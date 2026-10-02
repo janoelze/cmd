@@ -1,0 +1,25 @@
+{
+  "name": "cmd",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.1",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "core": "node --no-warnings packages/core/src/main.ts",
+    "cmd": "node --no-warnings packages/cli/src/main.ts",
+    "dev": "pnpm --filter @cmd/desktop dev",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit && pnpm --filter @cmd/desktop typecheck",
+    "postinstall": "node scripts/postinstall.mjs",
+    "build": "pnpm --filter @cmd/desktop build",
+    "e2e": "pnpm build && node e2e/smoke.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.0",
+    "playwright": "^1.63.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.3"
+  }
+}

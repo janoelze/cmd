@@ -1,0 +1,9 @@
+{
+  "name": "@cmd/cli",
+  "private": true,
+  "type": "module",
+  "bin": { "cmd": "./bin/cmd" },
+  "dependencies": {
+    "@cmd/protocol": "workspace:*"
+  }
+}

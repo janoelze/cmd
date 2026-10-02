@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+  - apps/*
+allowBuilds:
+  node-pty: true
+  electron: true
+  esbuild: true

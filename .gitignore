@@ -1,0 +1,7 @@
+node_modules/
+dist/
+out/
+.cmd-dev/
+*.log
+.DS_Store
+packages/core/native/build/
