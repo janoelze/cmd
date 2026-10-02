@@ -1,0 +1,11 @@
+import { defineConfig } from "electron-vite";
+import react from "@vitejs/plugin-react";
+
+// @cmd/protocol ships TypeScript source, so it must be bundled, not externalized.
+const bundleWorkspace = { externalizeDeps: { exclude: ["@cmd/protocol"] } };
+
+export default defineConfig({
+  main: { build: bundleWorkspace },
+  preload: { build: bundleWorkspace },
+  renderer: { plugins: [react()] },
+});
