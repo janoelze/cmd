@@ -120,9 +120,9 @@ kbd {
 .statusbar button { -webkit-app-region: no-drag; }
 .statusbar-session { flex: 1; min-width: 0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
 /* Spacing lives inside the slots, so an empty slot takes no space. */
-.statusbar-session .slot-v { padding-left: 8px; }
-.statusbar-session > .slot:first-child .slot-v { padding-left: 0; }
-.statusbar-name, .statusbar-proc { color: var(--text); font-weight: 500; }
+.statusbar-session .slot-v { --gap: 8px; }
+.statusbar-session > .slot:first-child .slot-v { --gap: 0px; }
+.statusbar-name { color: var(--text); font-weight: 500; }
 .statusbar-usage { font-variant-numeric: tabular-nums; cursor: default; }
 .statusbar-actions { display: flex; align-items: center; gap: 2px; }
 .statusbar-sep { width: 1px; height: 14px; margin: 0 6px; background: var(--separator); }
@@ -392,16 +392,28 @@ kbd {
 .tile.sel .tile-title { color: var(--text); }
 .tile-name { flex: 0 1 auto; display: flex; align-items: center; min-width: 0; font-weight: 500; }
 /* Kind · Place · Status. Narrow windows drop from the right: status first, the name last. */
-.tile-meta { margin-left: auto; display: flex; min-width: 0; flex: 0 100 auto; overflow: hidden; }
-.tile-meta .slot-v { padding-left: 8px; }
-.tile-meta .slot-kind { font-weight: 500; flex-shrink: 0.1; }
+/* Info, not the name: always dim, selected or not. */
+.tile-meta { margin-left: auto; display: flex; min-width: 0; flex: 0 100 auto; overflow: hidden; color: var(--text-dim); }
+.tile-meta .slot-v { --gap: 8px; }
+/* Dividers between Kind | Place | Status: 7px, 1px line, 7px. */
+.tile-meta .slot.divided .slot-v, .statusbar-session .slot.divided .slot-v { --gap: 15px; }
+.slot-divider {
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 1px;
+  height: 10px;
+  margin-top: -5px;
+  background: rgb(255 255 255 / 0.16);
+}
+.tile-meta .slot-kind { flex-shrink: 0.1; }
 .tile-meta .slot-place { flex-shrink: 10; }
 .tile-meta .slot-status { flex-shrink: 100; }
 /* Place or status squeezed to a sliver would show just its gap and "…": hide it
    instead. Slots have an explicit width, so they can be size containers. */
 .tile-meta :is(.slot-place, .slot-status), .statusbar-session :is(.statusbar-path, .statusbar-detail) { container-type: inline-size; }
-@container (max-width: 20px) {
-  .slot-v { visibility: hidden; }
+@container (max-width: 28px) {
+  .slot-v, .slot-divider { visibility: hidden; }
 }
 .tile-title { cursor: grab; touch-action: none; }
 .empty-main { display: grid; place-items: center; }
@@ -922,10 +934,23 @@ kbd {
   white-space: nowrap;
   transition: width 180ms var(--ease);
 }
-.slot-v { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.slot-v {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The gap before the value (and its divider) is padding, so an empty slot takes
+     no space; swaps scale around the text, not the padding. */
+  padding-left: var(--gap, 0px);
+  transform-origin: calc(50% + var(--gap, 0px) / 2) 50%;
+}
 /* Paths keep their end: the ellipsis goes at the start. */
 .slot-v.clip-start { direction: rtl; text-align: left; }
 .slot-v.in { animation: slot-in 180ms var(--ease) both; }
+/* Swapping: the new value starts only once the old one is gone, so two strings
+   are never drawn over each other. */
+.slot-v.in.swap { animation-duration: 160ms; animation-delay: 100ms; }
+.slot.moving .slot-v { text-overflow: clip; }
 .slot-v.out {
   position: absolute;
   top: 0;
@@ -934,15 +959,15 @@ kbd {
   display: flex;
   align-items: center;
   pointer-events: none;
-  animation: slot-out 140ms ease-in forwards;
+  animation: slot-out 100ms ease-in forwards;
 }
 .slot-v.fade.in { animation-name: slot-fade-in; }
 .slot-v.fade.out { animation-name: slot-fade-out; }
 .slot.still { transition: none; }
 .slot.still .slot-v { animation: none; }
 .slot.still .slot-v.out { display: none; }
-@keyframes slot-in { from { opacity: 0; transform: translateY(4px); } }
-@keyframes slot-out { to { opacity: 0; transform: translateY(-4px); } }
+@keyframes slot-in { from { opacity: 0; transform: scale(0.8); } }
+@keyframes slot-out { to { opacity: 0; transform: scale(0.8); } }
 @keyframes slot-fade-in { from { opacity: 0; } }
 @keyframes slot-fade-out { to { opacity: 0; } }
 

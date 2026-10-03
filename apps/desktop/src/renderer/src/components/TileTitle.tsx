@@ -1,5 +1,5 @@
 // Title bar of a window tile, the same for every window type
-// (docs/10-window-titles.md): Mark · Name · Dirty ……… Kind · Place · Status.
+// (docs/10-window-titles.md): Mark · Name · Dirty ……… Kind | Place | Status.
 // Each field is a Slot, so state changes animate instead of popping.
 
 import { fieldsOf, type SidebarRow, type WindowFields } from "../model.ts";
@@ -39,8 +39,8 @@ export function TileTitle({
       </span>
       <span className="tile-meta">
         <Slot className="slot-kind" value={{ text: f.kind }} />
-        <Slot className="slot-place" value={f.place ? { text: f.place } : undefined} clipStart />
-        <Slot className="slot-status" value={f.status} />
+        <Slot className="slot-place" value={f.place ? { text: f.place } : undefined} clipStart divider />
+        <Slot className="slot-status" value={f.status} divider />
       </span>
     </div>
   );

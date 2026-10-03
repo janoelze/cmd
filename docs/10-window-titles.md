@@ -84,7 +84,7 @@ Each surface shows a fixed subset of the fields, always in the same order. Types
 
 | Surface | Shows |
 |---|---|
-| **Title bar** | Mark · **Name** · Dirty ……… Kind · Place · Status |
+| **Title bar** | Mark · **Name** · Dirty ……… Kind \| Place \| Status (thin dividers between) |
 | **Sidebar row** | Mark · **Name** · Dirty / second line: Status, else Place |
 | **Status bar** | Usage of the selected window. In focus mode, which has no title bars: Mark · **Name** · Dirty · Kind · Place · Status · Usage |
 | **Palette** | Mark · **Name** — Place |
@@ -114,7 +114,7 @@ The title bar is a row of **slots**, one per field, always present in the DOM in
 | Change | Example | Motion |
 |---|---|---|
 | Slot fills or empties | `Edited` appears; `Loading…` goes away | width 0 ⇄ auto and opacity 0 ⇄ 1 together; its neighbours slide over |
-| Value replaced | `Working…` → `Done just now`; `zsh` → `claude` | old text fades out and moves up 4px, new text fades in from 4px below; the slot's width eases between the two |
+| Value replaced | `Working…` → `Done just now`; `zsh` → `claude` | old text scales down (0.8) and fades out in 100ms; only then does the new text scale up from 0.8 and fade in (160ms), so two values are never drawn over each other; the slot's width eases between the two, clipping instead of ellipsizing while it moves |
 | Mark changes | light working → needs; shell icon → agent light | colour cross-fades; icon ⇄ light cross-fades with a slight scale (0.6 → 1) |
 | Dirty set or cleared | first keystroke; save | dot scales in from 0 (out to 0) |
 | Name changes | page title loads; agent renamed | cross-fade only, no movement: the name is the anchor of the row and shouldn't jump |
@@ -128,6 +128,7 @@ The title bar is a row of **slots**, one per field, always present in the DOM in
 ### Timing
 
 - Slot width and value swaps: **180ms**, the app's ease-out (`cubic-bezier(0.2, 0.8, 0.2, 1)`, same as window moves). Mark and dirty dot: **140ms**. Exits run a little faster than entries, so a swap never shows two values at full opacity.
+- **Grace:** a slot that empties waits 250ms before collapsing, so a value that's replaced (⌘E remounting the view) swaps once instead of going out and coming back in. The sidebar's place-under-status fallback applies only after that grace.
 - **No flicker:** a value is shown for at least **600ms** before the next one replaces it; changes in between are coalesced, and only the latest is shown. A brief state (a page that loads in 80ms) shouldn't flash: `Loading…` waits **200ms** before it appears and is dropped if the load finished first.
 - **Reduced motion** (`prefers-reduced-motion`): opacity only, no width, slide or scale.
 

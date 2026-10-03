@@ -151,7 +151,7 @@ function RowView(props: {
           </div>
           {/* Status if there is one ("does this need me?"), else Place ("which one is it?"). */}
           <div className="row-detail">
-            <Slot value={f.status ?? (f.place ? { text: f.place } : undefined)} />
+            <Slot value={f.status} fallback={f.place ? { text: f.place } : undefined} />
           </div>
         </div>
         {depth === 0 && proj && (

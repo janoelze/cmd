@@ -1,10 +1,12 @@
 // Animated title-bar pieces (docs/10-window-titles.md, "Motion"). A Slot is one
 // field that stays mounted when empty (width 0), so a value never pops in or out:
-//  - a new key swaps: the old value fades up and out, the new one fades in from
-//    below, and the slot's width eases between them;
+//  - a new key swaps: the old value scales down and fades out, then the new one
+//    scales up and fades in, and the slot's width eases between them;
 //  - the same key updates in place, so counters ("3m ago", usage) don't animate;
-//  - a value stays at least DWELL ms (changes in between coalesce), and a
-//    transient one (loading) appears only if it lasts DELAY ms.
+//  - a value stays at least DWELL ms (changes in between coalesce), a transient
+//    one (loading) appears only if it lasts DELAY ms, and an emptied slot waits
+//    GRACE ms before collapsing, so a value that's replaced (⌘E remounting a
+//    window's view) swaps once instead of going out and coming back in.
 // Mark is the window's status light or type icon, cross-fading between them.
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -13,6 +15,9 @@ import { ICON, Symbol } from "./Symbol.tsx";
 
 const DWELL = 600;
 const DELAY = 200;
+const GRACE = 250;
+/** The width transition (styles.css, .slot) plus a frame. */
+const MOVE_MS = 200;
 
 /** False where changes should be instant: windows off screen, a canvas zoomed out too far to read. */
 export const SlotMotion = createContext(true);
@@ -41,11 +46,8 @@ function useSettled(v: SlotValue | undefined, animate: boolean): SlotValue | und
       since.current = performance.now();
       setShown(v);
     };
-    const wait = animate
-      ? Math.max(since.current + DWELL - performance.now(), v?.transient ? DELAY : 0)
-      : v?.transient
-        ? DELAY
-        : 0;
+    const hold = v?.transient ? DELAY : !v && shown ? GRACE : 0;
+    const wait = animate ? Math.max(since.current + DWELL - performance.now(), hold) : hold;
     if (wait <= 0) return show();
     const t = setTimeout(show, wait);
     return () => clearTimeout(t);
@@ -63,38 +65,64 @@ const naturalWidth = (el: HTMLElement) => el.scrollWidth + 1;
 
 export function Slot({
   value,
+  fallback,
   className = "",
   fade = false,
   clipStart = false,
+  divider = false,
   title,
 }: {
   value: SlotValue | undefined;
+  /** Shown while `value` is empty, after the grace period (the sidebar's place under a status). */
+  fallback?: SlotValue;
   className?: string;
   /** Cross-fade without movement (names). */
   fade?: boolean;
   /** Truncate at the start, keeping the end (paths). */
   clipStart?: boolean;
+  /** A thin divider before the value. Part of the slot, so it collapses with it and
+   *  stays put while values swap. */
+  divider?: boolean;
   title?: string;
 }) {
   const animate = useContext(SlotMotion);
-  const shown = useSettled(value, animate);
+  const shown = useSettled(value, animate) ?? fallback;
   const key = keyOf(shown);
   const outer = useRef<HTMLSpanElement>(null);
   const inner = useRef<HTMLSpanElement>(null);
   const mounted = useRef(false);
   const prev = useRef<{ key: string | null; text: string }>({ key, text: shown?.text ?? "" });
   const [leaving, setLeaving] = useState<{ id: number; text: string } | null>(null);
+  /** The value that replaced another (its entry waits for the exit; see styles.css). */
+  const [swapped, setSwapped] = useState<string | null>(null);
   const gen = useRef(0);
 
   // Width follows the content; measured only when the content changes (not per render).
+  // While it eases, the text is clipped rather than ellipsized: an ellipsis riding
+  // along the growing edge ("15 l…", "15 lines…") reads as flicker.
   useLayoutEffect(() => {
     const el = outer.current;
-    if (el) el.style.width = `${shown && inner.current ? naturalWidth(inner.current) : 0}px`;
+    if (!el) return;
+    const w = `${shown && inner.current ? naturalWidth(inner.current) : 0}px`;
+    if (el.style.width === w) return;
+    const first = !el.style.width;
+    el.style.width = w;
+    if (first || !animate) return;
+    el.classList.add("moving");
+    const t = setTimeout(() => el.classList.remove("moving"), MOVE_MS);
+    return () => {
+      clearTimeout(t);
+      el.classList.remove("moving");
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, shown?.text]);
 
   useLayoutEffect(() => {
     if (prev.current.key !== key && prev.current.key !== null && animate && mounted.current) {
       setLeaving({ id: ++gen.current, text: prev.current.text });
+      setSwapped(key);
+    } else if (prev.current.key !== key) {
+      setSwapped(null);
     }
     prev.current = { key, text: shown?.text ?? "" };
     mounted.current = true;
@@ -103,14 +131,15 @@ export function Slot({
   const text = (t: string) => (clipStart ? `‎${t}‎` : t);
   const cls = `${fade ? "fade" : ""} ${clipStart ? "clip-start" : ""}`;
   return (
-    <span ref={outer} className={`slot ${className} ${animate ? "" : "still"}`} title={title}>
+    <span ref={outer} className={`slot ${className} ${divider ? "divided" : ""} ${animate ? "" : "still"}`} title={title}>
+      {divider && <span className="slot-divider" aria-hidden />}
       {leaving && (
         <span key={`out-${leaving.id}`} className={`slot-v out ${cls}`} onAnimationEnd={() => setLeaving(null)} aria-hidden>
           {text(leaving.text)}
         </span>
       )}
       {shown && (
-        <span key={key!} ref={inner} className={`slot-v ${mounted.current && animate ? "in" : ""} ${cls}`}>
+        <span key={key!} ref={inner} className={`slot-v ${mounted.current && animate ? "in" : ""} ${swapped === key ? "swap" : ""} ${cls}`}>
           {text(shown.text)}
         </span>
       )}

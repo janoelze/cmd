@@ -55,8 +55,8 @@ export function StatusBar({ mode, row, pane, run }: Props) {
             <Slot className="statusbar-name" value={{ text: f.name }} fade />
             <DirtyDot on={!!f.dirty} />
             <Slot className="statusbar-proc" value={{ text: f.kind }} />
-            <Slot className="statusbar-path" value={f.place ? { text: f.place } : undefined} clipStart />
-            <Slot className="statusbar-detail" value={f.status} />
+            <Slot className="statusbar-path" value={f.place ? { text: f.place } : undefined} clipStart divider />
+            <Slot className="statusbar-detail" value={f.status} divider />
           </>
         )}
         <Slot
