@@ -5,8 +5,7 @@
 <h1 align="center">cmd</h1>
 
 <p align="center">
-  A personal terminal + coding-agent workbench for macOS.<br>
-  Research and design live in <a href="docs/00-overview.md"><code>docs/</code></a>.
+  A personal terminal + coding-agent workbench for macOS.
 </p>
 
 <picture>
