@@ -26,11 +26,14 @@ import type { SearchHit, SearchStatus } from "@cmd/protocol";
 import { getState, onAgentChange, onWindowFocus, usePersisted, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
+import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
+import type { Rect } from "./layouts.ts";
 import { windowActions } from "./windowActions.ts";
 import { stateStr, viewFor } from "./windows/registry.ts";
 import { toggleMarkdownEdit } from "./windows/markdown.tsx";
 import { builtinTools } from "./tools.ts";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
+import { requestCanvas } from "./components/WindowsView.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
 import { Sidebar, type SidebarTab } from "./components/Sidebar.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
@@ -76,6 +79,9 @@ export function App() {
   const [gridOrder, setGridOrder] = usePersisted<PaneId[]>("grid.order", []);
   // Strip widths as fractions of the pane (see strip.ts).
   const [stripWidths, setStripWidths] = usePersisted<Record<PaneId, number>>("strip.widths", {});
+  // Canvas: where each window sits (world px) and the camera (see canvas.ts).
+  const [canvasRects, setCanvasRects] = usePersisted<Record<PaneId, Rect>>("canvas.rects", {});
+  const [camera, setCamera] = usePersisted<Camera>("canvas.camera", DEFAULT_CAMERA);
   const setStripWidth = (id: PaneId, fraction: number) =>
     setStripWidths((w) => {
       const alive = getState().panes;
@@ -95,7 +101,17 @@ export function App() {
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
+  // Set by a click on the empty canvas: "nothing selected" on purpose, so the
+  // effect below doesn't pick a window again (until you leave the canvas).
+  const deselected = useRef(false);
+  const deselect = useCallback(() => {
+    deselected.current = true;
+    (document.activeElement as HTMLElement | null)?.blur();
+    setSelected(null);
+  }, []);
+
   const select = useCallback((paneId: PaneId) => {
+    deselected.current = false;
     setSelected(paneId);
     setHistory((h) => pushHistory(h, paneId));
     const agentId = getState().panes.get(paneId)?.agentId;
@@ -122,6 +138,7 @@ export function App() {
   useEffect(() => {
     if (!s.connected) return;
     if (selected && (s.panes.has(selected) || s.windows.has(selected))) return;
+    if (!selected && deselected.current && mode === "canvas") return;
     const alive = new Set(viewOrder);
     const next = selected
       ? nextAfterClose(selected, history, viewOrderBefore.current, alive)
@@ -130,7 +147,7 @@ export function App() {
       if (next) select(next);
       else setSelected(null);
     }
-  }, [s.connected, s.panes, viewOrder, selected, history, select]);
+  }, [s.connected, s.panes, viewOrder, selected, history, select, mode]);
 
   // Remember this render's order for the next close (declared after the effect above, so it
   // still sees the order from before the terminal disappeared).
@@ -227,6 +244,8 @@ export function App() {
     "view.grid": () => setMode("grid"),
     "view.strip": () => setMode("strip"),
     "view.canvas": () => setMode("canvas"),
+    "view.canvasFit": () => (setMode("canvas"), requestCanvas("fit")),
+    "view.canvasZoomWindow": () => (setMode("canvas"), requestCanvas("window")),
     "view.toggleEdit": () => {
       const w = selected ? s.windows.get(selected) : undefined;
       if (w) toggleMarkdownEdit(w);
@@ -431,6 +450,11 @@ export function App() {
         gridOrder={gridOrder}
         onGridReorder={setGridOrder}
         stripWidths={stripWidths}
+        canvasRects={canvasRects}
+        onCanvasRects={setCanvasRects}
+        camera={camera}
+        onCamera={setCamera}
+        onDeselect={deselect}
         onStripWidth={setStripWidth}
       />
       <StatusBar mode={mode} row={currentRow} pane={current} run={run} />

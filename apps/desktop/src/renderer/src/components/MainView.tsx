@@ -1,5 +1,7 @@
 import type { PaneId } from "@cmd/protocol";
 import type { SidebarRow } from "../model.ts";
+import type { Camera } from "../canvas.ts";
+import type { Rect } from "../layouts.ts";
 import { WindowsView } from "./WindowsView.tsx";
 
 export type { ViewMode } from "../layouts.ts";
@@ -16,6 +18,11 @@ interface Props {
   onGridReorder: (order: PaneId[]) => void;
   stripWidths: Record<PaneId, number>;
   onStripWidth: (id: PaneId, fraction: number) => void;
+  canvasRects: Record<PaneId, Rect>;
+  onCanvasRects: (rects: Record<PaneId, Rect>) => void;
+  camera: Camera;
+  onCamera: (cam: Camera) => void;
+  onDeselect: () => void;
 }
 
 export function MainView({
@@ -29,6 +36,11 @@ export function MainView({
   onGridReorder,
   stripWidths,
   onStripWidth,
+  canvasRects,
+  onCanvasRects,
+  camera,
+  onCamera,
+  onDeselect,
 }: Props) {
   // Every row that has a window: terminals and browser/file windows.
   const withPane = rows.filter((r) => !!(r.pane || r.win));
@@ -46,17 +58,6 @@ export function MainView({
     );
   }
 
-  if (mode === "canvas") {
-    return (
-      <main className="main empty-main">
-        <div className="hello">
-          <div className="hello-title">Canvas</div>
-          <p>Infinite canvas is on the roadmap — see docs/02 and docs/07.</p>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <WindowsView
       mode={mode}
@@ -69,6 +70,11 @@ export function MainView({
       onSelect={onSelect}
       onTerminalMenu={onTerminalMenu}
       onTitleMenu={onTitleMenu}
+      canvasRects={canvasRects}
+      onCanvasRects={onCanvasRects}
+      camera={camera}
+      onCamera={onCamera}
+      onDeselect={onDeselect}
     />
   );
 }

@@ -91,6 +91,8 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("view.grid"),
         ...i("view.strip"),
         ...i("view.canvas"),
+        ...i("view.canvasFit"),
+        ...i("view.canvasZoomWindow"),
         ...i("view.cycleWidth"),
         ...i("view.toggleEdit"),
         sep,

@@ -93,6 +93,12 @@ class Terminals {
     term.attachCustomKeyEventHandler((e) => !e.metaKey);
     const el = document.createElement("div");
     el.className = "xterm-host";
+    // Mark terminals that have scrollback, so the scrollbar only shows when there's
+    // something to scroll to (full-screen apps like Claude Code draw in place: none).
+    const scrollable = () => el.classList.toggle("scrollable", term.buffer.active.baseY > 0);
+    term.onWriteParsed(scrollable);
+    term.buffer.onBufferChange(scrollable);
+    term.onResize(scrollable);
     h = { term, fit, el, opened: false, webgl: null, lastUsed: Date.now() };
     this.#hosts.set(paneId, h);
     return h;
@@ -151,6 +157,18 @@ class Terminals {
 
   hasSelection(paneId: PaneId): boolean {
     return !!this.#hosts.get(paneId)?.term.hasSelection();
+  }
+
+  /** The last n lines up to the cursor, for canvas cards (no renderer needed). */
+  tail(paneId: PaneId, n: number): string[] {
+    const t = this.#hosts.get(paneId)?.term;
+    if (!t) return [];
+    const b = t.buffer.active;
+    let end = b.baseY + b.cursorY;
+    while (end > 0 && !b.getLine(end)?.translateToString(true).trim()) end--;
+    const out: string[] = [];
+    for (let i = Math.max(0, end - n + 1); i <= end; i++) out.push(b.getLine(i)?.translateToString(true) ?? "");
+    return out;
   }
 
   write(paneId: PaneId, data: string): void {

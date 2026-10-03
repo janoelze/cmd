@@ -85,9 +85,12 @@ Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keyb
 | ⌘C / ⌘V / ⌘A | copy / paste / select all, in the terminal or a text field |
 | ⌥⌘K | clear buffer |
 | ⌘+ / ⌘− / ⌘0 | terminal text size (this session only) |
-| ⌥⌘1/2/3 | focus / grid / canvas |
+| ⌥⌘1/2/3/4 | focus / grid / strip / canvas |
+| ⇧⌘1 / ⇧⌘2 | canvas: zoom to fit all / to the selected window |
 | ⌃⌘S | show/hide sidebar · ⌃⌘1 / ⌃⌘2 sessions / tools |
 | ⌥⌘R | show folder in Finder |
+
+On the canvas, drag a title bar to move a window and its bottom-right corner to resize it. Pinch or ⌘-scroll to zoom, and scroll or drag the background to pan. Scrolling over the selected window scrolls that window instead. Zoomed out, windows turn into cards showing a terminal's last lines. Double-click a title bar to zoom to that window, or the background to fit everything. Click or drag the minimap to move around.
 
 Right-click a sidebar row or a terminal for context menus: copy resume command / session id, reveal transcript, new terminal here, and so on. The window remembers its size and position, and the Dock menu has New Terminal / New Claude Session.
 
@@ -98,7 +101,7 @@ Right-click a sidebar row or a terminal for context menus: copy resume command /
 - Agents: detected from the foreground process, state from Claude/Codex hooks, Claude subagents as virtual children
 - Host API: spawn, send, read, wait, kill (`--tree`)
 - Settings and SQLite persistence
-- UI: Sessions/Tools sidebar sorted by attention, focus and grid views, palette, settings panel, notifications, Dock badge
+- UI: Sessions/Tools sidebar sorted by attention, focus, grid, strip and canvas views, palette, settings panel, notifications, Dock badge
 
 **Next**
 - Transcript search (port the fork's FTS5 index)
@@ -107,5 +110,4 @@ Right-click a sidebar row or a terminal for context menus: copy resume command /
 - Port the fork's argv inspection, to see through wrappers
 - A headless VT for `pane.read` (instead of stripping ANSI)
 - Codex hook install
-- Canvas view
 - Packaging

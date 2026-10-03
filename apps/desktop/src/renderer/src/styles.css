@@ -340,7 +340,15 @@ kbd {
   background: var(--well);
   border: var(--window-outline) solid var(--separator);
   border-radius: var(--window-radius);
+}
+/* Clips the content; the tile itself doesn't, so resize handles can sit outside it. */
+.tile-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  border-radius: inherit;
 }
 .tile.sel { border-color: var(--window-highlight); box-shadow: var(--window-glow); }
 .tile .term-well { padding-top: 6px; }
@@ -578,21 +586,23 @@ kbd {
   box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.25);
 }
 
-/* Right-edge resize handle, inside the tile (tiles clip their overflow). */
+/* Right-edge resize handle: the gutter right of the window, so it never covers
+   the window's scrollbar. */
 .strip-resize {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 0;
-  width: 8px;
+  right: calc(-1 * var(--gutter) - var(--window-outline));
+  width: var(--gutter);
   cursor: col-resize;
-  z-index: 2;
+  touch-action: none;
+  z-index: 4;
 }
 .strip-resize::after {
   content: "";
   position: absolute;
   top: 50%;
-  left: 3px;
+  left: calc(var(--gutter) / 2 - 1px);
   width: 2px;
   height: 36px;
   margin-top: -18px;
@@ -684,7 +694,7 @@ kbd {
 .address:focus { border-color: var(--accent); }
 .webview { flex: 1; min-height: 0; background: #fff; }
 /* While dragging or resizing windows, the page must not swallow pointer events. */
-.main.windows.dragging webview, .main.windows.resizing webview { pointer-events: none; }
+.main.windows.dragging webview, .main.windows.resizing webview, .main.windows.held webview { pointer-events: none; }
 
 .crumbs { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap; }
 .crumb {
@@ -795,3 +805,112 @@ kbd {
 .markdown th, .markdown td { padding: 6px 12px; border: 1px solid var(--separator); }
 .markdown th { font-weight: 600; background: var(--bg); }
 .markdown tr:nth-child(2n) td { background: rgb(255 255 255 / 0.02); }
+
+/* Canvas: windows on a pan/zoom plane (see WindowsView, canvas.ts). */
+.main.windows.mode-canvas {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, rgb(255 255 255 / 0.09) 1px, transparent 1.5px) var(--dots-x) var(--dots-y) / var(--dots) var(--dots),
+    var(--bg);
+}
+.mode-canvas .windows-track { transform-origin: 0 0; }
+.main.windows.switching .windows-track { transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.mode-canvas .windows-track > .tile.sel { z-index: 5; }
+.mode-canvas .windows-track > .tile.lifted { z-index: 10; }
+/* The drop outline jumps from dot to dot; gliding would trail the pointer. */
+.mode-canvas .ghost-slot { transition: none; }
+/* Windows stay where they are while the camera moves; only moves/resizes glide. */
+.main.windows.panning .windows-track > .tile,
+.main.windows.sizing .windows-track > .tile { transition: none; }
+.main.windows.panning { cursor: grabbing; }
+.main.windows.panning .xterm, .main.windows.sizing .xterm,
+.main.windows.panning webview, .main.windows.sizing webview { pointer-events: none; }
+.main.windows.sizing, .main.windows.sizing * { user-select: none; }
+.main.windows.sizing-x, .main.windows.sizing-x * { cursor: ew-resize !important; }
+.main.windows.sizing-y, .main.windows.sizing-y * { cursor: ns-resize !important; }
+.main.windows.sizing-xy, .main.windows.sizing-xy * { cursor: nwse-resize !important; }
+/* Unselected pages don't swallow clicks and scrolls: the first click selects. */
+.mode-canvas .tile:not(.sel) webview { pointer-events: none; }
+
+/* Edge and corner handles, just outside the window (in world px divided by the
+   zoom, so they stay grabbable when zoomed out). */
+.canvas-resize {
+  --h: calc(8px / var(--z, 1));
+  --o: calc(-1 * var(--h) - var(--window-outline));
+  position: absolute;
+  touch-action: none;
+  z-index: 4;
+}
+.canvas-resize.resize-x { top: 0; bottom: 0; right: var(--o); width: var(--h); cursor: ew-resize; }
+.canvas-resize.resize-y { left: 0; right: 0; bottom: var(--o); height: var(--h); cursor: ns-resize; }
+.canvas-resize.resize-xy {
+  /* Fully outside: where the two edge bands meet, and a bit beyond. */
+  right: calc(var(--o) - var(--h));
+  bottom: calc(var(--o) - var(--h));
+  width: calc(var(--h) * 2);
+  height: calc(var(--h) * 2);
+  cursor: nwse-resize;
+  z-index: 5;
+}
+/* A grip at the corner, outside the window, shown on hover. */
+.canvas-resize.resize-xy::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--h);
+  height: var(--h);
+  border-right: calc(2px / var(--z, 1)) solid rgb(255 255 255 / 0.3);
+  border-bottom: calc(2px / var(--z, 1)) solid rgb(255 255 255 / 0.3);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.tile:hover .canvas-resize.resize-xy::after, .main.windows.sizing .tile.sel .canvas-resize.resize-xy::after { opacity: 1; }
+
+/* Zoomed out: cards. Sizes are divided by the zoom so they read at screen size. */
+.card-title { flex: none; }
+.canvas-card {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  background: var(--well);
+  color: var(--text-dim);
+}
+.canvas-card.lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: calc(6px / var(--z)) calc(8px / var(--z));
+  font: calc(11px / var(--z)) / 1.3 var(--font-mono);
+  white-space: pre;
+}
+.canvas-card.info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(8px / var(--z));
+  font-size: calc(12px / var(--z));
+}
+.canvas-card-detail { max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile.sel .canvas-card { color: var(--text); }
+
+.minimap {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 20;
+  background: rgb(20 20 22 / 0.82);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 120ms;
+}
+.minimap:hover { opacity: 1; }
+.minimap rect { fill: rgb(255 255 255 / 0.18); }
+.minimap rect.sel { fill: var(--window-highlight); }
+.minimap rect.view { fill: rgb(255 255 255 / 0.04); stroke: rgb(255 255 255 / 0.55); stroke-width: 1; }
+

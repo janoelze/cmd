@@ -2,7 +2,8 @@
 // state) to a rectangle per window plus how dragging behaves. WindowsView
 // renders whatever a layout returns, so all modes share one set of windows,
 // one drag/push implementation and one animation path. Rects are in "content"
-// coordinates; only the strip scrolls (WindowsView translates the track).
+// coordinates; the strip scrolls and the canvas pans/zooms (WindowsView
+// transforms the track).
 
 import { gridShape } from "./model.ts";
 import { layout as stripSlots } from "./strip.ts";
@@ -87,6 +88,19 @@ export function stripLayout(ids: string[], widths: number[], vp: Viewport, gutte
     chrome: true,
     resizable: true,
     contentWidth: total,
+  };
+}
+
+/** Canvas: windows where they were put (world coordinates; WindowsView applies the camera). */
+export function canvasLayout(rects: Map<string, Rect>): Layout {
+  return {
+    rects,
+    hidden: new Set(),
+    dropIndex: () => -1,
+    slots: [],
+    chrome: true,
+    resizable: false,
+    contentWidth: 0,
   };
 }
 

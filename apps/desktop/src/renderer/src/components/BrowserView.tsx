@@ -9,6 +9,7 @@ import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { Symbol } from "./Symbol.tsx";
+import { SCROLLBAR_CSS } from "../scrollbars.ts";
 
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const url = typeof win.state.url === "string" ? win.state.url : null;
@@ -32,6 +33,9 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const titled = (e: { title: string }) => void cmd.call("window.update", { id: win.id, title: e.title }).catch(() => {});
     const start = () => setLoading(true);
     const stop = () => setLoading(false);
+    // Pages get the app's scrollbars, so every window's look the same.
+    const ready = () => void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
+    wv.addEventListener("dom-ready", ready);
     wv.addEventListener("did-navigate", navigated as never);
     wv.addEventListener("did-navigate-in-page", navigated as never);
     wv.addEventListener("page-title-updated", titled as never);
@@ -43,6 +47,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       wv.removeEventListener("page-title-updated", titled as never);
       wv.removeEventListener("did-start-loading", start);
       wv.removeEventListener("did-stop-loading", stop);
+      wv.removeEventListener("dom-ready", ready);
     };
   }, [win.id]);
 

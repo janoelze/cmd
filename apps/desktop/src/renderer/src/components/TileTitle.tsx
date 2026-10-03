@@ -14,18 +14,20 @@ export function TileTitle({
   row,
   onPointerDown,
   onContextMenu,
+  onDoubleClick,
   title,
 }: {
   row: SidebarRow;
   onPointerDown?: (e: React.PointerEvent) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
   title?: string;
 }) {
   const showUsage = useStore().settings.settings["ui.showResources"];
   const { pane, win } = row;
   const status = useWindowStatus(win?.id ?? null);
   return (
-    <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} title={title}>
+    <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} title={title}>
       {win && win.kind !== "terminal" ? (
         <Symbol name={iconFor(win.kind)} size={11} className="tile-icon" />
       ) : (
