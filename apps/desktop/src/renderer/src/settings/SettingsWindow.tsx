@@ -19,12 +19,14 @@ import { useKeybindings } from "../keybindings.ts";
 import { cmd } from "../bridge.ts";
 import { NumberField, Popup, Segmented, Switch, TextField } from "./controls.tsx";
 import { useSettings } from "./useSettings.ts";
+import { allThemes } from "../themes/registry.ts";
 
 type Group = keyof typeof SETTINGS_GROUPS;
 type Page = Group | "keyboard";
 
 /** Sidebar icons (SF Symbols, monochrome). */
 const ICONS: Record<Page, string> = {
+  theme: "paintpalette",
   font: "textformat",
   terminal: "terminal",
   shell: "chevron.left.forwardslash.chevron.right",
@@ -153,7 +155,10 @@ export function SettingsWindow() {
               className={`sw-nav-item${!q && p === page ? " sel" : ""}${q && !hitGroups.has(p as Group) ? " dim" : ""}`}
               onClick={() => (setQuery(""), setPage(p), setScrolled(false))}
             >
-              <Symbol name={ICONS[p]} size={12} />
+              {/* fixed-width box: symbols differ in width, the labels should line up */}
+              <span className="sw-nav-icon">
+                <Symbol name={ICONS[p]} size={12} />
+              </span>
               <span className="sw-nav-label">{pageTitle(p)}</span>
             </button>
           ))}
@@ -188,7 +193,7 @@ function Row(p: { k: SettingKey; settings: Settings; overridden: boolean; onSave
   const value = p.settings[p.k];
   const title = settingTitle(p.k);
   // Text values can be long (font lists, commands): the field goes under the label.
-  const stacked = def.type === "string";
+  const stacked = def.type === "string" && def.control !== "theme";
 
   let control;
   if (def.type === "boolean") control = <Switch value={value as boolean} onChange={p.onSave} label={title} />;
@@ -199,6 +204,7 @@ function Row(p: { k: SettingKey; settings: Settings; overridden: boolean; onSave
       ) : (
         <Popup value={value as string} options={def.options} labels={def.labels} onChange={p.onSave} />
       );
+  else if (def.type === "string" && def.control === "theme") control = <ThemePopup value={value as string} appearance={def.appearance} onChange={p.onSave} />;
   else if (def.type === "number")
     control = <NumberField value={value as number} min={def.min} max={def.max} step={def.step} unit={def.unit} onChange={p.onSave} />;
   else
@@ -280,4 +286,13 @@ function Shortcuts() {
       </div>
     </>
   );
+}
+
+/** The registered themes of one appearance; a value naming no theme (removed) stays listed so it shows. */
+function ThemePopup(p: { value: string; appearance?: "dark" | "light"; onChange: (v: string) => void }) {
+  const themes = allThemes().filter((t) => !p.appearance || t.appearance === p.appearance);
+  const labels: Record<string, string> = Object.fromEntries(themes.map((t) => [t.id, t.title]));
+  const options = themes.map((t) => t.id);
+  if (!labels[p.value]) (options.push(p.value), (labels[p.value] = `${p.value} (not found)`));
+  return <Popup value={p.value} options={options} labels={labels} onChange={p.onChange} />;
 }

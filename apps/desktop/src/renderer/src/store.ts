@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
 import { applyFonts } from "./fonts.ts";
+import { applyThemeSettings } from "./themes/registry.ts";
 import { setWindowTypes } from "./windows/registry.ts";
 
 export interface State {
@@ -182,6 +183,7 @@ function handle(e: CoreEvent): void {
     case "settings.updated":
       terminals.configure(e.snapshot.settings);
       applyFonts(e.snapshot.settings);
+      applyThemeSettings(e.snapshot.settings);
       set({ settings: e.snapshot });
       return;
     case "agent.removed": {
@@ -214,6 +216,7 @@ cmd.onStatus(async (status) => {
   for (const p of snap.panes) awaitingSnapshot.add(p.id), terminals.hold(p.id);
   terminals.configure(snap.settings.settings);
   applyFonts(snap.settings.settings);
+  applyThemeSettings(snap.settings.settings);
   setWindowTypes(snap.windowTypes ?? []);
   set({
     connected: true,

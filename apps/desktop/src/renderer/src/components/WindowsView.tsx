@@ -634,7 +634,7 @@ export function WindowsView(p: Props) {
       width: Math.ceil((cam.x + vp.w / z - left) / step) * step + step,
       height: Math.ceil((cam.y + vp.h / z - top) / step) * step + step,
       // Each dot sits in the middle of its tile; shift by half a tile onto the grid line.
-      backgroundImage: `radial-gradient(circle, rgb(255 255 255 / 0.1) ${r}px, transparent ${r + 0.6 / z}px)`,
+      backgroundImage: `radial-gradient(circle, color-mix(in srgb, var(--ink) 10%, transparent) ${r}px, transparent ${r + 0.6 / z}px)`,
       backgroundSize: `${step}px ${step}px`,
       backgroundPosition: `${-step / 2}px ${-step / 2}px`,
     };
@@ -757,7 +757,7 @@ export function WindowsView(p: Props) {
       {mode === "strip" && (
         <StripBar slots={stripSlots} total={lay.contentWidth} pad={padX} ids={ids} selected={selected} onSelect={onSelect} />
       )}
-      {canvas && vp.w > 0 && (
+      {canvas && cfg["canvas.minimap"] && vp.w > 0 && (
         <Minimap
           rects={lay.rects}
           cam={cam}

@@ -4,6 +4,7 @@
 import { useSyncExternalStore } from "react";
 import { DEFAULT_SETTINGS, type SettingsSnapshot } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
+import { applyThemeSettings } from "../themes/registry.ts";
 
 let snapshot: SettingsSnapshot = { settings: DEFAULT_SETTINGS, overrides: [], errors: [], path: "" };
 let connected = false;
@@ -13,6 +14,7 @@ const emit = () => listeners.forEach((fn) => fn());
 cmd.onEvent((e) => {
   if (e.type !== "settings.updated") return;
   snapshot = e.snapshot;
+  applyThemeSettings(snapshot.settings);
   emit();
 });
 cmd.onStatus(async (status) => {
@@ -20,6 +22,7 @@ cmd.onStatus(async (status) => {
   if (connected) {
     try {
       snapshot = (await cmd.call("events.subscribe", { types: ["settings.updated"] })).settings;
+      applyThemeSettings(snapshot.settings);
     } catch {
       connected = false;
     }

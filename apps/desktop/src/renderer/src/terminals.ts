@@ -9,6 +9,7 @@ import type { WebglAddon } from "@xterm/addon-webgl";
 import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
+import { currentTheme, onThemeChange, terminalColors } from "./themes/registry.ts";
 
 
 interface Host {
@@ -20,18 +21,7 @@ interface Host {
   lastUsed: number;
 }
 
-const dark: ITheme = {
-  background: "#161618",
-  foreground: "#e6e6ea",
-  cursor: "#9d9dff",
-  selectionBackground: "#3a3a6e",
-  black: "#16161c", red: "#ff6b5e", green: "#7bd88f", yellow: "#ffd866",
-  blue: "#8f8fff", magenta: "#e08cff", cyan: "#6fe0e8", white: "#d6d6dc",
-  brightBlack: "#6c6c78", brightRed: "#ff8a7f", brightGreen: "#9be6aa", brightYellow: "#ffe38f",
-  brightBlue: "#b0b0ff", brightMagenta: "#eeb0ff", brightCyan: "#9aeef3", brightWhite: "#ffffff",
-};
-
-const theme = () => dark;
+const theme = (): ITheme => terminalColors(currentTheme());
 
 // The WebGL addon loads only when the webgl renderer is used (not the default),
 // so it stays out of the startup bundle.
@@ -246,3 +236,4 @@ class Terminals {
 }
 
 export const terminals = new Terminals();
+onThemeChange(() => terminals.applyTheme());

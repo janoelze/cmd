@@ -5,6 +5,7 @@ import type { CoreEvent, Method, Params, Result } from "@cmd/protocol";
 import { connect, type Connection } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import type { KeybindingsSnapshot } from "../main/keybindings.ts";
+import type { Appearance } from "../main/appearance.ts";
 
 type Status = "connecting" | "connected" | "disconnected";
 
@@ -71,6 +72,8 @@ const api = {
     ipcRenderer.on("notification-click", h);
     return () => ipcRenderer.off("notification-click", h);
   },
+  /** Native appearance (traffic lights, menus, vibrancy) and window background for the active theme. */
+  setAppearance: (a: Appearance) => ipcRenderer.send("appearance", a),
   focusWindow: () => ipcRenderer.send("focus"),
   openPath: (p: string) => ipcRenderer.send("open-path", p),
   /** The Settings window (opens it, or brings it to the front). */

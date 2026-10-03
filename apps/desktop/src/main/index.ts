@@ -13,6 +13,7 @@ import { SETTINGS_TEMPLATE } from "@cmd/protocol";
 import { cmdHome, connect, defaultSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
+import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type KeybindingsSnapshot } from "./keybindings.ts";
 
 let keybindings: KeybindingsSnapshot = loadKeybindings();
@@ -176,7 +177,7 @@ function createWindow(): BrowserWindow {
     show: false,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 14, y: 12 },
-    backgroundColor: "#1e1e1e",
+    backgroundColor: savedAppearance().background,
     webPreferences: {
       preload: path.join(here, "../preload/index.mjs"),
       sandbox: false, // preload talks to the core socket via node:net
@@ -282,6 +283,10 @@ ipcMain.on("notify", (e, o: NotifyOptions) => {
 ipcMain.on("notify-close", (_e, tag: string) => {
   shown.get(tag)?.close();
   shown.delete(tag);
+});
+ipcMain.on("appearance", (_e, a: Appearance) => {
+  setAppearance(a);
+  for (const w of appWindows()) w.setBackgroundColor(a.background);
 });
 ipcMain.on("menu-state", (_e, state: MenuState) => applyMenuState(state));
 ipcMain.on("close-window", (e) => winOf(e)?.close());
@@ -395,7 +400,7 @@ app.on("web-contents-created", (_e, contents) => {
 
 app.whenReady().then(async () => {
   performance.mark("boot:app-ready");
-  nativeTheme.themeSource = "dark";
+  nativeTheme.themeSource = savedAppearance().source;
   if (devIcon) app.dock?.setIcon(devIcon);
   app.setAboutPanelOptions({
     applicationName: "cmd",

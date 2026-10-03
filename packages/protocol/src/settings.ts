@@ -16,7 +16,15 @@ export type SettingApplies = "newTerminals" | "firstLaunch";
 type Common = { title?: string; description: string; applies?: SettingApplies };
 type Def = Common &
   (
-    | { type: "string"; default: string; multiline?: boolean; placeholder?: string; control?: "font" }
+    | {
+        type: "string";
+        default: string;
+        multiline?: boolean;
+        placeholder?: string;
+        /** font: previews itself in that font. theme: a popup of the UI's registered themes of `appearance`. */
+        control?: "font" | "theme";
+        appearance?: "dark" | "light";
+      }
     | { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string }
     | { type: "boolean"; default: boolean }
     | { type: "enum"; default: string; options: readonly string[]; labels?: Readonly<Record<string, string>> }
@@ -40,6 +48,17 @@ export const SETTINGS_SCHEMA = {
     description: "Font family list for reading text: Markdown documents. Empty uses the system font.",
   },
   "font.textSize": { title: "Text font size", unit: "px", type: "number", default: 14, min: 10, max: 24, description: "Size of the text font." },
+
+  "theme.appearance": {
+    title: "Appearance",
+    type: "enum",
+    default: "dark",
+    options: ["auto", "dark", "light"],
+    labels: { auto: "Auto", dark: "Dark", light: "Light" },
+    description: "Dark, light, or follow the system (Auto). Each uses the theme chosen below.",
+  },
+  "theme.dark": { title: "Dark theme", type: "string", control: "theme", appearance: "dark", default: "dark", description: "Theme used in dark appearance." },
+  "theme.light": { title: "Light theme", type: "string", control: "theme", appearance: "light", default: "light", description: "Theme used in light appearance." },
 
   "terminal.renderer": {
     title: "Renderer", labels: { dom: "DOM", webgl: "WebGL" },
@@ -100,6 +119,7 @@ export const SETTINGS_SCHEMA = {
 
   "canvas.minZoom": { title: "Minimum zoom", unit: "%", type: "number", default: 30, min: 10, max: 100, step: 5, description: "Canvas: how far you can zoom out (%). Windows stay live at every zoom." },
   "canvas.maxZoom": { title: "Maximum zoom", unit: "%", type: "number", default: 150, min: 100, max: 300, step: 25, description: "Canvas: how far you can zoom in (%)." },
+  "canvas.minimap": { title: "Show minimap", type: "boolean", default: true, description: "Canvas: an overview of all windows in the bottom-right corner; click or drag it to move around." },
 
   "notifications.needsInput": { title: "Agent needs input", type: "boolean", default: true, description: "Notify when an agent needs input." },
   "notifications.done": { title: "Agent finished a turn", type: "boolean", default: true, description: "Notify when an agent finishes a turn." },
@@ -176,6 +196,7 @@ type GroupOf<K> = K extends `${infer G}.${string}` ? G : never;
 
 /** Section titles in the settings UI, in display order. Every key prefix needs one (tsc checks). */
 export const SETTINGS_GROUPS = {
+  theme: "Theme",
   font: "Fonts",
   terminal: "Terminal",
   shell: "Shell",

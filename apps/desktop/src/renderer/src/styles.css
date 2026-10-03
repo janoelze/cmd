@@ -1,5 +1,6 @@
-/* Simple dark theme in macOS system style, in the system font. Everything is a
-   token so a user stylesheet can restyle the app. */
+/* App styles in macOS system style, in the system font. Everything is a token.
+   Colours come from the active theme (themes/), which sets its tokens on :root;
+   the rest here is derived from them, and a theme's `vars` can override any of it. */
 
 :root {
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
@@ -11,39 +12,27 @@
   --font-text: var(--font-ui);
   --font-text-size: 14px;
 
-  --bg: #1e1e1e;
-  --bg-sidebar: #252527;
-  --bg-elevated: #2a2a2c;
-  --bg-hover: rgb(255 255 255 / 0.06);
-  --bg-selected: rgb(255 255 255 / 0.1);
-  --separator: rgb(255 255 255 / 0.09);
-  --text: #ececec;
-  --text-dim: #8e8e93;
-  /* Icons: brighter than secondary text — thin grey strokes on dark read as blurry. */
-  --icon: #b4b4b9;
-  --accent: #0a84ff;
-  --well: #161618;
+  /* Set by the theme (themes/types.ts ThemeColors): --bg, --bg-sidebar,
+     --bg-elevated, --well, --text, --text-dim, --icon, --accent, --link, --match,
+     --ink, --scrim, --state-needs/-done/-working/-idle, and the --syn-* syntax
+     colours. Derived from them: */
+  --bg-hover: color-mix(in srgb, var(--ink) 6%, transparent);
+  --bg-selected: color-mix(in srgb, var(--ink) 10%, transparent);
+  --separator: color-mix(in srgb, var(--ink) 9%, transparent);
+  --on-accent: #fff; /* text on an accent background */
+  --folder: var(--link);
   /* Vertical pinstripes for the main pane background (behind tiles). */
-  --pinstripe: repeating-linear-gradient(to right, rgb(255 255 255 / 0.028) 0 1px, transparent 1px 4px);
-
-  /* Editor syntax colours: the terminal palette (terminals.ts), so editor and
-     terminals read as one app. */
-  --syn-keyword: #e08cff;
-  --syn-string: #7bd88f;
-  --syn-number: #ffd866;
-  --syn-comment: #6c6c78;
-  --syn-function: #8f8fff;
-  --syn-type: #6fe0e8;
-  --syn-property: #b0b0ff;
-  --syn-heading: #ececec;
-  --syn-punct: #9a9aa6;
-  --syn-cursor: #9d9dff;
-  --syn-selection: #3a3a6e;
-
-  --state-needs: #ff9f0a;
-  --state-done: #30d158;
-  --state-working: #0a84ff;
-  --state-idle: #636366;
+  --pinstripe: repeating-linear-gradient(to right, color-mix(in srgb, var(--ink) 2.8%, transparent) 0 1px, transparent 1px 4px);
+  --shadow: rgb(0 0 0 / 0.5);
+  /* Recessed fields (settings window) and project chips (lightness for hsl(var(--hue) …)). */
+  --field: color-mix(in srgb, var(--scrim) 28%, transparent);
+  /* Dividers between a window's panes (the Settings window's sidebar and bar). */
+  --pane-edge: color-mix(in srgb, var(--scrim) 50%, transparent);
+  /* Recessed areas: unassigned grid cells. */
+  --recess: color-mix(in srgb, var(--scrim) 22%, transparent);
+  --recess-edge: color-mix(in srgb, var(--scrim) 35%, transparent);
+  --chip-fg: 70% 78%;
+  --chip-bg: 30% 22% / 0.8;
 
   --radius: 6px;
   --sidebar-w: 280px;
@@ -58,11 +47,10 @@
   --window-radius: 8px;
   --window-outline: 1px;
   --window-highlight: var(--accent);
-  --window-glow: 0 0 0 1px rgb(10 132 255 / 0.55), 0 0 14px rgb(10 132 255 / 0.35);
+  --window-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
   --window-dim: 0.28; /* darkening of unfocused windows */
   /* Motion: window moves and title-bar slots share this curve. */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -157,14 +145,14 @@ kbd {
 .btn {
   font: 12px var(--font-ui);
   color: var(--text);
-  background: rgb(255 255 255 / 0.08);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
   border: 0;
   border-radius: 5px;
   padding: 4px 10px;
   cursor: default;
 }
-.btn:hover { background: rgb(255 255 255 / 0.12); }
-.btn:active { background: rgb(255 255 255 / 0.16); }
+.btn:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.btn:active { background: color-mix(in srgb, var(--ink) 16%, transparent); }
 .btn .hint { margin-left: 6px; font-size: 10px; color: var(--text-dim); }
 
 .segmented, .sidebar-tabs {
@@ -172,7 +160,7 @@ kbd {
   padding: 2px;
   gap: 2px;
   border-radius: 7px;
-  background: rgb(255 255 255 / 0.06);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
 .segmented button, .sidebar-tabs button {
   font: 12px var(--font-ui);
@@ -185,7 +173,7 @@ kbd {
 }
 .segmented button.on, .sidebar-tabs button.on {
   color: var(--text);
-  background: rgb(255 255 255 / 0.14);
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 /* ── status dots ────────────────────────────────────── */
@@ -284,8 +272,8 @@ kbd {
   font: 500 10.5px var(--font-ui);
   padding: 1px 6px;
   border-radius: 4px;
-  color: hsl(var(--hue) 70% 78%);
-  background: hsl(var(--hue) 30% 22% / 0.8);
+  color: hsl(var(--hue) var(--chip-fg));
+  background: hsl(var(--hue) var(--chip-bg));
 }
 
 .twisty, .twisty-space { flex: none; width: 12px; height: 12px; }
@@ -413,7 +401,7 @@ kbd {
   width: 1px;
   height: 10px;
   margin-top: -5px;
-  background: rgb(255 255 255 / 0.16);
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
 }
 .tile-meta .slot-kind { flex-shrink: 0.1; }
 .tile-meta .slot-place { flex-shrink: 10; }
@@ -442,9 +430,9 @@ kbd {
   display: flex;
   flex-direction: column;
   background: var(--bg-elevated);
-  border: 1px solid rgb(255 255 255 / 0.12);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
   border-radius: 12px;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
+  box-shadow: 0 20px 60px var(--shadow);
   overflow: hidden;
 }
 .palette-input {
@@ -464,8 +452,8 @@ kbd {
   padding: 7px 10px;
   border-radius: var(--radius);
 }
-.palette-list li.on { background: var(--accent); }
-.palette-list li.on .palette-group, .palette-list li.on kbd { color: rgb(255 255 255 / 0.75); }
+.palette-list li.on { background: var(--accent); color: var(--on-accent); }
+.palette-list li.on .palette-group, .palette-list li.on kbd { color: color-mix(in srgb, var(--on-accent) 75%, transparent); }
 .palette-group { flex: none; width: 70px; font: 500 11px var(--font-ui); color: var(--text-dim); }
 .palette-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-empty { color: var(--text-dim); }
@@ -526,7 +514,7 @@ kbd {
   content: "";
   position: absolute;
   inset: 0;
-  background: #000;
+  background: var(--scrim);
   opacity: var(--window-dim);
   border-radius: var(--window-radius-inner);
   pointer-events: none;
@@ -540,7 +528,7 @@ kbd {
 /* Visual bell (notifications.visualBell): the outline flashes once. */
 .windows-track > .tile.bell { animation: tile-bell 450ms ease-out; }
 @keyframes tile-bell {
-  0%, 30% { border-color: var(--state-needs); box-shadow: 0 0 0 1px var(--state-needs), 0 0 18px rgb(255 159 10 / 0.45); }
+  0%, 30% { border-color: var(--state-needs); box-shadow: 0 0 0 1px var(--state-needs), 0 0 18px color-mix(in srgb, var(--state-needs) 45%, transparent); }
 }
 @media (prefers-reduced-motion: reduce) {
   .windows-track > .tile.bell { animation-duration: 1ms; }
@@ -564,18 +552,18 @@ kbd {
 
 /* Ghost slots while dragging: where windows can go. */
 .ghost-slot {
-  border: var(--window-outline) dashed rgb(255 255 255 / 0.14);
+  border: var(--window-outline) dashed color-mix(in srgb, var(--ink) 14%, transparent);
   border-radius: var(--window-radius);
-  background: rgb(255 255 255 / 0.015);
+  background: color-mix(in srgb, var(--ink) 1.5%, transparent);
   pointer-events: none;
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.ghost-slot.spare { border-color: rgb(255 255 255 / 0.06); }
+.ghost-slot.spare { border-color: color-mix(in srgb, var(--ink) 6%, transparent); }
 /* An unassigned grid cell when nothing is being dragged: quiet and inactive. */
 .ghost-slot.spare.idle {
-  border: var(--window-outline) solid rgb(0 0 0 / 0.35);
-  background: rgb(0 0 0 / 0.22);
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.25);
+  border: var(--window-outline) solid var(--recess-edge);
+  background: var(--recess);
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--scrim) 25%, transparent);
 }
 
 /* Right-edge resize handle: the gutter right of the window, so it never covers
@@ -603,7 +591,7 @@ kbd {
   background: transparent;
   transition: background 120ms;
 }
-.tile:hover .strip-resize::after, .main.windows.resizing .strip-resize::after { background: rgb(255 255 255 / 0.25); }
+.tile:hover .strip-resize::after, .main.windows.resizing .strip-resize::after { background: color-mix(in srgb, var(--ink) 25%, transparent); }
 
 /* Minimal position bar: one segment per window, the focused one highlighted. */
 .strip-scrollbar {
@@ -624,11 +612,11 @@ kbd {
   padding: 0;
   border: 0;
   border-radius: 1.5px;
-  background: rgb(255 255 255 / 0.14);
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
   cursor: pointer;
   transition: background 120ms;
 }
-.strip-seg:hover { background: rgb(255 255 255 / 0.3); }
+.strip-seg:hover { background: color-mix(in srgb, var(--ink) 30%, transparent); }
 .strip-seg.sel { background: var(--window-highlight); }
 
 /* Session search results in the palette */
@@ -646,9 +634,9 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.palette-snippet mark { background: rgb(255 214 10 / 0.25); color: var(--text); border-radius: 2px; padding: 0 1px; }
-.palette-list li.on .palette-meta, .palette-list li.on .palette-snippet { color: rgb(255 255 255 / 0.8); }
-.palette-list li.on .palette-snippet mark { background: rgb(255 255 255 / 0.3); color: #fff; }
+.palette-snippet mark { background: color-mix(in srgb, var(--match) 25%, transparent); color: var(--text); border-radius: 2px; padding: 0 1px; }
+.palette-list li.on .palette-meta, .palette-list li.on .palette-snippet { color: color-mix(in srgb, var(--on-accent) 80%, transparent); }
+.palette-list li.on .palette-snippet mark { background: color-mix(in srgb, var(--on-accent) 30%, transparent); color: var(--on-accent); }
 .palette-status { margin-left: auto; }
 
 /* ── browser and file windows ───────────────────────── */
@@ -719,14 +707,14 @@ kbd {
   cursor: default;
 }
 .file-row:hover { background: var(--bg-hover); }
-.file-row.sel { background: rgb(10 132 255 / 0.35); }
+.file-row.sel { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 .file-row.hidden-file { opacity: 0.55; }
 .file-icon { color: var(--text-dim); }
-.file-icon.dir { color: #5ea8ff; }
+.file-icon.dir { color: var(--folder); }
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-size, .file-date { font-size: 0.85em; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
 .file-error { padding: 16px; color: var(--text-dim); font-size: 12px; }
-.file-list:focus .file-row.sel { background: rgb(10 132 255 / 0.55); }
+.file-list:focus .file-row.sel { background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .file-row .twisty { color: var(--text-dim); }
 
 /* Text windows */
@@ -741,8 +729,8 @@ kbd {
   padding: 5px 10px;
   font-size: 12px;
   color: var(--text);
-  background: rgb(255 159 10 / 0.14);
-  border-bottom: 1px solid rgb(255 159 10 / 0.35);
+  background: color-mix(in srgb, var(--state-needs) 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--state-needs) 35%, transparent);
 }
 .textwin-banner span { flex: 1; }
 /* Unsaved changes: always in the DOM, scales in and out. */
@@ -781,7 +769,7 @@ kbd {
 .markdown li + li { margin-top: 0.25em; }
 .markdown li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
 .markdown input[type="checkbox"] { accent-color: var(--accent); margin-right: 0.5em; }
-.markdown a { color: #5ea8ff; text-decoration: none; cursor: pointer; }
+.markdown a { color: var(--link); text-decoration: none; cursor: pointer; }
 .markdown a:hover { text-decoration: underline; }
 .markdown strong { font-weight: 600; }
 .markdown hr { border: 0; border-top: 1px solid var(--separator); margin: 2em 0; }
@@ -799,7 +787,7 @@ kbd {
 .markdown table { border-collapse: collapse; display: block; overflow-x: auto; }
 .markdown th, .markdown td { padding: 6px 12px; border: 1px solid var(--separator); }
 .markdown th { font-weight: 600; background: var(--bg); }
-.markdown tr:nth-child(2n) td { background: rgb(255 255 255 / 0.02); }
+.markdown tr:nth-child(2n) td { background: color-mix(in srgb, var(--ink) 2%, transparent); }
 
 /* Canvas: windows on a pan/zoom plane (see WindowsView, canvas.ts). */
 .main.windows.mode-canvas { background: var(--bg); }
@@ -850,8 +838,8 @@ kbd {
   top: 0;
   width: var(--h);
   height: var(--h);
-  border-right: calc(2px / var(--z, 1)) solid rgb(255 255 255 / 0.3);
-  border-bottom: calc(2px / var(--z, 1)) solid rgb(255 255 255 / 0.3);
+  border-right: calc(2px / var(--z, 1)) solid color-mix(in srgb, var(--ink) 30%, transparent);
+  border-bottom: calc(2px / var(--z, 1)) solid color-mix(in srgb, var(--ink) 30%, transparent);
   opacity: 0;
   transition: opacity 120ms;
 }
@@ -862,7 +850,7 @@ kbd {
   right: 10px;
   bottom: 10px;
   z-index: 20;
-  background: rgb(20 20 22 / 0.82);
+  background: color-mix(in srgb, var(--well) 82%, transparent);
   border: 1px solid var(--separator);
   border-radius: var(--radius);
   cursor: pointer;
@@ -870,9 +858,9 @@ kbd {
   transition: opacity 120ms;
 }
 .minimap:hover { opacity: 1; }
-.minimap rect { fill: rgb(255 255 255 / 0.18); }
+.minimap rect { fill: color-mix(in srgb, var(--ink) 18%, transparent); }
 .minimap rect.sel { fill: var(--window-highlight); }
-.minimap rect.view { fill: rgb(255 255 255 / 0.04); stroke: rgb(255 255 255 / 0.55); stroke-width: 1; }
+.minimap rect.view { fill: color-mix(in srgb, var(--ink) 4%, transparent); stroke: color-mix(in srgb, var(--ink) 55%, transparent); stroke-width: 1; }
 
 /* ── title fields (components/Slot.tsx, docs/10-window-titles.md) ── */
 

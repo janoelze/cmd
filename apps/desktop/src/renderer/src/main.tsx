@@ -6,7 +6,10 @@ import "./styles.css";
 import "./windows/builtin.tsx"; // built-in window views (browser, files, text)
 import { App } from "./App.tsx";
 import { installScrollbars } from "./scrollbars.ts";
+import "./themes/builtin.ts";
+import { bootTheme } from "./themes/registry.ts";
 
+bootTheme();
 installScrollbars();
 
 createRoot(document.getElementById("root")!).render(<App />);
