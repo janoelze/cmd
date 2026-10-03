@@ -50,7 +50,27 @@ const launch = async () => {
 };
 let { app, win } = await launch();
 
+// Some calls have no timeout (app.close, evaluate waiting on the core) and can
+// hang for good, on Windows in particular. A watchdog fails the run instead,
+// naming the last step and saving a screenshot.
+let lastStep = "launch";
+let lastAt = Date.now();
+const step = (s) => ((lastStep = s), (lastAt = Date.now()));
+const HANG_MS = 90_000;
+setInterval(async () => {
+  if (Date.now() - lastAt < HANG_MS) return;
+  console.log(`HUNG: nothing for ${HANG_MS / 1000}s after: ${lastStep}`);
+  const within = (p) => Promise.race([p, new Promise((r) => setTimeout(() => r("(no answer in 5s)"), 5000))]);
+  const wins = await within(
+    app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => ({ title: w.getTitle(), visible: w.isVisible() }))),
+  ).catch((e) => e.message);
+  console.log("electron windows:", JSON.stringify(wins));
+  await within(win.screenshot({ path: path.join(shots, "hung.png") })).catch(() => {});
+  process.exit(1);
+}, 5000).unref();
+
 const check = (cond, msg) => {
+  step(`check "${msg}"`);
   if (!cond) throw new Error(`FAILED: ${msg}`);
   console.log(`ok - ${msg}`);
 };
@@ -58,12 +78,14 @@ const check = (cond, msg) => {
 const mac = process.platform === "darwin";
 const macOnly = (msg) => console.log(`skip - ${msg} (macOS keymap)`);
 // Synthetic keys bypass the native menu, so trigger menu items directly.
-const menu = (id) =>
+const menu = (id) => (
+  step(`menu ${id}`),
   app.evaluate(({ Menu }, id) => {
     const item = Menu.getApplicationMenu()?.getMenuItemById(id);
     if (!item) throw new Error(`no menu item ${id}`);
     item.click();
-  }, id);
+  }, id)
+);
 const accel = (id) => app.evaluate(({ Menu }, id) => Menu.getApplicationMenu()?.getMenuItemById(id)?.accelerator ?? null, id);
 const panes = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.length));
 // Windows in visual order (reading order); the DOM keeps a stable creation order.
@@ -468,6 +490,7 @@ const markerPane = (await win.evaluate(() => window.cmd.call("pane.list", {})))[
 const markerCmd = process.platform !== "win32"
   ? "printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r"
   : 'Write-Host -NoNewline "`e[?1000h`e[?1000l"; echo "MARKER-$(40+2)"\r';
+step("typing the re-attach marker");
 await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [markerPane, markerCmd]);
 await win.waitForTimeout(800);
 
@@ -477,10 +500,12 @@ await menu("view.tools");
 await win.click(".panel-title >> text=Agents"); // collapse a tool panel
 await menu("view.zoomIn");
 await menu("view.zoomIn");
+step("reading the UI state before the restart");
 const selectedBefore = await win.evaluate(() => window.cmd.call("ui.get", {}).then((u) => u["selection.pane"]));
 await win.waitForTimeout(400); // debounced writes
+step("closing the app");
 await app.close();
-
+step("relaunching the app");
 ({ app, win } = await launch());
 await win.waitForSelector(".sidebar-status");
 await win.waitForTimeout(800);
