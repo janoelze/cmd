@@ -9,16 +9,15 @@
 // yields nothing a generic walker still collects text. Bump PARSER_VERSION
 // whenever the output changes; the index then re-reads every transcript.
 
+import type { AgentKind } from "@cmd/protocol";
+
 export const PARSER_VERSION = 1;
 
-export type TranscriptAgent = "claude" | "codex";
 
 export interface SessionDocument {
   id: string;
-  agent: TranscriptAgent;
+  agent: AgentKind;
   path: string;
-  /** Claude Code config dir the transcript lives in (~/.claude, a profile, …). */
-  configDir: string | null;
   cwd?: string;
   branch?: string;
   title?: string;
@@ -35,7 +34,7 @@ const MAX_TEXT = 20_000;
 const LARGE_LINE = 200_000;
 const TOOL_OUTPUT_MARKERS = ["tool_result", "function_call_output", "file-history"];
 
-type Obj = Record<string, unknown>;
+export type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const cap = (s: string) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
@@ -62,6 +61,16 @@ function forEachObject(text: string, fn: (o: Obj) => void): void {
     }
     start = end + 1;
   }
+}
+
+/** The first `n` JSON objects of a transcript, for telling formats apart. */
+export function headObjects(text: string, n: number): Obj[] {
+  const out: Obj[] = [];
+  const head = text.length > 1_000_000 ? text.slice(0, 1_000_000) : text;
+  forEachObject(head, (o) => {
+    if (out.length < n) out.push(o);
+  });
+  return out;
 }
 
 function parseDate(v: unknown): number | undefined {
@@ -135,12 +144,11 @@ export function cleanClaudePrompt(text: string): string {
   return r.trim();
 }
 
-export function parseClaude(text: string, path: string, configDir: string | null): SessionDocument | null {
+export function parseClaude(text: string, path: string): SessionDocument | null {
   const doc: SessionDocument = {
     id: (path.split("/").pop() ?? "").replace(/\.jsonl$/, ""),
     agent: "claude",
     path,
-    configDir,
     prompts: [],
     responses: [],
     tools: [],
@@ -195,7 +203,7 @@ export function parseClaude(text: string, path: string, configDir: string | null
 }
 
 export function parseCodex(text: string, path: string): SessionDocument | null {
-  const doc: SessionDocument = { id: "", agent: "codex", path, configDir: null, prompts: [], responses: [], tools: [] };
+  const doc: SessionDocument = { id: "", agent: "codex", path, prompts: [], responses: [], tools: [] };
   // Codex logs user text twice (as an event and as a model input item that also
   // carries environment context); prefer the events, fall back to the items.
   const itemPrompts: string[] = [];

@@ -35,7 +35,7 @@ usage: cmd <command> [options]
   open <path|url> [--kind K] [--types] open in a cmd window (folder, text, browser, …);
                                       --types lists window types
   search <query…> [--json] [--limit N]  search past Claude Code / Codex sessions
-  resume <session-id> [--agent claude|codex] [--fork]
+  resume <session-id> [--agent claude|codex|…] [--fork]
   magic <request…> [--help]          make a widget or terminal command from a request
                                       (runs here, no core needed; see cmd magic --help)
   settings [get KEY | set KEY VALUE | reset KEY | path] [--json]
@@ -242,10 +242,10 @@ async function run({ client, closed }: Connection): Promise<number> {
       if (!id) return fail("usage: cmd resume <session-id>");
       const hit = (await client.call("search.query", { text: `"${id}"`, limit: 1 })).find((h) => h.sessionId === id);
       const agent = await client.call("agent.resume", {
-        agent: (str(opt.agent) as "claude" | "codex") ?? hit?.agent ?? "claude",
+        agent: str(opt.agent) ?? hit?.agent ?? "claude",
         sessionId: id,
         cwd: hit?.cwd ?? process.cwd(),
-        configDir: hit?.configDir ?? null,
+        env: hit?.env ?? null,
         fork: !!opt.fork,
         callerPaneId,
       });

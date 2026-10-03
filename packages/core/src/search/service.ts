@@ -4,14 +4,18 @@ import fs from "node:fs";
 import { EventEmitter } from "node:events";
 import { Worker } from "node:worker_threads";
 import { DatabaseSync } from "node:sqlite";
-import { Searcher, type IndexStatus, type SearchHit, type TranscriptRoot } from "./index.ts";
-import type { WorkerMessage } from "./worker.ts";
+import type { AgentKind } from "@cmd/protocol";
+import { Searcher, type IndexStatus, type SearchHit } from "./index.ts";
+import type { TranscriptRoot } from "./sources.ts";
+import type { WorkerMessage, WorkerRequest } from "./worker.ts";
 
 export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
   #dbPath: string;
   #worker: Worker | null = null;
   #searcher: Searcher | null = null;
   #status: IndexStatus = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
+  /** Transcript paths already passed to the worker. */
+  #reported = new Set<string>();
 
   constructor(dbPath: string, roots: TranscriptRoot[]) {
     super();
@@ -33,6 +37,13 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
 
   recent(limit?: number, exclude?: string[]): SearchHit[] {
     return this.#reader()?.recent(limit, exclude) ?? [];
+  }
+
+  /** A live agent's transcript: if it lies outside every known folder, its folder is indexed from now on. */
+  learn(agent: AgentKind, transcriptPath: string): void {
+    if (this.#reported.has(transcriptPath)) return;
+    this.#reported.add(transcriptPath);
+    this.#worker?.postMessage({ type: "learn", agent, path: transcriptPath } satisfies WorkerRequest);
   }
 
   /** Resolves once the worker has stopped (it holds the index open for writing). */
@@ -62,7 +73,8 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
     else if (m.type === "pass") {
       this.#searcher?.invalidate();
       this.#setStatus({ indexing: false, sessions: m.sessions, files: m.files, done: 0, total: 0 });
-    } else console.error("cmd search:", m.message);
+    } else if (m.type === "learned") console.log(`cmd search: now indexing ${m.root.agent ?? "mixed"} transcripts in ${m.root.dir}`);
+    else console.error("cmd search:", m.message);
   }
 
   #setStatus(patch: Partial<IndexStatus>): void {

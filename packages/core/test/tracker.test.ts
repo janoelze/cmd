@@ -1,4 +1,8 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { AgentTracker } from "../src/agents/tracker.ts";
 import { PaneManager } from "../src/panes.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
@@ -191,5 +195,24 @@ describe("launch failures", () => {
     vi.advanceTimersByTime(1500);
     expect(t.get(a.id)).toBeNull();
     expect(p.get(a.paneId!)!.agentId).toBeNull();
+  });
+});
+
+describe("resume command", () => {
+  it("is built by the core: cd, the profile's env from the transcript folder, the configured command", () => {
+    const profile = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-profile-")));
+    fs.mkdirSync(path.join(profile, "projects", "-p"), { recursive: true });
+    const t = new AgentTracker(panes, { settings: () => ({ ...DEFAULT_SETTINGS, "agents.claude.command": "claude --model opus" }) });
+    const pane = panes.create();
+    expect(t.resumeCommand(t.ingestHook(pane.id, "claude", "UserPromptSubmit", { cwd: "/tmp" })!.id)).toBeNull(); // no session yet
+    const a = t.ingestHook(pane.id, "claude", "SessionStart", {
+      session_id: "abc",
+      cwd: "/tmp/it's",
+      transcript_path: path.join(profile, "projects", "-p", "abc.jsonl"),
+    })!;
+    expect(t.resumeCommand(a.id)).toBe(`cd '/tmp/it'\\''s' && CLAUDE_CONFIG_DIR='${profile}' claude --model opus --resume 'abc'`);
+    const r = t.resume({ agent: "codex", sessionId: "t1", cwd: null, spaceId: HOME_SPACE_ID });
+    expect(t.resumeCommand(r.id)).toBe(`cd '${os.homedir()}' && codex resume 't1'`);
+    fs.rmSync(profile, { recursive: true, force: true });
   });
 });

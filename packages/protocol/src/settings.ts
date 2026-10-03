@@ -173,12 +173,12 @@ export const SETTINGS_SCHEMA = {
     description: "Notify when a command that ran at least this long finishes (needs shell integration). 0 = off.",
   },
 
-  "search.enabled": { title: "Index transcripts", type: "boolean", default: true, description: "Index Claude Code and Codex transcripts for search (? in the palette)." },
+  "search.enabled": { title: "Index transcripts", type: "boolean", default: true, description: "Index coding agent transcripts (Claude Code, Codex) for search (? in the palette)." },
   "search.archiveDirs": {
     title: "Archive folders", placeholder: "~/claude-transcripts-archive",
     type: "string",
     default: "~/claude-transcripts-archive",
-    description: "Extra folders of archived Claude transcripts (*.jsonl) to index, comma-separated.",
+    description: "Extra folders of archived transcripts (*.jsonl, any supported agent) to index, comma-separated.",
   },
 
   "agents.claude.command": {

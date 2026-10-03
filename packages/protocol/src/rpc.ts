@@ -162,8 +162,13 @@ export interface Methods {
   "search.recent": { params: { limit?: number; exclude?: string[] }; result: SearchHit[] };
   "search.status": { params: {}; result: SearchStatus };
   /** Resume (or fork) a past session in a new pane, typed into the user's shell. */
+  /**
+   * Shell command that resumes an agent's session from anywhere (cd + env + the
+   * agent's resume command), e.g. to copy; null if it has no resumable session.
+   */
+  "agent.resumeCommand": { params: { agentId: AgentId }; result: string | null };
   "agent.resume": {
-    params: Placement & { agent: "claude" | "codex"; sessionId: string; cwd?: string | null; configDir?: string | null; fork?: boolean };
+    params: Placement & { agent: AgentKind; sessionId: string; cwd?: string | null; env?: Record<string, string> | null; fork?: boolean };
     result: Agent;
   };
 
@@ -220,9 +225,10 @@ export type CoreEvent =
 
 export interface SearchHit {
   sessionId: string;
-  agent: "claude" | "codex";
+  agent: AgentKind;
   path: string;
-  configDir: string | null;
+  /** Environment the agent needs to resume this session (e.g. CLAUDE_CONFIG_DIR for a profile); null = none. */
+  env: Record<string, string> | null;
   cwd: string | null;
   branch: string | null;
   title: string;

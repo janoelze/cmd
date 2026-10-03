@@ -3,26 +3,19 @@
 // separate read connection in the core (WAL mode allows both at once).
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { isEmpty, parseClaude, parseCodex, PARSER_VERSION, type SessionDocument, type TranscriptAgent } from "./parser.ts";
+import type { AgentKind } from "@cmd/protocol";
+import { PARSER_VERSION, isEmpty, type SessionDocument } from "./parser.ts";
 import { identifierParts, SearchQuery, Vocabulary } from "./query.ts";
-
-export interface TranscriptRoot {
-  agent: TranscriptAgent;
-  dir: string;
-  /** Claude config dir the transcripts belong to (for resume); null for archives and Codex. */
-  configDir: string | null;
-  /** "projects": projects/<project>/<session>.jsonl · "flat": <dir>/*.jsonl · "tree": recursive. */
-  layout: "projects" | "flat" | "tree";
-}
+import type { TranscriptRoot, TranscriptSources } from "./sources.ts";
 
 export interface SearchHit {
   sessionId: string;
-  agent: TranscriptAgent;
+  agent: AgentKind;
   path: string;
-  configDir: string | null;
+  /** Environment the agent needs to resume this session (e.g. CLAUDE_CONFIG_DIR); null = none. */
+  env: Record<string, string> | null;
   cwd: string | null;
   branch: string | null;
   title: string;
@@ -41,41 +34,7 @@ export interface IndexStatus {
   total: number;
 }
 
-const SCHEMA_VERSION = 2; // 2: sessions.msg_first/msg_last
-
-/**
- * Where transcripts live: every Claude config dir (default, $CLAUDE_CONFIG_DIR,
- * ~/.claude-profiles/*), extra archive dirs (flat <uuid>.jsonl), and Codex sessions.
- */
-export function defaultRoots(archiveDirs: string[] = [], home = process.env.CMD_TRANSCRIPTS_HOME ?? os.homedir()): TranscriptRoot[] {
-  const claudeDirs = [path.join(home, ".claude")];
-  if (process.env.CLAUDE_CONFIG_DIR && !process.env.CMD_TRANSCRIPTS_HOME) claudeDirs.push(process.env.CLAUDE_CONFIG_DIR);
-  const profiles = path.join(home, ".claude-profiles");
-  try {
-    for (const p of fs.readdirSync(profiles)) claudeDirs.push(path.join(profiles, p));
-  } catch {}
-  const roots: TranscriptRoot[] = [];
-  const seen = new Set<string>();
-  for (const d of claudeDirs) {
-    let real: string;
-    try {
-      real = fs.realpathSync(d);
-    } catch {
-      continue;
-    }
-    const projects = path.join(real, "projects");
-    if (seen.has(projects) || !fs.existsSync(projects)) continue;
-    seen.add(projects);
-    roots.push({ agent: "claude", dir: projects, configDir: real, layout: "projects" });
-  }
-  for (const a of archiveDirs) {
-    const dir = a.replace(/^~(?=$|\/)/, home);
-    if (fs.existsSync(dir)) roots.push({ agent: "claude", dir, configDir: null, layout: "flat" });
-  }
-  const codex = path.join((!process.env.CMD_TRANSCRIPTS_HOME && process.env.CODEX_HOME) || path.join(home, ".codex"), "sessions");
-  if (fs.existsSync(codex)) roots.push({ agent: "codex", dir: codex, configDir: null, layout: "tree" });
-  return roots;
-}
+const SCHEMA_VERSION = 3; // 2: sessions.msg_first/msg_last · 3: sessions.env replaces config_dir
 
 export interface TranscriptFile {
   path: string;
@@ -84,35 +43,33 @@ export interface TranscriptFile {
   mtime: number;
 }
 
+/** Every *.jsonl within each root's depth; a file under two roots counts for the first. */
 export function transcriptFiles(roots: TranscriptRoot[]): TranscriptFile[] {
   const out: TranscriptFile[] = [];
-  const add = (p: string, root: TranscriptRoot) => {
-    if (!p.endsWith(".jsonl")) return;
+  const seen = new Set<string>();
+  const walk = (dir: string, root: TranscriptRoot, depth: number) => {
+    let entries: fs.Dirent[];
     try {
-      const st = fs.statSync(p);
-      if (st.isFile()) out.push({ path: p, root, size: st.size, mtime: st.mtimeMs });
-    } catch {}
-  };
-  const list = (d: string) => {
-    try {
-      return fs.readdirSync(d);
+      entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
-      return [];
+      return;
+    }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (root.depth === undefined || depth < root.depth) walk(p, root, depth + 1);
+      } else if (e.name.endsWith(".jsonl") && !seen.has(p)) {
+        try {
+          const st = fs.statSync(p);
+          if (st.isFile()) {
+            seen.add(p);
+            out.push({ path: p, root, size: st.size, mtime: st.mtimeMs });
+          }
+        } catch {}
+      }
     }
   };
-  for (const root of roots) {
-    if (root.layout === "projects") {
-      // projects/<project>/<session>.jsonl; deeper files are subagent logs.
-      for (const project of list(root.dir)) {
-        const pd = path.join(root.dir, project);
-        for (const f of list(pd)) add(path.join(pd, f), root);
-      }
-    } else if (root.layout === "flat") {
-      for (const f of list(root.dir)) add(path.join(root.dir, f), root);
-    } else {
-      for (const f of fs.readdirSync(root.dir, { recursive: true }) as string[]) add(path.join(root.dir, f), root);
-    }
-  }
+  for (const root of roots) walk(root.dir, root, 1);
   return out;
 }
 
@@ -120,18 +77,19 @@ export function openIndex(file: string): DatabaseSync {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(`PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;
-    CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);`);
+    CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE IF NOT EXISTS learned_roots(dir TEXT PRIMARY KEY, root TEXT);`);
   const version = `${SCHEMA_VERSION}.${PARSER_VERSION}`;
   const row = db.prepare(`SELECT value FROM meta WHERE key = 'version'`).get() as { value: string } | undefined;
   if (row?.value !== version) {
-    // Schema or parser changed: rebuild from scratch.
+    // Schema or parser changed: rebuild from scratch (learned roots are kept).
     db.exec(`DROP TABLE IF EXISTS files; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS session_fts;
       DROP TABLE IF EXISTS message_fts; DROP TABLE IF EXISTS vocab;`);
   }
   db.exec(`
     CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, size INTEGER, mtime REAL);
     CREATE TABLE IF NOT EXISTS sessions(
-      rowid INTEGER PRIMARY KEY, id TEXT, agent TEXT, path TEXT UNIQUE, config_dir TEXT,
+      rowid INTEGER PRIMARY KEY, id TEXT, agent TEXT, path TEXT UNIQUE, env TEXT,
       cwd TEXT, branch TEXT, title TEXT, first_prompt TEXT, started REAL, updated REAL,
       msg_first INTEGER, msg_last INTEGER);
     CREATE INDEX IF NOT EXISTS sessions_id ON sessions(id);
@@ -143,6 +101,16 @@ export function openIndex(file: string): DatabaseSync {
   `);
   db.prepare(`INSERT OR REPLACE INTO meta(key, value) VALUES ('version', ?)`).run(version);
   return db;
+}
+
+/** Transcript folders learned from live agents (see TranscriptSources.learn). */
+export function learnedRoots(db: DatabaseSync): TranscriptRoot[] {
+  const rows = db.prepare(`SELECT root FROM learned_roots`).all() as { root: string }[];
+  return rows.map((r) => JSON.parse(r.root) as TranscriptRoot);
+}
+
+export function saveLearnedRoot(db: DatabaseSync, root: TranscriptRoot): void {
+  db.prepare(`INSERT OR REPLACE INTO learned_roots(dir, root) VALUES (?, ?)`).run(root.dir, JSON.stringify(root));
 }
 
 function deleteByPath(db: DatabaseSync, p: string): void {
@@ -159,17 +127,17 @@ function deleteByPath(db: DatabaseSync, p: string): void {
   }
 }
 
-function insert(db: DatabaseSync, d: SessionDocument): void {
+function insert(db: DatabaseSync, d: SessionDocument, env: Record<string, string> | null): void {
   const r = db
     .prepare(
-      `INSERT INTO sessions(id, agent, path, config_dir, cwd, branch, title, first_prompt, started, updated)
+      `INSERT INTO sessions(id, agent, path, env, cwd, branch, title, first_prompt, started, updated)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       d.id,
       d.agent,
       d.path,
-      d.configDir,
+      env ? JSON.stringify(env) : null,
       d.cwd ?? null,
       d.branch ?? null,
       d.title ?? null,
@@ -201,14 +169,14 @@ function insert(db: DatabaseSync, d: SessionDocument): void {
   if (first !== null) db.prepare(`UPDATE sessions SET msg_first = ?, msg_last = ? WHERE rowid = ?`).run(first, last, rowid);
 }
 
-export function parseFile(f: TranscriptFile): SessionDocument | null {
+export function parseFile(f: TranscriptFile, sources: TranscriptSources): SessionDocument | null {
   let text: string;
   try {
     text = fs.readFileSync(f.path, "utf8");
   } catch {
     return null;
   }
-  const doc = f.root.agent === "codex" ? parseCodex(text, f.path) : parseClaude(text, f.path, f.root.configDir);
+  const doc = sources.parse(f.root, text, f.path);
   return doc && !isEmpty(doc) ? doc : null;
 }
 
@@ -216,7 +184,12 @@ export function parseFile(f: TranscriptFile): SessionDocument | null {
  * One incremental pass: (re)index files whose size or mtime changed, drop removed
  * ones. Commits in batches so readers see progress.
  */
-export function indexPass(db: DatabaseSync, roots: TranscriptRoot[], onProgress?: (done: number, total: number) => void): { changed: number; removed: number } {
+export function indexPass(
+  db: DatabaseSync,
+  roots: TranscriptRoot[],
+  sources: TranscriptSources,
+  onProgress?: (done: number, total: number) => void,
+): { changed: number; removed: number } {
   const files = transcriptFiles(roots);
   const known = new Map<string, { size: number; mtime: number }>();
   for (const r of db.prepare(`SELECT path, size, mtime FROM files`).all() as { path: string; size: number; mtime: number }[]) {
@@ -238,8 +211,8 @@ export function indexPass(db: DatabaseSync, roots: TranscriptRoot[], onProgress?
     }
     changed.forEach((f, i) => {
       deleteByPath(db, f.path);
-      const doc = parseFile(f);
-      if (doc) insert(db, doc);
+      const doc = parseFile(f, sources);
+      if (doc) insert(db, doc, f.root.env);
       db.prepare(`INSERT OR REPLACE INTO files(path, size, mtime) VALUES (?, ?, ?)`).run(f.path, f.size, f.mtime);
       if ((i + 1) % BATCH === 0) {
         db.exec("COMMIT");
@@ -267,9 +240,9 @@ const oneLine = (t: string) => (t.split(/\r?\n/)[0] ?? t).trim().slice(0, 200);
 function rowToHit(r: Record<string, unknown>, fuzzy: boolean): SearchHit {
   return {
     sessionId: String(r.id ?? ""),
-    agent: r.agent === "codex" ? "codex" : "claude",
+    agent: String(r.agent),
     path: String(r.path),
-    configDir: (r.config_dir as string | null) ?? null,
+    env: typeof r.env === "string" ? (JSON.parse(r.env) as Record<string, string>) : null,
     cwd: (r.cwd as string | null) ?? null,
     branch: (r.branch as string | null) ?? null,
     title: oneLine(String(r.title ?? "")),
@@ -339,7 +312,7 @@ export class Searcher {
     try {
       rows = this.#db
         .prepare(
-          `SELECT s.rowid, s.id, s.agent, s.path, s.config_dir, s.cwd, s.branch,
+          `SELECT s.rowid, s.id, s.agent, s.path, s.env, s.cwd, s.branch,
                   coalesce(s.title, s.first_prompt, '') AS title, s.updated,
                   bm25(session_fts, 10.0, 5.0, 1.0, 2.0, 1.5) AS bm
            FROM session_fts JOIN sessions s ON s.rowid = session_fts.rowid
@@ -365,7 +338,7 @@ export class Searcher {
     const skip = new Set(exclude);
     const rows = this.#db
       .prepare(
-        `SELECT id, agent, path, config_dir, cwd, branch, coalesce(title, first_prompt, '') AS title, updated
+        `SELECT id, agent, path, env, cwd, branch, coalesce(title, first_prompt, '') AS title, updated
          FROM sessions ORDER BY updated DESC NULLS LAST LIMIT ?`,
       )
       .all(limit * 3 + skip.size) as Record<string, unknown>[];

@@ -16,7 +16,7 @@ import {
   openableTarget,
   openPath,
   openSession,
-  resumeCommand,
+  copyResumeCommand,
   sessionId,
 } from "./actions.ts";
 import { showContextMenu } from "./context.ts";
@@ -329,10 +329,7 @@ export function App() {
       const target = flat.find(wants) ?? flatten(buildRows(all)).find(wants);
       if (target?.pane) select(target.pane.id);
     },
-    "session.copyResume": () => {
-      const c = currentAgent && resumeCommand(currentAgent);
-      if (c) copy(c);
-    },
+    "session.copyResume": () => currentAgent && void copyResumeCommand(currentAgent),
     "session.copyId": () => {
       const id = currentAgent && sessionId(currentAgent);
       if (id) copy(id);
@@ -378,7 +375,7 @@ export function App() {
         "edit.clear": hasPane,
         "session.next": withPane.length > 1,
         "session.prev": withPane.length > 1,
-        "session.copyResume": !!(currentAgent && resumeCommand(currentAgent)),
+        "session.copyResume": !!(currentAgent && sessionId(currentAgent)),
         "session.copyId": !!(currentAgent && sessionId(currentAgent)),
         "session.reveal": hasPane,
         "session.nextAttention": attention > 0,
@@ -397,7 +394,6 @@ export function App() {
     const a = r.agent;
     const winPath = r.win && stateStr(r.win, "path");
     const cwd = a?.cwd ?? r.pane?.cwd ?? (r.win?.kind === "files" ? winPath : winPath?.split("/").slice(0, -1).join("/")) ?? undefined;
-    const resume = a && resumeCommand(a);
     const id = a && sessionId(a);
     void showContextMenu([
       ...(windowIdOf(r)
@@ -413,7 +409,7 @@ export function App() {
       ...(r.win ? [...(viewFor(r.win.kind)?.menu?.(r.win) ?? []), "-" as const] : []),
       ...(a
         ? [
-            { label: "Copy Resume Command", run: () => resume && copy(resume), enabled: !!resume },
+            { label: "Copy Resume Command", run: () => void copyResumeCommand(a), enabled: !!id },
             { label: "Copy Session ID", run: () => id && copy(id), enabled: !!id },
             ...(a.native.transcriptPath ? [{ label: "Reveal Transcript", run: () => cmd.openPath(a.native.transcriptPath!) }] : []),
             "-" as const,

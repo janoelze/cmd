@@ -10,6 +10,8 @@ import { NotificationCenter } from "./notifications.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
+import { registerBuiltinSources } from "./search/builtin.ts";
+import { TranscriptSources } from "./search/sources.ts";
 import { listDir, parseOverrides, readText, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { Store } from "./store.ts";
@@ -35,10 +37,10 @@ export interface CoreOptions {
   /** Hook status directory (statusRoot()); null disables file-based hooks. */
   statusRoot?: string | null;
   /**
-   * Transcript search (runs its own indexing worker) for the current settings;
-   * called again when search.* changes. Returns null when search is off.
+   * Transcript search (runs its own indexing worker) for the current settings and
+   * transcript sources; called again when search.* changes. Returns null when search is off.
    */
-  search?: ((settings: Settings) => SearchService | null) | null;
+  search?: ((settings: Settings, sources: TranscriptSources) => SearchService | null) | null;
   /** File that keeps running shells' `open` rules current; null: rules are fixed when a shell starts. */
   shellRulesFile?: string | null;
   /** Source hash this core was started from (see sourceBuildId). */
@@ -62,6 +64,8 @@ export class Core {
   readonly resources: ResourceMonitor | null;
   readonly windows: WindowManager;
   readonly windowTypes: WindowTypes;
+  /** Where each agent keeps transcripts and how to resume them. */
+  readonly transcripts: TranscriptSources;
   readonly spaces: SpaceManager;
   readonly magic: MagicService;
   #server: net.Server | null = null;
@@ -85,6 +89,7 @@ export class Core {
     // Window types (built-ins now; plugins register more through the same API).
     this.windowTypes = new WindowTypes();
     registerBuiltins(this.windowTypes);
+    this.transcripts = registerBuiltinSources(new TranscriptSources());
     const overrides = () => parseOverrides(this.settings.settings["open.handlers"]);
     this.panes = new PaneManager(opts.ptyFactory, {
       socketPath: opts.socketPath,
@@ -102,7 +107,7 @@ export class Core {
         console.error(`cmd core: could not write shell rules: ${(err as Error).message}`);
       }
     });
-    this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null });
+    this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null, sources: this.transcripts });
     this.notifications = new NotificationCenter(this.panes, this.agents, settings);
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler) : null;
@@ -125,7 +130,11 @@ export class Core {
     this.panes.on("output", (paneId, data) => this.#broadcast({ type: "pane.output", paneId, data }));
     this.panes.on("updated", (pane) => this.#broadcast({ type: "pane.updated", pane }));
     this.panes.on("removed", (paneId) => this.#broadcast({ type: "pane.removed", paneId }));
-    this.agents.on("updated", (agent) => this.#broadcast({ type: "agent.updated", agent }));
+    this.agents.on("updated", (agent) => {
+      this.#broadcast({ type: "agent.updated", agent });
+      // Hooks report where the transcript is: picks up folders discovery doesn't know.
+      if (agent.native.transcriptPath) this.#search?.learn(agent.kind, agent.native.transcriptPath);
+    });
     this.agents.on("removed", (agentId) => this.#broadcast({ type: "agent.removed", agentId }));
   }
 
@@ -200,6 +209,7 @@ export class Core {
     "search.query": (p) => this.#search?.search(p.text, p.limit) ?? [],
     "search.recent": (p) => this.#search?.recent(Math.min(p.limit ?? 5, 50), p.exclude) ?? [],
     "search.status": () => this.#search?.status() ?? NO_SEARCH,
+    "agent.resumeCommand": (p) => this.agents.resumeCommand(p.agentId),
     "agent.resume": (p) => this.agents.resume({ ...p, spaceId: this.#place(p, { path: p.cwd ?? undefined }).id }),
     "ui.get": () => this.store.uiState(),
     "ui.set": (p) => {
@@ -226,7 +236,7 @@ export class Core {
       this.#search = null;
       await old?.close();
       if (gen !== this.#searchGen || this.#closed) return; // a newer restart replaces this one
-      const next = this.#opts.search!(this.settings.settings);
+      const next = this.#opts.search!(this.settings.settings, this.transcripts);
       this.#search = next;
       next?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
       this.#broadcast({ type: "search.status", status: next?.status() ?? NO_SEARCH });
