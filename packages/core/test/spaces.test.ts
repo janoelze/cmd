@@ -10,10 +10,11 @@ import { Store } from "../src/store.ts";
 import { SpaceManager } from "../src/spaces/manager.ts";
 import { canonical, contains, deepest, gitRoot } from "../src/spaces/paths.ts";
 import { fakeFactory } from "./fake-pty.ts";
+import { rmTemp } from "./tmp.ts";
 
 // realpath: on macOS os.tmpdir() is itself behind a symlink (/var → /private/var).
 const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-spaces-")));
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+afterAll(() => rmTemp(tmp));
 
 const mk = (...parts: string[]) => {
   const p = path.join(tmp, ...parts);
@@ -78,6 +79,11 @@ describe("containment", () => {
     expect(contains("/a/proj", "/a/proj-old")).toBe(false);
     expect(contains("/a/proj", "/a/pro")).toBe(false);
     expect(contains("/", "/anything")).toBe(true);
+    // Windows paths, with either separator.
+    expect(contains("C:\\src\\cmd", "C:\\src\\cmd\\docs")).toBe(true);
+    expect(contains("C:\\src\\cmd", "C:\\src\\cmd/docs")).toBe(true);
+    expect(contains("C:\\src\\cmd", "C:\\src\\cmd-old")).toBe(false);
+    expect(contains("C:\\", "C:\\anything")).toBe(true);
   });
 
   it("picks the deepest root", () => {
@@ -195,10 +201,14 @@ describe("SpaceManager", () => {
   it("persists across restarts", () => {
     const { home, proj } = fixture("persist");
     const db = path.join(tmp, "persist.sqlite");
-    const a = new SpaceManager(new Store(db), home).open(proj).space;
-    const again = new SpaceManager(new Store(db), home);
+    const first = new Store(db);
+    const a = new SpaceManager(first, home).open(proj).space;
+    first.close();
+    const second = new Store(db);
+    const again = new SpaceManager(second, home);
     expect(again.list().map((s) => s.id)).toEqual([HOME_SPACE_ID, a.id]);
     expect(again.open(proj).created).toBe(false);
+    second.close(); // Windows can't delete an open database file
   });
 });
 

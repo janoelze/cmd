@@ -18,4 +18,6 @@ cmd.onCommand((id) => {
   else if (id === "edit.selectAll") document.execCommand("selectAll");
 });
 
+// macOS draws the traffic lights over the page; elsewhere the platform's frame sits above it.
+document.documentElement.classList.add(navigator.platform.startsWith("Mac") ? "platform-mac" : "platform-other");
 createRoot(document.getElementById("root")!).render(<SettingsWindow />);

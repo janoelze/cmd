@@ -5,7 +5,7 @@
 //   icon.icns   flat render for older macOS, the DMG and Finder previews, via ictool
 //   icon.png    (1024, Linux), icon.ico (Windows)
 // and a red variant for development builds (pnpm dev, pnpm dist) in build/dev/
-// (Assets.car, icon.icns, icon.png), so they're easy to tell from the installed app.
+// (Assets.car, icon.icns, icon.png, icon.ico), so they're easy to tell from the installed app.
 // The outputs are committed, so packaging needs no Xcode. Needs Xcode 26+. usage: pnpm icons
 import fs from "node:fs";
 import os from "node:os";
@@ -116,6 +116,6 @@ function render(iconDoc, outDir, { ico = false } = {}) {
 }
 
 render(source, build, { ico: true });
-render(devSource, path.join(build, "dev"));
+render(devSource, path.join(build, "dev"), { ico: true });
 fs.rmSync(tmp, { recursive: true, force: true });
-console.log("wrote apps/desktop/build/{Assets.car,icon.icns,icon.png,icon.ico} and build/dev/{Assets.car,icon.icns,icon.png}");
+console.log("wrote apps/desktop/build/{Assets.car,icon.icns,icon.png,icon.ico} and build/dev/ (the same, red)");

@@ -8,7 +8,7 @@ import type { PaneManager } from "./panes.ts";
 
 export type TreeSampler = (pids: number[]) => Promise<TreeUsage[]>;
 
-const basename = (p: string) => p.split("/").pop() ?? p;
+const basename = (p: string) => p.split(/[\\/]/).pop() ?? p;
 
 /** Friendly process name: agents by their kind (Claude's binary is named after its version). */
 export function processName(name: string, path: string): string {

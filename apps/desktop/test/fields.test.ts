@@ -30,6 +30,14 @@ describe("window fields", () => {
     expect(fieldsOf(row({ pane: pane({ title: "✳ build server" }) }), undefined, 0)).toMatchObject({ name: "build server", kind: "zsh" });
   });
 
+  it("shell: a Windows console title that's just the shell's path counts as no title", () => {
+    const pwsh = (title: string) => fieldsOf(row({ pane: pane({ title, foreground: "pwsh", cwd: "C:\\Users\\me" }) }), undefined, 0);
+    expect(pwsh("Administrator: C:\\Program Files\\PowerShell\\7\\pwsh.exe").name).toBe("pwsh");
+    expect(pwsh("C:\\WINDOWS\\system32\\cmd.exe").name).toBe("pwsh");
+    expect(pwsh("Windows PowerShell").name).toBe("pwsh");
+    expect(pwsh("Administrator: npm run dev").name).toBe("npm run dev");
+  });
+
   it("shell with an attention marker: its text as status, a light until seen", () => {
     const at = 0;
     const bell = fieldsOf(row({ pane: pane({ attention: { kind: "bell", text: "Bell", urgent: true, at } }) }), undefined, 0);

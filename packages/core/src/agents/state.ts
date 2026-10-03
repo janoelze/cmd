@@ -92,7 +92,7 @@ export function applyHook(kind: AgentKind, event: string, p: Payload): StateChan
   return change;
 }
 
-const base = (p: unknown): string | null => (typeof p === "string" && p ? (p.split("/").pop() ?? p) : null);
+const base = (p: unknown): string | null => (typeof p === "string" && p ? (p.split(/[\\/]/).pop() ?? p) : null);
 const line1 = (s: string) => (s.split(/\r?\n/)[0] ?? s).trim();
 
 /** Short description of a tool call. Port of the fork's describeTool. */

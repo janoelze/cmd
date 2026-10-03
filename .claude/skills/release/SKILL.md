@@ -5,9 +5,10 @@ description: Cut a cmd release (signed, notarized, auto-updating) and verify it,
 
 # Releasing cmd
 
-A release is a `v<version>` tag. CI (`.github/workflows/build.yml`) builds the tag, signs it with
-Developer ID, notarizes and staples the app and the dmg, verifies all of that, and publishes a
-GitHub release. Installed apps update themselves from it (`apps/desktop/src/main/updater.ts`).
+A release is a `v<version>` tag. CI (`.github/workflows/build.yml`) builds the tag on macOS and
+Windows. The `mac` job signs with Developer ID, notarizes and staples the app and the dmg, and
+verifies all of that. The `windows` job builds an unsigned NSIS installer and a zip. A `release`
+job then publishes both platforms' files as one GitHub release. Installed apps update themselves from it (`apps/desktop/src/main/updater.ts`).
 DEVELOPMENT.md ("Packaging and releases") has the background. This skill is the checklist.
 
 ## 1. Before tagging
@@ -62,15 +63,17 @@ Check what users actually download, not the CI copy:
 
 ```sh
 cd "$(mktemp -d)" && gh release download vX.Y.Z -R janoelze/cmd
-gh release view vX.Y.Z --json assets -q '.assets[].name'   # dmg, zip, 2 .blockmap, latest-mac.yml
+gh release view vX.Y.Z --json assets -q '.assets[].name'
+# macOS: dmg, zip, their .blockmaps, latest-mac.yml
+# Windows: -win-x64-setup.exe (+ .blockmap), -win-x64.zip, latest.yml
 ditto -x -k cmd-*.zip . && codesign --verify --deep --strict cmd.app
 spctl --assess --type execute -vv cmd.app                  # accepted, source=Notarized Developer ID
 xcrun stapler validate cmd.app
 spctl -a -t open --context context:primary-signature -vv cmd-*.dmg
 ```
 
-**Without `latest-mac.yml`, installed apps can't update.** Check that it's there and that its
-`version` matches.
+**Without `latest-mac.yml` and `latest.yml`, installed apps can't update.** Check that both are
+there and that their `version` matches.
 
 ## Rules
 
@@ -80,7 +83,10 @@ spctl -a -t open --context context:primary-signature -vv cmd-*.dmg
   matches the running app's, so an ad-hoc signed release strands everyone who installs it. If the
   signing secrets are missing, CI warns ("ad-hoc signed") and still publishes. Treat that release as
   broken.
-- Don't hand out a `curl … | sh` command for a new `scripts/install.sh` before it's pushed to master.
+- Don't hand out a `curl … | sh` or `irm … | iex` command for a new `scripts/install.sh` or
+  `install.ps1` before it's pushed to master.
+- Windows builds are unsigned for now (SmartScreen warns about a downloaded installer). Updates
+  still work.
 
 ## When it fails
 

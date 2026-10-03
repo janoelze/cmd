@@ -4,6 +4,8 @@
 extends: ./electron-builder.yml
 appId: dev.janoelze.cmd.dev
 productName: cmd dev
+win:
+  icon: build/dev/icon.ico
 mac:
   icon: build/dev/icon.icns
   extraResources:

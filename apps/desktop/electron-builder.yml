@@ -1,5 +1,6 @@
 # Packages the built app (out/) plus the staged core runtime (.runtime, from
-# scripts/stage-runtime.mjs) into a macOS .app, .dmg and .zip.
+# scripts/stage-runtime.mjs): a macOS .app, .dmg and .zip, or a Windows
+# installer (NSIS, per user, no admin rights) and .zip.
 # Signing and notarization kick in when CSC_LINK / APPLE_* are set (see .github/workflows).
 appId: dev.janoelze.cmd
 productName: cmd
@@ -33,8 +34,20 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   artifactName: ${productName}-${version}-${arch}.${ext}
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: true
+  perMachine: false
+  artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
 # Where the app looks for updates (electron-updater, src/main/updater.ts). Builds
-# run with --publish never and CI uploads the files, latest-mac.yml included.
+# run with --publish never and CI uploads the files, latest-mac.yml and latest.yml included.
 publish:
   provider: github
   owner: janoelze

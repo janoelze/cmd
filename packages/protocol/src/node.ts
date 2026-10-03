@@ -27,7 +27,9 @@ export function sourceBuildId(repoRoot: string): string {
 
 /** State dir: $CMD_HOME, else ~/Library/Application Support/cmd. */
 export function cmdHome(): string {
-  return process.env.CMD_HOME ?? path.join(os.homedir(), "Library", "Application Support", "cmd");
+  if (process.env.CMD_HOME) return process.env.CMD_HOME;
+  if (process.platform === "win32") return path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local"), "cmd");
+  return path.join(os.homedir(), "Library", "Application Support", "cmd");
 }
 
 /** $CMD_CONFIG_DIR, else $CMD_HOME (dev isolation), else ~/.config/cmd. */
@@ -45,6 +47,17 @@ export function defaultSocketPath(): string {
   return path.join(os.tmpdir(), "cmd", "core.sock");
 }
 
+/**
+ * Where a socket path is actually served. Windows has no Unix sockets in the
+ * filesystem, so there a path stands for a named pipe derived from it; callers
+ * keep passing paths (and $CMD_HOME keeps isolating dev cores).
+ */
+export function ipcPath(socketPath: string): string {
+  if (process.platform !== "win32" || socketPath.startsWith("\\\\.\\pipe\\")) return socketPath;
+  const id = createHash("sha256").update(path.resolve(socketPath).toLowerCase()).digest("hex").slice(0, 16);
+  return `\\\\.\\pipe\\cmd-${id}`;
+}
+
 export interface Connection {
   client: RpcClient;
   close(): void;
@@ -53,7 +66,7 @@ export interface Connection {
 
 export function connect(socketPath = defaultSocketPath()): Promise<Connection> {
   return new Promise((resolve, reject) => {
-    const sock = net.createConnection(socketPath);
+    const sock = net.createConnection(ipcPath(socketPath));
     sock.setEncoding("utf8");
     const client = new RpcClient((line) => sock.write(line));
     sock.on("data", lineSplitter((l) => client.receive(l)));

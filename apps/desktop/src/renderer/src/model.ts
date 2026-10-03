@@ -135,12 +135,15 @@ export function flatten(rows: SidebarRow[]): SidebarRow[] {
   return rows.flatMap((r) => [r, ...flatten(r.children)]);
 }
 
-const GENERIC_TITLES = new Set(["claude code", "claude", "codex", "gemini", "opencode", "amp", "zsh", "bash"]);
+const GENERIC_TITLES = new Set(["claude code", "claude", "codex", "gemini", "opencode", "amp", "zsh", "bash", "pwsh", "powershell", "windows powershell", "cmd", "command prompt"]);
 
-/** Terminal title without agent spinner glyphs (✳ ◐ ⠋ …). */
+/** Terminal title without agent spinner glyphs (✳ ◐ ⠋ …) and Windows' "Administrator: " prefix. */
 function cleanTitle(t: string | undefined): string {
-  return (t ?? "").replace(/^[\s✳✻✽✶✢·•*◐◑◒◓⠀-⣿]+/u, "").trim();
+  return (t ?? "").replace(/^[\s✳✻✽✶✢·•*◐◑◒◓⠀-⣿]+/u, "").replace(/^Administrator:\s*/i, "").trim();
 }
+
+/** A console title that's just a program's path ("C:\\Program Files\\PowerShell\\7\\pwsh.exe"): says nothing. */
+const isProgramPath = (t: string) => /^(?:[a-z]:)?[\\/].*\.(?:exe|cmd|bat|com)$/i.test(t);
 
 /** Live status a window reports (see windowActions.ts); terminals have none. */
 export interface LiveStatus {
@@ -184,7 +187,7 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
     const a = r.agent;
     const p = r.pane;
     const t = cleanTitle(p?.title);
-    const generic = !t || GENERIC_TITLES.has(t.toLowerCase()) || t === p?.foreground;
+    const generic = !t || GENERIC_TITLES.has(t.toLowerCase()) || t === p?.foreground || isProgramPath(t);
     const cwd = p?.cwd ?? a?.cwd;
     const attn = p?.attention ?? null;
     f = {

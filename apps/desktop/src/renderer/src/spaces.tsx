@@ -151,7 +151,7 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
       .map((f) => ({
         id: `f-${f}`,
         group: "Folders" as const,
-        label: f.split("/").filter(Boolean).pop() ?? f,
+        label: f.split(/[\\/]/).filter(Boolean).pop() ?? f,
         meta: `${shortPath(f)} · recent session`,
         run: () => void openSpace(f),
         runAlt: () => void openSpace(f, true),

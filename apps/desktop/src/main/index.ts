@@ -12,9 +12,10 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { SETTINGS_TEMPLATE, mediaOrigin, widgetCsp } from "@cmd/protocol";
-import { cmdHome, configDir, connect, defaultSocketPath, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, configDir, connect, defaultSocketPath, ipcPath, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
+import { lucideSymbol, type SymbolImage } from "./icons.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type KeybindingsSnapshot } from "./keybindings.ts";
@@ -34,7 +35,7 @@ if (devBuild) {
   app.setName("cmd dev");
   if (!process.env.CMD_HOME) {
     process.env.CMD_CONFIG_DIR ??= configDir();
-    process.env.CMD_HOME = path.join(app.getPath("appData"), "cmd-dev");
+    process.env.CMD_HOME = path.join(path.dirname(cmdHome()), "cmd-dev"); // next to the real state dir
     process.env.CMD_SOCKET ??= path.join(os.tmpdir(), "cmd-dev", "core.sock");
   }
 }
@@ -45,7 +46,7 @@ if (process.env.CMD_NO_SANDBOX) app.commandLine.appendSwitch("no-sandbox");
 // Tests: render as on a Retina display regardless of the actual screen.
 if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scale-factor", process.env.CMD_FORCE_SCALE);
 
-// cmd-file:///abs/path — read-only access to local images/media for the app's own
+// cmd-file://local/?path=<abs path> — read-only access to local images/media for the app's own
 // pages (Markdown windows show relative images). Registered on the default
 // session only; browser windows use their own session and can't reach it.
 // cmd-widget://frame/ — the page every Magic widget runs in (docs/12-magic-windows.md):
@@ -86,7 +87,7 @@ const devIcon = app.isPackaged ? undefined : path.join(here, "../../build/dev/ic
 
 function canConnect(): Promise<boolean> {
   return new Promise((resolve) => {
-    const c = net.createConnection(socketPath);
+    const c = net.createConnection(ipcPath(socketPath));
     c.once("connect", () => (c.destroy(), resolve(true)));
     c.once("error", () => resolve(false));
   });
@@ -229,8 +230,9 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     title: app.getName(),
     icon: devIcon, // Windows/Linux; macOS uses the Dock icon
     show: false,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 14, y: 12 },
+    // macOS: content under an inset title bar, traffic lights over the sidebar.
+    // Elsewhere: the platform's own frame, window controls and menu bar.
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 14, y: 12 } } : {}),
     backgroundColor: savedAppearance().background,
     acceptFirstMouse: true, // a click on a window in the background also lands (selects, focuses a terminal)
     webPreferences: {
@@ -276,11 +278,9 @@ function openSettings(): BrowserWindow {
     minHeight: 420,
     title: "Settings",
     show: false,
-    titleBarStyle: "hidden",
-    trafficLightPosition: { x: 20, y: 19 },
-    vibrancy: "sidebar",
-    visualEffectState: "followWindow",
-    backgroundColor: "#00000000",
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hidden" as const, trafficLightPosition: { x: 20, y: 19 }, vibrancy: "sidebar" as const, visualEffectState: "followWindow" as const, backgroundColor: "#00000000" }
+      : { backgroundColor: savedAppearance().background }),
     fullscreenable: false,
     webPreferences: {
       preload: path.join(here, "../preload/index.cjs"),
@@ -394,12 +394,17 @@ ipcMain.handle("keybindings", () => keybindings);
 // shows them (native/sfsymbols.swift), so they stay crisp. PNG data URLs, black
 // template images; the UI tints them via CSS masks.
 const SF_HELPER = path.join(repoRoot, "apps/desktop/native/build/sfsymbols");
-type SymbolImage = { url: string; w: number; h: number; contain?: boolean } | null;
 const symbolCache = new Map<string, SymbolImage>();
 
 function renderSymbols(names: string[], size: number, weight: string, scale: number): Record<string, SymbolImage> {
   const key = (n: string) => `${n}@${size}@${weight}@${scale}`;
   const missing = names.filter((n) => !symbolCache.has(key(n)));
+  // SF Symbols are macOS-only (and Apple-only by licence): Lucide icons elsewhere
+  // (CMD_LUCIDE_ICONS=1 shows them on macOS too, to check the mapping).
+  if (process.platform !== "darwin" || process.env.CMD_LUCIDE_ICONS === "1") {
+    for (const n of missing) symbolCache.set(key(n), lucideSymbol(n, size, weight));
+    return Object.fromEntries(names.map((n) => [n, symbolCache.get(key(n)) ?? null]));
+  }
   if (missing.length && fs.existsSync(SF_HELPER)) {
     const r = spawnSync(SF_HELPER, [String(size), weight, String(scale), ...missing], { encoding: "utf8", timeout: 5000 });
     try {
@@ -524,8 +529,8 @@ app.whenReady().then(async () => {
     done(!/^cmd-widget:/.test(details.requestingUrl ?? ""));
   });
   protocol.handle("cmd-file", (req) => {
-    const file = decodeURIComponent(new URL(req.url).pathname);
-    if (!CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });
+    const file = new URL(req.url).searchParams.get("path") ?? "";
+    if (!path.isAbsolute(file) || !CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });
     return electronNet.fetch(pathToFileURL(file).href);
   });
   // First: the window loads its bundle while the menu is built and the core is

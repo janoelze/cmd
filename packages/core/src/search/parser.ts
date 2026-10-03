@@ -147,7 +147,7 @@ export function cleanClaudePrompt(text: string): string {
 
 export function parseClaude(text: string, path: string): SessionDocument | null {
   const doc: SessionDocument = {
-    id: (path.split("/").pop() ?? "").replace(/\.jsonl$/, ""),
+    id: (path.split(/[\\/]/).pop() ?? "").replace(/\.jsonl$/, ""),
     agent: "claude",
     path,
     prompts: [],
@@ -262,7 +262,7 @@ export function parseCodex(text: string, path: string): SessionDocument | null {
   if (doc.responses.length === 0) doc.responses = itemResponses;
   if (!doc.id) {
     // rollout-<date>-<uuid>.jsonl
-    const name = (path.split("/").pop() ?? "").replace(/\.jsonl$/, "");
+    const name = (path.split(/[\\/]/).pop() ?? "").replace(/\.jsonl$/, "");
     doc.id = name.slice(-36);
   }
   if (isEmpty(doc)) fallback(text, doc);

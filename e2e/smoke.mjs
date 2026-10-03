@@ -50,17 +50,54 @@ const launch = async () => {
 };
 let { app, win } = await launch();
 
+// Some calls have no timeout (app.close, evaluate waiting on the core) and can
+// hang for good, on Windows in particular. A watchdog fails the run instead,
+// naming the last step and saving a screenshot.
+let lastStep = "launch";
+let lastAt = Date.now();
+const step = (s) => ((lastStep = s), (lastAt = Date.now()));
+const HANG_MS = 90_000;
+setInterval(async () => {
+  if (Date.now() - lastAt < HANG_MS) return;
+  console.log(`HUNG: nothing for ${HANG_MS / 1000}s after: ${lastStep}`);
+  const within = (p) => Promise.race([p, new Promise((r) => setTimeout(() => r("(no answer in 5s)"), 5000))]);
+  const wins = await within(
+    app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => ({ title: w.getTitle(), visible: w.isVisible() }))),
+  ).catch((e) => e.message);
+  console.log("electron windows:", JSON.stringify(wins));
+  await within(win.screenshot({ path: path.join(shots, "hung.png") })).catch(() => {});
+  process.exit(1);
+}, 5000).unref();
+
+/**
+ * app.close() waits until Electron's stdout/stderr pipes close. On Windows the
+ * detached core inherits those handles and keeps running, so wait for Electron
+ * itself to exit instead.
+ */
+const closeApp = async () => {
+  const proc = app.process();
+  const exited = proc.exitCode !== null ? Promise.resolve() : new Promise((r) => proc.once("exit", r));
+  app.close().catch(() => {});
+  await exited;
+};
+
 const check = (cond, msg) => {
+  step(`check "${msg}"`);
   if (!cond) throw new Error(`FAILED: ${msg}`);
   console.log(`ok - ${msg}`);
 };
+// Shortcut checks: the macOS keymap, or its Windows translation (docs/10-windows.md).
+const mac = process.platform === "darwin";
+const macOnly = (msg) => console.log(`skip - ${msg} (macOS keymap)`);
 // Synthetic keys bypass the native menu, so trigger menu items directly.
-const menu = (id) =>
+const menu = (id) => (
+  step(`menu ${id}`),
   app.evaluate(({ Menu }, id) => {
     const item = Menu.getApplicationMenu()?.getMenuItemById(id);
     if (!item) throw new Error(`no menu item ${id}`);
     item.click();
-  }, id);
+  }, id)
+);
 const accel = (id) => app.evaluate(({ Menu }, id) => Menu.getApplicationMenu()?.getMenuItemById(id)?.accelerator ?? null, id);
 const panes = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.length));
 // Layout and selection live in the shown Space's view (docs/11-spaces.md); these checks run in Home.
@@ -99,9 +136,16 @@ await win.screenshot({ path: path.join(shots, "1-empty.png") });
     `status bar icons are exactly centred on whole pixels (${offsets.length} buttons)`);
 }
 
-check((await accel("file.newTerminal")) === "Cmd+N", "⌘N is New Terminal");
-check((await accel("file.close")) === "Cmd+W", "⌘W is Close Terminal");
-check((await accel("session.next")) === "Alt+Cmd+Right", "⌥⌘→ is Next Session");
+if (mac) {
+  check((await accel("file.newTerminal")) === "Cmd+N", "⌘N is New Terminal");
+  check((await accel("file.close")) === "Cmd+W", "⌘W is Close Terminal");
+  check((await accel("session.next")) === "Alt+Cmd+Right", "⌥⌘→ is Next Session");
+} else {
+  // The Windows Terminal-style keymap (shared/commands.ts otherPlatformKey) reached the native menu.
+  check((await accel("file.newTerminal")) === "Ctrl+Shift+N", "Ctrl+Shift+N is New Terminal");
+  check((await accel("view.palette")) === "Ctrl+Shift+K", "Ctrl+Shift+K is the command palette");
+  check((await accel("session.next")) === "Ctrl+Alt+Right", "Ctrl+Alt+→ is Next Session");
+}
 
 await menu("file.newTerminal");
 await win.waitForSelector(".xterm");
@@ -127,13 +171,17 @@ void before;
 await menu("view.grid");
 await win.waitForTimeout(400);
 check((await win.locator(".tile").count()) === 2, "grid shows both terminals");
-await win.waitForSelector(".statusbar-usage .slot-v", { timeout: 8000 });
-const usageText = await win.locator(".statusbar-usage .slot-v").first().textContent();
-check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `status bar shows memory of the process tree (${usageText})`);
+if (process.platform !== "win32") {
+  await win.waitForSelector(".statusbar-usage .slot-v", { timeout: 8000 });
+  const usageText = await win.locator(".statusbar-usage .slot-v").first().textContent();
+  check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `status bar shows memory of the process tree (${usageText})`);
+} else console.log("skip - status bar memory (needs a Windows procinfo helper)");
 // Notifications: a bell in the other terminal marks it until you look at it.
 {
   const other = await win.evaluate(() => document.querySelector(".tile:not(.sel)")?.getAttribute("data-pane"));
-  await win.evaluate((id) => window.cmd.call("pane.write", { paneId: id, data: "printf '\\a'\r" }), other);
+  // A bell from the shell: PowerShell on Windows, a POSIX shell elsewhere.
+  const bell = process.platform === "win32" ? 'Write-Host -NoNewline "`a"\r' : "printf '\\a'\r";
+  await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [other, bell]);
   const status = win.locator(`.tile[data-pane="${other}"] .slot-status .slot-v:not(.out)`);
   await status.filter({ hasText: "Bell" }).waitFor({ timeout: 5000 });
   check(true, "a terminal bell marks its window (Bell)");
@@ -146,13 +194,24 @@ check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `status bar shows memory of the pr
   await win.evaluate((id) => window.cmd.call("pane.clearAttention", { paneId: id }), other);
 }
 const panesOrder = async () => (await homeView())["grid.order"];
+const order0 = await panesOrder();
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
-await win.waitForTimeout(500);
-const order1 = await panesOrder();
+let order1 = await panesOrder();
+for (let i = 0; i < 30 && (!Array.isArray(order1) || JSON.stringify(order1) === JSON.stringify(order0)); i++) {
+  await win.waitForTimeout(100);
+  order1 = await panesOrder();
+}
 check(Array.isArray(order1) && order1.length === 2, `dragging a tile onto another reorders the grid (${JSON.stringify(order1?.map((x) => x.slice(0, 4)))})`);
+// Let the windows glide into their new places first: mid-animation, positions (and so the drag target) are stale.
+await win.waitForFunction(() => !document.querySelector(".tile.settling, .tile.lifted"), null, { timeout: 3000 }).catch(() => {});
+await win.waitForTimeout(400);
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
-await win.waitForTimeout(500);
-const order2 = await panesOrder();
+// The order is saved debounced: wait for it to change rather than a fixed time (slow CI runners).
+let order2 = await panesOrder();
+for (let i = 0; i < 30 && JSON.stringify(order2) === JSON.stringify(order1); i++) {
+  await win.waitForTimeout(100);
+  order2 = await panesOrder();
+}
 check(order2[0] === order1[1] && order2[1] === order1[0], "dragging back swaps the slots again");
 // A real drag through three tiles: the dragged tile follows the pointer, the others make room.
 await menu("file.newTerminal");
@@ -189,7 +248,7 @@ await win.waitForTimeout(150);
 await win.screenshot({ path: path.join(shots, "4-palette.png") });
 await menu("file.close"); // ⌘W closes the palette first
 check((await win.locator(".palette").count()) === 0, "⌘W closes the palette before any terminal");
-check((await panes()) === 2, "…and leaves terminals alone");
+{ const n = await panes(); check(n === 2, `…and leaves terminals alone (${n})`); }
 
 // Session search: ?query in the palette, Enter resumes the session in a new terminal.
 {
@@ -290,13 +349,15 @@ check((await panes()) === 2, "…and leaves terminals alone");
   await win.waitForTimeout(150);
   check((await selName()) === "notes.txt", "typing selects by name");
   await win.keyboard.press("Home");
-  await win.keyboard.press("Meta+ArrowDown");
-  await win.waitForTimeout(500);
-  check((await filesPath()).endsWith("sub-folder"), "⌘↓ makes the folder the root");
-  await win.keyboard.press("Meta+ArrowUp");
-  await win.waitForTimeout(500);
-  { const fp = await filesPath(); const sn = await selName();
-    check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${fp.split("/").pop()}, ${sn})`); }
+  if (mac) {
+    await win.keyboard.press("Meta+ArrowDown");
+    await win.waitForTimeout(500);
+    check((await filesPath()).endsWith("sub-folder"), "⌘↓ makes the folder the root");
+    await win.keyboard.press("Meta+ArrowUp");
+    await win.waitForTimeout(500);
+    const fp = await filesPath(); const sn = await selName();
+    check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${path.basename(fp)}, ${sn})`);
+  } else macOnly("⌘↓/⌘↑ in the file tree");
 
   // Files open in the window that suits them: notes.txt → text window; edit and ⌘S.
   await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).dblclick();
@@ -697,7 +758,12 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
 
 // Terminal content must survive re-attaching exactly once (no replayed duplicates).
 const markerPane = (await win.evaluate(() => window.cmd.call("pane.list", {})))[0].id;
-await win.evaluate((id) => window.cmd.call("pane.write", { paneId: id, data: "printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r" }), markerPane);
+// Mouse reporting on, then off, then a marker computed by the shell (PowerShell on Windows).
+const markerCmd = process.platform !== "win32"
+  ? "printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r"
+  : 'Write-Host -NoNewline "`e[?1000h`e[?1000l"; echo "MARKER-$(40+2)"\r';
+step("typing the re-attach marker");
+await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [markerPane, markerCmd]);
 await win.waitForTimeout(800);
 
 // ── remembered UI state across an app restart (the core keeps running) ──
@@ -715,8 +781,11 @@ await menu("view.zoomIn");
   await win.mouse.up();
 }
 await win.waitForTimeout(400); // debounced writes reach the core before we read them back
+step("reading the UI state before the restart");
 const selectedBefore = (await homeView())["selection.pane"];
-await app.close();
+step("closing the app");
+await closeApp();
+step("relaunching the app");
 
 ({ app, win } = await launch());
 await win.waitForSelector(".sidebar-status");
@@ -778,6 +847,6 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   check((await inSpace()).length === 0 && (await win.locator(".space-chip").count()) === 1, "closing a Space ends its terminals and leaves the switcher");
 }
 
-await app.close();
+await closeApp();
 await stopCore(home);
 console.log("all checks passed; screenshots in", shots);

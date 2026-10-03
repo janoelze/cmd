@@ -55,6 +55,8 @@
   /* Motion: window moves and title-bar slots share this curve. */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+/* Outside macOS the window has its own frame: no traffic-light area to keep free. */
+.platform-other { --titlebar-h: 28px; } /* the sidebar's top row (+) still needs its height */
 
 * { box-sizing: border-box; }
 

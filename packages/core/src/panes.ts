@@ -51,6 +51,22 @@ export interface SpawnOptions {
 
 export type PtyFactory = (opts: SpawnOptions) => Pty;
 
+const isWindows = process.platform === "win32";
+
+/**
+ * Shell for new terminals when `shell.program` is empty. On Windows $SHELL is
+ * ignored (under Git Bash it's an MSYS path native processes can't run):
+ * PowerShell 7 if installed, else Windows PowerShell.
+ */
+export function defaultShell(): string {
+  if (!isWindows) return process.env.SHELL || "/bin/zsh";
+  const dirs = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
+  return dirs.some((d) => fs.existsSync(path.join(d, "pwsh.exe"))) ? "pwsh.exe" : "powershell.exe";
+}
+
+/** "zsh" for /bin/zsh, "pwsh" for C:\\…\\pwsh.exe. */
+export const shellName = (shell: string) => path.basename(shell.replace(/\\/g, "/")).replace(/\.exe$/i, "");
+
 export async function nodePtyFactory(): Promise<PtyFactory> {
   const pty = await import("node-pty");
   return (o) => {
@@ -65,12 +81,15 @@ export async function nodePtyFactory(): Promise<PtyFactory> {
       get pid() {
         return p.pid;
       },
+      // On Windows node-pty reports the terminal type ("xterm-256color") here, not
+      // a program; until a Windows procinfo helper exists, report the shell.
       get process() {
-        return p.process;
+        return isWindows ? o.shell : p.process;
       },
       write: (d) => p.write(d),
       resize: (c, r) => p.resize(c, r),
-      kill: (s) => p.kill(s),
+      // Windows has no signals; node-pty throws if one is passed there.
+      kill: (s) => (isWindows ? p.kill() : p.kill(s)),
       onData: (fn) => void p.onData(fn),
       onExit: (fn) => void p.onExit(fn),
     };
@@ -196,7 +215,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   create(opts: CreatePaneOptions = {}): Pane {
     const id = opts.id ?? randomUUID();
     const cfg = this.#settings();
-    const shell = cfg["shell.program"] || process.env.SHELL || "/bin/zsh";
+    const shell = cfg["shell.program"] || defaultShell();
     const cwd = opts.cwd ?? os.homedir();
     const cols = opts.cols ?? 100;
     const rows = opts.rows ?? 30;
@@ -205,7 +224,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       if (v !== undefined && !k.startsWith("ELECTRON_") && k !== "NODE_OPTIONS") env[k] = v;
     }
     const token = randomBytes(12).toString("hex");
-    if (cfg["shell.integration"] && path.basename(shell) === "zsh" && fs.existsSync(ZSH_INTEGRATION_DIR)) {
+    if (cfg["shell.integration"] && shellName(shell) === "zsh" && fs.existsSync(ZSH_INTEGRATION_DIR)) {
       if (env.ZDOTDIR !== undefined) env.CMD_USER_ZDOTDIR = env.ZDOTDIR;
       env.ZDOTDIR = ZSH_INTEGRATION_DIR;
       env.CMD_PANE_TOKEN = token;
@@ -223,16 +242,18 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       ...opts.env,
     });
 
-    const pty = this.#factory({ shell, args: cfg["shell.login"] ? ["-l"] : [], cwd, cols, rows, env });
+    // -l means "login shell" to POSIX shells; PowerShell and cmd.exe don't take it.
+    const login = cfg["shell.login"] && !isWindows;
+    const pty = this.#factory({ shell, args: login ? ["-l"] : [], cwd, cols, rows, env });
     const now = Date.now();
     const pane: Pane = {
       id,
       spaceId: opts.spaceId ?? HOME_SPACE_ID,
-      title: shell.split("/").pop() ?? "shell",
+      title: shellName(shell) || "shell",
       cwd,
       shell,
       pid: pty.pid,
-      foreground: shell.split("/").pop() ?? "",
+      foreground: shellName(shell),
       cols,
       rows,
       createdAt: now,
@@ -250,14 +271,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.#panes.set(id, live);
 
     pty.onData((data) => this.#onData(live, data));
-    pty.onExit(({ exitCode }) => {
-      this.#clearPending(live);
-      setTimeout(() => live.vt.dispose(), 0);
-      pane.exitCode = exitCode;
-      this.emit("updated", { ...pane });
-      this.#panes.delete(id);
-      this.emit("removed", id);
-    });
+    pty.onExit(({ exitCode }) => this.#exited(live, exitCode));
 
     if (opts.command) this.#scheduleCommand(live, opts.command);
     this.emit("updated", { ...pane });
@@ -428,7 +442,24 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   }
 
   kill(id: PaneId): void {
-    this.#panes.get(id)?.pty.kill();
+    const live = this.#panes.get(id);
+    if (!live) return;
+    live.pty.kill();
+    // node-pty on Windows only reports the exit after asking a helper process for
+    // the console's process list, which can take its 5 s timeout. The pane is
+    // gone for us now; node-pty finishes cleaning up in the background.
+    if (isWindows) this.#exited(live, null);
+  }
+
+  #exited(live: Live, exitCode: number | null): void {
+    const { pane } = live;
+    if (this.#panes.get(pane.id) !== live) return; // already handled
+    this.#clearPending(live);
+    setTimeout(() => live.vt.dispose(), 0);
+    pane.exitCode = exitCode;
+    this.emit("updated", { ...pane });
+    this.#panes.delete(pane.id);
+    this.emit("removed", pane.id);
   }
 
   /** Serialized terminal state for a UI to restore exactly what is on screen. */

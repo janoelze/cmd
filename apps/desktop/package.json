@@ -17,7 +17,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dist": "electron-builder --mac --config electron-builder.dev.yml"
+    "dist": "electron-builder --config electron-builder.dev.yml"
   },
   "dependencies": {
     "@cmd/protocol": "workspace:*",
@@ -34,6 +34,7 @@
     "codemirror": "^6.0.2",
     "dompurify": "^3.4.16",
     "electron-updater": "^6.8.9",
+    "lucide-static": "^1.50.0",
     "marked": "^18.0.14",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

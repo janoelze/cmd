@@ -50,9 +50,11 @@ Inside the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
 CI (`.github/workflows/build.yml`) typechecks, tests and packages every push. `pnpm release 0.2.0` (or `patch`/`minor`/`major`) bumps the version, tags `v0.2.0` and pushes; CI builds the tag and publishes a GitHub release with the .dmg and .zip (a version with a `-`, like `0.2.0-beta.1`, is a prerelease). After packaging, CI checks the signature with `codesign --verify --deep --strict` (and `spctl` when Developer ID signed), so a release macOS would call "damaged" fails instead of shipping. `scripts/install.sh` is the one-line installer the README points to.
 
+Windows builds (x64) come from the same tag: CI's `windows` job runs the tests and the e2e on Windows, packages an NSIS installer (per user, one click) and a zip, and checks that the packaged app starts. A separate `release` job publishes both platforms' files as one release. Windows builds aren't code-signed yet, so SmartScreen warns about a downloaded installer; `scripts/install.ps1` downloads it with PowerShell, which doesn't mark the file, so no warning appears.
+
 ### Updates
 
-Installed apps update themselves from GitHub releases with electron-updater (`apps/desktop/src/main/updater.ts`). It reads `latest-mac.yml` from the latest non-prerelease, so `-beta` tags never reach users. `electron-builder.yml` has the `publish: github` config that generates that file (and the `.blockmap`s for partial downloads), and CI uploads them with the release. Squirrel.Mac only installs an update whose signature matches the running app, so updating needs Developer ID signed releases, which ad-hoc signed builds can't do.
+Installed apps update themselves from GitHub releases with electron-updater (`apps/desktop/src/main/updater.ts`). It reads `latest-mac.yml` (`latest.yml` on Windows) from the latest non-prerelease, so `-beta` tags never reach users. `electron-builder.yml` has the `publish: github` config that generates that file (and the `.blockmap`s for partial downloads), and CI uploads them with the release. Squirrel.Mac only installs an update whose signature matches the running app, so updating needs Developer ID signed releases, which ad-hoc signed builds can't do.
 
 The `updates.mode` setting picks `auto` (download in the background, install on quit; the default), `notify` or `off`. The app checks 30 s after launch and every 4 hours, and logs to `$CMD_HOME/update.log`.
 

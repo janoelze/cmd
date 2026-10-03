@@ -161,7 +161,7 @@ function insert(db: DatabaseSync, d: SessionDocument, env: Record<string, string
   const everything = [...d.prompts, ...d.responses, ...d.tools, d.title ?? "", d.cwd ?? ""];
   db.prepare(`INSERT INTO session_fts(rowid, title, prompts, responses, tools, idents) VALUES (?, ?, ?, ?, ?, ?)`).run(
     rowid,
-    [d.title, d.cwd?.split("/").pop(), d.branch].filter(Boolean).join(" "),
+    [d.title, d.cwd?.split(/[\\/]/).pop(), d.branch].filter(Boolean).join(" "),
     d.prompts.join("\n"),
     d.responses.join("\n"),
     d.tools.join("\n"),

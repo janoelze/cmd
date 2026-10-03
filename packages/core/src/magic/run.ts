@@ -13,7 +13,7 @@ import type { Backend, Usage } from "./backends.ts";
 import { AnswerStream, parseAnswer, type MagicHeader } from "./contract.ts";
 import { DEFAULT_DENY_PATHS } from "./policy.ts";
 import { buildRequest, buildSystem } from "./prompt.ts";
-import type { SandboxMode } from "./sandbox.ts";
+import { commandsSupported, type SandboxMode } from "./sandbox.ts";
 import { redact } from "./policy.ts";
 import { preview, runSource, sourceKey, type SourceResult } from "./sources.ts";
 import { runTool, toolsFor, type ToolContext } from "./tools.ts";
@@ -90,7 +90,8 @@ export function fastRoute(prompt: string): { route: "json"; data: unknown } | { 
     } catch {}
   }
   const first = /^[A-Za-z0-9_./-]+/.exec(t)?.[0];
-  if (!first) return null;
+  // The "is it a command?" check asks /bin/sh; on Windows the agent decides.
+  if (!first || process.platform === "win32") return null;
   // Shell syntax (flags, pipes, quotes, redirects) or a single word; never something that reads like a sentence.
   const shellish = /\s-{1,2}[A-Za-z]|[|><;$`'"]|^\S+$/.test(t);
   const english = /\b(of|every|all|my|the|show|me|what|which|how|is|are|in|for|with|and|live|please)\b/i.test(t.replace(/(["'])[^"']*\1/g, ""));
@@ -146,8 +147,9 @@ export async function runMagic(o: MagicOptions): Promise<MagicResult> {
   };
 
   const system = buildSystem(o.systemFile);
-  const tools = toolsFor(explore);
-  const messages: { role: "user" | "assistant"; content: string }[] = [{ role: "user", content: buildRequest(o.prompt, { cwd, explore }) }];
+  const canRun = commandsSupported(ctx.sandbox);
+  const tools = toolsFor(explore).filter((t) => canRun || t.name !== "run");
+  const messages: { role: "user" | "assistant"; content: string }[] = [{ role: "user", content: buildRequest(o.prompt, { cwd, explore, canRun }) }];
   const usage = { ...EMPTY_USAGE, costUSD: 0 };
   const repairs: string[] = [];
   let model = o.backend.model;

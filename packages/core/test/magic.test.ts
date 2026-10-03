@@ -22,6 +22,8 @@ import { requestedMedia, widgetCsp } from "@cmd/protocol";
 import type { BackendRun } from "../src/magic/backends.ts";
 
 const home = "/Users/test";
+// Shell commands (the run tool, command sources, the sandbox) are POSIX-only for now.
+const posix = process.platform !== "win32";
 const level = (cmd: string) => classify(cmd, { home }).level;
 
 describe("command policy", () => {
@@ -80,7 +82,7 @@ describe("logged-in CLIs", () => {
     expect(credentialsFor("echo gh")).toEqual({ env: [], paths: [], keychain: false });
   });
 
-  it("opens only those logins in the sandbox profile", () => {
+  it.skipIf(!posix)("opens only those logins in the sandbox profile", () => {
     const deny = ["~/.ssh", "~/.config/gh", "~/Library/Keychains"];
     const plain = sandboxProfile({ tmp: "/tmp/x", deny, home });
     expect(plain).toContain(`(subpath "${home}/.config/gh")`);
@@ -153,12 +155,14 @@ describe("answer contract", () => {
 describe("fast paths", () => {
   it("routes pasted JSON and obvious commands", () => {
     expect(fastRoute('{"a": [1, 2]}')).toEqual({ route: "json", data: { a: [1, 2] } });
-    expect(fastRoute("ps aux | head")).toEqual({ route: "terminal", command: "ps aux | head" });
-    expect(fastRoute("ls -la")).toEqual({ route: "terminal", command: "ls -la" });
+    if (posix) {
+      expect(fastRoute("ps aux | head")).toEqual({ route: "terminal", command: "ps aux | head" });
+      expect(fastRoute("ls -la")).toEqual({ route: "terminal", command: "ls -la" });
+    }
     expect(fastRoute("show my vpn status")).toBeNull();
     expect(fastRoute("weather in Berlin")).toBeNull();
     expect(fastRoute("git status of every repo in ~/src")).toBeNull();
-    expect(fastRoute("top")).toEqual({ route: "terminal", command: "top" });
+    if (posix) expect(fastRoute("top")).toEqual({ route: "terminal", command: "top" });
   });
 });
 
@@ -180,14 +184,14 @@ describe("tools", () => {
     expect(list.output).toContain("f  a.txt  13");
   });
 
-  it("runs only read-only commands", async () => {
+  it.skipIf(!posix)("runs only read-only commands", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "magic-"));
     expect((await runTool("run", { why: "", command: "touch x" }, ctx(dir))).output).toMatch(/^Not run/);
     const r = await runTool("run", { why: "", command: "echo hi | tr a-z A-Z" }, ctx(dir));
     expect(r).toEqual({ output: "exit 0\nHI\n", isError: false });
   });
 
-  it("tests command sources and remembers them", async () => {
+  it.skipIf(!posix)("tests command sources and remembers them", async () => {
     const c = ctx(os.tmpdir());
     const r = await runTool("test_source", { why: "", source: { type: "command", command: "echo '{\"up\": true}'" } }, c);
     expect(r.isError).toBe(false);
@@ -213,7 +217,7 @@ describe("sandbox", () => {
     if (sandboxAvailable()) return;
     const r = await execCommand("echo x", { sandbox: "required" });
     expect(r.code).toBeNull();
-    expect(r.stderr).toMatch(/sandbox/);
+    expect(r.stderr).toMatch(/sandbox|Windows/);
   });
 });
 
@@ -243,7 +247,7 @@ describe("runMagic", () => {
   const src = { type: "command", command: "echo '{\"n\": 3}'" };
   const answer = `{"kind":"widget","title":"Count","source":${JSON.stringify(src)},"refresh":5,"size":"s"}\n---\n<div id=n></div><script>cmd.onData(d=>n.textContent=d.n)</script>`;
 
-  it("runs tools, streams the header, and returns the tested sample", async () => {
+  it.skipIf(!posix)("runs tools, streams the header, and returns the tested sample", async () => {
     const backend = scripted([{ calls: [{ name: "test_source", input: { why: "Counting", source: src } }], answer }]);
     const events: string[] = [];
     const r = await runMagic({ prompt: "count things", backend, sandbox: "off", noFast: true, onEvent: (e) => events.push(e.type) });
@@ -258,7 +262,7 @@ describe("runMagic", () => {
     expect(backend.seen[0]!.messages[0]!.content).toMatch(/^Request: count things/);
   });
 
-  it("shows the agent untested source data once, then accepts the same answer", async () => {
+  it.skipIf(!posix)("shows the agent untested source data once, then accepts the same answer", async () => {
     const backend = scripted([{ answer }, { answer }]);
     const r = await runMagic({ prompt: "count things", backend, sandbox: "off", noFast: true });
     expect(r.repairs).toHaveLength(1);
@@ -306,7 +310,7 @@ describe("Magic windows in the core", () => {
     }
   };
 
-  it("runs a request into the window's state, streams progress, and refreshes the source", async () => {
+  it.skipIf(!posix)("runs a request into the window's state, streams progress, and refreshes the source", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
     const src = { type: "command", command: "echo '{\"n\": 7}'" };

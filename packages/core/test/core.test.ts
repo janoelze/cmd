@@ -7,6 +7,7 @@ import { connect, type Connection } from "@cmd/protocol/node";
 import { Core } from "../src/core.ts";
 import { nodePtyFactory } from "../src/panes.ts";
 import { ProcInfo } from "../src/agents/procinfo.ts";
+import { rmTemp } from "./tmp.ts";
 
 const procinfo = new ProcInfo();
 
@@ -34,7 +35,7 @@ afterAll(async () => {
   procinfo.close();
   conn?.close();
   await core?.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  rmTemp(dir);
 });
 
 const until = async (fn: () => boolean | Promise<boolean>, ms = 5000) => {
@@ -67,7 +68,11 @@ describe("core over the socket", () => {
     await conn.client.call("events.subscribe", {});
     const pane = await conn.client.call("pane.create", {
       cwd: dir,
-      command: `printf '\\033]2;hello-title\\007'; echo "pane=$CMD_PANE_ID"`,
+      // Panes run PowerShell on Windows.
+      command:
+        process.platform === "win32"
+          ? 'Write-Host -NoNewline "`e]2;hello-title`a"; echo "pane=$env:CMD_PANE_ID"'
+          : `printf '\\033]2;hello-title\\007'; echo "pane=$CMD_PANE_ID"`,
     });
     await until(() => events.join("").includes(`pane=${pane.id}`));
     await until(async () => (await conn.client.call("pane.list", {})).find((p) => p.id === pane.id)?.title === "hello-title");

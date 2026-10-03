@@ -1,0 +1,123 @@
+// Icons outside macOS. The UI names its icons by SF Symbol name (see
+// renderer/src/components/Symbol.tsx); on macOS a native helper renders the
+// real symbols. SF Symbols may only be used on Apple platforms, so elsewhere
+// each name maps to its closest Lucide icon (ISC licence), returned as an SVG
+// the Symbol component uses as a mask, like the helper's bitmaps.
+
+import {
+  AppWindow,
+  Bell,
+  BookText,
+  Braces,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  ChevronUp,
+  CircleX,
+  CodeXml,
+  Columns3,
+  Command,
+  Compass,
+  Copy,
+  Ellipsis,
+  Eye,
+  EyeOff,
+  File,
+  FileText,
+  Folder,
+  Globe,
+  Grid3x3,
+  History,
+  House,
+  Image,
+  Info,
+  Keyboard,
+  LayoutDashboard,
+  LayoutGrid,
+  Link,
+  Palette,
+  PanelLeft,
+  Pencil,
+  Plus,
+  RectangleHorizontal,
+  RotateCw,
+  Search,
+  Settings,
+  Sparkles,
+  SquareArrowOutUpRight,
+  SquareTerminal,
+  Trash2,
+  TriangleAlert,
+  Type,
+  Undo2,
+  WandSparkles,
+  X,
+} from "lucide-static";
+
+/** SF Symbol name → Lucide SVG. Unknown names render nothing, as on macOS. */
+const LUCIDE: Record<string, string> = {
+  "arrow.clockwise": RotateCw,
+  "arrow.up.forward.app": SquareArrowOutUpRight,
+  "arrow.uturn.backward": Undo2,
+  bell: Bell,
+  checkmark: Check,
+  "chevron.left": ChevronLeft,
+  "chevron.left.forwardslash.chevron.right": CodeXml,
+  "chevron.right": ChevronRight,
+  "chevron.up": ChevronUp,
+  "chevron.up.chevron.down": ChevronsUpDown,
+  "clock.arrow.circlepath": History,
+  command: Command,
+  curlybraces: Braces,
+  doc: File,
+  "doc.on.doc": Copy,
+  "doc.richtext": BookText,
+  "doc.text": FileText,
+  ellipsis: Ellipsis,
+  "exclamationmark.triangle.fill": TriangleAlert,
+  eye: Eye,
+  "eye.slash": EyeOff,
+  folder: Folder,
+  "folder.fill": Folder,
+  gearshape: Settings,
+  globe: Globe,
+  house: House,
+  "info.circle": Info,
+  keyboard: Keyboard,
+  link: Link,
+  macwindow: AppWindow,
+  magnifyingglass: Search,
+  paintpalette: Palette,
+  pencil: Pencil,
+  photo: Image,
+  plus: Plus,
+  rectangle: RectangleHorizontal,
+  "rectangle.3.group": LayoutDashboard,
+  "rectangle.split.3x1": Columns3,
+  safari: Compass,
+  "sidebar.left": PanelLeft,
+  sparkles: Sparkles,
+  "square.grid.2x2": LayoutGrid,
+  "square.grid.3x3": Grid3x3,
+  terminal: SquareTerminal,
+  textformat: Type,
+  trash: Trash2,
+  "wand.and.stars": WandSparkles,
+  xmark: X,
+  "xmark.circle.fill": CircleX,
+};
+
+/** Lucide's stroke width for an SF Symbol weight (Lucide's default, 2, is about medium). */
+const STROKE: Record<string, number> = { ultralight: 1, thin: 1.25, light: 1.5, regular: 1.75, medium: 2, semibold: 2.25, bold: 2.5 };
+
+export type SymbolImage = { url: string; w: number; h: number; contain?: boolean } | null;
+
+/** The icon for an SF Symbol name at a point size: an SVG data URL in the same even, square box. */
+export function lucideSymbol(name: string, size: number, weight: string): SymbolImage {
+  const svg = LUCIDE[name];
+  if (!svg) return null;
+  const sized = svg.replace(/stroke-width="[^"]*"/, `stroke-width="${STROKE[weight] ?? 2}"`);
+  const side = Math.ceil(size / 2) * 2;
+  return { url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sized)}`, w: side, h: side, contain: true };
+}

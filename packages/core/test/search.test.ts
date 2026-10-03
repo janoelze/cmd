@@ -8,6 +8,7 @@ import { clearIndex, indexPass, learnedRoots, openIndex, saveLearnedRoot, Search
 import { registerBuiltinSources } from "../src/search/builtin.ts";
 import { TranscriptSources, type TranscriptRoot } from "../src/search/sources.ts";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
+import { rmTemp } from "./tmp.ts";
 
 const sources = registerBuiltinSources(new TranscriptSources());
 
@@ -186,7 +187,10 @@ describe("index + search", () => {
     expect(indexPass(db, roots, sources)).toEqual({ changed: 9, removed: 0 });
     searcher = new Searcher(db);
   });
-  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+  afterAll(() => {
+    db.close(); // Windows can't delete an open database file
+    rmTemp(dir);
+  });
 
   it("finds sessions by prompt words, with a highlighted snippet and resume info", () => {
     const hits = searcher.search("collapsible");
@@ -261,7 +265,7 @@ describe("index + search", () => {
 describe("transcript sources", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-sources-"));
   const mk = (...p: string[]) => fs.mkdirSync(path.join(home, ...p), { recursive: true });
-  afterAll(() => fs.rmSync(home, { recursive: true, force: true }));
+  afterAll(() => rmTemp(home));
 
   it("finds every Claude config dir and Codex home; non-default ones carry the env to resume", () => {
     mk(".claude", "projects");

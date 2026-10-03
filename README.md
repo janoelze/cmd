@@ -5,7 +5,7 @@
 <h1 align="center">cmd</h1>
 
 <p align="center">
-  A terminal for working with coding agents, on macOS.
+  A terminal for working with coding agents, on macOS and Windows.
 </p>
 
 <p align="center">
@@ -68,7 +68,7 @@ Press ⇧⌘M and type what the window should show: a question, a URL, some JSON
 
 ## Install
 
-cmd runs on Apple Silicon Macs. Install or update to the latest release with:
+**macOS** (Apple Silicon). Install or update to the latest release with:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install.sh | sh
@@ -76,11 +76,21 @@ curl -fsSL https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install
 
 Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications. Releases are signed and notarized by Apple. Versions before 0.2.5 weren't, and can't update themselves, so install once more with either way above.
 
-cmd updates itself: new versions download in the background and install when you quit it, and your terminals keep running. Settings → Updates switches to notify-only or off; cmd → Check for Updates… checks now.
+**Windows** (x64). In PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install.ps1 | iex
+```
+
+Or run the `-setup.exe` from the [latest release](https://github.com/janoelze/cmd/releases/latest). It isn't code-signed yet, so SmartScreen warns about the downloaded installer: choose More info → Run anyway. cmd installs per user, without admin rights.
+
+cmd updates itself: new versions download in the background and install when you quit it, and your terminals keep running. Settings → Updates switches to notify-only or off; Check for Updates… (in the cmd menu on macOS, Help on Windows) checks now.
 
 **Agent state.** cmd sees that an agent is running from its process alone. To also see what it is doing (working, waiting for input, done, which tool it runs), add cmd's hook to the agent: `cmd hooks claude` (or `codex`) prints the snippet to merge into `~/.claude/settings.json` (or `~/.codex/hooks.json`). Hooks of the ghostty-agents fork work unchanged.
 
 ## Getting started
+
+Shortcuts are shown for macOS. On Windows, app shortcuts use Ctrl+Shift so plain Ctrl keys still reach the shell, as in Windows Terminal: ⌘N is Ctrl+Shift+N, ⌥⌘N is Ctrl+Alt+N, ⌘, is Ctrl+,. Settings → Keyboard Shortcuts lists them all.
 
 | | |
 |---|---|

@@ -23,13 +23,15 @@ import { stateStr, type WindowViewProps } from "./registry.ts";
 // The highlight style's CSS is normally mounted by an editor; mount it for static use.
 StyleModule.mount(document, syntax.module!);
 
-const dirOf = (p: string) => p.split("/").slice(0, -1).join("/") || "/";
+// Paths may use "\\" on Windows; results use "/", which Windows accepts too.
+const isAbsolute = (p: string) => p.startsWith("/") || /^[a-z]:[\\/]/i.test(p);
+const dirOf = (p: string) => p.split(/[\\/]/).slice(0, -1).join("/") || "/";
 
 /** Resolve a link/src relative to the Markdown file. */
 function resolveRelative(base: string, href: string): string {
-  if (href.startsWith("/")) return href;
-  const parts = base.split("/");
-  for (const seg of href.split("/")) {
+  if (isAbsolute(href)) return href;
+  const parts = base.split(/[\\/]/);
+  for (const seg of href.split(/[\\/]/)) {
     if (seg === "..") parts.pop();
     else if (seg !== "." && seg !== "") parts.push(seg);
   }
@@ -113,7 +115,8 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
     for (const h of el.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6")) if (!h.id) h.id = slug(h.textContent ?? "");
     for (const img of el.querySelectorAll<HTMLImageElement>("img")) {
       const src = img.getAttribute("src") ?? "";
-      if (src && !/^[a-z][\w+.-]*:/i.test(src)) img.src = `cmd-file://${encodeURI(resolveRelative(base, src))}`;
+      // The path goes in the query: a Windows drive letter would parse as the URL's host.
+      if (src && (isAbsolute(src) || !/^[a-z][\w+.-]*:/i.test(src))) img.src = `cmd-file://local/?path=${encodeURIComponent(resolveRelative(base, src))}`;
     }
     for (const code of el.querySelectorAll<HTMLElement>("pre > code")) void highlightBlock(code).catch(() => {});
     // GFM task list checkboxes are display-only.

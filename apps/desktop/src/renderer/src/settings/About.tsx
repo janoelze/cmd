@@ -9,6 +9,7 @@ import { Symbol } from "../components/Symbol.tsx";
 import { cmd } from "../bridge.ts";
 
 const POLL_MS = 2000;
+const REVEAL = navigator.platform.startsWith("Mac") ? "Show in Finder" : "Show in Explorer";
 
 const MODE_LABEL = { auto: "Installs automatically", notify: "Notifies you", off: "Not checking" } as const;
 
@@ -74,7 +75,7 @@ function PathRow(p: { title: string; path: string | null | undefined }) {
   return (
     <Row title={p.title} desc={<span className="sw-path">{p.path}</span>}>
       <button className="sw-button" onClick={() => cmd.revealPath(p.path!)}>
-        Show in Finder
+        {REVEAL}
       </button>
     </Row>
   );
