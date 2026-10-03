@@ -6,6 +6,7 @@ import { cleanClaudePrompt, parseClaude, parseCodex } from "../src/search/parser
 import { identifierParts, SearchQuery, Vocabulary, words } from "../src/search/query.ts";
 import { indexPass, openIndex, Searcher, type TranscriptRoot } from "../src/search/index.ts";
 import { resumeCommand } from "../src/agents/tracker.ts";
+import { rmTemp } from "./tmp.ts";
 
 const jsonl = (...objs: unknown[]) => objs.map((o) => JSON.stringify(o)).join("\n") + "\n";
 
@@ -121,7 +122,7 @@ describe("index + search", () => {
   });
   afterAll(() => {
     db.close(); // Windows can't delete an open database file
-    fs.rmSync(dir, { recursive: true, force: true });
+    rmTemp(dir);
   });
 
   it("finds sessions by prompt words, with a highlighted snippet and resume info", () => {

@@ -9,6 +9,7 @@ import type { SearchService } from "../src/search/service.ts";
 import { SettingsService } from "../src/settings.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { launchCommand } from "../src/agents/tracker.ts";
+import { rmTemp } from "./tmp.ts";
 
 describe("schema", () => {
   it("overlays valid user values and reports invalid ones", () => {
@@ -161,6 +162,6 @@ describe("live apply", () => {
     core.panes.create();
     expect(ptys[0]!.opts.env.CMD_OPEN_RULES).toBe(rules);
     await core.close();
-    fs.rmSync(dir, { recursive: true, force: true });
+    rmTemp(dir);
   });
 });

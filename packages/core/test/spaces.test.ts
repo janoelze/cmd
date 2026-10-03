@@ -10,17 +10,11 @@ import { Store } from "../src/store.ts";
 import { SpaceManager } from "../src/spaces/manager.ts";
 import { canonical, contains, deepest, gitRoot } from "../src/spaces/paths.ts";
 import { fakeFactory } from "./fake-pty.ts";
+import { rmTemp } from "./tmp.ts";
 
 // realpath: on macOS os.tmpdir() is itself behind a symlink (/var → /private/var).
 const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-spaces-")));
-// Windows keeps a folder busy while anything inside is open: retry, then leave it.
-afterAll(() => {
-  try {
-    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-  } catch (e) {
-    if (process.platform !== "win32") throw e;
-  }
-});
+afterAll(() => rmTemp(tmp));
 
 const mk = (...parts: string[]) => {
   const p = path.join(tmp, ...parts);

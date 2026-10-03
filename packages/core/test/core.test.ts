@@ -7,6 +7,7 @@ import { connect, type Connection } from "@cmd/protocol/node";
 import { Core } from "../src/core.ts";
 import { nodePtyFactory } from "../src/panes.ts";
 import { ProcInfo } from "../src/agents/procinfo.ts";
+import { rmTemp } from "./tmp.ts";
 
 const procinfo = new ProcInfo();
 
@@ -34,7 +35,7 @@ afterAll(async () => {
   procinfo.close();
   conn?.close();
   await core?.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  rmTemp(dir);
 });
 
 const until = async (fn: () => boolean | Promise<boolean>, ms = 5000) => {
