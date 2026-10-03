@@ -22,7 +22,7 @@ pnpm cmd <args>              # run the CLI from source
 pnpm release <ver|patch|minor>  # bump, tag v<ver>, push; CI publishes the GitHub release
 ```
 
-Use an isolated state dir in dev so you don't touch the real core: `export CMD_HOME=$PWD/.cmd-dev` (socket, SQLite, settings.json, core.log, core.pid go there). In the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
+`pnpm dev` and `pnpm dist` builds are "cmd dev" (red icon) with their own core and state in `~/Library/Application Support/cmd-dev`, separate from the installed app. For a throwaway state dir set `export CMD_HOME=$PWD/.cmd-dev` (socket, SQLite, settings.json, core.log, core.pid go there). In the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
 There is no build step for core/CLI/protocol: they run as `.ts` directly on Node ≥ 22.18 (type stripping). This means `tsconfig.base.json` enforces `erasableSyntaxOnly` (no enums, namespaces, parameter properties) and `verbatimModuleSyntax` (use `import type`), and relative imports must include the `.ts` extension.
 

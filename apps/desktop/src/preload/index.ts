@@ -10,7 +10,8 @@ import type { UpdateStatus } from "../main/updater.ts";
 
 export interface AppInfo {
   version: string;
-  packaged: boolean;
+  /** pnpm dev or a pnpm dist build: own core and state, no self-update. */
+  dev: boolean;
   electron: string;
   chrome: string;
   /** Source hash of the core this app ships (compare with core.info's build). */
@@ -23,6 +24,8 @@ export interface AppInfo {
 
 type Status = "connecting" | "connected" | "disconnected";
 
+/** Main decides which core this app uses (development builds run their own). */
+const socketPath: string = ipcRenderer.sendSync("core-socket");
 let conn: Connection | null = null;
 let ready: Promise<Connection>;
 const eventListeners = new Set<(e: CoreEvent) => void>();
@@ -39,7 +42,7 @@ function open(): Promise<Connection> {
     // attempts fail; retry quickly at first, then back off to 500 ms.
     for (let attempt = 0; ; attempt++) {
       try {
-        const c = await connect();
+        const c = await connect(socketPath);
         conn = c;
         c.client.onEvent((e) => {
           for (const fn of eventListeners) fn(e);

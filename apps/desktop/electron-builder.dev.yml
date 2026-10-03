@@ -1,0 +1,11 @@
+# `pnpm dist`: a local development build, "cmd dev" with the red icon (build/dev,
+# from `pnpm icons`). It installs next to the released app and keeps its own core
+# and state (src/main/index.ts). CI packages with electron-builder.yml itself.
+extends: ./electron-builder.yml
+appId: dev.janoelze.cmd.dev
+productName: cmd dev
+mac:
+  icon: build/dev/icon.icns
+  extraResources:
+    - from: build/dev/Assets.car
+      to: Assets.car

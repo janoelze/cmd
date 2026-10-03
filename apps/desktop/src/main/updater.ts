@@ -81,9 +81,9 @@ function check(): void {
 }
 
 /** Menu bar / palette: check now and report the result. */
-export function checkForUpdates(): void {
-  if (!app.isPackaged) {
-    void dialog.showMessageBox({ type: "info", message: "Updates only work in the packaged app" });
+export function checkForUpdates(devBuild: boolean): void {
+  if (devBuild) {
+    void dialog.showMessageBox({ type: "info", message: "Development builds don't update themselves", detail: "Install a release for updates." });
     return;
   }
   if (ready) return void askToRestart(ready);

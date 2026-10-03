@@ -9,9 +9,10 @@ import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { SETTINGS_TEMPLATE, mediaOrigin, widgetCsp } from "@cmd/protocol";
-import { cmdHome, connect, defaultSocketPath, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, configDir, connect, defaultSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
@@ -20,7 +21,23 @@ import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type Keybindi
 
 // Loaded after launch: the updater isn't needed to show the first window.
 const updater = () => import("./updater.ts");
-const checkForUpdates = () => void updater().then((u) => u.checkForUpdates());
+const checkForUpdates = () => void updater().then((u) => u.checkForUpdates(devBuild));
+
+/**
+ * Development builds (pnpm dev, and pnpm dist, which packages as "cmd dev") sit
+ * next to the installed app: a red icon, their own name, and their own core and
+ * state, so they never attach to (and offer to restart) the core your real
+ * terminals run in. Settings and keybindings stay shared. $CMD_HOME still wins.
+ */
+const devBuild = !app.isPackaged || app.getName() === "cmd dev";
+if (devBuild) {
+  app.setName("cmd dev");
+  if (!process.env.CMD_HOME) {
+    process.env.CMD_CONFIG_DIR ??= configDir();
+    process.env.CMD_HOME = path.join(app.getPath("appData"), "cmd-dev");
+    process.env.CMD_SOCKET ??= path.join(os.tmpdir(), "cmd-dev", "core.sock");
+  }
+}
 
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 
@@ -65,7 +82,7 @@ if (!process.env.CMD_HOME && !fs.existsSync(uiData) && fs.existsSync(legacyUiDat
 app.setPath("userData", uiData);
 
 // Packaged builds carry their icon in the bundle (.icns / .ico); dev runs use the PNG.
-const devIcon = app.isPackaged ? undefined : path.join(here, "../../build/icon.png");
+const devIcon = app.isPackaged ? undefined : path.join(here, "../../build/dev/icon.png");
 
 function canConnect(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -209,7 +226,7 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     ...b,
     minWidth: 760,
     minHeight: 480,
-    title: "cmd",
+    title: app.getName(),
     icon: devIcon, // Windows/Linux; macOS uses the Dock icon
     show: false,
     titleBarStyle: "hiddenInset",
@@ -350,11 +367,13 @@ ipcMain.on("open-path", (_e, p: string) => void shell.openPath(p));
 ipcMain.on("settings-window", () => void openSettings());
 ipcMain.on("check-updates", () => checkForUpdates());
 ipcMain.handle("restart-core", () => restartCore());
+// The preload connects where main decided (dev builds use their own core).
+ipcMain.on("core-socket", (e) => (e.returnValue = socketPath));
 ipcMain.on("reveal-path", (_e, p: string) => shell.showItemInFolder(p));
 /** Settings → About: the app's side of the diagnostics (core.info is the core's). */
 ipcMain.handle("app-info", async () => ({
   version: app.getVersion(),
-  packaged: app.isPackaged,
+  dev: devBuild,
   electron: process.versions.electron,
   chrome: process.versions.chrome,
   build: sourceBuildId(repoRoot),
@@ -488,7 +507,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = savedAppearance().source;
   if (devIcon) app.dock?.setIcon(devIcon);
   app.setAboutPanelOptions({
-    applicationName: "cmd",
+    applicationName: app.getName(),
     applicationVersion: app.getVersion(),
     copyright: "© 2026 Jan Oelze",
     website: "https://github.com/janoelze/cmd",
@@ -516,7 +535,7 @@ app.whenReady().then(async () => {
     () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows)),
     (err: Error) => dialog.showErrorBox("cmd: the core did not start", err.message),
   );
-  void updater().then((u) => u.startUpdater(socketPath));
+  if (!devBuild) void updater().then((u) => u.startUpdater(socketPath));
   const send = commandSender(() => spaces.reopen(), { openSettings, checkForUpdates, isSettings, appWindows });
   buildMenu(send, keybindings.bindings);
   watchKeybindings((next) => {

@@ -25,7 +25,9 @@ pnpm typecheck
 pnpm e2e                     # build, launch the app via Playwright, screenshots in .cmd-dev/shots
 ```
 
-Run against an isolated dev state instead of your real one:
+Development builds (`pnpm dev`, and `pnpm dist`, which packages "cmd dev") have a red icon and the name "cmd dev". They run their own core and state in `~/Library/Application Support/cmd-dev` (socket in `$TMPDIR/cmd-dev`), so they never attach to the installed app's core and your real terminals. They share `~/.config/cmd` (settings, keybindings) with it and never update themselves. Setting `CMD_HOME` overrides all of that. `pnpm icons` renders the red icon into `apps/desktop/build/dev` along with the normal one.
+
+For a throwaway state, or to use `pnpm core` and the CLI from source against it:
 
 ```sh
 export CMD_HOME=$PWD/.cmd-dev     # socket, SQLite and settings.json go here
@@ -44,7 +46,7 @@ Inside the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
 ## Packaging and releases
 
-`pnpm dist` builds `apps/desktop/dist/cmd-<version>-arm64.{dmg,zip}`. The app ships the core's TypeScript source in `Contents/Resources/runtime` (staged by `scripts/stage-runtime.mjs`) and runs it with Electron's own Node, so no system `node` is needed.
+`pnpm dist` builds the development flavor, `apps/desktop/dist/cmd dev-<version>-arm64.{dmg,zip}` (`electron-builder.dev.yml`); CI packages releases with `electron-builder.yml`. The app ships the core's TypeScript source in `Contents/Resources/runtime` (staged by `scripts/stage-runtime.mjs`) and runs it with Electron's own Node, so no system `node` is needed.
 
 CI (`.github/workflows/build.yml`) typechecks, tests and packages every push. `pnpm release 0.2.0` (or `patch`/`minor`/`major`) bumps the version, tags `v0.2.0` and pushes; CI builds the tag and publishes a GitHub release with the .dmg and .zip (a version with a `-`, like `0.2.0-beta.1`, is a prerelease). After packaging, CI checks the signature with `codesign --verify --deep --strict` (and `spctl` when Developer ID signed), so a release macOS would call "damaged" fails instead of shipping. `scripts/install.sh` is the one-line installer the README points to.
 

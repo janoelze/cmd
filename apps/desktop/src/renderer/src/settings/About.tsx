@@ -29,7 +29,7 @@ const ago = (t: number) => `${duration(Date.now() - t)} ago`;
 
 function updateLine(a: AppInfo): string {
   const u = a.updates;
-  if (!a.packaged) return "Development build: updates only work in the packaged app.";
+  if (a.dev) return "Development build: doesn't update itself. Install a release for updates.";
   if (u.ready) return `cmd ${u.ready} is downloaded and installs when you quit.`;
   if (u.lastError) return `Last check failed: ${u.lastError}`;
   return `${MODE_LABEL[u.mode]}. ${u.lastCheck ? `Last checked ${ago(u.lastCheck)}.` : "Not checked yet."}`;
@@ -37,7 +37,7 @@ function updateLine(a: AppInfo): string {
 
 function debugText(a: AppInfo | null, c: CoreInfo | null): string {
   const lines = [
-    `cmd ${a?.version ?? "?"}${a && !a.packaged ? " (development)" : ""}`,
+    `cmd ${a?.version ?? "?"}${a?.dev ? " (development)" : ""}`,
     `Electron ${a?.electron ?? "?"}, Chromium ${a?.chrome ?? "?"}`,
     `App build ${a?.build ?? "?"}`,
   ];
@@ -145,10 +145,10 @@ export function About() {
         <div className="sw-list">
           <Row title="Version" desc={app && `Electron ${app.electron}, Chromium ${app.chrome}`}>
             <Value>{app?.version ?? "…"}</Value>
-            {app && !app.packaged && <span className="sw-tag">development</span>}
+            {app?.dev && <span className="sw-tag">development</span>}
           </Row>
           <Row title="Updates" desc={app && updateLine(app)}>
-            <button className="sw-button" disabled={!app?.packaged} onClick={() => cmd.checkForUpdates()}>
+            <button className="sw-button" disabled={!app || app.dev} onClick={() => cmd.checkForUpdates()}>
               Check for Updates…
             </button>
           </Row>
@@ -211,7 +211,7 @@ export function About() {
           <PathRow title="State folder" path={app?.home} />
           <PathRow title="Settings" path={core?.settingsPath} />
           <PathRow title="Core log" path={app?.coreLog} />
-          <PathRow title="Update log" path={app?.packaged ? app.updateLog : null} />
+          <PathRow title="Update log" path={app && !app.dev ? app.updateLog : null} />
           <PathRow title="Core runs from" path={core?.root} />
           <PathRow title="Socket" path={core?.socket} />
         </div>
