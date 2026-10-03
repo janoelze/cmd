@@ -40,6 +40,30 @@ let webglLoading: Promise<void> | null = null;
 
 class Terminals {
   #hosts = new Map<PaneId, Host>();
+  /** Terminals whose snapshot is still loading (see hold). */
+  #held = new Map<PaneId, { ready: Promise<void>; release: () => void }>();
+
+  /**
+   * Keep views from opening a terminal until its content is written (release):
+   * writing into a terminal that isn't open only parses, with no per-line
+   * rendering or scrollbar work, and its first paint shows the final content.
+   */
+  hold(paneId: PaneId): void {
+    if (this.#held.has(paneId)) return;
+    let release!: () => void;
+    const ready = new Promise<void>((r) => (release = r));
+    this.#held.set(paneId, { ready, release });
+  }
+
+  release(paneId: PaneId): void {
+    this.#held.get(paneId)?.release();
+    this.#held.delete(paneId);
+  }
+
+  /** Resolves when the terminal may be shown; null if it may be now. */
+  whenReady(paneId: PaneId): Promise<void> | null {
+    return this.#held.get(paneId)?.ready ?? null;
+  }
   #settings: Settings = DEFAULT_SETTINGS;
   /** ⌘+/⌘- offset on top of terminal.fontSize (persisted by the app). */
   #zoom = 0;

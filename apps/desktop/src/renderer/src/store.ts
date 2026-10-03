@@ -192,20 +192,12 @@ function handle(e: CoreEvent): void {
 
 cmd.onEvent(handle);
 
-/** The snapshot's items, overridden by entries that changed since `before` (events received meanwhile). */
-function newer<T extends { id: string }>(items: T[], before: Map<string, T>, now: Map<string, T>): Map<string, T> {
-  const out = new Map(items.map((x) => [x.id, x]));
-  for (const [id, x] of now) if (before.get(id) !== x) out.set(id, x);
-  return out;
-}
-
 cmd.onStatus(async (status) => {
   if (status !== "connected") {
     set({ connected: false });
     return;
   }
   performance.mark("boot:connected");
-  const before = state;
   let snap;
   try {
     snap = await cmd.call("events.subscribe", {});
@@ -216,12 +208,20 @@ cmd.onStatus(async (status) => {
     set({ connected: false, error: (err as Error).message });
     return;
   }
-  for (const p of snap.panes) awaitingSnapshot.add(p.id);
+  for (const p of snap.panes) awaitingSnapshot.add(p.id), terminals.hold(p.id);
   terminals.configure(snap.settings.settings);
   setWindowTypes(snap.windowTypes ?? []);
-  // Fill the terminals before they are shown: writing into a terminal that isn't
-  // open yet only parses (no per-line rendering and scrollbar updates), and the
-  // first paint already has the final content. Snapshots are small and fast.
+  set({
+    connected: true,
+    error: undefined,
+    settings: snap.settings,
+    ui: snap.ui ?? {},
+    panes: new Map(snap.panes.map((p) => [p.id, p])),
+    agents: new Map(snap.agents.map((a) => [a.id, a])),
+    windows: new Map((snap.windows ?? []).map((w) => [w.id, w])),
+  });
+  void cmd.call("search.status", {}).then((search) => set({ search }), () => {});
+  // The windows show now; each terminal opens once its content is written (hold).
   await Promise.allSettled(
     snap.panes.map(async (p) => {
       try {
@@ -230,19 +230,9 @@ cmd.onStatus(async (status) => {
         terminals.write(p.id, data);
       } finally {
         awaitingSnapshot.delete(p.id);
+        terminals.release(p.id);
       }
     }),
   );
-  set({
-    connected: true,
-    error: undefined,
-    settings: snap.settings,
-    ui: snap.ui ?? {},
-    // Updates that arrived while the snapshots loaded are newer than `snap`.
-    panes: newer(snap.panes, before.panes, state.panes),
-    agents: newer(snap.agents, before.agents, state.agents),
-    windows: newer(snap.windows ?? [], before.windows, state.windows),
-  });
-  void cmd.call("search.status", {}).then((search) => set({ search }), () => {});
   performance.mark("boot:terminals");
 });
