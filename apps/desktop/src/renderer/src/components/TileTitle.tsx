@@ -3,9 +3,9 @@
 
 import { ledOf, rowTitle, shortPath, usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
 import { typeFor, viewFor } from "../windows/registry.ts";
-import { useStore } from "../store.ts";
+import { useStoreValue } from "../store.ts";
 import { useWindowStatus } from "../windowActions.ts";
-import { Symbol } from "./Symbol.tsx";
+import { ICON, Symbol } from "./Symbol.tsx";
 
 /** SF Symbol for a window kind (from the core's window type registry). */
 export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "macwindow";
@@ -23,13 +23,13 @@ export function TileTitle({
   onDoubleClick?: (e: React.MouseEvent) => void;
   title?: string;
 }) {
-  const showUsage = useStore().settings.settings["ui.showResources"];
+  const showUsage = useStoreValue((s) => s.settings.settings["ui.showResources"]);
   const { pane, win } = row;
   const status = useWindowStatus(win?.id ?? null);
   return (
     <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} title={title}>
       {win && win.kind !== "terminal" ? (
-        <Symbol name={iconFor(win.kind)} size={11} className="tile-icon" />
+        <Symbol name={iconFor(win.kind)} size={ICON.small} className="tile-icon" />
       ) : (
         <span className={`led led-${ledOf(row.agent)}`} />
       )}

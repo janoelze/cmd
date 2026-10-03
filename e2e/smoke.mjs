@@ -5,9 +5,19 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import http from "node:http";
 import { _electron as electron } from "playwright";
+import { corePid, stopCore } from "../scripts/stop-core.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const home = path.join(root, ".cmd-dev", "e2e");
+// The app starts a detached core that outlives it. Stop the last run's before
+// wiping its state (or it's orphaned), and this run's on any exit, pass or fail.
+await stopCore(home);
+process.on("exit", () => {
+  const pid = corePid(home);
+  try {
+    if (pid) process.kill(pid, "SIGTERM");
+  } catch {}
+});
 fs.rmSync(home, { recursive: true, force: true });
 fs.mkdirSync(home, { recursive: true });
 const shots = path.join(root, ".cmd-dev", "shots");
@@ -70,6 +80,26 @@ const selectedTitle = () => win.locator(".row.sel .row-title").textContent();
 
 await win.waitForSelector(".sidebar-status");
 await win.screenshot({ path: path.join(shots, "1-empty.png") });
+{
+  // The sidebar footer and the main status bar share one bottom row: same top, same height,
+  // and tall enough for their tallest icon button.
+  const left = await win.locator(".sidebar-status").boundingBox();
+  const right = await win.locator(".statusbar").boundingBox();
+  const btn = await win.locator(".statusbar .icon-btn").first().boundingBox();
+  check(Math.abs(left.y - right.y) < 0.5 && Math.abs(left.height - right.height) < 0.5 && right.height >= btn.height,
+    `bottom bars line up and fit their icons (${left.height} / ${right.height}, button ${btn.height})`);
+  check(right.height === 30, `bottom bars keep their 30 px height (${right.height})`);
+  // Icons sit on whole pixels, exactly centred in their buttons.
+  const offsets = await win.locator(".statusbar .icon-btn").evaluateAll((btns) =>
+    btns.map((b) => {
+      const s = b.querySelector(".sf").getBoundingClientRect();
+      const r = b.getBoundingClientRect();
+      return [s.left - r.left - (r.right - s.right), s.top - r.top - (r.bottom - s.bottom), s.width % 1, s.height % 1];
+    }),
+  );
+  check(offsets.every(([dx, dy, fw, fh]) => Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01 && fw === 0 && fh === 0),
+    `status bar icons are exactly centred on whole pixels (${offsets.length} buttons)`);
+}
 
 if (mac) {
   check((await accel("file.newTerminal")) === "Cmd+N", "⌘N is New Terminal");
@@ -282,7 +312,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(md.kind === "markdown", "README.md opens in a Markdown window");
   await win.evaluate((id) => window.__cmdSelect(id), md.id);
   await win.waitForSelector(".tile.kind-markdown .markdown h1");
-  await win.waitForTimeout(800);
+  // Code highlighting waits for the language parser to load on demand.
+  await win.waitForSelector(".tile.kind-markdown pre code span[class]", { timeout: 5000 }).catch(() => {});
   const h1 = await win.locator(".tile.kind-markdown .markdown h1").textContent();
   const tokens = await win.locator(".tile.kind-markdown pre code span[class]").count();
   const imgOk = await win.locator(".tile.kind-markdown .markdown img").evaluate((img) => img.complete && img.naturalWidth === 1);
@@ -474,6 +505,5 @@ check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.loca
 await win.screenshot({ path: path.join(shots, "7-restored.png") });
 
 await app.close();
-// The core outlives the UI by design; stop the isolated test core.
-process.kill(Number(fs.readFileSync(path.join(home, "core.pid"), "utf8")), "SIGTERM");
+await stopCore(home);
 console.log("all checks passed; screenshots in", shots);

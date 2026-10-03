@@ -3,7 +3,7 @@
 
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, protocol, screen, shell } from "electron";
 import { pathToFileURL } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -15,6 +15,8 @@ import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type Keybindi
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 
 if (process.env.CMD_NO_SANDBOX) app.commandLine.appendSwitch("no-sandbox");
+// Tests: render as on a Retina display regardless of the actual screen.
+if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scale-factor", process.env.CMD_FORCE_SCALE);
 
 // cmd-file://local/?path=<abs path> — read-only access to local images/media for the app's own
 // pages (Markdown windows show relative images). Registered on the default
@@ -168,18 +170,48 @@ ipcMain.on("open-settings", (_e, p: string) => {
   void shell.openPath(p);
 });
 ipcMain.handle("keybindings", () => keybindings);
-// SF Symbols by name, as PNG data URLs (black template images; the UI tints them via CSS masks).
-const symbolCache = new Map<string, string | null>();
-ipcMain.handle("sf-symbols", (_e, names: string[]) =>
-  Object.fromEntries(
-    names.map((n) => {
-      if (!symbolCache.has(n)) {
-        const img = nativeImage.createFromNamedImage(n);
-        symbolCache.set(n, img.isEmpty() ? null : img.toDataURL());
+// SF Symbols, rendered natively at the exact point size and pixel density the UI
+// shows them (native/sfsymbols.swift), so they stay crisp. PNG data URLs, black
+// template images; the UI tints them via CSS masks.
+const SF_HELPER = path.join(repoRoot, "apps/desktop/native/build/sfsymbols");
+type SymbolImage = { url: string; w: number; h: number; contain?: boolean } | null;
+const symbolCache = new Map<string, SymbolImage>();
+
+function renderSymbols(names: string[], size: number, weight: string, scale: number): Record<string, SymbolImage> {
+  const key = (n: string) => `${n}@${size}@${weight}@${scale}`;
+  const missing = names.filter((n) => !symbolCache.has(key(n)));
+  if (missing.length && fs.existsSync(SF_HELPER)) {
+    const r = spawnSync(SF_HELPER, [String(size), weight, String(scale), ...missing], { encoding: "utf8", timeout: 5000 });
+    try {
+      const out = JSON.parse(r.stdout || "{}") as Record<string, { png: string; w: number; h: number }>;
+      for (const n of missing) {
+        const o = out[n];
+        symbolCache.set(key(n), o ? { url: `data:image/png;base64,${o.png}`, w: o.w, h: o.h } : null);
       }
-      return [n, symbolCache.get(n)];
-    }),
-  ),
+    } catch {
+      // fall through to the fallback below
+    }
+  }
+  for (const n of missing) {
+    if (symbolCache.has(key(n))) continue;
+    // Fallback without the helper: Electron's image, resized (high quality) to the exact size.
+    const img = nativeImage.createFromNamedImage(n);
+    if (img.isEmpty()) {
+      symbolCache.set(key(n), null);
+      continue;
+    }
+    // Same square, even-sided box as the helper; the image is fitted inside (mask contain).
+    const side = Math.ceil(size / 2) * 2;
+    const { width, height } = img.getSize();
+    const k = side / Math.max(width, height);
+    const px = img.resize({ width: Math.round(width * k * scale), height: Math.round(height * k * scale), quality: "best" });
+    symbolCache.set(key(n), { url: px.toDataURL(), w: side, h: side, contain: true });
+  }
+  return Object.fromEntries(names.map((n) => [n, symbolCache.get(key(n)) ?? null]));
+}
+
+ipcMain.handle("sf-symbols", (_e, req: { names: string[]; size: number; weight?: string; scale?: number }) =>
+  renderSymbols(req.names, req.size, req.weight ?? "regular", Math.max(1, Math.min(3, Math.round(req.scale ?? 2)))),
 );
 ipcMain.on("open-keybindings", () => void shell.openPath(ensureKeybindingsFile()));
 ipcMain.on("open-docs", () => void shell.openPath(path.join(repoRoot, "docs", "00-overview.md")));

@@ -41,7 +41,7 @@ export interface IndexStatus {
   total: number;
 }
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2; // 2: sessions.msg_first/msg_last
 
 /**
  * Where transcripts live: every Claude config dir (default, $CLAUDE_CONFIG_DIR,
@@ -132,7 +132,8 @@ export function openIndex(file: string): DatabaseSync {
     CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, size INTEGER, mtime REAL);
     CREATE TABLE IF NOT EXISTS sessions(
       rowid INTEGER PRIMARY KEY, id TEXT, agent TEXT, path TEXT UNIQUE, config_dir TEXT,
-      cwd TEXT, branch TEXT, title TEXT, first_prompt TEXT, started REAL, updated REAL);
+      cwd TEXT, branch TEXT, title TEXT, first_prompt TEXT, started REAL, updated REAL,
+      msg_first INTEGER, msg_last INTEGER);
     CREATE INDEX IF NOT EXISTS sessions_id ON sessions(id);
     CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(
       title, prompts, responses, tools, idents, tokenize = 'unicode61 remove_diacritics 2');
@@ -145,10 +146,15 @@ export function openIndex(file: string): DatabaseSync {
 }
 
 function deleteByPath(db: DatabaseSync, p: string): void {
-  const row = db.prepare(`SELECT rowid FROM sessions WHERE path = ?`).get(p) as { rowid: number } | undefined;
+  const row = db.prepare(`SELECT rowid, msg_first, msg_last FROM sessions WHERE path = ?`).get(p) as
+    | { rowid: number; msg_first: number | null; msg_last: number | null }
+    | undefined;
   if (row) {
     db.prepare(`DELETE FROM session_fts WHERE rowid = ?`).run(row.rowid);
-    db.prepare(`DELETE FROM message_fts WHERE session = ?`).run(row.rowid);
+    // By rowid range: `session` is an UNINDEXED FTS column, so deleting by it scans
+    // every message in the index (~160 ms at 150k messages, per changed transcript).
+    if (row.msg_first !== null && row.msg_last !== null)
+      db.prepare(`DELETE FROM message_fts WHERE rowid BETWEEN ? AND ?`).run(row.msg_first, row.msg_last);
     db.prepare(`DELETE FROM sessions WHERE rowid = ?`).run(row.rowid);
   }
 }
@@ -181,10 +187,18 @@ function insert(db: DatabaseSync, d: SessionDocument): void {
     d.tools.join("\n"),
     identifierParts(everything),
   );
+  // A session's messages get consecutive rowids (one writer, inside a transaction);
+  // remember the range so deleteByPath can remove them without a scan.
   const msg = db.prepare(`INSERT INTO message_fts(text, session, kind) VALUES (?, ?, ?)`);
+  let first: number | null = null;
+  let last: number | null = null;
   for (const [kind, texts] of [["p", d.prompts], ["r", d.responses], ["t", d.tools]] as const) {
-    for (const t of texts) msg.run(t, rowid, kind);
+    for (const t of texts) {
+      last = Number(msg.run(t, rowid, kind).lastInsertRowid);
+      first ??= last;
+    }
   }
+  if (first !== null) db.prepare(`UPDATE sessions SET msg_first = ?, msg_last = ? WHERE rowid = ?`).run(first, last, rowid);
 }
 
 export function parseFile(f: TranscriptFile): SessionDocument | null {

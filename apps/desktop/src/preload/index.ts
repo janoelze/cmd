@@ -81,8 +81,9 @@ const api = {
     return () => ipcRenderer.off("open-url", h);
   },
   keybindings: (): Promise<KeybindingsSnapshot> => ipcRenderer.invoke("keybindings"),
-  /** SF Symbol images by name; null for names this macOS doesn't have. */
-  sfSymbols: (names: string[]): Promise<Record<string, string | null>> => ipcRenderer.invoke("sf-symbols", names),
+  /** SF Symbols rendered at an exact point size and pixel density; null for unknown names. */
+  sfSymbols: (req: { names: string[]; size: number; weight?: string; scale?: number }): Promise<Record<string, { url: string; w: number; h: number; contain?: boolean } | null>> =>
+    ipcRenderer.invoke("sf-symbols", req),
   onKeybindings(fn: (s: KeybindingsSnapshot) => void): () => void {
     const h = (_e: unknown, s: KeybindingsSnapshot) => fn(s);
     ipcRenderer.on("keybindings", h);

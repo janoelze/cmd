@@ -30,7 +30,10 @@ Run against an isolated dev state instead of your real one:
 export CMD_HOME=$PWD/.cmd-dev     # socket, SQLite and settings.json go here
 pnpm core                         # or let `pnpm dev` start it
 pnpm cmd ls
+pnpm core:stop                    # stop the core of $CMD_HOME
 ```
+
+Cores are detached and outlive the app, so after dev sessions they pile up, each holding its terminals' PTYs (macOS allows 511 in total). `pnpm core:stop-all` stops every cmd core on the machine, your real one included. `pnpm e2e` cleans up its own.
 
 Inside the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
@@ -96,7 +99,7 @@ Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keyb
 | ⌃⌘S | show/hide sidebar · ⌃⌘1 / ⌃⌘2 sessions / tools |
 | ⌥⌘R | show folder in Finder |
 
-On the canvas, drag a title bar to move a window and its bottom-right corner to resize it. Pinch or ⌘-scroll to zoom, and scroll or drag the background to pan. Scrolling over the selected window scrolls that window instead. Zoomed out, windows turn into cards showing a terminal's last lines. Double-click a title bar to zoom to that window, or the background to fit everything. Click or drag the minimap to move around.
+On the canvas, drag a title bar to move a window and its right or bottom edge or corner to resize it. Pinch or ⌘-scroll to zoom, and scroll or drag the background to pan. Scrolling over the selected window scrolls that window instead. Windows stay live at every zoom; `canvas.minZoom`/`canvas.maxZoom` set the range (30–150% by default). Double-click a title bar to zoom to that window, or the background to fit everything. Click or drag the minimap to move around.
 
 Right-click a sidebar row or a terminal for context menus: copy resume command / session id, reveal transcript, new terminal here, and so on. The window remembers its size and position, and the Dock menu has New Terminal / New Claude Session.
 

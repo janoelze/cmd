@@ -5,11 +5,11 @@ import type { Pane } from "@cmd/protocol";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
 import { ledOf, rowDetail, shortPath, usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
-import { useStore } from "../store.ts";
+import { useStoreValue } from "../store.ts";
 import { useWindowStatus } from "../windowActions.ts";
 import { typeFor, viewFor } from "../windows/registry.ts";
 import type { ViewMode } from "./MainView.tsx";
-import { Symbol } from "./Symbol.tsx";
+import { ICON, Symbol } from "./Symbol.tsx";
 
 const ICONS: Record<ViewMode | "new" | "palette" | "settings", string> = {
   focus: "rectangle",
@@ -30,7 +30,7 @@ interface Props {
 
 export function StatusBar({ mode, row, pane, run }: Props) {
   const keys = useKeybindings();
-  const showUsage = useStore().settings.settings["ui.showResources"];
+  const showUsage = useStoreValue((s) => s.settings.settings["ui.showResources"]);
   const winStatus = useWindowStatus(row?.win?.id ?? null);
   const tip = (label: string, id: CommandId) => {
     const k = prettyAccelerator(keys.bindings[id]?.[0]);
@@ -38,7 +38,7 @@ export function StatusBar({ mode, row, pane, run }: Props) {
   };
   const btn = (id: CommandId, icon: string, label: string, on = false) => (
     <button key={id} className={`icon-btn ${on ? "on" : ""}`} title={tip(label, id)} aria-label={label} onClick={() => run(id)}>
-      <Symbol name={icon} size={15} />
+      <Symbol name={icon} size={ICON.bar} />
     </button>
   );
 

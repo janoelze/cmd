@@ -8,6 +8,8 @@
   },
   "scripts": {
     "core": "node --no-warnings packages/core/src/main.ts",
+    "core:stop": "node scripts/stop-core.mjs",
+    "core:stop-all": "node scripts/stop-core.mjs --all",
     "cmd": "node --no-warnings packages/cli/src/main.ts",
     "dev": "pnpm --filter @cmd/desktop dev",
     "test": "vitest run",
