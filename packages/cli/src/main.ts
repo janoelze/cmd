@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import type { Agent, AgentState, Pane } from "@cmd/protocol";
 import { APPLIES_LABEL, currentKey, ENV, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
+import { magicCommand } from "./magic.ts";
 
 const HELP = `cmd — terminal + agent workbench
 
@@ -28,6 +29,8 @@ usage: cmd <command> [options]
                                       --types lists window types
   search <query…> [--json] [--limit N]  search past Claude Code / Codex sessions
   resume <session-id> [--agent claude|codex] [--fork]
+  magic <request…> [--help]          make a widget or terminal command from a request
+                                      (runs here, no core needed; see cmd magic --help)
   settings [get KEY | set KEY VALUE | reset KEY | path] [--json]
                                       list or change settings (applies live)
 
@@ -71,6 +74,7 @@ async function main(): Promise<number> {
   }
   if (cmd === "hook") return hook(pos[0] ?? "claude");
   if (cmd === "hooks") return printHooks(pos[0] ?? "claude");
+  if (cmd === "magic") return magicCommand(argv.slice(1));
 
   const conn = await connect().catch(() => {
     console.error(`cmd: no core running at ${defaultSocketPath()} (start it with: pnpm core)`);

@@ -3,6 +3,7 @@
 
 import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, Pane, PaneId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
+import type { MagicProgress } from "./magic.ts";
 
 export interface SettingsSnapshot {
   settings: Settings;
@@ -95,6 +96,17 @@ export interface Methods {
   /** All windows, terminals included. */
   "window.list": { params: {}; result: AppWindow[] };
 
+  /**
+   * Make a Magic window's content from a request (docs/12-magic-windows.md), or
+   * refine what it shows. Returns at once; progress arrives as magic.stream
+   * events and the result in the window's state.
+   */
+  "magic.run": { params: { id: WindowId; prompt: string }; result: null };
+  /** Stop a run in progress. */
+  "magic.cancel": { params: { id: WindowId }; result: null };
+  /** Run the widget's data source now (then on its interval again). */
+  "magic.refresh": { params: { id: WindowId }; result: null };
+
   /** Directory listing for file windows (dirs first, then by name). */
   "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };
   /** Read a text file (first 5 MB). */
@@ -154,6 +166,10 @@ export type CoreEvent =
   | { type: "search.status"; status: SearchStatus }
   | { type: "window.updated"; window: AppWindow }
   | { type: "window.removed"; id: WindowId }
+  /** A Magic window's run: agent steps, the header, the body so far, done or failed. */
+  | { type: "magic.stream"; id: WindowId; progress: MagicProgress }
+  /** New data from a Magic widget's source (error: the source failed; the widget keeps its last data). */
+  | { type: "magic.data"; id: WindowId; data: unknown; at: number; error?: string }
   /** A watched file or folder changed on disk (see fs.watch). */
   | { type: "fs.changed"; path: string }
   /** Bring a window to the front (e.g. `open .` in a terminal). */

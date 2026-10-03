@@ -9,6 +9,7 @@ import { terminals } from "./terminals.ts";
 import { applyFonts } from "./fonts.ts";
 import { applyThemeSettings } from "./themes/registry.ts";
 import { setWindowTypes } from "./windows/registry.ts";
+import { handleMagicEvent } from "./magic.ts";
 
 export interface State {
   connected: boolean;
@@ -168,6 +169,10 @@ function handle(e: CoreEvent): void {
       set({ windows });
       return;
     }
+    case "magic.stream":
+    case "magic.data":
+      handleMagicEvent(e);
+      return;
     case "fs.changed":
       for (const fn of fsListeners) fn(e.path);
       return;
