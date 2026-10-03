@@ -25,6 +25,8 @@ export interface WindowView {
   describe?(win: AppWindow): { name?: string; place?: string; kind?: string | null };
   /** Context-menu entries for the title bar and sidebar row. */
   menu?(win: AppWindow): MenuEntry[];
+  /** The window's own main actions: first in that menu, above Show, Move and Close. */
+  actions?(win: AppWindow): MenuEntry[];
 }
 
 const views = new Map<string, WindowView>();

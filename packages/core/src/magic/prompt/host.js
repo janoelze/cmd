@@ -208,8 +208,8 @@
   };
 
   // The app can't see the pointer over this page (it runs in its own process),
-  // so report presses (the window gets selected, like any other) and when the
-  // pointer enters and leaves (the window shows its controls on hover).
+  // so report presses (the window gets selected, like any other) and
+  // right-clicks (the window's menu opens: Change, Refresh, …).
   window.addEventListener(
     "pointerdown",
     (e) => {
@@ -220,16 +220,16 @@
     },
     { capture: true, passive: true },
   );
-  let inside = false;
-  const hover = (on) => {
-    if (on === inside) return;
-    inside = on;
-    try {
-      parent.postMessage({ type: "hover", on }, "*");
-    } catch {}
-  };
-  document.addEventListener("mousemove", () => hover(true), { passive: true });
-  document.documentElement.addEventListener("mouseleave", () => hover(false));
+  window.addEventListener(
+    "contextmenu",
+    (e) => {
+      e.preventDefault();
+      try {
+        parent.postMessage({ type: "contextmenu" }, "*");
+      } catch {}
+    },
+    { capture: true },
+  );
 
   // Theme: CSS variables update by themselves; code that draws with colours
   // (a canvas) re-reads them in cmd.onTheme, called now and on every change.
@@ -276,6 +276,14 @@
       setTokens(m.tokens);
       render(m.html);
       if ("data" in m && m.data !== undefined) receive(m.data);
+      // Painted with its data: the host shows the frame only now (two frames: after layout and paint).
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          try {
+            parent.postMessage({ type: "rendered" }, "*");
+          } catch {}
+        }),
+      );
     }
     if (m.type === "data") receive(m.data);
   });

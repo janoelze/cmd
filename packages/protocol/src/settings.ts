@@ -210,6 +210,7 @@ export const SETTINGS_SCHEMA = {
     description: "Auto downloads new versions in the background and installs them when you quit cmd; terminals keep running. Check for Updates… in the cmd menu checks now.",
   },
   "magic.explore": { title: "Look around this Mac", type: "boolean", default: true, description: "Let the Magic agent run read-only commands and read files to answer requests about this Mac. Private files (keys, keychains, browser profiles) stay off limits." },
+  "magic.showSteps": { title: "Show commands while building", type: "boolean", default: false, description: "Show the commands, files and URLs the Magic agent looks at while it builds a window, with their output. Off: only what it is doing, in a few words." },
 } as const satisfies Record<string, Def>;
 
 export type SettingKey = keyof typeof SETTINGS_SCHEMA;

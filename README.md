@@ -59,7 +59,7 @@ Press ⇧⌘M and type what the window should show: a question, a URL, some JSON
 - **It looks around first when it needs to.** For "show my VPN connection status", the agent checks your network interfaces, routes and VPN clients with read-only commands before deciding what to show. You watch its steps in the window while it works.
 - **It stays live.** The agent writes the widget once, together with a data source (a URL or a read-only command). cmd re-runs the source on its own schedule, so refreshing costs nothing and never calls the model again. The title bar says how fresh the data is.
 - **It matches cmd.** Widgets use your theme's colours, your terminal font and a small built-in kit, so they look right next to your terminals in every theme, light or dark.
-- **Change it by asking.** Hover a widget and click ✦ Change (or press ⌘L): "bigger numbers", "make it a line chart", "only failed runs".
+- **Change it by asking.** Right-click a widget and choose Change… (or press ⌘L), then type in its title bar: "bigger numbers", "make it a line chart", "only failed runs".
 - **Or it's a command.** When a terminal program already does the job (`btop`, `log stream`), you get the command, typed into a new terminal for you to run.
 
 **Setup.** If `claude` works in your shell, there is nothing to configure: cmd uses your Claude Code login. With `ANTHROPIC_API_KEY` in cmd's environment it uses the Anthropic API instead, and an OpenAI-compatible endpoint (OpenRouter, Ollama, LM Studio, …) works too. Choose the provider and model under Settings → Magic Windows.
@@ -111,7 +111,7 @@ Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keyb
 |---|---|
 | ⌘N (⌘T) | new terminal (in the current folder) |
 | ⌥⌘N | new Claude session |
-| ⇧⌘M | new Magic window; ⌘L in one changes it |
+| ⇧⌘M | new Magic window; in one, ⌘L changes it, ⌘R refreshes its data, ⌘. stops it while it is being made |
 | ⌘W | close the frontmost thing: the palette, then the terminal (asks if something is running), then the window |
 | ⇧⌘W | close window (terminals keep running) |
 | ⌥⌘← / ⌥⌘→ (⇧⌘[ / ⇧⌘]) | previous / next session |

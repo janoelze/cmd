@@ -273,6 +273,8 @@ export function App() {
     "file.newFiles": () => void newFiles(),
     "file.newMagic": () => void newMagic(),
     "view.magicChange": () => windowActions(selected)?.change?.(),
+    "view.magicRefresh": () => windowActions(selected)?.refresh?.(),
+    "view.magicStop": () => windowActions(selected)?.stop?.(),
     "file.close": () => {
       // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
       if (picker) setPicker(null);
@@ -388,7 +390,9 @@ export function App() {
     const winPath = r.win && stateStr(r.win, "path");
     const cwd = a?.cwd ?? r.pane?.cwd ?? (r.win?.kind === "files" ? winPath : winPath?.split("/").slice(0, -1).join("/")) ?? undefined;
     const id = a && sessionId(a);
+    const own = r.win ? (viewFor(r.win.kind)?.actions?.(r.win) ?? []) : [];
     void showContextMenu([
+      ...(own.length ? [...own, "-" as const] : []),
       ...(windowIdOf(r)
         ? [
             { label: "Show", run: () => select(windowIdOf(r)!) },

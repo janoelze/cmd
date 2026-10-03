@@ -106,6 +106,8 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("view.cycleWidth"),
         ...i("view.toggleEdit"),
         ...i("view.magicChange"),
+        ...i("view.magicRefresh"),
+        ...i("view.magicStop"),
         sep,
         ...i("view.sidebar"),
         sep,

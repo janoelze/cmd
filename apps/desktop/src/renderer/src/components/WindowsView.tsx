@@ -802,6 +802,13 @@ export function WindowsView(p: Props) {
                 width: rect.w,
                 height: rect.h,
               }}
+              // Right-clicks an embedded page reports (Magic widgets, embed.ts) open the title bar's menu.
+              onContextMenu={(e) => {
+                if (!(e.target instanceof Element && e.target.closest("[data-embed]"))) return;
+                e.preventDefault();
+                onSelect(id);
+                p.onTitleMenu?.(r);
+              }}
               onMouseDown={() => {
                 if (canvas && id !== selected) clickedSelect.current = true;
                 onSelect(id);

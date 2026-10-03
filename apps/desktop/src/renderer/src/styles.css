@@ -518,6 +518,12 @@ kbd {
 }
 .tile.sel .tile-title { color: var(--text); }
 .tile-name { flex: 0 1 auto; display: flex; align-items: center; min-width: 0; font-weight: 500; }
+.tile-name.editing { flex: 1 1 auto; margin-right: 8px; }
+.tile-title-input {
+  flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent;
+  font: inherit; font-weight: 400; color: var(--text); cursor: text;
+}
+.tile-title-input::placeholder { color: var(--text-dim); }
 /* Kind · Place · Status. Narrow windows drop from the right: status first, the name last. */
 /* Info, not the name: always dim, selected or not. */
 .tile-meta { margin-left: auto; display: flex; min-width: 0; flex: 0 100 auto; overflow: hidden; color: var(--text-dim); }
@@ -536,6 +542,9 @@ kbd {
 .tile-meta .slot-kind { flex-shrink: 0.1; }
 .tile-meta .slot-place { flex-shrink: 10; }
 .tile-meta .slot-status { flex-shrink: 100; }
+/* The status wrapper only carries the click; layout stays the slot's. */
+.tile-meta .tile-status { display: contents; }
+.tile-meta .slot-status.actionable:hover { color: var(--text); }
 /* Place or status squeezed to a sliver would show just its gap and "…": hide it
    instead (Slot.tsx sets .sliver; short values like "~" aren't squeezed). */
 .slot.sliver .slot-v, .slot.sliver .slot-divider { visibility: hidden; }

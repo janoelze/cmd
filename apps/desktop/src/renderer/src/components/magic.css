@@ -20,10 +20,29 @@
 }
 .magic-chip:hover { color: var(--text); background: color-mix(in srgb, var(--ink) 11%, transparent); }
 
-/* working: the agent's steps */
-.magic-progress { flex: 1; display: flex; flex-direction: column; padding: 14px 16px; gap: 10px; overflow: auto; min-height: 0; }
-.magic-request { font: 13px var(--font-ui); color: var(--text); }
-.magic-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* working: a dot matrix over the whole window, the current step in the
+   middle (Stop is in .magic-controls); over a dimmed widget while a refinement runs */
+.magic-frame { transition: opacity .18s; }
+.magic-frame.unpainted { opacity: 0; transition: none; }
+.magic-progress { position: absolute; inset: 0; z-index: 3; overflow: hidden; background: var(--well); }
+.magic-progress.overlay { background: color-mix(in srgb, var(--well) 80%, transparent); }
+.magic-matrix { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.magic-status {
+  position: absolute; inset: 0 24px; display: flex; align-items: center; justify-content: center;
+  font: 13px/18px var(--font-ui); color: var(--text); pointer-events: none;
+}
+.magic-status span {
+  min-width: 0; padding: 2px 8px; border-radius: 5px; background: color-mix(in srgb, var(--well) 75%, transparent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: magic-in .25s ease-out;
+}
+@keyframes magic-in { from { opacity: 0; transform: translateY(3px); } }
+
+/* magic.showSteps: the trace along the bottom, left of the × */
+.magic-steps {
+  position: absolute; left: 8px; right: 36px; bottom: 8px; max-height: 40%; overflow: auto; list-style: none; margin: 0;
+  padding: 4px 8px; display: flex; flex-direction: column; gap: 2px;
+  background: color-mix(in srgb, var(--well) 88%, transparent); border-radius: 6px;
+}
 .magic-step { display: grid; grid-template-columns: 14px max-content 1fr max-content; align-items: baseline; gap: 0 8px; font: 12px/20px var(--font-ui); color: var(--text); }
 .magic-step.failed .magic-why { color: var(--text-dim); }
 .magic-why { white-space: nowrap; }
@@ -39,12 +58,6 @@
 .magic-light.done { background: var(--state-done); }
 .magic-light.failed { background: color-mix(in srgb, var(--text-dim) 60%, transparent); }
 @keyframes magic-pulse { 50% { opacity: .35; } }
-.magic-progress-foot { margin-top: auto; display: flex; justify-content: flex-end; }
-
-.magic-drawing {
-  position: absolute; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 8px;
-  font: 11px var(--font-ui); color: var(--text-dim);
-}
 
 /* a command to run */
 .magic-terminal { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 20px; }
@@ -62,33 +75,33 @@
   font: 11px var(--font-ui); color: var(--text-dim); padding: 4px 12px; border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* media request: covers the dimmed widget until answered */
+.magic.needs-action .magic-frame { opacity: .3; pointer-events: none; }
+.magic-overlay { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; padding: 12px; }
 .magic-media {
-  display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 12px; font: 12px var(--font-ui); color: var(--text);
-  border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); cursor: default; user-select: none;
+  display: flex; flex-direction: column; gap: 6px; max-width: 320px; padding: 12px 14px;
+  font: 12px var(--font-ui); color: var(--text); background: var(--bg-elevated);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 8px; cursor: default; user-select: none;
 }
-.magic-media-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.magic-media-title { font-weight: 600; overflow-wrap: anywhere; }
+.magic-media-text { color: var(--text-dim); line-height: 1.4; }
+.magic-media .magic-row { justify-content: flex-end; margin-top: 4px; }
 .magic-error-inline { font: 12px var(--font-ui); color: var(--state-needs); }
 
-/* refining: a button floating over the widget's bottom-left corner, shown on
-   hover; an overlay, so the widget never resizes because of it */
-.magic-refine {
-  position: absolute; left: 8px; bottom: 8px; z-index: 2; display: flex; gap: 4px;
-  opacity: 0; pointer-events: none; transition: opacity .12s;
+/* Stop, while building: a small round × at the bottom right, over the dot matrix */
+.magic-stop {
+  position: absolute; right: 8px; bottom: 8px; z-index: 4; display: grid; place-items: center; width: 20px; height: 20px; padding: 0;
+  color: var(--text-dim); background: var(--bg-elevated); border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 10px; cursor: default;
 }
-/* :hover covers the window's own elements; .hovered the widget's page, which the app can't hit-test (host.js reports it). */
-.magic:hover .magic-refine, .magic.hovered .magic-refine, .magic-refine.open, .magic-refine:focus-within { opacity: 1; pointer-events: auto; }
-.magic-refine-btn, .magic-refine-form {
-  display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px;
-  font: 12px var(--font-ui); color: var(--text-dim);
-  background: var(--bg-elevated); border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 12px;
+.magic-stop:hover { color: var(--text); }
+
+/* Once, after the first widget: how to change it (there's no button for it) */
+.magic-hint-flash {
+  position: absolute; left: 50%; bottom: 10px; z-index: 4; transform: translateX(-50%); max-width: calc(100% - 24px);
+  padding: 2px 10px; font: 11px/18px var(--font-ui); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--bg-elevated); border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 10px; pointer-events: none;
+  animation: magic-hint 4.5s ease-in-out forwards;
 }
-/* Like the app's own buttons (.btn, .icon-btn in styles.css): the arrow, no text selection. */
-.magic-refine, .magic-refine-btn, .magic-step, .magic-row, .magic-error { cursor: default; user-select: none; }
-.magic-refine-form input { cursor: text; user-select: text; }
-.magic-refine-btn:hover { color: var(--text); }
-.magic-refine-btn.icon { padding: 0 6px; }
-.magic-refine.open { right: 8px; }
-.magic-refine-form { width: 100%; max-width: 340px; color: var(--text); }
-.magic-refine-form input { flex: 1; min-width: 0; font: 12px var(--font-ui); color: var(--text); background: transparent; border: 0; outline: 0; }
-.magic-refine-form input::placeholder { color: var(--text-dim); }
-.magic-mark-small { color: var(--accent); font-size: 12px; }
+@keyframes magic-hint { 0% { opacity: 0; } 8%, 85% { opacity: 1; } 100% { opacity: 0; } }
+.magic-mark-small { color: var(--accent); font-size: 11px; }
+.magic-step, .magic-row, .magic-error { cursor: default; user-select: none; }

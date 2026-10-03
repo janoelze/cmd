@@ -30,6 +30,8 @@ export const COMMANDS = spec([
   { id: "file.openSpace", label: "Open Space…", keys: ["Cmd+O"] },
   { id: "file.newMagic", label: "New Magic Window", keys: ["Shift+Cmd+M"] },
   { id: "view.magicChange", label: "Change Magic Window…", keys: ["Cmd+L"] },
+  { id: "view.magicRefresh", label: "Refresh Magic Window", keys: ["Cmd+R"] },
+  { id: "view.magicStop", label: "Stop Making Magic Window", keys: ["Cmd+."] },
   { id: "file.save", label: "Save", keys: ["Cmd+S"] },
   { id: "file.close", label: "Close Window", keys: ["Cmd+W"] },
   { id: "file.closeWindow", label: "Close App Window", keys: ["Shift+Cmd+W"] },

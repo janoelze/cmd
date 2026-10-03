@@ -3,6 +3,7 @@
 import { cmd } from "../bridge.ts";
 import { copy } from "../actions.ts";
 import { hostOf, shortPath } from "../model.ts";
+import { windowActions } from "../windowActions.ts";
 import { BrowserView } from "../components/BrowserView.tsx";
 import { FilesView } from "../components/FilesView.tsx";
 import { MagicView } from "../components/MagicView.tsx";
@@ -71,10 +72,21 @@ registerWindowView({
     // No "magic" kind label: the sparkle icon says it, and title bars are short on room.
     return { name: w.title !== "Magic" ? w.title : stateStr(w, "prompt") || "Magic", place, kind: null };
   },
+  // Change, Refresh and Stop have no buttons on the window (nothing covers a
+  // widget): they are here, on right-click in the widget or its title bar, and
+  // in the View menu (⌘L, ⌘R, ⌘.). All go through MagicView's window actions.
+  actions: (w) => {
+    const phase = stateStr(w, "phase");
+    const a = () => windowActions(w.id);
+    if (phase === "working") return [{ label: "Stop", run: () => a()?.stop?.() }];
+    return [
+      ...(phase === "ready" || stateStr(w, "html") ? [{ label: "Change…", run: () => a()?.change?.() }] : []),
+      ...(w.state.source ? [{ label: "Refresh Now", run: () => a()?.refresh?.() }] : []),
+    ];
+  },
   menu: (w) => {
     const prompt = stateStr(w, "prompt");
     return [
-      ...(w.state.source ? [{ label: "Refresh Now", run: () => void cmd.call("magic.refresh", { id: w.id }) }] : []),
       ...(prompt ? [{ label: "Copy Request", run: () => copy(prompt) }] : []),
       ...(stateStr(w, "html") ? [{ label: "Copy Widget HTML", run: () => copy(stateStr(w, "html")!) }] : []),
     ];

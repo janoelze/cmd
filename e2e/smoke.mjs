@@ -495,19 +495,32 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   }
   check(order.every(Boolean), `clicking from one embedded page into the next selects each window (${order.map((x) => (x ? "✓" : "✗")).join(" ")})`);
 
-  const b1 = await frame(magic[1]).boundingBox();
-  await win.mouse.move(b1.x + b1.width / 2, b1.y + b1.height / 2);
-  await win.waitForTimeout(300);
-  const hovered = await win.evaluate((id) => !!document.querySelector(`.tile[data-pane="${id}"] .magic.hovered`), magic[1]);
-  check(hovered, "hovering a Magic widget shows its window's controls");
-  const cursors = await win.evaluate((id) => [...document.querySelectorAll(`.tile[data-pane="${id}"] .magic-refine-btn`)].map((b) => getComputedStyle(b).cursor), magic[1]);
-  check(cursors.length > 0 && cursors.every((c) => c === "default"), `its buttons use the app's arrow cursor (${cursors.join(", ")})`);
+  // Right-click in a widget opens its window's menu (host.js reports it; the native menu is stubbed to record and pick).
+  await app.evaluate(({ Menu }) => {
+    globalThis.__menuPopup ??= Menu.prototype.popup;
+    Menu.prototype.popup = function (o) {
+      globalThis.__lastMenu = this.items.map((i) => i.label).filter(Boolean);
+      this.items.find((i) => i.label === globalThis.__pick)?.click();
+      o?.callback?.();
+    };
+  });
+  await app.evaluate(() => (globalThis.__pick = "Change…"));
+  const b0 = await frame(magic[0]).boundingBox();
+  await win.mouse.click(b0.x + b0.width / 2, b0.y + b0.height / 2, { button: "right" });
+  const titleInput = win.locator(`.tile[data-pane="${magic[0]}"] .tile-title-input`);
+  await titleInput.waitFor({ timeout: 3000 });
+  const menuItems = await app.evaluate(() => globalThis.__lastMenu);
+  check(menuItems[0] === "Change…" && menuItems.includes("Copy Request") && (await selected()) === magic[0], `right-click in a Magic widget opens its window's menu, Change first (${menuItems.slice(0, 3).join(", ")}…)`);
+  check(await titleInput.evaluate((el) => el === document.activeElement), "Change from that menu edits the title bar, focused");
+  await win.keyboard.press("Escape");
+  check(!(await titleInput.count()), "Esc puts the title back");
+  await app.evaluate(({ Menu }) => (Menu.prototype.popup = globalThis.__menuPopup));
 
   await clickIn(frame(magic[0]));
   await menu("view.magicChange");
-  const input = win.locator(`.tile[data-pane="${magic[0]}"] .magic-refine-form input`);
+  const input = win.locator(`.tile[data-pane="${magic[0]}"] .tile-title-input`);
   await input.waitFor({ timeout: 3000 });
-  check(await input.evaluate((el) => el === document.activeElement), "⌘L (a menu command) opens Change on the selected Magic window, even with the widget focused");
+  check(await input.evaluate((el) => el === document.activeElement), "⌘L (a menu command) opens Change in the selected Magic window's title bar, even with the widget focused");
   await win.keyboard.press("Escape");
 
   await menu("view.strip");
