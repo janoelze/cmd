@@ -35,9 +35,16 @@ function findPackage(dir, name) {
   }
 }
 
+/** A package's dependencies, plus the peer dependencies it can't do without (ai needs zod). */
+function depsOf(pkgDir) {
+  const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"));
+  const optional = pkg.peerDependenciesMeta ?? {};
+  const peers = Object.keys(pkg.peerDependencies ?? {}).filter((n) => !optional[n]?.optional);
+  return [...Object.keys(pkg.dependencies ?? {}), ...peers];
+}
+
 function stageDeps(pkgDir) {
-  const deps = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8")).dependencies ?? {};
-  for (const name of Object.keys(deps)) {
+  for (const name of depsOf(pkgDir)) {
     if (name.startsWith("@cmd/") || fs.existsSync(path.join(modules, name))) continue;
     const src = findPackage(pkgDir, name);
     fs.cpSync(src, path.join(modules, name), { recursive: true, dereference: true, filter: (f) => path.basename(f) !== "node_modules" });

@@ -46,6 +46,10 @@ jobs:
           pnpm build
           node scripts/stage-runtime.mjs
 
+      # The e2e test runs the core from source; this boots the staged copy the app ships.
+      - name: Check the staged core starts
+        run: node --no-warnings scripts/check-runtime.mjs
+
       - name: Package
         working-directory: apps/desktop
         env:
