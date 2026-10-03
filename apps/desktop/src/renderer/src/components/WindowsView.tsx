@@ -587,7 +587,9 @@ export function WindowsView(p: Props) {
   };
 
   // ── render ─────────────────────────────────────────────
-  const rootRect = rootRef.current?.getBoundingClientRect();
+  // Only while dragging: reading layout during every render (e.g. per pane update
+  // while terminals stream) forces a synchronous layout of whatever just changed.
+  const rootRect = drag ? rootRef.current?.getBoundingClientRect() : undefined;
   // Stable DOM order (creation), whatever the visual order.
   const stable = [...p.rows].sort((a, b) => createdOf(a) - createdOf(b));
   const canvas = mode === "canvas";
