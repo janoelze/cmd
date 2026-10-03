@@ -316,9 +316,12 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     },
   });
   if (b.maximized) win.maximize();
-  // Subframes are Magic widgets: they stay on their own page.
+  // Subframes are Magic widgets: they stay on their own page. host.js turns link
+  // clicks into open-url; a widget that sets location itself gets a browser too.
   win.webContents.on("will-frame-navigate", (e) => {
-    if (!e.isMainFrame && !e.url.startsWith("cmd-widget:")) e.preventDefault();
+    if (e.isMainFrame || e.url.startsWith("cmd-widget:")) return;
+    e.preventDefault();
+    if (/^https?:/i.test(e.url)) win.webContents.send("open-url", e.url);
   });
   performance.mark("boot:window-created");
   win.once("ready-to-show", () => (performance.mark("boot:ready-to-show"), win.show()));

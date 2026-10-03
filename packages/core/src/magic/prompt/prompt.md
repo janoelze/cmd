@@ -78,6 +78,7 @@ The `cmd` object:
 - `cmd.spark(el, values)`: a sparkline (class `k-spark`).
 - `cmd.history(key, value, max = 60)`: remembers the last `max` values of a live number across refreshes and returns them, for sparklines of things the source only reports now (CPU, a price). A fresh window has one value: make sure the widget still reads well then (the current value large, the chart filling in over time).
 - `cmd.state.get(key)` / `cmd.state.set(key, value)`: small values kept for this window (a chosen tab, a timer's start).
+- Links: a plain `<a href="https://…">` opens in a browser window when clicked (no `target` needed); from code, `cmd.openUrl(url)`. The widget itself never navigates.
 - `cmd.onTheme(fn)`: called with "dark" or "light" now and whenever the theme changes. CSS variables follow the theme by themselves; anything that draws colours from JavaScript (a `<canvas>`, colours put into strings) must read them inside this callback (`getComputedStyle(document.documentElement).getPropertyValue("--c1")`) and redraw, or it keeps the old theme's colours. Don't use `prefers-color-scheme` or `matchMedia` for light/dark: inside the widget they follow macOS, not cmd's theme.
 
 # How cmd looks

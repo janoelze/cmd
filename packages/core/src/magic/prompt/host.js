@@ -220,6 +220,27 @@
     },
     { capture: true, passive: true },
   );
+  // Links: the frame may not navigate (main stops it, leaving it blank), so a
+  // click on any http(s) link, target or not, opens it through the host instead.
+  // In-page anchors still scroll; other schemes do nothing.
+  const follow = (e) => {
+    if (e.defaultPrevented || (e.type === "auxclick" && e.button !== 1)) return;
+    const a = e.target instanceof Element && e.target.closest("a[href]");
+    if (!a) return;
+    const href = a.getAttribute("href") || "";
+    if (href.startsWith("#")) return;
+    e.preventDefault();
+    if (/^https?:$/i.test(a.protocol)) window.cmd.openUrl(a.href);
+  };
+  window.addEventListener("click", follow);
+  window.addEventListener("auxclick", follow);
+  window.open = (url) => {
+    try {
+      const u = new URL(String(url), "https://invalid/");
+      if (/^https?:$/.test(u.protocol) && u.host !== "invalid") window.cmd.openUrl(u.href);
+    } catch {}
+    return null;
+  };
   window.addEventListener(
     "contextmenu",
     (e) => {
