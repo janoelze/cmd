@@ -25,6 +25,19 @@ let busy = false;
 let ready: string | null = null;
 /** Version a notification was shown for, so each one is announced once. */
 let announced: string | null = null;
+let lastCheck: number | null = null;
+let lastError: string | null = null;
+
+export interface UpdateStatus {
+  mode: Settings["updates.mode"];
+  /** Epoch ms of the last finished check. */
+  lastCheck: number | null;
+  /** Downloaded, installs on quit. */
+  ready: string | null;
+  lastError: string | null;
+}
+
+export const updateStatus = (): UpdateStatus => ({ mode, lastCheck, ready, lastError });
 
 function log(...args: unknown[]): void {
   try {
@@ -104,6 +117,7 @@ export function startUpdater(socketPath: string): void {
   autoUpdater.logger = { info: log, warn: log, error: log, debug: () => {} };
 
   autoUpdater.on("update-available", (info) => {
+    (lastCheck = Date.now()), (lastError = null);
     if (mode === "auto" || manual) {
       void autoUpdater.downloadUpdate().catch(() => {});
       return;
@@ -118,6 +132,7 @@ export function startUpdater(socketPath: string): void {
     });
   });
   autoUpdater.on("update-not-available", () => {
+    (lastCheck = Date.now()), (lastError = null);
     busy = false;
     if (manual) void dialog.showMessageBox({ type: "info", message: "cmd is up to date", detail: `Version ${app.getVersion()} is the newest.` });
     manual = false;
@@ -135,6 +150,7 @@ export function startUpdater(socketPath: string): void {
   autoUpdater.on("error", (err) => {
     busy = false;
     log("error", err?.message ?? err);
+    (lastCheck = Date.now()), (lastError = err?.message ?? String(err));
     if (manual) dialog.showErrorBox("cmd could not update", err?.message ?? String(err));
     manual = false;
   });

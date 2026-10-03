@@ -490,6 +490,11 @@ check((await panes()) === 2, "…and leaves terminals alone");
     check(fn(), what);
   };
 
+  await page("About");
+  await sw.waitForSelector(".sw-row:has-text('Status') .sw-value");
+  const status = await row("Status").locator(".sw-value").textContent();
+  check(/^pid \d+$/.test(status ?? ""), `About shows the running core (${status})`);
+
   await page("Shell");
   const tags = await sw.locator(".sw-tag").allTextContents();
   check(tags.filter((t) => t === "new terminals only").length === 3, `settings that don't apply live are tagged (${tags.join(", ")})`);

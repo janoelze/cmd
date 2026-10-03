@@ -5,6 +5,25 @@ import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow,
 import type { SettingKey, Settings } from "./settings.ts";
 import type { MagicProgress } from "./magic.ts";
 
+export interface CoreInfo {
+  pid: number;
+  build: string;
+  /** Folder the core runs from (the repo, or the app's runtime copy). */
+  root: string;
+  node: string;
+  /** Epoch ms. */
+  startedAt: number;
+  rssBytes: number;
+  heapBytes: number;
+  /** CPU time used since start, user + system. */
+  cpuSeconds: number;
+  panes: number;
+  connections: number;
+  socket: string;
+  dbPath: string | null;
+  settingsPath: string | null;
+}
+
 export interface SettingsSnapshot {
   settings: Settings;
   /** Keys set explicitly in the user's file. */
@@ -26,6 +45,8 @@ export interface Placement {
 
 export interface Methods {
   "core.hello": { params: {}; result: { version: string; pid: number; socket: string; build: string } };
+  /** Diagnostics for the Settings window's About page. */
+  "core.info": { params: {}; result: CoreInfo };
 
   /** cwd defaults to the Space's root. */
   "pane.create": {

@@ -51,6 +51,14 @@ describe("core over the socket", () => {
     expect(await conn.client.call("core.hello", {})).toMatchObject({ socket: socketPath });
   });
 
+  it("reports diagnostics", async () => {
+    const info = await conn.client.call("core.info", {});
+    expect(info).toMatchObject({ pid: process.pid, socket: socketPath, dbPath: path.join(dir, "db.sqlite"), settingsPath: null });
+    expect(info.connections).toBeGreaterThanOrEqual(1);
+    expect(info.rssBytes).toBeGreaterThan(0);
+    expect(fs.existsSync(path.join(info.root, "packages/core/src/main.ts"))).toBe(true);
+  });
+
   it("runs a shell, streams output and tracks OSC title", async () => {
     const events: string[] = [];
     conn.client.onEvent((e) => {

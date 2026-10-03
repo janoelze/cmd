@@ -140,6 +140,25 @@ export class Core {
 
   readonly handlers: Handlers = {
     "core.hello": () => ({ version: VERSION, pid: process.pid, socket: this.#opts.socketPath, build: this.#opts.build ?? "" }),
+    "core.info": async () => {
+      const mem = process.memoryUsage();
+      const cpu = process.cpuUsage();
+      return {
+        pid: process.pid,
+        build: this.#opts.build ?? "",
+        root: path.resolve(import.meta.dirname, "../../.."),
+        node: process.versions.node,
+        startedAt: Date.now() - process.uptime() * 1000,
+        rssBytes: mem.rss,
+        heapBytes: mem.heapUsed,
+        cpuSeconds: (cpu.user + cpu.system) / 1e6,
+        panes: this.panes.list().length,
+        connections: await new Promise<number>((r) => (this.#server ? this.#server.getConnections((_e, n) => r(n ?? 0)) : r(0))),
+        socket: this.#opts.socketPath,
+        dbPath: this.#opts.dbPath,
+        settingsPath: this.#opts.settingsPath ?? null,
+      };
+    },
     "pane.create": (p) => {
       const space = this.#place(p, { path: p.cwd });
       return this.panes.create({ ...p, cwd: p.cwd ?? space.root, spaceId: space.id });

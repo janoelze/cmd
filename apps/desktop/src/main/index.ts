@@ -98,8 +98,7 @@ async function checkCoreBuild(): Promise<void> {
       cancelId: 1,
     });
     if (response !== 0) return;
-    process.kill(hello.pid, "SIGTERM");
-    for (let i = 0; i < 50 && (await canConnect()); i++) await new Promise((r) => setTimeout(r, 100));
+    await stopCore(hello.pid);
   } catch {
     // An unresponsive or very old core: leave it, the UI shows the error.
   } finally {
@@ -135,6 +134,29 @@ function coreRoot(): string {
   } catch {
     return repoRoot;
   }
+}
+
+async function stopCore(pid: number): Promise<void> {
+  process.kill(pid, "SIGTERM");
+  for (let i = 0; i < 50 && (await canConnect()); i++) await new Promise((r) => setTimeout(r, 100));
+}
+
+/** Settings → About: stop the core (its terminals close) and start one from this app's code. */
+async function restartCore(): Promise<void> {
+  const conn = await connect(socketPath).catch(() => null);
+  if (conn) {
+    try {
+      await stopCore((await conn.client.call("core.hello", {})).pid);
+    } finally {
+      conn.close();
+    }
+  }
+  spawnCore();
+  for (const until = Date.now() + 5000; Date.now() < until; ) {
+    if (await canConnect()) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`core did not start; see ${path.join(cmdHome(), "core.log")}`);
 }
 
 function spawnCore(): void {
@@ -327,6 +349,20 @@ ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("open-path", (_e, p: string) => void shell.openPath(p));
 ipcMain.on("settings-window", () => void openSettings());
 ipcMain.on("check-updates", () => checkForUpdates());
+ipcMain.handle("restart-core", () => restartCore());
+ipcMain.on("reveal-path", (_e, p: string) => shell.showItemInFolder(p));
+/** Settings → About: the app's side of the diagnostics (core.info is the core's). */
+ipcMain.handle("app-info", async () => ({
+  version: app.getVersion(),
+  packaged: app.isPackaged,
+  electron: process.versions.electron,
+  chrome: process.versions.chrome,
+  build: sourceBuildId(repoRoot),
+  home: cmdHome(),
+  coreLog: path.join(cmdHome(), "core.log"),
+  updateLog: path.join(cmdHome(), "update.log"),
+  updates: (await updater()).updateStatus(),
+}));
 ipcMain.on("open-settings", (_e, p: string) => {
   if (!fs.existsSync(p)) {
     fs.mkdirSync(path.dirname(p), { recursive: true });

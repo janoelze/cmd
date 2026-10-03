@@ -6,6 +6,20 @@ import { connect, type Connection } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import type { KeybindingsSnapshot } from "../main/keybindings.ts";
 import type { Appearance } from "../main/appearance.ts";
+import type { UpdateStatus } from "../main/updater.ts";
+
+export interface AppInfo {
+  version: string;
+  packaged: boolean;
+  electron: string;
+  chrome: string;
+  /** Source hash of the core this app ships (compare with core.info's build). */
+  build: string;
+  home: string;
+  coreLog: string;
+  updateLog: string;
+  updates: UpdateStatus;
+}
 
 type Status = "connecting" | "connected" | "disconnected";
 
@@ -79,6 +93,10 @@ const api = {
   /** The Settings window (opens it, or brings it to the front). */
   openSettings: () => ipcRenderer.send("settings-window"),
   checkForUpdates: () => ipcRenderer.send("check-updates"),
+  /** Settings → About. */
+  appInfo: (): Promise<AppInfo> => ipcRenderer.invoke("app-info"),
+  restartCore: (): Promise<void> => ipcRenderer.invoke("restart-core"),
+  revealPath: (p: string) => ipcRenderer.send("reveal-path", p),
   openSettingsFile: (p: string) => ipcRenderer.send("open-settings", p),
   openKeybindingsFile: () => ipcRenderer.send("open-keybindings"),
   openDocs: () => ipcRenderer.send("open-docs"),
