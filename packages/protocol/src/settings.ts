@@ -199,6 +199,14 @@ export const SETTINGS_SCHEMA = {
   },
   "magic.model": { title: "Model", type: "string", default: "claude-opus-5-5", placeholder: "claude-opus-5-5", description: "Model id for Magic windows, e.g. claude-opus-5-5, claude-haiku-4-5, or your endpoint's model name." },
   "magic.baseUrl": { title: "Endpoint", type: "string", default: "", placeholder: "http://localhost:11434/v1", description: "OpenAI-compatible endpoint (Ollama, LM Studio, OpenRouter, …); its key comes from CMD_MAGIC_API_KEY." },
+  "updates.mode": {
+    title: "Updates",
+    type: "enum",
+    default: "auto",
+    options: ["auto", "notify", "off"],
+    labels: { auto: "Install automatically", notify: "Notify me", off: "Don't check" },
+    description: "Auto downloads new versions in the background and installs them when you quit cmd; terminals keep running. Check for Updates… in the cmd menu checks now.",
+  },
   "magic.explore": { title: "Look around this Mac", type: "boolean", default: true, description: "Let the Magic agent run read-only commands and read files to answer requests about this Mac. Private files (keys, keychains, browser profiles) stay off limits." },
 } as const satisfies Record<string, Def>;
 
@@ -218,6 +226,7 @@ export const SETTINGS_GROUPS = {
   search: "Search",
   agents: "Agents",
   magic: "Magic Windows",
+  updates: "Updates",
 } as const satisfies Record<GroupOf<SettingKey>, string>;
 
 /** Keys that were renamed: old settings files keep working (old → new). */

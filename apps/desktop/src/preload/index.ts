@@ -78,6 +78,7 @@ const api = {
   openPath: (p: string) => ipcRenderer.send("open-path", p),
   /** The Settings window (opens it, or brings it to the front). */
   openSettings: () => ipcRenderer.send("settings-window"),
+  checkForUpdates: () => ipcRenderer.send("check-updates"),
   openSettingsFile: (p: string) => ipcRenderer.send("open-settings", p),
   openKeybindingsFile: () => ipcRenderer.send("open-keybindings"),
   openDocs: () => ipcRenderer.send("open-docs"),

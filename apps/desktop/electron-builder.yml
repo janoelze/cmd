@@ -33,4 +33,9 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   artifactName: ${productName}-${version}-${arch}.${ext}
-publish: null
+# Where the app looks for updates (electron-updater, src/main/updater.ts). Builds
+# run with --publish never and CI uploads the files, latest-mac.yml included.
+publish:
+  provider: github
+  owner: janoelze
+  repo: cmd

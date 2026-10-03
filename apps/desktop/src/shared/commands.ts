@@ -20,6 +20,7 @@ const spec = <const T extends CommandSpec[]>(xs: T) => xs;
 
 export const COMMANDS = spec([
   { id: "app.settings", label: "Settings…", keys: ["Cmd+,"] },
+  { id: "app.checkUpdates", label: "Check for Updates…" },
 
   { id: "file.newTerminal", label: "New Terminal", keys: ["Cmd+N", "Cmd+T"] },
   { id: "file.newClaude", label: "New Claude Session", keys: ["Alt+Cmd+N"] },

@@ -18,6 +18,10 @@ import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts
 import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type KeybindingsSnapshot } from "./keybindings.ts";
 
+// Loaded after launch: the updater isn't needed to show the first window.
+const updater = () => import("./updater.ts");
+const checkForUpdates = () => void updater().then((u) => u.checkForUpdates());
+
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 
 if (process.env.CMD_NO_SANDBOX) app.commandLine.appendSwitch("no-sandbox");
@@ -103,6 +107,36 @@ async function checkCoreBuild(): Promise<void> {
   }
 }
 
+/**
+ * Packaged: the core runs from a copy of the bundle's runtime, one per build in
+ * $CMD_HOME/runtime. An update replaces the bundle while the old core keeps
+ * running; from its own copy it never loads the new version's files (search
+ * worker, shell integration). The newest few copies are kept.
+ */
+function coreRoot(): string {
+  if (!app.isPackaged) return repoRoot;
+  const base = path.join(cmdHome(), "runtime");
+  const dir = path.join(base, sourceBuildId(repoRoot));
+  try {
+    if (!fs.existsSync(dir)) {
+      const tmp = `${dir}.tmp-${process.pid}`;
+      fs.cpSync(repoRoot, tmp, { recursive: true, verbatimSymlinks: true });
+      fs.renameSync(tmp, dir);
+    }
+    const now = new Date();
+    fs.utimesSync(dir, now, now);
+    const old = fs
+      .readdirSync(base)
+      .map((name) => ({ name, mtime: fs.statSync(path.join(base, name)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(3);
+    for (const o of old) fs.rmSync(path.join(base, o.name), { recursive: true, force: true });
+    return dir;
+  } catch {
+    return repoRoot;
+  }
+}
+
 function spawnCore(): void {
   const home = cmdHome();
   fs.mkdirSync(home, { recursive: true });
@@ -111,7 +145,7 @@ function spawnCore(): void {
   delete env.ELECTRON_RUN_AS_NODE;
   let node = "node";
   if (app.isPackaged) (node = process.execPath), (env.ELECTRON_RUN_AS_NODE = "1");
-  const child = spawn(node, ["--no-warnings", path.join(repoRoot, "packages/core/src/main.ts")], {
+  const child = spawn(node, ["--no-warnings", path.join(coreRoot(), "packages/core/src/main.ts")], {
     detached: true,
     stdio: ["ignore", log, log],
     env,
@@ -292,6 +326,7 @@ ipcMain.handle("choose-folder", async (e) => {
 ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("open-path", (_e, p: string) => void shell.openPath(p));
 ipcMain.on("settings-window", () => void openSettings());
+ipcMain.on("check-updates", () => checkForUpdates());
 ipcMain.on("open-settings", (_e, p: string) => {
   if (!fs.existsSync(p)) {
     fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -445,7 +480,8 @@ app.whenReady().then(async () => {
     () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows)),
     (err: Error) => dialog.showErrorBox("cmd: the core did not start", err.message),
   );
-  const send = commandSender(() => spaces.reopen(), { openSettings, isSettings, appWindows });
+  void updater().then((u) => u.startUpdater(socketPath));
+  const send = commandSender(() => spaces.reopen(), { openSettings, checkForUpdates, isSettings, appWindows });
   buildMenu(send, keybindings.bindings);
   watchKeybindings((next) => {
     keybindings = next;

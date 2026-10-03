@@ -272,6 +272,7 @@ export function App() {
   // One handler per command id; the menu bar, palette and context menus all call these.
   const handlers: Record<CommandId, () => void> = {
     "app.settings": () => cmd.openSettings(),
+    "app.checkUpdates": () => cmd.checkForUpdates(),
     "file.newTerminal": () => void newTerminal(),
     "file.newClaude": () => void newAgent("claude"),
     "file.newCodex": () => void newAgent("codex"),

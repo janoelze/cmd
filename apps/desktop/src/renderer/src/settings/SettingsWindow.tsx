@@ -37,6 +37,7 @@ const ICONS: Record<Page, string> = {
   search: "magnifyingglass",
   agents: "sparkles",
   magic: "wand.and.stars",
+  updates: "arrow.down.circle",
   keyboard: "keyboard",
 };
 

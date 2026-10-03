@@ -6,7 +6,8 @@ import react from "@vitejs/plugin-react";
 const bundleWorkspace = { externalizeDeps: { exclude: ["@cmd/protocol"] } };
 
 export default defineConfig({
-  main: { build: bundleWorkspace },
+  // The packaged app ships no node_modules, so main bundles electron-updater too.
+  main: { build: { externalizeDeps: { exclude: ["@cmd/protocol", "electron-updater"] } } },
   // Two preloads: the app's (index) and browser pages' (guest). CommonJS, because
   // browser pages are sandboxed and sandboxed preloads can't be ES modules.
   preload: {

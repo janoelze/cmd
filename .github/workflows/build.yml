@@ -139,6 +139,8 @@ jobs:
           path: |
             apps/desktop/dist/*.dmg
             apps/desktop/dist/*.zip
+            apps/desktop/dist/*.blockmap
+            apps/desktop/dist/latest-mac.yml
           if-no-files-found: error
 
       - name: Release
@@ -146,6 +148,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # latest-mac.yml and the blockmaps are what installed apps update from (src/main/updater.ts).
           gh release create "$GITHUB_REF_NAME" apps/desktop/dist/*.dmg apps/desktop/dist/*.zip \
+            apps/desktop/dist/*.blockmap apps/desktop/dist/latest-mac.yml \
             --title "$GITHUB_REF_NAME" --generate-notes \
             $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)

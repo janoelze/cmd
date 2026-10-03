@@ -40,6 +40,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
       label: app.name,
       submenu: [
         { role: "about" },
+        ...i("app.checkUpdates"),
         sep,
         ...i("app.settings"),
         sep,
@@ -173,6 +174,7 @@ export function applyMenuState(state: MenuState): void {
 /** Sends a command to the focused window, creating one if needed. */
 interface SettingsWindow {
   openSettings: () => void;
+  checkForUpdates: () => void;
   isSettings: (w: BrowserWindow | null) => boolean;
   appWindows: () => BrowserWindow[];
 }
@@ -183,6 +185,7 @@ const SETTINGS_COMMANDS = new Set(["edit.copy", "edit.selectAll"]);
 export function commandSender(createWindow: () => BrowserWindow, s: SettingsWindow): Send {
   return (id) => {
     if (id === "app.settings") return s.openSettings();
+    if (id === "app.checkUpdates") return s.checkForUpdates();
     const focused = BrowserWindow.getFocusedWindow();
     if (s.isSettings(focused)) {
       if (id === "file.close" || id === "file.closeWindow") return focused!.close();
