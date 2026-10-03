@@ -77,6 +77,9 @@
   font: 12px var(--font-ui); color: var(--text-dim);
   background: var(--bg-elevated); border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 12px;
 }
+/* Like the app's own buttons (.btn, .icon-btn in styles.css): the arrow, no text selection. */
+.magic-refine, .magic-refine-btn, .magic-step, .magic-row, .magic-error { cursor: default; user-select: none; }
+.magic-refine-form input { cursor: text; user-select: text; }
 .magic-refine-btn:hover { color: var(--text); }
 .magic-refine-btn.icon { padding: 0 6px; }
 .magic-refine.open { right: 8px; }

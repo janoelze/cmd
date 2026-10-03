@@ -89,3 +89,7 @@ svg { display: block; }
 
 .k-chart { width: 100%; height: 120px; }
 .k-spark { width: 100%; height: 28px; }
+
+/* Small windows: what gives way first (prompt.md → Any size). */
+@media (max-width: 319px) { .k-hide-narrow { display: none !important; } }
+@media (max-height: 199px) { .k-hide-short { display: none !important; } }

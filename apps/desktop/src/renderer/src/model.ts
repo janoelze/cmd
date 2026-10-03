@@ -174,7 +174,7 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
     const d = viewFor(w.kind)?.describe?.(w) ?? {};
     f = {
       name: d.name || w.title || type?.title || w.kind,
-      kind: (type?.title ?? w.kind).toLowerCase(),
+      kind: d.kind === null ? undefined : (d.kind ?? type?.title ?? w.kind).toLowerCase(),
       place: d.place || undefined,
       status: live ? { text: live.label, key: live.key ?? live.label, transient: live.transient } : undefined,
       dirty: live?.dirty,

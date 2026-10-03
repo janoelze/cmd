@@ -51,7 +51,7 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/magic-dark.png">
-  <img alt="Magic windows in a grid: GitHub Actions runs, the weather in Berlin, a EUR to JPY chart, disk space, a tea timer, and an empty Magic window asking what it should show" src="docs/screenshots/magic-light.png">
+  <img alt="Magic windows in a grid: GitHub Actions runs, the weather in Tokyo, a EUR to JPY chart, disk space, a tea timer, and an empty Magic window asking what it should show" src="docs/screenshots/magic-light.png">
 </picture>
 
 Press ⇧⌘M and type what the window should show: a question, a URL, some JSON, a command. cmd turns it into a small live window:

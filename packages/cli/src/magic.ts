@@ -182,7 +182,12 @@ export interface RenderCheck {
   empty: boolean;
   overflow: boolean;
   shots: string[];
+  /** Rendered at SMALL as well (windows get resized, gridded, zoomed out). */
+  small?: { overflowX: boolean; overflowY: boolean; empty: boolean };
 }
+
+/** A small window, as in a dense grid or a zoomed-out canvas. */
+export const SMALL = [240, 150] as const;
 
 /**
  * Render a run's widget in headless Chromium at its size, once per theme:
@@ -222,11 +227,28 @@ export async function shoot(dir: string, r: MagicResult, themes: (ThemeLike & { 
       await page.close();
       fs.rmSync(file);
     }
+    // Once more, small (dark theme).
+    const file = path.join(dir, "widget-small.html");
+    fs.writeFileSync(file, widgetHtml({ title: r.header.title, body: r.body, tokens: widgetTokens(themes[0]!), data }));
+    const page = await browser.newPage({ viewport: { width: SMALL[0], height: SMALL[1] }, deviceScaleFactor: 2, colorScheme: themes[0]!.appearance });
+    await page.goto(pathToFileURL(file).href);
+    await page.waitForTimeout(600);
+    const st = await page.evaluate(() => ({
+      text: document.body.innerText.trim().length,
+      nodes: document.body.querySelectorAll("*").length,
+      w: document.documentElement.scrollWidth,
+      h: document.documentElement.scrollHeight,
+    }));
+    await page.screenshot({ path: path.join(dir, "small.png") });
+    check.shots.push(path.join(dir, "small.png"));
+    check.small = { overflowX: st.w > SMALL[0] + 2, overflowY: st.h > SMALL[1] + 2, empty: st.text === 0 && st.nodes < 3 };
+    await page.close();
+    fs.rmSync(file);
   } finally {
     await browser.close();
   }
   const m = JSON.parse(fs.readFileSync(path.join(dir, "metrics.json"), "utf8"));
-  m.render = { errors: check.errors, empty: check.empty, overflow: check.overflow };
+  m.render = { errors: check.errors, empty: check.empty, overflow: check.overflow, small: check.small };
   fs.writeFileSync(path.join(dir, "metrics.json"), JSON.stringify(m, null, 2) + "\n");
   return check;
 }
@@ -249,7 +271,7 @@ async function viewCommand(dirs: string[]): Promise<number> {
     const r = { header: parsed.header, body: parsed.body, sample: data === undefined ? null : { ok: true, data, ms: 0, bytes: 0 } } as unknown as MagicResult;
     fs.writeFileSync(path.join(dir, "widget.html"), widgetHtml({ title: parsed.header.title, body: parsed.body, tokens: widgetTokens(themes.get(systemAppearance())!), data }));
     const check = await shoot(dir, r, [themes.get("dark")!, themes.get("light")!]);
-    const bad = check ? [...check.errors, check.empty ? "draws nothing" : "", check.overflow ? "overflows" : ""].filter(Boolean) : [];
+    const bad = check ? [...check.errors, check.empty ? "draws nothing" : "", check.overflow ? "overflows" : "", check.small?.overflowX ? `overflows sideways at ${SMALL.join("×")}` : ""].filter(Boolean) : [];
     process.stderr.write(`${bad.length ? red("✗") : green("✓")} ${parsed.header.title} ${dim(dir)}${bad.length ? "\n  " + red(bad.join("; ")) : ""}\n`);
     if (bad.length) failed++;
   }
@@ -351,7 +373,7 @@ export async function magicCommand(argv: string[]): Promise<number> {
     process.stderr.write(`  ${mark} ${secs(r.timings.done)} · ${r.trace.length} steps${r.repairs.length ? ` · ${r.repairs.length} repair` : ""}${tokens}${cost}\n`);
     for (const e of r.errors) process.stderr.write(red(`    ${e.split("\n")[0]}\n`));
     if (render) {
-      const bad = [...render.errors.map((e) => `script error: ${e}`), render.empty ? "draws nothing" : "", render.overflow ? "overflows its window" : ""].filter(Boolean);
+      const bad = [...render.errors.map((e) => `script error: ${e}`), render.empty ? "draws nothing" : "", render.overflow ? "overflows its window" : "", render.small?.overflowX ? "overflows sideways when small" : ""].filter(Boolean);
       process.stderr.write(bad.length ? red(`  ✗ render: ${bad.join("; ")}\n`) : `  ${green("✓")} renders ${dim(render.shots.map((p) => path.basename(p)).join(", "))}\n`);
     }
     if (r.header?.kind === "terminal") console.log(r.header.command);

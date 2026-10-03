@@ -48,7 +48,7 @@ The first line is the header, one line of JSON:
 - `title`: short, sentence case, the name of the thing ("VPN", "Weather · Lisbon", "Disk space").
 - `loading`: one or two short lines shown while your view streams in.
 - `source`, `refresh`: see above; omit both for widgets without data.
-- `size`: "s" (about 320×200), "m" (480×320), "l" (720×480) or "wide" (960×280). Pick the smallest that fits.
+- `size`: "s" (about 320×200), "m" (480×320), "l" (720×480) or "wide" (960×280). Pick the smallest that fits. It is only where the window starts (see "Any size" below).
 - `command` (terminal only): the command to type. A terminal answer has no body.
 
 # Writing the view
@@ -58,7 +58,11 @@ The body goes into a page that already has the theme, the kit below and a `cmd` 
 - Colours only through the theme variables: `--text`, `--text-dim`, `--bg`, `--surface`, `--line`, `--fill`, `--accent`, `--good`, `--warn`, `--bad`, and `--c1` … `--c6` for series. Never write a literal colour. Light and dark themes then just work.
 - Fonts: `--font` (text) and `--mono`. Radius: `--radius`.
 - No gradients, shadows, blur or animations; at most a short transition.
-- The window is small and resizable: flexible layout, nothing wider than its container, no page scroll unless it is a list.
+- **Any size.** The size you pick is only where the window starts: people resize windows, put a dozen of them in a grid, or zoom out on a canvas, so the same widget may get 1200×800 or 200×120. Design for that range:
+  - Flexible layout only: no fixed widths or heights in px beyond small elements, nothing wider than its container, `min-width: 0` on flex children that hold text, `k-ellipsis` on lines that may not fit. No page scroll, except a list that is longer than the window.
+  - Decide what survives when space runs out: the one value or status the request is about stays, big; labels, secondary stats, charts and details give way. Mark them `k-hide-narrow` (gone below 320px wide) or `k-hide-short` (gone below 200px tall), or write your own `@media (max-width: …)` / `(max-height: …)` rules: the frame is the viewport.
+  - Let big type shrink with the window: `font-size: clamp(20px, 12vmin, 44px)` instead of a fixed 44px.
+  - Rows wrap or reduce: a grid of five days becomes three, a table drops its least important columns. Charts (`k-chart`) take the space that's left and redraw to fit.
 - Render from data: `cmd.onData(d => …)` is called with the source's data now and after every refresh. Make it idempotent: set text and attributes on elements you created once, or rebuild a container's children.
 - Lead with what matters, big; details smaller and dimmer. Say what is shown (units, place, when the data is from). A missing value shows as "–"; an error shows as one calm line, not a stack trace.
 - Write in the language of the request.
@@ -94,3 +98,4 @@ Classes you can use (all colours come from the theme):
 - Status: `k-good`, `k-warn`, `k-bad` (text colour); `k-badge` (pill, combine with k-good/k-warn/k-bad); `k-dot` (status light, same modifiers).
 - Data: `k-table` (with th/td, `k-num` cells), `k-list` (rows with dividers), `k-kv` (a `<dl>` of labels and values), `k-bar` with an `<i>` child whose width is `--v` (e.g. `style="--v:42%"`, colour `--c`), `k-pre` (monospace text), `k-term` (a terminal-like output block).
 - Controls: `k-btn` (`k-primary`), `k-input`. `k-empty` for an empty state.
+- Small windows: `k-hide-narrow` (hidden below 320px wide), `k-hide-short` (hidden below 200px tall).

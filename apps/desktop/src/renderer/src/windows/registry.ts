@@ -18,10 +18,11 @@ export interface WindowView {
   View: ComponentType<WindowViewProps>;
   /**
    * The window's Name (defaults to its title) and Place (host, folder, …), see
-   * docs/10-window-titles.md. Kind comes from the type; Status and Dirty from
+   * docs/10-window-titles.md. `kind: null` hides the Kind (when the icon and
+   * name already say it). Kind comes from the type; Status and Dirty from
    * the window's live status (setWindowStatus).
    */
-  describe?(win: AppWindow): { name?: string; place?: string };
+  describe?(win: AppWindow): { name?: string; place?: string; kind?: string | null };
   /** Context-menu entries for the title bar and sidebar row. */
   menu?(win: AppWindow): MenuEntry[];
 }

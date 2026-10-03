@@ -68,7 +68,8 @@ registerWindowView({
   describe: (w) => {
     const src = w.state.source as { type?: string; url?: string; command?: string } | null | undefined;
     const place = src?.type === "fetch" ? hostOf(src.url ?? "").replace(/^www\./, "") : src?.type === "command" ? (src.command ?? "").split(/\s+/)[0] : undefined;
-    return { name: w.title !== "Magic" ? w.title : stateStr(w, "prompt") || "Magic", place };
+    // No "magic" kind label: the sparkle icon says it, and title bars are short on room.
+    return { name: w.title !== "Magic" ? w.title : stateStr(w, "prompt") || "Magic", place, kind: null };
   },
   menu: (w) => {
     const prompt = stateStr(w, "prompt");

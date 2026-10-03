@@ -5,11 +5,24 @@
   "size": "m",
   "source": {
    "type": "command",
-   "command": "gh run list -R janoelze/cmd --json status,conclusion,name,displayTitle,headBranch,event,createdAt,updatedAt,url,databaseId --limit 15"
+   "command": "gh run list -R janoelze/cmd --json status,conclusion,name,displayTitle,headBranch,event,createdAt,updatedAt,url,databaseId --limit 20",
+   "cwd": "/Users/janoelze/src/cmd"
   },
   "refresh": 15,
-  "html": "<style>.sum{gap:14px;padding-bottom:6px;border-bottom:1px solid var(--line)}.run{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}.run:last-child{border-bottom:0}.run a{color:var(--text);text-decoration:none}.run a:hover{color:var(--accent)}.meta{gap:6px}.r{text-align:right}</style>\n<div class=\"k-stack k-fill\">\n  <div class=\"k-row sum k-small\" id=\"sum\"></div>\n  <div id=\"list\" style=\"overflow:auto;flex:1\"></div>\n</div>\n<script>\nconst esc=s=>String(s??\"\").replace(/[&<>\"]/g,c=>({\"&\":\"&amp;\",\"<\":\"&lt;\",\">\":\"&gt;\",'\"':\"&quot;\"}[c]));\nfunction st(r){\n  if(r.status!==\"completed\")return{cls:\"k-warn\",word:r.status===\"in_progress\"?\"Running\":r.status[0].toUpperCase()+r.status.slice(1).replace(\"_\",\" \")};\n  const c=r.conclusion;\n  if(c===\"success\")return{cls:\"k-good\",word:\"Success\"};\n  if(c===\"failure\"||c===\"timed_out\"||c===\"startup_failure\")return{cls:\"k-bad\",word:\"Failed\"};\n  return{cls:\"\",word:c?c[0].toUpperCase()+c.slice(1).replace(\"_\",\" \"):\"–\"};\n}\ncmd.onData(d=>{\n  if(!Array.isArray(d)){list.innerHTML='<div class=\"k-empty\">Couldn’t read runs. Try <span class=\"k-mono\">gh auth login</span>.</div>';sum.textContent=\"\";return;}\n  if(!d.length){list.innerHTML='<div class=\"k-empty\">No workflow runs yet</div>';sum.textContent=\"\";return;}\n  const n={run:0,ok:0,bad:0};\n  d.forEach(r=>{const s=st(r);if(s.cls===\"k-warn\")n.run++;else if(s.cls===\"k-good\")n.ok++;else if(s.cls===\"k-bad\")n.bad++;});\n  sum.innerHTML=`<span class=\"k-row\" style=\"gap:5px\"><span class=\"k-dot ${n.run?\"k-warn\":\"\"}\"></span>${n.run} running</span><span class=\"k-row\" style=\"gap:5px\"><span class=\"k-dot k-good\"></span>${n.ok} passed</span><span class=\"k-row\" style=\"gap:5px\"><span class=\"k-dot ${n.bad?\"k-bad\":\"\"}\"></span>${n.bad} failed</span><span class=\"k-spacer\"></span><span class=\"k-dim\">last ${d.length} runs</span>`;\n  list.replaceChildren(...d.map(r=>{\n    const s=st(r),e=document.createElement(\"div\");e.className=\"run\";\n    const end=r.status===\"completed\"?new Date(r.updatedAt):new Date();\n    const dur=Math.max(0,(end-new Date(r.createdAt))/1000);\n    e.innerHTML=`<span class=\"k-dot ${s.cls}\" title=\"${s.word}\"></span>\n      <div class=\"k-stack\" style=\"gap:1px;min-width:0\"><a class=\"k-ellipsis\" href=\"${esc(r.url)}\" target=\"_blank\">${esc(r.displayTitle)}</a>\n      <div class=\"k-row meta k-small k-dim\"><span class=\"k-mono\">${esc(r.name)}</span><span>·</span><span class=\"k-mono k-ellipsis\">${esc(r.headBranch)}</span><span>·</span><span>${esc(r.event)}</span></div></div>\n      <div class=\"k-stack r\" style=\"gap:1px\"><span class=\"k-small ${s.cls}\">${s.word}</span><span class=\"k-small k-dim k-mono\">${cmd.fmt.dur(Math.round(dur))} · ${cmd.fmt.ago(r.createdAt)}</span></div>`;\n    return e;\n  }));\n});\n</script>",
+  "html": "<style>.head{gap:10px;align-items:center}.head .k-big{font-size:clamp(18px,7vmin,28px)}.runs{overflow:auto;flex:1;min-height:0}.runs td{vertical-align:middle}.msg{max-width:0;width:100%}.dur{white-space:nowrap}@media (max-width:420px){.c-branch,.c-ago{display:none}}</style>\n<div class=\"k-stack k-fill\">\n  <div class=\"k-row head\">\n    <span class=\"k-dot\" id=\"hdot\"></span>\n    <div class=\"k-stack\" style=\"gap:0;min-width:0;flex:1\">\n      <div class=\"k-big\" id=\"hstate\">–</div>\n      <div class=\"k-dim k-small k-ellipsis\" id=\"hsub\"></div>\n    </div>\n    <div class=\"k-stack k-hide-narrow\" style=\"gap:0;text-align:right\">\n      <div class=\"k-title\">Last 20</div>\n      <div class=\"k-small k-mono\" id=\"tally\"></div>\n    </div>\n  </div>\n  <div class=\"runs k-hide-short\"><table class=\"k-table\"><tbody id=\"rows\"></tbody></table></div>\n</div>\n<script>\nconst esc=s=>String(s??\"\").replace(/[&<>\"]/g,c=>({\"&\":\"&amp;\",\"<\":\"&lt;\",\">\":\"&gt;\",'\"':\"&quot;\"}[c]));\nconst st=r=>{\n  if(r.status!==\"completed\")return{cls:\"k-warn\",word:r.status===\"in_progress\"?\"Running\":r.status===\"queued\"?\"Queued\":r.status.replace(/_/g,\" \")};\n  const c=r.conclusion;\n  if(c===\"success\")return{cls:\"k-good\",word:\"Passed\"};\n  if(c===\"failure\"||c===\"timed_out\"||c===\"startup_failure\")return{cls:\"k-bad\",word:c===\"failure\"?\"Failed\":c.replace(/_/g,\" \")};\n  return{cls:\"\",word:c?c[0].toUpperCase()+c.slice(1).replace(/_/g,\" \"):\"–\"};\n};\nconst dur=r=>{const a=new Date(r.createdAt),b=r.status===\"completed\"?new Date(r.updatedAt):new Date();return cmd.fmt.dur(Math.max(0,Math.round((b-a)/1000)));};\ncmd.onData(d=>{\n  if(!Array.isArray(d)){hstate.textContent=\"Can't read runs\";hsub.textContent=typeof d===\"string\"?d.split(\"\\n\")[0]:\"Try gh auth login\";rows.replaceChildren();return;}\n  if(!d.length){hstate.textContent=\"No runs yet\";hsub.textContent=\"janoelze/cmd\";rows.replaceChildren();return;}\n  const live=d.filter(r=>r.status!==\"completed\");\n  const top=live[0]||d[0],s=st(top);\n  hdot.className=\"k-dot \"+s.cls;\n  hstate.textContent=live.length>1?`${live.length} running`:s.word;\n  hsub.textContent=`${top.name} · ${top.headBranch} · ${top.displayTitle}`;\n  const n=k=>d.filter(r=>st(r).cls===k).length;\n  tally.innerHTML=`<span class=\"k-good\">${n(\"k-good\")}✓</span> <span class=\"k-bad\">${n(\"k-bad\")}✗</span> <span class=\"k-warn\">${n(\"k-warn\")}●</span>`;\n  rows.replaceChildren(...d.map(r=>{\n    const s=st(r),tr=document.createElement(\"tr\");\n    tr.innerHTML=`<td style=\"width:1%\"><span class=\"k-dot ${s.cls}\" title=\"${esc(s.word)}\"></span></td><td class=\"k-text msg\"><div class=\"k-ellipsis\">${esc(r.displayTitle)}</div><div class=\"k-dim k-small k-ellipsis\">${esc(r.name)} · ${esc(r.event)}</div></td><td class=\"k-dim k-small c-branch k-ellipsis\" style=\"max-width:110px\">${esc(r.headBranch)}</td><td class=\"k-num dur ${s.cls===\"k-warn\"?\"k-warn\":\"\"}\">${dur(r)}</td><td class=\"k-num k-dim k-small c-ago dur\">${cmd.fmt.ago(r.createdAt)}</td>`;\n    tr.style.cursor=\"pointer\";tr.onclick=()=>window.open(r.url,\"_blank\");\n    return tr;\n  }));\n});\n</script>",
   "data": [
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T15:48:11Z",
+    "databaseId": 37134523405,
+    "displayTitle": "Embedded pages share the pointer and wheel like any window",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T15:50:23Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37134523405"
+   },
    {
     "conclusion": "success",
     "createdAt": "2026-10-03T13:39:44Z",
@@ -189,26 +202,74 @@
     "status": "completed",
     "updatedAt": "2026-10-03T03:01:54Z",
     "url": "https://github.com/janoelze/cmd/actions/runs/37091653812"
+   },
+   {
+    "conclusion": "cancelled",
+    "createdAt": "2026-10-03T02:16:21Z",
+    "databaseId": 37089217564,
+    "displayTitle": "Merge branch 'master' into windows",
+    "event": "push",
+    "headBranch": "windows",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T02:54:59Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37089217564"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T02:12:41Z",
+    "databaseId": 37088994578,
+    "displayTitle": "Windows: closing a PowerShell terminal doesn't ask for confirmation",
+    "event": "push",
+    "headBranch": "windows",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T02:14:10Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37088994578"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T02:05:01Z",
+    "databaseId": 37088531877,
+    "displayTitle": "Windows: closed terminals disappear at once instead of after node-pty…",
+    "event": "push",
+    "headBranch": "windows",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T02:06:22Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37088531877"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T02:01:36Z",
+    "databaseId": 37088316594,
+    "displayTitle": "Smoke test: report the terminal count when the palette check fails",
+    "event": "push",
+    "headBranch": "windows",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T02:03:19Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37088316594"
    }
   ]
  },
  {
-  "prompt": "weather in Berlin",
-  "title": "Weather · Berlin",
+  "prompt": "what's the weather like in Tokyo this week",
+  "title": "Weather · Tokyo",
   "size": "m",
   "source": {
    "type": "fetch",
-   "url": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto&forecast_days=5"
+   "url": "https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto&forecast_days=7"
   },
   "refresh": 900,
-  "html": "<style>.now{align-items:flex-end;gap:12px}.days{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center}.days>div{border-top:1px solid var(--line);padding-top:8px}</style>\n<div class=\"k-stack k-fill\">\n  <div class=\"k-row now\"><div class=\"k-huge k-mono\" id=\"t\">–</div><div class=\"k-stack\" style=\"gap:2px\"><div id=\"w\">–</div><div class=\"k-dim k-small\" id=\"f\"></div></div></div>\n  <div class=\"k-spacer\"></div>\n  <div class=\"days\" id=\"days\"></div>\n</div>\n<script>\nconst W={0:\"Clear\",1:\"Mostly clear\",2:\"Partly cloudy\",3:\"Overcast\",45:\"Fog\",48:\"Rime fog\",51:\"Light drizzle\",53:\"Drizzle\",55:\"Heavy drizzle\",56:\"Freezing drizzle\",57:\"Freezing drizzle\",61:\"Light rain\",63:\"Rain\",65:\"Heavy rain\",66:\"Freezing rain\",67:\"Freezing rain\",71:\"Light snow\",73:\"Snow\",75:\"Heavy snow\",77:\"Snow grains\",80:\"Showers\",81:\"Showers\",82:\"Heavy showers\",85:\"Snow showers\",86:\"Snow showers\",95:\"Thunderstorm\",96:\"Thunderstorm\",99:\"Thunderstorm\"};\nconst r=n=>n==null?\"–\":Math.round(n)+\"°\";\ncmd.onData(d=>{\n  if(!d||!d.current){w.textContent=\"Weather data unavailable\";return;}\n  const c=d.current;\n  t.textContent=r(c.temperature_2m);\n  w.textContent=W[c.weather_code]??\"–\";\n  f.textContent=`Feels ${r(c.apparent_temperature)} · wind ${Math.round(c.wind_speed_10m)} km/h · humidity ${c.relative_humidity_2m}%`;\n  const dl=d.daily;\n  days.replaceChildren(...dl.time.map((day,i)=>{\n    const e=document.createElement(\"div\");e.className=\"k-stack\";e.style.gap=\"2px\";\n    const name=i?new Date(day+\"T12:00\").toLocaleDateString(undefined,{weekday:\"short\"}):\"Today\";\n    const p=dl.precipitation_probability_max[i];\n    e.innerHTML=`<div class=\"k-dim k-small\">${name}</div><div class=\"k-small k-ellipsis\">${W[dl.weather_code[i]]??\"–\"}</div><div class=\"k-mono\">${r(dl.temperature_2m_max[i])}</div><div class=\"k-dim k-small k-mono\">${r(dl.temperature_2m_min[i])}</div><div class=\"k-small k-mono ${p>=50?\"k-warn\":\"k-dim\"}\">${p??\"–\"}%</div>`;\n    return e;\n  }));\n});\n</script>",
+  "html": "<style>.now{align-items:flex-end;gap:12px}.t{font-size:clamp(28px,14vmin,52px);line-height:1;font-variant-numeric:tabular-nums}.days{display:grid;grid-template-columns:minmax(40px,auto) minmax(0,1fr) auto minmax(40px,2fr) auto auto;gap:4px 10px;align-items:center}.days>*{min-width:0}.rng{position:relative;height:4px;background:var(--fill);border-radius:2px}.rng i{position:absolute;top:0;bottom:0;background:var(--c1);border-radius:2px}.rain{color:var(--c5)}@media (max-width:360px){.cond,.rainc{display:none}.days{grid-template-columns:auto auto minmax(30px,1fr) auto}}</style>\n<div class=\"k-stack k-fill\">\n  <div class=\"k-row now\"><div class=\"t k-mono\" id=\"t\">–</div><div class=\"k-stack\" style=\"gap:2px;min-width:0\"><div class=\"k-ellipsis\" id=\"w\"></div><div class=\"k-dim k-small k-ellipsis\" id=\"f\"></div></div></div>\n  <div class=\"k-spacer\"></div>\n  <div class=\"days k-hide-short\" id=\"days\"></div>\n</div>\n<script>\nconst W={0:\"Clear\",1:\"Mostly clear\",2:\"Partly cloudy\",3:\"Overcast\",45:\"Fog\",48:\"Fog\",51:\"Light drizzle\",53:\"Drizzle\",55:\"Heavy drizzle\",56:\"Freezing drizzle\",57:\"Freezing drizzle\",61:\"Light rain\",63:\"Rain\",65:\"Heavy rain\",66:\"Freezing rain\",67:\"Freezing rain\",71:\"Light snow\",73:\"Snow\",75:\"Heavy snow\",77:\"Snow grains\",80:\"Showers\",81:\"Showers\",82:\"Heavy showers\",85:\"Snow showers\",86:\"Snow showers\",95:\"Thunderstorm\",96:\"Thunderstorm\",99:\"Thunderstorm\"};\nconst r=n=>n==null?\"–\":Math.round(n)+\"°\";\ncmd.onData(d=>{\n  if(!d||!d.current){t.textContent=\"–\";w.textContent=\"Forecast unavailable\";return;}\n  const c=d.current,dl=d.daily;\n  t.textContent=r(c.temperature_2m);\n  w.textContent=W[c.weather_code]??\"\";\n  f.textContent=`Feels ${r(c.apparent_temperature)} · ${Math.round(c.relative_humidity_2m)}% humidity · wind ${Math.round(c.wind_speed_10m)} km/h`;\n  const lo=Math.min(...dl.temperature_2m_min),hi=Math.max(...dl.temperature_2m_max),span=Math.max(1,hi-lo);\n  const out=[];\n  dl.time.forEach((day,i)=>{\n    const name=i?new Date(day+\"T00:00:00Z\").toLocaleDateString(undefined,{weekday:\"short\",timeZone:\"UTC\"}):\"Today\";\n    const mn=dl.temperature_2m_min[i],mx=dl.temperature_2m_max[i],p=dl.precipitation_probability_max[i];\n    const a=(mn-lo)/span*100,b=(mx-lo)/span*100;\n    out.push(\n      `<div class=\"${i?\"\":\"k-dim\"}\">${name}</div>`,\n      `<div class=\"cond k-dim k-ellipsis k-small\">${W[dl.weather_code[i]]??\"\"}</div>`,\n      `<div class=\"k-num k-mono k-dim\">${r(mn)}</div>`,\n      `<div class=\"rng\"><i style=\"left:${a}%;width:${Math.max(2,b-a)}%\"></i></div>`,\n      `<div class=\"k-num k-mono\">${r(mx)}</div>`,\n      `<div class=\"rainc k-num k-mono k-small ${p>=30?\"rain\":\"k-dim\"}\">${p==null?\"–\":p+\"%\"}</div>`\n    );\n  });\n  days.innerHTML=out.join(\"\");\n});\n</script>",
   "data": {
-   "latitude": 52.52,
-   "longitude": 13.419998,
-   "generationtime_ms": 0.5286931991577148,
-   "utc_offset_seconds": 7200,
-   "timezone": "Europe/Berlin",
-   "timezone_abbreviation": "GMT+2",
+   "latitude": 35.7,
+   "longitude": 139.6875,
+   "generationtime_ms": 0.26977062225341797,
+   "utc_offset_seconds": 32400,
+   "timezone": "Asia/Tokyo",
+   "timezone_abbreviation": "GMT+9",
    "elevation": 38,
    "current_units": {
     "time": "iso8601",
@@ -220,13 +281,13 @@
     "relative_humidity_2m": "%"
    },
    "current": {
-    "time": "2026-10-03T17:45",
+    "time": "2026-10-04T01:15",
     "interval": 900,
-    "temperature_2m": 18.9,
-    "apparent_temperature": 18.7,
-    "weather_code": 3,
-    "wind_speed_10m": 7.1,
-    "relative_humidity_2m": 67
+    "temperature_2m": 16.8,
+    "apparent_temperature": 17,
+    "weather_code": 1,
+    "wind_speed_10m": 3.1,
+    "relative_humidity_2m": 75
    },
    "daily_units": {
     "time": "iso8601",
@@ -237,39 +298,49 @@
    },
    "daily": {
     "time": [
-     "2026-10-03",
      "2026-10-04",
      "2026-10-05",
      "2026-10-06",
-     "2026-10-07"
+     "2026-10-07",
+     "2026-10-08",
+     "2026-10-09",
+     "2026-10-10"
     ],
     "temperature_2m_max": [
-     19.5,
-     19.4,
-     21,
-     22,
-     23.4
+     22.4,
+     22.6,
+     27.2,
+     21.2,
+     23.6,
+     24.5,
+     24.7
     ],
     "temperature_2m_min": [
-     13.4,
-     11.9,
-     11.7,
-     9.9,
-     9.5
+     15.6,
+     16.6,
+     19.8,
+     17,
+     13.8,
+     13.6,
+     16.3
     ],
     "weather_code": [
-     45,
-     45,
      3,
+     3,
+     2,
+     51,
+     1,
      3,
      2
     ],
     "precipitation_probability_max": [
-     3,
-     3,
-     0,
-     0,
-     10
+     31,
+     41,
+     16,
+     6,
+     10,
+     5,
+     6
     ]
    }
   }
@@ -280,16 +351,31 @@
   "size": "m",
   "source": {
    "type": "fetch",
-   "url": "https://api.frankfurter.app/2026-09-01..?from=EUR&to=JPY"
+   "url": "https://api.frankfurter.app/2026-08-25..?from=EUR&to=JPY"
   },
   "refresh": 3600,
-  "html": "<div class=\"k-stack k-fill\">\n  <div class=\"k-grid\">\n    <div class=\"k-stat\"><div class=\"k-stat-label\">1 EUR</div><div class=\"k-stat-value\" id=\"now\">–</div><div class=\"k-delta\" id=\"chg\"></div></div>\n    <div class=\"k-stat\"><div class=\"k-stat-label\">30-day range</div><div class=\"k-stat-value k-dim\" id=\"range\" style=\"font-size:15px\">–</div><div class=\"k-stat-note k-dim\" id=\"asof\"></div></div>\n  </div>\n  <div class=\"k-chart\" id=\"chart\" style=\"flex:1\"></div>\n</div>\n<script>\nconst f=n=>cmd.fmt.num(n,2);\ncmd.onData(d=>{\n  if(!d||!d.rates){now.textContent=\"–\";asof.textContent=\"Couldn't load rates\";return;}\n  let days=Object.keys(d.rates).sort();\n  const last=new Date(days.at(-1)),cut=new Date(last.getTime()-30*864e5).toISOString().slice(0,10);\n  days=days.filter(x=>x>=cut);\n  const v=days.map(x=>d.rates[x].JPY),a=v[0],b=v.at(-1),pct=(b-a)/a*100;\n  now.innerHTML=`${f(b)}<span class=\"k-unit\">JPY</span>`;\n  chg.className=\"k-delta \"+(pct>=0?\"k-up\":\"k-down\");\n  chg.textContent=`${pct>=0?\"▲\":\"▼\"} ${cmd.fmt.pct(Math.abs(pct))} over 30 days`;\n  range.textContent=`${f(Math.min(...v))} – ${f(Math.max(...v))}`;\n  asof.textContent=`ECB reference rate · ${cmd.fmt.date(days.at(-1))}`;\n  cmd.chart(chart,{type:\"line\",area:true,labels:days.map(x=>cmd.fmt.date(x)),series:[{name:\"JPY\",values:v}],format:f});\n});\n</script>",
+  "html": "<style>.head{align-items:flex-end;gap:16px;flex-wrap:wrap}.head>div{min-width:0}</style>\n<div class=\"k-stack k-fill\">\n  <div class=\"k-row head\">\n    <div class=\"k-stat\"><div class=\"k-stat-label\" id=\"lbl\">1 EUR</div><div class=\"k-stat-value\" id=\"now\" style=\"font-size:clamp(20px,10vmin,40px)\">–</div><div class=\"k-delta\" id=\"chg\"></div></div>\n    <div class=\"k-stat k-hide-narrow\"><div class=\"k-stat-label\">30-day range</div><div class=\"k-stat-value k-dim\" id=\"range\" style=\"font-size:15px\">–</div><div class=\"k-stat-note\" id=\"avg\"></div></div>\n  </div>\n  <div class=\"k-chart k-hide-short\" id=\"chart\" style=\"flex:1;min-height:60px\"></div>\n  <div class=\"k-dim k-small k-ellipsis\" id=\"note\"></div>\n</div>\n<script>\nconst f=n=>cmd.fmt.num(n,2);\ncmd.onData(d=>{\n  if(!d||!d.rates){now.textContent=\"–\";note.textContent=\"Couldn't load rates.\";return;}\n  const end=new Date(d.end_date+\"T00:00:00Z\"),cut=new Date(end-30*864e5).toISOString().slice(0,10);\n  const days=Object.keys(d.rates).sort().filter(k=>k>=cut);\n  const v=days.map(k=>d.rates[k].JPY);\n  if(!v.length){now.textContent=\"–\";return;}\n  const first=v[0],last=v.at(-1),pct=(last-first)/first*100,diff=last-first;\n  now.innerHTML=`${f(last)}<span class=\"k-unit\">JPY</span>`;\n  chg.className=\"k-delta \"+(pct>=0?\"k-up\":\"k-down\");\n  chg.textContent=`${pct>=0?\"▲\":\"▼\"} ${f(Math.abs(diff))} · ${cmd.fmt.pct(Math.abs(pct))} in 30 days`;\n  range.textContent=`${f(Math.min(...v))} – ${f(Math.max(...v))}`;\n  avg.textContent=`Avg ${f(v.reduce((a,b)=>a+b,0)/v.length)}`;\n  lbl.textContent=`1 EUR · ${cmd.fmt.date(d.end_date)}`;\n  note.textContent=`ECB reference rates, working days · ${cmd.fmt.date(days[0])} – ${cmd.fmt.date(days.at(-1))}`;\n  cmd.chart(chart,{type:\"line\",area:true,labels:days.map(k=>cmd.fmt.date(k)),series:[{name:\"JPY\",values:v}],format:f});\n});\n</script>",
   "data": {
    "amount": 1,
    "base": "EUR",
-   "start_date": "2026-09-01",
+   "start_date": "2026-08-25",
    "end_date": "2026-10-02",
    "rates": {
+    "2026-08-25": {
+     "JPY": 185.7
+    },
+    "2026-08-26": {
+     "JPY": 185.62
+    },
+    "2026-08-27": {
+     "JPY": 185.61
+    },
+    "2026-08-28": {
+     "JPY": 185.92
+    },
+    "2026-08-31": {
+     "JPY": 185.22
+    },
     "2026-09-01": {
      "JPY": 185.63
     },
@@ -371,14 +457,14 @@
   "size": "s",
   "source": {
    "type": "command",
-   "command": "df -k /System/Volumes/Data | tail -1 | awk '{print \"{\\\"total\\\":\"$2*1024\",\\\"used\\\":\"$3*1024\",\\\"avail\\\":\"$4*1024\"}\"}'"
+   "command": "df -k /System/Volumes/Data | awk 'NR==2{printf \"{\\\"total\\\":%d,\\\"used\\\":%d,\\\"avail\\\":%d}\", $2*1024,$3*1024,$4*1024}'"
   },
   "refresh": 60,
-  "html": "<style>.big{align-items:baseline;gap:8px}.bar{height:8px}</style>\n<div class=\"k-stack k-fill\" style=\"justify-content:center\">\n  <div class=\"k-between k-row\"><div class=\"k-title\">Macintosh HD</div><div class=\"k-row k-small\" style=\"gap:6px\"><span class=\"k-dot\" id=\"dot\"></span><span id=\"st\">–</span></div></div>\n  <div class=\"k-row big\"><div class=\"k-huge k-mono\" id=\"pct\">–</div><div class=\"k-dim\">full</div></div>\n  <div class=\"k-bar bar\"><i id=\"fill\" style=\"--v:0%\"></i></div>\n  <div class=\"k-between k-row k-small\"><span><span class=\"k-mono\" id=\"used\">–</span> <span class=\"k-dim\">used</span></span><span><span class=\"k-mono\" id=\"free\">–</span> <span class=\"k-dim\">free of</span> <span class=\"k-mono\" id=\"tot\">–</span></span></div>\n</div>\n<script>\ncmd.onData(d=>{\n  if(!d||!d.total){st.textContent=\"Couldn't read disk usage\";return;}\n  const used=d.total-d.avail,p=used/d.total*100;\n  const lvl=p>=95?\"bad\":p>=85?\"warn\":\"good\";\n  pct.textContent=Math.round(p)+\"%\";\n  fill.style.setProperty(\"--v\",p.toFixed(1)+\"%\");\n  fill.style.setProperty(\"--c\",`var(--${lvl===\"good\"?\"c1\":lvl})`);\n  dot.className=\"k-dot k-\"+lvl;\n  st.textContent=lvl===\"bad\"?\"Almost full\":lvl===\"warn\"?\"Getting full\":\"Plenty of space\";\n  used.textContent=cmd.fmt.bytes(used);\n  free.textContent=cmd.fmt.bytes(d.avail);\n  tot.textContent=cmd.fmt.bytes(d.total);\n});\n</script>",
+  "html": "<style>.pct{font-size:clamp(28px,16vmin,56px);line-height:1}.bar{height:8px}.bar i{height:100%}</style>\n<div class=\"k-stack k-fill\">\n  <div class=\"k-row k-between\"><div class=\"k-title\">Macintosh HD</div><div class=\"k-small\" id=\"st\"></div></div>\n  <div class=\"k-row\" style=\"align-items:baseline;gap:8px\"><div class=\"pct k-mono\" id=\"pct\">–</div><div class=\"k-dim\">full</div></div>\n  <div class=\"k-bar bar\"><i id=\"fill\" style=\"--v:0%\"></i></div>\n  <div class=\"k-spacer\"></div>\n  <div class=\"k-row k-between k-small k-hide-short\">\n    <div><span class=\"k-mono\" id=\"free\">–</span> <span class=\"k-dim\">free</span></div>\n    <div><span class=\"k-mono\" id=\"used\">–</span> <span class=\"k-dim\">used of</span> <span class=\"k-mono\" id=\"tot\">–</span></div>\n  </div>\n</div>\n<script>\ncmd.onData(d=>{\n  if(!d||!d.total){pct.textContent=\"–\";st.textContent=\"Couldn't read disk\";return;}\n  const usedAll=d.total-d.avail,p=usedAll/d.total*100;\n  const col=p>=95?\"var(--bad)\":p>=85?\"var(--warn)\":\"var(--good)\";\n  pct.innerHTML=Math.round(p)+'<span class=\"k-unit\">%</span>';\n  fill.style.setProperty(\"--v\",p.toFixed(1)+\"%\");fill.style.setProperty(\"--c\",col);\n  st.innerHTML=`<span class=\"k-dot ${p>=95?\"k-bad\":p>=85?\"k-warn\":\"k-good\"}\"></span> ${p>=95?\"Almost full\":p>=85?\"Getting full\":\"OK\"}`;\n  free.textContent=cmd.fmt.bytes(d.avail);\n  used.textContent=cmd.fmt.bytes(usedAll);\n  tot.textContent=cmd.fmt.bytes(d.total);\n});\n</script>",
   "data": {
    "total": 994610155520,
-   "used": 888548507648,
-   "avail": 80509087744
+   "used": 885031563264,
+   "avail": 84026032128
   }
  },
  {
@@ -387,7 +473,7 @@
   "size": "s",
   "source": null,
   "refresh": 0,
-  "html": "<style>.ring{width:100%;max-width:240px}.done{color:var(--good)}</style>\n<div class=\"k-stack k-center k-fill\">\n  <div class=\"k-huge k-mono\" id=\"clock\">5:00</div>\n  <div class=\"k-bar ring\"><i id=\"bar\" style=\"--v:0%;--c:var(--accent)\"></i></div>\n  <div class=\"k-dim\" id=\"msg\">5 minutes · ready to steep</div>\n  <div class=\"k-row\"><button class=\"k-btn k-primary\" id=\"go\">Start</button><button class=\"k-btn\" id=\"reset\">Reset</button></div>\n</div>\n<script>\nconst LEN=300;\nlet s=cmd.state.get(\"tea\")||{left:LEN,end:null};\nconst save=()=>cmd.state.set(\"tea\",s);\nlet beeped=false;\nfunction beep(){try{const a=new (window.AudioContext||window.webkitAudioContext)();[0,0.35,0.7].forEach(t=>{const o=a.createOscillator(),g=a.createGain();o.frequency.value=880;o.connect(g);g.connect(a.destination);g.gain.setValueAtTime(0.2,a.currentTime+t);g.gain.setValueAtTime(0,a.currentTime+t+0.2);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.25);});}catch(e){}}\nfunction tick(){\n  if(s.end){s.left=Math.max(0,Math.round((s.end-Date.now())/1000));if(!s.left){s.end=null;save();if(!beeped){beeped=true;beep();}}}\n  const m=Math.floor(s.left/60),sec=s.left%60;\n  clock.textContent=m+\":\"+String(sec).padStart(2,\"0\");\n  bar.style.setProperty(\"--v\",((LEN-s.left)/LEN*100)+\"%\");\n  const finished=s.left===0;\n  clock.classList.toggle(\"done\",finished);\n  msg.textContent=finished?\"Tea's ready 🍵\":s.end?\"Steeping…\":s.left<LEN?\"Paused\":\"5 minutes · ready to steep\";\n  go.textContent=s.end?\"Pause\":s.left<LEN&&!finished?\"Resume\":\"Start\";\n  go.disabled=finished;\n}\ngo.onclick=()=>{if(s.end){s.end=null;}else{if(!s.left)s.left=LEN;s.end=Date.now()+s.left*1000;beeped=false;}save();tick();};\nreset.onclick=()=>{s={left:LEN,end:null};beeped=false;save();tick();};\nsetInterval(tick,250);tick();\n</script>",
+  "html": "<style>.clock{font-size:clamp(28px,22vmin,72px);font-variant-numeric:tabular-nums;line-height:1}.prog{width:min(260px,80%)}</style>\n<div class=\"k-stack k-center k-fill\">\n  <div class=\"k-mono clock\" id=\"clock\">5:00</div>\n  <div class=\"k-row k-hide-short\" style=\"gap:6px\"><span class=\"k-dot\" id=\"dot\"></span><span class=\"k-dim\" id=\"phase\">Ready</span></div>\n  <div class=\"k-bar prog k-hide-short\"><i id=\"bar\" style=\"--v:0%\"></i></div>\n  <div class=\"k-row\"><button class=\"k-btn k-primary\" id=\"go\">Start</button><button class=\"k-btn\" id=\"reset\">Reset</button></div>\n</div>\n<script>\nconst LEN=5*60;\nlet s=cmd.state.get(\"tea\")||{left:LEN,end:null};\nconst save=()=>cmd.state.set(\"tea\",s);\nlet beeped=false;\nfunction beep(){try{const a=new (window.AudioContext||window.webkitAudioContext)();[0,0.35,0.7].forEach(t=>{const o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.setValueAtTime(0.15,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.3);o.connect(g);g.connect(a.destination);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.3);});}catch(e){}}\nfunction tick(){\n  if(s.end){s.left=Math.max(0,Math.ceil((s.end-Date.now())/1000));if(!s.left){s.end=null;s.done=true;save();if(!beeped){beeped=true;beep();}}}\n  clock.textContent=Math.floor(s.left/60)+\":\"+String(s.left%60).padStart(2,\"0\");\n  const done=s.done&&!s.left;\n  phase.textContent=done?\"Tea's ready\":s.end?\"Steeping\":s.left<LEN?\"Paused\":\"Ready\";\n  dot.className=\"k-dot \"+(done?\"k-good\":s.end?\"k-warn\":\"\");\n  clock.className=\"k-mono clock\"+(done?\" k-good\":\"\");\n  bar.style.setProperty(\"--v\",((LEN-s.left)/LEN*100)+\"%\");\n  bar.style.setProperty(\"--c\",done?\"var(--good)\":\"var(--accent)\");\n  go.textContent=s.end?\"Pause\":done?\"Again\":s.left<LEN?\"Resume\":\"Start\";\n}\ngo.onclick=()=>{if(s.done&&!s.left){s={left:LEN,end:null};}s.done=false;beeped=false;s.end=s.end?null:Date.now()+s.left*1000;save();tick();};\nreset.onclick=()=>{s={left:LEN,end:null};beeped=false;save();tick();};\nsetInterval(tick,250);tick();\n</script>",
   "data": null
  }
 ]

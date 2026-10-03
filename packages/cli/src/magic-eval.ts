@@ -69,6 +69,9 @@ function judge(c: Case, r: MagicResult, render: RenderCheck | null, lint: { lite
     for (const x of render.errors) problems.push(`script error: ${x}`);
     if (render.empty) problems.push("draws nothing");
     if (render.overflow) warnings.push("overflows");
+    if (render.small?.overflowX) problems.push("overflows sideways when small (240×150)");
+    if (render.small?.overflowY) warnings.push("taller than a small window (240×150)");
+    if (render.small?.empty) problems.push("draws nothing when small");
   }
   if (lint?.literalColors.length) problems.push(`literal colours: ${lint.literalColors.join(" ")}`);
   if (lint?.externalResources.length) problems.push(`external resources: ${lint.externalResources.join(" ")}`);

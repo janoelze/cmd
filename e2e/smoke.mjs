@@ -404,6 +404,8 @@ check((await panes()) === 2, "…and leaves terminals alone");
   await win.waitForTimeout(300);
   const hovered = await win.evaluate((id) => !!document.querySelector(`.tile[data-pane="${id}"] .magic.hovered`), magic[1]);
   check(hovered, "hovering a Magic widget shows its window's controls");
+  const cursors = await win.evaluate((id) => [...document.querySelectorAll(`.tile[data-pane="${id}"] .magic-refine-btn`)].map((b) => getComputedStyle(b).cursor), magic[1]);
+  check(cursors.length > 0 && cursors.every((c) => c === "default"), `its buttons use the app's arrow cursor (${cursors.join(", ")})`);
 
   await clickIn(frame(magic[0]));
   await menu("view.magicChange");
