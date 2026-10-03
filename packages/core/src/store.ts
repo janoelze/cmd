@@ -2,7 +2,7 @@
 // Agents are stored as JSON documents for now; restore/search tables come later.
 
 import { DatabaseSync } from "node:sqlite";
-import type { Agent } from "@cmd/protocol";
+import type { Agent, AppWindow } from "@cmd/protocol";
 
 export class Store {
   #db: DatabaseSync;
@@ -19,12 +19,30 @@ export class Store {
         updated_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS agents_parent ON agents(parent_id);
+      CREATE TABLE IF NOT EXISTS windows (
+        id TEXT PRIMARY KEY,
+        doc TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS ui_state (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
     `);
+  }
+
+  /** Non-terminal windows (browser, files). */
+  windows(): AppWindow[] {
+    const rows = this.#db.prepare(`SELECT doc FROM windows`).all() as { doc: string }[];
+    return rows.map((r) => JSON.parse(r.doc) as AppWindow);
+  }
+
+  saveWindow(w: AppWindow): void {
+    this.#db.prepare(`INSERT OR REPLACE INTO windows (id, doc) VALUES (?, ?)`).run(w.id, JSON.stringify(w));
+  }
+
+  deleteWindow(id: string): void {
+    this.#db.prepare(`DELETE FROM windows WHERE id = ?`).run(id);
   }
 
   /** UI state (view mode, selection, collapsed rows, …) as JSON values. */

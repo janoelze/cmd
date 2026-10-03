@@ -1,4 +1,4 @@
-import type { Pane, PaneId } from "@cmd/protocol";
+import type { PaneId } from "@cmd/protocol";
 import type { SidebarRow } from "../model.ts";
 import { WindowsView } from "./WindowsView.tsx";
 
@@ -28,7 +28,8 @@ export function MainView({
   stripWidths,
   onStripWidth,
 }: Props) {
-  const withPane = rows.filter((r): r is SidebarRow & { pane: Pane } => !!r.pane);
+  // Every row that has a window: terminals and browser/file windows.
+  const withPane = rows.filter((r) => !!(r.pane || r.win));
 
   if (withPane.length === 0) {
     return (

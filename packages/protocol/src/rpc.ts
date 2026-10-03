@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, Pane, PaneId } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppWindow, FileEntry, Pane, PaneId, WindowId } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 
 export interface SettingsSnapshot {
@@ -66,6 +66,20 @@ export interface Methods {
   "settings.set": { params: { key: string; value: unknown }; result: SettingsSnapshot };
   "settings.reset": { params: { key: string }; result: SettingsSnapshot };
 
+  /** Open a window: a terminal (pane), a browser at a URL, or a file browser at a folder. */
+  "window.open": {
+    params: { kind: AppWindow["kind"]; url?: string; path?: string; cwd?: string; command?: string };
+    result: AppWindow;
+  };
+  /** Browser and file windows report navigation and titles here. */
+  "window.update": { params: { id: WindowId; title?: string; url?: string; path?: string }; result: AppWindow };
+  "window.close": { params: { id: WindowId }; result: null };
+  /** All windows, terminals included. */
+  "window.list": { params: {}; result: AppWindow[] };
+
+  /** Directory listing for file windows (dirs first, then by name). */
+  "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };
+
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };
   "search.status": { params: {}; result: SearchStatus };
@@ -83,7 +97,14 @@ export interface Methods {
   /** After this call the connection receives `event` notifications. */
   "events.subscribe": {
     params: {};
-    result: { panes: Pane[]; agents: Agent[]; settings: SettingsSnapshot; ui: Record<string, unknown> };
+    result: {
+      panes: Pane[];
+      agents: Agent[];
+      /** Non-terminal windows (terminal windows are the panes). */
+      windows: AppWindow[];
+      settings: SettingsSnapshot;
+      ui: Record<string, unknown>;
+    };
   };
 }
 
@@ -98,7 +119,9 @@ export type CoreEvent =
   | { type: "agent.updated"; agent: Agent }
   | { type: "agent.removed"; agentId: AgentId }
   | { type: "settings.updated"; snapshot: SettingsSnapshot }
-  | { type: "search.status"; status: SearchStatus };
+  | { type: "search.status"; status: SearchStatus }
+  | { type: "window.updated"; window: AppWindow }
+  | { type: "window.removed"; id: WindowId };
 
 export interface SearchHit {
   sessionId: string;

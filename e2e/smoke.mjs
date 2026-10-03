@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import http from "node:http";
 import { _electron as electron } from "playwright";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -165,6 +166,82 @@ check((await panes()) === 2, "…and leaves terminals alone");
   await win.waitForTimeout(600);
 }
 
+// Browser and file windows
+{
+  const server = http.createServer((_req, res) => {
+    res.setHeader("content-type", "text/html");
+    res.end("<title>E2E Page</title><body style='font:20px sans-serif;padding:20px'>Hello from a cmd browser window</body>");
+  });
+  await new Promise((r) => server.listen(0, r));
+  const port = server.address().port;
+
+  await menu("view.palette");
+  await win.waitForSelector(".palette");
+  await win.keyboard.type(`localhost:${port}`);
+  await win.waitForTimeout(200);
+  const offer = await win.locator(".palette-list li").first().textContent();
+  check(offer.includes(`Open localhost:${port}`), `typing a URL offers to open it (${offer.trim()})`);
+  await win.keyboard.press("Enter");
+  let browserWin = null;
+  for (let i = 0; i < 50 && !browserWin; i++) {
+    await win.waitForTimeout(200);
+    const all = await win.evaluate(() => window.cmd.call("window.list", {}));
+    browserWin = all.find((w) => w.kind === "browser" && w.title === "E2E Page");
+  }
+  check(!!browserWin && browserWin.url.startsWith(`http://localhost:${port}`), "browser window loads the page and reports its title");
+
+  fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
+  fs.writeFileSync(path.join(home, "files-fixture", "notes.md"), "# hi");
+  fs.writeFileSync(path.join(home, "files-fixture", "sub-folder", "inner.txt"), "inside");
+  const fw = await win.evaluate((p) => window.cmd.call("window.open", { kind: "files", path: p }), path.join(home, "files-fixture"));
+  await win.waitForTimeout(200);
+  await win.evaluate((id) => window.__cmdSelect(id), fw.id);
+  await win.waitForSelector(".tile.kind-files .file-row");
+  const rowsNow = () => win.locator(".tile.kind-files .file-row .file-name").allTextContents();
+  const selName = () => win.locator(".tile.kind-files .file-row.sel .file-name").textContent();
+  const filesPath = () => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.find((w) => w.kind === "files").path);
+  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.md"]), "file tree lists the folder, folders first");
+
+  await win.locator(".tile.kind-files .file-row", { hasText: "sub-folder" }).dblclick();
+  await win.waitForTimeout(400);
+  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "inner.txt", "notes.md"]), "double-clicking a folder expands it in place");
+
+  // Keyboard: come from a terminal, then select the file window — arrows drive the tree.
+  await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => window.__cmdSelect(p[0].id)));
+  await win.waitForTimeout(300);
+  await win.evaluate((id) => window.__cmdSelect(id), fw.id);
+  await win.waitForTimeout(400);
+  await win.keyboard.press("Home");
+  await win.keyboard.press("ArrowLeft"); // collapse
+  await win.waitForTimeout(200);
+  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.md"]), "← collapses the selected folder (focus moved here from a terminal)");
+  await win.keyboard.press("ArrowRight"); // expand
+  await win.waitForTimeout(300);
+  await win.keyboard.press("ArrowRight"); // into first child
+  await win.waitForTimeout(150);
+  check((await selName()) === "inner.txt", "→ expands, then steps into the folder");
+  await win.keyboard.press("ArrowLeft");
+  await win.waitForTimeout(150);
+  check((await selName()) === "sub-folder", "← on a child jumps to its folder");
+  await win.keyboard.type("n");
+  await win.waitForTimeout(150);
+  check((await selName()) === "notes.md", "typing selects by name");
+  await win.keyboard.press("Home");
+  await win.keyboard.press("Meta+ArrowDown");
+  await win.waitForTimeout(500);
+  check((await filesPath()).endsWith("sub-folder"), "⌘↓ makes the folder the root");
+  await win.keyboard.press("Meta+ArrowUp");
+  await win.waitForTimeout(500);
+  { const fp = await filesPath(); const sn = await selName();
+    check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${fp.split("/").pop()}, ${sn})`); }
+
+  await menu("view.grid");
+  await win.waitForTimeout(800);
+  await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });
+  check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows take part in the grid");
+  server.close();
+}
+
 await menu("app.settings");
 await win.waitForSelector(".settings");
 await win.locator(".shortcuts-heading").scrollIntoViewIfNeeded();
@@ -310,6 +387,7 @@ check((await win.locator(".panel.shaded").count()) === 1, "collapsed tool panel 
 const ui = await win.evaluate(() => window.cmd.call("ui.get", {}));
 check(ui["terminal.zoom"] === 2, "terminal zoom restored (+2)");
 check(ui["selection.pane"] === selectedBefore && !!selectedBefore, "selected terminal restored");
+check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows survive an app restart");
 await win.screenshot({ path: path.join(shots, "7-restored.png") });
 
 await app.close();

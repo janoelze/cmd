@@ -1,4 +1,4 @@
-// All terminal windows of the main pane, for every view mode. A layout
+// All windows of the main pane (terminals, browsers, file browsers), for every view mode. A layout
 // (../layouts.ts) says where each window goes; this component renders them as
 // absolutely positioned windows in a stable DOM order and owns the behaviour
 // shared by all modes:
@@ -13,9 +13,11 @@
 // running and pointer capture is never lost.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Pane, PaneId } from "@cmd/protocol";
+import type { PaneId } from "@cmd/protocol";
 import { focusLayout, gridLayout, stripLayout, type Layout, type ViewMode } from "../layouts.ts";
-import { arrangeTiles, moveInOrder, type SidebarRow } from "../model.ts";
+import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
+import { BrowserView } from "./BrowserView.tsx";
+import { FilesView } from "./FilesView.tsx";
 import {
   clampWidth,
   DEFAULT_FRACTION,
@@ -40,7 +42,11 @@ const SCROLL_ANIM_MS = 260;
 const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scrolls the strip
 const EDGE_SCROLL_MAX = 18; // px per frame
 
-type Row = SidebarRow & { pane: Pane };
+/** A row that has a window: a terminal (pane) or a browser/file window (win). */
+type Row = SidebarRow;
+
+const idOf = (r: Row) => windowIdOf(r)!;
+const createdOf = (r: Row) => r.pane?.createdAt ?? r.win?.createdAt ?? 0;
 
 interface Props {
   mode: Exclude<ViewMode, "canvas">;
@@ -75,8 +81,10 @@ export function WindowsView(p: Props) {
   const [resizing, setResizing] = useState<{ id: PaneId; w: number } | null>(null);
 
   // ── layout ─────────────────────────────────────────────
-  const byId = new Map(p.rows.map((r) => [r.pane.id, r]));
-  const settled = arrangeTiles(p.order, p.rows.map((r) => r.pane)).map((x) => x.id);
+  const settled = arrangeTiles(
+    p.order,
+    p.rows.map((r) => ({ id: idOf(r), createdAt: createdOf(r) })),
+  ).map((x) => x.id);
   const ids = preview ?? settled;
   const pxWidths = ids.map((id) =>
     resizing?.id === id ? resizing.w : widthFor(p.widths[id] ?? DEFAULT_FRACTION, vp.w || 1000, GUTTER),
@@ -292,7 +300,7 @@ export function WindowsView(p: Props) {
   // ── render ─────────────────────────────────────────────
   const rootRect = rootRef.current?.getBoundingClientRect();
   // Stable DOM order (creation), whatever the visual order.
-  const stable = [...p.rows].sort((a, b) => a.pane.createdAt - b.pane.createdAt);
+  const stable = [...p.rows].sort((a, b) => createdOf(a) - createdOf(b));
   const target = drag ? lay.rects.get(drag.id) : undefined;
 
   return (
@@ -319,7 +327,7 @@ export function WindowsView(p: Props) {
           />
         )}
         {stable.map((r) => {
-          const id = r.pane.id;
+          const id = idOf(r);
           const rect = lay.rects.get(id);
           if (!rect) return null;
           const lifted = drag?.id === id;
@@ -329,7 +337,7 @@ export function WindowsView(p: Props) {
             <div
               key={id}
               data-pane={id}
-              className={`tile ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""}`}
+              className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""}`}
               style={{
                 transform: `translate(${x}px, ${y}px)${lifted ? " scale(1.015)" : ""}`,
                 width: rect.w,
@@ -338,7 +346,13 @@ export function WindowsView(p: Props) {
               onMouseDown={() => onSelect(id)}
             >
               {lay.chrome && <TileTitle row={r} onPointerDown={(e) => startDrag(e, id)} title="Drag to move" />}
-              <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
+              {r.pane ? (
+                <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
+              ) : r.win?.kind === "browser" ? (
+                <BrowserView win={r.win} focused={id === selected} />
+              ) : r.win?.kind === "files" ? (
+                <FilesView win={r.win} focused={id === selected} />
+              ) : null}
               {lay.resizable && (
                 <div
                   className="strip-resize"

@@ -42,6 +42,12 @@ export function StatusBar({ mode, row, pane, run }: Props) {
   return (
     <footer className="statusbar">
       <div className="statusbar-session">
+        {!pane && row?.win && (
+          <>
+            <span className="statusbar-proc">{row.win.kind === "browser" ? "browser" : "files"}</span>
+            <span className="statusbar-path">{row.win.kind === "browser" ? (row.win.url ?? "") : shortPath(row.win.path ?? "")}</span>
+          </>
+        )}
         {pane && (
           <>
             <span className={`led led-${ledOf(row?.agent ?? null)}`} />

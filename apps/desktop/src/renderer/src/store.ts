@@ -2,7 +2,7 @@
 // goes straight to the xterm instances (see terminals.ts).
 
 import { useSyncExternalStore } from "react";
-import type { Agent, AgentId, CoreEvent, Pane, PaneId, SearchStatus, SettingsSnapshot } from "@cmd/protocol";
+import type { Agent, AgentId, AppWindow, CoreEvent, Pane, PaneId, SearchStatus, SettingsSnapshot, WindowId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -11,6 +11,8 @@ export interface State {
   connected: boolean;
   panes: Map<PaneId, Pane>;
   agents: Map<AgentId, Agent>;
+  /** Browser and file windows (terminal windows are the panes). */
+  windows: Map<WindowId, AppWindow>;
   settings: SettingsSnapshot;
   /** Why the UI is not connected, if known. */
   error?: string;
@@ -24,6 +26,7 @@ let state: State = {
   connected: false,
   panes: new Map(),
   agents: new Map(),
+  windows: new Map(),
   settings: { settings: DEFAULT_SETTINGS, overrides: [], errors: [], path: "" },
   ui: {},
   search: null,
@@ -126,6 +129,18 @@ function handle(e: CoreEvent): void {
       for (const fn of agentListeners) fn(prev, e.agent);
       return;
     }
+    case "window.updated": {
+      const windows = new Map(state.windows);
+      windows.set(e.window.id, e.window);
+      set({ windows });
+      return;
+    }
+    case "window.removed": {
+      const windows = new Map(state.windows);
+      windows.delete(e.id);
+      set({ windows });
+      return;
+    }
     case "search.status":
       set({ search: e.status });
       return;
@@ -167,6 +182,7 @@ cmd.onStatus(async (status) => {
     ui: snap.ui ?? {},
     panes: new Map(snap.panes.map((p) => [p.id, p])),
     agents: new Map(snap.agents.map((a) => [a.id, a])),
+    windows: new Map((snap.windows ?? []).map((w) => [w.id, w])),
   });
   void cmd.call("search.status", {}).then((search) => set({ search }), () => {});
   await Promise.all(

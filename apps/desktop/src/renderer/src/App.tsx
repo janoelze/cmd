@@ -11,13 +11,16 @@ import {
   newAgent,
   newTerminal,
   newTerminalIn,
+  newBrowser,
+  newFiles,
+  openableTarget,
   resumeCommand,
   runAction,
   sessionId,
 } from "./actions.ts";
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
-import { ago, arrangeTiles, buildRows, flatten, nextAfterClose, pushHistory, rowTitle, shortPath, type SidebarRow } from "./model.ts";
+import { ago, arrangeTiles, buildRows, flatten, nextAfterClose, pushHistory, rowDetail, rowTitle, shortPath, windowIdOf, type SidebarRow } from "./model.ts";
 import type { SearchHit, SearchStatus } from "@cmd/protocol";
 import { getState, onAgentChange, usePersisted, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
@@ -102,8 +105,10 @@ export function App() {
 
   // The order terminals appear in for the current view: grid slots, or the sidebar.
   const viewOrder = useMemo(() => {
-    const panes = flat.filter((r) => r.pane).map((r) => r.pane!);
-    return mode === "grid" || mode === "strip" ? arrangeTiles(gridOrder, panes).map((p) => p.id) : panes.map((p) => p.id);
+    const wins = flat
+      .filter((r) => r.pane || r.win)
+      .map((r) => ({ id: windowIdOf(r)!, createdAt: r.pane?.createdAt ?? r.win?.createdAt ?? 0 }));
+    return mode === "grid" || mode === "strip" ? arrangeTiles(gridOrder, wins).map((p) => p.id) : wins.map((p) => p.id);
   }, [flat, mode, gridOrder]);
   const viewOrderBefore = useRef<PaneId[]>([]);
 
@@ -111,7 +116,7 @@ export function App() {
   // Runs once the core's state, including the remembered selection, has arrived.
   useEffect(() => {
     if (!s.connected) return;
-    if (selected && s.panes.has(selected)) return;
+    if (selected && (s.panes.has(selected) || s.windows.has(selected))) return;
     const alive = new Set(viewOrder);
     const next = selected
       ? nextAfterClose(selected, history, viewOrderBefore.current, alive)
@@ -162,10 +167,15 @@ export function App() {
     [select],
   );
 
-  const selectRow = useCallback((r: SidebarRow) => r.pane && select(r.pane.id), [select]);
-  const withPane = useMemo(() => flat.filter((r) => r.pane), [flat]);
+  const selectRow = useCallback((r: SidebarRow) => {
+    const id = windowIdOf(r);
+    if (id) select(id);
+  }, [select]);
+  /** Rows with a window (terminal, browser, files), sidebar order. */
+  const withPane = useMemo(() => flat.filter((r) => r.pane || r.win), [flat]);
+  /** The selected terminal, if the selected window is one. */
   const current = selected ? s.panes.get(selected) : undefined;
-  const currentRow = flat.find((r) => r.pane?.id === selected);
+  const currentRow = flat.find((r) => windowIdOf(r) === selected);
   const currentAgent = currentRow?.agent ?? null;
 
   // ⌥⌘← / ⌥⌘→ follow what you see: grid/strip order, else the sidebar.
@@ -185,6 +195,8 @@ export function App() {
     "file.newTerminal": () => void newTerminal(),
     "file.newClaude": () => void newAgent("claude"),
     "file.newCodex": () => void newAgent("codex"),
+    "file.newBrowser": () => void newBrowser(),
+    "file.newFiles": () => void newFiles(),
     "file.close": () => {
       // ⌘W closes the frontmost thing: an open sheet, then the terminal, then the window.
       if (palette !== false) setPalette(false);
@@ -195,6 +207,7 @@ export function App() {
     "file.closeWindow": () => cmd.closeWindow(),
     "file.openSettingsFile": () => cmd.openSettingsFile(getState().settings.path),
     "edit.copy": () => {
+      if (selected && !s.panes.has(selected)) return void document.execCommand("copy");
       if (editingText() || !selected || !terminals.copy(selected)) document.execCommand("copy");
     },
     "edit.selectAll": () => {
@@ -244,6 +257,7 @@ export function App() {
   const run = useCallback((id: string) => handlersRef.current[id as CommandId]?.(), []);
 
   useEffect(() => cmd.onCommand(run), [run]);
+  useEffect(() => cmd.onOpenUrl((url) => void newBrowser(url)), []);
 
   // Tell the menu bar what is checked/enabled.
   useEffect(() => {
@@ -272,11 +286,18 @@ export function App() {
 
   const rowMenu = (r: SidebarRow) => {
     const a = r.agent;
-    const cwd = a?.cwd ?? r.pane?.cwd;
+    const cwd = a?.cwd ?? r.pane?.cwd ?? r.win?.path ?? undefined;
     const resume = a && resumeCommand(a);
     const id = a && sessionId(a);
     void showContextMenu([
-      ...(r.pane ? [{ label: "Show", run: () => select(r.pane!.id) }, { label: "Close Terminal", run: () => void closePane(r.pane!.id) }, "-" as const] : []),
+      ...(windowIdOf(r)
+        ? [
+            { label: "Show", run: () => select(windowIdOf(r)!) },
+            { label: r.pane ? "Close Terminal" : "Close Window", run: () => void closePane(windowIdOf(r)!) },
+            "-" as const,
+          ]
+        : []),
+      ...(r.win?.kind === "browser" && r.win.url ? [{ label: "Open in Default Browser", run: () => cmd.openPath(r.win!.url!) }, { label: "Copy URL", run: () => copy(r.win!.url!) }, "-" as const] : []),
       ...(a
         ? [
             { label: "Copy Resume Command", run: () => resume && copy(resume), enabled: !!resume },
@@ -347,8 +368,8 @@ export function App() {
     ...withPane.map((r) => ({
       id: `s-${r.key}`,
       group: "Sessions" as const,
-      label: `${rowTitle(r)} — ${shortPath(r.pane!.cwd)}`,
-      run: () => select(r.pane!.id),
+      label: `${rowTitle(r)} — ${r.pane ? shortPath(r.pane.cwd) : rowDetail(r, Date.now())}`,
+      run: () => select(windowIdOf(r)!),
     })),
     ...builtinTools.flatMap((t) =>
       t.controls.flatMap((c) =>
@@ -394,6 +415,16 @@ export function App() {
       {palette !== false && (
         <Palette
           items={paletteItems}
+          dynamic={(q) => {
+            // Typing a URL or a path offers to open it in a window.
+            const t = openableTarget(q);
+            if (!t) return [];
+            return [
+              t.kind === "browser"
+                ? { id: `open-url`, group: "Commands" as const, label: `Open ${t.value}`, hint: "browser", run: () => void newBrowser(t.value) }
+                : { id: `open-path`, group: "Commands" as const, label: `Browse ${t.value}`, hint: "files", run: () => void newFiles(t.value) },
+            ];
+          }}
           recent={recent}
           onRun={remember}
           onClose={() => setPalette(false)}

@@ -3,7 +3,8 @@ import type { PaneId } from "@cmd/protocol";
 import { bucketOf } from "@cmd/protocol";
 import { usePersisted } from "../store.ts";
 import { Symbol } from "./Symbol.tsx";
-import { flatten, ledOf, project, projectHue, rowDetail, rowTitle, type SidebarRow } from "../model.ts";
+import { WINDOW_ICONS } from "./TileTitle.tsx";
+import { windowIdOf, flatten, ledOf, project, projectHue, rowDetail, rowTitle, type SidebarRow } from "../model.ts";
 import { Tools } from "./Tools.tsx";
 
 export type SidebarTab = "sessions" | "tools";
@@ -32,7 +33,7 @@ export function Sidebar(p: Props) {
   // ⌘1–9 follow the visible order of rows that have a terminal.
   const shortcutOf = new Map(
     flatten(rows)
-      .filter((r) => r.pane)
+      .filter((r) => r.pane || r.win)
       .slice(0, 9)
       .map((r, i) => [r.key, i + 1]),
   );
@@ -105,16 +106,17 @@ function RowView(props: {
   const open = !collapsed.includes(row.key);
   const setOpen = (o: boolean) => setCollapsed((c) => (o ? c.filter((k) => k !== row.key) : [...c, row.key].slice(-200)));
   const led = ledOf(row.agent);
-  const proj = project(row.agent?.cwd ?? row.pane?.cwd ?? "");
+  const proj = row.win ? null : project(row.agent?.cwd ?? row.pane?.cwd ?? "");
   const hasKids = row.children.length > 0;
   const doneKids = row.children.filter((c) => c.agent && ["done", "exited"].includes(c.agent.state)).length;
-  const isSel = !!row.pane && row.pane.id === selected;
+  const winId = windowIdOf(row);
+  const isSel = !!winId && winId === selected;
 
   return (
     <>
       {props.divider && <div className="list-divider" />}
       <div
-        className={`row ${isSel ? "sel" : ""} led-row-${led} ${row.pane ? "" : "virtual"}`}
+        className={`row ${isSel ? "sel" : ""} led-row-${led} ${winId ? "" : "virtual"}`}
         style={{ paddingLeft: 10 + depth * 16 }}
         onClick={() => onSelect(row)}
         onContextMenu={(e) => {
@@ -136,7 +138,11 @@ function RowView(props: {
         ) : (
           <span className="twisty-space" />
         )}
-        <span className={`led led-${led}`} />
+        {row.win && row.win.kind !== "terminal" ? (
+          <Symbol name={WINDOW_ICONS[row.win.kind]} size={12} className="row-icon" />
+        ) : (
+          <span className={`led led-${led}`} />
+        )}
         <div className="row-text">
           <div className="row-title">
             {rowTitle(row)}
@@ -144,7 +150,7 @@ function RowView(props: {
           </div>
           <div className="row-detail">{rowDetail(row, now)}</div>
         </div>
-        {depth === 0 && (
+        {depth === 0 && proj && (
           <span className="chip" style={{ ["--hue" as string]: projectHue(proj) }}>
             {proj}
           </span>

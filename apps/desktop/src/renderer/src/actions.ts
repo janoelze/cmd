@@ -37,9 +37,13 @@ export async function newAgent(kind: string, prompt?: string): Promise<void> {
 
 const SHELLS = new Set(["zsh", "bash", "fish", "sh", "nu", "login"]);
 
-/** Like Terminal.app: ask before closing a terminal that is running something. */
+/** Close a window. Terminals ask first when something is running (like Terminal.app). */
 export async function closePane(paneId: PaneId): Promise<void> {
   const s = getState();
+  if (s.windows.has(paneId)) {
+    await cmd.call("window.close", { id: paneId });
+    return;
+  }
   const pane = s.panes.get(paneId);
   if (!pane) return;
   const agent = pane.agentId ? s.agents.get(pane.agentId) : undefined;
@@ -74,6 +78,29 @@ export function copy(text: string): void {
 export async function newTerminalIn(cwd: string): Promise<void> {
   const pane = await cmd.call("pane.create", { cwd });
   select(pane.id);
+}
+
+/** New browser window (blank, address field focused, unless a URL is given). */
+export async function newBrowser(url?: string): Promise<void> {
+  const w = await cmd.call("window.open", { kind: "browser", url });
+  select(w.id);
+}
+
+/** New file browser at a folder, defaulting to the selected terminal's folder. */
+export async function newFiles(path?: string): Promise<void> {
+  const w = await cmd.call("window.open", { kind: "files", path: path ?? contextCwd() });
+  select(w.id);
+}
+
+/** Does palette input look like a URL or a path we can open? */
+export function openableTarget(text: string): { kind: "browser" | "files"; value: string } | null {
+  const t = text.trim();
+  if (!t || /\s/.test(t)) return null;
+  if (/^(https?:\/\/|localhost(:\d+)?|127\.0\.0\.1)/i.test(t) || /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(t)) {
+    return { kind: "browser", value: t };
+  }
+  if (/^(~|\/)/.test(t)) return { kind: "files", value: t };
+  return null;
 }
 
 export function runAction(a: ToolAction): Promise<void> {

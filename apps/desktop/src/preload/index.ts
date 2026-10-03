@@ -74,6 +74,12 @@ const api = {
     return () => ipcRenderer.off("command", h);
   },
   setMenuState: (s: MenuState) => ipcRenderer.send("menu-state", s),
+  /** Links from browser windows that want a new window. */
+  onOpenUrl(fn: (url: string) => void): () => void {
+    const h = (_e: unknown, url: string) => fn(url);
+    ipcRenderer.on("open-url", h);
+    return () => ipcRenderer.off("open-url", h);
+  },
   keybindings: (): Promise<KeybindingsSnapshot> => ipcRenderer.invoke("keybindings"),
   /** SF Symbol images by name; null for names this macOS doesn't have. */
   sfSymbols: (names: string[]): Promise<Record<string, string | null>> => ipcRenderer.invoke("sf-symbols", names),

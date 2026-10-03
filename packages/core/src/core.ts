@@ -9,6 +9,7 @@ import { AgentTracker } from "./agents/tracker.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
+import { listDir, WindowManager } from "./windows.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
 
@@ -42,6 +43,7 @@ export class Core {
   readonly store: Store;
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
+  readonly windows: WindowManager;
   #server: net.Server | null = null;
   #subscribers = new Set<net.Socket>();
   #opts: CoreOptions;
@@ -59,6 +61,9 @@ export class Core {
     });
     this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null });
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler) : null;
+    this.windows = new WindowManager(this.panes, this.store);
+    this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
+    this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
     opts.search?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
 
@@ -94,6 +99,11 @@ export class Core {
     "settings.get": () => this.settings.snapshot(),
     "settings.set": (p) => this.settings.set(p.key, p.value),
     "settings.reset": (p) => this.settings.reset(p.key),
+    "window.open": (p) => this.windows.open(p),
+    "window.update": (p) => this.windows.update(p.id, p),
+    "window.close": (p) => (this.windows.close(p.id), null),
+    "window.list": () => this.windows.list(),
+    "fs.list": (p) => listDir(p.path),
     "search.query": (p) => this.#opts.search?.search(p.text, p.limit) ?? [],
     "search.status": () =>
       this.#opts.search?.status() ?? { sessions: 0, files: 0, indexing: false, done: 0, total: 0 },
@@ -108,6 +118,7 @@ export class Core {
     "events.subscribe": () => ({
       panes: this.panes.list(),
       agents: this.agents.list(),
+      windows: this.windows.others(),
       settings: this.settings.snapshot(),
       ui: this.store.uiState(),
     }),

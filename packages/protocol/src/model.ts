@@ -2,6 +2,8 @@
 
 export type PaneId = string;
 export type AgentId = string;
+/** Window id. A terminal window's id is its pane id. */
+export type WindowId = string;
 
 /** A terminal session owned by the core. Every session is a pane, agent or not. */
 export interface Pane {
@@ -82,4 +84,35 @@ export interface Agent {
   /** Last time the user looked at this agent; drives "done, unseen". */
   seenAt: number | null;
   createdAt: number;
+}
+
+// ── windows ──────────────────────────────────────────────
+
+/**
+ * Anything the main pane lays out. Terminal windows are derived from panes
+ * (id = pane id); browser and file windows are stored by the core.
+ */
+export type WindowKind = "terminal" | "browser" | "files";
+
+export interface AppWindow {
+  id: WindowId;
+  kind: WindowKind;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  /** terminal */
+  paneId: PaneId | null;
+  /** browser: current URL */
+  url: string | null;
+  /** files: current folder */
+  path: string | null;
+}
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  kind: "dir" | "file" | "link";
+  size: number;
+  mtime: number;
+  hidden: boolean;
 }

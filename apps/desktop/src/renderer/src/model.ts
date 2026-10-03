@@ -1,11 +1,18 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, sortRows, type Agent, type Pane, type PaneId } from "@cmd/protocol";
+import { bucketOf, type Agent, type AppWindow, type Pane, type PaneId } from "@cmd/protocol";
 import type { State } from "./store.ts";
 
+/**
+ * A sidebar row and, when it has a window, a layout item. Terminal rows have a
+ * pane (window id = pane id); browser/file rows have `win`; a host agent whose
+ * terminal is gone has neither.
+ */
 export interface SidebarRow {
   key: string;
   pane: Pane | null;
+  /** Non-terminal window (browser, files). */
+  win: AppWindow | null;
   agent: Agent | null;
   children: SidebarRow[];
   /** Most urgent agent in this subtree; drives sorting and the collapsed badge. */
@@ -29,7 +36,7 @@ export function buildRows(s: State): SidebarRow[] {
     for (const c of children) {
       if (c.urgent && (!urgent || RANK[bucketOf(c.urgent)] < RANK[bucketOf(urgent)])) urgent = c.urgent;
     }
-    return { key: agent?.id ?? pane!.id, pane, agent, children, urgent };
+    return { key: agent?.id ?? pane!.id, pane, win: null, agent, children, urgent };
   };
 
   const isChild = (a: Agent | null) => !!a?.parentId && s.agents.has(a.parentId);
@@ -42,9 +49,36 @@ export function buildRows(s: State): SidebarRow[] {
   const orphans: SidebarRow[] = [];
   for (const a of agents) if (!a.paneId && !isChild(a)) orphans.push(toRow(null, a));
 
-  const sortable = roots.map((r) => ({ pane: r.pane!, agent: r.urgent, row: r }));
-  const sorted = sortRows(sortable).map((x) => (x as (typeof sortable)[number]).row);
+  for (const w of s.windows.values()) {
+    roots.push({ key: w.id, pane: null, win: w, agent: null, children: [], urgent: null });
+  }
+
+  // needs-input first (longest wait first), then done-but-unseen (oldest first),
+  // then everything else by recency — same rule as @cmd/protocol's sortRows.
+  const activity = (r: SidebarRow) => Math.max(r.pane?.lastActivityAt ?? r.win?.updatedAt ?? 0, r.agent?.stateSince ?? 0);
+  const sorted = [...roots].sort((a, b) => {
+    const ba = RANK[bucketOf(a.urgent)];
+    const bb = RANK[bucketOf(b.urgent)];
+    if (ba !== bb) return ba - bb;
+    if (ba === RANK.rest) return activity(b) - activity(a);
+    return a.urgent!.stateSince - b.urgent!.stateSince;
+  });
   return [...sorted, ...orphans];
+}
+
+/** The window a row stands for (terminal: pane id), if any. */
+export function windowIdOf(r: SidebarRow): string | null {
+  return r.win?.id ?? r.pane?.id ?? null;
+}
+
+export function hostOf(url: string | null): string {
+  if (!url) return "";
+  try {
+    const u = new URL(url);
+    return u.host || u.protocol.replace(":", "");
+  } catch {
+    return url;
+  }
 }
 
 /** Rows in display order, children included (for ⌃⌘1–9 and ⌘[ / ⌘]). */
@@ -61,6 +95,10 @@ function cleanTitle(t: string | undefined): string {
 
 /** Like the fork: terminal title, else last prompt, else spawn prompt, else agent name. */
 export function rowTitle(r: SidebarRow): string {
+  if (r.win) {
+    if (r.win.kind === "browser") return r.win.title && r.win.title !== r.win.url ? r.win.title : hostOf(r.win.url) || "Browser";
+    return r.win.title || "Files";
+  }
   const a = r.agent;
   const t = cleanTitle(r.pane?.title);
   const generic = !t || GENERIC_TITLES.has(t.toLowerCase()) || t === r.pane?.foreground;
@@ -69,6 +107,7 @@ export function rowTitle(r: SidebarRow): string {
 }
 
 export function rowDetail(r: SidebarRow, now: number): string {
+  if (r.win) return r.win.kind === "browser" ? hostOf(r.win.url) : shortPath(r.win.path ?? "");
   const a = r.agent;
   if (!a) return shortPath(r.pane?.cwd ?? "");
   switch (a.state) {

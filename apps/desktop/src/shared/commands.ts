@@ -24,8 +24,10 @@ export const COMMANDS = spec([
   { id: "file.newTerminal", label: "New Terminal", keys: ["Cmd+N", "Cmd+T"] },
   { id: "file.newClaude", label: "New Claude Session", keys: ["Alt+Cmd+N"] },
   { id: "file.newCodex", label: "New Codex Session" },
-  { id: "file.close", label: "Close Terminal", keys: ["Cmd+W"] },
-  { id: "file.closeWindow", label: "Close Window", keys: ["Shift+Cmd+W"] },
+  { id: "file.newBrowser", label: "New Browser Window", keys: ["Shift+Cmd+B"] },
+  { id: "file.newFiles", label: "New File Browser", keys: ["Shift+Cmd+O"] },
+  { id: "file.close", label: "Close Window", keys: ["Cmd+W"] },
+  { id: "file.closeWindow", label: "Close App Window", keys: ["Shift+Cmd+W"] },
   { id: "file.openSettingsFile", label: "Open settings.json" },
 
   { id: "edit.copy", label: "Copy", keys: ["Cmd+C"] },

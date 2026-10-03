@@ -129,6 +129,7 @@ function createWindow(): BrowserWindow {
       preload: path.join(here, "../preload/index.mjs"),
       sandbox: false, // preload talks to the core socket via node:net
       contextIsolation: true,
+      webviewTag: true, // browser windows
     },
   });
   if (b.maximized) win.maximize();
@@ -199,6 +200,27 @@ ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
     );
     menu.popup({ window: winOf(e) ?? undefined, callback: () => resolve(chosen) });
   });
+});
+
+// ── browser windows (webview guests) ───────────────────
+
+// Guests get no Node, no preload, their own session; links that open new windows
+// become new cmd browser windows.
+app.on("web-contents-created", (_e, contents) => {
+  contents.on("will-attach-webview", (_ev, prefs, params) => {
+    delete prefs.preload;
+    prefs.nodeIntegration = false;
+    prefs.contextIsolation = true;
+    prefs.sandbox = true;
+    if (!/^(https?|about|file):/i.test(params.src ?? "")) params.src = "about:blank";
+  });
+  if (contents.getType() === "webview") {
+    contents.setWindowOpenHandler(({ url }) => {
+      const host = contents.hostWebContents;
+      if (host && /^https?:/i.test(url)) host.send("open-url", url);
+      return { action: "deny" };
+    });
+  }
 });
 
 // ── lifecycle ───────────────────────────────────────────

@@ -51,6 +51,7 @@ export function Palette({
   initialQuery = "",
   search,
   searchStatus,
+  dynamic,
 }: {
   items: PaletteItem[];
   /** Recently run item ids, most recent first; ranked first. */
@@ -62,6 +63,8 @@ export function Palette({
   search?: (text: string) => Promise<PaletteItem[]>;
   /** Shown in the footer while searching, e.g. "3,836 sessions indexed". */
   searchStatus?: string;
+  /** Extra items computed from the raw query (e.g. "Open <url>"), listed first. */
+  dynamic?: (query: string) => PaletteItem[];
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [active, setActive] = useState(0);
@@ -89,9 +92,10 @@ export function Palette({
 
   const results = useMemo(() => {
     if (searching) return found ?? [];
+    const extra = dynamic?.(query) ?? [];
     const group = PREFIX[query[0] ?? ""];
     const q = (group ? query.slice(1) : query).trim().toLowerCase();
-    return items
+    const matched = items
       .filter((it) => !group || it.group === group)
       .map((it) => {
         const s = score(it.label, q);
@@ -103,7 +107,8 @@ export function Palette({
       .sort((a, b) => b.s - a.s)
       .slice(0, 50)
       .map((x) => x.it);
-  }, [items, query, recent, searching, found]);
+    return [...extra, ...matched];
+  }, [items, query, recent, searching, found, dynamic]);
 
   useEffect(() => setActive(0), [query]);
 
