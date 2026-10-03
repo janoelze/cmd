@@ -2,6 +2,25 @@
 
 A personal terminal + coding-agent workbench for macOS. Research and design live in [`docs/`](docs/00-overview.md).
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/hero-dark.png">
+  <img alt="cmd in the grid layout: agents grouped by what needs you in the sidebar, three Claude sessions, htop, an editor and a browser window" src="docs/screenshots/hero-light.png">
+</picture>
+
+Agents are grouped by what needs you. The canvas lays windows out freely; the palette searches every past session.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/canvas-dark.png">
+  <img alt="The canvas view with a minimap" src="docs/screenshots/canvas-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/search-dark.png">
+  <img alt="Session search in the command palette" src="docs/screenshots/search-light.png">
+</picture>
+
+Screenshots: `pnpm shots` (staged with fake agents; see [`scripts/readme-shots/`](scripts/readme-shots/screenshots.mjs)).
+
 ## Layout
 
 ```
