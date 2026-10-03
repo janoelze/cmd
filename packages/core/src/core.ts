@@ -5,6 +5,7 @@ import net from "node:net";
 import path from "node:path";
 import type { CoreEvent, Method, Methods, Params, Result } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
+import { ipcPath } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
@@ -164,15 +165,20 @@ export class Core {
   }
 
   async listen(): Promise<void> {
-    const sock = this.#opts.socketPath;
-    fs.mkdirSync(path.dirname(sock), { recursive: true });
-    await removeStaleSocket(sock);
+    const sock = ipcPath(this.#opts.socketPath);
+    // A named pipe (Windows) has no file: nothing to create, clean up or chmod,
+    // and listening on a taken pipe fails by itself.
+    const isFile = sock === this.#opts.socketPath;
+    if (isFile) {
+      fs.mkdirSync(path.dirname(sock), { recursive: true });
+      await removeStaleSocket(sock);
+    }
     this.#server = net.createServer((conn) => this.#serve(conn));
     await new Promise<void>((resolve, reject) => {
       this.#server!.once("error", reject);
       this.#server!.listen(sock, () => resolve());
     });
-    fs.chmodSync(sock, 0o600);
+    if (isFile) fs.chmodSync(sock, 0o600);
     this.settings.watch();
   }
 
@@ -225,7 +231,7 @@ export class Core {
     for (const s of this.#subscribers) s.destroy();
     await new Promise<void>((r) => (this.#server ? this.#server.close(() => r()) : r()));
     try {
-      fs.unlinkSync(this.#opts.socketPath);
+      if (ipcPath(this.#opts.socketPath) === this.#opts.socketPath) fs.unlinkSync(this.#opts.socketPath);
     } catch {}
     this.resources?.close();
     this.#opts.search?.close();

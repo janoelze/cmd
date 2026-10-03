@@ -119,7 +119,10 @@ describe("index + search", () => {
     expect(indexPass(db, roots)).toEqual({ changed: 4, removed: 0 });
     searcher = new Searcher(db);
   });
-  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+  afterAll(() => {
+    db.close(); // Windows can't delete an open database file
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 
   it("finds sessions by prompt words, with a highlighted snippet and resume info", () => {
     const hits = searcher.search("collapsible");

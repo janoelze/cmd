@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import { cmdHome, connect, defaultSocketPath, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, connect, defaultSocketPath, ipcPath, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type KeybindingsSnapshot } from "./keybindings.ts";
@@ -30,7 +30,7 @@ const socketPath = defaultSocketPath();
 
 function canConnect(): Promise<boolean> {
   return new Promise((resolve) => {
-    const c = net.createConnection(socketPath);
+    const c = net.createConnection(ipcPath(socketPath));
     c.once("connect", () => (c.destroy(), resolve(true)));
     c.once("error", () => resolve(false));
   });
