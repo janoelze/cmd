@@ -78,6 +78,11 @@ describe("containment", () => {
     expect(contains("/a/proj", "/a/proj-old")).toBe(false);
     expect(contains("/a/proj", "/a/pro")).toBe(false);
     expect(contains("/", "/anything")).toBe(true);
+    // Windows paths, with either separator.
+    expect(contains("C:\\src\\cmd", "C:\\src\\cmd\\docs")).toBe(true);
+    expect(contains("C:\\src\\cmd", "C:\\src\\cmd/docs")).toBe(true);
+    expect(contains("C:\\src\\cmd", "C:\\src\\cmd-old")).toBe(false);
+    expect(contains("C:\\", "C:\\anything")).toBe(true);
   });
 
   it("picks the deepest root", () => {

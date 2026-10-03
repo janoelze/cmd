@@ -90,7 +90,8 @@ export function fastRoute(prompt: string): { route: "json"; data: unknown } | { 
     } catch {}
   }
   const first = /^[A-Za-z0-9_./-]+/.exec(t)?.[0];
-  if (!first) return null;
+  // The "is it a command?" check asks /bin/sh; on Windows the agent decides.
+  if (!first || process.platform === "win32") return null;
   // Shell syntax (flags, pipes, quotes, redirects) or a single word; never something that reads like a sentence.
   const shellish = /\s-{1,2}[A-Za-z]|[|><;$`'"]|^\S+$/.test(t);
   const english = /\b(of|every|all|my|the|show|me|what|which|how|is|are|in|for|with|and|live|please)\b/i.test(t.replace(/(["'])[^"']*\1/g, ""));
