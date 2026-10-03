@@ -36,9 +36,12 @@ const KNOWN_AGENTS = [
   "droid",
 ] as const;
 
-const SHELLS = new Set(["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu", "xonsh", "elvish", "pwsh", "login"]);
+const SHELLS = new Set(["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu", "xonsh", "elvish", "pwsh", "powershell", "login"]);
+// Only on Windows: elsewhere `cmd` is this app's own CLI.
+if (process.platform === "win32") SHELLS.add("cmd");
 
-const basename = (s: string) => s.split("/").pop() ?? s;
+/** Last path component, either separator, without a Windows `.exe`. */
+const basename = (s: string) => (s.split(/[\\/]/).pop() ?? s).replace(/\.exe$/i, "");
 
 /**
  * Agents are checked before shells because wrapper scripts start with a shell
@@ -46,7 +49,7 @@ const basename = (s: string) => s.split("/").pop() ?? s;
  * `…/claude/versions/<v>`, so path components are checked too.
  */
 export function classify(info: Pick<ForegroundInfo, "path" | "argv">): Classification {
-  const candidates = [...info.argv.map(basename), basename(info.path), ...info.path.split("/")];
+  const candidates = [...info.argv.map(basename), basename(info.path), ...info.path.split(/[\\/]/)];
   for (const c of candidates) {
     const hit = KNOWN_AGENTS.find((a) => a === c);
     if (hit) return { kind: "agent", agent: hit };

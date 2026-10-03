@@ -51,6 +51,22 @@ export interface SpawnOptions {
 
 export type PtyFactory = (opts: SpawnOptions) => Pty;
 
+const isWindows = process.platform === "win32";
+
+/**
+ * Shell for new terminals when `shell.program` is empty. On Windows $SHELL is
+ * ignored (under Git Bash it's an MSYS path native processes can't run):
+ * PowerShell 7 if installed, else Windows PowerShell.
+ */
+export function defaultShell(): string {
+  if (!isWindows) return process.env.SHELL || "/bin/zsh";
+  const dirs = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
+  return dirs.some((d) => fs.existsSync(path.join(d, "pwsh.exe"))) ? "pwsh.exe" : "powershell.exe";
+}
+
+/** "zsh" for /bin/zsh, "pwsh" for C:\\…\\pwsh.exe. */
+export const shellName = (shell: string) => path.basename(shell.replace(/\\/g, "/")).replace(/\.exe$/i, "");
+
 export async function nodePtyFactory(): Promise<PtyFactory> {
   const pty = await import("node-pty");
   return (o) => {
@@ -70,7 +86,8 @@ export async function nodePtyFactory(): Promise<PtyFactory> {
       },
       write: (d) => p.write(d),
       resize: (c, r) => p.resize(c, r),
-      kill: (s) => p.kill(s),
+      // Windows has no signals; node-pty throws if one is passed there.
+      kill: (s) => (isWindows ? p.kill() : p.kill(s)),
       onData: (fn) => void p.onData(fn),
       onExit: (fn) => void p.onExit(fn),
     };
@@ -164,7 +181,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   create(opts: CreatePaneOptions = {}): Pane {
     const id = opts.id ?? randomUUID();
     const cfg = this.#settings();
-    const shell = cfg["shell.program"] || process.env.SHELL || "/bin/zsh";
+    const shell = cfg["shell.program"] || defaultShell();
     const cwd = opts.cwd ?? os.homedir();
     const cols = opts.cols ?? 100;
     const rows = opts.rows ?? 30;
@@ -173,7 +190,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       if (v !== undefined && !k.startsWith("ELECTRON_") && k !== "NODE_OPTIONS") env[k] = v;
     }
     const token = randomBytes(12).toString("hex");
-    if (cfg["shell.integration"] && path.basename(shell) === "zsh" && fs.existsSync(ZSH_INTEGRATION_DIR)) {
+    if (cfg["shell.integration"] && shellName(shell) === "zsh" && fs.existsSync(ZSH_INTEGRATION_DIR)) {
       if (env.ZDOTDIR !== undefined) env.CMD_USER_ZDOTDIR = env.ZDOTDIR;
       env.ZDOTDIR = ZSH_INTEGRATION_DIR;
       env.CMD_PANE_TOKEN = token;
@@ -193,15 +210,17 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       ...opts.env,
     });
 
-    const pty = this.#factory({ shell, args: cfg["shell.login"] ? ["-l"] : [], cwd, cols, rows, env });
+    // -l means "login shell" to POSIX shells; PowerShell and cmd.exe don't take it.
+    const login = cfg["shell.login"] && !isWindows;
+    const pty = this.#factory({ shell, args: login ? ["-l"] : [], cwd, cols, rows, env });
     const now = Date.now();
     const pane: Pane = {
       id,
-      title: shell.split("/").pop() ?? "shell",
+      title: shellName(shell) || "shell",
       cwd,
       shell,
       pid: pty.pid,
-      foreground: shell.split("/").pop() ?? "",
+      foreground: shellName(shell),
       cols,
       rows,
       createdAt: now,
