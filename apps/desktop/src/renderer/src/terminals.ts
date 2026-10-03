@@ -13,6 +13,8 @@ import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { currentTheme, onThemeChange, terminalColors } from "./themes/registry.ts";
 
+// ⌘ keys sent to the PTY as readline control characters: kill line, start, end.
+const CMD_KEYS: Record<string, string> = { Backspace: "\x15", ArrowLeft: "\x01", ArrowRight: "\x05" };
 
 interface Host {
   term: Terminal;
@@ -124,7 +126,14 @@ class Terminals {
     term.onResize(({ cols, rows }) => void cmd.call("pane.resize", { paneId, cols, rows }));
     // App shortcuts are menu key equivalents (main process); keep them out of the PTY:
     // ⌘-anything on macOS, the bound Ctrl combinations elsewhere (Ctrl+Shift+K…).
-    term.attachCustomKeyEventHandler((e) => (MAC_KEYMAP ? !e.metaKey : !isAppShortcut(e)));
+    // Except the line-editing keys macOS terminals translate (⌘⌫ ⌘← ⌘→, as Ghostty does).
+    term.attachCustomKeyEventHandler((e) => {
+      if (!MAC_KEYMAP) return !isAppShortcut(e);
+      if (!e.metaKey) return true;
+      const seq = !e.ctrlKey && !e.altKey && !e.shiftKey ? CMD_KEYS[e.key] : undefined;
+      if (seq && e.type === "keydown") void cmd.call("pane.write", { paneId, data: seq });
+      return false;
+    });
     const el = document.createElement("div");
     el.className = "xterm-host";
     // Mark terminals that have scrollback, so the scrollbar only shows when there's
