@@ -75,7 +75,7 @@ Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keyb
 | ⌥⌘← / ⌥⌘→ (⇧⌘[ / ⇧⌘]) | previous / next session |
 | ⌘1–9 | select session |
 | ⌃⌘J | next session needing attention |
-| ⌘K | command palette (`>` commands, `@` sessions, `#` tools) |
+| ⌘K | command palette (`>` commands, `@` sessions) |
 | ⌘, | settings |
 | ⌘C / ⌘V / ⌘A | copy / paste / select all, in the terminal or a text field |
 | ⌥⌘K | clear buffer |

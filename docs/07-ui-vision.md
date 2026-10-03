@@ -10,7 +10,7 @@ Clickable mockup: not built yet (planned as `docs/mockups/ui.html`).
 
 ```
 ┌─ ● ● ●  ══════════════  cmd  ══════════════  [Focus|Tiles|Grid|Canvas] ⌘K ┐
-│┌ Sessions │ Tools ┐ │                                                     │
+│┌ Sessions ─────────┐ │                                                     │
 ││▸ NEEDS YOU (2)    │ │                                                     │
 ││ ● fix auth flow   │ │                 main view                           │
 ││ ● codex: migrate  │ │     focus / tiles / grid / canvas                   │
@@ -25,11 +25,9 @@ Clickable mockup: not built yet (planned as `docs/mockups/ui.html`).
 
 ## Left sidebar
 
-**Two tabs** at the top: **Sessions** and **Tools**.
-- Switch with ⌘⇧[ / ⌘⇧], or click.
 - The sidebar can collapse to a thin strip of status lights (⌃⌘S).
 
-### Sessions tab
+### Sessions
 Agents and plain terminal tabs share one list. A terminal tab is just a session with no agent.
 
 **Ordering is attention first, then recency:**
@@ -56,23 +54,6 @@ Agents and plain terminal tabs share one list. A terminal tab is just a session 
 - Return: focus the selected session
 - ⌘⌫: close the selected session
 
-### Tools tab
-Every plugin contributes a **panel**: a small "window" with a pinstriped title bar that collapses to that bar on double-click, like Mac OS 8's window shade.
-
-A panel is built from **declarative UI primitives** that the plugin returns as data:
-
-| Primitive | Use |
-|---|---|
-| `button` | Run a routine. It shows a busy state, and errors appear in a toast with "show output". |
-| `toggle` | Two-state routine with state read from a monitor (e.g. VPN on/off) |
-| `status` | A status light with label and value (`10.8.0.2 · 32ms`) |
-| `select` | Pick one option (e.g. VPN profile) |
-| `list` | Rows with actions (SSH hosts → Connect, Copy) |
-| `meter` / `sparkline` | Numbers that change over time (disk, CPU, quota) |
-| `log` | The tail of a routine's output, expandable into a full terminal |
-
-Routines that need a terminal (sudo prompts, interactive output) open as a session, so they show up in the Sessions list like everything else.
-
 ## Main view
 Four view modes in a segmented control in the title bar. Shortcuts ⌥⌘1–4, so they don't clash with the ⌃⌘ agent shortcuts.
 
@@ -81,7 +62,7 @@ Four view modes in a segmented control in the title bar. Shortcuts ⌥⌘1–4, 
 | **Focus** | One session fills the view. The sidebar picks which one. |
 | **Tiles** | Splits you arrange yourself (iTerm/Ghostty-style). The layout is saved per workspace. |
 | **Grid** | Automatic: every session (or a filter, e.g. "agents only" or "this project") as an even grid. Good for watching several agents. Idle sessions shrink to cards. |
-| **Canvas** | Infinite pan/zoom. Sessions are freely placed nodes, plus notes and tool panels. Zoomed out, nodes switch to **cards** (title, status, last lines); zoomed in, they become live terminals. Minimap in the corner. |
+| **Canvas** | Infinite pan/zoom. Sessions are freely placed nodes, plus notes. Zoomed out, nodes switch to **cards** (title, status, last lines); zoomed in, they become live terminals. Minimap in the corner. |
 
 Clicking a session in the sidebar always reveals it in the current mode: it scrolls or pans to it and focuses it. It never forces a mode switch.
 
@@ -90,10 +71,9 @@ One input that searches everything. Prefixes narrow the search:
 
 | Prefix | Searches |
 |---|---|
-| (none) | Everything, ranked: sessions, tools, commands, then transcript hits |
+| (none) | Everything, ranked: sessions, commands, then transcript hits |
 | `>` | App commands ("New terminal in…", "Switch to grid", "Rebuild index") |
 | `@` | Open sessions |
-| `#` | Tools and routines ("#vpn up") |
 | `?` | Transcript search (FTS) with snippets. Return resumes the session or switches to it if it is live. |
 
 The bottom of the palette shows keyboard hints. It's a 90s-style dialog box with a modern fuzzy list inside.

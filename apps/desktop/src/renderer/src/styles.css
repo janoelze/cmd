@@ -153,7 +153,6 @@ kbd {
 }
 .btn:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
 .btn:active { background: color-mix(in srgb, var(--ink) 16%, transparent); }
-.btn .hint { margin-left: 6px; font-size: 10px; color: var(--text-dim); }
 
 .segmented {
   display: flex;
@@ -427,22 +426,6 @@ kbd {
 
 .empty { text-align: center; padding: 24px 16px; color: var(--text-dim); }
 .empty p { margin: 0 0 10px; }
-
-/* ── tools ──────────────────────────────────────────── */
-
-.tools { display: flex; flex-direction: column; gap: 1px; padding: 0 8px 4px; }
-.panel-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 8px 0 14px;
-  border-radius: var(--radius);
-}
-.panel-title:hover { background: var(--bg-hover); }
-.panel-name { font: 500 12.5px var(--font-ui); color: var(--text); }
-.panel-body { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 8px 8px 32px; }
-.note { flex-basis: 100%; margin: 2px 0 0; font-size: 11px; color: var(--text-dim); }
 
 /* ── main view ──────────────────────────────────────── */
 

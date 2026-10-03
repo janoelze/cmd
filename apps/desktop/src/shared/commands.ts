@@ -46,7 +46,6 @@ export const COMMANDS = spec([
   { id: "view.cycleWidth", label: "Cycle Window Width", keys: ["Ctrl+Cmd+R"] },
   { id: "view.toggleEdit", label: "Toggle Preview / Edit", keys: ["Cmd+E"] },
   { id: "view.sidebar", label: "Show Sidebar", keys: ["Ctrl+Cmd+S"], checkable: "checkbox" },
-  { id: "view.tools", label: "Show Tools" },
   { id: "view.zoomIn", label: "Bigger", keys: ["Cmd+Plus", "Cmd+="] },
   { id: "view.zoomOut", label: "Smaller", keys: ["Cmd+-"] },
   { id: "view.zoomReset", label: "Actual Size", keys: ["Cmd+0"] },

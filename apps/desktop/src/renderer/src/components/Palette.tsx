@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface PaletteItem {
   id: string;
-  group: "Commands" | "Sessions" | "Tools" | "History";
+  group: "Commands" | "Sessions" | "History";
   label: string;
   hint?: string;
   /** Second line (search results): agent · folder · when. */
@@ -12,7 +12,7 @@ export interface PaletteItem {
   run: () => void;
 }
 
-const PREFIX: Record<string, PaletteItem["group"]> = { ">": "Commands", "@": "Sessions", "#": "Tools" };
+const PREFIX: Record<string, PaletteItem["group"]> = { ">": "Commands", "@": "Sessions" };
 /** `?query` searches agent transcripts (async, in the core). */
 const SEARCH_PREFIX = "?";
 
@@ -133,7 +133,7 @@ export function Palette({
         <input
           ref={input}
           className="palette-input"
-          placeholder="Type a command, @session, #tool, ?search…"
+          placeholder="Type a command, @session, ?search…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -185,7 +185,7 @@ export function Palette({
             <span className="palette-status">{searchStatus}</span>
           ) : (
             <span>
-              <kbd>&gt;</kbd> commands <kbd>@</kbd> sessions <kbd>#</kbd> tools <kbd>?</kbd> search
+              <kbd>&gt;</kbd> commands <kbd>@</kbd> sessions <kbd>?</kbd> search
             </span>
           )}
         </footer>

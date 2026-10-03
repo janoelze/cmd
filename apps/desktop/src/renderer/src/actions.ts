@@ -1,9 +1,8 @@
-// UI-level actions shared by the sidebar, tools and the command palette.
+// UI-level actions shared by the sidebar and the command palette.
 
 import type { Agent, PaneId, SearchHit } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { getState } from "./store.ts";
-import type { ToolAction } from "./tools.ts";
 
 type Selector = (paneId: PaneId) => void;
 let select: Selector = () => {};
@@ -127,8 +126,4 @@ export function openableTarget(text: string): { kind: "url" | "path"; value: str
   }
   if (/^(~|\/)/.test(t)) return { kind: "path", value: t };
   return null;
-}
-
-export function runAction(a: ToolAction): Promise<void> {
-  return a.kind === "terminal" ? newTerminal(a.command) : newAgent(a.agent, a.prompt);
 }

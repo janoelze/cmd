@@ -474,10 +474,6 @@ await menu("file.close");
 await win.waitForTimeout(600);
 check((await panes()) === 1, "⌘W closes an idle terminal");
 
-await menu("view.tools");
-await win.waitForTimeout(200);
-await win.screenshot({ path: path.join(shots, "6-tools.png") });
-
 // ── PaperWM-style strip ──
 {
   for (let i = 0; i < 3; i++) {
@@ -568,9 +564,7 @@ await win.waitForTimeout(800);
 
 // ── remembered UI state across an app restart (the core keeps running) ──
 await menu("view.grid");
-await menu("view.tools");
-await win.waitForTimeout(500); // Show Tools scrolls smoothly; let it settle before clicking
-await win.click(".panel-title >> text=Agents"); // collapse a tool panel
+await win.click(".sb-windows .sb-heading"); // collapse a sidebar section
 await menu("view.zoomIn");
 await menu("view.zoomIn");
 {
@@ -590,7 +584,6 @@ await app.close();
 await win.waitForSelector(".sidebar-status");
 await win.waitForTimeout(800);
 check((await win.locator(".main.mode-grid").count()) === 1, "view mode restored (grid)");
-check((await win.locator(".sb-tools .panel").count()) > 0, "open Tools section restored");
 {
   const w = (await win.locator(".sidebar").boundingBox()).width;
   check(Math.abs(w - 340) <= 1, `dragged sidebar width restored (${w})`);
@@ -599,7 +592,7 @@ check((await win.locator(".sb-tools .panel").count()) > 0, "open Tools section r
   const reset = (await win.locator(".sidebar").boundingBox()).width;
   check(Math.abs(reset - 280) <= 1, `double-clicking the edge resets the width (${reset})`);
 }
-check((await win.locator(".panel.shaded").count()) === 1, "collapsed tool panel restored");
+check((await win.locator('.sb-windows .sb-heading[aria-expanded="false"]').count()) === 1, "collapsed sidebar section restored");
 const ui = await win.evaluate(() => window.cmd.call("ui.get", {}));
 check(ui["terminal.zoom"] === 2, "terminal zoom restored (+2)");
 check(ui["selection.pane"] === selectedBefore && !!selectedBefore, `selected terminal restored (${selectedBefore} → ${ui["selection.pane"]})`);

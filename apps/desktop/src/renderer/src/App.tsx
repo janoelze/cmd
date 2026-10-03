@@ -16,7 +16,6 @@ import {
   openPath,
   openSession,
   resumeCommand,
-  runAction,
   sessionId,
 } from "./actions.ts";
 import { showContextMenu } from "./context.ts";
@@ -31,7 +30,6 @@ import type { Rect } from "./layouts.ts";
 import { windowActions } from "./windowActions.ts";
 import { stateStr, viewFor } from "./windows/registry.ts";
 import { toggleMarkdownEdit } from "./windows/markdown.tsx";
-import { builtinTools } from "./tools.ts";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
@@ -280,7 +278,6 @@ export function App() {
       setStripWidth(selected, nextPreset(stripWidths[selected] ?? DEFAULT_FRACTION));
     },
     "view.sidebar": () => setSidebarOpen((o) => !o),
-    "view.tools": () => (setSidebarOpen(true), setSidebarRequest({ kind: "tools", at: Date.now() })),
     "view.zoomIn": () => setZoom((z) => Math.min(24, z + 1)),
     "view.zoomOut": () => setZoom((z) => Math.max(-6, z - 1)),
     "view.zoomReset": () => setZoom(0),
@@ -457,13 +454,6 @@ export function App() {
         run: () => select(windowIdOf(r)!),
       };
     }),
-    ...builtinTools.flatMap((t) =>
-      t.controls.flatMap((c) =>
-        c.type === "button"
-          ? [{ id: `t-${t.id}-${c.id}`, group: "Tools" as const, label: `${t.title}: ${c.label}`, run: () => void runAction(c.action) }]
-          : [],
-      ),
-    ),
   ];
 
   return (

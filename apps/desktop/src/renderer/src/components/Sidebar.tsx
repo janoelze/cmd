@@ -1,5 +1,5 @@
 // The sidebar: a search field over open windows and the transcript index, then
-// sections (Needs you, Agents, Windows, Recent past sessions, Tools), a footer
+// sections (Needs you, Agents, Windows, Recent past sessions), a footer
 // that only speaks when there is news, and a draggable right edge.
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -10,14 +10,13 @@ import { usePersisted } from "../store.ts";
 import { terminals } from "../terminals.ts";
 import { filterRows, flatten, sectionOf, SECTIONS, type Section, type SidebarRow } from "../model.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
-import { Tools } from "./Tools.tsx";
 import { HistoryRow, SectionHeading, SessionRow } from "./SidebarRows.tsx";
 
 export const SIDEBAR_WIDTH = { default: 280, min: 200, max: 480 } as const;
 
-/** A request from a command: focus the search field, or open and show Tools. */
+/** A request from a command: focus the search field. */
 export interface SidebarRequest {
-  kind: "search" | "tools";
+  kind: "search";
   at: number;
 }
 
@@ -46,27 +45,21 @@ export function Sidebar(p: Props) {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
-  // Open/closed per section; Tools starts closed.
+  // Open/closed per section.
   const [openSections, setOpenSections] = usePersisted<Record<string, boolean>>("sidebar.sections", {});
-  const isOpen = (id: string) => openSections[id] ?? id !== "tools";
-  const toggle = (id: string) => setOpenSections((o) => ({ ...o, [id]: !(o[id] ?? id !== "tools") }));
+  const isOpen = (id: string) => openSections[id] ?? true;
+  const toggle = (id: string) => setOpenSections((o) => ({ ...o, [id]: !(o[id] ?? true) }));
 
   const [query, setQuery] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const searching = query.trim().length > 0;
 
-  // Commands (⇧⌘F, Show Tools) reach a sidebar that may have just opened.
+  // ⇧⌘F reaches a sidebar that may have just opened.
   useEffect(() => {
     if (!p.request || Date.now() - p.request.at > 1000) return;
-    if (p.request.kind === "search") {
-      input.current?.focus();
-      input.current?.select();
-    } else {
-      setQuery("");
-      setOpenSections((o) => ({ ...o, tools: true }));
-      requestAnimationFrame(() => list.current?.querySelector(".sb-tools")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
-    }
+    input.current?.focus();
+    input.current?.select();
   }, [p.request]);
 
   const groups = useMemo(() => SECTIONS.map((id) => ({ id, rows: rows.filter((r) => sectionOf(r) === id) })), [rows]);
@@ -216,10 +209,6 @@ export function Sidebar(p: Props) {
                   {isOpen("recent") && recent.map((h) => <HistoryRow key={`${h.agent}-${h.sessionId}`} hit={h} now={now} onOpen={(x) => void openSession(x)} />)}
                 </section>
               )}
-              <section className="sb-section sb-tools">
-                <SectionHeading title="Tools" open={isOpen("tools")} onToggle={() => toggle("tools")} />
-                {isOpen("tools") && <Tools />}
-              </section>
             </>
           )}
         </div>
