@@ -194,13 +194,21 @@ if (process.platform !== "win32") {
   await win.evaluate((id) => window.cmd.call("pane.clearAttention", { paneId: id }), other);
 }
 const panesOrder = async () => (await homeView())["grid.order"];
+const order0 = await panesOrder();
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
-await win.waitForTimeout(500);
-const order1 = await panesOrder();
+let order1 = await panesOrder();
+for (let i = 0; i < 30 && (!Array.isArray(order1) || JSON.stringify(order1) === JSON.stringify(order0)); i++) {
+  await win.waitForTimeout(100);
+  order1 = await panesOrder();
+}
 check(Array.isArray(order1) && order1.length === 2, `dragging a tile onto another reorders the grid (${JSON.stringify(order1?.map((x) => x.slice(0, 4)))})`);
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
-await win.waitForTimeout(500);
-const order2 = await panesOrder();
+// The order is saved debounced: wait for it to change rather than a fixed time (slow CI runners).
+let order2 = await panesOrder();
+for (let i = 0; i < 30 && JSON.stringify(order2) === JSON.stringify(order1); i++) {
+  await win.waitForTimeout(100);
+  order2 = await panesOrder();
+}
 check(order2[0] === order1[1] && order2[1] === order1[0], "dragging back swaps the slots again");
 // A real drag through three tiles: the dragged tile follows the pointer, the others make room.
 await menu("file.newTerminal");
