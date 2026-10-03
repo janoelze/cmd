@@ -60,6 +60,17 @@ export const SETTINGS_SCHEMA = {
   },
   "ui.sidebarWidth": { type: "number", default: 280, min: 200, max: 480, description: "Sidebar width in px." },
 
+  "canvas.cardZoom": {
+    type: "number",
+    default: 25,
+    min: 0,
+    max: 100,
+    step: 5,
+    description: "Canvas: below this zoom (%), windows are drawn as read-only cards (title, last lines) instead of live. Saves renderers with many windows. 0 keeps them live.",
+  },
+  "canvas.minZoom": { type: "number", default: 10, min: 5, max: 100, step: 5, description: "Canvas: how far you can zoom out (%)." },
+  "canvas.maxZoom": { type: "number", default: 200, min: 100, max: 400, step: 25, description: "Canvas: how far you can zoom in (%)." },
+
   "notifications.needsInput": { type: "boolean", default: true, description: "Notify when an agent needs input." },
   "notifications.done": { type: "boolean", default: true, description: "Notify when an agent finishes a turn." },
   "notifications.dockBadge": { type: "boolean", default: true, description: "Show the attention count on the Dock icon." },

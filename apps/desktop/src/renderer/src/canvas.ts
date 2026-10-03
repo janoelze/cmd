@@ -2,6 +2,7 @@
 // Windows have rects in world coordinates (px at zoom 1). The camera is the
 // world point at the viewport's top-left plus a zoom; screen = (world - cam) * zoom.
 
+import { DEFAULT_SETTINGS, type Settings } from "@cmd/protocol";
 import { gridShape } from "./model.ts";
 import type { Rect, Viewport } from "./layouts.ts";
 
@@ -11,10 +12,19 @@ export interface Camera {
   zoom: number;
 }
 
-export const MIN_ZOOM = 0.1;
-export const MAX_ZOOM = 2;
-/** Below this zoom windows are drawn as cards (title, status, last lines), not live. */
-export const CARD_ZOOM = 0.45;
+/** Zoom range, and below which windows are drawn as cards (title, last lines), not live. */
+export interface ZoomLimits {
+  min: number;
+  max: number;
+  cards: number;
+}
+
+/** From the canvas.* settings (percent). */
+export function zoomLimits(s: Pick<Settings, "canvas.minZoom" | "canvas.maxZoom" | "canvas.cardZoom">): ZoomLimits {
+  const min = Math.max(0.01, s["canvas.minZoom"] / 100);
+  return { min, max: Math.max(min, s["canvas.maxZoom"] / 100), cards: s["canvas.cardZoom"] / 100 };
+}
+export const DEFAULT_LIMITS = zoomLimits(DEFAULT_SETTINGS);
 /** The background's dot spacing: window edges, sizes and gaps all land on it. */
 export const DOT = 24;
 export const DEFAULT_W = 30 * DOT;
@@ -30,7 +40,7 @@ export const FRAME_PAD = 48;
 export const DEFAULT_CAMERA: Camera = { x: -FRAME_PAD, y: -FRAME_PAD, zoom: 1 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-export const clampZoom = (z: number) => clamp(z, MIN_ZOOM, MAX_ZOOM);
+export const clampZoom = (z: number, lim = DEFAULT_LIMITS) => clamp(z, lim.min, lim.max);
 export const snap = (v: number, step = SNAP) => Math.round(v / step) * step;
 
 export function toWorld(cam: Camera, sx: number, sy: number): { x: number; y: number } {
@@ -38,8 +48,8 @@ export function toWorld(cam: Camera, sx: number, sy: number): { x: number; y: nu
 }
 
 /** Zoom by a factor, keeping the world point under screen (sx, sy) fixed. */
-export function zoomAt(cam: Camera, factor: number, sx: number, sy: number): Camera {
-  const zoom = clampZoom(cam.zoom * factor);
+export function zoomAt(cam: Camera, factor: number, sx: number, sy: number, lim = DEFAULT_LIMITS): Camera {
+  const zoom = clampZoom(cam.zoom * factor, lim);
   const p = toWorld(cam, sx, sy);
   return { x: p.x - sx / zoom, y: p.y - sy / zoom, zoom };
 }
@@ -122,8 +132,8 @@ export function arrange(
 }
 
 /** A camera showing `r` whole and centred, at most at `maxZoom`. */
-export function frame(r: Rect, vp: Viewport, maxZoom = 1, pad = FRAME_PAD): Camera {
-  const zoom = clampZoom(Math.min(maxZoom, (vp.w - 2 * pad) / r.w, (vp.h - 2 * pad) / r.h));
+export function frame(r: Rect, vp: Viewport, maxZoom = 1, lim = DEFAULT_LIMITS, pad = FRAME_PAD): Camera {
+  const zoom = clampZoom(Math.min(maxZoom, (vp.w - 2 * pad) / r.w, (vp.h - 2 * pad) / r.h), lim);
   return { x: r.x + r.w / 2 - vp.w / 2 / zoom, y: r.y + r.h / 2 - vp.h / 2 / zoom, zoom };
 }
 
@@ -139,10 +149,10 @@ export function visible(cam: Camera, r: Rect, vp: Viewport): boolean {
  * only if it doesn't fit; zoomed out to cards, comes in to full size so the
  * window can be used.
  */
-export function reveal(cam: Camera, r: Rect, vp: Viewport, pad = GAP): Camera {
-  if (cam.zoom < CARD_ZOOM) return frame(r, vp, 1);
+export function reveal(cam: Camera, r: Rect, vp: Viewport, lim = DEFAULT_LIMITS, pad = GAP): Camera {
+  if (cam.zoom < lim.cards) return frame(r, vp, 1, lim);
   const fits = r.w * cam.zoom <= vp.w - 2 * pad && r.h * cam.zoom <= vp.h - 2 * pad;
-  if (!fits) return frame(r, vp, cam.zoom, pad);
+  if (!fits) return frame(r, vp, cam.zoom, lim, pad);
   if (visible(cam, r, vp)) return cam;
   const p = pad / cam.zoom;
   const vw = vp.w / cam.zoom;

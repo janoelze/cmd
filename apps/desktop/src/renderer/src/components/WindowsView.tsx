@@ -22,19 +22,20 @@ import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type R
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
 import { terminals } from "../terminals.ts";
+import { useStore } from "../store.ts";
 import {
   arrange,
   bounds,
-  CARD_ZOOM,
   DOT,
-  frame,
+  frame as frameWith,
   lerpCamera,
   MIN_H,
   MIN_W,
-  reveal,
+  reveal as revealWith,
   sized,
   snap as snapToGrid,
-  zoomAt,
+  zoomAt as zoomAtWith,
+  zoomLimits,
   type Camera,
 } from "../canvas.ts";
 import {
@@ -154,6 +155,14 @@ export function WindowsView(p: Props) {
   const gestureStart = useRef<number | null>(null);
 
   // ── canvas camera ──────────────────────────────────────
+  // Zoom range and card threshold come from the canvas.* settings.
+  const cfg = useStore().settings.settings;
+  const lim = zoomLimits(cfg);
+  const limRef = useRef(lim);
+  limRef.current = lim;
+  const zoomAt = (c: Camera, f: number, sx: number, sy: number) => zoomAtWith(c, f, sx, sy, limRef.current);
+  const frame = (r: Rect, vp: { w: number; h: number }, maxZoom: number) => frameWith(r, vp, maxZoom, limRef.current);
+  const reveal = (c: Camera, r: Rect, vp: { w: number; h: number }) => revealWith(c, r, vp, limRef.current);
   // Local state while it moves (no store round trip per frame); persisted when it pauses.
   const [cam, setCamState] = useState<Camera>(p.camera);
   const camRef = useRef(cam);
@@ -186,7 +195,14 @@ export function WindowsView(p: Props) {
     },
     [setCam],
   );
-  const cards = mode === "canvas" && cam.zoom < CARD_ZOOM;
+  const cards = mode === "canvas" && cam.zoom < lim.cards;
+  // Changed limits pull the camera back into range, around the viewport centre.
+  useEffect(() => {
+    const c = camRef.current;
+    const z = Math.max(lim.min, Math.min(lim.max, c.zoom));
+    if (z !== c.zoom) setCam(zoomAtWith(c, z / c.zoom, live.current.vp.w / 2, live.current.vp.h / 2, lim));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lim.min, lim.max]);
 
   // Latest values for event handlers registered once.
   const live = useRef({ lay, ids, settled, vp, selected, stripSlots, mode, preview, drag });
@@ -338,7 +354,7 @@ export function WindowsView(p: Props) {
       }
       const target = e.target as Element;
       const tile = target.closest?.(".tile");
-      if (tile && tile.getAttribute("data-pane") === live.current.selected && c.zoom >= CARD_ZOOM && !target.closest(".tile-title"))
+      if (tile && tile.getAttribute("data-pane") === live.current.selected && c.zoom >= limRef.current.cards && !target.closest(".tile-title"))
         return;
       e.preventDefault();
       e.stopPropagation();
