@@ -6,3 +6,4 @@ out/
 .DS_Store
 packages/core/native/build/
 .runtime/
+apps/desktop/native/build/
