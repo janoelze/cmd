@@ -148,6 +148,7 @@ function trackBounds(win: BrowserWindow): void {
 }
 
 function createWindow(): BrowserWindow {
+  performance.mark("boot:window-start");
   const b = loadBounds();
   const win = new BrowserWindow({
     ...b,
