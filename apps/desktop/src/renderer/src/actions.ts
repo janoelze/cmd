@@ -35,7 +35,10 @@ export async function newAgent(kind: string, prompt?: string): Promise<void> {
   if (agent.paneId) select(agent.paneId);
 }
 
-const SHELLS = new Set(["zsh", "bash", "fish", "sh", "nu", "login"]);
+// Same names the core classifies as shells (packages/core/src/agents/procinfo.ts).
+const SHELLS = new Set(["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu", "xonsh", "elvish", "pwsh", "powershell", "login"]);
+// cmd.exe; elsewhere `cmd` is this app's own CLI.
+if (navigator.userAgent.includes("Windows")) SHELLS.add("cmd");
 
 /** Close a window. Terminals ask first when something is running (like Terminal.app). */
 export async function closePane(paneId: PaneId): Promise<void> {
