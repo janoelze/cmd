@@ -397,6 +397,11 @@ await win.screenshot({ path: path.join(shots, "6-tools.png") });
   await menu("view.grid");
 }
 
+// Terminal content must survive re-attaching exactly once (no replayed duplicates).
+const markerPane = (await win.evaluate(() => window.cmd.call("pane.list", {})))[0].id;
+await win.evaluate((id) => window.cmd.call("pane.write", { paneId: id, data: "printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r" }), markerPane);
+await win.waitForTimeout(800);
+
 // ── remembered UI state across an app restart (the core keeps running) ──
 await menu("view.grid");
 await menu("view.tools");
@@ -416,6 +421,17 @@ check((await win.locator(".panel.shaded").count()) === 1, "collapsed tool panel 
 const ui = await win.evaluate(() => window.cmd.call("ui.get", {}));
 check(ui["terminal.zoom"] === 2, "terminal zoom restored (+2)");
 check(ui["selection.pane"] === selectedBefore && !!selectedBefore, "selected terminal restored");
+{
+  const text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 500 }).then((r) => r.text), markerPane);
+  await win.evaluate((id) => window.__cmdSelect(id), markerPane);
+  await menu("view.focus");
+  await win.waitForTimeout(600);
+  const shown = await win.locator(`.tile[data-pane="${markerPane}"] .xterm-rows`).textContent();
+  const count = (shown.match(/MARKER-42/g) ?? []).length;
+  check((text.match(/MARKER-42/g) ?? []).length === 1 && count === 1, `re-attached terminal shows its output exactly once (${count}×)`);
+  check(!/\[<\d+;\d+;\d+[mM]/.test(shown), "no stray mouse escape codes after re-attaching");
+  await menu("view.grid");
+}
 check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows survive an app restart");
 await win.screenshot({ path: path.join(shots, "7-restored.png") });
 

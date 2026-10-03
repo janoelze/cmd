@@ -332,6 +332,14 @@ export function App() {
       { label: "Select All", run: () => terminals.selectAll(paneId) },
       "-",
       { label: "Clear Buffer", run: () => terminals.clear(paneId) },
+      {
+        // For when a crashed program leaves modes on (mouse reporting, odd charsets).
+        label: "Reset Terminal",
+        run: () => {
+          terminals.reset(paneId);
+          void cmd.call("pane.reset", { paneId });
+        },
+      },
       "-",
       { label: "Close Terminal", run: () => void closePane(paneId) },
     ]);

@@ -26,7 +26,9 @@ export interface Methods {
   "pane.kill": { params: { paneId: PaneId }; result: null };
   /** Raw recent output, for re-attaching a view after a UI reload. */
   "pane.snapshot": { params: { paneId: PaneId }; result: { data: string } };
-  /** Plain-text tail of the pane (ANSI stripped). */
+  /** Clear stuck terminal state (modes a crashed program left on). */
+  "pane.reset": { params: { paneId: PaneId }; result: null };
+  /** Plain-text tail of the pane, as displayed. */
   "pane.read": { params: { paneId: PaneId; lines?: number }; result: { text: string } };
 
   "agent.list": { params: {}; result: Agent[] };

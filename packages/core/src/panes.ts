@@ -8,7 +8,11 @@ import { EventEmitter } from "node:events";
 import type { Pane, PaneId, PaneUsage, Settings } from "@cmd/protocol";
 import { usageChanged } from "./resources.ts";
 import { DEFAULT_SETTINGS, ENV } from "@cmd/protocol";
-import { OscScanner, stripAnsi, type OscEvent } from "./osc.ts";
+import { OscScanner, type OscEvent } from "./osc.ts";
+import headless from "@xterm/headless";
+import { SerializeAddon } from "@xterm/addon-serialize";
+
+type HeadlessTerminal = InstanceType<typeof headless.Terminal>;
 import { classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
 import { STATUS_ENV } from "./agents/statusfiles.ts";
 
@@ -73,13 +77,21 @@ export async function nodePtyFactory(): Promise<PtyFactory> {
   };
 }
 
-const SCROLLBACK_BYTES = 512 * 1024;
+/** Scrollback lines included when a UI re-attaches (the headless terminal keeps more). */
+const SNAPSHOT_SCROLLBACK = 5000;
 
 interface Live {
   pane: Pane;
   pty: Pty;
   osc: OscScanner;
-  buffer: string;
+  /**
+   * Headless terminal fed with all output: the pane's real screen state. UIs that
+   * (re)attach get it serialized (screen, scrollback, cursor, active modes) instead
+   * of a replay of raw output, which duplicated TUI frames and could leave stale
+   * modes (e.g. mouse reporting) switched on.
+   */
+  vt: HeadlessTerminal;
+  serializer: SerializeAddon;
   /** Command to type once the shell is ready (see #scheduleCommand). */
   pending: { command: string; timer: NodeJS.Timeout | undefined; deadline: NodeJS.Timeout } | null;
   fg: Foreground | null;
@@ -193,12 +205,16 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       agentId: null,
       usage: null,
     };
-    const live: Live = { pane, pty, osc: new OscScanner(), buffer: "", pending: null, fg: null, token };
+    const vt = new headless.Terminal({ cols, rows, scrollback: cfg["terminal.scrollback"], allowProposedApi: true });
+    const serializer = new SerializeAddon();
+    vt.loadAddon(serializer);
+    const live: Live = { pane, pty, osc: new OscScanner(), vt, serializer, pending: null, fg: null, token };
     this.#panes.set(id, live);
 
     pty.onData((data) => this.#onData(live, data));
     pty.onExit(({ exitCode }) => {
       this.#clearPending(live);
+      setTimeout(() => live.vt.dispose(), 0);
       pane.exitCode = exitCode;
       this.emit("updated", { ...pane });
       this.#panes.delete(id);
@@ -239,8 +255,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       clearTimeout(live.pending.timer);
       live.pending.timer = setTimeout(() => this.#flushPending(live), READY_QUIET_MS);
     }
-    live.buffer += data;
-    if (live.buffer.length > SCROLLBACK_BYTES) live.buffer = live.buffer.slice(-SCROLLBACK_BYTES);
+    live.vt.write(data);
     live.pane.lastActivityAt = Date.now();
     this.emit("output", live.pane.id, data);
     for (const ev of live.osc.feed(data)) {
@@ -337,19 +352,41 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     l.pane.cols = cols;
     l.pane.rows = rows;
     l.pty.resize(cols, rows);
+    l.vt.resize(cols, rows);
+  }
+
+  /** Clear stuck terminal state (modes a crashed program left on). */
+  async resetState(id: PaneId): Promise<void> {
+    const l = this.#must(id);
+    await this.#flush(l);
+    l.vt.reset();
+  }
+
+  /** Wait until all output written so far has been parsed. */
+  #flush(l: Live): Promise<void> {
+    return new Promise((resolve) => l.vt.write("", resolve));
   }
 
   kill(id: PaneId): void {
     this.#panes.get(id)?.pty.kill();
   }
 
-  snapshot(id: PaneId): string {
-    return this.#must(id).buffer;
+  /** Serialized terminal state for a UI to restore exactly what is on screen. */
+  async snapshot(id: PaneId): Promise<string> {
+    const l = this.#must(id);
+    await this.#flush(l);
+    return l.serializer.serialize({ scrollback: SNAPSHOT_SCROLLBACK });
   }
 
-  read(id: PaneId, lines = 50): string {
-    const text = stripAnsi(this.#must(id).buffer);
-    return text.split("\n").slice(-lines).join("\n");
+  /** The last `lines` lines of text (screen + scrollback, as displayed). */
+  async read(id: PaneId, lines = 50): Promise<string> {
+    const l = this.#must(id);
+    await this.#flush(l);
+    const buf = l.vt.buffer.active;
+    const out: string[] = [];
+    for (let i = 0; i < buf.length; i++) out.push(buf.getLine(i)?.translateToString(true) ?? "");
+    while (out.length && !out.at(-1)) out.pop();
+    return out.slice(-lines).join("\n");
   }
 
   dispose(): void {
@@ -357,6 +394,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     for (const l of this.#panes.values()) {
       this.#clearPending(l);
       l.pty.kill();
+      l.vt.dispose();
     }
     this.#panes.clear();
   }
