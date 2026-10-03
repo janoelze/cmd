@@ -100,6 +100,8 @@ const api = {
   /** The Settings window (opens it, or brings it to the front). */
   openSettings: () => ipcRenderer.send("settings-window"),
   checkForUpdates: () => ipcRenderer.send("check-updates"),
+  /** Restart into a downloaded update. */
+  installUpdate: () => ipcRenderer.send("install-update"),
   /** Settings → About. */
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke("app-info"),
   restartCore: (): Promise<void> => ipcRenderer.invoke("restart-core"),

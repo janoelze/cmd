@@ -1,15 +1,16 @@
 // Settings → About: versions and updates, the core's health, crash reports and
 // where cmd keeps its files and logs, plus what to do when something is off
 // (restart the core, open its log, copy everything for a bug report). core.info
-// is polled while the page is open.
+// is polled while the page is open, faster while an update is checked or downloaded.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { CoreInfo } from "@cmd/protocol";
 import type { AppInfo } from "../../../preload/index.ts";
 import { Symbol } from "../components/Symbol.tsx";
 import { cmd } from "../bridge.ts";
 
 const POLL_MS = 2000;
+const POLL_BUSY_MS = 400;
 const REVEAL = navigator.platform.startsWith("Mac") ? "Show in Finder" : "Show in Explorer";
 
 const MODE_LABEL = { auto: "Installs automatically", notify: "Notifies you", off: "Not checking" } as const;
@@ -33,6 +34,12 @@ function updateLine(a: AppInfo): string {
   const u = a.updates;
   if (a.dev) return "Development build: doesn't update itself. Install a release for updates.";
   if (u.ready) return `cmd ${u.ready} is downloaded and installs when you quit.`;
+  if (u.downloading)
+    return u.downloading.percent < 100
+      ? `Downloading cmd ${u.downloading.version}… ${Math.floor(u.downloading.percent)}%`
+      : `Preparing cmd ${u.downloading.version}…`;
+  if (u.checking) return "Checking for updates…";
+  if (u.available) return `cmd ${u.available} is available.`;
   if (u.lastError) return `Last check failed: ${u.lastError}`;
   return `${MODE_LABEL[u.mode]}. ${u.lastCheck ? `Last checked ${ago(u.lastCheck)}.` : "Not checked yet."}`;
 }
@@ -82,6 +89,26 @@ function PathRow(p: { title: string; path: string | null | undefined }) {
   );
 }
 
+const updateBusy = (a: AppInfo | null) => !!a && (a.updates.checking || !!a.updates.downloading);
+
+/** Settings → About's "Latest version" button: what the next step is. */
+function UpdateButton(p: { app: AppInfo | null; poll: () => void }) {
+  const u = p.app?.updates;
+  const check = () => (cmd.checkForUpdates(), setTimeout(p.poll, 100));
+  if (u?.ready)
+    return (
+      <button className="sw-button" onClick={() => cmd.installUpdate()}>
+        Restart to Update
+      </button>
+    );
+  if (u?.downloading) return <progress className="sw-progress" max={100} value={u.downloading.percent} />;
+  return (
+    <button className="sw-button" disabled={!p.app || p.app.dev || u?.checking} onClick={check}>
+      {u?.checking ? "Checking…" : u?.available ? "Download" : "Check Now"}
+    </button>
+  );
+}
+
 function crashLine(a: AppInfo): string {
   const c = a.crashes;
   const waiting = c.pending ? ` ${c.pending} waiting to be sent.` : "";
@@ -94,22 +121,27 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode }) {
   const [restarting, setRestarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const poll = useRef<() => void>(() => {});
 
   useEffect(() => {
     let live = true;
     let inflight = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
       if (inflight) return;
       inflight = true;
+      clearTimeout(timer);
       // core.info waits for a connection; a core that is down shows as such meanwhile.
       const timeout = new Promise<null>((r) => setTimeout(() => r(null), 1500));
       const [a, c] = await Promise.all([cmd.appInfo(), Promise.race([cmd.call("core.info", {}).catch(() => null), timeout])]);
       inflight = false;
-      if (live) (setApp(a), setCore(c));
+      if (!live) return;
+      setApp(a), setCore(c);
+      timer = setTimeout(tick, updateBusy(a) ? POLL_BUSY_MS : POLL_MS);
     };
+    poll.current = () => void tick();
     void tick();
-    const t = setInterval(tick, POLL_MS);
-    return () => ((live = false), clearInterval(t));
+    return () => ((live = false), clearTimeout(timer));
   }, []);
 
   const restart = async () => {
@@ -157,9 +189,7 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode }) {
           </Row>
           {p.updates}
           <Row title="Latest version" desc={app && updateLine(app)}>
-            <button className="sw-button" disabled={!app || app.dev} onClick={() => cmd.checkForUpdates()}>
-              Check Now
-            </button>
+            <UpdateButton app={app} poll={() => poll.current()} />
           </Row>
         </div>
       </section>

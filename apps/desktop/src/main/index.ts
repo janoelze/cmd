@@ -443,6 +443,7 @@ ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("open-path", (_e, p: string) => void shell.openPath(p));
 ipcMain.on("settings-window", () => void openSettings());
 ipcMain.on("check-updates", () => checkForUpdates());
+ipcMain.on("install-update", () => void updater().then((u) => u.installUpdate()));
 ipcMain.handle("restart-core", () => restartCore());
 // The preload connects where main decided (dev builds use their own core).
 ipcMain.on("core-socket", (e) => (e.returnValue = socketPath));

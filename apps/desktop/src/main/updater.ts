@@ -25,9 +25,18 @@ let ready: string | null = null;
 let announced: string | null = null;
 let lastCheck: number | null = null;
 let lastError: string | null = null;
+/** Version found but not downloaded (notify mode). */
+let available: string | null = null;
+let downloading: { version: string; percent: number } | null = null;
 
 export interface UpdateStatus {
   mode: Settings["updates.mode"];
+  /** A check is running. */
+  checking: boolean;
+  /** Found but not downloaded (notify mode). */
+  available: string | null;
+  /** Download in progress; percent reaches 100 before macOS finishes preparing it. */
+  downloading: { version: string; percent: number } | null;
   /** Epoch ms of the last finished check. */
   lastCheck: number | null;
   /** Downloaded, installs on quit. */
@@ -35,7 +44,15 @@ export interface UpdateStatus {
   lastError: string | null;
 }
 
-export const updateStatus = (): UpdateStatus => ({ mode, lastCheck, ready, lastError });
+export const updateStatus = (): UpdateStatus => ({
+  mode,
+  checking: busy && !downloading,
+  available,
+  downloading,
+  lastCheck,
+  ready,
+  lastError,
+});
 
 /** logDir()/update.log, electron-updater's own messages included. */
 let updateLog: LogFile | null = null;
@@ -48,6 +65,16 @@ function notify(body: string, onClick: () => void): void {
   const n = new Notification({ title: "cmd update", body });
   n.on("click", onClick);
   n.show();
+}
+
+function download(version: string): void {
+  downloading = { version, percent: 0 };
+  void autoUpdater.downloadUpdate().catch(() => {});
+}
+
+/** Restart into the downloaded version. */
+export function installUpdate(): void {
+  if (ready) install();
 }
 
 function install(): void {
@@ -116,27 +143,30 @@ export function startUpdater(socketPath: string): void {
 
   autoUpdater.on("update-available", (info) => {
     (lastCheck = Date.now()), (lastError = null);
-    if (mode === "auto" || manual) {
-      void autoUpdater.downloadUpdate().catch(() => {});
-      return;
-    }
+    if (mode === "auto" || manual) return download(info.version);
     busy = false;
+    available = info.version;
     if (announced === info.version) return;
     announced = info.version;
     notify(`cmd ${info.version} is available. Click to install it.`, () => {
       manual = true;
       busy = true;
-      void autoUpdater.downloadUpdate().catch(() => {});
+      download(info.version);
     });
+  });
+  autoUpdater.on("download-progress", (p) => {
+    if (downloading) downloading.percent = Math.min(100, p.percent);
   });
   autoUpdater.on("update-not-available", () => {
     (lastCheck = Date.now()), (lastError = null);
     busy = false;
+    available = null;
     if (manual) void dialog.showMessageBox({ type: "info", message: "cmd is up to date", detail: `Version ${app.getVersion()} is the newest.` });
     manual = false;
   });
   autoUpdater.on("update-downloaded", (info) => {
     busy = false;
+    (downloading = null), (available = null);
     ready = info.version;
     if (manual) void askToRestart(info.version);
     else if (announced !== info.version) {
@@ -147,6 +177,7 @@ export function startUpdater(socketPath: string): void {
   });
   autoUpdater.on("error", (err) => {
     busy = false;
+    downloading = null;
     log("error", err?.message ?? err);
     (lastCheck = Date.now()), (lastError = err?.message ?? String(err));
     if (manual) dialog.showErrorBox("cmd could not update", err?.message ?? String(err));
