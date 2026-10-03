@@ -57,6 +57,8 @@ if (process.platform === "darwin") {
     const plist = path.join(bundle, "Contents/Info.plist");
     for (const key of ["CFBundleName", "CFBundleDisplayName"]) execFileSync("/usr/bin/plutil", ["-replace", key, "-string", "cmd", plist]);
     fs.copyFileSync(path.resolve("apps/desktop/build/icon.icns"), path.join(bundle, "Contents/Resources/electron.icns"));
+    fs.copyFileSync(path.resolve("apps/desktop/build/Assets.car"), path.join(bundle, "Contents/Resources/Assets.car"));
+    execFileSync("/usr/bin/plutil", ["-replace", "CFBundleIconName", "-string", "Icon", plist]);
     const now = new Date();
     fs.utimesSync(bundle, now, now); // so LaunchServices picks up the new name and icon
   } catch (err) {

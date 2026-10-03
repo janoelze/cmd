@@ -17,7 +17,15 @@ extraResources:
 npmRebuild: false
 mac:
   category: public.app-category.developer-tools
+  # icon.icns is the flat icon for macOS 15 and older; macOS 26 uses the Liquid Glass
+  # icon in Assets.car (named by CFBundleIconName). Both come from build/icon.icon
+  # via `pnpm icons` and are committed, so CI needs no Xcode 26.
   icon: build/icon.icns
+  extraResources:
+    - from: build/Assets.car
+      to: Assets.car
+  extendInfo:
+    CFBundleIconName: Icon
   target:
     - dmg
     - zip
