@@ -451,7 +451,7 @@ check((await panes()) === 2, "…and leaves terminals alone");
 
   await menu("view.strip");
   await win.waitForTimeout(800);
-  const offset = () => win.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector(".windows-track")).transform).m41);
+  const offset = () => win.evaluate(() => document.querySelector(".windows-scroller").scrollLeft);
   const scrolls = async (loc, id) => {
     await win.evaluate((id) => window.__cmdSelect(id), id); // the strip reveals it
     await win.waitForTimeout(700);
@@ -602,7 +602,8 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   const n = await tiles.count();
   const heights = await tiles.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
   check(n >= 4 && heights.every((h) => Math.abs(h - heights[0]) < 1 && h > pane.height - 40), `strip: ${n} windows, all full height`);
-  const trackX = () => win.locator(".windows-track").evaluate((e) => new DOMMatrix(getComputedStyle(e).transform).m41);
+  // The strip is a native scroller: its content sits at -scrollLeft.
+  const trackX = () => win.locator(".windows-scroller").evaluate((e) => -e.scrollLeft);
 
   // keyboard: walk to the last window; it must end up fully visible
   for (let i = 0; i < n; i++) await menu("session.next");

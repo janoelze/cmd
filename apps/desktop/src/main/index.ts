@@ -159,11 +159,13 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 14, y: 12 },
     backgroundColor: savedAppearance().background,
+    acceptFirstMouse: true, // a click on a window in the background also lands (selects, focuses a terminal)
     webPreferences: {
       preload: path.join(here, "../preload/index.cjs"),
       sandbox: false, // preload talks to the core socket via node:net
       contextIsolation: true,
       webviewTag: true, // browser windows
+      scrollBounce: true, // macOS rubber banding (off by default in Electron), e.g. at the strip's ends
     },
   });
   if (b.maximized) win.maximize();
@@ -389,12 +391,14 @@ ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
 // become new cmd browser windows.
 app.on("web-contents-created", (_e, contents) => {
   contents.on("will-attach-webview", (_ev, prefs, params) => {
-    // Only cmd's own guest preload, in an isolated world: it reports presses and
-    // sideways scrolls to the app (preload/guest.ts, renderer/src/embed.ts).
+    // Only cmd's own guest preload, in an isolated world: it reports presses to
+    // the app (preload/guest.ts, renderer/src/embed.ts).
     prefs.preload = path.join(here, "../preload/guest.cjs");
     prefs.nodeIntegration = false;
     prefs.contextIsolation = true;
     prefs.sandbox = true;
+    prefs.scrollBounce = true; // pages bounce at their edges, like the rest of the app
+    prefs.safeDialogs = true; // a page looping alert() can be stopped
     if (!/^(https?|about|file):/i.test(params.src ?? "")) params.src = "about:blank";
   });
   if (contents.getType() === "webview") {

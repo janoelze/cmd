@@ -7,7 +7,11 @@
 //  - drag a window by its title bar: it follows the pointer, the others make
 //    room live (insert-style), ghost outlines show where it can go,
 //  - strip: free horizontal scrolling, reveal-on-select, resize by the right
-//    edge, auto-scroll while dragging near an edge, scrollbar.
+//    edge, auto-scroll while dragging near an edge, scrollbar. The strip is a
+//    native scroller (.windows-scroller), not a transform: Chromium scrolls it
+//    on the compositor, with macOS momentum and the bounce at the ends, and
+//    hands it the sideways scroll that embedded pages (their own process) and
+//    other content don't use.
 //  - canvas: windows placed freely in world coordinates (../canvas.ts) under a
 //    pan/zoom camera; drag to move, edges/corner to resize, minimap. Windows stay
 //    live at every zoom; the zoom range is capped by settings. The camera is a transform on the track, so terminals keep their
@@ -17,6 +21,7 @@
 // running and pointer capture is never lost.
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
 import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type Spacing, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
@@ -48,7 +53,6 @@ import {
   type Slot,
 } from "../strip.ts";
 import { TerminalView } from "./TerminalView.tsx";
-import { EMBED_ATTR, sidewaysForApp } from "../embed.ts";
 import { TileTitle } from "./TileTitle.tsx";
 import { SlotMotion } from "./Slot.tsx";
 
@@ -56,6 +60,7 @@ const DRAG_THRESHOLD = 4;
 const SCROLL_ANIM_MS = 260;
 const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scrolls the strip
 const EDGE_SCROLL_MAX = 18; // px per frame
+const OFFSET_SYNC_MS = 100; // the strip's scroll position reaches React this long after it rests
 const CAMERA_ANIM_MS = 280;
 const CAMERA_SAVE_MS = 400; // persist the camera once panning/zooming pauses
 const MOTION_MIN_ZOOM = 0.5; // zoomed out further, title bars change without animating
@@ -112,6 +117,7 @@ const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 export function WindowsView(p: Props) {
   const { mode, selected, onSelect } = p;
   const rootRef = useRef<HTMLElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [preview, setPreview] = useState<PaneId[] | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -159,6 +165,9 @@ export function WindowsView(p: Props) {
   const stripSlots: Slot[] = ids.map((id) => ({ x: lay.rects.get(id)!.x, w: lay.rects.get(id)!.w }));
 
   // ── strip scrolling ────────────────────────────────────
+  // The scroller's scrollLeft is the truth; offsetRef follows it at once, the
+  // state (title motion, the drop position) once it rests, every frame while
+  // dragging. Re-rendering every window per scroll frame is what stutters.
   const [offset, setOffsetState] = useState(0);
   const offsetRef = useRef(0);
   const anim = useRef<number | null>(null);
@@ -268,12 +277,58 @@ export function WindowsView(p: Props) {
     return () => clearTimeout(t);
   }, [mode]);
 
+  /** Scroll the strip (other modes: glide the track back to 0 after a switch). */
   const setOffset = useCallback((o: number) => {
     const { lay, vp, mode } = live.current;
     const max = mode === "strip" ? maxOffset(lay.contentWidth, vp.w) : 0;
     const v = Math.max(0, Math.min(max, o));
+    // Kept unrounded: scrollLeft snaps to device pixels and would eat small trackpad deltas.
     offsetRef.current = v;
-    setOffsetState(v);
+    if (mode === "strip") scrollerRef.current!.scrollLeft = v;
+    else setOffsetState(v);
+  }, []);
+
+  // Leaving the strip: the scroll position moves to the track's transform (no
+  // visible jump), which then glides to 0 with the switch.
+  const prevScrollMode = useRef(mode);
+  useLayoutEffect(() => {
+    const was = prevScrollMode.current;
+    prevScrollMode.current = mode;
+    const sc = scrollerRef.current!;
+    if (was !== "strip" || mode === "strip") return;
+    const x = sc.scrollLeft;
+    sc.scrollLeft = 0;
+    offsetRef.current = x;
+    setOffsetState(x);
+  }, [mode]);
+
+  // Follow the scroller (wheel, embedded pages' bubbled scroll, focus, our own writes).
+  useEffect(() => {
+    const sc = scrollerRef.current!;
+    let raf = 0;
+    let rest: ReturnType<typeof setTimeout> | undefined;
+    const sync = () => ((raf = 0), setOffsetState(offsetRef.current));
+    const onScroll = () => {
+      if (live.current.mode !== "strip") {
+        // Only the strip scrolls; focus can still scroll a clipped box.
+        if (sc.scrollLeft || sc.scrollTop) sc.scrollTo(0, 0);
+        return;
+      }
+      if (sc.scrollTop) sc.scrollTop = 0;
+      // Not our own write (those leave offsetRef within a pixel): someone else scrolls.
+      if (Math.abs(sc.scrollLeft - offsetRef.current) >= 1) {
+        offsetRef.current = sc.scrollLeft;
+        stopScroll();
+      }
+      if (live.current.drag) raf ||= requestAnimationFrame(sync);
+      else clearTimeout(rest), (rest = setTimeout(sync, OFFSET_SYNC_MS));
+    };
+    sc.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      sc.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+      clearTimeout(rest);
+    };
   }, []);
 
   const stopScroll = () => {
@@ -341,25 +396,20 @@ export function WindowsView(p: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, selSlot?.x, selSlot?.w, vp.w, lay.contentWidth]);
 
-  // Strip: horizontal wheel/trackpad (capture phase: terminals never see sideways
-  // scrolling; vertical scrolling passes through to their scrollback). Content
-  // that can scroll sideways where the pointer is keeps the scroll (../embed.ts).
+  // Strip: Chromium does the scrolling, over every kind of window: it latches a
+  // gesture to the strip or to content under the pointer that scrolls that way
+  // (long lines, wide tables), carries macOS momentum, bounces at the ends and
+  // runs on the compositor. A trackpad swipe is railed to one axis (mostly
+  // sideways: deltaY 0), so terminals' vertical scrollback doesn't take it.
+  // Sideways events are only kept from the content's own wheel handling (xterm
+  // would send them to the program); vertical ones pass through. Passive in the
+  // strip, so a gesture never waits on this page's main thread.
   useEffect(() => {
     const el = rootRef.current!;
+    const canvas = mode === "canvas";
     const onWheel = (e: WheelEvent) => {
-      // Over an embedded page only its own reports count (replayed, untrusted;
-      // ../embed.ts): Chromium also bubbles some of a webview's native wheel
-      // events out to here, which would scroll twice.
-      if (e.isTrusted && (e.target as Element).hasAttribute?.(EMBED_ATTR)) return;
-      if (live.current.mode === "canvas") return canvasWheel(e);
-      if (live.current.mode !== "strip") return;
-      // Content that scrolls sideways right there (long lines, wide tables) keeps it.
-      const dx = sidewaysForApp(e, (e.target as Element).closest?.(".tile"));
-      if (!dx) return;
-      e.preventDefault();
-      e.stopPropagation();
-      stopScroll();
-      setOffset(offsetRef.current + dx);
+      if (canvas) return canvasWheel(e);
+      if (mode === "strip" && Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.stopPropagation();
     };
     // Canvas: pinch (or ⌘-scroll) zooms at the pointer. Scrolling over the
     // selected, live window scrolls it; anywhere else it pans.
@@ -384,9 +434,9 @@ export function WindowsView(p: Props) {
       const dy = e.shiftKey && !e.deltaX ? 0 : e.deltaY;
       setCam({ ...c, x: c.x + dx / c.zoom, y: c.y + dy / c.zoom });
     };
-    el.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    el.addEventListener("wheel", onWheel, { passive: !canvas, capture: true });
     return () => el.removeEventListener("wheel", onWheel, { capture: true });
-  }, [setOffset, setCam]);
+  }, [mode, setCam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(
     () => () => {
@@ -401,7 +451,7 @@ export function WindowsView(p: Props) {
   // Canvas: drag the background (or anything, with the middle button) to pan;
   // click it to deselect; double-click it to frame everything.
   const onBackground = (e: React.SyntheticEvent) =>
-    e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("windows-track");
+    e.target === e.currentTarget || ["windows-track", "windows-scroller"].some((c) => (e.target as HTMLElement).classList.contains(c));
   const startPan = (e: React.PointerEvent) => {
     if (mode !== "canvas" || !(e.button === 1 || (e.button === 0 && onBackground(e)))) return;
     e.preventDefault();
@@ -478,7 +528,11 @@ export function WindowsView(p: Props) {
       if (d && root) {
         const r = root.getBoundingClientRect();
         const vx = edge(d.x - r.left, r.right - d.x);
-        if (mode === "strip" && vx) setOffset(offsetRef.current + vx);
+        if (mode === "strip" && vx) {
+          // The lifted window is placed from the offset: render it in the same frame as the scroll.
+          setOffset(offsetRef.current + vx);
+          flushSync(() => setOffsetState(offsetRef.current));
+        }
         const vy = edge(d.y - r.top, r.bottom - d.y);
         const c = camRef.current;
         if (mode === "canvas" && (vx || vy)) setCam({ ...c, x: c.x + vx / c.zoom, y: c.y + vy / c.zoom });
@@ -641,12 +695,15 @@ export function WindowsView(p: Props) {
       onPointerDown={startPan}
       onDoubleClick={(e) => canvas && onBackground(e) && fitAll()}
     >
+      <div className="windows-scroller" ref={scrollerRef}>
       <div
         className="windows-track"
         style={
           canvas
             ? { transform: `translate(${-cam.x * z}px, ${-cam.y * z}px) scale(${z})` }
-            : { transform: `translateX(${-offset}px)` }
+            : mode === "strip"
+              ? { width: lay.contentWidth }
+              : { transform: `translateX(${-offset}px)` }
         }
       >
         {dotGrid && <div className="canvas-dots" style={dotGrid} />}
@@ -748,9 +805,10 @@ export function WindowsView(p: Props) {
           );
         })}
       </div>
+      </div>
       {mode === "strip" && (
         <StripScrollbar
-          offset={offset}
+          scroller={scrollerRef}
           total={lay.contentWidth}
           viewport={vp.w}
           onScroll={(o) => (stopScroll(), setOffset(o))}
@@ -834,14 +892,26 @@ function Minimap(p: {
 
 /** Strip scrollbar: drag the thumb, or click the track to page towards the click. */
 function StripScrollbar(p: {
-  offset: number;
+  scroller: React.RefObject<HTMLDivElement | null>;
   total: number;
   viewport: number;
   onScroll: (offset: number) => void;
   onPage: (offset: number) => void;
 }) {
-  if (!p.viewport || p.total <= p.viewport + 0.5) return null;
+  // The thumb follows the scroller directly, not through a render per frame.
+  const thumb = useRef<HTMLDivElement>(null);
+  const shown = !!p.viewport && p.total > p.viewport + 0.5;
   const pct = (v: number) => `${(v / p.total) * 100}%`;
+  useLayoutEffect(() => {
+    const sc = p.scroller.current;
+    if (!sc || !shown) return;
+    const place = () => thumb.current && (thumb.current.style.left = pct(sc.scrollLeft));
+    place();
+    sc.addEventListener("scroll", place, { passive: true });
+    return () => sc.removeEventListener("scroll", place);
+  });
+  if (!shown) return null;
+  const offset = () => p.scroller.current?.scrollLeft ?? 0;
   return (
     <div
       className="strip-scrollbar"
@@ -853,13 +923,13 @@ function StripScrollbar(p: {
         const thumb = (e.target as Element).closest(".strip-thumb");
         if (!thumb) {
           const at = (e.clientX - track.left) * perPx;
-          return p.onPage(at < p.offset ? p.offset - p.viewport : p.offset + p.viewport);
+          return p.onPage(at < offset() ? offset() - p.viewport : offset() + p.viewport);
         }
         const el = e.currentTarget;
         el.setPointerCapture(e.pointerId);
         el.classList.add("dragging");
         const x0 = e.clientX;
-        const o0 = p.offset;
+        const o0 = offset();
         const move = (ev: PointerEvent) => p.onScroll(o0 + (ev.clientX - x0) * perPx);
         const up = () => {
           el.classList.remove("dragging");
@@ -873,7 +943,7 @@ function StripScrollbar(p: {
       }}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      <div className="strip-thumb" style={{ left: pct(p.offset), width: pct(p.viewport) }} />
+      <div className="strip-thumb" ref={thumb} style={{ width: pct(p.viewport) }} />
     </div>
   );
 }

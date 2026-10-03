@@ -49,27 +49,28 @@ registerWindowView({
 The windows view owns some gestures for every window: click to select, drag by
 the title bar, sideways scrolling in the strip, panning and pinch-zoom on the
 canvas. A type's content shares them through one contract
-(`apps/desktop/src/renderer/src/embed.ts`, the scroll rule in
-`apps/desktop/src/shared/embed-input.ts`), so a new type gets the same
+(`apps/desktop/src/renderer/src/embed.ts`), so a new type gets the same
 behaviour without special cases:
 
 - **DOM content** (terminals, files, text, Markdown) needs nothing. A press
   selects its window; sideways scrolling goes to the content when the element
   under the pointer can scroll that way (long lines, wide tables), otherwise to
-  the strip.
+  the strip. That is Chromium's native scrolling: the strip is a real scroller,
+  so a gesture stays with what it started on (windows sliding under the
+  pointer don't take it over), with macOS momentum and the bounce at the ends.
 - **Embedded pages** (`<webview>`, `<iframe>`) run in their own process, so
-  their input never reaches the app's page. This is the usual arrangement for
-  embedded web content (VS Code's webviews do the same): the page reports, the
-  host replays.
+  their input never reaches the app's page.
   - Mark the element with `data-embed`. The windows view turns its pointer
     events off while you drag, resize or pan, and on unselected canvas windows
     (the first click selects).
-  - The page reports **presses** and the **sideways scrolls it doesn't use**.
-    Pass each report to `handleEmbedMessage(element, message)`: a press is
-    replayed as a mousedown (the window gets selected like any other), a wheel
-    as a wheel event (the strip scrolls). Over an embedded element the windows
-    view ignores native wheel events, which Chromium sometimes also bubbles out
-    of a webview: only reports count.
+  - **Sideways scrolling** needs nothing: Chromium bubbles the scroll a page
+    doesn't use into the strip, on the compositor.
+    Don't add a non-passive wheel listener to the page to forward it: every
+    gesture would then wait on the page's main thread (this is how it used to
+    work, and the strip stuttered over busy pages).
+  - The page reports **presses**. Pass each report to
+    `handleEmbedMessage(element, message)`, which replays it as a mousedown
+    (the window gets selected like any other).
   - Browser pages report through cmd's guest preload (`preload/guest.ts`, set
     in `will-attach-webview`), which runs in an isolated world and uses
     Electron's host channel (`ipcRenderer.sendToHost` → the webview's

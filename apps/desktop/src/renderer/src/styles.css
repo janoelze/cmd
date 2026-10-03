@@ -606,6 +606,20 @@ kbd {
   position: relative;
   overflow: hidden;
 }
+/* The strip scrolls natively (WindowsView): on the compositor, with macOS
+   momentum and bounce, and windows' content (embedded pages too) hands it the
+   sideways scroll it doesn't use. Other modes clip. */
+.windows-scroller {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.mode-strip > .windows-scroller {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain; /* bounces at the ends, doesn't pass scroll on */
+  scrollbar-width: none; /* the strip draws its own (.strip-scrollbar) */
+}
 .windows-track {
   position: absolute;
   inset: 0;
