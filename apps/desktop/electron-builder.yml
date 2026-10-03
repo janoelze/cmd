@@ -3,6 +3,7 @@
 # Signing and notarization kick in when CSC_LINK / APPLE_* are set (see .github/workflows).
 appId: dev.janoelze.cmd
 productName: cmd
+copyright: Copyright © 2026 Jan Oelze
 directories:
   output: dist
   buildResources: build
@@ -16,6 +17,7 @@ extraResources:
 npmRebuild: false
 mac:
   category: public.app-category.developer-tools
+  icon: build/icon.icns
   target:
     - dmg
     - zip

@@ -31,6 +31,22 @@ const here = import.meta.dirname; // apps/desktop/out/main
 // scripts/stage-runtime.mjs) and run it with Electron's own Node.
 const repoRoot = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(here, "../../../..");
 const socketPath = defaultSocketPath();
+// Chromium's profile (browser-window cookies, caches) lives in the state dir, so
+// $CMD_HOME isolates it too. By default it would be Application Support/<app name>,
+// which for "cmd" is the core's own state dir. Dev builds used to be named
+// "@cmd/desktop": move that profile over once.
+const uiData = path.join(cmdHome(), "ui");
+const legacyUiData = path.join(app.getPath("appData"), "@cmd", "desktop");
+if (!process.env.CMD_HOME && !fs.existsSync(uiData) && fs.existsSync(legacyUiData)) {
+  try {
+    fs.mkdirSync(cmdHome(), { recursive: true });
+    fs.renameSync(legacyUiData, uiData);
+  } catch {}
+}
+app.setPath("userData", uiData);
+
+// Packaged builds carry their icon in the bundle (.icns / .ico); dev runs use the PNG.
+const devIcon = app.isPackaged ? undefined : path.join(here, "../../build/icon.png");
 
 function canConnect(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -155,6 +171,7 @@ function createWindow(): BrowserWindow {
     minWidth: 760,
     minHeight: 480,
     title: "cmd",
+    icon: devIcon, // Windows/Linux; macOS uses the Dock icon
     show: false,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 14, y: 12 },
@@ -293,6 +310,14 @@ app.on("web-contents-created", (_e, contents) => {
 app.whenReady().then(async () => {
   performance.mark("boot:app-ready");
   nativeTheme.themeSource = "dark";
+  if (devIcon) app.dock?.setIcon(devIcon);
+  app.setAboutPanelOptions({
+    applicationName: "cmd",
+    applicationVersion: app.getVersion(),
+    copyright: "© 2026 Jan Oelze",
+    website: "https://github.com/janoelze/cmd",
+    iconPath: devIcon,
+  });
   protocol.handle("cmd-file", (req) => {
     const file = decodeURIComponent(new URL(req.url).pathname);
     if (!CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });
