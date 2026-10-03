@@ -58,7 +58,8 @@ export function locateContext(): LocateContext {
   return home ? { home, env: {} } : { home: os.homedir(), env: process.env };
 }
 
-export const expandHome = (p: string, home: string) => p.replace(/^~(?=$|\/)/, home);
+/** "~" and "~/…" (or "~\\…" on Windows) under home, joined with the platform's separator. */
+export const expandHome = (p: string, home: string) => (p === "~" ? home : /^~[\\/]/.test(p) ? path.join(home, p.slice(2)) : p);
 
 export class TranscriptSources {
   #sources = new Map<string, TranscriptSource>();
