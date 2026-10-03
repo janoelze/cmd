@@ -24,6 +24,7 @@ beforeAll(async () => {
     inspector: (pid) => procinfo.query(pid),
     sampler: (pids) => procinfo.trees(pids),
     statusRoot: path.join(dir, "status"),
+    shellRulesFile: path.join(dir, "shell-open.zsh"),
   });
   await core.listen();
   conn = await connect(socketPath);

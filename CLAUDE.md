@@ -53,5 +53,5 @@ packages/cli (`cmd`, hook entry point)              ──┼─ newline-delimit
 
 ## Conventions
 
-- Settings: add new keys to `SETTINGS_SCHEMA` in `packages/protocol/src/settings.ts`. The settings panel generates a control for every key, so nothing else needs wiring.
+- Settings: add new keys to `SETTINGS_SCHEMA` in `packages/protocol/src/settings.ts` (a new key prefix also needs a title in `SETTINGS_GROUPS`; tsc checks). The Settings window (`renderer/src/settings/`, its own page `settings.html`) generates a row for every key; `title`, `unit`, `placeholder`, `labels` and `control: "font"` are display hints. Settings must apply live: read them when acting, or, if a core consumer caches something derived from them, subscribe with `SettingsService.bind(keys, fn)`; the renderer gets `settings.updated`. Only when a change can't reach what is already running, set `applies` (`newTerminals`, `firstLaunch`) so the UI and CLI say so.
 - Comments at the top of each file explain its role; keep that pattern and the existing terse comment style.

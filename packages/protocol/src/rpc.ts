@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppWindow, FileEntry, Pane, PaneId, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, Pane, PaneId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 
 export interface SettingsSnapshot {
@@ -24,6 +24,11 @@ export interface Methods {
   "pane.write": { params: { paneId: PaneId; data: string }; result: null };
   "pane.resize": { params: { paneId: PaneId; cols: number; rows: number }; result: null };
   "pane.kill": { params: { paneId: PaneId }; result: null };
+  /** Notifications (packages/core/src/notifications.ts). */
+  "pane.setMuted": { params: { paneId: PaneId; muted: boolean }; result: null };
+  "pane.clearAttention": { params: { paneId: PaneId }; result: null };
+  /** `cmd notify`: from a terminal (paneId) or from anywhere. */
+  "notify.send": { params: { paneId?: PaneId | null; title?: string; body: string }; result: null };
   /** Raw recent output, for re-attaching a view after a UI reload. */
   "pane.snapshot": { params: { paneId: PaneId }; result: { data: string } };
   /** Clear stuck terminal state (modes a crashed program left on). */
@@ -119,7 +124,8 @@ export interface Methods {
 
   /** After this call the connection receives `event` notifications. */
   "events.subscribe": {
-    params: {};
+    /** types: receive only these events (e.g. the Settings window wants settings.updated); omitted = all. */
+    params: { types?: CoreEvent["type"][] };
     result: {
       panes: Pane[];
       agents: Agent[];
@@ -149,7 +155,8 @@ export type CoreEvent =
   /** A watched file or folder changed on disk (see fs.watch). */
   | { type: "fs.changed"; path: string }
   /** Bring a window to the front (e.g. `open .` in a terminal). */
-  | { type: "window.focus"; id: WindowId };
+  | { type: "window.focus"; id: WindowId }
+  | { type: "notification"; notification: AppNotification };
 
 export interface SearchHit {
   sessionId: string;

@@ -23,7 +23,7 @@ import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, fieldsOf, nextAfterClose, pushHistory, shortPath, windowIdOf, type SidebarRow } from "./model.ts";
 import type { SearchHit, SearchStatus } from "@cmd/protocol";
-import { getState, onAgentChange, onWindowFocus, usePersisted, useStore } from "./store.ts";
+import { getState, onNotification, onWindowFocus, usePersisted, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
@@ -36,7 +36,6 @@ import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
 import { Sidebar, type SidebarTab } from "./components/Sidebar.tsx";
-import { SettingsView } from "./components/SettingsView.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 
 function searchStatusLabel(s: SearchStatus | null): string {
@@ -61,6 +60,22 @@ const editingText = () => {
   if (el instanceof HTMLElement && el.isContentEditable) return true; // CodeMirror (text windows)
   return (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && !el.closest(".xterm");
 };
+
+/** Visual bell: flash the window's outline (restarts if it's already flashing). */
+function flashWindow(paneId: PaneId): void {
+  const tile = document.querySelector<HTMLElement>(`.tile[data-pane="${CSS.escape(paneId)}"]`);
+  if (!tile) return;
+  tile.classList.remove("bell");
+  void tile.offsetWidth; // restart the animation
+  tile.classList.add("bell");
+  // Only the tile's own animation: title-bar slots inside it animate too.
+  const done = (e: AnimationEvent) => {
+    if (e.target !== tile) return;
+    tile.classList.remove("bell");
+    tile.removeEventListener("animationend", done);
+  };
+  tile.addEventListener("animationend", done);
+}
 
 export function App() {
   const s = useStore();
@@ -92,7 +107,6 @@ export function App() {
   // Transient: sheets don't reopen on launch.
   /** Palette open, with an optional initial query ("?" for session search). */
   const [palette, setPalette] = useState<false | string>(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => terminals.setZoom(zoom), [zoom]);
 
@@ -156,39 +170,57 @@ export function App() {
     viewOrderBefore.current = viewOrder;
   }, [viewOrder]);
 
-  // Seeing an agent finish while it is selected counts as seen.
+  // Looking at a window (selected, app focused) counts as seeing it: an agent's
+  // finished turn, a terminal's attention marker, its notification in Notification Center.
+  const [appFocused, setAppFocused] = useState(() => document.hasFocus());
   useEffect(() => {
-    const a = selected ? s.agents.get(s.panes.get(selected)?.agentId ?? "") : undefined;
-    if (a && bucketOf(a) === "unseen" && document.hasFocus()) void cmd.call("agent.markSeen", { agentId: a.id });
-  }, [s, selected]);
+    const on = () => setAppFocused(true);
+    const off = () => setAppFocused(false);
+    window.addEventListener("focus", on);
+    window.addEventListener("blur", off);
+    return () => (window.removeEventListener("focus", on), window.removeEventListener("blur", off));
+  }, []);
+  useEffect(() => {
+    if (!selected || !appFocused) return;
+    const pane = s.panes.get(selected);
+    const a = pane ? s.agents.get(pane.agentId ?? "") : undefined;
+    if (a && bucketOf(a) === "unseen") void cmd.call("agent.markSeen", { agentId: a.id });
+    if (pane?.attention) void cmd.call("pane.clearAttention", { paneId: pane.id });
+    cmd.closeNotification(selected);
+  }, [s, selected, appFocused]);
 
-  // Dock badge.
-  const attention = useMemo(() => [...s.agents.values()].filter(needsAttention).length, [s.agents]);
+  // Dock badge: agents and terminals waiting for you.
+  const attention = useMemo(
+    () =>
+      [...s.agents.values()].filter(needsAttention).length +
+      [...s.panes.values()].filter((p) => p.attention && !p.agentId).length,
+    [s.agents, s.panes],
+  );
   useEffect(() => cmd.setBadge(cfg["notifications.dockBadge"] ? attention : 0), [attention, cfg]);
 
-  // Notifications on transitions.
-  useEffect(
-    () =>
-      onAgentChange((prev, next) => {
-        const becameNeedy = next.state === "needs_input" && prev?.state !== "needs_input";
-        const finished = next.state === "done" && prev?.state === "working";
-        if (!becameNeedy && !finished) return;
-        const c = getState().settings.settings;
-        if ((becameNeedy && !c["notifications.needsInput"]) || (finished && !c["notifications.done"])) return;
-        if (document.hasFocus() && next.paneId === selectedRef.current) return;
-        const title = next.name ?? next.spawn.prompt ?? next.kind;
-        const n = new Notification(becameNeedy ? `${title} needs you` : `${title} is done`, {
-          body: becameNeedy ? (next.detail ?? "") : (next.lastMessage ?? "").slice(0, 200),
-          silent: !becameNeedy,
-        });
-        n.onclick = () => {
-          cmd.focusWindow();
-          if (next.paneId) select(next.paneId);
-        };
-        if (becameNeedy && !document.hasFocus()) cmd.bounce();
-      }),
-    [select],
-  );
+  // Notifications: the core decides what's worth telling (packages/core/src/notifications.ts);
+  // here, whether and how to show it, since only the UI knows focus and selection.
+  useEffect(() => {
+    const offClick = cmd.onNotificationClick((paneId) => select(paneId));
+    const off = onNotification((n) => {
+      const c = getState().settings.settings;
+      if (n.source === "bell" && n.paneId && c["notifications.visualBell"]) flashWindow(n.paneId);
+      if (!n.alert) return;
+      const looking = document.hasFocus() && n.paneId !== null && n.paneId === selectedRef.current;
+      if (c["notifications.when"] === "never" || (c["notifications.when"] === "background" && looking)) return;
+      const sound = c["notifications.sound"];
+      cmd.notify({
+        tag: n.paneId ?? n.id,
+        title: n.title,
+        body: n.body,
+        sound: n.urgent && sound !== "none" ? sound : null,
+        paneId: n.paneId,
+      });
+      const bounce = c["notifications.bounceDock"];
+      if (!document.hasFocus() && (bounce === "any" || (bounce === "needsInput" && n.urgent))) cmd.bounce();
+    });
+    return () => (off(), offClick());
+  }, [select]);
 
   const selectRow = useCallback((r: SidebarRow) => {
     const id = windowIdOf(r);
@@ -214,16 +246,15 @@ export function App() {
   // ── commands ───────────────────────────────────────────
   // One handler per command id; the menu bar, palette and context menus all call these.
   const handlers: Record<CommandId, () => void> = {
-    "app.settings": () => setSettingsOpen(true),
+    "app.settings": () => cmd.openSettings(),
     "file.newTerminal": () => void newTerminal(),
     "file.newClaude": () => void newAgent("claude"),
     "file.newCodex": () => void newAgent("codex"),
     "file.newBrowser": () => void newBrowser(),
     "file.newFiles": () => void newFiles(),
     "file.close": () => {
-      // ⌘W closes the frontmost thing: an open sheet, then the terminal, then the window.
+      // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
       if (palette !== false) setPalette(false);
-      else if (settingsOpen) setSettingsOpen(false);
       else if (selected) void closePane(selected);
       else cmd.closeWindow();
     },
@@ -265,7 +296,7 @@ export function App() {
     "session.next": () => step(1),
     "session.prev": () => step(-1),
     "session.nextAttention": () => {
-      const target = flat.find((r) => r.agent && needsAttention(r.agent) && r.pane);
+      const target = flat.find((r) => r.pane && ((r.agent && needsAttention(r.agent)) || (!r.agent && r.pane.attention)));
       if (target?.pane) select(target.pane.id);
     },
     "session.copyResume": () => {
@@ -325,6 +356,7 @@ export function App() {
       ...(windowIdOf(r)
         ? [
             { label: "Show", run: () => select(windowIdOf(r)!) },
+            ...(r.pane ? [muteEntry(r.pane.id)] : []),
             { label: r.pane ? "Close Terminal" : "Close Window", run: () => void closePane(windowIdOf(r)!) },
             "-" as const,
           ]
@@ -349,6 +381,15 @@ export function App() {
     ]);
   };
 
+  /** Per-terminal mute: no system notifications from it (its marker still shows). */
+  const muteEntry = (paneId: PaneId) => {
+    const muted = !!getState().panes.get(paneId)?.muted;
+    return {
+      label: muted ? "Unmute Notifications" : "Mute Notifications",
+      run: () => void cmd.call("pane.setMuted", { paneId, muted: !muted }),
+    };
+  };
+
   const terminalMenu = (paneId: PaneId) => {
     select(paneId);
     void showContextMenu([
@@ -365,6 +406,8 @@ export function App() {
           void cmd.call("pane.reset", { paneId });
         },
       },
+      "-",
+      muteEntry(paneId),
       "-",
       { label: "Close Terminal", run: () => void closePane(paneId) },
     ]);
@@ -426,8 +469,15 @@ export function App() {
 
   return (
     <div
-      className={`app ${sidebarOpen ? "" : "no-sidebar"}`}
-      style={{ ["--sidebar-w" as string]: `${cfg["ui.sidebarWidth"]}px`, ["--window-radius" as string]: `${cfg["ui.windowRadius"]}px` }}
+      className={`app ${sidebarOpen ? "" : "no-sidebar"} ${cfg["ui.unfocusedDesaturation"] > 0 ? "desaturate" : ""}`}
+      style={{
+        ["--sidebar-w" as string]: `${cfg["ui.sidebarWidth"]}px`,
+        ["--window-radius" as string]: `${cfg["ui.windowRadius"]}px`,
+        ["--gutter" as string]: `${cfg["ui.gutter"]}px`,
+        ["--pad-x" as string]: `${cfg["ui.paddingX"]}px`,
+        ["--pad-y" as string]: `${cfg["ui.paddingY"]}px`,
+        ["--window-desaturate" as string]: `${cfg["ui.unfocusedDesaturation"] / 100}`,
+      }}
     >
       {!sidebarOpen && <div className="drag-strip" />}
       {sidebarOpen && (
@@ -483,7 +533,6 @@ export function App() {
           searchStatus={searchStatusLabel(s.search)}
         />
       )}
-      {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

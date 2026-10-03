@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig } from "electron-vite";
 import react from "@vitejs/plugin-react";
 
@@ -8,5 +9,14 @@ export default defineConfig({
   main: { build: bundleWorkspace },
   preload: { build: bundleWorkspace },
   // electron-vite leaves minification off; the renderer bundle is parsed on every launch.
-  renderer: { plugins: [react()], build: { minify: true } },
+  // Two pages: the app (index.html) and the Settings window (settings.html).
+  renderer: {
+    plugins: [react()],
+    build: {
+      minify: true,
+      rollupOptions: {
+        input: { index: resolve(import.meta.dirname, "src/renderer/index.html"), settings: resolve(import.meta.dirname, "src/renderer/settings.html") },
+      },
+    },
+  },
 });

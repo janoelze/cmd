@@ -38,9 +38,10 @@ export function TileTitle({
         <DirtyDot on={!!f.dirty} />
       </span>
       <span className="tile-meta">
-        <Slot className="slot-kind" value={{ text: f.kind }} />
-        <Slot className="slot-place" value={f.place ? { text: f.place } : undefined} clipStart divider />
-        <Slot className="slot-status" value={f.status} divider />
+        <Slot className="slot-kind" value={f.kind ? { text: f.kind } : undefined} />
+        {/* A divider only after a field that's there. */}
+        <Slot className="slot-place" value={f.place ? { text: f.place } : undefined} clipStart divider={!!f.kind} />
+        <Slot className="slot-status" value={f.status} divider={!!(f.kind || f.place)} />
       </span>
     </div>
   );

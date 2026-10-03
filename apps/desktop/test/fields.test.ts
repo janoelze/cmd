@@ -13,20 +13,29 @@ registerWindowView({ kind: "text", View: () => null, describe: () => ({ place: "
 registerWindowView({ kind: "browser", View: () => null, describe: (w) => ({ name: w.title, place: "github.com" }) });
 
 const pane = (p: Partial<Pane> = {}): Pane =>
-  ({ id: "p1", title: "", cwd: "/Users/someone/src/cmd", foreground: "zsh", agentId: null, usage: null, ...p }) as Pane;
+  ({ id: "p1", title: "", cwd: "/Users/someone/src/cmd", foreground: "zsh", agentId: null, usage: null, attention: null, muted: false, ...p }) as Pane;
 const row = (r: Partial<SidebarRow>): SidebarRow => ({ key: "k", pane: null, win: null, agent: null, children: [], urgent: null, ...r });
 const win = (w: Partial<AppWindow>): AppWindow => ({ id: "w1", kind: "text", title: "README.md", createdAt: 0, updatedAt: 0, state: {}, ...w });
 
 describe("window fields", () => {
   it("shell: process name, cwd as place, type icon, no light or status", () => {
     const f = fieldsOf(row({ pane: pane() }), undefined, 0);
-    expect(f).toMatchObject({ name: "zsh", kind: "zsh", place: "~/src/cmd", icon: "terminal" });
+    expect(f).toMatchObject({ name: "zsh", place: "~/src/cmd", icon: "terminal" });
+    expect(f.kind).toBeUndefined(); // same as the name
     expect(f.light).toBeUndefined();
     expect(f.status).toBeUndefined();
   });
 
-  it("shell: a real terminal title wins over the process name", () => {
-    expect(fieldsOf(row({ pane: pane({ title: "✳ build server" }) }), undefined, 0).name).toBe("build server");
+  it("shell: a real terminal title wins over the process name, which becomes the kind", () => {
+    expect(fieldsOf(row({ pane: pane({ title: "✳ build server" }) }), undefined, 0)).toMatchObject({ name: "build server", kind: "zsh" });
+  });
+
+  it("shell with an attention marker: its text as status, a light until seen", () => {
+    const at = 0;
+    const bell = fieldsOf(row({ pane: pane({ attention: { kind: "bell", text: "Bell", urgent: true, at } }) }), undefined, 0);
+    expect(bell).toMatchObject({ status: { text: "Bell", key: "attention:bell" }, light: "needs" });
+    const done = fieldsOf(row({ pane: pane({ attention: { kind: "command", text: "make finished · 42s", urgent: false, at } }) }), undefined, 0);
+    expect(done).toMatchObject({ status: { text: "make finished · 42s" }, light: "unseen" });
   });
 
   it("agent: name, status light, state as status keyed by state", () => {

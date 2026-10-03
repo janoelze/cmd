@@ -277,6 +277,10 @@ export class Searcher {
     return indexCounts(this.#db);
   }
 
+  close(): void {
+    this.#db.close();
+  }
+
   /** Call after the index changed so typo tolerance sees new words. */
   invalidate(): void {
     this.#vocab = null;

@@ -129,6 +129,21 @@ check((await win.locator(".tile").count()) === 2, "grid shows both terminals");
 await win.waitForSelector(".statusbar-usage .slot-v", { timeout: 8000 });
 const usageText = await win.locator(".statusbar-usage .slot-v").first().textContent();
 check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `status bar shows memory of the process tree (${usageText})`);
+// Notifications: a bell in the other terminal marks it until you look at it.
+{
+  const other = await win.evaluate(() => document.querySelector(".tile:not(.sel)")?.getAttribute("data-pane"));
+  await win.evaluate((id) => window.cmd.call("pane.write", { paneId: id, data: "printf '\\a'\r" }), other);
+  const status = win.locator(`.tile[data-pane="${other}"] .slot-status .slot-v:not(.out)`);
+  await status.filter({ hasText: "Bell" }).waitFor({ timeout: 5000 });
+  check(true, "a terminal bell marks its window (Bell)");
+  await win.evaluate((id) => window.cmd.call("notify.send", { paneId: id, title: "Build", body: "done" }), other);
+  await status.filter({ hasText: "done" }).waitFor({ timeout: 3000 });
+  check(true, "cmd notify marks the terminal it came from");
+  await win.evaluate((id) => window.__cmdSelect(id), other);
+  await win.waitForFunction((id) => !document.querySelector(`.tile[data-pane="${id}"] .slot-status .slot-v:not(.out)`), other, { timeout: 3000 });
+  check(true, "looking at the terminal clears its mark");
+  await win.evaluate((id) => window.cmd.call("pane.clearAttention", { paneId: id }), other);
+}
 const panesOrder = async () => (await win.evaluate(() => window.cmd.call("ui.get", {})))["grid.order"];
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
 await win.waitForTimeout(500);
@@ -327,11 +342,89 @@ check((await panes()) === 2, "…and leaves terminals alone");
   server.close();
 }
 
-await menu("app.settings");
-await win.waitForSelector(".settings");
-await win.locator(".shortcuts-heading").scrollIntoViewIfNeeded();
-await win.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });
-await menu("file.close");
+// Settings: its own native window (⌘,), generated from the schema; changes apply live.
+{
+  const opened = app.waitForEvent("window");
+  await menu("app.settings");
+  const sw = await opened;
+  sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
+  await sw.waitForSelector(".sw-nav-item");
+  const pages = await sw.locator(".sw-nav-label").allTextContents();
+  check(["Fonts", "Terminal", "Shell", "Opening Files", "Interface", "Canvas", "Search", "Agents", "Keyboard Shortcuts"].every((p) => pages.includes(p)), `settings has a page per group (${pages.join(", ")})`);
+  await sw.screenshot({ path: path.join(shots, "5-settings-terminal.png") });
+  const page = (name) => sw.locator(".sw-nav-item", { hasText: name }).click();
+  const row = (title) => sw.locator(".sw-row", { has: sw.locator(".sw-row-title", { hasText: title }) });
+  const saved = () => JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8").replace(/^\/\/.*$/gm, ""));
+  const waitFor = async (fn, what) => {
+    for (let i = 0; i < 40 && !fn(); i++) await sw.waitForTimeout(50);
+    check(fn(), what);
+  };
+
+  await page("Shell");
+  const tags = await sw.locator(".sw-tag").allTextContents();
+  check(tags.filter((t) => t === "new terminals only").length === 3, `settings that don't apply live are tagged (${tags.join(", ")})`);
+
+  await page("Interface");
+  await row("Show resource usage").locator(".sw-switch").click();
+  await waitFor(() => saved()["ui.showResources"] === false, "a switch saves to settings.json");
+  await row("Window corner radius").locator(".nf button[aria-label=Increase]").click();
+  await waitFor(() => saved()["ui.windowRadius"] === 9, "+ steps a number field and saves");
+  const radius = () => win.evaluate(() => document.querySelector(".app")?.style.getPropertyValue("--window-radius"));
+  for (let i = 0; i < 40 && (await radius()) !== "9px"; i++) await win.waitForTimeout(50);
+  check((await radius()) === "9px", "the app window applies it live");
+  await row("Window corner radius").locator(".sw-reset").click();
+  await sw.screenshot({ path: path.join(shots, "5-settings-interface.png") });
+  await row("Show resource usage").locator(".sw-reset").click();
+  await waitFor(() => !("ui.showResources" in saved()), "restore default removes the override");
+
+  await page("Fonts");
+  const fontSize = row("Code font size").locator("input");
+  await fontSize.fill("16");
+  await fontSize.press("Enter");
+  await waitFor(() => saved()["font.codeSize"] === 16, "the code font size saves");
+  const codePx = () => win.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--font-code-size").trim());
+  for (let i = 0; i < 40 && (await codePx()) !== "16px"; i++) await win.waitForTimeout(50);
+  check((await codePx()) === "16px", "the app's file and Markdown windows get the code font size live (--font-code-size)");
+  const fonts = await win.evaluate(() =>
+    [".file-row", ".markdown", ".markdown code"].map((sel) => {
+      const el = document.querySelector(sel);
+      return el ? [sel, getComputedStyle(el).fontFamily, getComputedStyle(el).fontSize] : null;
+    }),
+  );
+  check(fonts[0] && /Monaspace/.test(fonts[0][1]) && fonts[0][2] === `${16 * 0.9}px`, `file browser rows use the code font (${fonts[0]})`);
+  check(fonts[1] && /system-ui|-apple-system/.test(fonts[1][1]), `Markdown prose uses the text font (${fonts[1]})`);
+  check(!fonts[2] || /Monaspace/.test(fonts[2][1]), `Markdown code uses the code font (${fonts[2]})`);
+  await row("Code font size").locator(".sw-reset").click();
+
+  await page("Terminal");
+  await row("Renderer").locator(".sw-seg button", { hasText: "WebGL" }).click();
+  await waitFor(() => saved()["terminal.renderer"] === "webgl", "a segmented control saves its option");
+  await page("Fonts");
+  const size = row("Code font size").locator("input");
+  await size.fill("");
+  await size.press("Enter");
+  check((await size.inputValue()) === "14" && !("font.codeSize" in saved()), "an emptied number field reverts instead of saving 0");
+  await size.fill("99");
+  await size.press("Enter");
+  await waitFor(() => saved()["font.codeSize"] === 32, "a number field clamps to the setting's range");
+  await row("Code font size").locator(".sw-reset").click();
+  await page("Terminal");
+  await row("Line height").locator(".nf input").focus();
+  await row("Line height").locator(".nf input").press("ArrowUp");
+  await waitFor(() => saved()["terminal.lineHeight"] === 1.2, "↑ steps a number field by its step");
+  await sw.locator(".sw-page-foot .sw-button").click();
+  await waitFor(() => !("terminal.lineHeight" in saved()) && !("terminal.renderer" in saved()), "Restore Defaults resets the page");
+
+  await sw.locator(".sw-search input").fill("zoom");
+  const found = await sw.locator(".sw-row-title").allTextContents();
+  check(["Minimum zoom", "Maximum zoom"].every((t) => found.some((f) => f.startsWith(t))), `search finds settings across pages (${found.join(", ")})`);
+  await sw.locator(".sw-search input").fill("");
+
+  await page("Keyboard Shortcuts");
+  check((await sw.locator(".sw-row.shortcut kbd").count()) > 10, "keyboard shortcuts are listed");
+  await sw.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });
+  await sw.close();
+}
 
 // Live remap via keybindings.json
 fs.writeFileSync(path.join(home, "keybindings.json"), '// test\n{ "session.next": ["Ctrl+Tab"], "edit.clear": null }');
@@ -438,7 +531,7 @@ await win.screenshot({ path: path.join(shots, "6-tools.png") });
     await win.mouse.move(s0.x + 60, s0.y + 20, { steps: 3 });
     await win.mouse.move(Math.min(d1.x + d1.width / 2, pane.x + pane.width - 80), d1.y + 100, { steps: 12 });
     await win.waitForTimeout(300);
-    check((await win.locator(".ghost-slot.target").count()) === 1, "dragging in the strip shows the drop slot");
+    check((await win.locator(".tile.lifted").count()) === 1, "dragging in the strip lifts the window");
     await win.screenshot({ path: path.join(shots, "8b-strip-drag.png") });
     await win.mouse.up();
     await win.waitForTimeout(500);

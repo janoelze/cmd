@@ -2,10 +2,11 @@
 // goes straight to the xterm instances (see terminals.ts).
 
 import { useSyncExternalStore } from "react";
-import type { Agent, AgentId, AppWindow, CoreEvent, Pane, PaneId, SearchStatus, SettingsSnapshot, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AppNotification, AppWindow, CoreEvent, Pane, PaneId, SearchStatus, SettingsSnapshot, WindowId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
+import { applyFonts } from "./fonts.ts";
 import { setWindowTypes } from "./windows/registry.ts";
 
 export interface State {
@@ -33,9 +34,15 @@ let state: State = {
   search: null,
 };
 const listeners = new Set<() => void>();
-const agentListeners = new Set<(prev: Agent | undefined, next: Agent) => void>();
 const focusListeners = new Set<(id: WindowId) => void>();
 const fsListeners = new Set<(path: string) => void>();
+const notificationListeners = new Set<(n: AppNotification) => void>();
+
+/** A notification from the core (packages/core/src/notifications.ts); the UI decides whether to show it. */
+export function onNotification(fn: (n: AppNotification) => void): () => void {
+  notificationListeners.add(fn);
+  return () => notificationListeners.delete(fn);
+}
 
 /** A watched file or folder changed on disk (see fs.watch). */
 export function onFsChanged(fn: (path: string) => void): () => void {
@@ -119,12 +126,6 @@ export function usePersisted<T>(key: string, fallback: T): [T, (v: T | ((prev: T
   return [value, setter];
 }
 
-/** For notifications: called on every agent transition. */
-export function onAgentChange(fn: (prev: Agent | undefined, next: Agent) => void): () => void {
-  agentListeners.add(fn);
-  return () => agentListeners.delete(fn);
-}
-
 // Output for panes that existed before we subscribed is held back until their
 // snapshot arrives. Events and responses share one ordered socket, so anything
 // received before the snapshot response is already contained in the snapshot.
@@ -149,11 +150,9 @@ function handle(e: CoreEvent): void {
       return;
     }
     case "agent.updated": {
-      const prev = state.agents.get(e.agent.id);
       const agents = new Map(state.agents);
       agents.set(e.agent.id, e.agent);
       set({ agents });
-      for (const fn of agentListeners) fn(prev, e.agent);
       return;
     }
     case "window.updated": {
@@ -171,6 +170,9 @@ function handle(e: CoreEvent): void {
     case "fs.changed":
       for (const fn of fsListeners) fn(e.path);
       return;
+    case "notification":
+      for (const fn of notificationListeners) fn(e.notification);
+      return;
     case "window.focus":
       for (const fn of focusListeners) fn(e.id);
       return;
@@ -179,6 +181,7 @@ function handle(e: CoreEvent): void {
       return;
     case "settings.updated":
       terminals.configure(e.snapshot.settings);
+      applyFonts(e.snapshot.settings);
       set({ settings: e.snapshot });
       return;
     case "agent.removed": {
@@ -210,6 +213,7 @@ cmd.onStatus(async (status) => {
   }
   for (const p of snap.panes) awaitingSnapshot.add(p.id), terminals.hold(p.id);
   terminals.configure(snap.settings.settings);
+  applyFonts(snap.settings.settings);
   setWindowTypes(snap.windowTypes ?? []);
   set({
     connected: true,

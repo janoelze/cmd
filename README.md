@@ -53,6 +53,7 @@ cmd send <agent> "also update docs"
 cmd read <agent> --lines 40
 cmd wait <agent…> --any --timeout 50
 cmd kill <agent> --tree
+cmd notify "deploy finished"         # a notification; inside cmd it marks this terminal
 cmd events                           # NDJSON stream
 cmd settings                         # list; `set KEY VALUE`, `reset KEY`, `path`
 cmd hooks claude                     # print the hook config to merge into ~/.claude/settings.json
@@ -72,9 +73,13 @@ The core detects agents in two ways, both ported from the ghostty-agents fork.
 
 `cmd hook <kind>` (talks to the socket; `cmd hooks claude` prints its config) remains an alternative for agents without the shell hook.
 
+### Notifications
+
+One path for every source (`packages/core/src/notifications.ts`): agents needing input or finishing a turn, terminal bells (`\a`), notifications programs ask for with escape codes (OSC 9, OSC 777, kitty's OSC 99), commands that ran longer than `notifications.longCommand` seconds (from the shell integration's OSC 133 marks), and `cmd notify`. A terminal that wants you gets an attention marker in its title bar and sidebar row, and counts toward the Dock badge, until you look at it. Whether a system notification shows, its sound and the Dock bounce are `notifications.*` settings; right-click a terminal to mute it.
+
 ## Settings
 
-The schema is `packages/protocol/src/settings.ts`, with flat dotted keys. User values go in `~/.config/cmd/settings.json` (comments allowed), or in `$CMD_HOME` in dev. The core watches the file, so edits apply live. Three ways to change a setting: ⌘, in the app, `cmd settings set`, or editing the file.
+The schema is `packages/protocol/src/settings.ts`, with flat dotted keys. User values go in `~/.config/cmd/settings.json` (comments allowed), or in `$CMD_HOME` in dev. The core watches the file, so edits apply live. Three ways to change a setting: ⌘, in the app, `cmd settings set`, or editing the file. Every setting applies at once, including to running shells (`open` rules) and search (the indexer restarts). The exceptions are tagged in the UI and CLI: `shell.program`, `shell.login` and `shell.integration` affect new terminals only, and `ui.defaultView` only the first launch.
 
 ## Shortcuts
 
@@ -84,7 +89,7 @@ Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keyb
 |---|---|
 | ⌘N (⌘T) | new terminal (in the current folder) |
 | ⌥⌘N | new Claude session |
-| ⌘W | close the frontmost thing: palette/settings, then the terminal (asks if something is running), then the window |
+| ⌘W | close the frontmost thing: the palette, then the terminal (asks if something is running), then the window |
 | ⇧⌘W | close window (terminals keep running in the core) |
 | ⌥⌘← / ⌥⌘→ (⇧⌘[ / ⇧⌘]) | previous / next session |
 | ⌘1–9 | select session |

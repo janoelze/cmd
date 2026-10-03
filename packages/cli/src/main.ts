@@ -3,7 +3,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 import type { Agent, AgentState, Pane } from "@cmd/protocol";
-import { ENV, SETTINGS_SCHEMA, parseSettingValue, type SettingKey } from "@cmd/protocol";
+import { APPLIES_LABEL, currentKey, ENV, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 
 const HELP = `cmd — terminal + agent workbench
@@ -19,6 +19,8 @@ usage: cmd <command> [options]
   read <agent|pane> [--lines N]       plain-text tail of the terminal
   wait <agent…> [--until done,needs_input] [--any] [--timeout SECS]
   kill <agent> [--tree]
+  notify <message…> [--title T] [--global]
+                                      a notification; inside cmd it comes from (and marks) this pane
   events [--output]                   stream core events as NDJSON
   hook <kind>                         hook entry point: reads the hook payload on stdin
   hooks <kind>                        print hook config to add to the agent's settings
@@ -55,6 +57,8 @@ const { values: opt, positionals: pos } = parseArgs({
     fork: { type: "boolean" },
     kind: { type: "string" },
     types: { type: "boolean" },
+    title: { type: "string" },
+    global: { type: "boolean" },
   },
 });
 
@@ -117,6 +121,13 @@ async function run({ client, closed }: Connection): Promise<number> {
         parentId,
       });
       return out(opt.json ? agent : agent.id);
+    }
+    case "notify": {
+      const body = pos.join(" ");
+      if (!body && !str(opt.title)) return fail("usage: cmd notify <message…> [--title T]");
+      const paneId = opt.global ? null : (process.env[ENV.paneId] ?? null);
+      await client.call("notify.send", { paneId, title: str(opt.title), body });
+      return 0;
     }
     case "send": {
       const [agentId, ...text] = pos;
@@ -208,6 +219,9 @@ async function run({ client, closed }: Connection): Promise<number> {
       if (sub === "set") {
         if (!key || !rest.length) return fail("usage: cmd settings set KEY VALUE");
         await client.call("settings.set", { key, value: parseSettingValue(key, rest.join(" ")) });
+        const k = currentKey(key);
+        const applies = isSettingKey(k) && (SETTINGS_SCHEMA[k] as SettingDef).applies;
+        if (applies) console.error(`note: ${APPLIES_LABEL[applies]}`);
         return 0;
       }
       if (sub === "reset") {
@@ -218,13 +232,15 @@ async function run({ client, closed }: Connection): Promise<number> {
       const snap = await client.call("settings.get", {});
       if (sub === "path") return out(snap.path);
       if (sub === "get") {
-        if (!key || !(key in snap.settings)) return fail(`unknown setting: ${key ?? ""}`);
-        return out(JSON.stringify(snap.settings[key as SettingKey]));
+        const k = currentKey(key ?? "");
+        if (!(k in snap.settings)) return fail(`unknown setting: ${key ?? ""}`);
+        return out(JSON.stringify(snap.settings[k as SettingKey]));
       }
       if (opt.json) return out(snap);
-      for (const [k, def] of Object.entries(SETTINGS_SCHEMA)) {
-        const mark = snap.overrides.includes(k as SettingKey) ? "*" : " ";
-        console.log(`${mark} ${k.padEnd(28)} ${JSON.stringify(snap.settings[k as SettingKey]).padEnd(24)} ${def.description}`);
+      for (const [k, def] of Object.entries(SETTINGS_SCHEMA) as [SettingKey, SettingDef][]) {
+        const mark = snap.overrides.includes(k) ? "*" : " ";
+        const applies = def.applies ? ` (${APPLIES_LABEL[def.applies]})` : "";
+        console.log(`${mark} ${k.padEnd(28)} ${JSON.stringify(snap.settings[k]).padEnd(24)} ${def.description}${applies}`);
       }
       console.log(`\n* = set in ${snap.path}`);
       for (const e of snap.errors) console.error(`warning: ${e}`);

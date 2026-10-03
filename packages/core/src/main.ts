@@ -9,7 +9,6 @@ import { ProcInfo } from "./agents/procinfo.ts";
 import { statusRoot } from "./agents/statusfiles.ts";
 import { defaultRoots } from "./search/index.ts";
 import { SearchService } from "./search/service.ts";
-import { SettingsService } from "./settings.ts";
 
 // The packaged app runs the core as `Electron` with ELECTRON_RUN_AS_NODE; don't
 // pass that on to shells, or every Electron app started from a pane runs as Node.
@@ -22,18 +21,16 @@ const home = cmdHome();
 fs.mkdirSync(home, { recursive: true });
 const socketPath = defaultSocketPath();
 
-// Search starts with the settings found at launch (archive dirs, enabled).
-const initial = new SettingsService(path.join(configDir(), "settings.json")).settings;
-const archives = initial["search.archiveDirs"].split(",").map((s) => s.trim()).filter(Boolean);
-const search = initial["search.enabled"]
-  ? new SearchService(path.join(home, "search.sqlite"), defaultRoots(archives))
-  : null;
-
 const core = new Core({
-  search,
+  search: (s) => {
+    if (!s["search.enabled"]) return null;
+    const archives = s["search.archiveDirs"].split(",").map((d) => d.trim()).filter(Boolean);
+    return new SearchService(path.join(home, "search.sqlite"), defaultRoots(archives));
+  },
   socketPath,
   dbPath: path.join(home, "cmd.sqlite"),
   settingsPath: path.join(configDir(), "settings.json"),
+  shellRulesFile: path.join(home, "shell-open.zsh"),
   ptyFactory: await nodePtyFactory(),
   inspector: procinfo.available ? (pid) => procinfo.query(pid) : null,
   sampler: procinfo.available ? (pids) => procinfo.trees(pids) : null,

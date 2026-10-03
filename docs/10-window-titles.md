@@ -99,7 +99,7 @@ Why these:
 ## Rules
 
 1. **One field, one meaning.** A path is always Place, a process is always Kind. A type never puts a path in Status or a state in Place.
-2. **No repeats on a surface.** If Place would equal the Name (a folder shown as its own path, a URL title that is the URL), drop Place.
+2. **No repeats on a surface.** If Kind or Place would equal the Name (a shell named after its process, a page titled with its host), drop it. A divider only follows a field that's shown.
 3. **Name is never empty.** Every type has a fallback chain that ends at its type title.
 4. **Mark is the only colour.** Status lights carry colour; text in the title bar and rows stays text/dim. The selected window brightens its title bar text, nothing else.
 5. **Same wording everywhere.** A status string is produced once (by the window) and shown verbatim on every surface. No surface rewrites it.

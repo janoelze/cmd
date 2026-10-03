@@ -18,7 +18,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaneId } from "@cmd/protocol";
-import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type ViewMode } from "../layouts.ts";
+import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type Spacing, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
 import { useStoreValue } from "../store.ts";
@@ -55,7 +55,6 @@ import { TerminalView } from "./TerminalView.tsx";
 import { TileTitle } from "./TileTitle.tsx";
 import { SlotMotion } from "./Slot.tsx";
 
-const GUTTER = 8;
 const DRAG_THRESHOLD = 4;
 const SNAP_DELAY = 140; // ms after the last wheel event (trackpad momentum included)
 const SCROLL_ANIM_MS = 260;
@@ -64,6 +63,7 @@ const EDGE_SCROLL_MAX = 18; // px per frame
 const CAMERA_ANIM_MS = 280;
 const CAMERA_SAVE_MS = 400; // persist the camera once panning/zooming pauses
 const MOTION_MIN_ZOOM = 0.5; // zoomed out further, title bars change without animating
+const SETTLE_MS = 110; // a dropped window's glide into place (see .tile.settling)
 
 /** Canvas commands from the menu/palette (see requestCanvas). */
 export type CanvasRequest = "fit" | "window";
@@ -120,7 +120,18 @@ export function WindowsView(p: Props) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [resizing, setResizing] = useState<{ id: PaneId; w: number } | null>(null);
   const [sizing, setSizing] = useState<{ id: PaneId; rect: Rect; axes: "x" | "y" | "xy" } | null>(null); // canvas edge/corner resize
+  // Space around (ui.paddingX/Y) and between (ui.gutter) windows in grid and strip;
+  // the canvas uses its dot grid.
+  const padX = useStoreValue((s) => s.settings.settings["ui.paddingX"]);
+  const padY = useStoreValue((s) => s.settings.settings["ui.paddingY"]);
+  const gap = useStoreValue((s) => s.settings.settings["ui.gutter"]);
+  const spacing: Spacing = { x: padX, y: padY, gap };
+  const padRef = useRef(padX);
+  padRef.current = padX;
   const [panning, setPanning] = useState(false);
+  // The window just dropped, while it glides into place (faster than other moves).
+  const [settling, setSettling] = useState<PaneId | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── layout ─────────────────────────────────────────────
   const settled = arrangeTiles(
@@ -129,7 +140,7 @@ export function WindowsView(p: Props) {
   ).map((x) => x.id);
   const ids = preview ?? settled;
   const pxWidths = ids.map((id) =>
-    resizing?.id === id ? resizing.w : widthFor(p.widths[id] ?? DEFAULT_FRACTION, vp.w || 1000, GUTTER),
+    resizing?.id === id ? resizing.w : widthFor(p.widths[id] ?? DEFAULT_FRACTION, vp.w || 1000, padX),
   );
   // Canvas: stored rects, new windows placed next to the last selected one.
   const lastPlaced = useRef<PaneId | null>(null);
@@ -138,9 +149,9 @@ export function WindowsView(p: Props) {
   if (arranged && sizing) arranged.rects.set(sizing.id, sizing.rect);
   const lay: Layout =
     mode === "grid"
-      ? gridLayout(ids, vp, GUTTER)
+      ? gridLayout(ids, vp, spacing)
       : mode === "strip"
-        ? stripLayout(ids, pxWidths, vp, GUTTER)
+        ? stripLayout(ids, pxWidths, vp, spacing)
         : arranged
           ? canvasLayout(arranged.rects)
           : focusLayout(ids, selected, vp);
@@ -303,7 +314,7 @@ export function WindowsView(p: Props) {
   const selSlot = selIdx >= 0 ? stripSlots[selIdx] : undefined;
   useEffect(() => {
     if (mode !== "strip" || !selSlot || !vp.w || gestureStart.current !== null || drag) return;
-    const target = revealOffset(offsetRef.current, selSlot, vp.w, GUTTER, lay.contentWidth);
+    const target = revealOffset(offsetRef.current, selSlot, vp.w, padX, lay.contentWidth);
     if (Math.abs(target - offsetRef.current) > 0.5) animateTo(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, selSlot?.x, selSlot?.w, vp.w, lay.contentWidth]);
@@ -315,11 +326,11 @@ export function WindowsView(p: Props) {
     gestureStart.current = null;
     const moved = offsetRef.current - startedAt;
     const dir: -1 | 0 | 1 = Math.abs(moved) < 30 ? 0 : moved > 0 ? 1 : -1;
-    const target = snapTarget(offsetRef.current, snapPoints(stripSlots, vp.w, GUTTER, lay.contentWidth), dir);
+    const target = snapTarget(offsetRef.current, snapPoints(stripSlots, vp.w, padRef.current, lay.contentWidth), dir);
     animateTo(target);
     const sel = ids.indexOf(selected ?? "");
     if (sel >= 0 && fullyVisible(stripSlots[sel]!, target, vp.w)) return;
-    const landed = ids[landedOn(stripSlots, target, vp.w, GUTTER, dir)];
+    const landed = ids[landedOn(stripSlots, target, vp.w, padRef.current, dir)];
     if (landed) onSelect(landed);
   }, [animateTo, onSelect]);
 
@@ -373,6 +384,7 @@ export function WindowsView(p: Props) {
       if (snapTimer.current) clearTimeout(snapTimer.current);
       if (camAnim.current) cancelAnimationFrame(camAnim.current);
       if (camSave.current) clearTimeout(camSave.current), onCamera.current(camRef.current);
+      if (settleTimer.current) clearTimeout(settleTimer.current);
     },
     [],
   );
@@ -524,6 +536,9 @@ export function WindowsView(p: Props) {
       }
       setDrag(null);
       setPreview(null);
+      setSettling(id);
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(() => setSettling(null), SETTLE_MS + 50);
     };
     const up = (ev: PointerEvent) => end(ev, true);
     const cancel = (ev: PointerEvent) => end(ev, false);
@@ -543,7 +558,7 @@ export function WindowsView(p: Props) {
     const startX = e.clientX;
     let w = startW;
     const move = (ev: PointerEvent) => {
-      w = clampWidth(startW + ev.clientX - startX, live.current.vp.w, GUTTER);
+      w = clampWidth(startW + ev.clientX - startX, live.current.vp.w, padRef.current);
       setResizing({ id, w });
     };
     const up = () => {
@@ -551,7 +566,7 @@ export function WindowsView(p: Props) {
       handle.removeEventListener("pointerup", up);
       handle.removeEventListener("pointercancel", up);
       setResizing(null);
-      p.onWidth(id, fractionFor(w, live.current.vp.w, GUTTER));
+      p.onWidth(id, fractionFor(w, live.current.vp.w, padRef.current));
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
@@ -601,16 +616,6 @@ export function WindowsView(p: Props) {
   // them only: on the track it would be inherited by every element
   // of every window, and changing it each frame would restyle them all.
   const zVar = { "--z": cam.zoom } as React.CSSProperties;
-  // Canvas: where the dragged window will land (snapped to the dots).
-  const dropAt =
-    canvas && drag && rootRect && lay.rects.get(drag.id)
-      ? sized({
-          ...lay.rects.get(drag.id)!,
-          x: cam.x + (drag.x - drag.grabX - rootRect.left) / cam.zoom,
-          y: cam.y + (drag.y - drag.grabY - rootRect.top) / cam.zoom,
-        })
-      : undefined;
-  const target = drag ? (canvas ? dropAt : lay.rects.get(drag.id)) : undefined;
   const z = cam.zoom;
   // Canvas background: a dot grid drawn in the track, in world px, so it shares the
   // windows' transform exactly. Drawn on screen instead, its tiles (DOT × zoom, a
@@ -662,12 +667,6 @@ export function WindowsView(p: Props) {
             />
           ) : null,
         )}
-        {target && (
-          <div
-            className="ghost-slot target"
-            style={{ transform: `translate(${target.x}px, ${target.y}px)`, width: target.w, height: target.h }}
-          />
-        )}
         {stable.map((r) => {
           const id = idOf(r);
           const rect = lay.rects.get(id);
@@ -707,9 +706,9 @@ export function WindowsView(p: Props) {
             <div
               key={id}
               data-pane={id}
-              className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""}`}
+              className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${settling === id ? "settling" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""}`}
               style={{
-                transform: `translate(${x}px, ${y}px)${lifted ? " scale(1.015)" : ""}`,
+                transform: `translate(${x}px, ${y}px)`,
                 width: rect.w,
                 height: rect.h,
               }}
@@ -756,7 +755,7 @@ export function WindowsView(p: Props) {
         })}
       </div>
       {mode === "strip" && (
-        <StripBar slots={stripSlots} total={lay.contentWidth} ids={ids} selected={selected} onSelect={onSelect} />
+        <StripBar slots={stripSlots} total={lay.contentWidth} pad={padX} ids={ids} selected={selected} onSelect={onSelect} />
       )}
       {canvas && vp.w > 0 && (
         <Minimap
@@ -834,10 +833,10 @@ function Minimap(p: {
 }
 
 /** Strip position bar: one segment per window, the focused one highlighted. Click to jump. */
-function StripBar(p: { slots: Slot[]; total: number; ids: PaneId[]; selected: PaneId | null; onSelect: (id: PaneId) => void }) {
-  // The bar is inset by the gutter like the windows; map the windows' span
+function StripBar(p: { slots: Slot[]; total: number; pad: number; ids: PaneId[]; selected: PaneId | null; onSelect: (id: PaneId) => void }) {
+  // The bar is inset by the padding like the windows; map the windows' span
   // (first left edge → last right edge) onto it so both ends line up.
-  const inner = p.total - 2 * GUTTER;
+  const inner = p.total - 2 * p.pad;
   if (inner <= 0) return null;
   const pct = (v: number) => `${(v / inner) * 100}%`;
   return (
@@ -846,7 +845,7 @@ function StripBar(p: { slots: Slot[]; total: number; ids: PaneId[]; selected: Pa
         <button
           key={p.ids[i]}
           className={`strip-seg ${p.ids[i] === p.selected ? "sel" : ""}`}
-          style={{ left: pct(s.x - GUTTER), width: pct(s.w) }}
+          style={{ left: pct(s.x - p.pad), width: pct(s.w) }}
           onClick={() => p.onSelect(p.ids[i]!)}
           tabIndex={-1}
         />

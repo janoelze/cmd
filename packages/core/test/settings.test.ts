@@ -1,24 +1,34 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, parseJsonc, parseSettingValue, resolveSettings } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, parseJsonc, parseSettingValue, resolveSettings, type Settings } from "@cmd/protocol";
+import { Core } from "../src/core.ts";
+import type { SearchService } from "../src/search/service.ts";
 import { SettingsService } from "../src/settings.ts";
+import { fakeFactory } from "./fake-pty.ts";
 import { launchCommand } from "../src/agents/tracker.ts";
 
 describe("schema", () => {
   it("overlays valid user values and reports invalid ones", () => {
     const { settings, errors } = resolveSettings({
-      "terminal.fontSize": 15,
+      "font.codeSize": 15,
       "terminal.lineHeight": 9,
       "ui.defaultView": "grid",
       "nope.key": 1,
       "plugins.vpn.conf": "x",
     });
-    expect(settings["terminal.fontSize"]).toBe(15);
+    expect(settings["font.codeSize"]).toBe(15);
     expect(settings["terminal.lineHeight"]).toBe(DEFAULT_SETTINGS["terminal.lineHeight"]);
     expect(settings["ui.defaultView"]).toBe("grid");
     expect(errors).toEqual(["terminal.lineHeight: must be ≤ 2", 'unknown setting "nope.key"']);
+  });
+
+  it("reads renamed keys under their new name; the new name wins", () => {
+    expect(resolveSettings({ "terminal.fontSize": 17 }).settings["font.codeSize"]).toBe(17);
+    expect(resolveSettings({ "terminal.fontSize": 17, "font.codeSize": 12 }).settings["font.codeSize"]).toBe(12);
+    expect(resolveSettings({ "terminal.fontFamily": "Iosevka" })).toMatchObject({ settings: { "font.code": "Iosevka" }, errors: [] });
   });
 
   it("parses JSONC with comments and trailing commas", () => {
@@ -29,7 +39,7 @@ describe("schema", () => {
   });
 
   it("coerces CLI strings by type", () => {
-    expect(parseSettingValue("terminal.fontSize", "14")).toBe(14);
+    expect(parseSettingValue("font.codeSize", "14")).toBe(14);
     expect(parseSettingValue("notifications.done", "false")).toBe(false);
     expect(parseSettingValue("shell.program", "/bin/bash")).toBe("/bin/bash");
   });
@@ -56,12 +66,22 @@ describe("SettingsService", () => {
 
   it("writes, resets and rejects invalid values", () => {
     svc = new SettingsService(file);
-    svc.set("terminal.fontSize", 16);
-    expect(parseJsonc(fs.readFileSync(file, "utf8"))).toEqual({ "terminal.fontSize": 16 });
-    expect(svc.snapshot().overrides).toEqual(["terminal.fontSize"]);
-    expect(() => svc!.set("terminal.fontSize", "big")).toThrow(/expected a number/);
-    svc.reset("terminal.fontSize");
-    expect(svc.settings["terminal.fontSize"]).toBe(DEFAULT_SETTINGS["terminal.fontSize"]);
+    svc.set("font.codeSize", 16);
+    expect(parseJsonc(fs.readFileSync(file, "utf8"))).toEqual({ "font.codeSize": 16 });
+    expect(svc.snapshot().overrides).toEqual(["font.codeSize"]);
+    expect(() => svc!.set("font.codeSize", "big")).toThrow(/expected a number/);
+    svc.reset("font.codeSize");
+    expect(svc.settings["font.codeSize"]).toBe(DEFAULT_SETTINGS["font.codeSize"]);
+  });
+
+  it("moves an old key name to the new one when it's set or reset", () => {
+    fs.writeFileSync(file, '{ "terminal.fontSize": 17, "terminal.fontFamily": "Iosevka" }');
+    svc = new SettingsService(file);
+    expect(svc.snapshot().overrides.sort()).toEqual(["font.code", "font.codeSize"]);
+    svc.set("terminal.fontSize", 18); // old names are accepted
+    expect(parseJsonc(fs.readFileSync(file, "utf8"))).toEqual({ "font.codeSize": 18, "terminal.fontFamily": "Iosevka" });
+    svc.reset("font.code");
+    expect(parseJsonc(fs.readFileSync(file, "utf8"))).toEqual({ "font.codeSize": 18 });
   });
 
   it("picks up edits made to the file by hand", async () => {
@@ -71,5 +91,75 @@ describe("SettingsService", () => {
     fs.writeFileSync(file, '// mine\n{ "ui.sidebarWidth": 320 }');
     await updated;
     expect(svc.settings["ui.sidebarWidth"]).toBe(320);
+  });
+});
+
+describe("live apply", () => {
+  it("bind runs now and only when one of its keys changes", () => {
+    const svc = new SettingsService(null);
+    const seen: number[] = [];
+    const off = svc.bind(["font.codeSize"], (s) => seen.push(s["font.codeSize"]));
+    svc.set("ui.sidebarWidth", 300);
+    svc.set("font.codeSize", 16);
+    off();
+    svc.set("font.codeSize", 18);
+    expect(seen).toEqual([DEFAULT_SETTINGS["font.codeSize"], 16]);
+  });
+
+  it("restarts search when search.* changes, one service at a time", async () => {
+    const made: Settings[] = [];
+    let open = 0;
+    let maxOpen = 0;
+    const fake = (s: Settings) => {
+      made.push(s);
+      if (!s["search.enabled"]) return null;
+      maxOpen = Math.max(maxOpen, ++open);
+      const svc = {
+        on: () => svc,
+        status: () => ({ sessions: 0, files: 0, indexing: false, done: 0, total: 0 }),
+        search: () => [],
+        close: async () => void open--,
+      };
+      return svc as unknown as SearchService;
+    };
+    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, search: fake });
+    const settle = () => new Promise((r) => setTimeout(r, 0));
+    await settle();
+    await core.call("settings.set", { key: "search.archiveDirs", value: "~/a, ~/b" });
+    await settle();
+    await core.call("settings.set", { key: "font.codeSize", value: 15 }); // not search: no restart
+    await settle();
+    // Changes in a burst start one service, with the latest settings.
+    await core.call("settings.set", { key: "search.archiveDirs", value: "~/c" });
+    await core.call("settings.set", { key: "search.enabled", value: false });
+    await settle();
+    await core.close();
+    expect(made.map((s) => [s["search.enabled"], s["search.archiveDirs"]])).toEqual([
+      [true, DEFAULT_SETTINGS["search.archiveDirs"]],
+      [true, "~/a, ~/b"],
+      [false, "~/c"],
+    ]);
+    expect(maxOpen).toBe(1);
+    expect(open).toBe(0);
+  });
+
+  it.skipIf(!fs.existsSync("/bin/zsh"))("keeps the shell `open` rules file current for running shells", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-rules-"));
+    const rules = path.join(dir, "shell-open.zsh");
+    const { factory, ptys } = fakeFactory();
+    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: factory, pollMs: 0, shellRulesFile: rules });
+    const read = (name: string) => execFileSync("/bin/zsh", ["-fc", `source ${rules}; print -r -- $${name}`], { encoding: "utf8" }).trim();
+    expect(read("CMD_OPEN_URLS")).toBe("0");
+    await core.call("settings.set", { key: "shell.openUrls", value: true });
+    expect(read("CMD_OPEN_URLS")).toBe("1");
+    // User text is quoted, not run.
+    await core.call("settings.set", { key: "open.handlers", value: "it's$(touch${IFS}pwned): text" });
+    expect(read("CMD_OPEN_EXTS").split(" ")).toContain("it's$(touch${ifs}pwned)"); // lowercased
+    expect(fs.existsSync(path.join(dir, "pwned"))).toBe(false);
+    await core.call("settings.set", { key: "shell.program", value: "/bin/zsh" });
+    core.panes.create();
+    expect(ptys[0]!.opts.env.CMD_OPEN_RULES).toBe(rules);
+    await core.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

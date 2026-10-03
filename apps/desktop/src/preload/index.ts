@@ -62,8 +62,19 @@ const api = {
   },
   setBadge: (count: number) => ipcRenderer.send("badge", count),
   bounce: () => ipcRenderer.send("bounce"),
+  /** A system notification; a newer one with the same tag replaces it (see main/index.ts). */
+  notify: (o: { tag: string; title: string; body: string; sound: string | null; paneId: string | null }) =>
+    ipcRenderer.send("notify", o),
+  closeNotification: (tag: string) => ipcRenderer.send("notify-close", tag),
+  onNotificationClick(fn: (paneId: string) => void): () => void {
+    const h = (_e: unknown, paneId: string) => fn(paneId);
+    ipcRenderer.on("notification-click", h);
+    return () => ipcRenderer.off("notification-click", h);
+  },
   focusWindow: () => ipcRenderer.send("focus"),
   openPath: (p: string) => ipcRenderer.send("open-path", p),
+  /** The Settings window (opens it, or brings it to the front). */
+  openSettings: () => ipcRenderer.send("settings-window"),
   openSettingsFile: (p: string) => ipcRenderer.send("open-settings", p),
   openKeybindingsFile: () => ipcRenderer.send("open-keybindings"),
   openDocs: () => ipcRenderer.send("open-docs"),

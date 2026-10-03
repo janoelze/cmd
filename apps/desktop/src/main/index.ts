@@ -3,12 +3,13 @@
 
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, protocol, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, screen, shell } from "electron";
 import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import { SETTINGS_TEMPLATE } from "@cmd/protocol";
 import { cmdHome, connect, defaultSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
@@ -192,19 +193,104 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+// ── settings window ─────────────────────────────────────
+// One native Settings window (⌘,), like a macOS app's: translucent sidebar of
+// categories. Its own page and bundle (renderer/settings.html).
+
+let settingsWin: BrowserWindow | null = null;
+const isSettings = (w: BrowserWindow | null | undefined) => !!w && w === settingsWin;
+
+function openSettings(): BrowserWindow {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.show();
+    settingsWin.focus();
+    return settingsWin;
+  }
+  const win = new BrowserWindow({
+    width: 800,
+    height: 580,
+    minWidth: 660,
+    minHeight: 420,
+    title: "Settings",
+    show: false,
+    titleBarStyle: "hidden",
+    trafficLightPosition: { x: 20, y: 19 },
+    vibrancy: "sidebar",
+    visualEffectState: "followWindow",
+    backgroundColor: "#00000000",
+    fullscreenable: false,
+    webPreferences: {
+      preload: path.join(here, "../preload/index.mjs"),
+      sandbox: false,
+      contextIsolation: true,
+    },
+  });
+  settingsWin = win;
+  win.on("closed", () => (settingsWin = null));
+  win.once("ready-to-show", () => win.show());
+  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/settings.html`);
+  else win.loadFile(path.join(here, "../renderer/settings.html"));
+  return win;
+}
+
+/** App windows, not the Settings window. */
+const appWindows = () => BrowserWindow.getAllWindows().filter((w) => !isSettings(w));
+
 // ── IPC ─────────────────────────────────────────────────
 
 const winOf = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => BrowserWindow.fromWebContents(e.sender);
 
 ipcMain.on("badge", (_e, count: number) => app.dock?.setBadge(count > 0 ? String(count) : ""));
 ipcMain.on("bounce", () => app.dock?.bounce("informational"));
+
+// System notifications (the UI decides when; see packages/core/src/notifications.ts).
+// Shown from here, not the renderer, for system sounds by name and so a window's
+// newer notification replaces its older one in Notification Center (by tag).
+interface NotifyOptions {
+  tag: string;
+  title: string;
+  body: string;
+  /** "default", a macOS system sound name, or null for silent. */
+  sound: string | null;
+  paneId: string | null;
+}
+const shown = new Map<string, Notification>();
+ipcMain.on("notify", (e, o: NotifyOptions) => {
+  if (!Notification.isSupported()) return;
+  const sender = winOf(e);
+  shown.get(o.tag)?.close();
+  const n = new Notification({
+    title: o.title,
+    body: o.body,
+    silent: o.sound === null,
+    ...(o.sound && o.sound !== "default" ? { sound: o.sound } : {}),
+  });
+  n.on("click", () => {
+    if (!sender || sender.isDestroyed()) return;
+    if (sender.isMinimized()) sender.restore();
+    // macOS usually activates the app on a notification click; make sure of it.
+    app.focus({ steal: true });
+    sender.show();
+    sender.focus();
+    if (o.paneId) sender.webContents.send("notification-click", o.paneId);
+  });
+  n.on("close", () => shown.get(o.tag) === n && shown.delete(o.tag));
+  shown.set(o.tag, n);
+  n.show();
+});
+/** Looking at the window it came from: its notification is no longer news. */
+ipcMain.on("notify-close", (_e, tag: string) => {
+  shown.get(tag)?.close();
+  shown.delete(tag);
+});
 ipcMain.on("menu-state", (_e, state: MenuState) => applyMenuState(state));
 ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("open-path", (_e, p: string) => void shell.openPath(p));
+ipcMain.on("settings-window", () => void openSettings());
 ipcMain.on("open-settings", (_e, p: string) => {
   if (!fs.existsSync(p)) {
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, "// cmd settings. Changes apply live.\n{\n}\n");
+    fs.writeFileSync(p, SETTINGS_TEMPLATE);
   }
   void shell.openPath(p);
 });
@@ -330,7 +416,7 @@ app.whenReady().then(async () => {
     () => performance.mark("boot:core-reachable"),
     (err: Error) => dialog.showErrorBox("cmd: the core did not start", err.message),
   );
-  const send = commandSender(createWindow);
+  const send = commandSender(createWindow, { openSettings, isSettings, appWindows });
   buildMenu(send, keybindings.bindings);
   watchKeybindings((next) => {
     keybindings = next;
@@ -344,7 +430,7 @@ app.whenReady().then(async () => {
     ]),
   );
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (appWindows().length === 0) createWindow();
   });
 });
 

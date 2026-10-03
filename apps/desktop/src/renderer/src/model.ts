@@ -106,8 +106,8 @@ export interface LiveStatus {
 export interface WindowFields {
   /** What it is about: short, no path. */
   name: string;
-  /** What runs or is open in it: the process, or the type, lowercase. */
-  kind: string;
+  /** What runs or is open in it: the process, or the type, lowercase. Absent when it equals the name. */
+  kind?: string;
   /** Where it lives (folder, host); never equal to the name. */
   place?: string;
   /** Live state; `key` says which state, so a changed text with the same key updates in place. */
@@ -138,6 +138,7 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
     const t = cleanTitle(p?.title);
     const generic = !t || GENERIC_TITLES.has(t.toLowerCase()) || t === p?.foreground;
     const cwd = p?.cwd ?? a?.cwd;
+    const attn = p?.attention ?? null;
     f = {
       // Like the fork: agent name, else terminal title, else last prompt, else spawn prompt.
       name: a
@@ -145,12 +146,15 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
         : (!generic ? t : null) || p?.foreground || "Terminal",
       kind: p?.foreground || a?.kind || "terminal",
       place: cwd ? shortPath(cwd) : undefined,
-      status: a ? agentStatus(a, now) : undefined,
-      light: a ? ledOf(a) : undefined,
+      // A terminal's attention marker (a bell, a notification, a finished command;
+      // see packages/core/src/notifications.ts) shows like an agent's state until seen.
+      status: a ? agentStatus(a, now) : attn ? { text: attn.text, key: `attention:${attn.kind}` } : undefined,
+      light: a ? ledOf(a) : attn ? (attn.urgent ? "needs" : "unseen") : undefined,
       icon: "terminal",
     };
   }
-  // Rule 2: no repeats.
+  // Rule 2: no repeats (a shell named after its process, a page titled with its host).
+  if (f.kind === f.name) f.kind = undefined;
   if (f.place === f.name) f.place = undefined;
   return f;
 }

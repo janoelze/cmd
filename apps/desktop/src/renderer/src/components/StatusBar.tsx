@@ -54,9 +54,9 @@ export function StatusBar({ mode, row, pane, run }: Props) {
             <Mark light={f.light} icon={f.icon} />
             <Slot className="statusbar-name" value={{ text: f.name }} fade />
             <DirtyDot on={!!f.dirty} />
-            <Slot className="statusbar-proc" value={{ text: f.kind }} />
-            <Slot className="statusbar-path" value={f.place ? { text: f.place } : undefined} clipStart divider />
-            <Slot className="statusbar-detail" value={f.status} divider />
+            <Slot className="statusbar-proc" value={f.kind ? { text: f.kind } : undefined} />
+            <Slot className="statusbar-path" value={f.place ? { text: f.place } : undefined} clipStart divider={!!f.kind} />
+            <Slot className="statusbar-detail" value={f.status} divider={!!(f.kind || f.place)} />
           </>
         )}
         <Slot

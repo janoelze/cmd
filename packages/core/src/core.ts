@@ -3,9 +3,10 @@
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import type { CoreEvent, Method, Methods, Params, Result } from "@cmd/protocol";
+import type { CoreEvent, Method, Methods, Params, Result, Settings } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
 import { AgentTracker } from "./agents/tracker.ts";
+import { NotificationCenter } from "./notifications.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
@@ -30,28 +31,42 @@ export interface CoreOptions {
   sampler?: TreeSampler | null;
   /** Hook status directory (statusRoot()); null disables file-based hooks. */
   statusRoot?: string | null;
-  /** Transcript search (runs its own indexing worker); null disables search. */
-  search?: SearchService | null;
+  /**
+   * Transcript search (runs its own indexing worker) for the current settings;
+   * called again when search.* changes. Returns null when search is off.
+   */
+  search?: ((settings: Settings) => SearchService | null) | null;
+  /** File that keeps running shells' `open` rules current; null: rules are fixed when a shell starts. */
+  shellRulesFile?: string | null;
   /** Source hash this core was started from (see sourceBuildId). */
   build?: string;
 }
+
+const NO_SEARCH = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
 
 type Handlers = { [M in Method]: (params: Params<M>) => Result<M> | Promise<Result<M>> };
 
 export class Core {
   readonly panes: PaneManager;
   readonly agents: AgentTracker;
+  readonly notifications: NotificationCenter;
   readonly store: Store;
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
   readonly windows: WindowManager;
   readonly windowTypes: WindowTypes;
   #server: net.Server | null = null;
-  #subscribers = new Set<net.Socket>();
+  /** Subscribed connections and the event types they want (null = all). */
+  #subscribers = new Map<net.Socket, Set<string> | null>();
   readonly watches = new WatchService();
   /** fs.watch subscriptions per connection, released when it closes. */
   #connWatches = new Map<net.Socket, string[]>();
   #opts: CoreOptions;
+  #search: SearchService | null = null;
+  #closed = false;
+  /** Restarts are chained so two workers never index at once. */
+  #searchSwap: Promise<void> = Promise.resolve();
+  #searchGen = 0;
 
   constructor(opts: CoreOptions) {
     this.#opts = opts;
@@ -69,16 +84,26 @@ export class Core {
       inspector: opts.inspector ?? null,
       // The zsh `open` function learns what cmd can open from the registry.
       shellEnv: () => shellOpenEnv(this.windowTypes, overrides()),
+      rulesFile: opts.shellRulesFile ?? null,
+    });
+    this.settings.bind(["shell.openFolders", "shell.openFiles", "shell.openUrls", "open.handlers"], () => {
+      try {
+        this.panes.writeShellRules();
+      } catch (err) {
+        console.error(`cmd core: could not write shell rules: ${(err as Error).message}`);
+      }
     });
     this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null });
+    this.notifications = new NotificationCenter(this.panes, this.agents, settings);
+    this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler) : null;
     this.windows = new WindowManager(this.panes, this.store, this.windowTypes, overrides);
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
     this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
     this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
-    opts.search?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
+    if (opts.search) this.settings.bind(["search.enabled", "search.archiveDirs"], () => this.#restartSearch());
 
     this.panes.on("output", (paneId, data) => this.#broadcast({ type: "pane.output", paneId, data }));
     this.panes.on("updated", (pane) => this.#broadcast({ type: "pane.updated", pane }));
@@ -94,6 +119,9 @@ export class Core {
     "pane.write": (p) => (this.panes.write(p.paneId, p.data), null),
     "pane.resize": (p) => (this.panes.resize(p.paneId, p.cols, p.rows), null),
     "pane.kill": (p) => (this.panes.kill(p.paneId), null),
+    "pane.setMuted": (p) => (this.notifications.setMuted(p.paneId, p.muted), null),
+    "pane.clearAttention": (p) => (this.notifications.clearAttention(p.paneId), null),
+    "notify.send": (p) => (this.notifications.send(p.paneId ?? null, p.title, p.body), null),
     "pane.snapshot": async (p) => ({ data: await this.panes.snapshot(p.paneId) }),
     "pane.read": async (p) => ({ text: await this.panes.read(p.paneId, p.lines) }),
     "pane.reset": async (p) => (await this.panes.resetState(p.paneId), null),
@@ -125,9 +153,8 @@ export class Core {
     // Connection-aware; handled in #serve. These run for in-process callers.
     "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),
-    "search.query": (p) => this.#opts.search?.search(p.text, p.limit) ?? [],
-    "search.status": () =>
-      this.#opts.search?.status() ?? { sessions: 0, files: 0, indexing: false, done: 0, total: 0 },
+    "search.query": (p) => this.#search?.search(p.text, p.limit) ?? [],
+    "search.status": () => this.#search?.status() ?? NO_SEARCH,
     "agent.resume": (p) => this.agents.resume(p),
     "ui.get": () => this.store.uiState(),
     "ui.set": (p) => {
@@ -145,6 +172,20 @@ export class Core {
       ui: this.store.uiState(),
     }),
   };
+
+  #restartSearch(): void {
+    const gen = ++this.#searchGen;
+    this.#searchSwap = this.#searchSwap.then(async () => {
+      const old = this.#search;
+      this.#search = null;
+      await old?.close();
+      if (gen !== this.#searchGen || this.#closed) return; // a newer restart replaces this one
+      const next = this.#opts.search!(this.settings.settings);
+      this.#search = next;
+      next?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
+      this.#broadcast({ type: "search.status", status: next?.status() ?? NO_SEARCH });
+    });
+  }
 
   /** Requests from a pane's shell integration, e.g. `open .` → file window. */
   #onShellRequest(_paneId: string, action: string, arg: string): void {
@@ -205,7 +246,10 @@ export class Core {
             const i = list.indexOf(wp);
             if (i >= 0) list.splice(i, 1);
           }
-          if (req.method === "events.subscribe") this.#subscribers.add(conn);
+          if (req.method === "events.subscribe") {
+            const types = (req.params as Params<"events.subscribe"> | undefined)?.types;
+            this.#subscribers.set(conn, Array.isArray(types) ? new Set(types) : null);
+          }
           send(conn, { jsonrpc: "2.0", id: req.id, result: result ?? null });
         } catch (err) {
           send(conn, { jsonrpc: "2.0", id: req.id, error: { code: -32000, message: (err as Error).message } });
@@ -217,18 +261,20 @@ export class Core {
   #broadcast(event: CoreEvent): void {
     if (this.#subscribers.size === 0) return;
     const line = JSON.stringify({ jsonrpc: "2.0", method: "event", params: event }) + "\n";
-    for (const s of this.#subscribers) if (s.writable) s.write(line);
+    for (const [s, types] of this.#subscribers) if (s.writable && (!types || types.has(event.type))) s.write(line);
   }
 
   async close(): Promise<void> {
     this.panes.dispose();
-    for (const s of this.#subscribers) s.destroy();
+    for (const s of this.#subscribers.keys()) s.destroy();
     await new Promise<void>((r) => (this.#server ? this.#server.close(() => r()) : r()));
     try {
       fs.unlinkSync(this.#opts.socketPath);
     } catch {}
+    this.#closed = true;
     this.resources?.close();
-    this.#opts.search?.close();
+    await this.#searchSwap;
+    await this.#search?.close();
     this.watches.close();
     this.agents.close();
     this.store.close();

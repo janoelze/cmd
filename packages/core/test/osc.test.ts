@@ -35,6 +35,34 @@ describe("OscScanner", () => {
   it("ignores CSI sequences", () => {
     expect(new OscScanner().feed("\x1b[31mred\x1b[0m")).toEqual([]);
   });
+
+  it("reports bells, but not the BEL that ends an OSC or sits in a DCS string", () => {
+    const s = new OscScanner();
+    expect(s.feed("done\x07 \x1b]0;t\x07 \x1bPq\x07data\x1b\\ \x07")).toEqual([
+      { type: "bell" },
+      { type: "title", title: "t" },
+      { type: "bell" },
+    ]);
+  });
+
+  it("parses kitty OSC 99 notifications, across chunks and in base64", () => {
+    const s = new OscScanner();
+    expect(s.feed("\x1b]99;i=1:d=0;Build\x1b\\")).toEqual([]);
+    expect(s.feed("\x1b]99;i=1:p=body;All 42 tests passed\x1b\\")).toEqual([
+      { type: "notify", title: "Build", body: "All 42 tests passed" },
+    ]);
+    const b64 = Buffer.from("héllo").toString("base64");
+    expect(s.feed(`\x1b]99;e=1;${b64}\x07`)).toEqual([{ type: "notify", title: "héllo", body: "" }]);
+    expect(s.feed("\x1b]99;p=?;\x07")).toEqual([]); // capability query
+  });
+
+  it("reads the exit code from OSC 133;D", () => {
+    expect(new OscScanner().feed("\x1b]133;C\x07\x1b]133;D;2\x07\x1b]133;D\x07")).toEqual([
+      { type: "prompt", mark: "C" },
+      { type: "prompt", mark: "D", exitCode: 2 },
+      { type: "prompt", mark: "D" },
+    ]);
+  });
 });
 
 describe("stripAnsi", () => {

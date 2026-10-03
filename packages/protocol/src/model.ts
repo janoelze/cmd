@@ -22,6 +22,37 @@ export interface Pane {
   agentId: AgentId | null;
   /** Memory/CPU of the pane's whole process tree; null until first sampled. */
   usage: PaneUsage | null;
+  /** Something in the terminal wants you (a bell, a notification, a long command finished) until you look at it. */
+  attention: Attention | null;
+  /** No system notifications from this terminal (its attention marker still shows). */
+  muted: boolean;
+}
+
+/** Why a terminal wants you; see packages/core/src/notifications.ts. */
+export interface Attention {
+  kind: "bell" | "notify" | "command";
+  /** Short text for the title bar and sidebar ("Bell", the notification, "make finished · 42s"). */
+  text: string;
+  /** A failed command or a bell: shown as needing you rather than as done. */
+  urgent: boolean;
+  at: number;
+}
+
+/**
+ * One notification from any source, decided by the core (what is worth telling)
+ * and shown by the UI (whether to, by focus and the notifications.when setting).
+ */
+export interface AppNotification {
+  id: string;
+  source: "agent-input" | "agent-done" | "bell" | "terminal" | "command" | "cli";
+  /** The terminal it came from, if any (clicking the notification selects it). */
+  paneId: PaneId | null;
+  title: string;
+  body: string;
+  /** Show a system notification (false: only the attention marker / visual bell). */
+  alert: boolean;
+  /** Needs you (plays the sound, may bounce the Dock) rather than merely informs. */
+  urgent: boolean;
 }
 
 export interface PaneUsage {

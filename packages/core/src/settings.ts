@@ -1,24 +1,22 @@
 // Settings file: load, validate, watch for edits, write changes.
 // The file is the source of truth, so hand edits and `cmd settings set` agree.
+// Core consumers that cache something derived from settings bind() to its keys.
 
 import fs from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import {
+  currentKey,
   isSettingKey,
+  RENAMED_SETTINGS,
   parseJsonc,
   resolveSettings,
+  SETTINGS_TEMPLATE,
   validateSetting,
   type SettingKey,
   type Settings,
   type SettingsSnapshot,
 } from "@cmd/protocol";
-
-const TEMPLATE = `// cmd settings. Keys and defaults: \`cmd settings\` or ⌘, in the app.
-// Changes apply live.
-{
-}
-`;
 
 export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] }> {
   readonly path: string;
@@ -42,6 +40,19 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
     return this.#snapshot;
   }
 
+  /** Run fn now and again whenever one of keys changes value. Returns an unsubscribe. */
+  bind(keys: readonly SettingKey[], fn: (settings: Settings) => void): () => void {
+    let prev = this.settings;
+    const onUpdated = ({ settings }: SettingsSnapshot) => {
+      const changed = keys.some((k) => settings[k] !== prev[k]);
+      prev = settings;
+      if (changed) fn(settings);
+    };
+    this.on("updated", onUpdated);
+    fn(prev);
+    return () => void this.off("updated", onUpdated);
+  }
+
   /** Watch the directory, not the file: editors often replace the file on save. */
   watch(): void {
     if (!this.path || this.#watcher) return;
@@ -63,16 +74,23 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
     this.emit("updated", next);
   }
 
+  /** Old key names are accepted, and writing a key drops its old names from the file. */
   set(key: string, value: unknown): SettingsSnapshot {
+    key = currentKey(key);
     const r = validateSetting(key, value);
     if ("error" in r) throw new Error(r.error);
-    return this.#write({ ...this.#raw, [key]: r.value });
+    return this.#write({ ...this.#without(key), [key]: r.value });
   }
 
   reset(key: string): SettingsSnapshot {
+    key = currentKey(key);
     if (!isSettingKey(key)) throw new Error(`unknown setting "${key}"`);
-    const { [key]: _removed, ...rest } = this.#raw;
-    return this.#write(rest);
+    return this.#write(this.#without(key));
+  }
+
+  /** The raw settings minus key and its old names. */
+  #without(key: string): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(this.#raw).filter(([k]) => k !== key && RENAMED_SETTINGS[k] !== key));
   }
 
   close(): void {
@@ -96,8 +114,7 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
     }
     const resolved = resolveSettings(this.#raw);
     errors = [...errors, ...resolved.errors];
-    const overrides = Object.keys(this.#raw).filter(isSettingKey) as SettingKey[];
-    return { settings: resolved.settings, overrides, errors, path: this.path };
+    return { settings: resolved.settings, overrides: overridesOf(this.#raw), errors, path: this.path };
   }
 
   // Note: rewriting the file drops comments. Fine for now; a JSONC-preserving
@@ -108,7 +125,7 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
       const sorted = Object.fromEntries(Object.entries(raw).sort(([a], [b]) => a.localeCompare(b)));
       const body = Object.keys(sorted).length ? JSON.stringify(sorted, null, 2) : "{\n}";
       const tmp = `${this.path}.tmp`;
-      fs.writeFileSync(tmp, TEMPLATE.replace("{\n}", body));
+      fs.writeFileSync(tmp, SETTINGS_TEMPLATE.replace("{\n}", body));
       fs.renameSync(tmp, this.path);
     } else {
       this.#raw = raw;
@@ -120,6 +137,10 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
 
   #fromRaw(raw: Record<string, unknown>): SettingsSnapshot {
     const r = resolveSettings(raw);
-    return { settings: r.settings, overrides: Object.keys(raw).filter(isSettingKey) as SettingKey[], errors: r.errors, path: "" };
+    return { settings: r.settings, overrides: overridesOf(raw), errors: r.errors, path: "" };
   }
+}
+
+function overridesOf(raw: Record<string, unknown>): SettingKey[] {
+  return [...new Set(Object.keys(raw).map(currentKey))].filter(isSettingKey);
 }

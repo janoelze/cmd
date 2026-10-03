@@ -1,5 +1,5 @@
 // PaperWM-style strip: geometry, snapping and reveal, as pure functions.
-// Windows are laid out left to right with a gutter; the strip scrolls
+// Windows are laid out left to right, `pad` from the edges and `gap` apart; the strip scrolls
 // horizontally by an offset (px). Widths are fractions of the viewport.
 
 export const MIN_WIDTH = 320;
@@ -13,22 +13,22 @@ export interface Slot {
   w: number;
 }
 
-/** The widest a window may be: the viewport minus a gutter on both sides. */
-export function maxWidth(viewport: number, gutter: number): number {
-  return Math.max(MIN_WIDTH, viewport - 2 * gutter);
+/** The widest a window may be: the viewport minus the padding on both sides. */
+export function maxWidth(viewport: number, pad: number): number {
+  return Math.max(MIN_WIDTH, viewport - 2 * pad);
 }
 
-export function clampWidth(w: number, viewport: number, gutter: number): number {
-  return Math.round(Math.max(Math.min(MIN_WIDTH, maxWidth(viewport, gutter)), Math.min(w, maxWidth(viewport, gutter))));
+export function clampWidth(w: number, viewport: number, pad: number): number {
+  return Math.round(Math.max(Math.min(MIN_WIDTH, maxWidth(viewport, pad)), Math.min(w, maxWidth(viewport, pad))));
 }
 
-/** Pixel width for a stored fraction (fraction 1 = full width minus gutters). */
-export function widthFor(fraction: number, viewport: number, gutter: number): number {
-  return clampWidth(fraction * maxWidth(viewport, gutter), viewport, gutter);
+/** Pixel width for a stored fraction (fraction 1 = full width minus padding). */
+export function widthFor(fraction: number, viewport: number, pad: number): number {
+  return clampWidth(fraction * maxWidth(viewport, pad), viewport, pad);
 }
 
-export function fractionFor(w: number, viewport: number, gutter: number): number {
-  return Math.min(1, Math.max(0.05, w / maxWidth(viewport, gutter)));
+export function fractionFor(w: number, viewport: number, pad: number): number {
+  return Math.min(1, Math.max(0.05, w / maxWidth(viewport, pad)));
 }
 
 /** Next preset larger than the current fraction, wrapping to the smallest. */
@@ -36,14 +36,14 @@ export function nextPreset(fraction: number): number {
   return WIDTH_PRESETS.find((p) => p > fraction + 0.01) ?? WIDTH_PRESETS[0];
 }
 
-export function layout(widths: number[], gutter: number): { slots: Slot[]; total: number } {
+export function layout(widths: number[], pad: number, gap = pad): { slots: Slot[]; total: number } {
   const slots: Slot[] = [];
-  let x = gutter;
+  let x = pad;
   for (const w of widths) {
     slots.push({ x, w });
-    x += w + gutter;
+    x += w + gap;
   }
-  return { slots, total: x };
+  return { slots, total: widths.length ? x - gap + pad : pad };
 }
 
 export function maxOffset(total: number, viewport: number): number {
@@ -53,12 +53,12 @@ export function maxOffset(total: number, viewport: number): number {
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** Offsets where a window edge lines up with the viewport edge (plus the ends). */
-export function snapPoints(slots: Slot[], viewport: number, gutter: number, total: number): number[] {
+export function snapPoints(slots: Slot[], viewport: number, pad: number, total: number): number[] {
   const max = maxOffset(total, viewport);
   const pts = new Set<number>([0, max]);
   for (const s of slots) {
-    pts.add(clamp(Math.round(s.x - gutter), 0, max)); // window flush left
-    pts.add(clamp(Math.round(s.x + s.w + gutter - viewport), 0, max)); // window flush right
+    pts.add(clamp(Math.round(s.x - pad), 0, max)); // window flush left
+    pts.add(clamp(Math.round(s.x + s.w + pad - viewport), 0, max)); // window flush right
   }
   return [...pts].sort((a, b) => a - b);
 }
@@ -78,10 +78,10 @@ export function snapTarget(offset: number, points: number[], direction: -1 | 0 |
 }
 
 /** Smallest scroll that makes window i fully visible (left-aligned if it doesn't fit). */
-export function revealOffset(offset: number, slot: Slot, viewport: number, gutter: number, total: number): number {
+export function revealOffset(offset: number, slot: Slot, viewport: number, pad: number, total: number): number {
   const max = maxOffset(total, viewport);
-  const left = slot.x - gutter;
-  const right = slot.x + slot.w + gutter - viewport;
+  const left = slot.x - pad;
+  const right = slot.x + slot.w + pad - viewport;
   if (left < offset) return clamp(left, 0, max);
   if (right > offset) return clamp(Math.min(right, left), 0, max);
   return clamp(offset, 0, max);
@@ -92,13 +92,13 @@ export function fullyVisible(slot: Slot, offset: number, viewport: number): bool
 }
 
 /** Which window the strip "landed on" at an offset, given the scroll direction. */
-export function landedOn(slots: Slot[], offset: number, viewport: number, gutter: number, direction: -1 | 0 | 1): number {
+export function landedOn(slots: Slot[], offset: number, viewport: number, pad: number, direction: -1 | 0 | 1): number {
   if (slots.length === 0) return -1;
   // The window flush with the edge we moved towards; else the most visible one.
   const edge = direction >= 0 ? offset + viewport : offset;
   if (direction !== 0) {
     const i = slots.findIndex((s) =>
-      direction > 0 ? Math.abs(s.x + s.w + gutter - edge) < 2 : Math.abs(s.x - gutter - edge) < 2,
+      direction > 0 ? Math.abs(s.x + s.w + pad - edge) < 2 : Math.abs(s.x - pad - edge) < 2,
     );
     if (i >= 0) return i;
   }

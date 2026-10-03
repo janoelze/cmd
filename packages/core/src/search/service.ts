@@ -31,9 +31,14 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
     return this.#reader()?.search(text, limit) ?? [];
   }
 
-  close(): void {
-    void this.#worker?.terminate();
+  /** Resolves once the worker has stopped (it holds the index open for writing). */
+  async close(): Promise<void> {
+    this.removeAllListeners();
+    this.#searcher?.close();
+    this.#searcher = null;
+    const w = this.#worker;
     this.#worker = null;
+    await w?.terminate();
   }
 
   #reader(): Searcher | null {

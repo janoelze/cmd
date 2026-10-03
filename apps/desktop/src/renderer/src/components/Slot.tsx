@@ -18,6 +18,8 @@ const DELAY = 200;
 const GRACE = 250;
 /** The width transition (styles.css, .slot) plus a frame. */
 const MOVE_MS = 200;
+/** Narrower than this and narrower than its value, a divided slot hides (just a gap and "…" otherwise). */
+const SLIVER = 28;
 
 /** False where changes should be instant: windows off screen, a canvas zoomed out too far to read. */
 export const SlotMotion = createContext(true);
@@ -96,6 +98,20 @@ export function Slot({
   /** The value that replaced another (its entry waits for the exit; see styles.css). */
   const [swapped, setSwapped] = useState<string | null>(null);
   const gen = useRef(0);
+  const natural = useRef(0);
+
+  // Divided slots (place, status): hide when squeezed to a sliver. A ResizeObserver
+  // reports flex squeezing without forcing layout; while the width eases (entering,
+  // swapping) it's never a sliver, and it's checked once more when that ends.
+  const sliver = (el: HTMLElement, w: number) =>
+    el.classList.toggle("sliver", !el.classList.contains("moving") && w < natural.current - 0.5 && w < SLIVER);
+  useEffect(() => {
+    const el = outer.current;
+    if (!divider || !el) return;
+    const ro = new ResizeObserver(([e]) => e && sliver(el, e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [divider]);
 
   // Width follows the content; measured only when the content changes (not per render).
   // While it eases, the text is clipped rather than ellipsized: an ellipsis riding
@@ -103,19 +119,24 @@ export function Slot({
   useLayoutEffect(() => {
     const el = outer.current;
     if (!el) return;
-    const w = `${shown && inner.current ? naturalWidth(inner.current) : 0}px`;
+    natural.current = shown && inner.current ? naturalWidth(inner.current) : 0;
+    const w = `${natural.current}px`;
     if (el.style.width === w) return;
     const first = !el.style.width;
     el.style.width = w;
     if (first || !animate) return;
     el.classList.add("moving");
-    const t = setTimeout(() => el.classList.remove("moving"), MOVE_MS);
+    el.classList.remove("sliver");
+    const t = setTimeout(() => {
+      el.classList.remove("moving");
+      if (divider) sliver(el, el.clientWidth);
+    }, MOVE_MS);
     return () => {
       clearTimeout(t);
       el.classList.remove("moving");
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, shown?.text]);
+  }, [key, shown?.text, divider]);
 
   useLayoutEffect(() => {
     if (prev.current.key !== key && prev.current.key !== null && animate && mounted.current) {

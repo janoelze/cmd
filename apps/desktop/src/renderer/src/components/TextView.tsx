@@ -97,7 +97,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
           basicSetup,
           keymap.of([indentWithTab]),
           syntaxHighlighting(syntax),
-          c.theme.of(appTheme(settings["terminal.fontFamily"], settings["terminal.fontSize"])),
+          c.theme.of(appTheme(settings["font.code"], settings["font.codeSize"])),
           c.lang.of([]),
           c.readOnly.of(EditorState.readOnly.of(false)),
           EditorView.updateListener.of((u) => {
@@ -119,7 +119,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
 
   useEffect(() => {
     view.current?.dispatch({
-      effects: comps.current.theme.reconfigure(appTheme(settings["terminal.fontFamily"], settings["terminal.fontSize"])),
+      effects: comps.current.theme.reconfigure(appTheme(settings["font.code"], settings["font.codeSize"])),
     });
   }, [settings]);
 

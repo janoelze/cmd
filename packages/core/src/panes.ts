@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { EventEmitter } from "node:events";
-import type { Pane, PaneId, PaneUsage, Settings } from "@cmd/protocol";
+import type { Attention, Pane, PaneId, PaneUsage, Settings } from "@cmd/protocol";
 import { usageChanged } from "./resources.ts";
 import { DEFAULT_SETTINGS, ENV } from "@cmd/protocol";
 import { OscScanner, type OscEvent } from "./osc.ts";
@@ -126,6 +126,11 @@ export interface PaneManagerOptions {
   inspector?: Inspector | null;
   /** Extra environment for shells with integration (e.g. what `open` should route to cmd). */
   shellEnv?: () => Record<string, string>;
+  /**
+   * Where the `open` rules are kept for running shells (see writeShellRules), so
+   * settings changes reach them; null: shells keep the rules they started with.
+   */
+  rulesFile?: string | null;
 }
 
 export interface CreatePaneOptions {
@@ -144,6 +149,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   #settings: () => Settings;
   #inspector: Inspector | null;
   #shellEnv: () => Record<string, string>;
+  #rulesFile: string | null;
   #poll: NodeJS.Timeout | undefined;
   #polling = false;
 
@@ -154,11 +160,35 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.#settings = o.settings ?? (() => DEFAULT_SETTINGS);
     this.#inspector = o.inspector ?? null;
     this.#shellEnv = o.shellEnv ?? (() => ({}));
+    this.#rulesFile = o.rulesFile ?? null;
     const pollMs = o.pollMs ?? 500;
     if (pollMs > 0) {
       this.#poll = setInterval(() => this.pollForeground(), pollMs);
       this.#poll.unref();
     }
+  }
+
+  /** What the zsh `open` function hands to cmd, as CMD_OPEN_* variables. */
+  #openRules(): Record<string, string> {
+    const cfg = this.#settings();
+    return {
+      CMD_OPEN_FOLDERS: cfg["shell.openFolders"] ? "1" : "0",
+      CMD_OPEN_URLS: cfg["shell.openUrls"] ? "1" : "0",
+      CMD_OPEN_FILES: cfg["shell.openFiles"] ? "1" : "0",
+      ...this.#shellEnv(),
+    };
+  }
+
+  /** Rewrite the rules file; the zsh `open` sources it on every call. Atomic, so a shell never reads half a file. */
+  writeShellRules(): void {
+    if (!this.#rulesFile) return;
+    const body = Object.entries(this.#openRules())
+      .map(([k, v]) => `${k}='${v.replaceAll("'", "'\\''")}'\n`)
+      .join("");
+    fs.mkdirSync(path.dirname(this.#rulesFile), { recursive: true });
+    const tmp = `${this.#rulesFile}.tmp`;
+    fs.writeFileSync(tmp, body, { mode: 0o600 });
+    fs.renameSync(tmp, this.#rulesFile);
   }
 
   create(opts: CreatePaneOptions = {}): Pane {
@@ -177,10 +207,8 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       if (env.ZDOTDIR !== undefined) env.CMD_USER_ZDOTDIR = env.ZDOTDIR;
       env.ZDOTDIR = ZSH_INTEGRATION_DIR;
       env.CMD_PANE_TOKEN = token;
-      env.CMD_OPEN_FOLDERS = cfg["shell.openFolders"] ? "1" : "0";
-      env.CMD_OPEN_URLS = cfg["shell.openUrls"] ? "1" : "0";
-      env.CMD_OPEN_FILES = cfg["shell.openFiles"] ? "1" : "0";
-      Object.assign(env, this.#shellEnv());
+      Object.assign(env, this.#openRules());
+      if (this.#rulesFile) env.CMD_OPEN_RULES = this.#rulesFile;
     }
     Object.assign(env, {
       TERM: "xterm-256color",
@@ -209,6 +237,8 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       exitCode: null,
       agentId: null,
       usage: null,
+      attention: null,
+      muted: false,
     };
     const vt = new headless.Terminal({ cols, rows, scrollback: cfg["terminal.scrollback"], allowProposedApi: true });
     const serializer = new SerializeAddon();
@@ -344,6 +374,21 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     const l = this.#panes.get(id);
     if (!l || l.pane.agentId === agentId) return;
     l.pane.agentId = agentId;
+    this.emit("updated", { ...l.pane });
+  }
+
+  /** The attention marker (see notifications.ts); null clears it. */
+  setAttention(id: PaneId, attention: Attention | null): void {
+    const l = this.#panes.get(id);
+    if (!l || (l.pane.attention === null && attention === null)) return;
+    l.pane.attention = attention;
+    this.emit("updated", { ...l.pane });
+  }
+
+  setMuted(id: PaneId, muted: boolean): void {
+    const l = this.#panes.get(id);
+    if (!l || l.pane.muted === muted) return;
+    l.pane.muted = muted;
     this.emit("updated", { ...l.pane });
   }
 

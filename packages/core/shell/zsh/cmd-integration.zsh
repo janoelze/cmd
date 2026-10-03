@@ -36,8 +36,10 @@ _cmd_report_cwd
 # Ask cmd to do something: OSC 777;cmd;<token>;<action>;<argument>
 _cmd_request() { _cmd_osc "777;cmd;${CMD_PANE_TOKEN};$1;$2" }
 
-# Would cmd open this itself? The rules come from cmd's window type registry,
-# passed in as CMD_OPEN_EXTS / CMD_OPEN_HANDLES_FOLDERS / CMD_OPEN_HANDLES_TEXT.
+# Would cmd open this itself? The rules come from cmd's settings and window type
+# registry: CMD_OPEN_FOLDERS/FILES/URLS, CMD_OPEN_EXTS, CMD_OPEN_HANDLES_FOLDERS/TEXT.
+# They start in the environment; cmd keeps $CMD_OPEN_RULES current as settings
+# change, and `open` re-reads it on every call.
 _cmd_handles() {
   local p=$1
   if [[ -d $p ]]; then [[ "$CMD_OPEN_FOLDERS" == 1 && "$CMD_OPEN_HANDLES_FOLDERS" == 1 ]]; return; fi
@@ -54,14 +56,13 @@ _cmd_handles() {
   [[ $mime == text/* || $mime == application/json || $mime == application/xml || $mime == application/javascript || $mime == application/x-ndjson ]]
 }
 
-if [[ "$CMD_OPEN_FOLDERS" == 1 || "$CMD_OPEN_FILES" == 1 ]]; then
-  open() {
-    if (( $# == 1 )) && [[ -e "$1" ]] && _cmd_handles "$1"; then
-      _cmd_request open "${1:A}"
-    elif (( $# == 1 )) && [[ "$CMD_OPEN_URLS" == 1 && ( "$1" == http://* || "$1" == https://* ) ]]; then
-      _cmd_request open "$1"
-    else
-      command open "$@"
-    fi
-  }
-fi
+open() {
+  [[ -n $CMD_OPEN_RULES && -r $CMD_OPEN_RULES ]] && source "$CMD_OPEN_RULES"
+  if (( $# == 1 )) && [[ -e "$1" ]] && _cmd_handles "$1"; then
+    _cmd_request open "${1:A}"
+  elif (( $# == 1 )) && [[ "$CMD_OPEN_URLS" == 1 && ( "$1" == http://* || "$1" == https://* ) ]]; then
+    _cmd_request open "$1"
+  else
+    command open "$@"
+  fi
+}

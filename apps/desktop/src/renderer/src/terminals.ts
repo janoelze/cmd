@@ -65,10 +65,10 @@ class Terminals {
     return this.#held.get(paneId)?.ready ?? null;
   }
   #settings: Settings = DEFAULT_SETTINGS;
-  /** ⌘+/⌘- offset on top of terminal.fontSize (persisted by the app). */
+  /** ⌘+/⌘- offset on top of font.codeSize (persisted by the app). */
   #zoom = 0;
 
-  /** Font size offset on top of terminal.fontSize (⌘+ / ⌘-). */
+  /** Font size offset on top of font.codeSize (⌘+ / ⌘-). */
   setZoom(offset: number): void {
     if (offset === this.#zoom) return;
     this.#zoom = offset;
@@ -87,18 +87,24 @@ class Terminals {
       } else if (s["terminal.renderer"] === "webgl" && !h.webgl && h.opened) {
         this.#ensureWebgl(h);
       }
-      if (fontChanged || s["terminal.fontFamily"] !== prev["terminal.fontFamily"] || s["terminal.fontSize"] !== prev["terminal.fontSize"]) {
+      if (fontChanged || s["font.code"] !== prev["font.code"] || s["font.codeSize"] !== prev["font.codeSize"]) {
         h.webgl?.clearTextureAtlas();
       }
       this.fit(id);
+    }
+    // A smaller pool: hand the least recently used terminals back to the DOM renderer.
+    const live = [...this.#hosts.values()].filter((h) => h.webgl).sort((a, b) => b.lastUsed - a.lastUsed);
+    for (const h of live.slice(Math.max(0, s["terminal.webglPool"]))) {
+      h.webgl!.dispose();
+      h.webgl = null;
     }
   }
 
   #options() {
     const s = this.#settings;
     return {
-      fontFamily: s["terminal.fontFamily"],
-      fontSize: Math.max(6, s["terminal.fontSize"] + this.#zoom),
+      fontFamily: s["font.code"],
+      fontSize: Math.max(6, s["font.codeSize"] + this.#zoom),
       lineHeight: s["terminal.lineHeight"],
       cursorBlink: s["terminal.cursorBlink"],
       scrollback: s["terminal.scrollback"],

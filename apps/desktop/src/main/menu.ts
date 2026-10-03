@@ -150,9 +150,25 @@ export function applyMenuState(state: MenuState): void {
 }
 
 /** Sends a command to the focused window, creating one if needed. */
-export function commandSender(createWindow: () => BrowserWindow): Send {
+interface SettingsWindow {
+  openSettings: () => void;
+  isSettings: (w: BrowserWindow | null) => boolean;
+  appWindows: () => BrowserWindow[];
+}
+
+/** The Settings window handles closing and text editing itself; other commands go to an app window. */
+const SETTINGS_COMMANDS = new Set(["edit.copy", "edit.selectAll"]);
+
+export function commandSender(createWindow: () => BrowserWindow, s: SettingsWindow): Send {
   return (id) => {
-    let win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (id === "app.settings") return s.openSettings();
+    const focused = BrowserWindow.getFocusedWindow();
+    if (s.isSettings(focused)) {
+      if (id === "file.close" || id === "file.closeWindow") return focused!.close();
+      if (SETTINGS_COMMANDS.has(id)) return focused!.webContents.send("command", id);
+    }
+    let win = (focused && !s.isSettings(focused) ? focused : null) ?? s.appWindows()[0];
+    if (win && s.isSettings(focused)) win.focus();
     if (!win) {
       win = createWindow();
       win.webContents.once("did-finish-load", () => win!.webContents.send("command", id));
