@@ -16,7 +16,7 @@ let keybindings: KeybindingsSnapshot = loadKeybindings();
 
 if (process.env.CMD_NO_SANDBOX) app.commandLine.appendSwitch("no-sandbox");
 
-// cmd-file:///abs/path — read-only access to local images/media for the app's own
+// cmd-file://local/?path=<abs path> — read-only access to local images/media for the app's own
 // pages (Markdown windows show relative images). Registered on the default
 // session only; browser windows use their own session and can't reach it.
 protocol.registerSchemesAsPrivileged([{ scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true } }]);
@@ -239,8 +239,8 @@ app.on("web-contents-created", (_e, contents) => {
 app.whenReady().then(async () => {
   nativeTheme.themeSource = "dark";
   protocol.handle("cmd-file", (req) => {
-    const file = decodeURIComponent(new URL(req.url).pathname);
-    if (!CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });
+    const file = new URL(req.url).searchParams.get("path") ?? "";
+    if (!path.isAbsolute(file) || !CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });
     return electronNet.fetch(pathToFileURL(file).href);
   });
   const send = commandSender(createWindow);
