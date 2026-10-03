@@ -262,7 +262,9 @@ function MediaRequest({ origins, onAnswer }: { origins: string[]; onAnswer: (all
   );
 }
 
-/** The frame's URL decides its CSP (main process), so a new set of allowed origins loads a new frame. */
+/** The frame's URL decides its CSP (main process), so a new set of allowed origins loads a new frame.
+ *  So does new HTML: its scripts run at the page's top level, and a second set in the same page
+ *  would collide with the first's let/const (and leave its timers and listeners running). */
 function WidgetFrame({ media, ...props }: { win: AppWindow; html: string; data: unknown; media: string[]; onPainted: (html: string) => void }) {
   const [src, setSrc] = useState<string | null>(media.length ? null : "cmd-widget://frame/");
   const key = media.join(" ");
@@ -272,7 +274,7 @@ function WidgetFrame({ media, ...props }: { win: AppWindow; html: string; data: 
     else void cmd.widgetFrame(key.split(" ")).then((u) => live && setSrc(u));
     return () => void (live = false);
   }, [key]);
-  return src ? <Frame key={src} src={src} {...props} /> : <div className="magic-frame" />;
+  return src ? <Frame key={`${src}\n${props.html}`} src={src} {...props} /> : <div className="magic-frame" />;
 }
 
 function Frame({ win, src, html, data, onPainted }: { win: AppWindow; src: string; html: string; data: unknown; onPainted: (html: string) => void }) {
