@@ -5,9 +5,19 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import http from "node:http";
 import { _electron as electron } from "playwright";
+import { corePid, stopCore } from "../scripts/stop-core.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const home = path.join(root, ".cmd-dev", "e2e");
+// The app starts a detached core that outlives it. Stop the last run's before
+// wiping its state (or it's orphaned), and this run's on any exit, pass or fail.
+await stopCore(home);
+process.on("exit", () => {
+  const pid = corePid(home);
+  try {
+    if (pid) process.kill(pid, "SIGTERM");
+  } catch {}
+});
 fs.rmSync(home, { recursive: true, force: true });
 fs.mkdirSync(home, { recursive: true });
 const shots = path.join(root, ".cmd-dev", "shots");
@@ -482,6 +492,5 @@ check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.loca
 await win.screenshot({ path: path.join(shots, "7-restored.png") });
 
 await app.close();
-// The core outlives the UI by design; stop the isolated test core.
-process.kill(Number(fs.readFileSync(path.join(home, "core.pid"), "utf8")), "SIGTERM");
+await stopCore(home);
 console.log("all checks passed; screenshots in", shots);

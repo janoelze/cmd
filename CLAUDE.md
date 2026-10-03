@@ -17,6 +17,7 @@ pnpm vitest run -t "name"                        # one test by name
 pnpm typecheck               # root tsc (packages/*) + desktop tsc
 pnpm e2e                     # build, then Playwright drives the real app; screenshots in .cmd-dev/shots
 pnpm core                    # run the core directly
+pnpm core:stop               # stop the core of $CMD_HOME; core:stop-all stops every cmd core
 pnpm cmd <args>              # run the CLI from source
 ```
 

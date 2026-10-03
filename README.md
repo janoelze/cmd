@@ -30,7 +30,10 @@ Run against an isolated dev state instead of your real one:
 export CMD_HOME=$PWD/.cmd-dev     # socket, SQLite and settings.json go here
 pnpm core                         # or let `pnpm dev` start it
 pnpm cmd ls
+pnpm core:stop                    # stop the core of $CMD_HOME
 ```
+
+Cores are detached and outlive the app, so after dev sessions they pile up, each holding its terminals' PTYs (macOS allows 511 in total). `pnpm core:stop-all` stops every cmd core on the machine, your real one included. `pnpm e2e` cleans up its own.
 
 Inside the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
