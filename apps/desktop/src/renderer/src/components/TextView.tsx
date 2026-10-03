@@ -18,7 +18,7 @@ import { languages } from "@codemirror/language-data";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { formatBytes } from "../model.ts";
-import { onFsChanged, useStore } from "../store.ts";
+import { onFsChanged, useStoreValue } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { syntax } from "../editor/syntax.ts";
 
@@ -69,7 +69,7 @@ function minimalChange(a: string, b: string): { from: number; to: number; insert
 
 export function TextView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const file = typeof win.state.path === "string" ? win.state.path : "";
-  const settings = useStore().settings.settings;
+  const settings = useStoreValue((s) => s.settings.settings);
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const saved = useRef<Text | null>(null);

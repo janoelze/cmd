@@ -5,7 +5,7 @@ import type { Pane } from "@cmd/protocol";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
 import { ledOf, rowDetail, shortPath, usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
-import { useStore } from "../store.ts";
+import { useStoreValue } from "../store.ts";
 import { useWindowStatus } from "../windowActions.ts";
 import { typeFor, viewFor } from "../windows/registry.ts";
 import type { ViewMode } from "./MainView.tsx";
@@ -30,7 +30,7 @@ interface Props {
 
 export function StatusBar({ mode, row, pane, run }: Props) {
   const keys = useKeybindings();
-  const showUsage = useStore().settings.settings["ui.showResources"];
+  const showUsage = useStoreValue((s) => s.settings.settings["ui.showResources"]);
   const winStatus = useWindowStatus(row?.win?.id ?? null);
   const tip = (label: string, id: CommandId) => {
     const k = prettyAccelerator(keys.bindings[id]?.[0]);

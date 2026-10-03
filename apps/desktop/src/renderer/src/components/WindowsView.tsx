@@ -21,7 +21,7 @@ import type { PaneId } from "@cmd/protocol";
 import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
-import { useStore } from "../store.ts";
+import { useStoreValue } from "../store.ts";
 import {
   arrange,
   bounds,
@@ -153,7 +153,7 @@ export function WindowsView(p: Props) {
 
   // ── canvas camera ──────────────────────────────────────
   // The zoom range comes from the canvas.* settings.
-  const cfg = useStore().settings.settings;
+  const cfg = useStoreValue((s) => s.settings.settings);
   const lim = zoomLimits(cfg);
   const limRef = useRef(lim);
   limRef.current = lim;

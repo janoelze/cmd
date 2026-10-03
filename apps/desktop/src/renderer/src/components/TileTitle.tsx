@@ -3,7 +3,7 @@
 
 import { ledOf, rowTitle, shortPath, usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
 import { typeFor, viewFor } from "../windows/registry.ts";
-import { useStore } from "../store.ts";
+import { useStoreValue } from "../store.ts";
 import { useWindowStatus } from "../windowActions.ts";
 import { Symbol } from "./Symbol.tsx";
 
@@ -23,7 +23,7 @@ export function TileTitle({
   onDoubleClick?: (e: React.MouseEvent) => void;
   title?: string;
 }) {
-  const showUsage = useStore().settings.settings["ui.showResources"];
+  const showUsage = useStoreValue((s) => s.settings.settings["ui.showResources"]);
   const { pane, win } = row;
   const status = useWindowStatus(win?.id ?? null);
   return (
