@@ -93,12 +93,11 @@ export class MagicService {
     const ac = new AbortController();
     this.#runs.set(id, ac);
 
-    const refining = !!(prev.answer && (prev.phase === "ready" || prev.phase === "error"));
+    const refining = !!(prev.prompt && (prev.answer || prev.html || prev.command) && (prev.phase === "ready" || prev.phase === "error"));
     const original = refining ? prev.prompt : text;
-    const request = refining
-      ? `${original}\n\nThis window already exists. Change it as asked, keeping what still fits: ${text}\n\nIts current answer (header and view):\n${prev.answer}`
-      : text;
-    const history = [...(prev.history ?? []), text];
+    const request = refining ? refineRequest(prev, text) : text;
+    // A fresh run (not a refinement) starts the history over.
+    const history = refining ? [...(prev.history ?? [prev.prompt]), text] : [text];
     this.#o.windows.update(id, { title: refining ? w.title : "Magic", state: { prompt: original, phase: "working", error: undefined, steps: [], history } });
 
     const steps: MagicStep[] = [];
@@ -314,6 +313,30 @@ export class MagicService {
     const factor = Math.min(10, 2 ** (this.#failures.get(id) ?? 0));
     this.#schedule(id, Math.max(2, s.refresh) * 1000 * factor);
   }
+}
+
+/**
+ * A refinement's request: everything the person asked so far (the first request
+ * and each change, in order, so details from any of them survive), the new
+ * change, and what the window is now.
+ */
+export function refineRequest(prev: MagicState, change: string): string {
+  const asked = prev.history?.length ? prev.history : [prev.prompt];
+  const earlier = asked.length === 1 ? `The window was made from this request:\n${asked[0]}` : `The window was made from these requests, in order (the first, then changes):\n${asked.map((r, i) => `${i + 1}. ${r}`).join("\n")}`;
+  const current = prev.answer
+    ? `Its current answer (header and view):\n${prev.answer}`
+    : prev.kind === "terminal" && prev.command
+      ? `It currently runs the terminal command: ${prev.command}`
+      : prev.html
+        ? `Its current view:\n${prev.html}`
+        : "";
+  return [
+    earlier,
+    `Change it as asked, keeping what still fits and everything those requests asked for that the change doesn't override: ${change}`,
+    current,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /** The no-model view of pasted JSON: a collapsible tree. */

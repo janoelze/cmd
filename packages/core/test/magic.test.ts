@@ -352,6 +352,28 @@ describe("Magic windows in the core", () => {
     await core.close();
   });
 
+  it("gives each refinement every earlier request, not only the first", async () => {
+    const { Core } = await import("../src/core.ts");
+    const { fakeFactory } = await import("./fake-pty.ts");
+    const answer = '{"kind":"widget","title":"Radio"}\n---\n<audio id=au></audio>';
+    const backend = scripted([{ answer }, { answer }, { answer }]);
+    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, magicBackend: () => backend });
+    const w = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
+    const state = () => core.windows.others().find((x) => x.id === w.id)!.state as Record<string, unknown>;
+    const asks = ["a dnb radio from somafm, autoplay muted", "add a volume slider", "make it dark"];
+    for (const [i, prompt] of asks.entries()) {
+      core.handlers["magic.run"]({ id: w.id, prompt });
+      await until(() => backend.seen.length === i + 1 && state().phase === "ready");
+    }
+    const last = backend.seen[2]!.messages[0]!.content;
+    expect(last).toContain("1. a dnb radio from somafm, autoplay muted");
+    expect(last).toContain("2. add a volume slider");
+    expect(last).toContain("make it dark");
+    expect(last).toContain("<audio id=au></audio>");
+    expect(state()).toMatchObject({ prompt: "a dnb radio from somafm, autoplay muted", history: asks });
+    await core.close();
+  });
+
   it("keeps a working widget when a refinement fails, and reports empty requests", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
