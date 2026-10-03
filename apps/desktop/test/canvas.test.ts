@@ -68,6 +68,12 @@ describe("placement", () => {
     expect(next.rects.get("b")).toMatchObject({ x: 410 + GAP, y: 10 });
     expect(arrange(["a"], stored, null).added).toBe(false);
   });
+
+  it("gives a new window the size of the selected one", () => {
+    const stored = { a: { x: 0, y: 0, w: 480, h: 912 }, b: { x: 600, y: 0, w: 720, h: 456 } };
+    expect(arrange(["a", "b", "c"], stored, "a").rects.get("c")).toMatchObject({ w: 480, h: 912 });
+    expect(arrange(["b", "c"], { b: stored.b }, null).rects.get("c")).toMatchObject({ w: DEFAULT_W, h: DEFAULT_H });
+  });
 });
 
 describe("framing", () => {

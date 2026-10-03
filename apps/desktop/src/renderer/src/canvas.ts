@@ -84,8 +84,9 @@ export function place(existing: Rect[], near: Rect | null, w = DEFAULT_W, h = DE
 }
 
 /**
- * Rects for every id: stored ones as they are; missing ones placed. With nothing
- * stored yet (first time on the canvas), windows start out as an even grid.
+ * Rects for every id: stored ones as they are; missing ones placed next to `near`
+ * (the selected window) at its size. With nothing stored yet (first time on the
+ * canvas), windows start out as an even grid.
  */
 export function arrange(
   ids: string[],
@@ -105,7 +106,7 @@ export function arrange(
   }
   let anchor = (near && rects.get(near)) || null;
   for (const id of missing) {
-    const r = place([...rects.values()], anchor);
+    const r = place([...rects.values()], anchor, anchor?.w, anchor?.h);
     rects.set(id, r);
     anchor = r;
   }
