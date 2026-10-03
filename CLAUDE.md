@@ -19,6 +19,7 @@ pnpm e2e                     # build, then Playwright drives the real app; scree
 pnpm core                    # run the core directly
 pnpm core:stop               # stop the core of $CMD_HOME; core:stop-all stops every cmd core
 pnpm cmd <args>              # run the CLI from source
+pnpm release <ver|patch|minor>  # bump, tag v<ver>, push; CI publishes the GitHub release
 ```
 
 Use an isolated state dir in dev so you don't touch the real core: `export CMD_HOME=$PWD/.cmd-dev` (socket, SQLite, settings.json, core.log, core.pid go there). In the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.

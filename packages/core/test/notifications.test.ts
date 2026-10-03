@@ -13,7 +13,7 @@ let sent: AppNotification[];
 beforeEach(() => {
   const f = fakeFactory();
   ptys = f.ptys;
-  cfg = { ...DEFAULT_SETTINGS };
+  cfg = { ...DEFAULT_SETTINGS, "shell.program": "/bin/zsh" };
   panes = new PaneManager(f.factory, { socketPath: "/tmp/test.sock", pollMs: 0, settings: () => cfg });
   const agents = new AgentTracker(panes);
   const center = new NotificationCenter(panes, agents, () => cfg);
