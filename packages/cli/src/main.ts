@@ -1,8 +1,9 @@
 // `cmd`: the CLI over the core socket. Used by humans, hooks and host agents.
 
+import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import type { Agent, AgentState, Pane } from "@cmd/protocol";
+import type { Agent, AgentState, Pane, Space } from "@cmd/protocol";
 import { APPLIES_LABEL, currentKey, ENV, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 
@@ -10,6 +11,12 @@ const HELP = `cmd — terminal + agent workbench
 
 usage: cmd <command> [options]
 
+  . | <dir> [-n] [--git-root]         open the folder as a Space (or return to it);
+                                      -n: in a new app window, --git-root: the repository's root
+  space [ls] [--all] [--json]         open Spaces (--all: recent ones too)
+  space which [PATH]                  the Space a path belongs to
+  space close|rename|forget [SPACE] [NAME]
+                                      SPACE: id prefix, name or folder; default: this terminal's
   ls [--json]                         panes and their agents (tree)
   identify [--json]                   this pane and agent (inside cmd)
   new [--cwd DIR] [-- COMMAND…]       open a terminal pane
@@ -33,8 +40,27 @@ usage: cmd <command> [options]
 
 env: ${ENV.socket} (default ${defaultSocketPath()})`;
 
-const argv = process.argv.slice(2);
+const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "open", "search", "resume", "settings", "space", "help"]);
+
+/**
+ * `cmd .`, `cmd ~/src/x`, `cmd ../y`: a folder to open as a Space. A command name
+ * always wins (`cmd ./ls` for a folder called ls); a bare word must be an existing folder.
+ */
+function isFolderArg(a: string | undefined): a is string {
+  if (!a || a.startsWith("-") || COMMANDS.has(a)) return false;
+  if (a === "." || a === ".." || /^(~|\.{1,2})?\//.test(a) || a === "~") return true;
+  try {
+    return fs.statSync(a).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+const rawArgv = process.argv.slice(2);
+const argv = isFolderArg(rawArgv[0]) ? ["space", "open", ...rawArgv] : rawArgv;
 const cmd = argv[0];
+/** The terminal this runs in, if inside cmd: new things go to its Space. */
+const callerPaneId = process.env[ENV.paneId] || undefined;
 
 const { values: opt, positionals: pos } = parseArgs({
   args: argv.slice(1),
@@ -59,6 +85,9 @@ const { values: opt, positionals: pos } = parseArgs({
     types: { type: "boolean" },
     title: { type: "string" },
     global: { type: "boolean" },
+    all: { type: "boolean" },
+    "new-window": { type: "boolean", short: "n" },
+    "git-root": { type: "boolean" },
   },
 });
 
@@ -102,7 +131,7 @@ async function run({ client, closed }: Connection): Promise<number> {
     case "new": {
       const dash = argv.indexOf("--");
       const command = dash >= 0 ? argv.slice(dash + 1).join(" ") : undefined;
-      const pane = await client.call("pane.create", { cwd: str(opt.cwd) ?? process.cwd(), command });
+      const pane = await client.call("pane.create", { cwd: str(opt.cwd) ?? process.cwd(), command, callerPaneId });
       return out(opt.json ? pane : pane.id);
     }
     case "spawn": {
@@ -119,6 +148,7 @@ async function run({ client, closed }: Connection): Promise<number> {
         name: str(opt.name),
         cwd: str(opt.cwd) ?? process.cwd(),
         parentId,
+        callerPaneId: opt["no-parent"] ? undefined : callerPaneId,
       });
       return out(opt.json ? agent : agent.id);
     }
@@ -180,11 +210,13 @@ async function run({ client, closed }: Connection): Promise<number> {
       const abs = /^[a-z][\w+.-]+:/i.test(target) ? target : path.resolve(target);
       const kind = str(opt.kind);
       const w = kind
-        ? await client.call("window.open", { kind, input: /^[a-z][\w+.-]+:/i.test(abs) ? { url: abs } : { path: abs } })
-        : await client.call("window.openTarget", { target: abs });
+        ? await client.call("window.open", { kind, input: /^[a-z][\w+.-]+:/i.test(abs) ? { url: abs } : { path: abs }, callerPaneId })
+        : await client.call("window.openTarget", { target: abs, callerPaneId });
       if (!w) return fail(`no cmd window type opens ${target} (try: open ${target})`);
       return out(opt.json ? w : w.id);
     }
+    case "space":
+      return space(client);
     case "search": {
       const text = pos.join(" ");
       if (!text) {
@@ -211,6 +243,7 @@ async function run({ client, closed }: Connection): Promise<number> {
         cwd: hit?.cwd ?? process.cwd(),
         configDir: hit?.configDir ?? null,
         fork: !!opt.fork,
+        callerPaneId,
       });
       return out(opt.json ? agent : agent.id);
     }
@@ -329,6 +362,75 @@ async function resolvePane(client: Connection["client"], prefix: string): Promis
   if (agent?.paneId) return agent.paneId;
   throw new Error(`no such pane or agent: ${prefix}`);
 }
+
+async function space(client: Connection["client"]): Promise<number> {
+  const [sub = "ls", ...rest] = pos;
+  const label = (s: Space) => `${s.home ? "home    " : short(s.id)}  ${s.name.padEnd(20)} ${tilde(s.root)}${s.closedAt ? "  (closed)" : ""}`;
+  switch (sub) {
+    case "ls": {
+      const spaces = await client.call("space.list", { closed: !!opt.all });
+      if (opt.json) return out(spaces);
+      for (const s of spaces) console.log(label(s));
+      return 0;
+    }
+    case "open": {
+      const target = rest[0] ?? ".";
+      const { space, created } = await client.call("space.open", {
+        path: target,
+        cwd: process.cwd(),
+        gitRoot: !!opt["git-root"],
+        show: true,
+        newWindow: !!opt["new-window"],
+      });
+      if (opt.json) return out({ space, created });
+      return out(`${created ? "new Space" : "Space"} ${space.name}  ${tilde(space.root)}`);
+    }
+    case "which": {
+      const s = await client.call("space.match", { path: rest[0] ?? ".", cwd: process.cwd() });
+      return out(opt.json ? s : label(s));
+    }
+    case "close":
+    case "forget": {
+      const s = await findSpace(client, rest[0]);
+      await client.call(sub === "close" ? "space.close" : "space.forget", { id: s.id });
+      return out(`${sub === "close" ? "closed" : "forgot"} ${s.name}`);
+    }
+    case "rename": {
+      // `rename NAME` renames this terminal's Space; `rename SPACE NAME` another one.
+      const [a, b] = rest;
+      if (!a) return fail("usage: cmd space rename [SPACE] NAME");
+      const s = await findSpace(client, b === undefined ? undefined : a);
+      const next = await client.call("space.update", { id: s.id, name: b ?? a });
+      return out(`renamed to ${next.name}`);
+    }
+    default:
+      return fail(`unknown space command: ${sub}\n\n${HELP}`);
+  }
+}
+
+/** A Space by id prefix, name or folder; none given: this terminal's. */
+async function findSpace(client: Connection["client"], ref: string | undefined): Promise<Space> {
+  const spaces = await client.call("space.list", { closed: true });
+  if (ref === undefined) {
+    if (!callerPaneId) throw new Error("not inside cmd: name the Space (id, name or folder)");
+    const me = await client.call("identify", { paneId: callerPaneId });
+    const s = spaces.find((x) => x.id === me.pane?.spaceId);
+    if (!s) throw new Error("this terminal's Space is gone");
+    return s;
+  }
+  const hits = spaces.filter((s) => s.id.startsWith(ref) || s.name === ref);
+  if (hits.length === 1) return hits[0]!;
+  if (hits.length > 1) throw new Error(`ambiguous Space: ${ref}`);
+  // A folder: the Space rooted exactly there (open or closed).
+  try {
+    const root = fs.realpathSync.native(path.resolve(ref.replace(/^~(?=$|\/)/, process.env.HOME ?? "~")));
+    const s = spaces.find((x) => x.root === root);
+    if (s) return s;
+  } catch {}
+  throw new Error(`no such Space: ${ref}`);
+}
+
+const tilde = (p: string) => (process.env.HOME && (p === process.env.HOME || p.startsWith(process.env.HOME + "/")) ? "~" + p.slice(process.env.HOME.length) : p);
 
 function printTree(panes: Pane[], agents: Agent[]): void {
   const byParent = new Map<string | null, Agent[]>();

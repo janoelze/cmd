@@ -21,6 +21,8 @@ export interface SidebarRequest {
 }
 
 interface Props {
+  /** The Space switcher, centered at the bottom. */
+  spaceBar: React.ReactNode;
   rows: SidebarRow[];
   selected: PaneId | null;
   onSelect: (row: SidebarRow) => void;
@@ -212,6 +214,7 @@ export function Sidebar(p: Props) {
             </>
           )}
         </div>
+        <div className="sb-spaces">{p.spaceBar}</div>
         <ResizeHandle onWidth={p.onWidth} />
       </aside>
       {/* In the app's bottom row, beside the main status bar: both share one height. */}

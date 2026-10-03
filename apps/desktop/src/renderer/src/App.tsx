@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PaneId } from "@cmd/protocol";
+import type { PaneId, Space, SpaceId } from "@cmd/protocol";
 import { bucketOf, needsAttention } from "@cmd/protocol";
 import { COMMANDS, prettyAccelerator, type CommandId } from "../../shared/commands.ts";
 import { cmd } from "./bridge.ts";
@@ -20,9 +20,9 @@ import {
 } from "./actions.ts";
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
-import { ago, arrangeTiles, buildRows, flatten, fieldsOf, nextAfterClose, pushHistory, shortPath, windowIdOf, type SidebarRow } from "./model.ts";
+import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, nextAfterClose, pushHistory, shortPath, spaceAttention, windowIdOf, type SidebarRow } from "./model.ts";
 import type { SearchStatus } from "@cmd/protocol";
-import { getState, onNotification, onWindowFocus, usePersisted, useStore } from "./store.ts";
+import { getState, onNotification, onWindowFocus, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
@@ -34,6 +34,8 @@ import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
 import { Sidebar, SIDEBAR_WIDTH, type SidebarRequest } from "./components/Sidebar.tsx";
+import { SpaceBar } from "./components/SpaceBar.tsx";
+import { closeSpace, showSpace, usePickers, type Picker } from "./spaces.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 
 function searchStatusLabel(s: SearchStatus | null): string {
@@ -66,14 +68,18 @@ function flashWindow(paneId: PaneId): void {
 }
 
 export function App() {
-  const s = useStore();
+  /** Everything, every Space: attention, the Dock badge, cross-Space jumps. */
+  const all = useStore();
+  /** What this app window shows: its Space's terminals, agents and windows. */
+  const s = useMemo(() => inSpace(all), [all]);
+  const space = all.spaces.get(all.spaceId);
   const keys = useKeybindings();
   const cfg = s.settings.settings;
-  // Remembered across restarts (stored in the core, see usePersisted).
-  const [selected, setSelected] = usePersisted<PaneId | null>("selection.pane", null);
+  // Per Space, remembered across restarts (stored in the core, see useSpaceView).
+  const [selected, setSelected] = useSpaceView<PaneId | null>("selection.pane", null);
   // Most recently used terminals, for picking what to focus after one closes.
-  const [history, setHistory] = usePersisted<PaneId[]>("selection.history", []);
-  const [mode, setMode] = usePersisted<ViewMode>("view.mode", cfg["ui.defaultView"]);
+  const [history, setHistory] = useSpaceView<PaneId[]>("selection.history", []);
+  const [mode, setMode] = useSpaceView<ViewMode>("view.mode", cfg["ui.defaultView"]);
   const [sidebarOpen, setSidebarOpen] = usePersisted("sidebar.open", true);
   // null: the default width (double-click the sidebar's edge).
   const [sidebarWidth, setSidebarWidth] = usePersisted<number | null>("sidebar.width", null);
@@ -81,12 +87,12 @@ export function App() {
   const [zoom, setZoom] = usePersisted("terminal.zoom", 0);
   const [recent, setRecent] = usePersisted<string[]>("palette.recent", []);
   // One spatial order shared by grid and strip.
-  const [gridOrder, setGridOrder] = usePersisted<PaneId[]>("grid.order", []);
+  const [gridOrder, setGridOrder] = useSpaceView<PaneId[]>("grid.order", []);
   // Strip widths as fractions of the pane (see strip.ts).
-  const [stripWidths, setStripWidths] = usePersisted<Record<PaneId, number>>("strip.widths", {});
+  const [stripWidths, setStripWidths] = useSpaceView<Record<PaneId, number>>("strip.widths", {});
   // Canvas: where each window sits (world px) and the camera (see canvas.ts).
-  const [canvasRects, setCanvasRects] = usePersisted<Record<PaneId, Rect>>("canvas.rects", {});
-  const [camera, setCamera] = usePersisted<Camera>("canvas.camera", DEFAULT_CAMERA);
+  const [canvasRects, setCanvasRects] = useSpaceView<Record<PaneId, Rect>>("canvas.rects", {});
+  const [camera, setCamera] = useSpaceView<Camera>("canvas.camera", DEFAULT_CAMERA);
   const setStripWidth = (id: PaneId, fraction: number) =>
     setStripWidths((w) => {
       const alive = getState().panes;
@@ -97,6 +103,19 @@ export function App() {
   // Transient: sheets don't reopen on launch.
   /** Palette open, with an optional initial query ("?" for session search). */
   const [palette, setPalette] = useState<false | string>(false);
+  /** Space pickers (open/switch, move a window, rename); see spaces.tsx. */
+  const [picker, setPicker] = useState<Picker | null>(null);
+
+  // Spaces: the switcher's order, what waits in each, and the one shown before (Last Space).
+  const openSpaces = useMemo(() => [...all.spaces.values()].sort((a, b) => a.order - b.order), [all.spaces]);
+  const waiting = useMemo(() => spaceAttention(all), [all.agents, all.panes]);
+  const lastSpace = useRef<SpaceId | null>(null);
+  const shownSpace = useRef(all.spaceId);
+  useEffect(() => {
+    if (shownSpace.current !== all.spaceId) lastSpace.current = shownSpace.current;
+    shownSpace.current = all.spaceId;
+  }, [all.spaceId]);
+  useEffect(() => void (document.title = space?.name ?? "cmd"), [space?.name]);
 
   useEffect(() => terminals.setZoom(zoom), [zoom]);
 
@@ -115,6 +134,9 @@ export function App() {
   }, []);
 
   const select = useCallback((paneId: PaneId) => {
+    // In another Space: main shows that Space (here or in the window showing it) and selects it there.
+    const target = spaceOfWindow(paneId);
+    if (target && target !== getState().spaceId) return showSpace(target, { select: paneId });
     deselected.current = false;
     setSelected(paneId);
     setHistory((h) => pushHistory(h, paneId));
@@ -179,12 +201,12 @@ export function App() {
     cmd.closeNotification(selected);
   }, [s, selected, appFocused]);
 
-  // Dock badge: agents and terminals waiting for you.
+  // Dock badge: agents and terminals waiting for you, in every Space.
   const attention = useMemo(
     () =>
-      [...s.agents.values()].filter(needsAttention).length +
-      [...s.panes.values()].filter((p) => p.attention && !p.agentId).length,
-    [s.agents, s.panes],
+      [...all.agents.values()].filter(needsAttention).length +
+      [...all.panes.values()].filter((p) => p.attention && !p.agentId).length,
+    [all.agents, all.panes],
   );
   useEffect(() => cmd.setBadge(cfg["notifications.dockBadge"] ? attention : 0), [attention, cfg]);
 
@@ -233,6 +255,13 @@ export function App() {
     if (next) select(next);
   };
 
+  /** ⌃⌘[ / ⌃⌘]: the switcher's order, wrapping around. */
+  const stepSpace = (d: number) => {
+    const i = openSpaces.findIndex((x) => x.id === all.spaceId);
+    const next = openSpaces[(i + d + openSpaces.length) % openSpaces.length];
+    if (next && next.id !== all.spaceId) showSpace(next.id);
+  };
+
   // ── commands ───────────────────────────────────────────
   // One handler per command id; the menu bar, palette and context menus all call these.
   const handlers: Record<CommandId, () => void> = {
@@ -244,7 +273,8 @@ export function App() {
     "file.newFiles": () => void newFiles(),
     "file.close": () => {
       // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
-      if (palette !== false) setPalette(false);
+      if (picker) setPicker(null);
+      else if (palette !== false) setPalette(false);
       else if (selected) void closePane(selected);
       else cmd.closeWindow();
     },
@@ -284,7 +314,9 @@ export function App() {
     "session.next": () => step(1),
     "session.prev": () => step(-1),
     "session.nextAttention": () => {
-      const target = flat.find((r) => r.pane && ((r.agent && needsAttention(r.agent)) || (!r.agent && r.pane.attention)));
+      // This Space first, then the others (select switches Space).
+      const wants = (r: SidebarRow) => r.pane && ((r.agent && needsAttention(r.agent)) || (!r.agent && r.pane.attention));
+      const target = flat.find(wants) ?? flatten(buildRows(all)).find(wants);
       if (target?.pane) select(target.pane.id);
     },
     "session.copyResume": () => {
@@ -299,6 +331,17 @@ export function App() {
     ...(Object.fromEntries(
       [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`session.select${n}`, () => withPane[n - 1] && selectRow(withPane[n - 1]!)]),
     ) as Record<`session.select${number}`, () => void>),
+    "file.openSpace": () => setPicker({ kind: "space" }),
+    "space.next": () => stepSpace(1),
+    "space.prev": () => stepSpace(-1),
+    "space.last": () => lastSpace.current && all.spaces.has(lastSpace.current) && showSpace(lastSpace.current),
+    "space.moveWindow": () => selected && setPicker({ kind: "move", windowId: selected }),
+    "space.rename": () => space && setPicker({ kind: "rename", space }),
+    "space.reveal": () => space && cmd.openPath(space.root),
+    "space.close": () => space && void closeSpace(space),
+    ...(Object.fromEntries(
+      [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`space.select${n}`, () => openSpaces[n - 1] && showSpace(openSpaces[n - 1]!.id)]),
+    ) as Record<`space.select${number}`, () => void>),
     "help.docs": () => cmd.openDocs(),
   };
   const handlersRef = useRef(handlers);
@@ -307,7 +350,8 @@ export function App() {
 
   useEffect(() => cmd.onCommand(run), [run]);
   useEffect(() => cmd.onOpenUrl((url) => void newBrowser(url)), []);
-  useEffect(() => onWindowFocus((id) => select(id)), [select]);
+  // `open` in a terminal: follow it, unless it came from another Space while this window is in the background.
+  useEffect(() => onWindowFocus((id) => (document.hasFocus() || spaceOfWindow(id) === getState().spaceId) && select(id)), [select]);
 
   // Tell the menu bar what is checked/enabled.
   useEffect(() => {
@@ -328,9 +372,14 @@ export function App() {
         "session.copyId": !!(currentAgent && sessionId(currentAgent)),
         "session.reveal": hasPane,
         "session.nextAttention": attention > 0,
+        "space.next": openSpaces.length > 1,
+        "space.prev": openSpaces.length > 1,
+        "space.moveWindow": hasPane && openSpaces.length > 1,
+        "space.close": !!space && !space.home,
+        "space.rename": !!space,
       },
     });
-  }, [mode, sidebarOpen, selected, withPane.length, currentAgent, attention]);
+  }, [mode, sidebarOpen, selected, withPane.length, currentAgent, attention, openSpaces.length, space]);
 
   // ── context menus ──────────────────────────────────────
 
@@ -345,6 +394,7 @@ export function App() {
         ? [
             { label: "Show", run: () => select(windowIdOf(r)!) },
             ...(r.pane ? [muteEntry(r.pane.id)] : []),
+            { label: "Move to Space…", run: () => setPicker({ kind: "move", windowId: windowIdOf(r)! }), enabled: openSpaces.length > 1 },
             { label: r.pane ? "Close Terminal" : "Close Window", run: () => void closePane(windowIdOf(r)!) },
             "-" as const,
           ]
@@ -368,6 +418,31 @@ export function App() {
         : []),
     ]);
   };
+
+  /** Right-click on a Space in the switcher. */
+  const spaceMenu = (sp: Space) =>
+    void showContextMenu([
+      { label: "Show", run: () => showSpace(sp.id), enabled: sp.id !== all.spaceId },
+      { label: "Open in New Window", run: () => showSpace(sp.id, { newWindow: true }), enabled: sp.id !== all.spaceId },
+      "-",
+      { label: "Rename…", run: () => setPicker({ kind: "rename", space: sp }) },
+      { label: "Show Folder in Finder", run: () => cmd.openPath(sp.root) },
+      { label: "Copy Path", run: () => copy(sp.root) },
+      "-",
+      { label: "Close Space…", run: () => void closeSpace(sp), enabled: !sp.home },
+    ]);
+
+  const spaceBar = (
+    <SpaceBar
+      spaces={openSpaces}
+      current={all.spaceId}
+      attention={waiting}
+      onShow={(id) => showSpace(id)}
+      onMenu={spaceMenu}
+      onPicker={() => setPicker({ kind: "space" })}
+    />
+  );
+  const pickerProps = usePickers(picker, () => setPicker(null));
 
   /** The sidebar's + button. */
   const newMenu = () =>
@@ -468,9 +543,10 @@ export function App() {
         ["--window-desaturate" as string]: `${cfg["ui.unfocusedDesaturation"] / 100}`,
       }}
     >
-      {!sidebarOpen && <div className="drag-strip" />}
+      {!sidebarOpen && <div className="drag-strip">{spaceBar}</div>}
       {sidebarOpen && (
         <Sidebar
+          spaceBar={spaceBar}
           rows={rows}
           selected={selected}
           onSelect={selectRow}
@@ -525,6 +601,7 @@ export function App() {
           searchStatus={searchStatusLabel(s.search)}
         />
       )}
+      {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}
     </div>
   );
 }

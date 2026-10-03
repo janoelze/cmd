@@ -7,8 +7,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import type { Agent, AgentId, AgentKind, AgentState, Methods, PaneId, Settings } from "@cmd/protocol";
-import { DEFAULT_SETTINGS, ENV } from "@cmd/protocol";
+import type { Agent, AgentId, AgentKind, AgentState, Methods, PaneId, Settings, SpaceId } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
 import type { Foreground, PaneManager } from "../panes.ts";
 import type { Store } from "../store.ts";
 import { applyHook, type StateChange } from "./state.ts";
@@ -201,6 +201,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const agent = this.#create({
       kind: p.kind,
       paneId: null,
+      spaceId: p.spaceId,
       source: parent ? "host-api" : "user",
       parentId: parent?.id ?? null,
       name: p.name ?? null,
@@ -213,7 +214,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (sessionId) agent.native.claudeSessionId = sessionId;
     const env: Record<string, string> = { [ENV.agentId]: agent.id };
     if (parent) env[ENV.parentId] = parent.id;
-    const pane = this.#panes.create({ cwd, command, env });
+    const pane = this.#panes.create({ cwd, command, env, spaceId: agent.spaceId });
     this.#panes.setAgent(pane.id, agent.id);
     this.#update(agent, {}, { paneId: pane.id, cwd: pane.cwd });
     this.#expectStart(agent.id);
@@ -237,13 +238,13 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   /** Resume (or fork) a past session in a new pane. */
   resume(p: Methods["agent.resume"]["params"]): Agent {
     const cwd = p.cwd && fs.existsSync(p.cwd) ? p.cwd : os.homedir();
-    const agent = this.#create({ kind: p.agent, paneId: null, source: "restored", cwd, state: "starting" });
+    const agent = this.#create({ kind: p.agent, paneId: null, spaceId: p.spaceId, source: "restored", cwd, state: "starting" });
     if (!p.fork) {
       if (p.agent === "codex") agent.native.codexThreadId = p.sessionId;
       else agent.native.claudeSessionId = p.sessionId;
     }
     const command = resumeCommand(p.agent, p.sessionId, p.configDir ?? null, !!p.fork, this.#settings());
-    const pane = this.#panes.create({ cwd, command, env: { [ENV.agentId]: agent.id } });
+    const pane = this.#panes.create({ cwd, command, env: { [ENV.agentId]: agent.id }, spaceId: agent.spaceId });
     this.#panes.setAgent(pane.id, agent.id);
     this.#update(agent, {}, { paneId: pane.id });
     this.#expectStart(agent.id);
@@ -303,6 +304,16 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     return targets;
   }
 
+  /** Move an agent, its descendants and their terminals to another Space. */
+  moveTree(id: AgentId, spaceId: SpaceId): void {
+    for (const t of [id, ...this.#descendants(id)]) {
+      const a = this.#agents.get(t);
+      if (!a) continue;
+      if (a.paneId) this.#panes.setSpace(a.paneId, spaceId);
+      if (a.spaceId !== spaceId) this.#update(a, {}, { spaceId });
+    }
+  }
+
   markSeen(id: AgentId): void {
     const a = this.#must(id);
     this.#update(a, {}, { seenAt: Date.now() });
@@ -313,6 +324,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #create(o: {
     kind: AgentKind;
     paneId: PaneId | null;
+    /** Default: the pane's Space, else the parent's, else Home. */
+    spaceId?: SpaceId;
     source: Agent["spawn"]["source"];
     parentId?: AgentId | null;
     name?: string | null;
@@ -324,12 +337,14 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const parent = o.parentId ? this.#agents.get(o.parentId) : undefined;
     const id = randomUUID();
     const now = Date.now();
+    const pane = o.paneId ? this.#panes.get(o.paneId) : null;
     const agent: Agent = {
       id,
       paneId: o.paneId,
+      spaceId: o.spaceId ?? pane?.spaceId ?? parent?.spaceId ?? HOME_SPACE_ID,
       kind: o.kind,
       name: o.name ?? null,
-      cwd: o.cwd ?? (o.paneId ? this.#panes.get(o.paneId)?.cwd : undefined) ?? process.cwd(),
+      cwd: o.cwd ?? pane?.cwd ?? process.cwd(),
       parentId: parent?.id ?? null,
       rootId: parent?.rootId ?? id,
       depth: parent ? parent.depth + 1 : 0,

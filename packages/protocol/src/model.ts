@@ -4,10 +4,33 @@ export type PaneId = string;
 export type AgentId = string;
 /** Window id. A terminal window's id is its pane id. */
 export type WindowId = string;
+export type SpaceId = string;
+
+/**
+ * A directory you work in, with everything opened for it (docs/11-spaces.md).
+ * Panes, agents and windows each belong to exactly one Space.
+ */
+export interface Space {
+  id: SpaceId;
+  name: string;
+  /** Canonical path (realpath, on-disk case); unique among Spaces. Home: the home folder. */
+  root: string;
+  home: boolean;
+  hue: number;
+  /** Position in the switcher (⌘1–9); user-chosen, never reshuffled by recency. */
+  order: number;
+  /** null = open; otherwise closed and kept as a recent Space. */
+  closedAt: number | null;
+  createdAt: number;
+  lastActiveAt: number;
+  /** Layout and selection, owned by the UI, opaque to the core (like AppWindow.state). */
+  view: Record<string, unknown>;
+}
 
 /** A terminal session owned by the core. Every session is a pane, agent or not. */
 export interface Pane {
   id: PaneId;
+  spaceId: SpaceId;
   title: string;
   cwd: string;
   shell: string;
@@ -89,6 +112,8 @@ export interface Agent {
   id: AgentId;
   /** null = virtual child without a terminal (e.g. a Claude in-process subagent). */
   paneId: PaneId | null;
+  /** Its pane's Space; virtual children have their parent's. */
+  spaceId: SpaceId;
   kind: AgentKind;
   name: string | null;
   cwd: string;
@@ -132,6 +157,7 @@ export type WindowKind = string;
  */
 export interface AppWindow {
   id: WindowId;
+  spaceId: SpaceId;
   kind: WindowKind;
   title: string;
   createdAt: number;

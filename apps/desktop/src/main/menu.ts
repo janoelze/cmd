@@ -62,6 +62,8 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("file.newBrowser"),
         ...i("file.newFiles"),
         sep,
+        ...i("file.openSpace"),
+        sep,
         ...i("file.save"),
         sep,
         ...i("file.close"),
@@ -124,6 +126,24 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("session.copyResume"),
         ...i("session.copyId"),
         ...i("session.reveal"),
+      ],
+    },
+    {
+      label: "Space",
+      submenu: [
+        ...i("space.next"),
+        ...i("space.prev"),
+        ...i("space.last"),
+        ...[1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n) => {
+          const [main] = i(`space.select${n}` as CommandId);
+          return [{ ...main!, visible: false, acceleratorWorksWhenHidden: true }];
+        }),
+        sep,
+        ...i("space.moveWindow"),
+        ...i("space.rename"),
+        ...i("space.reveal"),
+        sep,
+        ...i("space.close"),
       ],
     },
     { role: "windowMenu" },

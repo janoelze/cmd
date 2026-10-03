@@ -1,6 +1,6 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, type Agent, type AppWindow, type Pane, type PaneId } from "@cmd/protocol";
+import { bucketOf, needsAttention, type Agent, type AppWindow, type Pane, type PaneId, type SpaceId } from "@cmd/protocol";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "./windows/registry.ts";
 
@@ -21,6 +21,28 @@ export interface SidebarRow {
 }
 
 const RANK = { needs: 0, unseen: 1, rest: 2 } as const;
+
+/** The state as one Space sees it: only its terminals, agents and windows. */
+export function inSpace(s: State, spaceId: SpaceId = s.spaceId): State {
+  const only = <K, V extends { spaceId: SpaceId }>(m: Map<K, V>) => new Map([...m].filter(([, v]) => v.spaceId === spaceId));
+  return { ...s, panes: only(s.panes), agents: only(s.agents), windows: only(s.windows) };
+}
+
+/** What waits in each Space: something needing you, or done and unseen (for the Space switcher). */
+export function spaceAttention(s: State): Map<SpaceId, "needs" | "unseen"> {
+  const out = new Map<SpaceId, "needs" | "unseen">();
+  const mark = (id: SpaceId, v: "needs" | "unseen") => out.get(id) !== "needs" && out.set(id, v);
+  for (const a of s.agents.values()) {
+    if (needsAttention(a)) mark(a.spaceId, bucketOf(a) === "needs" ? "needs" : "unseen");
+  }
+  for (const p of s.panes.values()) if (p.attention && !p.agentId) mark(p.spaceId, p.attention.urgent ? "needs" : "unseen");
+  return out;
+}
+
+/** Is `p` the folder `root` or inside it (whole segments)? */
+export function under(root: string, p: string): boolean {
+  return p === root || p.startsWith(root.endsWith("/") ? root : root + "/");
+}
 
 export function buildRows(s: State): SidebarRow[] {
   const agents = [...s.agents.values()];

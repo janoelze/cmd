@@ -1,9 +1,10 @@
-// Mirror of core state (panes + agents). Terminal output bypasses this store and
-// goes straight to the xterm instances (see terminals.ts).
+// Mirror of core state (panes, agents, windows, Spaces) plus the Space this app
+// window shows. Terminal output bypasses this store and goes straight to the
+// xterm instances (see terminals.ts).
 
 import { useSyncExternalStore } from "react";
-import type { Agent, AgentId, AppNotification, AppWindow, CoreEvent, Pane, PaneId, SearchStatus, SettingsSnapshot, WindowId } from "@cmd/protocol";
-import { DEFAULT_SETTINGS } from "@cmd/protocol";
+import type { Agent, AgentId, AppNotification, AppWindow, CoreEvent, Pane, PaneId, SearchStatus, SettingsSnapshot, Space, SpaceId, WindowId } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
 import { applyFonts } from "./fonts.ts";
@@ -23,6 +24,10 @@ export interface State {
   search: SearchStatus | null;
   /** Persisted UI state (see usePersisted). Loaded with the first snapshot. */
   ui: Record<string, unknown>;
+  /** Open Spaces (docs/11-spaces.md). */
+  spaces: Map<SpaceId, Space>;
+  /** The Space this app window shows; main decides (see main/spaces.ts). */
+  spaceId: SpaceId;
 }
 
 let state: State = {
@@ -33,6 +38,8 @@ let state: State = {
   settings: { settings: DEFAULT_SETTINGS, overrides: [], errors: [], path: "" },
   ui: {},
   search: null,
+  spaces: new Map(),
+  spaceId: new URLSearchParams(location.search).get("space") || HOME_SPACE_ID,
 };
 const listeners = new Set<() => void>();
 const focusListeners = new Set<(id: WindowId) => void>();
@@ -108,13 +115,114 @@ export function flushUi(): void {
   }
   pendingUi.clear();
 }
-window.addEventListener("beforeunload", flushUi);
+window.addEventListener("beforeunload", () => (flushUi(), flushSpaceViews()));
+
+// ── per-Space view state ─────────────────────────────────
+// Layout and selection live in Space.view in the core. Writes apply locally at
+// once and reach the core debounced; until the core echoes a value back, it is
+// re-applied over incoming Space updates so an older echo can't undo it.
+
+const pendingView = new Map<SpaceId, Map<string, unknown>>();
+const viewTimers = new Map<SpaceId, ReturnType<typeof setTimeout>>();
+
+/**
+ * A Space from the core, as the UI should hold it: values still waiting to be
+ * echoed stay, and values equal to what we have keep their identity. The core
+ * sends the whole view on every change; without this, one key's echo would hand
+ * every consumer of every other key a "new" value (re-layout mid-drag).
+ */
+const withPending = (s: Space, prev?: Space): Space => {
+  const p = pendingView.get(s.id);
+  if (p) for (const [k, v] of p) if (JSON.stringify(s.view[k] ?? null) === JSON.stringify(v ?? null)) p.delete(k);
+  const view: Record<string, unknown> = { ...s.view, ...(p?.size ? Object.fromEntries(p) : {}) };
+  if (prev) for (const k of Object.keys(view)) if (k in prev.view && JSON.stringify(prev.view[k]) === JSON.stringify(view[k])) view[k] = prev.view[k];
+  return { ...s, view };
+};
+
+/** Equal fields, and view values identical (withPending keeps unchanged ones identical). */
+function sameSpace(a: Space, b: Space): boolean {
+  const keys = Object.keys(b.view);
+  return (
+    a.name === b.name && a.root === b.root && a.order === b.order && a.hue === b.hue && a.closedAt === b.closedAt && a.lastActiveAt === b.lastActiveAt &&
+    keys.length === Object.keys(a.view).length && keys.every((k) => a.view[k] === b.view[k])
+  );
+}
+
+function sendView(spaceId: SpaceId): void {
+  clearTimeout(viewTimers.get(spaceId));
+  viewTimers.delete(spaceId);
+  const p = pendingView.get(spaceId);
+  if (!p?.size) return;
+  void cmd.call("space.update", { id: spaceId, view: Object.fromEntries([...p].map(([k, v]) => [k, v ?? null])) }).catch(() => {});
+}
+
+function flushSpaceViews(): void {
+  for (const id of [...viewTimers.keys()]) sendView(id);
+}
+
+/** Set a view key of a Space (any Space, not only this window's). */
+export function setSpaceView(spaceId: SpaceId, key: string, value: unknown): void {
+  const space = state.spaces.get(spaceId);
+  if (!space || JSON.stringify(space.view[key]) === JSON.stringify(value)) return;
+  if (!pendingView.has(spaceId)) pendingView.set(spaceId, new Map());
+  pendingView.get(spaceId)!.set(key, value);
+  const spaces = new Map(state.spaces);
+  spaces.set(spaceId, { ...space, view: { ...space.view, [key]: value } });
+  set({ spaces });
+  clearTimeout(viewTimers.get(spaceId));
+  viewTimers.set(spaceId, setTimeout(() => sendView(spaceId), 250));
+}
+
+export function getSpaceView<T>(spaceId: SpaceId, key: string, fallback: T): T {
+  const v = state.spaces.get(spaceId)?.view[key];
+  return v === undefined ? fallback : (v as T);
+}
+
+/**
+ * Like usePersisted, for the shown Space's layout and selection. The setter
+ * writes to the Space shown when it is called, so callbacks stay correct after a switch.
+ */
+export function useSpaceView<T>(key: string, fallback: T): [T, (v: T | ((prev: T) => T)) => void] {
+  const stored = useStoreValue((s) => {
+    const view = s.spaces.get(s.spaceId)?.view;
+    return view && key in view ? view[key] : MISSING;
+  });
+  const value = (stored === MISSING ? fallback : stored) as T;
+  const setter = (v: T | ((prev: T) => T)) => {
+    const spaceId = state.spaceId;
+    const prev = getSpaceView(spaceId, key, fallback);
+    setSpaceView(spaceId, key, typeof v === "function" ? (v as (p: T) => T)(prev) : v);
+  };
+  return [value, setter];
+}
+
+/** The window (terminal or other) a selection id stands for lives in which Space? */
+export function spaceOfWindow(id: string): SpaceId | null {
+  return state.panes.get(id)?.spaceId ?? state.windows.get(id)?.spaceId ?? null;
+}
+
+/** Main says which Space this window shows (and maybe what to select there). */
+cmd.onShowSpace(({ spaceId, select }) => {
+  if (spaceId !== state.spaceId) set({ spaceId });
+  if (select) {
+    setSpaceView(spaceId, "selection.pane", select);
+    const history = getSpaceView<string[]>(spaceId, "selection.history", []);
+    setSpaceView(spaceId, "selection.history", [select, ...history.filter((x) => x !== select)].slice(0, 50));
+  }
+  void cmd.call("space.update", { id: spaceId, active: true }).catch(() => {});
+});
+
+/** This window's Space was closed or forgotten (here or elsewhere). */
+function checkSpace(): void {
+  if (state.connected && !state.spaces.has(state.spaceId)) cmd.spaceLost();
+}
+
+const MISSING = Symbol("missing");
 
 /**
  * Like useState, but remembered across app restarts (stored in the core).
  * Until the core's snapshot arrives the fallback is used.
  */
-const MISSING = Symbol("missing");
 
 export function usePersisted<T>(key: string, fallback: T): [T, (v: T | ((prev: T) => T)) => void] {
   // Only this key: other UI state and pane updates don't re-render the caller.
@@ -166,6 +274,25 @@ function handle(e: CoreEvent): void {
       const windows = new Map(state.windows);
       windows.delete(e.id);
       set({ windows });
+      return;
+    }
+    case "space.updated": {
+      const prev = state.spaces.get(e.space.id);
+      const next = e.space.closedAt === null ? withPending(e.space, prev) : null;
+      // Most updates are echoes of our own view writes: nothing new, no re-render.
+      if (prev && next && sameSpace(prev, next)) return;
+      const spaces = new Map(state.spaces);
+      if (next) spaces.set(e.space.id, next);
+      else spaces.delete(e.space.id);
+      set({ spaces });
+      checkSpace();
+      return;
+    }
+    case "space.removed": {
+      const spaces = new Map(state.spaces);
+      spaces.delete(e.id);
+      set({ spaces });
+      checkSpace();
       return;
     }
     case "fs.changed":
@@ -226,7 +353,9 @@ cmd.onStatus(async (status) => {
     panes: new Map(snap.panes.map((p) => [p.id, p])),
     agents: new Map(snap.agents.map((a) => [a.id, a])),
     windows: new Map((snap.windows ?? []).map((w) => [w.id, w])),
+    spaces: new Map((snap.spaces ?? []).map((sp) => [sp.id, withPending(sp, state.spaces.get(sp.id))])),
   });
+  checkSpace();
   void cmd.call("search.status", {}).then((search) => set({ search }), () => {});
   // The windows show now; each terminal opens once its content is written (hold).
   await Promise.allSettled(

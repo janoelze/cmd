@@ -5,9 +5,9 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { EventEmitter } from "node:events";
-import type { Attention, Pane, PaneId, PaneUsage, Settings } from "@cmd/protocol";
+import type { Attention, Pane, PaneId, PaneUsage, Settings, SpaceId } from "@cmd/protocol";
 import { usageChanged } from "./resources.ts";
-import { DEFAULT_SETTINGS, ENV } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
 import { OscScanner, type OscEvent } from "./osc.ts";
 import headless from "@xterm/headless";
 import { SerializeAddon } from "@xterm/addon-serialize";
@@ -134,6 +134,8 @@ export interface PaneManagerOptions {
 }
 
 export interface CreatePaneOptions {
+  /** Default: Home. The core resolves the Space before creating (see Placement). */
+  spaceId?: SpaceId;
   cwd?: string;
   command?: string;
   cols?: number;
@@ -225,6 +227,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     const now = Date.now();
     const pane: Pane = {
       id,
+      spaceId: opts.spaceId ?? HOME_SPACE_ID,
       title: shell.split("/").pop() ?? "shell",
       cwd,
       shell,
@@ -368,6 +371,13 @@ export class PaneManager extends EventEmitter<PaneEvents> {
 
   list(): Pane[] {
     return [...this.#panes.values()].map((l) => ({ ...l.pane }));
+  }
+
+  setSpace(id: PaneId, spaceId: SpaceId): void {
+    const l = this.#panes.get(id);
+    if (!l || l.pane.spaceId === spaceId) return;
+    l.pane.spaceId = spaceId;
+    this.emit("updated", { ...l.pane });
   }
 
   setAgent(id: PaneId, agentId: string | null): void {

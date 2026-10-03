@@ -63,6 +63,8 @@ const menu = (id) =>
   }, id);
 const accel = (id) => app.evaluate(({ Menu }, id) => Menu.getApplicationMenu()?.getMenuItemById(id)?.accelerator ?? null, id);
 const panes = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.length));
+// Layout and selection live in the shown Space's view (docs/11-spaces.md); these checks run in Home.
+const homeView = () => win.evaluate(() => window.cmd.call("space.list", {}).then((l) => l.find((s) => s.home).view));
 // Windows in visual order (reading order); the DOM keeps a stable creation order.
 const visualTiles = async () => {
   const ids = await win.locator(".windows-track > .tile:not(.hidden-tile)").evaluateAll((els) =>
@@ -143,7 +145,7 @@ check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `status bar shows memory of the pr
   check(true, "looking at the terminal clears its mark");
   await win.evaluate((id) => window.cmd.call("pane.clearAttention", { paneId: id }), other);
 }
-const panesOrder = async () => (await win.evaluate(() => window.cmd.call("ui.get", {})))["grid.order"];
+const panesOrder = async () => (await homeView())["grid.order"];
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
 await win.waitForTimeout(500);
 const order1 = await panesOrder();
@@ -465,7 +467,7 @@ check((await accel("edit.clear")) === null, "null unbinds a shortcut");
   await win.waitForTimeout(200);
   await menu("file.close");
   await win.waitForTimeout(700);
-  const sel = (await win.evaluate(() => window.cmd.call("ui.get", {})))["selection.pane"];
+  const sel = (await homeView())["selection.pane"];
   check(sel === first, "closing a terminal focuses the previously used one");
 }
 
@@ -546,13 +548,13 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
     await win.screenshot({ path: path.join(shots, "8b-strip-drag.png") });
     await win.mouse.up();
     await win.waitForTimeout(500);
-    const order = (await win.evaluate(() => window.cmd.call("ui.get", {})))["grid.order"];
+    const order = (await homeView())["grid.order"];
     check(order.indexOf(movedId) === order.indexOf(nextId) + 1, "dropping on the next window swaps their places along the strip");
   }
   await menu("session.next");
   await win.waitForTimeout(500);
   await win.screenshot({ path: path.join(shots, "8-strip.png") });
-  const widths = (await win.evaluate(() => window.cmd.call("ui.get", {})))["strip.widths"];
+  const widths = (await homeView())["strip.widths"];
   check(widths && Object.keys(widths).length >= 1, "strip widths are remembered");
   await menu("view.grid");
 }
@@ -577,7 +579,7 @@ await menu("view.zoomIn");
   await win.mouse.up();
 }
 await win.waitForTimeout(400); // debounced writes reach the core before we read them back
-const selectedBefore = await win.evaluate(() => window.cmd.call("ui.get", {}).then((u) => u["selection.pane"]));
+const selectedBefore = (await homeView())["selection.pane"];
 await app.close();
 
 ({ app, win } = await launch());
@@ -595,7 +597,8 @@ check((await win.locator(".main.mode-grid").count()) === 1, "view mode restored 
 check((await win.locator('.sb-windows .sb-heading[aria-expanded="false"]').count()) === 1, "collapsed sidebar section restored");
 const ui = await win.evaluate(() => window.cmd.call("ui.get", {}));
 check(ui["terminal.zoom"] === 2, "terminal zoom restored (+2)");
-check(ui["selection.pane"] === selectedBefore && !!selectedBefore, `selected terminal restored (${selectedBefore} → ${ui["selection.pane"]})`);
+const restored = (await homeView())["selection.pane"];
+check(restored === selectedBefore && !!selectedBefore, `selected terminal restored (${selectedBefore} → ${restored})`);
 {
   const text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 500 }).then((r) => r.text), markerPane);
   await win.evaluate((id) => window.__cmdSelect(id), markerPane);
@@ -609,6 +612,35 @@ check(ui["selection.pane"] === selectedBefore && !!selectedBefore, `selected ter
 }
 check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows survive an app restart");
 await win.screenshot({ path: path.join(shots, "7-restored.png") });
+
+// Spaces: `cmd .` (space.open with show) switches the window to a new, empty
+// Space; new terminals start at its root; ⌃⌘[ goes back; closing ends its terminals.
+{
+  const proj = path.join(home, "proj");
+  fs.mkdirSync(proj, { recursive: true });
+  const tilesInHome = await win.locator(".windows-track > .tile").count();
+  const chip = () => win.locator(".space-chip.on .space-name").textContent();
+  const sp = await win.evaluate((p) => window.cmd.call("space.open", { path: p, show: true }).then((r) => r.space), proj);
+  await win.waitForTimeout(700);
+  check((await chip()) === "proj", "space.open shows the new Space in the switcher");
+  check((await win.locator(".windows-track > .tile").count()) === 0, "a new Space starts empty");
+  await menu("file.newTerminal");
+  await win.waitForTimeout(800);
+  const inSpace = () => win.evaluate((id) => window.cmd.call("pane.list", {}).then((l) => l.filter((x) => x.spaceId === id)), sp.id);
+  const p = await inSpace();
+  check(p.length === 1 && p[0].cwd === fs.realpathSync.native(proj), `new terminals start at the Space's root (${p[0]?.cwd})`);
+  check((await win.title()) === "proj", "the app window is titled after its Space");
+  await win.screenshot({ path: path.join(shots, "8-space.png") });
+  await menu("space.prev");
+  await win.waitForTimeout(600);
+  const backTiles = await win.locator(".windows-track > .tile").count();
+  check((await chip()) === "Home" && backTiles === tilesInHome, `⌃⌘[ switches back to Home and its windows (${await chip()}, ${backTiles}/${tilesInHome})`);
+  const again = await win.evaluate((p) => window.cmd.call("space.open", { path: p + "/" }), proj);
+  check(again.created === false && again.space.id === sp.id, "opening the folder again returns the same Space");
+  await win.evaluate((id) => window.cmd.call("space.close", { id }), sp.id);
+  await win.waitForTimeout(500);
+  check((await inSpace()).length === 0 && (await win.locator(".space-chip").count()) === 1, "closing a Space ends its terminals and leaves the switcher");
+}
 
 await app.close();
 await stopCore(home);

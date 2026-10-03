@@ -105,6 +105,22 @@ const api = {
     ipcRenderer.on("keybindings", h);
     return () => ipcRenderer.off("keybindings", h);
   },
+  /**
+   * Show a Space (docs/11-spaces.md). Main decides where: the app window that
+   * already shows it, else this one (newWindow: a new one). select: a window to
+   * select there.
+   */
+  showSpace: (spaceId: string, o: { select?: string; newWindow?: boolean } = {}) => ipcRenderer.send("space-show", spaceId, o),
+  /** This window's Space was closed or forgotten: switch it to Home, or close it if Home is shown elsewhere. */
+  spaceLost: () => ipcRenderer.send("space-lost"),
+  /** Main tells this window which Space to show. */
+  onShowSpace(fn: (o: { spaceId: string; select?: string }) => void): () => void {
+    const h = (_e: unknown, o: { spaceId: string; select?: string }) => fn(o);
+    ipcRenderer.on("space-show", h);
+    return () => ipcRenderer.off("space-show", h);
+  },
+  /** Native folder picker; null when cancelled. */
+  chooseFolder: (): Promise<string | null> => ipcRenderer.invoke("choose-folder"),
   /** Native sheet; resolves true when confirmed. */
   confirm: (o: { message: string; detail?: string; confirm: string }): Promise<boolean> => ipcRenderer.invoke("confirm", o),
   /** Native context menu; resolves with the chosen item id or null. */

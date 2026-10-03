@@ -3,17 +3,18 @@
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import type { CoreEvent, Method, Methods, Params, Result, Settings } from "@cmd/protocol";
+import type { AgentId, AppWindow, CoreEvent, Method, Methods, Params, Placement, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
 import { AgentTracker } from "./agents/tracker.ts";
 import { NotificationCenter } from "./notifications.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
-import { listDir, parseOverrides, readText, registerBuiltins, shellOpenEnv, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
+import { listDir, parseOverrides, readText, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
+import { SpaceManager } from "./spaces/manager.ts";
 
 export const VERSION = "0.0.1";
 
@@ -40,6 +41,8 @@ export interface CoreOptions {
   shellRulesFile?: string | null;
   /** Source hash this core was started from (see sourceBuildId). */
   build?: string;
+  /** Home's root (default: the user's home folder); tests use a temp dir. */
+  home?: string;
 }
 
 const NO_SEARCH = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
@@ -55,6 +58,7 @@ export class Core {
   readonly resources: ResourceMonitor | null;
   readonly windows: WindowManager;
   readonly windowTypes: WindowTypes;
+  readonly spaces: SpaceManager;
   #server: net.Server | null = null;
   /** Subscribed connections and the event types they want (null = all). */
   #subscribers = new Map<net.Socket, Set<string> | null>();
@@ -97,7 +101,14 @@ export class Core {
     this.notifications = new NotificationCenter(this.panes, this.agents, settings);
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler) : null;
+    this.spaces = new SpaceManager(this.store, opts.home);
+    this.spaces.on("updated", (space) => this.#broadcast({ type: "space.updated", space }));
+    this.spaces.on("removed", (id) => this.#broadcast({ type: "space.removed", id }));
     this.windows = new WindowManager(this.panes, this.store, this.windowTypes, overrides);
+    // Windows of a Space that is gone or closed (e.g. the core died mid-close) go Home.
+    for (const w of this.windows.others()) {
+      if (this.spaces.get(w.spaceId)?.closedAt !== null) this.windows.move(w.id, this.spaces.home().id);
+    }
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
     this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
@@ -114,7 +125,10 @@ export class Core {
 
   readonly handlers: Handlers = {
     "core.hello": () => ({ version: VERSION, pid: process.pid, socket: this.#opts.socketPath, build: this.#opts.build ?? "" }),
-    "pane.create": (p) => this.panes.create(p),
+    "pane.create": (p) => {
+      const space = this.#place(p, { path: p.cwd });
+      return this.panes.create({ ...p, cwd: p.cwd ?? space.root, spaceId: space.id });
+    },
     "pane.list": () => this.panes.list(),
     "pane.write": (p) => (this.panes.write(p.paneId, p.data), null),
     "pane.resize": (p) => (this.panes.resize(p.paneId, p.cols, p.rows), null),
@@ -126,7 +140,11 @@ export class Core {
     "pane.read": async (p) => ({ text: await this.panes.read(p.paneId, p.lines) }),
     "pane.reset": async (p) => (await this.panes.resetState(p.paneId), null),
     "agent.list": () => this.agents.list(),
-    "agent.spawn": (p) => this.agents.spawn(p),
+    "agent.spawn": (p) => {
+      const space = this.#place(p, { parentId: p.parentId, path: p.cwd });
+      const parent = p.parentId ? this.agents.get(p.parentId) : null;
+      return this.agents.spawn({ ...p, spaceId: space.id, cwd: p.cwd ?? parent?.cwd ?? space.root });
+    },
     "agent.send": async (p) => (await this.agents.send(p.agentId, p.text, p.submit), null),
     "agent.wait": (p) => this.agents.wait(p.agentIds, p.until, p.mode, p.timeoutMs),
     "agent.kill": (p) => ({ killed: this.agents.kill(p.agentId, p.tree) }),
@@ -141,12 +159,28 @@ export class Core {
     "settings.get": () => this.settings.snapshot(),
     "settings.set": (p) => this.settings.set(p.key, p.value),
     "settings.reset": (p) => this.settings.reset(p.key),
-    "window.open": (p) => this.windows.open(p.kind, p.input),
+    "window.open": (p) => {
+      const input = p.input ?? {};
+      const at = [input.cwd, input.path].find((v): v is string => typeof v === "string");
+      return this.windows.open(p.kind, input, this.#place(p, { path: at }));
+    },
     "window.update": (p) => this.windows.update(p.id, p),
     "window.types": () => this.windowTypes.info(),
     "window.close": (p) => (this.windows.close(p.id), null),
     "window.list": () => this.windows.list(),
-    "window.openTarget": (p) => this.windows.openTarget(p.target),
+    "window.openTarget": (p) =>
+      this.windows.openTarget(p.target, this.#place(p, { path: /^[a-z][\w+.-]+:/i.test(p.target) ? undefined : p.target })),
+    "window.move": (p) => this.#moveWindow(p.id, p.spaceId),
+    "space.list": (p) => this.spaces.list(p.closed),
+    "space.open": (p) => {
+      const r = this.spaces.open(p.path, p);
+      if (p.show) this.#broadcast({ type: "space.show", spaceId: r.space.id, newWindow: !!p.newWindow });
+      return r;
+    },
+    "space.match": (p) => this.spaces.match(p.path, p.cwd),
+    "space.update": (p) => this.spaces.update(p.id, p),
+    "space.close": (p) => (this.#closeSpace(p.id), null),
+    "space.forget": (p) => (this.spaces.forget(p.id), null),
     "fs.list": (p) => listDir(p.path),
     "fs.read": (p) => readText(p.path),
     "fs.write": (p) => writeText(p.path, p.text, p.expectMtime),
@@ -156,7 +190,7 @@ export class Core {
     "search.query": (p) => this.#search?.search(p.text, p.limit) ?? [],
     "search.recent": (p) => this.#search?.recent(Math.min(p.limit ?? 5, 50), p.exclude) ?? [],
     "search.status": () => this.#search?.status() ?? NO_SEARCH,
-    "agent.resume": (p) => this.agents.resume(p),
+    "agent.resume": (p) => this.agents.resume({ ...p, spaceId: this.#place(p, { path: p.cwd ?? undefined }).id }),
     "ui.get": () => this.store.uiState(),
     "ui.set": (p) => {
       if (typeof p.key !== "string" || !p.key || p.key.length > 200) throw new Error("ui.set: invalid key");
@@ -168,6 +202,7 @@ export class Core {
       panes: this.panes.list(),
       agents: this.agents.list(),
       windows: this.windows.others(),
+      spaces: this.spaces.list(),
       windowTypes: this.windowTypes.info(),
       settings: this.settings.snapshot(),
       ui: this.store.uiState(),
@@ -188,11 +223,45 @@ export class Core {
     });
   }
 
-  /** Requests from a pane's shell integration, e.g. `open .` → file window. */
-  #onShellRequest(_paneId: string, action: string, arg: string): void {
+  /**
+   * Where something new goes (see Placement): an explicit Space, the calling
+   * pane's, the parent agent's, the open Space whose root most deeply contains
+   * the path, else Home.
+   */
+  #place(p: Placement, o: { parentId?: AgentId | null; path?: string } = {}): Space {
+    if (p.spaceId) return this.spaces.mustOpen(p.spaceId);
+    const caller = p.callerPaneId ? this.panes.get(p.callerPaneId) : null;
+    if (caller) return this.spaces.mustOpen(caller.spaceId);
+    const parent = o.parentId ? this.agents.get(o.parentId) : null;
+    if (parent) return this.spaces.mustOpen(parent.spaceId);
+    return o.path ? this.spaces.match(o.path) : this.spaces.home();
+  }
+
+  #moveWindow(id: WindowId, spaceId: SpaceId): AppWindow {
+    this.spaces.mustOpen(spaceId);
+    const pane = this.panes.get(id);
+    if (!pane) return this.windows.move(id, spaceId);
+    const agent = pane.agentId ? this.agents.get(pane.agentId) : null;
+    if (agent) this.agents.moveTree(agent.id, spaceId);
+    else this.panes.setSpace(id, spaceId);
+    return terminalWindow(this.panes.get(id)!);
+  }
+
+  /** Kill the Space's terminals (their agents go with them) and remove its windows; keep it as a recent Space. */
+  #closeSpace(id: SpaceId): void {
+    const space = this.spaces.mustOpen(id);
+    if (space.home) throw new Error("Home can't be closed");
+    for (const p of this.panes.list()) if (p.spaceId === id) this.panes.kill(p.id);
+    for (const a of this.agents.list()) if (a.spaceId === id && !a.paneId) this.agents.kill(a.id);
+    for (const w of this.windows.inSpace(id)) this.windows.close(w.id);
+    this.spaces.markClosed(id);
+  }
+
+  /** Requests from a pane's shell integration, e.g. `open .` → file window in the pane's Space. */
+  #onShellRequest(paneId: string, action: string, arg: string): void {
     if (action !== "open" || !arg) return;
     try {
-      const w = this.windows.openTarget(arg);
+      const w = this.windows.openTarget(arg, this.#place({ callerPaneId: paneId }));
       if (w) this.#broadcast({ type: "window.focus", id: w.id });
     } catch {
       // not a folder / URL: ignore

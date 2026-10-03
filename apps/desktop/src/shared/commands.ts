@@ -26,6 +26,7 @@ export const COMMANDS = spec([
   { id: "file.newCodex", label: "New Codex Session" },
   { id: "file.newBrowser", label: "New Browser Window", keys: ["Shift+Cmd+B"] },
   { id: "file.newFiles", label: "New File Browser", keys: ["Shift+Cmd+O"] },
+  { id: "file.openSpace", label: "Open Space…", keys: ["Cmd+O"] },
   { id: "file.save", label: "Save", keys: ["Cmd+S"] },
   { id: "file.close", label: "Close Window", keys: ["Cmd+W"] },
   { id: "file.closeWindow", label: "Close App Window", keys: ["Shift+Cmd+W"] },
@@ -60,6 +61,21 @@ export const COMMANDS = spec([
     id: `session.select${n}`,
     label: `Select Session ${n}`,
     keys: [`Cmd+${n}`],
+    paletteHidden: true,
+  })),
+
+  { id: "space.next", label: "Next Space", keys: ["Ctrl+Cmd+]"] },
+  { id: "space.prev", label: "Previous Space", keys: ["Ctrl+Cmd+["] },
+  { id: "space.last", label: "Last Space" },
+  { id: "space.moveWindow", label: "Move Window to Space…" },
+  { id: "space.rename", label: "Rename Space…" },
+  { id: "space.reveal", label: "Show Space Folder in Finder" },
+  { id: "space.close", label: "Close Space…" },
+  // Ctrl+1–9 like Arc's spaces; ⌘1–9 stay for sessions.
+  ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
+    id: `space.select${n}`,
+    label: `Switch to Space ${n}`,
+    keys: [`Ctrl+${n}`],
     paletteHidden: true,
   })),
 

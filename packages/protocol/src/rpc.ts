@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, Pane, PaneId, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, Pane, PaneId, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 
 export interface SettingsSnapshot {
@@ -13,11 +13,22 @@ export interface SettingsSnapshot {
   path: string;
 }
 
+/**
+ * Where something new goes (docs/11-spaces.md). Resolved in order: `spaceId`,
+ * the calling pane's Space (`callerPaneId`, the CLI's CMD_PANE_ID), the parent
+ * agent's, the open Space whose root most deeply contains the cwd or path, Home.
+ */
+export interface Placement {
+  spaceId?: SpaceId;
+  callerPaneId?: PaneId;
+}
+
 export interface Methods {
   "core.hello": { params: {}; result: { version: string; pid: number; socket: string; build: string } };
 
+  /** cwd defaults to the Space's root. */
   "pane.create": {
-    params: { cwd?: string; command?: string; cols?: number; rows?: number; env?: Record<string, string> };
+    params: Placement & { cwd?: string; command?: string; cols?: number; rows?: number; env?: Record<string, string> };
     result: Pane;
   };
   "pane.list": { params: {}; result: Pane[] };
@@ -38,7 +49,7 @@ export interface Methods {
 
   "agent.list": { params: {}; result: Agent[] };
   "agent.spawn": {
-    params: {
+    params: Placement & {
       kind: AgentKind;
       prompt?: string;
       cwd?: string;
@@ -77,7 +88,7 @@ export interface Methods {
    * Open a window of a registered type. `input` is the type's create input:
    * terminal { cwd?, command? }, browser { url? }, files { path? }, text { path }.
    */
-  "window.open": { params: { kind: string; input?: Record<string, unknown> }; result: AppWindow };
+  "window.open": { params: Placement & { kind: string; input?: Record<string, unknown> }; result: AppWindow };
   /** Windows report navigation (state patches, applied by their type) and titles here. */
   /** `kind` switches the window to another type in place (state re-created from the current one). */
   "window.update": {
@@ -91,7 +102,30 @@ export interface Methods {
    * Open a path or URL in the window type that handles it (registry rules +
    * the open.handlers setting). null = no type handles it (use the default app).
    */
-  "window.openTarget": { params: { target: string }; result: AppWindow | null };
+  "window.openTarget": { params: Placement & { target: string }; result: AppWindow | null };
+  /** Move a window to another Space; a terminal takes its agent tree (and their terminals) along. */
+  "window.move": { params: { id: WindowId; spaceId: SpaceId }; result: AppWindow };
+
+  /** Open Spaces in switcher order; closed: also the closed (recent) ones. */
+  "space.list": { params: { closed?: boolean }; result: Space[] };
+  /**
+   * Attach-or-create by root: the Space whose root is this path (canonicalized),
+   * reopened if it was closed, else a new one. Relative paths resolve against
+   * `cwd`. gitRoot: use the enclosing repository's root (a worktree's own root).
+   * show: ask the UI to show it (space.show event; newWindow: in a new app window).
+   */
+  "space.open": {
+    params: { path: string; cwd?: string; gitRoot?: boolean; show?: boolean; newWindow?: boolean };
+    result: { space: Space; created: boolean };
+  };
+  /** The Space a path belongs to (longest open root containing it, else Home), without creating one. */
+  "space.match": { params: { path: string; cwd?: string }; result: Space };
+  /** view: keys merged into the Space's view (null deletes a key). active: it was just shown (recency for the picker). */
+  "space.update": { params: { id: SpaceId; name?: string; order?: number; view?: Record<string, unknown>; active?: boolean }; result: Space };
+  /** Kill its terminals and agents, remove its windows; the Space stays as a recent one. Home can't be closed. */
+  "space.close": { params: { id: SpaceId }; result: null };
+  /** Delete a closed Space's record. */
+  "space.forget": { params: { id: SpaceId }; result: null };
   /** All windows, terminals included. */
   "window.list": { params: {}; result: AppWindow[] };
 
@@ -115,7 +149,7 @@ export interface Methods {
   "search.status": { params: {}; result: SearchStatus };
   /** Resume (or fork) a past session in a new pane, typed into the user's shell. */
   "agent.resume": {
-    params: { agent: "claude" | "codex"; sessionId: string; cwd?: string | null; configDir?: string | null; fork?: boolean };
+    params: Placement & { agent: "claude" | "codex"; sessionId: string; cwd?: string | null; configDir?: string | null; fork?: boolean };
     result: Agent;
   };
 
@@ -133,6 +167,8 @@ export interface Methods {
       agents: Agent[];
       /** Non-terminal windows (terminal windows are the panes). */
       windows: AppWindow[];
+      /** Open Spaces in switcher order. */
+      spaces: Space[];
       windowTypes: WindowTypeInfo[];
       settings: SettingsSnapshot;
       ui: Record<string, unknown>;
@@ -154,6 +190,10 @@ export type CoreEvent =
   | { type: "search.status"; status: SearchStatus }
   | { type: "window.updated"; window: AppWindow }
   | { type: "window.removed"; id: WindowId }
+  | { type: "space.updated"; space: Space }
+  | { type: "space.removed"; id: SpaceId }
+  /** Show this Space (cmd ., ⌘O from elsewhere); the app picks or creates the app window. */
+  | { type: "space.show"; spaceId: SpaceId; newWindow: boolean }
   /** A watched file or folder changed on disk (see fs.watch). */
   | { type: "fs.changed"; path: string }
   /** Bring a window to the front (e.g. `open .` in a terminal). */

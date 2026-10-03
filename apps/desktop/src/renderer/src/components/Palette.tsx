@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface PaletteItem {
   id: string;
-  group: "Commands" | "Sessions" | "History";
+  group: "Commands" | "Sessions" | "History" | "Spaces" | "Recent" | "Folders";
   label: string;
   hint?: string;
   /** Second line (search results): agent · folder · when. */
@@ -10,6 +10,8 @@ export interface PaletteItem {
   /** Matching passage; \x01…\x02 mark highlighted terms. */
   snippet?: string | null;
   run: () => void;
+  /** ⌘↵ (Space picker: open in a new app window). */
+  runAlt?: () => void;
 }
 
 const PREFIX: Record<string, PaletteItem["group"]> = { ">": "Commands", "@": "Sessions" };
@@ -52,6 +54,9 @@ export function Palette({
   search,
   searchStatus,
   dynamic,
+  placeholder = "Type a command, @session, ?search…",
+  footer,
+  emptyText,
 }: {
   items: PaletteItem[];
   /** Recently run item ids, most recent first; ranked first. */
@@ -65,6 +70,10 @@ export function Palette({
   searchStatus?: string;
   /** Extra items computed from the raw query (e.g. "Open <url>"), listed first. */
   dynamic?: (query: string) => PaletteItem[];
+  placeholder?: string;
+  /** Replaces the footer's hints (pickers other than the command palette). */
+  footer?: React.ReactNode;
+  emptyText?: string;
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [active, setActive] = useState(0);
@@ -98,7 +107,8 @@ export function Palette({
     const matched = items
       .filter((it) => !group || it.group === group)
       .map((it) => {
-        const s = score(it.label, q);
+        // The second line (a Space's folder) matches too: "src/cmd" finds it.
+        const s = score(it.meta ? `${it.label} ${it.meta}` : it.label, q);
         const r = recent.indexOf(it.id);
         // Recent items first when the query is empty; a small boost otherwise.
         return { it, s: s > 0 && r >= 0 ? s + (q ? 10 : 1000) - r : s };
@@ -112,11 +122,11 @@ export function Palette({
 
   useEffect(() => setActive(0), [query]);
 
-  const run = (it: PaletteItem | undefined) => {
+  const run = (it: PaletteItem | undefined, alt = false) => {
     if (!it) return;
     onClose();
     onRun?.(it.id);
-    it.run();
+    (alt && it.runAlt ? it.runAlt : it.run)();
   };
 
   const empty = searching
@@ -125,7 +135,7 @@ export function Palette({
         ? "Searching…"
         : "No sessions match."
       : 'Search past Claude Code and Codex sessions. "Phrases" and -exclusions work.'
-    : "Nothing matches. Type ? to search past agent sessions.";
+    : (emptyText ?? "Nothing matches. Type ? to search past agent sessions.");
 
   return (
     <div className="palette-backdrop" onMouseDown={onClose}>
@@ -133,14 +143,14 @@ export function Palette({
         <input
           ref={input}
           className="palette-input"
-          placeholder="Type a command, @session, ?search…"
+          placeholder={placeholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Escape") onClose();
             else if (e.key === "ArrowDown") (e.preventDefault(), setActive((a) => Math.min(a + 1, results.length - 1)));
             else if (e.key === "ArrowUp") (e.preventDefault(), setActive((a) => Math.max(a - 1, 0)));
-            else if (e.key === "Enter") run(results[active]);
+            else if (e.key === "Enter") run(results[active], e.metaKey);
           }}
         />
         <ul className="palette-list">
@@ -149,7 +159,7 @@ export function Palette({
               key={it.id}
               className={`${i === active ? "on" : ""} ${it.meta ? "rich" : ""}`}
               onMouseEnter={() => setActive(i)}
-              onClick={() => run(it)}
+              onClick={(e) => run(it, e.metaKey)}
             >
               {it.meta ? (
                 <div className="palette-hit">
@@ -175,18 +185,22 @@ export function Palette({
           {results.length === 0 && <li className="palette-empty">{empty}</li>}
         </ul>
         <footer className="palette-foot">
-          <span>
-            <kbd>↑↓</kbd> move
-          </span>
-          <span>
-            <kbd>↵</kbd> {searching ? "open or resume" : "run"}
-          </span>
-          {searching ? (
-            <span className="palette-status">{searchStatus}</span>
-          ) : (
-            <span>
-              <kbd>&gt;</kbd> commands <kbd>@</kbd> sessions <kbd>?</kbd> search
-            </span>
+          {footer ?? (
+            <>
+              <span>
+                <kbd>↑↓</kbd> move
+              </span>
+              <span>
+                <kbd>↵</kbd> {searching ? "open or resume" : "run"}
+              </span>
+              {searching ? (
+                <span className="palette-status">{searchStatus}</span>
+              ) : (
+                <span>
+                  <kbd>&gt;</kbd> commands <kbd>@</kbd> sessions <kbd>?</kbd> search
+                </span>
+              )}
+            </>
           )}
         </footer>
       </div>

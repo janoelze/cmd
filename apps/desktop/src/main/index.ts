@@ -3,7 +3,7 @@
 
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, shell } from "electron";
 import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -14,6 +14,7 @@ import { cmdHome, connect, defaultSocketPath, sourceBuildId } from "@cmd/protoco
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
+import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type KeybindingsSnapshot } from "./keybindings.ts";
 
 let keybindings: KeybindingsSnapshot = loadKeybindings();
@@ -133,41 +134,9 @@ async function ensureCore(): Promise<void> {
 
 // ── window ──────────────────────────────────────────────
 
-interface Bounds { x?: number; y?: number; width: number; height: number; maximized?: boolean }
-const boundsFile = () => path.join(cmdHome(), "window.json");
-
-function loadBounds(): Bounds {
-  try {
-    const b = JSON.parse(fs.readFileSync(boundsFile(), "utf8")) as Bounds;
-    const visible = screen.getAllDisplays().some((d) => {
-      const a = d.workArea;
-      return b.x !== undefined && b.y !== undefined && b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + 40 > a.y;
-    });
-    return visible ? b : { width: b.width, height: b.height };
-  } catch {
-    return { width: 1400, height: 900 };
-  }
-}
-
-function trackBounds(win: BrowserWindow): void {
-  let t: NodeJS.Timeout | undefined;
-  const save = () => {
-    clearTimeout(t);
-    t = setTimeout(() => {
-      if (win.isDestroyed() || win.isFullScreen()) return;
-      const b: Bounds = { ...win.getNormalBounds(), maximized: win.isMaximized() };
-      fs.mkdirSync(cmdHome(), { recursive: true });
-      fs.writeFileSync(boundsFile(), JSON.stringify(b));
-    }, 300);
-  };
-  win.on("resize", save);
-  win.on("move", save);
-  win.on("close", save);
-}
-
-function createWindow(): BrowserWindow {
+/** An app window showing a Space (see spaces.ts, which decides which). */
+function createWindow(spaceId: string, b: Bounds): BrowserWindow {
   performance.mark("boot:window-start");
-  const b = loadBounds();
   const win = new BrowserWindow({
     ...b,
     minWidth: 760,
@@ -188,11 +157,13 @@ function createWindow(): BrowserWindow {
   if (b.maximized) win.maximize();
   performance.mark("boot:window-created");
   win.once("ready-to-show", () => (performance.mark("boot:ready-to-show"), win.show()));
-  trackBounds(win);
-  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else win.loadFile(path.join(here, "../renderer/index.html"));
+  // The renderer reads its Space from the URL before the core answers.
+  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}?space=${encodeURIComponent(spaceId)}`);
+  else win.loadFile(path.join(here, "../renderer/index.html"), { query: { space: spaceId } });
   return win;
 }
+
+const spaces = new SpaceWindows(createWindow);
 
 // ── settings window ─────────────────────────────────────
 // One native Settings window (⌘,), like a macOS app's: translucent sidebar of
@@ -289,6 +260,17 @@ ipcMain.on("appearance", (_e, a: Appearance) => {
   for (const w of appWindows()) w.setBackgroundColor(a.background);
 });
 ipcMain.on("menu-state", (_e, state: MenuState) => applyMenuState(state));
+ipcMain.on("space-show", (e, spaceId: string, o: { select?: string; newWindow?: boolean }) => spaces.show(spaceId, o ?? {}, winOf(e)));
+ipcMain.on("space-lost", (e) => {
+  const win = winOf(e);
+  if (win) spaces.lost(win);
+});
+ipcMain.handle("choose-folder", async (e) => {
+  const opts = { properties: ["openDirectory" as const, "createDirectory" as const], buttonLabel: "Open Space" };
+  const win = winOf(e);
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  return r.canceled ? null : (r.filePaths[0] ?? null);
+});
 ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("open-path", (_e, p: string) => void shell.openPath(p));
 ipcMain.on("settings-window", () => void openSettings());
@@ -416,12 +398,12 @@ app.whenReady().then(async () => {
   });
   // First: the window loads its bundle while the menu is built and the core is
   // checked or started; the preload connects as soon as the socket answers.
-  createWindow();
+  spaces.restore();
   ensureCore().then(
-    () => performance.mark("boot:core-reachable"),
+    () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows)),
     (err: Error) => dialog.showErrorBox("cmd: the core did not start", err.message),
   );
-  const send = commandSender(createWindow, { openSettings, isSettings, appWindows });
+  const send = commandSender(() => spaces.reopen(), { openSettings, isSettings, appWindows });
   buildMenu(send, keybindings.bindings);
   watchKeybindings((next) => {
     keybindings = next;
@@ -435,7 +417,7 @@ app.whenReady().then(async () => {
     ]),
   );
   app.on("activate", () => {
-    if (appWindows().length === 0) createWindow();
+    if (appWindows().length === 0) spaces.reopen();
   });
 });
 
