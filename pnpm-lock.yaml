@@ -62,6 +62,9 @@ importers:
       dompurify:
         specifier: ^3.4.16
         version: 3.4.16
+      lucide-static:
+        specifier: ^1.50.0
+        version: 1.50.0
       marked:
         specifier: ^18.0.14
         version: 18.0.14
@@ -1855,6 +1858,9 @@ packages:
   lru-cache@6.0.0:
     resolution: {integrity: sha512-Jo6dJ04CmSjuznwJSS3pUeWmd/H0ffTlkXXgwZi+eq1UCmqQwCh+eLsYOYCwY991i2Fah4h1BEMCx4qThGbsiA==}
     engines: {node: '>=10'}
+
+  lucide-static@1.50.0:
+    resolution: {integrity: sha512-Pge6F5Au0bEBvjaeBIjfU5PsmA43FHdM3s5g3rYqSNWvBO3o7WwDSNQSavwX76z/OoSCjwSVbQpGA9lqKud/WA==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -4353,6 +4359,8 @@ snapshots:
   lru-cache@6.0.0:
     dependencies:
       yallist: 4.0.0
+
+  lucide-static@1.50.0: {}
 
   magic-string@0.30.21:
     dependencies:

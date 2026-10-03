@@ -6,7 +6,8 @@ import react from "@vitejs/plugin-react";
 const bundleWorkspace = { externalizeDeps: { exclude: ["@cmd/protocol"] } };
 
 export default defineConfig({
-  main: { build: bundleWorkspace },
+  // Lucide's icons are bundled too: the packaged app ships no node_modules for main.
+  main: { build: { externalizeDeps: { exclude: ["@cmd/protocol", "lucide-static"] } } },
   // Two preloads: the app's (index) and browser pages' (guest). CommonJS, because
   // browser pages are sandboxed and sandboxed preloads can't be ES modules.
   preload: {

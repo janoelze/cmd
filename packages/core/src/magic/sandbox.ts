@@ -40,6 +40,15 @@ export interface ExecResult {
 const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 let available: boolean | undefined;
 
+/**
+ * Can Magic run shell commands here? Not on Windows yet: there is no sandbox
+ * (and no /bin/sh), so the agent gets no run tool and command sources are refused.
+ */
+export function commandsSupported(mode: SandboxMode = "required"): boolean {
+  if (process.platform === "win32") return false;
+  return mode === "off" || sandboxAvailable();
+}
+
 /** Can this process apply a sandbox profile? Probed once. */
 export function sandboxAvailable(): boolean {
   if (available === undefined) {
@@ -71,7 +80,7 @@ export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; 
   const abs = (p: string) => real(path.resolve(expandPath(p, home)));
   const allowed = (o.credentials?.paths ?? []).map(abs);
   const keychain = !!o.credentials?.keychain;
-  const inside = (p: string, root: string) => p === root || p.startsWith(root + "/");
+  const inside = (p: string, root: string) => p === root || p.startsWith(root + path.sep);
   const deny = o.deny
     .map(abs)
     .filter((d) => !allowed.some((a) => inside(d, a) || inside(a, d)) && !(keychain && inside(d, abs("~/Library/Keychains"))));
@@ -105,6 +114,9 @@ export function execCommand(command: string, o: ExecOptions = {}): Promise<ExecR
   const mode = o.sandbox ?? "required";
   const sandboxed = mode === "required";
   const start = Date.now();
+  if (process.platform === "win32") {
+    return Promise.resolve({ stdout: "", stderr: "Running commands isn't supported on Windows yet.", code: null, timedOut: false, truncated: false, ms: 0, sandboxed });
+  }
   if (sandboxed && !sandboxAvailable()) {
     return Promise.resolve({
       stdout: "",

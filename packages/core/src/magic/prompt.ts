@@ -33,13 +33,15 @@ export interface RequestContext {
   home?: string;
   now?: Date;
   explore: boolean;
+  /** Shell commands can run (false on Windows for now: no sandbox). */
+  canRun?: boolean;
 }
 
 /** The user message: the request plus where and when it was made. */
 export function buildRequest(prompt: string, c: RequestContext): string {
   const now = c.now ?? new Date();
   const home = c.home ?? os.homedir();
-  const short = (p: string) => (p === home ? "~" : p.startsWith(home + "/") ? "~" + p.slice(home.length) : p);
+  const short = (p: string) => (p === home ? "~" : p.startsWith(home + path.sep) ? "~" + p.slice(home.length) : p);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const lines = [
     `Request: ${prompt}`,
@@ -47,5 +49,6 @@ export function buildRequest(prompt: string, c: RequestContext): string {
     `Context: macOS ${os.release()} (Darwin), user ${os.userInfo().username}, home ${home}, current folder ${short(c.cwd)}, ${now.toLocaleString("en-GB", { timeZone: tz })} ${tz}.`,
   ];
   if (!c.explore) lines.push("Looking around this Mac is off for this request: answer without the run, read and list tools.");
+  else if (c.canRun === false) lines.push(`Shell commands can't run here (${process.platform === "win32" ? "Windows" : "no sandbox"}): there is no run tool, and command sources fail. Use read and list, and fetch sources.`);
   return lines.join("\n");
 }

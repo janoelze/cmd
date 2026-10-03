@@ -35,7 +35,7 @@ export function canonical(p: string, base = process.cwd(), home = os.homedir()):
 /** Is `p` the folder `root` or inside it? Both canonical. */
 export function contains(root: string, p: string): boolean {
   if (p === root) return true;
-  return p.startsWith(root.endsWith("/") ? root : root + "/");
+  return p.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
 }
 
 /** The item whose root most deeply contains `p` (canonical), if any. */

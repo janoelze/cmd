@@ -27,7 +27,9 @@ export function sourceBuildId(repoRoot: string): string {
 
 /** State dir: $CMD_HOME, else ~/Library/Application Support/cmd. */
 export function cmdHome(): string {
-  return process.env.CMD_HOME ?? path.join(os.homedir(), "Library", "Application Support", "cmd");
+  if (process.env.CMD_HOME) return process.env.CMD_HOME;
+  if (process.platform === "win32") return path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local"), "cmd");
+  return path.join(os.homedir(), "Library", "Application Support", "cmd");
 }
 
 /** $CMD_CONFIG_DIR, else $CMD_HOME (dev isolation), else ~/.config/cmd. */

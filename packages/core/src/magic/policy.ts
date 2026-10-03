@@ -47,7 +47,7 @@ export function isDeniedPath(p: string, deny: string[], home = os.homedir(), cwd
   if (/^\.env(\..*)?$/.test(path.basename(abs))) return true;
   return deny.some((d) => {
     const root = path.resolve(expandPath(d, home));
-    return abs === root || abs.startsWith(root + "/");
+    return abs === root || abs.startsWith(root + path.sep);
   });
 }
 

@@ -33,6 +33,7 @@
     "@xterm/xterm": "^6.0.0",
     "codemirror": "^6.0.2",
     "dompurify": "^3.4.16",
+    "lucide-static": "^1.50.0",
     "marked": "^18.0.14",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

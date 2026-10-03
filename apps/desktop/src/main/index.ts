@@ -13,6 +13,7 @@ import { SETTINGS_TEMPLATE, WIDGET_CSP } from "@cmd/protocol";
 import { cmdHome, connect, defaultSocketPath, ipcPath, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
+import { lucideSymbol, type SymbolImage } from "./icons.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type KeybindingsSnapshot } from "./keybindings.ts";
@@ -151,8 +152,9 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     title: "cmd",
     icon: devIcon, // Windows/Linux; macOS uses the Dock icon
     show: false,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 14, y: 12 },
+    // macOS: content under an inset title bar, traffic lights over the sidebar.
+    // Elsewhere: the platform's own frame, window controls and menu bar.
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 14, y: 12 } } : {}),
     backgroundColor: savedAppearance().background,
     webPreferences: {
       preload: path.join(here, "../preload/index.cjs"),
@@ -196,11 +198,9 @@ function openSettings(): BrowserWindow {
     minHeight: 420,
     title: "Settings",
     show: false,
-    titleBarStyle: "hidden",
-    trafficLightPosition: { x: 20, y: 19 },
-    vibrancy: "sidebar",
-    visualEffectState: "followWindow",
-    backgroundColor: "#00000000",
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hidden" as const, trafficLightPosition: { x: 20, y: 19 }, vibrancy: "sidebar" as const, visualEffectState: "followWindow" as const, backgroundColor: "#00000000" }
+      : { backgroundColor: savedAppearance().background }),
     fullscreenable: false,
     webPreferences: {
       preload: path.join(here, "../preload/index.cjs"),
@@ -297,12 +297,17 @@ ipcMain.handle("keybindings", () => keybindings);
 // shows them (native/sfsymbols.swift), so they stay crisp. PNG data URLs, black
 // template images; the UI tints them via CSS masks.
 const SF_HELPER = path.join(repoRoot, "apps/desktop/native/build/sfsymbols");
-type SymbolImage = { url: string; w: number; h: number; contain?: boolean } | null;
 const symbolCache = new Map<string, SymbolImage>();
 
 function renderSymbols(names: string[], size: number, weight: string, scale: number): Record<string, SymbolImage> {
   const key = (n: string) => `${n}@${size}@${weight}@${scale}`;
   const missing = names.filter((n) => !symbolCache.has(key(n)));
+  // SF Symbols are macOS-only (and Apple-only by licence): Lucide icons elsewhere
+  // (CMD_LUCIDE_ICONS=1 shows them on macOS too, to check the mapping).
+  if (process.platform !== "darwin" || process.env.CMD_LUCIDE_ICONS === "1") {
+    for (const n of missing) symbolCache.set(key(n), lucideSymbol(n, size, weight));
+    return Object.fromEntries(names.map((n) => [n, symbolCache.get(key(n)) ?? null]));
+  }
   if (missing.length && fs.existsSync(SF_HELPER)) {
     const r = spawnSync(SF_HELPER, [String(size), weight, String(scale), ...missing], { encoding: "utf8", timeout: 5000 });
     try {

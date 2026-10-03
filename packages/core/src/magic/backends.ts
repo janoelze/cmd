@@ -143,13 +143,16 @@ export interface ClaudeCliOptions {
 
 const MCP_MAIN = path.join(path.dirname(fileURLToPath(import.meta.url)), "mcp-main.ts");
 
+// Windows: claude.exe (the native installer). A claude.cmd shim would need a shell to run.
+const CLAUDE = process.platform === "win32" ? ["claude.exe"] : ["claude"];
+
 function findClaude(): string {
-  for (const dir of (process.env.PATH ?? "").split(":")) {
-    const p = path.join(dir, "claude");
-    if (dir && fs.existsSync(p)) return p;
+  for (const dir of [...(process.env.PATH ?? "").split(path.delimiter), path.join(os.homedir(), ".local", "bin")]) {
+    for (const name of CLAUDE) {
+      const p = path.join(dir, name);
+      if (dir && fs.existsSync(p)) return p;
+    }
   }
-  const local = path.join(os.homedir(), ".local/bin/claude");
-  if (fs.existsSync(local)) return local;
   throw new Error("the claude CLI was not found");
 }
 
@@ -174,7 +177,8 @@ export function claudeCliBackend(o: ClaudeCliOptions): Backend {
     model: o.model,
     async run(r) {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-magic-cc-"));
-      const sock = path.join(dir, "relay.sock");
+      // The relay: a Unix socket, or a named pipe on Windows.
+      const sock = process.platform === "win32" ? `\\\\.\\pipe\\cmd-magic-${path.basename(dir)}` : path.join(dir, "relay.sock");
       let calls = 0;
       // Relay: one JSON line per tool call from the MCP server, one reply line.
       const server = net.createServer((c) => {

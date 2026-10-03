@@ -35,23 +35,27 @@ let lastState: MenuState | null = null;
 
 export function buildMenu(send: Send, bindings: Keybindings): void {
   const i = (id: CommandId) => item(id, send, bindings);
+  // The app-name menu (About, Services, Hide…) is a macOS convention; elsewhere
+  // Settings and Quit live in File.
+  const mac = process.platform === "darwin";
+  const appMenu: MenuItemConstructorOptions = {
+    label: app.name,
+    submenu: [
+      { role: "about" },
+      sep,
+      ...i("app.settings"),
+      sep,
+      { role: "services" },
+      sep,
+      { role: "hide" },
+      { role: "hideOthers" },
+      { role: "unhide" },
+      sep,
+      { role: "quit" },
+    ],
+  };
   const template: MenuItemConstructorOptions[] = [
-    {
-      label: app.name,
-      submenu: [
-        { role: "about" },
-        sep,
-        ...i("app.settings"),
-        sep,
-        { role: "services" },
-        sep,
-        { role: "hide" },
-        { role: "hideOthers" },
-        { role: "unhide" },
-        sep,
-        { role: "quit" },
-      ],
-    },
+    ...(mac ? [appMenu] : []),
     {
       label: "File",
       submenu: [
@@ -71,6 +75,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("file.closeWindow"),
         sep,
         ...i("file.openSettingsFile"),
+        ...(mac ? [] : [sep, ...i("app.settings"), sep, { role: "quit" as const }]),
       ],
     },
     {
