@@ -120,6 +120,13 @@ export async function openPath(target: string): Promise<void> {
   else cmd.openPath(t);
 }
 
+/** New Magic window (docs/12-magic-windows.md); with a request, it starts making it right away. */
+export async function newMagic(prompt?: string): Promise<void> {
+  const w = await cmd.call("window.open", { kind: "magic", input: {}, spaceId: here() });
+  select(w.id);
+  if (prompt?.trim()) await cmd.call("magic.run", { id: w.id, prompt });
+}
+
 /** New file browser at a folder, defaulting to the selected terminal's folder. */
 export async function newFiles(path?: string): Promise<void> {
   const w = await cmd.call("window.open", { kind: "files", input: { path: path ?? contextCwd() }, spaceId: here() });

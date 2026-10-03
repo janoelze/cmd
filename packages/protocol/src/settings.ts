@@ -188,6 +188,18 @@ export const SETTINGS_SCHEMA = {
     description: "Command used to start Claude Code (e.g. \"claude --model opus\"). Typed into your shell, so aliases apply.",
   },
   "agents.codex.command": { title: "Codex command", type: "string", default: "codex", description: "Command used to start Codex." },
+
+  "magic.provider": {
+    title: "Model provider",
+    labels: { auto: "Automatic", anthropic: "Anthropic API", "openai-compatible": "OpenAI-compatible", "claude-cli": "Claude Code login" },
+    type: "enum",
+    default: "auto",
+    options: ["auto", "anthropic", "openai-compatible", "claude-cli"],
+    description: "Who makes Magic windows. Automatic uses the Anthropic API when ANTHROPIC_API_KEY is set, else your Claude Code login.",
+  },
+  "magic.model": { title: "Model", type: "string", default: "claude-opus-5-5", placeholder: "claude-opus-5-5", description: "Model id for Magic windows, e.g. claude-opus-5-5, claude-haiku-4-5, or your endpoint's model name." },
+  "magic.baseUrl": { title: "Endpoint", type: "string", default: "", placeholder: "http://localhost:11434/v1", description: "OpenAI-compatible endpoint (Ollama, LM Studio, OpenRouter, …); its key comes from CMD_MAGIC_API_KEY." },
+  "magic.explore": { title: "Look around this Mac", type: "boolean", default: true, description: "Let the Magic agent run read-only commands and read files to answer requests about this Mac. Private files (keys, keychains, browser profiles) stay off limits." },
 } as const satisfies Record<string, Def>;
 
 export type SettingKey = keyof typeof SETTINGS_SCHEMA;
@@ -205,6 +217,7 @@ export const SETTINGS_GROUPS = {
   notifications: "Notifications",
   search: "Search",
   agents: "Agents",
+  magic: "Magic Windows",
 } as const satisfies Record<GroupOf<SettingKey>, string>;
 
 /** Keys that were renamed: old settings files keep working (old → new). */

@@ -15,6 +15,8 @@ import { WatchService } from "./watch.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
 import { SpaceManager } from "./spaces/manager.ts";
+import { MagicService } from "./magic/service.ts";
+import type { Backend } from "./magic/backends.ts";
 
 export const VERSION = "0.0.1";
 
@@ -43,6 +45,8 @@ export interface CoreOptions {
   build?: string;
   /** Home's root (default: the user's home folder); tests use a temp dir. */
   home?: string;
+  /** Tests: the model backend for Magic windows (default: from the magic.* settings). */
+  magicBackend?: (settings: Settings) => Backend;
 }
 
 const NO_SEARCH = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
@@ -59,6 +63,7 @@ export class Core {
   readonly windows: WindowManager;
   readonly windowTypes: WindowTypes;
   readonly spaces: SpaceManager;
+  readonly magic: MagicService;
   #server: net.Server | null = null;
   /** Subscribed connections and the event types they want (null = all). */
   #subscribers = new Map<net.Socket, Set<string> | null>();
@@ -111,6 +116,7 @@ export class Core {
     }
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
     this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
+    this.magic = new MagicService({ windows: this.windows, settings, broadcast: (e) => this.#broadcast(e), backend: opts.magicBackend, cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root });
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
     this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
@@ -181,6 +187,9 @@ export class Core {
     "space.update": (p) => this.spaces.update(p.id, p),
     "space.close": (p) => (this.#closeSpace(p.id), null),
     "space.forget": (p) => (this.spaces.forget(p.id), null),
+    "magic.run": (p) => (this.magic.run(p.id, p.prompt), null),
+    "magic.cancel": (p) => (this.magic.cancel(p.id), null),
+    "magic.refresh": (p) => (this.magic.refresh(p.id), null),
     "fs.list": (p) => listDir(p.path),
     "fs.read": (p) => readText(p.path),
     "fs.write": (p) => writeText(p.path, p.text, p.expectMtime),
@@ -335,6 +344,7 @@ export class Core {
   }
 
   async close(): Promise<void> {
+    this.magic.dispose();
     this.panes.dispose();
     for (const s of this.#subscribers.keys()) s.destroy();
     await new Promise<void>((r) => (this.#server ? this.#server.close(() => r()) : r()));

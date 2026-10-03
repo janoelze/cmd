@@ -11,6 +11,7 @@ import {
   newTerminal,
   newTerminalIn,
   newBrowser,
+  newMagic,
   newFiles,
   openableTarget,
   openPath,
@@ -271,6 +272,7 @@ export function App() {
     "file.newCodex": () => void newAgent("codex"),
     "file.newBrowser": () => void newBrowser(),
     "file.newFiles": () => void newFiles(),
+    "file.newMagic": () => void newMagic(),
     "file.close": () => {
       // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
       if (picker) setPicker(null);
@@ -447,7 +449,7 @@ export function App() {
   /** The sidebar's + button. */
   const newMenu = () =>
     void showContextMenu(
-      (["file.newTerminal", "file.newClaude", "file.newCodex", "-", "file.newBrowser", "file.newFiles"] as const).map((id) =>
+      (["file.newTerminal", "file.newClaude", "file.newCodex", "-", "file.newBrowser", "file.newFiles", "file.newMagic"] as const).map((id) =>
         id === "-" ? id : { label: COMMANDS.find((c) => c.id === id)!.label, run: () => run(id) },
       ),
     );

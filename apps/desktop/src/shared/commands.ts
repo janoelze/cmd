@@ -27,6 +27,7 @@ export const COMMANDS = spec([
   { id: "file.newBrowser", label: "New Browser Window", keys: ["Shift+Cmd+B"] },
   { id: "file.newFiles", label: "New File Browser", keys: ["Shift+Cmd+O"] },
   { id: "file.openSpace", label: "Open Space…", keys: ["Cmd+O"] },
+  { id: "file.newMagic", label: "New Magic Window", keys: ["Shift+Cmd+M"] },
   { id: "file.save", label: "Save", keys: ["Cmd+S"] },
   { id: "file.close", label: "Close Window", keys: ["Cmd+W"] },
   { id: "file.closeWindow", label: "Close App Window", keys: ["Shift+Cmd+W"] },

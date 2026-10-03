@@ -36,6 +36,7 @@ const ICONS: Record<Page, string> = {
   notifications: "bell",
   search: "magnifyingglass",
   agents: "sparkles",
+  magic: "wand.and.stars",
   keyboard: "keyboard",
 };
 

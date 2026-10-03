@@ -1,0 +1,42 @@
+// The page a Magic widget runs in: theme tokens, the kit, the `cmd` runtime
+// (prompt/host.js), then the model's body. The app will serve it into a
+// sandboxed frame; `cmd magic --out` writes it as a standalone file with the
+// data inlined, so a run can be opened in any browser and screenshotted.
+
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const read = (f: string) => fs.readFileSync(path.join(here, "prompt", f), "utf8");
+
+export { widgetTokens, type ThemeLike, MAGIC_SIZES as SIZES } from "@cmd/protocol";
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+export interface WidgetPage {
+  title: string;
+  body: string;
+  tokens: Record<string, string>;
+  /** Inline this data (standalone pages). Omitted: the host posts it. */
+  data?: unknown;
+}
+
+export function widgetHtml(p: WidgetPage): string {
+  const vars = Object.entries(p.tokens)
+    .map(([k, v]) => (k === "color-scheme" ? `color-scheme: ${v};` : `${k}: ${v};`))
+    .join(" ");
+  // </script> inside JSON would end the script element.
+  const data = p.data === undefined ? "" : `<script>window.__CMD_DATA__ = ${JSON.stringify(p.data).replace(/</g, "\\u003c")};</script>`;
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>${esc(p.title)}</title>
+<style>:root { ${vars} }
+${read("kit.css")}</style>
+<script>${read("host.js")}</script>
+${data}
+</head><body>
+${p.body}
+</body></html>
+`;
+}

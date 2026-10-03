@@ -1,0 +1,91 @@
+/* The Magic kit: the classes every widget can use. Colours come only from the
+   theme variables the host sets on :root, so widgets follow the app's theme. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 var(--font);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+  overflow: auto;
+}
+a { color: var(--accent); text-decoration: none; }
+h1, h2, h3, p { margin: 0; }
+svg { display: block; }
+
+.k-stack { display: flex; flex-direction: column; gap: 8px; }
+.k-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.k-wrap { flex-wrap: wrap; }
+.k-between { justify-content: space-between; }
+.k-spacer { flex: 1; }
+.k-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.k-fill { height: 100%; }
+.k-center { display: flex; align-items: center; justify-content: center; text-align: center; }
+
+.k-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.k-title { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); }
+.k-dim { color: var(--text-dim); }
+.k-small { font-size: 11px; }
+.k-mono { font-family: var(--mono); }
+.k-big { font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -.01em; }
+.k-huge { font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: -.02em; }
+.k-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+.k-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.k-stat-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); }
+.k-stat-value { font: 600 22px/1.15 var(--mono); letter-spacing: -.02em; }
+.k-stat-note { font-size: 11px; color: var(--text-dim); }
+.k-unit { font-size: .45em; font-weight: 500; color: var(--text-dim); margin-left: .25em; letter-spacing: 0; }
+.k-delta { font-size: 11px; font-variant-numeric: tabular-nums; }
+.k-up { color: var(--good); }
+.k-down { color: var(--bad); }
+
+.k-good { color: var(--good); }
+.k-warn { color: var(--warn); }
+.k-bad { color: var(--bad); }
+
+.k-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--fill); color: var(--text-dim); white-space: nowrap; }
+.k-badge.k-good { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.k-badge.k-warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.k-badge.k-bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+
+.k-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); flex: none; }
+.k-dot.k-good { background: var(--good); }
+.k-dot.k-warn { background: var(--warn); }
+.k-dot.k-bad { background: var(--bad); }
+
+.k-table { width: 100%; border-collapse: collapse; }
+.k-table td { font-family: var(--mono); font-size: 12px; }
+.k-table td.k-text { font-family: var(--font); font-size: 13px; }
+.k-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text-dim); padding: 0 8px 4px 0; border-bottom: 1px solid var(--line); }
+.k-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.k-table tr:last-child td { border-bottom: 0; }
+.k-table .k-num, .k-num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.k-list { list-style: none; margin: 0; padding: 0; }
+.k-list > li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.k-list > li:last-child { border-bottom: 0; }
+
+.k-kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+.k-kv dt { color: var(--text-dim); }
+.k-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+.k-bar { height: 6px; border-radius: 3px; background: var(--fill); overflow: hidden; }
+.k-bar > i { display: block; height: 100%; width: var(--v, 0%); background: var(--c, var(--c1)); border-radius: 3px; transition: width .3s; }
+
+.k-pre { margin: 0; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.k-term { margin: 0; padding: 8px 10px; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); }
+.k-prompt::before { content: "❯ "; color: var(--c2); }
+.k-empty { color: var(--text-dim); text-align: center; padding: 16px; }
+
+.k-btn { font: inherit; color: var(--text); background: var(--fill); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: default; }
+.k-btn:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
+.k-btn.k-primary { background: var(--accent); border-color: transparent; color: var(--on-accent); }
+.k-input { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; min-width: 0; }
+
+.k-chart { width: 100%; height: 120px; }
+.k-spark { width: 100%; height: 28px; }

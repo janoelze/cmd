@@ -3,13 +3,13 @@
 
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell } from "electron";
 import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import { SETTINGS_TEMPLATE } from "@cmd/protocol";
+import { SETTINGS_TEMPLATE, WIDGET_CSP } from "@cmd/protocol";
 import { cmdHome, connect, defaultSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
@@ -26,7 +26,14 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // cmd-file:///abs/path — read-only access to local images/media for the app's own
 // pages (Markdown windows show relative images). Registered on the default
 // session only; browser windows use their own session and can't reach it.
-protocol.registerSchemesAsPrivileged([{ scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true } }]);
+// cmd-widget://frame/ — the page every Magic widget runs in (docs/12-magic-windows.md):
+// the kit and the `cmd` runtime, under a CSP header that allows only inline code
+// and no network. The renderer posts the widget, theme and data into it. Frames
+// are sandboxed (no allow-same-origin), so each is an opaque origin.
+protocol.registerSchemesAsPrivileged([
+  { scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: "cmd-widget", privileges: { standard: true, secure: true } },
+]);
 const CMD_FILE_TYPES = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico|mp4|webm|mov|mp3|m4a|wav)$/i;
 
 const here = import.meta.dirname; // apps/desktop/out/main
@@ -155,6 +162,10 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     },
   });
   if (b.maximized) win.maximize();
+  // Subframes are Magic widgets: they stay on their own page.
+  win.webContents.on("will-frame-navigate", (e) => {
+    if (!e.isMainFrame && !e.url.startsWith("cmd-widget:")) e.preventDefault();
+  });
   performance.mark("boot:window-created");
   win.once("ready-to-show", () => (performance.mark("boot:ready-to-show"), win.show()));
   // The renderer reads its Space from the URL before the core answers.
@@ -390,6 +401,16 @@ app.whenReady().then(async () => {
     copyright: "© 2026 Jan Oelze",
     website: "https://github.com/janoelze/cmd",
     iconPath: devIcon,
+  });
+  protocol.handle("cmd-widget", () => {
+    const dir = path.join(repoRoot, "packages/core/src/magic/prompt");
+    const read = (f: string) => fs.readFileSync(path.join(dir, f), "utf8");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${read("kit.css")}</style><script>${read("host.js")}</script></head><body></body></html>`;
+    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": WIDGET_CSP, "cache-control": "no-store" } });
+  });
+  // Magic widgets may not leave their page, open anything, or ask for permissions.
+  session.defaultSession.setPermissionRequestHandler((wc, _permission, done, details) => {
+    done(!/^cmd-widget:/.test(details.requestingUrl ?? ""));
   });
   protocol.handle("cmd-file", (req) => {
     const file = decodeURIComponent(new URL(req.url).pathname);

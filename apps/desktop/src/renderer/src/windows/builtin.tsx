@@ -5,6 +5,7 @@ import { copy } from "../actions.ts";
 import { hostOf, shortPath } from "../model.ts";
 import { BrowserView } from "../components/BrowserView.tsx";
 import { FilesView } from "../components/FilesView.tsx";
+import { MagicView } from "../components/MagicView.tsx";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
 
@@ -58,5 +59,23 @@ registerWindowView({
           { label: "Copy Path", run: () => copy(p) },
         ]
       : [];
+  },
+});
+
+registerWindowView({
+  kind: "magic",
+  View: MagicView,
+  describe: (w) => {
+    const src = w.state.source as { type?: string; url?: string; command?: string } | null | undefined;
+    const place = src?.type === "fetch" ? hostOf(src.url ?? "").replace(/^www\./, "") : src?.type === "command" ? (src.command ?? "").split(/\s+/)[0] : undefined;
+    return { name: w.title !== "Magic" ? w.title : stateStr(w, "prompt") || "Magic", place };
+  },
+  menu: (w) => {
+    const prompt = stateStr(w, "prompt");
+    return [
+      ...(w.state.source ? [{ label: "Refresh Now", run: () => void cmd.call("magic.refresh", { id: w.id }) }] : []),
+      ...(prompt ? [{ label: "Copy Request", run: () => copy(prompt) }] : []),
+      ...(stateStr(w, "html") ? [{ label: "Copy Widget HTML", run: () => copy(stateStr(w, "html")!) }] : []),
+    ];
   },
 });
