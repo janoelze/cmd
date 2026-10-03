@@ -74,9 +74,9 @@ cmd runs on Apple Silicon Macs. Install or update to the latest release with:
 curl -fsSL https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install.sh | sh
 ```
 
-Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications.
+Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications. Releases are signed and notarized by Apple. Versions before 0.2.5 weren't, and can't update themselves, so install once more with either way above.
 
-cmd updates itself: new versions download in the background and install when you quit it, and your terminals keep running. Settings → Updates switches to notify-only or off; cmd → Check for Updates… checks now. Releases aren't notarized yet, so macOS blocks the first launch of a downloaded copy: open System Settings → Privacy & Security and click Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/cmd.app`.
+cmd updates itself: new versions download in the background and install when you quit it, and your terminals keep running. Settings → Updates switches to notify-only or off; cmd → Check for Updates… checks now.
 
 **Agent state.** cmd sees that an agent is running from its process alone. To also see what it is doing (working, waiting for input, done, which tool it runs), add cmd's hook to the agent: `cmd hooks claude` (or `codex`) prints the snippet to merge into `~/.claude/settings.json` (or `~/.codex/hooks.json`). Hooks of the ghostty-agents fork work unchanged.
 
