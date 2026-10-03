@@ -81,8 +81,10 @@ export async function nodePtyFactory(): Promise<PtyFactory> {
       get pid() {
         return p.pid;
       },
+      // On Windows node-pty reports the terminal type ("xterm-256color") here, not
+      // a program; until a Windows procinfo helper exists, report the shell.
       get process() {
-        return p.process;
+        return isWindows ? o.shell : p.process;
       },
       write: (d) => p.write(d),
       resize: (c, r) => p.resize(c, r),
