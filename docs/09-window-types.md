@@ -57,10 +57,12 @@ behaviour without special cases:
   that way (long lines, wide tables), otherwise to the strip.
 - **Embedded pages** (`<webview>`, `<iframe>`) run in their own process, so the
   app never sees their pointer, wheel or hover events. Mark the element with
-  `data-embed`. The windows view then selects the window when the page takes
-  focus, and turns the page's pointer events off while you drag, resize or pan,
-  and on unselected canvas windows (the first click selects). The page itself
-  reports what the app can't see:
+  `data-embed`. The windows view then turns the page's pointer events off while
+  you drag, resize or pan, and on unselected canvas windows (the first click
+  selects). The page itself reports what the app can't see:
+  - presses: the view replays a mousedown on the element, so the window is
+    selected like any other (focus alone misses a press that moves from one
+    embedded page to another, since this page's focus doesn't change);
   - sideways scrolls it doesn't use itself: the view calls `replayWheel` on the
     element, and the strip scrolls as if the wheel had been over the window
     (iframes post a `wheel` message, see Magic's `host.js`; browser pages get

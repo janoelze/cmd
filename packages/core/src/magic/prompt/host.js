@@ -229,7 +229,18 @@
   );
 
   // The app can't see the pointer over this page (it runs in its own process),
-  // so say when it enters and leaves: the window shows its controls on hover.
+  // so report presses (the window gets selected, like any other) and when the
+  // pointer enters and leaves (the window shows its controls on hover).
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.button !== 0) return;
+      try {
+        parent.postMessage({ type: "press" }, "*");
+      } catch {}
+    },
+    { capture: true, passive: true },
+  );
   let inside = false;
   const hover = (on) => {
     if (on === inside) return;

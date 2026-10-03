@@ -1,0 +1,393 @@
+[
+ {
+  "prompt": "show my github actions runs live",
+  "title": "GitHub Actions · janoelze/cmd",
+  "size": "m",
+  "source": {
+   "type": "command",
+   "command": "gh run list -R janoelze/cmd --json status,conclusion,name,displayTitle,headBranch,event,createdAt,updatedAt,url,databaseId --limit 15"
+  },
+  "refresh": 15,
+  "html": "<style>.sum{gap:14px;padding-bottom:6px;border-bottom:1px solid var(--line)}.run{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}.run:last-child{border-bottom:0}.run a{color:var(--text);text-decoration:none}.run a:hover{color:var(--accent)}.meta{gap:6px}.r{text-align:right}</style>\n<div class=\"k-stack k-fill\">\n  <div class=\"k-row sum k-small\" id=\"sum\"></div>\n  <div id=\"list\" style=\"overflow:auto;flex:1\"></div>\n</div>\n<script>\nconst esc=s=>String(s??\"\").replace(/[&<>\"]/g,c=>({\"&\":\"&amp;\",\"<\":\"&lt;\",\">\":\"&gt;\",'\"':\"&quot;\"}[c]));\nfunction st(r){\n  if(r.status!==\"completed\")return{cls:\"k-warn\",word:r.status===\"in_progress\"?\"Running\":r.status[0].toUpperCase()+r.status.slice(1).replace(\"_\",\" \")};\n  const c=r.conclusion;\n  if(c===\"success\")return{cls:\"k-good\",word:\"Success\"};\n  if(c===\"failure\"||c===\"timed_out\"||c===\"startup_failure\")return{cls:\"k-bad\",word:\"Failed\"};\n  return{cls:\"\",word:c?c[0].toUpperCase()+c.slice(1).replace(\"_\",\" \"):\"–\"};\n}\ncmd.onData(d=>{\n  if(!Array.isArray(d)){list.innerHTML='<div class=\"k-empty\">Couldn’t read runs. Try <span class=\"k-mono\">gh auth login</span>.</div>';sum.textContent=\"\";return;}\n  if(!d.length){list.innerHTML='<div class=\"k-empty\">No workflow runs yet</div>';sum.textContent=\"\";return;}\n  const n={run:0,ok:0,bad:0};\n  d.forEach(r=>{const s=st(r);if(s.cls===\"k-warn\")n.run++;else if(s.cls===\"k-good\")n.ok++;else if(s.cls===\"k-bad\")n.bad++;});\n  sum.innerHTML=`<span class=\"k-row\" style=\"gap:5px\"><span class=\"k-dot ${n.run?\"k-warn\":\"\"}\"></span>${n.run} running</span><span class=\"k-row\" style=\"gap:5px\"><span class=\"k-dot k-good\"></span>${n.ok} passed</span><span class=\"k-row\" style=\"gap:5px\"><span class=\"k-dot ${n.bad?\"k-bad\":\"\"}\"></span>${n.bad} failed</span><span class=\"k-spacer\"></span><span class=\"k-dim\">last ${d.length} runs</span>`;\n  list.replaceChildren(...d.map(r=>{\n    const s=st(r),e=document.createElement(\"div\");e.className=\"run\";\n    const end=r.status===\"completed\"?new Date(r.updatedAt):new Date();\n    const dur=Math.max(0,(end-new Date(r.createdAt))/1000);\n    e.innerHTML=`<span class=\"k-dot ${s.cls}\" title=\"${s.word}\"></span>\n      <div class=\"k-stack\" style=\"gap:1px;min-width:0\"><a class=\"k-ellipsis\" href=\"${esc(r.url)}\" target=\"_blank\">${esc(r.displayTitle)}</a>\n      <div class=\"k-row meta k-small k-dim\"><span class=\"k-mono\">${esc(r.name)}</span><span>·</span><span class=\"k-mono k-ellipsis\">${esc(r.headBranch)}</span><span>·</span><span>${esc(r.event)}</span></div></div>\n      <div class=\"k-stack r\" style=\"gap:1px\"><span class=\"k-small ${s.cls}\">${s.word}</span><span class=\"k-small k-dim k-mono\">${cmd.fmt.dur(Math.round(dur))} · ${cmd.fmt.ago(r.createdAt)}</span></div>`;\n    return e;\n  }));\n});\n</script>",
+  "data": [
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T13:39:44Z",
+    "databaseId": 37126936384,
+    "displayTitle": "README: credit PaperWM for the strip layout",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T13:41:24Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37126936384"
+   },
+   {
+    "conclusion": "cancelled",
+    "createdAt": "2026-10-03T13:38:29Z",
+    "databaseId": 37126861424,
+    "displayTitle": "README for users; developer docs move to DEVELOPMENT.md",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T13:40:05Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37126861424"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T13:33:17Z",
+    "databaseId": 37126578667,
+    "displayTitle": "README: drop the docs line from the header",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T13:35:43Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37126578667"
+   },
+   {
+    "conclusion": "cancelled",
+    "createdAt": "2026-10-03T13:31:57Z",
+    "databaseId": 37126502417,
+    "displayTitle": "README: centered app icon header",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T13:33:34Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37126502417"
+   },
+   {
+    "conclusion": "cancelled",
+    "createdAt": "2026-10-03T13:29:55Z",
+    "databaseId": 37126379578,
+    "displayTitle": "README: drop the screenshots note",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T13:32:02Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37126379578"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T13:25:21Z",
+    "databaseId": 37126116837,
+    "displayTitle": "README screenshots: pnpm shots stages the app with fake agents",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T13:27:34Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37126116837"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T13:03:11Z",
+    "databaseId": 37124882615,
+    "displayTitle": "Fix CI test that depended on $SHELL; add pnpm release",
+    "event": "push",
+    "headBranch": "v0.1.0",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T13:05:27Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37124882615"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T12:59:00Z",
+    "databaseId": 37124641984,
+    "displayTitle": "Fix CI test that depended on $SHELL; add pnpm release",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T13:01:22Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37124641984"
+   },
+   {
+    "conclusion": "failure",
+    "createdAt": "2026-10-03T12:57:14Z",
+    "databaseId": 37124547428,
+    "displayTitle": "Sidebar grouped by attention, with search and recent sessions",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T12:58:01Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37124547428"
+   },
+   {
+    "conclusion": "failure",
+    "createdAt": "2026-10-03T12:28:05Z",
+    "databaseId": 37122966777,
+    "displayTitle": "Smoother app window resizing in grid and strip",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T12:29:05Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37122966777"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T10:38:53Z",
+    "databaseId": 37117103995,
+    "displayTitle": "Dev runs show cmd as the app menu title and icon",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T10:40:43Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37117103995"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T03:30:25Z",
+    "databaseId": 37093420405,
+    "displayTitle": "Merge pull request #1 from janoelze/app-identity",
+    "event": "push",
+    "headBranch": "master",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T03:32:44Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37093420405"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T03:25:52Z",
+    "databaseId": 37093169757,
+    "displayTitle": "App icon and identity",
+    "event": "pull_request",
+    "headBranch": "app-identity",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T03:27:33Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37093169757"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T03:03:51Z",
+    "databaseId": 37091941555,
+    "displayTitle": "Smoke test waits for Electron to exit, not for its pipes (the core in…",
+    "event": "push",
+    "headBranch": "windows",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T03:06:33Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37091941555"
+   },
+   {
+    "conclusion": "success",
+    "createdAt": "2026-10-03T02:58:54Z",
+    "databaseId": 37091653812,
+    "displayTitle": "Smoke test watchdog: a hang fails after 90 s with the last step and a…",
+    "event": "push",
+    "headBranch": "windows",
+    "name": "build",
+    "status": "completed",
+    "updatedAt": "2026-10-03T03:01:54Z",
+    "url": "https://github.com/janoelze/cmd/actions/runs/37091653812"
+   }
+  ]
+ },
+ {
+  "prompt": "weather in Berlin",
+  "title": "Weather · Berlin",
+  "size": "m",
+  "source": {
+   "type": "fetch",
+   "url": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto&forecast_days=5"
+  },
+  "refresh": 900,
+  "html": "<style>.now{align-items:flex-end;gap:12px}.days{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center}.days>div{border-top:1px solid var(--line);padding-top:8px}</style>\n<div class=\"k-stack k-fill\">\n  <div class=\"k-row now\"><div class=\"k-huge k-mono\" id=\"t\">–</div><div class=\"k-stack\" style=\"gap:2px\"><div id=\"w\">–</div><div class=\"k-dim k-small\" id=\"f\"></div></div></div>\n  <div class=\"k-spacer\"></div>\n  <div class=\"days\" id=\"days\"></div>\n</div>\n<script>\nconst W={0:\"Clear\",1:\"Mostly clear\",2:\"Partly cloudy\",3:\"Overcast\",45:\"Fog\",48:\"Rime fog\",51:\"Light drizzle\",53:\"Drizzle\",55:\"Heavy drizzle\",56:\"Freezing drizzle\",57:\"Freezing drizzle\",61:\"Light rain\",63:\"Rain\",65:\"Heavy rain\",66:\"Freezing rain\",67:\"Freezing rain\",71:\"Light snow\",73:\"Snow\",75:\"Heavy snow\",77:\"Snow grains\",80:\"Showers\",81:\"Showers\",82:\"Heavy showers\",85:\"Snow showers\",86:\"Snow showers\",95:\"Thunderstorm\",96:\"Thunderstorm\",99:\"Thunderstorm\"};\nconst r=n=>n==null?\"–\":Math.round(n)+\"°\";\ncmd.onData(d=>{\n  if(!d||!d.current){w.textContent=\"Weather data unavailable\";return;}\n  const c=d.current;\n  t.textContent=r(c.temperature_2m);\n  w.textContent=W[c.weather_code]??\"–\";\n  f.textContent=`Feels ${r(c.apparent_temperature)} · wind ${Math.round(c.wind_speed_10m)} km/h · humidity ${c.relative_humidity_2m}%`;\n  const dl=d.daily;\n  days.replaceChildren(...dl.time.map((day,i)=>{\n    const e=document.createElement(\"div\");e.className=\"k-stack\";e.style.gap=\"2px\";\n    const name=i?new Date(day+\"T12:00\").toLocaleDateString(undefined,{weekday:\"short\"}):\"Today\";\n    const p=dl.precipitation_probability_max[i];\n    e.innerHTML=`<div class=\"k-dim k-small\">${name}</div><div class=\"k-small k-ellipsis\">${W[dl.weather_code[i]]??\"–\"}</div><div class=\"k-mono\">${r(dl.temperature_2m_max[i])}</div><div class=\"k-dim k-small k-mono\">${r(dl.temperature_2m_min[i])}</div><div class=\"k-small k-mono ${p>=50?\"k-warn\":\"k-dim\"}\">${p??\"–\"}%</div>`;\n    return e;\n  }));\n});\n</script>",
+  "data": {
+   "latitude": 52.52,
+   "longitude": 13.419998,
+   "generationtime_ms": 0.5286931991577148,
+   "utc_offset_seconds": 7200,
+   "timezone": "Europe/Berlin",
+   "timezone_abbreviation": "GMT+2",
+   "elevation": 38,
+   "current_units": {
+    "time": "iso8601",
+    "interval": "seconds",
+    "temperature_2m": "°C",
+    "apparent_temperature": "°C",
+    "weather_code": "wmo code",
+    "wind_speed_10m": "km/h",
+    "relative_humidity_2m": "%"
+   },
+   "current": {
+    "time": "2026-10-03T17:45",
+    "interval": 900,
+    "temperature_2m": 18.9,
+    "apparent_temperature": 18.7,
+    "weather_code": 3,
+    "wind_speed_10m": 7.1,
+    "relative_humidity_2m": 67
+   },
+   "daily_units": {
+    "time": "iso8601",
+    "temperature_2m_max": "°C",
+    "temperature_2m_min": "°C",
+    "weather_code": "wmo code",
+    "precipitation_probability_max": "%"
+   },
+   "daily": {
+    "time": [
+     "2026-10-03",
+     "2026-10-04",
+     "2026-10-05",
+     "2026-10-06",
+     "2026-10-07"
+    ],
+    "temperature_2m_max": [
+     19.5,
+     19.4,
+     21,
+     22,
+     23.4
+    ],
+    "temperature_2m_min": [
+     13.4,
+     11.9,
+     11.7,
+     9.9,
+     9.5
+    ],
+    "weather_code": [
+     45,
+     45,
+     3,
+     3,
+     2
+    ],
+    "precipitation_probability_max": [
+     3,
+     3,
+     0,
+     0,
+     10
+    ]
+   }
+  }
+ },
+ {
+  "prompt": "euro to yen rate, last 30 days",
+  "title": "EUR → JPY · 30 days",
+  "size": "m",
+  "source": {
+   "type": "fetch",
+   "url": "https://api.frankfurter.app/2026-09-01..?from=EUR&to=JPY"
+  },
+  "refresh": 3600,
+  "html": "<div class=\"k-stack k-fill\">\n  <div class=\"k-grid\">\n    <div class=\"k-stat\"><div class=\"k-stat-label\">1 EUR</div><div class=\"k-stat-value\" id=\"now\">–</div><div class=\"k-delta\" id=\"chg\"></div></div>\n    <div class=\"k-stat\"><div class=\"k-stat-label\">30-day range</div><div class=\"k-stat-value k-dim\" id=\"range\" style=\"font-size:15px\">–</div><div class=\"k-stat-note k-dim\" id=\"asof\"></div></div>\n  </div>\n  <div class=\"k-chart\" id=\"chart\" style=\"flex:1\"></div>\n</div>\n<script>\nconst f=n=>cmd.fmt.num(n,2);\ncmd.onData(d=>{\n  if(!d||!d.rates){now.textContent=\"–\";asof.textContent=\"Couldn't load rates\";return;}\n  let days=Object.keys(d.rates).sort();\n  const last=new Date(days.at(-1)),cut=new Date(last.getTime()-30*864e5).toISOString().slice(0,10);\n  days=days.filter(x=>x>=cut);\n  const v=days.map(x=>d.rates[x].JPY),a=v[0],b=v.at(-1),pct=(b-a)/a*100;\n  now.innerHTML=`${f(b)}<span class=\"k-unit\">JPY</span>`;\n  chg.className=\"k-delta \"+(pct>=0?\"k-up\":\"k-down\");\n  chg.textContent=`${pct>=0?\"▲\":\"▼\"} ${cmd.fmt.pct(Math.abs(pct))} over 30 days`;\n  range.textContent=`${f(Math.min(...v))} – ${f(Math.max(...v))}`;\n  asof.textContent=`ECB reference rate · ${cmd.fmt.date(days.at(-1))}`;\n  cmd.chart(chart,{type:\"line\",area:true,labels:days.map(x=>cmd.fmt.date(x)),series:[{name:\"JPY\",values:v}],format:f});\n});\n</script>",
+  "data": {
+   "amount": 1,
+   "base": "EUR",
+   "start_date": "2026-09-01",
+   "end_date": "2026-10-02",
+   "rates": {
+    "2026-09-01": {
+     "JPY": 185.63
+    },
+    "2026-09-02": {
+     "JPY": 184.78
+    },
+    "2026-09-03": {
+     "JPY": 181.21
+    },
+    "2026-09-04": {
+     "JPY": 181.59
+    },
+    "2026-09-07": {
+     "JPY": 179.85
+    },
+    "2026-09-08": {
+     "JPY": 179.2
+    },
+    "2026-09-09": {
+     "JPY": 178.59
+    },
+    "2026-09-10": {
+     "JPY": 179.09
+    },
+    "2026-09-11": {
+     "JPY": 178.56
+    },
+    "2026-09-14": {
+     "JPY": 178.52
+    },
+    "2026-09-15": {
+     "JPY": 178.86
+    },
+    "2026-09-16": {
+     "JPY": 178.88
+    },
+    "2026-09-17": {
+     "JPY": 178.75
+    },
+    "2026-09-18": {
+     "JPY": 180.94
+    },
+    "2026-09-21": {
+     "JPY": 180.7
+    },
+    "2026-09-22": {
+     "JPY": 180.17
+    },
+    "2026-09-23": {
+     "JPY": 180.2
+    },
+    "2026-09-24": {
+     "JPY": 180.57
+    },
+    "2026-09-25": {
+     "JPY": 179.7
+    },
+    "2026-09-28": {
+     "JPY": 178.5
+    },
+    "2026-09-29": {
+     "JPY": 178.41
+    },
+    "2026-09-30": {
+     "JPY": 178.27
+    },
+    "2026-10-01": {
+     "JPY": 178.49
+    },
+    "2026-10-02": {
+     "JPY": 176.99
+    }
+   }
+  }
+ },
+ {
+  "prompt": "how full is my disk",
+  "title": "Disk space",
+  "size": "s",
+  "source": {
+   "type": "command",
+   "command": "df -k /System/Volumes/Data | tail -1 | awk '{print \"{\\\"total\\\":\"$2*1024\",\\\"used\\\":\"$3*1024\",\\\"avail\\\":\"$4*1024\"}\"}'"
+  },
+  "refresh": 60,
+  "html": "<style>.big{align-items:baseline;gap:8px}.bar{height:8px}</style>\n<div class=\"k-stack k-fill\" style=\"justify-content:center\">\n  <div class=\"k-between k-row\"><div class=\"k-title\">Macintosh HD</div><div class=\"k-row k-small\" style=\"gap:6px\"><span class=\"k-dot\" id=\"dot\"></span><span id=\"st\">–</span></div></div>\n  <div class=\"k-row big\"><div class=\"k-huge k-mono\" id=\"pct\">–</div><div class=\"k-dim\">full</div></div>\n  <div class=\"k-bar bar\"><i id=\"fill\" style=\"--v:0%\"></i></div>\n  <div class=\"k-between k-row k-small\"><span><span class=\"k-mono\" id=\"used\">–</span> <span class=\"k-dim\">used</span></span><span><span class=\"k-mono\" id=\"free\">–</span> <span class=\"k-dim\">free of</span> <span class=\"k-mono\" id=\"tot\">–</span></span></div>\n</div>\n<script>\ncmd.onData(d=>{\n  if(!d||!d.total){st.textContent=\"Couldn't read disk usage\";return;}\n  const used=d.total-d.avail,p=used/d.total*100;\n  const lvl=p>=95?\"bad\":p>=85?\"warn\":\"good\";\n  pct.textContent=Math.round(p)+\"%\";\n  fill.style.setProperty(\"--v\",p.toFixed(1)+\"%\");\n  fill.style.setProperty(\"--c\",`var(--${lvl===\"good\"?\"c1\":lvl})`);\n  dot.className=\"k-dot k-\"+lvl;\n  st.textContent=lvl===\"bad\"?\"Almost full\":lvl===\"warn\"?\"Getting full\":\"Plenty of space\";\n  used.textContent=cmd.fmt.bytes(used);\n  free.textContent=cmd.fmt.bytes(d.avail);\n  tot.textContent=cmd.fmt.bytes(d.total);\n});\n</script>",
+  "data": {
+   "total": 994610155520,
+   "used": 888548507648,
+   "avail": 80509087744
+  }
+ },
+ {
+  "prompt": "a 5 minute tea timer",
+  "title": "Tea timer",
+  "size": "s",
+  "source": null,
+  "refresh": 0,
+  "html": "<style>.ring{width:100%;max-width:240px}.done{color:var(--good)}</style>\n<div class=\"k-stack k-center k-fill\">\n  <div class=\"k-huge k-mono\" id=\"clock\">5:00</div>\n  <div class=\"k-bar ring\"><i id=\"bar\" style=\"--v:0%;--c:var(--accent)\"></i></div>\n  <div class=\"k-dim\" id=\"msg\">5 minutes · ready to steep</div>\n  <div class=\"k-row\"><button class=\"k-btn k-primary\" id=\"go\">Start</button><button class=\"k-btn\" id=\"reset\">Reset</button></div>\n</div>\n<script>\nconst LEN=300;\nlet s=cmd.state.get(\"tea\")||{left:LEN,end:null};\nconst save=()=>cmd.state.set(\"tea\",s);\nlet beeped=false;\nfunction beep(){try{const a=new (window.AudioContext||window.webkitAudioContext)();[0,0.35,0.7].forEach(t=>{const o=a.createOscillator(),g=a.createGain();o.frequency.value=880;o.connect(g);g.connect(a.destination);g.gain.setValueAtTime(0.2,a.currentTime+t);g.gain.setValueAtTime(0,a.currentTime+t+0.2);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.25);});}catch(e){}}\nfunction tick(){\n  if(s.end){s.left=Math.max(0,Math.round((s.end-Date.now())/1000));if(!s.left){s.end=null;save();if(!beeped){beeped=true;beep();}}}\n  const m=Math.floor(s.left/60),sec=s.left%60;\n  clock.textContent=m+\":\"+String(sec).padStart(2,\"0\");\n  bar.style.setProperty(\"--v\",((LEN-s.left)/LEN*100)+\"%\");\n  const finished=s.left===0;\n  clock.classList.toggle(\"done\",finished);\n  msg.textContent=finished?\"Tea's ready 🍵\":s.end?\"Steeping…\":s.left<LEN?\"Paused\":\"5 minutes · ready to steep\";\n  go.textContent=s.end?\"Pause\":s.left<LEN&&!finished?\"Resume\":\"Start\";\n  go.disabled=finished;\n}\ngo.onclick=()=>{if(s.end){s.end=null;}else{if(!s.left)s.left=LEN;s.end=Date.now()+s.left*1000;beeped=false;}save();tick();};\nreset.onclick=()=>{s={left:LEN,end:null};beeped=false;save();tick();};\nsetInterval(tick,250);tick();\n</script>",
+  "data": null
+ }
+]

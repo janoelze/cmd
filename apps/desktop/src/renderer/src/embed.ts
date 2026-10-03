@@ -8,7 +8,9 @@
 //   never let them reach this page. Mark the element with `data-embed`: the
 //   windows view then turns its pointer events off during drags, pans and
 //   resizes and on unselected canvas windows, and selects the window when the
-//   page takes focus. For the wheel, the page hands sideways scrolls over (postMessage for iframes, see core's magic/prompt/host.js; injected
+//   page takes focus or reports a press (pressing in one embedded page after
+//   another moves no focus out of this page, so focus alone isn't enough).
+//   For the wheel, the page hands sideways scrolls over (postMessage for iframes, see core's magic/prompt/host.js; injected
 //   for webviews, see WEBVIEW_WHEEL_FORWARDER) and the view calls replayWheel.
 
 export const EMBED_ATTR = "data-embed";
@@ -43,6 +45,28 @@ export function isWheelMessage(m: unknown): m is WheelMessage {
   return !!m && typeof m === "object" && (m as { type?: unknown }).type === "wheel";
 }
 
+/** A press inside an embedded page. */
+export interface PressMessage {
+  type: "press";
+}
+
+/**
+ * Handle what an embedded page reports: a sideways wheel (replayed for the
+ * strip) or a press (replayed as a mousedown, so the window is selected like
+ * any other). Returns whether the message was one of these.
+ */
+export function handleEmbedMessage(el: HTMLElement, m: unknown): boolean {
+  if (isWheelMessage(m)) {
+    replayWheel(el, m);
+    return true;
+  }
+  if (m && typeof m === "object" && (m as { type?: unknown }).type === "press") {
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 }));
+    return true;
+  }
+  return false;
+}
+
 /**
  * Replay a handed-over wheel event on the embedding element, so the windows
  * view's handlers see it as if it had happened over the window itself.
@@ -69,11 +93,11 @@ export function replayWheel(el: HTMLElement, m: WheelMessage): void {
 }
 
 /** Marks console messages from the webview forwarder (BrowserView listens for them). */
-export const WHEEL_MARK = "\u0000cmd-wheel:";
+export const EMBED_MARK = "\u0000cmd-embed:";
 
 /**
- * Injected into browser pages (they get no preload): hands sideways scrolls
- * over unless the page itself scrolls sideways there. It talks back
+ * Injected into browser pages (they get no preload): reports presses, and
+ * hands sideways scrolls over unless the page itself scrolls sideways there. It talks back
  * through the console, the one channel a preload-less guest has; a page that
  * imitates it can only scroll the strip.
  */
@@ -90,12 +114,15 @@ export const WEBVIEW_WHEEL_FORWARDER = `(() => {
     }
     return false;
   };
+  window.addEventListener("pointerdown", (e) => {
+    if (e.button === 0) console.debug(${JSON.stringify(EMBED_MARK)} + '{"type":"press"}');
+  }, { capture: true, passive: true });
   window.addEventListener("wheel", (e) => {
     if (e.ctrlKey || e.metaKey) return;
     const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
     const sideways = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
     if (!sideways || !dx || scrollsX(e.target, dx)) return;
     e.preventDefault();
-    console.debug(${JSON.stringify(WHEEL_MARK)} + JSON.stringify({ type: "wheel", deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, x: e.clientX, y: e.clientY }));
+    console.debug(${JSON.stringify(EMBED_MARK)} + JSON.stringify({ type: "wheel", deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, x: e.clientX, y: e.clientY }));
   }, { passive: false, capture: true });
 })();`;

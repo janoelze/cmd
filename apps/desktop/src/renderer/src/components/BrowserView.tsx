@@ -11,7 +11,7 @@ import { cmd } from "../bridge.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { SCROLLBAR_CSS } from "../scrollbars.ts";
 import { setWindowStatus } from "../windowActions.ts";
-import { isWheelMessage, replayWheel, WEBVIEW_WHEEL_FORWARDER, WHEEL_MARK } from "../embed.ts";
+import { handleEmbedMessage, WEBVIEW_WHEEL_FORWARDER, EMBED_MARK } from "../embed.ts";
 
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const url = typeof win.state.url === "string" ? win.state.url : null;
@@ -42,10 +42,9 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       void wv.executeJavaScript(WEBVIEW_WHEEL_FORWARDER).catch(() => {});
     };
     const onConsole = (e: { message?: string }) => {
-      if (!e.message?.startsWith(WHEEL_MARK)) return;
+      if (!e.message?.startsWith(EMBED_MARK)) return;
       try {
-        const m = JSON.parse(e.message.slice(WHEEL_MARK.length));
-        if (isWheelMessage(m)) replayWheel(wv as unknown as HTMLElement, m);
+        handleEmbedMessage(wv as unknown as HTMLElement, JSON.parse(e.message.slice(EMBED_MARK.length)));
       } catch {}
     };
     wv.addEventListener("console-message", onConsole as never);

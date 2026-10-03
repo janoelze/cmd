@@ -14,7 +14,7 @@ import { useStoreValue } from "../store.ts";
 import { useTheme } from "../themes/registry.ts";
 import { setWindowStatus } from "../windowActions.ts";
 import { ago } from "../model.ts";
-import { isWheelMessage, replayWheel } from "../embed.ts";
+import { handleEmbedMessage } from "../embed.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import "./magic.css";
 
@@ -178,7 +178,7 @@ function WidgetFrame({ win, html, streaming, data }: { win: AppWindow; html: str
       if (e.source !== ref.current?.contentWindow || !e.data || typeof e.data !== "object") return;
       const m = e.data as { type?: string; url?: string; message?: string };
       if (m.type === "ready") setReady(true);
-      else if (isWheelMessage(m)) replayWheel(ref.current!, m);
+      else if (handleEmbedMessage(ref.current!, m)) return;
       // The pointer over the widget: the window shows its controls (see magic.css).
       else if (m.type === "hover") ref.current?.closest(".magic")?.classList.toggle("hovered", !!(m as { on?: boolean }).on);
       else if (m.type === "open-url" && typeof m.url === "string" && /^https?:\/\//i.test(m.url)) void openPath(m.url);

@@ -11,6 +11,7 @@
 <p align="center">
   <a href="https://github.com/janoelze/cmd/releases/latest">Download</a> ·
   <a href="#features">Features</a> ·
+  <a href="#magic-windows">Magic windows</a> ·
   <a href="#keyboard-shortcuts">Shortcuts</a> ·
   <a href="#cli">CLI</a> ·
   <a href="DEVELOPMENT.md">Development</a>
@@ -30,6 +31,7 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
 - **Four layouts.** Focus on one window, tile them in a grid, scroll through a horizontal strip of windows inspired by [PaperWM](https://github.com/paperwm/PaperWM), or arrange them freely on a zoomable canvas with a minimap.
 - **Every past session, searchable.** Typo-tolerant full-text search over your Claude Code and Codex transcripts, from the palette or the sidebar. Return resumes a session in a new terminal.
 - **More than terminals.** Browser, file tree, text editor and Markdown windows sit next to your terminals. `open README.md` in the shell opens it in cmd.
+- **Magic windows.** Describe what you want to see ("show my VPN status", a JSON URL, "my open pull requests") and an agent builds a live widget for it, in your theme, that keeps itself up to date. [More below](#magic-windows).
 - **Notifications that lead somewhere.** An agent waiting, a bell, a long command finishing, an OSC 9/777/99 notification or `cmd notify`: the terminal is marked until you look at it, and counts toward the Dock badge.
 - **Keyboard first.** Every action is in the menu bar and the command palette (⌘K), and every shortcut can be remapped.
 - **Scriptable.** The `cmd` CLI spawns, messages, waits on and stops agents, so an agent can run other agents.
@@ -45,6 +47,25 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
   <img alt="Session search in the command palette" src="docs/screenshots/search-light.png">
 </picture>
 
+## Magic windows
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/magic-dark.png">
+  <img alt="Magic windows in a grid: GitHub Actions runs, the weather in Berlin, a EUR to JPY chart, disk space, a tea timer, and an empty Magic window asking what it should show" src="docs/screenshots/magic-light.png">
+</picture>
+
+Press ⇧⌘M and type what the window should show: a question, a URL, some JSON, a command. cmd turns it into a small live window:
+
+- **It looks around first when it needs to.** For "show my VPN connection status", the agent checks your network interfaces, routes and VPN clients with read-only commands before deciding what to show. You watch its steps in the window while it works.
+- **It stays live.** The agent writes the widget once, together with a data source (a URL or a read-only command). cmd re-runs the source on its own schedule, so refreshing costs nothing and never calls the model again. The title bar says how fresh the data is.
+- **It matches cmd.** Widgets use your theme's colours, your terminal font and a small built-in kit, so they look right next to your terminals in every theme, light or dark.
+- **Change it by asking.** Hover a widget and click ✦ Change (or press ⌘L): "bigger numbers", "make it a line chart", "only failed runs".
+- **Or it's a command.** When a terminal program already does the job (`btop`, `log stream`), you get the command, typed into a new terminal for you to run.
+
+**Setup.** If `claude` works in your shell, there is nothing to configure: cmd uses your Claude Code login. With `ANTHROPIC_API_KEY` in cmd's environment it uses the Anthropic API instead, and an OpenAI-compatible endpoint (OpenRouter, Ollama, LM Studio, …) works too. Choose the provider and model under Settings → Magic Windows.
+
+**Safety.** The agent can only read. Every command it runs, and every command a widget refreshes with, must pass a read-only policy and runs in a sandbox that blocks writes. Your keys, keychains, browser profiles and `.env` files stay off limits to it. Logged-in tools like `gh` and `glab` may use your login to fetch data, but tokens never reach the model. Widgets run in a sandboxed frame without network access.
+
 ## Install
 
 Download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) (Apple Silicon) and move cmd to Applications. If macOS refuses to open it the first time, right-click the app and choose Open.
@@ -57,6 +78,7 @@ Download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/re
 |---|---|
 | ⌘N | new terminal |
 | ⌥⌘N | new Claude session |
+| ⇧⌘M | new Magic window |
 | ⌘K | command palette: type to find anything, `>` commands, `@` sessions, `?` past sessions |
 | ⌥⌘1 / 2 / 3 / 4 | focus / grid / strip / canvas |
 | ⌃⌘J | jump to the next session that needs you |
@@ -70,6 +92,7 @@ Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keyb
 |---|---|
 | ⌘N (⌘T) | new terminal (in the current folder) |
 | ⌥⌘N | new Claude session |
+| ⇧⌘M | new Magic window; ⌘L in one changes it |
 | ⌘W | close the frontmost thing: the palette, then the terminal (asks if something is running), then the window |
 | ⇧⌘W | close window (terminals keep running) |
 | ⌥⌘← / ⌥⌘→ (⇧⌘[ / ⇧⌘]) | previous / next session |
@@ -104,6 +127,8 @@ cmd notify "deploy finished"         # a notification; inside cmd it marks this 
 cmd events                           # NDJSON event stream
 cmd settings                         # list; `set KEY VALUE`, `reset KEY`, `path`
 cmd hooks claude                     # print the hook config for ~/.claude/settings.json
+cmd magic "how full is my disk"      # make a Magic widget without the app: shows its steps, saves it as a page
+cmd magic eval                       # run the Magic eval cases (for tuning its prompt)
 ```
 
 The CLI is not bundled with the app yet. Run it from a checkout (see [DEVELOPMENT.md](DEVELOPMENT.md)) and link it onto your PATH: `ln -s $PWD/packages/cli/bin/cmd ~/bin/cmd`.
