@@ -281,6 +281,8 @@ export function WindowsView(p: Props) {
   );
 
   useLayoutEffect(() => {
+    performance.mark("boot:tiles"); // first commit of the windows (boot benchmark)
+    requestAnimationFrame(() => requestAnimationFrame(() => performance.mark("boot:tiles-painted")));
     const el = rootRef.current!;
     const ro = new ResizeObserver(() => setVp({ w: el.clientWidth, h: el.clientHeight }));
     ro.observe(el);
