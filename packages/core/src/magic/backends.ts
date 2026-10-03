@@ -14,9 +14,9 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { jsonSchema, stepCountIs, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+// The AI SDK is imported when a run starts, not with the core: a problem with
+// it (or with a provider package) can break Magic windows, never the core.
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import type { ToolOutput, ToolSpec } from "./tools.ts";
 
 export interface Usage {
@@ -65,20 +65,25 @@ export interface AiBackendOptions {
   effort?: "low" | "medium" | "high";
 }
 
-export function aiBackend(o: AiBackendOptions): Backend {
-  let model: LanguageModel;
+async function languageModel(o: AiBackendOptions): Promise<LanguageModel> {
   if (o.provider === "anthropic") {
-    model = createAnthropic({ apiKey: o.apiKey })(o.model);
-  } else {
-    if (!o.baseURL) throw new Error("openai-compatible needs a base URL");
-    model = createOpenAICompatible({ name: "magic", baseURL: o.baseURL, apiKey: o.apiKey })(o.model);
+    const { createAnthropic } = await import("@ai-sdk/anthropic");
+    return createAnthropic({ apiKey: o.apiKey })(o.model);
   }
+  const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+  return createOpenAICompatible({ name: "magic", baseURL: o.baseURL!, apiKey: o.apiKey })(o.model);
+}
+
+export function aiBackend(o: AiBackendOptions): Backend {
+  if (o.provider === "openai-compatible" && !o.baseURL) throw new Error("openai-compatible needs a base URL");
   // Haiku 4.5 and older models reject `effort`.
   const takesEffort = o.provider === "anthropic" && !/haiku|claude-3|-4-5|-4-1|-4-0|sonnet-4-0/.test(o.model);
   return {
     name: o.provider,
     model: o.model,
     async run(r) {
+      const { jsonSchema, stepCountIs, streamText, tool } = await import("ai");
+      const model = await languageModel(o);
       const tools: ToolSet = {};
       for (const spec of r.tools) {
         tools[spec.name] = tool({
