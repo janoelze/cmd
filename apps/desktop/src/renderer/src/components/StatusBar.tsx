@@ -9,7 +9,7 @@ import { useStoreValue } from "../store.ts";
 import { useWindowStatus } from "../windowActions.ts";
 import { typeFor, viewFor } from "../windows/registry.ts";
 import type { ViewMode } from "./MainView.tsx";
-import { Symbol } from "./Symbol.tsx";
+import { ICON, Symbol } from "./Symbol.tsx";
 
 const ICONS: Record<ViewMode | "new" | "palette" | "settings", string> = {
   focus: "rectangle",
@@ -38,7 +38,7 @@ export function StatusBar({ mode, row, pane, run }: Props) {
   };
   const btn = (id: CommandId, icon: string, label: string, on = false) => (
     <button key={id} className={`icon-btn ${on ? "on" : ""}`} title={tip(label, id)} aria-label={label} onClick={() => run(id)}>
-      <Symbol name={icon} size={15} />
+      <Symbol name={icon} size={ICON.bar} />
     </button>
   );
 

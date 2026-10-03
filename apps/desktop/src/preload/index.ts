@@ -82,7 +82,7 @@ const api = {
   },
   keybindings: (): Promise<KeybindingsSnapshot> => ipcRenderer.invoke("keybindings"),
   /** SF Symbols rendered at an exact point size and pixel density; null for unknown names. */
-  sfSymbols: (req: { names: string[]; size: number; weight?: string; scale?: number }): Promise<Record<string, { url: string; w: number; h: number } | null>> =>
+  sfSymbols: (req: { names: string[]; size: number; weight?: string; scale?: number }): Promise<Record<string, { url: string; w: number; h: number; contain?: boolean } | null>> =>
     ipcRenderer.invoke("sf-symbols", req),
   onKeybindings(fn: (s: KeybindingsSnapshot) => void): () => void {
     const h = (_e: unknown, s: KeybindingsSnapshot) => fn(s);

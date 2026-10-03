@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PaneId } from "@cmd/protocol";
 import { bucketOf } from "@cmd/protocol";
 import { usePersisted } from "../store.ts";
-import { Symbol } from "./Symbol.tsx";
+import { ICON, Symbol } from "./Symbol.tsx";
 import { iconFor } from "./TileTitle.tsx";
 import { windowIdOf, flatten, ledOf, project, projectHue, rowDetail, rowTitle, type SidebarRow } from "../model.ts";
 import { Tools } from "./Tools.tsx";
@@ -39,45 +39,47 @@ export function Sidebar(p: Props) {
   );
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-tabs" role="tablist">
-        <button role="tab" className={p.tab === "sessions" ? "on" : ""} onClick={() => p.onTab("sessions")}>
-          Sessions
-        </button>
-        <button role="tab" className={p.tab === "tools" ? "on" : ""} onClick={() => p.onTab("tools")}>
-          Tools
-        </button>
-      </div>
-
-      {p.tab === "sessions" ? (
-        <div className="session-list" data-frozen={rows !== p.rows || undefined}>
-          {needs > 0 && <div className="list-heading">Needs you · {needs}</div>}
-          {rows.map((r, i) => (
-            <RowView
-              key={r.key}
-              row={r}
-              depth={0}
-              now={now}
-              selected={p.selected}
-              onSelect={p.onSelect}
-              onMenu={p.onRowMenu}
-              shortcutOf={shortcutOf}
-              divider={needs > 0 && i === needs}
-            />
-          ))}
-          {rows.length === 0 && (
-            <div className="empty">
-              <p>No sessions yet.</p>
-              <button className="btn" onClick={p.onNewTerminal}>
-                New Terminal <kbd>⌘T</kbd>
-              </button>
-            </div>
-          )}
+    <>
+      <aside className="sidebar">
+        <div className="sidebar-tabs" role="tablist">
+          <button role="tab" className={p.tab === "sessions" ? "on" : ""} onClick={() => p.onTab("sessions")}>
+            Sessions
+          </button>
+          <button role="tab" className={p.tab === "tools" ? "on" : ""} onClick={() => p.onTab("tools")}>
+            Tools
+          </button>
         </div>
-      ) : (
-        <Tools />
-      )}
 
+        {p.tab === "sessions" ? (
+          <div className="session-list" data-frozen={rows !== p.rows || undefined}>
+            {needs > 0 && <div className="list-heading">Needs you · {needs}</div>}
+            {rows.map((r, i) => (
+              <RowView
+                key={r.key}
+                row={r}
+                depth={0}
+                now={now}
+                selected={p.selected}
+                onSelect={p.onSelect}
+                onMenu={p.onRowMenu}
+                shortcutOf={shortcutOf}
+                divider={needs > 0 && i === needs}
+              />
+            ))}
+            {rows.length === 0 && (
+              <div className="empty">
+                <p>No sessions yet.</p>
+                <button className="btn" onClick={p.onNewTerminal}>
+                  New Terminal <kbd>⌘T</kbd>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Tools />
+        )}
+      </aside>
+      {/* In the app's bottom row, beside the main status bar: both share one height. */}
       <footer className="sidebar-status">
         <span className={`led led-${p.connected ? "idle" : "off"}`} />
         {p.connected
@@ -86,7 +88,7 @@ export function Sidebar(p: Props) {
             ? `core error: ${p.error}`
             : "core offline — reconnecting…"}
       </footer>
-    </aside>
+    </>
   );
 }
 
@@ -133,13 +135,13 @@ function RowView(props: {
             }}
             aria-label={open ? "Collapse" : "Expand"}
           >
-            <Symbol name="chevron.right" size={9} />
+            <Symbol name="chevron.right" size={ICON.disclosure} />
           </button>
         ) : (
           <span className="twisty-space" />
         )}
         {row.win && row.win.kind !== "terminal" ? (
-          <Symbol name={iconFor(row.win.kind)} size={12} className="row-icon" />
+          <Symbol name={iconFor(row.win.kind)} size={ICON.small} className="row-icon" />
         ) : (
           <span className={`led led-${led}`} />
         )}

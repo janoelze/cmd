@@ -1,5 +1,5 @@
 import { usePersisted } from "../store.ts";
-import { Symbol } from "./Symbol.tsx";
+import { ICON, Symbol } from "./Symbol.tsx";
 import { builtinTools, type Tool } from "../tools.ts";
 import { runAction } from "../actions.ts";
 
@@ -22,7 +22,7 @@ function ToolPanel({ tool }: { tool: Tool }) {
     <section className={`panel ${shaded ? "shaded" : ""}`}>
       <header className="panel-title" onClick={() => setShaded(!shaded)}>
         <span className={`twisty ${shaded ? "" : "open"}`}>
-          <Symbol name="chevron.right" size={9} />
+          <Symbol name="chevron.right" size={ICON.disclosure} />
         </span>
         <span className="panel-name">{tool.title}</span>
       </header>

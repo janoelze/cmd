@@ -13,7 +13,7 @@ import { copy, newTerminalIn, selectPane } from "../actions.ts";
 import { showContextMenu } from "../context.ts";
 import { formatBytes } from "../model.ts";
 import { onFsChanged, usePersisted } from "../store.ts";
-import { Symbol } from "./Symbol.tsx";
+import { ICON, Symbol } from "./Symbol.tsx";
 
 const iconFor = (e: FileEntry) =>
   e.kind === "dir"
@@ -235,7 +235,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     <div className="files">
       <div className="window-toolbar">
         <button className="icon-btn" disabled={!rootParent} onClick={rootUp} title="Enclosing folder (⌘↑)">
-          <Symbol name="chevron.up" size={13} />
+          <Symbol name="chevron.up" size={ICON.toolbar} />
         </button>
         <div className="crumbs" title={root}>
           {crumbs.map((c) => (
@@ -245,10 +245,10 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
           ))}
         </div>
         <button className={`icon-btn ${showHidden ? "on" : ""}`} onClick={() => setShowHidden((h) => !h)} title="Show hidden files">
-          <Symbol name={showHidden ? "eye" : "eye.slash"} size={13} />
+          <Symbol name={showHidden ? "eye" : "eye.slash"} size={ICON.toolbar} />
         </button>
         <button className="icon-btn" onClick={() => void newTerminalIn(root)} title="New terminal here">
-          <Symbol name="terminal" size={13} />
+          <Symbol name="terminal" size={ICON.toolbar} />
         </button>
       </div>
       <div className="file-list" ref={listRef} tabIndex={0} onKeyDown={onKey} role="tree">
@@ -280,12 +280,12 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
                   onMouseDown={(ev) => ev.stopPropagation()}
                   onClick={() => toggle(e)}
                 >
-                  <Symbol name="chevron.right" size={9} />
+                  <Symbol name="chevron.right" size={ICON.disclosure} />
                 </button>
               ) : (
                 <span className="twisty-space" />
               )}
-              <Symbol name={iconFor(e)} size={13} className={dir ? "file-icon dir" : "file-icon"} />
+              <Symbol name={iconFor(e)} size={ICON.row} className={dir ? "file-icon dir" : "file-icon"} />
               <span className="file-name">{e.name}</span>
               <span className="file-size">{dir ? "" : formatBytes(e.size)}</span>
               <span className="file-date">{when(e.mtime)}</span>

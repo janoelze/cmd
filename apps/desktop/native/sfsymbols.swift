@@ -5,6 +5,10 @@
 //   sfsymbols <pointSize> <weight> <scale> <name>...
 //   → {"<name>": {"png": "<base64>", "w": <points>, "h": <points>}, …}
 //
+// Each symbol is drawn centred in a canvas whose width and height are each
+// rounded up to an even number of whole points (19.2×12.1 → 20×14), so icon
+// buttons with even sizes centre it on whole pixels.
+//
 // Template symbols draw black on transparent; the UI tints them via CSS masks.
 
 import AppKit
@@ -25,8 +29,9 @@ for name in args.dropFirst(4) {
   guard let base = NSImage(systemSymbolName: name, accessibilityDescription: nil),
         let image = base.withSymbolConfiguration(config) else { continue }
   let size = image.size
-  let pw = Int((size.width * CGFloat(scale)).rounded(.up))
-  let ph = Int((size.height * CGFloat(scale)).rounded(.up))
+  let even = { (v: CGFloat) -> Int in let n = Int(v.rounded(.up)); return n % 2 == 0 ? n : n + 1 }
+  let pw = even(size.width) * Int(scale)
+  let ph = even(size.height) * Int(scale)
   guard pw > 0, ph > 0,
         let rep = NSBitmapImageRep(
           bitmapDataPlanes: nil, pixelsWide: pw, pixelsHigh: ph, bitsPerSample: 8, samplesPerPixel: 4,
@@ -37,7 +42,8 @@ for name in args.dropFirst(4) {
   rep.size = pointSize
   NSGraphicsContext.saveGraphicsState()
   NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-  image.draw(in: NSRect(origin: .zero, size: pointSize))
+  let origin = NSPoint(x: (pointSize.width - size.width) / 2, y: (pointSize.height - size.height) / 2)
+  image.draw(in: NSRect(origin: origin, size: size))
   NSGraphicsContext.restoreGraphicsState()
   guard let png = rep.representation(using: .png, properties: [:]) else { continue }
   out[name] = ["png": png.base64EncodedString(), "w": pointSize.width, "h": pointSize.height]

@@ -5,7 +5,24 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { cmd } from "../bridge.ts";
 
-type Img = { url: string; w: number; h: number } | null;
+type Img = { url: string; w: number; h: number; contain?: boolean } | null;
+
+/**
+ * Icon sizes (points). Every size renders natively and crisp (no scaling); these
+ * follow macOS conventions for small controls. Change the scale here, not per use.
+ */
+export const ICON = {
+  /** bottom status/action bars */
+  bar: 12,
+  /** window toolbars (browser, files) */
+  toolbar: 12,
+  /** rows in lists and trees */
+  row: 12,
+  /** small marks: window-kind icons in sidebar rows and title bars */
+  small: 11,
+  /** disclosure chevrons */
+  disclosure: 8,
+} as const;
 
 // ── pixel density (re-render symbols when the window moves to another display) ──
 const dprListeners = new Set<() => void>();
@@ -81,9 +98,11 @@ export function Symbol({
     };
   }, [key, name, size, weight, scale]);
 
-  // The box is the symbol's own size in points, so the bitmap maps 1:1 to device pixels.
-  const w = img ? img.w : size;
-  const h = img ? img.h : size;
+  // The box is the rendered canvas (square, even, whole points), so the bitmap maps
+  // 1:1 to device pixels and centres on whole pixels.
+  const even = Math.ceil(size / 2) * 2;
+  const w = img ? img.w : even;
+  const h = img ? img.h : even;
   return (
     <span
       className={`sf ${className}`}
@@ -92,6 +111,8 @@ export function Symbol({
         width: w,
         height: h,
         ...(img ? { WebkitMaskImage: `url(${img.url})`, maskImage: `url(${img.url})` } : { opacity: 0 }),
+        // fallback images (no native helper) aren't square: fit, don't stretch
+        ...(img?.contain ? { WebkitMaskSize: "contain", maskSize: "contain" } : {}),
       }}
     />
   );

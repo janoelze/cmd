@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { Symbol } from "./Symbol.tsx";
+import { ICON, Symbol } from "./Symbol.tsx";
 import { SCROLLBAR_CSS } from "../scrollbars.ts";
 
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
@@ -82,17 +82,17 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     <div className="browser">
       <div className="window-toolbar">
         <button className="icon-btn" disabled={!nav.back} onClick={() => ref.current?.goBack()} title="Back">
-          <Symbol name="chevron.left" size={13} />
+          <Symbol name="chevron.left" size={ICON.toolbar} />
         </button>
         <button className="icon-btn" disabled={!nav.forward} onClick={() => ref.current?.goForward()} title="Forward">
-          <Symbol name="chevron.right" size={13} />
+          <Symbol name="chevron.right" size={ICON.toolbar} />
         </button>
         <button
           className="icon-btn"
           onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())}
           title={loading ? "Stop" : "Reload"}
         >
-          <Symbol name={loading ? "xmark" : "arrow.clockwise"} size={13} />
+          <Symbol name={loading ? "xmark" : "arrow.clockwise"} size={ICON.toolbar} />
         </button>
         <input
           ref={input}
@@ -115,7 +115,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
           }}
         />
         <button className="icon-btn" onClick={() => url && cmd.openPath(url)} title="Open in default browser">
-          <Symbol name="safari" size={13} />
+          <Symbol name="safari" size={ICON.toolbar} />
         </button>
       </div>
       <webview ref={ref as never} className="webview" src={initial} partition="persist:cmd-browser" />

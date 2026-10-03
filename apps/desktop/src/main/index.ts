@@ -172,7 +172,7 @@ ipcMain.handle("keybindings", () => keybindings);
 // shows them (native/sfsymbols.swift), so they stay crisp. PNG data URLs, black
 // template images; the UI tints them via CSS masks.
 const SF_HELPER = path.join(repoRoot, "apps/desktop/native/build/sfsymbols");
-type SymbolImage = { url: string; w: number; h: number } | null;
+type SymbolImage = { url: string; w: number; h: number; contain?: boolean } | null;
 const symbolCache = new Map<string, SymbolImage>();
 
 function renderSymbols(names: string[], size: number, weight: string, scale: number): Record<string, SymbolImage> {
@@ -198,12 +198,12 @@ function renderSymbols(names: string[], size: number, weight: string, scale: num
       symbolCache.set(key(n), null);
       continue;
     }
+    // Same square, even-sided box as the helper; the image is fitted inside (mask contain).
+    const side = Math.ceil(size / 2) * 2;
     const { width, height } = img.getSize();
-    const k = size / Math.max(width, height);
-    const w = Math.round(width * k);
-    const h = Math.round(height * k);
-    const px = img.resize({ width: w * scale, height: h * scale, quality: "best" });
-    symbolCache.set(key(n), { url: px.toDataURL(), w, h });
+    const k = side / Math.max(width, height);
+    const px = img.resize({ width: Math.round(width * k * scale), height: Math.round(height * k * scale), quality: "best" });
+    symbolCache.set(key(n), { url: px.toDataURL(), w: side, h: side, contain: true });
   }
   return Object.fromEntries(names.map((n) => [n, symbolCache.get(key(n)) ?? null]));
 }

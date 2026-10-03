@@ -5,7 +5,7 @@ import { ledOf, rowTitle, shortPath, usageLabel, usageTooltip, type SidebarRow }
 import { typeFor, viewFor } from "../windows/registry.ts";
 import { useStoreValue } from "../store.ts";
 import { useWindowStatus } from "../windowActions.ts";
-import { Symbol } from "./Symbol.tsx";
+import { ICON, Symbol } from "./Symbol.tsx";
 
 /** SF Symbol for a window kind (from the core's window type registry). */
 export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "macwindow";
@@ -29,7 +29,7 @@ export function TileTitle({
   return (
     <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} title={title}>
       {win && win.kind !== "terminal" ? (
-        <Symbol name={iconFor(win.kind)} size={11} className="tile-icon" />
+        <Symbol name={iconFor(win.kind)} size={ICON.small} className="tile-icon" />
       ) : (
         <span className={`led led-${ledOf(row.agent)}`} />
       )}
