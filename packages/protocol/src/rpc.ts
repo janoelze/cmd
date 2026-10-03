@@ -167,6 +167,8 @@ export interface Methods {
   "magic.cancel": { params: { id: WindowId }; result: null };
   /** Run the widget's data source now (then on its interval again). */
   "magic.refresh": { params: { id: WindowId }; result: null };
+  /** Set how often the widget's data source runs, in seconds (0 = only on Refresh Now); kept across refinements. */
+  "magic.setRefresh": { params: { id: WindowId; seconds: number }; result: null };
   /** The models a provider offers to the user's stored API key, newest first (fails without a key). */
   "magic.models": { params: { provider: string; refresh?: boolean }; result: MagicModel[] };
   /** Allow (or decline) the media origins the widget asks for (MagicState.media); the frame's CSP opens only allowed ones. */

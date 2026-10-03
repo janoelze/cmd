@@ -100,7 +100,8 @@ export interface MenuState {
 }
 
 /** Context menu item sent from renderer to main. */
-export type ContextItem = { id: string; label: string; enabled?: boolean } | { separator: true };
+/** A context-menu item; `checked` shows a checkmark, `submenu` nests items (its own id is never chosen). */
+export type ContextItem = { id: string; label: string; enabled?: boolean; checked?: boolean; submenu?: ContextItem[] } | { separator: true };
 
 export type Keybindings = Record<string, string[]>;
 

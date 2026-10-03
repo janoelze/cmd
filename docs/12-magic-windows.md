@@ -1,7 +1,7 @@
 # Magic windows
 
 > Status (2026-10-03), branch `magic-windows`:
-> - **Built:** the prompt lab (`cmd magic`, `cmd magic view`, `cmd magic eval`); the AI SDK backend with Anthropic and OpenAI, keys and models set by the user (see Providers); Magic windows in the app (⇧⌘M, File → New Magic Window, the sidebar's +): the empty prompt, the live step trace, streaming, the widget frame, refresh scheduling in the core, the refine line (⌘L), terminal answers, the magic.* settings.
+> - **Built:** the prompt lab (`cmd magic`, `cmd magic view`, `cmd magic eval`); the AI SDK backend with Anthropic and OpenAI, keys and models set by the user (see Providers); Magic windows in the app (⇧⌘M, File → New Magic Window, the sidebar's +): the empty prompt, the live step trace, streaming, the widget frame, refresh scheduling in the core, the refine line (⌘L), Refresh Every (per window, kept across refinements), terminal answers, the magic.* settings.
 > - **Not yet:** versions and "How this was made" as a panel, recipes, the palette fallback, paste and drop, attention from widgets, Edit code, pausing refreshes while hidden, Keychain keys (API keys come from ANTHROPIC_API_KEY / CMD_MAGIC_API_KEY).
 > - **Found while building:** `sandbox-exec` can't apply a profile inside another sandbox (Agent Safehouse), so there commands are refused unless `CMD_MAGIC_UNSANDBOXED=1`; the AI SDK is v7 (`instructions`, not `system`); an inline frame (`srcdoc`, blob or data URL) inherits the app's CSP, which forbids inline scripts, hence the `cmd-widget://` page; the agent asks nothing while it works (see Agent).
 

@@ -46,6 +46,8 @@ export interface MagicState {
   html?: string;
   source?: MagicSource | null;
   refresh?: number;
+  /** The person chose `refresh` (Refresh Every): refinements keep it. */
+  refreshByUser?: boolean;
   size?: "s" | "m" | "l" | "wide";
   command?: string;
   /** The last data the source produced, so the widget draws at once after a restart. */

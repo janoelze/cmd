@@ -1,6 +1,8 @@
 // Built-in window views. Each uses the same registration a plugin would.
 
+import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
+import type { MenuEntry } from "../context.ts";
 import { copy } from "../actions.ts";
 import { hostOf, shortPath } from "../model.ts";
 import { windowActions } from "../windowActions.ts";
@@ -63,6 +65,28 @@ registerWindowView({
   },
 });
 
+/** Choices for a widget's source interval, in seconds (0: only on Refresh Now). */
+const REFRESH_CHOICES = [2, 5, 10, 30, 60, 300, 900, 3600, 0];
+function intervalLabel(s: number): string {
+  const [n, unit] = s % 3600 === 0 ? [s / 3600, "Hour"] : s % 60 === 0 ? [s / 60, "Minute"] : [s, "Second"];
+  return s === 0 ? "Never" : `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
+
+/** Refresh Every ▸: the widget's interval, chosen by the model until the person picks one. */
+function refreshEvery(w: AppWindow): MenuEntry {
+  const cur = typeof w.state.refresh === "number" ? w.state.refresh : 0;
+  // The model's own interval (e.g. 3 s) is listed too, so it shows as checked.
+  const choices = REFRESH_CHOICES.includes(cur) ? REFRESH_CHOICES : [...REFRESH_CHOICES.slice(0, -1), cur].sort((x, y) => x - y).concat(0);
+  return {
+    label: "Refresh Every",
+    submenu: choices.map((s) => ({
+      label: intervalLabel(s),
+      checked: s === cur,
+      run: () => void cmd.call("magic.setRefresh", { id: w.id, seconds: s }),
+    })),
+  };
+}
+
 registerWindowView({
   kind: "magic",
   View: MagicView,
@@ -81,7 +105,7 @@ registerWindowView({
     if (phase === "working") return [{ label: "Stop", run: () => a()?.stop?.() }];
     return [
       ...(phase === "ready" || stateStr(w, "html") ? [{ label: "Change…", run: () => a()?.change?.() }] : []),
-      ...(w.state.source ? [{ label: "Refresh Now", run: () => a()?.refresh?.() }] : []),
+      ...(w.state.source ? [{ label: "Refresh Now", run: () => a()?.refresh?.() }, refreshEvery(w)] : []),
     ];
   },
   menu: (w) => {

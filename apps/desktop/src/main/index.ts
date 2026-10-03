@@ -566,13 +566,15 @@ ipcMain.handle("widget-frame", (_e, media: unknown) => {
 ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
   return new Promise<string | null>((resolve) => {
     let chosen: string | null = null;
-    const menu = Menu.buildFromTemplate(
-      items.map((it) =>
+    const template = (list: ContextItem[]): Electron.MenuItemConstructorOptions[] =>
+      list.map((it) =>
         "separator" in it
           ? { type: "separator" as const }
-          : { label: it.label, enabled: it.enabled ?? true, click: () => (chosen = it.id) },
-      ),
-    );
+          : it.submenu
+            ? { label: it.label, enabled: it.enabled ?? true, submenu: template(it.submenu) }
+            : { label: it.label, enabled: it.enabled ?? true, ...(it.checked !== undefined ? { type: "checkbox" as const, checked: it.checked } : {}), click: () => (chosen = it.id) },
+      );
+    const menu = Menu.buildFromTemplate(template(items));
     menu.popup({ window: winOf(e) ?? undefined, callback: () => resolve(chosen) });
   });
 });

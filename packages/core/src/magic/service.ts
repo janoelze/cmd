@@ -43,6 +43,8 @@ export interface MagicServiceOptions {
 const PERSIST_DATA_MS = 60_000;
 const MODELS_TTL_MS = 10 * 60_000;
 const BODY_THROTTLE_MS = 80;
+/** The shortest interval a source runs at. */
+const MIN_REFRESH_S = 2;
 
 const stateOf = (w: AppWindow) => w.state as MagicState;
 
@@ -205,6 +207,9 @@ export class MagicService {
           return;
         }
         const h = r.header!;
+        // An interval the person chose survives refinements.
+        const keepRefresh = refining && !!prev.refreshByUser;
+        const refresh = keepRefresh ? (prev.refresh ?? 0) : h.refresh;
         this.#o.windows.update(id, {
           title: h.title,
           state: {
@@ -212,7 +217,8 @@ export class MagicService {
             kind: h.kind,
             html: r.body,
             source: h.source,
-            refresh: h.refresh,
+            refresh,
+            refreshByUser: keepRefresh || undefined,
             size: h.size,
             command: h.command,
             media: h.media ?? [],
@@ -224,7 +230,7 @@ export class MagicService {
         });
         send({ type: "done" });
         this.#persistedAt.set(id, Date.now());
-        if (h.source && h.refresh) this.#schedule(id, h.refresh * 1000);
+        if (h.source && refresh) this.#schedule(id, refresh * 1000);
       })
       .catch((e: Error) => {
         if (bodyTimer) clearTimeout(bodyTimer);
@@ -296,6 +302,17 @@ export class MagicService {
     this.#schedule(id, 0);
   }
 
+  /** The person's interval for the source (Refresh Every); 0 runs it only on Refresh Now. */
+  setRefresh(id: WindowId, seconds: number): void {
+    if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`magic.setRefresh: bad interval ${seconds}`);
+    const refresh = seconds === 0 ? 0 : Math.max(MIN_REFRESH_S, Math.round(seconds));
+    const s = stateOf(this.#window(id));
+    this.#o.windows.update(id, { state: { refresh, refreshByUser: true } });
+    if (!s.source || s.phase !== "ready") return;
+    if (refresh) this.#schedule(id, refresh * 1000);
+    else this.stop(id);
+  }
+
   stop(id: WindowId): void {
     clearTimeout(this.#timers.get(id));
     this.#timers.delete(id);
@@ -345,7 +362,7 @@ export class MagicService {
     if (!s.refresh) return;
     // Back off on failures, up to 10× the interval.
     const factor = Math.min(10, 2 ** (this.#failures.get(id) ?? 0));
-    this.#schedule(id, Math.max(2, s.refresh) * 1000 * factor);
+    this.#schedule(id, Math.max(MIN_REFRESH_S, s.refresh) * 1000 * factor);
   }
 }
 

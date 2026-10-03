@@ -235,6 +235,7 @@ export class Core {
     "magic.run": (p) => (this.magic.run(p.id, p.prompt), null),
     "magic.cancel": (p) => (this.magic.cancel(p.id), null),
     "magic.refresh": (p) => (this.magic.refresh(p.id), null),
+    "magic.setRefresh": (p) => (this.magic.setRefresh(p.id, p.seconds), null),
     "magic.media": (p) => (this.magic.media(p.id, p.allow), null),
     "magic.models": (p) => this.magic.models(p.provider, p.refresh),
     "secrets.status": () => this.secrets.status(),

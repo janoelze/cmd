@@ -352,6 +352,28 @@ describe("Magic windows in the core", () => {
     await core.close();
   });
 
+  it("lets the person set the source's interval, and keeps it across refinements", async () => {
+    const { Core } = await import("../src/core.ts");
+    const { fakeFactory } = await import("./fake-pty.ts");
+    const answer = '{"kind":"widget","title":"Clock","source":{"type":"fetch","url":"https://example.com/t"},"refresh":10}\n---\n<div></div>';
+    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, magicBackend: () => scripted([{ answer }, { answer }]) });
+    const w = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
+    const state = () => core.windows.others().find((x) => x.id === w.id)!.state as Record<string, unknown>;
+    core.handlers["magic.run"]({ id: w.id, prompt: "a clock" });
+    await until(() => state().phase === "ready");
+    expect(state().refresh).toBe(10);
+    core.handlers["magic.setRefresh"]({ id: w.id, seconds: 300 });
+    expect(state()).toMatchObject({ refresh: 300, refreshByUser: true });
+    core.handlers["magic.setRefresh"]({ id: w.id, seconds: 0.5 });
+    expect(state().refresh).toBe(2);
+    expect(() => core.handlers["magic.setRefresh"]({ id: w.id, seconds: -1 })).toThrow();
+    core.handlers["magic.setRefresh"]({ id: w.id, seconds: 60 });
+    core.handlers["magic.run"]({ id: w.id, prompt: "bigger" });
+    await until(() => state().phase === "ready");
+    expect(state()).toMatchObject({ refresh: 60, refreshByUser: true });
+    await core.close();
+  });
+
   it("gives each refinement every earlier request, not only the first", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
