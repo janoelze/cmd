@@ -19,8 +19,6 @@ Agents are grouped by what needs you. The canvas lays windows out freely; the pa
   <img alt="Session search in the command palette" src="docs/screenshots/search-light.png">
 </picture>
 
-Screenshots: `pnpm shots` (staged with fake agents; see [`scripts/readme-shots/`](scripts/readme-shots/screenshots.mjs)).
-
 ## Layout
 
 ```
