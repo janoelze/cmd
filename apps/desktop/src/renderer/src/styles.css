@@ -698,31 +698,27 @@ kbd {
 }
 .tile:hover .strip-resize::after, .main.windows.resizing .strip-resize::after { background: color-mix(in srgb, var(--ink) 25%, transparent); }
 
-/* Minimal position bar: one segment per window, the focused one highlighted. */
+/* Strip scrollbar: a track and a thumb sized to the visible part. */
 .strip-scrollbar {
   position: absolute;
   left: var(--pad-x);
   right: var(--pad-x);
-  /* Centred in the space under the windows (layouts.ts, stripBottom). */
-  bottom: calc((max(var(--pad-y) + 3px, 7px) - 3px) / 2);
-  height: 3px;
-  opacity: 0.6;
-  transition: opacity 150ms;
+  /* Centred in the space under the windows (layouts.ts, stripBottom, STRIP_BAR). */
+  bottom: calc((max(var(--pad-y) + 6px, 10px) - 6px) / 2);
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
-.mode-strip:hover .strip-scrollbar { opacity: 1; }
-.strip-seg {
+.strip-thumb {
   position: absolute;
   top: 0;
   height: 100%;
-  padding: 0;
-  border: 0;
-  border-radius: 1.5px;
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
-  cursor: pointer;
+  min-width: 24px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
   transition: background 120ms;
 }
-.strip-seg:hover { background: color-mix(in srgb, var(--ink) 30%, transparent); }
-.strip-seg.sel { background: var(--window-highlight); }
+.strip-scrollbar:hover .strip-thumb, .strip-scrollbar.dragging .strip-thumb { background: color-mix(in srgb, var(--ink) 38%, transparent); }
 
 /* Session search results in the palette */
 .palette.searching { width: min(760px, calc(100vw - 32px)); }

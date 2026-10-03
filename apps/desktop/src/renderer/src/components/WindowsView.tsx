@@ -6,8 +6,8 @@
 //  - moves animate with a CSS transition on transform (mode switches too),
 //  - drag a window by its title bar: it follows the pointer, the others make
 //    room live (insert-style), ghost outlines show where it can go,
-//  - strip: horizontal scrolling with snapping, reveal-on-select, resize by the
-//    right edge, auto-scroll while dragging near an edge, position bar.
+//  - strip: free horizontal scrolling, reveal-on-select, resize by the right
+//    edge, auto-scroll while dragging near an edge, scrollbar.
 //  - canvas: windows placed freely in world coordinates (../canvas.ts) under a
 //    pan/zoom camera; drag to move, edges/corner to resize, minimap. Windows stay
 //    live at every zoom; the zoom range is capped by settings. The camera is a transform on the track, so terminals keep their
@@ -41,13 +41,9 @@ import {
   clampWidth,
   DEFAULT_FRACTION,
   fractionFor,
-  fullyVisible,
-  landedOn,
   maxOffset,
   nextPreset,
   revealOffset,
-  snapPoints,
-  snapTarget,
   widthFor,
   type Slot,
 } from "../strip.ts";
@@ -57,7 +53,6 @@ import { TileTitle } from "./TileTitle.tsx";
 import { SlotMotion } from "./Slot.tsx";
 
 const DRAG_THRESHOLD = 4;
-const SNAP_DELAY = 140; // ms after the last wheel event (trackpad momentum included)
 const SCROLL_ANIM_MS = 260;
 const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scrolls the strip
 const EDGE_SCROLL_MAX = 18; // px per frame
@@ -167,8 +162,6 @@ export function WindowsView(p: Props) {
   const [offset, setOffsetState] = useState(0);
   const offsetRef = useRef(0);
   const anim = useRef<number | null>(null);
-  const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const gestureStart = useRef<number | null>(null);
 
   // ── canvas camera ──────────────────────────────────────
   // The zoom range comes from the canvas.* settings.
@@ -220,8 +213,8 @@ export function WindowsView(p: Props) {
   }, [lim.min, lim.max]);
 
   // Latest values for event handlers registered once.
-  const live = useRef({ lay, ids, settled, vp, selected, stripSlots, mode, preview, drag });
-  live.current = { lay, ids, settled, vp, selected, stripSlots, mode, preview, drag };
+  const live = useRef({ lay, ids, settled, vp, selected, mode, preview, drag });
+  live.current = { lay, ids, settled, vp, selected, mode, preview, drag };
 
   // Windows placed for the first time are stored, so they stay put.
   useEffect(() => {
@@ -283,6 +276,9 @@ export function WindowsView(p: Props) {
     setOffsetState(v);
   }, []);
 
+  const stopScroll = () => {
+    if (anim.current) cancelAnimationFrame(anim.current), (anim.current = null);
+  };
   const animateTo = useCallback(
     (target: number) => {
       if (anim.current) cancelAnimationFrame(anim.current);
@@ -339,26 +335,11 @@ export function WindowsView(p: Props) {
   const selIdx = ids.indexOf(selected ?? "");
   const selSlot = selIdx >= 0 ? stripSlots[selIdx] : undefined;
   useEffect(() => {
-    if (mode !== "strip" || !selSlot || !vp.w || gestureStart.current !== null || drag) return;
+    if (mode !== "strip" || !selSlot || !vp.w || drag) return;
     const target = revealOffset(offsetRef.current, selSlot, vp.w, padX, lay.contentWidth);
     if (Math.abs(target - offsetRef.current) > 0.5) animateTo(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, selSlot?.x, selSlot?.w, vp.w, lay.contentWidth]);
-
-  // Strip: settle on a window edge when free scrolling stops; focus follows.
-  const snap = useCallback(() => {
-    const { lay, vp, stripSlots, ids, selected } = live.current;
-    const startedAt = gestureStart.current ?? offsetRef.current;
-    gestureStart.current = null;
-    const moved = offsetRef.current - startedAt;
-    const dir: -1 | 0 | 1 = Math.abs(moved) < 30 ? 0 : moved > 0 ? 1 : -1;
-    const target = snapTarget(offsetRef.current, snapPoints(stripSlots, vp.w, padRef.current, lay.contentWidth), dir);
-    animateTo(target);
-    const sel = ids.indexOf(selected ?? "");
-    if (sel >= 0 && fullyVisible(stripSlots[sel]!, target, vp.w)) return;
-    const landed = ids[landedOn(stripSlots, target, vp.w, padRef.current, dir)];
-    if (landed) onSelect(landed);
-  }, [animateTo, onSelect]);
 
   // Strip: horizontal wheel/trackpad (capture phase: terminals never see sideways
   // scrolling; vertical scrolling passes through to their scrollback). Content
@@ -377,11 +358,8 @@ export function WindowsView(p: Props) {
       if (!dx) return;
       e.preventDefault();
       e.stopPropagation();
-      if (anim.current) cancelAnimationFrame(anim.current), (anim.current = null);
-      if (gestureStart.current === null) gestureStart.current = offsetRef.current;
+      stopScroll();
       setOffset(offsetRef.current + dx);
-      if (snapTimer.current) clearTimeout(snapTimer.current);
-      snapTimer.current = setTimeout(snap, SNAP_DELAY);
     };
     // Canvas: pinch (or ⌘-scroll) zooms at the pointer. Scrolling over the
     // selected, live window scrolls it; anywhere else it pans.
@@ -408,12 +386,11 @@ export function WindowsView(p: Props) {
     };
     el.addEventListener("wheel", onWheel, { passive: false, capture: true });
     return () => el.removeEventListener("wheel", onWheel, { capture: true });
-  }, [setOffset, snap, setCam]);
+  }, [setOffset, setCam]);
 
   useEffect(
     () => () => {
       if (anim.current) cancelAnimationFrame(anim.current);
-      if (snapTimer.current) clearTimeout(snapTimer.current);
       if (camAnim.current) cancelAnimationFrame(camAnim.current);
       if (camSave.current) clearTimeout(camSave.current), onCamera.current(camRef.current);
       if (settleTimer.current) clearTimeout(settleTimer.current);
@@ -772,7 +749,13 @@ export function WindowsView(p: Props) {
         })}
       </div>
       {mode === "strip" && (
-        <StripBar slots={stripSlots} total={lay.contentWidth} pad={padX} ids={ids} selected={selected} onSelect={onSelect} />
+        <StripScrollbar
+          offset={offset}
+          total={lay.contentWidth}
+          viewport={vp.w}
+          onScroll={(o) => (stopScroll(), setOffset(o))}
+          onPage={(o) => animateTo(o)}
+        />
       )}
       {canvas && cfg["canvas.minimap"] && vp.w > 0 && (
         <Minimap
@@ -849,24 +832,48 @@ function Minimap(p: {
   );
 }
 
-/** Strip position bar: one segment per window, the focused one highlighted. Click to jump. */
-function StripBar(p: { slots: Slot[]; total: number; pad: number; ids: PaneId[]; selected: PaneId | null; onSelect: (id: PaneId) => void }) {
-  // The bar is inset by the padding like the windows; map the windows' span
-  // (first left edge → last right edge) onto it so both ends line up.
-  const inner = p.total - 2 * p.pad;
-  if (inner <= 0) return null;
-  const pct = (v: number) => `${(v / inner) * 100}%`;
+/** Strip scrollbar: drag the thumb, or click the track to page towards the click. */
+function StripScrollbar(p: {
+  offset: number;
+  total: number;
+  viewport: number;
+  onScroll: (offset: number) => void;
+  onPage: (offset: number) => void;
+}) {
+  if (!p.viewport || p.total <= p.viewport + 0.5) return null;
+  const pct = (v: number) => `${(v / p.total) * 100}%`;
   return (
-    <div className="strip-scrollbar" aria-hidden>
-      {p.slots.map((s, i) => (
-        <button
-          key={p.ids[i]}
-          className={`strip-seg ${p.ids[i] === p.selected ? "sel" : ""}`}
-          style={{ left: pct(s.x - p.pad), width: pct(s.w) }}
-          onClick={() => p.onSelect(p.ids[i]!)}
-          tabIndex={-1}
-        />
-      ))}
+    <div
+      className="strip-scrollbar"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        const track = e.currentTarget.getBoundingClientRect();
+        const perPx = p.total / track.width; // content px per track px
+        const thumb = (e.target as Element).closest(".strip-thumb");
+        if (!thumb) {
+          const at = (e.clientX - track.left) * perPx;
+          return p.onPage(at < p.offset ? p.offset - p.viewport : p.offset + p.viewport);
+        }
+        const el = e.currentTarget;
+        el.setPointerCapture(e.pointerId);
+        el.classList.add("dragging");
+        const x0 = e.clientX;
+        const o0 = p.offset;
+        const move = (ev: PointerEvent) => p.onScroll(o0 + (ev.clientX - x0) * perPx);
+        const up = () => {
+          el.classList.remove("dragging");
+          el.removeEventListener("pointermove", move);
+          el.removeEventListener("pointerup", up);
+          el.removeEventListener("pointercancel", up);
+        };
+        el.addEventListener("pointermove", move);
+        el.addEventListener("pointerup", up);
+        el.addEventListener("pointercancel", up);
+      }}
+      onDoubleClick={(e) => e.stopPropagation()}
+    >
+      <div className="strip-thumb" style={{ left: pct(p.offset), width: pct(p.viewport) }} />
     </div>
   );
 }

@@ -596,17 +596,21 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   check(sel && sel.x >= pane.x - 1 && sel.x + sel.width <= pane.x + pane.width + 1 && (await trackX()) < 0,
     "⌥⌘→ scrolls the strip to reveal the selected window");
 
-  // trackpad: a horizontal swipe left, then it settles on a window edge
+  // trackpad: a horizontal swipe left stays where it stopped (no snapping)
   await win.mouse.move(pane.x + pane.width / 2, pane.y + pane.height / 2);
-  for (let i = 0; i < 6; i++) await win.mouse.wheel(-40, 0);
+  const before = -(await trackX());
+  await win.mouse.wheel(-37, 0);
   await win.waitForTimeout(700);
-  const offs = -(await trackX());
-  // window edges in content coordinates (tiles are positioned by transform)
-  const edges = await tiles.evaluateAll((els) => els.map((e) => { const m = new DOMMatrix(getComputedStyle(e).transform); return [m.m41 - 8, m.m41 + e.offsetWidth + 8]; }));
-  const vw = pane.width;
-  const total = Math.max(...edges.map(([, r]) => r));
-  const snapped = offs < 1 || Math.abs(offs - (total - vw)) < 1 || edges.some(([l, r]) => Math.abs(offs - l) < 2 || Math.abs(offs - (r - vw)) < 2);
-  check(snapped, `horizontal scroll settles on a window edge (offset ${Math.round(offs)})`);
+  check(Math.abs(-(await trackX()) - (before - 37)) < 1, "horizontal scroll moves freely and stays put");
+
+  // scrollbar: dragging the thumb scrolls the strip
+  const thumb = await win.locator(".strip-thumb").boundingBox();
+  const o0 = -(await trackX());
+  await win.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
+  await win.mouse.down();
+  await win.mouse.move(thumb.x + thumb.width / 2 - 40, thumb.y + thumb.height / 2, { steps: 4 });
+  await win.mouse.up();
+  check(-(await trackX()) < o0 - 1, "dragging the scrollbar thumb scrolls the strip");
 
   // resize by the right edge, capped at the pane width
   await win.evaluate((id) => window.__cmdSelect(id), await (await visualTiles())[0].getAttribute("data-pane"));
