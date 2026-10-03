@@ -15,6 +15,8 @@ import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type Keybindi
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 
 if (process.env.CMD_NO_SANDBOX) app.commandLine.appendSwitch("no-sandbox");
+// Tests: render as on a Retina display regardless of the actual screen.
+if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scale-factor", process.env.CMD_FORCE_SCALE);
 
 // cmd-file:///abs/path — read-only access to local images/media for the app's own
 // pages (Markdown windows show relative images). Registered on the default

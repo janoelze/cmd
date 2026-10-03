@@ -42,7 +42,10 @@ for name in args.dropFirst(4) {
   rep.size = pointSize
   NSGraphicsContext.saveGraphicsState()
   NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-  let origin = NSPoint(x: (pointSize.width - size.width) / 2, y: (pointSize.height - size.height) / 2)
+  // Centre, but snapped to whole device pixels: a fractional offset puts every
+  // stroke between pixels and blurs it (what native AppKit buttons avoid too).
+  let snap = { (v: CGFloat) -> CGFloat in (v * CGFloat(scale)).rounded() / CGFloat(scale) }
+  let origin = NSPoint(x: snap((pointSize.width - size.width) / 2), y: snap((pointSize.height - size.height) / 2))
   image.draw(in: NSRect(origin: origin, size: size))
   NSGraphicsContext.restoreGraphicsState()
   guard let png = rep.representation(using: .png, properties: [:]) else { continue }

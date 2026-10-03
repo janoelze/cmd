@@ -77,7 +77,8 @@ function load(name: string, size: number, weight: string, scale: number): Promis
 export function Symbol({
   name,
   size = 14,
-  weight = "regular",
+  // Medium reads crisper than regular at 11–13 pt (thin strokes are mostly edge).
+  weight = "medium",
   className = "",
 }: {
   name: string;
