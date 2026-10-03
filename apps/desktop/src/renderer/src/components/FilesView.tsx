@@ -24,13 +24,16 @@ const iconFor = (e: FileEntry) =>
         ? "doc.text"
         : "doc";
 
+// Formatters are built once: toLocale*String with options builds one per call,
+// which costs more than the rest of rendering a row.
+const TIME = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit" });
+const DATE = new Intl.DateTimeFormat([], { day: "numeric", month: "short", year: "numeric" });
+
 function when(ms: number): string {
   if (!ms) return "";
   const d = new Date(ms);
   const sameDay = d.toDateString() === new Date().toDateString();
-  return sameDay
-    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+  return sameDay ? TIME.format(d) : DATE.format(d);
 }
 
 interface Row {

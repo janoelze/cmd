@@ -1,8 +1,10 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import type { PaneId } from "@cmd/protocol";
 import { terminals } from "../terminals.ts";
 
-export function TerminalView(p: { paneId: PaneId; focused: boolean; onMenu: (paneId: PaneId) => void }) {
+// Memoized: the canvas re-renders every window on each camera frame; the content
+// only needs to when its own props change.
+export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focused: boolean; onMenu: (paneId: PaneId) => void }) {
   const { paneId, focused } = p;
   const ref = useRef<HTMLDivElement>(null);
 
@@ -31,4 +33,4 @@ export function TerminalView(p: { paneId: PaneId; focused: boolean; onMenu: (pan
       }}
     />
   );
-}
+});

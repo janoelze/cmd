@@ -16,7 +16,7 @@
 // Windows are never remounted or reordered in the DOM, so terminals keep
 // running and pointer capture is never lost.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaneId } from "@cmd/protocol";
 import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
@@ -595,6 +595,10 @@ export function WindowsView(p: Props) {
   // Stable DOM order (creation), whatever the visual order.
   const stable = [...p.rows].sort((a, b) => createdOf(a) - createdOf(b));
   const canvas = mode === "canvas";
+  // The zoom as a CSS variable, for the few elements sized in screen px (handles,
+  // cards). Set on them only: on the track it would be inherited by every element
+  // of every window, and changing it each frame would restyle them all.
+  const zVar = { "--z": cam.zoom } as React.CSSProperties;
   // Canvas: where the dragged window will land (snapped to the dots).
   const dropAt =
     canvas && drag && rootRect && lay.rects.get(drag.id)
@@ -640,7 +644,7 @@ export function WindowsView(p: Props) {
         className="windows-track"
         style={
           canvas
-            ? ({ transform: `translate(${-cam.x * z}px, ${-cam.y * z}px) scale(${z})`, "--z": z } as React.CSSProperties)
+            ? { transform: `translate(${-cam.x * z}px, ${-cam.y * z}px) scale(${z})` }
             : { transform: `translateX(${-offset}px)` }
         }
       >
@@ -715,12 +719,13 @@ export function WindowsView(p: Props) {
               <div className="tile-body">
                 {/* Cards keep their title bar readable: it's drawn at screen size. */}
                 {lay.chrome && (cards ? <div className="card-title" style={{ zoom: 1 / z }}>{title}</div> : title)}
-                {cards ? (
-                  <Card row={r} zoom={z} />
-                ) : r.pane ? (
-                  <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
+                {/* As cards, terminals detach (frees their renderer); other windows stay
+                    mounted under the card, so pages don't reload and nothing rebuilds. */}
+                {cards && <Card row={r} zoom={z} />}
+                {r.pane ? (
+                  !cards && <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
                 ) : r.win ? (
-                  <WindowContent win={r.win} focused={id === selected} />
+                  <WindowContent win={r.win} focused={id === selected && !cards} />
                 ) : null}
               </div>
               {lay.resizable && (
@@ -736,6 +741,7 @@ export function WindowsView(p: Props) {
                   <div
                     key={axes}
                     className={`canvas-resize resize-${axes}`}
+                    style={zVar}
                     onPointerDown={(e) => startSizing(e, id, rect, axes)}
                   />
                 ))}
@@ -759,12 +765,16 @@ export function WindowsView(p: Props) {
   );
 }
 
-/** A window's content from its registered view (see windows/registry.ts). */
-function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
+/**
+ * A window's content from its registered view (see windows/registry.ts). Memoized,
+ * so moving the canvas camera (a re-render per frame) doesn't re-render file lists,
+ * editors and pages; only a changed window or focus does.
+ */
+const WindowContent = memo(function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
   const view = viewFor(win.kind);
   if (!view) return <div className="file-error">No view registered for “{win.kind}” windows.</div>;
   return <view.View win={win} focused={focused} />;
-}
+});
 
 /** A window drawn as a card when the canvas is zoomed out: no live renderer. */
 function Card({ row, zoom }: { row: Row; zoom: number }) {
@@ -775,10 +785,16 @@ function Card({ row, zoom }: { row: Row; zoom: number }) {
     const t = setInterval(() => refresh((n) => n + 1), 1000);
     return () => clearInterval(t);
   }, [paneId]);
-  if (paneId) return <pre className="canvas-card lines">{terminals.tail(paneId, CARD_LINES).join("\n")}</pre>;
+  const zVar = { "--z": zoom } as React.CSSProperties;
+  if (paneId)
+    return (
+      <pre className="canvas-card lines" style={zVar}>
+        {terminals.tail(paneId, CARD_LINES).join("\n")}
+      </pre>
+    );
   const win = row.win!;
   return (
-    <div className="canvas-card info">
+    <div className="canvas-card info" style={zVar}>
       <Symbol name={iconFor(win.kind)} size={Math.round(28 / zoom)} />
       <div className="canvas-card-detail">{viewFor(win.kind)?.detail?.(win) ?? win.title}</div>
     </div>
