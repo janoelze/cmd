@@ -58,7 +58,7 @@ export function transcriptFiles(roots: TranscriptRoot[]): TranscriptFile[] {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) {
         if (root.depth === undefined || depth < root.depth) walk(p, root, depth + 1);
-      } else if (e.name.endsWith(".jsonl") && !seen.has(p)) {
+      } else if ((root.fileName ? e.name === root.fileName : e.name.endsWith(".jsonl")) && !seen.has(p)) {
         try {
           const st = fs.statSync(p);
           if (st.isFile()) {

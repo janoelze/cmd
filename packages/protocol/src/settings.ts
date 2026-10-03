@@ -173,7 +173,7 @@ export const SETTINGS_SCHEMA = {
     description: "Notify when a command that ran at least this long finishes (needs shell integration). 0 = off.",
   },
 
-  "search.enabled": { title: "Index transcripts", type: "boolean", default: true, description: "Index coding agent transcripts (Claude Code, Codex) for search (? in the palette)." },
+  "search.enabled": { title: "Index transcripts", type: "boolean", default: true, description: "Index coding agent transcripts (Claude Code, Codex, Qwen Code, Copilot CLI) for search (? in the palette)." },
   "search.archiveDirs": {
     title: "Archive folders", placeholder: "~/claude-transcripts-archive",
     type: "string",
@@ -188,6 +188,8 @@ export const SETTINGS_SCHEMA = {
     description: "Command used to start Claude Code (e.g. \"claude --model opus\"). Typed into your shell, so aliases apply.",
   },
   "agents.codex.command": { title: "Codex command", type: "string", default: "codex", description: "Command used to start Codex." },
+  "agents.qwen.command": { title: "Qwen Code command", type: "string", default: "qwen", description: "Command used to resume Qwen Code sessions." },
+  "agents.copilot.command": { title: "Copilot CLI command", type: "string", default: "copilot", description: "Command used to resume GitHub Copilot CLI sessions." },
 
   "magic.provider": {
     title: "Model provider",

@@ -1,4 +1,5 @@
-// Reads Claude Code and Codex transcripts (JSONL) into searchable documents.
+// Reads coding agent transcripts (JSONL: Claude Code, Codex, Qwen Code, Copilot CLI)
+// into searchable documents.
 // Port of the ghostty-agents fork's TranscriptParser.swift.
 //
 // Only what a person would remember is kept: titles, prompts, replies and tool
@@ -11,7 +12,7 @@
 
 import type { AgentKind } from "@cmd/protocol";
 
-export const PARSER_VERSION = 1;
+export const PARSER_VERSION = 2; // 2: Qwen, Copilot; absolute_path in tool inputs
 
 
 export interface SessionDocument {
@@ -110,7 +111,7 @@ function textOf(content: unknown): string | undefined {
 /** The memorable parts of a tool call's input: what it ran, on which files, and why. */
 function describeToolInput(input: unknown): string | undefined {
   if (!isObj(input)) return undefined;
-  const keys = ["description", "command", "cmd", "file_path", "notebook_path", "path", "pattern", "url", "query", "prompt", "skill"];
+  const keys = ["description", "command", "cmd", "file_path", "absolute_path", "notebook_path", "path", "pattern", "url", "query", "prompt", "skill"];
   const parts: string[] = [];
   for (const key of keys) {
     const v = input[key];
@@ -264,6 +265,104 @@ export function parseCodex(text: string, path: string): SessionDocument | null {
     const name = (path.split("/").pop() ?? "").replace(/\.jsonl$/, "");
     doc.id = name.slice(-36);
   }
+  if (isEmpty(doc)) fallback(text, doc);
+  return isEmpty(doc) ? null : doc;
+}
+
+/** Text of Gemini-style parts ({text}, {thought, text}, {functionCall}, …), without thoughts. */
+function partsText(parts: Obj[]): string | undefined {
+  const t = parts
+    .filter((p) => p.thought !== true)
+    .map((p) => str(p.text))
+    .filter((x): x is string => !!x)
+    .join("\n");
+  return t || undefined;
+}
+
+/**
+ * Qwen Code: <home>/projects/<project>/chats/<session>.jsonl, Claude-like records
+ * whose message is Gemini-style ({role, parts}). The prompt as the user typed it
+ * is in systemPayload.displayText; titles are system records (custom_title).
+ */
+export function parseQwen(text: string, path: string): SessionDocument | null {
+  const doc: SessionDocument = { id: (path.split("/").pop() ?? "").replace(/\.jsonl$/, ""), agent: "qwen", path, prompts: [], responses: [], tools: [] };
+  forEachObject(text, (o) => {
+    if (o.isSidechain === true) return;
+    const type = str(o.type);
+    const payload = isObj(o.systemPayload) ? o.systemPayload : {};
+    if (type === "system") {
+      if (o.subtype === "custom_title") doc.title = str(payload.customTitle) ?? doc.title;
+      return;
+    }
+    readCommonMetadata(o, doc);
+    const id = str(o.sessionId);
+    if (id) doc.id = id;
+    const parts = isObj(o.message) && Array.isArray(o.message.parts) ? o.message.parts.filter(isObj) : [];
+    if (type === "user" && (o.subtype === undefined || o.subtype === "mid_turn_user_message")) {
+      const t = (str(payload.displayText) ?? partsText(parts))?.trim();
+      if (t) doc.prompts.push(cap(t));
+    } else if (type === "assistant") {
+      const t = partsText(parts);
+      if (t) doc.responses.push(cap(t));
+      for (const p of parts) {
+        const d = isObj(p.functionCall) ? describeToolInput(p.functionCall.args) : undefined;
+        if (d) doc.tools.push(cap(d));
+      }
+    }
+  });
+  if (isEmpty(doc)) fallback(text, doc);
+  return isEmpty(doc) ? null : doc;
+}
+
+/**
+ * GitHub Copilot CLI: <home>/session-state/<session>/events.jsonl, one event per
+ * line ({type, timestamp, data}): session.start (id, context.cwd/branch),
+ * user.message, assistant.message (content, toolRequests).
+ */
+export function parseCopilot(text: string, path: string): SessionDocument | null {
+  const doc: SessionDocument = { id: path.split("/").at(-2) ?? "", agent: "copilot", path, prompts: [], responses: [], tools: [] };
+  forEachObject(text, (o) => {
+    const data = isObj(o.data) ? o.data : {};
+    const date = parseDate(o.timestamp);
+    if (date !== undefined) {
+      doc.startedAt ??= date;
+      doc.updatedAt = date;
+    }
+    switch (o.type) {
+      case "session.start":
+      case "session.context_changed": {
+        const id = str(data.sessionId);
+        if (id) doc.id = id;
+        const ctx = isObj(data.context) ? data.context : data;
+        if (str(ctx.cwd)) doc.cwd = str(ctx.cwd);
+        if (str(ctx.branch)) doc.branch = str(ctx.branch);
+        break;
+      }
+      case "session.title_changed":
+        doc.title = str(data.title) ?? doc.title;
+        break;
+      case "user.message": {
+        const t = str(data.content)?.trim();
+        if (t) doc.prompts.push(cap(t));
+        break;
+      }
+      case "assistant.message": {
+        const t = str(data.content)?.trim();
+        if (t) doc.responses.push(cap(t));
+        for (const r of Array.isArray(data.toolRequests) ? data.toolRequests.filter(isObj) : []) {
+          let input: unknown = r.arguments;
+          if (typeof input === "string") {
+            try {
+              input = JSON.parse(input);
+            } catch {}
+          }
+          const d = describeToolInput(input);
+          if (d) doc.tools.push(cap(d));
+        }
+        break;
+      }
+    }
+  });
   if (isEmpty(doc)) fallback(text, doc);
   return isEmpty(doc) ? null : doc;
 }

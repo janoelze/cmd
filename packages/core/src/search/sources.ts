@@ -20,6 +20,8 @@ export interface TranscriptRoot {
   dir: string;
   /** How deep transcripts sit below dir (1 = directly in it); omitted = any depth. */
   depth?: number;
+  /** Only files with this name (Copilot: events.jsonl); omitted = every *.jsonl. */
+  fileName?: string;
   /** Environment the agent needs to find these sessions again (CLAUDE_CONFIG_DIR, …); null = none. */
   env: Record<string, string> | null;
 }
@@ -45,6 +47,8 @@ export interface TranscriptSource {
   /** Whether a transcript is this agent's, from its first JSON lines (for mixed folders). */
   sniff(head: Obj[]): boolean;
   parse(text: string, path: string): SessionDocument | null;
+  /** Whether resume can fork a session (continue it as a new one). */
+  forks: boolean;
   /** Shell command that resumes (or forks) a session; the root's env is added by the caller. */
   resume(sessionId: string, fork: boolean, settings: Settings): string;
 }
@@ -120,6 +124,7 @@ export class TranscriptSources {
   resumeCommand(agent: AgentKind, sessionId: string, env: Record<string, string> | null, fork: boolean, settings: Settings): string {
     const source = this.get(agent);
     if (!source) throw new Error(`can't resume ${agent} sessions`);
+    if (fork && !source.forks) throw new Error(`${source.title} can't fork sessions`);
     return envPrefix(env) + source.resume(sessionId, fork, settings);
   }
 }
@@ -128,6 +133,7 @@ export class TranscriptSources {
 export function covers(root: TranscriptRoot, file: string): boolean {
   const rel = path.relative(root.dir, file);
   if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
+  if (root.fileName && path.basename(file) !== root.fileName) return false;
   return root.depth === undefined || rel.split(path.sep).length <= root.depth;
 }
 

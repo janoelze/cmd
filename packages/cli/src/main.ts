@@ -34,7 +34,7 @@ usage: cmd <command> [options]
   hooks <kind>                        print hook config to add to the agent's settings
   open <path|url> [--kind K] [--types] open in a cmd window (folder, text, browser, …);
                                       --types lists window types
-  search <query…> [--json] [--limit N]  search past Claude Code / Codex sessions
+  search <query…> [--json] [--limit N]  search past agent sessions
   resume <session-id> [--agent claude|codex|…] [--fork]
   magic <request…> [--help]          make a widget or terminal command from a request
                                       (runs here, no core needed; see cmd magic --help)

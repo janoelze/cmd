@@ -10,5 +10,5 @@ export * from "./windows/index.ts";
 export { SearchService } from "./search/service.ts";
 export { Searcher, indexPass, openIndex } from "./search/index.ts";
 export { TranscriptSources, locateContext, type TranscriptSource, type TranscriptRoot, type LocateContext } from "./search/sources.ts";
-export { registerBuiltinSources, claudeSource, codexSource } from "./search/builtin.ts";
+export { registerBuiltinSources, claudeSource, codexSource, qwenSource, copilotSource } from "./search/builtin.ts";
 export { OscScanner, parseOsc, stripAnsi } from "./osc.ts";
