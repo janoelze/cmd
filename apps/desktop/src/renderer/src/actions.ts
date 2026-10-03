@@ -44,7 +44,7 @@ export async function openSession(h: SearchHit): Promise<void> {
     (a) => a.paneId && (a.native.claudeSessionId === h.sessionId || a.native.codexThreadId === h.sessionId),
   );
   if (live?.paneId) return select(live.paneId);
-  const agent = await cmd.call("agent.resume", { agent: h.agent, sessionId: h.sessionId, cwd: h.cwd, configDir: h.configDir, spaceId: here() });
+  const agent = await cmd.call("agent.resume", { agent: h.agent, sessionId: h.sessionId, cwd: h.cwd, env: h.env, spaceId: here() });
   if (agent.paneId) select(agent.paneId);
 }
 
@@ -86,11 +86,10 @@ export async function closePane(paneId: PaneId): Promise<void> {
   await cmd.call("pane.kill", { paneId });
 }
 
-export function resumeCommand(a: Agent): string | null {
-  const cd = `cd ${JSON.stringify(a.cwd)} && `;
-  if (a.native.claudeSessionId) return `${cd}claude --resume ${a.native.claudeSessionId}`;
-  if (a.native.codexThreadId) return `${cd}codex resume ${a.native.codexThreadId}`;
-  return null;
+/** Copies the command that resumes an agent's session; the core builds it (env, configured command). */
+export async function copyResumeCommand(a: Agent): Promise<void> {
+  const c = await cmd.call("agent.resumeCommand", { agentId: a.id });
+  if (c) copy(c);
 }
 
 export function sessionId(a: Agent): string | null {

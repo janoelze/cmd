@@ -21,12 +21,18 @@ describe("pane terminal state", () => {
     return { panes, pane, pty: f.ptys[0]! };
   };
 
+  it("says what size the snapshot replays at", async () => {
+    const { panes, pane } = setup();
+    panes.resize(pane.id, 120, 30);
+    expect(await panes.snapshot(pane.id)).toMatchObject({ cols: 120, rows: 30 });
+  });
+
   it("restores a redrawing TUI as one frame, not stacked copies", async () => {
     const { panes, pane, pty } = setup();
     pty.output("$ agent\r\n");
     // A TUI redrawing its two-line frame in place, many times (cursor up + clear).
     for (let i = 0; i < 50; i++) pty.output(`${i ? "\x1b[2A\r\x1b[J" : ""}status: step ${i}\r\nprompt >\r\n`);
-    const { text } = await render(await panes.snapshot(pane.id));
+    const { text } = await render((await panes.snapshot(pane.id)).data);
     expect(text.match(/status:/g)).toHaveLength(1);
     expect(text).toContain("status: step 49");
   });
@@ -35,11 +41,11 @@ describe("pane terminal state", () => {
     const { panes, pane, pty } = setup();
     pty.output("\x1b[?1000h\x1b[?1006h"); // mouse reporting on…
     pty.output("\x1b[?1000l\x1b[?1006l"); // …and off again
-    expect((await render(await panes.snapshot(pane.id))).mouse).toBe("none");
+    expect((await render((await panes.snapshot(pane.id)).data)).mouse).toBe("none");
     pty.output("\x1b[?1000h"); // a program that is still running keeps it
-    expect((await render(await panes.snapshot(pane.id))).mouse).not.toBe("none");
+    expect((await render((await panes.snapshot(pane.id)).data)).mouse).not.toBe("none");
     await panes.resetState(pane.id);
-    expect((await render(await panes.snapshot(pane.id))).mouse).toBe("none");
+    expect((await render((await panes.snapshot(pane.id)).data)).mouse).toBe("none");
   });
 
   it("reads back the displayed text", async () => {

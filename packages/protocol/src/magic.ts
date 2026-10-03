@@ -40,6 +40,12 @@ export interface MagicState {
   history?: string[];
   /** The model's last full answer: context for refinements. */
   answer?: string;
+  /** Origins the view plays audio/video or shows images from (header.media). */
+  media?: string[];
+  /** Media origins the person allowed for this window; the frame's CSP opens only these. */
+  mediaAllowed?: string[];
+  /** Media origins the person declined (not asked again). */
+  mediaDenied?: string[];
 }
 
 /** Progress of a run, streamed as `magic.stream` events (not persisted). */
@@ -90,6 +96,30 @@ export function widgetTokens(t: ThemeLike, fonts: { text?: string; mono?: string
 /** Widget size hints → the viewport the model is told about. */
 export const MAGIC_SIZES = { s: [320, 200], m: [480, 320], l: [720, 480], wide: [960, 280] } as const;
 
-/** The frame's CSP: no network, no navigation, no plugins; only its own inline code. */
-export const WIDGET_CSP =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; media-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
+/** The frame's CSP: no network, no navigation, no plugins; only its own inline code, plus media from allowed origins. */
+export function widgetCsp(media: string[] = []): string {
+  const extra = media.map(mediaOrigin).filter((o): o is string => !!o).map((o) => " " + o).join("");
+  return `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:${extra}; media-src data:${extra}; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'`;
+}
+export const WIDGET_CSP = widgetCsp();
+
+/** An https URL or origin → its origin ("https://host[:port]"); null for anything else. */
+export function mediaOrigin(u: unknown): string | null {
+  if (typeof u !== "string") return null;
+  try {
+    const url = new URL(u.includes("://") ? u : `https://${u}`);
+    return url.protocol === "https:" && url.hostname && !url.username && !url.password ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The media origins a widget wants. The header declares them; answers from
+ * before the header had `media` are read from the body when it plays audio or
+ * video (every https URL in it).
+ */
+export function requestedMedia(s: Pick<MagicState, "media" | "html">): string[] {
+  const list = s.media ?? (s.html && /<audio|<video|new Audio\b/.test(s.html) ? [...s.html.matchAll(/https:\/\/[^\s"'`<>)\\]+/g)].map((m) => m[0]) : []);
+  return [...new Set(list.map(mediaOrigin).filter((o): o is string => !!o))].slice(0, 12);
+}

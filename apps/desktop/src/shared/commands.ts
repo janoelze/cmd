@@ -20,6 +20,7 @@ const spec = <const T extends CommandSpec[]>(xs: T) => xs;
 
 export const COMMANDS = spec([
   { id: "app.settings", label: "Settings…", keys: ["Cmd+,"] },
+  { id: "app.checkUpdates", label: "Check for Updates…" },
 
   { id: "file.newTerminal", label: "New Terminal", keys: ["Cmd+N", "Cmd+T"] },
   { id: "file.newClaude", label: "New Claude Session", keys: ["Alt+Cmd+N"] },
@@ -44,6 +45,7 @@ export const COMMANDS = spec([
   { id: "view.grid", label: "Grid", keys: ["Alt+Cmd+2"], checkable: "radio" },
   { id: "view.strip", label: "Strip", keys: ["Alt+Cmd+3"], checkable: "radio" },
   { id: "view.canvas", label: "Canvas", keys: ["Alt+Cmd+4"], checkable: "radio" },
+  { id: "view.toggleFocus", label: "Toggle Focus", keys: ["Cmd+Enter"] },
   { id: "view.canvasFit", label: "Zoom Canvas to Fit", keys: ["Shift+Cmd+1"] },
   { id: "view.canvasZoomWindow", label: "Zoom Canvas to Window", keys: ["Shift+Cmd+2"] },
   { id: "view.cycleWidth", label: "Cycle Window Width", keys: ["Ctrl+Cmd+R"] },

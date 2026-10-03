@@ -5,7 +5,7 @@
 <h1 align="center">cmd</h1>
 
 <p align="center">
-  A terminal for working with coding agents, on macOS.
+  A terminal for working with coding agents, on macOS and Windows.
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
 - **Knows your agents.** Claude Code, Codex, Gemini, Aider and others are detected on their own, even behind wrappers and sandboxes. The sidebar puts agents waiting for input first, then the ones working, then the ones done; subagents show as children.
 - **Terminals that outlive the app.** A long-lived core process owns every terminal. Close the window or restart the app: your sessions are still there.
 - **Four layouts.** Focus on one window, tile them in a grid, scroll through a horizontal strip of windows inspired by [PaperWM](https://github.com/paperwm/PaperWM), or arrange them freely on a zoomable canvas with a minimap.
-- **Every past session, searchable.** Typo-tolerant full-text search over your Claude Code and Codex transcripts, from the palette or the sidebar. Return resumes a session in a new terminal.
+- **Every past session, searchable.** Typo-tolerant full-text search over your Claude Code, Codex, Qwen Code and Copilot CLI transcripts (including profiles and custom config dirs), from the palette or the sidebar. Return resumes a session in a new terminal.
 - **More than terminals.** Browser, file tree, text editor and Markdown windows sit next to your terminals. `open README.md` in the shell opens it in cmd.
 - **Magic windows.** Describe what you want to see ("show my VPN status", a JSON URL, "my open pull requests") and an agent builds a live widget for it, in your theme, that keeps itself up to date. [More below](#magic-windows).
 - **Notifications that lead somewhere.** An agent waiting, a bell, a long command finishing, an OSC 9/777/99 notification or `cmd notify`: the terminal is marked until you look at it, and counts toward the Dock badge.
@@ -68,11 +68,29 @@ Press ⇧⌘M and type what the window should show: a question, a URL, some JSON
 
 ## Install
 
-Download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) (Apple Silicon) and move cmd to Applications. If macOS refuses to open it the first time, right-click the app and choose Open.
+**macOS** (Apple Silicon). Install or update to the latest release with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install.sh | sh
+```
+
+Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications. Releases are signed and notarized by Apple. Versions before 0.2.5 weren't, and can't update themselves, so install once more with either way above.
+
+**Windows** (x64). In PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install.ps1 | iex
+```
+
+Or run the `-setup.exe` from the [latest release](https://github.com/janoelze/cmd/releases/latest). It isn't code-signed yet, so SmartScreen warns about the downloaded installer: choose More info → Run anyway. cmd installs per user, without admin rights.
+
+cmd updates itself: new versions download in the background and install when you quit it, and your terminals keep running. Settings → Updates switches to notify-only or off; Check for Updates… (in the cmd menu on macOS, Help on Windows) checks now.
 
 **Agent state.** cmd sees that an agent is running from its process alone. To also see what it is doing (working, waiting for input, done, which tool it runs), add cmd's hook to the agent: `cmd hooks claude` (or `codex`) prints the snippet to merge into `~/.claude/settings.json` (or `~/.codex/hooks.json`). Hooks of the ghostty-agents fork work unchanged.
 
 ## Getting started
+
+Shortcuts are shown for macOS. On Windows, app shortcuts use Ctrl+Shift so plain Ctrl keys still reach the shell, as in Windows Terminal: ⌘N is Ctrl+Shift+N, ⌥⌘N is Ctrl+Alt+N, ⌘, is Ctrl+,. Settings → Keyboard Shortcuts lists them all.
 
 | | |
 |---|---|
@@ -81,6 +99,7 @@ Download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/re
 | ⇧⌘M | new Magic window |
 | ⌘K | command palette: type to find anything, `>` commands, `@` sessions, `?` past sessions |
 | ⌥⌘1 / 2 / 3 / 4 | focus / grid / strip / canvas |
+| ⌘↩ | focus on the selected window, and back |
 | ⌃⌘J | jump to the next session that needs you |
 | ⌘, | settings |
 
@@ -104,6 +123,7 @@ Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keyb
 | ⌥⌘K | clear buffer |
 | ⌘+ / ⌘− / ⌘0 | terminal text size (this session only) |
 | ⌥⌘1/2/3/4 | focus / grid / strip / canvas |
+| ⌘↩ | toggle focus: the selected window fills the pane; again returns to grid, strip or canvas |
 | ⇧⌘1 / ⇧⌘2 | canvas: zoom to fit all / to the selected window |
 | ⌃⌘S | show/hide sidebar |
 | ⇧⌘F | search the sidebar: open windows and past sessions |

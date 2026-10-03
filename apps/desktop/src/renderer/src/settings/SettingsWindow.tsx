@@ -19,10 +19,11 @@ import { useKeybindings } from "../keybindings.ts";
 import { cmd } from "../bridge.ts";
 import { NumberField, Popup, Segmented, Switch, TextField } from "./controls.tsx";
 import { useSettings } from "./useSettings.ts";
+import { About } from "./About.tsx";
 import { allThemes } from "../themes/registry.ts";
 
 type Group = keyof typeof SETTINGS_GROUPS;
-type Page = Group | "keyboard";
+type Page = Group | "keyboard" | "about";
 
 /** Sidebar icons (SF Symbols, monochrome). */
 const ICONS: Record<Page, string> = {
@@ -37,11 +38,13 @@ const ICONS: Record<Page, string> = {
   search: "magnifyingglass",
   agents: "sparkles",
   magic: "wand.and.stars",
+  updates: "arrow.down.circle",
   keyboard: "keyboard",
+  about: "info.circle",
 };
 
-const PAGES: Page[] = [...(Object.keys(SETTINGS_GROUPS) as Group[]), "keyboard"];
-const pageTitle = (p: Page) => (p === "keyboard" ? "Keyboard Shortcuts" : SETTINGS_GROUPS[p]);
+const PAGES: Page[] = [...(Object.keys(SETTINGS_GROUPS) as Group[]), "keyboard", "about"];
+const pageTitle = (p: Page) => (p === "keyboard" ? "Keyboard Shortcuts" : p === "about" ? "About" : SETTINGS_GROUPS[p]);
 const groupOf = (k: SettingKey) => k.split(".")[0] as Group;
 const KEYS = Object.keys(SETTINGS_SCHEMA) as SettingKey[];
 
@@ -118,6 +121,8 @@ export function SettingsWindow() {
     );
   } else if (page === "keyboard") {
     body = <Shortcuts />;
+  } else if (page === "about") {
+    body = <About />;
   } else {
     const keys = KEYS.filter((k) => groupOf(k) === page);
     const changed = keys.filter((k) => snap.overrides.includes(k));

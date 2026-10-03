@@ -97,6 +97,12 @@ export function Slot({
   const [leaving, setLeaving] = useState<{ id: number; text: string } | null>(null);
   /** The value that replaced another (its entry waits for the exit; see styles.css). */
   const [swapped, setSwapped] = useState<string | null>(null);
+  /**
+   * The value animating in, until its animation ends. Not derived from `animate`
+   * per render: a window scrolling into view would then (re)play its title's
+   * entry animations, as would dropping .still from one that already played.
+   */
+  const [entering, setEntering] = useState<string | null>(null);
   const gen = useRef(0);
   const natural = useRef(0);
 
@@ -142,8 +148,10 @@ export function Slot({
     if (prev.current.key !== key && prev.current.key !== null && animate && mounted.current) {
       setLeaving({ id: ++gen.current, text: prev.current.text });
       setSwapped(key);
+      setEntering(key);
     } else if (prev.current.key !== key) {
       setSwapped(null);
+      setEntering(animate && mounted.current ? key : null);
     }
     prev.current = { key, text: shown?.text ?? "" };
     mounted.current = true;
@@ -160,7 +168,12 @@ export function Slot({
         </span>
       )}
       {shown && (
-        <span key={key!} ref={inner} className={`slot-v ${mounted.current && animate ? "in" : ""} ${swapped === key ? "swap" : ""} ${cls}`}>
+        <span
+          key={key!}
+          ref={inner}
+          className={`slot-v ${entering === key ? "in" : ""} ${swapped === key ? "swap" : ""} ${cls}`}
+          onAnimationEnd={(e) => e.target === e.currentTarget && setEntering(null)}
+        >
           {text(shown.text)}
         </span>
       )}

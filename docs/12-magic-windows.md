@@ -109,6 +109,7 @@ Header fields:
   - `{type:"command", command, cwd?}`: run without a PTY, with a timeout and an output cap. Output is parsed as JSON when it can be, otherwise passed as text.
 - `refresh`: in seconds, or 0.
 - `command`, and `run: "ask" | "now"` (terminal only; `now` still goes through the policy).
+- `media` (widget only, optional): https origins the view streams audio/video or loads images from (a web radio). See Security → Media.
 
 The body uses the **kit**: about 40 classes (`k-card`, `k-stat`, `k-grid`, `k-table`, `k-list`, `k-badge`, `k-spark`, `k-bar`, `k-mono`…) built on the theme tokens. Two chart libraries (uPlot and Chart.js) are vendored, not loaded from a CDN. Rules in the prompt:
 
@@ -162,6 +163,7 @@ The renderer runs with `sandbox: false`, and `window.cmd` there is the core sock
   - served from a custom `cmd-widget://<window id>/` protocol with the CSP as a **header**: `default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'none'; frame-src 'none'`.
   - Main also blocks navigation (`will-frame-navigate`), new windows, permission requests and outbound requests from `cmd-widget:` frames. `nodeIntegrationInSubFrames` stays off.
 - **Bridge:** the renderer accepts a message only if `event.source === frame.contentWindow`, since every opaque origin reports `"null"`. A frame can only use the frame API above, scoped to its own window.
+- **Media:** the frame has no network, except media. A widget lists the https origins it plays audio/video or shows images from in `header.media` (answers from before that field are read from the body when it uses `<audio>`/`<video>`). The window asks once ("This widget wants to play media from …", Allow / Don't Allow, `magic.media`); the answer is kept in the window's state (`mediaAllowed`, `mediaDenied`). Main serves allowed frames as `cmd-widget://frame/<token>`, with those origins added to `img-src` and `media-src` only; the token comes from the renderer (`widget-frame`), so a widget can't navigate itself to a looser CSP. `connect-src` stays `'none'`. What remains is that a widget can encode data in a media URL to an allowed origin, which is why it is per window and asked for.
 - **Fetch sources:** the origins in the header are shown in the window chrome. A new origin, or a source using a `secret`, is approved once per window.
 - **Command policy** (used by terminal kinds, command sources and `cmd.run`), in the order Claude Code uses:
   - rules are deny, then ask, then allow;

@@ -34,6 +34,7 @@ const KNOWN_AGENTS = [
   "crush",
   "qwen",
   "droid",
+  "copilot",
 ] as const;
 
 const SHELLS = new Set(["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu", "xonsh", "elvish", "pwsh", "powershell", "login"]);

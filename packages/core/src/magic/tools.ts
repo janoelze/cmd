@@ -169,6 +169,12 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
       if (!url || !/^https?:\/\//i.test(url)) return err("an http(s) url is required");
       try {
         const res = await fetch(url, { headers: { "user-agent": "cmd-magic/0.1" }, signal: AbortSignal.timeout(10_000), redirect: "follow" });
+        // A stream (a web radio) never ends: its headers are the answer.
+        const type = res.headers.get("content-type") ?? "";
+        if (/^(audio|video)\/|ogg|aacp|mpegurl/i.test(type)) {
+          void res.body?.cancel();
+          return { output: `HTTP ${res.status} ${type}\n(a media stream at ${res.url}; not read)`, isError: !res.ok };
+        }
         const text = (await res.text()).slice(0, MAX);
         let body = text;
         try {

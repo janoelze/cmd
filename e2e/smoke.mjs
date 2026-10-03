@@ -459,6 +459,21 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const afterTheme = await readTheme();
   await call("settings.set", { key: "theme.appearance", value: appearance });
   check(!!beforeTheme.js && afterTheme.css !== beforeTheme.css && afterTheme.js !== beforeTheme.js, `a theme change reaches a widget live, CSS and cmd.onTheme (${beforeTheme.js} → ${afterTheme.js})`);
+
+  // Media: a widget's media origins are blocked by the frame's CSP until the person allows them.
+  const radio = await call("window.open", { kind: "magic", input: {} });
+  const radioHtml = '<div id="r">–</div><script>document.addEventListener("securitypolicyviolation",()=>r.textContent="blocked");const a=new Audio();a.onerror=()=>r.textContent==="–"&&(r.textContent="loaded");a.src="https://radio.invalid/live.aacp"</script>';
+  await call("window.update", { id: radio.id, title: "Radio", state: { prompt: "radio", phase: "ready", kind: "widget", html: radioHtml, media: ["https://radio.invalid"], source: null, refresh: 0, size: "s", lastData: null } });
+  await win.waitForTimeout(1500);
+  const radioTile = win.locator(`.tile[data-pane="${radio.id}"]`);
+  const radioText = () => win.frameLocator(`.tile[data-pane="${radio.id}"] iframe.magic-frame`).locator("#r").textContent({ timeout: 5000 });
+  const asked = await radioTile.locator(".magic-media").isVisible();
+  const before = await radioText();
+  await radioTile.locator(".magic-media .btn.primary").click();
+  await win.waitForTimeout(2500);
+  const after = await radioText();
+  const stored = (await call("window.list")).find((x) => x.id === radio.id).state.mediaAllowed;
+  check(asked && before === "blocked" && after === "loaded" && !(await radioTile.locator(".magic-media").count()) && stored?.[0] === "https://radio.invalid", `a widget's media origins are asked for and then allowed by the frame's CSP (${asked}, ${before} → ${after})`);
   await call("window.close", { id: themed.id });
   await win.waitForTimeout(600);
 
@@ -497,7 +512,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
 
   await menu("view.strip");
   await win.waitForTimeout(800);
-  const offset = () => win.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector(".windows-track")).transform).m41);
+  const offset = () => win.evaluate(() => document.querySelector(".windows-scroller").scrollLeft);
   const scrolls = async (loc, id) => {
     await win.evaluate((id) => window.__cmdSelect(id), id); // the strip reveals it
     await win.waitForTimeout(700);
@@ -535,6 +550,11 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     for (let i = 0; i < 40 && !fn(); i++) await sw.waitForTimeout(50);
     check(fn(), what);
   };
+
+  await page("About");
+  await sw.waitForSelector(".sw-row:has-text('Status') .sw-value");
+  const status = await row("Status").locator(".sw-value").textContent();
+  check(/^pid \d+$/.test(status ?? ""), `About shows the running core (${status})`);
 
   await page("Shell");
   const tags = await sw.locator(".sw-tag").allTextContents();
@@ -648,7 +668,8 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   const n = await tiles.count();
   const heights = await tiles.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
   check(n >= 4 && heights.every((h) => Math.abs(h - heights[0]) < 1 && h > pane.height - 40), `strip: ${n} windows, all full height`);
-  const trackX = () => win.locator(".windows-track").evaluate((e) => new DOMMatrix(getComputedStyle(e).transform).m41);
+  // The strip is a native scroller: its content sits at -scrollLeft.
+  const trackX = () => win.locator(".windows-scroller").evaluate((e) => -e.scrollLeft);
 
   // keyboard: walk to the last window; it must end up fully visible
   for (let i = 0; i < n; i++) await menu("session.next");
@@ -657,17 +678,35 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   check(sel && sel.x >= pane.x - 1 && sel.x + sel.width <= pane.x + pane.width + 1 && (await trackX()) < 0,
     "⌥⌘→ scrolls the strip to reveal the selected window");
 
-  // trackpad: a horizontal swipe left, then it settles on a window edge
+  // trackpad: a horizontal swipe left stays where it stopped (no snapping)
   await win.mouse.move(pane.x + pane.width / 2, pane.y + pane.height / 2);
-  for (let i = 0; i < 6; i++) await win.mouse.wheel(-40, 0);
+  const before = -(await trackX());
+  await win.mouse.wheel(-37, 0);
   await win.waitForTimeout(700);
-  const offs = -(await trackX());
-  // window edges in content coordinates (tiles are positioned by transform)
-  const edges = await tiles.evaluateAll((els) => els.map((e) => { const m = new DOMMatrix(getComputedStyle(e).transform); return [m.m41 - 8, m.m41 + e.offsetWidth + 8]; }));
-  const vw = pane.width;
-  const total = Math.max(...edges.map(([, r]) => r));
-  const snapped = offs < 1 || Math.abs(offs - (total - vw)) < 1 || edges.some(([l, r]) => Math.abs(offs - l) < 2 || Math.abs(offs - (r - vw)) < 2);
-  check(snapped, `horizontal scroll settles on a window edge (offset ${Math.round(offs)})`);
+  check(Math.abs(-(await trackX()) - (before - 37)) < 1, "horizontal scroll moves freely and stays put");
+
+  // scrollbar: dragging the thumb scrolls the strip
+  const thumb = await win.locator(".strip-thumb").boundingBox();
+  const o0 = -(await trackX());
+  await win.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
+  await win.mouse.down();
+  await win.mouse.move(thumb.x + thumb.width / 2 - 40, thumb.y + thumb.height / 2, { steps: 4 });
+  await win.mouse.up();
+  check(-(await trackX()) < o0 - 1, "dragging the scrollbar thumb scrolls the strip");
+
+  // ⌘↩ into focus and back: the strip returns to exactly where it was
+  await win.waitForTimeout(300);
+  const scrolled = await trackX();
+  const selX = (await win.locator(".windows-track > .tile.sel").boundingBox()).x;
+  await menu("view.toggleFocus");
+  await win.waitForSelector(".main.mode-focus");
+  await win.waitForTimeout(500);
+  await menu("view.toggleFocus");
+  await win.waitForSelector(".main.mode-strip");
+  await win.waitForTimeout(600);
+  const selX2 = (await win.locator(".windows-track > .tile.sel").boundingBox()).x;
+  check(Math.abs((await trackX()) - scrolled) < 1 && Math.abs(selX2 - selX) < 1,
+    `toggling focus returns the strip to its scroll position (${Math.round(scrolled)} → ${Math.round(await trackX())})`);
 
   // resize by the right edge, capped at the pane width
   await win.evaluate((id) => window.__cmdSelect(id), await (await visualTiles())[0].getAttribute("data-pane"));

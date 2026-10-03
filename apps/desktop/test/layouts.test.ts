@@ -52,7 +52,7 @@ describe("strip layout", () => {
     expect(s.contentWidth).toBe(20 + 400 + 4 + 700 + 20);
   });
 
-  it("keeps room for the position bar with no padding", () => {
+  it("keeps room for the scrollbar with no padding", () => {
     const s = stripLayout(["a"], [400], vp, { x: 0, y: 0, gap: 0 });
     expect(s.rects.get("a")!.h).toBe(600 - STRIP_BAR - 4);
   });

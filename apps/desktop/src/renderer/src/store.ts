@@ -3,6 +3,7 @@
 // xterm instances (see terminals.ts).
 
 import { useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import type { Agent, AgentId, AppNotification, AppWindow, CoreEvent, Pane, PaneId, SearchStatus, SettingsSnapshot, Space, SpaceId, WindowId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
@@ -204,14 +205,37 @@ export function spaceOfWindow(id: string): SpaceId | null {
 
 /** Main says which Space this window shows (and maybe what to select there). */
 cmd.onShowSpace(({ spaceId, select }) => {
-  if (spaceId !== state.spaceId) set({ spaceId });
-  if (select) {
-    setSpaceView(spaceId, "selection.pane", select);
-    const history = getSpaceView<string[]>(spaceId, "selection.history", []);
-    setSpaceView(spaceId, "selection.history", [select, ...history.filter((x) => x !== select)].slice(0, 50));
-  }
+  const show = () => {
+    if (spaceId !== state.spaceId) set({ spaceId });
+    if (select) {
+      setSpaceView(spaceId, "selection.pane", select);
+      const history = getSpaceView<string[]>(spaceId, "selection.history", []);
+      setSpaceView(spaceId, "selection.history", [select, ...history.filter((x) => x !== select)].slice(0, 50));
+    }
+  };
+  if (spaceId === state.spaceId) show();
+  else slideSidebar(state.spaceId, spaceId, show);
+  // A reload (⌘R) loads the URL again: keep it naming the Space shown now.
+  const url = new URL(location.href);
+  url.searchParams.set("space", spaceId);
+  history.replaceState(history.state, "", url);
   void cmd.call("space.update", { id: spaceId, active: true }).catch(() => {});
 });
+
+/**
+ * Switching Spaces slides the sidebar's list toward the new Space's side of the
+ * switcher, as in Arc: an element-scoped View Transition, so only the list is
+ * captured (terminals and webviews stay live) and the slide runs on the
+ * compositor while the main view re-lays out. `update` must commit synchronously.
+ */
+function slideSidebar(from: SpaceId, to: SpaceId, update: () => void): void {
+  const el = document.querySelector<HTMLElement & { startViewTransition?: Document["startViewTransition"] }>(".sidebar-scroll");
+  const a = state.spaces.get(from);
+  const b = state.spaces.get(to);
+  const searching = !!document.querySelector<HTMLInputElement>(".sb-search input")?.value;
+  if (!el?.startViewTransition || !a || !b || searching || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
+  el.startViewTransition({ update: () => flushSync(update), types: [b.order > a.order ? "space-next" : "space-prev"] });
+}
 
 /** This window's Space was closed or forgotten (here or elsewhere). */
 function checkSpace(): void {
@@ -366,9 +390,9 @@ cmd.onStatus(async (status) => {
   await Promise.allSettled(
     snap.panes.map(async (p) => {
       try {
-        const { data } = await cmd.call("pane.snapshot", { paneId: p.id });
+        const { data, cols, rows } = await cmd.call("pane.snapshot", { paneId: p.id });
         terminals.reset(p.id);
-        terminals.write(p.id, data);
+        terminals.write(p.id, data, { cols, rows });
       } finally {
         awaitingSnapshot.delete(p.id);
         terminals.release(p.id);

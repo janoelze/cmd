@@ -209,8 +209,16 @@ class Terminals {
     return !!this.#hosts.get(paneId)?.term.hasSelection();
   }
 
-  write(paneId: PaneId, data: string): void {
-    this.get(paneId).term.write(data);
+  /**
+   * Write output. With a size (a snapshot's), the terminal takes it first: a
+   * fresh terminal is 80x24, and a wider screen replayed into it wraps and puts
+   * its cursor moves on the wrong cells (Claude Code comes out mangled). That is
+   * the PTY's size already, so it isn't resized; the next fit sets the real one.
+   */
+  write(paneId: PaneId, data: string, size?: { cols: number; rows: number }): void {
+    const t = this.get(paneId).term;
+    if (size && (size.cols !== t.cols || size.rows !== t.rows)) t.resize(size.cols, size.rows);
+    t.write(data);
   }
 
   reset(paneId: PaneId): void {

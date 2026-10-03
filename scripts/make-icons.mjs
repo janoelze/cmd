@@ -3,7 +3,9 @@
 //   icon.icon/Assets/glyph.svg  the ⌘ (U+2318), drawn from plain geometry
 //   Assets.car  the Liquid Glass icon (light, dark, clear, tinted) for macOS 26+, via actool
 //   icon.icns   flat render for older macOS, the DMG and Finder previews, via ictool
-//   icon.png    (1024, Linux and the dev Dock icon), icon.ico (Windows)
+//   icon.png    (1024, Linux), icon.ico (Windows)
+// and a red variant for development builds (pnpm dev, pnpm dist) in build/dev/
+// (Assets.car, icon.icns, icon.png, icon.ico), so they're easy to tell from the installed app.
 // The outputs are committed, so packaging needs no Xcode. Needs Xcode 26+. usage: pnpm icons
 import fs from "node:fs";
 import os from "node:os";
@@ -45,57 +47,75 @@ fs.writeFileSync(
   `<svg xmlns="http://www.w3.org/2000/svg" width="${2 * edge}" height="${2 * edge}" viewBox="${-edge} ${-edge} ${2 * edge} ${2 * edge}"><path fill="#fff" d="${d}"/></svg>\n`,
 );
 
-// 2. Assets.car. actool names the icon after the .icon file; CFBundleIconName is "Icon".
-fs.cpSync(source, path.join(tmp, "Icon.icon"), { recursive: true });
-fs.mkdirSync(path.join(tmp, "car"));
-run("xcrun", [
-  "actool", path.join(tmp, "Icon.icon"), "--compile", path.join(tmp, "car"),
-  "--output-partial-info-plist", path.join(tmp, "car/info.plist"),
-  "--app-icon", "Icon", "--include-all-app-icons", "--enable-on-demand-resources", "NO",
-  "--development-region", "en", "--target-device", "mac", "--minimum-deployment-target", "12.0", "--platform", "macosx",
-]);
-fs.copyFileSync(path.join(tmp, "car/Assets.car"), path.join(build, "Assets.car"));
+// The dev variant: the same document with a red background.
+const devSource = path.join(tmp, "dev.icon");
+fs.cpSync(source, devSource, { recursive: true });
+const doc = JSON.parse(fs.readFileSync(path.join(devSource, "icon.json"), "utf8"));
+doc.fill["linear-gradient"] = ["srgb:0.86000,0.20000,0.18000,1.00000", "srgb:0.52000,0.06000,0.06000,1.00000"];
+fs.writeFileSync(path.join(devSource, "icon.json"), JSON.stringify(doc, null, 2) + "\n");
 
-// 3. Flat renders. ictool draws the tile edge to edge; the macOS grid puts an
-//    824 px tile in 1024, so render smaller and pad with transparency.
-const png = (size) => {
-  const out = path.join(tmp, `${size}.png`);
-  if (fs.existsSync(out)) return out;
-  const tile = Math.round((size * 824) / 1024);
-  run(ictool, [source, "--export-image", "--output-file", out, "--platform", "macOS", "--rendition", "Default", "--width", String(tile), "--height", String(tile), "--scale", "1"]);
-  run("sips", ["-p", String(size), String(size), out]);
-  return out;
-};
+/** Renders one .icon document into outDir: Assets.car, icon.icns, icon.png (and icon.ico). */
+function render(iconDoc, outDir, { ico = false } = {}) {
+  const work = fs.mkdtempSync(path.join(tmp, "render-"));
+  fs.mkdirSync(outDir, { recursive: true });
 
-// macOS .icns from an .iconset (16…512 at 1x and 2x).
-const iconset = path.join(tmp, "icon.iconset");
-fs.mkdirSync(iconset);
-for (const s of [16, 32, 128, 256, 512]) {
-  fs.copyFileSync(png(s), path.join(iconset, `icon_${s}x${s}.png`));
-  fs.copyFileSync(png(s * 2), path.join(iconset, `icon_${s}x${s}@2x.png`));
+  // Assets.car. actool names the icon after the .icon file; CFBundleIconName is "Icon".
+  fs.cpSync(iconDoc, path.join(work, "Icon.icon"), { recursive: true });
+  fs.mkdirSync(path.join(work, "car"));
+  run("xcrun", [
+    "actool", path.join(work, "Icon.icon"), "--compile", path.join(work, "car"),
+    "--output-partial-info-plist", path.join(work, "car/info.plist"),
+    "--app-icon", "Icon", "--include-all-app-icons", "--enable-on-demand-resources", "NO",
+    "--development-region", "en", "--target-device", "mac", "--minimum-deployment-target", "12.0", "--platform", "macosx",
+  ]);
+  fs.copyFileSync(path.join(work, "car/Assets.car"), path.join(outDir, "Assets.car"));
+
+  // Flat renders. ictool draws the tile edge to edge; the macOS grid puts an
+  // 824 px tile in 1024, so render smaller and pad with transparency.
+  const png = (size) => {
+    const out = path.join(work, `${size}.png`);
+    if (fs.existsSync(out)) return out;
+    const tile = Math.round((size * 824) / 1024);
+    run(ictool, [iconDoc, "--export-image", "--output-file", out, "--platform", "macOS", "--rendition", "Default", "--width", String(tile), "--height", String(tile), "--scale", "1"]);
+    run("sips", ["-p", String(size), String(size), out]);
+    return out;
+  };
+
+  // macOS .icns from an .iconset (16…512 at 1x and 2x).
+  const iconset = path.join(work, "icon.iconset");
+  fs.mkdirSync(iconset);
+  for (const s of [16, 32, 128, 256, 512]) {
+    fs.copyFileSync(png(s), path.join(iconset, `icon_${s}x${s}.png`));
+    fs.copyFileSync(png(s * 2), path.join(iconset, `icon_${s}x${s}@2x.png`));
+  }
+  execFileSync("iconutil", ["-c", "icns", iconset, "-o", path.join(outDir, "icon.icns")]);
+
+  if (ico) {
+    // Windows .ico: PNG-compressed entries, 16…256.
+    const icoSizes = [16, 24, 32, 48, 64, 128, 256];
+    const entries = icoSizes.map((s) => fs.readFileSync(png(s)));
+    const header = Buffer.alloc(6 + 16 * entries.length);
+    header.writeUInt16LE(1, 2);
+    header.writeUInt16LE(entries.length, 4);
+    let offset = header.length;
+    entries.forEach((data, i) => {
+      const s = icoSizes[i];
+      const e = 6 + 16 * i;
+      header.writeUInt8(s === 256 ? 0 : s, e);
+      header.writeUInt8(s === 256 ? 0 : s, e + 1);
+      header.writeUInt16LE(1, e + 4);
+      header.writeUInt16LE(32, e + 6);
+      header.writeUInt32LE(data.length, e + 8);
+      header.writeUInt32LE(offset, e + 12);
+      offset += data.length;
+    });
+    fs.writeFileSync(path.join(outDir, "icon.ico"), Buffer.concat([header, ...entries]));
+  }
+
+  fs.copyFileSync(png(1024), path.join(outDir, "icon.png"));
 }
-execFileSync("iconutil", ["-c", "icns", iconset, "-o", path.join(build, "icon.icns")]);
 
-// Windows .ico: PNG-compressed entries, 16…256.
-const icoSizes = [16, 24, 32, 48, 64, 128, 256];
-const ico = icoSizes.map((s) => fs.readFileSync(png(s)));
-const header = Buffer.alloc(6 + 16 * ico.length);
-header.writeUInt16LE(1, 2);
-header.writeUInt16LE(ico.length, 4);
-let offset = header.length;
-ico.forEach((data, i) => {
-  const s = icoSizes[i];
-  const e = 6 + 16 * i;
-  header.writeUInt8(s === 256 ? 0 : s, e);
-  header.writeUInt8(s === 256 ? 0 : s, e + 1);
-  header.writeUInt16LE(1, e + 4);
-  header.writeUInt16LE(32, e + 6);
-  header.writeUInt32LE(data.length, e + 8);
-  header.writeUInt32LE(offset, e + 12);
-  offset += data.length;
-});
-fs.writeFileSync(path.join(build, "icon.ico"), Buffer.concat([header, ...ico]));
-
-fs.copyFileSync(png(1024), path.join(build, "icon.png"));
+render(source, build, { ico: true });
+render(devSource, path.join(build, "dev"), { ico: true });
 fs.rmSync(tmp, { recursive: true, force: true });
-console.log("wrote apps/desktop/build/{Assets.car,icon.icns,icon.png,icon.ico}");
+console.log("wrote apps/desktop/build/{Assets.car,icon.icns,icon.png,icon.ico} and build/dev/ (the same, red)");

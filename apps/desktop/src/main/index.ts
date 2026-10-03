@@ -4,19 +4,41 @@
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell } from "electron";
+import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
-import { SETTINGS_TEMPLATE, WIDGET_CSP } from "@cmd/protocol";
-import { cmdHome, connect, defaultSocketPath, ipcPath, sourceBuildId } from "@cmd/protocol/node";
+import { SETTINGS_TEMPLATE, mediaOrigin, widgetCsp } from "@cmd/protocol";
+import { cmdHome, configDir, connect, defaultSocketPath, ipcPath, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { lucideSymbol, type SymbolImage } from "./icons.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type KeybindingsSnapshot } from "./keybindings.ts";
+
+// Loaded after launch: the updater isn't needed to show the first window.
+const updater = () => import("./updater.ts");
+const checkForUpdates = () => void updater().then((u) => u.checkForUpdates(devBuild));
+
+/**
+ * Development builds (pnpm dev, and pnpm dist, which packages as "cmd dev") sit
+ * next to the installed app: a red icon, their own name, and their own core and
+ * state, so they never attach to (and offer to restart) the core your real
+ * terminals run in. Settings and keybindings stay shared. $CMD_HOME still wins.
+ */
+const devBuild = !app.isPackaged || app.getName() === "cmd dev";
+if (devBuild) {
+  app.setName("cmd dev");
+  if (!process.env.CMD_HOME) {
+    process.env.CMD_CONFIG_DIR ??= configDir();
+    process.env.CMD_HOME = path.join(path.dirname(cmdHome()), "cmd-dev"); // next to the real state dir
+    process.env.CMD_SOCKET ??= path.join(os.tmpdir(), "cmd-dev", "core.sock");
+  }
+}
 
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 
@@ -31,6 +53,10 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // the kit and the `cmd` runtime, under a CSP header that allows only inline code
 // and no network. The renderer posts the widget, theme and data into it. Frames
 // are sandboxed (no allow-same-origin), so each is an opaque origin.
+// cmd-widget://frame/<token> — the same page whose CSP also lets media (audio,
+// video, images) load from origins the person allowed for that window. Tokens
+// come from the renderer's "widget-frame" call and can't be guessed, so a widget
+// can't navigate itself to a page with a looser CSP.
 protocol.registerSchemesAsPrivileged([
   { scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true } },
   { scheme: "cmd-widget", privileges: { standard: true, secure: true } },
@@ -57,7 +83,7 @@ if (!process.env.CMD_HOME && !fs.existsSync(uiData) && fs.existsSync(legacyUiDat
 app.setPath("userData", uiData);
 
 // Packaged builds carry their icon in the bundle (.icns / .ico); dev runs use the PNG.
-const devIcon = app.isPackaged ? undefined : path.join(here, "../../build/icon.png");
+const devIcon = app.isPackaged ? undefined : path.join(here, "../../build/dev/icon.png");
 
 function canConnect(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -90,13 +116,65 @@ async function checkCoreBuild(): Promise<void> {
       cancelId: 1,
     });
     if (response !== 0) return;
-    process.kill(hello.pid, "SIGTERM");
-    for (let i = 0; i < 50 && (await canConnect()); i++) await new Promise((r) => setTimeout(r, 100));
+    await stopCore(hello.pid);
   } catch {
     // An unresponsive or very old core: leave it, the UI shows the error.
   } finally {
     conn.close();
   }
+}
+
+/**
+ * Packaged: the core runs from a copy of the bundle's runtime, one per build in
+ * $CMD_HOME/runtime. An update replaces the bundle while the old core keeps
+ * running; from its own copy it never loads the new version's files (search
+ * worker, shell integration). The newest few copies are kept.
+ */
+function coreRoot(): string {
+  if (!app.isPackaged) return repoRoot;
+  const base = path.join(cmdHome(), "runtime");
+  const dir = path.join(base, sourceBuildId(repoRoot));
+  try {
+    if (!fs.existsSync(dir)) {
+      const tmp = `${dir}.tmp-${process.pid}`;
+      fs.cpSync(repoRoot, tmp, { recursive: true, verbatimSymlinks: true });
+      fs.renameSync(tmp, dir);
+    }
+    const now = new Date();
+    fs.utimesSync(dir, now, now);
+    const old = fs
+      .readdirSync(base)
+      .map((name) => ({ name, mtime: fs.statSync(path.join(base, name)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(3);
+    for (const o of old) fs.rmSync(path.join(base, o.name), { recursive: true, force: true });
+    return dir;
+  } catch {
+    return repoRoot;
+  }
+}
+
+async function stopCore(pid: number): Promise<void> {
+  process.kill(pid, "SIGTERM");
+  for (let i = 0; i < 50 && (await canConnect()); i++) await new Promise((r) => setTimeout(r, 100));
+}
+
+/** Settings → About: stop the core (its terminals close) and start one from this app's code. */
+async function restartCore(): Promise<void> {
+  const conn = await connect(socketPath).catch(() => null);
+  if (conn) {
+    try {
+      await stopCore((await conn.client.call("core.hello", {})).pid);
+    } finally {
+      conn.close();
+    }
+  }
+  spawnCore();
+  for (const until = Date.now() + 5000; Date.now() < until; ) {
+    if (await canConnect()) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`core did not start; see ${path.join(cmdHome(), "core.log")}`);
 }
 
 function spawnCore(): void {
@@ -107,7 +185,7 @@ function spawnCore(): void {
   delete env.ELECTRON_RUN_AS_NODE;
   let node = "node";
   if (app.isPackaged) (node = process.execPath), (env.ELECTRON_RUN_AS_NODE = "1");
-  const child = spawn(node, ["--no-warnings", path.join(repoRoot, "packages/core/src/main.ts")], {
+  const child = spawn(node, ["--no-warnings", path.join(coreRoot(), "packages/core/src/main.ts")], {
     detached: true,
     stdio: ["ignore", log, log],
     env,
@@ -149,18 +227,20 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     ...b,
     minWidth: 760,
     minHeight: 480,
-    title: "cmd",
+    title: app.getName(),
     icon: devIcon, // Windows/Linux; macOS uses the Dock icon
     show: false,
     // macOS: content under an inset title bar, traffic lights over the sidebar.
     // Elsewhere: the platform's own frame, window controls and menu bar.
     ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 14, y: 12 } } : {}),
     backgroundColor: savedAppearance().background,
+    acceptFirstMouse: true, // a click on a window in the background also lands (selects, focuses a terminal)
     webPreferences: {
       preload: path.join(here, "../preload/index.cjs"),
       sandbox: false, // preload talks to the core socket via node:net
       contextIsolation: true,
       webviewTag: true, // browser windows
+      scrollBounce: true, // macOS rubber banding (off by default in Electron), e.g. at the strip's ends
     },
   });
   if (b.maximized) win.maximize();
@@ -285,6 +365,23 @@ ipcMain.handle("choose-folder", async (e) => {
 ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("open-path", (_e, p: string) => void shell.openPath(p));
 ipcMain.on("settings-window", () => void openSettings());
+ipcMain.on("check-updates", () => checkForUpdates());
+ipcMain.handle("restart-core", () => restartCore());
+// The preload connects where main decided (dev builds use their own core).
+ipcMain.on("core-socket", (e) => (e.returnValue = socketPath));
+ipcMain.on("reveal-path", (_e, p: string) => shell.showItemInFolder(p));
+/** Settings → About: the app's side of the diagnostics (core.info is the core's). */
+ipcMain.handle("app-info", async () => ({
+  version: app.getVersion(),
+  dev: devBuild,
+  electron: process.versions.electron,
+  chrome: process.versions.chrome,
+  build: sourceBuildId(repoRoot),
+  home: cmdHome(),
+  coreLog: path.join(cmdHome(), "core.log"),
+  updateLog: path.join(cmdHome(), "update.log"),
+  updates: (await updater()).updateStatus(),
+}));
 ipcMain.on("open-settings", (_e, p: string) => {
   if (!fs.existsSync(p)) {
     fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -359,6 +456,16 @@ ipcMain.handle("confirm", async (e, o: { message: string; detail?: string; confi
   return r.response === 0;
 });
 
+const widgetFrames = new Map<string, string[]>(); // token → allowed media origins
+ipcMain.handle("widget-frame", (_e, media: unknown) => {
+  const origins = [...new Set((Array.isArray(media) ? media : []).map(mediaOrigin).filter((o): o is string => !!o))].sort();
+  if (!origins.length) return "cmd-widget://frame/";
+  const key = origins.join(" ");
+  let token = [...widgetFrames].find(([, v]) => v.join(" ") === key)?.[0];
+  if (!token) widgetFrames.set((token = randomUUID()), origins);
+  return `cmd-widget://frame/${token}`;
+});
+
 ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
   return new Promise<string | null>((resolve) => {
     let chosen: string | null = null;
@@ -379,12 +486,14 @@ ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
 // become new cmd browser windows.
 app.on("web-contents-created", (_e, contents) => {
   contents.on("will-attach-webview", (_ev, prefs, params) => {
-    // Only cmd's own guest preload, in an isolated world: it reports presses and
-    // sideways scrolls to the app (preload/guest.ts, renderer/src/embed.ts).
+    // Only cmd's own guest preload, in an isolated world: it reports presses to
+    // the app (preload/guest.ts, renderer/src/embed.ts).
     prefs.preload = path.join(here, "../preload/guest.cjs");
     prefs.nodeIntegration = false;
     prefs.contextIsolation = true;
     prefs.sandbox = true;
+    prefs.scrollBounce = true; // pages bounce at their edges, like the rest of the app
+    prefs.safeDialogs = true; // a page looping alert() can be stopped
     if (!/^(https?|about|file):/i.test(params.src ?? "")) params.src = "about:blank";
   });
   if (contents.getType() === "webview") {
@@ -403,17 +512,17 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = savedAppearance().source;
   if (devIcon) app.dock?.setIcon(devIcon);
   app.setAboutPanelOptions({
-    applicationName: "cmd",
+    applicationName: app.getName(),
     applicationVersion: app.getVersion(),
     copyright: "© 2026 Jan Oelze",
     website: "https://github.com/janoelze/cmd",
     iconPath: devIcon,
   });
-  protocol.handle("cmd-widget", () => {
+  protocol.handle("cmd-widget", (req) => {
     const dir = path.join(repoRoot, "packages/core/src/magic/prompt");
     const read = (f: string) => fs.readFileSync(path.join(dir, f), "utf8");
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>${read("kit.css")}</style><script>${read("host.js")}</script></head><body></body></html>`;
-    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": WIDGET_CSP, "cache-control": "no-store" } });
+    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": widgetCsp(widgetFrames.get(new URL(req.url).pathname.slice(1)) ?? []), "cache-control": "no-store" } });
   });
   // Magic widgets may not leave their page, open anything, or ask for permissions.
   session.defaultSession.setPermissionRequestHandler((wc, _permission, done, details) => {
@@ -431,7 +540,8 @@ app.whenReady().then(async () => {
     () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows)),
     (err: Error) => dialog.showErrorBox("cmd: the core did not start", err.message),
   );
-  const send = commandSender(() => spaces.reopen(), { openSettings, isSettings, appWindows });
+  if (!devBuild) void updater().then((u) => u.startUpdater(socketPath));
+  const send = commandSender(() => spaces.reopen(), { openSettings, checkForUpdates, isSettings, appWindows });
   buildMenu(send, keybindings.bindings);
   watchKeybindings((next) => {
     keybindings = next;

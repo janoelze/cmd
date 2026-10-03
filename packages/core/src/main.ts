@@ -7,7 +7,7 @@ import { Core } from "./core.ts";
 import { nodePtyFactory } from "./panes.ts";
 import { ProcInfo } from "./agents/procinfo.ts";
 import { statusRoot } from "./agents/statusfiles.ts";
-import { defaultRoots } from "./search/index.ts";
+import { locateContext } from "./search/sources.ts";
 import { SearchService } from "./search/service.ts";
 
 // The packaged app runs the core as `Electron` with ELECTRON_RUN_AS_NODE; don't
@@ -22,10 +22,10 @@ fs.mkdirSync(home, { recursive: true });
 const socketPath = defaultSocketPath();
 
 const core = new Core({
-  search: (s) => {
+  search: (s, sources) => {
     if (!s["search.enabled"]) return null;
     const archives = s["search.archiveDirs"].split(",").map((d) => d.trim()).filter(Boolean);
-    return new SearchService(path.join(home, "search.sqlite"), defaultRoots(archives));
+    return new SearchService(path.join(home, "search.sqlite"), sources.locate(locateContext(), archives));
   },
   socketPath,
   dbPath: path.join(home, "cmd.sqlite"),

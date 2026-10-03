@@ -18,6 +18,7 @@ import {
   type Backend,
 } from "../src/magic/index.ts";
 import { lintBody } from "../src/magic/lint.ts";
+import { requestedMedia, widgetCsp } from "@cmd/protocol";
 import type { BackendRun } from "../src/magic/backends.ts";
 
 const home = "/Users/test";
@@ -121,6 +122,24 @@ describe("answer contract", () => {
     expect(parseAnswer('{"kind":"widget","title":"x"}\n---\n').ok).toBe(false);
     expect(parseAnswer('{"kind":"terminal","title":"x"}').ok).toBe(false);
     expect(parseAnswer('{"kind":"widget","title":"x","source":{"type":"fetch","url":"ftp://x"}}\n---\n<p>').ok).toBe(false);
+  });
+
+  it("parses media origins and rejects anything but https", () => {
+    const r = parseAnswer('{"kind":"widget","title":"Radio","media":["https://a.example/stream.aacp","https://a.example","https://b.example:8443"]}\n---\n<audio>');
+    expect(r.ok && r.header.media).toEqual(["https://a.example", "https://b.example:8443"]);
+    expect(parseAnswer('{"kind":"widget","title":"Radio","media":["http://a.example"]}\n---\n<audio>').ok).toBe(false);
+    expect(parseAnswer('{"kind":"widget","title":"Radio","media":"https://a.example"}\n---\n<audio>').ok).toBe(false);
+  });
+
+  it("builds the frame CSP from allowed media origins", () => {
+    expect(widgetCsp()).toContain("media-src data:;");
+    const csp = widgetCsp(["https://a.example/x", "http://b.example", "javascript:alert(1)"]);
+    expect(csp).toContain("media-src data: https://a.example;");
+    expect(csp).toContain("img-src data: https://a.example;");
+    expect(csp).toContain("connect-src 'none'");
+    expect(requestedMedia({ html: '<audio></audio><script>const u="https://r.example/live.aacp"</script>' })).toEqual(["https://r.example"]);
+    expect(requestedMedia({ html: '<a href="https://r.example">x</a>' })).toEqual([]);
+    expect(requestedMedia({ media: [], html: "<audio src='https://r.example/x'>" })).toEqual([]);
   });
 
   it("streams the header as soon as its line is complete", () => {
@@ -314,6 +333,23 @@ describe("Magic windows in the core", () => {
     expect(s.answer).toContain('"title":"Seven"');
     await core.close();
     delete process.env.CMD_MAGIC_UNSANDBOXED;
+  });
+
+  it("asks for a widget's media origins and remembers the answer", async () => {
+    const { Core } = await import("../src/core.ts");
+    const { fakeFactory } = await import("./fake-pty.ts");
+    const answer = '{"kind":"widget","title":"Radio","media":["https://a.example","https://b.example"]}\n---\n<audio id=au></audio>';
+    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, magicBackend: () => scripted([{ calls: [], answer }]) });
+    const w = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
+    const state = () => core.windows.others().find((x) => x.id === w.id)!.state as Record<string, unknown>;
+    core.handlers["magic.run"]({ id: w.id, prompt: "a dnb radio" });
+    await until(() => state().phase === "ready");
+    expect(state().media).toEqual(["https://a.example", "https://b.example"]);
+    core.handlers["magic.media"]({ id: w.id, allow: false });
+    expect(state().mediaDenied).toEqual(["https://a.example", "https://b.example"]);
+    core.handlers["magic.media"]({ id: w.id, allow: true });
+    expect(state()).toMatchObject({ mediaAllowed: ["https://a.example", "https://b.example"], mediaDenied: [] });
+    await core.close();
   });
 
   it("keeps a working widget when a refinement fails, and reports empty requests", async () => {

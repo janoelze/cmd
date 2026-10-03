@@ -5,6 +5,25 @@ import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow,
 import type { SettingKey, Settings } from "./settings.ts";
 import type { MagicProgress } from "./magic.ts";
 
+export interface CoreInfo {
+  pid: number;
+  build: string;
+  /** Folder the core runs from (the repo, or the app's runtime copy). */
+  root: string;
+  node: string;
+  /** Epoch ms. */
+  startedAt: number;
+  rssBytes: number;
+  heapBytes: number;
+  /** CPU time used since start, user + system. */
+  cpuSeconds: number;
+  panes: number;
+  connections: number;
+  socket: string;
+  dbPath: string | null;
+  settingsPath: string | null;
+}
+
 export interface SettingsSnapshot {
   settings: Settings;
   /** Keys set explicitly in the user's file. */
@@ -26,6 +45,8 @@ export interface Placement {
 
 export interface Methods {
   "core.hello": { params: {}; result: { version: string; pid: number; socket: string; build: string } };
+  /** Diagnostics for the Settings window's About page. */
+  "core.info": { params: {}; result: CoreInfo };
 
   /** cwd defaults to the Space's root. */
   "pane.create": {
@@ -41,8 +62,8 @@ export interface Methods {
   "pane.clearAttention": { params: { paneId: PaneId }; result: null };
   /** `cmd notify`: from a terminal (paneId) or from anywhere. */
   "notify.send": { params: { paneId?: PaneId | null; title?: string; body: string }; result: null };
-  /** Raw recent output, for re-attaching a view after a UI reload. */
-  "pane.snapshot": { params: { paneId: PaneId }; result: { data: string } };
+  /** Terminal state, for re-attaching a view after a UI reload; replay it into a terminal of `cols` x `rows`. */
+  "pane.snapshot": { params: { paneId: PaneId }; result: { data: string; cols: number; rows: number } };
   /** Clear stuck terminal state (modes a crashed program left on). */
   "pane.reset": { params: { paneId: PaneId }; result: null };
   /** Plain-text tail of the pane, as displayed. */
@@ -140,6 +161,8 @@ export interface Methods {
   "magic.cancel": { params: { id: WindowId }; result: null };
   /** Run the widget's data source now (then on its interval again). */
   "magic.refresh": { params: { id: WindowId }; result: null };
+  /** Allow (or decline) the media origins the widget asks for (MagicState.media); the frame's CSP opens only allowed ones. */
+  "magic.media": { params: { id: WindowId; allow: boolean }; result: null };
 
   /** Directory listing for file windows (dirs first, then by name). */
   "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };
@@ -160,8 +183,13 @@ export interface Methods {
   "search.recent": { params: { limit?: number; exclude?: string[] }; result: SearchHit[] };
   "search.status": { params: {}; result: SearchStatus };
   /** Resume (or fork) a past session in a new pane, typed into the user's shell. */
+  /**
+   * Shell command that resumes an agent's session from anywhere (cd + env + the
+   * agent's resume command), e.g. to copy; null if it has no resumable session.
+   */
+  "agent.resumeCommand": { params: { agentId: AgentId }; result: string | null };
   "agent.resume": {
-    params: Placement & { agent: "claude" | "codex"; sessionId: string; cwd?: string | null; configDir?: string | null; fork?: boolean };
+    params: Placement & { agent: AgentKind; sessionId: string; cwd?: string | null; env?: Record<string, string> | null; fork?: boolean };
     result: Agent;
   };
 
@@ -218,9 +246,10 @@ export type CoreEvent =
 
 export interface SearchHit {
   sessionId: string;
-  agent: "claude" | "codex";
+  agent: AgentKind;
   path: string;
-  configDir: string | null;
+  /** Environment the agent needs to resume this session (e.g. CLAUDE_CONFIG_DIR for a profile); null = none. */
+  env: Record<string, string> | null;
   cwd: string | null;
   branch: string | null;
   title: string;

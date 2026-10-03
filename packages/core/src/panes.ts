@@ -463,10 +463,11 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   }
 
   /** Serialized terminal state for a UI to restore exactly what is on screen. */
-  async snapshot(id: PaneId): Promise<string> {
+  async snapshot(id: PaneId): Promise<{ data: string; cols: number; rows: number }> {
     const l = this.#must(id);
     await this.#flush(l);
-    return l.serializer.serialize({ scrollback: SNAPSHOT_SCROLLBACK });
+    // Cursor moves and wrapping in the data only replay right at the size they were made at.
+    return { data: l.serializer.serialize({ scrollback: SNAPSHOT_SCROLLBACK }), cols: l.vt.cols, rows: l.vt.rows };
   }
 
   /** The last `lines` lines of text (screen + scrollback, as displayed). */

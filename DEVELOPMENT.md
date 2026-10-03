@@ -25,7 +25,9 @@ pnpm typecheck
 pnpm e2e                     # build, launch the app via Playwright, screenshots in .cmd-dev/shots
 ```
 
-Run against an isolated dev state instead of your real one:
+Development builds (`pnpm dev`, and `pnpm dist`, which packages "cmd dev") have a red icon and the name "cmd dev". They run their own core and state in `~/Library/Application Support/cmd-dev` (socket in `$TMPDIR/cmd-dev`), so they never attach to the installed app's core and your real terminals. They share `~/.config/cmd` (settings, keybindings) with it and never update themselves. Setting `CMD_HOME` overrides all of that. `pnpm icons` renders the red icon into `apps/desktop/build/dev` along with the normal one.
+
+For a throwaway state, or to use `pnpm core` and the CLI from source against it:
 
 ```sh
 export CMD_HOME=$PWD/.cmd-dev     # socket, SQLite and settings.json go here
@@ -44,9 +46,38 @@ Inside the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
 ## Packaging and releases
 
-`pnpm dist` builds `apps/desktop/dist/cmd-<version>-arm64.{dmg,zip}`. The app ships the core's TypeScript source in `Contents/Resources/runtime` (staged by `scripts/stage-runtime.mjs`) and runs it with Electron's own Node, so no system `node` is needed.
+`pnpm dist` builds the development flavor, `apps/desktop/dist/cmd dev-<version>-arm64.{dmg,zip}` (`electron-builder.dev.yml`); CI packages releases with `electron-builder.yml`. The app ships the core's TypeScript source in `Contents/Resources/runtime` (staged by `scripts/stage-runtime.mjs`) and runs it with Electron's own Node, so no system `node` is needed.
 
-CI (`.github/workflows/build.yml`) typechecks, tests and packages every push. `pnpm release 0.2.0` (or `patch`/`minor`/`major`) bumps the version, tags `v0.2.0` and pushes; CI builds the tag and publishes a GitHub release with the .dmg and .zip (a version with a `-`, like `0.2.0-beta.1`, is a prerelease). Signing and notarization run when the `MAC_CERT_P12_BASE64`, `MAC_CERT_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` secrets exist; without them the app is ad-hoc signed, and you open it the first time with right-click → Open.
+CI (`.github/workflows/build.yml`) typechecks, tests and packages every push. `pnpm release 0.2.0` (or `patch`/`minor`/`major`) bumps the version, tags `v0.2.0` and pushes; CI builds the tag and publishes a GitHub release with the .dmg and .zip (a version with a `-`, like `0.2.0-beta.1`, is a prerelease). After packaging, CI checks the signature with `codesign --verify --deep --strict` (and `spctl` when Developer ID signed), so a release macOS would call "damaged" fails instead of shipping. `scripts/install.sh` is the one-line installer the README points to.
+
+Windows builds (x64) come from the same tag: CI's `windows` job runs the tests and the e2e on Windows, packages an NSIS installer (per user, one click) and a zip, and checks that the packaged app starts. A separate `release` job publishes both platforms' files as one release. Windows builds aren't code-signed yet, so SmartScreen warns about a downloaded installer; `scripts/install.ps1` downloads it with PowerShell, which doesn't mark the file, so no warning appears.
+
+### Updates
+
+Installed apps update themselves from GitHub releases with electron-updater (`apps/desktop/src/main/updater.ts`). It reads `latest-mac.yml` (`latest.yml` on Windows) from the latest non-prerelease, so `-beta` tags never reach users. `electron-builder.yml` has the `publish: github` config that generates that file (and the `.blockmap`s for partial downloads), and CI uploads them with the release. Squirrel.Mac only installs an update whose signature matches the running app, so updating needs Developer ID signed releases, which ad-hoc signed builds can't do.
+
+The `updates.mode` setting picks `auto` (download in the background, install on quit; the default), `notify` or `off`. The app checks 30 s after launch and every 4 hours, and logs to `$CMD_HOME/update.log`.
+
+An update replaces the app bundle while the old core keeps running. So the packaged app starts the core from a copy of the runtime in `$CMD_HOME/runtime/<build>` (the newest three are kept), and an old core never loads the new version's files. After an update the app shows the usual "core is outdated" prompt.
+
+### Signing and notarization
+
+Without signing secrets, CI ad-hoc signs the whole bundle (`-c.mac.identity=-`). It runs, but Gatekeeper blocks a downloaded copy until the user clicks Open Anyway in Privacy & Security (or installs with `scripts/install.sh`). To sign with Developer ID and notarize, which needs a paid Apple Developer Program membership:
+
+1. **Certificate.** In Xcode → Settings → Accounts → Manage Certificates, add a *Developer ID Application* certificate (or create one at developer.apple.com → Certificates with a CSR from Keychain Access). In Keychain Access, export it with its private key as a `.p12` with a password.
+2. **API key for notarization.** At appstoreconnect.apple.com → Users and Access → Integrations → App Store Connect API, create a key with the Developer role. Download `AuthKey_<id>.p8` (only possible once) and note the Key ID and Issuer ID.
+3. **Secrets:**
+   ```sh
+   base64 -i DeveloperID.p12 | gh secret set MAC_CERT_P12_BASE64
+   gh secret set MAC_CERT_PASSWORD               # the .p12 password
+   base64 -i AuthKey_XXXXXXXXXX.p8 | gh secret set APPLE_API_KEY_P8_BASE64
+   gh secret set APPLE_API_KEY_ID --body XXXXXXXXXX
+   gh secret set APPLE_API_ISSUER --body <issuer uuid>
+   ```
+   Instead of the API key, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` (from account.apple.com) and `APPLE_TEAM_ID` work too.
+4. Release as usual. The tag build signs with hardened runtime and `build/entitlements.mac.plist`, notarizes and staples the app. A certificate without notarization credentials fails the build, because Gatekeeper would block that app anyway.
+
+To check a release by hand: `spctl --assess --type execute -vv /Applications/cmd.app` should print `source=Notarized Developer ID`.
 
 ## Agent detection and hooks
 

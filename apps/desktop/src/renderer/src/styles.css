@@ -262,6 +262,24 @@ kbd {
 .sb-search-clear:hover { color: var(--text); }
 
 .sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 10px; }
+/* Switching Spaces (store.ts slideSidebar): the list is the scope of a View
+   Transition, captured as its `root`; the old list leaves toward one side while
+   the new one comes in from the other. Transforms and opacity only (compositor). */
+.sidebar-scroll::view-transition-group(root) { overflow: clip; animation: none; }
+.sidebar-scroll::view-transition-old(root),
+.sidebar-scroll::view-transition-new(root) {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation-fill-mode: both;
+}
+.sidebar-scroll:active-view-transition-type(space-next)::view-transition-old(root) { animation-name: sb-out-left; }
+.sidebar-scroll:active-view-transition-type(space-next)::view-transition-new(root) { animation-name: sb-in-right; }
+.sidebar-scroll:active-view-transition-type(space-prev)::view-transition-old(root) { animation-name: sb-out-right; }
+.sidebar-scroll:active-view-transition-type(space-prev)::view-transition-new(root) { animation-name: sb-in-left; }
+@keyframes sb-out-left { to { transform: translateX(-100%); opacity: 0.4; } }
+@keyframes sb-out-right { to { transform: translateX(100%); opacity: 0.4; } }
+@keyframes sb-in-right { from { transform: translateX(100%); opacity: 0.4; } }
+@keyframes sb-in-left { from { transform: translateX(-100%); opacity: 0.4; } }
 .sb-section + .sb-section { margin-top: 6px; }
 
 .sb-heading {
@@ -590,6 +608,20 @@ kbd {
   position: relative;
   overflow: hidden;
 }
+/* The strip scrolls natively (WindowsView): on the compositor, with macOS
+   momentum and bounce, and windows' content (embedded pages too) hands it the
+   sideways scroll it doesn't use. Other modes clip. */
+.windows-scroller {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.mode-strip > .windows-scroller {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain; /* bounces at the ends, doesn't pass scroll on */
+  scrollbar-width: none; /* the strip draws its own (.strip-scrollbar) */
+}
 .windows-track {
   position: absolute;
   inset: 0;
@@ -700,31 +732,27 @@ kbd {
 }
 .tile:hover .strip-resize::after, .main.windows.resizing .strip-resize::after { background: color-mix(in srgb, var(--ink) 25%, transparent); }
 
-/* Minimal position bar: one segment per window, the focused one highlighted. */
+/* Strip scrollbar: a track and a thumb sized to the visible part. */
 .strip-scrollbar {
   position: absolute;
   left: var(--pad-x);
   right: var(--pad-x);
-  /* Centred in the space under the windows (layouts.ts, stripBottom). */
-  bottom: calc((max(var(--pad-y) + 3px, 7px) - 3px) / 2);
-  height: 3px;
-  opacity: 0.6;
-  transition: opacity 150ms;
+  /* Centred in the space under the windows (layouts.ts, stripBottom, STRIP_BAR). */
+  bottom: calc((max(var(--pad-y) + 6px, 10px) - 6px) / 2);
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
-.mode-strip:hover .strip-scrollbar { opacity: 1; }
-.strip-seg {
+.strip-thumb {
   position: absolute;
   top: 0;
   height: 100%;
-  padding: 0;
-  border: 0;
-  border-radius: 1.5px;
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
-  cursor: pointer;
+  min-width: 24px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
   transition: background 120ms;
 }
-.strip-seg:hover { background: color-mix(in srgb, var(--ink) 30%, transparent); }
-.strip-seg.sel { background: var(--window-highlight); }
+.strip-scrollbar:hover .strip-thumb, .strip-scrollbar.dragging .strip-thumb { background: color-mix(in srgb, var(--ink) 38%, transparent); }
 
 /* Session search results in the palette */
 .palette.searching { width: min(760px, calc(100vw - 32px)); }
@@ -1104,6 +1132,26 @@ kbd {
   transition: max-width 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease;
 }
 .space-chip.on .space-name { max-width: 160px; margin-left: 6px; opacity: 1; transition-delay: 0ms, 0ms, 60ms; }
+/* The hovered chip's label (SpaceBar.tsx): fixed, so the bar's overflow doesn't clip it. */
+.space-tip {
+  position: fixed;
+  z-index: 20;
+  max-width: 260px;
+  padding: 6px 9px 7px;
+  transform: translate(-50%, -100%);
+  background: var(--bg-elevated);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px var(--shadow);
+  pointer-events: none;
+  animation: space-tip-in 120ms ease-out;
+}
+.space-tip.below { transform: translate(-50%, 0); }
+.space-tip-title { display: flex; align-items: center; gap: 6px; font: 600 12px var(--font-ui); color: var(--text); }
+.space-tip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.space-tip-title kbd { margin-left: auto; padding-left: 10px; }
+.space-tip-meta { margin-top: 2px; font: 11px var(--font-ui); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes space-tip-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .space-chip, .space-name, .space-dot { transition: none; animation: none !important; }
+  .space-chip, .space-name, .space-dot, .space-tip { transition: none; animation: none !important; }
 }

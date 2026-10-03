@@ -71,8 +71,8 @@ export function gridLayout(ids: string[], vp: Viewport, sp: Spacing): Layout {
   };
 }
 
-/** Height of the strip's position bar, which sits in the bottom padding. */
-export const STRIP_BAR = 3;
+/** Height of the strip's scrollbar, which sits in the bottom padding. */
+export const STRIP_BAR = 6;
 /** Space under the windows: the bottom padding plus the bar, and room for the bar with little (or no) padding. */
 export const stripBottom = (padY: number) => Math.max(padY + STRIP_BAR, STRIP_BAR + 4);
 

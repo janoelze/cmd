@@ -17,11 +17,16 @@ export interface StateChange {
 type Payload = Record<string, unknown>;
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
 
+/** Where an agent's own session id is kept (Codex calls it a thread). */
+export function nativeSession(kind: AgentKind, sessionId: string): { claudeSessionId?: string; codexThreadId?: string } {
+  return kind === "codex" ? { codexThreadId: sessionId } : { claudeSessionId: sessionId };
+}
+
 export function applyHook(kind: AgentKind, event: string, p: Payload): StateChange {
   const change: StateChange = {};
   const sessionId = str(p.session_id);
   if (sessionId) {
-    change.native = kind === "codex" ? { codexThreadId: sessionId } : { claudeSessionId: sessionId };
+    change.native = nativeSession(kind, sessionId);
     const tp = str(p.transcript_path);
     if (tp) change.native.transcriptPath = tp;
   }

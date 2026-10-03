@@ -46,4 +46,9 @@ nsis:
   oneClick: true
   perMachine: false
   artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
-publish: null
+# Where the app looks for updates (electron-updater, src/main/updater.ts). Builds
+# run with --publish never and CI uploads the files, latest-mac.yml and latest.yml included.
+publish:
+  provider: github
+  owner: janoelze
+  repo: cmd

@@ -173,12 +173,12 @@ export const SETTINGS_SCHEMA = {
     description: "Notify when a command that ran at least this long finishes (needs shell integration). 0 = off.",
   },
 
-  "search.enabled": { title: "Index transcripts", type: "boolean", default: true, description: "Index Claude Code and Codex transcripts for search (? in the palette)." },
+  "search.enabled": { title: "Index transcripts", type: "boolean", default: true, description: "Index coding agent transcripts (Claude Code, Codex, Qwen Code, Copilot CLI) for search (? in the palette)." },
   "search.archiveDirs": {
     title: "Archive folders", placeholder: "~/claude-transcripts-archive",
     type: "string",
     default: "~/claude-transcripts-archive",
-    description: "Extra folders of archived Claude transcripts (*.jsonl) to index, comma-separated.",
+    description: "Extra folders of archived transcripts (*.jsonl, any supported agent) to index, comma-separated.",
   },
 
   "agents.claude.command": {
@@ -188,6 +188,8 @@ export const SETTINGS_SCHEMA = {
     description: "Command used to start Claude Code (e.g. \"claude --model opus\"). Typed into your shell, so aliases apply.",
   },
   "agents.codex.command": { title: "Codex command", type: "string", default: "codex", description: "Command used to start Codex." },
+  "agents.qwen.command": { title: "Qwen Code command", type: "string", default: "qwen", description: "Command used to resume Qwen Code sessions." },
+  "agents.copilot.command": { title: "Copilot CLI command", type: "string", default: "copilot", description: "Command used to resume GitHub Copilot CLI sessions." },
 
   "magic.provider": {
     title: "Model provider",
@@ -199,6 +201,14 @@ export const SETTINGS_SCHEMA = {
   },
   "magic.model": { title: "Model", type: "string", default: "claude-opus-5-5", placeholder: "claude-opus-5-5", description: "Model id for Magic windows, e.g. claude-opus-5-5, claude-haiku-4-5, or your endpoint's model name." },
   "magic.baseUrl": { title: "Endpoint", type: "string", default: "", placeholder: "http://localhost:11434/v1", description: "OpenAI-compatible endpoint (Ollama, LM Studio, OpenRouter, …); its key comes from CMD_MAGIC_API_KEY." },
+  "updates.mode": {
+    title: "Updates",
+    type: "enum",
+    default: "auto",
+    options: ["auto", "notify", "off"],
+    labels: { auto: "Install automatically", notify: "Notify me", off: "Don't check" },
+    description: "Auto downloads new versions in the background and installs them when you quit cmd; terminals keep running. Check for Updates… in the cmd menu checks now.",
+  },
   "magic.explore": { title: "Look around this Mac", type: "boolean", default: true, description: "Let the Magic agent run read-only commands and read files to answer requests about this Mac. Private files (keys, keychains, browser profiles) stay off limits." },
 } as const satisfies Record<string, Def>;
 
@@ -218,6 +228,7 @@ export const SETTINGS_GROUPS = {
   search: "Search",
   agents: "Agents",
   magic: "Magic Windows",
+  updates: "Updates",
 } as const satisfies Record<GroupOf<SettingKey>, string>;
 
 /** Keys that were renamed: old settings files keep working (old → new). */

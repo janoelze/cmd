@@ -42,6 +42,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
     label: app.name,
     submenu: [
       { role: "about" },
+      ...i("app.checkUpdates"),
       sep,
       ...i("app.settings"),
       sep,
@@ -99,6 +100,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("view.grid"),
         ...i("view.strip"),
         ...i("view.canvas"),
+        ...i("view.toggleFocus"),
         ...i("view.canvasFit"),
         ...i("view.canvasZoomWindow"),
         ...i("view.cycleWidth"),
@@ -154,7 +156,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
       ],
     },
     { role: "windowMenu" },
-    { role: "help", submenu: [...i("help.docs")] },
+    { role: "help", submenu: [...i("help.docs"), ...(mac ? [] : [sep, ...i("app.checkUpdates")])] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   if (lastState) applyMenuState(lastState);
@@ -177,6 +179,7 @@ export function applyMenuState(state: MenuState): void {
 /** Sends a command to the focused window, creating one if needed. */
 interface SettingsWindow {
   openSettings: () => void;
+  checkForUpdates: () => void;
   isSettings: (w: BrowserWindow | null) => boolean;
   appWindows: () => BrowserWindow[];
 }
@@ -187,6 +190,7 @@ const SETTINGS_COMMANDS = new Set(["edit.copy", "edit.selectAll"]);
 export function commandSender(createWindow: () => BrowserWindow, s: SettingsWindow): Send {
   return (id) => {
     if (id === "app.settings") return s.openSettings();
+    if (id === "app.checkUpdates") return s.checkForUpdates();
     const focused = BrowserWindow.getFocusedWindow();
     if (s.isSettings(focused)) {
       if (id === "file.close" || id === "file.closeWindow") return focused!.close();
