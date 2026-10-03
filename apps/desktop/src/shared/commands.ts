@@ -44,6 +44,7 @@ export const COMMANDS = spec([
   { id: "view.grid", label: "Grid", keys: ["Alt+Cmd+2"], checkable: "radio" },
   { id: "view.strip", label: "Strip", keys: ["Alt+Cmd+3"], checkable: "radio" },
   { id: "view.canvas", label: "Canvas", keys: ["Alt+Cmd+4"], checkable: "radio" },
+  { id: "view.toggleFocus", label: "Toggle Focus", keys: ["Cmd+Enter"] },
   { id: "view.canvasFit", label: "Zoom Canvas to Fit", keys: ["Shift+Cmd+1"] },
   { id: "view.canvasZoomWindow", label: "Zoom Canvas to Window", keys: ["Shift+Cmd+2"] },
   { id: "view.cycleWidth", label: "Cycle Window Width", keys: ["Ctrl+Cmd+R"] },

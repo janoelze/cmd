@@ -628,6 +628,20 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   await win.mouse.up();
   check(-(await trackX()) < o0 - 1, "dragging the scrollbar thumb scrolls the strip");
 
+  // ⌘↩ into focus and back: the strip returns to exactly where it was
+  await win.waitForTimeout(300);
+  const scrolled = await trackX();
+  const selX = (await win.locator(".windows-track > .tile.sel").boundingBox()).x;
+  await menu("view.toggleFocus");
+  await win.waitForSelector(".main.mode-focus");
+  await win.waitForTimeout(500);
+  await menu("view.toggleFocus");
+  await win.waitForSelector(".main.mode-strip");
+  await win.waitForTimeout(600);
+  const selX2 = (await win.locator(".windows-track > .tile.sel").boundingBox()).x;
+  check(Math.abs((await trackX()) - scrolled) < 1 && Math.abs(selX2 - selX) < 1,
+    `toggling focus returns the strip to its scroll position (${Math.round(scrolled)} → ${Math.round(await trackX())})`);
+
   // resize by the right edge, capped at the pane width
   await win.evaluate((id) => window.__cmdSelect(id), await (await visualTiles())[0].getAttribute("data-pane"));
   await win.waitForTimeout(500);

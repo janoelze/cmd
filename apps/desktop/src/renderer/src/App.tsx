@@ -81,6 +81,11 @@ export function App() {
   // Most recently used terminals, for picking what to focus after one closes.
   const [history, setHistory] = useSpaceView<PaneId[]>("selection.history", []);
   const [mode, setMode] = useSpaceView<ViewMode>("view.mode", cfg["ui.defaultView"]);
+  // The layout Toggle Focus returns to: the last mode other than focus, however focus was entered.
+  const [layoutMode, setLayoutMode] = useSpaceView<ViewMode>("view.layoutMode", "grid");
+  useEffect(() => {
+    if (mode !== "focus" && mode !== layoutMode) setLayoutMode(mode);
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const [sidebarOpen, setSidebarOpen] = usePersisted("sidebar.open", true);
   // null: the default width (double-click the sidebar's edge).
   const [sidebarWidth, setSidebarWidth] = usePersisted<number | null>("sidebar.width", null);
@@ -299,6 +304,7 @@ export function App() {
     "view.grid": () => setMode("grid"),
     "view.strip": () => setMode("strip"),
     "view.canvas": () => setMode("canvas"),
+    "view.toggleFocus": () => setMode(mode === "focus" ? layoutMode : "focus"),
     "view.canvasFit": () => (setMode("canvas"), requestCanvas("fit")),
     "view.canvasZoomWindow": () => (setMode("canvas"), requestCanvas("window")),
     "view.toggleEdit": () => {

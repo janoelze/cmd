@@ -171,6 +171,14 @@ export function WindowsView(p: Props) {
   const [offset, setOffsetState] = useState(0);
   const offsetRef = useRef(0);
   const anim = useRef<number | null>(null);
+  // Where the strip was scrolled when it was left, to come back to exactly there.
+  const stripOffset = useRef(0);
+  // …and which window was selected then: the same one isn't revealed again on return.
+  const stripSelected = useRef<string | null>(null);
+  const skipReveal = useRef(false);
+  // Returning to the strip: the track glides to that offset as a transform, then hands it to the scroller.
+  const [gliding, setGliding] = useState(false);
+  const glidingRef = useRef(false);
 
   // ── canvas camera ──────────────────────────────────────
   // The zoom range comes from the canvas.* settings.
@@ -284,23 +292,51 @@ export function WindowsView(p: Props) {
     const v = Math.max(0, Math.min(max, o));
     // Kept unrounded: scrollLeft snaps to device pixels and would eat small trackpad deltas.
     offsetRef.current = v;
-    if (mode === "strip") scrollerRef.current!.scrollLeft = v;
+    if (mode === "strip" && !glidingRef.current) scrollerRef.current!.scrollLeft = v;
     else setOffsetState(v);
   }, []);
 
   // Leaving the strip: the scroll position moves to the track's transform (no
-  // visible jump), which then glides to 0 with the switch.
+  // visible jump), which then glides to 0 with the switch. Coming back glides
+  // the transform to where the strip was, then hands it back to the scroller.
   const prevScrollMode = useRef(mode);
   useLayoutEffect(() => {
     const was = prevScrollMode.current;
     prevScrollMode.current = mode;
     const sc = scrollerRef.current!;
-    if (was !== "strip" || mode === "strip") return;
-    const x = sc.scrollLeft;
+    if (was === mode || (was !== "strip" && mode !== "strip")) return;
+    if (mode === "strip") {
+      // Set now so revealing the selection starts from it; the track follows in
+      // the effect below, with the switch's transition.
+      offsetRef.current = Math.min(stripOffset.current, maxOffset(lay.contentWidth, vp.w));
+      skipReveal.current = selected === stripSelected.current;
+      glidingRef.current = true;
+      setGliding(true);
+      return;
+    }
+    // Not scrollLeft: the track has already lost the strip's width, so the browser may have clamped it.
+    const x = offsetRef.current;
+    glidingRef.current = false;
+    setGliding(false);
+    stripOffset.current = x;
+    stripSelected.current = selected;
     sc.scrollLeft = 0;
     offsetRef.current = x;
     setOffsetState(x);
   }, [mode]);
+  useEffect(() => {
+    if (!gliding) return;
+    setOffsetState(offsetRef.current);
+    const t = setTimeout(() => setGliding(false), 260); // once the switch is done
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gliding]);
+  useLayoutEffect(() => {
+    if (gliding || !glidingRef.current) return;
+    // Same frame as dropping the transform, so nothing moves.
+    glidingRef.current = false;
+    scrollerRef.current!.scrollLeft = offsetRef.current;
+  }, [gliding]);
 
   // Follow the scroller (wheel, embedded pages' bubbled scroll, focus, our own writes).
   useEffect(() => {
@@ -315,6 +351,8 @@ export function WindowsView(p: Props) {
         return;
       }
       if (sc.scrollTop) sc.scrollTop = 0;
+      // Gliding back in, the track's transform holds the offset; the scroller stays at 0 (focus may scroll it).
+      if (glidingRef.current) return void (sc.scrollLeft && (sc.scrollLeft = 0));
       // Not our own write (those leave offsetRef within a pixel): someone else scrolls.
       if (Math.abs(sc.scrollLeft - offsetRef.current) >= 1) {
         offsetRef.current = sc.scrollLeft;
@@ -391,6 +429,7 @@ export function WindowsView(p: Props) {
   const selSlot = selIdx >= 0 ? stripSlots[selIdx] : undefined;
   useEffect(() => {
     if (mode !== "strip" || !selSlot || !vp.w || drag) return;
+    if (skipReveal.current) return void (skipReveal.current = false);
     const target = revealOffset(offsetRef.current, selSlot, vp.w, padX, lay.contentWidth);
     if (Math.abs(target - offsetRef.current) > 0.5) animateTo(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -702,7 +741,7 @@ export function WindowsView(p: Props) {
           canvas
             ? { transform: `translate(${-cam.x * z}px, ${-cam.y * z}px) scale(${z})` }
             : mode === "strip"
-              ? { width: lay.contentWidth }
+              ? { width: lay.contentWidth, transform: gliding ? `translateX(${-offset}px)` : undefined }
               : { transform: `translateX(${-offset}px)` }
         }
       >
