@@ -150,7 +150,7 @@ await win.waitForTimeout(150);
 await win.screenshot({ path: path.join(shots, "4-palette.png") });
 await menu("file.close"); // ⌘W closes the palette first
 check((await win.locator(".palette").count()) === 0, "⌘W closes the palette before any terminal");
-check((await panes()) === 2, "…and leaves terminals alone");
+{ const n = await panes(); check(n === 2, `…and leaves terminals alone (${n})`); }
 
 // Session search: ?query in the palette, Enter resumes the session in a new terminal.
 {
