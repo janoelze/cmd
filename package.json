@@ -7,7 +7,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "core": "node --no-warnings packages/core/src/main.ts",
+    "core": "node --no-warnings packages/core/src/main.ts --instance=dev",
     "core:stop": "node scripts/stop-core.mjs",
     "core:stop-all": "node scripts/stop-core.mjs --all",
     "cmd": "node --no-warnings packages/cli/src/main.ts",

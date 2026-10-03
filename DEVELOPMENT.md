@@ -25,7 +25,9 @@ pnpm typecheck
 pnpm e2e                     # build, launch the app via Playwright, screenshots in .cmd-dev/shots
 ```
 
-Development builds (`pnpm dev`, and `pnpm dist`, which packages "cmd dev") have a red icon and the name "cmd dev". They run their own core and state in `~/Library/Application Support/cmd-dev` (socket in `$TMPDIR/cmd-dev`), so they never attach to the installed app's core and your real terminals. They share `~/.config/cmd` (settings, keybindings) with it and never update themselves. Setting `CMD_HOME` overrides all of that. `pnpm icons` renders the red icon into `apps/desktop/build/dev` along with the normal one.
+Development builds (`pnpm dev`, and `pnpm dist`, which packages "cmd dev") have a red icon and the name "cmd dev". They are the "dev" instance (`packages/protocol/src/instance.ts`): their own core and state in `~/Library/Application Support/cmd-dev` (socket in `$TMPDIR/cmd-dev`), so they never attach to the installed app's core and your real terminals. They share `~/.config/cmd` (settings, keybindings) with it and never update themselves. Setting `CMD_HOME` puts an instance's state and socket in that folder instead.
+
+`$CMD_INSTANCE` and `$CMD_HOME` decide which instance a process is; `$CMD_SOCKET` only decides which core a client (the CLI, hooks) talks to. Every pane sets `CMD_SOCKET` to its own core, so the app and the core drop it on startup, along with the rest of the pane's context (`CMD_PANE_ID`, `CMD_AGENT_ID`…). That's what makes `pnpm dev`, `pnpm e2e` and `pnpm core` safe to run in the installed app's terminals. As a second guard, `core.hello` reports the core's state dir, and the app never restarts a core that isn't its own. `pnpm icons` renders the red icon into `apps/desktop/build/dev` along with the normal one.
 
 For a throwaway state, or to use `pnpm core` and the CLI from source against it:
 
@@ -33,10 +35,10 @@ For a throwaway state, or to use `pnpm core` and the CLI from source against it:
 export CMD_HOME=$PWD/.cmd-dev     # socket, SQLite and settings.json go here
 pnpm core                         # or let `pnpm dev` start it
 pnpm cmd ls
-pnpm core:stop                    # stop the core of $CMD_HOME
+pnpm core:stop                    # stop the core of $CMD_HOME (without it: the dev instance's; --release: the installed app's)
 ```
 
-Cores are detached and outlive the app, so after dev sessions they pile up, each holding its terminals' PTYs (macOS allows 511 in total). `pnpm core:stop-all` stops every cmd core on the machine, your real one included. `pnpm e2e` cleans up its own.
+Cores are detached and outlive the app, so after dev sessions they pile up, each holding its terminals' PTYs (macOS allows 511 in total). `pnpm core:stop-all` stops every dev and test core on the machine; the installed app's only with `-- --include-release`. `pnpm e2e` cleans up its own.
 
 Inside the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 

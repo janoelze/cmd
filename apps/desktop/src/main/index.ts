@@ -9,10 +9,9 @@ import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { SETTINGS_TEMPLATE, mediaOrigin, widgetCsp } from "@cmd/protocol";
-import { cmdHome, configDir, connect, defaultSocketPath, ipcPath, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, connect, coreSocketPath, enterInstance, ipcPath, isOwnCore, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { lucideSymbol, type SymbolImage } from "./icons.ts";
@@ -27,18 +26,14 @@ const checkForUpdates = () => void updater().then((u) => u.checkForUpdates(devBu
 /**
  * Development builds (pnpm dev, and pnpm dist, which packages as "cmd dev") sit
  * next to the installed app: a red icon, their own name, and their own core and
- * state, so they never attach to (and offer to restart) the core your real
- * terminals run in. Settings and keybindings stay shared. $CMD_HOME still wins.
+ * state (the "dev" instance, see protocol/instance.ts), so they never attach to
+ * (and offer to restart) the core your real terminals run in, even when started
+ * from one of them. Settings and keybindings stay shared. $CMD_HOME relocates
+ * either instance.
  */
 const devBuild = !app.isPackaged || app.getName() === "cmd dev";
-if (devBuild) {
-  app.setName("cmd dev");
-  if (!process.env.CMD_HOME) {
-    process.env.CMD_CONFIG_DIR ??= configDir();
-    process.env.CMD_HOME = path.join(path.dirname(cmdHome()), "cmd-dev"); // next to the real state dir
-    process.env.CMD_SOCKET ??= path.join(os.tmpdir(), "cmd-dev", "core.sock");
-  }
-}
+if (devBuild) app.setName("cmd dev");
+enterInstance(devBuild ? "dev" : "release");
 
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 
@@ -67,14 +62,14 @@ const here = import.meta.dirname; // apps/desktop/out/main
 // Packaged builds ship the core's source tree in Resources/runtime (see
 // scripts/stage-runtime.mjs) and run it with Electron's own Node.
 const repoRoot = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(here, "../../../..");
-const socketPath = defaultSocketPath();
+const socketPath = coreSocketPath();
 // Chromium's profile (browser-window cookies, caches) lives in the state dir, so
 // $CMD_HOME isolates it too. By default it would be Application Support/<app name>,
 // which for "cmd" is the core's own state dir. Dev builds used to be named
-// "@cmd/desktop": move that profile over once.
+// "@cmd/desktop": move that profile over once (as before dev builds had their own state).
 const uiData = path.join(cmdHome(), "ui");
 const legacyUiData = path.join(app.getPath("appData"), "@cmd", "desktop");
-if (!process.env.CMD_HOME && !fs.existsSync(uiData) && fs.existsSync(legacyUiData)) {
+if (!process.env.CMD_HOME && !devBuild && !fs.existsSync(uiData) && fs.existsSync(legacyUiData)) {
   try {
     fs.mkdirSync(cmdHome(), { recursive: true });
     fs.renameSync(legacyUiData, uiData);
@@ -94,6 +89,17 @@ function canConnect(): Promise<boolean> {
 }
 
 /**
+ * Whether the core that answered is this instance's. Only ours may be stopped:
+ * a socket shared by mistake must never let a dev build restart the installed
+ * app's core.
+ */
+function ownCore(hello: { pid: number; stateDir?: string }): boolean {
+  if (isOwnCore(hello)) return true;
+  console.error(`cmd: core ${hello.pid} on ${socketPath} belongs to ${hello.stateDir ?? "another instance"}, not ${cmdHome()}; leaving it alone`);
+  return false;
+}
+
+/**
  * A core outlives the app on purpose, so after pulling or editing core code an
  * old core may still be serving. Detect that and offer to restart it.
  */
@@ -101,6 +107,7 @@ async function checkCoreBuild(): Promise<void> {
   const conn = await connect(socketPath);
   try {
     const hello = await conn.client.call("core.hello", {});
+    if (!ownCore(hello)) return;
     const current = sourceBuildId(repoRoot);
     if (hello.build === current) return;
     const panes = await conn.client.call("pane.list", {}).catch(() => []);
@@ -164,7 +171,9 @@ async function restartCore(): Promise<void> {
   const conn = await connect(socketPath).catch(() => null);
   if (conn) {
     try {
-      await stopCore((await conn.client.call("core.hello", {})).pid);
+      const hello = await conn.client.call("core.hello", {});
+      if (!ownCore(hello)) throw new Error(`the core on ${socketPath} is not this app's (its state is in ${hello.stateDir ?? "an unknown place"}); stop it yourself`);
+      await stopCore(hello.pid);
     } finally {
       conn.close();
     }
@@ -185,7 +194,8 @@ function spawnCore(): void {
   delete env.ELECTRON_RUN_AS_NODE;
   let node = "node";
   if (app.isPackaged) (node = process.execPath), (env.ELECTRON_RUN_AS_NODE = "1");
-  const child = spawn(node, ["--no-warnings", path.join(coreRoot(), "packages/core/src/main.ts")], {
+  // --instance also tells cores apart in `ps` (scripts/stop-core.mjs --all).
+  const child = spawn(node, ["--no-warnings", path.join(coreRoot(), "packages/core/src/main.ts"), `--instance=${devBuild ? "dev" : "release"}`], {
     detached: true,
     stdio: ["ignore", log, log],
     env,

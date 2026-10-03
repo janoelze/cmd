@@ -3,10 +3,11 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { RpcClient, lineSplitter } from "./client.ts";
-import { ENV } from "./rpc.ts";
+import { defaultSocketPath } from "./instance.ts";
+
+export * from "./instance.ts";
 
 /**
  * Hash of the core + protocol source. The core reports the hash it started with;
@@ -23,28 +24,6 @@ export function sourceBuildId(repoRoot: string): string {
     }
   }
   return h.digest("hex").slice(0, 12);
-}
-
-/** State dir: $CMD_HOME, else ~/Library/Application Support/cmd. */
-export function cmdHome(): string {
-  if (process.env.CMD_HOME) return process.env.CMD_HOME;
-  if (process.platform === "win32") return path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local"), "cmd");
-  return path.join(os.homedir(), "Library", "Application Support", "cmd");
-}
-
-/** $CMD_CONFIG_DIR, else $CMD_HOME (dev isolation), else ~/.config/cmd. */
-export function configDir(): string {
-  return process.env.CMD_CONFIG_DIR ?? process.env.CMD_HOME ?? path.join(os.homedir(), ".config", "cmd");
-}
-
-/**
- * $CMD_SOCKET, else $CMD_HOME/core.sock, else the per-user temp dir. The temp dir
- * (/var/folders/…) stays reachable from sandboxed agents, unlike ~/Library.
- */
-export function defaultSocketPath(): string {
-  if (process.env[ENV.socket]) return process.env[ENV.socket]!;
-  if (process.env.CMD_HOME) return path.join(process.env.CMD_HOME, "core.sock");
-  return path.join(os.tmpdir(), "cmd", "core.sock");
 }
 
 /**

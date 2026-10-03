@@ -45,7 +45,8 @@ export interface Placement {
 }
 
 export interface Methods {
-  "core.hello": { params: {}; result: { version: string; pid: number; socket: string; build: string } };
+  /** stateDir: the core's $CMD_HOME, so an app can tell its own core from another instance's (older cores omit it). */
+  "core.hello": { params: {}; result: { version: string; pid: number; socket: string; build: string; stateDir?: string } };
   /** Diagnostics for the Settings window's About page. */
   "core.info": { params: {}; result: CoreInfo };
 

@@ -17,12 +17,12 @@ pnpm vitest run -t "name"                        # one test by name
 pnpm typecheck               # root tsc (packages/*) + desktop tsc
 pnpm e2e                     # build, then Playwright drives the real app; screenshots in .cmd-dev/shots
 pnpm core                    # run the core directly
-pnpm core:stop               # stop the core of $CMD_HOME; core:stop-all stops every cmd core
+pnpm core:stop               # stop the core of $CMD_HOME, else the dev one; core:stop-all stops every non-release core
 pnpm cmd <args>              # run the CLI from source
 pnpm release <ver|patch|minor>  # bump, tag v<ver>, push; CI publishes the GitHub release
 ```
 
-`pnpm dev` and `pnpm dist` builds are "cmd dev" (red icon) with their own core and state in `~/Library/Application Support/cmd-dev`, separate from the installed app. For a throwaway state dir set `export CMD_HOME=$PWD/.cmd-dev` (socket, SQLite, settings.json, core.log, core.pid go there). In the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
+`pnpm dev` and `pnpm dist` builds are "cmd dev" (red icon) with their own core and state in `~/Library/Application Support/cmd-dev`, separate from the installed app, even when started from its terminals (instances: `packages/protocol/src/instance.ts`). For a throwaway state dir set `export CMD_HOME=$PWD/.cmd-dev` (socket, SQLite, settings.json, core.log, core.pid go there). In the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
 There is no build step for core/CLI/protocol: they run as `.ts` directly on Node ≥ 22.18 (type stripping). This means `tsconfig.base.json` enforces `erasableSyntaxOnly` (no enums, namespaces, parameter properties) and `verbatimModuleSyntax` (use `import type`), and relative imports must include the `.ts` extension.
 
@@ -36,7 +36,7 @@ packages/cli (`cmd`, hook entry point)              ──┼─ newline-delimit
 
 - **The core owns all state** and is a detached process that outlives the UI. Electron main (`apps/desktop/src/main/index.ts`) connects to an existing core or spawns one (logging to `$CMD_HOME/core.log`). Closing or reloading the app never kills terminals.
 - **Stale cores:** because the core outlives the app, after editing core code an old core may still be serving. `core.hello` returns a `build` hash (`sourceBuildId`), and the app prompts to restart a mismatched core. When testing core changes manually, restart the core.
-- **`packages/protocol`** is the contract: `rpc.ts` (`Methods` map of every method's params/result, plus `CoreEvent`s), `model.ts` (Pane, Agent, AppWindow…), `settings.ts` (the settings schema, flat dotted keys), `node.ts` (paths, `connect`, env vars like `CMD_HOME`/`CMD_SOCKET`/`CMD_CONFIG_DIR`). Adding an API method means: add it to `Methods`, implement the handler in `packages/core/src/core.ts` (the `Handlers` map is typed against `Methods`, so tsc flags missing ones), then expose it from the CLI and/or call it from the renderer.
+- **`packages/protocol`** is the contract: `rpc.ts` (`Methods` map of every method's params/result, plus `CoreEvent`s), `model.ts` (Pane, Agent, AppWindow…), `settings.ts` (the settings schema, flat dotted keys), `node.ts` (`connect`, build ids), `instance.ts` (paths and env vars: `CMD_INSTANCE`/`CMD_HOME` pick the instance a process is, `CMD_SOCKET` only the core a client talks to). Adding an API method means: add it to `Methods`, implement the handler in `packages/core/src/core.ts` (the `Handlers` map is typed against `Methods`, so tsc flags missing ones), then expose it from the CLI and/or call it from the renderer.
 - **Renderer ↔ core:** the preload (`apps/desktop/src/preload/index.ts`) opens the socket itself (renderer runs with `sandbox: false`) and reconnects automatically; the renderer uses it as `window.cmd` (`renderer/src/bridge.ts`).
 - **Core internals** (`packages/core/src`):
   - `panes.ts`: node-pty PTYs, each mirrored into an `@xterm/headless` terminal. Re-attaching a UI view or `pane.read` uses that real terminal state, not replayed raw output. `osc.ts` parses OSC 0/2/7/9/777/133. Panes get `CMD_PANE_ID`, `CMD_SOCKET`, etc. in their env, plus the zsh integration in `packages/core/shell/zsh/`.

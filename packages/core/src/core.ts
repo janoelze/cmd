@@ -49,6 +49,8 @@ export interface CoreOptions {
   shellRulesFile?: string | null;
   /** Source hash this core was started from (see sourceBuildId). */
   build?: string;
+  /** The instance's state dir (cmdHome), reported by core.hello. */
+  stateDir?: string;
   /** Home's root (default: the user's home folder); tests use a temp dir. */
   home?: string;
   /** Tests: the model backend for Magic windows (default: from the magic.* settings). */
@@ -146,7 +148,7 @@ export class Core {
   }
 
   readonly handlers: Handlers = {
-    "core.hello": () => ({ version: VERSION, pid: process.pid, socket: this.#opts.socketPath, build: this.#opts.build ?? "" }),
+    "core.hello": () => ({ version: VERSION, pid: process.pid, socket: this.#opts.socketPath, build: this.#opts.build ?? "", stateDir: this.#opts.stateDir }),
     "core.info": async () => {
       const mem = process.memoryUsage();
       const cpu = process.cpuUsage();
