@@ -302,6 +302,9 @@ export function App() {
             "-" as const,
           ]
         : []),
+      ...(r.win && (r.win.kind === "text" || r.win.kind === "files") && r.win.path
+        ? [{ label: "Open with Default App", run: () => cmd.openPath(r.win!.path!) }, { label: "Copy Path", run: () => copy(r.win!.path!) }, "-" as const]
+        : []),
       ...(r.win?.kind === "browser" && r.win.url ? [{ label: "Open in Default Browser", run: () => cmd.openPath(r.win!.url!) }, { label: "Copy URL", run: () => copy(r.win!.url!) }, "-" as const] : []),
       ...(a
         ? [
@@ -411,6 +414,7 @@ export function App() {
         selected={selected}
         onSelect={select}
         onTerminalMenu={terminalMenu}
+        onTitleMenu={rowMenu}
         gridOrder={gridOrder}
         onGridReorder={setGridOrder}
         stripWidths={stripWidths}

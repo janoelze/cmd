@@ -1,36 +1,87 @@
-// Text window: a CodeMirror 6 editor for one file — syntax highlighting (language
-// loaded on demand from the file name), find/replace (⌘F), multiple cursors,
-// bracket matching, folding. ⌘S saves (refusing if the file changed on disk);
-// an unedited buffer reloads when the window is focused again.
+// Text window: a CodeMirror 6 editor for one file. No toolbar — the title bar
+// (or, in focus mode, the status bar) shows the file, folder and state; ⌘S saves.
+//
+//  - Styled from the app's tokens (background, separators, selection, terminal
+//    font) with syntax colours from the terminal palette (--syn-* in styles.css).
+//  - Live: the file is watched; outside changes merge in as a minimal edit
+//    (cursor and scroll survive) when there are no unsaved edits, otherwise a
+//    banner asks whether to reload or keep yours. Saving never silently
+//    overwrites a file that changed on disk.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { basicSetup } from "codemirror";
 import { Compartment, EditorState, type Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
-import { LanguageDescription } from "@codemirror/language";
+import { HighlightStyle, LanguageDescription, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { tags as t } from "@lezer/highlight";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { registerWindowActions } from "../windowActions.ts";
 import { formatBytes } from "../model.ts";
-import { useStore } from "../store.ts";
-import { Symbol } from "./Symbol.tsx";
+import { onFsChanged, useStore } from "../store.ts";
+import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 
-/** Blend CodeMirror's One Dark into the app: same background, fonts from settings. */
+/** Editor chrome from the app's design tokens. */
 const appTheme = (fontFamily: string, fontSize: number) =>
   EditorView.theme(
     {
-      "&": { height: "100%", backgroundColor: "var(--well)", fontSize: `${fontSize}px` },
+      "&": { height: "100%", color: "var(--text)", backgroundColor: "var(--well)", fontSize: `${fontSize}px` },
       ".cm-scroller": { fontFamily, lineHeight: "1.5" },
-      ".cm-gutters": { backgroundColor: "var(--well)", borderRight: "1px solid var(--separator)" },
-      ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "rgb(255 255 255 / 0.04)" },
+      ".cm-content": { caretColor: "var(--syn-cursor)", padding: "8px 0" },
+      ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--syn-cursor)", borderLeftWidth: "2px" },
+      "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+        backgroundColor: "var(--syn-selection) !important",
+      },
+      ".cm-gutters": {
+        backgroundColor: "var(--well)",
+        color: "var(--text-dim)",
+        border: "none",
+        borderRight: "1px solid var(--separator)",
+      },
+      ".cm-lineNumbers .cm-gutterElement": { padding: "0 10px 0 14px", opacity: "0.6" },
+      ".cm-activeLine": { backgroundColor: "var(--bg-hover)" },
+      ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--text)" },
+      ".cm-foldPlaceholder": { backgroundColor: "var(--bg-selected)", border: "none", color: "var(--text-dim)" },
+      ".cm-matchingBracket": { backgroundColor: "var(--bg-selected)", outline: "1px solid var(--separator)" },
+      ".cm-searchMatch": { backgroundColor: "rgb(255 214 10 / 0.18)" },
+      ".cm-searchMatch-selected": { backgroundColor: "rgb(255 214 10 / 0.35)" },
+      ".cm-panels": { backgroundColor: "var(--bg)", color: "var(--text)" },
+      ".cm-panels-bottom": { borderTop: "1px solid var(--separator)" },
+      ".cm-panel input, .cm-panel button": { font: "12px var(--font-ui)" },
+      ".cm-tooltip": { backgroundColor: "var(--bg-elevated)", border: "1px solid var(--separator)" },
       "&.cm-focused": { outline: "none" },
-      ".cm-panels": { backgroundColor: "var(--bg)" },
     },
     { dark: true },
   );
+
+/** Syntax colours: the terminal palette, as CSS variables so themes can override. */
+const syntax = HighlightStyle.define([
+  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: "var(--syn-keyword)" },
+  { tag: [t.string, t.special(t.string), t.regexp, t.character], color: "var(--syn-string)" },
+  { tag: [t.number, t.bool, t.null, t.atom], color: "var(--syn-number)" },
+  { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: "var(--syn-comment)", fontStyle: "italic" },
+  { tag: [t.function(t.variableName), t.function(t.propertyName), t.macroName], color: "var(--syn-function)" },
+  { tag: [t.typeName, t.className, t.namespace, t.tagName], color: "var(--syn-type)" },
+  { tag: [t.propertyName, t.attributeName, t.labelName], color: "var(--syn-property)" },
+  { tag: [t.heading, t.strong], color: "var(--syn-heading)", fontWeight: "600" },
+  { tag: t.emphasis, fontStyle: "italic" },
+  { tag: [t.link, t.url], color: "var(--syn-string)", textDecoration: "underline" },
+  { tag: [t.meta, t.processingInstruction, t.punctuation, t.separator], color: "var(--syn-punct)" },
+  { tag: t.invalid, color: "var(--state-needs)" },
+]);
+
+/** The smallest single change turning `a` into `b` (keeps cursor and scroll stable). */
+function minimalChange(a: string, b: string): { from: number; to: number; insert: string } | null {
+  if (a === b) return null;
+  let start = 0;
+  const max = Math.min(a.length, b.length);
+  while (start < max && a.charCodeAt(start) === b.charCodeAt(start)) start++;
+  let endA = a.length;
+  let endB = b.length;
+  while (endA > start && endB > start && a.charCodeAt(endA - 1) === b.charCodeAt(endB - 1)) endA--, endB--;
+  return { from: start, to: endA, insert: b.slice(start, endB) };
+}
 
 export function TextView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const file = win.path ?? "";
@@ -39,13 +90,15 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
   const view = useRef<EditorView | null>(null);
   const saved = useRef<Text | null>(null);
   const comps = useRef({ lang: new Compartment(), readOnly: new Compartment(), theme: new Compartment() });
-  const [meta, setMeta] = useState({ size: 0, mtime: 0, truncated: false, binary: false });
+  const meta = useRef({ size: 0, mtime: 0, truncated: false, binary: false });
   const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
   const [lines, setLines] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const metaRef = useRef(meta);
-  metaRef.current = meta;
+  const [notice, setNotice] = useState<string | null>(null);
+  /** The file changed on disk while there were unsaved edits. */
+  const [conflict, setConflict] = useState(false);
 
   // Create the editor once per window.
   useEffect(() => {
@@ -57,7 +110,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
         extensions: [
           basicSetup,
           keymap.of([indentWithTab]),
-          oneDark,
+          syntaxHighlighting(syntax),
           c.theme.of(appTheme(settings["terminal.fontFamily"], settings["terminal.fontSize"])),
           c.lang.of([]),
           c.readOnly.of(EditorState.readOnly.of(false)),
@@ -70,7 +123,6 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
       }),
     });
     view.current = v;
-    // Syntax highlighting for the file type, loaded on demand.
     const desc = LanguageDescription.matchFilename(languages, file.split("/").pop() ?? "");
     if (desc) void desc.load().then((lang) => v.dispatch({ effects: c.lang.reconfigure(lang) }));
     return () => {
@@ -79,89 +131,110 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
     };
   }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Follow font settings.
   useEffect(() => {
     view.current?.dispatch({
       effects: comps.current.theme.reconfigure(appTheme(settings["terminal.fontFamily"], settings["terminal.fontSize"])),
     });
   }, [settings]);
 
-  /** Load (or reload) the file into the editor. */
-  const load = useCallback(() => {
-    cmd.call("fs.read", { path: file }).then(
-      (r) => {
-        const v = view.current;
-        if (!v) return;
-        setMeta(r);
-        setError(null);
-        if (v.state.doc.toString() !== r.text) {
-          v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: r.text } });
-        }
-        saved.current = v.state.doc;
-        setDirty(false);
-        setLines(v.state.doc.lines);
-        v.dispatch({ effects: comps.current.readOnly.reconfigure(EditorState.readOnly.of(r.truncated || r.binary)) });
-      },
-      (e: Error) => setError(e.message),
-    );
+  /** Load the file; merges into the buffer as a minimal change. */
+  const load = useCallback(async () => {
+    try {
+      const r = await cmd.call("fs.read", { path: file });
+      const v = view.current;
+      if (!v) return;
+      meta.current = r;
+      setError(null);
+      const change = minimalChange(v.state.doc.toString(), r.text);
+      if (change) v.dispatch({ changes: change });
+      saved.current = v.state.doc;
+      setDirty(false);
+      setConflict(false);
+      setLines(v.state.doc.lines);
+      v.dispatch({ effects: comps.current.readOnly.reconfigure(EditorState.readOnly.of(r.truncated || r.binary)) });
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }, [file]);
-  useEffect(load, [load]);
+  useEffect(() => void load(), [load]);
 
-  // Coming back to the window: pick up outside changes unless there are unsaved
-  // edits, and take keyboard focus (unless a text field elsewhere has it).
+  // Live: watch the file; reload when clean, ask when there are unsaved edits.
+  useEffect(() => {
+    void cmd.call("fs.watch", { path: file }).catch(() => {});
+    const off = onFsChanged((p) => {
+      if (p !== file) return;
+      void cmd.call("fs.read", { path: file }).then((r) => {
+        if (Math.abs(r.mtime - meta.current.mtime) < 1) return; // our own save
+        if (dirtyRef.current) setConflict(true);
+        else void load();
+      });
+    });
+    return () => {
+      off();
+      void cmd.call("fs.unwatch", { path: file }).catch(() => {});
+    };
+  }, [file, load]);
+
   useEffect(() => {
     if (!focused) return;
-    if (!dirty) load();
     const active = document.activeElement;
-    const typing =
-      (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) && !active.closest(".xterm");
+    const typing = (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) && !active.closest(".xterm");
     if (!typing) view.current?.focus();
-  }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focused]);
 
   const save = useCallback(async () => {
     const v = view.current;
-    const m = metaRef.current;
+    const m = meta.current;
     if (!v || m.truncated || m.binary) return;
     try {
       const doc = v.state.doc;
       const r = await cmd.call("fs.write", { path: file, text: doc.toString(), expectMtime: m.mtime });
+      meta.current = { ...m, size: r.size, mtime: r.mtime };
       saved.current = doc;
       setDirty(!v.state.doc.eq(doc));
-      setMeta((x) => ({ ...x, size: r.size, mtime: r.mtime }));
-      setStatus("Saved");
-      setTimeout(() => setStatus(null), 1500);
+      setConflict(false);
+      setNotice("Saved");
+      setTimeout(() => setNotice(null), 1500);
     } catch (e) {
-      setStatus((e as Error).message);
+      setNotice(null);
+      setConflict(/changed on disk/i.test((e as Error).message));
+      if (!/changed on disk/i.test((e as Error).message)) setError((e as Error).message);
     }
   }, [file]);
 
-  useEffect(() => registerWindowActions(win.id, { save }), [win.id, save]);
+  /** Keep my edits: overwrite the disk version on the next save. */
+  const keepMine = async () => {
+    const r = await cmd.call("fs.read", { path: file }).catch(() => null);
+    if (r) meta.current = { ...meta.current, mtime: r.mtime };
+    setConflict(false);
+  };
 
-  const readOnly = meta.truncated || meta.binary;
+  useEffect(
+    () => registerWindowActions(win.id, { save, openExternally: () => cmd.openPath(file) }),
+    [win.id, save, file],
+  );
+
+  // What the title bar / status bar shows for this window.
+  const m = meta.current;
+  const label =
+    notice ??
+    (dirty ? "Edited" : m.truncated ? "Read-only (truncated)" : m.binary ? "Read-only (binary)" : `${lines} lines · ${formatBytes(m.size)}`);
+  useEffect(() => setWindowStatus(win.id, { label, dirty }), [win.id, label, dirty]);
+  useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
+
   return (
     <div className="textwin">
-      <div className="window-toolbar">
-        <Symbol name="doc.text" size={13} className="file-icon" />
-        <span className="textwin-path" title={file}>
-          {file.replace(/^\/Users\/[^/]+/, "~")}
-        </span>
-        <span className="textwin-meta">
-          {status ??
-            (dirty
-              ? "Edited"
-              : readOnly
-                ? meta.truncated
-                  ? "Read-only (truncated)"
-                  : "Read-only (binary)"
-                : `${lines} lines · ${formatBytes(meta.size)}`)}
-        </span>
-        <button className="icon-btn" disabled={!dirty || readOnly} onClick={() => void save()} title="Save (⌘S)">
-          <Symbol name="square.and.arrow.down" size={13} />
-        </button>
-        <button className="icon-btn" onClick={() => cmd.openPath(file)} title="Open with default app">
-          <Symbol name="arrow.up.forward.app" size={13} />
-        </button>
-      </div>
+      {conflict && (
+        <div className="textwin-banner">
+          <span>This file changed on disk.</span>
+          <button className="btn" onClick={() => void load()}>
+            Reload
+          </button>
+          <button className="btn" onClick={() => void keepMine()}>
+            Keep mine
+          </button>
+        </div>
+      )}
       {error && <div className="file-error">{error}</div>}
       <div className="textwin-editor" ref={host} />
     </div>

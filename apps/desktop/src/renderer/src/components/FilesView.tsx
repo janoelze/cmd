@@ -12,7 +12,7 @@ import { cmd } from "../bridge.ts";
 import { copy, newTerminalIn, selectPane } from "../actions.ts";
 import { showContextMenu } from "../context.ts";
 import { formatBytes } from "../model.ts";
-import { usePersisted } from "../store.ts";
+import { onFsChanged, usePersisted } from "../store.ts";
 import { Symbol } from "./Symbol.tsx";
 
 const iconFor = (e: FileEntry) =>
@@ -84,6 +84,19 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isOpen = useCallback((p: string) => expanded.includes(p), [expanded]);
+
+  // Live: watch the root and expanded folders; refresh a folder when it changes.
+  const watched = useMemo(() => [root, ...expanded.filter((p) => p.startsWith(root + "/"))], [root, expanded]);
+  useEffect(() => {
+    for (const p of watched) void cmd.call("fs.watch", { path: p }).catch(() => {});
+    const off = onFsChanged((p) => {
+      if (watched.includes(p)) void fetchDir(p).catch(() => {});
+    });
+    return () => {
+      off();
+      for (const p of watched) void cmd.call("fs.unwatch", { path: p }).catch(() => {});
+    };
+  }, [watched, fetchDir]);
 
   // Visible rows, depth-first.
   const rows = useMemo(() => {

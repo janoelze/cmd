@@ -248,6 +248,22 @@ check((await panes()) === 2, "…and leaves terminals alone");
   await win.waitForTimeout(400);
   check(fs.readFileSync(path.join(home, "files-fixture", "notes.md"), "utf8") === "# hi there", "⌘S saves the text window");
 
+  // Live: outside edits show up in the editor; new files show up in the tree.
+  fs.writeFileSync(path.join(home, "files-fixture", "notes.md"), "# changed by an agent\n");
+  let live = "";
+  for (let i = 0; i < 30 && !live.includes("changed by an agent"); i++) {
+    await win.waitForTimeout(100);
+    live = (await win.locator(".tile.kind-text .cm-content").textContent()) ?? "";
+  }
+  check(live.includes("changed by an agent"), "the text window reloads live when the file changes on disk");
+  fs.writeFileSync(path.join(home, "files-fixture", "zz-new-file.txt"), "new");
+  let rows = [];
+  for (let i = 0; i < 30 && !rows.includes("zz-new-file.txt"); i++) {
+    await win.waitForTimeout(100);
+    rows = await win.locator(".tile.kind-files .file-row .file-name").allTextContents();
+  }
+  check(rows.includes("zz-new-file.txt"), "the file tree shows new files live");
+
   await menu("view.grid");
   await win.waitForTimeout(800);
   await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });

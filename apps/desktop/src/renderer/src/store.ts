@@ -34,6 +34,13 @@ let state: State = {
 const listeners = new Set<() => void>();
 const agentListeners = new Set<(prev: Agent | undefined, next: Agent) => void>();
 const focusListeners = new Set<(id: WindowId) => void>();
+const fsListeners = new Set<(path: string) => void>();
+
+/** A watched file or folder changed on disk (see fs.watch). */
+export function onFsChanged(fn: (path: string) => void): () => void {
+  fsListeners.add(fn);
+  return () => fsListeners.delete(fn);
+}
 
 /** The core asks to bring a window forward (e.g. `open .` in a terminal). */
 export function onWindowFocus(fn: (id: WindowId) => void): () => void {
@@ -148,6 +155,9 @@ function handle(e: CoreEvent): void {
       set({ windows });
       return;
     }
+    case "fs.changed":
+      for (const fn of fsListeners) fn(e.path);
+      return;
     case "window.focus":
       for (const fn of focusListeners) fn(e.id);
       return;

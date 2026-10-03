@@ -59,6 +59,8 @@ interface Props {
   selected: PaneId | null;
   onSelect: (paneId: PaneId) => void;
   onTerminalMenu: (paneId: PaneId) => void;
+  /** Right-click on a window's title bar. */
+  onTitleMenu?: (row: SidebarRow) => void;
 }
 
 interface Drag {
@@ -346,7 +348,18 @@ export function WindowsView(p: Props) {
               }}
               onMouseDown={() => onSelect(id)}
             >
-              {lay.chrome && <TileTitle row={r} onPointerDown={(e) => startDrag(e, id)} title="Drag to move" />}
+              {lay.chrome && (
+                <TileTitle
+                  row={r}
+                  onPointerDown={(e) => startDrag(e, id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onSelect(id);
+                    p.onTitleMenu?.(r);
+                  }}
+                  title="Drag to move"
+                />
+              )}
               {r.pane ? (
                 <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
               ) : r.win?.kind === "browser" ? (

@@ -89,6 +89,9 @@ export interface Methods {
     params: { path: string };
     result: { text: string; size: number; mtime: number; truncated: boolean; binary: boolean };
   };
+  /** Get fs.changed events for a file or folder (released when the connection closes). */
+  "fs.watch": { params: { path: string }; result: { watching: boolean } };
+  "fs.unwatch": { params: { path: string }; result: null };
   /** Write a text file; fails if it changed on disk since `expectMtime`. */
   "fs.write": { params: { path: string; text: string; expectMtime?: number }; result: { size: number; mtime: number } };
 
@@ -134,6 +137,8 @@ export type CoreEvent =
   | { type: "search.status"; status: SearchStatus }
   | { type: "window.updated"; window: AppWindow }
   | { type: "window.removed"; id: WindowId }
+  /** A watched file or folder changed on disk (see fs.watch). */
+  | { type: "fs.changed"; path: string }
   /** Bring a window to the front (e.g. `open .` in a terminal). */
   | { type: "window.focus"; id: WindowId };
 

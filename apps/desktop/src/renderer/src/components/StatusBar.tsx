@@ -6,6 +6,7 @@ import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
 import { ledOf, rowDetail, shortPath, usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
 import { useStore } from "../store.ts";
+import { useWindowStatus } from "../windowActions.ts";
 import type { ViewMode } from "./MainView.tsx";
 import { Symbol } from "./Symbol.tsx";
 
@@ -29,6 +30,7 @@ interface Props {
 export function StatusBar({ mode, row, pane, run }: Props) {
   const keys = useKeybindings();
   const showUsage = useStore().settings.settings["ui.showResources"];
+  const winStatus = useWindowStatus(row?.win?.id ?? null);
   const tip = (label: string, id: CommandId) => {
     const k = prettyAccelerator(keys.bindings[id]?.[0]);
     return k ? `${label} (${k})` : label;
@@ -46,6 +48,7 @@ export function StatusBar({ mode, row, pane, run }: Props) {
           <>
             <span className="statusbar-proc">{row.win.kind}</span>
             <span className="statusbar-path">{row.win.kind === "browser" ? (row.win.url ?? "") : shortPath(row.win.path ?? "")}</span>
+            {winStatus && <span className="statusbar-usage">{winStatus.label}</span>}
           </>
         )}
         {pane && (

@@ -10,6 +10,7 @@ import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
 import { listDir, readText, WindowManager, writeText } from "./windows.ts";
+import { WatchService } from "./watch.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
 
@@ -46,6 +47,9 @@ export class Core {
   readonly windows: WindowManager;
   #server: net.Server | null = null;
   #subscribers = new Set<net.Socket>();
+  readonly watches = new WatchService();
+  /** fs.watch subscriptions per connection, released when it closes. */
+  #connWatches = new Map<net.Socket, string[]>();
   #opts: CoreOptions;
 
   constructor(opts: CoreOptions) {
@@ -65,6 +69,7 @@ export class Core {
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
     this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
+    this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
     opts.search?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
 
@@ -108,6 +113,9 @@ export class Core {
     "fs.list": (p) => listDir(p.path),
     "fs.read": (p) => readText(p.path),
     "fs.write": (p) => writeText(p.path, p.text, p.expectMtime),
+    // Connection-aware; handled in #serve. These run for in-process callers.
+    "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
+    "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),
     "search.query": (p) => this.#opts.search?.search(p.text, p.limit) ?? [],
     "search.status": () =>
       this.#opts.search?.status() ?? { sessions: 0, files: 0, indexing: false, done: 0, total: 0 },
@@ -161,7 +169,11 @@ export class Core {
   #serve(conn: net.Socket): void {
     conn.setEncoding("utf8");
     conn.on("error", () => {});
-    conn.on("close", () => this.#subscribers.delete(conn));
+    conn.on("close", () => {
+      this.#subscribers.delete(conn);
+      for (const p of this.#connWatches.get(conn) ?? []) this.watches.unwatch(p);
+      this.#connWatches.delete(conn);
+    });
     conn.on(
       "data",
       lineSplitter(async (line) => {
@@ -174,6 +186,15 @@ export class Core {
         }
         try {
           const result = await this.call(req.method, (req.params ?? {}) as never);
+          // Remember per-connection watches so a closed UI doesn't leak them.
+          const wp = (req.params as { path?: string } | undefined)?.path;
+          if (req.method === "fs.watch" && wp && (result as { watching: boolean }).watching) {
+            this.#connWatches.set(conn, [...(this.#connWatches.get(conn) ?? []), wp]);
+          } else if (req.method === "fs.unwatch" && wp) {
+            const list = this.#connWatches.get(conn) ?? [];
+            const i = list.indexOf(wp);
+            if (i >= 0) list.splice(i, 1);
+          }
           if (req.method === "events.subscribe") this.#subscribers.add(conn);
           send(conn, { jsonrpc: "2.0", id: req.id, result: result ?? null });
         } catch (err) {
@@ -198,6 +219,7 @@ export class Core {
     } catch {}
     this.resources?.close();
     this.#opts.search?.close();
+    this.watches.close();
     this.agents.close();
     this.store.close();
     this.settings.close();

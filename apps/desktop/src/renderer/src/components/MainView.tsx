@@ -11,6 +11,7 @@ interface Props {
   selected: PaneId | null;
   onSelect: (paneId: PaneId) => void;
   onTerminalMenu: (paneId: PaneId) => void;
+  onTitleMenu?: (row: SidebarRow) => void;
   gridOrder: PaneId[];
   onGridReorder: (order: PaneId[]) => void;
   stripWidths: Record<PaneId, number>;
@@ -23,6 +24,7 @@ export function MainView({
   selected,
   onSelect,
   onTerminalMenu,
+  onTitleMenu,
   gridOrder,
   onGridReorder,
   stripWidths,
@@ -66,6 +68,7 @@ export function MainView({
       selected={selected}
       onSelect={onSelect}
       onTerminalMenu={onTerminalMenu}
+      onTitleMenu={onTitleMenu}
     />
   );
 }
