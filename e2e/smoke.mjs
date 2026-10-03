@@ -202,6 +202,9 @@ for (let i = 0; i < 30 && (!Array.isArray(order1) || JSON.stringify(order1) === 
   order1 = await panesOrder();
 }
 check(Array.isArray(order1) && order1.length === 2, `dragging a tile onto another reorders the grid (${JSON.stringify(order1?.map((x) => x.slice(0, 4)))})`);
+// Let the windows glide into their new places first: mid-animation, positions (and so the drag target) are stale.
+await win.waitForFunction(() => !document.querySelector(".tile.settling, .tile.lifted"), null, { timeout: 3000 }).catch(() => {});
+await win.waitForTimeout(400);
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
 // The order is saved debounced: wait for it to change rather than a fixed time (slow CI runners).
 let order2 = await panesOrder();
