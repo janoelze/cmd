@@ -555,6 +555,27 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await sw.waitForSelector(".sw-nav-item");
   const pages = await sw.locator(".sw-nav-label").allTextContents();
   check(["Fonts", "Terminal", "Shell", "Opening Files", "Interface", "Canvas", "Search", "Agents", "Keyboard Shortcuts"].every((p) => pages.includes(p)), `settings has a page per group (${pages.join(", ")})`);
+
+  // Magic Windows: each provider's API key beside its model; keys are stored outside settings.json.
+  await sw.locator(".sw-nav-item", { hasText: "Magic Windows" }).click();
+  await sw.waitForTimeout(300);
+  const keyRows = await sw.locator(".sw-row-key").allTextContents();
+  const notes = await sw.locator(".sw-model-note").allTextContents();
+  check(
+    keyRows.indexOf("magic.anthropic.apiKey") === keyRows.indexOf("magic.anthropic.model") - 1 && notes.length === 2 && notes.every((n) => n.includes("Add the API key")),
+    "Magic Windows settings put each provider's API key beside its model, and the model waits for the key",
+  );
+  await sw.locator(".sw-row", { hasText: "magic.openai.apiKey" }).locator("input[type=password]").fill("sk-e2e-not-a-real-key-1234");
+  await sw.keyboard.press("Enter");
+  await sw.waitForTimeout(400);
+  const rpc = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const keyStatus = (await rpc("secrets.status", {}))["magic.openai.apiKey"];
+  const settingsFile = fs.readFileSync(path.join(home, "settings.json"), "utf8");
+  check(
+    keyStatus.set && keyStatus.hint === "…1234" && (await sw.locator(".sw-secret-set").count()) === 1 && !settingsFile.includes("sk-e2e") && fs.existsSync(path.join(home, "secrets.json")),
+    "an API key typed in Settings is stored outside settings.json and shown only as a hint",
+  );
+  await rpc("secrets.set", { key: "magic.openai.apiKey", value: null });
   await sw.screenshot({ path: path.join(shots, "5-settings-terminal.png") });
   const page = (name) => sw.locator(".sw-nav-item", { hasText: name }).click();
   const row = (title) => sw.locator(".sw-row", { has: sw.locator(".sw-row-title", { hasText: title }) });

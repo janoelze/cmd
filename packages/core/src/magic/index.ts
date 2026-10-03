@@ -1,5 +1,6 @@
 export { runMagic, fastRoute, type MagicOptions, type MagicResult, type MagicEvent, type TraceStep } from "./run.ts";
-export { aiBackend, backendFor, claudeCliBackend, claudeCliAvailable, DEFAULT_MODEL, type Backend, type Usage } from "./backends.ts";
+export { aiBackend, backendFor, isProvider, type Backend, type BackendChoice, type Usage } from "./backends.ts";
+export { listModels, isOpenAIChatModel } from "./models.ts";
 export { MagicService } from "./service.ts";
 export { parseAnswer, AnswerStream, type MagicHeader } from "./contract.ts";
 export { classify, credentialsFor, DEFAULT_DENY_PATHS, isDeniedPath, redact } from "./policy.ts";
@@ -8,4 +9,4 @@ export { runSource, preview, type MagicSource, type SourceResult } from "./sourc
 export { TOOL_SPECS, toolsFor, runTool } from "./tools.ts";
 export { buildSystem, buildRequest, PROMPT_DIR } from "./prompt.ts";
 export { widgetHtml, widgetTokens, SIZES, type ThemeLike } from "./host.ts";
-export { serveMcp } from "./mcp.ts";
+export { readSecrets } from "../secrets.ts";

@@ -19,6 +19,7 @@ import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
 import { SpaceManager } from "./spaces/manager.ts";
 import { MagicService } from "./magic/service.ts";
+import { SecretsService } from "./secrets.ts";
 import type { Backend } from "./magic/backends.ts";
 
 export const VERSION = "0.0.1";
@@ -29,6 +30,8 @@ export interface CoreOptions {
   dbPath: string | null;
   /** settings.json, or null for in-memory defaults (tests). */
   settingsPath?: string | null;
+  /** API keys (secrets.ts), or null for in-memory (tests). */
+  secretsPath?: string | null;
   ptyFactory: PtyFactory;
   pollMs?: number;
   /** Foreground-process lookup (ProcInfo); null falls back to process names. */
@@ -69,6 +72,7 @@ export class Core {
   readonly transcripts: TranscriptSources;
   readonly spaces: SpaceManager;
   readonly magic: MagicService;
+  readonly secrets: SecretsService;
   #server: net.Server | null = null;
   /** Subscribed connections and the event types they want (null = all). */
   #subscribers = new Map<net.Socket, Set<string> | null>();
@@ -122,7 +126,9 @@ export class Core {
     }
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
     this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
-    this.magic = new MagicService({ windows: this.windows, settings, broadcast: (e) => this.#broadcast(e), backend: opts.magicBackend, cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root });
+    this.secrets = new SecretsService(opts.secretsPath ?? null);
+    this.secrets.on("updated", (status) => this.#broadcast({ type: "secrets.updated", status }));
+    this.magic = new MagicService({ windows: this.windows, settings, secret: (k) => this.secrets.get(k), broadcast: (e) => this.#broadcast(e), backend: opts.magicBackend, cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root });
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
     this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
@@ -220,6 +226,9 @@ export class Core {
     "magic.cancel": (p) => (this.magic.cancel(p.id), null),
     "magic.refresh": (p) => (this.magic.refresh(p.id), null),
     "magic.media": (p) => (this.magic.media(p.id, p.allow), null),
+    "magic.models": (p) => this.magic.models(p.provider, p.refresh),
+    "secrets.status": () => this.secrets.status(),
+    "secrets.set": (p) => this.secrets.set(p.key, p.value),
     "fs.list": (p) => listDir(p.path),
     "fs.read": (p) => readText(p.path),
     "fs.write": (p) => writeText(p.path, p.text, p.expectMtime),

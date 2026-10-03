@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import type { Agent, AgentState, Pane, Space } from "@cmd/protocol";
-import { APPLIES_LABEL, currentKey, ENV, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
+import { APPLIES_LABEL, currentKey, ENV, isSecretKey, SECRETS, type SecretDef, type SecretKey, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 import { magicCommand } from "./magic.ts";
 
@@ -40,6 +40,8 @@ usage: cmd <command> [options]
                                       (runs here, no core needed; see cmd magic --help)
   settings [get KEY | set KEY VALUE | reset KEY | path] [--json]
                                       list or change settings (applies live)
+  settings secret KEY [--clear]       store an API key from stdin (pbpaste | cmd settings secret
+                                      magic.anthropic.apiKey); never in settings.json
 
 env: ${ENV.socket} (default ${defaultSocketPath()})`;
 
@@ -91,6 +93,7 @@ const { values: opt, positionals: pos } = parseArgs({
     all: { type: "boolean" },
     "new-window": { type: "boolean", short: "n" },
     "git-root": { type: "boolean" },
+    clear: { type: "boolean" },
   },
 });
 
@@ -261,6 +264,20 @@ async function run({ client, closed }: Connection): Promise<number> {
         if (applies) console.error(`note: ${APPLIES_LABEL[applies]}`);
         return 0;
       }
+      if (sub === "secret") {
+        // From stdin, so the key stays out of argv and shell history: pbpaste | cmd settings secret KEY
+        if (!key || !isSecretKey(key)) return fail(`usage: cmd settings secret KEY [--clear]   (KEY: ${Object.keys(SECRETS).join(", ")})`);
+        if (opt.clear) {
+          await client.call("secrets.set", { key, value: null });
+          return 0;
+        }
+        if (process.stdin.isTTY) return fail(`pipe the value in, e.g.: pbpaste | cmd settings secret ${key}`);
+        let value = "";
+        for await (const chunk of process.stdin) value += chunk;
+        if (!value.trim()) return fail("no value on stdin (use --clear to remove it)");
+        await client.call("secrets.set", { key, value: value.trim() });
+        return 0;
+      }
       if (sub === "reset") {
         if (!key) return fail("usage: cmd settings reset KEY");
         await client.call("settings.reset", { key });
@@ -278,6 +295,11 @@ async function run({ client, closed }: Connection): Promise<number> {
         const mark = snap.overrides.includes(k) ? "*" : " ";
         const applies = def.applies ? ` (${APPLIES_LABEL[def.applies]})` : "";
         console.log(`${mark} ${k.padEnd(28)} ${JSON.stringify(snap.settings[k]).padEnd(24)} ${def.description}${applies}`);
+      }
+      const secrets = await client.call("secrets.status", {});
+      for (const [k, def] of Object.entries(SECRETS) as [SecretKey, SecretDef][]) {
+        const st = secrets[k];
+        console.log(`${st.set ? "*" : " "} ${k.padEnd(28)} ${(st.set ? `set ${st.hint ?? ""}`.trim() : "not set").padEnd(24)} ${def.description}`);
       }
       console.log(`\n* = set in ${snap.path}`);
       for (const e of snap.errors) console.error(`warning: ${e}`);

@@ -354,3 +354,13 @@ body.settings-window { background: transparent; }
 }
 .nf button:hover:not(:disabled) { color: var(--text); }
 .nf button:disabled { opacity: 0.3; }
+
+/* secrets (API keys) and the model popup */
+.sw-secret { display: flex; align-items: center; gap: 6px; }
+.sw-secret .sw-field { width: 240px; }
+.sw-secret-set { font: 12px var(--font-mono); color: var(--text-dim); margin-right: 2px; }
+.sw-popup select:disabled { color: var(--text-dim); }
+.sw-model { display: flex; align-items: center; gap: 6px; }
+.sw-model-note { font-size: 11.5px; color: var(--text-dim); max-width: 260px; text-align: right; }
+.sw-model-note.error { color: var(--state-needs, var(--text-dim)); }
+.sw-model .sw-popup select { max-width: 280px; }

@@ -4,8 +4,9 @@
 // The agent is never involved in a refresh.
 
 import os from "node:os";
-import { requestedMedia, type AppWindow, type CoreEvent, type MagicState, type MagicStep, type Settings, type WindowId } from "@cmd/protocol";
-import { backendFor, type Backend } from "./backends.ts";
+import { MAGIC_PROVIDERS, requestedMedia, type AppWindow, type CoreEvent, type MagicModel, type MagicState, type MagicStep, type SecretKey, type Settings, type WindowId } from "@cmd/protocol";
+import { backendFor, isProvider, type Backend } from "./backends.ts";
+import { listModels } from "./models.ts";
 import { DEFAULT_DENY_PATHS } from "./policy.ts";
 import { runMagic, type MagicEvent } from "./run.ts";
 import { sandboxAvailable, type SandboxMode } from "./sandbox.ts";
@@ -21,15 +22,20 @@ export interface MagicWindows {
 export interface MagicServiceOptions {
   windows: MagicWindows;
   settings: () => Settings;
+  /** The user's stored API keys (SecretsService). */
+  secret: (key: SecretKey) => string | undefined;
   broadcast: (e: CoreEvent) => void;
-  /** Tests inject a fake; default: from the magic.* settings. */
+  /** Tests inject a fake; default: the provider and model in the magic.* settings, with the provider's stored key. */
   backend?: (s: Settings) => Backend;
+  /** Tests: the model list (default: the provider's /v1/models). */
+  listModels?: typeof listModels;
   sandbox?: SandboxMode;
   /** Where a window's agent and source commands run (its Space's root); default: home. */
   cwdFor?: (w: AppWindow) => string;
 }
 
 const PERSIST_DATA_MS = 60_000;
+const MODELS_TTL_MS = 10 * 60_000;
 const BODY_THROTTLE_MS = 80;
 
 const stateOf = (w: AppWindow) => w.state as MagicState;
@@ -46,6 +52,8 @@ export class MagicService {
   #timers = new Map<WindowId, ReturnType<typeof setTimeout>>();
   #failures = new Map<WindowId, number>();
   #persistedAt = new Map<WindowId, number>();
+  /** Model lists per provider and key, so the settings popup opens instantly. */
+  #models = new Map<string, { at: number; list: Promise<MagicModel[]> }>();
 
   constructor(o: MagicServiceOptions) {
     this.#o = o;
@@ -140,7 +148,7 @@ export class MagicService {
     const s = this.#o.settings();
     let backend: Backend;
     try {
-      backend = (this.#o.backend ?? ((x: Settings) => backendFor({ provider: x["magic.provider"], model: x["magic.model"], baseURL: x["magic.baseUrl"] || undefined })))(s);
+      backend = (this.#o.backend ?? ((x: Settings) => this.#backend(x)))(s);
     } catch (e) {
       this.#fail(id, prev, (e as Error).message);
       return;
@@ -200,6 +208,25 @@ export class MagicService {
       });
   }
 
+  #backend(s: Settings): Backend {
+    const p = MAGIC_PROVIDERS[s["magic.provider"]];
+    return backendFor({ provider: s["magic.provider"], model: s[p.modelSetting], apiKey: this.#o.secret(p.keySecret) });
+  }
+
+  /** The models `provider` offers to the user's stored key, newest first; cached for a while (refresh: ask again). */
+  async models(provider: string, refresh = false): Promise<MagicModel[]> {
+    if (!isProvider(provider)) throw new Error(`unknown provider "${provider}"`);
+    const key = this.#o.secret(MAGIC_PROVIDERS[provider].keySecret);
+    if (!key) throw new Error(`No ${MAGIC_PROVIDERS[provider].title} API key`);
+    const cacheKey = `${provider} ${key}`;
+    const hit = this.#models.get(cacheKey);
+    if (hit && !refresh && Date.now() - hit.at < MODELS_TTL_MS) return hit.list;
+    const list = (this.#o.listModels ?? listModels)(provider, key);
+    this.#models.set(cacheKey, { at: Date.now(), list });
+    list.catch(() => this.#models.get(cacheKey)?.list === list && this.#models.delete(cacheKey)); // errors aren't cached
+    return list;
+  }
+
   #fail(id: WindowId, prev: MagicState, message: string): void {
     this.#runs.delete(id);
     // A failed refinement keeps the widget that worked.
@@ -207,7 +234,10 @@ export class MagicService {
       this.#o.windows.update(id, { state: { phase: "ready", error: message } });
       this.#schedule(id, 0);
     } else {
-      this.#o.windows.update(id, { state: { phase: prev.prompt ? "error" : "empty", error: message } });
+      // The request being run is in the state by now (prev is from before it).
+      const asked = this.#o.windows.others().find((x) => x.id === id);
+      const prompt = asked ? stateOf(asked).prompt : prev.prompt;
+      this.#o.windows.update(id, { state: { phase: prompt ? "error" : "empty", error: message } });
     }
     this.#o.broadcast({ type: "magic.stream", id, progress: { type: "error", message } });
   }

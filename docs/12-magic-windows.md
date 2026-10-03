@@ -1,7 +1,7 @@
 # Magic windows
 
 > Status (2026-10-03), branch `magic-windows`:
-> - **Built:** the prompt lab (`cmd magic`, `cmd magic view`, `cmd magic eval`); the AI SDK backend and the `claude -p` backend over the MCP relay; Magic windows in the app (⇧⌘M, File → New Magic Window, the sidebar's +): the empty prompt, the live step trace, streaming, the widget frame, refresh scheduling in the core, the refine line (⌘L), terminal answers, the magic.* settings.
+> - **Built:** the prompt lab (`cmd magic`, `cmd magic view`, `cmd magic eval`); the AI SDK backend with Anthropic and OpenAI, keys and models set by the user (see Providers); Magic windows in the app (⇧⌘M, File → New Magic Window, the sidebar's +): the empty prompt, the live step trace, streaming, the widget frame, refresh scheduling in the core, the refine line (⌘L), terminal answers, the magic.* settings.
 > - **Not yet:** versions and "How this was made" as a panel, recipes, the palette fallback, paste and drop, attention from widgets, Edit code, pausing refreshes while hidden, Keychain keys (API keys come from ANTHROPIC_API_KEY / CMD_MAGIC_API_KEY).
 > - **Found while building:** `sandbox-exec` can't apply a profile inside another sandbox (Agent Safehouse), so there commands are refused unless `CMD_MAGIC_UNSANDBOXED=1`; the AI SDK is v7 (`instructions`, not `system`); an inline frame (`srcdoc`, blob or data URL) inherits the app's CSP, which forbids inline scripts, hence the `cmd-widget://` page; the agent asks nothing while it works (see Agent).
 
@@ -130,18 +130,22 @@ The **frame API** (`window.cmd` inside the frame, built over the bridge):
 
 ## Providers
 
-Every backend runs the same agent with the same tools. The core exposes the tools in two forms:
-- in-process, for SDK backends, where the core drives the loop;
-- as an MCP server (`cmd mcp magic --window <id>`, stdio, a thin client of the core socket), for CLI backends, which drive the loop themselves.
+Two providers, both through the Vercel AI SDK v7 (plain ESM, runs under type stripping): **Anthropic** (`@ai-sdk/anthropic`) and **OpenAI** (`@ai-sdk/openai`, the Responses API). The core runs the loop with `streamText`, tools and `stopWhen`; the tools always execute in the core, so the policy, sandbox and budget are the same for both. The system prompt is cached (`cache_control` on Anthropic, automatic on OpenAI). Effort is `low` where the model takes it (Anthropic's newer models, OpenAI's reasoning models).
 
-The tools always execute in the core, so the policy, sandbox and budget are identical everywhere.
+**Everything is the user's choice, nothing is discovered.** Settings (Settings → Magic Windows):
+- `magic.provider`: `anthropic` | `openai`;
+- `magic.anthropic.model`, `magic.openai.model`: one model per provider, so switching keeps each choice. The old `magic.model` carries over as `magic.anthropic.model`; `magic.baseUrl` is ignored.
 
-| Backend | How | Notes |
-|---|---|---|
-| Anthropic, OpenAI, Google, OpenRouter | Vercel AI SDK v7 (plain ESM, runs under type stripping), `streamText` with tools and `stopWhen` | system prompt and tool definitions cached (`cache_control`; automatic on OpenAI); cache warmed when the prompt sheet opens |
-| Local (Ollama, LM Studio) | AI SDK `openai-compatible` | `magic.baseUrl`; small local models are weak at tool loops, so exploring falls back to off |
-| Claude Code login | spawn `claude -p --output-format stream-json --include-partial-messages --system-prompt … --tools "" --mcp-config <cmd magic server> --allowedTools "mcp__cmd__*" --strict-mcp-config` from an empty cwd | for users with no API key. Built-in tools are off, so it can only use ours. Slower startup; it can't use `--bare` because that skips the login. Uses the user's own CLI, which stays within the Agent SDK terms |
-| Codex login | `codex exec --json --sandbox read-only` with the same MCP server | same idea |
+API keys are **secrets**, not settings (`packages/protocol/src/secrets.ts`): `magic.anthropic.apiKey`, `magic.openai.apiKey`. The core keeps them in `$CMD_HOME/secrets.json` (mode 0600, not in the config folder people sync), never in `settings.json`. Clients only see whether each is set and its last four characters (`secrets.status`, `secrets.updated`); `secrets.set` stores or removes one. The Settings window shows them as rows beside their model; the CLI stores one from stdin (`pbpaste | cmd settings secret magic.openai.apiKey`), so it stays out of argv and shell history. Environment variables (`ANTHROPIC_API_KEY`, …) are not read, and the `cmd magic` prompt lab uses the same settings and stored keys as the app.
+
+**Model lists** come from the providers, with the user's key, so they show exactly what that key can use (`magic.models { provider }`, cached 10 minutes per key; the popup's ↻ asks again):
+- Anthropic `GET /v1/models` (`x-api-key`, `anthropic-version`): id, display name, release date, newest first, paginated with `after_id`. Every entry is a chat model.
+- OpenAI `GET /v1/models` (Bearer): id and creation time only, and everything the key can call. cmd keeps chat models by id: no embeddings, audio, realtime, image, moderation or search models, no dated snapshots (their alias is listed), nothing older than GPT-4o.
+- models.dev (`https://models.dev/api.json`) has richer metadata (tool calling, limits, prices) but is about 5 MB and says nothing about a given key's access, so it isn't used.
+
+A chosen model the list doesn't have stays selected and is marked "not available to this key". With no key, the window says which key to add and where.
+
+Retired: the `auto` provider, the Claude Code login backend (`claude -p` with an MCP relay for the tools) and OpenAI-compatible endpoints (`magic.baseUrl`). They depended on what happened to be installed or set in the environment.
 
 **Fast tier by default:**
 - Haiku 4.5 without thinking: about 0.4–0.6 s to first token, 85–200 tok/s.
@@ -151,8 +155,6 @@ The tools always execute in the core, so the policy, sandbox and budget are iden
 Thinking stays off on this path; reasoning modes add about 20 s before the first token. The fast tier also drives the agent loop: tool turns are short, so exploring costs one round trip per step (about 1 s plus the command's own time), not a long generation. A typical "VPN status" run takes 3–5 steps, roughly 5–10 s before the widget starts streaming, and the live trace makes that wait legible.
 
 **Quality tier** (e.g. Sonnet at low effort) for ✦ Polish, which also includes a screenshot critique via `capturePage`. It also takes over when the fast tier runs out of budget or fails to repair a widget.
-
-`magic.provider: auto` picks the first available of: a configured API key, the `claude` CLI, the `codex` CLI. Keys live in the macOS Keychain (see the Secrets section of docs/06), never in `settings.json`.
 
 ## Security
 
@@ -225,8 +227,6 @@ Methods:
 "magic.refine":  { params: { id: WindowId; prompt: string }; result: null };
 "magic.cancel":  { params: { id: WindowId }; result: null };
 "magic.approve": { params: { id: WindowId; what: string }; result: null };
-/** The agent's tools, for the MCP server that CLI backends use (scoped to one running window). */
-"magic.tool":    { params: { id: WindowId; tool: string; input: unknown }; result: unknown };
 "magic.recipes": { params: {}; result: Recipe[] };
 ```
 
@@ -248,7 +248,7 @@ Core module `packages/core/src/magic/`:
 - `recipes.ts` (`$CMD_CONFIG_DIR/recipes/*.json`).
 
 Settings:
-- `magic.provider`, `magic.model`, `magic.qualityModel`, `magic.baseUrl`;
+- `magic.provider`, `magic.anthropic.model`, `magic.openai.model` (and the API keys, as secrets; see Providers); later `magic.qualityModel`;
 - `magic.autoRepair`;
 - `magic.explore` (`ask` | `allow` | `off`), `magic.denyPaths`, `magic.maxSteps`;
 - `magic.commandPolicy`: allow and deny rules, in the `open.handlers` style.

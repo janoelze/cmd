@@ -9,12 +9,14 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { cmdHome } from "@cmd/protocol/node";
+import { DEFAULT_SETTINGS, MAGIC_PROVIDERS, parseJsonc, resolveSettings, type Settings } from "@cmd/protocol";
+import { cmdHome, configDir } from "@cmd/protocol/node";
 import {
   backendFor,
+  isProvider,
+  readSecrets,
   runMagic,
   sandboxAvailable,
-  serveMcp,
   SIZES,
   widgetHtml,
   widgetTokens,
@@ -32,11 +34,9 @@ usage: cmd magic <request…> [options]
        cmd magic view <run dir…>     re-render saved runs (dark + light screenshots), no model
        cmd magic eval [case…]        run the eval cases against prompt variants (see --help)
 
-  --provider P      anthropic | openai-compatible | claude-cli
-                    (default: anthropic with ANTHROPIC_API_KEY, else your claude login)
-  --model M         default claude-opus-5-5
-  --effort E        low | medium | high (Anthropic API; default low)
-  --base-url U      openai-compatible endpoint, e.g. http://localhost:11434/v1
+  --provider P      anthropic | openai (default: magic.provider in your settings)
+  --model M         default: that provider's model in your settings
+  --effort E        low | medium | high, for models that take it (default low)
   --system FILE     use FILE instead of prompt/prompt.md (prompt variants)
   --no-explore      don't let the agent look around this Mac
   --no-fast         always use the agent (skip the JSON / command fast paths)
@@ -48,7 +48,10 @@ usage: cmd magic <request…> [options]
   --json            print events as NDJSON instead of the trace
   --unsandboxed     run commands without sandbox-exec (only the policy guards them)
 
-env: ANTHROPIC_API_KEY, CMD_MAGIC_API_KEY (openai-compatible), CMD_MAGIC_UNSANDBOXED=1`;
+The API key is the one stored in Settings → Magic Windows (or with
+\`cmd settings secret KEY\`); nothing is read from the environment.
+
+env: CMD_MAGIC_UNSANDBOXED=1`;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const THEMES_DIR = path.resolve(here, "../../../apps/desktop/src/renderer/src/themes");
@@ -75,8 +78,23 @@ function systemAppearance(): "dark" | "light" {
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "run";
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "").replace("T", "-");
 
-export function pickBackend(o: { provider?: string; model?: string; effort?: string; baseUrl?: string }): Backend {
-  return backendFor({ provider: o.provider, model: o.model, effort: o.effort, baseURL: o.baseUrl });
+/** The user's settings file as the core would read it (the prompt lab runs without a core). */
+function userSettings(): Settings {
+  try {
+    return resolveSettings(parseJsonc(fs.readFileSync(path.join(configDir(), "settings.json"), "utf8")) as Record<string, unknown>).settings;
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+/** The provider, model and stored key the app would use; --provider and --model override the first two. */
+export function pickBackend(o: { provider?: string; model?: string; effort?: string }): Backend {
+  const s = userSettings();
+  const provider = o.provider ?? s["magic.provider"];
+  const p = isProvider(provider) ? MAGIC_PROVIDERS[provider] : undefined;
+  const effort = o.effort === "low" || o.effort === "medium" || o.effort === "high" ? o.effort : undefined;
+  if (o.effort && !effort) throw new Error(`--effort: expected low, medium or high`);
+  return backendFor({ provider, model: o.model ?? (p ? s[p.modelSetting] : ""), apiKey: p ? readSecrets(path.join(cmdHome(), "secrets.json"))[p.keySecret] : undefined, effort });
 }
 
 // ── trace printing ──────────────────────────────────────
@@ -281,10 +299,6 @@ async function viewCommand(dirs: string[]): Promise<number> {
 // ── command ─────────────────────────────────────────────
 
 export async function magicCommand(argv: string[]): Promise<number> {
-  if (argv[0] === "mcp") {
-    await serveMcp(); // kept for older relay configs; backends start mcp-main.ts
-    return 0;
-  }
   if (argv[0] === "view") return viewCommand(argv.slice(1));
   if (argv[0] === "eval") return (await import("./magic-eval.ts")).evalCommand(argv.slice(1));
   const { values: o, positionals } = parseArgs({
@@ -294,7 +308,6 @@ export async function magicCommand(argv: string[]): Promise<number> {
       provider: { type: "string" },
       model: { type: "string" },
       effort: { type: "string" },
-      "base-url": { type: "string" },
       system: { type: "string" },
       "no-explore": { type: "boolean" },
       "no-fast": { type: "boolean" },
@@ -321,7 +334,13 @@ export async function magicCommand(argv: string[]): Promise<number> {
   const theme = themes.get(o.theme ?? systemAppearance()) ?? themes.get("dark")!;
   if (o.theme && !themes.has(o.theme)) process.stderr.write(dim(`  unknown theme ${o.theme}; using ${theme === themes.get("dark") ? "dark" : "?"} (have: ${[...themes.keys()].join(", ")})\n`));
 
-  const backend = pickBackend({ provider: o.provider, model: o.model, effort: o.effort, baseUrl: o["base-url"] });
+  let backend: Backend;
+  try {
+    backend = pickBackend({ provider: o.provider, model: o.model, effort: o.effort });
+  } catch (e) {
+    process.stderr.write(red(`  ✗ ${(e as Error).message}\n`));
+    return 1;
+  }
   const events: MagicEvent[] = [];
   const print = o.json ? (e: MagicEvent) => console.log(JSON.stringify(e)) : printer();
   const ac = new AbortController();

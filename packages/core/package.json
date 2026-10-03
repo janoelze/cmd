@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.71",
-    "@ai-sdk/openai-compatible": "^3.0.62",
+    "@ai-sdk/openai": "^4.0.83",
     "@cmd/protocol": "workspace:*",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",

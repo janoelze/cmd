@@ -3,7 +3,8 @@
 
 import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, Pane, PaneId, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
-import type { MagicProgress } from "./magic.ts";
+import type { MagicModel, MagicProgress } from "./magic.ts";
+import type { SecretsStatus } from "./secrets.ts";
 
 export interface CoreInfo {
   pid: number;
@@ -105,6 +106,10 @@ export interface Methods {
   "settings.get": { params: {}; result: SettingsSnapshot };
   "settings.set": { params: { key: string; value: unknown }; result: SettingsSnapshot };
   "settings.reset": { params: { key: string }; result: SettingsSnapshot };
+  /** Which secrets (API keys) are set, never their values (secrets.ts). */
+  "secrets.status": { params: {}; result: SecretsStatus };
+  /** Store a secret, or remove it with null. */
+  "secrets.set": { params: { key: string; value: string | null }; result: SecretsStatus };
 
   /**
    * Open a window of a registered type. `input` is the type's create input:
@@ -161,6 +166,8 @@ export interface Methods {
   "magic.cancel": { params: { id: WindowId }; result: null };
   /** Run the widget's data source now (then on its interval again). */
   "magic.refresh": { params: { id: WindowId }; result: null };
+  /** The models a provider offers to the user's stored API key, newest first (fails without a key). */
+  "magic.models": { params: { provider: string; refresh?: boolean }; result: MagicModel[] };
   /** Allow (or decline) the media origins the widget asks for (MagicState.media); the frame's CSP opens only allowed ones. */
   "magic.media": { params: { id: WindowId; allow: boolean }; result: null };
 
@@ -229,6 +236,7 @@ export type CoreEvent =
   | { type: "agent.updated"; agent: Agent }
   | { type: "agent.removed"; agentId: AgentId }
   | { type: "settings.updated"; snapshot: SettingsSnapshot }
+  | { type: "secrets.updated"; status: SecretsStatus }
   | { type: "search.status"; status: SearchStatus }
   | { type: "window.updated"; window: AppWindow }
   | { type: "window.removed"; id: WindowId }

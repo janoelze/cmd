@@ -45,7 +45,7 @@ usage: cmd magic eval [CASE…] [options]
   --tag T               only cases with this tag (fast, portable, local)
   --repeat N            runs per case and variant (default 1)
   -j N                  runs in parallel (default 3)
-  --provider/--model/--effort/--base-url  as for cmd magic
+  --provider/--model/--effort  as for cmd magic
   --unsandboxed         as for cmd magic
   --out DIR             default $CMD_HOME/magic/evals/<time>
 
@@ -98,7 +98,6 @@ export async function evalCommand(argv: string[]): Promise<number> {
       provider: { type: "string" },
       model: { type: "string" },
       effort: { type: "string" },
-      "base-url": { type: "string" },
       unsandboxed: { type: "boolean" },
       out: { type: "string" },
       help: { type: "boolean", short: "h" },
@@ -122,7 +121,7 @@ export async function evalCommand(argv: string[]): Promise<number> {
   const out = path.resolve(o.out ?? path.join(cmdHome(), "magic", "evals", new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "").replace("T", "-")));
   const themes = await loadThemes();
   const shotThemes = [themes.get("dark")!, themes.get("light")!];
-  const backend = pickBackend({ provider: o.provider, model: o.model, effort: o.effort, baseUrl: o["base-url"] });
+  const backend = pickBackend({ provider: o.provider, model: o.model, effort: o.effort });
   const unsandboxed = o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
 
   const jobs = variants.flatMap((v) => cases.flatMap((c) => Array.from({ length: repeat }, (_, rep) => ({ v, c, rep }))));

@@ -30,6 +30,7 @@ const core = new Core({
   socketPath,
   dbPath: path.join(home, "cmd.sqlite"),
   settingsPath: path.join(configDir(), "settings.json"),
+  secretsPath: path.join(home, "secrets.json"),
   shellRulesFile: path.join(home, "shell-open.zsh"),
   ptyFactory: await nodePtyFactory(),
   inspector: procinfo.available ? (pid) => procinfo.query(pid) : null,

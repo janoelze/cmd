@@ -62,7 +62,7 @@ Press ⇧⌘M and type what the window should show: a question, a URL, some JSON
 - **Change it by asking.** Right-click a widget and choose Change… (or press ⌘L), then type in its title bar: "bigger numbers", "make it a line chart", "only failed runs".
 - **Or it's a command.** When a terminal program already does the job (`btop`, `log stream`), you get the command, typed into a new terminal for you to run.
 
-**Setup.** If `claude` works in your shell, there is nothing to configure: cmd uses your Claude Code login. With `ANTHROPIC_API_KEY` in cmd's environment it uses the Anthropic API instead, and an OpenAI-compatible endpoint (OpenRouter, Ollama, LM Studio, …) works too. Choose the provider and model under Settings → Magic Windows.
+**Setup.** Magic windows use your own API key, from Anthropic or OpenAI. Under Settings → Magic Windows, pick the provider, paste its key and choose a model: the list shows the models your key can use. Keys are stored by cmd outside `settings.json`, readable only by you, and nothing is read from your environment. From a terminal: `pbpaste | cmd settings secret magic.anthropic.apiKey`.
 
 **Safety.** The agent can only read. Every command it runs, and every command a widget refreshes with, must pass a read-only policy and runs in a sandbox that blocks writes. Your keys, keychains, browser profiles and `.env` files stay off limits to it. Logged-in tools like `gh` and `glab` may use your login to fetch data, but tokens never reach the model. Widgets run in a sandboxed frame without network access.
 

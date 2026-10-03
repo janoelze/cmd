@@ -21,9 +21,14 @@ type Def = Common &
         default: string;
         multiline?: boolean;
         placeholder?: string;
-        /** font: previews itself in that font. theme: a popup of the UI's registered themes of `appearance`. */
-        control?: "font" | "theme";
+        /**
+         * font: previews itself in that font. theme: a popup of the UI's registered
+         * themes of `appearance`. model: a popup of `provider`'s models that the
+         * user's API key can use (magic.models).
+         */
+        control?: "font" | "theme" | "model";
         appearance?: "dark" | "light";
+        provider?: "anthropic" | "openai";
       }
     | { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string }
     | { type: "boolean"; default: boolean }
@@ -192,15 +197,29 @@ export const SETTINGS_SCHEMA = {
   "agents.copilot.command": { title: "Copilot CLI command", type: "string", default: "copilot", description: "Command used to resume GitHub Copilot CLI sessions." },
 
   "magic.provider": {
-    title: "Model provider",
-    labels: { auto: "Automatic", anthropic: "Anthropic API", "openai-compatible": "OpenAI-compatible", "claude-cli": "Claude Code login" },
+    title: "Provider",
     type: "enum",
-    default: "auto",
-    options: ["auto", "anthropic", "openai-compatible", "claude-cli"],
-    description: "Who makes Magic windows. Automatic uses the Anthropic API when ANTHROPIC_API_KEY is set, else your Claude Code login.",
+    default: "anthropic",
+    options: ["anthropic", "openai"],
+    labels: { anthropic: "Anthropic", openai: "OpenAI" },
+    description: "Who makes Magic windows. Each provider uses its own API key and model, set below.",
   },
-  "magic.model": { title: "Model", type: "string", default: "claude-opus-5-5", placeholder: "claude-opus-5-5", description: "Model id for Magic windows, e.g. claude-opus-5-5, claude-haiku-4-5, or your endpoint's model name." },
-  "magic.baseUrl": { title: "Endpoint", type: "string", default: "", placeholder: "http://localhost:11434/v1", description: "OpenAI-compatible endpoint (Ollama, LM Studio, OpenRouter, …); its key comes from CMD_MAGIC_API_KEY." },
+  "magic.anthropic.model": {
+    title: "Anthropic model",
+    type: "string",
+    control: "model",
+    provider: "anthropic",
+    default: "claude-opus-5-5",
+    description: "The model Magic windows use with Anthropic. The list shows the models your API key can use.",
+  },
+  "magic.openai.model": {
+    title: "OpenAI model",
+    type: "string",
+    control: "model",
+    provider: "openai",
+    default: "gpt-5.5",
+    description: "The model Magic windows use with OpenAI. The list shows the chat models your API key can use.",
+  },
   "updates.mode": {
     title: "Updates",
     type: "enum",
@@ -236,13 +255,17 @@ export const SETTINGS_GROUPS = {
 export const RENAMED_SETTINGS: Readonly<Record<string, SettingKey>> = {
   "terminal.fontFamily": "font.code",
   "terminal.fontSize": "font.codeSize",
+  "magic.model": "magic.anthropic.model",
 };
 
 /** The current name of a key (renamed keys map to their new name). */
 export const currentKey = (key: string): string => RENAMED_SETTINGS[key] ?? key;
 
-/** Keys that no longer exist; ignored without an error (ui.sidebarWidth: drag the sidebar edge). */
-export const REMOVED_SETTINGS: ReadonlySet<string> = new Set(["ui.sidebarWidth"]);
+/**
+ * Keys that no longer exist; ignored without an error (ui.sidebarWidth: drag the
+ * sidebar edge; magic.baseUrl: only Anthropic and OpenAI are providers now).
+ */
+export const REMOVED_SETTINGS: ReadonlySet<string> = new Set(["ui.sidebarWidth", "magic.baseUrl"]);
 
 export const APPLIES_LABEL: Record<SettingApplies, string> = {
   newTerminals: "new terminals only",

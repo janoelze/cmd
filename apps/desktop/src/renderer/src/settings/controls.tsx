@@ -1,5 +1,5 @@
 // Controls for the Settings window: switch, segmented control, popup, number
-// field and text field. Each shows the setting's current value
+// field, text field and secret field. Each shows the setting's current value
 // and calls onChange with a valid one; text-like fields commit on Enter or blur
 // (Escape reverts).
 
@@ -40,16 +40,18 @@ export function Popup({
   value,
   options,
   labels,
+  disabled,
   onChange,
 }: {
   value: string;
   options: readonly string[];
   labels?: Readonly<Record<string, string>>;
+  disabled?: boolean;
   onChange: (v: string) => void;
 }) {
   return (
     <span className="sw-popup">
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => (
           <option key={o} value={o}>
             {labels?.[o] ?? o}
@@ -153,5 +155,68 @@ export function TextField({
         else if (e.key === "Escape") setDraft(value);
       }}
     />
+  );
+}
+
+/**
+ * A secret (an API key): never shown. Set, it reads "Set · …abcd" with Change and
+ * Remove; otherwise (or while changing) a password field that saves on Enter.
+ */
+export function SecretField({
+  set,
+  hint,
+  placeholder,
+  onSave,
+}: {
+  set: boolean;
+  hint?: string;
+  placeholder?: string;
+  onSave: (v: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (editing) ref.current?.focus();
+  }, [editing]);
+  const done = () => (setEditing(false), setDraft(""));
+  if (set && !editing) {
+    return (
+      <span className="sw-secret">
+        <span className="sw-secret-set">Set{hint ? ` · ${hint}` : ""}</span>
+        <button type="button" className="sw-button" onClick={() => setEditing(true)}>
+          Change…
+        </button>
+        <button type="button" className="sw-button" onClick={() => onSave(null)}>
+          Remove
+        </button>
+      </span>
+    );
+  }
+  const save = () => {
+    if (draft.trim()) onSave(draft.trim());
+    done();
+  };
+  return (
+    <span className="sw-secret">
+      <input
+        ref={ref}
+        className="sw-field"
+        type="password"
+        autoComplete="off"
+        spellCheck={false}
+        value={draft}
+        placeholder={placeholder}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          else if (e.key === "Escape") done();
+        }}
+        onBlur={() => !draft.trim() && done()}
+      />
+      <button type="button" className="sw-button" disabled={!draft.trim()} onMouseDown={(e) => e.preventDefault()} onClick={save}>
+        Save
+      </button>
+    </span>
   );
 }

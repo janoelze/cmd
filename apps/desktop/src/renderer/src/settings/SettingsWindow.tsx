@@ -2,13 +2,22 @@
 // (SETTINGS_GROUPS) plus Keyboard Shortcuts, each page one dense list of rows
 // that shows the key beside the title (what you'd type in `cmd settings set`).
 // The control comes from the key's type and display hints; nothing is hand-wired.
+// Secrets (API keys, SECRETS) appear as rows too, next to the settings that
+// share their prefix, but are stored by the core outside settings.json.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   APPLIES_LABEL,
+  MAGIC_PROVIDERS,
+  SECRETS,
   SETTINGS_GROUPS,
   SETTINGS_SCHEMA,
   settingTitle,
+  type MagicModel,
+  type MagicProvider,
+  type SecretDef,
+  type SecretKey,
+  type SecretsStatus,
   type SettingDef,
   type SettingKey,
   type SearchStatus,
@@ -19,7 +28,7 @@ import { Symbol } from "../components/Symbol.tsx";
 import { IndexRing } from "../components/IndexRing.tsx";
 import { useKeybindings } from "../keybindings.ts";
 import { cmd } from "../bridge.ts";
-import { NumberField, Popup, Segmented, Switch, TextField } from "./controls.tsx";
+import { NumberField, Popup, SecretField, Segmented, Switch, TextField } from "./controls.tsx";
 import { useSettings } from "./useSettings.ts";
 import { About } from "./About.tsx";
 import { allThemes } from "../themes/registry.ts";
@@ -47,8 +56,23 @@ const ICONS: Record<Page, string> = {
 
 const PAGES: Page[] = [...(Object.keys(SETTINGS_GROUPS) as Group[]), "keyboard", "about"];
 const pageTitle = (p: Page) => (p === "keyboard" ? "Keyboard Shortcuts" : p === "about" ? "About" : SETTINGS_GROUPS[p]);
-const groupOf = (k: SettingKey) => k.split(".")[0] as Group;
+const groupOf = (k: SettingKey | SecretKey) => k.split(".")[0] as Group;
 const KEYS = Object.keys(SETTINGS_SCHEMA) as SettingKey[];
+const SECRET_KEYS = Object.keys(SECRETS) as SecretKey[];
+
+type Item = { kind: "setting"; k: SettingKey } | { kind: "secret"; k: SecretKey };
+const prefixOf = (k: string) => k.split(".").slice(0, -1).join(".") + ".";
+/** Rows in schema order, each secret just before the first setting with its prefix (the key above "magic.anthropic.model"). */
+function itemsOf(keys: SettingKey[], secrets: SecretKey[]): Item[] {
+  const out: Item[] = [];
+  const placed = new Set<SecretKey>();
+  for (const k of keys) {
+    for (const sk of secrets) if (!placed.has(sk) && prefixOf(sk) === prefixOf(k)) (out.push({ kind: "secret", k: sk }), placed.add(sk));
+    out.push({ kind: "setting", k });
+  }
+  for (const sk of secrets) if (!placed.has(sk)) out.push({ kind: "secret", k: sk });
+  return out;
+}
 
 const COMMAND_GROUPS: Record<string, string> = { app: "App", file: "File", edit: "Edit", view: "View", session: "Sessions", help: "Help" };
 
@@ -65,9 +89,13 @@ const matches = (k: SettingKey, q: string) => {
   const d: SettingDef = SETTINGS_SCHEMA[k];
   return [settingTitle(k), d.description, k].some((t) => t.toLowerCase().includes(q));
 };
+const secretMatches = (k: SecretKey, q: string) => {
+  const d: SecretDef = SECRETS[k];
+  return [d.title, d.description, k].some((t) => t.toLowerCase().includes(q));
+};
 
 export function SettingsWindow() {
-  const { snapshot: snap, connected, search } = useSettings();
+  const { snapshot: snap, connected, search, secrets } = useSettings();
   const [page, setPage] = useState<Page>(initialPage);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -91,31 +119,40 @@ export function SettingsWindow() {
   };
   const reset = (key: SettingKey) => void cmd.call("settings.reset", { key }).catch((err: Error) => setError(err.message));
 
+  const saveSecret = (key: SecretKey, value: string | null) =>
+    void cmd.call("secrets.set", { key, value }).then(() => setError(null), (err: Error) => setError(err.message));
+
   const hits = useMemo(() => (q ? KEYS.filter((k) => matches(k, q)) : []), [q]);
-  const hitGroups = new Set(hits.map(groupOf));
+  const secretHits = useMemo(() => (q ? SECRET_KEYS.filter((k) => secretMatches(k, q)) : []), [q]);
+  const hitGroups = new Set([...hits, ...secretHits].map(groupOf));
   const errors = [...snap.errors, ...(error ? [error] : [])];
 
-  const rows = (keys: SettingKey[]) =>
-    keys.map((k) => (
-      <Row
-        key={k}
-        k={k}
-        settings={snap.settings}
-        overridden={snap.overrides.includes(k)}
-        onSave={(v) => void save(k, v)}
-        onReset={() => reset(k)}
-      />
-    ));
+  const rows = (items: Item[]) =>
+    items.map((it) =>
+      it.kind === "secret" ? (
+        <SecretRow key={it.k} k={it.k} status={secrets?.[it.k]} onSave={(v) => saveSecret(it.k, v)} />
+      ) : (
+        <Row
+          key={it.k}
+          k={it.k}
+          settings={snap.settings}
+          secrets={secrets}
+          overridden={snap.overrides.includes(it.k)}
+          onSave={(v) => void save(it.k, v)}
+          onReset={() => reset(it.k)}
+        />
+      ),
+    );
 
   let body;
   if (q) {
-    body = hits.length ? (
+    body = hits.length || secretHits.length ? (
       (Object.keys(SETTINGS_GROUPS) as Group[])
         .filter((g) => hitGroups.has(g))
         .map((g) => (
           <section key={g}>
             <h2 className="sw-section-title">{SETTINGS_GROUPS[g]}</h2>
-            <div className="sw-list">{rows(hits.filter((k) => groupOf(k) === g))}</div>
+            <div className="sw-list">{rows(itemsOf(hits.filter((k) => groupOf(k) === g), secretHits.filter((k) => groupOf(k) === g)))}</div>
           </section>
         ))
     ) : (
@@ -130,7 +167,7 @@ export function SettingsWindow() {
     const changed = keys.filter((k) => snap.overrides.includes(k));
     body = (
       <>
-        <div className="sw-list">{rows(keys)}</div>
+        <div className="sw-list">{rows(itemsOf(keys, SECRET_KEYS.filter((k) => groupOf(k) === page)))}</div>
         <div className="sw-page-foot">
           {page === "search" && <IndexStatusFoot status={search} enabled={snap.settings["search.enabled"]} />}
           <button className="sw-button" disabled={!changed.length} onClick={() => changed.forEach(reset)}>
@@ -197,12 +234,12 @@ export function SettingsWindow() {
   );
 }
 
-function Row(p: { k: SettingKey; settings: Settings; overridden: boolean; onSave: (v: unknown) => void; onReset: () => void }) {
+function Row(p: { k: SettingKey; settings: Settings; secrets: SecretsStatus | null; overridden: boolean; onSave: (v: unknown) => void; onReset: () => void }) {
   const def: SettingDef = SETTINGS_SCHEMA[p.k];
   const value = p.settings[p.k];
   const title = settingTitle(p.k);
   // Text values can be long (font lists, commands): the field goes under the label.
-  const stacked = def.type === "string" && def.control !== "theme";
+  const stacked = def.type === "string" && def.control !== "theme" && def.control !== "model";
 
   let control;
   if (def.type === "boolean") control = <Switch value={value as boolean} onChange={p.onSave} label={title} />;
@@ -214,6 +251,10 @@ function Row(p: { k: SettingKey; settings: Settings; overridden: boolean; onSave
         <Popup value={value as string} options={def.options} labels={def.labels} onChange={p.onSave} />
       );
   else if (def.type === "string" && def.control === "theme") control = <ThemePopup value={value as string} appearance={def.appearance} onChange={p.onSave} />;
+  else if (def.type === "string" && def.control === "model" && def.provider) {
+    const key = p.secrets?.[MAGIC_PROVIDERS[def.provider].keySecret];
+    control = <ModelPopup provider={def.provider} value={value as string} keySet={key?.set} keyHint={key?.hint} onChange={p.onSave} />;
+  }
   else if (def.type === "number")
     control = <NumberField value={value as number} min={def.min} max={def.max} step={def.step} unit={def.unit} onChange={p.onSave} />;
   else
@@ -245,6 +286,70 @@ function Row(p: { k: SettingKey; settings: Settings; overridden: boolean; onSave
         {control}
       </div>
     </div>
+  );
+}
+
+/** An API key (SECRETS): set or not, never shown; stored by the core outside settings.json. */
+function SecretRow(p: { k: SecretKey; status: { set: boolean; hint?: string } | undefined; onSave: (v: string | null) => void }) {
+  const def: SecretDef = SECRETS[p.k];
+  return (
+    <div className="sw-row">
+      <div className="sw-row-text">
+        <div className="sw-row-title">
+          {def.title}
+          <span className="sw-row-key">{p.k}</span>
+        </div>
+        <div className="sw-row-desc">{def.description} Stored by cmd outside settings.json, readable only by you.</div>
+      </div>
+      <div className="sw-row-control">
+        <SecretField set={!!p.status?.set} hint={p.status?.hint} placeholder={def.placeholder} onSave={p.onSave} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The models the provider offers to the user's key (magic.models), newest
+ * first, listed again when the key changes. A value the list doesn't have stays
+ * selectable, marked, so a stale choice is visible rather than silently replaced.
+ */
+function ModelPopup(p: { provider: MagicProvider; value: string; keySet: boolean | undefined; keyHint?: string; onChange: (v: string) => void }) {
+  const [models, setModels] = useState<MagicModel[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const seq = useRef(0);
+  const load = (refresh = false) => {
+    const n = ++seq.current;
+    setError(null);
+    if (!p.keySet) return (setModels(null), setLoading(false));
+    setLoading(true);
+    cmd.call("magic.models", { provider: p.provider, refresh }).then(
+      (list) => n === seq.current && (setModels(list), setLoading(false)),
+      (e: Error) => n === seq.current && (setModels(null), setError(e.message), setLoading(false)),
+    );
+  };
+  useEffect(() => load(), [p.provider, p.keySet, p.keyHint]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const list = models ?? [];
+  const options = list.map((m) => m.id);
+  const labels: Record<string, string> = Object.fromEntries(list.map((m) => [m.id, m.name]));
+  if (!options.includes(p.value)) {
+    options.unshift(p.value);
+    labels[p.value] = models ? `${p.value} (not available to this key)` : p.value;
+  }
+  const note = !p.keySet ? "Add the API key above to choose" : loading && !models ? "Loading models…" : error;
+  return (
+    <span className="sw-model">
+      {note && <span className={`sw-model-note${error ? " error" : ""}`}>{note}</span>}
+      <span title={p.value}>
+        <Popup value={p.value} options={options} labels={labels} disabled={!models} onChange={p.onChange} />
+      </span>
+      {p.keySet && (
+        <button type="button" className="sw-button" title="List the models again" disabled={loading} onClick={() => load(true)}>
+          <Symbol name="arrow.clockwise" size={10} weight="semibold" />
+        </button>
+      )}
+    </span>
   );
 }
 

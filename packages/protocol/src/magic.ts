@@ -4,6 +4,22 @@
 
 import { DEFAULT_SETTINGS } from "./settings.ts";
 
+/** The model providers Magic windows can use; each has its own API key (secrets.ts) and model setting. */
+export const MAGIC_PROVIDERS = {
+  anthropic: { title: "Anthropic", keySecret: "magic.anthropic.apiKey", modelSetting: "magic.anthropic.model" },
+  openai: { title: "OpenAI", keySecret: "magic.openai.apiKey", modelSetting: "magic.openai.model" },
+} as const;
+export type MagicProvider = keyof typeof MAGIC_PROVIDERS;
+
+/** A model a provider offers to the user's key (magic.models). */
+export interface MagicModel {
+  id: string;
+  /** Display name, where the provider gives one. */
+  name: string;
+  /** Release time, ms (newest first in lists). */
+  created?: number;
+}
+
 export type MagicSource = { type: "fetch"; url: string; headers?: Record<string, string> } | { type: "command"; command: string; cwd?: string };
 
 /** One agent step as the window shows it. */

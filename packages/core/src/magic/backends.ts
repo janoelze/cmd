@@ -1,22 +1,14 @@
-// Model backends for the Magic agent. Each runs the tool loop to its final text
-// answer; the tools themselves always execute in-process through `exec` (see
-// tools.ts), so the policy, the sandbox and the budget are the same everywhere.
-//
-// - "ai": the Vercel AI SDK. One loop for every API provider: Anthropic, and any
-//   OpenAI-compatible endpoint (OpenAI, OpenRouter, Groq, Cerebras, Ollama, LM Studio).
-// - "claude-cli": the user's own `claude` login, for people without an API key.
-//   Claude Code runs its own loop with its built-in tools off; it reaches ours
-//   through an MCP server (`cmd magic mcp`) that relays each call back here.
+// Model backends for the Magic agent: the Vercel AI SDK, with the provider and
+// model the user chose (magic.provider, magic.<provider>.model) and the API key
+// they stored (secrets). Nothing is discovered: no environment variables, no
+// CLI logins. The loop runs here; the tools always execute in-process through
+// `exec` (see tools.ts), so the policy, the sandbox and the budget are the same
+// for every provider.
 
-import fs from "node:fs";
-import net from "node:net";
-import os from "node:os";
-import path from "node:path";
-import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
 // The AI SDK is imported when a run starts, not with the core: a problem with
 // it (or with a provider package) can break Magic windows, never the core.
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
+import { MAGIC_PROVIDERS, type MagicProvider } from "@cmd/protocol";
 import type { ToolOutput, ToolSpec } from "./tools.ts";
 
 export interface Usage {
@@ -56,12 +48,10 @@ export interface Backend {
 // ── AI SDK ───────────────────────────────────────────────
 
 export interface AiBackendOptions {
-  provider: "anthropic" | "openai-compatible";
+  provider: MagicProvider;
   model: string;
-  apiKey?: string;
-  /** openai-compatible: the endpoint, e.g. http://localhost:11434/v1 (Ollama). */
-  baseURL?: string;
-  /** Anthropic models that take it: low | medium | high. */
+  apiKey: string;
+  /** How hard the model thinks: low keeps Magic fast. Sent only to models that take it. */
   effort?: "low" | "medium" | "high";
 }
 
@@ -70,14 +60,18 @@ async function languageModel(o: AiBackendOptions): Promise<LanguageModel> {
     const { createAnthropic } = await import("@ai-sdk/anthropic");
     return createAnthropic({ apiKey: o.apiKey })(o.model);
   }
-  const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
-  return createOpenAICompatible({ name: "magic", baseURL: o.baseURL!, apiKey: o.apiKey })(o.model);
+  const { createOpenAI } = await import("@ai-sdk/openai");
+  return createOpenAI({ apiKey: o.apiKey })(o.model); // the Responses API
+}
+
+/** Effort for the models that take it: Anthropic's newer models, OpenAI's reasoning models. */
+function effortOptions(o: AiBackendOptions): Record<string, Record<string, string>> | undefined {
+  const effort = o.effort ?? "low";
+  if (o.provider === "anthropic") return /haiku|claude-3|-4-5|-4-1|-4-0|sonnet-4-0/.test(o.model) ? undefined : { anthropic: { effort } };
+  return /^(o\d|gpt-5|gpt-6)/.test(o.model) ? { openai: { reasoningEffort: effort } } : undefined;
 }
 
 export function aiBackend(o: AiBackendOptions): Backend {
-  if (o.provider === "openai-compatible" && !o.baseURL) throw new Error("openai-compatible needs a base URL");
-  // Haiku 4.5 and older models reject `effort`.
-  const takesEffort = o.provider === "anthropic" && !/haiku|claude-3|-4-5|-4-1|-4-0|sonnet-4-0/.test(o.model);
   return {
     name: o.provider,
     model: o.model,
@@ -106,7 +100,7 @@ export function aiBackend(o: AiBackendOptions): Backend {
         prepareStep: ({ stepNumber }) => (stepNumber >= r.maxSteps ? { activeTools: [] } : {}),
         abortSignal: r.signal,
         maxOutputTokens: 16_000,
-        providerOptions: takesEffort && o.effort ? { anthropic: { effort: o.effort } } : undefined,
+        providerOptions: effortOptions(o),
       });
       let text = "";
       for await (const part of result.fullStream) {
@@ -136,181 +130,24 @@ export function aiBackend(o: AiBackendOptions): Backend {
   };
 }
 
-// ── claude CLI ───────────────────────────────────────────
-
-export interface ClaudeCliOptions {
-  model: string;
-  /** The claude binary; default: `claude` on PATH, else ~/.local/bin/claude. */
-  bin?: string;
-  /** argv that starts the MCP relay server; default: this Node running mcp-main.ts. */
-  mcpCommand?: string[];
-}
-
-const MCP_MAIN = path.join(path.dirname(fileURLToPath(import.meta.url)), "mcp-main.ts");
-
-// Windows: claude.exe (the native installer). A claude.cmd shim would need a shell to run.
-const CLAUDE = process.platform === "win32" ? ["claude.exe"] : ["claude"];
-
-function findClaude(): string {
-  for (const dir of [...(process.env.PATH ?? "").split(path.delimiter), path.join(os.homedir(), ".local", "bin")]) {
-    for (const name of CLAUDE) {
-      const p = path.join(dir, name);
-      if (dir && fs.existsSync(p)) return p;
-    }
-  }
-  throw new Error("the claude CLI was not found");
-}
-
-export function claudeCliAvailable(): boolean {
-  try {
-    findClaude();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Env var that tells `cmd magic mcp` where to relay tool calls, and which tools to offer. */
-export const RELAY_ENV = "CMD_MAGIC_RELAY";
-export const RELAY_TOOLS_ENV = "CMD_MAGIC_TOOLS";
-
-type CliResult = { result?: string; usage?: Record<string, number>; total_cost_usd?: number; is_error?: boolean };
-
-export function claudeCliBackend(o: ClaudeCliOptions): Backend {
-  return {
-    name: "claude-cli",
-    model: o.model,
-    async run(r) {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-magic-cc-"));
-      // The relay: a Unix socket, or a named pipe on Windows.
-      const sock = process.platform === "win32" ? `\\\\.\\pipe\\cmd-magic-${path.basename(dir)}` : path.join(dir, "relay.sock");
-      let calls = 0;
-      // Relay: one JSON line per tool call from the MCP server, one reply line.
-      const server = net.createServer((c) => {
-        let buf = "";
-        c.on("data", async (d) => {
-          buf += d.toString("utf8");
-          let nl: number;
-          while ((nl = buf.indexOf("\n")) >= 0) {
-            const line = buf.slice(0, nl);
-            buf = buf.slice(nl + 1);
-            const req = JSON.parse(line) as { id: number; name: string; input: Record<string, unknown> };
-            let out: ToolOutput;
-            if (++calls > r.maxSteps) out = { output: "Out of steps: answer now with what you have.", isError: true };
-            else out = await r.exec(req.name, req.input ?? {}).catch((e: Error) => ({ output: e.message, isError: true }));
-            c.write(JSON.stringify({ id: req.id, ...out }) + "\n");
-          }
-        });
-      });
-      await new Promise<void>((res) => server.listen(sock, res));
-      const mcp = o.mcpCommand ?? [process.execPath, "--no-warnings", MCP_MAIN];
-      const mcpConfig = {
-        mcpServers: {
-          magic: {
-            command: mcp[0],
-            args: mcp.slice(1),
-            env: { [RELAY_ENV]: sock, [RELAY_TOOLS_ENV]: r.tools.map((t) => t.name).join(",") },
-          },
-        },
-      };
-      // claude -p is stateless here: earlier turns go into the prompt.
-      const prompt =
-        r.messages.length === 1
-          ? r.messages[0]!.content
-          : r.messages.map((m) => `${m.role === "user" ? "User" : "Your earlier answer"}:\n${m.content}`).join("\n\n---\n\n");
-      const args = [
-        "-p", prompt,
-        "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-        "--system-prompt", r.system,
-        "--model", o.model,
-        "--tools", "",
-        "--mcp-config", JSON.stringify(mcpConfig),
-        "--strict-mcp-config",
-        "--allowedTools", r.tools.map((t) => `mcp__magic__${t.name}`).join(","),
-        "--permission-mode", "dontAsk",
-        "--setting-sources", "",
-        "--no-session-persistence",
-      ];
-      const env = { ...process.env };
-      delete env.ANTHROPIC_API_KEY; // use the login
-      const child = spawn(o.bin ?? findClaude(), args, { cwd: dir, env, stdio: ["ignore", "pipe", "pipe"] });
-      const onAbort = () => child.kill("SIGTERM");
-      r.signal?.addEventListener("abort", onAbort, { once: true });
-      let text = "";
-      // Set from the stream callback; a holder keeps TS from narrowing it to null.
-      const done: { result: CliResult | null } = { result: null };
-      let stderr = "";
-      child.stderr.on("data", (d) => (stderr += d));
-      let buf = "";
-      child.stdout.on("data", (d: Buffer) => {
-        buf += d.toString("utf8");
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl).trim();
-          buf = buf.slice(nl + 1);
-          if (!line) continue;
-          let ev: { type?: string; event?: { type?: string; delta?: { type?: string; text?: string } }; result?: string };
-          try {
-            ev = JSON.parse(line);
-          } catch {
-            continue;
-          }
-          if (ev.type === "stream_event" && ev.event?.type === "message_start") {
-            text = "";
-            r.onTurn();
-          } else if (ev.type === "stream_event" && ev.event?.type === "content_block_delta" && ev.event.delta?.type === "text_delta") {
-            text += ev.event.delta.text ?? "";
-            r.onText(ev.event.delta.text ?? "");
-          } else if (ev.type === "result") {
-            done.result = ev as CliResult;
-          }
-        }
-      });
-      const code = await new Promise<number | null>((res) => child.on("close", res));
-      r.signal?.removeEventListener("abort", onAbort);
-      server.close();
-      fs.rm(dir, { recursive: true, force: true }, () => {});
-      const f = done.result;
-      if (!f) throw new Error(`claude exited ${code}: ${stderr.trim().slice(0, 500) || "no result"}`);
-      if (f.is_error) throw new Error(`claude: ${f.result ?? "error"}`);
-      const u = f.usage ?? {};
-      return {
-        text: f.result ?? text,
-        model: o.model,
-        usage: {
-          input: u.input_tokens ?? 0,
-          output: u.output_tokens ?? 0,
-          cacheRead: u.cache_read_input_tokens ?? 0,
-          cacheWrite: u.cache_creation_input_tokens ?? 0,
-          costUSD: f.total_cost_usd,
-        },
-      };
-    },
-  };
-}
-
 // ── choosing one ─────────────────────────────────────────
 
 export interface BackendChoice {
-  /** auto: the Anthropic API with ANTHROPIC_API_KEY, else the claude login. */
-  provider?: string;
-  model?: string;
-  effort?: string;
-  baseURL?: string;
-  apiKey?: string;
+  provider: string;
+  model: string;
+  /** The provider's stored key (secrets); undefined when the user hasn't set one. */
+  apiKey: string | undefined;
+  effort?: AiBackendOptions["effort"];
 }
 
-export const DEFAULT_MODEL = "claude-opus-5-5";
+export function isProvider(p: string): p is MagicProvider {
+  return Object.hasOwn(MAGIC_PROVIDERS, p);
+}
 
 export function backendFor(c: BackendChoice): Backend {
-  const model = c.model || DEFAULT_MODEL;
-  const provider = !c.provider || c.provider === "auto" ? (process.env.ANTHROPIC_API_KEY ? "anthropic" : claudeCliAvailable() ? "claude-cli" : undefined) : c.provider;
-  if (provider === "anthropic") {
-    return aiBackend({ provider: "anthropic", model, apiKey: c.apiKey ?? process.env.ANTHROPIC_API_KEY, effort: (c.effort as AiBackendOptions["effort"]) ?? "low" });
-  }
-  if (provider === "openai-compatible") {
-    return aiBackend({ provider: "openai-compatible", model, baseURL: c.baseURL, apiKey: c.apiKey ?? process.env.CMD_MAGIC_API_KEY });
-  }
-  if (provider === "claude-cli") return claudeCliBackend({ model });
-  throw new Error("No model provider: set ANTHROPIC_API_KEY, choose an OpenAI-compatible endpoint in Settings, or install and log in to the claude CLI.");
+  if (!isProvider(c.provider)) throw new Error(`Unknown provider "${c.provider}": choose Anthropic or OpenAI in Settings → Magic Windows.`);
+  const title = MAGIC_PROVIDERS[c.provider].title;
+  if (!c.apiKey) throw new Error(`No ${title} API key: add one in Settings → Magic Windows.`);
+  if (!c.model.trim()) throw new Error(`No ${title} model: choose one in Settings → Magic Windows.`);
+  return aiBackend({ provider: c.provider, model: c.model.trim(), apiKey: c.apiKey, effort: c.effort });
 }
