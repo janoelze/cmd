@@ -69,6 +69,18 @@ setInterval(async () => {
   process.exit(1);
 }, 5000).unref();
 
+/**
+ * app.close() waits until Electron's stdout/stderr pipes close. On Windows the
+ * detached core inherits those handles and keeps running, so wait for Electron
+ * itself to exit instead.
+ */
+const closeApp = async () => {
+  const proc = app.process();
+  const exited = proc.exitCode !== null ? Promise.resolve() : new Promise((r) => proc.once("exit", r));
+  app.close().catch(() => {});
+  await exited;
+};
+
 const check = (cond, msg) => {
   step(`check "${msg}"`);
   if (!cond) throw new Error(`FAILED: ${msg}`);
@@ -504,7 +516,7 @@ step("reading the UI state before the restart");
 const selectedBefore = await win.evaluate(() => window.cmd.call("ui.get", {}).then((u) => u["selection.pane"]));
 await win.waitForTimeout(400); // debounced writes
 step("closing the app");
-await app.close();
+await closeApp();
 step("relaunching the app");
 ({ app, win } = await launch());
 await win.waitForSelector(".sidebar-status");
@@ -529,6 +541,6 @@ check(ui["selection.pane"] === selectedBefore && !!selectedBefore, "selected ter
 check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows survive an app restart");
 await win.screenshot({ path: path.join(shots, "7-restored.png") });
 
-await app.close();
+await closeApp();
 await stopCore(home);
 console.log("all checks passed; screenshots in", shots);

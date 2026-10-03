@@ -20,6 +20,8 @@ It can't cover: how the keymap and title bar feel in daily use, agent detection 
 
 Agents are detected through hooks (`cmd hook` → `hook.ingest`) only, and there is no CPU/memory sampling.
 
+Known: Windows children inherit every inheritable handle, so the detached core inherits Electron's stdout/stderr pipes. Anything waiting for those pipes to close (Playwright's `app.close()`, `pnpm dev` in a terminal) waits until the core exits. The smoke test waits for Electron's exit instead; a real fix means starting the core without inheriting handles (e.g. through `Start-Process`).
+
 ## Phase 2: parity
 
 - **PowerShell integration**: a profile injected at startup with a `prompt` that emits OSC 7 and 133, an `open` function (token-checked, falling back to `Invoke-Item`), and the "first prompt" signal for typing commands.
