@@ -86,7 +86,7 @@ const check = (cond, msg) => {
   if (!cond) throw new Error(`FAILED: ${msg}`);
   console.log(`ok - ${msg}`);
 };
-// Shortcuts are ⌘-based and only defined for macOS so far (docs/10-windows.md).
+// Shortcut checks: the macOS keymap, or its Windows translation (docs/10-windows.md).
 const mac = process.platform === "darwin";
 const macOnly = (msg) => console.log(`skip - ${msg} (macOS keymap)`);
 // Synthetic keys bypass the native menu, so trigger menu items directly.
@@ -140,7 +140,12 @@ if (mac) {
   check((await accel("file.newTerminal")) === "Cmd+N", "⌘N is New Terminal");
   check((await accel("file.close")) === "Cmd+W", "⌘W is Close Terminal");
   check((await accel("session.next")) === "Alt+Cmd+Right", "⌥⌘→ is Next Session");
-} else macOnly("menu accelerators");
+} else {
+  // The Windows Terminal-style keymap (shared/commands.ts otherPlatformKey) reached the native menu.
+  check((await accel("file.newTerminal")) === "Ctrl+Shift+N", "Ctrl+Shift+N is New Terminal");
+  check((await accel("view.palette")) === "Ctrl+Shift+K", "Ctrl+Shift+K is the command palette");
+  check((await accel("session.next")) === "Ctrl+Alt+Right", "Ctrl+Alt+→ is Next Session");
+}
 
 await menu("file.newTerminal");
 await win.waitForSelector(".xterm");

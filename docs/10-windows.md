@@ -2,6 +2,14 @@
 
 cmd started macOS-only. This is the plan for running it on Windows, and the record of what's done. Work happens on the `windows` branch; the `windows` CI job (`.github/workflows/build.yml`) is the scoreboard. It runs with `continue-on-error` until it is green, then becomes required.
 
+## Status (2026-10-03)
+
+The `windows` CI job is required: install, typecheck, unit tests, the Playwright smoke test against the built app, staging plus a boot check of the shipped core, and packaging (NSIS installer and zip, x64, unsigned). A tag releases both platforms' builds together.
+
+Done: named pipes; PowerShell as the default shell; Windows process names; terminals that close at once; drive-letter paths (Markdown, Spaces); state in `%LOCALAPPDATA%\cmd`; the platform's own window frame and menu bar (Settings and Quit in File); Lucide icons for the SF Symbols the UI names (`apps/desktop/src/main/icons.ts`); a Windows Terminal-style keymap translated from the macOS one (`otherPlatformKey` in `shared/commands.ts`: ⌘X → Ctrl+Shift+X, ⌥⌘X → Ctrl+Alt+X, ⇧⌘X/⌃⌘X → Ctrl+Alt+Shift+X; plain Ctrl+letter stays with the shell), with hints in that form and the terminal leaving bound combinations to the menu.
+
+Known limits: no CPU/memory per terminal and agent detection through hooks only (no procinfo yet); Magic windows can't run shell commands (no sandbox yet: the agent gets no `run` tool, sources are fetched); no PowerShell integration (OSC 7/133, `open`); the CLI isn't packaged and `cmd` collides with `cmd.exe`; the installer is unsigned (SmartScreen warns). Synthetic keys bypass the native menu, so CI checks the menu's accelerators, not a real key press; AltGr (Ctrl+Alt) layouts may lose characters to the Ctrl+Alt shortcuts.
+
 ## What CI can and can't tell us
 
 CI on `windows-latest` covers the mechanics: install, typecheck, unit tests, the core's integration tests against real ConPTY terminals, packaging, and the Playwright smoke test driving the built app (with screenshots as artifacts).

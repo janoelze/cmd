@@ -3,6 +3,8 @@
 // WebGL contexts are pooled (browsers keep ~16); others use the DOM renderer.
 // See docs/02-terminal-foundations.md.
 
+import { MAC_KEYMAP } from "../../shared/commands.ts";
+import { isAppShortcut } from "./keybindings.ts";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import type { WebglAddon } from "@xterm/addon-webgl";
@@ -120,8 +122,9 @@ class Terminals {
     term.loadAddon(fit);
     term.onData((data) => void cmd.call("pane.write", { paneId, data }));
     term.onResize(({ cols, rows }) => void cmd.call("pane.resize", { paneId, cols, rows }));
-    // ⌘-shortcuts are menu key equivalents (main process); keep them out of the PTY.
-    term.attachCustomKeyEventHandler((e) => !e.metaKey);
+    // App shortcuts are menu key equivalents (main process); keep them out of the PTY:
+    // ⌘-anything on macOS, the bound Ctrl combinations elsewhere (Ctrl+Shift+K…).
+    term.attachCustomKeyEventHandler((e) => (MAC_KEYMAP ? !e.metaKey : !isAppShortcut(e)));
     const el = document.createElement("div");
     el.className = "xterm-host";
     // Mark terminals that have scrollback, so the scrollbar only shows when there's

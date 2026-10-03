@@ -13,7 +13,14 @@ import { fakeFactory } from "./fake-pty.ts";
 
 // realpath: on macOS os.tmpdir() is itself behind a symlink (/var → /private/var).
 const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-spaces-")));
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+// Windows keeps a folder busy while anything inside is open: retry, then leave it.
+afterAll(() => {
+  try {
+    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch (e) {
+    if (process.platform !== "win32") throw e;
+  }
+});
 
 const mk = (...parts: string[]) => {
   const p = path.join(tmp, ...parts);
@@ -200,10 +207,14 @@ describe("SpaceManager", () => {
   it("persists across restarts", () => {
     const { home, proj } = fixture("persist");
     const db = path.join(tmp, "persist.sqlite");
-    const a = new SpaceManager(new Store(db), home).open(proj).space;
-    const again = new SpaceManager(new Store(db), home);
+    const first = new Store(db);
+    const a = new SpaceManager(first, home).open(proj).space;
+    first.close();
+    const second = new Store(db);
+    const again = new SpaceManager(second, home);
     expect(again.list().map((s) => s.id)).toEqual([HOME_SPACE_ID, a.id]);
     expect(again.open(proj).created).toBe(false);
+    second.close(); // Windows can't delete an open database file
   });
 });
 

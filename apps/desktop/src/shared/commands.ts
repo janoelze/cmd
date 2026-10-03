@@ -99,17 +99,54 @@ export type ContextItem = { id: string; label: string; enabled?: boolean } | { s
 
 export type Keybindings = Record<string, string[]>;
 
-export const DEFAULT_KEYBINDINGS: Keybindings = Object.fromEntries(
-  (COMMANDS as readonly CommandSpec[]).map((c) => [c.id, [...(c.keys ?? [])]]),
-);
+/** The macOS keymap (⌘ shortcuts) or the one for Windows/Linux. Main: the platform; renderer: the browser's. */
+export const MAC_KEYMAP: boolean =
+  typeof process !== "undefined" && typeof process.platform === "string" ? process.platform === "darwin" : typeof navigator !== "undefined" && navigator.platform.startsWith("Mac");
+
+/**
+ * A default shortcut (written for macOS) on Windows and Linux, the Windows
+ * Terminal way: app shortcuts take Ctrl+Shift, so plain Ctrl+letter keeps
+ * reaching the shell (Ctrl+C, Ctrl+R…). ⌘X → Ctrl+Shift+X, ⌥⌘X → Ctrl+Alt+X,
+ * ⇧⌘X and ⌃⌘X → Ctrl+Alt+Shift+X; ⌘, ⌘= ⌘- ⌘0 → Ctrl+, Ctrl+= … (settings
+ * and zoom, as in Windows Terminal). Shortcuts without ⌘ stay as they are.
+ */
+export function otherPlatformKey(acc: string): string {
+  const parts = acc.split("+");
+  const key = parts.pop()!;
+  const alias: Record<string, string> = { command: "cmd", cmdorctrl: "cmd", option: "alt", control: "ctrl" };
+  const mods = new Set(parts.map((m) => alias[m.toLowerCase()] ?? m.toLowerCase()));
+  if (!mods.has("cmd")) return acc;
+  if (mods.size === 1 && [",", "=", "Plus", "-", "0"].includes(key)) return `Ctrl+${key}`;
+  const out = mods.has("shift") || mods.has("ctrl") ? ["Ctrl", "Alt", "Shift"] : mods.has("alt") ? ["Ctrl", "Alt"] : ["Ctrl", "Shift"];
+  return [...out, key].join("+");
+}
+
+/** Every command's default shortcuts for the macOS keymap or the Windows/Linux one. */
+export function platformDefaults(mac: boolean): Keybindings {
+  const specs = COMMANDS as readonly CommandSpec[];
+  const out: Keybindings = Object.fromEntries(specs.map((c) => [c.id, (c.keys ?? []).map((k) => (mac ? k : otherPlatformKey(k)))]));
+  if (mac) return out;
+  // Two macOS shortcuts can land on the same one (⇧⌘] and ⌃⌘]): it stays with
+  // the command that has fewest shortcuts (Next Space keeps it; Next Session has ⌥→).
+  const owners = new Map<string, string[]>();
+  for (const c of specs) for (const k of out[c.id]!) owners.set(norm(k), [...(owners.get(norm(k)) ?? []), c.id]);
+  for (const [k, ids] of owners) {
+    if (ids.length < 2) continue;
+    const keep = [...ids].sort((a, b) => out[a]!.length - out[b]!.length)[0];
+    for (const id of ids) if (id !== keep) out[id] = out[id]!.filter((x) => norm(x) !== k);
+  }
+  return out;
+}
+
+export const DEFAULT_KEYBINDINGS: Keybindings = platformDefaults(MAC_KEYMAP);
 
 /**
  * Overlay the user's keybindings.json on the defaults:
  * { "session.next": "Ctrl+Tab" } replaces, ["A", "B"] binds several,
  * null or [] unbinds. A shortcut taken by another command is removed there.
  */
-export function resolveKeybindings(user: unknown): { bindings: Keybindings; errors: string[] } {
-  const bindings: Keybindings = structuredClone(DEFAULT_KEYBINDINGS);
+export function resolveKeybindings(user: unknown, defaults: Keybindings = DEFAULT_KEYBINDINGS): { bindings: Keybindings; errors: string[] } {
+  const bindings: Keybindings = structuredClone(defaults);
   const errors: string[] = [];
   if (!user || typeof user !== "object" || Array.isArray(user)) return { bindings, errors };
   for (const [id, v] of Object.entries(user as Record<string, unknown>)) {
@@ -131,15 +168,20 @@ export function resolveKeybindings(user: unknown): { bindings: Keybindings; erro
 }
 
 const sameKey = (a: string, b: string) => norm(a) === norm(b);
-const norm = (k: string) => {
+/** A shortcut in a comparable form: lowercase, modifiers sorted ("alt+cmd+n"). */
+export function norm(k: string): string {
   const parts = k.toLowerCase().replace(/cmdorctrl|command/g, "cmd").replace(/option/g, "alt").replace(/control/g, "ctrl").split("+");
   const key = parts.pop();
   return [...parts.sort(), key].join("+");
-};
+}
 
-/** "Alt+Cmd+N" → "⌥⌘N" for display. */
-export function prettyAccelerator(acc?: string): string | undefined {
+/** "Alt+Cmd+N" → "⌥⌘N" for display on macOS; "Ctrl+Shift+N" stays as written elsewhere. */
+export function prettyAccelerator(acc?: string, mac = MAC_KEYMAP): string | undefined {
   if (!acc) return undefined;
+  if (!mac) {
+    const words: Record<string, string> = { Cmd: "Ctrl", Command: "Ctrl", CmdOrCtrl: "Ctrl", Control: "Ctrl", Option: "Alt", Plus: "+", Escape: "Esc", Return: "Enter" };
+    return acc.split("+").map((p) => words[p] ?? (p.length === 1 ? p.toUpperCase() : p)).join("+");
+  }
   const map: Record<string, string> = {
     Cmd: "⌘", Command: "⌘", CmdOrCtrl: "⌘", Ctrl: "⌃", Control: "⌃", Alt: "⌥", Option: "⌥", Shift: "⇧",
     Plus: "+", Left: "←", Right: "→", Up: "↑", Down: "↓", Tab: "⇥", Enter: "↩", Return: "↩", Backspace: "⌫", Escape: "⎋", Space: "Space",
