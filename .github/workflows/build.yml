@@ -1,8 +1,9 @@
-# Typecheck, test and package the app for macOS and Windows on every push and PR.
+# Typecheck, test and package the app for macOS on every push and PR.
 # Pushing a tag `v*` additionally signs + notarizes the macOS app (when the
-# secrets below exist) and publishes one GitHub release: the .dmg and .zip for
-# macOS, the installer and .zip for Windows (unsigned for now), and the update
-# metadata (latest-mac.yml, latest.yml, blockmaps) installed apps update from.
+# secrets below exist) and publishes one GitHub release: the .dmg and .zip, and
+# the update metadata (latest-mac.yml, blockmaps) installed apps update from.
+# The Windows job is disabled for now (`if: false`); re-enable it and add it to
+# the release's `needs` to ship Windows builds again.
 #
 # CMD_CRASH_WEBHOOK (optional): the Discord webhook release builds send crash
 # reports to (apps/desktop/src/main/crash.ts). Without it they keep them locally.
@@ -156,6 +157,7 @@ jobs:
           if-no-files-found: error
 
   windows:
+    if: false # disabled for now
     runs-on: windows-latest
     timeout-minutes: 30
     defaults:
@@ -221,10 +223,10 @@ jobs:
             apps/desktop/dist/latest.yml
           if-no-files-found: error
 
-  # A tag publishes one release with both platforms' builds.
+  # A tag publishes one release with the platforms' builds.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [mac, windows]
+    needs: [mac]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
