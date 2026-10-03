@@ -26,6 +26,15 @@ try {
   console.warn("postinstall: could not build procinfo (agent detection falls back to process names):", err.message);
 }
 
+// Build the desktop app's native SF Symbols renderer (crisp icons at exact sizes).
+try {
+  const dir = path.resolve("apps/desktop/native");
+  fs.mkdirSync(path.join(dir, "build"), { recursive: true });
+  execFileSync("/usr/bin/xcrun", ["swiftc", "-O", "-o", path.join(dir, "build/sfsymbols"), path.join(dir, "sfsymbols.swift")], { stdio: "inherit" });
+} catch (err) {
+  console.warn("postinstall: could not build sfsymbols (icons fall back to resized bitmaps):", err.message);
+}
+
 // pnpm sometimes skips electron's own postinstall (build-script approval);
 // fetch the binary if it is missing.
 try {

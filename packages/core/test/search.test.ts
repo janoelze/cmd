@@ -142,12 +142,22 @@ describe("index + search", () => {
   });
 
   it("re-indexes changed files and forgets removed ones", () => {
+    const messages = () => (db.prepare(`SELECT count(*) AS n FROM message_fts`).get() as { n: number }).n;
+    const vpnMessages = () =>
+      (db.prepare(`SELECT count(*) AS n FROM message_fts WHERE session = (SELECT rowid FROM sessions WHERE id = 's-vpn')`).get() as { n: number }).n;
+    const before = messages();
+    const vpnBefore = vpnMessages();
+    const archived = (db.prepare(`SELECT msg_last - msg_first + 1 AS n FROM sessions WHERE path = ?`).get(path.join(archive, "s-sidebar.jsonl")) as { n: number }).n;
     fs.appendFileSync(path.join(projects, "s-vpn.jsonl"), jsonl({ type: "user", sessionId: "s-vpn", message: { role: "user", content: "also check tailscale" } }));
     fs.rmSync(path.join(archive, "s-sidebar.jsonl"));
     const r = indexPass(db, roots);
     expect(r).toEqual({ changed: 1, removed: 1 });
     searcher.invalidate();
     expect(searcher.search("tailscale").map((h) => h.sessionId)).toEqual(["s-vpn"]);
+    // The changed session's old messages are replaced, not duplicated; the removed
+    // copy's messages are gone; everyone else's stay.
+    expect(vpnMessages()).toBe(vpnBefore + 1);
+    expect(messages()).toBe(before + 1 - archived);
     expect(indexPass(db, roots)).toEqual({ changed: 0, removed: 0 });
   });
 });

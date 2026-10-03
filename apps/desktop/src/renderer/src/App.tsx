@@ -21,7 +21,7 @@ import {
 } from "./actions.ts";
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
-import { ago, arrangeTiles, buildRows, flatten, nextAfterClose, pushHistory, rowDetail, rowTitle, shortPath, windowIdOf, type SidebarRow } from "./model.ts";
+import { ago, arrangeTiles, buildRows, flatten, fieldsOf, nextAfterClose, pushHistory, shortPath, windowIdOf, type SidebarRow } from "./model.ts";
 import type { SearchHit, SearchStatus } from "@cmd/protocol";
 import { getState, onAgentChange, onWindowFocus, usePersisted, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
@@ -119,6 +119,7 @@ export function App() {
   }, []);
 
   useEffect(() => bindSelection(select, () => selectedRef.current), [select]);
+  useEffect(() => void performance.mark("boot:app-mounted"), []);
   // Test hook for the e2e smoke test.
   useEffect(() => {
     (window as unknown as { __cmdSelect?: (id: PaneId) => void }).__cmdSelect = select;
@@ -405,12 +406,15 @@ export function App() {
       hint: prettyAccelerator(keys.bindings[c.id]?.[0]),
       run: () => run(c.id),
     })),
-    ...withPane.map((r) => ({
-      id: `s-${r.key}`,
-      group: "Sessions" as const,
-      label: `${rowTitle(r)} — ${r.pane ? shortPath(r.pane.cwd) : rowDetail(r, Date.now())}`,
-      run: () => select(windowIdOf(r)!),
-    })),
+    ...withPane.map((r) => {
+      const f = fieldsOf(r, undefined, Date.now());
+      return {
+        id: `s-${r.key}`,
+        group: "Sessions" as const,
+        label: f.place ? `${f.name} — ${f.place}` : f.name,
+        run: () => select(windowIdOf(r)!),
+      };
+    }),
     ...builtinTools.flatMap((t) =>
       t.controls.flatMap((c) =>
         c.type === "button"
@@ -423,7 +427,7 @@ export function App() {
   return (
     <div
       className={`app ${sidebarOpen ? "" : "no-sidebar"}`}
-      style={{ ["--sidebar-w" as string]: `${cfg["ui.sidebarWidth"]}px` }}
+      style={{ ["--sidebar-w" as string]: `${cfg["ui.sidebarWidth"]}px`, ["--window-radius" as string]: `${cfg["ui.windowRadius"]}px` }}
     >
       {!sidebarOpen && <div className="drag-strip" />}
       {sidebarOpen && (

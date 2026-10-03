@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   arrange,
-  CARD_ZOOM,
+  DEFAULT_LIMITS,
   DEFAULT_H,
   DEFAULT_W,
   DOT,
   frame,
   GAP,
   lerpCamera,
-  MAX_ZOOM,
   MIN_H,
   MIN_W,
   overlaps,
@@ -18,19 +17,23 @@ import {
   toWorld,
   visible,
   zoomAt,
+  zoomLimits,
 } from "../src/renderer/src/canvas.ts";
 
 const vp = { w: 1000, h: 600 };
 
 describe("camera", () => {
   it("zooms around the pointer", () => {
-    const c = zoomAt({ x: 0, y: 0, zoom: 1 }, 2, 500, 300);
-    expect(c.zoom).toBe(2);
+    const c = zoomAt({ x: 0, y: 0, zoom: 1 }, 1.25, 500, 300);
+    expect(c.zoom).toBe(1.25);
     expect(toWorld(c, 500, 300)).toEqual({ x: 500, y: 300 });
   });
 
   it("clamps zoom", () => {
-    expect(zoomAt({ x: 0, y: 0, zoom: 1 }, 100, 0, 0).zoom).toBe(MAX_ZOOM);
+    expect(zoomAt({ x: 0, y: 0, zoom: 1 }, 100, 0, 0).zoom).toBe(DEFAULT_LIMITS.max);
+    const lim = zoomLimits({ "canvas.minZoom": 50, "canvas.maxZoom": 150 });
+    expect(zoomAt({ x: 0, y: 0, zoom: 1 }, 0.01, 0, 0, lim).zoom).toBe(0.5);
+    expect(zoomAt({ x: 0, y: 0, zoom: 1 }, 100, 0, 0, lim).zoom).toBe(1.5);
   });
 
   it("interpolates around the viewport centre", () => {
@@ -99,9 +102,8 @@ describe("framing", () => {
     expect(reveal(c, r, vp)).toBe(c); // already visible: no move
   });
 
-  it("comes in to full size from card zoom", () => {
-    const c = reveal({ x: 0, y: 0, zoom: CARD_ZOOM / 2 }, { x: 0, y: 0, w: 400, h: 300 }, vp);
-    expect(c.zoom).toBe(1);
+  it("keeps the zoom when revealing a window that fits", () => {
+    expect(reveal({ x: 0, y: 0, zoom: 0.4 }, { x: 0, y: 0, w: 400, h: 300 }, vp).zoom).toBe(0.4);
   });
 
   it("snaps to the dot grid and enforces a minimum size", () => {

@@ -54,11 +54,20 @@ function set(next: Partial<State>): void {
   for (const fn of listeners) fn();
 }
 
+const subscribe = (fn: () => void) => (listeners.add(fn), () => void listeners.delete(fn));
+
+/** The whole state: re-renders on every change (panes, agents, usage…). Prefer useStoreValue. */
 export function useStore(): State {
-  return useSyncExternalStore(
-    (fn) => (listeners.add(fn), () => listeners.delete(fn)),
-    () => state,
-  );
+  return useSyncExternalStore(subscribe, () => state);
+}
+
+/**
+ * One value from the state; re-renders only when it changes (by identity). The
+ * selector must return something stable, e.g. `s.settings.settings` or a primitive,
+ * not a new object per call.
+ */
+export function useStoreValue<T>(select: (s: State) => T): T {
+  return useSyncExternalStore(subscribe, () => select(state));
 }
 
 export function getState(): State {
@@ -97,9 +106,12 @@ window.addEventListener("beforeunload", flushUi);
  * Like useState, but remembered across app restarts (stored in the core).
  * Until the core's snapshot arrives the fallback is used.
  */
+const MISSING = Symbol("missing");
+
 export function usePersisted<T>(key: string, fallback: T): [T, (v: T | ((prev: T) => T)) => void] {
-  const s = useStore();
-  const value = (key in s.ui ? s.ui[key] : fallback) as T;
+  // Only this key: other UI state and pane updates don't re-render the caller.
+  const stored = useStoreValue((s) => (key in s.ui ? s.ui[key] : MISSING));
+  const value = (stored === MISSING ? fallback : stored) as T;
   const setter = (v: T | ((prev: T) => T)) => {
     const prev = (key in state.ui ? state.ui[key] : fallback) as T;
     setUi(key, typeof v === "function" ? (v as (p: T) => T)(prev) : v);
@@ -185,16 +197,18 @@ cmd.onStatus(async (status) => {
     set({ connected: false });
     return;
   }
+  performance.mark("boot:connected");
   let snap;
   try {
     snap = await cmd.call("events.subscribe", {});
+    performance.mark("boot:snapshot");
     if (!snap.settings) throw new Error("core is running older code; restart it (relaunch the app to be asked)");
   } catch (err) {
     console.error("cmd: subscribe failed", err);
     set({ connected: false, error: (err as Error).message });
     return;
   }
-  for (const p of snap.panes) awaitingSnapshot.add(p.id);
+  for (const p of snap.panes) awaitingSnapshot.add(p.id), terminals.hold(p.id);
   terminals.configure(snap.settings.settings);
   setWindowTypes(snap.windowTypes ?? []);
   set({
@@ -207,7 +221,8 @@ cmd.onStatus(async (status) => {
     windows: new Map((snap.windows ?? []).map((w) => [w.id, w])),
   });
   void cmd.call("search.status", {}).then((search) => set({ search }), () => {});
-  await Promise.all(
+  // The windows show now; each terminal opens once its content is written (hold).
+  await Promise.allSettled(
     snap.panes.map(async (p) => {
       try {
         const { data } = await cmd.call("pane.snapshot", { paneId: p.id });
@@ -215,7 +230,9 @@ cmd.onStatus(async (status) => {
         terminals.write(p.id, data);
       } finally {
         awaitingSnapshot.delete(p.id);
+        terminals.release(p.id);
       }
     }),
   );
+  performance.mark("boot:terminals");
 });

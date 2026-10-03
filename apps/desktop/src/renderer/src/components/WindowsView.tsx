@@ -9,32 +9,32 @@
 //  - strip: horizontal scrolling with snapping, reveal-on-select, resize by the
 //    right edge, auto-scroll while dragging near an edge, position bar.
 //  - canvas: windows placed freely in world coordinates (../canvas.ts) under a
-//    pan/zoom camera; drag to move, corner to resize, cards when zoomed out,
-//    minimap. The camera is a transform on the track, so terminals keep their
+//    pan/zoom camera; drag to move, edges/corner to resize, minimap. Windows stay
+//    live at every zoom; the zoom range is capped by settings. The camera is a transform on the track, so terminals keep their
 //    size in cells whatever the zoom.
 //
 // Windows are never remounted or reordered in the DOM, so terminals keep
 // running and pointer capture is never lost.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaneId } from "@cmd/protocol";
 import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
-import { terminals } from "../terminals.ts";
+import { useStoreValue } from "../store.ts";
 import {
   arrange,
   bounds,
-  CARD_ZOOM,
   DOT,
-  frame,
+  frame as frameWith,
   lerpCamera,
   MIN_H,
   MIN_W,
-  reveal,
+  reveal as revealWith,
   sized,
   snap as snapToGrid,
-  zoomAt,
+  zoomAt as zoomAtWith,
+  zoomLimits,
   type Camera,
 } from "../canvas.ts";
 import {
@@ -52,8 +52,8 @@ import {
   type Slot,
 } from "../strip.ts";
 import { TerminalView } from "./TerminalView.tsx";
-import { iconFor, TileTitle } from "./TileTitle.tsx";
-import { Symbol } from "./Symbol.tsx";
+import { TileTitle } from "./TileTitle.tsx";
+import { SlotMotion } from "./Slot.tsx";
 
 const GUTTER = 8;
 const DRAG_THRESHOLD = 4;
@@ -63,7 +63,7 @@ const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scroll
 const EDGE_SCROLL_MAX = 18; // px per frame
 const CAMERA_ANIM_MS = 280;
 const CAMERA_SAVE_MS = 400; // persist the camera once panning/zooming pauses
-const CARD_LINES = 14;
+const MOTION_MIN_ZOOM = 0.5; // zoomed out further, title bars change without animating
 
 /** Canvas commands from the menu/palette (see requestCanvas). */
 export type CanvasRequest = "fit" | "window";
@@ -154,6 +154,14 @@ export function WindowsView(p: Props) {
   const gestureStart = useRef<number | null>(null);
 
   // ── canvas camera ──────────────────────────────────────
+  // The zoom range comes from the canvas.* settings.
+  const cfg = useStoreValue((s) => s.settings.settings);
+  const lim = zoomLimits(cfg);
+  const limRef = useRef(lim);
+  limRef.current = lim;
+  const zoomAt = (c: Camera, f: number, sx: number, sy: number) => zoomAtWith(c, f, sx, sy, limRef.current);
+  const frame = (r: Rect, vp: { w: number; h: number }, maxZoom: number) => frameWith(r, vp, maxZoom, limRef.current);
+  const reveal = (c: Camera, r: Rect, vp: { w: number; h: number }) => revealWith(c, r, vp, limRef.current);
   // Local state while it moves (no store round trip per frame); persisted when it pauses.
   const [cam, setCamState] = useState<Camera>(p.camera);
   const camRef = useRef(cam);
@@ -186,7 +194,13 @@ export function WindowsView(p: Props) {
     },
     [setCam],
   );
-  const cards = mode === "canvas" && cam.zoom < CARD_ZOOM;
+  // Changed limits pull the camera back into range, around the viewport centre.
+  useEffect(() => {
+    const c = camRef.current;
+    const z = Math.max(lim.min, Math.min(lim.max, c.zoom));
+    if (z !== c.zoom) setCam(zoomAtWith(c, z / c.zoom, live.current.vp.w / 2, live.current.vp.h / 2, lim));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lim.min, lim.max]);
 
   // Latest values for event handlers registered once.
   const live = useRef({ lay, ids, settled, vp, selected, stripSlots, mode, preview, drag });
@@ -269,6 +283,8 @@ export function WindowsView(p: Props) {
   );
 
   useLayoutEffect(() => {
+    performance.mark("boot:tiles"); // first commit of the windows (boot benchmark)
+    requestAnimationFrame(() => requestAnimationFrame(() => performance.mark("boot:tiles-painted")));
     const el = rootRef.current!;
     const ro = new ResizeObserver(() => setVp({ w: el.clientWidth, h: el.clientHeight }));
     ro.observe(el);
@@ -338,7 +354,7 @@ export function WindowsView(p: Props) {
       }
       const target = e.target as Element;
       const tile = target.closest?.(".tile");
-      if (tile && tile.getAttribute("data-pane") === live.current.selected && c.zoom >= CARD_ZOOM && !target.closest(".tile-title"))
+      if (tile && tile.getAttribute("data-pane") === live.current.selected && !target.closest(".tile-title"))
         return;
       e.preventDefault();
       e.stopPropagation();
@@ -575,10 +591,16 @@ export function WindowsView(p: Props) {
   };
 
   // ── render ─────────────────────────────────────────────
-  const rootRect = rootRef.current?.getBoundingClientRect();
+  // Only while dragging: reading layout during every render (e.g. per pane update
+  // while terminals stream) forces a synchronous layout of whatever just changed.
+  const rootRect = drag ? rootRef.current?.getBoundingClientRect() : undefined;
   // Stable DOM order (creation), whatever the visual order.
   const stable = [...p.rows].sort((a, b) => createdOf(a) - createdOf(b));
   const canvas = mode === "canvas";
+  // The zoom as a CSS variable, for the resize handles (sized in screen px). Set on
+  // them only: on the track it would be inherited by every element
+  // of every window, and changing it each frame would restyle them all.
+  const zVar = { "--z": cam.zoom } as React.CSSProperties;
   // Canvas: where the dragged window will land (snapped to the dots).
   const dropAt =
     canvas && drag && rootRect && lay.rects.get(drag.id)
@@ -616,7 +638,7 @@ export function WindowsView(p: Props) {
   return (
     <main
       ref={rootRef}
-      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""} ${cards ? "cards" : ""}`}
+      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""}`}
       onPointerDown={startPan}
       onDoubleClick={(e) => canvas && onBackground(e) && fitAll()}
     >
@@ -624,7 +646,7 @@ export function WindowsView(p: Props) {
         className="windows-track"
         style={
           canvas
-            ? ({ transform: `translate(${-cam.x * z}px, ${-cam.y * z}px) scale(${z})`, "--z": z } as React.CSSProperties)
+            ? { transform: `translate(${-cam.x * z}px, ${-cam.y * z}px) scale(${z})` }
             : { transform: `translateX(${-offset}px)` }
         }
       >
@@ -660,6 +682,14 @@ export function WindowsView(p: Props) {
             x = drag.x - drag.grabX - rootRect.left + offset;
             y = drag.y - drag.grabY - rootRect.top;
           }
+          // Title bars animate state changes only where you can see them: on screen,
+          // and on the canvas only while the title is legible (docs/10-window-titles.md).
+          const motion =
+            !lay.hidden.has(id) &&
+            (canvas
+              ? z >= MOTION_MIN_ZOOM &&
+                x + rect.w > cam.x && x < cam.x + vp.w / z && y + rect.h > cam.y && y < cam.y + vp.h / z
+              : x + rect.w > offset && x < offset + vp.w);
           const title = (
             <TileTitle
               row={r}
@@ -697,11 +727,8 @@ export function WindowsView(p: Props) {
               {/* The body clips the content; resize handles sit outside it, in the
                   gutter, so they never cover a scrollbar or the content's edge. */}
               <div className="tile-body">
-                {/* Cards keep their title bar readable: it's drawn at screen size. */}
-                {lay.chrome && (cards ? <div className="card-title" style={{ zoom: 1 / z }}>{title}</div> : title)}
-                {cards ? (
-                  <Card row={r} zoom={z} />
-                ) : r.pane ? (
+                {lay.chrome && <SlotMotion.Provider value={motion}>{title}</SlotMotion.Provider>}
+                {r.pane ? (
                   <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
                 ) : r.win ? (
                   <WindowContent win={r.win} focused={id === selected} />
@@ -720,6 +747,7 @@ export function WindowsView(p: Props) {
                   <div
                     key={axes}
                     className={`canvas-resize resize-${axes}`}
+                    style={zVar}
                     onPointerDown={(e) => startSizing(e, id, rect, axes)}
                   />
                 ))}
@@ -743,31 +771,16 @@ export function WindowsView(p: Props) {
   );
 }
 
-/** A window's content from its registered view (see windows/registry.ts). */
-function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
+/**
+ * A window's content from its registered view (see windows/registry.ts). Memoized,
+ * so moving the canvas camera (a re-render per frame) doesn't re-render file lists,
+ * editors and pages; only a changed window or focus does.
+ */
+const WindowContent = memo(function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
   const view = viewFor(win.kind);
   if (!view) return <div className="file-error">No view registered for “{win.kind}” windows.</div>;
   return <view.View win={win} focused={focused} />;
-}
-
-/** A window drawn as a card when the canvas is zoomed out: no live renderer. */
-function Card({ row, zoom }: { row: Row; zoom: number }) {
-  const [, refresh] = useState(0);
-  const paneId = row.pane?.id;
-  useEffect(() => {
-    if (!paneId) return;
-    const t = setInterval(() => refresh((n) => n + 1), 1000);
-    return () => clearInterval(t);
-  }, [paneId]);
-  if (paneId) return <pre className="canvas-card lines">{terminals.tail(paneId, CARD_LINES).join("\n")}</pre>;
-  const win = row.win!;
-  return (
-    <div className="canvas-card info">
-      <Symbol name={iconFor(win.kind)} size={Math.round(28 / zoom)} />
-      <div className="canvas-card-detail">{viewFor(win.kind)?.detail?.(win) ?? win.title}</div>
-    </div>
-  );
-}
+});
 
 /** Canvas overview: every window, the visible area; click or drag to move there. */
 function Minimap(p: {

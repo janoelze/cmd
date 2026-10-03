@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import type { PaneId } from "@cmd/protocol";
 import { bucketOf } from "@cmd/protocol";
 import { usePersisted } from "../store.ts";
-import { Symbol } from "./Symbol.tsx";
-import { iconFor } from "./TileTitle.tsx";
-import { windowIdOf, flatten, ledOf, project, projectHue, rowDetail, rowTitle, type SidebarRow } from "../model.ts";
+import { ICON, Symbol } from "./Symbol.tsx";
+import { DirtyDot, Mark, Slot } from "./Slot.tsx";
+import { useFields } from "./TileTitle.tsx";
+import { windowIdOf, flatten, ledOf, project, projectHue, type SidebarRow } from "../model.ts";
 import { Tools } from "./Tools.tsx";
 
 export type SidebarTab = "sessions" | "tools";
@@ -39,45 +40,47 @@ export function Sidebar(p: Props) {
   );
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-tabs" role="tablist">
-        <button role="tab" className={p.tab === "sessions" ? "on" : ""} onClick={() => p.onTab("sessions")}>
-          Sessions
-        </button>
-        <button role="tab" className={p.tab === "tools" ? "on" : ""} onClick={() => p.onTab("tools")}>
-          Tools
-        </button>
-      </div>
-
-      {p.tab === "sessions" ? (
-        <div className="session-list" data-frozen={rows !== p.rows || undefined}>
-          {needs > 0 && <div className="list-heading">Needs you · {needs}</div>}
-          {rows.map((r, i) => (
-            <RowView
-              key={r.key}
-              row={r}
-              depth={0}
-              now={now}
-              selected={p.selected}
-              onSelect={p.onSelect}
-              onMenu={p.onRowMenu}
-              shortcutOf={shortcutOf}
-              divider={needs > 0 && i === needs}
-            />
-          ))}
-          {rows.length === 0 && (
-            <div className="empty">
-              <p>No sessions yet.</p>
-              <button className="btn" onClick={p.onNewTerminal}>
-                New Terminal <kbd>⌘T</kbd>
-              </button>
-            </div>
-          )}
+    <>
+      <aside className="sidebar">
+        <div className="sidebar-tabs" role="tablist">
+          <button role="tab" className={p.tab === "sessions" ? "on" : ""} onClick={() => p.onTab("sessions")}>
+            Sessions
+          </button>
+          <button role="tab" className={p.tab === "tools" ? "on" : ""} onClick={() => p.onTab("tools")}>
+            Tools
+          </button>
         </div>
-      ) : (
-        <Tools />
-      )}
 
+        {p.tab === "sessions" ? (
+          <div className="session-list" data-frozen={rows !== p.rows || undefined}>
+            {needs > 0 && <div className="list-heading">Needs you · {needs}</div>}
+            {rows.map((r, i) => (
+              <RowView
+                key={r.key}
+                row={r}
+                depth={0}
+                now={now}
+                selected={p.selected}
+                onSelect={p.onSelect}
+                onMenu={p.onRowMenu}
+                shortcutOf={shortcutOf}
+                divider={needs > 0 && i === needs}
+              />
+            ))}
+            {rows.length === 0 && (
+              <div className="empty">
+                <p>No sessions yet.</p>
+                <button className="btn" onClick={p.onNewTerminal}>
+                  New Terminal <kbd>⌘T</kbd>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Tools />
+        )}
+      </aside>
+      {/* In the app's bottom row, beside the main status bar: both share one height. */}
       <footer className="sidebar-status">
         <span className={`led led-${p.connected ? "idle" : "off"}`} />
         {p.connected
@@ -86,7 +89,7 @@ export function Sidebar(p: Props) {
             ? `core error: ${p.error}`
             : "core offline — reconnecting…"}
       </footer>
-    </aside>
+    </>
   );
 }
 
@@ -106,6 +109,7 @@ function RowView(props: {
   const open = !collapsed.includes(row.key);
   const setOpen = (o: boolean) => setCollapsed((c) => (o ? c.filter((k) => k !== row.key) : [...c, row.key].slice(-200)));
   const led = ledOf(row.agent);
+  const f = useFields(row, now)!;
   const proj = row.win ? null : project(row.agent?.cwd ?? row.pane?.cwd ?? "");
   const hasKids = row.children.length > 0;
   const doneKids = row.children.filter((c) => c.agent && ["done", "exited"].includes(c.agent.state)).length;
@@ -133,22 +137,22 @@ function RowView(props: {
             }}
             aria-label={open ? "Collapse" : "Expand"}
           >
-            <Symbol name="chevron.right" size={9} />
+            <Symbol name="chevron.right" size={ICON.disclosure} />
           </button>
         ) : (
           <span className="twisty-space" />
         )}
-        {row.win && row.win.kind !== "terminal" ? (
-          <Symbol name={iconFor(row.win.kind)} size={12} className="row-icon" />
-        ) : (
-          <span className={`led led-${led}`} />
-        )}
+        <Mark light={f.light} icon={f.icon} />
         <div className="row-text">
           <div className="row-title">
-            {rowTitle(row)}
+            <Slot value={{ text: f.name }} fade />
+            <DirtyDot on={!!f.dirty} />
             {hasKids && !open && <span className="badge">{doneKids}/{row.children.length}</span>}
           </div>
-          <div className="row-detail">{rowDetail(row, now)}</div>
+          {/* Status if there is one ("does this need me?"), else Place ("which one is it?"). */}
+          <div className="row-detail">
+            <Slot value={f.status} fallback={f.place ? { text: f.place } : undefined} />
+          </div>
         </div>
         {depth === 0 && proj && (
           <span className="chip" style={{ ["--hue" as string]: projectHue(proj) }}>

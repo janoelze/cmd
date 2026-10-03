@@ -56,9 +56,13 @@ export const SETTINGS_SCHEMA = {
   "ui.showResources": {
     type: "boolean",
     default: true,
-    description: "Show memory and CPU of each terminal's process tree in its title bar and the status bar.",
+    description: "Show memory and CPU of the selected window's processes in the status bar.",
   },
   "ui.sidebarWidth": { type: "number", default: 280, min: 200, max: 480, description: "Sidebar width in px." },
+  "ui.windowRadius": { type: "number", default: 8, min: 0, max: 16, step: 1, description: "Corner radius of windows in px (0 = square). Focus mode always fills the pane edge to edge." },
+
+  "canvas.minZoom": { type: "number", default: 30, min: 10, max: 100, step: 5, description: "Canvas: how far you can zoom out (%). Windows stay live at every zoom." },
+  "canvas.maxZoom": { type: "number", default: 150, min: 100, max: 300, step: 25, description: "Canvas: how far you can zoom in (%)." },
 
   "notifications.needsInput": { type: "boolean", default: true, description: "Notify when an agent needs input." },
   "notifications.done": { type: "boolean", default: true, description: "Notify when an agent finishes a turn." },

@@ -1,15 +1,16 @@
-// Bottom bar of the main pane: the current session on the left, view modes and
-// actions on the right. Shares its row (and height) with the sidebar's footer.
+// Bottom bar of the main pane: the selected window's usage on the left (all its
+// title fields in focus mode), view modes and actions on the right. Shares its
+// row (and height) with the sidebar's footer.
 
 import type { Pane } from "@cmd/protocol";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
-import { ledOf, rowDetail, shortPath, usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
-import { useStore } from "../store.ts";
-import { useWindowStatus } from "../windowActions.ts";
-import { typeFor, viewFor } from "../windows/registry.ts";
+import { usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
+import { useStoreValue } from "../store.ts";
+import { DirtyDot, Mark, Slot } from "./Slot.tsx";
+import { useFields } from "./TileTitle.tsx";
 import type { ViewMode } from "./MainView.tsx";
-import { Symbol } from "./Symbol.tsx";
+import { ICON, Symbol } from "./Symbol.tsx";
 
 const ICONS: Record<ViewMode | "new" | "palette" | "settings", string> = {
   focus: "rectangle",
@@ -30,41 +31,39 @@ interface Props {
 
 export function StatusBar({ mode, row, pane, run }: Props) {
   const keys = useKeybindings();
-  const showUsage = useStore().settings.settings["ui.showResources"];
-  const winStatus = useWindowStatus(row?.win?.id ?? null);
+  const showUsage = useStoreValue((s) => s.settings.settings["ui.showResources"]);
+  const f = useFields(row);
   const tip = (label: string, id: CommandId) => {
     const k = prettyAccelerator(keys.bindings[id]?.[0]);
     return k ? `${label} (${k})` : label;
   };
   const btn = (id: CommandId, icon: string, label: string, on = false) => (
     <button key={id} className={`icon-btn ${on ? "on" : ""}`} title={tip(label, id)} aria-label={label} onClick={() => run(id)}>
-      <Symbol name={icon} size={15} />
+      <Symbol name={icon} size={ICON.bar} />
     </button>
   );
 
   return (
     <footer className="statusbar">
+      {/* The title bar and sidebar already show the window's fields; the status bar adds
+          what they don't: the processes' memory and CPU. Focus mode has no title bar,
+          so there the status bar stands in for it. */}
       <div className="statusbar-session">
-        {!pane && row?.win && (
+        {mode === "focus" && f && (
           <>
-            <span className="statusbar-proc">{(typeFor(row.win.kind)?.title ?? row.win.kind).toLowerCase()}</span>
-            <span className="statusbar-path">{viewFor(row.win.kind)?.detail?.(row.win) ?? ""}</span>
-            {winStatus && <span className="statusbar-usage">{winStatus.label}</span>}
+            <Mark light={f.light} icon={f.icon} />
+            <Slot className="statusbar-name" value={{ text: f.name }} fade />
+            <DirtyDot on={!!f.dirty} />
+            <Slot className="statusbar-proc" value={{ text: f.kind }} />
+            <Slot className="statusbar-path" value={f.place ? { text: f.place } : undefined} clipStart divider />
+            <Slot className="statusbar-detail" value={f.status} divider />
           </>
         )}
-        {pane && (
-          <>
-            <span className={`led led-${ledOf(row?.agent ?? null)}`} />
-            <span className="statusbar-proc">{pane.foreground}</span>
-            <span className="statusbar-path">{shortPath(pane.cwd)}</span>
-            {row?.agent && <span className="statusbar-detail">{rowDetail(row, Date.now())}</span>}
-            {showUsage && pane.usage && (
-              <span className="statusbar-usage" title={usageTooltip(pane.usage)}>
-                {usageLabel(pane.usage)}
-              </span>
-            )}
-          </>
-        )}
+        <Slot
+          className="statusbar-usage"
+          value={showUsage && pane?.usage ? { text: usageLabel(pane.usage) ?? "", key: "usage" } : undefined}
+          title={usageTooltip(pane?.usage ?? null)}
+        />
       </div>
       <div className="statusbar-actions">
         {btn("file.newTerminal", ICONS.new, "New Terminal")}

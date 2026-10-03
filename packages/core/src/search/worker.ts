@@ -21,12 +21,14 @@ const db = openIndex(dbPath);
 
 let running = false;
 let again = false;
+let lastPass = 0;
 function pass(): void {
   if (running) {
     again = true; // coalesce bursts of file events into one follow-up pass
     return;
   }
   running = true;
+  lastPass = Date.now();
   try {
     const r = indexPass(db, roots, (done, total) => post({ type: "progress", done, total }));
     post({ type: "pass", ...r, ...indexCounts(db) });
@@ -43,11 +45,22 @@ function pass(): void {
 
 pass();
 
-// Transcripts are appended to constantly while agents run; batch changes.
+// Transcripts are appended to constantly while agents run; batch changes. A pass
+// re-indexes each changed transcript whole (hundreds of ms for a long session),
+// so live sessions are re-indexed at most every MIN_INTERVAL. A pending pass is
+// kept, not pushed back: a session that writes constantly still gets indexed.
+const QUIET = 3000;
+const MIN_INTERVAL = 30_000;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const schedule = () => {
-  clearTimeout(timer);
-  timer = setTimeout(pass, 3000);
+  if (timer) return;
+  timer = setTimeout(
+    () => {
+      timer = undefined;
+      pass();
+    },
+    Math.max(QUIET, lastPass + MIN_INTERVAL - Date.now()),
+  );
 };
 for (const r of roots) {
   try {

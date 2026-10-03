@@ -1,9 +1,11 @@
 // Electron main: makes sure a core is running, then opens the window.
 // The core is a separate, detached process so terminals survive UI reloads and restarts.
 
+// Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
+performance.mark("boot:main-script");
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, protocol, screen, shell } from "electron";
 import { pathToFileURL } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -15,6 +17,8 @@ import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type Keybindi
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 
 if (process.env.CMD_NO_SANDBOX) app.commandLine.appendSwitch("no-sandbox");
+// Tests: render as on a Retina display regardless of the actual screen.
+if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scale-factor", process.env.CMD_FORCE_SCALE);
 
 // cmd-file:///abs/path — read-only access to local images/media for the app's own
 // pages (Markdown windows show relative images). Registered on the default
@@ -27,6 +31,22 @@ const here = import.meta.dirname; // apps/desktop/out/main
 // scripts/stage-runtime.mjs) and run it with Electron's own Node.
 const repoRoot = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(here, "../../../..");
 const socketPath = defaultSocketPath();
+// Chromium's profile (browser-window cookies, caches) lives in the state dir, so
+// $CMD_HOME isolates it too. By default it would be Application Support/<app name>,
+// which for "cmd" is the core's own state dir. Dev builds used to be named
+// "@cmd/desktop": move that profile over once.
+const uiData = path.join(cmdHome(), "ui");
+const legacyUiData = path.join(app.getPath("appData"), "@cmd", "desktop");
+if (!process.env.CMD_HOME && !fs.existsSync(uiData) && fs.existsSync(legacyUiData)) {
+  try {
+    fs.mkdirSync(cmdHome(), { recursive: true });
+    fs.renameSync(legacyUiData, uiData);
+  } catch {}
+}
+app.setPath("userData", uiData);
+
+// Packaged builds carry their icon in the bundle (.icns / .ico); dev runs use the PNG.
+const devIcon = app.isPackaged ? undefined : path.join(here, "../../build/icon.png");
 
 function canConnect(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -68,9 +88,7 @@ async function checkCoreBuild(): Promise<void> {
   }
 }
 
-async function ensureCore(): Promise<void> {
-  if (await canConnect()) await checkCoreBuild();
-  if (await canConnect()) return;
+function spawnCore(): void {
   const home = cmdHome();
   fs.mkdirSync(home, { recursive: true });
   const log = fs.openSync(path.join(home, "core.log"), "a");
@@ -84,11 +102,31 @@ async function ensureCore(): Promise<void> {
     env,
   });
   child.unref();
-  for (let i = 0; i < 50; i++) {
-    if (await canConnect()) return;
-    await new Promise((r) => setTimeout(r, 100));
+}
+
+/** A core process is alive for this state dir (sync check of its pid file). */
+function coreProcessAlive(): boolean {
+  try {
+    process.kill(Number(fs.readFileSync(path.join(cmdHome(), "core.pid"), "utf8")), 0);
+    return true;
+  } catch {
+    return false;
   }
-  throw new Error(`core did not start; see ${path.join(home, "core.log")}`);
+}
+
+// No core running: start one now, before Electron is ready, so it boots alongside
+// the app instead of after the window. (A stale pid file just means ensureCore
+// finds nothing to connect to and starts one then.)
+let coreSpawned = !coreProcessAlive() && (spawnCore(), true);
+
+async function ensureCore(): Promise<void> {
+  if (!coreSpawned && (await canConnect())) await checkCoreBuild();
+  if (!coreSpawned && !(await canConnect())) (spawnCore(), (coreSpawned = true));
+  for (const until = Date.now() + 5000; Date.now() < until; ) {
+    if (await canConnect()) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error(`core did not start; see ${path.join(cmdHome(), "core.log")}`);
 }
 
 // ── window ──────────────────────────────────────────────
@@ -126,12 +164,14 @@ function trackBounds(win: BrowserWindow): void {
 }
 
 function createWindow(): BrowserWindow {
+  performance.mark("boot:window-start");
   const b = loadBounds();
   const win = new BrowserWindow({
     ...b,
     minWidth: 760,
     minHeight: 480,
     title: "cmd",
+    icon: devIcon, // Windows/Linux; macOS uses the Dock icon
     show: false,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 14, y: 12 },
@@ -144,7 +184,8 @@ function createWindow(): BrowserWindow {
     },
   });
   if (b.maximized) win.maximize();
-  win.once("ready-to-show", () => win.show());
+  performance.mark("boot:window-created");
+  win.once("ready-to-show", () => (performance.mark("boot:ready-to-show"), win.show()));
   trackBounds(win);
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else win.loadFile(path.join(here, "../renderer/index.html"));
@@ -168,18 +209,48 @@ ipcMain.on("open-settings", (_e, p: string) => {
   void shell.openPath(p);
 });
 ipcMain.handle("keybindings", () => keybindings);
-// SF Symbols by name, as PNG data URLs (black template images; the UI tints them via CSS masks).
-const symbolCache = new Map<string, string | null>();
-ipcMain.handle("sf-symbols", (_e, names: string[]) =>
-  Object.fromEntries(
-    names.map((n) => {
-      if (!symbolCache.has(n)) {
-        const img = nativeImage.createFromNamedImage(n);
-        symbolCache.set(n, img.isEmpty() ? null : img.toDataURL());
+// SF Symbols, rendered natively at the exact point size and pixel density the UI
+// shows them (native/sfsymbols.swift), so they stay crisp. PNG data URLs, black
+// template images; the UI tints them via CSS masks.
+const SF_HELPER = path.join(repoRoot, "apps/desktop/native/build/sfsymbols");
+type SymbolImage = { url: string; w: number; h: number; contain?: boolean } | null;
+const symbolCache = new Map<string, SymbolImage>();
+
+function renderSymbols(names: string[], size: number, weight: string, scale: number): Record<string, SymbolImage> {
+  const key = (n: string) => `${n}@${size}@${weight}@${scale}`;
+  const missing = names.filter((n) => !symbolCache.has(key(n)));
+  if (missing.length && fs.existsSync(SF_HELPER)) {
+    const r = spawnSync(SF_HELPER, [String(size), weight, String(scale), ...missing], { encoding: "utf8", timeout: 5000 });
+    try {
+      const out = JSON.parse(r.stdout || "{}") as Record<string, { png: string; w: number; h: number }>;
+      for (const n of missing) {
+        const o = out[n];
+        symbolCache.set(key(n), o ? { url: `data:image/png;base64,${o.png}`, w: o.w, h: o.h } : null);
       }
-      return [n, symbolCache.get(n)];
-    }),
-  ),
+    } catch {
+      // fall through to the fallback below
+    }
+  }
+  for (const n of missing) {
+    if (symbolCache.has(key(n))) continue;
+    // Fallback without the helper: Electron's image, resized (high quality) to the exact size.
+    const img = nativeImage.createFromNamedImage(n);
+    if (img.isEmpty()) {
+      symbolCache.set(key(n), null);
+      continue;
+    }
+    // Same square, even-sided box as the helper; the image is fitted inside (mask contain).
+    const side = Math.ceil(size / 2) * 2;
+    const { width, height } = img.getSize();
+    const k = side / Math.max(width, height);
+    const px = img.resize({ width: Math.round(width * k * scale), height: Math.round(height * k * scale), quality: "best" });
+    symbolCache.set(key(n), { url: px.toDataURL(), w: side, h: side, contain: true });
+  }
+  return Object.fromEntries(names.map((n) => [n, symbolCache.get(key(n)) ?? null]));
+}
+
+ipcMain.handle("sf-symbols", (_e, req: { names: string[]; size: number; weight?: string; scale?: number }) =>
+  renderSymbols(req.names, req.size, req.weight ?? "regular", Math.max(1, Math.min(3, Math.round(req.scale ?? 2)))),
 );
 ipcMain.on("open-keybindings", () => void shell.openPath(ensureKeybindingsFile()));
 ipcMain.on("open-docs", () => void shell.openPath(path.join(repoRoot, "docs", "00-overview.md")));
@@ -237,12 +308,28 @@ app.on("web-contents-created", (_e, contents) => {
 // ── lifecycle ───────────────────────────────────────────
 
 app.whenReady().then(async () => {
+  performance.mark("boot:app-ready");
   nativeTheme.themeSource = "dark";
+  if (devIcon) app.dock?.setIcon(devIcon);
+  app.setAboutPanelOptions({
+    applicationName: "cmd",
+    applicationVersion: app.getVersion(),
+    copyright: "© 2026 Jan Oelze",
+    website: "https://github.com/janoelze/cmd",
+    iconPath: devIcon,
+  });
   protocol.handle("cmd-file", (req) => {
     const file = decodeURIComponent(new URL(req.url).pathname);
     if (!CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });
     return electronNet.fetch(pathToFileURL(file).href);
   });
+  // First: the window loads its bundle while the menu is built and the core is
+  // checked or started; the preload connects as soon as the socket answers.
+  createWindow();
+  ensureCore().then(
+    () => performance.mark("boot:core-reachable"),
+    (err: Error) => dialog.showErrorBox("cmd: the core did not start", err.message),
+  );
   const send = commandSender(createWindow);
   buildMenu(send, keybindings.bindings);
   watchKeybindings((next) => {
@@ -256,8 +343,6 @@ app.whenReady().then(async () => {
       { label: "New Claude Session", click: () => send("file.newClaude") },
     ]),
   );
-  await ensureCore();
-  createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

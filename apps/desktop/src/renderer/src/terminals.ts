@@ -5,7 +5,7 @@
 
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebglAddon } from "@xterm/addon-webgl";
+import type { WebglAddon } from "@xterm/addon-webgl";
 import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
@@ -33,8 +33,37 @@ const dark: ITheme = {
 
 const theme = () => dark;
 
+// The WebGL addon loads only when the webgl renderer is used (not the default),
+// so it stays out of the startup bundle.
+let Webgl: typeof WebglAddon | null = null;
+let webglLoading: Promise<void> | null = null;
+
 class Terminals {
   #hosts = new Map<PaneId, Host>();
+  /** Terminals whose snapshot is still loading (see hold). */
+  #held = new Map<PaneId, { ready: Promise<void>; release: () => void }>();
+
+  /**
+   * Keep views from opening a terminal until its content is written (release):
+   * writing into a terminal that isn't open only parses, with no per-line
+   * rendering or scrollbar work, and its first paint shows the final content.
+   */
+  hold(paneId: PaneId): void {
+    if (this.#held.has(paneId)) return;
+    let release!: () => void;
+    const ready = new Promise<void>((r) => (release = r));
+    this.#held.set(paneId, { ready, release });
+  }
+
+  release(paneId: PaneId): void {
+    this.#held.get(paneId)?.release();
+    this.#held.delete(paneId);
+  }
+
+  /** Resolves when the terminal may be shown; null if it may be now. */
+  whenReady(paneId: PaneId): Promise<void> | null {
+    return this.#held.get(paneId)?.ready ?? null;
+  }
   #settings: Settings = DEFAULT_SETTINGS;
   /** ⌘+/⌘- offset on top of terminal.fontSize (persisted by the app). */
   #zoom = 0;
@@ -159,18 +188,6 @@ class Terminals {
     return !!this.#hosts.get(paneId)?.term.hasSelection();
   }
 
-  /** The last n lines up to the cursor, for canvas cards (no renderer needed). */
-  tail(paneId: PaneId, n: number): string[] {
-    const t = this.#hosts.get(paneId)?.term;
-    if (!t) return [];
-    const b = t.buffer.active;
-    let end = b.baseY + b.cursorY;
-    while (end > 0 && !b.getLine(end)?.translateToString(true).trim()) end--;
-    const out: string[] = [];
-    for (let i = Math.max(0, end - n + 1); i <= end; i++) out.push(b.getLine(i)?.translateToString(true) ?? "");
-    return out;
-  }
-
   write(paneId: PaneId, data: string): void {
     this.get(paneId).term.write(data);
   }
@@ -191,6 +208,12 @@ class Terminals {
   #ensureWebgl(h: Host): void {
     const pool = this.#settings["terminal.webglPool"];
     if (h.webgl || pool <= 0 || this.#settings["terminal.renderer"] !== "webgl") return;
+    if (!Webgl) {
+      webglLoading ??= import("@xterm/addon-webgl").then((m) => void (Webgl = m.WebglAddon));
+      // Once loaded, upgrade this terminal unless it was disposed meanwhile.
+      void webglLoading.then(() => [...this.#hosts.values()].includes(h) && this.#ensureWebgl(h));
+      return;
+    }
     const live = [...this.#hosts.values()].filter((x) => x.webgl);
     if (live.length >= pool) {
       // Evict the least recently used terminal back to the DOM renderer.
@@ -199,7 +222,7 @@ class Terminals {
       lru.webgl = null;
     }
     try {
-      const addon = new WebglAddon();
+      const addon = new Webgl();
       addon.onContextLoss(() => {
         addon.dispose();
         h.webgl = null;

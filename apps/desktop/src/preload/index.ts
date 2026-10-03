@@ -20,7 +20,9 @@ function setStatus(s: Status): void {
 function open(): Promise<Connection> {
   setStatus("connecting");
   ready = (async () => {
-    for (;;) {
+    // The window opens while the core starts (main/index.ts), so the first
+    // attempts fail; retry quickly at first, then back off to 500 ms.
+    for (let attempt = 0; ; attempt++) {
       try {
         const c = await connect();
         conn = c;
@@ -35,7 +37,7 @@ function open(): Promise<Connection> {
         setStatus("connected");
         return c;
       } catch {
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, Math.min(500, 20 * 1.15 ** attempt)));
       }
     }
   })();
@@ -81,8 +83,9 @@ const api = {
     return () => ipcRenderer.off("open-url", h);
   },
   keybindings: (): Promise<KeybindingsSnapshot> => ipcRenderer.invoke("keybindings"),
-  /** SF Symbol images by name; null for names this macOS doesn't have. */
-  sfSymbols: (names: string[]): Promise<Record<string, string | null>> => ipcRenderer.invoke("sf-symbols", names),
+  /** SF Symbols rendered at an exact point size and pixel density; null for unknown names. */
+  sfSymbols: (req: { names: string[]; size: number; weight?: string; scale?: number }): Promise<Record<string, { url: string; w: number; h: number; contain?: boolean } | null>> =>
+    ipcRenderer.invoke("sf-symbols", req),
   onKeybindings(fn: (s: KeybindingsSnapshot) => void): () => void {
     const h = (_e: unknown, s: KeybindingsSnapshot) => fn(s);
     ipcRenderer.on("keybindings", h);

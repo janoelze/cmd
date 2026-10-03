@@ -1,6 +1,6 @@
 # UI vision
 
-> **Update 2026-10-03:** after seeing the first build, the visual direction moved to a **simple, solid dark theme in macOS system style**: no bevels, pinstripes, translucency or vibrancy. The pixel font (Pixelify Sans) stays for headings and labels, and terminals use JetBrains Mono. The "Platinum" design-language section below is superseded. Layout, sidebar behaviour, view modes and the command palette still apply.
+> **Update 2026-10-03:** after seeing the first build, the visual direction moved to a **simple, solid dark theme in macOS system style**: no bevels, pinstripes, translucency or vibrancy. The pixel font (Pixelify Sans) was later retired too: all UI text uses the system font, and terminals use JetBrains Mono. The "Platinum" design-language section below is superseded. Layout, sidebar behaviour, view modes and the command palette still apply.
 
 A playful take on 90s desktop software (Mac OS 8/9 "Platinum", a touch of BeOS and Win95), with a modern keyboard-first workflow, that still feels like a macOS app.
 

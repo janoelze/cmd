@@ -1,14 +1,20 @@
-// Title bar of a window tile (grid and strip). Terminals: status, title, process,
-// path, usage. Browser and file windows: icon, title, host or folder.
+// Title bar of a window tile, the same for every window type
+// (docs/10-window-titles.md): Mark · Name · Dirty ……… Kind | Place | Status.
+// Each field is a Slot, so state changes animate instead of popping.
 
-import { ledOf, rowTitle, shortPath, usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
-import { typeFor, viewFor } from "../windows/registry.ts";
-import { useStore } from "../store.ts";
+import { fieldsOf, type SidebarRow, type WindowFields } from "../model.ts";
+import { typeFor } from "../windows/registry.ts";
 import { useWindowStatus } from "../windowActions.ts";
-import { Symbol } from "./Symbol.tsx";
+import { DirtyDot, Mark, Slot } from "./Slot.tsx";
 
 /** SF Symbol for a window kind (from the core's window type registry). */
 export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "macwindow";
+
+/** A row's title fields, with the window's live status. */
+export function useFields(row: SidebarRow | undefined, now = Date.now()): WindowFields | undefined {
+  const live = useWindowStatus(row?.win?.id ?? null);
+  return row ? fieldsOf(row, live, now) : undefined;
+}
 
 export function TileTitle({
   row,
@@ -23,33 +29,18 @@ export function TileTitle({
   onDoubleClick?: (e: React.MouseEvent) => void;
   title?: string;
 }) {
-  const showUsage = useStore().settings.settings["ui.showResources"];
-  const { pane, win } = row;
-  const status = useWindowStatus(win?.id ?? null);
+  const f = useFields(row)!;
   return (
     <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} title={title}>
-      {win && win.kind !== "terminal" ? (
-        <Symbol name={iconFor(win.kind)} size={11} className="tile-icon" />
-      ) : (
-        <span className={`led led-${ledOf(row.agent)}`} />
-      )}
+      <Mark light={f.light} icon={f.icon} />
       <span className="tile-name">
-        {rowTitle(row)}
-        {status?.dirty && <span className="dirty-dot" title="Unsaved changes" />}
+        <Slot value={{ text: f.name }} fade />
+        <DirtyDot on={!!f.dirty} />
       </span>
       <span className="tile-meta">
-        {pane && (
-          <>
-            <span className="tile-proc">{pane.foreground}</span>
-            <span className="tile-path">{shortPath(pane.cwd)}</span>
-            {showUsage && pane.usage && (
-              <span className="tile-usage" title={usageTooltip(pane.usage)}>
-                {usageLabel(pane.usage)}
-              </span>
-            )}
-          </>
-        )}
-        {win && viewFor(win.kind)?.meta?.(win)}
+        <Slot className="slot-kind" value={{ text: f.kind }} />
+        <Slot className="slot-place" value={f.place ? { text: f.place } : undefined} clipStart divider />
+        <Slot className="slot-status" value={f.status} divider />
       </span>
     </div>
   );
