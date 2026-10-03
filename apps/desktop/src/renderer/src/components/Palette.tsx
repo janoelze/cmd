@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { SearchStatus } from "@cmd/protocol";
+import { IndexRing } from "./IndexRing.tsx";
 
 export interface PaletteItem {
   id: string;
@@ -67,7 +69,7 @@ export function Palette({
   /** Transcript search for `?query`. */
   search?: (text: string) => Promise<PaletteItem[]>;
   /** Shown in the footer while searching, e.g. "3,836 sessions indexed". */
-  searchStatus?: string;
+  searchStatus?: SearchStatus | null;
   /** Extra items computed from the raw query (e.g. "Open <url>"), listed first. */
   dynamic?: (query: string) => PaletteItem[];
   placeholder?: string;
@@ -194,7 +196,10 @@ export function Palette({
                 <kbd>↵</kbd> {searching ? "open or resume" : "run"}
               </span>
               {searching ? (
-                <span className="palette-status">{searchStatus}</span>
+                <span className="palette-status">
+                  <IndexRing status={searchStatus ?? null} />
+                  {searchStatus ? `${searchStatus.sessions.toLocaleString()} session${searchStatus.sessions === 1 ? "" : "s"} indexed` : ""}
+                </span>
               ) : (
                 <span>
                   <kbd>&gt;</kbd> commands <kbd>@</kbd> sessions <kbd>?</kbd> search

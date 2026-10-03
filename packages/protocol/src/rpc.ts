@@ -182,6 +182,8 @@ export interface Methods {
   /** The most recently active past sessions, newest first; `exclude`: session ids to leave out (open ones). */
   "search.recent": { params: { limit?: number; exclude?: string[] }; result: SearchHit[] };
   "search.status": { params: {}; result: SearchStatus };
+  /** Rebuild the transcript index from scratch; progress arrives as search.status events. Fails when search is off. */
+  "search.reindex": { params: {}; result: null };
   /** Resume (or fork) a past session in a new pane, typed into the user's shell. */
   /**
    * Shell command that resumes an agent's session from anywhere (cd + env + the

@@ -187,7 +187,8 @@ body.settings-window { background: transparent; }
 }
 .sw-reset:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 
-.sw-page-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.sw-page-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 12px; }
+.sw-index-status { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; color: var(--text-dim); font-size: 12px; }
 .sw-empty { margin-top: 60px; text-align: center; color: var(--text-dim); }
 .sw-value { font: 12px var(--font-mono); user-select: text; }
 .sw-path { font-family: var(--font-mono); user-select: text; word-break: break-all; }

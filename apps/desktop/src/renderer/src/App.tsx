@@ -22,7 +22,6 @@ import {
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, nextAfterClose, pushHistory, shortPath, spaceAttention, windowIdOf, type SidebarRow } from "./model.ts";
-import type { SearchStatus } from "@cmd/protocol";
 import { getState, onNotification, onWindowFocus, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
@@ -38,12 +37,6 @@ import { Sidebar, SIDEBAR_WIDTH, type SidebarRequest } from "./components/Sideba
 import { SpaceBar } from "./components/SpaceBar.tsx";
 import { closeSpace, showSpace, usePickers, type Picker } from "./spaces.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
-
-function searchStatusLabel(s: SearchStatus | null): string {
-  if (!s) return "";
-  if (s.indexing && s.total) return `Indexing ${s.done.toLocaleString()} / ${s.total.toLocaleString()}…`;
-  return `${s.sessions.toLocaleString()} session${s.sessions === 1 ? "" : "s"} indexed`;
-}
 
 /** True when a text field (palette, settings) has focus, so Edit commands target it. */
 const editingText = () => {
@@ -604,7 +597,7 @@ export function App() {
           onClose={() => setPalette(false)}
           initialQuery={palette}
           search={searchSessions}
-          searchStatus={searchStatusLabel(s.search)}
+          searchStatus={s.search}
         />
       )}
       {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}

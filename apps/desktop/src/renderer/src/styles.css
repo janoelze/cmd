@@ -258,6 +258,14 @@ kbd {
   color: var(--text-dim);
 }
 .sb-search-clear:hover { color: var(--text); }
+.sb-search-ring { position: absolute; right: 6px; }
+.sb-search-ring.with-clear { right: 24px; }
+.sb-search:has(.sb-search-ring.with-clear) input { padding-right: 42px; }
+
+/* Indexing progress (IndexRing). */
+.index-ring { flex: none; display: block; }
+.index-ring-track { fill: none; stroke: color-mix(in srgb, var(--text-dim) 35%, transparent); stroke-width: 2; }
+.index-ring-fill { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
 
 .sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 10px; }
 /* Switching Spaces (store.ts slideSidebar): the list is the scope of a View
@@ -770,7 +778,7 @@ kbd {
 .palette-snippet mark { background: color-mix(in srgb, var(--match) 25%, transparent); color: var(--text); border-radius: 2px; padding: 0 1px; }
 .palette-list li.on .palette-meta, .palette-list li.on .palette-snippet { color: color-mix(in srgb, var(--on-accent) 80%, transparent); }
 .palette-list li.on .palette-snippet mark { background: color-mix(in srgb, var(--on-accent) 30%, transparent); color: var(--on-accent); }
-.palette-status { margin-left: auto; }
+.palette-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 
 /* ── browser and file windows ───────────────────────── */
 

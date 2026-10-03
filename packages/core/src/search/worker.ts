@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import { parentPort, workerData } from "node:worker_threads";
 import type { AgentKind } from "@cmd/protocol";
-import { indexCounts, indexPass, learnedRoots, openIndex, saveLearnedRoot } from "./index.ts";
+import { clearIndex, indexCounts, indexPass, learnedRoots, openIndex, saveLearnedRoot } from "./index.ts";
 import { registerBuiltinSources } from "./builtin.ts";
 import { covers, isDir, locateContext, TranscriptSources, type TranscriptRoot } from "./sources.ts";
 
@@ -16,7 +16,7 @@ export interface WorkerInit {
 }
 
 /** Core → worker. */
-export type WorkerRequest = { type: "learn"; agent: AgentKind; path: string };
+export type WorkerRequest = { type: "learn"; agent: AgentKind; path: string } | { type: "reindex" };
 
 export type WorkerMessage =
   | { type: "progress"; done: number; total: number }
@@ -78,7 +78,12 @@ for (const r of roots) watch(r);
 setInterval(() => schedule(0), 5 * 60_000);
 
 parentPort!.on("message", (m: WorkerRequest) => {
-  if (m.type !== "learn") return;
+  if (m.type === "reindex") {
+    clearIndex(db);
+    lastPass = Date.now();
+    pass();
+    return;
+  }
   const root = sources.learn(m.agent, m.path, roots, locateContext());
   if (!root || !isDir(root.dir)) return;
   roots.push(root);

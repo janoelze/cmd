@@ -46,6 +46,12 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
     this.#worker?.postMessage({ type: "learn", agent, path: transcriptPath } satisfies WorkerRequest);
   }
 
+  /** Rebuilds the index from scratch (e.g. after a parser fix); folders learned from agents are kept. */
+  reindex(): void {
+    this.#worker?.postMessage({ type: "reindex" } satisfies WorkerRequest);
+    this.#setStatus({ indexing: true, done: 0, total: 0 });
+  }
+
   /** Resolves once the worker has stopped (it holds the index open for writing). */
   async close(): Promise<void> {
     this.removeAllListeners();

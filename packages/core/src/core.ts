@@ -228,6 +228,11 @@ export class Core {
     "search.query": (p) => this.#search?.search(p.text, p.limit) ?? [],
     "search.recent": (p) => this.#search?.recent(Math.min(p.limit ?? 5, 50), p.exclude) ?? [],
     "search.status": () => this.#search?.status() ?? NO_SEARCH,
+    "search.reindex": () => {
+      if (!this.#search) throw new Error("transcript search is off (search.enabled)");
+      this.#search.reindex();
+      return null;
+    },
     "agent.resumeCommand": (p) => this.agents.resumeCommand(p.agentId),
     "agent.resume": (p) => this.agents.resume({ ...p, spaceId: this.#place(p, { path: p.cwd ?? undefined }).id }),
     "ui.get": () => this.store.uiState(),

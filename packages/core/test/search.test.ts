@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cleanClaudePrompt, parseClaude, parseCodex, parseCopilot, parseQwen } from "../src/search/parser.ts";
 import { identifierParts, SearchQuery, Vocabulary, words } from "../src/search/query.ts";
-import { indexPass, openIndex, Searcher, transcriptFiles } from "../src/search/index.ts";
+import { clearIndex, indexPass, learnedRoots, openIndex, saveLearnedRoot, Searcher, transcriptFiles } from "../src/search/index.ts";
 import { registerBuiltinSources } from "../src/search/builtin.ts";
 import { TranscriptSources, type TranscriptRoot } from "../src/search/sources.ts";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
@@ -241,6 +241,20 @@ describe("index + search", () => {
     expect(vpnMessages()).toBe(vpnBefore + 1);
     expect(messages()).toBe(before + 1 - archived);
     expect(indexPass(db, roots, sources)).toEqual({ changed: 0, removed: 0 });
+  });
+
+  it("rebuilds from scratch, keeping learned folders; big passes announce their size first", () => {
+    saveLearnedRoot(db, { agent: "claude", dir: "/learned/projects", depth: 2, env: null });
+    const before = searcher.recent(50).length;
+    clearIndex(db);
+    searcher.invalidate();
+    expect(searcher.search("collapsible")).toEqual([]);
+    const progress: [number, number][] = [];
+    const r = indexPass(db, roots, sources, (done, total) => progress.push([done, total]));
+    expect(r.changed).toBe(transcriptFiles(roots).length);
+    expect(progress.at(-1)).toEqual([r.changed, r.changed]);
+    expect(searcher.recent(50)).toHaveLength(before);
+    expect(learnedRoots(db).map((l) => l.dir)).toEqual(["/learned/projects"]);
   });
 });
 

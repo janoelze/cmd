@@ -11,6 +11,7 @@ import { terminals } from "../terminals.ts";
 import { filterRows, flatten, sectionOf, SECTIONS, type Section, type SidebarRow } from "../model.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { HistoryRow, SectionHeading, SessionRow } from "./SidebarRows.tsx";
+import { IndexRing } from "./IndexRing.tsx";
 
 export const SIDEBAR_WIDTH = { default: 280, min: 200, max: 480 } as const;
 
@@ -150,6 +151,7 @@ export function Sidebar(p: Props) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
           />
+          <IndexRing status={p.search} className={query ? "sb-search-ring with-clear" : "sb-search-ring"} />
           {query && (
             <button className="sb-search-clear" aria-label="Clear" onClick={() => (setQuery(""), input.current?.focus())}>
               <Symbol name="xmark.circle.fill" size={ICON.small} />
@@ -228,14 +230,11 @@ export function Sidebar(p: Props) {
 
 function footerOf(p: Props): { text: string; led: "idle" | "off" | "working" } {
   if (!p.connected) return { text: p.error ? `core error: ${p.error}` : "core offline — reconnecting…", led: "off" };
-  const s = p.search;
-  if (s?.indexing && s.total) return { text: `Indexing ${s.done.toLocaleString()} / ${s.total.toLocaleString()}…`, led: "working" };
   const { agents, working, waiting } = p.stats;
   if (agents) {
     const parts = [`${agents} agent${agents === 1 ? "" : "s"}`, working ? `${working} working` : null, waiting ? `${waiting} waiting` : null];
     return { text: parts.filter(Boolean).join(" · "), led: working ? "working" : "idle" };
   }
-  if (s?.sessions) return { text: `${s.sessions.toLocaleString()} past session${s.sessions === 1 ? "" : "s"} indexed`, led: "idle" };
   return { text: "", led: "idle" };
 }
 

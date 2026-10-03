@@ -81,11 +81,25 @@ export function openIndex(file: string): DatabaseSync {
     CREATE TABLE IF NOT EXISTS learned_roots(dir TEXT PRIMARY KEY, root TEXT);`);
   const version = `${SCHEMA_VERSION}.${PARSER_VERSION}`;
   const row = db.prepare(`SELECT value FROM meta WHERE key = 'version'`).get() as { value: string } | undefined;
-  if (row?.value !== version) {
-    // Schema or parser changed: rebuild from scratch (learned roots are kept).
-    db.exec(`DROP TABLE IF EXISTS files; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS session_fts;
-      DROP TABLE IF EXISTS message_fts; DROP TABLE IF EXISTS vocab;`);
-  }
+  // Schema or parser changed: rebuild from scratch.
+  if (row?.value !== version) dropTables(db);
+  createTables(db);
+  db.prepare(`INSERT OR REPLACE INTO meta(key, value) VALUES ('version', ?)`).run(version);
+  return db;
+}
+
+/** Empties the index so the next pass reads every transcript again; learned roots are kept. */
+export function clearIndex(db: DatabaseSync): void {
+  dropTables(db);
+  createTables(db);
+}
+
+function dropTables(db: DatabaseSync): void {
+  db.exec(`DROP TABLE IF EXISTS files; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS session_fts;
+    DROP TABLE IF EXISTS message_fts; DROP TABLE IF EXISTS vocab;`);
+}
+
+function createTables(db: DatabaseSync): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, size INTEGER, mtime REAL);
     CREATE TABLE IF NOT EXISTS sessions(
@@ -99,8 +113,6 @@ export function openIndex(file: string): DatabaseSync {
       text, session UNINDEXED, kind UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');
     CREATE VIRTUAL TABLE IF NOT EXISTS vocab USING fts5vocab(session_fts, 'row');
   `);
-  db.prepare(`INSERT OR REPLACE INTO meta(key, value) VALUES ('version', ?)`).run(version);
-  return db;
 }
 
 /** Transcript folders learned from live agents (see TranscriptSources.learn). */
@@ -203,6 +215,8 @@ export function indexPass(
   const removed = [...known.keys()].filter((p) => !present.has(p));
 
   const BATCH = 25;
+  // Announce big passes up front (a full reindex); small ones would only flicker.
+  if (changed.length > BATCH) onProgress?.(0, changed.length);
   db.exec("BEGIN");
   try {
     for (const p of removed) {

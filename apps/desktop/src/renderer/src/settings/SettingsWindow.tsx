@@ -11,10 +11,12 @@ import {
   settingTitle,
   type SettingDef,
   type SettingKey,
+  type SearchStatus,
   type Settings,
 } from "@cmd/protocol";
 import { COMMANDS, DEFAULT_KEYBINDINGS, prettyAccelerator } from "../../../shared/commands.ts";
 import { Symbol } from "../components/Symbol.tsx";
+import { IndexRing } from "../components/IndexRing.tsx";
 import { useKeybindings } from "../keybindings.ts";
 import { cmd } from "../bridge.ts";
 import { NumberField, Popup, Segmented, Switch, TextField } from "./controls.tsx";
@@ -65,7 +67,7 @@ const matches = (k: SettingKey, q: string) => {
 };
 
 export function SettingsWindow() {
-  const { snapshot: snap, connected } = useSettings();
+  const { snapshot: snap, connected, search } = useSettings();
   const [page, setPage] = useState<Page>(initialPage);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -130,6 +132,7 @@ export function SettingsWindow() {
       <>
         <div className="sw-list">{rows(keys)}</div>
         <div className="sw-page-foot">
+          {page === "search" && <IndexStatusFoot status={search} enabled={snap.settings["search.enabled"]} />}
           <button className="sw-button" disabled={!changed.length} onClick={() => changed.forEach(reset)}>
             Restore Defaults
           </button>
@@ -290,6 +293,37 @@ function Shortcuts() {
           Edit keybindings.json…
         </button>
       </div>
+    </>
+  );
+}
+
+/** Search page: how much is indexed, progress while indexing, and Rebuild Index. */
+function IndexStatusFoot(p: { status: SearchStatus | null; enabled: boolean }) {
+  const s = p.status;
+  const busy = !!s?.indexing;
+  const text = !p.enabled
+    ? "Indexing is off"
+    : busy && s.total
+      ? `Indexing ${s.done.toLocaleString()} / ${s.total.toLocaleString()}…`
+      : busy
+        ? "Indexing…"
+        : s
+          ? `${s.sessions.toLocaleString()} session${s.sessions === 1 ? "" : "s"} indexed`
+          : "";
+  return (
+    <>
+      <span className="sw-index-status">
+        <IndexRing status={s} />
+        {text}
+      </span>
+      <button
+        className="sw-button"
+        disabled={!p.enabled || busy}
+        title="Read every transcript again, e.g. after moving folders or an update"
+        onClick={() => void cmd.call("search.reindex", {})}
+      >
+        Rebuild Index
+      </button>
     </>
   );
 }
