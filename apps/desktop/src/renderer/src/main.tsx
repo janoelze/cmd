@@ -5,10 +5,12 @@ import "@xterm/xterm/css/xterm.css";
 import "./styles.css";
 import "./windows/builtin.tsx"; // built-in window views (browser, files, text)
 import { App } from "./App.tsx";
+import { installErrorReporting } from "./errors.ts";
 import { installScrollbars } from "./scrollbars.ts";
 import "./themes/builtin.ts";
 import { bootTheme } from "./themes/registry.ts";
 
+installErrorReporting();
 bootTheme();
 installScrollbars();
 

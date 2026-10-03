@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { PANE_ENV, cmdHome, configDir, coreSocketPath, defaultSocketPath, enterInstance, isOwnCore } from "@cmd/protocol/node";
+import { PANE_ENV, cmdHome, configDir, coreSocketPath, defaultSocketPath, enterInstance, isOwnCore, logDir } from "@cmd/protocol/node";
 import { Core } from "../src/core.ts";
 import { fakeFactory } from "./fake-pty.ts";
 
@@ -18,12 +18,13 @@ function clean(): void {
 describe("instances", () => {
   it("keeps release and dev apart", () => {
     clean();
-    const release = { home: cmdHome(), socket: coreSocketPath() };
+    const release = { home: cmdHome(), socket: coreSocketPath(), logs: logDir() };
     process.env.CMD_INSTANCE = "dev";
     expect(path.basename(cmdHome())).toBe("cmd-dev");
     expect(path.dirname(cmdHome())).toBe(path.dirname(release.home));
     expect(coreSocketPath()).toBe(path.join(os.tmpdir(), "cmd-dev", "core.sock"));
     expect(coreSocketPath()).not.toBe(release.socket);
+    expect(logDir()).not.toBe(release.logs);
     expect(configDir()).toBe(path.join(os.homedir(), ".config", "cmd")); // shared
   });
 

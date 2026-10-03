@@ -25,7 +25,7 @@ pnpm typecheck
 pnpm e2e                     # build, launch the app via Playwright, screenshots in .cmd-dev/shots
 ```
 
-Development builds (`pnpm dev`, and `pnpm dist`, which packages "cmd dev") have a red icon and the name "cmd dev". They are the "dev" instance (`packages/protocol/src/instance.ts`): their own core and state in `~/Library/Application Support/cmd-dev` (socket in `$TMPDIR/cmd-dev`), so they never attach to the installed app's core and your real terminals. They share `~/.config/cmd` (settings, keybindings) with it and never update themselves. Setting `CMD_HOME` puts an instance's state and socket in that folder instead.
+Development builds (`pnpm dev`, and `pnpm dist`, which packages "cmd dev") have a red icon and the name "cmd dev". They are the "dev" instance (`packages/protocol/src/instance.ts`): their own core and state in `~/Library/Application Support/cmd-dev` (socket in `$TMPDIR/cmd-dev`), so they never attach to the installed app's core and your real terminals. They share `~/.config/cmd` (settings, keybindings) with it and never update themselves. Setting `CMD_HOME` puts an instance's state, socket and logs in that folder instead.
 
 `$CMD_INSTANCE` and `$CMD_HOME` decide which instance a process is; `$CMD_SOCKET` only decides which core a client (the CLI, hooks) talks to. Every pane sets `CMD_SOCKET` to its own core, so the app and the core drop it on startup, along with the rest of the pane's context (`CMD_PANE_ID`, `CMD_AGENT_ID`…). That's what makes `pnpm dev`, `pnpm e2e` and `pnpm core` safe to run in the installed app's terminals. As a second guard, `core.hello` reports the core's state dir, and the app never restarts a core that isn't its own. `pnpm icons` renders the red icon into `apps/desktop/build/dev` along with the normal one.
 
@@ -58,9 +58,15 @@ Windows builds (x64) come from the same tag: CI's `windows` job runs the tests a
 
 Installed apps update themselves from GitHub releases with electron-updater (`apps/desktop/src/main/updater.ts`). It reads `latest-mac.yml` (`latest.yml` on Windows) from the latest non-prerelease, so `-beta` tags never reach users. `electron-builder.yml` has the `publish: github` config that generates that file (and the `.blockmap`s for partial downloads), and CI uploads them with the release. Squirrel.Mac only installs an update whose signature matches the running app, so updating needs Developer ID signed releases, which ad-hoc signed builds can't do.
 
-The `updates.mode` setting picks `auto` (download in the background, install on quit; the default), `notify` or `off`. The app checks 30 s after launch and every 4 hours, and logs to `$CMD_HOME/update.log`.
+The `updates.mode` setting picks `auto` (download in the background, install on quit; the default), `notify` or `off`. The app checks 30 s after launch and every 4 hours, and logs to `update.log` in the logs folder (see Logs and crash reports).
 
 An update replaces the app bundle while the old core keeps running. So the packaged app starts the core from a copy of the runtime in `$CMD_HOME/runtime/<build>` (the newest three are kept), and an old core never loads the new version's files. After an update the app shows the usual "core is outdated" prompt.
+
+### Logs and crash reports
+
+Each process logs to its own file (`packages/protocol/src/log.ts`): `core.log`, `main.log` (with the app pages' warnings and errors as `[renderer]`), `update.log`, and `core.out.log` for whatever bypasses the core's logger (Node's fatal errors). Files rotate at 5 MB, three kept. Release builds log to `~/Library/Logs/cmd`, development builds to `~/Library/Logs/cmd-dev` (Console.app shows both); with `$CMD_HOME` set it's `$CMD_HOME/logs`, and `$CMD_LOG_DIR` overrides all of them. `CMD_LOG_LEVEL=debug` adds debug lines (on by default in development builds). Log through `logger("scope")`, not `console`.
+
+Crashes are written as JSON to `<logs>/crashes`: uncaught exceptions in the core (which then exits) and in main, unhandled rejections (logged, the process keeps running), TypeErrors and the like thrown by RPC handlers, renderers and GPU processes that die, uncaught errors in the app's pages, a core that dies of a signal, and Crashpad minidumps when main itself crashed. The app (`apps/desktop/src/main/crash.ts`) sends them to a Discord webhook with home folders replaced by `~`, at most once a day per crash and ten an hour, and moves them to `crashes/sent`. The webhook is baked in at build time from `$CMD_CRASH_WEBHOOK`, which CI sets from the `CMD_CRASH_WEBHOOK` secret for tagged releases only. Development builds don't send unless `CMD_CRASH_WEBHOOK` is set when they run. People can turn sending off with `diagnostics.crashReports` (Settings → About).
 
 ### Signing and notarization
 

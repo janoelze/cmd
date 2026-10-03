@@ -10,8 +10,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AgentKind, Settings } from "@cmd/protocol";
+import { logger } from "@cmd/protocol/node";
 import { envPrefix } from "../shell.ts";
 import { headObjects, type Obj, type SessionDocument } from "./parser.ts";
+
+const log = logger("search");
 
 /** A folder of transcripts. */
 export interface TranscriptRoot {
@@ -84,7 +87,7 @@ export class TranscriptSources {
       try {
         roots.push(...s.locate(ctx));
       } catch (err) {
-        console.error(`cmd search: locating ${s.agent} transcripts: ${(err as Error).message}`);
+        log.error(`locating ${s.agent} transcripts: ${(err as Error).message}`);
       }
     }
     for (const d of extraDirs) {

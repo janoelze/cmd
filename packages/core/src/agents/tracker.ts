@@ -9,6 +9,7 @@ import path from "node:path";
 import { EventEmitter } from "node:events";
 import type { Agent, AgentId, AgentKind, AgentState, Methods, PaneId, Settings, SpaceId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
+import { logger } from "@cmd/protocol/node";
 import type { Foreground, PaneManager } from "../panes.ts";
 import type { Store } from "../store.ts";
 import { shq } from "../shell.ts";
@@ -16,6 +17,8 @@ import { registerBuiltinSources } from "../search/builtin.ts";
 import { locateContext, TranscriptSources } from "../search/sources.ts";
 import { applyHook, nativeSession, type StateChange } from "./state.ts";
 import { readStatus, removeStatus, StatusWatcher, type HookStatus } from "./statusfiles.ts";
+
+const log = logger("agents");
 
 export interface TrackerOptions {
   store?: Store | null;
@@ -374,6 +377,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     };
     this.#agents.set(id, agent);
     if (o.paneId) this.#panes.setAgent(o.paneId, id);
+    log.info(`agent ${id.slice(0, 8)} ${o.kind} (${o.source})`, { pane: o.paneId?.slice(0, 8) ?? null, parent: o.parentId?.slice(0, 8) ?? null });
     this.#emitUpdate(agent);
     return agent;
   }
@@ -382,6 +386,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     let dirty = Object.keys(fields).length > 0;
     Object.assign(agent, fields);
     if (change.state && change.state !== agent.state) {
+      log.debug(`agent ${agent.id.slice(0, 8)} ${agent.state} → ${change.state}`);
       agent.state = change.state;
       agent.stateSince = Date.now();
       dirty = true;

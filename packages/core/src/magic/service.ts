@@ -4,6 +4,7 @@
 // The agent is never involved in a refresh.
 
 import os from "node:os";
+import { logger } from "@cmd/protocol/node";
 import { MAGIC_PROVIDERS, requestedMedia, type AppWindow, type CoreEvent, type MagicModel, type MagicState, type MagicStep, type SecretKey, type Settings, type WindowId } from "@cmd/protocol";
 import { backendFor, isProvider, type Backend } from "./backends.ts";
 import { listModels } from "./models.ts";
@@ -12,6 +13,8 @@ import { runMagic, type MagicEvent } from "./run.ts";
 import type { Workspace } from "./prompt.ts";
 import { sandboxAvailable, type SandboxMode } from "./sandbox.ts";
 import { runSource, type SourceResult } from "./sources.ts";
+
+const log = logger("magic");
 
 /** What the service needs from the core's window manager. */
 export interface MagicWindows {
@@ -120,6 +123,7 @@ export class MagicService {
         case "step-start": {
           const step: MagicStep = { id: e.id, tool: e.tool, why: e.why, detail: detailOf(e.tool, e.input) };
           steps.push(step);
+          log.debug(`run ${id.slice(0, 8)} ${e.tool}: ${e.why}`, step.detail ?? "");
           send({ type: "step", step });
           break;
         }
@@ -128,6 +132,7 @@ export class MagicService {
           if (!step) break;
           step.ms = e.ms;
           step.isError = e.isError;
+          log.debug(`run ${id.slice(0, 8)} ${step.tool} done`, { ms: e.ms, error: e.isError });
           step.output = e.output.slice(0, 4000);
           send({ type: "step", step: { ...step } });
           break;
@@ -142,6 +147,7 @@ export class MagicService {
           else bodyTimer ??= setTimeout(flushBody, BODY_THROTTLE_MS);
           break;
         case "repair":
+          log.info(`run ${id.slice(0, 8)} repairing: ${e.reason.split("\n")[0]}`);
           send({ type: "repair", reason: e.reason.split("\n")[0]! });
           break;
       }
@@ -155,6 +161,7 @@ export class MagicService {
       this.#fail(id, prev, (e as Error).message);
       return;
     }
+    log.info(`run ${id.slice(0, 8)}${refining ? " (refine)" : ""}`, { provider: s["magic.provider"], model: s[MAGIC_PROVIDERS[s["magic.provider"]].modelSetting] || "default" });
     void runMagic({
       prompt: request,
       backend,
@@ -172,6 +179,22 @@ export class MagicService {
         if (this.#runs.get(id) !== ac) return; // superseded
         this.#runs.delete(id);
         const usable = r.ok || (r.header && (r.header.kind === "terminal" || r.body));
+        log.info(`run ${id.slice(0, 8)} finished`, {
+          ok: r.ok,
+          usable: !!usable,
+          route: r.route,
+          kind: r.header?.kind ?? null,
+          backend: r.backend,
+          model: r.model,
+          ms: r.timings.done,
+          firstStepMs: r.timings.firstStep ?? null,
+          headerMs: r.timings.header ?? null,
+          steps: steps.length,
+          repairs: r.repairs.length,
+          tokens: { in: r.usage.input, out: r.usage.output, cacheRead: r.usage.cacheRead, cacheWrite: r.usage.cacheWrite },
+          costUSD: r.usage.costUSD ?? null,
+          ...(r.errors.length ? { errors: r.errors.length, firstError: r.errors[0]!.split("\n")[0] } : {}),
+        });
         if (!usable) return this.#fail(id, prev, r.errors[0]?.split("\n")[0] ?? "The answer couldn't be used.");
         if (r.route === "json") {
           this.#o.windows.update(id, {
@@ -226,11 +249,15 @@ export class MagicService {
     if (hit && !refresh && Date.now() - hit.at < MODELS_TTL_MS) return hit.list;
     const list = (this.#o.listModels ?? listModels)(provider, key);
     this.#models.set(cacheKey, { at: Date.now(), list });
-    list.catch(() => this.#models.get(cacheKey)?.list === list && this.#models.delete(cacheKey)); // errors aren't cached
+    list.catch((e: Error) => {
+      log.warn(`listing ${provider} models failed: ${e.message}`);
+      if (this.#models.get(cacheKey)?.list === list) this.#models.delete(cacheKey); // errors aren't cached
+    });
     return list;
   }
 
   #fail(id: WindowId, prev: MagicState, message: string): void {
+    log.warn(`run ${id.slice(0, 8)} failed: ${message}`);
     this.#runs.delete(id);
     // A failed refinement keeps the widget that worked.
     if (prev.phase === "ready" && (prev.html || prev.command)) {
@@ -298,7 +325,10 @@ export class MagicService {
     }
     const s = stateOf(w);
     if (!s.source || s.phase !== "ready") return;
+    const t0 = Date.now();
     const r: SourceResult = await runSource(s.source, { cwd: this.#cwd(w), deny: DEFAULT_DENY_PATHS, sandbox: this.#sandbox() });
+    if (r.ok) log.debug(`data ${id.slice(0, 8)} refreshed`, { ms: Date.now() - t0 });
+    else log.warn(`data ${id.slice(0, 8)} failed (${(this.#failures.get(id) ?? 0) + 1} in a row): ${(r.error ?? "failed").split("\n")[0]}`, { ms: Date.now() - t0 });
     if (!this.#o.windows.others().some((x) => x.id === id)) return;
     const at = Date.now();
     if (r.ok) {

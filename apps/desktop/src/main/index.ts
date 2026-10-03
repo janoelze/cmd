@@ -9,14 +9,16 @@ import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { SETTINGS_TEMPLATE, mediaOrigin, widgetCsp } from "@cmd/protocol";
-import { cmdHome, connect, coreSocketPath, enterInstance, ipcPath, isOwnCore, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, connect, coreSocketPath, enterInstance, initLog, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { lucideSymbol, type SymbolImage } from "./icons.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
+import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
 import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type KeybindingsSnapshot } from "./keybindings.ts";
 
 // Loaded after launch: the updater isn't needed to show the first window.
@@ -25,15 +27,26 @@ const checkForUpdates = () => void updater().then((u) => u.checkForUpdates(devBu
 
 /**
  * Development builds (pnpm dev, and pnpm dist, which packages as "cmd dev") sit
- * next to the installed app: a red icon, their own name, and their own core and
- * state (the "dev" instance, see protocol/instance.ts), so they never attach to
- * (and offer to restart) the core your real terminals run in, even when started
- * from one of them. Settings and keybindings stay shared. $CMD_HOME relocates
- * either instance.
+ * next to the installed app: a red icon, their own name, and their own core,
+ * state and logs (the "dev" instance, see protocol/instance.ts), so they never
+ * attach to (and offer to restart) the core your real terminals run in, even
+ * when started from one of them. Settings and keybindings stay shared. $CMD_HOME
+ * relocates either instance.
  */
 const devBuild = !app.isPackaged || app.getName() === "cmd dev";
 if (devBuild) app.setName("cmd dev");
 enterInstance(devBuild ? "dev" : "release");
+
+// Logs: main.log, renderer.log and (from the core) core.log in logDir(), see
+// protocol/log.ts. The core learns the app's version from this and its instance
+// from $CMD_INSTANCE.
+process.env.CMD_APP_VERSION = app.getVersion();
+initLog("main", { level: devBuild ? "debug" : "info" });
+const log = logger("main");
+const rendererLog = logger("renderer");
+installCrashHandlers("main", { exitOnException: false, context: () => crashContext() });
+startCrashReporting({ devBuild, context: () => crashContext() });
+log.info(`${app.getName()} ${app.getVersion()} starting`, { pid: process.pid, electron: process.versions.electron, platform: `${process.platform} ${os.release()} ${process.arch}`, home: cmdHome() });
 
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 
@@ -63,6 +76,14 @@ const here = import.meta.dirname; // apps/desktop/out/main
 // scripts/stage-runtime.mjs) and run it with Electron's own Node.
 const repoRoot = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(here, "../../../..");
 const socketPath = coreSocketPath();
+/** What crash reports from the app say about it (the core adds its own build). */
+let appBuild = "";
+function crashContext(): Record<string, string> {
+  try {
+    appBuild ||= sourceBuildId(repoRoot);
+  } catch {}
+  return { build: appBuild };
+}
 // Chromium's profile (browser-window cookies, caches) lives in the state dir, so
 // $CMD_HOME isolates it too. By default it would be Application Support/<app name>,
 // which for "cmd" is the core's own state dir. Dev builds used to be named
@@ -95,7 +116,7 @@ function canConnect(): Promise<boolean> {
  */
 function ownCore(hello: { pid: number; stateDir?: string }): boolean {
   if (isOwnCore(hello)) return true;
-  console.error(`cmd: core ${hello.pid} on ${socketPath} belongs to ${hello.stateDir ?? "another instance"}, not ${cmdHome()}; leaving it alone`);
+  log.error(`core ${hello.pid} on ${socketPath} belongs to ${hello.stateDir ?? "another instance"}, not ${cmdHome()}; leaving it alone`);
   return false;
 }
 
@@ -110,6 +131,7 @@ async function checkCoreBuild(): Promise<void> {
     if (!ownCore(hello)) return;
     const current = sourceBuildId(repoRoot);
     if (hello.build === current) return;
+    log.info(`core ${hello.pid} runs build ${hello.build}, this app ships ${current}`);
     const panes = await conn.client.call("pane.list", {}).catch(() => []);
     const { response } = await dialog.showMessageBox({
       type: "warning",
@@ -122,6 +144,7 @@ async function checkCoreBuild(): Promise<void> {
       defaultId: 0,
       cancelId: 1,
     });
+    log.info(response === 0 ? "restarting the outdated core" : "keeping the outdated core");
     if (response !== 0) return;
     await stopCore(hello.pid);
   } catch {
@@ -183,13 +206,36 @@ async function restartCore(): Promise<void> {
     if (await canConnect()) return;
     await new Promise((r) => setTimeout(r, 50));
   }
-  throw new Error(`core did not start; see ${path.join(cmdHome(), "core.log")}`);
+  throw new Error(`core did not start; see ${coreLog()}`);
+}
+
+const coreLog = () => path.join(logDir(), "core.log");
+/** The core's stdout and stderr: what bypasses its logger, e.g. Node's fatal errors. */
+const coreOutput = () => path.join(logDir(), "core.out.log");
+
+/** The last `n` lines of a log file. */
+function tailOf(file: string, n: number): string[] {
+  try {
+    const fd = fs.openSync(file, "r");
+    const size = fs.fstatSync(fd).size;
+    const buf = Buffer.alloc(Math.min(size, 64 * 1024));
+    fs.readSync(fd, buf, 0, buf.length, size - buf.length);
+    fs.closeSync(fd);
+    return buf.toString("utf8").split("\n").filter(Boolean).slice(-n);
+  } catch {
+    return [];
+  }
 }
 
 function spawnCore(): void {
-  const home = cmdHome();
-  fs.mkdirSync(home, { recursive: true });
-  const log = fs.openSync(path.join(home, "core.log"), "a");
+  fs.mkdirSync(cmdHome(), { recursive: true });
+  fs.mkdirSync(logDir(), { recursive: true });
+  // Only this file is appended to by the child itself, so it isn't rotated: start over when large.
+  const out = coreOutput();
+  try {
+    if (fs.statSync(out).size > 5 * 1024 * 1024) fs.rmSync(out);
+  } catch {}
+  const fd = fs.openSync(out, "a");
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   let node = "node";
@@ -197,8 +243,20 @@ function spawnCore(): void {
   // --instance also tells cores apart in `ps` (scripts/stop-core.mjs --all).
   const child = spawn(node, ["--no-warnings", path.join(coreRoot(), "packages/core/src/main.ts"), `--instance=${devBuild ? "dev" : "release"}`], {
     detached: true,
-    stdio: ["ignore", log, log],
+    stdio: ["ignore", fd, fd],
     env,
+  });
+  fs.closeSync(fd);
+  log.info(`started a core, pid ${child.pid}`);
+  // While this app runs, a core that dies without reporting it (killed by a
+  // signal, a native crash, Node's own fatal errors) is reported from here.
+  // 70: the core's crash handler has recorded it already. SIGTERM/SIGINT: stopped on purpose.
+  child.on("exit", (code, signal) => {
+    log.info(`core ${child.pid} exited`, { code, signal });
+    const stopped = signal === "SIGTERM" || signal === "SIGINT" || signal === "SIGHUP" || code === 0 || code === 70;
+    const output = tailOf(out, 40);
+    if (stopped || output.some((l) => l.includes("already running"))) return;
+    recordCrash("core", "exit", signal ? `Core killed by ${signal}` : `Core exited with code ${code}`, output.join("\n") || null, {}, tailOf(coreLog(), 80));
   });
   child.unref();
 }
@@ -225,7 +283,7 @@ async function ensureCore(): Promise<void> {
     if (await canConnect()) return;
     await new Promise((r) => setTimeout(r, 10));
   }
-  throw new Error(`core did not start; see ${path.join(cmdHome(), "core.log")}`);
+  throw new Error(`core did not start; see ${coreLog()}`);
 }
 
 // ── window ──────────────────────────────────────────────
@@ -386,6 +444,15 @@ ipcMain.handle("restart-core", () => restartCore());
 // The preload connects where main decided (dev builds use their own core).
 ipcMain.on("core-socket", (e) => (e.returnValue = socketPath));
 ipcMain.on("reveal-path", (_e, p: string) => shell.showItemInFolder(p));
+// Uncaught errors in the app's pages (renderer/src/errors.ts): each one once per launch.
+const rendererErrors = new Set<string>();
+ipcMain.on("renderer-error", (e, r: { kind: string; message: string; stack: string | null }) => {
+  const key = `${r.message}\n${r.stack?.split("\n").find((l) => l.trim().startsWith("at ")) ?? ""}`;
+  if (rendererErrors.has(key)) return;
+  rendererErrors.add(key);
+  const page = isSettings(BrowserWindow.fromWebContents(e.sender)) ? "settings" : "app";
+  recordCrash("renderer", r.kind, r.message, r.stack, { page });
+});
 /** Settings → About: the app's side of the diagnostics (core.info is the core's). */
 ipcMain.handle("app-info", async () => ({
   version: app.getVersion(),
@@ -394,8 +461,10 @@ ipcMain.handle("app-info", async () => ({
   chrome: process.versions.chrome,
   build: sourceBuildId(repoRoot),
   home: cmdHome(),
-  coreLog: path.join(cmdHome(), "core.log"),
-  updateLog: path.join(cmdHome(), "update.log"),
+  logs: logDir(),
+  coreLog: coreLog(),
+  updateLog: path.join(logDir(), "update.log"),
+  crashes: crashStatus(devBuild),
   updates: (await updater()).updateStatus(),
 }));
 ipcMain.on("open-settings", (_e, p: string) => {
@@ -512,6 +581,14 @@ app.on("web-contents-created", (_e, contents) => {
     prefs.safeDialogs = true; // a page looping alert() can be stopped
     if (!/^(https?|about|file):/i.test(params.src ?? "")) params.src = "about:blank";
   });
+  // The app's own pages' warnings and errors go to main.log (browser windows' pages and Magic widgets' don't).
+  if (contents.getType() === "window") {
+    contents.on("console-message", (e) => {
+      if ((e.level !== "warning" && e.level !== "error") || e.sourceId.startsWith("cmd-widget:")) return;
+      const where = e.sourceId ? ` (${path.basename(e.sourceId.replace(/\?.*$/, ""))}:${e.lineNumber})` : "";
+      rendererLog[e.level === "error" ? "error" : "warn"](`${e.message}${where}`);
+    });
+  }
   if (contents.getType() === "webview") {
     contents.setWindowOpenHandler(({ url }) => {
       const host = contents.hostWebContents;
@@ -554,8 +631,9 @@ app.whenReady().then(async () => {
   spaces.restore();
   ensureCore().then(
     () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows)),
-    (err: Error) => dialog.showErrorBox("cmd: the core did not start", err.message),
+    (err: Error) => (log.error("the core did not start", err), dialog.showErrorBox("cmd: the core did not start", err.message)),
   );
+  followCrashReports(socketPath);
   if (!devBuild) void updater().then((u) => u.startUpdater(socketPath));
   const send = commandSender(() => spaces.reopen(), { openSettings, checkForUpdates, isSettings, appWindows });
   buildMenu(send, keybindings.bindings);

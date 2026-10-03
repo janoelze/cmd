@@ -7,6 +7,7 @@ import type { ContextItem, MenuState } from "../shared/commands.ts";
 import type { KeybindingsSnapshot } from "../main/keybindings.ts";
 import type { Appearance } from "../main/appearance.ts";
 import type { UpdateStatus } from "../main/updater.ts";
+import type { CrashStatus } from "../main/crash.ts";
 
 export interface AppInfo {
   version: string;
@@ -17,9 +18,12 @@ export interface AppInfo {
   /** Source hash of the core this app ships (compare with core.info's build). */
   build: string;
   home: string;
+  /** Where the logs and crash reports are (release and development builds each have their own). */
+  logs: string;
   coreLog: string;
   updateLog: string;
   updates: UpdateStatus;
+  crashes: CrashStatus;
 }
 
 type Status = "connecting" | "connected" | "disconnected";
@@ -100,6 +104,8 @@ const api = {
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke("app-info"),
   restartCore: (): Promise<void> => ipcRenderer.invoke("restart-core"),
   revealPath: (p: string) => ipcRenderer.send("reveal-path", p),
+  /** An uncaught error in this page (renderer/src/errors.ts). */
+  reportError: (r: { kind: string; message: string; stack: string | null }) => ipcRenderer.send("renderer-error", r),
   openSettingsFile: (p: string) => ipcRenderer.send("open-settings", p),
   openKeybindingsFile: () => ipcRenderer.send("open-keybindings"),
   openDocs: () => ipcRenderer.send("open-docs"),

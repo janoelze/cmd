@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { cmdHome, configDir, coreSocketPath, enterInstance, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, configDir, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, logger, sourceBuildId } from "@cmd/protocol/node";
 import { Core } from "./core.ts";
 import { nodePtyFactory } from "./panes.ts";
 import { ProcInfo } from "./agents/procinfo.ts";
@@ -21,8 +21,15 @@ delete process.env.ELECTRON_RUN_AS_NODE;
 const flag = process.argv.find((a) => a.startsWith("--instance="))?.slice("--instance=".length);
 enterInstance(flag === "dev" || (!flag && process.env.CMD_INSTANCE === "dev") ? "dev" : "release");
 
+// Logs to logDir()/core.log; stdout and stderr (where the app points them) only
+// get what bypasses the logger, e.g. Node's own fatal errors.
+initLog("core", { level: instanceName() === "dev" ? "debug" : "info" });
+const log = logger("core");
+const build = sourceBuildId(path.resolve(import.meta.dirname, "../../.."));
+installCrashHandlers("core", { exitOnException: true, context: () => ({ build }) });
+
 const procinfo = new ProcInfo();
-if (!procinfo.available) console.warn("cmd core: native/build/procinfo missing (run pnpm install); agent detection falls back to process names");
+if (!procinfo.available) log.warn("native/build/procinfo missing (run pnpm install); agent detection falls back to process names");
 
 const home = cmdHome();
 fs.mkdirSync(home, { recursive: true });
@@ -43,24 +50,27 @@ const core = new Core({
   inspector: procinfo.available ? (pid) => procinfo.query(pid) : null,
   sampler: procinfo.available ? (pids) => procinfo.trees(pids) : null,
   statusRoot: statusRoot(),
-  build: sourceBuildId(path.resolve(import.meta.dirname, "../../..")),
+  build,
   stateDir: home,
 });
 
 try {
   await core.listen();
 } catch (err) {
+  log.error(`could not listen: ${(err as Error).message}`);
   console.error(`cmd core: ${(err as Error).message}`);
   process.exit(1);
 }
 const pidFile = path.join(home, "core.pid");
 fs.writeFileSync(pidFile, String(process.pid));
+log.info(`pid ${process.pid} listening on ${socketPath}`, { instance: instanceName(), home, version: process.env.CMD_APP_VERSION ?? "source", build, node: process.versions.node, platform: `${process.platform} ${process.arch}` });
 console.log(`cmd core ${process.pid} listening on ${socketPath}`);
 
 let closing = false;
 const shutdown = async () => {
   if (closing) return;
   closing = true;
+  log.info("shutting down");
   await core.close();
   fs.rmSync(pidFile, { force: true });
   process.exit(0);

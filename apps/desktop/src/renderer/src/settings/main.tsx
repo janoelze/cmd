@@ -4,11 +4,13 @@ import { createRoot } from "react-dom/client";
 import "../styles.css";
 import "./settings.css";
 import { cmd } from "../bridge.ts";
+import { installErrorReporting } from "../errors.ts";
 import { installScrollbars } from "../scrollbars.ts";
 import "../themes/builtin.ts";
 import { bootTheme } from "../themes/registry.ts";
 import { SettingsWindow } from "./SettingsWindow.tsx";
 
+installErrorReporting();
 bootTheme();
 installScrollbars();
 

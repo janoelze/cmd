@@ -5,9 +5,12 @@ import { EventEmitter } from "node:events";
 import { Worker } from "node:worker_threads";
 import { DatabaseSync } from "node:sqlite";
 import type { AgentKind } from "@cmd/protocol";
+import { logger } from "@cmd/protocol/node";
 import { Searcher, type IndexStatus, type SearchHit } from "./index.ts";
 import type { TranscriptRoot } from "./sources.ts";
 import type { WorkerMessage, WorkerRequest } from "./worker.ts";
+
+const log = logger("search");
 
 export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
   #dbPath: string;
@@ -23,7 +26,7 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
     this.#worker = new Worker(new URL("./worker.ts", import.meta.url), { workerData: { dbPath, roots } });
     this.#worker.unref();
     this.#worker.on("message", (m: WorkerMessage) => this.#onMessage(m));
-    this.#worker.on("error", (err) => console.error("cmd search worker:", err.message));
+    this.#worker.on("error", (err) => log.error("worker failed", err));
     this.#setStatus({ indexing: true });
   }
 
@@ -79,8 +82,8 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
     else if (m.type === "pass") {
       this.#searcher?.invalidate();
       this.#setStatus({ indexing: false, sessions: m.sessions, files: m.files, done: 0, total: 0 });
-    } else if (m.type === "learned") console.log(`cmd search: now indexing ${m.root.agent ?? "mixed"} transcripts in ${m.root.dir}`);
-    else console.error("cmd search:", m.message);
+    } else if (m.type === "learned") log.info(`now indexing ${m.root.agent ?? "mixed"} transcripts in ${m.root.dir}`);
+    else log.error(m.message);
   }
 
   #setStatus(patch: Partial<IndexStatus>): void {

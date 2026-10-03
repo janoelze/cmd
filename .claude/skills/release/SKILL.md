@@ -97,7 +97,7 @@ there and that their `version` matches.
 | Notarization `Invalid` | `xcrun notarytool log <submission id> --key … --key-id … --issuer …` lists the unsigned or untimestamped binaries. |
 | `A timestamp was expected but was not found` locally | The Agent Safehouse sandbox blocks codesign's timestamp request. Sign in CI, or outside the sandbox. |
 | "cmd is damaged" for users | The release wasn't properly signed (v0.2.4 and earlier). The fix is a new signed release; users reinstall once. |
-| App doesn't update | Check `$CMD_HOME/update.log` and Settings → About. Usual causes: the release lacks `latest-mac.yml`, the app runs from the dmg or a translocated copy, or `updates.mode` is off. |
+| App doesn't update | Check `~/Library/Logs/cmd/update.log` and Settings → About. Usual causes: the release lacks `latest-mac.yml`, the app runs from the dmg or a translocated copy, or `updates.mode` is off. |
 
 ## Secrets and credentials
 

@@ -5,7 +5,7 @@ import net from "node:net";
 import path from "node:path";
 import type { AgentId, AppWindow, CoreEvent, Method, Methods, Params, Placement, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
-import { ipcPath } from "@cmd/protocol/node";
+import { ipcPath, logger, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
 import { NotificationCenter } from "./notifications.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
@@ -23,6 +23,9 @@ import { SecretsService } from "./secrets.ts";
 import type { Backend } from "./magic/backends.ts";
 
 export const VERSION = "0.0.1";
+
+const log = logger("core");
+const rpcLog = logger("rpc");
 
 export interface CoreOptions {
   socketPath: string;
@@ -111,7 +114,7 @@ export class Core {
       try {
         this.panes.writeShellRules();
       } catch (err) {
-        console.error(`cmd core: could not write shell rules: ${(err as Error).message}`);
+        log.error(`could not write shell rules: ${(err as Error).message}`);
       }
     });
     this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null, sources: this.transcripts });
@@ -356,7 +359,9 @@ export class Core {
   #serve(conn: net.Socket): void {
     conn.setEncoding("utf8");
     conn.on("error", () => {});
+    rpcLog.debug("connection opened");
     conn.on("close", () => {
+      rpcLog.debug("connection closed");
       this.#subscribers.delete(conn);
       for (const p of this.#connWatches.get(conn) ?? []) this.watches.unwatch(p);
       this.#connWatches.delete(conn);
@@ -388,6 +393,12 @@ export class Core {
           }
           send(conn, { jsonrpc: "2.0", id: req.id, result: result ?? null });
         } catch (err) {
+          // Handlers throw plain Errors for expected failures (a closed pane, a bad
+          // path); a TypeError and the like is a bug in the core: report it.
+          if (err instanceof TypeError || err instanceof ReferenceError || err instanceof RangeError) {
+            rpcLog.error(`${req.method} threw`, err);
+            recordCrash({ process: "core", kind: `rpc ${req.method}`, message: `${err.name}: ${err.message}`, stack: err.stack ?? null, context: { build: this.#opts.build ?? "" } });
+          } else rpcLog.warn(`${req.method} failed: ${(err as Error).message}`);
           send(conn, { jsonrpc: "2.0", id: req.id, error: { code: -32000, message: (err as Error).message } });
         }
       }),

@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { EventEmitter } from "node:events";
+import { logger } from "@cmd/protocol/node";
 import type { Attention, Pane, PaneId, PaneUsage, Settings, SpaceId } from "@cmd/protocol";
 import { usageChanged } from "./resources.ts";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
@@ -15,6 +16,8 @@ import { SerializeAddon } from "@xterm/addon-serialize";
 type HeadlessTerminal = InstanceType<typeof headless.Terminal>;
 import { classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
 import { STATUS_ENV } from "./agents/statusfiles.ts";
+
+const log = logger("panes");
 
 /** What runs in the foreground of a pane's terminal. */
 export interface Foreground {
@@ -221,7 +224,8 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     const rows = opts.rows ?? 30;
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(process.env)) {
-      if (v !== undefined && !k.startsWith("ELECTRON_") && k !== "NODE_OPTIONS") env[k] = v;
+      // CMD_APP_VERSION is the app's, for this core's logs; a core started in the shell isn't that app.
+      if (v !== undefined && !k.startsWith("ELECTRON_") && k !== "NODE_OPTIONS" && k !== "CMD_APP_VERSION") env[k] = v;
     }
     const token = randomBytes(12).toString("hex");
     if (cfg["shell.integration"] && shellName(shell) === "zsh" && fs.existsSync(ZSH_INTEGRATION_DIR)) {
@@ -272,6 +276,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
 
     pty.onData((data) => this.#onData(live, data));
     pty.onExit(({ exitCode }) => this.#exited(live, exitCode));
+    log.info(`pane ${id.slice(0, 8)} started`, { shell: shellName(shell), pid: pty.pid, command: opts.command ? opts.command.split(" ")[0] : null });
 
     if (opts.command) this.#scheduleCommand(live, opts.command);
     this.emit("updated", { ...pane });
@@ -457,6 +462,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.#clearPending(live);
     setTimeout(() => live.vt.dispose(), 0);
     pane.exitCode = exitCode;
+    log.info(`pane ${pane.id.slice(0, 8)} exited`, { exitCode, agent: pane.agentId ? pane.agentId.slice(0, 8) : null, aliveMs: Date.now() - pane.createdAt });
     this.emit("updated", { ...pane });
     this.#panes.delete(pane.id);
     this.emit("removed", pane.id);

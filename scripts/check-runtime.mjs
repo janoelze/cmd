@@ -40,6 +40,10 @@ try {
     }
   }
 } finally {
+  // The core logs to a file; keep it for the error below.
+  try {
+    log += fs.readFileSync(path.join(home, "logs", "core.log"), "utf8");
+  } catch {}
   // Wait for the core to exit before removing its state: Windows can't delete open files.
   const gone = exited !== null ? Promise.resolve() : new Promise((r) => core.once("exit", r));
   core.kill();

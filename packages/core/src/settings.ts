@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
+import { logger } from "@cmd/protocol/node";
 import {
   currentKey,
   isSettingKey,
@@ -17,6 +18,8 @@ import {
   type Settings,
   type SettingsSnapshot,
 } from "@cmd/protocol";
+
+const log = logger("settings");
 
 export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] }> {
   readonly path: string;
@@ -114,6 +117,7 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
     }
     const resolved = resolveSettings(this.#raw);
     errors = [...errors, ...resolved.errors];
+    for (const e of errors) log.warn(e);
     return { settings: resolved.settings, overrides: overridesOf(this.#raw), errors, path: this.path };
   }
 

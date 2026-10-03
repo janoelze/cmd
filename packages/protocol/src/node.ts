@@ -7,6 +7,7 @@ import path from "node:path";
 import { RpcClient, lineSplitter } from "./client.ts";
 import { defaultSocketPath } from "./instance.ts";
 
+export * from "./log.ts";
 export * from "./instance.ts";
 
 /**

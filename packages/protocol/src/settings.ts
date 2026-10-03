@@ -228,6 +228,12 @@ export const SETTINGS_SCHEMA = {
     labels: { auto: "Install automatically", notify: "Notify me", off: "Don't check" },
     description: "Auto downloads new versions in the background and installs them when you quit cmd; terminals keep running. Check for Updates… in the cmd menu checks now.",
   },
+  "diagnostics.crashReports": {
+    title: "Send crash reports",
+    type: "boolean",
+    default: true,
+    description: "When cmd crashes or hits an internal error, send the error, its stack trace, the app version, macOS version and the last lines of the log to the developer. Your home folder is replaced by ~. Reports are also kept in the logs folder.",
+  },
   "magic.explore": { title: "Look around this Mac", type: "boolean", default: true, description: "Let the Magic agent run read-only commands and read files to answer requests about this Mac. Private files (keys, keychains, browser profiles) stay off limits." },
   "magic.showSteps": { title: "Show commands while building", type: "boolean", default: false, description: "Show the commands, files and URLs the Magic agent looks at while it builds a window, with their output. Off: only what it is doing, in a few words." },
 } as const satisfies Record<string, Def>;
@@ -249,6 +255,7 @@ export const SETTINGS_GROUPS = {
   agents: "Agents",
   magic: "Magic Windows",
   updates: "Updates",
+  diagnostics: "Diagnostics",
 } as const satisfies Record<GroupOf<SettingKey>, string>;
 
 /** Keys that were renamed: old settings files keep working (old → new). */

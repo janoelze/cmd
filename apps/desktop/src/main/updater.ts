@@ -7,10 +7,8 @@
 
 import { app, dialog, Notification } from "electron";
 import electronUpdater from "electron-updater";
-import fs from "node:fs";
-import path from "node:path";
 import type { Settings } from "@cmd/protocol";
-import { cmdHome, connect } from "@cmd/protocol/node";
+import { connect, formatLine, formatValue, LogFile } from "@cmd/protocol/node";
 
 const { autoUpdater } = electronUpdater;
 
@@ -39,10 +37,10 @@ export interface UpdateStatus {
 
 export const updateStatus = (): UpdateStatus => ({ mode, lastCheck, ready, lastError });
 
+/** logDir()/update.log, electron-updater's own messages included. */
+let updateLog: LogFile | null = null;
 function log(...args: unknown[]): void {
-  try {
-    fs.appendFileSync(path.join(cmdHome(), "update.log"), `${new Date().toISOString()} ${args.map(String).join(" ")}\n`);
-  } catch {}
+  (updateLog ??= new LogFile("update")).write(formatLine("info", "update", args.map(formatValue).join(" "), []));
 }
 
 function notify(body: string, onClick: () => void): void {
