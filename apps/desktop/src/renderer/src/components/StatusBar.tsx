@@ -44,7 +44,7 @@ export function StatusBar({ mode, row, pane, run }: Props) {
       <div className="statusbar-session">
         {!pane && row?.win && (
           <>
-            <span className="statusbar-proc">{row.win.kind === "browser" ? "browser" : "files"}</span>
+            <span className="statusbar-proc">{row.win.kind}</span>
             <span className="statusbar-path">{row.win.kind === "browser" ? (row.win.url ?? "") : shortPath(row.win.path ?? "")}</span>
           </>
         )}

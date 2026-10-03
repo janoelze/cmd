@@ -14,6 +14,7 @@ import {
   newBrowser,
   newFiles,
   openableTarget,
+  openPath,
   resumeCommand,
   runAction,
   sessionId,
@@ -25,6 +26,7 @@ import type { SearchHit, SearchStatus } from "@cmd/protocol";
 import { getState, onAgentChange, onWindowFocus, usePersisted, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
+import { windowActions } from "./windowActions.ts";
 import { builtinTools } from "./tools.ts";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
@@ -205,6 +207,7 @@ export function App() {
       else cmd.closeWindow();
     },
     "file.closeWindow": () => cmd.closeWindow(),
+    "file.save": () => void windowActions(selected)?.save?.(),
     "file.openSettingsFile": () => cmd.openSettingsFile(getState().settings.path),
     "edit.copy": () => {
       if (selected && !s.panes.has(selected)) return void document.execCommand("copy");
@@ -423,7 +426,7 @@ export function App() {
             return [
               t.kind === "browser"
                 ? { id: `open-url`, group: "Commands" as const, label: `Open ${t.value}`, hint: "browser", run: () => void newBrowser(t.value) }
-                : { id: `open-path`, group: "Commands" as const, label: `Browse ${t.value}`, hint: "files", run: () => void newFiles(t.value) },
+                : { id: `open-path`, group: "Commands" as const, label: `Open ${t.value}`, hint: "path", run: () => void openPath(t.value) },
             ];
           }}
           recent={recent}

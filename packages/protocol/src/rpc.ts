@@ -74,11 +74,23 @@ export interface Methods {
   /** Browser and file windows report navigation and titles here. */
   "window.update": { params: { id: WindowId; title?: string; url?: string; path?: string }; result: AppWindow };
   "window.close": { params: { id: WindowId }; result: null };
+  /**
+   * Open a path in the window that suits it: folder → files, html/images/pdf →
+   * browser, text → text window. null = not ours (open with the default app).
+   */
+  "window.openPath": { params: { path: string }; result: AppWindow | null };
   /** All windows, terminals included. */
   "window.list": { params: {}; result: AppWindow[] };
 
   /** Directory listing for file windows (dirs first, then by name). */
   "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };
+  /** Read a text file (first 5 MB). */
+  "fs.read": {
+    params: { path: string };
+    result: { text: string; size: number; mtime: number; truncated: boolean; binary: boolean };
+  };
+  /** Write a text file; fails if it changed on disk since `expectMtime`. */
+  "fs.write": { params: { path: string; text: string; expectMtime?: number }; result: { size: number; mtime: number } };
 
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };

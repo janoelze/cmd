@@ -9,7 +9,7 @@ import { AgentTracker } from "./agents/tracker.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
-import { listDir, WindowManager } from "./windows.ts";
+import { listDir, readText, WindowManager, writeText } from "./windows.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
 
@@ -104,7 +104,10 @@ export class Core {
     "window.update": (p) => this.windows.update(p.id, p),
     "window.close": (p) => (this.windows.close(p.id), null),
     "window.list": () => this.windows.list(),
+    "window.openPath": (p) => this.windows.openPath(p.path),
     "fs.list": (p) => listDir(p.path),
+    "fs.read": (p) => readText(p.path),
+    "fs.write": (p) => writeText(p.path, p.text, p.expectMtime),
     "search.query": (p) => this.#opts.search?.search(p.text, p.limit) ?? [],
     "search.status": () =>
       this.#opts.search?.status() ?? { sessions: 0, files: 0, indexing: false, done: 0, total: 0 },
@@ -129,10 +132,8 @@ export class Core {
   #onShellRequest(_paneId: string, action: string, arg: string): void {
     if (action !== "open" || !arg) return;
     try {
-      const w = /^https?:\/\//i.test(arg)
-        ? this.windows.open({ kind: "browser", url: arg })
-        : this.windows.open({ kind: "files", path: arg });
-      this.#broadcast({ type: "window.focus", id: w.id });
+      const w = /^https?:\/\//i.test(arg) ? this.windows.open({ kind: "browser", url: arg }) : this.windows.openPath(arg);
+      if (w) this.#broadcast({ type: "window.focus", id: w.id });
     } catch {
       // not a folder / URL: ignore
     }

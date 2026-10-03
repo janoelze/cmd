@@ -97,7 +97,7 @@ function cleanTitle(t: string | undefined): string {
 export function rowTitle(r: SidebarRow): string {
   if (r.win) {
     if (r.win.kind === "browser") return r.win.title && r.win.title !== r.win.url ? r.win.title : hostOf(r.win.url) || "Browser";
-    return r.win.title || "Files";
+    return r.win.title || (r.win.kind === "text" ? "Text" : "Files");
   }
   const a = r.agent;
   const t = cleanTitle(r.pane?.title);
@@ -231,7 +231,8 @@ export function nextAfterClose(closed: string, history: string[], orderBefore: s
 export function formatBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(n >= 10 * 1024 ** 3 ? 0 : 1)} GB`;
   if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
-  return `${Math.max(1, Math.round(n / 1024))} KB`;
+  if (n < 1024) return `${n} B`;
+  return `${Math.round(n / 1024)} KB`;
 }
 
 /** "412 MB · 3%" (CPU only when noticeable). */

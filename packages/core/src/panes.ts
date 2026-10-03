@@ -163,6 +163,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       env.CMD_PANE_TOKEN = token;
       env.CMD_OPEN_FOLDERS = cfg["shell.openFolders"] ? "1" : "0";
       env.CMD_OPEN_URLS = cfg["shell.openUrls"] ? "1" : "0";
+      env.CMD_OPEN_FILES = cfg["shell.openFiles"] ? "1" : "0";
     }
     Object.assign(env, {
       TERM: "xterm-256color",

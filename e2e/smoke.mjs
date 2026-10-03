@@ -235,10 +235,22 @@ check((await panes()) === 2, "…and leaves terminals alone");
   { const fp = await filesPath(); const sn = await selName();
     check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${fp.split("/").pop()}, ${sn})`); }
 
+  // Files open in the window that suits them: notes.md → text window; edit and ⌘S.
+  await win.locator(".tile.kind-files .file-row", { hasText: "notes.md" }).dblclick();
+  await win.waitForSelector(".tile.kind-text .textwin-area");
+  await win.waitForTimeout(300);
+  check((await win.locator(".tile.kind-text .textwin-area").inputValue()) === "# hi", "double-clicking a text file opens it in a text window");
+  await win.locator(".tile.kind-text .textwin-area").click();
+  await win.keyboard.press("End");
+  await win.keyboard.type(" there");
+  await menu("file.save");
+  await win.waitForTimeout(400);
+  check(fs.readFileSync(path.join(home, "files-fixture", "notes.md"), "utf8") === "# hi there", "⌘S saves the text window");
+
   await menu("view.grid");
   await win.waitForTimeout(800);
   await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });
-  check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows take part in the grid");
+  check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1 && (await win.locator(".tile.kind-text").count()) === 1, "browser, file and text windows take part in the grid");
   server.close();
 }
 

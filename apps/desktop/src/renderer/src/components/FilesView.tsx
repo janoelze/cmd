@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AppWindow, FileEntry } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { copy, newTerminalIn } from "../actions.ts";
+import { copy, newTerminalIn, selectPane } from "../actions.ts";
 import { showContextMenu } from "../context.ts";
 import { formatBytes } from "../model.ts";
 import { usePersisted } from "../store.ts";
@@ -142,7 +142,12 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     cameFrom.current = root;
     setRoot(rootParent);
   };
-  const openFile = (e: FileEntry) => cmd.openPath(e.path);
+  // Files open in the window that suits them (text, browser), else their default app.
+  const openFile = (e: FileEntry) =>
+    void cmd.call("window.openPath", { path: e.path }).then((w) => {
+      if (w) selectPane(w.id);
+      else cmd.openPath(e.path);
+    });
   const activate = (e: FileEntry) => (e.kind === "dir" ? toggle(e) : openFile(e));
 
   // Breadcrumbs: "~ › src › cmd" inside the home folder, "/ › etc" elsewhere.
@@ -200,7 +205,10 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
             { label: isOpen(e.path) ? "Collapse" : "Expand", run: () => toggle(e) },
             { label: "Open as Root", run: () => setRoot(e.path) },
           ]
-        : [{ label: "Open with Default App", run: () => openFile(e) }]),
+        : [
+            { label: "Open", run: () => openFile(e) },
+            { label: "Open with Default App", run: () => cmd.openPath(e.path) },
+          ]),
       { label: "Show in Finder", run: () => cmd.openPath(e.kind === "dir" ? e.path : e.path.split("/").slice(0, -1).join("/") || "/") },
       "-",
       { label: "Copy Path", run: () => copy(e.path) },

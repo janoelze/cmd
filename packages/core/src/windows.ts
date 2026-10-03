@@ -10,6 +10,8 @@ import { EventEmitter } from "node:events";
 import type { AppWindow, FileEntry, Pane, WindowId } from "@cmd/protocol";
 import type { PaneManager } from "./panes.ts";
 import type { Store } from "./store.ts";
+import { routeFor, TEXT_MAX_BYTES } from "./routing.ts";
+import { pathToFileURL } from "node:url";
 
 export interface OpenParams {
   kind: AppWindow["kind"];
@@ -83,6 +85,11 @@ export class WindowManager extends EventEmitter<{ updated: [AppWindow]; removed:
     if (p.kind === "browser") {
       w.url = normalizeUrl(p.url ?? "");
       w.title = w.url === "about:blank" ? "New Tab" : w.url;
+    } else if (p.kind === "text") {
+      const file = path.resolve(expandHome(p.path ?? ""));
+      if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
+      w.path = file;
+      w.title = path.basename(file);
     } else {
       const dir = path.resolve(expandHome(p.path ?? p.cwd ?? os.homedir()));
       if (!fs.statSync(dir).isDirectory()) throw new Error(`not a folder: ${dir}`);
@@ -91,6 +98,16 @@ export class WindowManager extends EventEmitter<{ updated: [AppWindow]; removed:
     }
     this.#save(w);
     return { ...w };
+  }
+
+  /** Open a path in the window that suits it (see routing.ts); null = not ours. */
+  openPath(p: string): AppWindow | null {
+    const abs = path.resolve(expandHome(p));
+    const route = routeFor(abs);
+    if (route === "files") return this.open({ kind: "files", path: abs });
+    if (route === "text") return this.open({ kind: "text", path: abs });
+    if (route === "browser") return this.open({ kind: "browser", url: pathToFileURL(abs).href });
+    return null;
   }
 
   update(id: WindowId, patch: { title?: string; url?: string; path?: string }): AppWindow {
@@ -141,4 +158,39 @@ export function listDir(dir: string): { path: string; parent: string | null; ent
   entries.sort((a, b) => (a.kind === "dir") !== (b.kind === "dir") ? (a.kind === "dir" ? -1 : 1) : a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   const parent = path.dirname(abs);
   return { path: abs, parent: parent === abs ? null : parent, entries };
+}
+
+const READ_MAX = 5 * 1024 * 1024;
+
+/** Read a text file for a text window (first 5 MB). */
+export function readText(file: string): { text: string; size: number; mtime: number; truncated: boolean; binary: boolean } {
+  const abs = path.resolve(expandHome(file));
+  const st = fs.statSync(abs);
+  const fd = fs.openSync(abs, "r");
+  try {
+    const len = Math.min(st.size, READ_MAX);
+    const buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, 0);
+    return {
+      text: buf.toString("utf8"),
+      size: st.size,
+      mtime: st.mtimeMs,
+      truncated: st.size > READ_MAX,
+      binary: buf.subarray(0, 8192).includes(0),
+    };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Save a text window; refuses if the file changed on disk since it was read. */
+export function writeText(file: string, text: string, expectMtime?: number): { size: number; mtime: number } {
+  const abs = path.resolve(expandHome(file));
+  if (expectMtime !== undefined && fs.existsSync(abs) && Math.abs(fs.statSync(abs).mtimeMs - expectMtime) > 1) {
+    throw new Error("The file changed on disk since it was opened.");
+  }
+  if (Buffer.byteLength(text) > TEXT_MAX_BYTES) throw new Error("Too large for a text window.");
+  fs.writeFileSync(abs, text);
+  const st = fs.statSync(abs);
+  return { size: st.size, mtime: st.mtimeMs };
 }

@@ -18,6 +18,7 @@ import { focusLayout, gridLayout, stripLayout, type Layout, type ViewMode } from
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
 import { BrowserView } from "./BrowserView.tsx";
 import { FilesView } from "./FilesView.tsx";
+import { TextView } from "./TextView.tsx";
 import {
   clampWidth,
   DEFAULT_FRACTION,
@@ -352,6 +353,8 @@ export function WindowsView(p: Props) {
                 <BrowserView win={r.win} focused={id === selected} />
               ) : r.win?.kind === "files" ? (
                 <FilesView win={r.win} focused={id === selected} />
+              ) : r.win?.kind === "text" ? (
+                <TextView win={r.win} focused={id === selected} />
               ) : null}
               {lay.resizable && (
                 <div

@@ -92,7 +92,7 @@ export interface Agent {
  * Anything the main pane lays out. Terminal windows are derived from panes
  * (id = pane id); browser and file windows are stored by the core.
  */
-export type WindowKind = "terminal" | "browser" | "files";
+export type WindowKind = "terminal" | "browser" | "files" | "text";
 
 export interface AppWindow {
   id: WindowId;
@@ -104,7 +104,7 @@ export interface AppWindow {
   paneId: PaneId | null;
   /** browser: current URL */
   url: string | null;
-  /** files: current folder */
+  /** files: current folder · text: the file */
   path: string | null;
 }
 

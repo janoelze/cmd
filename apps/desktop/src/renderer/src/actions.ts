@@ -86,6 +86,13 @@ export async function newBrowser(url?: string): Promise<void> {
   select(w.id);
 }
 
+/** Open a path in the window that suits it; falls back to the default app. */
+export async function openPath(p: string): Promise<void> {
+  const w = await cmd.call("window.openPath", { path: p }).catch(() => null);
+  if (w) select(w.id);
+  else cmd.openPath(p);
+}
+
 /** New file browser at a folder, defaulting to the selected terminal's folder. */
 export async function newFiles(path?: string): Promise<void> {
   const w = await cmd.call("window.open", { kind: "files", path: path ?? contextCwd() });

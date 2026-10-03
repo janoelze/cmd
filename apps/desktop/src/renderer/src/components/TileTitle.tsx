@@ -5,7 +5,7 @@ import { hostOf, ledOf, rowTitle, shortPath, usageLabel, usageTooltip, type Side
 import { useStore } from "../store.ts";
 import { Symbol } from "./Symbol.tsx";
 
-export const WINDOW_ICONS = { browser: "globe", files: "folder" } as const;
+export const WINDOW_ICONS = { browser: "globe", files: "folder", text: "doc.text" } as const;
 
 export function TileTitle({
   row,
@@ -39,7 +39,7 @@ export function TileTitle({
           </>
         )}
         {win?.kind === "browser" && <span className="tile-path">{hostOf(win.url)}</span>}
-        {win?.kind === "files" && <span className="tile-path">{shortPath(win.path ?? "")}</span>}
+        {(win?.kind === "files" || win?.kind === "text") && <span className="tile-path">{shortPath(win.path ?? "")}</span>}
       </span>
     </div>
   );

@@ -62,6 +62,8 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("file.newBrowser"),
         ...i("file.newFiles"),
         sep,
+        ...i("file.save"),
+        sep,
         ...i("file.close"),
         ...i("file.closeWindow"),
         sep,
