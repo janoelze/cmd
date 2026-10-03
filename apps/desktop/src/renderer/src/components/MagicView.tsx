@@ -12,7 +12,7 @@ import { copy, openPath } from "../actions.ts";
 import { resetMagic, useMagicLive, type MagicLive } from "../magic.ts";
 import { useStoreValue } from "../store.ts";
 import { useTheme } from "../themes/registry.ts";
-import { setWindowStatus } from "../windowActions.ts";
+import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { ago } from "../model.ts";
 import { handleEmbedMessage } from "../embed.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
@@ -55,7 +55,7 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
         <WidgetFrame win={win} html={working ? (live.body ?? "") : (s.html ?? "")} streaming={working} data={live.data?.data ?? s.lastData?.data} />
       )}
       {s.error && !working && <div className="magic-error" title={s.error}>{s.error}</div>}
-      {!working && <RefineButton focused={focused} onSubmit={run} onRefresh={s.source ? () => void cmd.call("magic.refresh", { id: win.id }) : undefined} />}
+      {!working && <RefineButton id={win.id} onSubmit={run} onRefresh={s.source ? () => void cmd.call("magic.refresh", { id: win.id }) : undefined} />}
       {working && live.body !== undefined && <div className="magic-drawing">Drawing…<button className="btn" onClick={() => void cmd.call("magic.cancel", { id: win.id })}>Stop</button></div>}
     </div>
   );
@@ -239,20 +239,13 @@ function TerminalOffer({ win, command }: { win: AppWindow; command: string }) {
  * hover, that opens a floating input (also ⌘L). It overlays the widget, so the
  * widget never resizes (and re-lays out) because of it.
  */
-function RefineButton({ focused, onSubmit, onRefresh }: { focused: boolean; onSubmit: (p: string) => void; onRefresh?: () => void }) {
+function RefineButton({ id, onSubmit, onRefresh }: { id: string; onSubmit: (p: string) => void; onRefresh?: () => void }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (focused && e.metaKey && e.key.toLowerCase() === "l") {
-        e.preventDefault();
-        setOpen(true);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [focused]);
+  // View → Change Magic Window (⌘L) routes here: a menu command, so it works
+  // even while the widget's page has the keyboard.
+  useEffect(() => registerWindowActions(id, { change: () => setOpen(true) }), [id]);
   useEffect(() => {
     if (open) ref.current?.focus();
   }, [open]);

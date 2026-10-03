@@ -11,7 +11,7 @@ import { cmd } from "../bridge.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { SCROLLBAR_CSS } from "../scrollbars.ts";
 import { setWindowStatus } from "../windowActions.ts";
-import { handleEmbedMessage, WEBVIEW_WHEEL_FORWARDER, EMBED_MARK } from "../embed.ts";
+import { handleEmbedMessage } from "../embed.ts";
 
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const url = typeof win.state.url === "string" ? win.state.url : null;
@@ -36,18 +36,12 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const start = () => setLoading(true);
     const stop = () => setLoading(false);
     // Pages get the app's scrollbars, so every window's look the same.
-    const ready = () => {
-      void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
-      // Sideways scrolling the page doesn't use goes to the strip (../embed.ts).
-      void wv.executeJavaScript(WEBVIEW_WHEEL_FORWARDER).catch(() => {});
+    const ready = () => void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
+    // What the page's preload reports (preload/guest.ts): presses, sideways scrolls.
+    const reported = (e: { channel: string; args: unknown[] }) => {
+      if (e.channel === "cmd-embed") handleEmbedMessage(wv as unknown as HTMLElement, e.args[0]);
     };
-    const onConsole = (e: { message?: string }) => {
-      if (!e.message?.startsWith(EMBED_MARK)) return;
-      try {
-        handleEmbedMessage(wv as unknown as HTMLElement, JSON.parse(e.message.slice(EMBED_MARK.length)));
-      } catch {}
-    };
-    wv.addEventListener("console-message", onConsole as never);
+    wv.addEventListener("ipc-message", reported as never);
     wv.addEventListener("dom-ready", ready);
     wv.addEventListener("did-navigate", navigated as never);
     wv.addEventListener("did-navigate-in-page", navigated as never);
@@ -61,7 +55,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       wv.removeEventListener("did-start-loading", start);
       wv.removeEventListener("did-stop-loading", stop);
       wv.removeEventListener("dom-ready", ready);
-      wv.removeEventListener("console-message", onConsole as never);
+      wv.removeEventListener("ipc-message", reported as never);
     };
   }, [win.id]);
 

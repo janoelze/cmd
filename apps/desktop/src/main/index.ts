@@ -155,7 +155,7 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     trafficLightPosition: { x: 14, y: 12 },
     backgroundColor: savedAppearance().background,
     webPreferences: {
-      preload: path.join(here, "../preload/index.mjs"),
+      preload: path.join(here, "../preload/index.cjs"),
       sandbox: false, // preload talks to the core socket via node:net
       contextIsolation: true,
       webviewTag: true, // browser windows
@@ -203,7 +203,7 @@ function openSettings(): BrowserWindow {
     backgroundColor: "#00000000",
     fullscreenable: false,
     webPreferences: {
-      preload: path.join(here, "../preload/index.mjs"),
+      preload: path.join(here, "../preload/index.cjs"),
       sandbox: false,
       contextIsolation: true,
     },
@@ -370,11 +370,13 @@ ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
 
 // ── browser windows (webview guests) ───────────────────
 
-// Guests get no Node, no preload, their own session; links that open new windows
+// Guests get no Node, only cmd's guest preload, their own session; links that open new windows
 // become new cmd browser windows.
 app.on("web-contents-created", (_e, contents) => {
   contents.on("will-attach-webview", (_ev, prefs, params) => {
-    delete prefs.preload;
+    // Only cmd's own guest preload, in an isolated world: it reports presses and
+    // sideways scrolls to the app (preload/guest.ts, renderer/src/embed.ts).
+    prefs.preload = path.join(here, "../preload/guest.cjs");
     prefs.nodeIntegration = false;
     prefs.contextIsolation = true;
     prefs.sandbox = true;

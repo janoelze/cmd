@@ -52,7 +52,7 @@ import {
   type Slot,
 } from "../strip.ts";
 import { TerminalView } from "./TerminalView.tsx";
-import { canScrollX, EMBED_ATTR } from "../embed.ts";
+import { EMBED_ATTR, sidewaysForApp } from "../embed.ts";
 import { TileTitle } from "./TileTitle.tsx";
 import { SlotMotion } from "./Slot.tsx";
 
@@ -366,13 +366,15 @@ export function WindowsView(p: Props) {
   useEffect(() => {
     const el = rootRef.current!;
     const onWheel = (e: WheelEvent) => {
+      // Over an embedded page only its own reports count (replayed, untrusted;
+      // ../embed.ts): Chromium also bubbles some of a webview's native wheel
+      // events out to here, which would scroll twice.
+      if (e.isTrusted && (e.target as Element).hasAttribute?.(EMBED_ATTR)) return;
       if (live.current.mode === "canvas") return canvasWheel(e);
       if (live.current.mode !== "strip") return;
-      const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
-      if (!dx || (!e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX))) return;
       // Content that scrolls sideways right there (long lines, wide tables) keeps it.
-      const target = e.target as Element;
-      if (canScrollX(target, dx, target.closest?.(".tile"))) return;
+      const dx = sidewaysForApp(e, (e.target as Element).closest?.(".tile"));
+      if (!dx) return;
       e.preventDefault();
       e.stopPropagation();
       if (anim.current) cancelAnimationFrame(anim.current), (anim.current = null);
@@ -468,21 +470,6 @@ export function WindowsView(p: Props) {
     window.addEventListener("pointercancel", off, true);
   };
 
-  // A click inside an embedded page (a browser page, a Magic widget; ../embed.ts)
-  // reaches neither onMouseDown nor a focus event here: the app's window just
-  // blurs while the element becomes the active one. Select its window.
-  useEffect(() => {
-    const onBlur = () =>
-      requestAnimationFrame(() => {
-        const a = document.activeElement;
-        const id = a?.hasAttribute(EMBED_ATTR) ? (a.closest(".tile") as HTMLElement | null)?.dataset.pane : undefined;
-        if (!id || id === live.current.selected) return;
-        if (live.current.mode === "canvas") clickedSelect.current = true;
-        onSelect(id);
-      });
-    window.addEventListener("blur", onBlur);
-    return () => window.removeEventListener("blur", onBlur);
-  }, [onSelect]);
 
   // ── dragging windows (all modes with chrome) ───────────
   /** Re-evaluate where the dragged window would go, from the current pointer. */

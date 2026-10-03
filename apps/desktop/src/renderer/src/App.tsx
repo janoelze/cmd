@@ -273,6 +273,7 @@ export function App() {
     "file.newBrowser": () => void newBrowser(),
     "file.newFiles": () => void newFiles(),
     "file.newMagic": () => void newMagic(),
+    "view.magicChange": () => windowActions(selected)?.change?.(),
     "file.close": () => {
       // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
       if (picker) setPicker(null);

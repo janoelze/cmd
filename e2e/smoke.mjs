@@ -360,6 +360,81 @@ check((await panes()) === 2, "…and leaves terminals alone");
   server.close();
 }
 
+// Embedded pages: browser pages and Magic widgets run in their own process, so
+// they report presses and sideways scrolls (renderer/src/embed.ts; browser pages
+// through preload/guest.ts, widgets by postMessage). Magic windows are staged
+// with a widget and its data, so no model runs.
+{
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const magic = [];
+  for (const name of ["Alpha", "Beta"]) {
+    const w = await call("window.open", { kind: "magic", input: {} });
+    await call("window.update", {
+      id: w.id,
+      title: name,
+      state: { prompt: name, phase: "ready", kind: "widget", html: '<div class="k-big" id="v">–</div><script>cmd.onData((d) => (v.textContent = d.text))</script>', source: null, refresh: 0, size: "m", lastData: { data: { text: `${name} data` }, at: Date.now() } },
+    });
+    magic.push(w.id);
+  }
+  await menu("view.grid");
+  await win.waitForTimeout(1200);
+  const widgetText = await win.frameLocator(`.tile[data-pane="${magic[0]}"] iframe.magic-frame`).locator("#v").textContent({ timeout: 5000 });
+  check(widgetText === "Alpha data", "a Magic widget renders its data in its sandboxed frame");
+
+  const selected = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
+  const clickIn = async (loc) => {
+    const b = await loc.boundingBox();
+    await win.mouse.click(b.x + b.width / 2, b.y + b.height * 0.6);
+    await win.waitForTimeout(400);
+  };
+  const frame = (id) => win.locator(`.tile[data-pane="${id}"] iframe.magic-frame`);
+  const page = win.locator(".tile.kind-browser webview");
+  const pageId = await win.locator(".tile.kind-browser").getAttribute("data-pane");
+  const term = win.locator(".tile.kind-terminal .xterm").first();
+  const termId = await win.locator(".tile.kind-terminal").first().getAttribute("data-pane");
+  const order = [];
+  for (const [loc, id] of [[term, termId], [frame(magic[0]), magic[0]], [frame(magic[1]), magic[1]], [page, pageId], [frame(magic[0]), magic[0]]]) {
+    await clickIn(loc);
+    order.push((await selected()) === id);
+  }
+  check(order.every(Boolean), `clicking from one embedded page into the next selects each window (${order.map((x) => (x ? "✓" : "✗")).join(" ")})`);
+
+  const b1 = await frame(magic[1]).boundingBox();
+  await win.mouse.move(b1.x + b1.width / 2, b1.y + b1.height / 2);
+  await win.waitForTimeout(300);
+  const hovered = await win.evaluate((id) => !!document.querySelector(`.tile[data-pane="${id}"] .magic.hovered`), magic[1]);
+  check(hovered, "hovering a Magic widget shows its window's controls");
+
+  await clickIn(frame(magic[0]));
+  await menu("view.magicChange");
+  const input = win.locator(`.tile[data-pane="${magic[0]}"] .magic-refine-form input`);
+  await input.waitFor({ timeout: 3000 });
+  check(await input.evaluate((el) => el === document.activeElement), "⌘L (a menu command) opens Change on the selected Magic window, even with the widget focused");
+  await win.keyboard.press("Escape");
+
+  await menu("view.strip");
+  await win.waitForTimeout(800);
+  const offset = () => win.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector(".windows-track")).transform).m41);
+  const scrolls = async (loc, id) => {
+    await win.evaluate((id) => window.__cmdSelect(id), id); // the strip reveals it
+    await win.waitForTimeout(700);
+    const b = await loc.boundingBox();
+    await win.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    for (const dx of [60, -60]) {
+      const before = await offset();
+      for (let i = 0; i < 3; i++) await win.mouse.wheel(dx, 0), await win.waitForTimeout(16);
+      const moved = (await offset()) !== before;
+      await win.waitForTimeout(500); // let it snap back to a window
+      if (moved) return true;
+    }
+    return false;
+  };
+  check(await scrolls(frame(magic[0]), magic[0]), "sideways scrolling over a Magic widget scrolls the strip");
+  check(await scrolls(page, pageId), "sideways scrolling over a browser page scrolls the strip");
+  await menu("view.grid");
+  for (const id of magic) await call("window.close", { id });
+}
+
 // Settings: its own native window (⌘,), generated from the schema; changes apply live.
 {
   const opened = app.waitForEvent("window");

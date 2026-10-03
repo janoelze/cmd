@@ -5,7 +5,7 @@
 
 import { useSyncExternalStore } from "react";
 
-type Actions = { save?: () => void | Promise<void>; openExternally?: () => void };
+type Actions = { save?: () => void | Promise<void>; openExternally?: () => void; change?: () => void };
 const registry = new Map<string, Actions>();
 
 export function registerWindowActions(id: string, actions: Actions): () => void {
