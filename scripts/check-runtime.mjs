@@ -40,8 +40,15 @@ try {
     }
   }
 } finally {
+  // Wait for the core to exit before removing its state: Windows can't delete open files.
+  const gone = exited !== null ? Promise.resolve() : new Promise((r) => core.once("exit", r));
   core.kill();
-  fs.rmSync(home, { recursive: true, force: true });
+  await Promise.race([gone, new Promise((r) => setTimeout(r, 5000))]);
+  try {
+    fs.rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  } catch (e) {
+    console.warn(`left ${home} behind: ${e.message}`);
+  }
 }
 if (!ok) {
   console.error(`the staged core didn't answer${exited !== null ? ` (it exited ${exited})` : ""}:\n${log.trim().slice(-3000)}`);
