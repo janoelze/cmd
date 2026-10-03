@@ -92,6 +92,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("view.strip"),
         ...i("view.canvas"),
         ...i("view.cycleWidth"),
+        ...i("view.toggleEdit"),
         sep,
         ...i("view.sidebar"),
         ...i("view.sessions"),

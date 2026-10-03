@@ -42,6 +42,7 @@ export const COMMANDS = spec([
   { id: "view.strip", label: "Strip", keys: ["Alt+Cmd+3"], checkable: "radio" },
   { id: "view.canvas", label: "Canvas", keys: ["Alt+Cmd+4"], checkable: "radio" },
   { id: "view.cycleWidth", label: "Cycle Window Width", keys: ["Ctrl+Cmd+R"] },
+  { id: "view.toggleEdit", label: "Toggle Preview / Edit", keys: ["Cmd+E"] },
   { id: "view.sidebar", label: "Show Sidebar", keys: ["Ctrl+Cmd+S"], checkable: "checkbox" },
   { id: "view.sessions", label: "Sessions", keys: ["Ctrl+Cmd+1"] },
   { id: "view.tools", label: "Tools", keys: ["Ctrl+Cmd+2"] },

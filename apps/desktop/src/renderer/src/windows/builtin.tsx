@@ -8,6 +8,7 @@ import { FilesView } from "../components/FilesView.tsx";
 import { TextView } from "../components/TextView.tsx";
 import { useWindowStatus } from "../windowActions.ts";
 import { registerWindowView, stateStr } from "./registry.ts";
+import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
 
 const folderOf = (p: string) => shortPath(p.split("/").slice(0, -1).join("/") || "/");
 
@@ -63,6 +64,7 @@ registerWindowView({
     const p = stateStr(w, "path");
     return p
       ? [
+          ...(/\.(md|markdown|mdx)$/i.test(p) ? [{ label: "Preview (⌘E)", run: () => toggleMarkdownEdit(w) }] : []),
           { label: "Open with Default App", run: () => cmd.openPath(p) },
           { label: "Copy Path", run: () => copy(p) },
         ]

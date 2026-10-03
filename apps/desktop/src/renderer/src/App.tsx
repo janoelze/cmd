@@ -28,6 +28,7 @@ import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
 import { windowActions } from "./windowActions.ts";
 import { stateStr, viewFor } from "./windows/registry.ts";
+import { toggleMarkdownEdit } from "./windows/markdown.tsx";
 import { builtinTools } from "./tools.ts";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
@@ -226,6 +227,10 @@ export function App() {
     "view.grid": () => setMode("grid"),
     "view.strip": () => setMode("strip"),
     "view.canvas": () => setMode("canvas"),
+    "view.toggleEdit": () => {
+      const w = selected ? s.windows.get(selected) : undefined;
+      if (w) toggleMarkdownEdit(w);
+    },
     "view.cycleWidth": () => {
       if (!selected) return;
       if (mode !== "strip") setMode("strip");

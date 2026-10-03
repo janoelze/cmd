@@ -191,7 +191,7 @@ check((await panes()) === 2, "…and leaves terminals alone");
   check(!!browserWin && browserWin.state.url.startsWith(`http://localhost:${port}`), "browser window loads the page and reports its title");
 
   fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
-  fs.writeFileSync(path.join(home, "files-fixture", "notes.md"), "# hi");
+  fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# hi");
   fs.writeFileSync(path.join(home, "files-fixture", "sub-folder", "inner.txt"), "inside");
   const fw = await win.evaluate((p) => window.cmd.call("window.open", { kind: "files", input: { path: p } }), path.join(home, "files-fixture"));
   await win.waitForTimeout(200);
@@ -200,11 +200,11 @@ check((await panes()) === 2, "…and leaves terminals alone");
   const rowsNow = () => win.locator(".tile.kind-files .file-row .file-name").allTextContents();
   const selName = () => win.locator(".tile.kind-files .file-row.sel .file-name").textContent();
   const filesPath = () => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.find((w) => w.kind === "files").state.path);
-  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.md"]), "file tree lists the folder, folders first");
+  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.txt"]), "file tree lists the folder, folders first");
 
   await win.locator(".tile.kind-files .file-row", { hasText: "sub-folder" }).dblclick();
   await win.waitForTimeout(400);
-  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "inner.txt", "notes.md"]), "double-clicking a folder expands it in place");
+  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "inner.txt", "notes.txt"]), "double-clicking a folder expands it in place");
 
   // Keyboard: come from a terminal, then select the file window — arrows drive the tree.
   await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => window.__cmdSelect(p[0].id)));
@@ -214,7 +214,7 @@ check((await panes()) === 2, "…and leaves terminals alone");
   await win.keyboard.press("Home");
   await win.keyboard.press("ArrowLeft"); // collapse
   await win.waitForTimeout(200);
-  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.md"]), "← collapses the selected folder (focus moved here from a terminal)");
+  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.txt"]), "← collapses the selected folder (focus moved here from a terminal)");
   await win.keyboard.press("ArrowRight"); // expand
   await win.waitForTimeout(300);
   await win.keyboard.press("ArrowRight"); // into first child
@@ -225,7 +225,7 @@ check((await panes()) === 2, "…and leaves terminals alone");
   check((await selName()) === "sub-folder", "← on a child jumps to its folder");
   await win.keyboard.type("n");
   await win.waitForTimeout(150);
-  check((await selName()) === "notes.md", "typing selects by name");
+  check((await selName()) === "notes.txt", "typing selects by name");
   await win.keyboard.press("Home");
   await win.keyboard.press("Meta+ArrowDown");
   await win.waitForTimeout(500);
@@ -235,21 +235,20 @@ check((await panes()) === 2, "…and leaves terminals alone");
   { const fp = await filesPath(); const sn = await selName();
     check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${fp.split("/").pop()}, ${sn})`); }
 
-  // Files open in the window that suits them: notes.md → text window; edit and ⌘S.
-  await win.locator(".tile.kind-files .file-row", { hasText: "notes.md" }).dblclick();
+  // Files open in the window that suits them: notes.txt → text window; edit and ⌘S.
+  await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).dblclick();
   await win.waitForSelector(".tile.kind-text .cm-content");
   await win.waitForTimeout(500);
   check((await win.locator(".tile.kind-text .cm-content").textContent()) === "# hi", "double-clicking a text file opens it in a text window (CodeMirror)");
-  check((await win.locator(".tile.kind-text .cm-content span[class]").count()) > 0, "markdown gets syntax highlighting");
   await win.locator(".tile.kind-text .cm-content").click();
   await win.keyboard.press("End");
   await win.keyboard.type(" there");
   await menu("file.save");
   await win.waitForTimeout(400);
-  check(fs.readFileSync(path.join(home, "files-fixture", "notes.md"), "utf8") === "# hi there", "⌘S saves the text window");
+  check(fs.readFileSync(path.join(home, "files-fixture", "notes.txt"), "utf8") === "# hi there", "⌘S saves the text window");
 
   // Live: outside edits show up in the editor; new files show up in the tree.
-  fs.writeFileSync(path.join(home, "files-fixture", "notes.md"), "# changed by an agent\n");
+  fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# changed by an agent\n");
   let live = "";
   for (let i = 0; i < 30 && !live.includes("changed by an agent"); i++) {
     await win.waitForTimeout(100);
@@ -264,10 +263,36 @@ check((await panes()) === 2, "…and leaves terminals alone");
   }
   check(rows.includes("zz-new-file.txt"), "the file tree shows new files live");
 
+  // Markdown window: rendered, highlighted code, local image, live, ⌘E ⇄ editor.
+  const mdDir = path.join(home, "md-fixture");
+  fs.mkdirSync(mdDir, { recursive: true });
+  // 1×1 PNG
+  fs.writeFileSync(path.join(mdDir, "dot.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
+  fs.writeFileSync(path.join(mdDir, "README.md"), "# Hello cmd\n\nSome **bold** text and a [link](https://example.com).\n\n- [x] done\n- [ ] todo\n\n![dot](dot.png)\n\n```ts\nconst answer: number = 42;\n```\n");
+  const md = await win.evaluate((p) => window.cmd.call("window.openTarget", { target: p }), path.join(mdDir, "README.md"));
+  check(md.kind === "markdown", "README.md opens in a Markdown window");
+  await win.evaluate((id) => window.__cmdSelect(id), md.id);
+  await win.waitForSelector(".tile.kind-markdown .markdown h1");
+  await win.waitForTimeout(800);
+  const h1 = await win.locator(".tile.kind-markdown .markdown h1").textContent();
+  const tokens = await win.locator(".tile.kind-markdown pre code span[class]").count();
+  const imgOk = await win.locator(".tile.kind-markdown .markdown img").evaluate((img) => img.complete && img.naturalWidth === 1);
+  check(h1 === "Hello cmd" && tokens > 0, `Markdown renders with highlighted code (${tokens} tokens)`);
+  check(imgOk, "relative images load through cmd-file:");
+  fs.appendFileSync(path.join(mdDir, "README.md"), "\n## Added live\n");
+  await win.waitForSelector(".tile.kind-markdown .markdown h2", { timeout: 3000 });
+  check(true, "Markdown re-renders live when the file changes");
+  await menu("view.toggleEdit");
+  await win.waitForSelector(`.tile.kind-text[data-pane="${md.id}"] .cm-content`, { timeout: 3000 });
+  check(true, "⌘E switches the same window to the editor");
+  await menu("view.toggleEdit");
+  await win.waitForSelector(`.tile.kind-markdown[data-pane="${md.id}"] .markdown h1`, { timeout: 3000 });
+  check(true, "⌘E switches back to the preview");
+
   await menu("view.grid");
   await win.waitForTimeout(800);
   await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });
-  check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1 && (await win.locator(".tile.kind-text").count()) === 1, "browser, file and text windows take part in the grid");
+  check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1 && (await win.locator(".tile.kind-text").count()) === 1 && (await win.locator(".tile.kind-markdown").count()) === 1, "browser, file, text and Markdown windows take part in the grid");
   server.close();
 }
 

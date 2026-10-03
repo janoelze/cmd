@@ -47,7 +47,8 @@ describe("window type registry", () => {
     expect(kindFor(dir)).toBe("files");
     expect(kindFor(file("page.html", "<p>hi</p>"))).toBe("browser");
     expect(kindFor(file("shot.PNG", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0])))).toBe("browser");
-    expect(kindFor(file("notes.md", "# hi"))).toBe("text");
+    expect(kindFor(file("notes.md", "# hi"))).toBe("markdown");
+    expect(kindFor(file("notes.txt", "hi"))).toBe("text");
     expect(kindFor(file("Makefile", "all:\n\techo"))).toBe("text");
     expect(kindFor(file("README", "plain text, no extension"))).toBe("text");
     expect(kindFor("https://example.com")).toBe("browser");
@@ -62,6 +63,7 @@ describe("window type registry", () => {
   it("lets the open.handlers setting override by extension", () => {
     expect(parseOverrides(" .md: browser , log:text")).toEqual({ md: "browser", log: "text" });
     expect(kindFor(path.join(dir, "notes.md"), { md: "browser" })).toBe("browser");
+    expect(kindFor(path.join(dir, "notes.md"), { md: "text" })).toBe("text");
   });
 
   it("takes new types the way a plugin would: a more specific rule wins", () => {
@@ -70,7 +72,7 @@ describe("window type registry", () => {
       kind: "markdown-preview",
       title: "Markdown Preview",
       icon: "doc.richtext",
-      opens: { extensions: ["md"], priority: 10 },
+      opens: { extensions: ["md"], priority: 20 },
       fromTarget: (tg) => ({ path: tg.type === "path" ? tg.path : "" }),
       create: (input) => ({ state: { path: String(input.path) }, title: "Preview" }),
     };
@@ -120,6 +122,17 @@ describe("window manager", () => {
     const store = new Store(db);
     store.saveWindow({ id: "old", kind: "browser", title: "Old", createdAt: 1, updatedAt: 1, url: "https://x.test", path: null, paneId: null } as never);
     expect(new Store(db).windows()[0]).toEqual({ id: "old", kind: "browser", title: "Old", createdAt: 1, updatedAt: 1, state: { url: "https://x.test" } });
+  });
+
+  it("switches a window's type in place (Markdown ⇄ text), keeping its id", () => {
+    const { wins } = make(builtins(), {}, path.join(dir, "switch.sqlite"));
+    const md = file("readme.md", "# Title");
+    const w = wins.openTarget(md)!;
+    expect(w.kind).toBe("markdown");
+    const t = wins.update(w.id, { kind: "text" });
+    expect(t).toMatchObject({ id: w.id, kind: "text", state: { path: md } });
+    expect(wins.update(w.id, { kind: "markdown" })).toMatchObject({ id: w.id, kind: "markdown" });
+    expect(() => wins.update(w.id, { kind: "terminal" })).toThrow();
   });
 
   it("treats panes as terminal windows", () => {

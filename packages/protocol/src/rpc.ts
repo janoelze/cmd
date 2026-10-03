@@ -74,7 +74,11 @@ export interface Methods {
    */
   "window.open": { params: { kind: string; input?: Record<string, unknown> }; result: AppWindow };
   /** Windows report navigation (state patches, applied by their type) and titles here. */
-  "window.update": { params: { id: WindowId; title?: string; state?: Record<string, unknown> }; result: AppWindow };
+  /** `kind` switches the window to another type in place (state re-created from the current one). */
+  "window.update": {
+    params: { id: WindowId; title?: string; state?: Record<string, unknown>; kind?: string };
+    result: AppWindow;
+  };
   /** Registered window types (built-in and plugins). */
   "window.types": { params: {}; result: WindowTypeInfo[] };
   "window.close": { params: { id: WindowId }; result: null };

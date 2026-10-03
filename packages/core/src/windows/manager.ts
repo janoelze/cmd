@@ -80,9 +80,19 @@ export class WindowManager extends EventEmitter<{ updated: [AppWindow]; removed:
     return this.open(type.kind, type.fromTarget ? type.fromTarget(target) : {});
   }
 
-  update(id: WindowId, patch: { title?: string; state?: Record<string, unknown> }): AppWindow {
+  update(id: WindowId, patch: { title?: string; state?: Record<string, unknown>; kind?: string }): AppWindow {
     const w = this.#windows.get(id);
     if (!w) throw new Error(`no such window: ${id}`);
+    if (patch.kind !== undefined && patch.kind !== w.kind) {
+      // Switch type in place (e.g. Markdown ⇄ text), keeping id, slot and size.
+      // The new type re-creates its state from the current one.
+      const next = this.types.get(patch.kind);
+      if (!next || patch.kind === "terminal") throw new Error(`cannot switch to window type: ${patch.kind}`);
+      const r = next.create({ ...w.state });
+      w.kind = patch.kind;
+      w.state = r.state;
+      w.title = r.title;
+    }
     if (patch.state) {
       const type = this.types.get(w.kind);
       const r = type?.update ? type.update(w.state, patch.state) : { state: { ...w.state, ...patch.state } };

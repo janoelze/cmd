@@ -77,6 +77,27 @@ export const textType: WindowType<{ path: string }> = {
   },
 };
 
+/** Rendered Markdown with live reload; ⌘E switches the same window to the text editor. */
+export const markdownType: WindowType<{ path: string }> = {
+  kind: "markdown",
+  title: "Markdown",
+  icon: "doc.richtext",
+  // Same specificity as text's extension match; priority makes .md open here.
+  opens: { extensions: ["md", "markdown", "mdx"], priority: 10 },
+  fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
+  create(input) {
+    const file = path.resolve(expandHome(str(input.path) ?? ""));
+    if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
+    return { state: { path: file }, title: path.basename(file) };
+  },
+  update(state, patch) {
+    const p = str(patch.path);
+    if (p === undefined) return { state };
+    const file = path.resolve(expandHome(p));
+    return { state: { ...state, path: file }, title: path.basename(file) };
+  },
+};
+
 /**
  * Terminals are backed by panes: the window manager creates and closes the pane;
  * this entry only describes the type (state: { paneId }).
@@ -95,4 +116,5 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(browserType);
   types.register(filesType);
   types.register(textType);
+  types.register(markdownType);
 }

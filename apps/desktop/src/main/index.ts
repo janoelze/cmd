@@ -1,7 +1,8 @@
 // Electron main: makes sure a core is running, then opens the window.
 // The core is a separate, detached process so terminals survive UI reloads and restarts.
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, protocol, screen, shell } from "electron";
+import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
@@ -14,6 +15,12 @@ import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type Keybindi
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 
 if (process.env.CMD_NO_SANDBOX) app.commandLine.appendSwitch("no-sandbox");
+
+// cmd-file:///abs/path — read-only access to local images/media for the app's own
+// pages (Markdown windows show relative images). Registered on the default
+// session only; browser windows use their own session and can't reach it.
+protocol.registerSchemesAsPrivileged([{ scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true } }]);
+const CMD_FILE_TYPES = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico|mp4|webm|mov|mp3|m4a|wav)$/i;
 
 const here = import.meta.dirname; // apps/desktop/out/main
 const repoRoot = path.resolve(here, "../../../..");
@@ -227,6 +234,11 @@ app.on("web-contents-created", (_e, contents) => {
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = "dark";
+  protocol.handle("cmd-file", (req) => {
+    const file = decodeURIComponent(new URL(req.url).pathname);
+    if (!CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });
+    return electronNet.fetch(pathToFileURL(file).href);
+  });
   const send = commandSender(createWindow);
   buildMenu(send, keybindings.bindings);
   watchKeybindings((next) => {
