@@ -41,8 +41,8 @@ export interface Methods {
   "pane.clearAttention": { params: { paneId: PaneId }; result: null };
   /** `cmd notify`: from a terminal (paneId) or from anywhere. */
   "notify.send": { params: { paneId?: PaneId | null; title?: string; body: string }; result: null };
-  /** Raw recent output, for re-attaching a view after a UI reload. */
-  "pane.snapshot": { params: { paneId: PaneId }; result: { data: string } };
+  /** Terminal state, for re-attaching a view after a UI reload; replay it into a terminal of `cols` x `rows`. */
+  "pane.snapshot": { params: { paneId: PaneId }; result: { data: string; cols: number; rows: number } };
   /** Clear stuck terminal state (modes a crashed program left on). */
   "pane.reset": { params: { paneId: PaneId }; result: null };
   /** Plain-text tail of the pane, as displayed. */

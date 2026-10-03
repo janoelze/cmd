@@ -142,7 +142,7 @@ export class Core {
     "pane.setMuted": (p) => (this.notifications.setMuted(p.paneId, p.muted), null),
     "pane.clearAttention": (p) => (this.notifications.clearAttention(p.paneId), null),
     "notify.send": (p) => (this.notifications.send(p.paneId ?? null, p.title, p.body), null),
-    "pane.snapshot": async (p) => ({ data: await this.panes.snapshot(p.paneId) }),
+    "pane.snapshot": (p) => this.panes.snapshot(p.paneId),
     "pane.read": async (p) => ({ text: await this.panes.read(p.paneId, p.lines) }),
     "pane.reset": async (p) => (await this.panes.resetState(p.paneId), null),
     "agent.list": () => this.agents.list(),

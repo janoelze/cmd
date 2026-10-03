@@ -390,9 +390,9 @@ cmd.onStatus(async (status) => {
   await Promise.allSettled(
     snap.panes.map(async (p) => {
       try {
-        const { data } = await cmd.call("pane.snapshot", { paneId: p.id });
+        const { data, cols, rows } = await cmd.call("pane.snapshot", { paneId: p.id });
         terminals.reset(p.id);
-        terminals.write(p.id, data);
+        terminals.write(p.id, data, { cols, rows });
       } finally {
         awaitingSnapshot.delete(p.id);
         terminals.release(p.id);
