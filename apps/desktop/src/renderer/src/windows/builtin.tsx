@@ -5,18 +5,19 @@ import { copy } from "../actions.ts";
 import { hostOf, shortPath } from "../model.ts";
 import { BrowserView } from "../components/BrowserView.tsx";
 import { FilesView } from "../components/FilesView.tsx";
-import { useWindowStatus } from "../windowActions.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
 
-const folderOf = (p: string) => shortPath(p.split("/").slice(0, -1).join("/") || "/");
+const parentOf = (p: string) => shortPath(p.split("/").slice(0, -1).join("/") || "/");
 
 registerWindowView({
   kind: "browser",
   View: BrowserView,
-  label: (w) => (w.title && w.title !== stateStr(w, "url") ? w.title : hostOf(stateStr(w, "url") ?? null) || "Browser"),
-  detail: (w) => hostOf(stateStr(w, "url") ?? null),
-  meta: (w) => <span className="tile-path">{hostOf(stateStr(w, "url") ?? null)}</span>,
+  describe: (w) => {
+    const url = stateStr(w, "url") ?? null;
+    const host = hostOf(url).replace(/^www\./, "");
+    return { name: (w.title && w.title !== url ? w.title : host) || "New Tab", place: host };
+  },
   menu: (w) => {
     const url = stateStr(w, "url");
     return url
@@ -31,8 +32,7 @@ registerWindowView({
 registerWindowView({
   kind: "files",
   View: FilesView,
-  detail: (w) => shortPath(stateStr(w, "path") ?? ""),
-  meta: (w) => <span className="tile-path">{shortPath(stateStr(w, "path") ?? "")}</span>,
+  describe: (w) => ({ place: parentOf(stateStr(w, "path") ?? "/") }),
   menu: (w) => {
     const p = stateStr(w, "path");
     return p
@@ -44,22 +44,11 @@ registerWindowView({
   },
 });
 
-function TextMeta({ id, path }: { id: string; path: string }) {
-  const status = useWindowStatus(id);
-  return (
-    <>
-      <span className="tile-path">{folderOf(path)}</span>
-      {status && <span className="tile-usage">{status.label}</span>}
-    </>
-  );
-}
-
 registerWindowView({
   kind: "text",
   // CodeMirror loads on first use, not at startup.
   View: lazyView(() => import("../components/TextView.tsx").then((m) => m.TextView)),
-  detail: (w) => shortPath(stateStr(w, "path") ?? ""),
-  meta: (w) => <TextMeta id={w.id} path={stateStr(w, "path") ?? ""} />,
+  describe: (w) => ({ place: parentOf(stateStr(w, "path") ?? "") }),
   menu: (w) => {
     const p = stateStr(w, "path");
     return p

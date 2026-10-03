@@ -53,6 +53,7 @@ import {
 } from "../strip.ts";
 import { TerminalView } from "./TerminalView.tsx";
 import { TileTitle } from "./TileTitle.tsx";
+import { SlotMotion } from "./Slot.tsx";
 
 const GUTTER = 8;
 const DRAG_THRESHOLD = 4;
@@ -62,6 +63,7 @@ const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scroll
 const EDGE_SCROLL_MAX = 18; // px per frame
 const CAMERA_ANIM_MS = 280;
 const CAMERA_SAVE_MS = 400; // persist the camera once panning/zooming pauses
+const MOTION_MIN_ZOOM = 0.5; // zoomed out further, title bars change without animating
 
 /** Canvas commands from the menu/palette (see requestCanvas). */
 export type CanvasRequest = "fit" | "window";
@@ -680,6 +682,14 @@ export function WindowsView(p: Props) {
             x = drag.x - drag.grabX - rootRect.left + offset;
             y = drag.y - drag.grabY - rootRect.top;
           }
+          // Title bars animate state changes only where you can see them: on screen,
+          // and on the canvas only while the title is legible (docs/10-window-titles.md).
+          const motion =
+            !lay.hidden.has(id) &&
+            (canvas
+              ? z >= MOTION_MIN_ZOOM &&
+                x + rect.w > cam.x && x < cam.x + vp.w / z && y + rect.h > cam.y && y < cam.y + vp.h / z
+              : x + rect.w > offset && x < offset + vp.w);
           const title = (
             <TileTitle
               row={r}
@@ -717,7 +727,7 @@ export function WindowsView(p: Props) {
               {/* The body clips the content; resize handles sit outside it, in the
                   gutter, so they never cover a scrollbar or the content's edge. */}
               <div className="tile-body">
-                {lay.chrome && title}
+                {lay.chrome && <SlotMotion.Provider value={motion}>{title}</SlotMotion.Provider>}
                 {r.pane ? (
                   <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
                 ) : r.win ? (

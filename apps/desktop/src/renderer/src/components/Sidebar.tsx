@@ -3,8 +3,9 @@ import type { PaneId } from "@cmd/protocol";
 import { bucketOf } from "@cmd/protocol";
 import { usePersisted } from "../store.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
-import { iconFor } from "./TileTitle.tsx";
-import { windowIdOf, flatten, ledOf, project, projectHue, rowDetail, rowTitle, type SidebarRow } from "../model.ts";
+import { DirtyDot, Mark, Slot } from "./Slot.tsx";
+import { useFields } from "./TileTitle.tsx";
+import { windowIdOf, flatten, ledOf, project, projectHue, type SidebarRow } from "../model.ts";
 import { Tools } from "./Tools.tsx";
 
 export type SidebarTab = "sessions" | "tools";
@@ -108,6 +109,7 @@ function RowView(props: {
   const open = !collapsed.includes(row.key);
   const setOpen = (o: boolean) => setCollapsed((c) => (o ? c.filter((k) => k !== row.key) : [...c, row.key].slice(-200)));
   const led = ledOf(row.agent);
+  const f = useFields(row, now)!;
   const proj = row.win ? null : project(row.agent?.cwd ?? row.pane?.cwd ?? "");
   const hasKids = row.children.length > 0;
   const doneKids = row.children.filter((c) => c.agent && ["done", "exited"].includes(c.agent.state)).length;
@@ -140,17 +142,17 @@ function RowView(props: {
         ) : (
           <span className="twisty-space" />
         )}
-        {row.win && row.win.kind !== "terminal" ? (
-          <Symbol name={iconFor(row.win.kind)} size={ICON.small} className="row-icon" />
-        ) : (
-          <span className={`led led-${led}`} />
-        )}
+        <Mark light={f.light} icon={f.icon} />
         <div className="row-text">
           <div className="row-title">
-            {rowTitle(row)}
+            <Slot value={{ text: f.name }} fade />
+            <DirtyDot on={!!f.dirty} />
             {hasKids && !open && <span className="badge">{doneKids}/{row.children.length}</span>}
           </div>
-          <div className="row-detail">{rowDetail(row, now)}</div>
+          {/* Status if there is one ("does this need me?"), else Place ("which one is it?"). */}
+          <div className="row-detail">
+            <Slot value={f.status ?? (f.place ? { text: f.place } : undefined)} />
+          </div>
         </div>
         {depth === 0 && proj && (
           <span className="chip" style={{ ["--hue" as string]: projectHue(proj) }}>

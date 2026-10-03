@@ -10,6 +10,7 @@ import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { SCROLLBAR_CSS } from "../scrollbars.ts";
+import { setWindowStatus } from "../windowActions.ts";
 
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const url = typeof win.state.url === "string" ? win.state.url : null;
@@ -50,6 +51,13 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       wv.removeEventListener("dom-ready", ready);
     };
   }, [win.id]);
+
+  // Status: "Loading…" (transient, so fast loads don't flash it; see components/Slot.tsx).
+  useEffect(
+    () => setWindowStatus(win.id, loading ? { label: "Loading…", key: "loading", transient: true } : null),
+    [win.id, loading],
+  );
+  useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
 
   // Navigation requested from elsewhere (cmd open, another client): follow it.
   useEffect(() => {

@@ -203,7 +203,9 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
   const label =
     notice ??
     (dirty ? "Edited" : m.truncated ? "Read-only (truncated)" : m.binary ? "Read-only (binary)" : `${lines} lines · ${formatBytes(m.size)}`);
-  useEffect(() => setWindowStatus(win.id, { label, dirty }), [win.id, label, dirty]);
+  // The key says which state it is: a new key animates, line counts update in place.
+  const key = notice ? "notice" : dirty ? "edited" : m.truncated || m.binary ? "readonly" : "info";
+  useEffect(() => setWindowStatus(win.id, { label, key, dirty }), [win.id, label, key, dirty]);
   useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
 
   return (

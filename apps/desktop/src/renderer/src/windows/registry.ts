@@ -2,7 +2,7 @@
 // UI. The core half (what it opens, its state) lives in packages/core/src/windows.
 // Built-ins register in ./builtin.tsx; plugin window types will register the same way.
 
-import { createElement, lazy, Suspense, type ComponentType, type ReactNode } from "react";
+import { createElement, lazy, Suspense, type ComponentType } from "react";
 import type { AppWindow, WindowTypeInfo } from "@cmd/protocol";
 import type { MenuEntry } from "../context.ts";
 
@@ -16,12 +16,12 @@ export interface WindowView {
   kind: string;
   /** The window's content (below the shared title bar). */
   View: ComponentType<WindowViewProps>;
-  /** Name for the sidebar and title bar; defaults to the window's title. */
-  label?(win: AppWindow): string;
-  /** Second line in the sidebar and the status bar (host, folder, …). */
-  detail?(win: AppWindow): string;
-  /** Right side of the title bar. */
-  meta?(win: AppWindow): ReactNode;
+  /**
+   * The window's Name (defaults to its title) and Place (host, folder, …), see
+   * docs/10-window-titles.md. Kind comes from the type; Status and Dirty from
+   * the window's live status (setWindowStatus).
+   */
+  describe?(win: AppWindow): { name?: string; place?: string };
   /** Context-menu entries for the title bar and sidebar row. */
   menu?(win: AppWindow): MenuEntry[];
 }

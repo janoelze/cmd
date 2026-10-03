@@ -94,36 +94,87 @@ function cleanTitle(t: string | undefined): string {
   return (t ?? "").replace(/^[\s✳✻✽✶✢·•*◐◑◒◓⠀-⣿]+/u, "").trim();
 }
 
-/** Like the fork: terminal title, else last prompt, else spawn prompt, else agent name. */
-export function rowTitle(r: SidebarRow): string {
-  if (r.win) return viewFor(r.win.kind)?.label?.(r.win) ?? (r.win.title || typeFor(r.win.kind)?.title || r.win.kind);
-  const a = r.agent;
-  const t = cleanTitle(r.pane?.title);
-  const generic = !t || GENERIC_TITLES.has(t.toLowerCase()) || t === r.pane?.foreground;
-  if (a) return a.name ?? (!generic ? t : null) ?? a.lastPrompt ?? a.spawn.prompt ?? a.kind;
-  return t || r.pane?.foreground || "terminal";
+/** Live status a window reports (see windowActions.ts); terminals have none. */
+export interface LiveStatus {
+  label: string;
+  key?: string;
+  transient?: boolean;
+  dirty?: boolean;
 }
 
-export function rowDetail(r: SidebarRow, now: number): string {
-  if (r.win) return viewFor(r.win.kind)?.detail?.(r.win) ?? "";
-  const a = r.agent;
-  if (!a) return shortPath(r.pane?.cwd ?? "");
-  switch (a.state) {
-    case "needs_input":
-      return a.detail ?? "Needs input";
-    case "working":
-      return a.detail ?? "Working…";
-    case "done":
-      return `Done ${ago(a.stateSince, now)}`;
-    case "starting":
-      return "Starting…";
-    case "exited":
-      return "Exited";
-    case "failed":
-      return a.detail ?? "Failed";
-    default:
-      return `${a.kind} · idle`;
+/** A window's title fields, the same for every type (docs/10-window-titles.md). */
+export interface WindowFields {
+  /** What it is about: short, no path. */
+  name: string;
+  /** What runs or is open in it: the process, or the type, lowercase. */
+  kind: string;
+  /** Where it lives (folder, host); never equal to the name. */
+  place?: string;
+  /** Live state; `key` says which state, so a changed text with the same key updates in place. */
+  status?: { text: string; key: string; transient?: boolean };
+  dirty?: boolean;
+  /** Agents: the status light (Mark). Everything else shows `icon`. */
+  light?: Led;
+  icon: string;
+}
+
+export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: number): WindowFields {
+  let f: WindowFields;
+  if (r.win) {
+    const w = r.win;
+    const type = typeFor(w.kind);
+    const d = viewFor(w.kind)?.describe?.(w) ?? {};
+    f = {
+      name: d.name || w.title || type?.title || w.kind,
+      kind: (type?.title ?? w.kind).toLowerCase(),
+      place: d.place || undefined,
+      status: live ? { text: live.label, key: live.key ?? live.label, transient: live.transient } : undefined,
+      dirty: live?.dirty,
+      icon: type?.icon ?? "macwindow",
+    };
+  } else {
+    const a = r.agent;
+    const p = r.pane;
+    const t = cleanTitle(p?.title);
+    const generic = !t || GENERIC_TITLES.has(t.toLowerCase()) || t === p?.foreground;
+    const cwd = p?.cwd ?? a?.cwd;
+    f = {
+      // Like the fork: agent name, else terminal title, else last prompt, else spawn prompt.
+      name: a
+        ? (a.name ?? (!generic ? t : null) ?? a.lastPrompt ?? a.spawn.prompt ?? a.kind)
+        : (!generic ? t : null) || p?.foreground || "Terminal",
+      kind: p?.foreground || a?.kind || "terminal",
+      place: cwd ? shortPath(cwd) : undefined,
+      status: a ? agentStatus(a, now) : undefined,
+      light: a ? ledOf(a) : undefined,
+      icon: "terminal",
+    };
   }
+  // Rule 2: no repeats.
+  if (f.place === f.name) f.place = undefined;
+  return f;
+}
+
+function agentStatus(a: Agent, now: number): { text: string; key: string } {
+  const text = (() => {
+    switch (a.state) {
+      case "needs_input":
+        return a.detail ?? "Needs input";
+      case "working":
+        return a.detail ?? "Working…";
+      case "done":
+        return `Done ${ago(a.stateSince, now)}`;
+      case "starting":
+        return "Starting…";
+      case "exited":
+        return "Exited";
+      case "failed":
+        return a.detail ?? "Failed";
+      default:
+        return "idle";
+    }
+  })();
+  return { text, key: a.state };
 }
 
 export type Led = "needs" | "unseen" | "done" | "working" | "idle" | "shell" | "off";

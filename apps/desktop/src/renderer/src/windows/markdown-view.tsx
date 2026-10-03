@@ -144,7 +144,7 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
   }, [focused]);
 
   const words = useMemo(() => (source ? source.split(/\s+/).filter(Boolean).length : 0), [source]);
-  useEffect(() => setWindowStatus(win.id, { label: `${words.toLocaleString()} words` }), [win.id, words]);
+  useEffect(() => setWindowStatus(win.id, { label: `${words.toLocaleString()} words`, key: "words" }), [win.id, words]);
   useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
   useEffect(
     () => registerWindowActions(win.id, { openExternally: () => cmd.openPath(file) }),
