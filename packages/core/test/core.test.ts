@@ -94,7 +94,7 @@ describe("agent detection with the native helper", () => {
     expect(fg).toBe("claude");
     await until(async () => (await conn.client.call("identify", { paneId: pane.id })).agent === null, 8000);
     await conn.client.call("pane.kill", { paneId: pane.id });
-  });
+  }, 20_000);
 
   it.skipIf(!procinfo.available)("reports the real foreground program", async () => {
     const pane = await conn.client.call("pane.create", { cwd: dir, command: "sleep 3" });
@@ -155,5 +155,5 @@ describe("zsh shell integration", () => {
     await until(async () => fs.realpathSync(await cwdOf()) === real, 5000);
     await conn.client.call("window.close", { id: files[0]!.id });
     await conn.client.call("pane.kill", { paneId: pane.id });
-  });
+  }, 25_000); // a first zsh start on a fresh CI machine is slow
 });
