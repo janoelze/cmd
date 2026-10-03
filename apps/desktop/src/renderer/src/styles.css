@@ -497,8 +497,9 @@ kbd {
   display: inline-block;
   flex: none;
   background-color: currentColor;
-  -webkit-mask-size: contain;
-  mask-size: contain;
+  /* Rendered at the exact size shown (see Symbol.tsx): map 1:1, no scaling. */
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
@@ -863,39 +864,6 @@ kbd {
   transition: opacity 120ms;
 }
 .tile:hover .canvas-resize.resize-xy::after, .main.windows.sizing .tile.sel .canvas-resize.resize-xy::after { opacity: 1; }
-
-/* Zoomed out: cards. Sizes are divided by the zoom so they read at screen size. */
-.card-title { flex: none; }
-/* Windows other than terminals keep their content under the card: hidden, in place. */
-.main.cards .tile-body { position: relative; }
-.main.cards .tile-body > .canvas-card { position: absolute; left: 0; right: 0; bottom: 0; top: calc(26px / var(--z)); z-index: 1; }
-.main.cards .tile-body > :not(.card-title):not(.canvas-card) { visibility: hidden; }
-.canvas-card {
-  flex: 1;
-  min-height: 0;
-  margin: 0;
-  overflow: hidden;
-  background: var(--well);
-  color: var(--text-dim);
-}
-.canvas-card.lines {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: calc(6px / var(--z)) calc(8px / var(--z));
-  font: calc(11px / var(--z)) / 1.3 var(--font-mono);
-  white-space: pre;
-}
-.canvas-card.info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: calc(8px / var(--z));
-  font-size: calc(12px / var(--z));
-}
-.canvas-card-detail { max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tile.sel .canvas-card { color: var(--text); }
 
 .minimap {
   position: absolute;

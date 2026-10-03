@@ -12,17 +12,16 @@ export interface Camera {
   zoom: number;
 }
 
-/** Zoom range, and below which windows are drawn as cards (title, last lines), not live. */
+/** Zoom range (windows stay live at every zoom, so the range is what keeps them usable). */
 export interface ZoomLimits {
   min: number;
   max: number;
-  cards: number;
 }
 
 /** From the canvas.* settings (percent). */
-export function zoomLimits(s: Pick<Settings, "canvas.minZoom" | "canvas.maxZoom" | "canvas.cardZoom">): ZoomLimits {
+export function zoomLimits(s: Pick<Settings, "canvas.minZoom" | "canvas.maxZoom">): ZoomLimits {
   const min = Math.max(0.01, s["canvas.minZoom"] / 100);
-  return { min, max: Math.max(min, s["canvas.maxZoom"] / 100), cards: s["canvas.cardZoom"] / 100 };
+  return { min, max: Math.max(min, s["canvas.maxZoom"] / 100) };
 }
 export const DEFAULT_LIMITS = zoomLimits(DEFAULT_SETTINGS);
 /** The background's dot spacing: window edges, sizes and gaps all land on it. */
@@ -144,13 +143,8 @@ export function visible(cam: Camera, r: Rect, vp: Viewport): boolean {
   return r.x >= a.x - 0.5 && r.y >= a.y - 0.5 && r.x + r.w <= b.x + 0.5 && r.y + r.h <= b.y + 0.5;
 }
 
-/**
- * The smallest camera move that shows `r` (like the strip's reveal). Zooms out
- * only if it doesn't fit; zoomed out to cards, comes in to full size so the
- * window can be used.
- */
+/** The smallest camera move that shows `r` (like the strip's reveal). Zooms out only if it doesn't fit. */
 export function reveal(cam: Camera, r: Rect, vp: Viewport, lim = DEFAULT_LIMITS, pad = GAP): Camera {
-  if (cam.zoom < lim.cards) return frame(r, vp, 1, lim);
   const fits = r.w * cam.zoom <= vp.w - 2 * pad && r.h * cam.zoom <= vp.h - 2 * pad;
   if (!fits) return frame(r, vp, cam.zoom, lim, pad);
   if (visible(cam, r, vp)) return cam;

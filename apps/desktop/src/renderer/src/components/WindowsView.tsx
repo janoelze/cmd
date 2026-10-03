@@ -9,8 +9,8 @@
 //  - strip: horizontal scrolling with snapping, reveal-on-select, resize by the
 //    right edge, auto-scroll while dragging near an edge, position bar.
 //  - canvas: windows placed freely in world coordinates (../canvas.ts) under a
-//    pan/zoom camera; drag to move, corner to resize, cards when zoomed out,
-//    minimap. The camera is a transform on the track, so terminals keep their
+//    pan/zoom camera; drag to move, edges/corner to resize, minimap. Windows stay
+//    live at every zoom; the zoom range is capped by settings. The camera is a transform on the track, so terminals keep their
 //    size in cells whatever the zoom.
 //
 // Windows are never remounted or reordered in the DOM, so terminals keep
@@ -21,7 +21,6 @@ import type { PaneId } from "@cmd/protocol";
 import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
-import { terminals } from "../terminals.ts";
 import { useStore } from "../store.ts";
 import {
   arrange,
@@ -53,8 +52,7 @@ import {
   type Slot,
 } from "../strip.ts";
 import { TerminalView } from "./TerminalView.tsx";
-import { iconFor, TileTitle } from "./TileTitle.tsx";
-import { Symbol } from "./Symbol.tsx";
+import { TileTitle } from "./TileTitle.tsx";
 
 const GUTTER = 8;
 const DRAG_THRESHOLD = 4;
@@ -64,7 +62,6 @@ const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scroll
 const EDGE_SCROLL_MAX = 18; // px per frame
 const CAMERA_ANIM_MS = 280;
 const CAMERA_SAVE_MS = 400; // persist the camera once panning/zooming pauses
-const CARD_LINES = 14;
 
 /** Canvas commands from the menu/palette (see requestCanvas). */
 export type CanvasRequest = "fit" | "window";
@@ -155,7 +152,7 @@ export function WindowsView(p: Props) {
   const gestureStart = useRef<number | null>(null);
 
   // ── canvas camera ──────────────────────────────────────
-  // Zoom range and card threshold come from the canvas.* settings.
+  // The zoom range comes from the canvas.* settings.
   const cfg = useStore().settings.settings;
   const lim = zoomLimits(cfg);
   const limRef = useRef(lim);
@@ -195,7 +192,6 @@ export function WindowsView(p: Props) {
     },
     [setCam],
   );
-  const cards = mode === "canvas" && cam.zoom < lim.cards;
   // Changed limits pull the camera back into range, around the viewport centre.
   useEffect(() => {
     const c = camRef.current;
@@ -354,7 +350,7 @@ export function WindowsView(p: Props) {
       }
       const target = e.target as Element;
       const tile = target.closest?.(".tile");
-      if (tile && tile.getAttribute("data-pane") === live.current.selected && c.zoom >= limRef.current.cards && !target.closest(".tile-title"))
+      if (tile && tile.getAttribute("data-pane") === live.current.selected && !target.closest(".tile-title"))
         return;
       e.preventDefault();
       e.stopPropagation();
@@ -595,8 +591,8 @@ export function WindowsView(p: Props) {
   // Stable DOM order (creation), whatever the visual order.
   const stable = [...p.rows].sort((a, b) => createdOf(a) - createdOf(b));
   const canvas = mode === "canvas";
-  // The zoom as a CSS variable, for the few elements sized in screen px (handles,
-  // cards). Set on them only: on the track it would be inherited by every element
+  // The zoom as a CSS variable, for the resize handles (sized in screen px). Set on
+  // them only: on the track it would be inherited by every element
   // of every window, and changing it each frame would restyle them all.
   const zVar = { "--z": cam.zoom } as React.CSSProperties;
   // Canvas: where the dragged window will land (snapped to the dots).
@@ -636,7 +632,7 @@ export function WindowsView(p: Props) {
   return (
     <main
       ref={rootRef}
-      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""} ${cards ? "cards" : ""}`}
+      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""}`}
       onPointerDown={startPan}
       onDoubleClick={(e) => canvas && onBackground(e) && fitAll()}
     >
@@ -717,15 +713,11 @@ export function WindowsView(p: Props) {
               {/* The body clips the content; resize handles sit outside it, in the
                   gutter, so they never cover a scrollbar or the content's edge. */}
               <div className="tile-body">
-                {/* Cards keep their title bar readable: it's drawn at screen size. */}
-                {lay.chrome && (cards ? <div className="card-title" style={{ zoom: 1 / z }}>{title}</div> : title)}
-                {/* As cards, terminals detach (frees their renderer); other windows stay
-                    mounted under the card, so pages don't reload and nothing rebuilds. */}
-                {cards && <Card row={r} zoom={z} />}
+                {lay.chrome && title}
                 {r.pane ? (
-                  !cards && <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
+                  <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
                 ) : r.win ? (
-                  <WindowContent win={r.win} focused={id === selected && !cards} />
+                  <WindowContent win={r.win} focused={id === selected} />
                 ) : null}
               </div>
               {lay.resizable && (
@@ -775,31 +767,6 @@ const WindowContent = memo(function WindowContent({ win, focused }: { win: impor
   if (!view) return <div className="file-error">No view registered for “{win.kind}” windows.</div>;
   return <view.View win={win} focused={focused} />;
 });
-
-/** A window drawn as a card when the canvas is zoomed out: no live renderer. */
-function Card({ row, zoom }: { row: Row; zoom: number }) {
-  const [, refresh] = useState(0);
-  const paneId = row.pane?.id;
-  useEffect(() => {
-    if (!paneId) return;
-    const t = setInterval(() => refresh((n) => n + 1), 1000);
-    return () => clearInterval(t);
-  }, [paneId]);
-  const zVar = { "--z": zoom } as React.CSSProperties;
-  if (paneId)
-    return (
-      <pre className="canvas-card lines" style={zVar}>
-        {terminals.tail(paneId, CARD_LINES).join("\n")}
-      </pre>
-    );
-  const win = row.win!;
-  return (
-    <div className="canvas-card info" style={zVar}>
-      <Symbol name={iconFor(win.kind)} size={Math.round(28 / zoom)} />
-      <div className="canvas-card-detail">{viewFor(win.kind)?.detail?.(win) ?? win.title}</div>
-    </div>
-  );
-}
 
 /** Canvas overview: every window, the visible area; click or drag to move there. */
 function Minimap(p: {

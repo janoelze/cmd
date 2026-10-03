@@ -159,18 +159,6 @@ class Terminals {
     return !!this.#hosts.get(paneId)?.term.hasSelection();
   }
 
-  /** The last n lines up to the cursor, for canvas cards (no renderer needed). */
-  tail(paneId: PaneId, n: number): string[] {
-    const t = this.#hosts.get(paneId)?.term;
-    if (!t) return [];
-    const b = t.buffer.active;
-    let end = b.baseY + b.cursorY;
-    while (end > 0 && !b.getLine(end)?.translateToString(true).trim()) end--;
-    const out: string[] = [];
-    for (let i = Math.max(0, end - n + 1); i <= end; i++) out.push(b.getLine(i)?.translateToString(true) ?? "");
-    return out;
-  }
-
   write(paneId: PaneId, data: string): void {
     this.get(paneId).term.write(data);
   }
