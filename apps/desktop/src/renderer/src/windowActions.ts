@@ -55,6 +55,10 @@ export function setWindowStatus(id: string, status: WindowStatus | null): void {
   for (const fn of listeners) fn();
 }
 
+export function windowStatus(id: string): WindowStatus | undefined {
+  return statuses.get(id);
+}
+
 export function useWindowStatus(id: string | null): WindowStatus | undefined {
   const map = useSyncExternalStore(
     (fn) => (listeners.add(fn), () => listeners.delete(fn)),

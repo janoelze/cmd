@@ -13,6 +13,7 @@ import {
   newBrowser,
   newMagic,
   newFiles,
+  newText,
   openableTarget,
   openPath,
   openSession,
@@ -271,6 +272,7 @@ export function App() {
     "file.newCodex": () => void newAgent("codex"),
     "file.newBrowser": () => void newBrowser(),
     "file.newFiles": () => void newFiles(),
+    "file.newText": () => void newText(),
     "file.newMagic": () => void newMagic(),
     "view.magicChange": () => windowActions(selected)?.change?.(),
     "view.magicRefresh": () => windowActions(selected)?.refresh?.(),
@@ -450,7 +452,7 @@ export function App() {
   /** The sidebar's + button. */
   const newMenu = () =>
     void showContextMenu(
-      (["file.newTerminal", "file.newClaude", "file.newCodex", "-", "file.newBrowser", "file.newFiles", "file.newMagic"] as const).map((id) =>
+      (["file.newTerminal", "file.newClaude", "file.newCodex", "-", "file.newBrowser", "file.newFiles", "file.newText", "file.newMagic"] as const).map((id) =>
         id === "-" ? id : { label: COMMANDS.find((c) => c.id === id)!.label, run: () => run(id) },
       ),
     );

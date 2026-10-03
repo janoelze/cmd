@@ -143,6 +143,8 @@ const api = {
   },
   /** Native folder picker; null when cancelled. */
   chooseFolder: (): Promise<string | null> => ipcRenderer.invoke("choose-folder"),
+  /** Native save panel (untitled text windows), starting at `defaultPath`; null when cancelled. */
+  chooseSavePath: (defaultPath: string): Promise<string | null> => ipcRenderer.invoke("choose-save-path", defaultPath),
   /** Native sheet; resolves true when confirmed. */
   confirm: (o: { message: string; detail?: string; confirm: string }): Promise<boolean> => ipcRenderer.invoke("confirm", o),
   /** The URL of a Magic widget frame whose CSP allows media from these origins (cmd-widget://, main process). */

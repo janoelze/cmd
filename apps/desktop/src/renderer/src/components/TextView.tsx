@@ -1,4 +1,5 @@
-// Text window: a CodeMirror 6 editor for one file. No toolbar — the title bar
+// Text window: a CodeMirror 6 editor for one file, or an untitled buffer
+// (File › New Text Window) whose first ⌘S asks where to save. No toolbar — the title bar
 // (or, in focus mode, the status bar) shows the file, folder and state; ⌘S saves.
 //
 //  - Styled from the app's tokens (background, separators, selection, terminal
@@ -7,10 +8,12 @@
 //    (cursor and scroll survive) when there are no unsaved edits, otherwise a
 //    banner asks whether to reload or keep yours. Saving never silently
 //    overwrites a file that changed on disk.
+//  - Untitled: the text is kept in the window's state (`draft`), so it survives
+//    reloads and core restarts until it's saved.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { basicSetup } from "codemirror";
-import { Compartment, EditorState, type Text } from "@codemirror/state";
+import { Compartment, EditorState, Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
@@ -70,6 +73,9 @@ function minimalChange(a: string, b: string): { from: number; to: number; insert
 
 export function TextView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const file = typeof win.state.path === "string" ? win.state.path : "";
+  const dir = typeof win.state.dir === "string" ? win.state.dir : "";
+  const fileRef = useRef(file);
+  fileRef.current = file;
   const settings = useStoreValue((s) => s.settings.settings);
   const dark = useTheme().appearance === "dark";
   const host = useRef<HTMLDivElement>(null);
@@ -88,13 +94,15 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
   /** The file changed on disk while there were unsaved edits. */
   const [conflict, setConflict] = useState(false);
 
-  // Create the editor once per window.
+  // Create the editor once per window (an untitled buffer keeps it when saved).
   useEffect(() => {
     const c = comps.current;
+    const draft = !file && typeof win.state.draft === "string" ? win.state.draft : "";
+    let persist: ReturnType<typeof setTimeout> | undefined;
     const v = new EditorView({
       parent: host.current!,
       state: EditorState.create({
-        doc: "",
+        doc: draft,
         extensions: [
           basicSetup,
           keymap.of([indentWithTab]),
@@ -106,18 +114,33 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
             if (!u.docChanged) return;
             setDirty(!!saved.current && !u.state.doc.eq(saved.current));
             setLines(u.state.doc.lines);
+            if (fileRef.current) return;
+            clearTimeout(persist);
+            persist = setTimeout(() => void cmd.call("window.update", { id: win.id, state: { draft: u.state.doc.toString() } }), 500);
           }),
         ],
       }),
     });
     view.current = v;
-    const desc = LanguageDescription.matchFilename(languages, file.split("/").pop() ?? "");
-    if (desc) void desc.load().then((lang) => v.dispatch({ effects: c.lang.reconfigure(lang) }));
+    if (!file) {
+      // Nothing on disk: unsaved until the first ⌘S.
+      saved.current = Text.empty;
+      setDirty(draft !== "");
+      setLines(v.state.doc.lines);
+      setLoaded(true);
+    }
     return () => {
+      clearTimeout(persist);
       v.destroy();
       view.current = null;
     };
-  }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [win.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const desc = file ? LanguageDescription.matchFilename(languages, file.split("/").pop() ?? "") : null;
+    if (desc) void desc.load().then((lang) => view.current?.dispatch({ effects: comps.current.lang.reconfigure(lang) }));
+    else view.current?.dispatch({ effects: comps.current.lang.reconfigure([]) });
+  }, [file]);
 
   useEffect(() => {
     view.current?.dispatch({
@@ -127,6 +150,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
 
   /** Load the file; merges into the buffer as a minimal change. */
   const load = useCallback(async () => {
+    if (!file) return;
     try {
       const r = await cmd.call("fs.read", { path: file });
       const v = view.current;
@@ -149,6 +173,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
 
   // Live: watch the file; reload when clean, ask when there are unsaved edits.
   useEffect(() => {
+    if (!file) return;
     void cmd.call("fs.watch", { path: file }).catch(() => {});
     const off = onFsChanged((p) => {
       if (p !== file) return;
@@ -176,9 +201,13 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
     const m = meta.current;
     if (!v || m.truncated || m.binary) return;
     try {
+      // Untitled: ask where (the save panel confirms overwriting), then the window becomes that file's.
+      const target = file || (await cmd.chooseSavePath(`${dir || "~"}/Untitled.txt`));
+      if (!target) return;
       const doc = v.state.doc;
-      const r = await cmd.call("fs.write", { path: file, text: doc.toString(), expectMtime: m.mtime });
+      const r = await cmd.call("fs.write", { path: target, text: doc.toString(), expectMtime: file ? m.mtime : undefined });
       meta.current = { ...m, size: r.size, mtime: r.mtime };
+      if (!file) await cmd.call("window.update", { id: win.id, state: { path: target } });
       saved.current = doc;
       setDirty(!v.state.doc.eq(doc));
       setConflict(false);
@@ -189,7 +218,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
       setConflict(/changed on disk/i.test((e as Error).message));
       if (!/changed on disk/i.test((e as Error).message)) setError((e as Error).message);
     }
-  }, [file]);
+  }, [file, dir, win.id]);
 
   /** Keep my edits: overwrite the disk version on the next save. */
   const keepMine = async () => {
@@ -199,7 +228,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
   };
 
   useEffect(
-    () => registerWindowActions(win.id, { save, openExternally: () => cmd.openPath(file) }),
+    () => registerWindowActions(win.id, { save, openExternally: file ? () => cmd.openPath(file) : undefined }),
     [win.id, save, file],
   );
 
@@ -207,7 +236,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
   const m = meta.current;
   const label =
     notice ??
-    (dirty ? "Edited" : m.truncated ? "Read-only (truncated)" : m.binary ? "Read-only (binary)" : `${lines} lines · ${formatBytes(m.size)}`);
+    (dirty ? "Edited" : m.truncated ? "Read-only (truncated)" : m.binary ? "Read-only (binary)" : !file ? "Empty" : `${lines} lines · ${formatBytes(m.size)}`);
   // The key says which state it is: a new key animates, line counts update in place.
   const key = notice ? "notice" : dirty ? "edited" : m.truncated || m.binary ? "readonly" : "info";
   useEffect(

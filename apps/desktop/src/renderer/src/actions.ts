@@ -4,6 +4,7 @@ import type { Agent, PaneId, SearchHit } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { getState } from "./store.ts";
 import { under } from "./model.ts";
+import { windowStatus } from "./windowActions.ts";
 
 type Selector = (paneId: PaneId) => void;
 let select: Selector = () => {};
@@ -63,10 +64,24 @@ const SHELLS = new Set(["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh
 // cmd.exe; elsewhere `cmd` is this app's own CLI.
 if (navigator.userAgent.includes("Windows")) SHELLS.add("cmd");
 
-/** Close a window. Terminals ask first when something is running (like Terminal.app). */
+/**
+ * Close a window. Terminals ask first when something is running (like Terminal.app),
+ * text windows when they have unsaved changes (an empty Untitled has none).
+ */
 export async function closePane(paneId: PaneId): Promise<void> {
   const s = getState();
-  if (s.windows.has(paneId)) {
+  const win = s.windows.get(paneId);
+  if (win) {
+    // An unmounted untitled window has no live status, only its draft.
+    const draft = win.kind === "text" && !win.state.path && typeof win.state.draft === "string" && win.state.draft !== "";
+    if (windowStatus(paneId)?.dirty || draft) {
+      const ok = await cmd.confirm({
+        message: `Close “${win.title}” without saving?`,
+        detail: win.state.path ? "Your changes will be lost." : "It has never been saved; its text will be lost.",
+        confirm: "Close",
+      });
+      if (!ok) return;
+    }
     await cmd.call("window.close", { id: paneId });
     return;
   }
@@ -132,6 +147,12 @@ export async function newMagic(prompt?: string): Promise<void> {
 /** New file browser at a folder, defaulting to the selected terminal's folder. */
 export async function newFiles(path?: string): Promise<void> {
   const w = await cmd.call("window.open", { kind: "files", input: { path: path ?? contextCwd() }, spaceId: here() });
+  select(w.id);
+}
+
+/** New untitled text window; its first ⌘S asks where to save, starting in the selected terminal's folder. */
+export async function newText(): Promise<void> {
+  const w = await cmd.call("window.open", { kind: "text", input: { cwd: contextCwd() }, spaceId: here() });
   select(w.id);
 }
 

@@ -66,6 +66,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         sep,
         ...i("file.newBrowser"),
         ...i("file.newFiles"),
+        ...i("file.newText"),
         ...i("file.newMagic"),
         sep,
         ...i("file.openSpace"),

@@ -418,6 +418,45 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.waitForTimeout(800);
   await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });
   check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1 && (await win.locator(".tile.kind-text").count()) === 1 && (await win.locator(".tile.kind-markdown").count()) === 1, "browser, file, text and Markdown windows take part in the grid");
+
+  // New Text Window: an untitled buffer whose text survives in the window's state;
+  // ⌘S asks where to save (the native panel is stubbed) and the window becomes that file's.
+  await menu("file.newText");
+  const untitled = win.locator(".tile.kind-text.sel .cm-content");
+  await untitled.waitFor({ timeout: 5000 });
+  const textWin = () => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.filter((w) => w.kind === "text").sort((a, b) => b.createdAt - a.createdAt)[0]);
+  check((await textWin()).title === "Untitled", "⇧⌘E opens an untitled text window");
+  await untitled.click();
+  await win.keyboard.type("scratch notes");
+  await win.waitForTimeout(800);
+  check((await textWin()).state.draft === "scratch notes", "an untitled window keeps its unsaved text in the core");
+  // ⌘W asks before losing that text (the sheet is stubbed to answer Cancel).
+  const asked = () => app.evaluate(({ dialog }) => dialog.__asked);
+  await app.evaluate(({ dialog }) => {
+    dialog.__orig ??= dialog.showMessageBox;
+    dialog.__asked = 0;
+    dialog.showMessageBox = async () => (dialog.__asked++, { response: 1 });
+  });
+  const draftId = (await textWin()).id;
+  await menu("file.close");
+  await win.waitForTimeout(400);
+  check((await asked()) === 1 && (await textWin()).id === draftId, "⌘W on an untitled window with text asks first, and Cancel keeps it");
+  const savedAs = path.join(home, "files-fixture", "scratch.txt");
+  await app.evaluate(({ dialog }, p) => (dialog.showSaveDialog = async () => ({ canceled: false, filePath: p })), savedAs);
+  await menu("file.save");
+  await win.waitForTimeout(600);
+  const after = await textWin();
+  check(fs.readFileSync(savedAs, "utf8") === "scratch notes" && after.title === "scratch.txt" && after.state.path === savedAs, "⌘S on an untitled window saves it where the panel says, and the window becomes that file's");
+  await win.evaluate((id) => window.cmd.call("window.close", { id }), after.id);
+  // An empty Untitled has nothing to lose: ⌘W closes it without asking.
+  await menu("file.newText");
+  await untitled.waitFor({ timeout: 5000 });
+  const emptyId = (await textWin()).id;
+  await menu("file.close");
+  await win.waitForTimeout(400);
+  const left = await win.evaluate(() => window.cmd.call("window.list", {}));
+  check((await asked()) === 1 && !left.some((w) => w.id === emptyId), "⌘W closes an empty untitled window without asking");
+  await app.evaluate(({ dialog }) => (dialog.showMessageBox = dialog.__orig));
   server.close();
 }
 

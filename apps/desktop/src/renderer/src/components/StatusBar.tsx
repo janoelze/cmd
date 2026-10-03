@@ -12,12 +12,11 @@ import { useFields } from "./TileTitle.tsx";
 import type { ViewMode } from "./MainView.tsx";
 import { ICON, Symbol } from "./Symbol.tsx";
 
-const ICONS: Record<ViewMode | "new" | "palette" | "settings", string> = {
+const ICONS: Record<ViewMode | "palette" | "settings", string> = {
   focus: "rectangle",
   grid: "square.grid.2x2",
   strip: "rectangle.split.3x1",
   canvas: "rectangle.3.group",
-  new: "plus",
   palette: "command",
   settings: "gearshape",
 };
@@ -66,8 +65,6 @@ export function StatusBar({ mode, row, pane, run }: Props) {
         />
       </div>
       <div className="statusbar-actions">
-        {btn("file.newTerminal", ICONS.new, "New Terminal")}
-        <span className="statusbar-sep" />
         {btn("view.focus", ICONS.focus, "Focus", mode === "focus")}
         {btn("view.grid", ICONS.grid, "Grid", mode === "grid")}
         {btn("view.strip", ICONS.strip, "Strip", mode === "strip")}

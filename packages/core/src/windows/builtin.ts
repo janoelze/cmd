@@ -56,7 +56,12 @@ export const filesType: WindowType<{ path: string }> = {
   },
 };
 
-export const textType: WindowType<{ path: string }> = {
+/**
+ * A text editor for one file, or an untitled buffer (no path): `dir` is where
+ * Save asks first, `draft` the unsaved text, kept so it survives reloads. Saving
+ * sets `path` and drops the draft.
+ */
+export const textType: WindowType<{ path: string; dir?: string; draft?: string }> = {
   kind: "text",
   title: "Text",
   icon: "doc.text",
@@ -71,9 +76,20 @@ export const textType: WindowType<{ path: string }> = {
   },
   fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
   create(input) {
-    const file = path.resolve(expandHome(str(input.path) ?? ""));
+    const p = str(input.path);
+    if (!p) return { state: { path: "", dir: path.resolve(expandHome(str(input.cwd) ?? os.homedir())), draft: str(input.draft) ?? "" }, title: "Untitled" };
+    const file = path.resolve(expandHome(p));
     if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
     return { state: { path: file }, title: path.basename(file) };
+  },
+  update(state, patch) {
+    const p = str(patch.path);
+    if (p) {
+      const file = path.resolve(expandHome(p));
+      return { state: { path: file }, title: path.basename(file) };
+    }
+    const draft = str(patch.draft);
+    return { state: draft !== undefined && !state.path ? { ...state, draft } : state };
   },
 };
 

@@ -362,6 +362,12 @@ ipcMain.handle("choose-folder", async (e) => {
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
   return r.canceled ? null : (r.filePaths[0] ?? null);
 });
+ipcMain.handle("choose-save-path", async (e, defaultPath: string) => {
+  const opts = { defaultPath, properties: ["createDirectory" as const, "showOverwriteConfirmation" as const] };
+  const win = winOf(e);
+  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+  return r.canceled ? null : (r.filePath ?? null);
+});
 ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("open-path", (_e, p: string) => void shell.openPath(p));
 ipcMain.on("settings-window", () => void openSettings());

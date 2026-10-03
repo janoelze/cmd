@@ -50,7 +50,7 @@ registerWindowView({
   kind: "text",
   // CodeMirror loads on first use, not at startup.
   View: lazyView(() => import("../components/TextView.tsx").then((m) => m.TextView)),
-  describe: (w) => ({ place: parentOf(stateStr(w, "path") ?? "") }),
+  describe: (w) => ({ place: stateStr(w, "path") ? parentOf(stateStr(w, "path")!) : undefined }),
   menu: (w) => {
     const p = stateStr(w, "path");
     return p

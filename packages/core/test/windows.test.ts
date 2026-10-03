@@ -130,6 +130,16 @@ describe("window manager", () => {
     expect(() => wins.update(w.id, { kind: "terminal" })).toThrow();
   });
 
+  it("opens untitled text windows that keep a draft until saved to a file", () => {
+    const { wins } = make(builtins(), {}, path.join(dir, "untitled.sqlite"));
+    const w = wins.open("text", {}, space);
+    expect(w).toMatchObject({ kind: "text", title: "Untitled", state: { path: "", dir: path.resolve(space.root), draft: "" } });
+    expect(wins.update(w.id, { state: { draft: "hello" } }).state).toMatchObject({ draft: "hello" });
+    const saved = file("saved.txt", "hello");
+    expect(wins.update(w.id, { state: { path: saved } })).toMatchObject({ title: "saved.txt", state: { path: saved } });
+    expect(wins.update(w.id, { state: { draft: "late" } }).state).toEqual({ path: saved });
+  });
+
   it("treats panes as terminal windows", () => {
     const { wins, panes } = make(builtins(), {}, path.join(dir, "term.sqlite"));
     const t = wins.open("terminal", { cwd: dir }, space);

@@ -27,6 +27,7 @@ export const COMMANDS = spec([
   { id: "file.newCodex", label: "New Codex Session" },
   { id: "file.newBrowser", label: "New Browser Window", keys: ["Shift+Cmd+B"] },
   { id: "file.newFiles", label: "New File Browser", keys: ["Shift+Cmd+O"] },
+  { id: "file.newText", label: "New Text Window", keys: ["Shift+Cmd+E"] },
   { id: "file.openSpace", label: "Open Space…", keys: ["Cmd+O"] },
   { id: "file.newMagic", label: "New Magic Window", keys: ["Shift+Cmd+M"] },
   { id: "view.magicChange", label: "Change Magic Window…", keys: ["Cmd+L"] },
