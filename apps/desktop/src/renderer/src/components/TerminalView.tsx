@@ -19,7 +19,7 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
     const attach = () => {
       if (!live) return;
       terminals.attach(paneId, el);
-      ro = new ResizeObserver(() => terminals.fit(paneId));
+      ro = new ResizeObserver(() => terminals.resized(paneId));
       ro.observe(el);
       if (focusedRef.current) terminals.focus(paneId);
     };

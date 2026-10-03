@@ -540,7 +540,9 @@ kbd {
 .app.desaturate .windows-track > .tile .tile-body { transition: filter 160ms ease; }
 .app.desaturate .windows-track > .tile:not(.sel, .lifted) .tile-body { filter: grayscale(var(--window-desaturate)); }
 .app.desaturate .mode-focus .windows-track > .tile .tile-body { filter: none; }
-.main.windows.resizing .windows-track > .tile { transition: none; }
+.main.windows.resizing .windows-track > .tile,
+.main.windows.live-resize .windows-track > .tile,
+.main.windows.live-resize .windows-track > .ghost-slot { transition: none; }
 .main.windows.dragging, .main.windows.dragging .tile-title { cursor: grabbing; }
 .main.windows.dragging .xterm, .main.windows.resizing .xterm { pointer-events: none; }
 .main.windows.dragging, .main.windows.resizing { user-select: none; }

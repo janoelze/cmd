@@ -19,7 +19,13 @@ interface Host {
   opened: boolean;
   webgl: WebglAddon | null;
   lastUsed: number;
+  /** When it was last fitted, and a pending trailing fit (see resized). */
+  fittedAt: number;
+  fitTimer: ReturnType<typeof setTimeout> | null;
 }
+
+/** While a terminal keeps changing size (the app window being resized), fit it at most this often. */
+const FIT_INTERVAL = 100;
 
 const theme = (): ITheme => terminalColors(currentTheme());
 
@@ -124,7 +130,7 @@ class Terminals {
     term.onWriteParsed(scrollable);
     term.buffer.onBufferChange(scrollable);
     term.onResize(scrollable);
-    h = { term, fit, el, opened: false, webgl: null, lastUsed: Date.now() };
+    h = { term, fit, el, opened: false, webgl: null, lastUsed: Date.now(), fittedAt: 0, fitTimer: null };
     this.#hosts.set(paneId, h);
     return h;
   }
@@ -149,9 +155,25 @@ class Terminals {
   fit(paneId: PaneId): void {
     const h = this.#hosts.get(paneId);
     if (!h?.opened || !h.el.isConnected) return;
+    if (h.fitTimer) clearTimeout(h.fitTimer), (h.fitTimer = null);
+    h.fittedAt = performance.now();
     try {
       h.fit.fit();
     } catch {}
+  }
+
+  /**
+   * The terminal's element changed size. A single change (sidebar, mode switch)
+   * fits right away; a continuous one fits every FIT_INTERVAL ms and once at the
+   * end. Each fit reflows the scrollback and resizes the PTY, whose program then
+   * redraws, so fitting on every frame of a window resize makes it lag.
+   */
+  resized(paneId: PaneId): void {
+    const h = this.#hosts.get(paneId);
+    if (!h || h.fitTimer) return;
+    const wait = h.fittedAt + FIT_INTERVAL - performance.now();
+    if (wait <= 0) return this.fit(paneId);
+    h.fitTimer = setTimeout(() => this.fit(paneId), wait);
   }
 
   focus(paneId: PaneId): void {
@@ -195,6 +217,7 @@ class Terminals {
   dispose(paneId: PaneId): void {
     const h = this.#hosts.get(paneId);
     if (!h) return;
+    if (h.fitTimer) clearTimeout(h.fitTimer);
     h.webgl?.dispose();
     h.term.dispose();
     h.el.remove();

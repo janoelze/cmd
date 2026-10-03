@@ -64,6 +64,7 @@ const CAMERA_ANIM_MS = 280;
 const CAMERA_SAVE_MS = 400; // persist the camera once panning/zooming pauses
 const MOTION_MIN_ZOOM = 0.5; // zoomed out further, title bars change without animating
 const SETTLE_MS = 110; // a dropped window's glide into place (see .tile.settling)
+const LIVE_RESIZE_MS = 150; // viewport changes this close together are a live resize (no gliding)
 
 /** Canvas commands from the menu/palette (see requestCanvas). */
 export type CanvasRequest = "fit" | "window";
@@ -129,6 +130,7 @@ export function WindowsView(p: Props) {
   const padRef = useRef(padX);
   padRef.current = padX;
   const [panning, setPanning] = useState(false);
+  const [liveResize, setLiveResize] = useState(false);
   // The window just dropped, while it glides into place (faster than other moves).
   const [settling, setSettling] = useState<PaneId | null>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -297,10 +299,24 @@ export function WindowsView(p: Props) {
     performance.mark("boot:tiles"); // first commit of the windows (boot benchmark)
     requestAnimationFrame(() => requestAnimationFrame(() => performance.mark("boot:tiles-painted")));
     const el = rootRef.current!;
-    const ro = new ResizeObserver(() => setVp({ w: el.clientWidth, h: el.clientHeight }));
+    // A one-off change (sidebar) glides the windows into place; a live resize of
+    // the app window moves them with it, or positions trail behind sizes.
+    let last = 0;
+    let done: ReturnType<typeof setTimeout> | null = null;
+    const ro = new ResizeObserver(() => {
+      const now = performance.now();
+      if (now - last < LIVE_RESIZE_MS) setLiveResize(true);
+      last = now;
+      if (done) clearTimeout(done);
+      done = setTimeout(() => setLiveResize(false), LIVE_RESIZE_MS);
+      setVp({ w: el.clientWidth, h: el.clientHeight });
+    });
     ro.observe(el);
     setVp({ w: el.clientWidth, h: el.clientHeight });
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (done) clearTimeout(done);
+    };
   }, []);
 
   // Keep the offset valid (other modes don't scroll; the strip may have shrunk).
@@ -643,7 +659,7 @@ export function WindowsView(p: Props) {
   return (
     <main
       ref={rootRef}
-      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""}`}
+      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""} ${liveResize ? "live-resize" : ""}`}
       onPointerDown={startPan}
       onDoubleClick={(e) => canvas && onBackground(e) && fitAll()}
     >
