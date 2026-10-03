@@ -190,6 +190,7 @@ export class Core {
     "magic.run": (p) => (this.magic.run(p.id, p.prompt), null),
     "magic.cancel": (p) => (this.magic.cancel(p.id), null),
     "magic.refresh": (p) => (this.magic.refresh(p.id), null),
+    "magic.media": (p) => (this.magic.media(p.id, p.allow), null),
     "fs.list": (p) => listDir(p.path),
     "fs.read": (p) => readText(p.path),
     "fs.write": (p) => writeText(p.path, p.text, p.expectMtime),

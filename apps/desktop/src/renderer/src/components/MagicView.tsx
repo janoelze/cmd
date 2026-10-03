@@ -3,10 +3,11 @@
 // works, its steps show as a quiet list and the widget streams in. Finished,
 // the widget runs in a sandboxed frame (cmd-widget://, see the main process),
 // fed with theme tokens and its source's data; a prompt line at the bottom
-// refines it.
+// refines it. A widget that streams media asks once for its origins; the
+// frame's CSP opens only the ones allowed.
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
+import { requestedMedia, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { copy, openPath } from "../actions.ts";
 import { resetMagic, useMagicLive, type MagicLive } from "../magic.ts";
@@ -37,6 +38,10 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
   }, [win.id, working, live.header, live.data?.error, s.phase, s.source, dataAt, now]);
   useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
 
+  const asked = useMemo(() => requestedMedia(s), [s.media, s.html]);
+  const allowed = useMemo(() => asked.filter((o) => s.mediaAllowed?.includes(o)), [asked, s.mediaAllowed]);
+  const pending = asked.filter((o) => !s.mediaAllowed?.includes(o) && !s.mediaDenied?.includes(o));
+
   const run = (prompt: string) => {
     resetMagic(win.id);
     void cmd.call("magic.run", { id: win.id, prompt }).catch((e: Error) => console.error("magic.run", e));
@@ -47,12 +52,13 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
   }
   return (
     <div className="magic">
+      {!working && s.kind === "widget" && pending.length > 0 && <MediaRequest origins={pending} onAnswer={(allow) => void cmd.call("magic.media", { id: win.id, allow })} />}
       {working && !live.body ? (
         <Progress state={s} live={live} onStop={() => void cmd.call("magic.cancel", { id: win.id })} />
       ) : s.kind === "terminal" && !working ? (
         <TerminalOffer win={win} command={s.command ?? ""} />
       ) : (
-        <WidgetFrame win={win} html={working ? (live.body ?? "") : (s.html ?? "")} streaming={working} data={live.data?.data ?? s.lastData?.data} />
+        <WidgetFrame win={win} html={working ? (live.body ?? "") : (s.html ?? "")} streaming={working} data={live.data?.data ?? s.lastData?.data} media={allowed} />
       )}
       {s.error && !working && <div className="magic-error" title={s.error}>{s.error}</div>}
       {!working && <RefineButton id={win.id} onSubmit={run} onRefresh={s.source ? () => void cmd.call("magic.refresh", { id: win.id }) : undefined} />}
@@ -164,7 +170,37 @@ function StepRow({ step }: { step: MagicStep }) {
 
 // ── ready: the widget ───────────────────────────────────
 
-function WidgetFrame({ win, html, streaming, data }: { win: AppWindow; html: string; streaming: boolean; data: unknown }) {
+/** "This widget wants to play media from …": the person allows or declines its origins, once per window. */
+function MediaRequest({ origins, onAnswer }: { origins: string[]; onAnswer: (allow: boolean) => void }) {
+  const hosts = origins.map((o) => new URL(o).host);
+  const named = hosts.length > 3 ? `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} more` : hosts.join(", ");
+  return (
+    <div className="magic-media" title={hosts.join("\n")}>
+      <span className="magic-media-text">This widget wants to play media from {named}.</span>
+      <button className="btn primary" onClick={() => onAnswer(true)}>
+        Allow
+      </button>
+      <button className="btn" onClick={() => onAnswer(false)}>
+        Don't Allow
+      </button>
+    </div>
+  );
+}
+
+/** The frame's URL decides its CSP (main process), so a new set of allowed origins loads a new frame. */
+function WidgetFrame({ media, ...props }: { win: AppWindow; html: string; streaming: boolean; data: unknown; media: string[] }) {
+  const [src, setSrc] = useState<string | null>(media.length ? null : "cmd-widget://frame/");
+  const key = media.join(" ");
+  useEffect(() => {
+    let live = true;
+    if (!key) setSrc("cmd-widget://frame/");
+    else void cmd.widgetFrame(key.split(" ")).then((u) => live && setSrc(u));
+    return () => void (live = false);
+  }, [key]);
+  return src ? <Frame key={src} src={src} {...props} /> : <div className="magic-frame" />;
+}
+
+function Frame({ win, src, html, streaming, data }: { win: AppWindow; src: string; html: string; streaming: boolean; data: unknown }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const theme = useTheme();
@@ -202,7 +238,7 @@ function WidgetFrame({ win, html, streaming, data }: { win: AppWindow; html: str
     if (ready && !streaming && data !== undefined) post({ type: "data", data });
   }, [ready, streaming, data]);
 
-  return <iframe ref={ref} className="magic-frame" data-embed sandbox="allow-scripts" src="cmd-widget://frame/" title={win.title} />;
+  return <iframe ref={ref} className="magic-frame" data-embed sandbox="allow-scripts" src={src} title={win.title} />;
 }
 
 // ── ready: a command to run ─────────────────────────────

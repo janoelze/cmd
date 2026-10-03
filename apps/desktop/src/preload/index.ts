@@ -123,6 +123,8 @@ const api = {
   chooseFolder: (): Promise<string | null> => ipcRenderer.invoke("choose-folder"),
   /** Native sheet; resolves true when confirmed. */
   confirm: (o: { message: string; detail?: string; confirm: string }): Promise<boolean> => ipcRenderer.invoke("confirm", o),
+  /** The URL of a Magic widget frame whose CSP allows media from these origins (cmd-widget://, main process). */
+  widgetFrame: (media: string[]): Promise<string> => ipcRenderer.invoke("widget-frame", media),
   /** Native context menu; resolves with the chosen item id or null. */
   contextMenu: (items: ContextItem[]): Promise<string | null> => ipcRenderer.invoke("context-menu", items),
 };

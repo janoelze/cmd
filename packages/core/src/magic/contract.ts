@@ -3,6 +3,7 @@
 // every backend; it streams, so the window can show the title as soon as the
 // header line is complete and morph the HTML in as it arrives.
 
+import { mediaOrigin } from "@cmd/protocol";
 import { parseSource, type MagicSource } from "./sources.ts";
 
 export interface MagicHeader {
@@ -16,6 +17,8 @@ export interface MagicHeader {
   size: "s" | "m" | "l" | "wide";
   /** Terminal kind: the command to offer. */
   command?: string;
+  /** https origins the view plays audio/video or shows images from; the person allows them per window. */
+  media?: string[];
 }
 
 export type ParsedAnswer =
@@ -40,6 +43,12 @@ export function parseHeader(v: unknown): MagicHeader | string {
   const loading = Array.isArray(h.loading) ? h.loading.filter((x): x is string => typeof x === "string").slice(0, 3) : [];
   const header: MagicHeader = { kind: h.kind, title: h.title.trim().slice(0, 120), loading, source, refresh: source ? refresh : 0, size };
   if (h.kind === "terminal") header.command = (h.command as string).trim();
+  if (h.media !== undefined) {
+    if (!Array.isArray(h.media)) return "header.media must be a list of https origins";
+    const bad = h.media.find((m) => !mediaOrigin(m) || !/^https:\/\//.test(String(m)));
+    if (bad !== undefined) return `header.media: ${JSON.stringify(bad)} is not an https origin`;
+    header.media = [...new Set(h.media.map((m) => mediaOrigin(m)!))].slice(0, 12);
+  }
   return header;
 }
 

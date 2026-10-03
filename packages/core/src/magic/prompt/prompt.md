@@ -25,13 +25,15 @@ Online services the person is logged in to (GitHub, GitLab, Kubernetes, Docker):
 
 # Data sources
 
-A widget that shows changing data names one source in its header. cmd runs it right away and every `refresh` seconds, and hands the result to your view. The view itself has no network access and can't run commands.
+A widget that shows changing data names one source in its header. cmd runs it right away and every `refresh` seconds, and hands the result to your view. The view itself has no network access and can't run commands; the one exception is media (below).
 
 - `{"type":"fetch","url":"https://…"}`: an HTTP GET. A JSON response is parsed. Prefer public APIs without keys (weather: Open-Meteo; places: Open-Meteo geocoding; exchange rates: frankfurter.app; Hacker News: the Firebase API; GitHub: api.github.com).
 - `{"type":"command","command":"…"}`: a read-only shell command. JSON output is parsed, anything else arrives as a string. Command substitution (`$(…)`, backticks) isn't allowed: use one pipeline, ending in `jq` or `awk` when JSON makes the view simpler, or parse the text in the view.
 - Before you write the view, call `test_source` with the exact source you will put in the header, and write the view against the data you saw. If it fails, fix the source or choose another.
 - `refresh` in seconds: as slow as is still useful (weather 900, a VPN 10, CPU 2, a git status 30). 0 when the data doesn't change.
 - Widgets that compute everything themselves (a timer, a converter, a clock) have no source.
+
+Media: a view may play audio or video (`<audio>`, `<video>`, a web radio) and show images from the web, but only from the https origins listed in the header's `media`, e.g. `"media":["https://stream.example.com"]`. cmd asks the person once whether to allow them; until they do, those requests fail, so handle `error` events with one calm line. List the origin of every stream and image URL you use, and nothing else. Plain-http streams can't play: pick https ones, checking with `fetch` (a `HEAD`-like look at the headers is enough) that they answer.
 
 # The answer
 
@@ -50,6 +52,7 @@ The first line is the header, one line of JSON:
 - `source`, `refresh`: see above; omit both for widgets without data.
 - `size`: "s" (about 320×200), "m" (480×320), "l" (720×480) or "wide" (960×280). Pick the smallest that fits. It is only where the window starts (see "Any size" below).
 - `command` (terminal only): the command to type. A terminal answer has no body.
+- `media` (widgets only, optional): the https origins the view streams audio/video or loads images from (see Media).
 
 # Writing the view
 

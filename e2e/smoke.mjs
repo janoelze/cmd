@@ -398,6 +398,21 @@ check((await panes()) === 2, "…and leaves terminals alone");
   const afterTheme = await readTheme();
   await call("settings.set", { key: "theme.appearance", value: appearance });
   check(!!beforeTheme.js && afterTheme.css !== beforeTheme.css && afterTheme.js !== beforeTheme.js, `a theme change reaches a widget live, CSS and cmd.onTheme (${beforeTheme.js} → ${afterTheme.js})`);
+
+  // Media: a widget's media origins are blocked by the frame's CSP until the person allows them.
+  const radio = await call("window.open", { kind: "magic", input: {} });
+  const radioHtml = '<div id="r">–</div><script>document.addEventListener("securitypolicyviolation",()=>r.textContent="blocked");const a=new Audio();a.onerror=()=>r.textContent==="–"&&(r.textContent="loaded");a.src="https://radio.invalid/live.aacp"</script>';
+  await call("window.update", { id: radio.id, title: "Radio", state: { prompt: "radio", phase: "ready", kind: "widget", html: radioHtml, media: ["https://radio.invalid"], source: null, refresh: 0, size: "s", lastData: null } });
+  await win.waitForTimeout(1500);
+  const radioTile = win.locator(`.tile[data-pane="${radio.id}"]`);
+  const radioText = () => win.frameLocator(`.tile[data-pane="${radio.id}"] iframe.magic-frame`).locator("#r").textContent({ timeout: 5000 });
+  const asked = await radioTile.locator(".magic-media").isVisible();
+  const before = await radioText();
+  await radioTile.locator(".magic-media .btn.primary").click();
+  await win.waitForTimeout(2500);
+  const after = await radioText();
+  const stored = (await call("window.list")).find((x) => x.id === radio.id).state.mediaAllowed;
+  check(asked && before === "blocked" && after === "loaded" && !(await radioTile.locator(".magic-media").count()) && stored?.[0] === "https://radio.invalid", `a widget's media origins are asked for and then allowed by the frame's CSP (${asked}, ${before} → ${after})`);
   await call("window.close", { id: themed.id });
   await win.waitForTimeout(600);
 

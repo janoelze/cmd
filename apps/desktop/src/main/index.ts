@@ -4,12 +4,13 @@
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell } from "electron";
+import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import { SETTINGS_TEMPLATE, WIDGET_CSP } from "@cmd/protocol";
+import { SETTINGS_TEMPLATE, mediaOrigin, widgetCsp } from "@cmd/protocol";
 import { cmdHome, connect, defaultSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
@@ -30,6 +31,10 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // the kit and the `cmd` runtime, under a CSP header that allows only inline code
 // and no network. The renderer posts the widget, theme and data into it. Frames
 // are sandboxed (no allow-same-origin), so each is an opaque origin.
+// cmd-widget://frame/<token> — the same page whose CSP also lets media (audio,
+// video, images) load from origins the person allowed for that window. Tokens
+// come from the renderer's "widget-frame" call and can't be guessed, so a widget
+// can't navigate itself to a page with a looser CSP.
 protocol.registerSchemesAsPrivileged([
   { scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true } },
   { scheme: "cmd-widget", privileges: { standard: true, secure: true } },
@@ -354,6 +359,16 @@ ipcMain.handle("confirm", async (e, o: { message: string; detail?: string; confi
   return r.response === 0;
 });
 
+const widgetFrames = new Map<string, string[]>(); // token → allowed media origins
+ipcMain.handle("widget-frame", (_e, media: unknown) => {
+  const origins = [...new Set((Array.isArray(media) ? media : []).map(mediaOrigin).filter((o): o is string => !!o))].sort();
+  if (!origins.length) return "cmd-widget://frame/";
+  const key = origins.join(" ");
+  let token = [...widgetFrames].find(([, v]) => v.join(" ") === key)?.[0];
+  if (!token) widgetFrames.set((token = randomUUID()), origins);
+  return `cmd-widget://frame/${token}`;
+});
+
 ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
   return new Promise<string | null>((resolve) => {
     let chosen: string | null = null;
@@ -404,11 +419,11 @@ app.whenReady().then(async () => {
     website: "https://github.com/janoelze/cmd",
     iconPath: devIcon,
   });
-  protocol.handle("cmd-widget", () => {
+  protocol.handle("cmd-widget", (req) => {
     const dir = path.join(repoRoot, "packages/core/src/magic/prompt");
     const read = (f: string) => fs.readFileSync(path.join(dir, f), "utf8");
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>${read("kit.css")}</style><script>${read("host.js")}</script></head><body></body></html>`;
-    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": WIDGET_CSP, "cache-control": "no-store" } });
+    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": widgetCsp(widgetFrames.get(new URL(req.url).pathname.slice(1)) ?? []), "cache-control": "no-store" } });
   });
   // Magic widgets may not leave their page, open anything, or ask for permissions.
   session.defaultSession.setPermissionRequestHandler((wc, _permission, done, details) => {

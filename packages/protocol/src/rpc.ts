@@ -140,6 +140,8 @@ export interface Methods {
   "magic.cancel": { params: { id: WindowId }; result: null };
   /** Run the widget's data source now (then on its interval again). */
   "magic.refresh": { params: { id: WindowId }; result: null };
+  /** Allow (or decline) the media origins the widget asks for (MagicState.media); the frame's CSP opens only allowed ones. */
+  "magic.media": { params: { id: WindowId; allow: boolean }; result: null };
 
   /** Directory listing for file windows (dirs first, then by name). */
   "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };

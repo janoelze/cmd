@@ -4,7 +4,7 @@
 // The agent is never involved in a refresh.
 
 import os from "node:os";
-import type { AppWindow, CoreEvent, MagicState, MagicStep, Settings, WindowId } from "@cmd/protocol";
+import { requestedMedia, type AppWindow, type CoreEvent, type MagicState, type MagicStep, type Settings, type WindowId } from "@cmd/protocol";
 import { backendFor, type Backend } from "./backends.ts";
 import { DEFAULT_DENY_PATHS } from "./policy.ts";
 import { runMagic, type MagicEvent } from "./run.ts";
@@ -165,7 +165,7 @@ export class MagicService {
         if (r.route === "json") {
           this.#o.windows.update(id, {
             title: "JSON",
-            state: { phase: "ready", kind: "widget", html: JSON_VIEW, source: null, refresh: 0, size: "m", lastData: { data: r.data, at: Date.now() }, steps, answer: undefined },
+            state: { phase: "ready", kind: "widget", html: JSON_VIEW, media: [], source: null, refresh: 0, size: "m", lastData: { data: r.data, at: Date.now() }, steps, answer: undefined },
           });
           send({ type: "done" });
           return;
@@ -181,6 +181,7 @@ export class MagicService {
             refresh: h.refresh,
             size: h.size,
             command: h.command,
+            media: h.media ?? [],
             lastData: r.sample?.ok ? { data: r.sample.data, at: Date.now() } : null,
             error: r.ok ? undefined : r.errors[0]?.split("\n")[0],
             steps,
@@ -209,6 +210,20 @@ export class MagicService {
       this.#o.windows.update(id, { state: { phase: prev.prompt ? "error" : "empty", error: message } });
     }
     this.#o.broadcast({ type: "magic.stream", id, progress: { type: "error", message } });
+  }
+
+  /** The person's answer to the widget's media request: allow or decline the origins it asks for. */
+  media(id: WindowId, allow: boolean): void {
+    const s = stateOf(this.#window(id));
+    const asked = requestedMedia(s);
+    const allowed = s.mediaAllowed ?? [];
+    const denied = s.mediaDenied ?? [];
+    const union = (a: string[], b: string[]) => [...new Set([...a, ...b])];
+    this.#o.windows.update(id, {
+      state: allow
+        ? { mediaAllowed: union(allowed, asked), mediaDenied: denied.filter((o) => !asked.includes(o)) }
+        : { mediaDenied: union(denied, asked.filter((o) => !allowed.includes(o))) },
+    });
   }
 
   cancel(id: WindowId): void {

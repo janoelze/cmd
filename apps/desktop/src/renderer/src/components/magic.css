@@ -62,6 +62,11 @@
   font: 11px var(--font-ui); color: var(--text-dim); padding: 4px 12px; border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.magic-media {
+  display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 12px; font: 12px var(--font-ui); color: var(--text);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); cursor: default; user-select: none;
+}
+.magic-media-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .magic-error-inline { font: 12px var(--font-ui); color: var(--state-needs); }
 
 /* refining: a button floating over the widget's bottom-left corner, shown on
