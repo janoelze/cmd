@@ -11,7 +11,8 @@ export type SettingApplies = "newTerminals" | "firstLaunch";
 
 /**
  * title: the label in the settings window (default: from the key). The rest are
- * display hints (unit, placeholder, option labels, a font preview).
+ * display hints (unit, placeholder, option labels, a font preview, code). Where
+ * a key appears in the window is the window's business (renderer settings/layout.ts).
  */
 type Common = { title?: string; description: string; applies?: SettingApplies };
 type Def = Common &
@@ -21,6 +22,8 @@ type Def = Common &
         default: string;
         multiline?: boolean;
         placeholder?: string;
+        /** A command, path or similar: edited in the mono font. */
+        code?: boolean;
         /**
          * font: previews itself in that font. theme: a popup of the UI's registered
          * themes of `appearance`. model: a popup of `provider`'s models that the
@@ -84,7 +87,7 @@ export const SETTINGS_SCHEMA = {
     description: "With the webgl renderer: max terminals using WebGL at once; others fall back to DOM. Browsers allow ~16 contexts.",
   },
 
-  "shell.program": { title: "Shell", placeholder: "$SHELL", type: "string", default: "", applies: "newTerminals", description: "Shell to run in new terminals. Empty uses $SHELL." },
+  "shell.program": { title: "Shell", placeholder: "$SHELL", code: true, type: "string", default: "", applies: "newTerminals", description: "Shell to run in new terminals. Empty uses $SHELL." },
   "shell.login": { title: "Login shell", type: "boolean", default: true, applies: "newTerminals", description: "Start shells as login shells (-l)." },
   "shell.integration": {
     title: "Shell integration",
@@ -101,7 +104,7 @@ export const SETTINGS_SCHEMA = {
     description: "With shell integration, `open <file>` opens text in a text window and html/images/pdf in a browser window; other files still use their app.",
   },
   "open.handlers": {
-    title: "Extension overrides", placeholder: "md: browser, log: text",
+    title: "Extension overrides", placeholder: "md: browser, log: text", code: true,
     type: "string",
     default: "",
     description: "Which window type opens which file extension, overriding the defaults, e.g. \"md: browser, log: text\".",
@@ -115,14 +118,14 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: "Show memory and CPU of the selected window's processes in the status bar.",
   },
-  "ui.unfocusedDesaturation": { title: "Desaturate other windows", unit: "%", type: "number", default: 0, min: 0, max: 100, step: 10, description: "Drain the colour from windows other than the selected one (%): 0 = off, 100 = grayscale." },
-  "ui.paddingX": { title: "Horizontal padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the left and right edges in grid and strip view (px)." },
-  "ui.paddingY": { title: "Vertical padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the top and bottom edges in grid and strip view (px)." },
-  "ui.gutter": { title: "Gap between windows", unit: "px", type: "number", default: 8, min: 0, max: 32, step: 1, description: "Space between windows in grid and strip view (px). The canvas places windows on its own dot grid." },
-  "ui.windowRadius": { title: "Window corner radius", unit: "px", type: "number", default: 8, min: 0, max: 16, step: 1, description: "Corner radius of windows in px (0 = square). Focus mode always fills the pane edge to edge." },
+  "ui.unfocusedDesaturation": { title: "Desaturate other windows", unit: "%", type: "number", default: 0, min: 0, max: 100, step: 10, description: "Drain the colour from windows other than the selected one: 0 = off, 100 = grayscale." },
+  "ui.paddingX": { title: "Horizontal padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the left and right edges in grid and strip view." },
+  "ui.paddingY": { title: "Vertical padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the top and bottom edges in grid and strip view." },
+  "ui.gutter": { title: "Gap between windows", unit: "px", type: "number", default: 8, min: 0, max: 32, step: 1, description: "Space between windows in grid and strip view. The canvas places windows on its own dot grid." },
+  "ui.windowRadius": { title: "Window corner radius", unit: "px", type: "number", default: 8, min: 0, max: 16, step: 1, description: "Corner radius of windows (0 = square). Focus mode always fills the pane edge to edge." },
 
-  "canvas.minZoom": { title: "Minimum zoom", unit: "%", type: "number", default: 30, min: 10, max: 100, step: 5, description: "Canvas: how far you can zoom out (%). Windows stay live at every zoom." },
-  "canvas.maxZoom": { title: "Maximum zoom", unit: "%", type: "number", default: 150, min: 100, max: 300, step: 25, description: "Canvas: how far you can zoom in (%)." },
+  "canvas.minZoom": { title: "Minimum zoom", unit: "%", type: "number", default: 30, min: 10, max: 100, step: 5, description: "Canvas: how far you can zoom out. Windows stay live at every zoom." },
+  "canvas.maxZoom": { title: "Maximum zoom", unit: "%", type: "number", default: 150, min: 100, max: 300, step: 25, description: "Canvas: how far you can zoom in." },
   "canvas.minimap": { title: "Show minimap", type: "boolean", default: true, description: "Canvas: an overview of all windows in the bottom-right corner; click or drag it to move around." },
 
   "notifications.needsInput": { title: "Agent needs input", type: "boolean", default: true, description: "Notify when an agent needs input." },
@@ -180,7 +183,7 @@ export const SETTINGS_SCHEMA = {
 
   "search.enabled": { title: "Index transcripts", type: "boolean", default: true, description: "Index coding agent transcripts (Claude Code, Codex, Qwen Code, Copilot CLI) for search (? in the palette)." },
   "search.archiveDirs": {
-    title: "Archive folders", placeholder: "~/claude-transcripts-archive",
+    title: "Archive folders", placeholder: "~/claude-transcripts-archive", code: true,
     type: "string",
     default: "~/claude-transcripts-archive",
     description: "Extra folders of archived transcripts (*.jsonl, any supported agent) to index, comma-separated.",
@@ -188,13 +191,14 @@ export const SETTINGS_SCHEMA = {
 
   "agents.claude.command": {
     title: "Claude Code command",
+    code: true,
     type: "string",
     default: "claude",
     description: "Command used to start Claude Code (e.g. \"claude --model opus\"). Typed into your shell, so aliases apply.",
   },
-  "agents.codex.command": { title: "Codex command", type: "string", default: "codex", description: "Command used to start Codex." },
-  "agents.qwen.command": { title: "Qwen Code command", type: "string", default: "qwen", description: "Command used to resume Qwen Code sessions." },
-  "agents.copilot.command": { title: "Copilot CLI command", type: "string", default: "copilot", description: "Command used to resume GitHub Copilot CLI sessions." },
+  "agents.codex.command": { title: "Codex command", code: true, type: "string", default: "codex", description: "Command used to start Codex." },
+  "agents.qwen.command": { title: "Qwen Code command", code: true, type: "string", default: "qwen", description: "Command used to resume Qwen Code sessions." },
+  "agents.copilot.command": { title: "Copilot CLI command", code: true, type: "string", default: "copilot", description: "Command used to resume GitHub Copilot CLI sessions." },
 
   "magic.provider": {
     title: "Provider",
@@ -239,24 +243,6 @@ export const SETTINGS_SCHEMA = {
 } as const satisfies Record<string, Def>;
 
 export type SettingKey = keyof typeof SETTINGS_SCHEMA;
-type GroupOf<K> = K extends `${infer G}.${string}` ? G : never;
-
-/** Section titles in the settings UI, in display order. Every key prefix needs one (tsc checks). */
-export const SETTINGS_GROUPS = {
-  theme: "Theme",
-  font: "Fonts",
-  terminal: "Terminal",
-  shell: "Shell",
-  open: "Opening Files",
-  ui: "Interface",
-  canvas: "Canvas",
-  notifications: "Notifications",
-  search: "Search",
-  agents: "Agents",
-  magic: "Magic Windows",
-  updates: "Updates",
-  diagnostics: "Diagnostics",
-} as const satisfies Record<GroupOf<SettingKey>, string>;
 
 /** Keys that were renamed: old settings files keep working (old → new). */
 export const RENAMED_SETTINGS: Readonly<Record<string, SettingKey>> = {

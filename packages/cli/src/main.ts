@@ -294,7 +294,8 @@ async function run({ client, closed }: Connection): Promise<number> {
       for (const [k, def] of Object.entries(SETTINGS_SCHEMA) as [SettingKey, SettingDef][]) {
         const mark = snap.overrides.includes(k) ? "*" : " ";
         const applies = def.applies ? ` (${APPLIES_LABEL[def.applies]})` : "";
-        console.log(`${mark} ${k.padEnd(28)} ${JSON.stringify(snap.settings[k]).padEnd(24)} ${def.description}${applies}`);
+        const unit = def.type === "number" && def.unit ? ` (${def.unit})` : "";
+        console.log(`${mark} ${k.padEnd(28)} ${JSON.stringify(snap.settings[k]).padEnd(24)} ${def.description}${unit}${applies}`);
       }
       const secrets = await client.call("secrets.status", {});
       for (const [k, def] of Object.entries(SECRETS) as [SecretKey, SecretDef][]) {

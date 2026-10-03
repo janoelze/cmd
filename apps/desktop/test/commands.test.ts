@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMMANDS, otherPlatformKey, platformDefaults, prettyAccelerator, resolveKeybindings } from "../src/shared/commands.ts";
+import { COMMANDS, editKeybindings, otherPlatformKey, platformDefaults, prettyAccelerator, resolveKeybindings } from "../src/shared/commands.ts";
 
 // Both keymaps are tested on every platform.
 const MAC = platformDefaults(true);
@@ -71,5 +71,21 @@ describe("prettyAccelerator", () => {
     expect(prettyAccelerator("Shift+Cmd+[", true)).toBe("⇧⌘[");
     expect(prettyAccelerator("Ctrl+Cmd+J", true)).toBe("⌃⌘J");
     expect(prettyAccelerator("Ctrl+Alt+Shift+k", false)).toBe("Ctrl+Alt+Shift+K");
+  });
+
+  it("edits keybindings.json from the Settings window", () => {
+    // A new shortcut is written; one taken from another command's entry leaves it.
+    let user = editKeybindings({ "view.palette": ["Cmd+P"] }, "session.next", ["Alt+Cmd+Right", "Cmd+P"], MAC);
+    expect(user).toEqual({ "view.palette": [], "session.next": ["Alt+Cmd+Right", "Cmd+P"] });
+    expect(resolveKeybindings(user, MAC).bindings["view.palette"]).toEqual([]);
+    // Taking a default moves it without touching the file's other entries.
+    user = editKeybindings({}, "session.next", ["Cmd+K"], MAC);
+    expect(user).toEqual({ "session.next": ["Cmd+K"] });
+    expect(resolveKeybindings(user, MAC).bindings["view.palette"]).toEqual([]);
+    // Restoring (null) or setting the defaults again removes the entry.
+    expect(editKeybindings(user, "session.next", null, MAC)).toEqual({});
+    expect(editKeybindings(user, "session.next", ["alt+cmd+right", "Shift+Cmd+]"], MAC)).toEqual({});
+    // Unbinding is an empty list.
+    expect(editKeybindings({}, "file.save", [], MAC)).toEqual({ "file.save": [] });
   });
 });

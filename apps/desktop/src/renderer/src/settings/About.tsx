@@ -1,6 +1,7 @@
-// Settings → About: versions, the core's health and where cmd keeps its files,
-// plus what to do when something is off (restart the core, open its log, copy
-// everything for a bug report). core.info is polled while the page is open.
+// Settings → About: versions and updates, the core's health, crash reports and
+// where cmd keeps its files and logs, plus what to do when something is off
+// (restart the core, open its log, copy everything for a bug report). core.info
+// is polled while the page is open.
 
 import { useEffect, useState, type ReactNode } from "react";
 import type { CoreInfo } from "@cmd/protocol";
@@ -51,7 +52,7 @@ function debugText(a: AppInfo | null, c: CoreInfo | null): string {
       `Socket ${c.socket}`,
     );
   else lines.push("Core: not connected");
-  if (a) lines.push(`State ${a.home}`);
+  if (a) lines.push(`State ${a.home}`, `Logs ${a.logs}`);
   return lines.join("\n");
 }
 
@@ -81,7 +82,13 @@ function PathRow(p: { title: string; path: string | null | undefined }) {
   );
 }
 
-export function About() {
+function crashLine(a: AppInfo): string {
+  const c = a.crashes;
+  const waiting = c.pending ? ` ${c.pending} waiting to be sent.` : "";
+  return c.sending ? `Sent when cmd crashes or hits an internal error.${waiting}` : `${c.reason} Reports are kept in the logs folder.`;
+}
+
+export function About(p: { updates: ReactNode; crashReports: ReactNode }) {
   const [app, setApp] = useState<AppInfo | null>(null);
   const [core, setCore] = useState<CoreInfo | null>(null);
   const [restarting, setRestarting] = useState(false);
@@ -141,22 +148,23 @@ export function About() {
           {error}
         </div>
       )}
-      <section>
+      <section className="sw-section">
         <h2 className="sw-section-title">cmd</h2>
         <div className="sw-list">
           <Row title="Version" desc={app && `Electron ${app.electron}, Chromium ${app.chrome}`}>
             <Value>{app?.version ?? "…"}</Value>
             {app?.dev && <span className="sw-tag">development</span>}
           </Row>
-          <Row title="Updates" desc={app && updateLine(app)}>
+          {p.updates}
+          <Row title="Latest version" desc={app && updateLine(app)}>
             <button className="sw-button" disabled={!app || app.dev} onClick={() => cmd.checkForUpdates()}>
-              Check for Updates…
+              Check Now
             </button>
           </Row>
         </div>
       </section>
 
-      <section>
+      <section className="sw-section">
         <h2 className="sw-section-title">Core</h2>
         <div className="sw-list">
           <Row
@@ -206,11 +214,24 @@ export function About() {
         </div>
       </section>
 
-      <section>
+      <section className="sw-section">
+        <h2 className="sw-section-title">Diagnostics</h2>
+        <div className="sw-list">
+          {p.crashReports}
+          <Row title="Crash reports" desc={app && crashLine(app)}>
+            <button className="sw-button" disabled={!app} onClick={() => cmd.revealPath(app!.crashes.folder)}>
+              {REVEAL}
+            </button>
+          </Row>
+        </div>
+      </section>
+
+      <section className="sw-section">
         <h2 className="sw-section-title">Files</h2>
         <div className="sw-list">
           <PathRow title="State folder" path={app?.home} />
           <PathRow title="Settings" path={core?.settingsPath} />
+          <PathRow title="Logs" path={app?.logs} />
           <PathRow title="Core log" path={app?.coreLog} />
           <PathRow title="Update log" path={app && !app.dev ? app.updateLog : null} />
           <PathRow title="Core runs from" path={core?.root} />

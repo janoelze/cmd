@@ -593,18 +593,23 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
   await sw.waitForSelector(".sw-nav-item");
   const pages = await sw.locator(".sw-nav-label").allTextContents();
-  check(["Fonts", "Terminal", "Shell", "Opening Files", "Interface", "Canvas", "Search", "Agents", "Keyboard Shortcuts"].every((p) => pages.includes(p)), `settings has a page per group (${pages.join(", ")})`);
+  check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "Agents", "Magic Windows", "Keyboard Shortcuts", "About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
 
-  // Magic Windows: each provider's API key beside its model; keys are stored outside settings.json.
+  // Magic Windows: the chosen provider's API key above its model; keys are stored outside settings.json.
   await sw.locator(".sw-nav-item", { hasText: "Magic Windows" }).click();
   await sw.waitForTimeout(300);
-  const keyRows = await sw.locator(".sw-row-key").allTextContents();
+  const rowTitles = () => sw.locator(".sw-row-title").allTextContents();
+  let titles = await rowTitles();
   const notes = await sw.locator(".sw-model-note").allTextContents();
   check(
-    keyRows.indexOf("magic.anthropic.apiKey") === keyRows.indexOf("magic.anthropic.model") - 1 && notes.length === 2 && notes.every((n) => n.includes("Add the API key")),
-    "Magic Windows settings put each provider's API key beside its model, and the model waits for the key",
+    titles.indexOf("Anthropic API key") === titles.indexOf("Anthropic model") - 1 && !titles.includes("OpenAI API key") && notes.length === 1 && notes[0].includes("Add the API key"),
+    "Magic Windows shows the chosen provider's API key above its model, and the model waits for the key",
   );
-  await sw.locator(".sw-row", { hasText: "magic.openai.apiKey" }).locator("input[type=password]").fill("sk-e2e-not-a-real-key-1234");
+  await sw.locator(".sw-row", { hasText: "Provider" }).locator(".sw-seg button", { hasText: "OpenAI" }).click();
+  await sw.waitForSelector(".sw-row:has-text('OpenAI API key')");
+  titles = await rowTitles();
+  check(titles.includes("OpenAI model") && !titles.includes("Anthropic API key"), "switching the provider shows its key and model instead");
+  await sw.locator(".sw-row", { hasText: "OpenAI API key" }).locator("input[type=password]").fill("sk-e2e-not-a-real-key-1234");
   await sw.keyboard.press("Enter");
   await sw.waitForTimeout(400);
   const rpc = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
@@ -615,8 +620,9 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     "an API key typed in Settings is stored outside settings.json and shown only as a hint",
   );
   await rpc("secrets.set", { key: "magic.openai.apiKey", value: null });
+  await rpc("settings.reset", { key: "magic.provider" });
   await sw.screenshot({ path: path.join(shots, "5-settings-terminal.png") });
-  const page = (name) => sw.locator(".sw-nav-item", { hasText: name }).click();
+  const page = (name) => sw.locator(".sw-nav-item", { has: sw.getByText(name, { exact: true }) }).click();
   const row = (title) => sw.locator(".sw-row", { has: sw.locator(".sw-row-title", { hasText: title }) });
   const saved = () => JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8").replace(/^\/\/.*$/gm, ""));
   const waitFor = async (fn, what) => {
@@ -629,11 +635,11 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const status = await row("Status").locator(".sw-value").textContent();
   check(/^pid \d+$/.test(status ?? ""), `About shows the running core (${status})`);
 
-  await page("Shell");
-  const tags = await sw.locator(".sw-tag").allTextContents();
-  check(tags.filter((t) => t === "new terminals only").length === 3, `settings that don't apply live are tagged (${tags.join(", ")})`);
+  await page("Terminal");
+  const tags = await sw.locator(".sw-applies").allTextContents();
+  check(tags.filter((t) => t.includes("new terminals")).length === 3, `settings that don't apply live say so (${tags.join(", ")})`);
 
-  await page("Interface");
+  await page("Windows");
   await row("Show resource usage").locator(".sw-switch").click();
   await waitFor(() => saved()["ui.showResources"] === false, "a switch saves to settings.json");
   await row("Window corner radius").locator(".nf button[aria-label=Increase]").click();
@@ -646,7 +652,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await row("Show resource usage").locator(".sw-reset").click();
   await waitFor(() => !("ui.showResources" in saved()), "restore default removes the override");
 
-  await page("Fonts");
+  await page("Appearance");
   const fontSize = row("Code font size").locator("input");
   await fontSize.fill("16");
   await fontSize.press("Enter");
@@ -668,7 +674,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await page("Terminal");
   await row("Renderer").locator(".sw-seg button", { hasText: "WebGL" }).click();
   await waitFor(() => saved()["terminal.renderer"] === "webgl", "a segmented control saves its option");
-  await page("Fonts");
+  await page("Appearance");
   const size = row("Code font size").locator("input");
   await size.fill("");
   await size.press("Enter");
@@ -684,13 +690,35 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await sw.locator(".sw-page-foot .sw-button").click();
   await waitFor(() => !("terminal.lineHeight" in saved()) && !("terminal.renderer" in saved()), "Restore Defaults resets the page");
 
-  await sw.locator(".sw-search input").fill("zoom");
+  await sw.locator(".sb-search input").fill("zoom");
   const found = await sw.locator(".sw-row-title").allTextContents();
   check(["Minimum zoom", "Maximum zoom"].every((t) => found.some((f) => f.startsWith(t))), `search finds settings across pages (${found.join(", ")})`);
-  await sw.locator(".sw-search input").fill("");
+  await sw.locator(".sb-search input").fill("");
 
   await page("Keyboard Shortcuts");
   check((await sw.locator(".sw-row.shortcut kbd").count()) > 10, "keyboard shortcuts are listed");
+  // Recording a shortcut: the menu lets go of its keys meanwhile; it's saved to keybindings.json.
+  const kbFile = path.join(home, "keybindings.json");
+  const lastSpace = row("Last Space");
+  await lastSpace.hover();
+  await lastSpace.locator(".sw-key-add").click();
+  await waitFor(async () => (await accel("view.palette")) === null, "the menu has no shortcuts while one is recorded");
+  await sw.keyboard.press("Control+Alt+L");
+  await waitFor(() => fs.existsSync(kbFile) && fs.readFileSync(kbFile, "utf8").includes('"space.last": ["Ctrl+Alt+L"]'), "a recorded shortcut is saved to keybindings.json");
+  await waitFor(async () => (await accel("space.last")) === "Ctrl+Alt+L" && (await accel("view.palette")) !== null, "the menu takes the new shortcut and its others back");
+  await lastSpace.locator(".sw-reset").click();
+  await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("space.last"), "Restore default removes the shortcut from keybindings.json");
+  await lastSpace.hover();
+  await lastSpace.locator(".sw-key-add").click();
+  await sw.keyboard.press("Control+Alt+L");
+  await waitFor(() => fs.readFileSync(kbFile, "utf8").includes("space.last"), "a second recording is saved");
+  await sw.locator(".sw-page-foot .sw-button", { hasText: "Restore Defaults" }).click();
+  await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("space.last"), "Restore Defaults puts every shortcut back");
+  await sw.locator(".sb-search input").fill("palette");
+  await sw.waitForTimeout(100);
+  const paletteRows = await sw.locator(".sw-row.shortcut .sw-row-name").allTextContents();
+  check(paletteRows.includes("Command Palette"), `search finds shortcuts (${paletteRows.join(", ")})`);
+  await sw.locator(".sb-search input").fill("");
   await sw.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });
   await sw.close();
 }

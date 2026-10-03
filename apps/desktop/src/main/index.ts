@@ -19,7 +19,7 @@ import { lucideSymbol, type SymbolImage } from "./icons.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
-import { ensureKeybindingsFile, loadKeybindings, watchKeybindings, type KeybindingsSnapshot } from "./keybindings.ts";
+import { ensureKeybindingsFile, loadKeybindings, resetKeybindings, watchKeybindings, writeKeybinding, type KeybindingsSnapshot } from "./keybindings.ts";
 
 // Loaded after launch: the updater isn't needed to show the first window.
 const updater = () => import("./updater.ts");
@@ -49,6 +49,10 @@ startCrashReporting({ devBuild, context: () => crashContext() });
 log.info(`${app.getName()} ${app.getVersion()} starting`, { pid: process.pid, electron: process.versions.electron, platform: `${process.platform} ${os.release()} ${process.arch}`, home: cmdHome() });
 
 let keybindings: KeybindingsSnapshot = loadKeybindings();
+// While the Settings window records a shortcut the menu has none, so the keys
+// reach it instead of running commands.
+let recordingShortcut = false;
+let refreshMenu = (): void => {};
 
 if (process.env.CMD_NO_SANDBOX) app.commandLine.appendSwitch("no-sandbox");
 // Tests: render as on a Retina display regardless of the actual screen.
@@ -327,8 +331,8 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
 const spaces = new SpaceWindows(createWindow);
 
 // ── settings window ─────────────────────────────────────
-// One native Settings window (⌘,), like a macOS app's: translucent sidebar of
-// categories. Its own page and bundle (renderer/settings.html).
+// One native Settings window (⌘,), like a macOS app's: a sidebar of categories,
+// drawn like the main window's. Its own page and bundle (renderer/settings.html).
 
 let settingsWin: BrowserWindow | null = null;
 const isSettings = (w: BrowserWindow | null | undefined) => !!w && w === settingsWin;
@@ -340,15 +344,14 @@ function openSettings(): BrowserWindow {
     return settingsWin;
   }
   const win = new BrowserWindow({
-    width: 800,
-    height: 580,
-    minWidth: 660,
-    minHeight: 420,
+    width: 860,
+    height: 620,
+    minWidth: 700,
+    minHeight: 440,
     title: "Settings",
     show: false,
-    ...(process.platform === "darwin"
-      ? { titleBarStyle: "hidden" as const, trafficLightPosition: { x: 20, y: 19 }, vibrancy: "sidebar" as const, visualEffectState: "followWindow" as const, backgroundColor: "#00000000" }
-      : { backgroundColor: savedAppearance().background }),
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 14, y: 12 } } : {}),
+    backgroundColor: savedAppearance().background,
     fullscreenable: false,
     webPreferences: {
       preload: path.join(here, "../preload/index.cjs"),
@@ -475,6 +478,14 @@ ipcMain.on("open-settings", (_e, p: string) => {
   void shell.openPath(p);
 });
 ipcMain.handle("keybindings", () => keybindings);
+ipcMain.handle("set-keybinding", (_e, id: string, keys: string[] | null) => writeKeybinding(id, keys));
+ipcMain.handle("reset-keybindings", () => resetKeybindings());
+ipcMain.on("record-shortcut", (e, on: boolean) => {
+  if (recordingShortcut === on) return;
+  recordingShortcut = on;
+  refreshMenu();
+  if (on) e.sender.once("destroyed", () => ((recordingShortcut = false), refreshMenu()));
+});
 // SF Symbols, rendered natively at the exact point size and pixel density the UI
 // shows them (native/sfsymbols.swift), so they stay crisp. PNG data URLs, black
 // template images; the UI tints them via CSS masks.
@@ -636,10 +647,11 @@ app.whenReady().then(async () => {
   followCrashReports(socketPath);
   if (!devBuild) void updater().then((u) => u.startUpdater(socketPath));
   const send = commandSender(() => spaces.reopen(), { openSettings, checkForUpdates, isSettings, appWindows });
-  buildMenu(send, keybindings.bindings);
+  refreshMenu = () => buildMenu(send, recordingShortcut ? {} : keybindings.bindings);
+  refreshMenu();
   watchKeybindings((next) => {
     keybindings = next;
-    buildMenu(send, next.bindings);
+    refreshMenu();
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send("keybindings", next);
   });
   app.dock?.setMenu(

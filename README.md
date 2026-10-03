@@ -105,7 +105,7 @@ Shortcuts are shown for macOS. On Windows, app shortcuts use Ctrl+Shift so plain
 
 ## Keyboard shortcuts
 
-Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keybindings.json` (map a command id to a shortcut, a list, or `null`); the full list with ids is under Settings → Keyboard Shortcuts.
+Every shortcut is a real menu-bar item. Remap any of them under Settings → Keyboard Shortcuts (click a shortcut and press the new keys, or + to add another), or in `~/.config/cmd/keybindings.json` (map a command id to a shortcut, a list, or `null`). Both stay in sync; the Settings page saves to that file.
 
 | | |
 |---|---|

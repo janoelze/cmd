@@ -172,6 +172,24 @@ export function resolveKeybindings(user: unknown, defaults: Keybindings = DEFAUL
   return { bindings, errors };
 }
 
+/**
+ * keybindings.json's object after the Settings window binds `keys` to `id`
+ * (null: back to the defaults). The keys leave other commands' entries, so the
+ * file's order can't hand them back; a list equal to the defaults is dropped.
+ */
+export function editKeybindings(user: unknown, id: string, keys: string[] | null, defaults: Keybindings = DEFAULT_KEYBINDINGS): Record<string, unknown> {
+  const out: Record<string, unknown> = user && typeof user === "object" && !Array.isArray(user) ? { ...(user as Record<string, unknown>) } : {};
+  delete out[id];
+  if (!keys) return out;
+  for (const [other, v] of Object.entries(out)) {
+    const list = typeof v === "string" ? [v] : Array.isArray(v) ? v : null;
+    if (list?.some((k) => typeof k === "string" && keys.some((x) => sameKey(x, k)))) out[other] = list.filter((k) => !keys.some((x) => sameKey(x, k)));
+  }
+  const def = defaults[id] ?? [];
+  if (keys.length !== def.length || keys.some((k, i) => !sameKey(k, def[i]!))) out[id] = keys;
+  return out;
+}
+
 const sameKey = (a: string, b: string) => norm(a) === norm(b);
 /** A shortcut in a comparable form: lowercase, modifiers sorted ("alt+cmd+n"). */
 export function norm(k: string): string {

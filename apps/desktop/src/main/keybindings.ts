@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseJsonc } from "@cmd/protocol";
 import { configDir } from "@cmd/protocol/node";
-import { resolveKeybindings, type Keybindings } from "../shared/commands.ts";
+import { editKeybindings, resolveKeybindings, type Keybindings } from "../shared/commands.ts";
 
 export interface KeybindingsSnapshot {
   bindings: Keybindings;
@@ -14,10 +14,12 @@ export interface KeybindingsSnapshot {
 
 export const keybindingsPath = () => path.join(configDir(), "keybindings.json");
 
-export const KEYBINDINGS_TEMPLATE = `// cmd keybindings. Map a command id to a shortcut, a list of shortcuts, or null
+const HEADER = `// cmd keybindings. Map a command id to a shortcut, a list of shortcuts, or null
 // to unbind. Shortcuts use Electron accelerator syntax: "Alt+Cmd+Right", "Ctrl+Tab".
 // Command ids are listed under Settings → Keyboard Shortcuts. Changes apply live.
-{
+`;
+
+export const KEYBINDINGS_TEMPLATE = `${HEADER}{
   // "session.next": ["Alt+Cmd+Right", "Ctrl+Tab"],
 }
 `;
@@ -53,4 +55,33 @@ export function ensureKeybindingsFile(): string {
     fs.writeFileSync(file, KEYBINDINGS_TEMPLATE);
   }
   return file;
+}
+
+/**
+ * Bind `keys` to command `id` (null: its defaults) from the Settings window.
+ * Rewrites the file, which drops comments, as settings.json does; the watcher
+ * then applies it. A file that doesn't parse is left alone.
+ */
+export function writeKeybinding(id: string, keys: string[] | null): void {
+  const file = keybindingsPath();
+  let user: unknown = {};
+  try {
+    user = parseJsonc(fs.readFileSync(file, "utf8"));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw new Error(`keybindings.json: ${(err as Error).message}. Fix it first.`);
+  }
+  const next = editKeybindings(user, id, keys);
+  const entries = Object.entries(next).map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v).replaceAll('","', '", "')}`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, entries.length ? `${HEADER}{\n${entries.join(",\n")}\n}\n` : KEYBINDINGS_TEMPLATE);
+  fs.renameSync(tmp, file);
+}
+
+/** Settings → Keyboard Shortcuts → Restore Defaults: the file back to its template. */
+export function resetKeybindings(): void {
+  const file = keybindingsPath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(`${file}.tmp`, KEYBINDINGS_TEMPLATE);
+  fs.renameSync(`${file}.tmp`, file);
 }

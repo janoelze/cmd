@@ -125,6 +125,12 @@ const api = {
     return () => ipcRenderer.off("open-url", h);
   },
   keybindings: (): Promise<KeybindingsSnapshot> => ipcRenderer.invoke("keybindings"),
+  /** Bind shortcuts to a command in keybindings.json; null restores its defaults. */
+  setKeybinding: (id: string, keys: string[] | null): Promise<void> => ipcRenderer.invoke("set-keybinding", id, keys),
+  /** keybindings.json back to its template: every default shortcut. */
+  resetKeybindings: (): Promise<void> => ipcRenderer.invoke("reset-keybindings"),
+  /** Menu shortcuts off while the Settings window records one. */
+  recordShortcut: (on: boolean) => ipcRenderer.send("record-shortcut", on),
   /** SF Symbols rendered at an exact point size and pixel density; null for unknown names. */
   sfSymbols: (req: { names: string[]; size: number; weight?: string; scale?: number }): Promise<Record<string, { url: string; w: number; h: number; contain?: boolean } | null>> =>
     ipcRenderer.invoke("sf-symbols", req),

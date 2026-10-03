@@ -2,7 +2,7 @@
 // for palette hints and the settings panel.
 
 import { useSyncExternalStore } from "react";
-import { DEFAULT_KEYBINDINGS, norm } from "../../shared/commands.ts";
+import { DEFAULT_KEYBINDINGS, MAC_KEYMAP, norm } from "../../shared/commands.ts";
 import type { KeybindingsSnapshot } from "../../main/keybindings.ts";
 import { cmd } from "./bridge.ts";
 
@@ -43,3 +43,20 @@ export function isAppShortcut(e: KeyboardEvent): boolean {
   const mods = [e.altKey && "alt", e.ctrlKey && "ctrl", e.metaKey && "cmd", e.shiftKey && "shift"].filter(Boolean).sort();
   return bound.has([...mods, eventKey(e)].join("+"));
 }
+
+const ACCELERATOR_KEYS: Record<string, string> = { Comma: ",", Period: ".", Equal: "=", Minus: "-", BracketLeft: "[", BracketRight: "]", Slash: "/", Backslash: "\\", Semicolon: ";", Quote: "'", Backquote: "`", ArrowLeft: "Left", ArrowRight: "Right", ArrowUp: "Up", ArrowDown: "Down", Tab: "Tab", Enter: "Enter", NumpadEnter: "Enter", Escape: "Escape", Space: "Space", Backspace: "Backspace", Delete: "Delete", Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown" };
+
+/**
+ * A key event as a shortcut for keybindings.json ("Shift+Cmd+K"), layout-independent;
+ * null for a lone modifier or a key it can't name. Modifiers in the defaults' order.
+ */
+export function acceleratorOf(e: KeyboardEvent, mac = MAC_KEYMAP): string | null {
+  const c = e.code;
+  const key = /^Key[A-Z]$/.test(c) ? c.slice(3) : /^Digit\d$/.test(c) ? c.slice(5) : /^F\d{1,2}$/.test(c) ? c : ACCELERATOR_KEYS[c];
+  if (!key || (e.metaKey && !mac)) return null;
+  const mods = [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Cmd"].filter((m): m is string => !!m);
+  return [...mods, key].join("+");
+}
+
+/** A shortcut that can't be typed into a terminal or field: it has ⌘/Ctrl/Alt, or is a function key. */
+export const usableShortcut = (acc: string) => /^F\d/.test(acc.split("+").pop()!) || /(^|\+)(Cmd|Ctrl|Alt)\+/.test(acc);
