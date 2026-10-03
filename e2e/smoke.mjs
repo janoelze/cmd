@@ -101,9 +101,11 @@ void before;
 await menu("view.grid");
 await win.waitForTimeout(400);
 check((await win.locator(".tile").count()) === 2, "grid shows both terminals");
-await win.waitForSelector(".tile-usage", { timeout: 8000 });
-const usageText = await win.locator(".tile-usage").first().textContent();
-check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `tile title shows memory of the process tree (${usageText})`);
+if (process.platform !== "win32") {
+  await win.waitForSelector(".tile-usage", { timeout: 8000 });
+  const usageText = await win.locator(".tile-usage").first().textContent();
+  check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `tile title shows memory of the process tree (${usageText})`);
+} else console.log("skip - tile memory (needs a Windows procinfo helper)");
 const panesOrder = async () => (await win.evaluate(() => window.cmd.call("ui.get", {})))["grid.order"];
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
 await win.waitForTimeout(500);
