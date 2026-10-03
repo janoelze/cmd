@@ -140,6 +140,8 @@ describe("zsh shell integration", () => {
       if (e.type === "window.focus") focused.push(e.id);
     });
     await conn.client.call("events.subscribe", {});
+    // Panes default to $SHELL, which isn't zsh everywhere (CI runners use bash).
+    await conn.client.call("settings.set", { key: "shell.program", value: "/bin/zsh" });
     // A forged request (wrong token) printed by a command must not open anything.
     const pane = await conn.client.call("pane.create", {
       cwd: dir,
@@ -155,5 +157,6 @@ describe("zsh shell integration", () => {
     await until(async () => fs.realpathSync(await cwdOf()) === real, 5000);
     await conn.client.call("window.close", { id: files[0]!.id });
     await conn.client.call("pane.kill", { paneId: pane.id });
+    await conn.client.call("settings.reset", { key: "shell.program" });
   }, 25_000); // a first zsh start on a fresh CI machine is slow
 });
