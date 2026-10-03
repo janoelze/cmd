@@ -47,24 +47,50 @@ export function buildRows(s: State): SidebarRow[] {
     if (!isChild(agent)) roots.push(toRow(pane, agent));
   }
   // Hosts whose terminal is gone but whose workers are still running.
-  const orphans: SidebarRow[] = [];
-  for (const a of agents) if (!a.paneId && !isChild(a)) orphans.push(toRow(null, a));
+  for (const a of agents) if (!a.paneId && !isChild(a)) roots.push(toRow(null, a));
 
   for (const w of s.windows.values()) {
     roots.push({ key: w.id, pane: null, win: w, agent: null, children: [], urgent: null });
   }
 
-  // needs-input first (longest wait first), then done-but-unseen (oldest first),
-  // then everything else by recency — same rule as @cmd/protocol's sortRows.
+  // By sidebar section; within one, needs-input first (longest wait first), then
+  // done-but-unseen (oldest first), then everything else by recency — same rule
+  // as @cmd/protocol's sortRows.
   const activity = (r: SidebarRow) => Math.max(r.pane?.lastActivityAt ?? r.win?.updatedAt ?? 0, r.agent?.stateSince ?? 0);
-  const sorted = [...roots].sort((a, b) => {
+  return roots.sort((a, b) => {
+    const sa = SECTIONS.indexOf(sectionOf(a));
+    const sb = SECTIONS.indexOf(sectionOf(b));
+    if (sa !== sb) return sa - sb;
     const ba = RANK[bucketOf(a.urgent)];
     const bb = RANK[bucketOf(b.urgent)];
     if (ba !== bb) return ba - bb;
     if (ba === RANK.rest) return activity(b) - activity(a);
     return a.urgent!.stateSince - b.urgent!.stateSince;
   });
-  return [...sorted, ...orphans];
+}
+
+/** Sidebar sections of the open rows, in display order. */
+export const SECTIONS = ["needs", "agents", "windows"] as const;
+export type Section = (typeof SECTIONS)[number];
+
+/** Needs you: an agent (or one of its workers) waiting for input. Else agents, then plain windows. */
+export function sectionOf(r: SidebarRow): Section {
+  if (r.urgent && bucketOf(r.urgent) === "needs") return "needs";
+  return r.agent ? "agents" : "windows";
+}
+
+/**
+ * Sidebar search over open rows, children included, as a flat list: every
+ * whitespace-separated term must appear in the row's name, place, kind or cwd.
+ */
+export function filterRows(rows: SidebarRow[], query: string, now = Date.now()): SidebarRow[] {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+  return flatten(rows).filter((r) => {
+    const f = fieldsOf(r, undefined, now);
+    const hay = [f.name, f.place, f.kind, r.agent?.cwd, r.pane?.cwd, r.agent?.lastPrompt].filter(Boolean).join(" ").toLowerCase();
+    return terms.every((t) => hay.includes(t));
+  });
 }
 
 /** The window a row stands for (terminal: pane id), if any. */

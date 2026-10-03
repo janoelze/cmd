@@ -136,6 +136,13 @@ describe("index + search", () => {
     expect(searcher.search("postgres")[0]).toMatchObject({ agent: "codex", sessionId: "0199-codex-thread" });
   });
 
+  it("lists recent sessions once each, leaving out excluded ones", () => {
+    const ids = searcher.recent(10).map((h) => h.sessionId);
+    expect(ids.sort()).toEqual(["0199-codex-thread", "s-sidebar", "s-vpn"]);
+    expect(searcher.recent(10, ["s-vpn"]).map((h) => h.sessionId)).not.toContain("s-vpn");
+    expect(searcher.recent(1)).toHaveLength(1);
+  });
+
   it("tolerates typos", () => {
     const hits = searcher.search("wiregaurd");
     expect(hits[0]).toMatchObject({ sessionId: "s-vpn", fuzzy: true });

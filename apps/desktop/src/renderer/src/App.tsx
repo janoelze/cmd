@@ -4,7 +4,6 @@ import { bucketOf, needsAttention } from "@cmd/protocol";
 import { COMMANDS, prettyAccelerator, type CommandId } from "../../shared/commands.ts";
 import { cmd } from "./bridge.ts";
 import {
-  selectPane,
   bindSelection,
   closePane,
   copy,
@@ -15,6 +14,7 @@ import {
   newFiles,
   openableTarget,
   openPath,
+  openSession,
   resumeCommand,
   runAction,
   sessionId,
@@ -22,7 +22,7 @@ import {
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, fieldsOf, nextAfterClose, pushHistory, shortPath, windowIdOf, type SidebarRow } from "./model.ts";
-import type { SearchHit, SearchStatus } from "@cmd/protocol";
+import type { SearchStatus } from "@cmd/protocol";
 import { getState, onNotification, onWindowFocus, usePersisted, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
@@ -35,23 +35,13 @@ import { builtinTools } from "./tools.ts";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
-import { Sidebar, type SidebarTab } from "./components/Sidebar.tsx";
+import { Sidebar, SIDEBAR_WIDTH, type SidebarRequest } from "./components/Sidebar.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 
 function searchStatusLabel(s: SearchStatus | null): string {
   if (!s) return "";
   if (s.indexing && s.total) return `Indexing ${s.done.toLocaleString()} / ${s.total.toLocaleString()}…`;
   return `${s.sessions.toLocaleString()} session${s.sessions === 1 ? "" : "s"} indexed`;
-}
-
-/** Switch to a session if it is open in a terminal, otherwise resume it in a new one. */
-async function openSession(h: SearchHit): Promise<void> {
-  const live = [...getState().agents.values()].find(
-    (a) => a.paneId && (a.native.claudeSessionId === h.sessionId || a.native.codexThreadId === h.sessionId),
-  );
-  if (live?.paneId) return selectPane(live.paneId);
-  const agent = await cmd.call("agent.resume", { agent: h.agent, sessionId: h.sessionId, cwd: h.cwd, configDir: h.configDir });
-  if (agent.paneId) selectPane(agent.paneId);
 }
 
 /** True when a text field (palette, settings) has focus, so Edit commands target it. */
@@ -86,8 +76,10 @@ export function App() {
   // Most recently used terminals, for picking what to focus after one closes.
   const [history, setHistory] = usePersisted<PaneId[]>("selection.history", []);
   const [mode, setMode] = usePersisted<ViewMode>("view.mode", cfg["ui.defaultView"]);
-  const [tab, setTab] = usePersisted<SidebarTab>("sidebar.tab", "sessions");
   const [sidebarOpen, setSidebarOpen] = usePersisted("sidebar.open", true);
+  // null: the default width (double-click the sidebar's edge).
+  const [sidebarWidth, setSidebarWidth] = usePersisted<number | null>("sidebar.width", null);
+  const [sidebarRequest, setSidebarRequest] = useState<SidebarRequest | null>(null);
   const [zoom, setZoom] = usePersisted("terminal.zoom", 0);
   const [recent, setRecent] = usePersisted<string[]>("palette.recent", []);
   // One spatial order shared by grid and strip.
@@ -271,7 +263,7 @@ export function App() {
     },
     "edit.clear": () => selected && terminals.clear(selected),
     "view.palette": () => setPalette((p) => (p === false ? "" : false)),
-    "view.search": () => setPalette("?"),
+    "view.search": () => (setSidebarOpen(true), setSidebarRequest({ kind: "search", at: Date.now() })),
     "view.focus": () => setMode("focus"),
     "view.grid": () => setMode("grid"),
     "view.strip": () => setMode("strip"),
@@ -288,8 +280,7 @@ export function App() {
       setStripWidth(selected, nextPreset(stripWidths[selected] ?? DEFAULT_FRACTION));
     },
     "view.sidebar": () => setSidebarOpen((o) => !o),
-    "view.sessions": () => (setSidebarOpen(true), setTab("sessions")),
-    "view.tools": () => (setSidebarOpen(true), setTab("tools")),
+    "view.tools": () => (setSidebarOpen(true), setSidebarRequest({ kind: "tools", at: Date.now() })),
     "view.zoomIn": () => setZoom((z) => Math.min(24, z + 1)),
     "view.zoomOut": () => setZoom((z) => Math.max(-6, z - 1)),
     "view.zoomReset": () => setZoom(0),
@@ -381,6 +372,14 @@ export function App() {
     ]);
   };
 
+  /** The sidebar's + button. */
+  const newMenu = () =>
+    void showContextMenu(
+      (["file.newTerminal", "file.newClaude", "file.newCodex", "-", "file.newBrowser", "file.newFiles"] as const).map((id) =>
+        id === "-" ? id : { label: COMMANDS.find((c) => c.id === id)!.label, run: () => run(id) },
+      ),
+    );
+
   /** Per-terminal mute: no system notifications from it (its marker still shows). */
   const muteEntry = (paneId: PaneId) => {
     const muted = !!getState().panes.get(paneId)?.muted;
@@ -471,7 +470,7 @@ export function App() {
     <div
       className={`app ${sidebarOpen ? "" : "no-sidebar"} ${cfg["ui.unfocusedDesaturation"] > 0 ? "desaturate" : ""}`}
       style={{
-        ["--sidebar-w" as string]: `${cfg["ui.sidebarWidth"]}px`,
+        ["--sidebar-w" as string]: `${sidebarWidth ?? SIDEBAR_WIDTH.default}px`,
         ["--window-radius" as string]: `${cfg["ui.windowRadius"]}px`,
         ["--gutter" as string]: `${cfg["ui.gutter"]}px`,
         ["--pad-x" as string]: `${cfg["ui.paddingX"]}px`,
@@ -482,14 +481,17 @@ export function App() {
       {!sidebarOpen && <div className="drag-strip" />}
       {sidebarOpen && (
         <Sidebar
-          tab={tab}
-          onTab={setTab}
           rows={rows}
           selected={selected}
           onSelect={selectRow}
           onRowMenu={rowMenu}
+          onClose={(r) => windowIdOf(r) && void closePane(windowIdOf(r)!)}
+          onNew={newMenu}
           onNewTerminal={() => void newTerminal()}
+          onWidth={setSidebarWidth}
+          request={sidebarRequest}
           stats={stats}
+          search={s.search}
           connected={s.connected}
           error={s.error}
         />

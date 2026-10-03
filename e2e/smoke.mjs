@@ -73,7 +73,6 @@ const visualTiles = async () => {
   );
   return ids.map((id) => win.locator(`.tile[data-pane="${id}"]`));
 };
-const selectedTitle = () => win.locator(".row.sel .row-title").textContent();
 
 await win.waitForSelector(".sidebar-status");
 await win.screenshot({ path: path.join(shots, "1-empty.png") });
@@ -116,10 +115,10 @@ check((await panes()) === 2, "two terminals open");
 await win.screenshot({ path: path.join(shots, "2-focus.png") });
 
 const before = await win.locator(".row.sel").getAttribute("class");
-const rowsBefore = await win.locator(".row").allTextContents();
+const rowsBefore = await win.locator(".row:not(.history)").allTextContents();
 await menu("session.next");
 await win.waitForTimeout(200);
-const selIndexAfter = await win.locator(".row").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel")));
+const selIndexAfter = await win.locator(".row:not(.history)").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel")));
 check(rowsBefore.length === 2 && selIndexAfter >= 0, `session.next moves selection (now row ${selIndexAfter + 1})`);
 void before;
 
@@ -192,9 +191,10 @@ check((await panes()) === 2, "…and leaves terminals alone");
 
 // Session search: ?query in the palette, Enter resumes the session in a new terminal.
 {
-  await menu("view.search");
+  await menu("view.palette");
+  await win.waitForSelector(".palette");
+  await win.keyboard.type("?wiregaurd"); // typo on purpose
   await win.waitForSelector(".palette.searching");
-  await win.keyboard.type("wiregaurd"); // typo on purpose
   await win.waitForSelector(".palette-list li.rich", { timeout: 15000 });
   const label = await win.locator(".palette-list li.rich .palette-label").first().textContent();
   const snippet = await win.locator(".palette-snippet mark").first().textContent();
@@ -209,6 +209,22 @@ check((await panes()) === 2, "…and leaves terminals alone");
   const resumed = agents.find((a) => a.native.claudeSessionId === "e2e-session-1");
   await win.evaluate((id) => window.cmd.call("pane.kill", { paneId: id }), resumed.paneId);
   await win.waitForTimeout(600);
+}
+
+// Sidebar search (⇧⌘F): filters open windows and searches past sessions; Esc leaves.
+{
+  await menu("view.search");
+  check(await win.evaluate(() => document.activeElement?.closest(".sb-search") !== null), "⇧⌘F focuses the sidebar search");
+  await win.keyboard.type("wiregaurd");
+  await win.waitForSelector(".sidebar-scroll .row.history", { timeout: 15000 });
+  const label = await win.locator(".sidebar-scroll .row.history .row-name").first().textContent();
+  check(label === "VPN auto reconnect", `sidebar search finds past sessions (${label})`);
+  await win.screenshot({ path: path.join(shots, "4c-sidebar-search.png") });
+  await win.keyboard.press("Escape");
+  check((await win.locator(".sb-search input").inputValue()) === "", "Esc clears the sidebar search");
+  await win.keyboard.press("Escape");
+  await win.waitForSelector(".sb-recent .row.history", { timeout: 5000 }).catch(() => {});
+  check((await win.locator(".sb-recent .row.history").count()) > 0, "Recent lists past sessions from the index");
 }
 
 // Browser and file windows
@@ -438,7 +454,6 @@ check((await accel("edit.clear")) === null, "null unbinds a shortcut");
 
 // Closing the focused terminal returns to the previously used one (MRU), not a sidebar neighbour.
 {
-  await menu("view.sessions");
   await menu("file.newTerminal");
   await win.waitForTimeout(800);
   const list = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.sort((a, b) => a.createdAt - b.createdAt).map((x) => x.id)));
@@ -554,22 +569,40 @@ await win.waitForTimeout(800);
 // ── remembered UI state across an app restart (the core keeps running) ──
 await menu("view.grid");
 await menu("view.tools");
+await win.waitForTimeout(500); // Show Tools scrolls smoothly; let it settle before clicking
 await win.click(".panel-title >> text=Agents"); // collapse a tool panel
 await menu("view.zoomIn");
 await menu("view.zoomIn");
+{
+  // Drag the sidebar's edge; the width is UI state.
+  const edge = await win.locator(".sidebar-resize").boundingBox();
+  await win.mouse.move(edge.x + edge.width / 2, 300);
+  await win.mouse.down();
+  await win.mouse.move(300, 300, { steps: 4 });
+  await win.mouse.move(340, 300, { steps: 4 });
+  await win.mouse.up();
+}
+await win.waitForTimeout(400); // debounced writes reach the core before we read them back
 const selectedBefore = await win.evaluate(() => window.cmd.call("ui.get", {}).then((u) => u["selection.pane"]));
-await win.waitForTimeout(400); // debounced writes
 await app.close();
 
 ({ app, win } = await launch());
 await win.waitForSelector(".sidebar-status");
 await win.waitForTimeout(800);
 check((await win.locator(".main.mode-grid").count()) === 1, "view mode restored (grid)");
-check((await win.locator(".sidebar-tabs button.on").textContent()) === "Tools", "sidebar tab restored (Tools)");
+check((await win.locator(".sb-tools .panel").count()) > 0, "open Tools section restored");
+{
+  const w = (await win.locator(".sidebar").boundingBox()).width;
+  check(Math.abs(w - 340) <= 1, `dragged sidebar width restored (${w})`);
+  await win.locator(".sidebar-resize").dblclick();
+  await win.waitForTimeout(100);
+  const reset = (await win.locator(".sidebar").boundingBox()).width;
+  check(Math.abs(reset - 280) <= 1, `double-clicking the edge resets the width (${reset})`);
+}
 check((await win.locator(".panel.shaded").count()) === 1, "collapsed tool panel restored");
 const ui = await win.evaluate(() => window.cmd.call("ui.get", {}));
 check(ui["terminal.zoom"] === 2, "terminal zoom restored (+2)");
-check(ui["selection.pane"] === selectedBefore && !!selectedBefore, "selected terminal restored");
+check(ui["selection.pane"] === selectedBefore && !!selectedBefore, `selected terminal restored (${selectedBefore} → ${ui["selection.pane"]})`);
 {
   const text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 500 }).then((r) => r.text), markerPane);
   await win.evaluate((id) => window.__cmdSelect(id), markerPane);

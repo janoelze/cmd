@@ -1,6 +1,6 @@
 // UI-level actions shared by the sidebar, tools and the command palette.
 
-import type { Agent, PaneId } from "@cmd/protocol";
+import type { Agent, PaneId, SearchHit } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { getState } from "./store.ts";
 import type { ToolAction } from "./tools.ts";
@@ -23,6 +23,21 @@ export function bindSelection(fn: Selector, current: () => PaneId | null): void 
 function contextCwd(): string | undefined {
   const id = currentPane();
   return id ? getState().panes.get(id)?.cwd : undefined;
+}
+
+/** Session ids of agents open in a terminal (transcript search leaves them out of Recent). */
+export function liveSessionIds(): string[] {
+  return [...getState().agents.values()].flatMap((a) => (a.paneId ? [a.native.claudeSessionId, a.native.codexThreadId] : [])).filter((x): x is string => !!x);
+}
+
+/** Switch to a past session if it is open in a terminal, otherwise resume it in a new one. */
+export async function openSession(h: SearchHit): Promise<void> {
+  const live = [...getState().agents.values()].find(
+    (a) => a.paneId && (a.native.claudeSessionId === h.sessionId || a.native.codexThreadId === h.sessionId),
+  );
+  if (live?.paneId) return select(live.paneId);
+  const agent = await cmd.call("agent.resume", { agent: h.agent, sessionId: h.sessionId, cwd: h.cwd, configDir: h.configDir });
+  if (agent.paneId) select(agent.paneId);
 }
 
 export async function newTerminal(command?: string): Promise<void> {

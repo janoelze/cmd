@@ -264,6 +264,21 @@ export function indexCounts(db: DatabaseSync): { sessions: number; files: number
 
 const oneLine = (t: string) => (t.split(/\r?\n/)[0] ?? t).trim().slice(0, 200);
 
+function rowToHit(r: Record<string, unknown>, fuzzy: boolean): SearchHit {
+  return {
+    sessionId: String(r.id ?? ""),
+    agent: r.agent === "codex" ? "codex" : "claude",
+    path: String(r.path),
+    configDir: (r.config_dir as string | null) ?? null,
+    cwd: (r.cwd as string | null) ?? null,
+    branch: (r.branch as string | null) ?? null,
+    title: oneLine(String(r.title ?? "")),
+    updatedAt: typeof r.updated === "number" ? r.updated : null,
+    snippet: null,
+    fuzzy,
+  };
+}
+
 /** Searcher over a read connection; caches the vocabulary until the index changes. */
 export class Searcher {
   #db: DatabaseSync;
@@ -336,24 +351,32 @@ export class Searcher {
     }
     return rows
       .map((r) => {
-        const updated = typeof r.updated === "number" ? r.updated : null;
+        const hit = rowToHit(r, fuzzy);
         // Recent sessions get up to 60% more weight, fading over a few weeks.
-        const ageDays = updated ? Math.max(0, now - updated) / 86_400_000 : 365;
+        const ageDays = hit.updatedAt ? Math.max(0, now - hit.updatedAt) / 86_400_000 : 365;
         const recency = 1 + 0.6 * Math.exp(-ageDays / 21);
-        return {
-          rowid: r.rowid as number,
-          sessionId: String(r.id ?? ""),
-          agent: (r.agent === "codex" ? "codex" : "claude") as TranscriptAgent,
-          path: String(r.path),
-          configDir: (r.config_dir as string | null) ?? null,
-          cwd: (r.cwd as string | null) ?? null,
-          branch: (r.branch as string | null) ?? null,
-          title: oneLine(String(r.title ?? "")),
-          updatedAt: updated,
-          fuzzy,
-          score: -(r.bm as number) * recency,
-        };
+        return { rowid: r.rowid as number, ...hit, score: -(r.bm as number) * recency };
       })
       .sort((a, b) => b.score - a.score);
+  }
+
+  /** The most recently active sessions, one per session id, minus `exclude` (e.g. open ones). */
+  recent(limit = 5, exclude: string[] = []): SearchHit[] {
+    const skip = new Set(exclude);
+    const rows = this.#db
+      .prepare(
+        `SELECT id, agent, path, config_dir, cwd, branch, coalesce(title, first_prompt, '') AS title, updated
+         FROM sessions ORDER BY updated DESC NULLS LAST LIMIT ?`,
+      )
+      .all(limit * 3 + skip.size) as Record<string, unknown>[];
+    const out: SearchHit[] = [];
+    for (const r of rows) {
+      const hit = rowToHit(r, false);
+      if (skip.has(hit.sessionId)) continue;
+      skip.add(hit.sessionId); // archived copies of a session
+      out.push(hit);
+      if (out.length === limit) break;
+    }
+    return out;
   }
 }

@@ -110,7 +110,6 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: "Show memory and CPU of the selected window's processes in the status bar.",
   },
-  "ui.sidebarWidth": { title: "Sidebar width", unit: "px", type: "number", default: 280, min: 200, max: 480, description: "Sidebar width in px." },
   "ui.unfocusedDesaturation": { title: "Desaturate other windows", unit: "%", type: "number", default: 0, min: 0, max: 100, step: 10, description: "Drain the colour from windows other than the selected one (%): 0 = off, 100 = grayscale." },
   "ui.paddingX": { title: "Horizontal padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the left and right edges in grid and strip view (px)." },
   "ui.paddingY": { title: "Vertical padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the top and bottom edges in grid and strip view (px)." },
@@ -217,6 +216,9 @@ export const RENAMED_SETTINGS: Readonly<Record<string, SettingKey>> = {
 /** The current name of a key (renamed keys map to their new name). */
 export const currentKey = (key: string): string => RENAMED_SETTINGS[key] ?? key;
 
+/** Keys that no longer exist; ignored without an error (ui.sidebarWidth: drag the sidebar edge). */
+export const REMOVED_SETTINGS: ReadonlySet<string> = new Set(["ui.sidebarWidth"]);
+
 export const APPLIES_LABEL: Record<SettingApplies, string> = {
   newTerminals: "new terminals only",
   firstLaunch: "first launch only",
@@ -292,7 +294,7 @@ export function resolveSettings(user: Record<string, unknown>): { settings: Sett
   const settings: Record<string, unknown> = { ...DEFAULT_SETTINGS };
   const errors: string[] = [];
   for (const [k, v] of Object.entries(user)) {
-    if (k.startsWith("plugins.")) continue; // owned by plugins
+    if (k.startsWith("plugins.") || REMOVED_SETTINGS.has(k)) continue; // owned by plugins / gone
     const key = currentKey(k);
     if (key !== k && key in user) continue; // the new name wins over the old one
     const r = validateSetting(key, v);

@@ -34,7 +34,7 @@ function score(label: string, q: string): number {
 }
 
 /** Render \x01…\x02 markers as highlights. */
-function Highlighted({ text }: { text: string }) {
+export function Highlighted({ text }: { text: string }) {
   const parts = text.split(/(\x01[^\x02]*\x02)/);
   return (
     <>

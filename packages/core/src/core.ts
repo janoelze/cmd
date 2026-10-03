@@ -154,6 +154,7 @@ export class Core {
     "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),
     "search.query": (p) => this.#search?.search(p.text, p.limit) ?? [],
+    "search.recent": (p) => this.#search?.recent(Math.min(p.limit ?? 5, 50), p.exclude) ?? [],
     "search.status": () => this.#search?.status() ?? NO_SEARCH,
     "agent.resume": (p) => this.agents.resume(p),
     "ui.get": () => this.store.uiState(),

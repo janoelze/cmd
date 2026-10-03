@@ -29,6 +29,7 @@ describe("schema", () => {
     expect(resolveSettings({ "terminal.fontSize": 17 }).settings["font.codeSize"]).toBe(17);
     expect(resolveSettings({ "terminal.fontSize": 17, "font.codeSize": 12 }).settings["font.codeSize"]).toBe(12);
     expect(resolveSettings({ "terminal.fontFamily": "Iosevka" })).toMatchObject({ settings: { "font.code": "Iosevka" }, errors: [] });
+    expect(resolveSettings({ "ui.sidebarWidth": 320 }).errors).toEqual([]); // removed: no error
   });
 
   it("parses JSONC with comments and trailing commas", () => {
@@ -88,9 +89,9 @@ describe("SettingsService", () => {
     svc = new SettingsService(file);
     svc.watch();
     const updated = new Promise((r) => svc!.once("updated", r));
-    fs.writeFileSync(file, '// mine\n{ "ui.sidebarWidth": 320 }');
+    fs.writeFileSync(file, '// mine\n{ "ui.gutter": 20 }');
     await updated;
-    expect(svc.settings["ui.sidebarWidth"]).toBe(320);
+    expect(svc.settings["ui.gutter"]).toBe(20);
   });
 });
 
@@ -99,7 +100,7 @@ describe("live apply", () => {
     const svc = new SettingsService(null);
     const seen: number[] = [];
     const off = svc.bind(["font.codeSize"], (s) => seen.push(s["font.codeSize"]));
-    svc.set("ui.sidebarWidth", 300);
+    svc.set("ui.gutter", 12);
     svc.set("font.codeSize", 16);
     off();
     svc.set("font.codeSize", 18);

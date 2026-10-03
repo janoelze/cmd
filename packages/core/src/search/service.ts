@@ -31,6 +31,10 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
     return this.#reader()?.search(text, limit) ?? [];
   }
 
+  recent(limit?: number, exclude?: string[]): SearchHit[] {
+    return this.#reader()?.recent(limit, exclude) ?? [];
+  }
+
   /** Resolves once the worker has stopped (it holds the index open for writing). */
   async close(): Promise<void> {
     this.removeAllListeners();

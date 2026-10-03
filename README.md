@@ -101,10 +101,13 @@ Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keyb
 | ⌘+ / ⌘− / ⌘0 | terminal text size (this session only) |
 | ⌥⌘1/2/3/4 | focus / grid / strip / canvas |
 | ⇧⌘1 / ⇧⌘2 | canvas: zoom to fit all / to the selected window |
-| ⌃⌘S | show/hide sidebar · ⌃⌘1 / ⌃⌘2 sessions / tools |
+| ⌃⌘S | show/hide sidebar |
+| ⇧⌘F | search the sidebar: open windows and past sessions |
 | ⌥⌘R | show folder in Finder |
 
 On the canvas, drag a title bar to move a window and its right or bottom edge or corner to resize it. Pinch or ⌘-scroll to zoom, and scroll or drag the background to pan. Scrolling over the selected window scrolls that window instead. Windows stay live at every zoom; `canvas.minZoom`/`canvas.maxZoom` set the range (30–150% by default). Double-click a title bar to zoom to that window, or the background to fit everything. Click or drag the minimap to move around (`canvas.minimap` hides it).
+
+The sidebar groups what is open into Needs you, Agents and Windows (attention first, then recency), then Recent past sessions from the transcript index and the Tools. Its search field filters the open windows and searches the index as you type: ↑/↓ and Return open a result (a past session resumes in a new terminal, or switches to it if it is open), Esc clears. Drag the sidebar's right edge to resize it; double-click the edge for the default width.
 
 Right-click a sidebar row or a terminal for context menus: copy resume command / session id, reveal transcript, new terminal here, and so on. The window remembers its size and position, and the Dock menu has New Terminal / New Claude Session.
 
@@ -115,7 +118,7 @@ Right-click a sidebar row or a terminal for context menus: copy resume command /
 - Agents: detected from the foreground process, state from Claude/Codex hooks, Claude subagents as virtual children
 - Host API: spawn, send, read, wait, kill (`--tree`)
 - Settings and SQLite persistence
-- UI: Sessions/Tools sidebar sorted by attention, focus, grid, strip and canvas views, palette, settings panel, notifications, Dock badge
+- UI: sidebar grouped by attention with search and recent sessions, focus, grid, strip and canvas views, palette, settings panel, notifications, Dock badge
 
 **Next**
 - Transcript search (port the fork's FTS5 index)
