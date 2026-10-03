@@ -103,6 +103,19 @@ jobs:
           fi
           if [ "$IS_TAG" = true ]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.0-ci.${GITHUB_RUN_NUMBER}"; fi
           pnpm exec electron-builder --mac --publish never -c.extraMetadata.version="$version" "${sign[@]}"
+          # electron-builder notarizes the app; the dmg around it is signed and gets its own ticket.
+          if [ -n "${MAC_CERT_P12_BASE64:-}" ]; then
+            if [ -n "${APPLE_API_KEY:-}" ]; then
+              auth=(--key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
+            else
+              auth=(--apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID")
+            fi
+            for dmg in dist/*.dmg; do
+              codesign --sign "Developer ID Application" --timestamp "$dmg"
+              xcrun notarytool submit "$dmg" "${auth[@]}" --wait
+              xcrun stapler staple "$dmg"
+            done
+          fi
 
       # Fail rather than publish an app macOS refuses to open.
       - name: Verify signature
@@ -110,10 +123,14 @@ jobs:
         run: |
           app=dist/mac-arm64/cmd.app
           codesign --verify --deep --strict --verbose=2 "$app"
-          codesign -dv "$app" 2>&1 | grep -E 'Authority|TeamIdentifier|Signature|flags'
-          if codesign -dv "$app" 2>&1 | grep -q 'Authority=Developer ID Application'; then
+          codesign -dvv "$app" 2>&1 | grep -E 'Authority|TeamIdentifier|Signature|flags'
+          if codesign -dvv "$app" 2>&1 | grep -q 'Authority=Developer ID Application'; then
             spctl --assess --type execute --verbose=2 "$app"
-            if xcrun stapler validate "$app"; then echo "notarized and stapled"; fi
+            xcrun stapler validate "$app"
+            for dmg in dist/*.dmg; do
+              spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+              xcrun stapler validate "$dmg"
+            done
           fi
 
       - uses: actions/upload-artifact@v4
