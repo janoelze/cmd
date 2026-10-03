@@ -21,13 +21,13 @@
   <img alt="cmd in the grid layout: agents grouped by what needs you in the sidebar, three Claude sessions, htop, an editor and a browser window" src="docs/screenshots/hero-light.png">
 </picture>
 
-Run Claude Code, Codex and your shells side by side, and see at a glance which agent is waiting for you. Lay out terminals, editors and browser windows in a grid, a scrolling strip or on an infinite canvas. Terminals live in a background process, so quitting or reloading the app never kills them.
+Run Claude Code, Codex and your shells side by side, and see at a glance which agent is waiting for you. Lay out terminals, editors and browser windows in a grid, a scrolling strip inspired by PaperWM, or on an infinite canvas. Terminals live in a background process, so quitting or reloading the app never kills them.
 
 ## Features
 
 - **Knows your agents.** Claude Code, Codex, Gemini, Aider and others are detected on their own, even behind wrappers and sandboxes. The sidebar puts agents waiting for input first, then the ones working, then the ones done; subagents show as children.
 - **Terminals that outlive the app.** A long-lived core process owns every terminal. Close the window or restart the app: your sessions are still there.
-- **Four layouts.** Focus on one window, tile them in a grid, scroll through a strip, or arrange them freely on a zoomable canvas with a minimap.
+- **Four layouts.** Focus on one window, tile them in a grid, scroll through a horizontal strip of windows inspired by [PaperWM](https://github.com/paperwm/PaperWM), or arrange them freely on a zoomable canvas with a minimap.
 - **Every past session, searchable.** Typo-tolerant full-text search over your Claude Code and Codex transcripts, from the palette or the sidebar. Return resumes a session in a new terminal.
 - **More than terminals.** Browser, file tree, text editor and Markdown windows sit next to your terminals. `open README.md` in the shell opens it in cmd.
 - **Notifications that lead somewhere.** An agent waiting, a bell, a long command finishing, an OSC 9/777/99 notification or `cmd notify`: the terminal is marked until you look at it, and counts toward the Dock badge.
