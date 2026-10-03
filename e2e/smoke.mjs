@@ -381,6 +381,26 @@ check((await panes()) === 2, "…and leaves terminals alone");
   const widgetText = await win.frameLocator(`.tile[data-pane="${magic[0]}"] iframe.magic-frame`).locator("#v").textContent({ timeout: 5000 });
   check(widgetText === "Alpha data", "a Magic widget renders its data in its sandboxed frame");
 
+  // A theme change reaches widgets live: CSS variables, and colours drawn from JavaScript (cmd.onTheme).
+  const themed = await call("window.open", { kind: "magic", input: {} });
+  await call("window.update", {
+    id: themed.id,
+    title: "Themed",
+    state: { prompt: "themed", phase: "ready", kind: "widget", html: '<canvas id="c"></canvas><script>cmd.onTheme(() => (c.dataset.bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()))</script>', source: null, refresh: 0, size: "s", lastData: null },
+  });
+  await win.waitForTimeout(1000);
+  const themedFrame = win.frameLocator(`.tile[data-pane="${themed.id}"] iframe.magic-frame`);
+  const readTheme = () => themedFrame.locator("body").evaluate(() => ({ css: getComputedStyle(document.body).backgroundColor, js: document.getElementById("c").dataset.bg }));
+  const beforeTheme = await readTheme();
+  const appearance = (await call("settings.get")).settings["theme.appearance"];
+  await call("settings.set", { key: "theme.appearance", value: appearance === "light" ? "dark" : "light" });
+  await win.waitForTimeout(1000);
+  const afterTheme = await readTheme();
+  await call("settings.set", { key: "theme.appearance", value: appearance });
+  check(!!beforeTheme.js && afterTheme.css !== beforeTheme.css && afterTheme.js !== beforeTheme.js, `a theme change reaches a widget live, CSS and cmd.onTheme (${beforeTheme.js} → ${afterTheme.js})`);
+  await call("window.close", { id: themed.id });
+  await win.waitForTimeout(600);
+
   const selected = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
   const clickIn = async (loc) => {
     const b = await loc.boundingBox();

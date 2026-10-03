@@ -182,6 +182,12 @@
     get data() {
       return latest;
     },
+    /** fn(appearance) now (once a theme is set) and whenever the theme changes. */
+    onTheme(fn) {
+      themeListeners.push(fn);
+      const root = getComputedStyle(document.documentElement);
+      if (root.getPropertyValue("--bg")) call(fn, root.colorScheme || "dark");
+    },
     fmt,
     spark,
     chart,
@@ -252,11 +258,20 @@
   document.addEventListener("mousemove", () => hover(true), { passive: true });
   document.documentElement.addEventListener("mouseleave", () => hover(false));
 
+  // Theme: CSS variables update by themselves; code that draws with colours
+  // (a canvas) re-reads them in cmd.onTheme, called now and on every change.
+  const themeListeners = [];
+  let lastTokens = "";
   const setTokens = (tokens) => {
-    for (const k in tokens || {}) {
+    if (!tokens) return;
+    const key = JSON.stringify(tokens);
+    if (key === lastTokens) return;
+    lastTokens = key;
+    for (const k in tokens) {
       if (k === "color-scheme") document.documentElement.style.colorScheme = tokens[k];
       else document.documentElement.style.setProperty(k, tokens[k]);
     }
+    for (const fn of themeListeners) call(fn, tokens["color-scheme"]);
   };
   // While the answer streams: the markup so far, without scripts (they run once, at the end).
   const stream = (html) => {
@@ -267,6 +282,7 @@
   // The finished widget: markup, then its scripts in order (innerHTML doesn't run them).
   const render = (html) => {
     listeners.length = 0;
+    themeListeners.length = 0;
     has = false;
     document.body.innerHTML = String(html);
     for (const old of [...document.body.querySelectorAll("script")]) {
