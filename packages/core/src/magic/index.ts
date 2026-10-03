@@ -7,6 +7,6 @@ export { classify, credentialsFor, DEFAULT_DENY_PATHS, isDeniedPath, redact } fr
 export { execCommand, sandboxAvailable, sandboxProfile, type SandboxMode } from "./sandbox.ts";
 export { runSource, preview, type MagicSource, type SourceResult } from "./sources.ts";
 export { TOOL_SPECS, toolsFor, runTool } from "./tools.ts";
-export { buildSystem, buildRequest, PROMPT_DIR } from "./prompt.ts";
+export { buildSystem, buildRequest, PROMPT_DIR, type Workspace } from "./prompt.ts";
 export { widgetHtml, widgetTokens, SIZES, type ThemeLike } from "./host.ts";
 export { readSecrets } from "../secrets.ts";

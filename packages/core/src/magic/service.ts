@@ -9,6 +9,7 @@ import { backendFor, isProvider, type Backend } from "./backends.ts";
 import { listModels } from "./models.ts";
 import { DEFAULT_DENY_PATHS } from "./policy.ts";
 import { runMagic, type MagicEvent } from "./run.ts";
+import type { Workspace } from "./prompt.ts";
 import { sandboxAvailable, type SandboxMode } from "./sandbox.ts";
 import { runSource, type SourceResult } from "./sources.ts";
 
@@ -32,6 +33,8 @@ export interface MagicServiceOptions {
   sandbox?: SandboxMode;
   /** Where a window's agent and source commands run (its Space's root); default: home. */
   cwdFor?: (w: AppWindow) => string;
+  /** The window's Space, unless it is Home: named in the request, so "this project" means its folder. */
+  workspaceFor?: (w: AppWindow) => Workspace | null;
 }
 
 const PERSIST_DATA_MS = 60_000;
@@ -156,6 +159,7 @@ export class MagicService {
       prompt: request,
       backend,
       cwd: this.#cwd(w),
+      workspace: this.#o.workspaceFor?.(w) ?? null,
       explore: s["magic.explore"],
       sandbox: this.#sandbox(),
       deny: DEFAULT_DENY_PATHS,

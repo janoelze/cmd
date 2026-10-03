@@ -28,8 +28,26 @@ export function buildSystem(file?: string): string {
   return `${main}\n\n# Examples\n\n${examples.join("\n\n")}\n`;
 }
 
+/** The Space a window belongs to (not Home): what "this project" or a relative path means. */
+export interface Workspace {
+  name: string;
+  root: string;
+}
+
+/** Files that say what kind of folder a workspace is, checked cheaply (no reads). */
+const MARKERS = [".git", "package.json", "pnpm-workspace.yaml", "Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt", "Gemfile", "Package.swift", "pom.xml", "build.gradle", "composer.json", "Makefile", "docker-compose.yml", "compose.yaml"];
+
+function describeFolder(root: string): string {
+  const has = MARKERS.filter((m) => fs.existsSync(path.join(root, m)));
+  const git = has.includes(".git");
+  const files = has.filter((m) => m !== ".git");
+  return [git ? "a git repository" : "", files.length ? `with ${files.join(", ")}` : ""].filter(Boolean).join(" ") || "a folder";
+}
+
 export interface RequestContext {
   cwd: string;
+  /** The window's Space, when it has one besides Home. */
+  workspace?: Workspace | null;
   home?: string;
   now?: Date;
   explore: boolean;
@@ -37,7 +55,7 @@ export interface RequestContext {
   canRun?: boolean;
 }
 
-/** The user message: the request plus where and when it was made. */
+/** The user message: the request plus where (machine, folder, the window's workspace) and when it was made. */
 export function buildRequest(prompt: string, c: RequestContext): string {
   const now = c.now ?? new Date();
   const home = c.home ?? os.homedir();
@@ -48,6 +66,12 @@ export function buildRequest(prompt: string, c: RequestContext): string {
     "",
     `Context: macOS ${os.release()} (Darwin), user ${os.userInfo().username}, home ${home}, current folder ${short(c.cwd)}, ${now.toLocaleString("en-GB", { timeZone: tz })} ${tz}.`,
   ];
+  if (c.workspace) {
+    lines.push(
+      `Workspace: this window belongs to the Space "${c.workspace.name}" at ${short(c.workspace.root)} (${describeFolder(c.workspace.root)}). ` +
+        `The person is working there: "this project", "the repo", "my code", "the tests", a branch or a relative path mean this folder unless the request names another place, and the tools start there.`,
+    );
+  }
   if (!c.explore) lines.push("Looking around this Mac is off for this request: answer without the run, read and list tools.");
   else if (c.canRun === false) lines.push(`Shell commands can't run here (${process.platform === "win32" ? "Windows" : "no sandbox"}): there is no run tool, and command sources fail. Use read and list, and fetch sources.`);
   return lines.join("\n");

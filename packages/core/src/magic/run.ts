@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import type { Backend, Usage } from "./backends.ts";
 import { AnswerStream, parseAnswer, type MagicHeader } from "./contract.ts";
 import { DEFAULT_DENY_PATHS } from "./policy.ts";
-import { buildRequest, buildSystem } from "./prompt.ts";
+import { buildRequest, buildSystem, type Workspace } from "./prompt.ts";
 import { commandsSupported, type SandboxMode } from "./sandbox.ts";
 import { redact } from "./policy.ts";
 import { preview, runSource, sourceKey, type SourceResult } from "./sources.ts";
@@ -22,6 +22,8 @@ export interface MagicOptions {
   prompt: string;
   backend: Backend;
   cwd?: string;
+  /** The window's Space (not Home), named in the request so "this project" resolves. */
+  workspace?: Workspace | null;
   /** Let the agent look around this Mac (run, read, list). */
   explore?: boolean;
   /** Tool calls before the agent must answer. */
@@ -149,7 +151,7 @@ export async function runMagic(o: MagicOptions): Promise<MagicResult> {
   const system = buildSystem(o.systemFile);
   const canRun = commandsSupported(ctx.sandbox);
   const tools = toolsFor(explore).filter((t) => canRun || t.name !== "run");
-  const messages: { role: "user" | "assistant"; content: string }[] = [{ role: "user", content: buildRequest(o.prompt, { cwd, explore, canRun }) }];
+  const messages: { role: "user" | "assistant"; content: string }[] = [{ role: "user", content: buildRequest(o.prompt, { cwd, workspace: o.workspace, explore, canRun }) }];
   const usage = { ...EMPTY_USAGE, costUSD: 0 };
   const repairs: string[] = [];
   let model = o.backend.model;

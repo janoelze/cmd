@@ -129,3 +129,47 @@ describe("choosing a backend", () => {
     expect(r.settings["magic.anthropic.model"]).toBe("claude-haiku-4-5");
   });
 });
+
+describe("the window's workspace", () => {
+  it("is named in the request, with what kind of folder it is", async () => {
+    const { buildRequest } = await import("../src/magic/prompt.ts");
+    const root = tmp();
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.writeFileSync(path.join(root, "package.json"), "{}");
+    const text = buildRequest("open pull requests", { cwd: root, workspace: { name: "shop", root }, explore: true });
+    expect(text).toContain(`Workspace: this window belongs to the Space "shop" at ${root} (a git repository with package.json).`);
+    expect(text).toMatch(/"this project", "the repo".*mean this folder/);
+    expect(buildRequest("a timer", { cwd: root, workspace: null, explore: true })).not.toContain("Workspace:");
+  });
+
+  it("is the window's Space, not Home", async () => {
+    const { Core } = await import("../src/core.ts");
+    const { fakeFactory } = await import("./fake-pty.ts");
+    const home = fs.realpathSync(tmp());
+    const proj = path.join(home, "shop");
+    fs.mkdirSync(proj);
+    const seen: string[] = [];
+    const answer = '{"kind":"widget","title":"T","size":"s"}\n---\n<div>t</div>';
+    const backend = {
+      name: "fake",
+      model: "fake-1",
+      async run(r: { messages: { content: string }[]; onTurn: () => void; onText: (d: string) => void }) {
+        seen.push(r.messages[0]!.content);
+        r.onTurn();
+        r.onText(answer);
+        return { text: answer, model: "fake-1", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+      },
+    };
+    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, home, magicBackend: () => backend as never });
+    const sp = (await core.call("space.open", { path: proj })).space;
+    const inSpace = core.handlers["window.open"]({ kind: "magic", input: {}, spaceId: sp.id }) as unknown as { id: string };
+    const inHome = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
+    core.handlers["magic.run"]({ id: inSpace.id, prompt: "what changed today" });
+    core.handlers["magic.run"]({ id: inHome.id, prompt: "what changed today" });
+    const end = Date.now() + 3000;
+    while (seen.length < 2 && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
+    expect(seen.find((t) => t.includes("Workspace:"))).toContain(`the Space "shop" at ${proj}`);
+    expect(seen.filter((t) => t.includes("Workspace:"))).toHaveLength(1);
+    await core.close();
+  });
+});

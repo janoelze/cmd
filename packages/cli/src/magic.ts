@@ -5,6 +5,7 @@
 // packages/core/src/magic/prompt/ on every run, so edits apply immediately.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -363,6 +364,8 @@ export async function magicCommand(argv: string[]): Promise<number> {
       prompt,
       backend,
       cwd: process.cwd(),
+      // Run from a project folder, it is the workspace, as a window's Space is in the app.
+      workspace: process.cwd() !== os.homedir() ? { name: path.basename(process.cwd()), root: process.cwd() } : null,
       explore: !o["no-explore"],
       noFast: o["no-fast"],
       maxSteps: o["max-steps"] ? Number(o["max-steps"]) : undefined,

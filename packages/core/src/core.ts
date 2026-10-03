@@ -130,7 +130,12 @@ export class Core {
     this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
     this.secrets = new SecretsService(opts.secretsPath ?? null);
     this.secrets.on("updated", (status) => this.#broadcast({ type: "secrets.updated", status }));
-    this.magic = new MagicService({ windows: this.windows, settings, secret: (k) => this.secrets.get(k), broadcast: (e) => this.#broadcast(e), backend: opts.magicBackend, cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root });
+    this.magic = new MagicService({ windows: this.windows, settings, secret: (k) => this.secrets.get(k), broadcast: (e) => this.#broadcast(e), backend: opts.magicBackend, cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root,
+      workspaceFor: (w) => {
+        const sp = this.spaces.get(w.spaceId);
+        return sp && !sp.home ? { name: sp.name, root: sp.root } : null;
+      },
+    });
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
     this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
