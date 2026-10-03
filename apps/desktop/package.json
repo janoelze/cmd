@@ -1,5 +1,8 @@
 {
   "name": "@cmd/desktop",
+  "version": "0.1.0",
+  "description": "Terminal and coding-agent workbench",
+  "author": "Jan Oelze",
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
@@ -7,7 +10,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dist": "electron-builder --mac"
   },
   "dependencies": {
     "@cmd/protocol": "workspace:*",
@@ -33,6 +37,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "vite": "^7.0.0"
   }

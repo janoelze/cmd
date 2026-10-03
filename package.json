@@ -14,7 +14,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && pnpm --filter @cmd/desktop typecheck",
     "postinstall": "node scripts/postinstall.mjs",
     "build": "pnpm --filter @cmd/desktop build",
-    "e2e": "pnpm build && node e2e/smoke.mjs"
+    "e2e": "pnpm build && node e2e/smoke.mjs",
+    "dist": "pnpm build && node scripts/stage-runtime.mjs && pnpm --filter @cmd/desktop dist"
   },
   "devDependencies": {
     "@types/node": "^24.9.0",

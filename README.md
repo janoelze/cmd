@@ -34,6 +34,12 @@ pnpm cmd ls
 
 Inside the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
+## Packaging and releases
+
+`pnpm dist` builds `apps/desktop/dist/cmd-<version>-arm64.{dmg,zip}`. The app ships the core's TypeScript source in `Contents/Resources/runtime` (staged by `scripts/stage-runtime.mjs`) and runs it with Electron's own Node, so no system `node` is needed.
+
+CI (`.github/workflows/build.yml`) typechecks, tests and packages every push. Pushing a `v*` tag (`git tag v0.2.0 && git push --tags`) publishes a GitHub release. Signing and notarization run when the `MAC_CERT_P12_BASE64`, `MAC_CERT_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` secrets exist; without them the app is ad-hoc signed, and you open it the first time with right-click → Open.
+
 ## CLI
 
 ```sh

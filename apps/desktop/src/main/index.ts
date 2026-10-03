@@ -23,7 +23,9 @@ protocol.registerSchemesAsPrivileged([{ scheme: "cmd-file", privileges: { secure
 const CMD_FILE_TYPES = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico|mp4|webm|mov|mp3|m4a|wav)$/i;
 
 const here = import.meta.dirname; // apps/desktop/out/main
-const repoRoot = path.resolve(here, "../../../..");
+// Packaged builds ship the core's source tree in Resources/runtime (see
+// scripts/stage-runtime.mjs) and run it with Electron's own Node.
+const repoRoot = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(here, "../../../..");
 const socketPath = defaultSocketPath();
 
 function canConnect(): Promise<boolean> {
@@ -74,7 +76,9 @@ async function ensureCore(): Promise<void> {
   const log = fs.openSync(path.join(home, "core.log"), "a");
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
-  const child = spawn("node", ["--no-warnings", path.join(repoRoot, "packages/core/src/main.ts")], {
+  let node = "node";
+  if (app.isPackaged) (node = process.execPath), (env.ELECTRON_RUN_AS_NODE = "1");
+  const child = spawn(node, ["--no-warnings", path.join(repoRoot, "packages/core/src/main.ts")], {
     detached: true,
     stdio: ["ignore", log, log],
     env,

@@ -1,0 +1,26 @@
+# Packages the built app (out/) plus the staged core runtime (.runtime, from
+# scripts/stage-runtime.mjs) into a macOS .app, .dmg and .zip.
+# Signing and notarization kick in when CSC_LINK / APPLE_* are set (see .github/workflows).
+appId: dev.janoelze.cmd
+productName: cmd
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - "!node_modules/**/*"
+extraResources:
+  - from: .runtime
+    to: runtime
+npmRebuild: false
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  artifactName: ${productName}-${version}-${arch}.${ext}
+publish: null

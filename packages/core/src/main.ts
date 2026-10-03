@@ -11,6 +11,10 @@ import { defaultRoots } from "./search/index.ts";
 import { SearchService } from "./search/service.ts";
 import { SettingsService } from "./settings.ts";
 
+// The packaged app runs the core as `Electron` with ELECTRON_RUN_AS_NODE; don't
+// pass that on to shells, or every Electron app started from a pane runs as Node.
+delete process.env.ELECTRON_RUN_AS_NODE;
+
 const procinfo = new ProcInfo();
 if (!procinfo.available) console.warn("cmd core: native/build/procinfo missing (run pnpm install); agent detection falls back to process names");
 
