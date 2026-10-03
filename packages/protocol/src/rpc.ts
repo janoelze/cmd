@@ -66,6 +66,15 @@ export interface Methods {
   "settings.set": { params: { key: string; value: unknown }; result: SettingsSnapshot };
   "settings.reset": { params: { key: string }; result: SettingsSnapshot };
 
+  /** Full-text search over Claude Code / Codex transcripts. */
+  "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };
+  "search.status": { params: {}; result: SearchStatus };
+  /** Resume (or fork) a past session in a new pane, typed into the user's shell. */
+  "agent.resume": {
+    params: { agent: "claude" | "codex"; sessionId: string; cwd?: string | null; configDir?: string | null; fork?: boolean };
+    result: Agent;
+  };
+
   /** Persisted UI state, owned by the UI; the core only stores it. */
   "ui.get": { params: {}; result: Record<string, unknown> };
   /** null deletes the key. Values must be JSON, ≤ 64 KiB. */
@@ -88,7 +97,30 @@ export type CoreEvent =
   | { type: "pane.removed"; paneId: PaneId }
   | { type: "agent.updated"; agent: Agent }
   | { type: "agent.removed"; agentId: AgentId }
-  | { type: "settings.updated"; snapshot: SettingsSnapshot };
+  | { type: "settings.updated"; snapshot: SettingsSnapshot }
+  | { type: "search.status"; status: SearchStatus };
+
+export interface SearchHit {
+  sessionId: string;
+  agent: "claude" | "codex";
+  path: string;
+  configDir: string | null;
+  cwd: string | null;
+  branch: string | null;
+  title: string;
+  updatedAt: number | null;
+  /** Matching passage; \x01…\x02 mark highlighted terms. */
+  snippet: string | null;
+  fuzzy: boolean;
+}
+
+export interface SearchStatus {
+  sessions: number;
+  files: number;
+  indexing: boolean;
+  done: number;
+  total: number;
+}
 
 export interface RpcRequest {
   jsonrpc: "2.0";

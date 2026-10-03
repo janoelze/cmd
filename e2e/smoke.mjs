@@ -12,12 +12,26 @@ fs.mkdirSync(home, { recursive: true });
 const shots = path.join(root, ".cmd-dev", "shots");
 fs.mkdirSync(shots, { recursive: true });
 
+// Fixture transcripts (instead of the real ~/.claude) and a harmless agent command.
+const transcripts = path.join(home, "transcripts-home");
+const project = path.join(transcripts, ".claude", "projects", "-tmp-demo");
+fs.mkdirSync(project, { recursive: true });
+fs.writeFileSync(
+  path.join(project, "e2e-session-1.jsonl"),
+  [
+    { type: "user", sessionId: "e2e-session-1", cwd: home, timestamp: new Date().toISOString(), message: { role: "user", content: "make the wireguard vpn reconnect automatically" } },
+    { type: "assistant", sessionId: "e2e-session-1", message: { role: "assistant", content: [{ type: "text", text: "Added a launchd job that runs wg-quick up on network change." }] } },
+    { type: "ai-title", aiTitle: "VPN auto reconnect" },
+  ].map((o) => JSON.stringify(o)).join("\n") + "\n",
+);
+fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "agents.claude.command": "echo claude" }));
+
 const require = createRequire(path.join(root, "apps/desktop/package.json"));
 const launch = async () => {
   const app = await electron.launch({
     executablePath: require("electron"),
     args: [path.join(root, "apps/desktop")],
-    env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1" },
+    env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_TRANSCRIPTS_HOME: transcripts },
   });
   const win = await app.firstWindow();
   win.on("pageerror", (e) => console.log("pageerror:", e.message));
@@ -129,6 +143,27 @@ await win.screenshot({ path: path.join(shots, "4-palette.png") });
 await menu("file.close"); // ⌘W closes the palette first
 check((await win.locator(".palette").count()) === 0, "⌘W closes the palette before any terminal");
 check((await panes()) === 2, "…and leaves terminals alone");
+
+// Session search: ?query in the palette, Enter resumes the session in a new terminal.
+{
+  await menu("view.search");
+  await win.waitForSelector(".palette.searching");
+  await win.keyboard.type("wiregaurd"); // typo on purpose
+  await win.waitForSelector(".palette-list li.rich", { timeout: 15000 });
+  const label = await win.locator(".palette-list li.rich .palette-label").first().textContent();
+  const snippet = await win.locator(".palette-snippet mark").first().textContent();
+  check(label === "VPN auto reconnect" && /wireguard/i.test(snippet ?? ""), `session search finds past sessions, typo-tolerant (${label}: ${snippet})`);
+  await win.screenshot({ path: path.join(shots, "4b-search.png") });
+  const before = await panes();
+  await win.keyboard.press("Enter");
+  await win.waitForTimeout(1500);
+  const agents = await win.evaluate(() => window.cmd.call("agent.list", {}));
+  check((await panes()) === before + 1 && agents.some((a) => a.native.claudeSessionId === "e2e-session-1"), "Enter resumes the session in a new terminal");
+  // the resumed "agent" is just echo; close its terminal directly (no confirmation sheet)
+  const resumed = agents.find((a) => a.native.claudeSessionId === "e2e-session-1");
+  await win.evaluate((id) => window.cmd.call("pane.kill", { paneId: id }), resumed.paneId);
+  await win.waitForTimeout(600);
+}
 
 await menu("app.settings");
 await win.waitForSelector(".settings");

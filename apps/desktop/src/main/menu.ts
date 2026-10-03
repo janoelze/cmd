@@ -93,6 +93,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("view.tools"),
         sep,
         ...i("view.palette"),
+        ...i("view.search"),
         sep,
         ...i("view.zoomIn"),
         ...i("view.zoomOut"),

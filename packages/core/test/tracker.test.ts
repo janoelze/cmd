@@ -179,3 +179,17 @@ describe("launch commands", () => {
     expect(ptys[0]!.written).toEqual(["ls\r"]);
   });
 });
+
+describe("launch failures", () => {
+  it("drops a launched agent whose process never appears", async () => {
+    vi.useFakeTimers();
+    const f = fakeFactory();
+    const p = new PaneManager(f.factory, { socketPath: "/tmp/t.sock", pollMs: 0 });
+    const t = new AgentTracker(p, { startTimeoutMs: 1000 });
+    const a = t.spawn({ kind: "claude", prompt: "hi" });
+    await p.pollForeground(); // still the shell
+    vi.advanceTimersByTime(1500);
+    expect(t.get(a.id)).toBeNull();
+    expect(p.get(a.paneId!)!.agentId).toBeNull();
+  });
+});

@@ -3,6 +3,9 @@
 // See docs/05-agent-integration.md and docs/08-host-agents.md.
 
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { EventEmitter } from "node:events";
 import type { Agent, AgentId, AgentKind, AgentState, Methods, PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, ENV } from "@cmd/protocol";
@@ -16,6 +19,8 @@ export interface TrackerOptions {
   settings?: () => Settings;
   /** Hook status directory to watch (statusRoot()); null disables. */
   statusRoot?: string | null;
+  /** A launched agent whose process never shows up within this time is dropped. */
+  startTimeoutMs?: number;
 }
 
 export interface TrackerEvents {
@@ -35,6 +40,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #store: Store | null;
   #settings: () => Settings;
   #statusRoot: string | null;
+  #startTimeoutMs: number;
   #watcher: StatusWatcher | null = null;
   #backstop: NodeJS.Timeout | undefined;
 
@@ -44,6 +50,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     this.#store = o.store ?? null;
     this.#settings = o.settings ?? (() => DEFAULT_SETTINGS);
     this.#statusRoot = o.statusRoot ?? null;
+    this.#startTimeoutMs = o.startTimeoutMs ?? 15_000;
     if (this.#statusRoot) {
       this.#watcher = new StatusWatcher(this.#statusRoot);
       this.#watcher.on("changed", (paneId) => this.applyStatus(paneId));
@@ -209,6 +216,37 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const pane = this.#panes.create({ cwd, command, env });
     this.#panes.setAgent(pane.id, agent.id);
     this.#update(agent, {}, { paneId: pane.id, cwd: pane.cwd });
+    this.#expectStart(agent.id);
+    return this.get(agent.id)!;
+  }
+
+  /**
+   * If the launch command fails (typo, missing binary) or exits at once, the agent's
+   * process never appears; drop the record once the pane is back at a shell.
+   */
+  #expectStart(id: AgentId): void {
+    const t = setTimeout(() => {
+      const a = this.#agents.get(id);
+      if (!a || this.#started.has(id) || a.state !== "starting" || !a.paneId) return;
+      const fg = this.#panes.foreground(a.paneId);
+      if (!fg || fg.class.kind === "shell") this.#exit(a);
+    }, this.#startTimeoutMs);
+    t.unref();
+  }
+
+  /** Resume (or fork) a past session in a new pane. */
+  resume(p: Methods["agent.resume"]["params"]): Agent {
+    const cwd = p.cwd && fs.existsSync(p.cwd) ? p.cwd : os.homedir();
+    const agent = this.#create({ kind: p.agent, paneId: null, source: "restored", cwd, state: "starting" });
+    if (!p.fork) {
+      if (p.agent === "codex") agent.native.codexThreadId = p.sessionId;
+      else agent.native.claudeSessionId = p.sessionId;
+    }
+    const command = resumeCommand(p.agent, p.sessionId, p.configDir ?? null, !!p.fork, this.#settings());
+    const pane = this.#panes.create({ cwd, command, env: { [ENV.agentId]: agent.id } });
+    this.#panes.setAgent(pane.id, agent.id);
+    this.#update(agent, {}, { paneId: pane.id });
+    this.#expectStart(agent.id);
     return this.get(agent.id)!;
   }
 
@@ -381,6 +419,29 @@ function statusChange(kind: AgentKind, s: HookStatus): StateChange {
   }
   if (s.transcriptPath) native.transcriptPath = s.transcriptPath;
   return { state: s.state, detail, native, cwd: s.cwd ?? undefined };
+}
+
+/** Claude's default config dir; sessions elsewhere (profiles) need CLAUDE_CONFIG_DIR to resume. */
+function isDefaultClaudeDir(dir: string): boolean {
+  const def = path.join(os.homedir(), ".claude");
+  try {
+    return fs.realpathSync(dir) === fs.realpathSync(def);
+  } catch {
+    return dir === def;
+  }
+}
+
+/** Command that resumes (or forks) a session; typed into the shell so wrappers apply. */
+export function resumeCommand(
+  kind: "claude" | "codex",
+  sessionId: string,
+  configDir: string | null,
+  fork: boolean,
+  settings: Settings = DEFAULT_SETTINGS,
+): string {
+  if (kind === "codex") return `${settings["agents.codex.command"]} ${fork ? "fork" : "resume"} ${shq(sessionId)}`;
+  const env = configDir && !isDefaultClaudeDir(configDir) ? `CLAUDE_CONFIG_DIR=${shq(configDir)} ` : "";
+  return `${env}${settings["agents.claude.command"]} --resume ${shq(sessionId)}${fork ? " --fork-session" : ""}`;
 }
 
 /** Shell-quote for zsh/bash. */

@@ -2,7 +2,7 @@
 // goes straight to the xterm instances (see terminals.ts).
 
 import { useSyncExternalStore } from "react";
-import type { Agent, AgentId, CoreEvent, Pane, PaneId, SettingsSnapshot } from "@cmd/protocol";
+import type { Agent, AgentId, CoreEvent, Pane, PaneId, SearchStatus, SettingsSnapshot } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -14,6 +14,8 @@ export interface State {
   settings: SettingsSnapshot;
   /** Why the UI is not connected, if known. */
   error?: string;
+  /** Transcript index status (search). */
+  search: SearchStatus | null;
   /** Persisted UI state (see usePersisted). Loaded with the first snapshot. */
   ui: Record<string, unknown>;
 }
@@ -24,6 +26,7 @@ let state: State = {
   agents: new Map(),
   settings: { settings: DEFAULT_SETTINGS, overrides: [], errors: [], path: "" },
   ui: {},
+  search: null,
 };
 const listeners = new Set<() => void>();
 const agentListeners = new Set<(prev: Agent | undefined, next: Agent) => void>();
@@ -123,6 +126,9 @@ function handle(e: CoreEvent): void {
       for (const fn of agentListeners) fn(prev, e.agent);
       return;
     }
+    case "search.status":
+      set({ search: e.status });
+      return;
     case "settings.updated":
       terminals.configure(e.snapshot.settings);
       set({ settings: e.snapshot });
@@ -162,6 +168,7 @@ cmd.onStatus(async (status) => {
     panes: new Map(snap.panes.map((p) => [p.id, p])),
     agents: new Map(snap.agents.map((a) => [a.id, a])),
   });
+  void cmd.call("search.status", {}).then((search) => set({ search }), () => {});
   await Promise.all(
     snap.panes.map(async (p) => {
       try {

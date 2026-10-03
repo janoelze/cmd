@@ -4,6 +4,7 @@ import { bucketOf, needsAttention } from "@cmd/protocol";
 import { COMMANDS, prettyAccelerator, type CommandId } from "../../shared/commands.ts";
 import { cmd } from "./bridge.ts";
 import {
+  selectPane,
   bindSelection,
   closePane,
   copy,
@@ -16,7 +17,8 @@ import {
 } from "./actions.ts";
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
-import { arrangeTiles, buildRows, flatten, nextAfterClose, pushHistory, rowTitle, shortPath, type SidebarRow } from "./model.ts";
+import { ago, arrangeTiles, buildRows, flatten, nextAfterClose, pushHistory, rowTitle, shortPath, type SidebarRow } from "./model.ts";
+import type { SearchHit, SearchStatus } from "@cmd/protocol";
 import { getState, onAgentChange, usePersisted, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
@@ -26,6 +28,22 @@ import { Palette, type PaletteItem } from "./components/Palette.tsx";
 import { Sidebar, type SidebarTab } from "./components/Sidebar.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
+
+function searchStatusLabel(s: SearchStatus | null): string {
+  if (!s) return "";
+  if (s.indexing && s.total) return `Indexing ${s.done.toLocaleString()} / ${s.total.toLocaleString()}…`;
+  return `${s.sessions.toLocaleString()} session${s.sessions === 1 ? "" : "s"} indexed`;
+}
+
+/** Switch to a session if it is open in a terminal, otherwise resume it in a new one. */
+async function openSession(h: SearchHit): Promise<void> {
+  const live = [...getState().agents.values()].find(
+    (a) => a.paneId && (a.native.claudeSessionId === h.sessionId || a.native.codexThreadId === h.sessionId),
+  );
+  if (live?.paneId) return selectPane(live.paneId);
+  const agent = await cmd.call("agent.resume", { agent: h.agent, sessionId: h.sessionId, cwd: h.cwd, configDir: h.configDir });
+  if (agent.paneId) selectPane(agent.paneId);
+}
 
 /** True when a text field (palette, settings) has focus, so Edit commands target it. */
 const editingText = () => {
@@ -58,7 +76,8 @@ export function App() {
       return next;
     });
   // Transient: sheets don't reopen on launch.
-  const [palette, setPalette] = useState(false);
+  /** Palette open, with an optional initial query ("?" for session search). */
+  const [palette, setPalette] = useState<false | string>(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => terminals.setZoom(zoom), [zoom]);
@@ -168,7 +187,7 @@ export function App() {
     "file.newCodex": () => void newAgent("codex"),
     "file.close": () => {
       // ⌘W closes the frontmost thing: an open sheet, then the terminal, then the window.
-      if (palette) setPalette(false);
+      if (palette !== false) setPalette(false);
       else if (settingsOpen) setSettingsOpen(false);
       else if (selected) void closePane(selected);
       else cmd.closeWindow();
@@ -183,7 +202,8 @@ export function App() {
       else terminals.selectAll(selected);
     },
     "edit.clear": () => selected && terminals.clear(selected),
-    "view.palette": () => setPalette((p) => !p),
+    "view.palette": () => setPalette((p) => (p === false ? "" : false)),
+    "view.search": () => setPalette("?"),
     "view.focus": () => setMode("focus"),
     "view.grid": () => setMode("grid"),
     "view.strip": () => setMode("strip"),
@@ -299,6 +319,22 @@ export function App() {
     };
   }, [s.agents]);
 
+  // ?query in the palette: past agent sessions. Enter switches to a live one, else resumes it.
+  const searchSessions = useCallback(async (text: string): Promise<PaletteItem[]> => {
+    const hits = await cmd.call("search.query", { text, limit: 40 });
+    const now = Date.now();
+    return hits.map((h) => ({
+      id: `h-${h.agent}-${h.sessionId}`,
+      group: "History" as const,
+      label: h.title || "(untitled session)",
+      meta: [h.agent, h.cwd ? shortPath(h.cwd) : null, h.branch, h.updatedAt ? ago(h.updatedAt, now) : null, h.fuzzy ? "~" : null]
+        .filter(Boolean)
+        .join(" · "),
+      snippet: h.snippet,
+      run: () => void openSession(h),
+    }));
+  }, []);
+
   const remember = (id: string) => setRecent((r) => [id, ...r.filter((x) => x !== id)].slice(0, 20));
   const paletteItems: PaletteItem[] = [
     ...COMMANDS.filter((c) => !("paletteHidden" in c) && c.id !== "view.palette").map((c) => ({
@@ -355,7 +391,17 @@ export function App() {
         onStripWidth={setStripWidth}
       />
       <StatusBar mode={mode} row={currentRow} pane={current} run={run} />
-      {palette && <Palette items={paletteItems} recent={recent} onRun={remember} onClose={() => setPalette(false)} />}
+      {palette !== false && (
+        <Palette
+          items={paletteItems}
+          recent={recent}
+          onRun={remember}
+          onClose={() => setPalette(false)}
+          initialQuery={palette}
+          search={searchSessions}
+          searchStatus={searchStatusLabel(s.search)}
+        />
+      )}
       {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
     </div>
   );

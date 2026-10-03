@@ -9,6 +9,11 @@ type Selector = (paneId: PaneId) => void;
 let select: Selector = () => {};
 let currentPane: () => PaneId | null = () => null;
 
+/** Select a pane from outside React (e.g. after resuming a session). */
+export function selectPane(id: PaneId): void {
+  select(id);
+}
+
 export function bindSelection(fn: Selector, current: () => PaneId | null): void {
   select = fn;
   currentPane = current;

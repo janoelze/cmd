@@ -2,13 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface PaletteItem {
   id: string;
-  group: "Commands" | "Sessions" | "Tools";
+  group: "Commands" | "Sessions" | "Tools" | "History";
   label: string;
   hint?: string;
+  /** Second line (search results): agent · folder · when. */
+  meta?: string;
+  /** Matching passage; \x01…\x02 mark highlighted terms. */
+  snippet?: string | null;
   run: () => void;
 }
 
 const PREFIX: Record<string, PaletteItem["group"]> = { ">": "Commands", "@": "Sessions", "#": "Tools" };
+/** `?query` searches agent transcripts (async, in the core). */
+const SEARCH_PREFIX = "?";
 
 /** Subsequence match; earlier and tighter matches score higher. */
 function score(label: string, q: string): number {
@@ -27,25 +33,62 @@ function score(label: string, q: string): number {
   return Math.max(1, 50 - gaps);
 }
 
+/** Render \x01…\x02 markers as highlights. */
+function Highlighted({ text }: { text: string }) {
+  const parts = text.split(/(\x01[^\x02]*\x02)/);
+  return (
+    <>
+      {parts.map((p, i) => (p.startsWith("\x01") ? <mark key={i}>{p.slice(1, -1)}</mark> : <span key={i}>{p}</span>))}
+    </>
+  );
+}
+
 export function Palette({
   items,
   recent = [],
   onRun,
   onClose,
+  initialQuery = "",
+  search,
+  searchStatus,
 }: {
   items: PaletteItem[];
   /** Recently run item ids, most recent first; ranked first. */
   recent?: string[];
   onRun?: (id: string) => void;
   onClose: () => void;
+  initialQuery?: string;
+  /** Transcript search for `?query`. */
+  search?: (text: string) => Promise<PaletteItem[]>;
+  /** Shown in the footer while searching, e.g. "3,836 sessions indexed". */
+  searchStatus?: string;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [active, setActive] = useState(0);
+  const [found, setFound] = useState<PaletteItem[] | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const searching = query.startsWith(SEARCH_PREFIX);
+  const searchText = searching ? query.slice(1).trim() : "";
 
   useEffect(() => input.current?.focus(), []);
 
+  // Debounced transcript search; stale responses are dropped.
+  useEffect(() => {
+    if (!searching || !search) return setFound(null);
+    if (!searchText) return setFound([]);
+    setFound(null);
+    let live = true;
+    const t = setTimeout(() => {
+      void search(searchText).then((r) => live && setFound(r));
+    }, 120);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [searching, searchText, search]);
+
   const results = useMemo(() => {
+    if (searching) return found ?? [];
     const group = PREFIX[query[0] ?? ""];
     const q = (group ? query.slice(1) : query).trim().toLowerCase();
     return items
@@ -60,7 +103,7 @@ export function Palette({
       .sort((a, b) => b.s - a.s)
       .slice(0, 50)
       .map((x) => x.it);
-  }, [items, query, recent]);
+  }, [items, query, recent, searching, found]);
 
   useEffect(() => setActive(0), [query]);
 
@@ -71,13 +114,21 @@ export function Palette({
     it.run();
   };
 
+  const empty = searching
+    ? searchText
+      ? found === null
+        ? "Searching…"
+        : "No sessions match."
+      : 'Search past Claude Code and Codex sessions. "Phrases" and -exclusions work.'
+    : "Nothing matches. Type ? to search past agent sessions.";
+
   return (
     <div className="palette-backdrop" onMouseDown={onClose}>
-      <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={`palette ${searching ? "searching" : ""}`} onMouseDown={(e) => e.stopPropagation()}>
         <input
           ref={input}
           className="palette-input"
-          placeholder="Type a command, @session, #tool…"
+          placeholder="Type a command, @session, #tool, ?search…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -91,21 +142,47 @@ export function Palette({
           {results.map((it, i) => (
             <li
               key={it.id}
-              className={i === active ? "on" : ""}
+              className={`${i === active ? "on" : ""} ${it.meta ? "rich" : ""}`}
               onMouseEnter={() => setActive(i)}
               onClick={() => run(it)}
             >
-              <span className="palette-group">{it.group}</span>
-              <span className="palette-label">{it.label}</span>
-              {it.hint && <kbd>{it.hint}</kbd>}
+              {it.meta ? (
+                <div className="palette-hit">
+                  <div className="palette-hit-top">
+                    <span className="palette-label">{it.label}</span>
+                    <span className="palette-meta">{it.meta}</span>
+                  </div>
+                  {it.snippet && (
+                    <div className="palette-snippet">
+                      <Highlighted text={it.snippet} />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <span className="palette-group">{it.group}</span>
+                  <span className="palette-label">{it.label}</span>
+                  {it.hint && <kbd>{it.hint}</kbd>}
+                </>
+              )}
             </li>
           ))}
-          {results.length === 0 && <li className="palette-empty">Nothing matches. Transcript search (?) is next.</li>}
+          {results.length === 0 && <li className="palette-empty">{empty}</li>}
         </ul>
         <footer className="palette-foot">
-          <span><kbd>↑↓</kbd> move</span>
-          <span><kbd>↵</kbd> run</span>
-          <span><kbd>&gt;</kbd> commands <kbd>@</kbd> sessions <kbd>#</kbd> tools</span>
+          <span>
+            <kbd>↑↓</kbd> move
+          </span>
+          <span>
+            <kbd>↵</kbd> {searching ? "open or resume" : "run"}
+          </span>
+          {searching ? (
+            <span className="palette-status">{searchStatus}</span>
+          ) : (
+            <span>
+              <kbd>&gt;</kbd> commands <kbd>@</kbd> sessions <kbd>#</kbd> tools <kbd>?</kbd> search
+            </span>
+          )}
         </footer>
       </div>
     </div>

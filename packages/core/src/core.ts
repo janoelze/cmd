@@ -8,6 +8,7 @@ import { lineSplitter } from "@cmd/protocol";
 import { AgentTracker } from "./agents/tracker.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
+import type { SearchService } from "./search/service.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
 
@@ -27,6 +28,8 @@ export interface CoreOptions {
   sampler?: TreeSampler | null;
   /** Hook status directory (statusRoot()); null disables file-based hooks. */
   statusRoot?: string | null;
+  /** Transcript search (runs its own indexing worker); null disables search. */
+  search?: SearchService | null;
   /** Source hash this core was started from (see sourceBuildId). */
   build?: string;
 }
@@ -56,6 +59,7 @@ export class Core {
     });
     this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null });
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler) : null;
+    opts.search?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
 
     this.panes.on("output", (paneId, data) => this.#broadcast({ type: "pane.output", paneId, data }));
@@ -90,6 +94,10 @@ export class Core {
     "settings.get": () => this.settings.snapshot(),
     "settings.set": (p) => this.settings.set(p.key, p.value),
     "settings.reset": (p) => this.settings.reset(p.key),
+    "search.query": (p) => this.#opts.search?.search(p.text, p.limit) ?? [],
+    "search.status": () =>
+      this.#opts.search?.status() ?? { sessions: 0, files: 0, indexing: false, done: 0, total: 0 },
+    "agent.resume": (p) => this.agents.resume(p),
     "ui.get": () => this.store.uiState(),
     "ui.set": (p) => {
       if (typeof p.key !== "string" || !p.key || p.key.length > 200) throw new Error("ui.set: invalid key");
@@ -163,6 +171,7 @@ export class Core {
       fs.unlinkSync(this.#opts.socketPath);
     } catch {}
     this.resources?.close();
+    this.#opts.search?.close();
     this.agents.close();
     this.store.close();
     this.settings.close();

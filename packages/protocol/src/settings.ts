@@ -47,6 +47,13 @@ export const SETTINGS_SCHEMA = {
   "notifications.done": { type: "boolean", default: true, description: "Notify when an agent finishes a turn." },
   "notifications.dockBadge": { type: "boolean", default: true, description: "Show the attention count on the Dock icon." },
 
+  "search.enabled": { type: "boolean", default: true, description: "Index Claude Code and Codex transcripts for search (? in the palette)." },
+  "search.archiveDirs": {
+    type: "string",
+    default: "~/claude-transcripts-archive",
+    description: "Extra folders of archived Claude transcripts (*.jsonl) to index, comma-separated.",
+  },
+
   "agents.claude.command": {
     type: "string",
     default: "claude",

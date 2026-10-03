@@ -33,6 +33,7 @@ export const COMMANDS = spec([
   { id: "edit.clear", label: "Clear Buffer", keys: ["Alt+Cmd+K"] },
 
   { id: "view.palette", label: "Command Palette…", keys: ["Cmd+K"] },
+  { id: "view.search", label: "Search Sessions…", keys: ["Shift+Cmd+F"] },
   { id: "view.focus", label: "Focus", keys: ["Alt+Cmd+1"], checkable: "radio" },
   { id: "view.grid", label: "Grid", keys: ["Alt+Cmd+2"], checkable: "radio" },
   { id: "view.strip", label: "Strip", keys: ["Alt+Cmd+3"], checkable: "radio" },

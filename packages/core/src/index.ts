@@ -5,4 +5,6 @@ export { applyHook, describeTool } from "./agents/state.ts";
 export { classify, ProcInfo } from "./agents/procinfo.ts";
 export { deriveStatus, readStatus, statusRoot, STATUS_ENV } from "./agents/statusfiles.ts";
 export { SettingsService } from "./settings.ts";
+export { SearchService } from "./search/service.ts";
+export { Searcher, indexPass, openIndex, defaultRoots } from "./search/index.ts";
 export { OscScanner, parseOsc, stripAnsi } from "./osc.ts";

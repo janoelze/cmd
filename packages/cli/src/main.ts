@@ -21,6 +21,8 @@ usage: cmd <command> [options]
   events [--output]                   stream core events as NDJSON
   hook <kind>                         hook entry point: reads the hook payload on stdin
   hooks <kind>                        print hook config to add to the agent's settings
+  search <query…> [--json] [--limit N]  search past Claude Code / Codex sessions
+  resume <session-id> [--agent claude|codex] [--fork]
   settings [get KEY | set KEY VALUE | reset KEY | path] [--json]
                                       list or change settings (applies live)
 
@@ -45,6 +47,9 @@ const { values: opt, positionals: pos } = parseArgs({
     output: { type: "boolean" },
     "no-submit": { type: "boolean" },
     "no-parent": { type: "boolean" },
+    limit: { type: "string" },
+    agent: { type: "string" },
+    fork: { type: "boolean" },
   },
 });
 
@@ -140,6 +145,35 @@ async function run({ client, closed }: Connection): Promise<number> {
       if (!pos[0]) return fail("usage: cmd kill <agent>");
       const r = await client.call("agent.kill", { agentId: await resolveAgent(client, pos[0]), tree: !!opt.tree });
       return out(opt.json ? r : r.killed.map(short).join(" "));
+    }
+    case "search": {
+      const text = pos.join(" ");
+      if (!text) {
+        const st = await client.call("search.status", {});
+        return out(opt.json ? st : `${st.sessions} sessions indexed${st.indexing ? ` (indexing ${st.done}/${st.total})` : ""}`);
+      }
+      const hits = await client.call("search.query", { text, limit: Number(opt.limit ?? 20) });
+      if (opt.json) return out(hits);
+      for (const h of hits) {
+        const when = h.updatedAt ? new Date(h.updatedAt).toISOString().slice(0, 10) : "";
+        console.log(`${h.sessionId.slice(0, 8)}  ${h.agent.padEnd(6)} ${when}  ${h.title.slice(0, 70)}`);
+        if (h.snippet) console.log(`          ${h.snippet.replace(/\x01/g, "\x1b[1m").replace(/\x02/g, "\x1b[0m").slice(0, 160)}`);
+      }
+      if (!hits.length) console.log("(no matches)");
+      return 0;
+    }
+    case "resume": {
+      const id = pos[0];
+      if (!id) return fail("usage: cmd resume <session-id>");
+      const hit = (await client.call("search.query", { text: `"${id}"`, limit: 1 })).find((h) => h.sessionId === id);
+      const agent = await client.call("agent.resume", {
+        agent: (str(opt.agent) as "claude" | "codex") ?? hit?.agent ?? "claude",
+        sessionId: id,
+        cwd: hit?.cwd ?? process.cwd(),
+        configDir: hit?.configDir ?? null,
+        fork: !!opt.fork,
+      });
+      return out(opt.json ? agent : agent.id);
     }
     case "settings": {
       const [sub, key, ...rest] = pos;
