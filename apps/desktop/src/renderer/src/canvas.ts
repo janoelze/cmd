@@ -84,33 +84,25 @@ export function place(existing: Rect[], near: Rect | null, w = DEFAULT_W, h = DE
 }
 
 /**
- * Rects for every id: stored ones snapped onto the dot grid (rects saved before it
- * existed may be off it); missing ones placed next to `near` (the selected window)
- * at its size. With nothing stored yet (first time on the canvas), windows start
- * out as an even grid. `changed`: the caller should store the result.
+ * Rects for every id: stored ones as they are; missing ones placed next to `near`
+ * (the selected window) at its size. With nothing stored yet (first time on the
+ * canvas), windows start out as an even grid.
  */
 export function arrange(
   ids: string[],
   stored: Record<string, Rect>,
   near: string | null,
-): { rects: Map<string, Rect>; changed: boolean } {
+): { rects: Map<string, Rect>; added: boolean } {
   const rects = new Map<string, Rect>();
-  let changed = false;
-  for (const id of ids) {
-    const r = stored[id];
-    if (!r) continue;
-    const s = sized(r);
-    if (s.x !== r.x || s.y !== r.y || s.w !== r.w || s.h !== r.h) changed = true;
-    rects.set(id, s);
-  }
+  for (const id of ids) if (stored[id]) rects.set(id, stored[id]!);
   const missing = ids.filter((id) => !stored[id]);
-  if (missing.length === 0) return { rects, changed };
+  if (missing.length === 0) return { rects, added: false };
   if (rects.size === 0) {
     const { cols } = gridShape(missing.length);
     missing.forEach((id, i) =>
       rects.set(id, { x: (i % cols) * (DEFAULT_W + GAP), y: Math.floor(i / cols) * (DEFAULT_H + GAP), w: DEFAULT_W, h: DEFAULT_H }),
     );
-    return { rects, changed: true };
+    return { rects, added: true };
   }
   let anchor = (near && rects.get(near)) || null;
   for (const id of missing) {
@@ -118,7 +110,7 @@ export function arrange(
     rects.set(id, r);
     anchor = r;
   }
-  return { rects, changed: true };
+  return { rects, added: true };
 }
 
 /** A camera showing `r` whole and centred, at most at `maxZoom`. */
