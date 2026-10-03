@@ -21,7 +21,7 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 04 | [Prior art](04-prior-art.md) | cmux, Superset, Conductor, Wave, Tabby, canvas terminals; plugin patterns |
 | 05 | [Agent integration](05-agent-integration.md) | Claude and Codex on-disk formats, ways to detect state, resume commands, search index |
 | 06 | [Plugins, routines, system](06-plugins-routines-system.md) | Plugin model, VPN/SSH/secrets, sudo, testing |
-| 07 | [UI vision](07-ui-vision.md) | Sidebar (Sessions/Tools), view modes, command palette, "Platinum, but playful" design language |
+| 07 | [UI vision](07-ui-vision.md) | Sidebar, view modes, command palette, "Platinum, but playful" design language |
 | 08 | [Host agents and sub-agents](08-host-agents.md) | How cmux does it (and what it lacks), agent-tree data model, host API, UI |
 
 ## Key findings

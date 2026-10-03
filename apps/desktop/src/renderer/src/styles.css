@@ -1,58 +1,59 @@
-/* Simple dark theme in macOS system style. The pixel font is kept for headings
-   and labels only. Everything is a token so a user stylesheet can restyle the app. */
+/* App styles in macOS system style, in the system font. Everything is a token.
+   Colours come from the active theme (themes/), which sets its tokens on :root;
+   the rest here is derived from them, and a theme's `vars` can override any of it. */
 
 :root {
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  --font-pixel: "Pixelify Sans", var(--font-ui);
   --font-mono: "SF Mono", Menlo, monospace;
+  /* Content fonts, from the font.* settings (fonts.ts): code (terminals, editor,
+     file browsers, Markdown code) and text (Markdown prose). */
+  --font-code: var(--font-mono);
+  --font-code-size: 14px;
+  --font-text: var(--font-ui);
+  --font-text-size: 14px;
 
-  --bg: #1e1e1e;
-  --bg-sidebar: #252527;
-  --bg-elevated: #2a2a2c;
-  --bg-hover: rgb(255 255 255 / 0.06);
-  --bg-selected: rgb(255 255 255 / 0.1);
-  --separator: rgb(255 255 255 / 0.09);
-  --text: #ececec;
-  --text-dim: #8e8e93;
-  /* Icons: brighter than secondary text — thin grey strokes on dark read as blurry. */
-  --icon: #b4b4b9;
-  --accent: #0a84ff;
-  --well: #161618;
+  /* Set by the theme (themes/types.ts ThemeColors): --bg, --bg-sidebar,
+     --bg-elevated, --well, --text, --text-dim, --icon, --accent, --link, --match,
+     --ink, --scrim, --state-needs/-done/-working/-idle, and the --syn-* syntax
+     colours. Derived from them: */
+  --bg-hover: color-mix(in srgb, var(--ink) 6%, transparent);
+  --bg-selected: color-mix(in srgb, var(--ink) 10%, transparent);
+  --separator: color-mix(in srgb, var(--ink) 9%, transparent);
+  --on-accent: #fff; /* text on an accent background */
+  --folder: var(--link);
   /* Vertical pinstripes for the main pane background (behind tiles). */
-  --pinstripe: repeating-linear-gradient(to right, rgb(255 255 255 / 0.028) 0 1px, transparent 1px 4px);
-
-  /* Editor syntax colours: the terminal palette (terminals.ts), so editor and
-     terminals read as one app. */
-  --syn-keyword: #e08cff;
-  --syn-string: #7bd88f;
-  --syn-number: #ffd866;
-  --syn-comment: #6c6c78;
-  --syn-function: #8f8fff;
-  --syn-type: #6fe0e8;
-  --syn-property: #b0b0ff;
-  --syn-heading: #ececec;
-  --syn-punct: #9a9aa6;
-  --syn-cursor: #9d9dff;
-  --syn-selection: #3a3a6e;
-
-  --state-needs: #ff9f0a;
-  --state-done: #30d158;
-  --state-working: #0a84ff;
-  --state-idle: #636366;
+  --pinstripe: repeating-linear-gradient(to right, color-mix(in srgb, var(--ink) 2.8%, transparent) 0 1px, transparent 1px 4px);
+  --shadow: rgb(0 0 0 / 0.5);
+  /* Recessed fields (settings window) and project chips (lightness for hsl(var(--hue) …)). */
+  --field: color-mix(in srgb, var(--scrim) 28%, transparent);
+  /* Dividers between a window's panes (the Settings window's sidebar and bar). */
+  --pane-edge: color-mix(in srgb, var(--scrim) 50%, transparent);
+  /* Recessed areas: unassigned grid cells. */
+  --recess: color-mix(in srgb, var(--scrim) 22%, transparent);
+  --recess-edge: color-mix(in srgb, var(--scrim) 35%, transparent);
+  --chip-fg: 70% 78%;
+  --chip-bg: 30% 22% / 0.8;
 
   --radius: 6px;
   --sidebar-w: 280px;
   --titlebar-h: 38px; /* traffic-light area at the top of the sidebar */
   --statusbar-h: 30px; /* sidebar footer and main status bar share this */
-  --gutter: 8px;
-  /* Windows: square corners, crisp 1px outlines (fractional widths look fuzzy),
-     blue highlight with a soft glow. */
-  --window-radius: 0;
+  /* Window spacing in grid and strip (set on .app from ui.gutter, ui.paddingX/Y). */
+  --gutter: 8px; /* between windows */
+  --pad-x: 8px; /* to the left and right edges */
+  --pad-y: 8px; /* to the top and bottom edges */
+  /* Windows: rounded corners (the ui.windowRadius setting, set on .app), crisp 1px
+     outlines (fractional widths look fuzzy), blue highlight with a soft glow. */
+  --window-radius: 8px;
   --window-outline: 1px;
+  /* Window outline and the line under the title bar: one opaque colour (the
+     separator over the title bar), so both look the same over any background. */
+  --window-edge: color-mix(in srgb, var(--ink) 9%, var(--bg-sidebar));
   --window-highlight: var(--accent);
-  --window-glow: 0 0 0 1px rgb(10 132 255 / 0.55), 0 0 14px rgb(10 132 255 / 0.35);
+  --window-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
   --window-dim: 0.28; /* darkening of unfocused windows */
-  color-scheme: dark;
+  /* Motion: window moves and title-bar slots share this curve. */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 * { box-sizing: border-box; }
@@ -117,10 +118,12 @@ kbd {
   -webkit-app-region: drag;
 }
 .statusbar button { -webkit-app-region: no-drag; }
-.statusbar-session { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
-.statusbar-proc { color: var(--text); font-weight: 500; }
-.statusbar-path, .statusbar-detail { overflow: hidden; text-overflow: ellipsis; }
-.statusbar-detail::before { content: "·"; margin-right: 8px; }
+.statusbar-session { flex: 1; min-width: 0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
+/* Spacing lives inside the slots, so an empty slot takes no space. */
+.statusbar-session .slot-v { --gap: 8px; }
+.statusbar-session > .slot:first-child .slot-v { --gap: 0px; }
+.statusbar-name { color: var(--text); font-weight: 500; }
+.statusbar-usage { font-variant-numeric: tabular-nums; cursor: default; }
 .statusbar-actions { display: flex; align-items: center; gap: 2px; }
 .statusbar-sep { width: 1px; height: 14px; margin: 0 6px; background: var(--separator); }
 .icon-btn {
@@ -145,24 +148,23 @@ kbd {
 .btn {
   font: 12px var(--font-ui);
   color: var(--text);
-  background: rgb(255 255 255 / 0.08);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
   border: 0;
   border-radius: 5px;
   padding: 4px 10px;
   cursor: default;
 }
-.btn:hover { background: rgb(255 255 255 / 0.12); }
-.btn:active { background: rgb(255 255 255 / 0.16); }
-.btn .hint { margin-left: 6px; font-size: 10px; color: var(--text-dim); }
+.btn:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.btn:active { background: color-mix(in srgb, var(--ink) 16%, transparent); }
 
-.segmented, .sidebar-tabs {
+.segmented {
   display: flex;
   padding: 2px;
   gap: 2px;
   border-radius: 7px;
-  background: rgb(255 255 255 / 0.06);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
-.segmented button, .sidebar-tabs button {
+.segmented button {
   font: 12px var(--font-ui);
   color: var(--text-dim);
   background: transparent;
@@ -171,9 +173,9 @@ kbd {
   padding: 2px 10px;
   cursor: default;
 }
-.segmented button.on, .sidebar-tabs button.on {
+.segmented button.on {
   color: var(--text);
-  background: rgb(255 255 255 / 0.14);
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 /* ── status dots ────────────────────────────────────── */
@@ -197,11 +199,10 @@ kbd {
 /* ── sidebar ────────────────────────────────────────── */
 
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* full height, under the traffic lights, like Finder's sidebar */
-  padding-top: var(--titlebar-h);
   grid-row: 1;
   grid-column: 1;
   -webkit-app-region: drag;
@@ -209,54 +210,152 @@ kbd {
   border-right: 1px solid var(--separator);
 }
 .sidebar > * { -webkit-app-region: no-drag; }
-.sidebar-tabs { margin: 0 10px 6px; }
-.sidebar-tabs button { flex: 1; }
+/* Full height, under the traffic lights, like Finder's sidebar; the strip stays draggable. */
+.sidebar > .sidebar-titlebar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: var(--titlebar-h);
+  padding: 0 8px;
+  -webkit-app-region: drag;
+}
+.sidebar-titlebar .icon-btn { -webkit-app-region: no-drag; }
 
-.session-list { flex: 1; overflow-y: auto; padding: 2px 0 8px; }
-
-.list-heading {
-  font: 11px var(--font-pixel);
+.sb-search {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 8px 6px;
+}
+.sb-search input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 24px 0 26px;
+  font: 12.5px var(--font-ui);
+  color: var(--text);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  outline: none;
+  user-select: text;
+}
+.sb-search input::placeholder { color: var(--text-dim); }
+.sb-search input:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: var(--well); }
+.sb-search-icon { position: absolute; left: 9px; color: var(--text-dim); pointer-events: none; }
+.sb-search-clear {
+  position: absolute;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--text-dim);
-  padding: 8px 16px 4px;
+}
+.sb-search-clear:hover { color: var(--text); }
+
+.sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 10px; }
+.sb-section + .sb-section { margin-top: 6px; }
+
+.sb-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin: 0 8px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  font: 600 10.5px var(--font-ui);
+  color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.list-divider { height: 1px; margin: 6px 16px; background: var(--separator); }
+.sb-count { font-weight: 500; letter-spacing: 0; opacity: 0.75; font-variant-numeric: tabular-nums; }
+.sb-heading.tone-needs { color: var(--state-needs); }
+.sb-heading.tone-needs .sb-count { opacity: 1; }
+/* Chevron on the right, shown on hover (or when closed), like Finder's sections. */
+.sb-heading .twisty { margin-left: auto; opacity: 0; transition: opacity 120ms, transform 120ms; }
+.sb-heading.collapsible:hover .twisty, .sb-heading[aria-expanded="false"] .twisty { opacity: 1; }
+.sb-heading.collapsible:hover { color: var(--text); }
+
+.sb-none { padding: 14px 18px; font-size: 12px; color: var(--text-dim); }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin: 0 8px;
-  padding: 5px 8px;
+  padding: 0 8px;
   border-radius: var(--radius);
-  min-height: 38px;
+  cursor: default;
 }
+.row.tall { min-height: 38px; padding-top: 3px; padding-bottom: 3px; }
+.row.short { height: 28px; }
 .row:hover { background: var(--bg-hover); }
 .row.sel { background: var(--bg-selected); }
-.row.virtual { min-height: 28px; }
+.row.active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent); }
 .row-text { flex: 1; min-width: 0; }
 .row-title {
+  display: flex;
+  align-items: center;
+  /* Whole-pixel line heights keep rows (and their marks) on the pixel grid. */
+  line-height: 18px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
+}
+.row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Short rows: where it is, after the name, dim. Gives way first. */
+.row-place {
+  flex: 0 100 auto;
+  min-width: 0;
+  margin-left: 7px;
+  overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--text-dim);
 }
 .row-detail {
+  display: flex;
   font-size: 11.5px;
+  line-height: 16px;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .led-row-needs .row-detail { color: var(--state-needs); }
-.row-key { font-size: 10px; color: var(--text-dim); opacity: 0; }
-.row:hover .row-key { opacity: 1; }
-.badge {
-  margin-left: 6px;
-  font-size: 10px;
+.badge { margin-left: 6px; font-size: 10px; color: var(--text-dim); font-weight: 400; }
+.row-age { flex: none; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.row.history { padding-left: 14px; }
+.row.history .mark-icon { color: var(--text-dim); }
+.row.history .row-detail { display: block; }
+.row.history .row-detail mark { background: color-mix(in srgb, var(--match) 25%, transparent); color: var(--text); border-radius: 2px; padding: 0 1px; }
+
+/* Right end: the project chip, swapped for ⌘N and close on hover. */
+.row-end { flex: none; display: flex; align-items: center; }
+.row-hover { display: none; align-items: center; gap: 4px; }
+.row:hover .row-hover { display: flex; }
+.row:hover .row-end .chip { display: none; }
+.row-key { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.row-close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
   color: var(--text-dim);
 }
+.row-close:hover { color: var(--text); background: var(--bg-selected); }
 
 .chip {
   --hue: 240;
@@ -268,8 +367,8 @@ kbd {
   font: 500 10.5px var(--font-ui);
   padding: 1px 6px;
   border-radius: 4px;
-  color: hsl(var(--hue) 70% 78%);
-  background: hsl(var(--hue) 30% 22% / 0.8);
+  color: hsl(var(--hue) var(--chip-fg));
+  background: hsl(var(--hue) var(--chip-bg));
 }
 
 .twisty, .twisty-space { flex: none; width: 12px; height: 12px; }
@@ -283,6 +382,32 @@ kbd {
   transition: transform 120ms;
 }
 .twisty.open { transform: rotate(90deg); }
+
+/* The right edge: drag to resize. A hairline lights up on hover. */
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 6;
+}
+.sidebar-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background 120ms 80ms;
+}
+.sidebar-resize:hover::after, .app.sidebar-resizing .sidebar-resize::after { background: var(--accent); }
+.app.sidebar-resizing, .app.sidebar-resizing * { cursor: col-resize !important; user-select: none; }
+.app.sidebar-resizing .xterm, .app.sidebar-resizing [data-embed] { pointer-events: none; }
+.app.sidebar-resizing .windows-track > .tile { transition: none; }
 
 .sidebar-status {
   grid-row: 2;
@@ -300,29 +425,10 @@ kbd {
   border-right: 1px solid var(--separator);
   -webkit-app-region: drag;
 }
+.sidebar-status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.empty { text-align: center; padding: 32px 16px; color: var(--text-dim); }
+.empty { text-align: center; padding: 24px 16px; color: var(--text-dim); }
 .empty p { margin: 0 0 10px; }
-
-/* ── tools ──────────────────────────────────────────── */
-
-.tools { flex: 1; overflow-y: auto; padding: 4px 8px 10px; display: flex; flex-direction: column; gap: 2px; }
-.panel-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: var(--radius);
-}
-.panel-title:hover { background: var(--bg-hover); }
-.panel-name {
-  font: 12px var(--font-pixel);
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.panel-body { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 8px 10px 24px; }
-.note { flex-basis: 100%; margin: 2px 0 0; font-size: 11px; color: var(--text-dim); }
 
 /* ── main view ──────────────────────────────────────── */
 
@@ -351,8 +457,12 @@ kbd {
   flex-direction: column;
   min-height: 0;
   background: var(--well);
-  border: var(--window-outline) solid var(--separator);
+  border: var(--window-outline) solid var(--window-edge);
   border-radius: var(--window-radius);
+  /* Inside the outline, curves are smaller by its width, so they stay concentric.
+     Declared here, not on :root: a variable built from another resolves where it's
+     declared, and the radius is set per app (setting) and per mode (focus). */
+  --window-radius-inner: max(0px, calc(var(--window-radius) - var(--window-outline)));
 }
 /* Clips the content; the tile itself doesn't, so resize handles can sit outside it. */
 .tile-body {
@@ -361,7 +471,7 @@ kbd {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: inherit;
+  border-radius: var(--window-radius-inner);
 }
 .tile.sel { border-color: var(--window-highlight); box-shadow: var(--window-glow); }
 .tile .term-well { padding-top: 6px; }
@@ -369,23 +479,42 @@ kbd {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   height: 26px;
   padding: 0 10px;
   font-size: 11.5px;
   color: var(--text-dim);
   background: var(--bg-sidebar);
-  border-bottom: 1px solid var(--separator);
+  /* separator as an inset shadow: no layout space, so the mark centres on whole pixels */
+  box-shadow: inset 0 -1px 0 var(--window-edge);
 }
 .tile.sel .tile-title { color: var(--text); }
-.tile-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tile-meta { margin-left: auto; display: flex; gap: 8px; min-width: 0; white-space: nowrap; }
-.tile-proc { font-weight: 500; }
-.tile-path { overflow: hidden; text-overflow: ellipsis; }
+.tile-name { flex: 0 1 auto; display: flex; align-items: center; min-width: 0; font-weight: 500; }
+/* Kind · Place · Status. Narrow windows drop from the right: status first, the name last. */
+/* Info, not the name: always dim, selected or not. */
+.tile-meta { margin-left: auto; display: flex; min-width: 0; flex: 0 100 auto; overflow: hidden; color: var(--text-dim); }
+.tile-meta .slot-v { --gap: 8px; }
+/* Dividers between Kind | Place | Status: 7px, 1px line, 7px. */
+.tile-meta .slot.divided .slot-v, .statusbar-session .slot.divided .slot-v { --gap: 15px; }
+.slot-divider {
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 1px;
+  height: 10px;
+  margin-top: -5px;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+.tile-meta .slot-kind { flex-shrink: 0.1; }
+.tile-meta .slot-place { flex-shrink: 10; }
+.tile-meta .slot-status { flex-shrink: 100; }
+/* Place or status squeezed to a sliver would show just its gap and "…": hide it
+   instead (Slot.tsx sets .sliver; short values like "~" aren't squeezed). */
+.slot.sliver .slot-v, .slot.sliver .slot-divider { visibility: hidden; }
 .tile-title { cursor: grab; touch-action: none; }
 .empty-main { display: grid; place-items: center; }
 .hello { text-align: center; color: var(--text-dim); }
-.hello-title { font: 40px var(--font-pixel); color: var(--text); margin-bottom: 6px; }
+.hello-title { font: 600 34px var(--font-ui); letter-spacing: -0.01em; color: var(--text); margin-bottom: 6px; }
 
 /* ── command palette ────────────────────────────────── */
 
@@ -403,9 +532,9 @@ kbd {
   display: flex;
   flex-direction: column;
   background: var(--bg-elevated);
-  border: 1px solid rgb(255 255 255 / 0.12);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
   border-radius: 12px;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
+  box-shadow: 0 20px 60px var(--shadow);
   overflow: hidden;
 }
 .palette-input {
@@ -425,9 +554,9 @@ kbd {
   padding: 7px 10px;
   border-radius: var(--radius);
 }
-.palette-list li.on { background: var(--accent); }
-.palette-list li.on .palette-group, .palette-list li.on kbd { color: rgb(255 255 255 / 0.75); }
-.palette-group { flex: none; width: 70px; font: 11px var(--font-pixel); color: var(--text-dim); }
+.palette-list li.on { background: var(--accent); color: var(--on-accent); }
+.palette-list li.on .palette-group, .palette-list li.on kbd { color: color-mix(in srgb, var(--on-accent) 75%, transparent); }
+.palette-group { flex: none; width: 70px; font: 500 11px var(--font-ui); color: var(--text-dim); }
 .palette-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-empty { color: var(--text-dim); }
 .palette-foot {
@@ -438,72 +567,6 @@ kbd {
   color: var(--text-dim);
   border-top: 1px solid var(--separator);
 }
-
-/* ── settings ───────────────────────────────────────── */
-
-.settings {
-  width: min(720px, calc(100vw - 32px));
-  max-height: 76vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-elevated);
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
-  overflow: hidden;
-}
-.settings-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--separator);
-}
-.settings-title { font: 16px var(--font-pixel); }
-.settings-error { padding: 6px 16px; font-size: 12px; color: var(--state-needs); border-bottom: 1px solid var(--separator); }
-.settings-body { overflow-y: auto; padding: 0 8px 12px; }
-.settings-body .list-heading { margin: 12px 0 2px; padding-left: 8px; }
-.field {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 8px;
-  border-radius: var(--radius);
-}
-.field:hover { background: var(--bg-hover); }
-.field-text { flex: 1; min-width: 0; }
-.field-key { font-family: var(--font-mono); font-size: 12px; display: flex; gap: 8px; align-items: baseline; }
-.field-desc { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
-.field-reset { font-size: 10.5px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
-.field-control { flex: none; width: 220px; display: flex; justify-content: flex-end; }
-.field-control input[type="text"], .field-control input[type="number"], .field-control select {
-  width: 100%;
-  font: 12px var(--font-ui);
-  color: var(--text);
-  background: var(--well);
-  border: 1px solid var(--separator);
-  border-radius: 5px;
-  padding: 5px 8px;
-  outline: none;
-  user-select: text;
-}
-.field-control input:focus, .field-control select:focus { border-color: var(--accent); }
-.field-control input[type="number"] { width: 90px; }
-.switch { accent-color: var(--accent); width: 16px; height: 16px; }
-.shortcuts-heading { display: flex; align-items: center; justify-content: space-between; padding-right: 8px; }
-.shortcuts-heading .btn { font: 11px var(--font-ui); text-transform: none; letter-spacing: 0; }
-.field.shortcut { padding: 4px 8px; }
-.field-control.keys { gap: 6px; }
-.field-control.keys kbd {
-  font: 12px var(--font-ui);
-  color: var(--text);
-  padding: 2px 7px;
-  border-radius: 4px;
-  background: rgb(255 255 255 / 0.08);
-}
-.field-changed { font: 10.5px var(--font-ui); color: var(--accent); }
-.field.shortcut .field-key { font: 500 12.5px var(--font-ui); }
-.field.shortcut .field-desc { font-family: var(--font-mono); font-size: 10.5px; }
 
 /* SF Symbol, tinted like an AppKit template image */
 .sf {
@@ -518,14 +581,6 @@ kbd {
   -webkit-mask-position: center;
   mask-position: center;
 }
-
-/* Memory · CPU of a terminal's process tree */
-.tile-usage, .statusbar-usage {
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-  cursor: default;
-}
-.tile-usage::before, .statusbar-usage::before { content: "·"; margin-right: 8px; opacity: 0.6; }
 
 /* ── windows (all view modes, see WindowsView / layouts.ts) ── */
 
@@ -550,17 +605,21 @@ kbd {
   z-index: 10;
   transition: none;
   border-color: var(--window-highlight);
-  box-shadow: var(--window-glow), 0 18px 50px rgb(0 0 0 / 0.55);
+  box-shadow: var(--window-glow);
 }
+/* A dropped window snaps into place quicker than other moves (WindowsView SETTLE_MS). */
+.windows-track > .tile.settling { transition-duration: 110ms; }
 .windows-track > .tile.hidden-tile { visibility: hidden; pointer-events: none; }
 
-/* Unfocused windows are dimmed by an overlay (not a filter, which would soften text). */
+/* Unfocused windows are dimmed by an overlay (not a filter, which would soften text).
+   It covers the outline too, so the outline dims with the line under the title. */
 .windows-track > .tile::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background: #000;
+  inset: calc(-1 * var(--window-outline));
+  background: var(--scrim);
   opacity: var(--window-dim);
+  border-radius: var(--window-radius);
   pointer-events: none;
   transition: opacity 160ms ease;
   z-index: 3;
@@ -568,36 +627,48 @@ kbd {
 .windows-track > .tile.sel::after,
 .windows-track > .tile.lifted::after,
 .mode-focus .windows-track > .tile::after { opacity: 0; }
-.main.windows.resizing .windows-track > .tile { transition: none; }
+
+/* Visual bell (notifications.visualBell): the outline flashes once. */
+.windows-track > .tile.bell { animation: tile-bell 450ms ease-out; }
+@keyframes tile-bell {
+  0%, 30% { border-color: var(--state-needs); box-shadow: 0 0 0 1px var(--state-needs), 0 0 18px color-mix(in srgb, var(--state-needs) 45%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .windows-track > .tile.bell { animation-duration: 1ms; }
+}
+
+/* ui.unfocusedDesaturation: unfocused windows lose their colour. This one has to
+   be a filter (on the content, not the outline); it's only set when the setting
+   is on, since any filter makes the window a compositing layer. */
+.app.desaturate .windows-track > .tile .tile-body { transition: filter 160ms ease; }
+.app.desaturate .windows-track > .tile:not(.sel, .lifted) .tile-body { filter: grayscale(var(--window-desaturate)); }
+.app.desaturate .mode-focus .windows-track > .tile .tile-body { filter: none; }
+.main.windows.resizing .windows-track > .tile,
+.main.windows.live-resize .windows-track > .tile,
+.main.windows.live-resize .windows-track > .ghost-slot { transition: none; }
 .main.windows.dragging, .main.windows.dragging .tile-title { cursor: grabbing; }
 .main.windows.dragging .xterm, .main.windows.resizing .xterm { pointer-events: none; }
 .main.windows.dragging, .main.windows.resizing { user-select: none; }
 .main.windows.resizing, .main.windows.resizing * { cursor: col-resize !important; }
 
 /* Focus mode: one window, edge to edge, no chrome. */
-.mode-focus .windows-track > .tile { border: 0; border-radius: 0; }
+.mode-focus .windows-track > .tile { border: 0; --window-radius: 0px; }
 .mode-focus .windows-track > .tile .term-well { padding-top: 8px; }
 
-/* Ghost slots while dragging: where windows can go, the drop target highlighted. */
+/* Ghost slots while dragging: where windows can go. */
 .ghost-slot {
-  border: var(--window-outline) dashed rgb(255 255 255 / 0.14);
+  border: var(--window-outline) dashed color-mix(in srgb, var(--ink) 14%, transparent);
   border-radius: var(--window-radius);
-  background: rgb(255 255 255 / 0.015);
+  background: color-mix(in srgb, var(--ink) 1.5%, transparent);
   pointer-events: none;
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.ghost-slot.target {
-  border-color: var(--window-highlight);
-  background: rgb(10 132 255 / 0.07);
-  box-shadow: 0 0 14px rgb(10 132 255 / 0.25);
-  z-index: 1;
-}
-.ghost-slot.spare { border-color: rgb(255 255 255 / 0.06); }
+.ghost-slot.spare { border-color: color-mix(in srgb, var(--ink) 6%, transparent); }
 /* An unassigned grid cell when nothing is being dragged: quiet and inactive. */
 .ghost-slot.spare.idle {
-  border: var(--window-outline) solid rgb(0 0 0 / 0.35);
-  background: rgb(0 0 0 / 0.22);
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.25);
+  border: var(--window-outline) solid var(--recess-edge);
+  background: var(--recess);
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--scrim) 25%, transparent);
 }
 
 /* Right-edge resize handle: the gutter right of the window, so it never covers
@@ -606,8 +677,9 @@ kbd {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: calc(-1 * var(--gutter) - var(--window-outline));
-  width: var(--gutter);
+  /* At least 6px wide, so it's still grabbable with a narrow (or no) gutter. */
+  right: calc(-1 * max(var(--gutter), 6px) - var(--window-outline));
+  width: max(var(--gutter), 6px);
   cursor: col-resize;
   touch-action: none;
   z-index: 4;
@@ -616,7 +688,7 @@ kbd {
   content: "";
   position: absolute;
   top: 50%;
-  left: calc(var(--gutter) / 2 - 1px);
+  left: calc(max(var(--gutter), 6px) / 2 - 1px);
   width: 2px;
   height: 36px;
   margin-top: -18px;
@@ -624,14 +696,15 @@ kbd {
   background: transparent;
   transition: background 120ms;
 }
-.tile:hover .strip-resize::after, .main.windows.resizing .strip-resize::after { background: rgb(255 255 255 / 0.25); }
+.tile:hover .strip-resize::after, .main.windows.resizing .strip-resize::after { background: color-mix(in srgb, var(--ink) 25%, transparent); }
 
 /* Minimal position bar: one segment per window, the focused one highlighted. */
 .strip-scrollbar {
   position: absolute;
-  left: var(--gutter);
-  right: var(--gutter);
-  bottom: 4px;
+  left: var(--pad-x);
+  right: var(--pad-x);
+  /* Centred in the space under the windows (layouts.ts, stripBottom). */
+  bottom: calc((max(var(--pad-y) + 3px, 7px) - 3px) / 2);
   height: 3px;
   opacity: 0.6;
   transition: opacity 150ms;
@@ -643,12 +716,12 @@ kbd {
   height: 100%;
   padding: 0;
   border: 0;
-  border-radius: var(--window-radius);
-  background: rgb(255 255 255 / 0.14);
+  border-radius: 1.5px;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
   cursor: pointer;
   transition: background 120ms;
 }
-.strip-seg:hover { background: rgb(255 255 255 / 0.3); }
+.strip-seg:hover { background: color-mix(in srgb, var(--ink) 30%, transparent); }
 .strip-seg.sel { background: var(--window-highlight); }
 
 /* Session search results in the palette */
@@ -666,9 +739,9 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.palette-snippet mark { background: rgb(255 214 10 / 0.25); color: var(--text); border-radius: 2px; padding: 0 1px; }
-.palette-list li.on .palette-meta, .palette-list li.on .palette-snippet { color: rgb(255 255 255 / 0.8); }
-.palette-list li.on .palette-snippet mark { background: rgb(255 255 255 / 0.3); color: #fff; }
+.palette-snippet mark { background: color-mix(in srgb, var(--match) 25%, transparent); color: var(--text); border-radius: 2px; padding: 0 1px; }
+.palette-list li.on .palette-meta, .palette-list li.on .palette-snippet { color: color-mix(in srgb, var(--on-accent) 80%, transparent); }
+.palette-list li.on .palette-snippet mark { background: color-mix(in srgb, var(--on-accent) 30%, transparent); color: var(--on-accent); }
 .palette-status { margin-left: auto; }
 
 /* ── browser and file windows ───────────────────────── */
@@ -707,8 +780,8 @@ kbd {
 }
 .address:focus { border-color: var(--accent); }
 .webview { flex: 1; min-height: 0; background: #fff; }
-/* While dragging or resizing windows, the page must not swallow pointer events. */
-.main.windows.dragging webview, .main.windows.resizing webview, .main.windows.held webview { pointer-events: none; }
+/* While dragging or resizing windows, embedded pages ([data-embed], embed.ts) must not swallow pointer events. */
+.main.windows.dragging [data-embed], .main.windows.resizing [data-embed], .main.windows.held [data-embed] { pointer-events: none; }
 
 .crumbs { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap; }
 .crumb {
@@ -733,22 +806,20 @@ kbd {
   grid-template-columns: 12px 16px minmax(0, 1fr) 72px 110px;
   align-items: center;
   gap: 6px;
-  height: 24px;
+  height: max(24px, calc(var(--font-code-size) * 1.7));
   padding: 0 12px 0 calc(8px + var(--depth) * 16px);
-  font-size: 12.5px;
+  font: calc(var(--font-code-size) * 0.9) var(--font-code);
   cursor: default;
 }
 .file-row:hover { background: var(--bg-hover); }
-.file-row.sel { background: rgb(10 132 255 / 0.35); }
+.file-row.sel { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 .file-row.hidden-file { opacity: 0.55; }
 .file-icon { color: var(--text-dim); }
-.file-icon.dir { color: #5ea8ff; }
+.file-icon.dir { color: var(--folder); }
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-size, .file-date { font-size: 11px; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
+.file-size, .file-date { font-size: 0.85em; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
 .file-error { padding: 16px; color: var(--text-dim); font-size: 12px; }
-.tile-icon, .row-icon { color: var(--icon); }
-.row-icon { margin: 0 1px; }
-.file-list:focus .file-row.sel { background: rgb(10 132 255 / 0.55); }
+.file-list:focus .file-row.sel { background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .file-row .twisty { color: var(--text-dim); }
 
 /* Text windows */
@@ -763,19 +834,22 @@ kbd {
   padding: 5px 10px;
   font-size: 12px;
   color: var(--text);
-  background: rgb(255 159 10 / 0.14);
-  border-bottom: 1px solid rgb(255 159 10 / 0.35);
+  background: color-mix(in srgb, var(--state-needs) 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--state-needs) 35%, transparent);
 }
 .textwin-banner span { flex: 1; }
+/* Unsaved changes: always in the DOM, scales in and out. */
 .dirty-dot {
-  display: inline-block;
-  width: 6px;
+  flex: none;
+  width: 0;
   height: 6px;
-  margin-left: 6px;
-  vertical-align: middle;
+  margin-left: 0;
   border-radius: 50%;
   background: var(--text-dim);
+  transform: scale(0);
+  transition: width 140ms var(--ease), margin 140ms var(--ease), transform 140ms var(--ease);
 }
+.dirty-dot.on { width: 6px; margin-left: 6px; transform: none; }
 
 /* ── Markdown windows ───────────────────────────────── */
 
@@ -784,29 +858,29 @@ kbd {
   max-width: 760px;
   margin: 0 auto;
   padding: 28px 32px 64px;
-  font: 14px/1.65 var(--font-ui);
+  font: var(--font-text-size)/1.65 var(--font-text);
   color: var(--text);
   user-select: text;
   overflow-wrap: anywhere;
 }
 .markdown > :first-child { margin-top: 0; }
 .markdown h1, .markdown h2, .markdown h3, .markdown h4 { line-height: 1.25; margin: 1.6em 0 0.6em; font-weight: 600; scroll-margin-top: 16px; }
-.markdown h1 { font: 28px/1.2 var(--font-pixel); letter-spacing: 0.01em; }
-.markdown h2 { font-size: 20px; padding-bottom: 0.3em; border-bottom: 1px solid var(--separator); }
-.markdown h3 { font-size: 16px; }
-.markdown h4 { font-size: 14px; color: var(--text-dim); }
+.markdown h1 { font-size: 2em; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+.markdown h2 { font-size: 1.43em; padding-bottom: 0.3em; border-bottom: 1px solid var(--separator); }
+.markdown h3 { font-size: 1.14em; }
+.markdown h4 { font-size: 1em; color: var(--text-dim); }
 .markdown p, .markdown ul, .markdown ol, .markdown blockquote, .markdown table, .markdown pre { margin: 0 0 1em; }
 .markdown ul, .markdown ol { padding-left: 1.6em; }
 .markdown li + li { margin-top: 0.25em; }
 .markdown li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
 .markdown input[type="checkbox"] { accent-color: var(--accent); margin-right: 0.5em; }
-.markdown a { color: #5ea8ff; text-decoration: none; cursor: pointer; }
+.markdown a { color: var(--link); text-decoration: none; cursor: pointer; }
 .markdown a:hover { text-decoration: underline; }
 .markdown strong { font-weight: 600; }
 .markdown hr { border: 0; border-top: 1px solid var(--separator); margin: 2em 0; }
 .markdown blockquote { padding: 0.1em 1em; color: var(--text-dim); border-left: 3px solid var(--separator); }
 .markdown img { max-width: 100%; border-radius: 4px; }
-.markdown code { font: 0.88em var(--font-mono); padding: 0.15em 0.35em; border-radius: 4px; background: var(--bg-selected); }
+.markdown code { font: 0.88em var(--font-code); padding: 0.15em 0.35em; border-radius: 4px; background: var(--bg-selected); }
 .markdown pre {
   padding: 12px 14px;
   overflow-x: auto;
@@ -814,11 +888,11 @@ kbd {
   border-radius: 6px;
   background: var(--bg);
 }
-.markdown pre code { padding: 0; background: none; font-size: 12.5px; line-height: 1.5; }
+.markdown pre code { padding: 0; background: none; font-size: calc(var(--font-code-size) * 0.9); line-height: 1.5; }
 .markdown table { border-collapse: collapse; display: block; overflow-x: auto; }
 .markdown th, .markdown td { padding: 6px 12px; border: 1px solid var(--separator); }
 .markdown th { font-weight: 600; background: var(--bg); }
-.markdown tr:nth-child(2n) td { background: rgb(255 255 255 / 0.02); }
+.markdown tr:nth-child(2n) td { background: color-mix(in srgb, var(--ink) 2%, transparent); }
 
 /* Canvas: windows on a pan/zoom plane (see WindowsView, canvas.ts). */
 .main.windows.mode-canvas { background: var(--bg); }
@@ -828,20 +902,18 @@ kbd {
 .main.windows.switching .windows-track { transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .mode-canvas .windows-track > .tile.sel { z-index: 5; }
 .mode-canvas .windows-track > .tile.lifted { z-index: 10; }
-/* The drop outline jumps from dot to dot; gliding would trail the pointer. */
-.mode-canvas .ghost-slot { transition: none; }
 /* Windows stay where they are while the camera moves; only moves/resizes glide. */
 .main.windows.panning .windows-track > .tile,
 .main.windows.sizing .windows-track > .tile { transition: none; }
 .main.windows.panning { cursor: grabbing; }
 .main.windows.panning .xterm, .main.windows.sizing .xterm,
-.main.windows.panning webview, .main.windows.sizing webview { pointer-events: none; }
+.main.windows.panning [data-embed], .main.windows.sizing [data-embed] { pointer-events: none; }
 .main.windows.sizing, .main.windows.sizing * { user-select: none; }
 .main.windows.sizing-x, .main.windows.sizing-x * { cursor: ew-resize !important; }
 .main.windows.sizing-y, .main.windows.sizing-y * { cursor: ns-resize !important; }
 .main.windows.sizing-xy, .main.windows.sizing-xy * { cursor: nwse-resize !important; }
 /* Unselected pages don't swallow clicks and scrolls: the first click selects. */
-.mode-canvas .tile:not(.sel) webview { pointer-events: none; }
+.mode-canvas .tile:not(.sel) [data-embed] { pointer-events: none; }
 
 /* Edge and corner handles, just outside the window (in world px divided by the
    zoom, so they stay grabbable when zoomed out). */
@@ -871,8 +943,8 @@ kbd {
   top: 0;
   width: var(--h);
   height: var(--h);
-  border-right: calc(2px / var(--z, 1)) solid rgb(255 255 255 / 0.3);
-  border-bottom: calc(2px / var(--z, 1)) solid rgb(255 255 255 / 0.3);
+  border-right: calc(2px / var(--z, 1)) solid color-mix(in srgb, var(--ink) 30%, transparent);
+  border-bottom: calc(2px / var(--z, 1)) solid color-mix(in srgb, var(--ink) 30%, transparent);
   opacity: 0;
   transition: opacity 120ms;
 }
@@ -883,7 +955,7 @@ kbd {
   right: 10px;
   bottom: 10px;
   z-index: 20;
-  background: rgb(20 20 22 / 0.82);
+  background: color-mix(in srgb, var(--well) 82%, transparent);
   border: 1px solid var(--separator);
   border-radius: var(--radius);
   cursor: pointer;
@@ -891,7 +963,145 @@ kbd {
   transition: opacity 120ms;
 }
 .minimap:hover { opacity: 1; }
-.minimap rect { fill: rgb(255 255 255 / 0.18); }
+.minimap rect { fill: color-mix(in srgb, var(--ink) 18%, transparent); }
 .minimap rect.sel { fill: var(--window-highlight); }
-.minimap rect.view { fill: rgb(255 255 255 / 0.04); stroke: rgb(255 255 255 / 0.55); stroke-width: 1; }
+.minimap rect.view { fill: color-mix(in srgb, var(--ink) 4%, transparent); stroke: color-mix(in srgb, var(--ink) 55%, transparent); stroke-width: 1; }
 
+/* ── title fields (components/Slot.tsx, docs/10-window-titles.md) ── */
+
+/* A field that stays mounted when empty; its width (set from the content) eases. */
+.slot {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: width 180ms var(--ease);
+}
+.slot-v {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The gap before the value (and its divider) is padding, so an empty slot takes
+     no space; swaps scale around the text, not the padding. */
+  padding-left: var(--gap, 0px);
+  transform-origin: calc(50% + var(--gap, 0px) / 2) 50%;
+}
+/* Paths keep their end: the ellipsis goes at the start. */
+.slot-v.clip-start { direction: rtl; text-align: left; }
+.slot-v.in { animation: slot-in 180ms var(--ease) both; }
+/* Swapping: the new value starts only once the old one is gone, so two strings
+   are never drawn over each other. */
+.slot-v.in.swap { animation-duration: 160ms; animation-delay: 100ms; }
+.slot.moving .slot-v { text-overflow: clip; }
+.slot-v.out {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  animation: slot-out 100ms ease-in forwards;
+}
+.slot-v.fade.in { animation-name: slot-fade-in; }
+.slot-v.fade.out { animation-name: slot-fade-out; }
+.slot.still { transition: none; }
+.slot.still .slot-v { animation: none; }
+.slot.still .slot-v.out { display: none; }
+@keyframes slot-in { from { opacity: 0; transform: scale(0.8); } }
+@keyframes slot-out { to { opacity: 0; transform: scale(0.8); } }
+@keyframes slot-fade-in { from { opacity: 0; } }
+@keyframes slot-fade-out { to { opacity: 0; } }
+
+/* Mark: an agent's status light, else the type icon; they cross-fade. */
+/* 16px box: every icon canvas (even sizes up to 16) and the 8px light centre on
+   whole pixels inside it. Its parent must give it an even height to centre in. */
+.mark { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; }
+.mark > * {
+  grid-area: 1 / 1;
+  transition: opacity 140ms ease, transform 140ms var(--ease), background-color 140ms ease, box-shadow 140ms ease;
+}
+.mark .mark-icon { color: var(--icon); }
+.mark .mark-light { opacity: 0; transform: scale(0.6); }
+.mark.has-light .mark-light { opacity: 1; transform: none; }
+.mark.has-light .mark-icon { opacity: 0; transform: scale(0.6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .slot, .dirty-dot { transition: none; }
+  .slot-v.in { animation-name: slot-fade-in; }
+  .slot-v.out { animation-name: slot-fade-out; }
+  .mark > * { transform: none !important; }
+}
+
+/* ── Space switcher (bottom of the sidebar; under the traffic lights when it's hidden) ── */
+
+.sb-spaces {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: 6px 8px 8px;
+}
+.spacebar {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+.drag-strip .spacebar { position: absolute; left: 80px; top: 0; height: 100%; }
+/* Switching: the old Space's name folds into its dot while the new one's unfolds,
+   and a pressed chip dips. */
+.space-chip {
+  --hue: 240;
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font: 500 12px var(--font-ui);
+  transition: background-color 200ms ease, color 200ms ease, transform 140ms cubic-bezier(0.3, 0.7, 0.4, 1.5);
+}
+.space-chip:hover { background: var(--bg-selected); color: var(--text); }
+.space-chip:active { transform: scale(0.9); transition-duration: 60ms; }
+.space-chip.on { flex: 0 1 auto; color: var(--text); background: hsl(var(--hue) var(--chip-bg)); }
+.space-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--hue) var(--chip-fg));
+  transition: box-shadow 200ms ease;
+}
+.space-chip.on .space-dot { animation: space-dot-pop 320ms cubic-bezier(0.3, 0.7, 0.4, 1.5); }
+@keyframes space-dot-pop {
+  0% { transform: scale(0.4); }
+  100% { transform: scale(1); }
+}
+/* Something in a background Space wants you: a ring in the state color. */
+.space-chip.attn-needs .space-dot { box-shadow: 0 0 0 2px var(--bg-sidebar), 0 0 0 3.5px var(--state-needs); }
+.space-chip.attn-unseen .space-dot { box-shadow: 0 0 0 2px var(--bg-sidebar), 0 0 0 3.5px var(--state-done); }
+.space-chip.on.attn-needs .space-dot, .space-chip.on.attn-unseen .space-dot { box-shadow: none; }
+.space-name {
+  min-width: 0;
+  max-width: 0;
+  margin-left: 0;
+  opacity: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: max-width 260ms cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease;
+}
+.space-chip.on .space-name { max-width: 160px; margin-left: 6px; opacity: 1; transition-delay: 0ms, 0ms, 60ms; }
+@media (prefers-reduced-motion: reduce) {
+  .space-chip, .space-name, .space-dot { transition: none; animation: none !important; }
+}

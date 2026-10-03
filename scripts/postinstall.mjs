@@ -46,3 +46,22 @@ try {
 } catch (err) {
   console.warn("postinstall: could not install electron binary:", err.message);
 }
+
+// Dev runs use the stock Electron.app, and macOS titles the app menu (and ⌘-Tab,
+// with the icon) from the bundle, not from app.name: brand it as cmd. Its ad-hoc
+// signature doesn't seal Info.plist or resources, so no re-signing is needed.
+if (process.platform === "darwin") {
+  try {
+    const req = createRequire(path.resolve("apps/desktop/package.json"));
+    const bundle = path.join(path.dirname(req.resolve("electron/package.json")), "dist/Electron.app");
+    const plist = path.join(bundle, "Contents/Info.plist");
+    for (const key of ["CFBundleName", "CFBundleDisplayName"]) execFileSync("/usr/bin/plutil", ["-replace", key, "-string", "cmd", plist]);
+    fs.copyFileSync(path.resolve("apps/desktop/build/icon.icns"), path.join(bundle, "Contents/Resources/electron.icns"));
+    fs.copyFileSync(path.resolve("apps/desktop/build/Assets.car"), path.join(bundle, "Contents/Resources/Assets.car"));
+    execFileSync("/usr/bin/plutil", ["-replace", "CFBundleIconName", "-string", "Icon", plist]);
+    const now = new Date();
+    fs.utimesSync(bundle, now, now); // so LaunchServices picks up the new name and icon
+  } catch (err) {
+    console.warn("postinstall: could not brand the dev Electron.app:", err.message);
+  }
+}

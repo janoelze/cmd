@@ -3,12 +3,17 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./magic": "./src/magic/index.ts",
+    "./magic/lint": "./src/magic/lint.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.71",
+    "@ai-sdk/openai-compatible": "^3.0.62",
     "@cmd/protocol": "workspace:*",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",
+    "ai": "^7.0.127",
     "node-pty": "^1.1.0"
   }
 }

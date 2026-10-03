@@ -2,7 +2,7 @@
 // UI. The core half (what it opens, its state) lives in packages/core/src/windows.
 // Built-ins register in ./builtin.tsx; plugin window types will register the same way.
 
-import type { ComponentType, ReactNode } from "react";
+import { createElement, lazy, Suspense, type ComponentType } from "react";
 import type { AppWindow, WindowTypeInfo } from "@cmd/protocol";
 import type { MenuEntry } from "../context.ts";
 
@@ -16,17 +16,28 @@ export interface WindowView {
   kind: string;
   /** The window's content (below the shared title bar). */
   View: ComponentType<WindowViewProps>;
-  /** Name for the sidebar and title bar; defaults to the window's title. */
-  label?(win: AppWindow): string;
-  /** Second line in the sidebar and the status bar (host, folder, …). */
-  detail?(win: AppWindow): string;
-  /** Right side of the title bar. */
-  meta?(win: AppWindow): ReactNode;
+  /**
+   * The window's Name (defaults to its title) and Place (host, folder, …), see
+   * docs/10-window-titles.md. `kind: null` hides the Kind (when the icon and
+   * name already say it). Kind comes from the type; Status and Dirty from
+   * the window's live status (setWindowStatus).
+   */
+  describe?(win: AppWindow): { name?: string; place?: string; kind?: string | null };
   /** Context-menu entries for the title bar and sidebar row. */
   menu?(win: AppWindow): MenuEntry[];
 }
 
 const views = new Map<string, WindowView>();
+
+/**
+ * A view whose code loads on first use, so heavy dependencies (an editor, a
+ * Markdown renderer) stay out of the startup bundle. Shows an empty well meanwhile.
+ */
+export function lazyView(load: () => Promise<ComponentType<WindowViewProps>>): ComponentType<WindowViewProps> {
+  const View = lazy(async () => ({ default: await load() }));
+  const fallback = createElement("div", { style: { flex: 1, background: "var(--well)" } });
+  return (props) => createElement(Suspense, { fallback }, createElement(View, props));
+}
 
 export function registerWindowView(view: WindowView): void {
   views.set(view.kind, view);

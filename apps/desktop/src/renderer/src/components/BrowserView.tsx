@@ -10,6 +10,8 @@ import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { SCROLLBAR_CSS } from "../scrollbars.ts";
+import { setWindowStatus } from "../windowActions.ts";
+import { handleEmbedMessage } from "../embed.ts";
 
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const url = typeof win.state.url === "string" ? win.state.url : null;
@@ -35,6 +37,11 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const stop = () => setLoading(false);
     // Pages get the app's scrollbars, so every window's look the same.
     const ready = () => void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
+    // What the page's preload reports (preload/guest.ts): presses, sideways scrolls.
+    const reported = (e: { channel: string; args: unknown[] }) => {
+      if (e.channel === "cmd-embed") handleEmbedMessage(wv as unknown as HTMLElement, e.args[0]);
+    };
+    wv.addEventListener("ipc-message", reported as never);
     wv.addEventListener("dom-ready", ready);
     wv.addEventListener("did-navigate", navigated as never);
     wv.addEventListener("did-navigate-in-page", navigated as never);
@@ -48,8 +55,16 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       wv.removeEventListener("did-start-loading", start);
       wv.removeEventListener("did-stop-loading", stop);
       wv.removeEventListener("dom-ready", ready);
+      wv.removeEventListener("ipc-message", reported as never);
     };
   }, [win.id]);
+
+  // Status: "Loading…" (transient, so fast loads don't flash it; see components/Slot.tsx).
+  useEffect(
+    () => setWindowStatus(win.id, loading ? { label: "Loading…", key: "loading", transient: true } : null),
+    [win.id, loading],
+  );
+  useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
 
   // Navigation requested from elsewhere (cmd open, another client): follow it.
   useEffect(() => {
@@ -118,7 +133,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
           <Symbol name="safari" size={ICON.toolbar} />
         </button>
       </div>
-      <webview ref={ref as never} className="webview" src={initial} partition="persist:cmd-browser" />
+      <webview ref={ref as never} className="webview" data-embed src={initial} partition="persist:cmd-browser" />
     </div>
   );
 }

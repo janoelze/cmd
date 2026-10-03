@@ -38,13 +38,20 @@ export interface Viewport {
   h: number;
 }
 
-export function gridLayout(ids: string[], vp: Viewport, gutter: number): Layout {
+/** Space around the windows (x: left/right edges, y: top/bottom) and between them (gap). */
+export interface Spacing {
+  x: number;
+  y: number;
+  gap: number;
+}
+
+export function gridLayout(ids: string[], vp: Viewport, sp: Spacing): Layout {
   const { cols, rows } = gridShape(ids.length);
-  const cw = (vp.w - gutter * (cols + 1)) / cols;
-  const ch = (vp.h - gutter * (rows + 1)) / rows;
+  const cw = (vp.w - 2 * sp.x - sp.gap * (cols - 1)) / cols;
+  const ch = (vp.h - 2 * sp.y - sp.gap * (rows - 1)) / rows;
   const cell = (i: number): Rect => ({
-    x: gutter + (i % cols) * (cw + gutter),
-    y: gutter + Math.floor(i / cols) * (ch + gutter),
+    x: sp.x + (i % cols) * (cw + sp.gap),
+    y: sp.y + Math.floor(i / cols) * (ch + sp.gap),
     w: cw,
     h: ch,
   });
@@ -53,8 +60,8 @@ export function gridLayout(ids: string[], vp: Viewport, gutter: number): Layout 
     rects,
     hidden: new Set(),
     dropIndex: (x, y) => {
-      const col = Math.max(0, Math.min(cols - 1, Math.floor((x - gutter / 2) / (cw + gutter))));
-      const row = Math.max(0, Math.min(rows - 1, Math.floor((y - gutter / 2) / (ch + gutter))));
+      const col = Math.max(0, Math.min(cols - 1, Math.floor((x - sp.x + sp.gap / 2) / (cw + sp.gap))));
+      const row = Math.max(0, Math.min(rows - 1, Math.floor((y - sp.y + sp.gap / 2) / (ch + sp.gap))));
       return Math.min(row * cols + col, ids.length - 1);
     },
     slots: Array.from({ length: cols * rows }, (_, i) => cell(i)),
@@ -64,13 +71,15 @@ export function gridLayout(ids: string[], vp: Viewport, gutter: number): Layout 
   };
 }
 
-/** Bottom space reserved for the strip's position bar. */
+/** Height of the strip's position bar, which sits in the bottom padding. */
 export const STRIP_BAR = 3;
+/** Space under the windows: the bottom padding plus the bar, and room for the bar with little (or no) padding. */
+export const stripBottom = (padY: number) => Math.max(padY + STRIP_BAR, STRIP_BAR + 4);
 
-export function stripLayout(ids: string[], widths: number[], vp: Viewport, gutter: number): Layout {
-  const { slots, total } = stripSlots(widths, gutter);
-  const h = vp.h - 2 * gutter - STRIP_BAR;
-  const rects = new Map(ids.map((id, i) => [id, { x: slots[i]!.x, y: gutter, w: slots[i]!.w, h }]));
+export function stripLayout(ids: string[], widths: number[], vp: Viewport, sp: Spacing): Layout {
+  const { slots, total } = stripSlots(widths, sp.x, sp.gap);
+  const h = vp.h - sp.y - stripBottom(sp.y);
+  const rects = new Map(ids.map((id, i) => [id, { x: slots[i]!.x, y: sp.y, w: slots[i]!.w, h }]));
   return {
     rects,
     hidden: new Set(),

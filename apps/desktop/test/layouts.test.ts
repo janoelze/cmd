@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { focusLayout, gridLayout, STRIP_BAR, stripLayout } from "../src/renderer/src/layouts.ts";
 
 const vp = { w: 1000, h: 600 };
+const even = { x: 8, y: 8, gap: 8 };
 
 describe("grid layout", () => {
-  const l = gridLayout(["a", "b", "c"], vp, 8); // 2×2
+  const l = gridLayout(["a", "b", "c"], vp, even); // 2×2
 
   it("places windows in cells with gutters", () => {
     expect(l.rects.get("a")).toEqual({ x: 8, y: 8, w: 488, h: 288 });
@@ -17,10 +18,18 @@ describe("grid layout", () => {
     expect(l.dropIndex(900, 100)).toBe(1);
     expect(l.dropIndex(900, 500)).toBe(2);
   });
+
+  it("pads the edges and spaces the windows independently", () => {
+    const g = gridLayout(["a", "b", "c", "d"], vp, { x: 20, y: 10, gap: 4 });
+    expect(g.rects.get("a")).toEqual({ x: 20, y: 10, w: 478, h: 288 });
+    expect(g.rects.get("d")).toEqual({ x: 502, y: 302, w: 478, h: 288 }); // ends 20 / 10 from the edges
+    expect(g.dropIndex(499, 0)).toBe(0); // left of the gap's middle
+    expect(g.dropIndex(501, 0)).toBe(1);
+  });
 });
 
 describe("strip layout", () => {
-  const l = stripLayout(["a", "b"], [400, 700], vp, 8);
+  const l = stripLayout(["a", "b"], [400, 700], vp, even);
 
   it("stacks windows horizontally at full height", () => {
     expect(l.rects.get("a")).toEqual({ x: 8, y: 8, w: 400, h: 600 - 16 - STRIP_BAR });
@@ -34,6 +43,18 @@ describe("strip layout", () => {
     expect(l.dropIndex(900, 0)).toBe(1);
     expect(l.dropIndex(411, 0)).toBe(0);
     expect(l.dropIndex(414, 0)).toBe(1);
+  });
+
+  it("pads the edges and spaces the windows independently", () => {
+    const s = stripLayout(["a", "b"], [400, 700], vp, { x: 20, y: 10, gap: 4 });
+    expect(s.rects.get("a")).toEqual({ x: 20, y: 10, w: 400, h: 600 - 10 - (10 + STRIP_BAR) });
+    expect(s.rects.get("b")!.x).toBe(424);
+    expect(s.contentWidth).toBe(20 + 400 + 4 + 700 + 20);
+  });
+
+  it("keeps room for the position bar with no padding", () => {
+    const s = stripLayout(["a"], [400], vp, { x: 0, y: 0, gap: 0 });
+    expect(s.rects.get("a")!.h).toBe(600 - STRIP_BAR - 4);
   });
 });
 

@@ -1,11 +1,13 @@
-// Incremental scanner for OSC sequences in PTY output.
-// Sequences may be split across chunks, so state is carried between calls.
+// Incremental scanner for OSC sequences in PTY output, and for bells (BEL
+// outside any escape string). Sequences may be split across chunks, so state is
+// carried between calls; kitty's OSC 99 notifications may also span sequences.
 
 export type OscEvent =
   | { type: "title"; title: string } // OSC 0 / 2
   | { type: "cwd"; cwd: string } // OSC 7 file://host/path
-  | { type: "notify"; title: string; body: string } // OSC 9 / OSC 777;notify
-  | { type: "prompt"; mark: string } // OSC 133 shell integration (A/B/C/D)
+  | { type: "notify"; title: string; body: string } // OSC 9 / OSC 777;notify / OSC 99
+  | { type: "prompt"; mark: string; exitCode?: number } // OSC 133 shell integration (A/B/C/D;exit)
+  | { type: "bell" } // BEL outside escape strings
   | { type: "request"; token: string; action: string; arg: string }; // OSC 777;cmd;<token>;<action>;<arg>
 
 const ESC = "\x1b";
@@ -14,13 +16,25 @@ const MAX_OSC = 8192;
 
 export class OscScanner {
   #inOsc = false;
+  /** Inside a DCS/APC/PM/SOS string (ESC P, _, ^, X … ST): BELs there aren't bells. */
+  #inString = false;
   #pendingEsc = false;
   #buf = "";
+  /** OSC 99 notifications being assembled, by id (d=0 means more chunks follow). */
+  #kitty = new Map<string, { title: string; body: string }>();
 
   feed(chunk: string): OscEvent[] {
     const out: OscEvent[] = [];
     for (let i = 0; i < chunk.length; i++) {
       const ch = chunk[i]!;
+      if (this.#inString) {
+        if (this.#pendingEsc) {
+          this.#pendingEsc = false;
+          if (ch === "\\") this.#inString = false;
+        }
+        if (ch === ESC) this.#pendingEsc = true;
+        continue;
+      }
       if (!this.#inOsc) {
         if (this.#pendingEsc) {
           this.#pendingEsc = false;
@@ -29,8 +43,13 @@ export class OscScanner {
             this.#buf = "";
             continue;
           }
+          if (ch === "P" || ch === "_" || ch === "^" || ch === "X") {
+            this.#inString = true;
+            continue;
+          }
         }
         if (ch === ESC) this.#pendingEsc = true;
+        else if (ch === BEL) out.push({ type: "bell" });
         continue;
       }
       // inside OSC: terminated by BEL or ST (ESC \)
@@ -59,9 +78,38 @@ export class OscScanner {
 
   #finish(out: OscEvent[]): void {
     this.#inOsc = false;
-    const ev = parseOsc(this.#buf);
+    const ev = this.#buf.startsWith("99;") ? this.#kittyNotify(this.#buf.slice(3)) : parseOsc(this.#buf);
     this.#buf = "";
     if (ev) out.push(ev);
+  }
+
+  /**
+   * kitty's notification protocol: `99;key=value:…;payload`. p= says whether the
+   * payload is the title (default) or the body, e=1 that it's base64, d=0 that more
+   * chunks with the same i= follow. Queries and other payload types are ignored.
+   */
+  #kittyNotify(rest: string): OscEvent | null {
+    const semi = rest.indexOf(";");
+    const meta = new Map((semi < 0 ? rest : rest.slice(0, semi)).split(":").map((kv) => kv.split("=", 2) as [string, string]));
+    let payload = semi < 0 ? "" : rest.slice(semi + 1);
+    const kind = meta.get("p") ?? "title";
+    if (kind !== "title" && kind !== "body") return null;
+    if (meta.get("e") === "1") {
+      try {
+        payload = Buffer.from(payload, "base64").toString("utf8");
+      } catch {
+        return null;
+      }
+    }
+    const id = meta.get("i") ?? "";
+    const n = this.#kitty.get(id) ?? { title: "", body: "" };
+    n[kind] += payload;
+    if (meta.get("d") === "0") {
+      if (this.#kitty.size < 32) this.#kitty.set(id, n);
+      return null;
+    }
+    this.#kitty.delete(id);
+    return n.title || n.body ? { type: "notify", title: n.title, body: n.body } : null;
   }
 }
 
@@ -96,8 +144,11 @@ export function parseOsc(body: string): OscEvent | null {
       if (kind !== "notify") return null;
       return { type: "notify", title, body: bodyParts.join(";") };
     }
-    case "133":
-      return { type: "prompt", mark: rest.split(";")[0] ?? "" };
+    case "133": {
+      const [mark = "", arg] = rest.split(";");
+      const code = mark === "D" && arg !== undefined && /^-?\d+$/.test(arg) ? Number(arg) : undefined;
+      return code === undefined ? { type: "prompt", mark } : { type: "prompt", mark, exitCode: code };
+    }
     default:
       return null;
   }

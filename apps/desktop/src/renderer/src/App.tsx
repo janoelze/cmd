@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PaneId } from "@cmd/protocol";
+import type { PaneId, Space, SpaceId } from "@cmd/protocol";
 import { bucketOf, needsAttention } from "@cmd/protocol";
 import { COMMANDS, prettyAccelerator, type CommandId } from "../../shared/commands.ts";
 import { cmd } from "./bridge.ts";
 import {
-  selectPane,
   bindSelection,
   closePane,
   copy,
@@ -12,18 +11,19 @@ import {
   newTerminal,
   newTerminalIn,
   newBrowser,
+  newMagic,
   newFiles,
   openableTarget,
   openPath,
+  openSession,
   resumeCommand,
-  runAction,
   sessionId,
 } from "./actions.ts";
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
-import { ago, arrangeTiles, buildRows, flatten, nextAfterClose, pushHistory, rowDetail, rowTitle, shortPath, windowIdOf, type SidebarRow } from "./model.ts";
-import type { SearchHit, SearchStatus } from "@cmd/protocol";
-import { getState, onAgentChange, onWindowFocus, usePersisted, useStore } from "./store.ts";
+import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, nextAfterClose, pushHistory, shortPath, spaceAttention, windowIdOf, type SidebarRow } from "./model.ts";
+import type { SearchStatus } from "@cmd/protocol";
+import { getState, onNotification, onWindowFocus, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
@@ -31,28 +31,18 @@ import type { Rect } from "./layouts.ts";
 import { windowActions } from "./windowActions.ts";
 import { stateStr, viewFor } from "./windows/registry.ts";
 import { toggleMarkdownEdit } from "./windows/markdown.tsx";
-import { builtinTools } from "./tools.ts";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
-import { Sidebar, type SidebarTab } from "./components/Sidebar.tsx";
-import { SettingsView } from "./components/SettingsView.tsx";
+import { Sidebar, SIDEBAR_WIDTH, type SidebarRequest } from "./components/Sidebar.tsx";
+import { SpaceBar } from "./components/SpaceBar.tsx";
+import { closeSpace, showSpace, usePickers, type Picker } from "./spaces.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 
 function searchStatusLabel(s: SearchStatus | null): string {
   if (!s) return "";
   if (s.indexing && s.total) return `Indexing ${s.done.toLocaleString()} / ${s.total.toLocaleString()}…`;
   return `${s.sessions.toLocaleString()} session${s.sessions === 1 ? "" : "s"} indexed`;
-}
-
-/** Switch to a session if it is open in a terminal, otherwise resume it in a new one. */
-async function openSession(h: SearchHit): Promise<void> {
-  const live = [...getState().agents.values()].find(
-    (a) => a.paneId && (a.native.claudeSessionId === h.sessionId || a.native.codexThreadId === h.sessionId),
-  );
-  if (live?.paneId) return selectPane(live.paneId);
-  const agent = await cmd.call("agent.resume", { agent: h.agent, sessionId: h.sessionId, cwd: h.cwd, configDir: h.configDir });
-  if (agent.paneId) selectPane(agent.paneId);
 }
 
 /** True when a text field (palette, settings) has focus, so Edit commands target it. */
@@ -62,26 +52,48 @@ const editingText = () => {
   return (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && !el.closest(".xterm");
 };
 
+/** Visual bell: flash the window's outline (restarts if it's already flashing). */
+function flashWindow(paneId: PaneId): void {
+  const tile = document.querySelector<HTMLElement>(`.tile[data-pane="${CSS.escape(paneId)}"]`);
+  if (!tile) return;
+  tile.classList.remove("bell");
+  void tile.offsetWidth; // restart the animation
+  tile.classList.add("bell");
+  // Only the tile's own animation: title-bar slots inside it animate too.
+  const done = (e: AnimationEvent) => {
+    if (e.target !== tile) return;
+    tile.classList.remove("bell");
+    tile.removeEventListener("animationend", done);
+  };
+  tile.addEventListener("animationend", done);
+}
+
 export function App() {
-  const s = useStore();
+  /** Everything, every Space: attention, the Dock badge, cross-Space jumps. */
+  const all = useStore();
+  /** What this app window shows: its Space's terminals, agents and windows. */
+  const s = useMemo(() => inSpace(all), [all]);
+  const space = all.spaces.get(all.spaceId);
   const keys = useKeybindings();
   const cfg = s.settings.settings;
-  // Remembered across restarts (stored in the core, see usePersisted).
-  const [selected, setSelected] = usePersisted<PaneId | null>("selection.pane", null);
+  // Per Space, remembered across restarts (stored in the core, see useSpaceView).
+  const [selected, setSelected] = useSpaceView<PaneId | null>("selection.pane", null);
   // Most recently used terminals, for picking what to focus after one closes.
-  const [history, setHistory] = usePersisted<PaneId[]>("selection.history", []);
-  const [mode, setMode] = usePersisted<ViewMode>("view.mode", cfg["ui.defaultView"]);
-  const [tab, setTab] = usePersisted<SidebarTab>("sidebar.tab", "sessions");
+  const [history, setHistory] = useSpaceView<PaneId[]>("selection.history", []);
+  const [mode, setMode] = useSpaceView<ViewMode>("view.mode", cfg["ui.defaultView"]);
   const [sidebarOpen, setSidebarOpen] = usePersisted("sidebar.open", true);
+  // null: the default width (double-click the sidebar's edge).
+  const [sidebarWidth, setSidebarWidth] = usePersisted<number | null>("sidebar.width", null);
+  const [sidebarRequest, setSidebarRequest] = useState<SidebarRequest | null>(null);
   const [zoom, setZoom] = usePersisted("terminal.zoom", 0);
   const [recent, setRecent] = usePersisted<string[]>("palette.recent", []);
   // One spatial order shared by grid and strip.
-  const [gridOrder, setGridOrder] = usePersisted<PaneId[]>("grid.order", []);
+  const [gridOrder, setGridOrder] = useSpaceView<PaneId[]>("grid.order", []);
   // Strip widths as fractions of the pane (see strip.ts).
-  const [stripWidths, setStripWidths] = usePersisted<Record<PaneId, number>>("strip.widths", {});
+  const [stripWidths, setStripWidths] = useSpaceView<Record<PaneId, number>>("strip.widths", {});
   // Canvas: where each window sits (world px) and the camera (see canvas.ts).
-  const [canvasRects, setCanvasRects] = usePersisted<Record<PaneId, Rect>>("canvas.rects", {});
-  const [camera, setCamera] = usePersisted<Camera>("canvas.camera", DEFAULT_CAMERA);
+  const [canvasRects, setCanvasRects] = useSpaceView<Record<PaneId, Rect>>("canvas.rects", {});
+  const [camera, setCamera] = useSpaceView<Camera>("canvas.camera", DEFAULT_CAMERA);
   const setStripWidth = (id: PaneId, fraction: number) =>
     setStripWidths((w) => {
       const alive = getState().panes;
@@ -92,7 +104,19 @@ export function App() {
   // Transient: sheets don't reopen on launch.
   /** Palette open, with an optional initial query ("?" for session search). */
   const [palette, setPalette] = useState<false | string>(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Space pickers (open/switch, move a window, rename); see spaces.tsx. */
+  const [picker, setPicker] = useState<Picker | null>(null);
+
+  // Spaces: the switcher's order, what waits in each, and the one shown before (Last Space).
+  const openSpaces = useMemo(() => [...all.spaces.values()].sort((a, b) => a.order - b.order), [all.spaces]);
+  const waiting = useMemo(() => spaceAttention(all), [all.agents, all.panes]);
+  const lastSpace = useRef<SpaceId | null>(null);
+  const shownSpace = useRef(all.spaceId);
+  useEffect(() => {
+    if (shownSpace.current !== all.spaceId) lastSpace.current = shownSpace.current;
+    shownSpace.current = all.spaceId;
+  }, [all.spaceId]);
+  useEffect(() => void (document.title = space?.name ?? "cmd"), [space?.name]);
 
   useEffect(() => terminals.setZoom(zoom), [zoom]);
 
@@ -111,6 +135,9 @@ export function App() {
   }, []);
 
   const select = useCallback((paneId: PaneId) => {
+    // In another Space: main shows that Space (here or in the window showing it) and selects it there.
+    const target = spaceOfWindow(paneId);
+    if (target && target !== getState().spaceId) return showSpace(target, { select: paneId });
     deselected.current = false;
     setSelected(paneId);
     setHistory((h) => pushHistory(h, paneId));
@@ -119,6 +146,7 @@ export function App() {
   }, []);
 
   useEffect(() => bindSelection(select, () => selectedRef.current), [select]);
+  useEffect(() => void performance.mark("boot:app-mounted"), []);
   // Test hook for the e2e smoke test.
   useEffect(() => {
     (window as unknown as { __cmdSelect?: (id: PaneId) => void }).__cmdSelect = select;
@@ -155,39 +183,57 @@ export function App() {
     viewOrderBefore.current = viewOrder;
   }, [viewOrder]);
 
-  // Seeing an agent finish while it is selected counts as seen.
+  // Looking at a window (selected, app focused) counts as seeing it: an agent's
+  // finished turn, a terminal's attention marker, its notification in Notification Center.
+  const [appFocused, setAppFocused] = useState(() => document.hasFocus());
   useEffect(() => {
-    const a = selected ? s.agents.get(s.panes.get(selected)?.agentId ?? "") : undefined;
-    if (a && bucketOf(a) === "unseen" && document.hasFocus()) void cmd.call("agent.markSeen", { agentId: a.id });
-  }, [s, selected]);
+    const on = () => setAppFocused(true);
+    const off = () => setAppFocused(false);
+    window.addEventListener("focus", on);
+    window.addEventListener("blur", off);
+    return () => (window.removeEventListener("focus", on), window.removeEventListener("blur", off));
+  }, []);
+  useEffect(() => {
+    if (!selected || !appFocused) return;
+    const pane = s.panes.get(selected);
+    const a = pane ? s.agents.get(pane.agentId ?? "") : undefined;
+    if (a && bucketOf(a) === "unseen") void cmd.call("agent.markSeen", { agentId: a.id });
+    if (pane?.attention) void cmd.call("pane.clearAttention", { paneId: pane.id });
+    cmd.closeNotification(selected);
+  }, [s, selected, appFocused]);
 
-  // Dock badge.
-  const attention = useMemo(() => [...s.agents.values()].filter(needsAttention).length, [s.agents]);
+  // Dock badge: agents and terminals waiting for you, in every Space.
+  const attention = useMemo(
+    () =>
+      [...all.agents.values()].filter(needsAttention).length +
+      [...all.panes.values()].filter((p) => p.attention && !p.agentId).length,
+    [all.agents, all.panes],
+  );
   useEffect(() => cmd.setBadge(cfg["notifications.dockBadge"] ? attention : 0), [attention, cfg]);
 
-  // Notifications on transitions.
-  useEffect(
-    () =>
-      onAgentChange((prev, next) => {
-        const becameNeedy = next.state === "needs_input" && prev?.state !== "needs_input";
-        const finished = next.state === "done" && prev?.state === "working";
-        if (!becameNeedy && !finished) return;
-        const c = getState().settings.settings;
-        if ((becameNeedy && !c["notifications.needsInput"]) || (finished && !c["notifications.done"])) return;
-        if (document.hasFocus() && next.paneId === selectedRef.current) return;
-        const title = next.name ?? next.spawn.prompt ?? next.kind;
-        const n = new Notification(becameNeedy ? `${title} needs you` : `${title} is done`, {
-          body: becameNeedy ? (next.detail ?? "") : (next.lastMessage ?? "").slice(0, 200),
-          silent: !becameNeedy,
-        });
-        n.onclick = () => {
-          cmd.focusWindow();
-          if (next.paneId) select(next.paneId);
-        };
-        if (becameNeedy && !document.hasFocus()) cmd.bounce();
-      }),
-    [select],
-  );
+  // Notifications: the core decides what's worth telling (packages/core/src/notifications.ts);
+  // here, whether and how to show it, since only the UI knows focus and selection.
+  useEffect(() => {
+    const offClick = cmd.onNotificationClick((paneId) => select(paneId));
+    const off = onNotification((n) => {
+      const c = getState().settings.settings;
+      if (n.source === "bell" && n.paneId && c["notifications.visualBell"]) flashWindow(n.paneId);
+      if (!n.alert) return;
+      const looking = document.hasFocus() && n.paneId !== null && n.paneId === selectedRef.current;
+      if (c["notifications.when"] === "never" || (c["notifications.when"] === "background" && looking)) return;
+      const sound = c["notifications.sound"];
+      cmd.notify({
+        tag: n.paneId ?? n.id,
+        title: n.title,
+        body: n.body,
+        sound: n.urgent && sound !== "none" ? sound : null,
+        paneId: n.paneId,
+      });
+      const bounce = c["notifications.bounceDock"];
+      if (!document.hasFocus() && (bounce === "any" || (bounce === "needsInput" && n.urgent))) cmd.bounce();
+    });
+    return () => (off(), offClick());
+  }, [select]);
 
   const selectRow = useCallback((r: SidebarRow) => {
     const id = windowIdOf(r);
@@ -210,19 +256,28 @@ export function App() {
     if (next) select(next);
   };
 
+  /** ⌃⌘[ / ⌃⌘]: the switcher's order, wrapping around. */
+  const stepSpace = (d: number) => {
+    const i = openSpaces.findIndex((x) => x.id === all.spaceId);
+    const next = openSpaces[(i + d + openSpaces.length) % openSpaces.length];
+    if (next && next.id !== all.spaceId) showSpace(next.id);
+  };
+
   // ── commands ───────────────────────────────────────────
   // One handler per command id; the menu bar, palette and context menus all call these.
   const handlers: Record<CommandId, () => void> = {
-    "app.settings": () => setSettingsOpen(true),
+    "app.settings": () => cmd.openSettings(),
     "file.newTerminal": () => void newTerminal(),
     "file.newClaude": () => void newAgent("claude"),
     "file.newCodex": () => void newAgent("codex"),
     "file.newBrowser": () => void newBrowser(),
     "file.newFiles": () => void newFiles(),
+    "file.newMagic": () => void newMagic(),
+    "view.magicChange": () => windowActions(selected)?.change?.(),
     "file.close": () => {
-      // ⌘W closes the frontmost thing: an open sheet, then the terminal, then the window.
-      if (palette !== false) setPalette(false);
-      else if (settingsOpen) setSettingsOpen(false);
+      // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
+      if (picker) setPicker(null);
+      else if (palette !== false) setPalette(false);
       else if (selected) void closePane(selected);
       else cmd.closeWindow();
     },
@@ -239,7 +294,7 @@ export function App() {
     },
     "edit.clear": () => selected && terminals.clear(selected),
     "view.palette": () => setPalette((p) => (p === false ? "" : false)),
-    "view.search": () => setPalette("?"),
+    "view.search": () => (setSidebarOpen(true), setSidebarRequest({ kind: "search", at: Date.now() })),
     "view.focus": () => setMode("focus"),
     "view.grid": () => setMode("grid"),
     "view.strip": () => setMode("strip"),
@@ -256,15 +311,15 @@ export function App() {
       setStripWidth(selected, nextPreset(stripWidths[selected] ?? DEFAULT_FRACTION));
     },
     "view.sidebar": () => setSidebarOpen((o) => !o),
-    "view.sessions": () => (setSidebarOpen(true), setTab("sessions")),
-    "view.tools": () => (setSidebarOpen(true), setTab("tools")),
     "view.zoomIn": () => setZoom((z) => Math.min(24, z + 1)),
     "view.zoomOut": () => setZoom((z) => Math.max(-6, z - 1)),
     "view.zoomReset": () => setZoom(0),
     "session.next": () => step(1),
     "session.prev": () => step(-1),
     "session.nextAttention": () => {
-      const target = flat.find((r) => r.agent && needsAttention(r.agent) && r.pane);
+      // This Space first, then the others (select switches Space).
+      const wants = (r: SidebarRow) => r.pane && ((r.agent && needsAttention(r.agent)) || (!r.agent && r.pane.attention));
+      const target = flat.find(wants) ?? flatten(buildRows(all)).find(wants);
       if (target?.pane) select(target.pane.id);
     },
     "session.copyResume": () => {
@@ -279,6 +334,17 @@ export function App() {
     ...(Object.fromEntries(
       [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`session.select${n}`, () => withPane[n - 1] && selectRow(withPane[n - 1]!)]),
     ) as Record<`session.select${number}`, () => void>),
+    "file.openSpace": () => setPicker({ kind: "space" }),
+    "space.next": () => stepSpace(1),
+    "space.prev": () => stepSpace(-1),
+    "space.last": () => lastSpace.current && all.spaces.has(lastSpace.current) && showSpace(lastSpace.current),
+    "space.moveWindow": () => selected && setPicker({ kind: "move", windowId: selected }),
+    "space.rename": () => space && setPicker({ kind: "rename", space }),
+    "space.reveal": () => space && cmd.openPath(space.root),
+    "space.close": () => space && void closeSpace(space),
+    ...(Object.fromEntries(
+      [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`space.select${n}`, () => openSpaces[n - 1] && showSpace(openSpaces[n - 1]!.id)]),
+    ) as Record<`space.select${number}`, () => void>),
     "help.docs": () => cmd.openDocs(),
   };
   const handlersRef = useRef(handlers);
@@ -287,7 +353,8 @@ export function App() {
 
   useEffect(() => cmd.onCommand(run), [run]);
   useEffect(() => cmd.onOpenUrl((url) => void newBrowser(url)), []);
-  useEffect(() => onWindowFocus((id) => select(id)), [select]);
+  // `open` in a terminal: follow it, unless it came from another Space while this window is in the background.
+  useEffect(() => onWindowFocus((id) => (document.hasFocus() || spaceOfWindow(id) === getState().spaceId) && select(id)), [select]);
 
   // Tell the menu bar what is checked/enabled.
   useEffect(() => {
@@ -308,9 +375,14 @@ export function App() {
         "session.copyId": !!(currentAgent && sessionId(currentAgent)),
         "session.reveal": hasPane,
         "session.nextAttention": attention > 0,
+        "space.next": openSpaces.length > 1,
+        "space.prev": openSpaces.length > 1,
+        "space.moveWindow": hasPane && openSpaces.length > 1,
+        "space.close": !!space && !space.home,
+        "space.rename": !!space,
       },
     });
-  }, [mode, sidebarOpen, selected, withPane.length, currentAgent, attention]);
+  }, [mode, sidebarOpen, selected, withPane.length, currentAgent, attention, openSpaces.length, space]);
 
   // ── context menus ──────────────────────────────────────
 
@@ -324,6 +396,8 @@ export function App() {
       ...(windowIdOf(r)
         ? [
             { label: "Show", run: () => select(windowIdOf(r)!) },
+            ...(r.pane ? [muteEntry(r.pane.id)] : []),
+            { label: "Move to Space…", run: () => setPicker({ kind: "move", windowId: windowIdOf(r)! }), enabled: openSpaces.length > 1 },
             { label: r.pane ? "Close Terminal" : "Close Window", run: () => void closePane(windowIdOf(r)!) },
             "-" as const,
           ]
@@ -348,6 +422,48 @@ export function App() {
     ]);
   };
 
+  /** Right-click on a Space in the switcher. */
+  const spaceMenu = (sp: Space) =>
+    void showContextMenu([
+      { label: "Show", run: () => showSpace(sp.id), enabled: sp.id !== all.spaceId },
+      { label: "Open in New Window", run: () => showSpace(sp.id, { newWindow: true }), enabled: sp.id !== all.spaceId },
+      "-",
+      { label: "Rename…", run: () => setPicker({ kind: "rename", space: sp }) },
+      { label: "Show Folder in Finder", run: () => cmd.openPath(sp.root) },
+      { label: "Copy Path", run: () => copy(sp.root) },
+      "-",
+      { label: "Close Space…", run: () => void closeSpace(sp), enabled: !sp.home },
+    ]);
+
+  const spaceBar = (
+    <SpaceBar
+      spaces={openSpaces}
+      current={all.spaceId}
+      attention={waiting}
+      onShow={(id) => showSpace(id)}
+      onMenu={spaceMenu}
+      onPicker={() => setPicker({ kind: "space" })}
+    />
+  );
+  const pickerProps = usePickers(picker, () => setPicker(null));
+
+  /** The sidebar's + button. */
+  const newMenu = () =>
+    void showContextMenu(
+      (["file.newTerminal", "file.newClaude", "file.newCodex", "-", "file.newBrowser", "file.newFiles", "file.newMagic"] as const).map((id) =>
+        id === "-" ? id : { label: COMMANDS.find((c) => c.id === id)!.label, run: () => run(id) },
+      ),
+    );
+
+  /** Per-terminal mute: no system notifications from it (its marker still shows). */
+  const muteEntry = (paneId: PaneId) => {
+    const muted = !!getState().panes.get(paneId)?.muted;
+    return {
+      label: muted ? "Unmute Notifications" : "Mute Notifications",
+      run: () => void cmd.call("pane.setMuted", { paneId, muted: !muted }),
+    };
+  };
+
   const terminalMenu = (paneId: PaneId) => {
     select(paneId);
     void showContextMenu([
@@ -364,6 +480,8 @@ export function App() {
           void cmd.call("pane.reset", { paneId });
         },
       },
+      "-",
+      muteEntry(paneId),
       "-",
       { label: "Close Terminal", run: () => void closePane(paneId) },
     ]);
@@ -405,37 +523,44 @@ export function App() {
       hint: prettyAccelerator(keys.bindings[c.id]?.[0]),
       run: () => run(c.id),
     })),
-    ...withPane.map((r) => ({
-      id: `s-${r.key}`,
-      group: "Sessions" as const,
-      label: `${rowTitle(r)} — ${r.pane ? shortPath(r.pane.cwd) : rowDetail(r, Date.now())}`,
-      run: () => select(windowIdOf(r)!),
-    })),
-    ...builtinTools.flatMap((t) =>
-      t.controls.flatMap((c) =>
-        c.type === "button"
-          ? [{ id: `t-${t.id}-${c.id}`, group: "Tools" as const, label: `${t.title}: ${c.label}`, run: () => void runAction(c.action) }]
-          : [],
-      ),
-    ),
+    ...withPane.map((r) => {
+      const f = fieldsOf(r, undefined, Date.now());
+      return {
+        id: `s-${r.key}`,
+        group: "Sessions" as const,
+        label: f.place ? `${f.name} — ${f.place}` : f.name,
+        run: () => select(windowIdOf(r)!),
+      };
+    }),
   ];
 
   return (
     <div
-      className={`app ${sidebarOpen ? "" : "no-sidebar"}`}
-      style={{ ["--sidebar-w" as string]: `${cfg["ui.sidebarWidth"]}px` }}
+      className={`app ${sidebarOpen ? "" : "no-sidebar"} ${cfg["ui.unfocusedDesaturation"] > 0 ? "desaturate" : ""}`}
+      style={{
+        ["--sidebar-w" as string]: `${sidebarWidth ?? SIDEBAR_WIDTH.default}px`,
+        ["--window-radius" as string]: `${cfg["ui.windowRadius"]}px`,
+        ["--gutter" as string]: `${cfg["ui.gutter"]}px`,
+        ["--pad-x" as string]: `${cfg["ui.paddingX"]}px`,
+        ["--pad-y" as string]: `${cfg["ui.paddingY"]}px`,
+        ["--window-desaturate" as string]: `${cfg["ui.unfocusedDesaturation"] / 100}`,
+      }}
     >
-      {!sidebarOpen && <div className="drag-strip" />}
+      {!sidebarOpen && <div className="drag-strip">{spaceBar}</div>}
       {sidebarOpen && (
         <Sidebar
-          tab={tab}
-          onTab={setTab}
+          spaceBar={spaceBar}
           rows={rows}
           selected={selected}
           onSelect={selectRow}
           onRowMenu={rowMenu}
+          onClose={(r) => windowIdOf(r) && void closePane(windowIdOf(r)!)}
+          onNew={newMenu}
           onNewTerminal={() => void newTerminal()}
+          onWidth={setSidebarWidth}
+          request={sidebarRequest}
           stats={stats}
+          search={s.search}
           connected={s.connected}
           error={s.error}
         />
@@ -479,7 +604,7 @@ export function App() {
           searchStatus={searchStatusLabel(s.search)}
         />
       )}
-      {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
+      {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}
     </div>
   );
 }

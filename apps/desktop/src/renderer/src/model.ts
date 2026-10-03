@@ -1,6 +1,6 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, type Agent, type AppWindow, type Pane, type PaneId } from "@cmd/protocol";
+import { bucketOf, needsAttention, type Agent, type AppWindow, type Pane, type PaneId, type SpaceId } from "@cmd/protocol";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "./windows/registry.ts";
 
@@ -21,6 +21,28 @@ export interface SidebarRow {
 }
 
 const RANK = { needs: 0, unseen: 1, rest: 2 } as const;
+
+/** The state as one Space sees it: only its terminals, agents and windows. */
+export function inSpace(s: State, spaceId: SpaceId = s.spaceId): State {
+  const only = <K, V extends { spaceId: SpaceId }>(m: Map<K, V>) => new Map([...m].filter(([, v]) => v.spaceId === spaceId));
+  return { ...s, panes: only(s.panes), agents: only(s.agents), windows: only(s.windows) };
+}
+
+/** What waits in each Space: something needing you, or done and unseen (for the Space switcher). */
+export function spaceAttention(s: State): Map<SpaceId, "needs" | "unseen"> {
+  const out = new Map<SpaceId, "needs" | "unseen">();
+  const mark = (id: SpaceId, v: "needs" | "unseen") => out.get(id) !== "needs" && out.set(id, v);
+  for (const a of s.agents.values()) {
+    if (needsAttention(a)) mark(a.spaceId, bucketOf(a) === "needs" ? "needs" : "unseen");
+  }
+  for (const p of s.panes.values()) if (p.attention && !p.agentId) mark(p.spaceId, p.attention.urgent ? "needs" : "unseen");
+  return out;
+}
+
+/** Is `p` the folder `root` or inside it (whole segments)? */
+export function under(root: string, p: string): boolean {
+  return p === root || p.startsWith(root.endsWith("/") ? root : root + "/");
+}
 
 export function buildRows(s: State): SidebarRow[] {
   const agents = [...s.agents.values()];
@@ -47,24 +69,50 @@ export function buildRows(s: State): SidebarRow[] {
     if (!isChild(agent)) roots.push(toRow(pane, agent));
   }
   // Hosts whose terminal is gone but whose workers are still running.
-  const orphans: SidebarRow[] = [];
-  for (const a of agents) if (!a.paneId && !isChild(a)) orphans.push(toRow(null, a));
+  for (const a of agents) if (!a.paneId && !isChild(a)) roots.push(toRow(null, a));
 
   for (const w of s.windows.values()) {
     roots.push({ key: w.id, pane: null, win: w, agent: null, children: [], urgent: null });
   }
 
-  // needs-input first (longest wait first), then done-but-unseen (oldest first),
-  // then everything else by recency — same rule as @cmd/protocol's sortRows.
+  // By sidebar section; within one, needs-input first (longest wait first), then
+  // done-but-unseen (oldest first), then everything else by recency — same rule
+  // as @cmd/protocol's sortRows.
   const activity = (r: SidebarRow) => Math.max(r.pane?.lastActivityAt ?? r.win?.updatedAt ?? 0, r.agent?.stateSince ?? 0);
-  const sorted = [...roots].sort((a, b) => {
+  return roots.sort((a, b) => {
+    const sa = SECTIONS.indexOf(sectionOf(a));
+    const sb = SECTIONS.indexOf(sectionOf(b));
+    if (sa !== sb) return sa - sb;
     const ba = RANK[bucketOf(a.urgent)];
     const bb = RANK[bucketOf(b.urgent)];
     if (ba !== bb) return ba - bb;
     if (ba === RANK.rest) return activity(b) - activity(a);
     return a.urgent!.stateSince - b.urgent!.stateSince;
   });
-  return [...sorted, ...orphans];
+}
+
+/** Sidebar sections of the open rows, in display order. */
+export const SECTIONS = ["needs", "agents", "windows"] as const;
+export type Section = (typeof SECTIONS)[number];
+
+/** Needs you: an agent (or one of its workers) waiting for input. Else agents, then plain windows. */
+export function sectionOf(r: SidebarRow): Section {
+  if (r.urgent && bucketOf(r.urgent) === "needs") return "needs";
+  return r.agent ? "agents" : "windows";
+}
+
+/**
+ * Sidebar search over open rows, children included, as a flat list: every
+ * whitespace-separated term must appear in the row's name, place, kind or cwd.
+ */
+export function filterRows(rows: SidebarRow[], query: string, now = Date.now()): SidebarRow[] {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+  return flatten(rows).filter((r) => {
+    const f = fieldsOf(r, undefined, now);
+    const hay = [f.name, f.place, f.kind, r.agent?.cwd, r.pane?.cwd, r.agent?.lastPrompt].filter(Boolean).join(" ").toLowerCase();
+    return terms.every((t) => hay.includes(t));
+  });
 }
 
 /** The window a row stands for (terminal: pane id), if any. */
@@ -94,36 +142,91 @@ function cleanTitle(t: string | undefined): string {
   return (t ?? "").replace(/^[\s✳✻✽✶✢·•*◐◑◒◓⠀-⣿]+/u, "").trim();
 }
 
-/** Like the fork: terminal title, else last prompt, else spawn prompt, else agent name. */
-export function rowTitle(r: SidebarRow): string {
-  if (r.win) return viewFor(r.win.kind)?.label?.(r.win) ?? (r.win.title || typeFor(r.win.kind)?.title || r.win.kind);
-  const a = r.agent;
-  const t = cleanTitle(r.pane?.title);
-  const generic = !t || GENERIC_TITLES.has(t.toLowerCase()) || t === r.pane?.foreground;
-  if (a) return a.name ?? (!generic ? t : null) ?? a.lastPrompt ?? a.spawn.prompt ?? a.kind;
-  return t || r.pane?.foreground || "terminal";
+/** Live status a window reports (see windowActions.ts); terminals have none. */
+export interface LiveStatus {
+  label: string;
+  key?: string;
+  transient?: boolean;
+  dirty?: boolean;
 }
 
-export function rowDetail(r: SidebarRow, now: number): string {
-  if (r.win) return viewFor(r.win.kind)?.detail?.(r.win) ?? "";
-  const a = r.agent;
-  if (!a) return shortPath(r.pane?.cwd ?? "");
-  switch (a.state) {
-    case "needs_input":
-      return a.detail ?? "Needs input";
-    case "working":
-      return a.detail ?? "Working…";
-    case "done":
-      return `Done ${ago(a.stateSince, now)}`;
-    case "starting":
-      return "Starting…";
-    case "exited":
-      return "Exited";
-    case "failed":
-      return a.detail ?? "Failed";
-    default:
-      return `${a.kind} · idle`;
+/** A window's title fields, the same for every type (docs/10-window-titles.md). */
+export interface WindowFields {
+  /** What it is about: short, no path. */
+  name: string;
+  /** What runs or is open in it: the process, or the type, lowercase. Absent when it equals the name. */
+  kind?: string;
+  /** Where it lives (folder, host); never equal to the name. */
+  place?: string;
+  /** Live state; `key` says which state, so a changed text with the same key updates in place. */
+  status?: { text: string; key: string; transient?: boolean };
+  dirty?: boolean;
+  /** Agents: the status light (Mark). Everything else shows `icon`. */
+  light?: Led;
+  icon: string;
+}
+
+export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: number): WindowFields {
+  let f: WindowFields;
+  if (r.win) {
+    const w = r.win;
+    const type = typeFor(w.kind);
+    const d = viewFor(w.kind)?.describe?.(w) ?? {};
+    f = {
+      name: d.name || w.title || type?.title || w.kind,
+      kind: d.kind === null ? undefined : (d.kind ?? type?.title ?? w.kind).toLowerCase(),
+      place: d.place || undefined,
+      status: live ? { text: live.label, key: live.key ?? live.label, transient: live.transient } : undefined,
+      dirty: live?.dirty,
+      icon: type?.icon ?? "macwindow",
+    };
+  } else {
+    const a = r.agent;
+    const p = r.pane;
+    const t = cleanTitle(p?.title);
+    const generic = !t || GENERIC_TITLES.has(t.toLowerCase()) || t === p?.foreground;
+    const cwd = p?.cwd ?? a?.cwd;
+    const attn = p?.attention ?? null;
+    f = {
+      // Like the fork: agent name, else terminal title, else last prompt, else spawn prompt.
+      name: a
+        ? (a.name ?? (!generic ? t : null) ?? a.lastPrompt ?? a.spawn.prompt ?? a.kind)
+        : (!generic ? t : null) || p?.foreground || "Terminal",
+      kind: p?.foreground || a?.kind || "terminal",
+      place: cwd ? shortPath(cwd) : undefined,
+      // A terminal's attention marker (a bell, a notification, a finished command;
+      // see packages/core/src/notifications.ts) shows like an agent's state until seen.
+      status: a ? agentStatus(a, now) : attn ? { text: attn.text, key: `attention:${attn.kind}` } : undefined,
+      light: a ? ledOf(a) : attn ? (attn.urgent ? "needs" : "unseen") : undefined,
+      icon: "terminal",
+    };
   }
+  // Rule 2: no repeats (a shell named after its process, a page titled with its host).
+  if (f.kind === f.name) f.kind = undefined;
+  if (f.place === f.name) f.place = undefined;
+  return f;
+}
+
+function agentStatus(a: Agent, now: number): { text: string; key: string } {
+  const text = (() => {
+    switch (a.state) {
+      case "needs_input":
+        return a.detail ?? "Needs input";
+      case "working":
+        return a.detail ?? "Working…";
+      case "done":
+        return `Done ${ago(a.stateSince, now)}`;
+      case "starting":
+        return "Starting…";
+      case "exited":
+        return "Exited";
+      case "failed":
+        return a.detail ?? "Failed";
+      default:
+        return "idle";
+    }
+  })();
+  return { text, key: a.state };
 }
 
 export type Led = "needs" | "unseen" | "done" | "working" | "idle" | "shell" | "off";

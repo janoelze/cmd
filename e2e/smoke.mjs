@@ -100,6 +100,8 @@ const menu = (id) => (
 );
 const accel = (id) => app.evaluate(({ Menu }, id) => Menu.getApplicationMenu()?.getMenuItemById(id)?.accelerator ?? null, id);
 const panes = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.length));
+// Layout and selection live in the shown Space's view (docs/11-spaces.md); these checks run in Home.
+const homeView = () => win.evaluate(() => window.cmd.call("space.list", {}).then((l) => l.find((s) => s.home).view));
 // Windows in visual order (reading order); the DOM keeps a stable creation order.
 const visualTiles = async () => {
   const ids = await win.locator(".windows-track > .tile:not(.hidden-tile)").evaluateAll((els) =>
@@ -110,7 +112,6 @@ const visualTiles = async () => {
   );
   return ids.map((id) => win.locator(`.tile[data-pane="${id}"]`));
 };
-const selectedTitle = () => win.locator(".row.sel .row-title").textContent();
 
 await win.waitForSelector(".sidebar-status");
 await win.screenshot({ path: path.join(shots, "1-empty.png") });
@@ -155,10 +156,10 @@ check((await panes()) === 2, "two terminals open");
 await win.screenshot({ path: path.join(shots, "2-focus.png") });
 
 const before = await win.locator(".row.sel").getAttribute("class");
-const rowsBefore = await win.locator(".row").allTextContents();
+const rowsBefore = await win.locator(".row:not(.history)").allTextContents();
 await menu("session.next");
 await win.waitForTimeout(200);
-const selIndexAfter = await win.locator(".row").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel")));
+const selIndexAfter = await win.locator(".row:not(.history)").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel")));
 check(rowsBefore.length === 2 && selIndexAfter >= 0, `session.next moves selection (now row ${selIndexAfter + 1})`);
 void before;
 
@@ -166,11 +167,28 @@ await menu("view.grid");
 await win.waitForTimeout(400);
 check((await win.locator(".tile").count()) === 2, "grid shows both terminals");
 if (process.platform !== "win32") {
-  await win.waitForSelector(".tile-usage", { timeout: 8000 });
-  const usageText = await win.locator(".tile-usage").first().textContent();
-  check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `tile title shows memory of the process tree (${usageText})`);
-} else console.log("skip - tile memory (needs a Windows procinfo helper)");
-const panesOrder = async () => (await win.evaluate(() => window.cmd.call("ui.get", {})))["grid.order"];
+  await win.waitForSelector(".statusbar-usage .slot-v", { timeout: 8000 });
+  const usageText = await win.locator(".statusbar-usage .slot-v").first().textContent();
+  check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `status bar shows memory of the process tree (${usageText})`);
+} else console.log("skip - status bar memory (needs a Windows procinfo helper)");
+// Notifications: a bell in the other terminal marks it until you look at it.
+{
+  const other = await win.evaluate(() => document.querySelector(".tile:not(.sel)")?.getAttribute("data-pane"));
+  // A bell from the shell: PowerShell on Windows, a POSIX shell elsewhere.
+  const bell = process.platform === "win32" ? 'Write-Host -NoNewline "`a"\r' : "printf '\\a'\r";
+  await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [other, bell]);
+  const status = win.locator(`.tile[data-pane="${other}"] .slot-status .slot-v:not(.out)`);
+  await status.filter({ hasText: "Bell" }).waitFor({ timeout: 5000 });
+  check(true, "a terminal bell marks its window (Bell)");
+  await win.evaluate((id) => window.cmd.call("notify.send", { paneId: id, title: "Build", body: "done" }), other);
+  await status.filter({ hasText: "done" }).waitFor({ timeout: 3000 });
+  check(true, "cmd notify marks the terminal it came from");
+  await win.evaluate((id) => window.__cmdSelect(id), other);
+  await win.waitForFunction((id) => !document.querySelector(`.tile[data-pane="${id}"] .slot-status .slot-v:not(.out)`), other, { timeout: 3000 });
+  check(true, "looking at the terminal clears its mark");
+  await win.evaluate((id) => window.cmd.call("pane.clearAttention", { paneId: id }), other);
+}
+const panesOrder = async () => (await homeView())["grid.order"];
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
 await win.waitForTimeout(500);
 const order1 = await panesOrder();
@@ -218,9 +236,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
 
 // Session search: ?query in the palette, Enter resumes the session in a new terminal.
 {
-  await menu("view.search");
+  await menu("view.palette");
+  await win.waitForSelector(".palette");
+  await win.keyboard.type("?wiregaurd"); // typo on purpose
   await win.waitForSelector(".palette.searching");
-  await win.keyboard.type("wiregaurd"); // typo on purpose
   await win.waitForSelector(".palette-list li.rich", { timeout: 15000 });
   const label = await win.locator(".palette-list li.rich .palette-label").first().textContent();
   const snippet = await win.locator(".palette-snippet mark").first().textContent();
@@ -235,6 +254,22 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const resumed = agents.find((a) => a.native.claudeSessionId === "e2e-session-1");
   await win.evaluate((id) => window.cmd.call("pane.kill", { paneId: id }), resumed.paneId);
   await win.waitForTimeout(600);
+}
+
+// Sidebar search (⇧⌘F): filters open windows and searches past sessions; Esc leaves.
+{
+  await menu("view.search");
+  check(await win.evaluate(() => document.activeElement?.closest(".sb-search") !== null), "⇧⌘F focuses the sidebar search");
+  await win.keyboard.type("wiregaurd");
+  await win.waitForSelector(".sidebar-scroll .row.history", { timeout: 15000 });
+  const label = await win.locator(".sidebar-scroll .row.history .row-name").first().textContent();
+  check(label === "VPN auto reconnect", `sidebar search finds past sessions (${label})`);
+  await win.screenshot({ path: path.join(shots, "4c-sidebar-search.png") });
+  await win.keyboard.press("Escape");
+  check((await win.locator(".sb-search input").inputValue()) === "", "Esc clears the sidebar search");
+  await win.keyboard.press("Escape");
+  await win.waitForSelector(".sb-recent .row.history", { timeout: 5000 }).catch(() => {});
+  check((await win.locator(".sb-recent .row.history").count()) > 0, "Recent lists past sessions from the index");
 }
 
 // Browser and file windows
@@ -370,11 +405,186 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   server.close();
 }
 
-await menu("app.settings");
-await win.waitForSelector(".settings");
-await win.locator(".shortcuts-heading").scrollIntoViewIfNeeded();
-await win.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });
-await menu("file.close");
+// Embedded pages: browser pages and Magic widgets run in their own process, so
+// they report presses and sideways scrolls (renderer/src/embed.ts; browser pages
+// through preload/guest.ts, widgets by postMessage). Magic windows are staged
+// with a widget and its data, so no model runs.
+{
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const magic = [];
+  for (const name of ["Alpha", "Beta"]) {
+    const w = await call("window.open", { kind: "magic", input: {} });
+    await call("window.update", {
+      id: w.id,
+      title: name,
+      state: { prompt: name, phase: "ready", kind: "widget", html: '<div class="k-big" id="v">–</div><script>cmd.onData((d) => (v.textContent = d.text))</script>', source: null, refresh: 0, size: "m", lastData: { data: { text: `${name} data` }, at: Date.now() } },
+    });
+    magic.push(w.id);
+  }
+  await menu("view.grid");
+  await win.waitForTimeout(1200);
+  const widgetText = await win.frameLocator(`.tile[data-pane="${magic[0]}"] iframe.magic-frame`).locator("#v").textContent({ timeout: 5000 });
+  check(widgetText === "Alpha data", "a Magic widget renders its data in its sandboxed frame");
+
+  // A theme change reaches widgets live: CSS variables, and colours drawn from JavaScript (cmd.onTheme).
+  const themed = await call("window.open", { kind: "magic", input: {} });
+  await call("window.update", {
+    id: themed.id,
+    title: "Themed",
+    state: { prompt: "themed", phase: "ready", kind: "widget", html: '<canvas id="c"></canvas><script>cmd.onTheme(() => (c.dataset.bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()))</script>', source: null, refresh: 0, size: "s", lastData: null },
+  });
+  await win.waitForTimeout(1000);
+  const themedFrame = win.frameLocator(`.tile[data-pane="${themed.id}"] iframe.magic-frame`);
+  const readTheme = () => themedFrame.locator("body").evaluate(() => ({ css: getComputedStyle(document.body).backgroundColor, js: document.getElementById("c").dataset.bg }));
+  const beforeTheme = await readTheme();
+  const appearance = (await call("settings.get")).settings["theme.appearance"];
+  await call("settings.set", { key: "theme.appearance", value: appearance === "light" ? "dark" : "light" });
+  await win.waitForTimeout(1000);
+  const afterTheme = await readTheme();
+  await call("settings.set", { key: "theme.appearance", value: appearance });
+  check(!!beforeTheme.js && afterTheme.css !== beforeTheme.css && afterTheme.js !== beforeTheme.js, `a theme change reaches a widget live, CSS and cmd.onTheme (${beforeTheme.js} → ${afterTheme.js})`);
+  await call("window.close", { id: themed.id });
+  await win.waitForTimeout(600);
+
+  const selected = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
+  const clickIn = async (loc) => {
+    const b = await loc.boundingBox();
+    await win.mouse.click(b.x + b.width / 2, b.y + b.height * 0.6);
+    await win.waitForTimeout(400);
+  };
+  const frame = (id) => win.locator(`.tile[data-pane="${id}"] iframe.magic-frame`);
+  const page = win.locator(".tile.kind-browser webview");
+  const pageId = await win.locator(".tile.kind-browser").getAttribute("data-pane");
+  const term = win.locator(".tile.kind-terminal .xterm").first();
+  const termId = await win.locator(".tile.kind-terminal").first().getAttribute("data-pane");
+  const order = [];
+  for (const [loc, id] of [[term, termId], [frame(magic[0]), magic[0]], [frame(magic[1]), magic[1]], [page, pageId], [frame(magic[0]), magic[0]]]) {
+    await clickIn(loc);
+    order.push((await selected()) === id);
+  }
+  check(order.every(Boolean), `clicking from one embedded page into the next selects each window (${order.map((x) => (x ? "✓" : "✗")).join(" ")})`);
+
+  const b1 = await frame(magic[1]).boundingBox();
+  await win.mouse.move(b1.x + b1.width / 2, b1.y + b1.height / 2);
+  await win.waitForTimeout(300);
+  const hovered = await win.evaluate((id) => !!document.querySelector(`.tile[data-pane="${id}"] .magic.hovered`), magic[1]);
+  check(hovered, "hovering a Magic widget shows its window's controls");
+  const cursors = await win.evaluate((id) => [...document.querySelectorAll(`.tile[data-pane="${id}"] .magic-refine-btn`)].map((b) => getComputedStyle(b).cursor), magic[1]);
+  check(cursors.length > 0 && cursors.every((c) => c === "default"), `its buttons use the app's arrow cursor (${cursors.join(", ")})`);
+
+  await clickIn(frame(magic[0]));
+  await menu("view.magicChange");
+  const input = win.locator(`.tile[data-pane="${magic[0]}"] .magic-refine-form input`);
+  await input.waitFor({ timeout: 3000 });
+  check(await input.evaluate((el) => el === document.activeElement), "⌘L (a menu command) opens Change on the selected Magic window, even with the widget focused");
+  await win.keyboard.press("Escape");
+
+  await menu("view.strip");
+  await win.waitForTimeout(800);
+  const offset = () => win.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector(".windows-track")).transform).m41);
+  const scrolls = async (loc, id) => {
+    await win.evaluate((id) => window.__cmdSelect(id), id); // the strip reveals it
+    await win.waitForTimeout(700);
+    const b = await loc.boundingBox();
+    await win.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    for (const dx of [60, -60]) {
+      const before = await offset();
+      for (let i = 0; i < 3; i++) await win.mouse.wheel(dx, 0), await win.waitForTimeout(16);
+      const moved = (await offset()) !== before;
+      await win.waitForTimeout(500); // let it snap back to a window
+      if (moved) return true;
+    }
+    return false;
+  };
+  check(await scrolls(frame(magic[0]), magic[0]), "sideways scrolling over a Magic widget scrolls the strip");
+  check(await scrolls(page, pageId), "sideways scrolling over a browser page scrolls the strip");
+  await menu("view.grid");
+  for (const id of magic) await call("window.close", { id });
+}
+
+// Settings: its own native window (⌘,), generated from the schema; changes apply live.
+{
+  const opened = app.waitForEvent("window");
+  await menu("app.settings");
+  const sw = await opened;
+  sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
+  await sw.waitForSelector(".sw-nav-item");
+  const pages = await sw.locator(".sw-nav-label").allTextContents();
+  check(["Fonts", "Terminal", "Shell", "Opening Files", "Interface", "Canvas", "Search", "Agents", "Keyboard Shortcuts"].every((p) => pages.includes(p)), `settings has a page per group (${pages.join(", ")})`);
+  await sw.screenshot({ path: path.join(shots, "5-settings-terminal.png") });
+  const page = (name) => sw.locator(".sw-nav-item", { hasText: name }).click();
+  const row = (title) => sw.locator(".sw-row", { has: sw.locator(".sw-row-title", { hasText: title }) });
+  const saved = () => JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8").replace(/^\/\/.*$/gm, ""));
+  const waitFor = async (fn, what) => {
+    for (let i = 0; i < 40 && !fn(); i++) await sw.waitForTimeout(50);
+    check(fn(), what);
+  };
+
+  await page("Shell");
+  const tags = await sw.locator(".sw-tag").allTextContents();
+  check(tags.filter((t) => t === "new terminals only").length === 3, `settings that don't apply live are tagged (${tags.join(", ")})`);
+
+  await page("Interface");
+  await row("Show resource usage").locator(".sw-switch").click();
+  await waitFor(() => saved()["ui.showResources"] === false, "a switch saves to settings.json");
+  await row("Window corner radius").locator(".nf button[aria-label=Increase]").click();
+  await waitFor(() => saved()["ui.windowRadius"] === 9, "+ steps a number field and saves");
+  const radius = () => win.evaluate(() => document.querySelector(".app")?.style.getPropertyValue("--window-radius"));
+  for (let i = 0; i < 40 && (await radius()) !== "9px"; i++) await win.waitForTimeout(50);
+  check((await radius()) === "9px", "the app window applies it live");
+  await row("Window corner radius").locator(".sw-reset").click();
+  await sw.screenshot({ path: path.join(shots, "5-settings-interface.png") });
+  await row("Show resource usage").locator(".sw-reset").click();
+  await waitFor(() => !("ui.showResources" in saved()), "restore default removes the override");
+
+  await page("Fonts");
+  const fontSize = row("Code font size").locator("input");
+  await fontSize.fill("16");
+  await fontSize.press("Enter");
+  await waitFor(() => saved()["font.codeSize"] === 16, "the code font size saves");
+  const codePx = () => win.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--font-code-size").trim());
+  for (let i = 0; i < 40 && (await codePx()) !== "16px"; i++) await win.waitForTimeout(50);
+  check((await codePx()) === "16px", "the app's file and Markdown windows get the code font size live (--font-code-size)");
+  const fonts = await win.evaluate(() =>
+    [".file-row", ".markdown", ".markdown code"].map((sel) => {
+      const el = document.querySelector(sel);
+      return el ? [sel, getComputedStyle(el).fontFamily, getComputedStyle(el).fontSize] : null;
+    }),
+  );
+  check(fonts[0] && /Monaspace/.test(fonts[0][1]) && fonts[0][2] === `${16 * 0.9}px`, `file browser rows use the code font (${fonts[0]})`);
+  check(fonts[1] && /system-ui|-apple-system/.test(fonts[1][1]), `Markdown prose uses the text font (${fonts[1]})`);
+  check(!fonts[2] || /Monaspace/.test(fonts[2][1]), `Markdown code uses the code font (${fonts[2]})`);
+  await row("Code font size").locator(".sw-reset").click();
+
+  await page("Terminal");
+  await row("Renderer").locator(".sw-seg button", { hasText: "WebGL" }).click();
+  await waitFor(() => saved()["terminal.renderer"] === "webgl", "a segmented control saves its option");
+  await page("Fonts");
+  const size = row("Code font size").locator("input");
+  await size.fill("");
+  await size.press("Enter");
+  check((await size.inputValue()) === "14" && !("font.codeSize" in saved()), "an emptied number field reverts instead of saving 0");
+  await size.fill("99");
+  await size.press("Enter");
+  await waitFor(() => saved()["font.codeSize"] === 32, "a number field clamps to the setting's range");
+  await row("Code font size").locator(".sw-reset").click();
+  await page("Terminal");
+  await row("Line height").locator(".nf input").focus();
+  await row("Line height").locator(".nf input").press("ArrowUp");
+  await waitFor(() => saved()["terminal.lineHeight"] === 1.2, "↑ steps a number field by its step");
+  await sw.locator(".sw-page-foot .sw-button").click();
+  await waitFor(() => !("terminal.lineHeight" in saved()) && !("terminal.renderer" in saved()), "Restore Defaults resets the page");
+
+  await sw.locator(".sw-search input").fill("zoom");
+  const found = await sw.locator(".sw-row-title").allTextContents();
+  check(["Minimum zoom", "Maximum zoom"].every((t) => found.some((f) => f.startsWith(t))), `search finds settings across pages (${found.join(", ")})`);
+  await sw.locator(".sw-search input").fill("");
+
+  await page("Keyboard Shortcuts");
+  check((await sw.locator(".sw-row.shortcut kbd").count()) > 10, "keyboard shortcuts are listed");
+  await sw.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });
+  await sw.close();
+}
 
 // Live remap via keybindings.json
 fs.writeFileSync(path.join(home, "keybindings.json"), '// test\n{ "session.next": ["Ctrl+Tab"], "edit.clear": null }');
@@ -388,7 +598,6 @@ check((await accel("edit.clear")) === null, "null unbinds a shortcut");
 
 // Closing the focused terminal returns to the previously used one (MRU), not a sidebar neighbour.
 {
-  await menu("view.sessions");
   await menu("file.newTerminal");
   await win.waitForTimeout(800);
   const list = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.sort((a, b) => a.createdAt - b.createdAt).map((x) => x.id)));
@@ -400,7 +609,7 @@ check((await accel("edit.clear")) === null, "null unbinds a shortcut");
   await win.waitForTimeout(200);
   await menu("file.close");
   await win.waitForTimeout(700);
-  const sel = (await win.evaluate(() => window.cmd.call("ui.get", {})))["selection.pane"];
+  const sel = (await homeView())["selection.pane"];
   check(sel === first, "closing a terminal focuses the previously used one");
 }
 
@@ -408,10 +617,6 @@ check((await accel("edit.clear")) === null, "null unbinds a shortcut");
 await menu("file.close");
 await win.waitForTimeout(600);
 check((await panes()) === 1, "⌘W closes an idle terminal");
-
-await menu("view.tools");
-await win.waitForTimeout(200);
-await win.screenshot({ path: path.join(shots, "6-tools.png") });
 
 // ── PaperWM-style strip ──
 {
@@ -481,17 +686,17 @@ await win.screenshot({ path: path.join(shots, "6-tools.png") });
     await win.mouse.move(s0.x + 60, s0.y + 20, { steps: 3 });
     await win.mouse.move(Math.min(d1.x + d1.width / 2, pane.x + pane.width - 80), d1.y + 100, { steps: 12 });
     await win.waitForTimeout(300);
-    check((await win.locator(".ghost-slot.target").count()) === 1, "dragging in the strip shows the drop slot");
+    check((await win.locator(".tile.lifted").count()) === 1, "dragging in the strip lifts the window");
     await win.screenshot({ path: path.join(shots, "8b-strip-drag.png") });
     await win.mouse.up();
     await win.waitForTimeout(500);
-    const order = (await win.evaluate(() => window.cmd.call("ui.get", {})))["grid.order"];
+    const order = (await homeView())["grid.order"];
     check(order.indexOf(movedId) === order.indexOf(nextId) + 1, "dropping on the next window swaps their places along the strip");
   }
   await menu("session.next");
   await win.waitForTimeout(500);
   await win.screenshot({ path: path.join(shots, "8-strip.png") });
-  const widths = (await win.evaluate(() => window.cmd.call("ui.get", {})))["strip.widths"];
+  const widths = (await homeView())["strip.widths"];
   check(widths && Object.keys(widths).length >= 1, "strip widths are remembered");
   await menu("view.grid");
 }
@@ -508,25 +713,42 @@ await win.waitForTimeout(800);
 
 // ── remembered UI state across an app restart (the core keeps running) ──
 await menu("view.grid");
-await menu("view.tools");
-await win.click(".panel-title >> text=Agents"); // collapse a tool panel
+await win.click(".sb-windows .sb-heading"); // collapse a sidebar section
 await menu("view.zoomIn");
 await menu("view.zoomIn");
+{
+  // Drag the sidebar's edge; the width is UI state.
+  const edge = await win.locator(".sidebar-resize").boundingBox();
+  await win.mouse.move(edge.x + edge.width / 2, 300);
+  await win.mouse.down();
+  await win.mouse.move(300, 300, { steps: 4 });
+  await win.mouse.move(340, 300, { steps: 4 });
+  await win.mouse.up();
+}
+await win.waitForTimeout(400); // debounced writes reach the core before we read them back
 step("reading the UI state before the restart");
-const selectedBefore = await win.evaluate(() => window.cmd.call("ui.get", {}).then((u) => u["selection.pane"]));
-await win.waitForTimeout(400); // debounced writes
+const selectedBefore = (await homeView())["selection.pane"];
 step("closing the app");
 await closeApp();
 step("relaunching the app");
+
 ({ app, win } = await launch());
 await win.waitForSelector(".sidebar-status");
 await win.waitForTimeout(800);
 check((await win.locator(".main.mode-grid").count()) === 1, "view mode restored (grid)");
-check((await win.locator(".sidebar-tabs button.on").textContent()) === "Tools", "sidebar tab restored (Tools)");
-check((await win.locator(".panel.shaded").count()) === 1, "collapsed tool panel restored");
+{
+  const w = (await win.locator(".sidebar").boundingBox()).width;
+  check(Math.abs(w - 340) <= 1, `dragged sidebar width restored (${w})`);
+  await win.locator(".sidebar-resize").dblclick();
+  await win.waitForTimeout(100);
+  const reset = (await win.locator(".sidebar").boundingBox()).width;
+  check(Math.abs(reset - 280) <= 1, `double-clicking the edge resets the width (${reset})`);
+}
+check((await win.locator('.sb-windows .sb-heading[aria-expanded="false"]').count()) === 1, "collapsed sidebar section restored");
 const ui = await win.evaluate(() => window.cmd.call("ui.get", {}));
 check(ui["terminal.zoom"] === 2, "terminal zoom restored (+2)");
-check(ui["selection.pane"] === selectedBefore && !!selectedBefore, "selected terminal restored");
+const restored = (await homeView())["selection.pane"];
+check(restored === selectedBefore && !!selectedBefore, `selected terminal restored (${selectedBefore} → ${restored})`);
 {
   const text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 500 }).then((r) => r.text), markerPane);
   await win.evaluate((id) => window.__cmdSelect(id), markerPane);
@@ -540,6 +762,35 @@ check(ui["selection.pane"] === selectedBefore && !!selectedBefore, "selected ter
 }
 check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows survive an app restart");
 await win.screenshot({ path: path.join(shots, "7-restored.png") });
+
+// Spaces: `cmd .` (space.open with show) switches the window to a new, empty
+// Space; new terminals start at its root; ⌃⌘[ goes back; closing ends its terminals.
+{
+  const proj = path.join(home, "proj");
+  fs.mkdirSync(proj, { recursive: true });
+  const tilesInHome = await win.locator(".windows-track > .tile").count();
+  const chip = () => win.locator(".space-chip.on .space-name").textContent();
+  const sp = await win.evaluate((p) => window.cmd.call("space.open", { path: p, show: true }).then((r) => r.space), proj);
+  await win.waitForTimeout(700);
+  check((await chip()) === "proj", "space.open shows the new Space in the switcher");
+  check((await win.locator(".windows-track > .tile").count()) === 0, "a new Space starts empty");
+  await menu("file.newTerminal");
+  await win.waitForTimeout(800);
+  const inSpace = () => win.evaluate((id) => window.cmd.call("pane.list", {}).then((l) => l.filter((x) => x.spaceId === id)), sp.id);
+  const p = await inSpace();
+  check(p.length === 1 && p[0].cwd === fs.realpathSync.native(proj), `new terminals start at the Space's root (${p[0]?.cwd})`);
+  check((await win.title()) === "proj", "the app window is titled after its Space");
+  await win.screenshot({ path: path.join(shots, "8-space.png") });
+  await menu("space.prev");
+  await win.waitForTimeout(600);
+  const backTiles = await win.locator(".windows-track > .tile").count();
+  check((await chip()) === "Home" && backTiles === tilesInHome, `⌃⌘[ switches back to Home and its windows (${await chip()}, ${backTiles}/${tilesInHome})`);
+  const again = await win.evaluate((p) => window.cmd.call("space.open", { path: p + "/" }), proj);
+  check(again.created === false && again.space.id === sp.id, "opening the folder again returns the same Space");
+  await win.evaluate((id) => window.cmd.call("space.close", { id }), sp.id);
+  await win.waitForTimeout(500);
+  check((await inSpace()).length === 0 && (await win.locator(".space-chip").count()) === 1, "closing a Space ends its terminals and leaves the switcher");
+}
 
 await closeApp();
 await stopCore(home);

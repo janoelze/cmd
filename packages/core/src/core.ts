@@ -3,17 +3,21 @@
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import type { CoreEvent, Method, Methods, Params, Result } from "@cmd/protocol";
+import type { AgentId, AppWindow, CoreEvent, Method, Methods, Params, Placement, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
 import { ipcPath } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
+import { NotificationCenter } from "./notifications.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
-import { listDir, parseOverrides, readText, registerBuiltins, shellOpenEnv, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
+import { listDir, parseOverrides, readText, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
+import { SpaceManager } from "./spaces/manager.ts";
+import { MagicService } from "./magic/service.ts";
+import type { Backend } from "./magic/backends.ts";
 
 export const VERSION = "0.0.1";
 
@@ -31,28 +35,48 @@ export interface CoreOptions {
   sampler?: TreeSampler | null;
   /** Hook status directory (statusRoot()); null disables file-based hooks. */
   statusRoot?: string | null;
-  /** Transcript search (runs its own indexing worker); null disables search. */
-  search?: SearchService | null;
+  /**
+   * Transcript search (runs its own indexing worker) for the current settings;
+   * called again when search.* changes. Returns null when search is off.
+   */
+  search?: ((settings: Settings) => SearchService | null) | null;
+  /** File that keeps running shells' `open` rules current; null: rules are fixed when a shell starts. */
+  shellRulesFile?: string | null;
   /** Source hash this core was started from (see sourceBuildId). */
   build?: string;
+  /** Home's root (default: the user's home folder); tests use a temp dir. */
+  home?: string;
+  /** Tests: the model backend for Magic windows (default: from the magic.* settings). */
+  magicBackend?: (settings: Settings) => Backend;
 }
+
+const NO_SEARCH = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
 
 type Handlers = { [M in Method]: (params: Params<M>) => Result<M> | Promise<Result<M>> };
 
 export class Core {
   readonly panes: PaneManager;
   readonly agents: AgentTracker;
+  readonly notifications: NotificationCenter;
   readonly store: Store;
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
   readonly windows: WindowManager;
   readonly windowTypes: WindowTypes;
+  readonly spaces: SpaceManager;
+  readonly magic: MagicService;
   #server: net.Server | null = null;
-  #subscribers = new Set<net.Socket>();
+  /** Subscribed connections and the event types they want (null = all). */
+  #subscribers = new Map<net.Socket, Set<string> | null>();
   readonly watches = new WatchService();
   /** fs.watch subscriptions per connection, released when it closes. */
   #connWatches = new Map<net.Socket, string[]>();
   #opts: CoreOptions;
+  #search: SearchService | null = null;
+  #closed = false;
+  /** Restarts are chained so two workers never index at once. */
+  #searchSwap: Promise<void> = Promise.resolve();
+  #searchGen = 0;
 
   constructor(opts: CoreOptions) {
     this.#opts = opts;
@@ -70,16 +94,34 @@ export class Core {
       inspector: opts.inspector ?? null,
       // The zsh `open` function learns what cmd can open from the registry.
       shellEnv: () => shellOpenEnv(this.windowTypes, overrides()),
+      rulesFile: opts.shellRulesFile ?? null,
+    });
+    this.settings.bind(["shell.openFolders", "shell.openFiles", "shell.openUrls", "open.handlers"], () => {
+      try {
+        this.panes.writeShellRules();
+      } catch (err) {
+        console.error(`cmd core: could not write shell rules: ${(err as Error).message}`);
+      }
     });
     this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null });
+    this.notifications = new NotificationCenter(this.panes, this.agents, settings);
+    this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler) : null;
+    this.spaces = new SpaceManager(this.store, opts.home);
+    this.spaces.on("updated", (space) => this.#broadcast({ type: "space.updated", space }));
+    this.spaces.on("removed", (id) => this.#broadcast({ type: "space.removed", id }));
     this.windows = new WindowManager(this.panes, this.store, this.windowTypes, overrides);
+    // Windows of a Space that is gone or closed (e.g. the core died mid-close) go Home.
+    for (const w of this.windows.others()) {
+      if (this.spaces.get(w.spaceId)?.closedAt !== null) this.windows.move(w.id, this.spaces.home().id);
+    }
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
     this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
+    this.magic = new MagicService({ windows: this.windows, settings, broadcast: (e) => this.#broadcast(e), backend: opts.magicBackend, cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root });
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
     this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
-    opts.search?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
+    if (opts.search) this.settings.bind(["search.enabled", "search.archiveDirs"], () => this.#restartSearch());
 
     this.panes.on("output", (paneId, data) => this.#broadcast({ type: "pane.output", paneId, data }));
     this.panes.on("updated", (pane) => this.#broadcast({ type: "pane.updated", pane }));
@@ -90,16 +132,26 @@ export class Core {
 
   readonly handlers: Handlers = {
     "core.hello": () => ({ version: VERSION, pid: process.pid, socket: this.#opts.socketPath, build: this.#opts.build ?? "" }),
-    "pane.create": (p) => this.panes.create(p),
+    "pane.create": (p) => {
+      const space = this.#place(p, { path: p.cwd });
+      return this.panes.create({ ...p, cwd: p.cwd ?? space.root, spaceId: space.id });
+    },
     "pane.list": () => this.panes.list(),
     "pane.write": (p) => (this.panes.write(p.paneId, p.data), null),
     "pane.resize": (p) => (this.panes.resize(p.paneId, p.cols, p.rows), null),
     "pane.kill": (p) => (this.panes.kill(p.paneId), null),
+    "pane.setMuted": (p) => (this.notifications.setMuted(p.paneId, p.muted), null),
+    "pane.clearAttention": (p) => (this.notifications.clearAttention(p.paneId), null),
+    "notify.send": (p) => (this.notifications.send(p.paneId ?? null, p.title, p.body), null),
     "pane.snapshot": async (p) => ({ data: await this.panes.snapshot(p.paneId) }),
     "pane.read": async (p) => ({ text: await this.panes.read(p.paneId, p.lines) }),
     "pane.reset": async (p) => (await this.panes.resetState(p.paneId), null),
     "agent.list": () => this.agents.list(),
-    "agent.spawn": (p) => this.agents.spawn(p),
+    "agent.spawn": (p) => {
+      const space = this.#place(p, { parentId: p.parentId, path: p.cwd });
+      const parent = p.parentId ? this.agents.get(p.parentId) : null;
+      return this.agents.spawn({ ...p, spaceId: space.id, cwd: p.cwd ?? parent?.cwd ?? space.root });
+    },
     "agent.send": async (p) => (await this.agents.send(p.agentId, p.text, p.submit), null),
     "agent.wait": (p) => this.agents.wait(p.agentIds, p.until, p.mode, p.timeoutMs),
     "agent.kill": (p) => ({ killed: this.agents.kill(p.agentId, p.tree) }),
@@ -114,22 +166,41 @@ export class Core {
     "settings.get": () => this.settings.snapshot(),
     "settings.set": (p) => this.settings.set(p.key, p.value),
     "settings.reset": (p) => this.settings.reset(p.key),
-    "window.open": (p) => this.windows.open(p.kind, p.input),
+    "window.open": (p) => {
+      const input = p.input ?? {};
+      const at = [input.cwd, input.path].find((v): v is string => typeof v === "string");
+      return this.windows.open(p.kind, input, this.#place(p, { path: at }));
+    },
     "window.update": (p) => this.windows.update(p.id, p),
     "window.types": () => this.windowTypes.info(),
     "window.close": (p) => (this.windows.close(p.id), null),
     "window.list": () => this.windows.list(),
-    "window.openTarget": (p) => this.windows.openTarget(p.target),
+    "window.openTarget": (p) =>
+      this.windows.openTarget(p.target, this.#place(p, { path: /^[a-z][\w+.-]+:/i.test(p.target) ? undefined : p.target })),
+    "window.move": (p) => this.#moveWindow(p.id, p.spaceId),
+    "space.list": (p) => this.spaces.list(p.closed),
+    "space.open": (p) => {
+      const r = this.spaces.open(p.path, p);
+      if (p.show) this.#broadcast({ type: "space.show", spaceId: r.space.id, newWindow: !!p.newWindow });
+      return r;
+    },
+    "space.match": (p) => this.spaces.match(p.path, p.cwd),
+    "space.update": (p) => this.spaces.update(p.id, p),
+    "space.close": (p) => (this.#closeSpace(p.id), null),
+    "space.forget": (p) => (this.spaces.forget(p.id), null),
+    "magic.run": (p) => (this.magic.run(p.id, p.prompt), null),
+    "magic.cancel": (p) => (this.magic.cancel(p.id), null),
+    "magic.refresh": (p) => (this.magic.refresh(p.id), null),
     "fs.list": (p) => listDir(p.path),
     "fs.read": (p) => readText(p.path),
     "fs.write": (p) => writeText(p.path, p.text, p.expectMtime),
     // Connection-aware; handled in #serve. These run for in-process callers.
     "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),
-    "search.query": (p) => this.#opts.search?.search(p.text, p.limit) ?? [],
-    "search.status": () =>
-      this.#opts.search?.status() ?? { sessions: 0, files: 0, indexing: false, done: 0, total: 0 },
-    "agent.resume": (p) => this.agents.resume(p),
+    "search.query": (p) => this.#search?.search(p.text, p.limit) ?? [],
+    "search.recent": (p) => this.#search?.recent(Math.min(p.limit ?? 5, 50), p.exclude) ?? [],
+    "search.status": () => this.#search?.status() ?? NO_SEARCH,
+    "agent.resume": (p) => this.agents.resume({ ...p, spaceId: this.#place(p, { path: p.cwd ?? undefined }).id }),
     "ui.get": () => this.store.uiState(),
     "ui.set": (p) => {
       if (typeof p.key !== "string" || !p.key || p.key.length > 200) throw new Error("ui.set: invalid key");
@@ -141,17 +212,66 @@ export class Core {
       panes: this.panes.list(),
       agents: this.agents.list(),
       windows: this.windows.others(),
+      spaces: this.spaces.list(),
       windowTypes: this.windowTypes.info(),
       settings: this.settings.snapshot(),
       ui: this.store.uiState(),
     }),
   };
 
-  /** Requests from a pane's shell integration, e.g. `open .` → file window. */
-  #onShellRequest(_paneId: string, action: string, arg: string): void {
+  #restartSearch(): void {
+    const gen = ++this.#searchGen;
+    this.#searchSwap = this.#searchSwap.then(async () => {
+      const old = this.#search;
+      this.#search = null;
+      await old?.close();
+      if (gen !== this.#searchGen || this.#closed) return; // a newer restart replaces this one
+      const next = this.#opts.search!(this.settings.settings);
+      this.#search = next;
+      next?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
+      this.#broadcast({ type: "search.status", status: next?.status() ?? NO_SEARCH });
+    });
+  }
+
+  /**
+   * Where something new goes (see Placement): an explicit Space, the calling
+   * pane's, the parent agent's, the open Space whose root most deeply contains
+   * the path, else Home.
+   */
+  #place(p: Placement, o: { parentId?: AgentId | null; path?: string } = {}): Space {
+    if (p.spaceId) return this.spaces.mustOpen(p.spaceId);
+    const caller = p.callerPaneId ? this.panes.get(p.callerPaneId) : null;
+    if (caller) return this.spaces.mustOpen(caller.spaceId);
+    const parent = o.parentId ? this.agents.get(o.parentId) : null;
+    if (parent) return this.spaces.mustOpen(parent.spaceId);
+    return o.path ? this.spaces.match(o.path) : this.spaces.home();
+  }
+
+  #moveWindow(id: WindowId, spaceId: SpaceId): AppWindow {
+    this.spaces.mustOpen(spaceId);
+    const pane = this.panes.get(id);
+    if (!pane) return this.windows.move(id, spaceId);
+    const agent = pane.agentId ? this.agents.get(pane.agentId) : null;
+    if (agent) this.agents.moveTree(agent.id, spaceId);
+    else this.panes.setSpace(id, spaceId);
+    return terminalWindow(this.panes.get(id)!);
+  }
+
+  /** Kill the Space's terminals (their agents go with them) and remove its windows; keep it as a recent Space. */
+  #closeSpace(id: SpaceId): void {
+    const space = this.spaces.mustOpen(id);
+    if (space.home) throw new Error("Home can't be closed");
+    for (const p of this.panes.list()) if (p.spaceId === id) this.panes.kill(p.id);
+    for (const a of this.agents.list()) if (a.spaceId === id && !a.paneId) this.agents.kill(a.id);
+    for (const w of this.windows.inSpace(id)) this.windows.close(w.id);
+    this.spaces.markClosed(id);
+  }
+
+  /** Requests from a pane's shell integration, e.g. `open .` → file window in the pane's Space. */
+  #onShellRequest(paneId: string, action: string, arg: string): void {
     if (action !== "open" || !arg) return;
     try {
-      const w = this.windows.openTarget(arg);
+      const w = this.windows.openTarget(arg, this.#place({ callerPaneId: paneId }));
       if (w) this.#broadcast({ type: "window.focus", id: w.id });
     } catch {
       // not a folder / URL: ignore
@@ -211,7 +331,10 @@ export class Core {
             const i = list.indexOf(wp);
             if (i >= 0) list.splice(i, 1);
           }
-          if (req.method === "events.subscribe") this.#subscribers.add(conn);
+          if (req.method === "events.subscribe") {
+            const types = (req.params as Params<"events.subscribe"> | undefined)?.types;
+            this.#subscribers.set(conn, Array.isArray(types) ? new Set(types) : null);
+          }
           send(conn, { jsonrpc: "2.0", id: req.id, result: result ?? null });
         } catch (err) {
           send(conn, { jsonrpc: "2.0", id: req.id, error: { code: -32000, message: (err as Error).message } });
@@ -223,18 +346,21 @@ export class Core {
   #broadcast(event: CoreEvent): void {
     if (this.#subscribers.size === 0) return;
     const line = JSON.stringify({ jsonrpc: "2.0", method: "event", params: event }) + "\n";
-    for (const s of this.#subscribers) if (s.writable) s.write(line);
+    for (const [s, types] of this.#subscribers) if (s.writable && (!types || types.has(event.type))) s.write(line);
   }
 
   async close(): Promise<void> {
+    this.magic.dispose();
     this.panes.dispose();
-    for (const s of this.#subscribers) s.destroy();
+    for (const s of this.#subscribers.keys()) s.destroy();
     await new Promise<void>((r) => (this.#server ? this.#server.close(() => r()) : r()));
     try {
       if (ipcPath(this.#opts.socketPath) === this.#opts.socketPath) fs.unlinkSync(this.#opts.socketPath);
     } catch {}
+    this.#closed = true;
     this.resources?.close();
-    this.#opts.search?.close();
+    await this.#searchSwap;
+    await this.#search?.close();
     this.watches.close();
     this.agents.close();
     this.store.close();

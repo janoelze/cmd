@@ -2,7 +2,7 @@
 // Agents are stored as JSON documents for now; restore/search tables come later.
 
 import { DatabaseSync } from "node:sqlite";
-import type { Agent, AppWindow } from "@cmd/protocol";
+import type { Agent, AppWindow, Space } from "@cmd/protocol";
 
 export class Store {
   #db: DatabaseSync;
@@ -23,6 +23,11 @@ export class Store {
         id TEXT PRIMARY KEY,
         doc TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS spaces (
+        id TEXT PRIMARY KEY,
+        root TEXT NOT NULL UNIQUE,
+        doc TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS ui_state (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
@@ -34,17 +39,7 @@ export class Store {
   /** Non-terminal windows (browser, files). */
   windows(): AppWindow[] {
     const rows = this.#db.prepare(`SELECT doc FROM windows`).all() as { doc: string }[];
-    return rows.map((r) => {
-      const w = JSON.parse(r.doc) as AppWindow & { url?: string | null; path?: string | null };
-      // Older documents kept url/path as fields; state is per window type now.
-      if (!w.state) {
-        w.state = w.url ? { url: w.url } : w.path ? { path: w.path } : {};
-        delete w.url;
-        delete w.path;
-        delete (w as { paneId?: unknown }).paneId;
-      }
-      return w;
-    });
+    return rows.map((r) => JSON.parse(r.doc) as AppWindow);
   }
 
   saveWindow(w: AppWindow): void {
@@ -53,6 +48,19 @@ export class Store {
 
   deleteWindow(id: string): void {
     this.#db.prepare(`DELETE FROM windows WHERE id = ?`).run(id);
+  }
+
+  spaces(): Space[] {
+    const rows = this.#db.prepare(`SELECT doc FROM spaces`).all() as { doc: string }[];
+    return rows.map((r) => JSON.parse(r.doc) as Space);
+  }
+
+  saveSpace(s: Space): void {
+    this.#db.prepare(`INSERT OR REPLACE INTO spaces (id, root, doc) VALUES (?, ?, ?)`).run(s.id, s.root, JSON.stringify(s));
+  }
+
+  deleteSpace(id: string): void {
+    this.#db.prepare(`DELETE FROM spaces WHERE id = ?`).run(id);
   }
 
   /** UI state (view mode, selection, collapsed rows, …) as JSON values. */

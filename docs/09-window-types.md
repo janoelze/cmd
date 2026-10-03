@@ -44,6 +44,47 @@ registerWindowView({
 - **Programmatic opening:** `cmd open --kind markdown-preview file.md`, `window.open` over RPC, and host agents through the same API.
 - **Live files:** views can use `fs.watch`/`fs.changed`, `fs.read`/`fs.write`, and `setWindowStatus` for title-bar status.
 
+## Input: pointer, wheel and focus
+
+The windows view owns some gestures for every window: click to select, drag by
+the title bar, sideways scrolling in the strip, panning and pinch-zoom on the
+canvas. A type's content shares them through one contract
+(`apps/desktop/src/renderer/src/embed.ts`, the scroll rule in
+`apps/desktop/src/shared/embed-input.ts`), so a new type gets the same
+behaviour without special cases:
+
+- **DOM content** (terminals, files, text, Markdown) needs nothing. A press
+  selects its window; sideways scrolling goes to the content when the element
+  under the pointer can scroll that way (long lines, wide tables), otherwise to
+  the strip.
+- **Embedded pages** (`<webview>`, `<iframe>`) run in their own process, so
+  their input never reaches the app's page. This is the usual arrangement for
+  embedded web content (VS Code's webviews do the same): the page reports, the
+  host replays.
+  - Mark the element with `data-embed`. The windows view turns its pointer
+    events off while you drag, resize or pan, and on unselected canvas windows
+    (the first click selects).
+  - The page reports **presses** and the **sideways scrolls it doesn't use**.
+    Pass each report to `handleEmbedMessage(element, message)`: a press is
+    replayed as a mousedown (the window gets selected like any other), a wheel
+    as a wheel event (the strip scrolls). Over an embedded element the windows
+    view ignores native wheel events, which Chromium sometimes also bubbles out
+    of a webview: only reports count.
+  - Browser pages report through cmd's guest preload (`preload/guest.ts`, set
+    in `will-attach-webview`), which runs in an isolated world and uses
+    Electron's host channel (`ipcRenderer.sendToHost` → the webview's
+    `ipc-message` event). Iframes post messages from their own code (Magic's
+    runtime, `host.js`); the receiver checks `event.source` against the frame.
+  - Keyboard focus moving into an embedded page (Tab) selects its window
+    through the normal focus handling.
+- **Shortcuts** are menu commands (main owns accelerators), so they work
+  whatever has the keyboard, embedded pages included. A window's own command
+  (⌘S saves, ⌘L changes a Magic window) reaches it through
+  `registerWindowActions`.
+
+Pinch-zoom is not handed over: over the selected window it belongs to the page
+(maps, images); unselected embedded windows let the canvas have it.
+
 ## Routing rules
 
 `WindowTypes.resolve(target)` picks a type in this order:

@@ -1,9 +1,9 @@
-// UI-level actions shared by the sidebar, tools and the command palette.
+// UI-level actions shared by the sidebar and the command palette.
 
-import type { Agent, PaneId } from "@cmd/protocol";
+import type { Agent, PaneId, SearchHit } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { getState } from "./store.ts";
-import type { ToolAction } from "./tools.ts";
+import { under } from "./model.ts";
 
 type Selector = (paneId: PaneId) => void;
 let select: Selector = () => {};
@@ -19,19 +19,42 @@ export function bindSelection(fn: Selector, current: () => PaneId | null): void 
   currentPane = current;
 }
 
-/** New panes inherit the working directory of the selected pane. */
+/** New things go to the Space this app window shows. */
+const here = () => getState().spaceId;
+
+/**
+ * New panes inherit the working directory of the selected pane while it is
+ * inside the Space's root; otherwise (undefined) the core starts them at the root.
+ */
 function contextCwd(): string | undefined {
   const id = currentPane();
-  return id ? getState().panes.get(id)?.cwd : undefined;
+  const cwd = id ? getState().panes.get(id)?.cwd : undefined;
+  const root = getState().spaces.get(here())?.root;
+  return cwd && root && under(root, cwd) ? cwd : undefined;
+}
+
+/** Session ids of agents open in a terminal (transcript search leaves them out of Recent). */
+export function liveSessionIds(): string[] {
+  return [...getState().agents.values()].flatMap((a) => (a.paneId ? [a.native.claudeSessionId, a.native.codexThreadId] : [])).filter((x): x is string => !!x);
+}
+
+/** Switch to a past session if it is open in a terminal, otherwise resume it in a new one. */
+export async function openSession(h: SearchHit): Promise<void> {
+  const live = [...getState().agents.values()].find(
+    (a) => a.paneId && (a.native.claudeSessionId === h.sessionId || a.native.codexThreadId === h.sessionId),
+  );
+  if (live?.paneId) return select(live.paneId);
+  const agent = await cmd.call("agent.resume", { agent: h.agent, sessionId: h.sessionId, cwd: h.cwd, configDir: h.configDir, spaceId: here() });
+  if (agent.paneId) select(agent.paneId);
 }
 
 export async function newTerminal(command?: string): Promise<void> {
-  const pane = await cmd.call("pane.create", { cwd: contextCwd(), command });
+  const pane = await cmd.call("pane.create", { cwd: contextCwd(), command, spaceId: here() });
   select(pane.id);
 }
 
 export async function newAgent(kind: string, prompt?: string): Promise<void> {
-  const agent = await cmd.call("agent.spawn", { kind, prompt, cwd: contextCwd() });
+  const agent = await cmd.call("agent.spawn", { kind, prompt, cwd: contextCwd(), spaceId: here() });
   if (agent.paneId) select(agent.paneId);
 }
 
@@ -79,13 +102,13 @@ export function copy(text: string): void {
 }
 
 export async function newTerminalIn(cwd: string): Promise<void> {
-  const pane = await cmd.call("pane.create", { cwd });
+  const pane = await cmd.call("pane.create", { cwd, spaceId: here() });
   select(pane.id);
 }
 
 /** New browser window (blank, address field focused, unless a URL is given). */
 export async function newBrowser(url?: string): Promise<void> {
-  const w = await cmd.call("window.open", { kind: "browser", input: { url } });
+  const w = await cmd.call("window.open", { kind: "browser", input: { url }, spaceId: here() });
   select(w.id);
 }
 
@@ -95,14 +118,21 @@ export async function newBrowser(url?: string): Promise<void> {
  */
 export async function openPath(target: string): Promise<void> {
   const t = /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(target) || /^localhost(:\d+)?/i.test(target) ? `https://${target}`.replace("https://localhost", "http://localhost") : target;
-  const w = await cmd.call("window.openTarget", { target: t }).catch(() => null);
+  const w = await cmd.call("window.openTarget", { target: t, spaceId: here() }).catch(() => null);
   if (w) select(w.id);
   else cmd.openPath(t);
 }
 
+/** New Magic window (docs/12-magic-windows.md); with a request, it starts making it right away. */
+export async function newMagic(prompt?: string): Promise<void> {
+  const w = await cmd.call("window.open", { kind: "magic", input: {}, spaceId: here() });
+  select(w.id);
+  if (prompt?.trim()) await cmd.call("magic.run", { id: w.id, prompt });
+}
+
 /** New file browser at a folder, defaulting to the selected terminal's folder. */
 export async function newFiles(path?: string): Promise<void> {
-  const w = await cmd.call("window.open", { kind: "files", input: { path: path ?? contextCwd() } });
+  const w = await cmd.call("window.open", { kind: "files", input: { path: path ?? contextCwd() }, spaceId: here() });
   select(w.id);
 }
 
@@ -115,8 +145,4 @@ export function openableTarget(text: string): { kind: "url" | "path"; value: str
   }
   if (/^(~|\/)/.test(t)) return { kind: "path", value: t };
   return null;
-}
-
-export function runAction(a: ToolAction): Promise<void> {
-  return a.kind === "terminal" ? newTerminal(a.command) : newAgent(a.agent, a.prompt);
 }

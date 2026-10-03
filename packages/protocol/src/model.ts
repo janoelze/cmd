@@ -4,10 +4,33 @@ export type PaneId = string;
 export type AgentId = string;
 /** Window id. A terminal window's id is its pane id. */
 export type WindowId = string;
+export type SpaceId = string;
+
+/**
+ * A directory you work in, with everything opened for it (docs/11-spaces.md).
+ * Panes, agents and windows each belong to exactly one Space.
+ */
+export interface Space {
+  id: SpaceId;
+  name: string;
+  /** Canonical path (realpath, on-disk case); unique among Spaces. Home: the home folder. */
+  root: string;
+  home: boolean;
+  hue: number;
+  /** Position in the switcher (⌘1–9); user-chosen, never reshuffled by recency. */
+  order: number;
+  /** null = open; otherwise closed and kept as a recent Space. */
+  closedAt: number | null;
+  createdAt: number;
+  lastActiveAt: number;
+  /** Layout and selection, owned by the UI, opaque to the core (like AppWindow.state). */
+  view: Record<string, unknown>;
+}
 
 /** A terminal session owned by the core. Every session is a pane, agent or not. */
 export interface Pane {
   id: PaneId;
+  spaceId: SpaceId;
   title: string;
   cwd: string;
   shell: string;
@@ -22,6 +45,37 @@ export interface Pane {
   agentId: AgentId | null;
   /** Memory/CPU of the pane's whole process tree; null until first sampled. */
   usage: PaneUsage | null;
+  /** Something in the terminal wants you (a bell, a notification, a long command finished) until you look at it. */
+  attention: Attention | null;
+  /** No system notifications from this terminal (its attention marker still shows). */
+  muted: boolean;
+}
+
+/** Why a terminal wants you; see packages/core/src/notifications.ts. */
+export interface Attention {
+  kind: "bell" | "notify" | "command";
+  /** Short text for the title bar and sidebar ("Bell", the notification, "make finished · 42s"). */
+  text: string;
+  /** A failed command or a bell: shown as needing you rather than as done. */
+  urgent: boolean;
+  at: number;
+}
+
+/**
+ * One notification from any source, decided by the core (what is worth telling)
+ * and shown by the UI (whether to, by focus and the notifications.when setting).
+ */
+export interface AppNotification {
+  id: string;
+  source: "agent-input" | "agent-done" | "bell" | "terminal" | "command" | "cli";
+  /** The terminal it came from, if any (clicking the notification selects it). */
+  paneId: PaneId | null;
+  title: string;
+  body: string;
+  /** Show a system notification (false: only the attention marker / visual bell). */
+  alert: boolean;
+  /** Needs you (plays the sound, may bounce the Dock) rather than merely informs. */
+  urgent: boolean;
 }
 
 export interface PaneUsage {
@@ -58,6 +112,8 @@ export interface Agent {
   id: AgentId;
   /** null = virtual child without a terminal (e.g. a Claude in-process subagent). */
   paneId: PaneId | null;
+  /** Its pane's Space; virtual children have their parent's. */
+  spaceId: SpaceId;
   kind: AgentKind;
   name: string | null;
   cwd: string;
@@ -101,6 +157,7 @@ export type WindowKind = string;
  */
 export interface AppWindow {
   id: WindowId;
+  spaceId: SpaceId;
   kind: WindowKind;
   title: string;
   createdAt: number;

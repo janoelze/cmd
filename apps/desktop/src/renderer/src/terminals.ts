@@ -5,10 +5,11 @@
 
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebglAddon } from "@xterm/addon-webgl";
+import type { WebglAddon } from "@xterm/addon-webgl";
 import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
+import { currentTheme, onThemeChange, terminalColors } from "./themes/registry.ts";
 
 
 interface Host {
@@ -18,28 +19,52 @@ interface Host {
   opened: boolean;
   webgl: WebglAddon | null;
   lastUsed: number;
+  /** When it was last fitted, and a pending trailing fit (see resized). */
+  fittedAt: number;
+  fitTimer: ReturnType<typeof setTimeout> | null;
 }
 
-const dark: ITheme = {
-  background: "#161618",
-  foreground: "#e6e6ea",
-  cursor: "#9d9dff",
-  selectionBackground: "#3a3a6e",
-  black: "#16161c", red: "#ff6b5e", green: "#7bd88f", yellow: "#ffd866",
-  blue: "#8f8fff", magenta: "#e08cff", cyan: "#6fe0e8", white: "#d6d6dc",
-  brightBlack: "#6c6c78", brightRed: "#ff8a7f", brightGreen: "#9be6aa", brightYellow: "#ffe38f",
-  brightBlue: "#b0b0ff", brightMagenta: "#eeb0ff", brightCyan: "#9aeef3", brightWhite: "#ffffff",
-};
+/** While a terminal keeps changing size (the app window being resized), fit it at most this often. */
+const FIT_INTERVAL = 100;
 
-const theme = () => dark;
+const theme = (): ITheme => terminalColors(currentTheme());
+
+// The WebGL addon loads only when the webgl renderer is used (not the default),
+// so it stays out of the startup bundle.
+let Webgl: typeof WebglAddon | null = null;
+let webglLoading: Promise<void> | null = null;
 
 class Terminals {
   #hosts = new Map<PaneId, Host>();
+  /** Terminals whose snapshot is still loading (see hold). */
+  #held = new Map<PaneId, { ready: Promise<void>; release: () => void }>();
+
+  /**
+   * Keep views from opening a terminal until its content is written (release):
+   * writing into a terminal that isn't open only parses, with no per-line
+   * rendering or scrollbar work, and its first paint shows the final content.
+   */
+  hold(paneId: PaneId): void {
+    if (this.#held.has(paneId)) return;
+    let release!: () => void;
+    const ready = new Promise<void>((r) => (release = r));
+    this.#held.set(paneId, { ready, release });
+  }
+
+  release(paneId: PaneId): void {
+    this.#held.get(paneId)?.release();
+    this.#held.delete(paneId);
+  }
+
+  /** Resolves when the terminal may be shown; null if it may be now. */
+  whenReady(paneId: PaneId): Promise<void> | null {
+    return this.#held.get(paneId)?.ready ?? null;
+  }
   #settings: Settings = DEFAULT_SETTINGS;
-  /** ⌘+/⌘- offset on top of terminal.fontSize (persisted by the app). */
+  /** ⌘+/⌘- offset on top of font.codeSize (persisted by the app). */
   #zoom = 0;
 
-  /** Font size offset on top of terminal.fontSize (⌘+ / ⌘-). */
+  /** Font size offset on top of font.codeSize (⌘+ / ⌘-). */
   setZoom(offset: number): void {
     if (offset === this.#zoom) return;
     this.#zoom = offset;
@@ -58,18 +83,24 @@ class Terminals {
       } else if (s["terminal.renderer"] === "webgl" && !h.webgl && h.opened) {
         this.#ensureWebgl(h);
       }
-      if (fontChanged || s["terminal.fontFamily"] !== prev["terminal.fontFamily"] || s["terminal.fontSize"] !== prev["terminal.fontSize"]) {
+      if (fontChanged || s["font.code"] !== prev["font.code"] || s["font.codeSize"] !== prev["font.codeSize"]) {
         h.webgl?.clearTextureAtlas();
       }
       this.fit(id);
+    }
+    // A smaller pool: hand the least recently used terminals back to the DOM renderer.
+    const live = [...this.#hosts.values()].filter((h) => h.webgl).sort((a, b) => b.lastUsed - a.lastUsed);
+    for (const h of live.slice(Math.max(0, s["terminal.webglPool"]))) {
+      h.webgl!.dispose();
+      h.webgl = null;
     }
   }
 
   #options() {
     const s = this.#settings;
     return {
-      fontFamily: s["terminal.fontFamily"],
-      fontSize: Math.max(6, s["terminal.fontSize"] + this.#zoom),
+      fontFamily: s["font.code"],
+      fontSize: Math.max(6, s["font.codeSize"] + this.#zoom),
       lineHeight: s["terminal.lineHeight"],
       cursorBlink: s["terminal.cursorBlink"],
       scrollback: s["terminal.scrollback"],
@@ -99,7 +130,7 @@ class Terminals {
     term.onWriteParsed(scrollable);
     term.buffer.onBufferChange(scrollable);
     term.onResize(scrollable);
-    h = { term, fit, el, opened: false, webgl: null, lastUsed: Date.now() };
+    h = { term, fit, el, opened: false, webgl: null, lastUsed: Date.now(), fittedAt: 0, fitTimer: null };
     this.#hosts.set(paneId, h);
     return h;
   }
@@ -124,9 +155,25 @@ class Terminals {
   fit(paneId: PaneId): void {
     const h = this.#hosts.get(paneId);
     if (!h?.opened || !h.el.isConnected) return;
+    if (h.fitTimer) clearTimeout(h.fitTimer), (h.fitTimer = null);
+    h.fittedAt = performance.now();
     try {
       h.fit.fit();
     } catch {}
+  }
+
+  /**
+   * The terminal's element changed size. A single change (sidebar, mode switch)
+   * fits right away; a continuous one fits every FIT_INTERVAL ms and once at the
+   * end. Each fit reflows the scrollback and resizes the PTY, whose program then
+   * redraws, so fitting on every frame of a window resize makes it lag.
+   */
+  resized(paneId: PaneId): void {
+    const h = this.#hosts.get(paneId);
+    if (!h || h.fitTimer) return;
+    const wait = h.fittedAt + FIT_INTERVAL - performance.now();
+    if (wait <= 0) return this.fit(paneId);
+    h.fitTimer = setTimeout(() => this.fit(paneId), wait);
   }
 
   focus(paneId: PaneId): void {
@@ -170,6 +217,7 @@ class Terminals {
   dispose(paneId: PaneId): void {
     const h = this.#hosts.get(paneId);
     if (!h) return;
+    if (h.fitTimer) clearTimeout(h.fitTimer);
     h.webgl?.dispose();
     h.term.dispose();
     h.el.remove();
@@ -179,6 +227,12 @@ class Terminals {
   #ensureWebgl(h: Host): void {
     const pool = this.#settings["terminal.webglPool"];
     if (h.webgl || pool <= 0 || this.#settings["terminal.renderer"] !== "webgl") return;
+    if (!Webgl) {
+      webglLoading ??= import("@xterm/addon-webgl").then((m) => void (Webgl = m.WebglAddon));
+      // Once loaded, upgrade this terminal unless it was disposed meanwhile.
+      void webglLoading.then(() => [...this.#hosts.values()].includes(h) && this.#ensureWebgl(h));
+      return;
+    }
     const live = [...this.#hosts.values()].filter((x) => x.webgl);
     if (live.length >= pool) {
       // Evict the least recently used terminal back to the DOM renderer.
@@ -187,7 +241,7 @@ class Terminals {
       lru.webgl = null;
     }
     try {
-      const addon = new WebglAddon();
+      const addon = new Webgl();
       addon.onContextLoss(() => {
         addon.dispose();
         h.webgl = null;
@@ -205,3 +259,4 @@ class Terminals {
 }
 
 export const terminals = new Terminals();
+onThemeChange(() => terminals.applyTheme());

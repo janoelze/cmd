@@ -5,7 +5,7 @@
 
 import { useSyncExternalStore } from "react";
 
-type Actions = { save?: () => void | Promise<void>; openExternally?: () => void };
+type Actions = { save?: () => void | Promise<void>; openExternally?: () => void; change?: () => void };
 const registry = new Map<string, Actions>();
 
 export function registerWindowActions(id: string, actions: Actions): () => void {
@@ -22,6 +22,11 @@ export function windowActions(id: string | null): Actions | undefined {
 export interface WindowStatus {
   /** Short text for the title bar / status bar. */
   label: string;
+  /** Which state this is ("edited", "info", …). A new label with the same key
+   *  updates in place; a new key animates (see components/Slot.tsx). Defaults to the label. */
+  key?: string;
+  /** A brief state (loading): shown only if it lasts, so fast changes don't flash. */
+  transient?: boolean;
   /** Unsaved changes. */
   dirty?: boolean;
 }
@@ -31,7 +36,9 @@ const listeners = new Set<() => void>();
 
 export function setWindowStatus(id: string, status: WindowStatus | null): void {
   const cur = statuses.get(id);
-  if (status ? cur?.label === status.label && cur?.dirty === status.dirty : !cur) return;
+  const same = (a: WindowStatus, b: WindowStatus) =>
+    a.label === b.label && a.key === b.key && a.transient === b.transient && a.dirty === b.dirty;
+  if (status ? cur && same(cur, status) : !cur) return;
   statuses = new Map(statuses);
   if (status) statuses.set(id, status);
   else statuses.delete(id);

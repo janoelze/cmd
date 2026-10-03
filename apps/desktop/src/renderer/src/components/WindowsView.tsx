@@ -18,7 +18,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaneId } from "@cmd/protocol";
-import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type ViewMode } from "../layouts.ts";
+import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type Spacing, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
 import { useStoreValue } from "../store.ts";
@@ -52,9 +52,10 @@ import {
   type Slot,
 } from "../strip.ts";
 import { TerminalView } from "./TerminalView.tsx";
+import { EMBED_ATTR, sidewaysForApp } from "../embed.ts";
 import { TileTitle } from "./TileTitle.tsx";
+import { SlotMotion } from "./Slot.tsx";
 
-const GUTTER = 8;
 const DRAG_THRESHOLD = 4;
 const SNAP_DELAY = 140; // ms after the last wheel event (trackpad momentum included)
 const SCROLL_ANIM_MS = 260;
@@ -62,6 +63,9 @@ const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scroll
 const EDGE_SCROLL_MAX = 18; // px per frame
 const CAMERA_ANIM_MS = 280;
 const CAMERA_SAVE_MS = 400; // persist the camera once panning/zooming pauses
+const MOTION_MIN_ZOOM = 0.5; // zoomed out further, title bars change without animating
+const SETTLE_MS = 110; // a dropped window's glide into place (see .tile.settling)
+const LIVE_RESIZE_MS = 150; // viewport changes this close together are a live resize (no gliding)
 
 /** Canvas commands from the menu/palette (see requestCanvas). */
 export type CanvasRequest = "fit" | "window";
@@ -118,7 +122,22 @@ export function WindowsView(p: Props) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [resizing, setResizing] = useState<{ id: PaneId; w: number } | null>(null);
   const [sizing, setSizing] = useState<{ id: PaneId; rect: Rect; axes: "x" | "y" | "xy" } | null>(null); // canvas edge/corner resize
+  // Space around (ui.paddingX/Y) and between (ui.gutter) windows in grid and strip;
+  // the canvas uses its dot grid.
+  const padX = useStoreValue((s) => s.settings.settings["ui.paddingX"]);
+  const padY = useStoreValue((s) => s.settings.settings["ui.paddingY"]);
+  const gap = useStoreValue((s) => s.settings.settings["ui.gutter"]);
+  const spacing: Spacing = { x: padX, y: padY, gap };
+  const padRef = useRef(padX);
+  padRef.current = padX;
   const [panning, setPanning] = useState(false);
+  const [liveResize, setLiveResize] = useState(false);
+  // Until the viewport is measured and holds still, windows take their places
+  // without gliding (else at boot they glide out from a zero-size layout).
+  const [entering, setEntering] = useState(true);
+  // The window just dropped, while it glides into place (faster than other moves).
+  const [settling, setSettling] = useState<PaneId | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── layout ─────────────────────────────────────────────
   const settled = arrangeTiles(
@@ -127,7 +146,7 @@ export function WindowsView(p: Props) {
   ).map((x) => x.id);
   const ids = preview ?? settled;
   const pxWidths = ids.map((id) =>
-    resizing?.id === id ? resizing.w : widthFor(p.widths[id] ?? DEFAULT_FRACTION, vp.w || 1000, GUTTER),
+    resizing?.id === id ? resizing.w : widthFor(p.widths[id] ?? DEFAULT_FRACTION, vp.w || 1000, padX),
   );
   // Canvas: stored rects, new windows placed next to the last selected one.
   const lastPlaced = useRef<PaneId | null>(null);
@@ -136,9 +155,9 @@ export function WindowsView(p: Props) {
   if (arranged && sizing) arranged.rects.set(sizing.id, sizing.rect);
   const lay: Layout =
     mode === "grid"
-      ? gridLayout(ids, vp, GUTTER)
+      ? gridLayout(ids, vp, spacing)
       : mode === "strip"
-        ? stripLayout(ids, pxWidths, vp, GUTTER)
+        ? stripLayout(ids, pxWidths, vp, spacing)
         : arranged
           ? canvasLayout(arranged.rects)
           : focusLayout(ids, selected, vp);
@@ -281,12 +300,34 @@ export function WindowsView(p: Props) {
   );
 
   useLayoutEffect(() => {
+    performance.mark("boot:tiles"); // first commit of the windows (boot benchmark)
+    requestAnimationFrame(() => requestAnimationFrame(() => performance.mark("boot:tiles-painted")));
     const el = rootRef.current!;
-    const ro = new ResizeObserver(() => setVp({ w: el.clientWidth, h: el.clientHeight }));
+    // A one-off change (sidebar) glides the windows into place; a live resize of
+    // the app window moves them with it, or positions trail behind sizes.
+    let last = 0;
+    let done: ReturnType<typeof setTimeout> | null = null;
+    const ro = new ResizeObserver(() => {
+      const now = performance.now();
+      if (now - last < LIVE_RESIZE_MS) setLiveResize(true);
+      last = now;
+      if (done) clearTimeout(done);
+      done = setTimeout(() => setLiveResize(false), LIVE_RESIZE_MS);
+      setVp({ w: el.clientWidth, h: el.clientHeight });
+    });
     ro.observe(el);
     setVp({ w: el.clientWidth, h: el.clientHeight });
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (done) clearTimeout(done);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!entering || !vp.w) return;
+    const t = setTimeout(() => setEntering(false), LIVE_RESIZE_MS);
+    return () => clearTimeout(t);
+  }, [entering, vp.w, vp.h]);
 
   // Keep the offset valid (other modes don't scroll; the strip may have shrunk).
   const maxOff = mode === "strip" ? maxOffset(lay.contentWidth, vp.w) : 0;
@@ -299,7 +340,7 @@ export function WindowsView(p: Props) {
   const selSlot = selIdx >= 0 ? stripSlots[selIdx] : undefined;
   useEffect(() => {
     if (mode !== "strip" || !selSlot || !vp.w || gestureStart.current !== null || drag) return;
-    const target = revealOffset(offsetRef.current, selSlot, vp.w, GUTTER, lay.contentWidth);
+    const target = revealOffset(offsetRef.current, selSlot, vp.w, padX, lay.contentWidth);
     if (Math.abs(target - offsetRef.current) > 0.5) animateTo(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, selSlot?.x, selSlot?.w, vp.w, lay.contentWidth]);
@@ -311,23 +352,29 @@ export function WindowsView(p: Props) {
     gestureStart.current = null;
     const moved = offsetRef.current - startedAt;
     const dir: -1 | 0 | 1 = Math.abs(moved) < 30 ? 0 : moved > 0 ? 1 : -1;
-    const target = snapTarget(offsetRef.current, snapPoints(stripSlots, vp.w, GUTTER, lay.contentWidth), dir);
+    const target = snapTarget(offsetRef.current, snapPoints(stripSlots, vp.w, padRef.current, lay.contentWidth), dir);
     animateTo(target);
     const sel = ids.indexOf(selected ?? "");
     if (sel >= 0 && fullyVisible(stripSlots[sel]!, target, vp.w)) return;
-    const landed = ids[landedOn(stripSlots, target, vp.w, GUTTER, dir)];
+    const landed = ids[landedOn(stripSlots, target, vp.w, padRef.current, dir)];
     if (landed) onSelect(landed);
   }, [animateTo, onSelect]);
 
   // Strip: horizontal wheel/trackpad (capture phase: terminals never see sideways
-  // scrolling; vertical scrolling passes through to their scrollback).
+  // scrolling; vertical scrolling passes through to their scrollback). Content
+  // that can scroll sideways where the pointer is keeps the scroll (../embed.ts).
   useEffect(() => {
     const el = rootRef.current!;
     const onWheel = (e: WheelEvent) => {
+      // Over an embedded page only its own reports count (replayed, untrusted;
+      // ../embed.ts): Chromium also bubbles some of a webview's native wheel
+      // events out to here, which would scroll twice.
+      if (e.isTrusted && (e.target as Element).hasAttribute?.(EMBED_ATTR)) return;
       if (live.current.mode === "canvas") return canvasWheel(e);
       if (live.current.mode !== "strip") return;
-      const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
-      if (!dx || (!e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX))) return;
+      // Content that scrolls sideways right there (long lines, wide tables) keeps it.
+      const dx = sidewaysForApp(e, (e.target as Element).closest?.(".tile"));
+      if (!dx) return;
       e.preventDefault();
       e.stopPropagation();
       if (anim.current) cancelAnimationFrame(anim.current), (anim.current = null);
@@ -369,6 +416,7 @@ export function WindowsView(p: Props) {
       if (snapTimer.current) clearTimeout(snapTimer.current);
       if (camAnim.current) cancelAnimationFrame(camAnim.current);
       if (camSave.current) clearTimeout(camSave.current), onCamera.current(camRef.current);
+      if (settleTimer.current) clearTimeout(settleTimer.current);
     },
     [],
   );
@@ -406,7 +454,7 @@ export function WindowsView(p: Props) {
     el.addEventListener("pointercancel", up);
   };
 
-  // Pages in browser windows (<webview>) swallow pointer events, so a gesture that
+  // Embedded pages ([data-embed], ../embed.ts) swallow pointer events, so a gesture that
   // crosses one would stop dead. Turn them off the moment a press starts, before
   // the first move, until the button is released.
   const hold = () => {
@@ -422,21 +470,6 @@ export function WindowsView(p: Props) {
     window.addEventListener("pointercancel", off, true);
   };
 
-  // A click inside a browser page reaches neither onMouseDown nor a focus event
-  // here: the app's window just blurs while the <webview> becomes the active
-  // element. Select the window it belongs to.
-  useEffect(() => {
-    const onBlur = () =>
-      requestAnimationFrame(() => {
-        const a = document.activeElement;
-        const id = a?.tagName === "WEBVIEW" ? (a.closest(".tile") as HTMLElement | null)?.dataset.pane : undefined;
-        if (!id || id === live.current.selected) return;
-        if (live.current.mode === "canvas") clickedSelect.current = true;
-        onSelect(id);
-      });
-    window.addEventListener("blur", onBlur);
-    return () => window.removeEventListener("blur", onBlur);
-  }, [onSelect]);
 
   // ── dragging windows (all modes with chrome) ───────────
   /** Re-evaluate where the dragged window would go, from the current pointer. */
@@ -520,6 +553,9 @@ export function WindowsView(p: Props) {
       }
       setDrag(null);
       setPreview(null);
+      setSettling(id);
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(() => setSettling(null), SETTLE_MS + 50);
     };
     const up = (ev: PointerEvent) => end(ev, true);
     const cancel = (ev: PointerEvent) => end(ev, false);
@@ -539,7 +575,7 @@ export function WindowsView(p: Props) {
     const startX = e.clientX;
     let w = startW;
     const move = (ev: PointerEvent) => {
-      w = clampWidth(startW + ev.clientX - startX, live.current.vp.w, GUTTER);
+      w = clampWidth(startW + ev.clientX - startX, live.current.vp.w, padRef.current);
       setResizing({ id, w });
     };
     const up = () => {
@@ -547,7 +583,7 @@ export function WindowsView(p: Props) {
       handle.removeEventListener("pointerup", up);
       handle.removeEventListener("pointercancel", up);
       setResizing(null);
-      p.onWidth(id, fractionFor(w, live.current.vp.w, GUTTER));
+      p.onWidth(id, fractionFor(w, live.current.vp.w, padRef.current));
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
@@ -597,16 +633,6 @@ export function WindowsView(p: Props) {
   // them only: on the track it would be inherited by every element
   // of every window, and changing it each frame would restyle them all.
   const zVar = { "--z": cam.zoom } as React.CSSProperties;
-  // Canvas: where the dragged window will land (snapped to the dots).
-  const dropAt =
-    canvas && drag && rootRect && lay.rects.get(drag.id)
-      ? sized({
-          ...lay.rects.get(drag.id)!,
-          x: cam.x + (drag.x - drag.grabX - rootRect.left) / cam.zoom,
-          y: cam.y + (drag.y - drag.grabY - rootRect.top) / cam.zoom,
-        })
-      : undefined;
-  const target = drag ? (canvas ? dropAt : lay.rects.get(drag.id)) : undefined;
   const z = cam.zoom;
   // Canvas background: a dot grid drawn in the track, in world px, so it shares the
   // windows' transform exactly. Drawn on screen instead, its tiles (DOT × zoom, a
@@ -625,7 +651,7 @@ export function WindowsView(p: Props) {
       width: Math.ceil((cam.x + vp.w / z - left) / step) * step + step,
       height: Math.ceil((cam.y + vp.h / z - top) / step) * step + step,
       // Each dot sits in the middle of its tile; shift by half a tile onto the grid line.
-      backgroundImage: `radial-gradient(circle, rgb(255 255 255 / 0.1) ${r}px, transparent ${r + 0.6 / z}px)`,
+      backgroundImage: `radial-gradient(circle, color-mix(in srgb, var(--ink) 10%, transparent) ${r}px, transparent ${r + 0.6 / z}px)`,
       backgroundSize: `${step}px ${step}px`,
       backgroundPosition: `${-step / 2}px ${-step / 2}px`,
     };
@@ -634,7 +660,7 @@ export function WindowsView(p: Props) {
   return (
     <main
       ref={rootRef}
-      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""}`}
+      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""} ${liveResize || entering ? "live-resize" : ""}`}
       onPointerDown={startPan}
       onDoubleClick={(e) => canvas && onBackground(e) && fitAll()}
     >
@@ -658,12 +684,6 @@ export function WindowsView(p: Props) {
             />
           ) : null,
         )}
-        {target && (
-          <div
-            className="ghost-slot target"
-            style={{ transform: `translate(${target.x}px, ${target.y}px)`, width: target.w, height: target.h }}
-          />
-        )}
         {stable.map((r) => {
           const id = idOf(r);
           const rect = lay.rects.get(id);
@@ -678,6 +698,14 @@ export function WindowsView(p: Props) {
             x = drag.x - drag.grabX - rootRect.left + offset;
             y = drag.y - drag.grabY - rootRect.top;
           }
+          // Title bars animate state changes only where you can see them: on screen,
+          // and on the canvas only while the title is legible (docs/10-window-titles.md).
+          const motion =
+            !lay.hidden.has(id) &&
+            (canvas
+              ? z >= MOTION_MIN_ZOOM &&
+                x + rect.w > cam.x && x < cam.x + vp.w / z && y + rect.h > cam.y && y < cam.y + vp.h / z
+              : x + rect.w > offset && x < offset + vp.w);
           const title = (
             <TileTitle
               row={r}
@@ -695,9 +723,9 @@ export function WindowsView(p: Props) {
             <div
               key={id}
               data-pane={id}
-              className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""}`}
+              className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${settling === id ? "settling" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""}`}
               style={{
-                transform: `translate(${x}px, ${y}px)${lifted ? " scale(1.015)" : ""}`,
+                transform: `translate(${x}px, ${y}px)`,
                 width: rect.w,
                 height: rect.h,
               }}
@@ -715,7 +743,7 @@ export function WindowsView(p: Props) {
               {/* The body clips the content; resize handles sit outside it, in the
                   gutter, so they never cover a scrollbar or the content's edge. */}
               <div className="tile-body">
-                {lay.chrome && title}
+                {lay.chrome && <SlotMotion.Provider value={motion}>{title}</SlotMotion.Provider>}
                 {r.pane ? (
                   <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
                 ) : r.win ? (
@@ -744,9 +772,9 @@ export function WindowsView(p: Props) {
         })}
       </div>
       {mode === "strip" && (
-        <StripBar slots={stripSlots} total={lay.contentWidth} ids={ids} selected={selected} onSelect={onSelect} />
+        <StripBar slots={stripSlots} total={lay.contentWidth} pad={padX} ids={ids} selected={selected} onSelect={onSelect} />
       )}
-      {canvas && vp.w > 0 && (
+      {canvas && cfg["canvas.minimap"] && vp.w > 0 && (
         <Minimap
           rects={lay.rects}
           cam={cam}
@@ -822,10 +850,10 @@ function Minimap(p: {
 }
 
 /** Strip position bar: one segment per window, the focused one highlighted. Click to jump. */
-function StripBar(p: { slots: Slot[]; total: number; ids: PaneId[]; selected: PaneId | null; onSelect: (id: PaneId) => void }) {
-  // The bar is inset by the gutter like the windows; map the windows' span
+function StripBar(p: { slots: Slot[]; total: number; pad: number; ids: PaneId[]; selected: PaneId | null; onSelect: (id: PaneId) => void }) {
+  // The bar is inset by the padding like the windows; map the windows' span
   // (first left edge → last right edge) onto it so both ends line up.
-  const inner = p.total - 2 * GUTTER;
+  const inner = p.total - 2 * p.pad;
   if (inner <= 0) return null;
   const pct = (v: number) => `${(v / inner) * 100}%`;
   return (
@@ -834,7 +862,7 @@ function StripBar(p: { slots: Slot[]; total: number; ids: PaneId[]; selected: Pa
         <button
           key={p.ids[i]}
           className={`strip-seg ${p.ids[i] === p.selected ? "sel" : ""}`}
-          style={{ left: pct(s.x - GUTTER), width: pct(s.w) }}
+          style={{ left: pct(s.x - p.pad), width: pct(s.w) }}
           onClick={() => p.onSelect(p.ids[i]!)}
           tabIndex={-1}
         />

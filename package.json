@@ -16,8 +16,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && pnpm --filter @cmd/desktop typecheck",
     "postinstall": "node scripts/postinstall.mjs",
     "build": "pnpm --filter @cmd/desktop build",
+    "icons": "node scripts/make-icons.mjs",
     "e2e": "pnpm build && node e2e/smoke.mjs",
-    "dist": "pnpm build && node scripts/stage-runtime.mjs && pnpm --filter @cmd/desktop dist"
+    "dist": "pnpm build && node scripts/stage-runtime.mjs && pnpm --filter @cmd/desktop dist",
+    "release": "node scripts/release.mjs",
+    "shots": "pnpm build && node scripts/readme-shots/screenshots.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.9.0",

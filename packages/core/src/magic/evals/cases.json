@@ -1,0 +1,18 @@
+[
+  {"id": "json-paste", "prompt": "{\"service\":\"api\",\"healthy\":true,\"latency_ms\":[12,15,11,40,13],\"regions\":{\"eu\":\"ok\",\"us\":\"degraded\"}}", "expect": {"route": "json"}, "tags": ["fast"]},
+  {"id": "command-paste", "prompt": "ps aux | sort -nrk 3 | head", "expect": {"route": "terminal"}, "tags": ["fast"]},
+  {"id": "weather", "prompt": "what's the weather like in Tokyo this week", "expect": {"kind": "widget", "source": "fetch", "explores": false}, "tags": ["portable"]},
+  {"id": "fx", "prompt": "euro to yen rate, last 30 days", "expect": {"kind": "widget", "source": "fetch", "explores": false}, "tags": ["portable"]},
+  {"id": "hn", "prompt": "top 10 hacker news stories", "expect": {"kind": "widget", "source": "fetch", "explores": false}, "tags": ["portable"]},
+  {"id": "json-url", "prompt": "https://api.github.com/repos/nodejs/node", "expect": {"kind": "widget", "source": "fetch"}, "tags": ["portable"]},
+  {"id": "timer", "prompt": "a 5 minute tea timer", "expect": {"kind": "widget", "source": null, "explores": false}, "tags": ["portable"]},
+  {"id": "unit-convert", "prompt": "convert between celsius and fahrenheit", "expect": {"kind": "widget", "source": null, "explores": false}, "tags": ["portable"]},
+  {"id": "log-follow", "prompt": "watch the system log live", "expect": {"kind": "terminal"}, "tags": ["portable"]},
+  {"id": "vpn", "prompt": "show my vpn connection status", "expect": {"kind": "widget", "source": "command", "explores": true}, "tags": ["local"]},
+  {"id": "disk", "prompt": "how full is my disk", "expect": {"kind": "widget", "source": "command"}, "tags": ["local"]},
+  {"id": "src-size", "prompt": "which of my projects in ~/src take the most space", "expect": {"kind": "widget", "source": "command", "explores": true}, "tags": ["local"]},
+  {"id": "repos", "prompt": "git status of every repo in ~/src", "expect": {"kind": "widget", "source": "command", "explores": true}, "tags": ["local"]},
+  {"id": "battery", "prompt": "battery", "expect": {"kind": "widget", "source": "command"}, "tags": ["local"]},
+  {"id": "gh-runs", "prompt": "show my github actions runs live", "expect": {"kind": "widget", "source": "command", "explores": true}, "tags": ["local"]},
+  {"id": "cpu-live", "prompt": "cpu usage over time", "expect": {"kind": "widget", "source": "command"}, "tags": ["local"]}
+]

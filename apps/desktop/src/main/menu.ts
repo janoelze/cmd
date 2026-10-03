@@ -61,6 +61,9 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         sep,
         ...i("file.newBrowser"),
         ...i("file.newFiles"),
+        ...i("file.newMagic"),
+        sep,
+        ...i("file.openSpace"),
         sep,
         ...i("file.save"),
         sep,
@@ -95,10 +98,9 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("view.canvasZoomWindow"),
         ...i("view.cycleWidth"),
         ...i("view.toggleEdit"),
+        ...i("view.magicChange"),
         sep,
         ...i("view.sidebar"),
-        ...i("view.sessions"),
-        ...i("view.tools"),
         sep,
         ...i("view.palette"),
         ...i("view.search"),
@@ -128,6 +130,24 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("session.reveal"),
       ],
     },
+    {
+      label: "Space",
+      submenu: [
+        ...i("space.next"),
+        ...i("space.prev"),
+        ...i("space.last"),
+        ...[1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n) => {
+          const [main] = i(`space.select${n}` as CommandId);
+          return [{ ...main!, visible: false, acceleratorWorksWhenHidden: true }];
+        }),
+        sep,
+        ...i("space.moveWindow"),
+        ...i("space.rename"),
+        ...i("space.reveal"),
+        sep,
+        ...i("space.close"),
+      ],
+    },
     { role: "windowMenu" },
     { role: "help", submenu: [...i("help.docs")] },
   ];
@@ -150,9 +170,25 @@ export function applyMenuState(state: MenuState): void {
 }
 
 /** Sends a command to the focused window, creating one if needed. */
-export function commandSender(createWindow: () => BrowserWindow): Send {
+interface SettingsWindow {
+  openSettings: () => void;
+  isSettings: (w: BrowserWindow | null) => boolean;
+  appWindows: () => BrowserWindow[];
+}
+
+/** The Settings window handles closing and text editing itself; other commands go to an app window. */
+const SETTINGS_COMMANDS = new Set(["edit.copy", "edit.selectAll"]);
+
+export function commandSender(createWindow: () => BrowserWindow, s: SettingsWindow): Send {
   return (id) => {
-    let win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (id === "app.settings") return s.openSettings();
+    const focused = BrowserWindow.getFocusedWindow();
+    if (s.isSettings(focused)) {
+      if (id === "file.close" || id === "file.closeWindow") return focused!.close();
+      if (SETTINGS_COMMANDS.has(id)) return focused!.webContents.send("command", id);
+    }
+    let win = (focused && !s.isSettings(focused) ? focused : null) ?? s.appWindows()[0];
+    if (win && s.isSettings(focused)) win.focus();
     if (!win) {
       win = createWindow();
       win.webContents.once("did-finish-load", () => win!.webContents.send("command", id));

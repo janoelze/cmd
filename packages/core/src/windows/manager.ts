@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import type { AppWindow, FileEntry, Pane, WindowId } from "@cmd/protocol";
+import type { AppWindow, FileEntry, Pane, Space, SpaceId, WindowId } from "@cmd/protocol";
 import type { PaneManager } from "../panes.ts";
 import type { Store } from "../store.ts";
 import { expandHome } from "./builtin.ts";
@@ -18,6 +18,7 @@ export { normalizeUrl } from "./builtin.ts";
 export function terminalWindow(p: Pane): AppWindow {
   return {
     id: p.id,
+    spaceId: p.spaceId,
     kind: "terminal",
     title: p.title,
     createdAt: p.createdAt,
@@ -56,28 +57,47 @@ export class WindowManager extends EventEmitter<{ updated: [AppWindow]; removed:
     return [...this.#panes.list().map(terminalWindow), ...this.others()];
   }
 
-  open(kind: string, input: Record<string, unknown> = {}): AppWindow {
+  /** Open in `space`; a type without an explicit cwd (terminal, files) starts at the Space's root. */
+  open(kind: string, input: Record<string, unknown>, space: Space): AppWindow {
+    if (typeof input.cwd !== "string") input = { ...input, cwd: space.root };
     if (kind === "terminal") {
       const cwd = typeof input.cwd === "string" ? expandHome(input.cwd) : undefined;
       const command = typeof input.command === "string" ? input.command : undefined;
-      return terminalWindow(this.#panes.create({ cwd, command }));
+      return terminalWindow(this.#panes.create({ cwd, command, spaceId: space.id }));
     }
     const type = this.types.get(kind);
     if (!type) throw new Error(`unknown window type: ${kind}`);
     const { state, title } = type.create(input);
     const now = Date.now();
-    const w: AppWindow = { id: randomUUID(), kind, title, createdAt: now, updatedAt: now, state };
+    const w: AppWindow = { id: randomUUID(), spaceId: space.id, kind, title, createdAt: now, updatedAt: now, state };
     this.#save(w);
     return { ...w };
   }
 
   /** Open a path or URL in the window type that suits it; null = not ours (use the default app). */
-  openTarget(input: string): AppWindow | null {
+  openTarget(input: string, space: Space): AppWindow | null {
     const target = targetFor(input);
     if (!target) return null;
     const type = this.types.resolve(target, this.#overrides());
     if (!type) return null;
-    return this.open(type.kind, type.fromTarget ? type.fromTarget(target) : {});
+    return this.open(type.kind, type.fromTarget ? type.fromTarget(target) : {}, space);
+  }
+
+  /** Move a non-terminal window (terminals move with their pane, see Core). */
+  move(id: WindowId, spaceId: SpaceId): AppWindow {
+    const w = this.#windows.get(id);
+    if (!w) throw new Error(`no such window: ${id}`);
+    if (w.spaceId !== spaceId) {
+      w.spaceId = spaceId;
+      w.updatedAt = Date.now();
+      this.#save(w);
+    }
+    return { ...w };
+  }
+
+  /** Non-terminal windows of a Space. */
+  inSpace(spaceId: SpaceId): AppWindow[] {
+    return this.others().filter((w) => w.spaceId === spaceId);
   }
 
   update(id: WindowId, patch: { title?: string; state?: Record<string, unknown>; kind?: string }): AppWindow {

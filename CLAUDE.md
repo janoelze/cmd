@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`cmd`: a personal macOS terminal + coding-agent workbench (Electron UI, a long-lived TypeScript core process, a CLI). It replaces the `ghostty-agents` fork. Design research and rationale live in `docs/` (start at `docs/00-overview.md`). The README covers user-facing behaviour, the CLI, shortcuts and what is done or next.
+`cmd`: a personal macOS terminal + coding-agent workbench (Electron UI, a long-lived TypeScript core process, a CLI). It replaces the `ghostty-agents` fork. Design research and rationale live in `docs/` (start at `docs/00-overview.md`). The README is user-facing (features, install, shortcuts, CLI); DEVELOPMENT.md covers building, packaging, internals and what is done or next.
 
 ## Commands
 
@@ -19,6 +19,7 @@ pnpm e2e                     # build, then Playwright drives the real app; scree
 pnpm core                    # run the core directly
 pnpm core:stop               # stop the core of $CMD_HOME; core:stop-all stops every cmd core
 pnpm cmd <args>              # run the CLI from source
+pnpm release <ver|patch|minor>  # bump, tag v<ver>, push; CI publishes the GitHub release
 ```
 
 Use an isolated state dir in dev so you don't touch the real core: `export CMD_HOME=$PWD/.cmd-dev` (socket, SQLite, settings.json, core.log, core.pid go there). In the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
@@ -53,5 +54,5 @@ packages/cli (`cmd`, hook entry point)              ──┼─ newline-delimit
 
 ## Conventions
 
-- Settings: add new keys to `SETTINGS_SCHEMA` in `packages/protocol/src/settings.ts`. The settings panel generates a control for every key, so nothing else needs wiring.
+- Settings: add new keys to `SETTINGS_SCHEMA` in `packages/protocol/src/settings.ts` (a new key prefix also needs a title in `SETTINGS_GROUPS`; tsc checks). The Settings window (`renderer/src/settings/`, its own page `settings.html`) generates a row for every key; `title`, `unit`, `placeholder`, `labels` and `control: "font"` are display hints. Settings must apply live: read them when acting, or, if a core consumer caches something derived from them, subscribe with `SettingsService.bind(keys, fn)`; the renderer gets `settings.updated`. Only when a change can't reach what is already running, set `applies` (`newTerminals`, `firstLaunch`) so the UI and CLI say so.
 - Comments at the top of each file explain its role; keep that pattern and the existing terse comment style.
