@@ -11,6 +11,7 @@ import { cmd } from "../bridge.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { SCROLLBAR_CSS } from "../scrollbars.ts";
 import { setWindowStatus } from "../windowActions.ts";
+import { isWheelMessage, replayWheel, WEBVIEW_WHEEL_FORWARDER, WHEEL_MARK } from "../embed.ts";
 
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const url = typeof win.state.url === "string" ? win.state.url : null;
@@ -35,7 +36,19 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const start = () => setLoading(true);
     const stop = () => setLoading(false);
     // Pages get the app's scrollbars, so every window's look the same.
-    const ready = () => void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
+    const ready = () => {
+      void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
+      // Sideways scrolling the page doesn't use goes to the strip (../embed.ts).
+      void wv.executeJavaScript(WEBVIEW_WHEEL_FORWARDER).catch(() => {});
+    };
+    const onConsole = (e: { message?: string }) => {
+      if (!e.message?.startsWith(WHEEL_MARK)) return;
+      try {
+        const m = JSON.parse(e.message.slice(WHEEL_MARK.length));
+        if (isWheelMessage(m)) replayWheel(wv as unknown as HTMLElement, m);
+      } catch {}
+    };
+    wv.addEventListener("console-message", onConsole as never);
     wv.addEventListener("dom-ready", ready);
     wv.addEventListener("did-navigate", navigated as never);
     wv.addEventListener("did-navigate-in-page", navigated as never);
@@ -49,6 +62,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       wv.removeEventListener("did-start-loading", start);
       wv.removeEventListener("did-stop-loading", stop);
       wv.removeEventListener("dom-ready", ready);
+      wv.removeEventListener("console-message", onConsole as never);
     };
   }, [win.id]);
 
@@ -126,7 +140,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
           <Symbol name="safari" size={ICON.toolbar} />
         </button>
       </div>
-      <webview ref={ref as never} className="webview" src={initial} partition="persist:cmd-browser" />
+      <webview ref={ref as never} className="webview" data-embed src={initial} partition="persist:cmd-browser" />
     </div>
   );
 }

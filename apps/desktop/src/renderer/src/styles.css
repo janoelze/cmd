@@ -406,7 +406,7 @@ kbd {
 }
 .sidebar-resize:hover::after, .app.sidebar-resizing .sidebar-resize::after { background: var(--accent); }
 .app.sidebar-resizing, .app.sidebar-resizing * { cursor: col-resize !important; user-select: none; }
-.app.sidebar-resizing .xterm, .app.sidebar-resizing webview { pointer-events: none; }
+.app.sidebar-resizing .xterm, .app.sidebar-resizing [data-embed] { pointer-events: none; }
 .app.sidebar-resizing .windows-track > .tile { transition: none; }
 
 .sidebar-status {
@@ -780,8 +780,8 @@ kbd {
 }
 .address:focus { border-color: var(--accent); }
 .webview { flex: 1; min-height: 0; background: #fff; }
-/* While dragging or resizing windows, the page must not swallow pointer events. */
-.main.windows.dragging webview, .main.windows.resizing webview, .main.windows.held webview { pointer-events: none; }
+/* While dragging or resizing windows, embedded pages ([data-embed], embed.ts) must not swallow pointer events. */
+.main.windows.dragging [data-embed], .main.windows.resizing [data-embed], .main.windows.held [data-embed] { pointer-events: none; }
 
 .crumbs { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap; }
 .crumb {
@@ -907,13 +907,13 @@ kbd {
 .main.windows.sizing .windows-track > .tile { transition: none; }
 .main.windows.panning { cursor: grabbing; }
 .main.windows.panning .xterm, .main.windows.sizing .xterm,
-.main.windows.panning webview, .main.windows.sizing webview { pointer-events: none; }
+.main.windows.panning [data-embed], .main.windows.sizing [data-embed] { pointer-events: none; }
 .main.windows.sizing, .main.windows.sizing * { user-select: none; }
 .main.windows.sizing-x, .main.windows.sizing-x * { cursor: ew-resize !important; }
 .main.windows.sizing-y, .main.windows.sizing-y * { cursor: ns-resize !important; }
 .main.windows.sizing-xy, .main.windows.sizing-xy * { cursor: nwse-resize !important; }
 /* Unselected pages don't swallow clicks and scrolls: the first click selects. */
-.mode-canvas .tile:not(.sel) webview { pointer-events: none; }
+.mode-canvas .tile:not(.sel) [data-embed] { pointer-events: none; }
 
 /* Edge and corner handles, just outside the window (in world px divided by the
    zoom, so they stay grabbable when zoomed out). */

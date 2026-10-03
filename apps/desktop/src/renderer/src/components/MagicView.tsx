@@ -14,6 +14,7 @@ import { useStoreValue } from "../store.ts";
 import { useTheme } from "../themes/registry.ts";
 import { setWindowStatus } from "../windowActions.ts";
 import { ago } from "../model.ts";
+import { isWheelMessage, replayWheel } from "../embed.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import "./magic.css";
 
@@ -54,7 +55,7 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
         <WidgetFrame win={win} html={working ? (live.body ?? "") : (s.html ?? "")} streaming={working} data={live.data?.data ?? s.lastData?.data} />
       )}
       {s.error && !working && <div className="magic-error" title={s.error}>{s.error}</div>}
-      {!working && <RefineBar focused={focused} onSubmit={run} onRefresh={s.source ? () => void cmd.call("magic.refresh", { id: win.id }) : undefined} />}
+      {!working && <RefineButton focused={focused} onSubmit={run} onRefresh={s.source ? () => void cmd.call("magic.refresh", { id: win.id }) : undefined} />}
       {working && live.body !== undefined && <div className="magic-drawing">Drawing…<button className="btn" onClick={() => void cmd.call("magic.cancel", { id: win.id })}>Stop</button></div>}
     </div>
   );
@@ -177,6 +178,9 @@ function WidgetFrame({ win, html, streaming, data }: { win: AppWindow; html: str
       if (e.source !== ref.current?.contentWindow || !e.data || typeof e.data !== "object") return;
       const m = e.data as { type?: string; url?: string; message?: string };
       if (m.type === "ready") setReady(true);
+      else if (isWheelMessage(m)) replayWheel(ref.current!, m);
+      // The pointer over the widget: the window shows its controls (see magic.css).
+      else if (m.type === "hover") ref.current?.closest(".magic")?.classList.toggle("hovered", !!(m as { on?: boolean }).on);
       else if (m.type === "open-url" && typeof m.url === "string" && /^https?:\/\//i.test(m.url)) void openPath(m.url);
       else if (m.type === "error") console.warn(`magic ${win.id}:`, m.message);
     };
@@ -198,7 +202,7 @@ function WidgetFrame({ win, html, streaming, data }: { win: AppWindow; html: str
     if (ready && !streaming && data !== undefined) post({ type: "data", data });
   }, [ready, streaming, data]);
 
-  return <iframe ref={ref} className="magic-frame" sandbox="allow-scripts" src="cmd-widget://frame/" title={win.title} />;
+  return <iframe ref={ref} className="magic-frame" data-embed sandbox="allow-scripts" src="cmd-widget://frame/" title={win.title} />;
 }
 
 // ── ready: a command to run ─────────────────────────────
@@ -228,38 +232,69 @@ function TerminalOffer({ win, command }: { win: AppWindow; command: string }) {
   );
 }
 
-// ── the refine line ─────────────────────────────────────
+// ── refining: a button over the widget ──────────────────
 
-function RefineBar({ focused, onSubmit, onRefresh }: { focused: boolean; onSubmit: (p: string) => void; onRefresh?: () => void }) {
+/**
+ * "Change something": a small button floating at the bottom left, shown on
+ * hover, that opens a floating input (also ⌘L). It overlays the widget, so the
+ * widget never resizes (and re-lays out) because of it.
+ */
+function RefineButton({ focused, onSubmit, onRefresh }: { focused: boolean; onSubmit: (p: string) => void; onRefresh?: () => void }) {
+  const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (focused && e.metaKey && e.key.toLowerCase() === "l") {
         e.preventDefault();
-        ref.current?.focus();
+        setOpen(true);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [focused]);
+  useEffect(() => {
+    if (open) ref.current?.focus();
+  }, [open]);
+  const close = () => {
+    setOpen(false);
+    setText("");
+  };
   return (
-    <form
-      className="magic-refine"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!text.trim()) return;
-        onSubmit(text.trim());
-        setText("");
-      }}
-    >
-      <span className="magic-mark-small">✦</span>
-      <input ref={ref} value={text} onChange={(e) => setText(e.target.value)} placeholder="Change something… (⌘L)" spellCheck={false} />
-      {onRefresh && (
-        <button type="button" className="magic-icon" title="Refresh now" onClick={onRefresh}>
-          <Symbol name="arrow.clockwise" size={ICON.toolbar} />
-        </button>
+    <div className={`magic-refine ${open ? "open" : ""}`}>
+      {open ? (
+        <form
+          className="magic-refine-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!text.trim()) return;
+            onSubmit(text.trim());
+            close();
+          }}
+        >
+          <span className="magic-mark-small">✦</span>
+          <input
+            ref={ref}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && close()}
+            onBlur={() => !text.trim() && close()}
+            placeholder="Change something…"
+            spellCheck={false}
+          />
+        </form>
+      ) : (
+        <>
+          <button className="magic-refine-btn" title="Change something (⌘L)" onClick={() => setOpen(true)}>
+            <span className="magic-mark-small">✦</span> Change
+          </button>
+          {onRefresh && (
+            <button className="magic-refine-btn icon" title="Refresh now" onClick={onRefresh}>
+              <Symbol name="arrow.clockwise" size={ICON.toolbar} />
+            </button>
+          )}
+        </>
       )}
-    </form>
+    </div>
   );
 }

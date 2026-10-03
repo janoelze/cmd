@@ -201,6 +201,46 @@
     },
   };
 
+  // Sideways scrolling belongs to cmd (the strip scrolls) unless the widget
+  // itself scrolls sideways right there. An iframe's wheel events never reach
+  // the app, so hand those over (apps/desktop/src/renderer/src/embed.ts).
+  const scrollsX = (el, dx) => {
+    for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+      const ox = getComputedStyle(n).overflowX;
+      if ((ox === "auto" || ox === "scroll") && n.scrollWidth > n.clientWidth) {
+        if (dx < 0 ? n.scrollLeft > 0 : n.scrollLeft + n.clientWidth < n.scrollWidth - 1) return true;
+      }
+    }
+    return false;
+  };
+  window.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey || e.metaKey) return;
+      const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
+      const sideways = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      if (!sideways || !dx || scrollsX(e.target, dx)) return;
+      e.preventDefault();
+      try {
+        parent.postMessage({ type: "wheel", deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, x: e.clientX, y: e.clientY }, "*");
+      } catch {}
+    },
+    { passive: false },
+  );
+
+  // The app can't see the pointer over this page (it runs in its own process),
+  // so say when it enters and leaves: the window shows its controls on hover.
+  let inside = false;
+  const hover = (on) => {
+    if (on === inside) return;
+    inside = on;
+    try {
+      parent.postMessage({ type: "hover", on }, "*");
+    } catch {}
+  };
+  document.addEventListener("mousemove", () => hover(true), { passive: true });
+  document.documentElement.addEventListener("mouseleave", () => hover(false));
+
   const setTokens = (tokens) => {
     for (const k in tokens || {}) {
       if (k === "color-scheme") document.documentElement.style.colorScheme = tokens[k];

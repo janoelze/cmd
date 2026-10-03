@@ -52,6 +52,7 @@ import {
   type Slot,
 } from "../strip.ts";
 import { TerminalView } from "./TerminalView.tsx";
+import { canScrollX, EMBED_ATTR } from "../embed.ts";
 import { TileTitle } from "./TileTitle.tsx";
 import { SlotMotion } from "./Slot.tsx";
 
@@ -360,7 +361,8 @@ export function WindowsView(p: Props) {
   }, [animateTo, onSelect]);
 
   // Strip: horizontal wheel/trackpad (capture phase: terminals never see sideways
-  // scrolling; vertical scrolling passes through to their scrollback).
+  // scrolling; vertical scrolling passes through to their scrollback). Content
+  // that can scroll sideways where the pointer is keeps the scroll (../embed.ts).
   useEffect(() => {
     const el = rootRef.current!;
     const onWheel = (e: WheelEvent) => {
@@ -368,6 +370,9 @@ export function WindowsView(p: Props) {
       if (live.current.mode !== "strip") return;
       const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
       if (!dx || (!e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX))) return;
+      // Content that scrolls sideways right there (long lines, wide tables) keeps it.
+      const target = e.target as Element;
+      if (canScrollX(target, dx, target.closest?.(".tile"))) return;
       e.preventDefault();
       e.stopPropagation();
       if (anim.current) cancelAnimationFrame(anim.current), (anim.current = null);
@@ -447,7 +452,7 @@ export function WindowsView(p: Props) {
     el.addEventListener("pointercancel", up);
   };
 
-  // Pages in browser windows (<webview>) swallow pointer events, so a gesture that
+  // Embedded pages ([data-embed], ../embed.ts) swallow pointer events, so a gesture that
   // crosses one would stop dead. Turn them off the moment a press starts, before
   // the first move, until the button is released.
   const hold = () => {
@@ -463,14 +468,14 @@ export function WindowsView(p: Props) {
     window.addEventListener("pointercancel", off, true);
   };
 
-  // A click inside a browser page reaches neither onMouseDown nor a focus event
-  // here: the app's window just blurs while the <webview> becomes the active
-  // element. Select the window it belongs to.
+  // A click inside an embedded page (a browser page, a Magic widget; ../embed.ts)
+  // reaches neither onMouseDown nor a focus event here: the app's window just
+  // blurs while the element becomes the active one. Select its window.
   useEffect(() => {
     const onBlur = () =>
       requestAnimationFrame(() => {
         const a = document.activeElement;
-        const id = a?.tagName === "WEBVIEW" ? (a.closest(".tile") as HTMLElement | null)?.dataset.pane : undefined;
+        const id = a?.hasAttribute(EMBED_ATTR) ? (a.closest(".tile") as HTMLElement | null)?.dataset.pane : undefined;
         if (!id || id === live.current.selected) return;
         if (live.current.mode === "canvas") clickedSelect.current = true;
         onSelect(id);

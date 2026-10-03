@@ -44,6 +44,32 @@ registerWindowView({
 - **Programmatic opening:** `cmd open --kind markdown-preview file.md`, `window.open` over RPC, and host agents through the same API.
 - **Live files:** views can use `fs.watch`/`fs.changed`, `fs.read`/`fs.write`, and `setWindowStatus` for title-bar status.
 
+## Input: pointer, wheel and focus
+
+The windows view owns some gestures for every window: click to select, drag by
+the title bar, sideways scrolling in the strip, panning and pinch-zoom on the
+canvas. A type's content shares them through two rules
+(`apps/desktop/src/renderer/src/embed.ts`), so a new type gets the same
+behaviour without special cases:
+
+- **DOM content** (terminals, files, text, Markdown) needs nothing. Sideways
+  scrolling goes to the content when the element under the pointer can scroll
+  that way (long lines, wide tables), otherwise to the strip.
+- **Embedded pages** (`<webview>`, `<iframe>`) run in their own process, so the
+  app never sees their pointer, wheel or hover events. Mark the element with
+  `data-embed`. The windows view then selects the window when the page takes
+  focus, and turns the page's pointer events off while you drag, resize or pan,
+  and on unselected canvas windows (the first click selects). The page itself
+  reports what the app can't see:
+  - sideways scrolls it doesn't use itself: the view calls `replayWheel` on the
+    element, and the strip scrolls as if the wheel had been over the window
+    (iframes post a `wheel` message, see Magic's `host.js`; browser pages get
+    `WEBVIEW_WHEEL_FORWARDER` injected);
+  - hover (Magic: a `hover` message), for controls shown on hover.
+
+Pinch-zoom is not handed over: over the selected window it belongs to the page
+(maps, images); unselected embedded windows let the canvas have it.
+
 ## Routing rules
 
 `WindowTypes.resolve(target)` picks a type in this order:
