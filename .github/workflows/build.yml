@@ -1,4 +1,6 @@
 # Typecheck, test and package the macOS app on every push and PR.
+# A Windows job runs the same checks while the Windows port is in progress
+# (continue-on-error until it passes; see docs/10-windows.md).
 # Pushing a tag `v*` additionally signs + notarizes (when the secrets below exist)
 # and publishes a GitHub release with the .dmg and .zip.
 #
@@ -10,7 +12,7 @@ name: build
 
 on:
   push:
-    branches: [master]
+    branches: [master, windows]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
@@ -80,3 +82,25 @@ jobs:
           gh release create "$GITHUB_REF_NAME" apps/desktop/dist/*.dmg apps/desktop/dist/*.zip \
             --title "$GITHUB_REF_NAME" --generate-notes \
             $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)
+
+  windows:
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
