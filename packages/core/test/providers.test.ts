@@ -168,7 +168,8 @@ describe("the window's workspace", () => {
     core.handlers["magic.run"]({ id: inHome.id, prompt: "what changed today" });
     const end = Date.now() + 3000;
     while (seen.length < 2 && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
-    expect(seen.find((t) => t.includes("Workspace:"))).toContain(`the Space "shop" at ${proj}`);
+    // The path may be shortened to ~ (Windows keeps temp folders in the home folder).
+    expect(seen.find((t) => t.includes("Workspace:"))).toMatch(/the Space "shop" at \S*shop \(/);
     expect(seen.filter((t) => t.includes("Workspace:"))).toHaveLength(1);
     await core.close();
   });
