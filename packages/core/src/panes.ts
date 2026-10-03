@@ -238,14 +238,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.#panes.set(id, live);
 
     pty.onData((data) => this.#onData(live, data));
-    pty.onExit(({ exitCode }) => {
-      this.#clearPending(live);
-      setTimeout(() => live.vt.dispose(), 0);
-      pane.exitCode = exitCode;
-      this.emit("updated", { ...pane });
-      this.#panes.delete(id);
-      this.emit("removed", id);
-    });
+    pty.onExit(({ exitCode }) => this.#exited(live, exitCode));
 
     if (opts.command) this.#scheduleCommand(live, opts.command);
     this.emit("updated", { ...pane });
@@ -394,7 +387,24 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   }
 
   kill(id: PaneId): void {
-    this.#panes.get(id)?.pty.kill();
+    const live = this.#panes.get(id);
+    if (!live) return;
+    live.pty.kill();
+    // node-pty on Windows only reports the exit after asking a helper process for
+    // the console's process list, which can take its 5 s timeout. The pane is
+    // gone for us now; node-pty finishes cleaning up in the background.
+    if (isWindows) this.#exited(live, null);
+  }
+
+  #exited(live: Live, exitCode: number | null): void {
+    const { pane } = live;
+    if (this.#panes.get(pane.id) !== live) return; // already handled
+    this.#clearPending(live);
+    setTimeout(() => live.vt.dispose(), 0);
+    pane.exitCode = exitCode;
+    this.emit("updated", { ...pane });
+    this.#panes.delete(pane.id);
+    this.emit("removed", pane.id);
   }
 
   /** Serialized terminal state for a UI to restore exactly what is on screen. */
