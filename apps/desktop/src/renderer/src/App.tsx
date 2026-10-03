@@ -53,6 +53,7 @@ async function openSession(h: SearchHit): Promise<void> {
 /** True when a text field (palette, settings) has focus, so Edit commands target it. */
 const editingText = () => {
   const el = document.activeElement;
+  if (el instanceof HTMLElement && el.isContentEditable) return true; // CodeMirror (text windows)
   return (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && !el.closest(".xterm");
 };
 

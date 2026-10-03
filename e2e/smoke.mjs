@@ -237,10 +237,11 @@ check((await panes()) === 2, "…and leaves terminals alone");
 
   // Files open in the window that suits them: notes.md → text window; edit and ⌘S.
   await win.locator(".tile.kind-files .file-row", { hasText: "notes.md" }).dblclick();
-  await win.waitForSelector(".tile.kind-text .textwin-area");
-  await win.waitForTimeout(300);
-  check((await win.locator(".tile.kind-text .textwin-area").inputValue()) === "# hi", "double-clicking a text file opens it in a text window");
-  await win.locator(".tile.kind-text .textwin-area").click();
+  await win.waitForSelector(".tile.kind-text .cm-content");
+  await win.waitForTimeout(500);
+  check((await win.locator(".tile.kind-text .cm-content").textContent()) === "# hi", "double-clicking a text file opens it in a text window (CodeMirror)");
+  check((await win.locator(".tile.kind-text .cm-content span[class]").count()) > 0, "markdown gets syntax highlighting");
+  await win.locator(".tile.kind-text .cm-content").click();
   await win.keyboard.press("End");
   await win.keyboard.type(" there");
   await menu("file.save");
