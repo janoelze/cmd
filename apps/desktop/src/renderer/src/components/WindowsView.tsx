@@ -194,7 +194,7 @@ export function WindowsView(p: Props) {
 
   // Windows placed for the first time are stored, so they stay put.
   useEffect(() => {
-    if (arranged?.added) p.onCanvasRects({ ...p.canvasRects, ...Object.fromEntries(arranged.rects) });
+    if (arranged?.changed) p.onCanvasRects({ ...p.canvasRects, ...Object.fromEntries(arranged.rects) });
   });
   const saveRect = (id: PaneId, r: Rect) => {
     const all = live.current.lay.rects;
@@ -590,22 +590,33 @@ export function WindowsView(p: Props) {
       : undefined;
   const target = drag ? (canvas ? dropAt : lay.rects.get(drag.id)) : undefined;
   const z = cam.zoom;
-  // Canvas background (a dot grid) moves with the camera. Each dot is drawn in
-  // the middle of its tile, so shift by half a tile to put dots on world multiples of DOT.
-  const dots = DOT * z;
-  const rootStyle = canvas
-    ? ({
-        "--dots": `${dots}px`,
-        "--dots-x": `${-cam.x * z - dots / 2}px`,
-        "--dots-y": `${-cam.y * z - dots / 2}px`,
-      } as React.CSSProperties)
-    : undefined;
+  // Canvas background: a dot grid drawn in the track, in world px, so it shares the
+  // windows' transform exactly. Drawn on screen instead, its tiles (DOT × zoom, a
+  // fraction of a pixel) get rounded and drift off the window edges with distance.
+  // It covers just the visible area, aligned to the grid; zoomed far out, every
+  // fourth dot. Dots stay about 1px on screen whatever the zoom.
+  let dotGrid: React.CSSProperties | undefined;
+  if (canvas && vp.w) {
+    const step = z < 0.35 ? DOT * 4 : DOT;
+    const left = Math.floor(cam.x / step) * step - step;
+    const top = Math.floor(cam.y / step) * step - step;
+    const r = 1.1 / z;
+    dotGrid = {
+      left,
+      top,
+      width: Math.ceil((cam.x + vp.w / z - left) / step) * step + step,
+      height: Math.ceil((cam.y + vp.h / z - top) / step) * step + step,
+      // Each dot sits in the middle of its tile; shift by half a tile onto the grid line.
+      backgroundImage: `radial-gradient(circle, rgb(255 255 255 / 0.1) ${r}px, transparent ${r + 0.6 / z}px)`,
+      backgroundSize: `${step}px ${step}px`,
+      backgroundPosition: `${-step / 2}px ${-step / 2}px`,
+    };
+  }
 
   return (
     <main
       ref={rootRef}
       className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""} ${cards ? "cards" : ""}`}
-      style={rootStyle}
       onPointerDown={startPan}
       onDoubleClick={(e) => canvas && onBackground(e) && fitAll()}
     >
@@ -617,6 +628,7 @@ export function WindowsView(p: Props) {
             : { transform: `translateX(${-offset}px)` }
         }
       >
+        {dotGrid && <div className="canvas-dots" style={dotGrid} />}
         {/* Slots: unassigned cells always show as inactive placeholders; while
             dragging, every slot shows as a ghost outline. */}
         {lay.slots.map((s, i) =>

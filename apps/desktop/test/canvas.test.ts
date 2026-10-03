@@ -58,15 +58,21 @@ describe("placement", () => {
 
   it("lays out a first visit as a grid and keeps stored rects", () => {
     const first = arrange(["a", "b", "c"], {}, null);
-    expect(first.added).toBe(true);
+    expect(first.changed).toBe(true);
     expect(first.rects.get("b")).toMatchObject({ x: DEFAULT_W + GAP, y: 0 });
     expect(first.rects.get("c")).toMatchObject({ x: 0, y: DEFAULT_H + GAP });
 
-    const stored = { a: { x: 10, y: 10, w: 400, h: 300 } };
+    const stored = { a: { x: 24, y: 48, w: 408, h: 312 } };
     const next = arrange(["a", "b"], stored, "a");
-    expect(next.rects.get("a")).toBe(stored.a);
-    expect(next.rects.get("b")).toMatchObject({ x: 410 + GAP, y: 10 });
-    expect(arrange(["a"], stored, null).added).toBe(false);
+    expect(next.rects.get("a")).toEqual(stored.a);
+    expect(next.rects.get("b")).toMatchObject({ x: 432 + GAP, y: 48 });
+    expect(arrange(["a"], stored, null).changed).toBe(false);
+  });
+
+  it("snaps rects stored off the dot grid, and asks to store them", () => {
+    const off = arrange(["a"], { a: { x: 10, y: 37, w: 400, h: 300 } }, null);
+    expect(off.rects.get("a")).toEqual({ x: 0, y: 48, w: 408, h: 312 });
+    expect(off.changed).toBe(true);
   });
 
   it("gives a new window the size of the selected one", () => {
