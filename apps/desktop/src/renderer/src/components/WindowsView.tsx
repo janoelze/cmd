@@ -131,6 +131,9 @@ export function WindowsView(p: Props) {
   padRef.current = padX;
   const [panning, setPanning] = useState(false);
   const [liveResize, setLiveResize] = useState(false);
+  // Until the viewport is measured and holds still, windows take their places
+  // without gliding (else at boot they glide out from a zero-size layout).
+  const [entering, setEntering] = useState(true);
   // The window just dropped, while it glides into place (faster than other moves).
   const [settling, setSettling] = useState<PaneId | null>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -318,6 +321,12 @@ export function WindowsView(p: Props) {
       if (done) clearTimeout(done);
     };
   }, []);
+
+  useEffect(() => {
+    if (!entering || !vp.w) return;
+    const t = setTimeout(() => setEntering(false), LIVE_RESIZE_MS);
+    return () => clearTimeout(t);
+  }, [entering, vp.w, vp.h]);
 
   // Keep the offset valid (other modes don't scroll; the strip may have shrunk).
   const maxOff = mode === "strip" ? maxOffset(lay.contentWidth, vp.w) : 0;
@@ -659,7 +668,7 @@ export function WindowsView(p: Props) {
   return (
     <main
       ref={rootRef}
-      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""} ${liveResize ? "live-resize" : ""}`}
+      className={`main windows mode-${mode} ${drag ? "dragging" : ""} ${resizing ? "resizing" : ""} ${sizing ? `sizing sizing-${sizing.axes}` : ""} ${panning ? "panning" : ""} ${switching ? "switching" : ""} ${liveResize || entering ? "live-resize" : ""}`}
       onPointerDown={startPan}
       onDoubleClick={(e) => canvas && onBackground(e) && fitAll()}
     >
