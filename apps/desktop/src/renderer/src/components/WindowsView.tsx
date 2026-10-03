@@ -16,9 +16,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { PaneId } from "@cmd/protocol";
 import { focusLayout, gridLayout, stripLayout, type Layout, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
-import { BrowserView } from "./BrowserView.tsx";
-import { FilesView } from "./FilesView.tsx";
-import { TextView } from "./TextView.tsx";
+import { viewFor } from "../windows/registry.ts";
 import {
   clampWidth,
   DEFAULT_FRACTION,
@@ -362,12 +360,8 @@ export function WindowsView(p: Props) {
               )}
               {r.pane ? (
                 <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
-              ) : r.win?.kind === "browser" ? (
-                <BrowserView win={r.win} focused={id === selected} />
-              ) : r.win?.kind === "files" ? (
-                <FilesView win={r.win} focused={id === selected} />
-              ) : r.win?.kind === "text" ? (
-                <TextView win={r.win} focused={id === selected} />
+              ) : r.win ? (
+                <WindowContent win={r.win} focused={id === selected} />
               ) : null}
               {lay.resizable && (
                 <div
@@ -386,6 +380,13 @@ export function WindowsView(p: Props) {
       )}
     </main>
   );
+}
+
+/** A window's content from its registered view (see windows/registry.ts). */
+function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
+  const view = viewFor(win.kind);
+  if (!view) return <div className="file-error">No view registered for “{win.kind}” windows.</div>;
+  return <view.View win={win} focused={focused} />;
 }
 
 /** Strip position bar: one segment per window, the focused one highlighted. Click to jump. */

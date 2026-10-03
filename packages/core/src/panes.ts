@@ -124,6 +124,8 @@ export interface PaneManagerOptions {
   settings?: () => Settings;
   /** null: use node-pty's process name only (no argv, can't see through wrappers). */
   inspector?: Inspector | null;
+  /** Extra environment for shells with integration (e.g. what `open` should route to cmd). */
+  shellEnv?: () => Record<string, string>;
 }
 
 export interface CreatePaneOptions {
@@ -141,6 +143,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   #socketPath: string;
   #settings: () => Settings;
   #inspector: Inspector | null;
+  #shellEnv: () => Record<string, string>;
   #poll: NodeJS.Timeout | undefined;
   #polling = false;
 
@@ -150,6 +153,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.#socketPath = o.socketPath;
     this.#settings = o.settings ?? (() => DEFAULT_SETTINGS);
     this.#inspector = o.inspector ?? null;
+    this.#shellEnv = o.shellEnv ?? (() => ({}));
     const pollMs = o.pollMs ?? 500;
     if (pollMs > 0) {
       this.#poll = setInterval(() => this.pollForeground(), pollMs);
@@ -176,6 +180,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       env.CMD_OPEN_FOLDERS = cfg["shell.openFolders"] ? "1" : "0";
       env.CMD_OPEN_URLS = cfg["shell.openUrls"] ? "1" : "0";
       env.CMD_OPEN_FILES = cfg["shell.openFiles"] ? "1" : "0";
+      Object.assign(env, this.#shellEnv());
     }
     Object.assign(env, {
       TERM: "xterm-256color",

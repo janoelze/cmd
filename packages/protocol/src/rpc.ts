@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppWindow, FileEntry, Pane, PaneId, WindowId } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppWindow, FileEntry, Pane, PaneId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 
 export interface SettingsSnapshot {
@@ -68,19 +68,21 @@ export interface Methods {
   "settings.set": { params: { key: string; value: unknown }; result: SettingsSnapshot };
   "settings.reset": { params: { key: string }; result: SettingsSnapshot };
 
-  /** Open a window: a terminal (pane), a browser at a URL, or a file browser at a folder. */
-  "window.open": {
-    params: { kind: AppWindow["kind"]; url?: string; path?: string; cwd?: string; command?: string };
-    result: AppWindow;
-  };
-  /** Browser and file windows report navigation and titles here. */
-  "window.update": { params: { id: WindowId; title?: string; url?: string; path?: string }; result: AppWindow };
+  /**
+   * Open a window of a registered type. `input` is the type's create input:
+   * terminal { cwd?, command? }, browser { url? }, files { path? }, text { path }.
+   */
+  "window.open": { params: { kind: string; input?: Record<string, unknown> }; result: AppWindow };
+  /** Windows report navigation (state patches, applied by their type) and titles here. */
+  "window.update": { params: { id: WindowId; title?: string; state?: Record<string, unknown> }; result: AppWindow };
+  /** Registered window types (built-in and plugins). */
+  "window.types": { params: {}; result: WindowTypeInfo[] };
   "window.close": { params: { id: WindowId }; result: null };
   /**
-   * Open a path in the window that suits it: folder → files, html/images/pdf →
-   * browser, text → text window. null = not ours (open with the default app).
+   * Open a path or URL in the window type that handles it (registry rules +
+   * the open.handlers setting). null = no type handles it (use the default app).
    */
-  "window.openPath": { params: { path: string }; result: AppWindow | null };
+  "window.openTarget": { params: { target: string }; result: AppWindow | null };
   /** All windows, terminals included. */
   "window.list": { params: {}; result: AppWindow[] };
 
@@ -119,6 +121,7 @@ export interface Methods {
       agents: Agent[];
       /** Non-terminal windows (terminal windows are the panes). */
       windows: AppWindow[];
+      windowTypes: WindowTypeInfo[];
       settings: SettingsSnapshot;
       ui: Record<string, unknown>;
     };

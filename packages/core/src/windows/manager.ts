@@ -3,35 +3,17 @@
 // survive core restarts.
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import type { AppWindow, FileEntry, Pane, WindowId } from "@cmd/protocol";
-import type { PaneManager } from "./panes.ts";
-import type { Store } from "./store.ts";
-import { routeFor, TEXT_MAX_BYTES } from "./routing.ts";
-import { pathToFileURL } from "node:url";
+import type { PaneManager } from "../panes.ts";
+import type { Store } from "../store.ts";
+import { expandHome } from "./builtin.ts";
+import { targetFor, TEXT_MAX_BYTES } from "./routing.ts";
+import type { WindowTypes } from "./types.ts";
 
-export interface OpenParams {
-  kind: AppWindow["kind"];
-  url?: string;
-  path?: string;
-  cwd?: string;
-  command?: string;
-}
-
-const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
-
-/** Accepts "example.com", "localhost:3000", full URLs; anything else becomes a search-less error. */
-export function normalizeUrl(input: string): string {
-  const t = input.trim();
-  if (!t) return "about:blank";
-  if (/^(https?|file|about):/i.test(t)) return t;
-  if (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(t)) return `http://${t}`;
-  if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/|$)/.test(t)) return `https://${t}`;
-  throw new Error(`not a URL: ${input}`);
-}
+export { normalizeUrl } from "./builtin.ts";
 
 export function terminalWindow(p: Pane): AppWindow {
   return {
@@ -40,21 +22,28 @@ export function terminalWindow(p: Pane): AppWindow {
     title: p.title,
     createdAt: p.createdAt,
     updatedAt: p.lastActivityAt,
-    paneId: p.id,
-    url: null,
-    path: null,
+    state: { paneId: p.id, cwd: p.cwd },
   };
 }
 
+/**
+ * Windows: everything the main pane lays out. Terminal windows are the panes
+ * (window id = pane id); other windows are created by their WindowType and
+ * persisted, so they survive core restarts. State is opaque per type.
+ */
 export class WindowManager extends EventEmitter<{ updated: [AppWindow]; removed: [WindowId] }> {
   #windows = new Map<WindowId, AppWindow>();
   #panes: PaneManager;
   #store: Store | null;
+  readonly types: WindowTypes;
+  #overrides: () => Record<string, string>;
 
-  constructor(panes: PaneManager, store: Store | null) {
+  constructor(panes: PaneManager, store: Store | null, types: WindowTypes, overrides: () => Record<string, string> = () => ({})) {
     super();
     this.#panes = panes;
     this.#store = store;
+    this.types = types;
+    this.#overrides = overrides;
     for (const w of store?.windows() ?? []) this.#windows.set(w.id, w);
   }
 
@@ -67,56 +56,38 @@ export class WindowManager extends EventEmitter<{ updated: [AppWindow]; removed:
     return [...this.#panes.list().map(terminalWindow), ...this.others()];
   }
 
-  open(p: OpenParams): AppWindow {
-    if (p.kind === "terminal") {
-      return terminalWindow(this.#panes.create({ cwd: p.cwd ? expandHome(p.cwd) : undefined, command: p.command }));
+  open(kind: string, input: Record<string, unknown> = {}): AppWindow {
+    if (kind === "terminal") {
+      const cwd = typeof input.cwd === "string" ? expandHome(input.cwd) : undefined;
+      const command = typeof input.command === "string" ? input.command : undefined;
+      return terminalWindow(this.#panes.create({ cwd, command }));
     }
+    const type = this.types.get(kind);
+    if (!type) throw new Error(`unknown window type: ${kind}`);
+    const { state, title } = type.create(input);
     const now = Date.now();
-    const w: AppWindow = {
-      id: randomUUID(),
-      kind: p.kind,
-      title: "",
-      createdAt: now,
-      updatedAt: now,
-      paneId: null,
-      url: null,
-      path: null,
-    };
-    if (p.kind === "browser") {
-      w.url = normalizeUrl(p.url ?? "");
-      w.title = w.url === "about:blank" ? "New Tab" : w.url;
-    } else if (p.kind === "text") {
-      const file = path.resolve(expandHome(p.path ?? ""));
-      if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
-      w.path = file;
-      w.title = path.basename(file);
-    } else {
-      const dir = path.resolve(expandHome(p.path ?? p.cwd ?? os.homedir()));
-      if (!fs.statSync(dir).isDirectory()) throw new Error(`not a folder: ${dir}`);
-      w.path = dir;
-      w.title = path.basename(dir) || dir;
-    }
+    const w: AppWindow = { id: randomUUID(), kind, title, createdAt: now, updatedAt: now, state };
     this.#save(w);
     return { ...w };
   }
 
-  /** Open a path in the window that suits it (see routing.ts); null = not ours. */
-  openPath(p: string): AppWindow | null {
-    const abs = path.resolve(expandHome(p));
-    const route = routeFor(abs);
-    if (route === "files") return this.open({ kind: "files", path: abs });
-    if (route === "text") return this.open({ kind: "text", path: abs });
-    if (route === "browser") return this.open({ kind: "browser", url: pathToFileURL(abs).href });
-    return null;
+  /** Open a path or URL in the window type that suits it; null = not ours (use the default app). */
+  openTarget(input: string): AppWindow | null {
+    const target = targetFor(input);
+    if (!target) return null;
+    const type = this.types.resolve(target, this.#overrides());
+    if (!type) return null;
+    return this.open(type.kind, type.fromTarget ? type.fromTarget(target) : {});
   }
 
-  update(id: WindowId, patch: { title?: string; url?: string; path?: string }): AppWindow {
+  update(id: WindowId, patch: { title?: string; state?: Record<string, unknown> }): AppWindow {
     const w = this.#windows.get(id);
     if (!w) throw new Error(`no such window: ${id}`);
-    if (patch.url !== undefined && w.kind === "browser") w.url = normalizeUrl(patch.url);
-    if (patch.path !== undefined && w.kind === "files") {
-      w.path = path.resolve(expandHome(patch.path));
-      if (patch.title === undefined) w.title = path.basename(w.path) || w.path;
+    if (patch.state) {
+      const type = this.types.get(w.kind);
+      const r = type?.update ? type.update(w.state, patch.state) : { state: { ...w.state, ...patch.state } };
+      w.state = r.state;
+      if (r.title !== undefined) w.title = r.title;
     }
     if (patch.title !== undefined) w.title = patch.title.slice(0, 300);
     w.updatedAt = Date.now();

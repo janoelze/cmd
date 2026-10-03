@@ -34,7 +34,17 @@ export class Store {
   /** Non-terminal windows (browser, files). */
   windows(): AppWindow[] {
     const rows = this.#db.prepare(`SELECT doc FROM windows`).all() as { doc: string }[];
-    return rows.map((r) => JSON.parse(r.doc) as AppWindow);
+    return rows.map((r) => {
+      const w = JSON.parse(r.doc) as AppWindow & { url?: string | null; path?: string | null };
+      // Older documents kept url/path as fields; state is per window type now.
+      if (!w.state) {
+        w.state = w.url ? { url: w.url } : w.path ? { path: w.path } : {};
+        delete w.url;
+        delete w.path;
+        delete (w as { paneId?: unknown }).paneId;
+      }
+      return w;
+    });
   }
 
   saveWindow(w: AppWindow): void {

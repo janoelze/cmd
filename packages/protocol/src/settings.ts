@@ -45,6 +45,11 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: "With shell integration, `open <file>` opens text in a text window and html/images/pdf in a browser window; other files still use their app.",
   },
+  "open.handlers": {
+    type: "string",
+    default: "",
+    description: "Which window type opens which file extension, overriding the defaults, e.g. \"md: browser, log: text\".",
+  },
   "shell.openUrls": { type: "boolean", default: false, description: "With shell integration, `open <http(s) URL>` opens a cmd browser window." },
 
   "ui.defaultView": { type: "enum", default: "focus", options: ["focus", "grid", "strip", "canvas"], description: "View mode on first launch; after that the last used mode is remembered." },

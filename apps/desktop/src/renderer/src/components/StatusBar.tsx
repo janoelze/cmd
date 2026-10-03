@@ -7,6 +7,7 @@ import { useKeybindings } from "../keybindings.ts";
 import { ledOf, rowDetail, shortPath, usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
 import { useStore } from "../store.ts";
 import { useWindowStatus } from "../windowActions.ts";
+import { typeFor, viewFor } from "../windows/registry.ts";
 import type { ViewMode } from "./MainView.tsx";
 import { Symbol } from "./Symbol.tsx";
 
@@ -46,8 +47,8 @@ export function StatusBar({ mode, row, pane, run }: Props) {
       <div className="statusbar-session">
         {!pane && row?.win && (
           <>
-            <span className="statusbar-proc">{row.win.kind}</span>
-            <span className="statusbar-path">{row.win.kind === "browser" ? (row.win.url ?? "") : shortPath(row.win.path ?? "")}</span>
+            <span className="statusbar-proc">{(typeFor(row.win.kind)?.title ?? row.win.kind).toLowerCase()}</span>
+            <span className="statusbar-path">{viewFor(row.win.kind)?.detail?.(row.win) ?? ""}</span>
             {winStatus && <span className="statusbar-usage">{winStatus.label}</span>}
           </>
         )}

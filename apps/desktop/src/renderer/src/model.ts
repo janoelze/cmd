@@ -2,6 +2,7 @@
 
 import { bucketOf, type Agent, type AppWindow, type Pane, type PaneId } from "@cmd/protocol";
 import type { State } from "./store.ts";
+import { typeFor, viewFor } from "./windows/registry.ts";
 
 /**
  * A sidebar row and, when it has a window, a layout item. Terminal rows have a
@@ -95,10 +96,7 @@ function cleanTitle(t: string | undefined): string {
 
 /** Like the fork: terminal title, else last prompt, else spawn prompt, else agent name. */
 export function rowTitle(r: SidebarRow): string {
-  if (r.win) {
-    if (r.win.kind === "browser") return r.win.title && r.win.title !== r.win.url ? r.win.title : hostOf(r.win.url) || "Browser";
-    return r.win.title || (r.win.kind === "text" ? "Text" : "Files");
-  }
+  if (r.win) return viewFor(r.win.kind)?.label?.(r.win) ?? (r.win.title || typeFor(r.win.kind)?.title || r.win.kind);
   const a = r.agent;
   const t = cleanTitle(r.pane?.title);
   const generic = !t || GENERIC_TITLES.has(t.toLowerCase()) || t === r.pane?.foreground;
@@ -107,7 +105,7 @@ export function rowTitle(r: SidebarRow): string {
 }
 
 export function rowDetail(r: SidebarRow, now: number): string {
-  if (r.win) return r.win.kind === "browser" ? hostOf(r.win.url) : shortPath(r.win.path ?? "");
+  if (r.win) return viewFor(r.win.kind)?.detail?.(r.win) ?? "";
   const a = r.agent;
   if (!a) return shortPath(r.pane?.cwd ?? "");
   switch (a.state) {

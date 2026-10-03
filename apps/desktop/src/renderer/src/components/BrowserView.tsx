@@ -11,14 +11,15 @@ import { cmd } from "../bridge.ts";
 import { Symbol } from "./Symbol.tsx";
 
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
+  const url = typeof win.state.url === "string" ? win.state.url : null;
   const ref = useRef<WebviewTag | null>(null);
-  const [address, setAddress] = useState(win.url ?? "");
+  const [address, setAddress] = useState(url ?? "");
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [nav, setNav] = useState({ back: false, forward: false });
   const input = useRef<HTMLInputElement>(null);
   // The URL the webview was created with; later navigation happens inside it.
-  const [initial] = useState(win.url ?? "about:blank");
+  const [initial] = useState(url ?? "about:blank");
 
   useEffect(() => {
     const wv = ref.current;
@@ -26,7 +27,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const navigated = (e: { url: string }) => {
       setAddress(e.url);
       setNav({ back: wv.canGoBack(), forward: wv.canGoForward() });
-      void cmd.call("window.update", { id: win.id, url: e.url }).catch(() => {});
+      void cmd.call("window.update", { id: win.id, state: { url: e.url } }).catch(() => {});
     };
     const titled = (e: { title: string }) => void cmd.call("window.update", { id: win.id, title: e.title }).catch(() => {});
     const start = () => setLoading(true);
@@ -48,13 +49,13 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   // Navigation requested from elsewhere (cmd open, another client): follow it.
   useEffect(() => {
     const wv = ref.current;
-    if (!wv || !win.url) return;
+    if (!wv || !url) return;
     try {
-      if (wv.getURL() !== win.url) void wv.loadURL(win.url);
+      if (wv.getURL() !== url) void wv.loadURL(url);
     } catch {
       // not attached yet; the initial src covers it
     }
-  }, [win.url]);
+  }, [url]);
 
   // A new, blank browser window starts with the address field focused.
   useEffect(() => {
@@ -63,9 +64,9 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
 
   const go = async (text: string) => {
     try {
-      const w = await cmd.call("window.update", { id: win.id, url: text });
+      const w = await cmd.call("window.update", { id: win.id, state: { url: text } });
       setEditing(false);
-      ref.current?.loadURL(w.url ?? "about:blank");
+      ref.current?.loadURL(typeof w.state.url === "string" ? w.state.url : "about:blank");
       ref.current?.focus();
     } catch {
       input.current?.select();
@@ -103,12 +104,12 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
           onKeyDown={(e) => {
             if (e.key === "Enter") void go(address);
             if (e.key === "Escape") {
-              setAddress(ref.current?.getURL() ?? win.url ?? "");
+              setAddress(ref.current?.getURL() ?? url ?? "");
               ref.current?.focus();
             }
           }}
         />
-        <button className="icon-btn" onClick={() => win.url && cmd.openPath(win.url)} title="Open in default browser">
+        <button className="icon-btn" onClick={() => url && cmd.openPath(url)} title="Open in default browser">
           <Symbol name="safari" size={13} />
         </button>
       </div>

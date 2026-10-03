@@ -36,14 +36,17 @@ _cmd_report_cwd
 # Ask cmd to do something: OSC 777;cmd;<token>;<action>;<argument>
 _cmd_request() { _cmd_osc "777;cmd;${CMD_PANE_TOKEN};$1;$2" }
 
-# Would cmd open this itself? Mirrors packages/core/src/routing.ts.
+# Would cmd open this itself? The rules come from cmd's window type registry,
+# passed in as CMD_OPEN_EXTS / CMD_OPEN_HANDLES_FOLDERS / CMD_OPEN_HANDLES_TEXT.
 _cmd_handles() {
   local p=$1
-  if [[ -d $p ]]; then [[ "$CMD_OPEN_FOLDERS" == 1 ]]; return; fi
+  if [[ -d $p ]]; then [[ "$CMD_OPEN_FOLDERS" == 1 && "$CMD_OPEN_HANDLES_FOLDERS" == 1 ]]; return; fi
   [[ "$CMD_OPEN_FILES" == 1 && -f $p ]] || return 1
-  case "${p:l}" in
-    *.html|*.htm|*.xhtml|*.svg|*.png|*.jpg|*.jpeg|*.gif|*.webp|*.avif|*.bmp|*.ico|*.pdf) return 0 ;;
-  esac
+  local name=${${p:t}:l}
+  local ext=${name:e}
+  [[ -z $ext ]] && ext=$name   # Makefile, Dockerfile
+  [[ " $CMD_OPEN_EXTS " == *" $ext "* ]] && return 0
+  [[ "$CMD_OPEN_HANDLES_TEXT" == 1 ]] || return 1
   local size=$(wc -c < "$p" 2>/dev/null)
   (( ${size:-0} <= 10485760 )) || return 1
   (( ${size:-0} == 0 )) && return 0

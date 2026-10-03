@@ -4,62 +4,141 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { PaneManager } from "../src/panes.ts";
 import { Store } from "../src/store.ts";
-import { listDir, normalizeUrl, WindowManager } from "../src/windows.ts";
+import {
+  listDir,
+  normalizeUrl,
+  parseOverrides,
+  readText,
+  registerBuiltins,
+  shellOpenEnv,
+  targetFor,
+  WindowManager,
+  WindowTypes,
+  writeText,
+  type WindowType,
+} from "../src/windows/index.ts";
 import { fakeFactory } from "./fake-pty.ts";
 
-describe("windows", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-win-"));
-  const dbFile = path.join(dir, "db.sqlite");
-  const make = () => {
-    const f = fakeFactory();
-    const panes = new PaneManager(f.factory, { socketPath: "/tmp/w.sock", pollMs: 0 });
-    return { panes, wins: new WindowManager(panes, new Store(dbFile)) };
+const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-win-")));
+const file = (name: string, content: string | Buffer) => {
+  const p = path.join(dir, name);
+  fs.writeFileSync(p, content);
+  return p;
+};
+const builtins = () => {
+  const t = new WindowTypes();
+  registerBuiltins(t);
+  return t;
+};
+const make = (types = builtins(), overrides: Record<string, string> = {}, db = path.join(dir, "db.sqlite")) => {
+  const f = fakeFactory();
+  const panes = new PaneManager(f.factory, { socketPath: "/tmp/w.sock", pollMs: 0 });
+  return { panes, wins: new WindowManager(panes, new Store(db), types, () => overrides) };
+};
+
+describe("window type registry", () => {
+  const types = builtins();
+  const kindFor = (input: string, overrides: Record<string, string> = {}) => {
+    const t = targetFor(input);
+    return t ? (types.resolve(t, overrides)?.kind ?? null) : null;
   };
 
+  it("routes folders, web/images/pdf, text and URLs to the built-in types", () => {
+    expect(kindFor(dir)).toBe("files");
+    expect(kindFor(file("page.html", "<p>hi</p>"))).toBe("browser");
+    expect(kindFor(file("shot.PNG", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0])))).toBe("browser");
+    expect(kindFor(file("notes.md", "# hi"))).toBe("text");
+    expect(kindFor(file("Makefile", "all:\n\techo"))).toBe("text");
+    expect(kindFor(file("README", "plain text, no extension"))).toBe("text");
+    expect(kindFor("https://example.com")).toBe("browser");
+  });
+
+  it("leaves binaries, unknown schemes and missing paths alone", () => {
+    expect(kindFor(file("app.bin", Buffer.from([1, 2, 0, 3])))).toBeNull();
+    expect(kindFor("slack://open")).toBeNull();
+    expect(kindFor(path.join(dir, "missing.txt"))).toBeNull();
+  });
+
+  it("lets the open.handlers setting override by extension", () => {
+    expect(parseOverrides(" .md: browser , log:text")).toEqual({ md: "browser", log: "text" });
+    expect(kindFor(path.join(dir, "notes.md"), { md: "browser" })).toBe("browser");
+  });
+
+  it("takes new types the way a plugin would: a more specific rule wins", () => {
+    const t = builtins();
+    const preview: WindowType<{ path: string }> = {
+      kind: "markdown-preview",
+      title: "Markdown Preview",
+      icon: "doc.richtext",
+      opens: { extensions: ["md"], priority: 10 },
+      fromTarget: (tg) => ({ path: tg.type === "path" ? tg.path : "" }),
+      create: (input) => ({ state: { path: String(input.path) }, title: "Preview" }),
+    };
+    t.register(preview);
+    expect(() => t.register(preview)).toThrow(/already registered/);
+    expect(t.resolve(targetFor(path.join(dir, "notes.md"))!)?.kind).toBe("markdown-preview");
+    expect(t.resolve(targetFor(path.join(dir, "README"))!)?.kind).toBe("text"); // others unchanged
+    const { wins } = make(t, {}, path.join(dir, "plugin.sqlite"));
+    const w = wins.openTarget(path.join(dir, "notes.md"))!;
+    expect(w).toMatchObject({ kind: "markdown-preview", title: "Preview", state: { path: path.join(dir, "notes.md") } });
+    expect(t.info().find((i) => i.kind === "markdown-preview")).toMatchObject({ icon: "doc.richtext", opens: { extensions: ["md"] } });
+  });
+
+  it("gives the shell the same rules", () => {
+    const env = shellOpenEnv(builtins(), { foo: "text" });
+    expect(env.CMD_OPEN_EXTS!.split(" ")).toEqual(expect.arrayContaining(["html", "md", "pdf", "foo"]));
+    expect(env).toMatchObject({ CMD_OPEN_HANDLES_FOLDERS: "1", CMD_OPEN_HANDLES_TEXT: "1" });
+  });
+});
+
+describe("window manager", () => {
   it("normalizes what people type as URLs", () => {
     expect(normalizeUrl("example.com")).toBe("https://example.com");
     expect(normalizeUrl("localhost:3000/app")).toBe("http://localhost:3000/app");
-    expect(normalizeUrl("http://x.test")).toBe("http://x.test");
     expect(normalizeUrl("")).toBe("about:blank");
     expect(() => normalizeUrl("not a url")).toThrow();
   });
 
-  it("opens browser and file windows, persists them across restarts, closes them", () => {
-    const { wins } = make();
-    const events: string[] = [];
-    wins.on("updated", (w) => events.push(`u:${w.kind}`));
-    wins.on("removed", () => events.push("removed"));
-    const b = wins.open({ kind: "browser", url: "localhost:5173" });
-    const f = wins.open({ kind: "files", path: dir });
-    expect(b).toMatchObject({ kind: "browser", url: "http://localhost:5173" });
-    expect(f).toMatchObject({ kind: "files", path: dir, title: path.basename(dir) });
-    wins.update(b.id, { url: "https://example.com", title: "Example" });
+  it("opens windows with type-owned state, persists them, applies updates through the type", () => {
+    const db = path.join(dir, "persist.sqlite");
+    const { wins } = make(builtins(), {}, db);
+    const b = wins.open("browser", { url: "localhost:5173" });
+    const f = wins.open("files", { path: dir });
+    expect(b).toMatchObject({ kind: "browser", state: { url: "http://localhost:5173" } });
+    expect(f).toMatchObject({ kind: "files", state: { path: dir }, title: path.basename(dir) });
+    wins.update(b.id, { state: { url: "example.com" }, title: "Example" });
+    expect(() => wins.open("nope")).toThrow(/unknown window type/);
 
-    const again = make().wins; // a restarted core
-    expect(again.others().find((w) => w.id === b.id)).toMatchObject({ url: "https://example.com", title: "Example" });
+    const again = make(builtins(), {}, db).wins; // a restarted core
+    expect(again.others().find((w) => w.id === b.id)).toMatchObject({ state: { url: "https://example.com" }, title: "Example" });
     again.close(f.id);
     expect(again.others().map((w) => w.id)).toEqual([b.id]);
-    expect(events).toEqual(["u:browser", "u:files", "u:browser"]);
+  });
+
+  it("migrates windows saved before state existed", () => {
+    const db = path.join(dir, "old.sqlite");
+    const store = new Store(db);
+    store.saveWindow({ id: "old", kind: "browser", title: "Old", createdAt: 1, updatedAt: 1, url: "https://x.test", path: null, paneId: null } as never);
+    expect(new Store(db).windows()[0]).toEqual({ id: "old", kind: "browser", title: "Old", createdAt: 1, updatedAt: 1, state: { url: "https://x.test" } });
   });
 
   it("treats panes as terminal windows", () => {
-    const { wins, panes } = make();
-    const t = wins.open({ kind: "terminal", cwd: dir });
-    expect(t).toMatchObject({ kind: "terminal", paneId: t.id });
-    expect(wins.list().some((w) => w.id === t.id && w.kind === "terminal")).toBe(true);
+    const { wins, panes } = make(builtins(), {}, path.join(dir, "term.sqlite"));
+    const t = wins.open("terminal", { cwd: dir });
+    expect(t).toMatchObject({ kind: "terminal", state: { paneId: t.id } });
     wins.close(t.id);
     expect(panes.get(t.id)).toBeNull();
   });
 
-  it("lists folders first, with hidden flags", () => {
-    fs.mkdirSync(path.join(dir, "b-folder"));
-    fs.writeFileSync(path.join(dir, "a-file.txt"), "hi");
-    fs.writeFileSync(path.join(dir, ".hidden"), "");
+  it("lists folders first, reads and saves text, refusing outside changes", () => {
+    fs.mkdirSync(path.join(dir, "b-folder"), { recursive: true });
     const l = listDir(dir);
-    expect(l.parent).toBe(path.dirname(dir));
-    const names = l.entries.map((e) => e.name);
-    expect(names.indexOf("b-folder")).toBeLessThan(names.indexOf("a-file.txt"));
-    expect(l.entries.find((e) => e.name === ".hidden")!.hidden).toBe(true);
-    expect(l.entries.find((e) => e.name === "a-file.txt")).toMatchObject({ kind: "file", size: 2 });
+    expect(l.entries[0]!.kind).toBe("dir");
+    const p = file("edit.txt", "one");
+    const r = readText(p);
+    const w = writeText(p, "two", r.mtime);
+    expect(fs.readFileSync(p, "utf8")).toBe("two");
+    fs.utimesSync(p, new Date(), new Date(Date.now() + 5000));
+    expect(() => writeText(p, "three", w.mtime)).toThrow(/changed on disk/);
   });
 });

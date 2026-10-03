@@ -82,31 +82,35 @@ export async function newTerminalIn(cwd: string): Promise<void> {
 
 /** New browser window (blank, address field focused, unless a URL is given). */
 export async function newBrowser(url?: string): Promise<void> {
-  const w = await cmd.call("window.open", { kind: "browser", url });
+  const w = await cmd.call("window.open", { kind: "browser", input: { url } });
   select(w.id);
 }
 
-/** Open a path in the window that suits it; falls back to the default app. */
-export async function openPath(p: string): Promise<void> {
-  const w = await cmd.call("window.openPath", { path: p }).catch(() => null);
+/**
+ * Open a path or URL in the window type that handles it (core registry); bare
+ * domains get https://; anything no type handles goes to the default app.
+ */
+export async function openPath(target: string): Promise<void> {
+  const t = /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(target) || /^localhost(:\d+)?/i.test(target) ? `https://${target}`.replace("https://localhost", "http://localhost") : target;
+  const w = await cmd.call("window.openTarget", { target: t }).catch(() => null);
   if (w) select(w.id);
-  else cmd.openPath(p);
+  else cmd.openPath(t);
 }
 
 /** New file browser at a folder, defaulting to the selected terminal's folder. */
 export async function newFiles(path?: string): Promise<void> {
-  const w = await cmd.call("window.open", { kind: "files", path: path ?? contextCwd() });
+  const w = await cmd.call("window.open", { kind: "files", input: { path: path ?? contextCwd() } });
   select(w.id);
 }
 
 /** Does palette input look like a URL or a path we can open? */
-export function openableTarget(text: string): { kind: "browser" | "files"; value: string } | null {
+export function openableTarget(text: string): { kind: "url" | "path"; value: string } | null {
   const t = text.trim();
   if (!t || /\s/.test(t)) return null;
-  if (/^(https?:\/\/|localhost(:\d+)?|127\.0\.0\.1)/i.test(t) || /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(t)) {
-    return { kind: "browser", value: t };
+  if (/^[a-z][\w+.-]+:\/\//i.test(t) || /^(localhost(:\d+)?|127\.0\.0\.1)/i.test(t) || /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(t)) {
+    return { kind: "url", value: t };
   }
-  if (/^(~|\/)/.test(t)) return { kind: "files", value: t };
+  if (/^(~|\/)/.test(t)) return { kind: "path", value: t };
   return null;
 }
 

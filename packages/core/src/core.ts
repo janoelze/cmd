@@ -9,7 +9,7 @@ import { AgentTracker } from "./agents/tracker.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
-import { listDir, readText, WindowManager, writeText } from "./windows.ts";
+import { listDir, parseOverrides, readText, registerBuiltins, shellOpenEnv, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
@@ -45,6 +45,7 @@ export class Core {
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
   readonly windows: WindowManager;
+  readonly windowTypes: WindowTypes;
   #server: net.Server | null = null;
   #subscribers = new Set<net.Socket>();
   readonly watches = new WatchService();
@@ -57,15 +58,21 @@ export class Core {
     this.store = new Store(opts.dbPath ?? ":memory:");
     this.settings = new SettingsService(opts.settingsPath ?? null);
     const settings = () => this.settings.settings;
+    // Window types (built-ins now; plugins register more through the same API).
+    this.windowTypes = new WindowTypes();
+    registerBuiltins(this.windowTypes);
+    const overrides = () => parseOverrides(this.settings.settings["open.handlers"]);
     this.panes = new PaneManager(opts.ptyFactory, {
       socketPath: opts.socketPath,
       pollMs: opts.pollMs,
       settings,
       inspector: opts.inspector ?? null,
+      // The zsh `open` function learns what cmd can open from the registry.
+      shellEnv: () => shellOpenEnv(this.windowTypes, overrides()),
     });
     this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null });
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler) : null;
-    this.windows = new WindowManager(this.panes, this.store);
+    this.windows = new WindowManager(this.panes, this.store, this.windowTypes, overrides);
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
     this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
@@ -106,11 +113,12 @@ export class Core {
     "settings.get": () => this.settings.snapshot(),
     "settings.set": (p) => this.settings.set(p.key, p.value),
     "settings.reset": (p) => this.settings.reset(p.key),
-    "window.open": (p) => this.windows.open(p),
+    "window.open": (p) => this.windows.open(p.kind, p.input),
     "window.update": (p) => this.windows.update(p.id, p),
+    "window.types": () => this.windowTypes.info(),
     "window.close": (p) => (this.windows.close(p.id), null),
     "window.list": () => this.windows.list(),
-    "window.openPath": (p) => this.windows.openPath(p.path),
+    "window.openTarget": (p) => this.windows.openTarget(p.target),
     "fs.list": (p) => listDir(p.path),
     "fs.read": (p) => readText(p.path),
     "fs.write": (p) => writeText(p.path, p.text, p.expectMtime),
@@ -132,6 +140,7 @@ export class Core {
       panes: this.panes.list(),
       agents: this.agents.list(),
       windows: this.windows.others(),
+      windowTypes: this.windowTypes.info(),
       settings: this.settings.snapshot(),
       ui: this.store.uiState(),
     }),
@@ -141,7 +150,7 @@ export class Core {
   #onShellRequest(_paneId: string, action: string, arg: string): void {
     if (action !== "open" || !arg) return;
     try {
-      const w = /^https?:\/\//i.test(arg) ? this.windows.open({ kind: "browser", url: arg }) : this.windows.openPath(arg);
+      const w = this.windows.openTarget(arg);
       if (w) this.#broadcast({ type: "window.focus", id: w.id });
     } catch {
       // not a folder / URL: ignore

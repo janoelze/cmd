@@ -89,23 +89,40 @@ export interface Agent {
 // ── windows ──────────────────────────────────────────────
 
 /**
- * Anything the main pane lays out. Terminal windows are derived from panes
- * (id = pane id); browser and file windows are stored by the core.
+ * Window kind: a registered window type. Built-ins: "terminal", "browser",
+ * "files", "text"; plugins can add more.
  */
-export type WindowKind = "terminal" | "browser" | "files" | "text";
+export type WindowKind = string;
 
+/**
+ * Anything the main pane lays out. Terminal windows are derived from panes
+ * (id = pane id); other windows are stored by the core. `state` belongs to the
+ * window's type (browser: { url }, files/text: { path }, terminal: { paneId }).
+ */
 export interface AppWindow {
   id: WindowId;
   kind: WindowKind;
   title: string;
   createdAt: number;
   updatedAt: number;
-  /** terminal */
-  paneId: PaneId | null;
-  /** browser: current URL */
-  url: string | null;
-  /** files: current folder · text: the file */
-  path: string | null;
+  state: Record<string, unknown>;
+}
+
+/** What a window type can open (see the core's window type registry). */
+export interface OpenRuleInfo {
+  folders?: boolean;
+  extensions?: string[];
+  text?: boolean;
+  schemes?: string[];
+  priority?: number;
+}
+
+export interface WindowTypeInfo {
+  kind: WindowKind;
+  title: string;
+  /** SF Symbol name. */
+  icon: string;
+  opens: OpenRuleInfo;
 }
 
 export interface FileEntry {

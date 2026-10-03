@@ -84,7 +84,7 @@ function minimalChange(a: string, b: string): { from: number; to: number; insert
 }
 
 export function TextView({ win, focused }: { win: AppWindow; focused: boolean }) {
-  const file = win.path ?? "";
+  const file = typeof win.state.path === "string" ? win.state.path : "";
   const settings = useStore().settings.settings;
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);

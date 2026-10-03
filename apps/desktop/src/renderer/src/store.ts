@@ -6,6 +6,7 @@ import type { Agent, AgentId, AppWindow, CoreEvent, Pane, PaneId, SearchStatus, 
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
+import { setWindowTypes } from "./windows/registry.ts";
 
 export interface State {
   connected: boolean;
@@ -195,6 +196,7 @@ cmd.onStatus(async (status) => {
   }
   for (const p of snap.panes) awaitingSnapshot.add(p.id);
   terminals.configure(snap.settings.settings);
+  setWindowTypes(snap.windowTypes ?? []);
   set({
     connected: true,
     error: undefined,

@@ -1,5 +1,6 @@
 // `cmd`: the CLI over the core socket. Used by humans, hooks and host agents.
 
+import path from "node:path";
 import { parseArgs } from "node:util";
 import type { Agent, AgentState, Pane } from "@cmd/protocol";
 import { ENV, SETTINGS_SCHEMA, parseSettingValue, type SettingKey } from "@cmd/protocol";
@@ -21,6 +22,8 @@ usage: cmd <command> [options]
   events [--output]                   stream core events as NDJSON
   hook <kind>                         hook entry point: reads the hook payload on stdin
   hooks <kind>                        print hook config to add to the agent's settings
+  open <path|url> [--kind K] [--types] open in a cmd window (folder, text, browser, …);
+                                      --types lists window types
   search <query…> [--json] [--limit N]  search past Claude Code / Codex sessions
   resume <session-id> [--agent claude|codex] [--fork]
   settings [get KEY | set KEY VALUE | reset KEY | path] [--json]
@@ -50,6 +53,8 @@ const { values: opt, positionals: pos } = parseArgs({
     limit: { type: "string" },
     agent: { type: "string" },
     fork: { type: "boolean" },
+    kind: { type: "string" },
+    types: { type: "boolean" },
   },
 });
 
@@ -145,6 +150,29 @@ async function run({ client, closed }: Connection): Promise<number> {
       if (!pos[0]) return fail("usage: cmd kill <agent>");
       const r = await client.call("agent.kill", { agentId: await resolveAgent(client, pos[0]), tree: !!opt.tree });
       return out(opt.json ? r : r.killed.map(short).join(" "));
+    }
+    case "open": {
+      if (opt.types) {
+        const types = await client.call("window.types", {});
+        if (opt.json) return out(types);
+        for (const t of types) {
+          const o = t.opens;
+          const what = [o.folders && "folders", o.schemes?.join("/"), o.extensions?.length && `${o.extensions.length} extensions`, o.text && "text"]
+            .filter(Boolean)
+            .join(", ");
+          console.log(`${t.kind.padEnd(16)} ${t.title.padEnd(14)} ${what}`);
+        }
+        return 0;
+      }
+      const target = pos[0];
+      if (!target) return fail("usage: cmd open <path|url> [--kind K]");
+      const abs = /^[a-z][\w+.-]+:/i.test(target) ? target : path.resolve(target);
+      const kind = str(opt.kind);
+      const w = kind
+        ? await client.call("window.open", { kind, input: /^[a-z][\w+.-]+:/i.test(abs) ? { url: abs } : { path: abs } })
+        : await client.call("window.openTarget", { target: abs });
+      if (!w) return fail(`no cmd window type opens ${target} (try: open ${target})`);
+      return out(opt.json ? w : w.id);
     }
     case "search": {
       const text = pos.join(" ");

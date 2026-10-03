@@ -27,6 +27,7 @@ import { getState, onAgentChange, onWindowFocus, usePersisted, useStore } from "
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
 import { windowActions } from "./windowActions.ts";
+import { stateStr, viewFor } from "./windows/registry.ts";
 import { builtinTools } from "./tools.ts";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
@@ -291,7 +292,8 @@ export function App() {
 
   const rowMenu = (r: SidebarRow) => {
     const a = r.agent;
-    const cwd = a?.cwd ?? r.pane?.cwd ?? r.win?.path ?? undefined;
+    const winPath = r.win && stateStr(r.win, "path");
+    const cwd = a?.cwd ?? r.pane?.cwd ?? (r.win?.kind === "files" ? winPath : winPath?.split("/").slice(0, -1).join("/")) ?? undefined;
     const resume = a && resumeCommand(a);
     const id = a && sessionId(a);
     void showContextMenu([
@@ -302,10 +304,8 @@ export function App() {
             "-" as const,
           ]
         : []),
-      ...(r.win && (r.win.kind === "text" || r.win.kind === "files") && r.win.path
-        ? [{ label: "Open with Default App", run: () => cmd.openPath(r.win!.path!) }, { label: "Copy Path", run: () => copy(r.win!.path!) }, "-" as const]
-        : []),
-      ...(r.win?.kind === "browser" && r.win.url ? [{ label: "Open in Default Browser", run: () => cmd.openPath(r.win!.url!) }, { label: "Copy URL", run: () => copy(r.win!.url!) }, "-" as const] : []),
+      // Entries the window's type contributes (see windows/registry.ts).
+      ...(r.win ? [...(viewFor(r.win.kind)?.menu?.(r.win) ?? []), "-" as const] : []),
       ...(a
         ? [
             { label: "Copy Resume Command", run: () => resume && copy(resume), enabled: !!resume },
@@ -437,8 +437,8 @@ export function App() {
             const t = openableTarget(q);
             if (!t) return [];
             return [
-              t.kind === "browser"
-                ? { id: `open-url`, group: "Commands" as const, label: `Open ${t.value}`, hint: "browser", run: () => void newBrowser(t.value) }
+              t.kind === "url"
+                ? { id: `open-url`, group: "Commands" as const, label: `Open ${t.value}`, hint: "url", run: () => void openPath(t.value) }
                 : { id: `open-path`, group: "Commands" as const, label: `Open ${t.value}`, hint: "path", run: () => void openPath(t.value) },
             ];
           }}

@@ -41,7 +41,7 @@ interface Row {
 }
 
 export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }) {
-  const root = win.path ?? "/";
+  const root = typeof win.state.path === "string" ? win.state.path : "/";
   /** Folder contents by path (lazy, refreshed on focus). */
   const [children, setChildren] = useState<Map<string, FileEntry[]>>(new Map());
   const [rootParent, setRootParent] = useState<string | null>(null);
@@ -148,7 +148,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
 
   const setRoot = (p: string) => {
     setSel(null);
-    void cmd.call("window.update", { id: win.id, path: p });
+    void cmd.call("window.update", { id: win.id, state: { path: p } });
   };
   const rootUp = () => {
     if (!rootParent) return;
@@ -157,7 +157,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   };
   // Files open in the window that suits them (text, browser), else their default app.
   const openFile = (e: FileEntry) =>
-    void cmd.call("window.openPath", { path: e.path }).then((w) => {
+    void cmd.call("window.openTarget", { target: e.path }).then((w) => {
       if (w) selectPane(w.id);
       else cmd.openPath(e.path);
     });

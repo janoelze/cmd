@@ -145,7 +145,7 @@ describe("zsh shell integration", () => {
     await until(async () => (await conn.client.call("window.list", {})).some((w) => w.kind === "files"), 15000);
     const files = (await conn.client.call("window.list", {})).filter((w) => w.kind === "files");
     expect(files).toHaveLength(1);
-    expect(files[0]!.path).toBe(real);
+    expect(files[0]!.state.path).toBe(real);
     expect(focused).toContain(files[0]!.id);
     // zsh reports the logical path (/var/…); compare resolved paths (/private/var/…).
     const cwdOf = async () => (await conn.client.call("pane.list", {})).find((p) => p.id === pane.id)?.cwd ?? "";

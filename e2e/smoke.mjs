@@ -188,18 +188,18 @@ check((await panes()) === 2, "…and leaves terminals alone");
     const all = await win.evaluate(() => window.cmd.call("window.list", {}));
     browserWin = all.find((w) => w.kind === "browser" && w.title === "E2E Page");
   }
-  check(!!browserWin && browserWin.url.startsWith(`http://localhost:${port}`), "browser window loads the page and reports its title");
+  check(!!browserWin && browserWin.state.url.startsWith(`http://localhost:${port}`), "browser window loads the page and reports its title");
 
   fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
   fs.writeFileSync(path.join(home, "files-fixture", "notes.md"), "# hi");
   fs.writeFileSync(path.join(home, "files-fixture", "sub-folder", "inner.txt"), "inside");
-  const fw = await win.evaluate((p) => window.cmd.call("window.open", { kind: "files", path: p }), path.join(home, "files-fixture"));
+  const fw = await win.evaluate((p) => window.cmd.call("window.open", { kind: "files", input: { path: p } }), path.join(home, "files-fixture"));
   await win.waitForTimeout(200);
   await win.evaluate((id) => window.__cmdSelect(id), fw.id);
   await win.waitForSelector(".tile.kind-files .file-row");
   const rowsNow = () => win.locator(".tile.kind-files .file-row .file-name").allTextContents();
   const selName = () => win.locator(".tile.kind-files .file-row.sel .file-name").textContent();
-  const filesPath = () => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.find((w) => w.kind === "files").path);
+  const filesPath = () => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.find((w) => w.kind === "files").state.path);
   check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.md"]), "file tree lists the folder, folders first");
 
   await win.locator(".tile.kind-files .file-row", { hasText: "sub-folder" }).dblclick();

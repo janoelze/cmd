@@ -3,7 +3,7 @@ import type { PaneId } from "@cmd/protocol";
 import { bucketOf } from "@cmd/protocol";
 import { usePersisted } from "../store.ts";
 import { Symbol } from "./Symbol.tsx";
-import { WINDOW_ICONS } from "./TileTitle.tsx";
+import { iconFor } from "./TileTitle.tsx";
 import { windowIdOf, flatten, ledOf, project, projectHue, rowDetail, rowTitle, type SidebarRow } from "../model.ts";
 import { Tools } from "./Tools.tsx";
 
@@ -139,7 +139,7 @@ function RowView(props: {
           <span className="twisty-space" />
         )}
         {row.win && row.win.kind !== "terminal" ? (
-          <Symbol name={WINDOW_ICONS[row.win.kind]} size={12} className="row-icon" />
+          <Symbol name={iconFor(row.win.kind)} size={12} className="row-icon" />
         ) : (
           <span className={`led led-${led}`} />
         )}
