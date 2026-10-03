@@ -5,9 +5,8 @@ import { copy } from "../actions.ts";
 import { hostOf, shortPath } from "../model.ts";
 import { BrowserView } from "../components/BrowserView.tsx";
 import { FilesView } from "../components/FilesView.tsx";
-import { TextView } from "../components/TextView.tsx";
 import { useWindowStatus } from "../windowActions.ts";
-import { registerWindowView, stateStr } from "./registry.ts";
+import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
 
 const folderOf = (p: string) => shortPath(p.split("/").slice(0, -1).join("/") || "/");
@@ -57,7 +56,8 @@ function TextMeta({ id, path }: { id: string; path: string }) {
 
 registerWindowView({
   kind: "text",
-  View: TextView,
+  // CodeMirror loads on first use, not at startup.
+  View: lazyView(() => import("../components/TextView.tsx").then((m) => m.TextView)),
   detail: (w) => shortPath(stateStr(w, "path") ?? ""),
   meta: (w) => <TextMeta id={w.id} path={stateStr(w, "path") ?? ""} />,
   menu: (w) => {

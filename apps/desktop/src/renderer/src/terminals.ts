@@ -5,7 +5,7 @@
 
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebglAddon } from "@xterm/addon-webgl";
+import type { WebglAddon } from "@xterm/addon-webgl";
 import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
@@ -32,6 +32,11 @@ const dark: ITheme = {
 };
 
 const theme = () => dark;
+
+// The WebGL addon loads only when the webgl renderer is used (not the default),
+// so it stays out of the startup bundle.
+let Webgl: typeof WebglAddon | null = null;
+let webglLoading: Promise<void> | null = null;
 
 class Terminals {
   #hosts = new Map<PaneId, Host>();
@@ -179,6 +184,12 @@ class Terminals {
   #ensureWebgl(h: Host): void {
     const pool = this.#settings["terminal.webglPool"];
     if (h.webgl || pool <= 0 || this.#settings["terminal.renderer"] !== "webgl") return;
+    if (!Webgl) {
+      webglLoading ??= import("@xterm/addon-webgl").then((m) => void (Webgl = m.WebglAddon));
+      // Once loaded, upgrade this terminal unless it was disposed meanwhile.
+      void webglLoading.then(() => [...this.#hosts.values()].includes(h) && this.#ensureWebgl(h));
+      return;
+    }
     const live = [...this.#hosts.values()].filter((x) => x.webgl);
     if (live.length >= pool) {
       // Evict the least recently used terminal back to the DOM renderer.
@@ -187,7 +198,7 @@ class Terminals {
       lru.webgl = null;
     }
     try {
-      const addon = new WebglAddon();
+      const addon = new Webgl();
       addon.onContextLoss(() => {
         addon.dispose();
         h.webgl = null;

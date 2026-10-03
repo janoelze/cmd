@@ -20,7 +20,9 @@ function setStatus(s: Status): void {
 function open(): Promise<Connection> {
   setStatus("connecting");
   ready = (async () => {
-    for (;;) {
+    // The window opens while the core starts (main/index.ts), so the first
+    // attempts fail; retry quickly at first, then back off to 500 ms.
+    for (let attempt = 0; ; attempt++) {
       try {
         const c = await connect();
         conn = c;
@@ -35,7 +37,7 @@ function open(): Promise<Connection> {
         setStatus("connected");
         return c;
       } catch {
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, Math.min(500, 20 * 1.15 ** attempt)));
       }
     }
   })();

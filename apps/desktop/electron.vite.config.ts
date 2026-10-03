@@ -7,5 +7,6 @@ const bundleWorkspace = { externalizeDeps: { exclude: ["@cmd/protocol"] } };
 export default defineConfig({
   main: { build: bundleWorkspace },
   preload: { build: bundleWorkspace },
-  renderer: { plugins: [react()] },
+  // electron-vite leaves minification off; the renderer bundle is parsed on every launch.
+  renderer: { plugins: [react()], build: { minify: true } },
 });

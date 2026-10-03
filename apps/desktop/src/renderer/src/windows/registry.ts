@@ -2,7 +2,7 @@
 // UI. The core half (what it opens, its state) lives in packages/core/src/windows.
 // Built-ins register in ./builtin.tsx; plugin window types will register the same way.
 
-import type { ComponentType, ReactNode } from "react";
+import { createElement, lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import type { AppWindow, WindowTypeInfo } from "@cmd/protocol";
 import type { MenuEntry } from "../context.ts";
 
@@ -27,6 +27,16 @@ export interface WindowView {
 }
 
 const views = new Map<string, WindowView>();
+
+/**
+ * A view whose code loads on first use, so heavy dependencies (an editor, a
+ * Markdown renderer) stay out of the startup bundle. Shows an empty well meanwhile.
+ */
+export function lazyView(load: () => Promise<ComponentType<WindowViewProps>>): ComponentType<WindowViewProps> {
+  const View = lazy(async () => ({ default: await load() }));
+  const fallback = createElement("div", { style: { flex: 1, background: "var(--well)" } });
+  return (props) => createElement(Suspense, { fallback }, createElement(View, props));
+}
 
 export function registerWindowView(view: WindowView): void {
   views.set(view.kind, view);

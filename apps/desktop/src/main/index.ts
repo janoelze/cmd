@@ -1,6 +1,8 @@
 // Electron main: makes sure a core is running, then opens the window.
 // The core is a separate, detached process so terminals survive UI reloads and restarts.
 
+// Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
+performance.mark("boot:main-script");
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, protocol, screen, shell } from "electron";
 import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
@@ -70,9 +72,7 @@ async function checkCoreBuild(): Promise<void> {
   }
 }
 
-async function ensureCore(): Promise<void> {
-  if (await canConnect()) await checkCoreBuild();
-  if (await canConnect()) return;
+function spawnCore(): void {
   const home = cmdHome();
   fs.mkdirSync(home, { recursive: true });
   const log = fs.openSync(path.join(home, "core.log"), "a");
@@ -86,11 +86,31 @@ async function ensureCore(): Promise<void> {
     env,
   });
   child.unref();
-  for (let i = 0; i < 50; i++) {
-    if (await canConnect()) return;
-    await new Promise((r) => setTimeout(r, 100));
+}
+
+/** A core process is alive for this state dir (sync check of its pid file). */
+function coreProcessAlive(): boolean {
+  try {
+    process.kill(Number(fs.readFileSync(path.join(cmdHome(), "core.pid"), "utf8")), 0);
+    return true;
+  } catch {
+    return false;
   }
-  throw new Error(`core did not start; see ${path.join(home, "core.log")}`);
+}
+
+// No core running: start one now, before Electron is ready, so it boots alongside
+// the app instead of after the window. (A stale pid file just means ensureCore
+// finds nothing to connect to and starts one then.)
+let coreSpawned = !coreProcessAlive() && (spawnCore(), true);
+
+async function ensureCore(): Promise<void> {
+  if (!coreSpawned && (await canConnect())) await checkCoreBuild();
+  if (!coreSpawned && !(await canConnect())) (spawnCore(), (coreSpawned = true));
+  for (const until = Date.now() + 5000; Date.now() < until; ) {
+    if (await canConnect()) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error(`core did not start; see ${path.join(cmdHome(), "core.log")}`);
 }
 
 // ── window ──────────────────────────────────────────────
@@ -146,7 +166,8 @@ function createWindow(): BrowserWindow {
     },
   });
   if (b.maximized) win.maximize();
-  win.once("ready-to-show", () => win.show());
+  performance.mark("boot:window-created");
+  win.once("ready-to-show", () => (performance.mark("boot:ready-to-show"), win.show()));
   trackBounds(win);
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else win.loadFile(path.join(here, "../renderer/index.html"));
@@ -269,12 +290,20 @@ app.on("web-contents-created", (_e, contents) => {
 // ── lifecycle ───────────────────────────────────────────
 
 app.whenReady().then(async () => {
+  performance.mark("boot:app-ready");
   nativeTheme.themeSource = "dark";
   protocol.handle("cmd-file", (req) => {
     const file = decodeURIComponent(new URL(req.url).pathname);
     if (!CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });
     return electronNet.fetch(pathToFileURL(file).href);
   });
+  // First: the window loads its bundle while the menu is built and the core is
+  // checked or started; the preload connects as soon as the socket answers.
+  createWindow();
+  ensureCore().then(
+    () => performance.mark("boot:core-reachable"),
+    (err: Error) => dialog.showErrorBox("cmd: the core did not start", err.message),
+  );
   const send = commandSender(createWindow);
   buildMenu(send, keybindings.bindings);
   watchKeybindings((next) => {
@@ -288,8 +317,6 @@ app.whenReady().then(async () => {
       { label: "New Claude Session", click: () => send("file.newClaude") },
     ]),
   );
-  await ensureCore();
-  createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

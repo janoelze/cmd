@@ -119,6 +119,7 @@ export function App() {
   }, []);
 
   useEffect(() => bindSelection(select, () => selectedRef.current), [select]);
+  useEffect(() => void performance.mark("boot:app-mounted"), []);
   // Test hook for the e2e smoke test.
   useEffect(() => {
     (window as unknown as { __cmdSelect?: (id: PaneId) => void }).__cmdSelect = select;
