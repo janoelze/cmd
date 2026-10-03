@@ -104,3 +104,17 @@ jobs:
       - run: pnpm typecheck
 
       - run: pnpm test
+
+      - name: Smoke test (Playwright drives the built app)
+        run: pnpm e2e
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-screenshots
+          path: .cmd-dev/shots
+          if-no-files-found: ignore
+
+      - name: Core log
+        if: failure()
+        run: cat .cmd-dev/e2e/core.log || true

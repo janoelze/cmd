@@ -44,6 +44,9 @@ const check = (cond, msg) => {
   if (!cond) throw new Error(`FAILED: ${msg}`);
   console.log(`ok - ${msg}`);
 };
+// Shortcuts are ⌘-based and only defined for macOS so far (docs/10-windows.md).
+const mac = process.platform === "darwin";
+const macOnly = (msg) => console.log(`skip - ${msg} (macOS keymap)`);
 // Synthetic keys bypass the native menu, so trigger menu items directly.
 const menu = (id) =>
   app.evaluate(({ Menu }, id) => {
@@ -68,9 +71,11 @@ const selectedTitle = () => win.locator(".row.sel .row-title").textContent();
 await win.waitForSelector(".sidebar-status");
 await win.screenshot({ path: path.join(shots, "1-empty.png") });
 
-check((await accel("file.newTerminal")) === "Cmd+N", "⌘N is New Terminal");
-check((await accel("file.close")) === "Cmd+W", "⌘W is Close Terminal");
-check((await accel("session.next")) === "Alt+Cmd+Right", "⌥⌘→ is Next Session");
+if (mac) {
+  check((await accel("file.newTerminal")) === "Cmd+N", "⌘N is New Terminal");
+  check((await accel("file.close")) === "Cmd+W", "⌘W is Close Terminal");
+  check((await accel("session.next")) === "Alt+Cmd+Right", "⌥⌘→ is Next Session");
+} else macOnly("menu accelerators");
 
 await menu("file.newTerminal");
 await win.waitForSelector(".xterm");
@@ -227,13 +232,15 @@ check((await panes()) === 2, "…and leaves terminals alone");
   await win.waitForTimeout(150);
   check((await selName()) === "notes.txt", "typing selects by name");
   await win.keyboard.press("Home");
-  await win.keyboard.press("Meta+ArrowDown");
-  await win.waitForTimeout(500);
-  check((await filesPath()).endsWith("sub-folder"), "⌘↓ makes the folder the root");
-  await win.keyboard.press("Meta+ArrowUp");
-  await win.waitForTimeout(500);
-  { const fp = await filesPath(); const sn = await selName();
-    check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${fp.split("/").pop()}, ${sn})`); }
+  if (mac) {
+    await win.keyboard.press("Meta+ArrowDown");
+    await win.waitForTimeout(500);
+    check((await filesPath()).endsWith("sub-folder"), "⌘↓ makes the folder the root");
+    await win.keyboard.press("Meta+ArrowUp");
+    await win.waitForTimeout(500);
+    const fp = await filesPath(); const sn = await selName();
+    check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${path.basename(fp)}, ${sn})`);
+  } else macOnly("⌘↓/⌘↑ in the file tree");
 
   // Files open in the window that suits them: notes.txt → text window; edit and ⌘S.
   await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).dblclick();
@@ -424,7 +431,11 @@ await win.screenshot({ path: path.join(shots, "6-tools.png") });
 
 // Terminal content must survive re-attaching exactly once (no replayed duplicates).
 const markerPane = (await win.evaluate(() => window.cmd.call("pane.list", {})))[0].id;
-await win.evaluate((id) => window.cmd.call("pane.write", { paneId: id, data: "printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r" }), markerPane);
+// Mouse reporting on, then off, then a marker computed by the shell (PowerShell on Windows).
+const markerCmd = process.platform !== "win32"
+  ? "printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r"
+  : 'Write-Host -NoNewline "`e[?1000h`e[?1000l"; echo "MARKER-$(40+2)"\r';
+await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [markerPane, markerCmd]);
 await win.waitForTimeout(800);
 
 // ── remembered UI state across an app restart (the core keeps running) ──
