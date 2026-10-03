@@ -34,6 +34,13 @@ export const SETTINGS_SCHEMA = {
 
   "shell.program": { type: "string", default: "", description: "Shell to run in new terminals. Empty uses $SHELL." },
   "shell.login": { type: "boolean", default: true, description: "Start shells as login shells (-l)." },
+  "shell.integration": {
+    type: "boolean",
+    default: true,
+    description: "zsh integration: report the working directory and prompt marks to cmd. Loads your normal config first.",
+  },
+  "shell.openFolders": { type: "boolean", default: true, description: "With shell integration, `open <folder>` opens a cmd file window instead of Finder." },
+  "shell.openUrls": { type: "boolean", default: false, description: "With shell integration, `open <http(s) URL>` opens a cmd browser window." },
 
   "ui.defaultView": { type: "enum", default: "focus", options: ["focus", "grid", "strip", "canvas"], description: "View mode on first launch; after that the last used mode is remembered." },
   "ui.showResources": {

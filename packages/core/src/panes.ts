@@ -1,6 +1,8 @@
 // Terminal sessions. The core owns the PTYs; UIs attach and detach freely.
 
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import os from "node:os";
 import { EventEmitter } from "node:events";
 import type { Pane, PaneId, PaneUsage, Settings } from "@cmd/protocol";
@@ -81,7 +83,12 @@ interface Live {
   /** Command to type once the shell is ready (see #scheduleCommand). */
   pending: { command: string; timer: NodeJS.Timeout | undefined; deadline: NodeJS.Timeout } | null;
   fg: Foreground | null;
+  /** Secret the shell integration includes in its requests (OSC 777;cmd). */
+  token: string;
 }
+
+/** zsh integration (shell/zsh): .zshenv restores the user's ZDOTDIR, then adds hooks. */
+export const ZSH_INTEGRATION_DIR = path.resolve(import.meta.dirname, "../shell/zsh");
 
 /** Shell counts as ready once its startup output has been quiet this long. */
 const READY_QUIET_MS = 250;
@@ -94,6 +101,8 @@ export interface PaneEvents {
   removed: [paneId: PaneId];
   osc: [paneId: PaneId, ev: OscEvent];
   foreground: [paneId: PaneId, fg: Foreground];
+  /** A verified request from the pane's shell integration (e.g. `open .`). */
+  request: [paneId: PaneId, action: string, arg: string];
 }
 
 export interface PaneManagerOptions {
@@ -147,6 +156,14 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     for (const [k, v] of Object.entries(process.env)) {
       if (v !== undefined && !k.startsWith("ELECTRON_") && k !== "NODE_OPTIONS") env[k] = v;
     }
+    const token = randomBytes(12).toString("hex");
+    if (cfg["shell.integration"] && path.basename(shell) === "zsh" && fs.existsSync(ZSH_INTEGRATION_DIR)) {
+      if (env.ZDOTDIR !== undefined) env.CMD_USER_ZDOTDIR = env.ZDOTDIR;
+      env.ZDOTDIR = ZSH_INTEGRATION_DIR;
+      env.CMD_PANE_TOKEN = token;
+      env.CMD_OPEN_FOLDERS = cfg["shell.openFolders"] ? "1" : "0";
+      env.CMD_OPEN_URLS = cfg["shell.openUrls"] ? "1" : "0";
+    }
     Object.assign(env, {
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
@@ -175,7 +192,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       agentId: null,
       usage: null,
     };
-    const live: Live = { pane, pty, osc: new OscScanner(), buffer: "", pending: null, fg: null };
+    const live: Live = { pane, pty, osc: new OscScanner(), buffer: "", pending: null, fg: null, token };
     this.#panes.set(id, live);
 
     pty.onData((data) => this.#onData(live, data));
@@ -235,7 +252,12 @@ export class PaneManager extends EventEmitter<PaneEvents> {
         changed = true;
       }
       if (changed) this.emit("updated", { ...live.pane });
-      if (ev.type === "prompt" && ev.mark === "B") this.#flushPending(live);
+      if (ev.type === "prompt" && (ev.mark === "B" || ev.mark === "A")) this.#flushPending(live);
+      if (ev.type === "request") {
+        // Only the pane's own shell knows the token; printed text can't forge requests.
+        if (ev.token === live.token) this.emit("request", live.pane.id, ev.action, ev.arg);
+        continue;
+      }
       this.emit("osc", live.pane.id, ev);
     }
   }

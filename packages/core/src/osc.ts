@@ -5,7 +5,8 @@ export type OscEvent =
   | { type: "title"; title: string } // OSC 0 / 2
   | { type: "cwd"; cwd: string } // OSC 7 file://host/path
   | { type: "notify"; title: string; body: string } // OSC 9 / OSC 777;notify
-  | { type: "prompt"; mark: string }; // OSC 133 shell integration (A/B/C/D)
+  | { type: "prompt"; mark: string } // OSC 133 shell integration (A/B/C/D)
+  | { type: "request"; token: string; action: string; arg: string }; // OSC 777;cmd;<token>;<action>;<arg>
 
 const ESC = "\x1b";
 const BEL = "\x07";
@@ -87,6 +88,11 @@ export function parseOsc(body: string): OscEvent | null {
       return { type: "notify", title: "", body: rest };
     case "777": {
       const [kind, title = "", ...bodyParts] = rest.split(";");
+      if (kind === "cmd") {
+        // cmd shell integration request; the argument may itself contain ";".
+        const [action = "", ...arg] = bodyParts;
+        return { type: "request", token: title, action, arg: arg.join(";") };
+      }
       if (kind !== "notify") return null;
       return { type: "notify", title, body: bodyParts.join(";") };
     }

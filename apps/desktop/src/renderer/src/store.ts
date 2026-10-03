@@ -33,6 +33,13 @@ let state: State = {
 };
 const listeners = new Set<() => void>();
 const agentListeners = new Set<(prev: Agent | undefined, next: Agent) => void>();
+const focusListeners = new Set<(id: WindowId) => void>();
+
+/** The core asks to bring a window forward (e.g. `open .` in a terminal). */
+export function onWindowFocus(fn: (id: WindowId) => void): () => void {
+  focusListeners.add(fn);
+  return () => focusListeners.delete(fn);
+}
 
 function set(next: Partial<State>): void {
   state = { ...state, ...next };
@@ -141,6 +148,9 @@ function handle(e: CoreEvent): void {
       set({ windows });
       return;
     }
+    case "window.focus":
+      for (const fn of focusListeners) fn(e.id);
+      return;
     case "search.status":
       set({ search: e.status });
       return;

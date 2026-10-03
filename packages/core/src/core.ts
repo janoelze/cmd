@@ -64,6 +64,7 @@ export class Core {
     this.windows = new WindowManager(this.panes, this.store);
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
     this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
+    this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
     opts.search?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
 
@@ -123,6 +124,19 @@ export class Core {
       ui: this.store.uiState(),
     }),
   };
+
+  /** Requests from a pane's shell integration, e.g. `open .` → file window. */
+  #onShellRequest(_paneId: string, action: string, arg: string): void {
+    if (action !== "open" || !arg) return;
+    try {
+      const w = /^https?:\/\//i.test(arg)
+        ? this.windows.open({ kind: "browser", url: arg })
+        : this.windows.open({ kind: "files", path: arg });
+      this.#broadcast({ type: "window.focus", id: w.id });
+    } catch {
+      // not a folder / URL: ignore
+    }
+  }
 
   async call<M extends Method>(method: M, params: Params<M>): Promise<Result<M>> {
     const h = this.handlers[method] as (p: Params<M>) => Result<M> | Promise<Result<M>>;

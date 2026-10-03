@@ -126,3 +126,31 @@ describe("resource usage", () => {
     await conn.client.call("pane.kill", { paneId: pane.id });
   });
 });
+
+describe("zsh shell integration", () => {
+  const zsh = fs.existsSync("/bin/zsh");
+  it.skipIf(!zsh)("reports the cwd and turns `open <folder>` into a file window; forged requests are ignored", async () => {
+    const target = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-open-"));
+    const real = fs.realpathSync(target);
+    const focused: string[] = [];
+    conn.client.onEvent((e) => {
+      if (e.type === "window.focus") focused.push(e.id);
+    });
+    await conn.client.call("events.subscribe", {});
+    // A forged request (wrong token) printed by a command must not open anything.
+    const pane = await conn.client.call("pane.create", {
+      cwd: dir,
+      command: `printf '\\033]777;cmd;forged;open;/tmp\\007'; cd ${JSON.stringify(target)} && open .`,
+    });
+    await until(async () => (await conn.client.call("window.list", {})).some((w) => w.kind === "files"), 15000);
+    const files = (await conn.client.call("window.list", {})).filter((w) => w.kind === "files");
+    expect(files).toHaveLength(1);
+    expect(files[0]!.path).toBe(real);
+    expect(focused).toContain(files[0]!.id);
+    // zsh reports the logical path (/var/…); compare resolved paths (/private/var/…).
+    const cwdOf = async () => (await conn.client.call("pane.list", {})).find((p) => p.id === pane.id)?.cwd ?? "";
+    await until(async () => fs.realpathSync(await cwdOf()) === real, 5000);
+    await conn.client.call("window.close", { id: files[0]!.id });
+    await conn.client.call("pane.kill", { paneId: pane.id });
+  });
+});

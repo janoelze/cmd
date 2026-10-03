@@ -22,7 +22,7 @@ import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, nextAfterClose, pushHistory, rowDetail, rowTitle, shortPath, windowIdOf, type SidebarRow } from "./model.ts";
 import type { SearchHit, SearchStatus } from "@cmd/protocol";
-import { getState, onAgentChange, usePersisted, useStore } from "./store.ts";
+import { getState, onAgentChange, onWindowFocus, usePersisted, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
 import { builtinTools } from "./tools.ts";
@@ -258,6 +258,7 @@ export function App() {
 
   useEffect(() => cmd.onCommand(run), [run]);
   useEffect(() => cmd.onOpenUrl((url) => void newBrowser(url)), []);
+  useEffect(() => onWindowFocus((id) => select(id)), [select]);
 
   // Tell the menu bar what is checked/enabled.
   useEffect(() => {

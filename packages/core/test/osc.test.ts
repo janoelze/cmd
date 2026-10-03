@@ -26,6 +26,12 @@ describe("OscScanner", () => {
     ]);
   });
 
+  it("parses cmd shell-integration requests, keeping ; in the argument", () => {
+    expect(new OscScanner().feed("\x1b]777;cmd;tok123;open;/tmp/a;b\x07")).toEqual([
+      { type: "request", token: "tok123", action: "open", arg: "/tmp/a;b" },
+    ]);
+  });
+
   it("ignores CSI sequences", () => {
     expect(new OscScanner().feed("\x1b[31mred\x1b[0m")).toEqual([]);
   });

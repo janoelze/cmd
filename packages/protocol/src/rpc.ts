@@ -121,7 +121,9 @@ export type CoreEvent =
   | { type: "settings.updated"; snapshot: SettingsSnapshot }
   | { type: "search.status"; status: SearchStatus }
   | { type: "window.updated"; window: AppWindow }
-  | { type: "window.removed"; id: WindowId };
+  | { type: "window.removed"; id: WindowId }
+  /** Bring a window to the front (e.g. `open .` in a terminal). */
+  | { type: "window.focus"; id: WindowId };
 
 export interface SearchHit {
   sessionId: string;
