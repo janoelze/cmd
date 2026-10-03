@@ -1,6 +1,13 @@
-# cmd
+<p align="center">
+  <img src="apps/desktop/build/icon.png" width="128" alt="cmd app icon">
+</p>
 
-A personal terminal + coding-agent workbench for macOS. Research and design live in [`docs/`](docs/00-overview.md).
+<h1 align="center">cmd</h1>
+
+<p align="center">
+  A personal terminal + coding-agent workbench for macOS.<br>
+  Research and design live in <a href="docs/00-overview.md"><code>docs/</code></a>.
+</p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/hero-dark.png">
