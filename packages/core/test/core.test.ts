@@ -69,6 +69,9 @@ describe("core over the socket", () => {
 
   it("ingests hooks for a pane and reports errors as RPC errors", async () => {
     const pane = await conn.client.call("pane.create", { cwd: dir });
+    // Hooks come from an agent already in the foreground; a shell that is still
+    // starting would later read as "the agent exited" (slow CI machines).
+    await until(() => core.panes.foreground(pane.id)?.class.kind === "shell");
     const r = await conn.client.call("hook.ingest", {
       paneId: pane.id,
       agent: "claude",
