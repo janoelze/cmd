@@ -68,7 +68,13 @@ Press ⇧⌘M and type what the window should show: a question, a URL, some JSON
 
 ## Install
 
-Download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) (Apple Silicon) and move cmd to Applications. If macOS refuses to open it the first time, right-click the app and choose Open.
+cmd runs on Apple Silicon Macs. Install or update to the latest release with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install.sh | sh
+```
+
+Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications. Releases aren't notarized yet, so macOS blocks the first launch of a downloaded copy: open System Settings → Privacy & Security and click Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/cmd.app`.
 
 **Agent state.** cmd sees that an agent is running from its process alone. To also see what it is doing (working, waiting for input, done, which tool it runs), add cmd's hook to the agent: `cmd hooks claude` (or `codex`) prints the snippet to merge into `~/.claude/settings.json` (or `~/.codex/hooks.json`). Hooks of the ghostty-agents fork work unchanged.
 
@@ -81,6 +87,7 @@ Download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/re
 | ⇧⌘M | new Magic window |
 | ⌘K | command palette: type to find anything, `>` commands, `@` sessions, `?` past sessions |
 | ⌥⌘1 / 2 / 3 / 4 | focus / grid / strip / canvas |
+| ⌘↩ | focus on the selected window, and back |
 | ⌃⌘J | jump to the next session that needs you |
 | ⌘, | settings |
 
@@ -104,6 +111,7 @@ Every shortcut is a real menu-bar item. Remap any of them in `~/.config/cmd/keyb
 | ⌥⌘K | clear buffer |
 | ⌘+ / ⌘− / ⌘0 | terminal text size (this session only) |
 | ⌥⌘1/2/3/4 | focus / grid / strip / canvas |
+| ⌘↩ | toggle focus: the selected window fills the pane; again returns to grid, strip or canvas |
 | ⇧⌘1 / ⇧⌘2 | canvas: zoom to fit all / to the selected window |
 | ⌃⌘S | show/hide sidebar |
 | ⇧⌘F | search the sidebar: open windows and past sessions |
