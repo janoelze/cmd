@@ -70,6 +70,10 @@ jobs:
           if [ "$IS_TAG" = true ]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.0-ci.${GITHUB_RUN_NUMBER}"; fi
           pnpm exec electron-builder --mac --publish never -c.extraMetadata.version="$version"
 
+      # The packaged app itself: window, bundled core, a terminal with a prompt.
+      - name: Check the packaged app
+        run: node e2e/packaged.mjs
+
       - uses: actions/upload-artifact@v4
         with:
           name: cmd-mac
@@ -128,6 +132,9 @@ jobs:
         run: |
           if [ "$IS_TAG" = true ]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.0-ci.${GITHUB_RUN_NUMBER}"; fi
           pnpm exec electron-builder --win --publish never -c.extraMetadata.version="$version"
+
+      - name: Check the packaged app
+        run: node e2e/packaged.mjs
 
       - uses: actions/upload-artifact@v4
         with:
