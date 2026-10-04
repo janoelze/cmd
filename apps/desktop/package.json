@@ -1,7 +1,7 @@
 {
   "name": "@cmd/desktop",
   "productName": "cmd",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Terminals and coding agents, side by side",
   "author": "Jan Oelze",
   "homepage": "https://github.com/janoelze/cmd",
