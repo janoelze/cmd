@@ -75,7 +75,7 @@ export const SETTINGS_SCHEMA = {
     options: ["dom", "webgl"],
     description: "webgl is much cheaper for heavy output and scrolling (up to terminal.webglPool terminals; the rest use dom); dom draws text natively (matches macOS rendering).",
   },
-  "terminal.lineHeight": { title: "Line height", type: "number", default: 1.15, min: 1, max: 2, step: 0.05, description: "Terminal line height." },
+  "terminal.lineHeight": { title: "Line height", type: "number", default: 1.1, min: 1, max: 2, step: 0.05, description: "Terminal line height." },
   "terminal.cursorBlink": { title: "Blinking cursor", type: "boolean", default: true, description: "Blink the terminal cursor." },
   "terminal.scrollback": { title: "Scrollback", unit: "lines", type: "number", default: 10000, min: 0, max: 200000, description: "Lines of scrollback per terminal." },
   "terminal.cursorStyle": {
