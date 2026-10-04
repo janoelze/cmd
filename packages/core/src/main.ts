@@ -3,10 +3,10 @@
 // else $CMD_INSTANCE; $CMD_HOME relocates it (see protocol/instance.ts).
 
 import fs from "node:fs";
-import net from "node:net";
 import path from "node:path";
-import { cmdHome, configDir, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, ipcPath, logDir, logger, ptyHostSocketPath, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, configDir, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, logDir, logger, ptyHostSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import { Core } from "./core.ts";
+import { acquireLock } from "./lock.ts";
 import { USAGE_URL } from "./usage.ts";
 import { nodePtyFactory } from "./panes.ts";
 import { adoptLoginPath } from "./loginpath.ts";
@@ -40,10 +40,12 @@ const home = cmdHome();
 fs.mkdirSync(home, { recursive: true });
 const socketPath = coreSocketPath();
 
-// A second core must not get as far as taking the PTY host over from the first.
-if (await answers(socketPath)) {
-  log.error(`a core is already running on ${socketPath}`);
-  console.error(`cmd core: a core is already running on ${socketPath}`);
+// A second core must not get as far as taking the PTY host over from the first
+// (lock.ts). Held until exit; the app looks for "already running" in our output.
+const lock = acquireLock(path.join(home, "core.lock"));
+if (!lock) {
+  log.error(`a core is already running for ${home}`);
+  console.error(`cmd core: a core is already running for ${home}`);
   process.exit(1);
 }
 
@@ -74,8 +76,9 @@ const core = new Core({
   shellRulesFile: path.join(home, "shell-open.zsh"),
   terminals,
   reconnectTerminals: host,
-  // Only a core whose socket nobody reaches gets replaced (a second core starts
-  // only when the first doesn't answer): it has nothing left to serve.
+  // The lock keeps a second core of this state dir out, so another core took the
+  // PTY host only if something went wrong anyway (a core from before the lock):
+  // it has the terminals now, step aside.
   onReplaced: () => process.kill(process.pid, "SIGTERM"),
   inspector: procinfo.available ? (pid) => procinfo.query(pid) : null,
   sampler: procinfo.available ? (pids) => procinfo.trees(pids) : null,
@@ -106,19 +109,9 @@ const shutdown = async () => {
   closing = true;
   log.info("shutting down");
   await core.close();
-  // A core started while we still close (the app waits for our exit, others may not) owns the pid file now: keep it.
-  try {
-    if (fs.readFileSync(pidFile, "utf8").trim() === String(process.pid)) fs.rmSync(pidFile, { force: true });
-  } catch {}
+  fs.rmSync(pidFile, { force: true }); // ours: we hold the lock
+  lock.release();
   process.exit(0);
 };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-function answers(sock: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const c = net.createConnection(ipcPath(sock));
-    c.once("connect", () => (c.destroy(), resolve(true)));
-    c.once("error", () => resolve(false));
-  });
-}

@@ -148,6 +148,7 @@ async function checkCoreBuild(): Promise<void> {
     const current = sourceBuildId(repoRoot);
     if (hello.build === current) return;
     log.info(`core ${hello.pid} runs build ${hello.build}, this app ships ${current}: restarting it`);
+    conn.close(); // the core closes only once its clients are gone
     await stopCore(hello.pid);
   } catch {
     // An unresponsive or very old core: leave it, the UI shows the error.
@@ -262,6 +263,7 @@ async function restartCore(): Promise<void> {
     try {
       const hello = await conn.client.call("core.hello", {});
       if (!ownCore(hello)) throw new Error(`the core on ${socketPath} is not this app's (its state is in ${hello.stateDir ?? "an unknown place"}); stop it yourself`);
+      conn.close(); // the core closes only once its clients are gone
       await stopCore(hello.pid);
     } finally {
       conn.close();

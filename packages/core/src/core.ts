@@ -51,6 +51,8 @@ export interface CoreOptions {
   terminals: TermBackend | PtyFactory;
   /** A new backend when the PTY host died (its terminals are then resurrected); none: they are lost. */
   reconnectTerminals?: () => Promise<TermBackend>;
+  /** How often to check that the socket file is still there (default 2 s). */
+  socketCheckMs?: number;
   /** Another core took the PTY host over (this one was cut off from its clients, see main.ts): stop. */
   onReplaced?: () => void;
   pollMs?: number;
@@ -109,9 +111,14 @@ export class Core {
   /** Agents already counted for usage stats. */
   #countedAgents = new Set<AgentId>();
   #startedAt = Date.now();
-  #server: net.Server | null = null;
-  /** Inode of the socket file this core created: on close, it removes that file only, not a successor's. */
+  /** Listening servers: one, plus one per time the socket file was put back (the old ones keep their clients). */
+  #servers: net.Server[] = [];
+  /** Open socket connections, cut on close so a lingering client can't hold it up. */
+  #sockets = new Set<net.Socket>();
+  /** Inode of the socket file this core created: on close, it removes that file only, not another's. */
   #sockIno: number | null = null;
+  #sockCheck: ReturnType<typeof setInterval> | null = null;
+  #sockError: string | null = null;
   /** Subscribed connections and which events each wants. */
   #subscribers = new Map<Connection, (e: CoreEvent) => boolean>();
   readonly watches = new WatchService();
@@ -247,7 +254,7 @@ export class Core {
         heapBytes: mem.heapUsed,
         cpuSeconds: (cpu.user + cpu.system) / 1e6,
         panes: this.panes.list().length,
-        connections: await new Promise<number>((r) => (this.#server ? this.#server.getConnections((_e, n) => r(n ?? 0)) : r(0))),
+        connections: this.#sockets.size,
         socket: this.#opts.socketPath,
         dbPath: this.#opts.dbPath,
         settingsPath: this.#opts.settingsPath ?? null,
@@ -543,6 +550,17 @@ export class Core {
   }
 
   async listen(): Promise<void> {
+    await this.#bind();
+    this.settings.watch();
+    // The socket file can go while we run (removed by hand, a temp-dir cleaner):
+    // put it back, or clients find no core and the app starts another.
+    if (this.#sockIno !== null) {
+      this.#sockCheck = setInterval(() => void this.#checkSocket(), this.#opts.socketCheckMs ?? 2000);
+      this.#sockCheck.unref();
+    }
+  }
+
+  async #bind(): Promise<void> {
     const sock = ipcPath(this.#opts.socketPath);
     // A named pipe (Windows) has no file: nothing to create, clean up or chmod,
     // and listening on a taken pipe fails by itself.
@@ -551,22 +569,52 @@ export class Core {
       fs.mkdirSync(path.dirname(sock), { recursive: true });
       await removeStaleSocket(sock);
     }
-    this.#server = net.createServer((sock) => this.#serveSocket(sock));
+    // A file socket is bound under a temporary name, then renamed into place:
+    // closing a server unlinks the path it was bound to (libuv), and by then
+    // that path may be another process's socket. The rename is atomic, too.
+    const bindTo = isFile ? path.join(path.dirname(sock), `.${process.pid}-${this.#servers.length}.sock`) : sock;
+    if (isFile) fs.rmSync(bindTo, { force: true });
+    const server = net.createServer((sock) => this.#serveSocket(sock));
     await new Promise<void>((resolve, reject) => {
-      this.#server!.once("error", reject);
-      this.#server!.listen(sock, () => resolve());
+      server.once("error", reject);
+      server.listen(bindTo, () => resolve());
     });
+    this.#servers.push(server);
     if (isFile) {
-      fs.chmodSync(sock, 0o600);
+      fs.chmodSync(bindTo, 0o600);
+      fs.renameSync(bindTo, sock);
       this.#sockIno = fs.statSync(sock).ino;
     }
-    this.settings.watch();
+  }
+
+  #rebinding = false;
+
+  async #checkSocket(): Promise<void> {
+    if (this.#closed || this.#rebinding) return;
+    let ino: number | null = null;
+    try {
+      ino = fs.statSync(this.#opts.socketPath).ino;
+    } catch {}
+    if (ino === this.#sockIno) return;
+    this.#rebinding = true;
+    try {
+      await this.#bind();
+      log.warn(`the socket file was gone or replaced: listening on ${this.#opts.socketPath} again`);
+      this.#sockError = null;
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg !== this.#sockError) log.warn(`could not put the socket back: ${msg}`);
+      this.#sockError = msg;
+    } finally {
+      this.#rebinding = false;
+    }
   }
 
   /** A Unix socket client: local access. */
   #serveSocket(sock: net.Socket): void {
     sock.setEncoding("utf8");
     sock.on("error", () => {});
+    this.#sockets.add(sock);
     rpcLog.debug("connection opened");
     const served = this.serve({
       access: "local",
@@ -574,6 +622,7 @@ export class Core {
       close: () => sock.destroy(),
     });
     sock.on("close", () => {
+      this.#sockets.delete(sock);
       rpcLog.debug("connection closed");
       served.closed();
     });
@@ -719,9 +768,11 @@ export class Core {
     this.remote.close();
     await this.panes.shutdown();
     for (const s of this.#subscribers.keys()) s.close();
-    await new Promise<void>((r) => (this.#server ? this.#server.close(() => r()) : r()));
-    // The next core may already listen on this path (Restart Core starts it once
-    // ours stops accepting, while connections still drain): leave its socket be.
+    if (this.#sockCheck) clearInterval(this.#sockCheck);
+    const closed = Promise.all(this.#servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
+    for (const s of this.#sockets) s.destroy();
+    await closed;
+    // Leave a socket file this core didn't create be (another process's, on the same path).
     try {
       if (this.#sockIno !== null && fs.statSync(this.#opts.socketPath).ino === this.#sockIno) fs.unlinkSync(this.#opts.socketPath);
     } catch {}

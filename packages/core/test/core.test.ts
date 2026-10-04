@@ -177,22 +177,38 @@ describe("zsh shell integration", () => {
 });
 
 describe("restart", () => {
-  it("a closing core leaves the socket of the core that replaced it", async () => {
+  it("a closing core cuts its clients and leaves another core's socket", async () => {
     const sock = path.join(dir, "restart.sock");
     const a = new Core({ socketPath: sock, dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     await a.listen();
-    // A client that lingers keeps a's server closing after it stopped accepting.
+    // A client that never lets go must not keep a from closing.
     const lingering = await connect(sock);
-    const closing = a.close();
-    await until(async () => !(await connect(sock).then((c) => (c.close(), true)).catch(() => false)));
+    // a's socket file is gone (removed by hand, a cleaner, a crash) and b took the path.
+    fs.unlinkSync(sock);
     const b = new Core({ socketPath: sock, dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     await b.listen();
+    await a.close();
     lingering.close();
-    await closing;
     const c = await connect(sock);
     expect(await c.client.call("core.hello", {})).toMatchObject({ pid: process.pid });
     c.close();
     await b.close();
+    expect(fs.existsSync(sock)).toBe(false);
+  });
+
+  it("puts its socket file back when it is removed", async () => {
+    const sock = path.join(dir, "lost.sock");
+    const a = new Core({ socketPath: sock, dbPath: null, terminals: fakeFactory().factory, pollMs: 0, socketCheckMs: 50 });
+    await a.listen();
+    const before = await connect(sock); // a client from before keeps working
+    fs.unlinkSync(sock);
+    await until(() => fs.existsSync(sock));
+    const after = await connect(sock);
+    expect(await after.client.call("core.hello", {})).toMatchObject({ pid: process.pid });
+    expect(await before.client.call("core.hello", {})).toMatchObject({ pid: process.pid });
+    before.close();
+    after.close();
+    await a.close();
     expect(fs.existsSync(sock)).toBe(false);
   });
 });
