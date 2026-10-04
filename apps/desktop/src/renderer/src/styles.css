@@ -44,7 +44,7 @@
 
   --radius: 6px;
   --sidebar-w: 280px;
-  --sidebar-pad: 10px; /* rows' inset from the sidebar edges (ui.sidebarPadding, set on .app / .sw) */
+  --sidebar-pad: 14px; /* rows' inset from the sidebar edges (ui.sidebarPadding, set on .app / .sw) */
   --titlebar-h: 38px; /* traffic-light area at the top of the sidebar */
   --statusbar-h: 30px; /* sidebar footer and main status bar share this */
   /* Window spacing in grid and strip (set on .app from ui.gutter, ui.paddingX/Y). */
