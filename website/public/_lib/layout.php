@@ -92,7 +92,7 @@ function page_end(): void
 {
     ?>
 </main>
-<footer>cmd · a workbench for building software with AI, on macOS · <a href="https://endtime-instruments.org">endtime instruments</a></footer>
+<footer>cmd · terminals and coding agents, side by side, on macOS · <a href="https://endtime-instruments.org">endtime instruments</a></footer>
 </body>
 </html>
 <?php

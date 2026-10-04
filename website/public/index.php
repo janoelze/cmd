@@ -15,10 +15,10 @@ foreach ($releases as $r) {
     }
 }
 
-page_start('cmd — a workbench for building software with AI', 'Terminals, coding agents, a browser, an editor and widgets you make by asking, side by side on one desk. For macOS.', '');
+page_start('cmd — terminals and coding agents, side by side', 'A macOS app for running terminals and coding agents side by side, in a grid, a strip or on a canvas.', '');
 ?>
 <h1>cmd</h1>
-<p class="lede">A workbench for building software with AI. Terminals, coding agents, a browser, an editor and widgets you make by asking, side by side on one desk. Nothing gets lost, nothing dies, and the agent that needs you is always on top.</p>
+<p class="lede">A macOS app for running terminals and coding agents side by side.</p>
 <p class="cta">
 <?php if ($latest): ?>
   <a class="button" href="<?= h($latest['dmg'] ?? $latest['url']) ?>">Download <?= h($latest['tag']) ?></a>
@@ -50,23 +50,23 @@ page_start('cmd — a workbench for building software with AI', 'Terminals, codi
 })();
 </script>
 
-<p>Terminals are where we'll work with agents for years to come, and they still feel like 1995: a window and a row of tabs. cmd is a desk instead. It isn't an IDE and it doesn't bring its own agent: you keep your editor and Claude Code or Codex, and cmd gives them a place to live. It's made for the serious, normal work, not for running 600 agents overnight.</p>
+<p>Terminals, Claude Code and Codex sessions, browsers, editors and widgets are all windows in one app. It isn't an IDE and has no agent of its own: you bring Claude Code, Codex or whichever agent you use.</p>
 
 <section class="pillar">
-  <h2>One desk</h2>
-  <p>Terminals, agents, browser, editor and widgets are windows on the same desk. Focus on one, tile them in a grid, scroll through a strip, or lay them out on an infinite canvas. ⌘K finds anything.</p>
+  <h2>Layouts</h2>
+  <p>Show one window at a time, tile them in a grid, scroll through them in a strip, or place them on a canvas. ⌘K finds any window, command or past session.</p>
   <img class="shot" src="assets/grid.png" width="1505" height="950" loading="lazy" alt="The grid: twelve windows at once, agents, widgets, a file browser, a shell and the weather">
 </section>
 
 <section class="pillar">
-  <h2>Knows your agents</h2>
-  <p>Claude Code, Codex and others are recognised in any terminal. The one waiting for you is on top. Terminals survive quits and updates, and every past session is searchable and resumable.</p>
+  <h2>Agents</h2>
+  <p>cmd detects Claude Code, Codex and other agents in any terminal and lists the ones waiting for input first. Terminals run in a background process, so quitting or updating the app doesn't end them. Past sessions are searchable and can be resumed.</p>
   <img class="shot" src="assets/agents.png" width="1505" height="950" loading="lazy" alt="The strip: a Claude Code session, a file browser and a shell, with six agents and recent sessions in the sidebar">
 </section>
 
 <section class="pillar">
   <h2>Magic widgets</h2>
-  <p>Ask for a window: “the last CI runs”, “my open merge requests”, a JSON URL. An agent builds a live widget for it, in your theme. Close it tomorrow.</p>
+  <p>Describe what you want to see, like your CI runs or a JSON URL, and an agent writes a small widget that shows it and keeps it up to date. Uses your own Anthropic or OpenAI API key.</p>
   <img class="shot" src="assets/widgets.png" width="1505" height="950" loading="lazy" alt="A weather widget next to top in the strip">
 </section>
 
