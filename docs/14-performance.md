@@ -42,6 +42,28 @@ The scenarios:
 
 The headless idle number leaves out agents, Magic windows and file windows, which is where most idle cost comes from (see below).
 
+## Startup
+
+`e2e/startup.mjs` times every `boot:*` mark of main and the renderer on one clock, from the launch call, against six terminals with 3,000 lines each. `e2e/startup-profile.mjs` profiles the window's start. Warm start (core running), median of 5, after the fixes:
+
+| Step | ms after launch | Notes |
+|---|---|---|
+| main script runs | ~115 | Electron itself |
+| app ready | ~180 | |
+| window created | ~340 | `new BrowserWindow` takes ~155 ms (Chromium's first window; `webviewTag` isn't it) |
+| renderer script | ~430 | ~100 ms to start the renderer and compile 813 KB of JS (no code cache over `file://`) |
+| connected, snapshot, first paint | ~545 | the core answers in ~25 ms |
+| terminals filled | ~815 | ~45 ms of main-thread work per terminal: open, WebGL context and atlas, parse, first draw. The core serves all six snapshots in 56 ms |
+
+The core itself boots in ~200 ms (365 ms when it also starts the PTY host), in parallel with the window, so it is off the critical path except on a cold start. 124 ms of that is importing the TypeScript graph, about 50 ms of it type stripping; Node 22's compile cache doesn't cover stripped TypeScript.
+
+Cold starts (core and PTY host stopped, shells resurrected) vary by ±200 ms between runs: six login shells start at once.
+
+Left to try:
+- **A V8 code cache for the renderer**, via a privileged `app://` scheme instead of `file://`: an estimated 20–80 ms per window. `localStorage` moves with the origin and needs a one-time migration.
+- **A pre-bundled core in packaged builds** (esbuild at staging time): about 50 ms less to boot the core, mostly off the critical path.
+- **One terminal in the first paint.** Open and fill the selected terminal before the others, deferring the rest by a frame each, so the one in view shows sooner. Total work stays the same.
+
 ## Findings
 
 Ordered by expected win. Risk means the risk of a visible change in behaviour. ✅ means done (see the log).
@@ -97,6 +119,8 @@ Measured with the bench and `e2e/perf.mjs` on the same machine. "UI" rows are th
 | 8 | Magic's dot matrix animates only on screen; StripScrollbar and the sidebar's hover order no longer run DOM work after every render | a 30 fps canvas loop in off-screen tiles; a forced layout per render | none off screen |
 | 9 | Files windows poll git only while cmd is in front | two git processes every 5 s per Files window, also in the background | none in the background; one refresh on focus |
 | 11 | The PTY host keeps only the lines ever read back (a UI's snapshot: 5,000, or `restore.scrollback` if larger) instead of `terminal.scrollback` (10,000) | host memory per full terminal: 26 MB | 15.5 MB (`cmd read` returns at most 5,000 lines of scrollback) |
+| 12 | WebGL renderer by default | UI scroll: main thread 122 ms/s; 4 spinners 50 ms/s; renderer 384 MB after scrolling | 66 ms/s; 38 ms/s; 276 MB |
+| 13 | The selected terminal's snapshot is asked for first; the dev Dock icon is set 1 s after launch | first window created ~265 ms after launch (dev); terminals filled in any order | ~185 ms; the terminal in view fills first (warm start: terminals filled at 815 instead of 833 ms) |
 | 10 | The updater bundle loads 5 s after launch | 570 KB parsed on the main thread during the first window's load | after it |
 
 Already fine: no frame over 33 ms while flooding (25 MB through `cat`) or scrolling 10,000 lines of scrollback (p95 frame 9 ms at 120 Hz); the core serializes each broadcast once for all connections.
