@@ -29,9 +29,11 @@ page_start('cmd — a workbench for building software with AI', 'Terminals, codi
 
 <div class="hero-shots" aria-roledescription="slideshow">
   <img class="on" src="assets/hero.png" width="1505" height="950" alt="cmd with a usage widget, a Claude Code session finishing a release, and a CI widget side by side; six agents in the sidebar">
+  <img src="assets/grid.png" width="1505" height="950" alt="The grid: twelve windows at once, agents, widgets, a file browser, a shell and the weather">
   <img src="assets/agents.png" width="1505" height="950" alt="The strip: a Claude Code session, a file browser and a shell, with six agents and recent sessions in the sidebar">
   <img src="assets/widgets.png" width="1505" height="950" alt="A weather widget next to top in the strip">
   <img src="assets/canvas.png" width="1505" height="950" alt="The canvas: a widget and a Claude Code session placed freely">
+  <img src="assets/canvas-pan.png" width="1505" height="950" alt="The canvas, panned across a log, a usage widget and a Claude Code session">
 </div>
 <script>
 // Crossfade the hero screenshots; reduced motion keeps the first.
@@ -53,7 +55,7 @@ page_start('cmd — a workbench for building software with AI', 'Terminals, codi
 <section class="pillar">
   <h2>One desk</h2>
   <p>Terminals, agents, browser, editor and widgets are windows on the same desk. Focus on one, tile them in a grid, scroll through a strip, or lay them out on an infinite canvas. ⌘K finds anything.</p>
-  <img class="shot" src="assets/canvas.png" width="1505" height="950" loading="lazy" alt="The canvas: a widget and a Claude Code session placed freely">
+  <img class="shot" src="assets/grid.png" width="1505" height="950" loading="lazy" alt="The grid: twelve windows at once, agents, widgets, a file browser, a shell and the weather">
 </section>
 
 <section class="pillar">
