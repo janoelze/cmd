@@ -6,6 +6,7 @@ import "./tasks.css";
 import { cmd } from "../bridge.ts";
 import { installErrorReporting } from "../errors.ts";
 import { installScrollbars } from "../scrollbars.ts";
+import { installTooltips } from "../tooltips.tsx";
 import "../themes/builtin.ts";
 import { bootTheme } from "../themes/registry.ts";
 import { TaskManager } from "./TaskManager.tsx";
@@ -13,6 +14,7 @@ import { TaskManager } from "./TaskManager.tsx";
 installErrorReporting();
 bootTheme();
 installScrollbars();
+installTooltips();
 
 // The menu bar sends the edit commands it can't do natively (main/menu.ts); ⌘W closes in main.
 cmd.onCommand((id) => {

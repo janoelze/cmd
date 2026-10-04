@@ -765,7 +765,7 @@ export function WindowsView(p: Props) {
                 onSelect(id);
                 p.onTitleMenu?.(r);
               }}
-              title={canvas ? "Drag to move · double-click to zoom to this window" : "Drag to move"}
+              data-tip={canvas ? "Drag to move · double-click to zoom to this window" : "Drag to move"}
             />
           );
           return (
@@ -812,7 +812,7 @@ export function WindowsView(p: Props) {
               {lay.resizable && (
                 <div
                   className="strip-resize"
-                  title="Drag to resize · double-click to cycle widths"
+                  data-tip="Drag to resize · double-click to cycle widths"
                   onPointerDown={(e) => startResize(e, id, rect.w)}
                   onDoubleClick={() => p.onWidth(id, nextPreset(p.widths[id] ?? DEFAULT_FRACTION))}
                 />

@@ -350,11 +350,3 @@ export function usageLabel(u: { memory: number; cpu: number } | null): string | 
   const cpu = u.cpu >= 1 ? ` · ${Math.round(u.cpu)}%` : "";
   return `${formatBytes(u.memory)}${cpu}`;
 }
-
-/** Tooltip: totals plus the largest processes in the tree. */
-export function usageTooltip(u: { memory: number; cpu: number; processes: number; top: { name: string; memory: number }[] } | null): string | undefined {
-  if (!u) return undefined;
-  const lines = [`${formatBytes(u.memory)} memory · ${u.cpu.toFixed(1)}% CPU · ${u.processes} process${u.processes === 1 ? "" : "es"}`];
-  for (const t of u.top) lines.push(`${formatBytes(t.memory).padStart(7)}  ${t.name}`);
-  return lines.join("\n");
-}

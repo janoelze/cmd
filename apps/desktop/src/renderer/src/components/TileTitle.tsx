@@ -36,7 +36,7 @@ export function TileTitle({
   const action = useWindowStatus(row.win?.id ?? null)?.action;
   const edit = useTitleEdit(row.win?.id ?? null);
   return (
-    <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} title={title}>
+    <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} data-tip={title}>
       <Mark light={f.light} icon={f.icon} />
       <span className={`tile-name${edit ? " editing" : ""}`}>
         {edit ? (

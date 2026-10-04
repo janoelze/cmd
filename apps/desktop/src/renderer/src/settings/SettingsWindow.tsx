@@ -203,7 +203,7 @@ export function SettingsWindow() {
             onKeyDown={(e) => e.key === "Escape" && setQuery("")}
           />
           {query && (
-            <button className="sb-search-clear" aria-label="Clear" onClick={() => (setQuery(""), input.current?.focus())}>
+            <button className="sb-search-clear" aria-label="Clear" data-tip="Clear Search" onClick={() => (setQuery(""), input.current?.focus())}>
               <Symbol name="xmark.circle.fill" size={11} />
             </button>
           )}
@@ -224,7 +224,7 @@ export function SettingsWindow() {
             </button>
           ))}
         </nav>
-        <button className="sw-side-foot" onClick={() => cmd.openSettingsFile(snap.path)} disabled={!snap.path} title={snap.path}>
+        <button className="sw-side-foot" onClick={() => cmd.openSettingsFile(snap.path)} disabled={!snap.path} data-tip={snap.path}>
           <Symbol name="curlybraces" size={11} weight="semibold" />
           Open settings.json
         </button>
@@ -265,7 +265,7 @@ export function RowShell(p: { title: ReactNode; tip?: string; desc?: ReactNode; 
   return (
     <div className={`sw-row${p.className ? ` ${p.className}` : ""}`}>
       <div className="sw-row-text">
-        <div className="sw-row-title" title={p.tip}>
+        <div className="sw-row-title" data-tip={p.tip}>
           {p.title}
         </div>
         {p.desc && <div className="sw-row-desc">{p.desc}</div>}
@@ -298,7 +298,7 @@ function settingText(k: SettingKey, ctx: RowContext) {
       <>
         <span className="sw-row-name">{settingTitle(k)}</span>
         {ctx.snap.overrides.includes(k) && (
-          <button type="button" className="sw-reset" onClick={() => ctx.reset(k)} title="Restore default">
+          <button type="button" className="sw-reset" onClick={() => ctx.reset(k)} data-tip="Restore Default">
             <Symbol name="arrow.uturn.backward" size={9} weight="semibold" />
           </button>
         )}
@@ -363,11 +363,11 @@ function ModelRow(p: { k: SettingKey; provider: MagicProvider; value: string; ct
   return (
     <RowShell {...settingText(p.k, p.ctx)} note={note && <span className="sw-model-note">{note}</span>} noteError={!!s.error}>
       <span className="sw-model">
-        <span title={p.value}>
+        <span data-tip={p.value}>
           <Popup value={p.value} options={options} labels={labels} disabled={!s.models} onChange={(v) => p.ctx.save(p.k, v)} />
         </span>
         {key?.set && (
-          <button type="button" className="sw-button icon" title="List the models again" disabled={s.loading} onClick={() => s.load(true)}>
+          <button type="button" className="sw-button icon" data-tip="List the Models Again" disabled={s.loading} onClick={() => s.load(true)}>
             <Symbol name="arrow.clockwise" size={10} weight="semibold" />
           </button>
         )}
@@ -475,7 +475,7 @@ function Shortcuts({ q }: { q?: string }) {
                   <>
                     <span className="sw-row-name">{c.label.replace(/…$/, "")}</span>
                     {changed(c) && (
-                      <button type="button" className="sw-reset" onClick={() => (setRec(null), save(c.id, null))} title="Restore default">
+                      <button type="button" className="sw-reset" onClick={() => (setRec(null), save(c.id, null))} data-tip="Restore Default">
                         <Symbol name="arrow.uturn.backward" size={9} weight="semibold" />
                       </button>
                     )}
@@ -488,10 +488,10 @@ function Shortcuts({ q }: { q?: string }) {
                       <span key={k}>{recording}</span>
                     ) : (
                       <span key={k} className="sw-key">
-                        <kbd title="Click to change" onClick={() => (setNote(null), setRec({ id: c.id, slot: i }))}>
+                        <kbd data-tip="Click to change" onClick={() => (setNote(null), setRec({ id: c.id, slot: i }))}>
                           {prettyAccelerator(k)}
                         </kbd>
-                        <button type="button" className="sw-key-remove" title="Remove" onClick={() => save(c.id, bound.filter((_, j) => j !== i))}>
+                        <button type="button" className="sw-key-remove" data-tip="Remove" onClick={() => save(c.id, bound.filter((_, j) => j !== i))}>
                           <Symbol name="xmark" size={7} weight="bold" />
                         </button>
                       </span>
@@ -503,7 +503,7 @@ function Shortcuts({ q }: { q?: string }) {
                     <button
                       type="button"
                       className="sw-key-add"
-                      title={bound.length ? "Add another shortcut" : "Add a shortcut"}
+                      data-tip={bound.length ? "Add Another Shortcut" : "Add a Shortcut"}
                       onClick={() => (setNote(null), setRec({ id: c.id, slot: bound.length }))}
                     >
                       <Symbol name="plus" size={9} weight="semibold" />

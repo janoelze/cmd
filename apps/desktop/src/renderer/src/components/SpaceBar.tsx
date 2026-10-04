@@ -41,7 +41,7 @@ export function SpaceBar(p: Props) {
         className={`space-trigger ${open ? "open" : ""}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        title={shown ? shortPath(shown.root) : undefined}
+        data-tip={shown ? shortPath(shown.root) : undefined}
         onClick={() => setOpen(!open)}
         onContextMenu={(e) => (e.preventDefault(), setOpen(false), shown && p.onMenu(shown))}
         onKeyDown={(e) => {
@@ -51,7 +51,7 @@ export function SpaceBar(p: Props) {
         {shown && <SpaceIcon space={shown} />}
         <span className="space-name">{shown?.name ?? "—"}</span>
         {mark && (
-          <span className={`space-badge attn-${mark}`} title={`${others.length} other Space${others.length === 1 ? "" : "s"} ${mark === "needs" ? "need you" : "finished"}`}>
+          <span className={`space-badge attn-${mark}`} data-tip={`${others.length} other Space${others.length === 1 ? "" : "s"} ${mark === "needs" ? "need you" : "finished"}`}>
             {others.length}
           </span>
         )}

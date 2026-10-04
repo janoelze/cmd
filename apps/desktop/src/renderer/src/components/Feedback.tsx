@@ -94,7 +94,7 @@ export function Feedback({ onClose }: { onClose: () => void }) {
               maxLength={200}
             />
             <div className="feedback-foot">
-              <label className="feedback-info" title="App version, build, macOS version and architecture. Home folders are replaced by ~.">
+              <label className="feedback-info" data-tip="App version, build, macOS version and architecture. Home folders are replaced by ~.">
                 <input type="checkbox" checked={includeInfo} onChange={(e) => setIncludeInfo(e.target.checked)} />
                 Include app version and system info
               </label>
@@ -102,7 +102,7 @@ export function Feedback({ onClose }: { onClose: () => void }) {
               <button type="button" className="btn" onClick={onClose}>
                 Cancel
               </button>
-              <button type="submit" className="btn primary" disabled={!canSend} title="⌘↵">
+              <button type="submit" className="btn primary" disabled={!canSend} data-tip="Send" data-tip-key="⌘↵">
                 {state === "sending" ? "Sending…" : "Send"}
               </button>
             </div>

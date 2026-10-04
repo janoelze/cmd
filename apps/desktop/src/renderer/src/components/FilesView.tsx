@@ -434,10 +434,10 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   return (
     <div className="files">
       <div className="window-toolbar">
-        <button className="icon-btn" disabled={!rootParent} onClick={rootUp} title="Enclosing folder (⌘↑)">
+        <button className="icon-btn" disabled={!rootParent} onClick={rootUp} data-tip="Enclosing Folder" data-tip-key="⌘↑">
           <Symbol name="chevron.up" size={ICON.toolbar} />
         </button>
-        <div className="crumbs" title={root}>
+        <div className="crumbs" data-tip={root}>
           {crumbs.map((c) => (
             <button key={c.path} className="crumb" onClick={() => setRoot(c.path)}>
               {c.name}
@@ -445,7 +445,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
           ))}
         </div>
         {git && (
-          <button className={`git-branch ${showChanges ? "on" : ""}`} onClick={() => setChangesOnly((c) => !c)} title={branchTitle}>
+          <button className={`git-branch ${showChanges ? "on" : ""}`} onClick={() => setChangesOnly((c) => !c)} data-tip={branchTitle}>
             <Symbol name="arrow.triangle.branch" size={ICON.toolbar} />
             <span className="git-branch-name">{branchLabel}</span>
             {git.ahead > 0 && <span className="git-ab">↑{git.ahead}</span>}
@@ -453,10 +453,10 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
             {changes.length > 0 && <span className="git-count">{changes.length}{git.truncated ? "+" : ""}</span>}
           </button>
         )}
-        <button className={`icon-btn ${showHidden ? "on" : ""}`} onClick={() => setShowHidden((h) => !h)} title="Show hidden files">
+        <button className={`icon-btn ${showHidden ? "on" : ""}`} onClick={() => setShowHidden((h) => !h)} data-tip={showHidden ? "Hide Hidden Files" : "Show Hidden Files"}>
           <Symbol name={showHidden ? "eye" : "eye.slash"} size={ICON.toolbar} />
         </button>
-        <button className="icon-btn" onClick={() => void newTerminalIn(root)} title="New terminal here">
+        <button className="icon-btn" onClick={() => void newTerminalIn(root)} data-tip="New Terminal Here">
           <Symbol name="terminal" size={ICON.toolbar} />
         </button>
       </div>
@@ -519,7 +519,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
               ) : (
                 <span className="file-name">{label ?? e.name}</span>
               )}
-              <span className="git-mark" title={g ? `${GIT_WORD[g.state]}${g.staged ? " (staged)" : ""}` : inside ? "Contains changes" : undefined}>
+              <span className="git-mark" data-tip={g ? `${GIT_WORD[g.state]}${g.staged ? " (staged)" : ""}` : inside ? "Contains changes" : undefined}>
                 {g ? GIT_LETTER[g.state] : inside ? "•" : ""}
               </span>
               <span className="file-size">{dir || label !== undefined ? "" : formatBytes(e.size)}</span>

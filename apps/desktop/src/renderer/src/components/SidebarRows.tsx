@@ -129,7 +129,7 @@ export function SessionRow(props: {
               <button
                 className="row-close"
                 aria-label="Close"
-                title="Close"
+                data-tip="Close"
                 onClick={(e) => {
                   e.stopPropagation();
                   props.onClose(row);
@@ -159,7 +159,8 @@ export function HistoryRow(p: { hit: SearchHit; now: number; onOpen: (h: SearchH
     <div
       className={`row history ${p.rich ? "tall" : "short"} ${p.active ? "active" : ""}`}
       data-key={`h-${h.agent}-${h.sessionId}`}
-      title={[h.title, h.cwd ? shortPath(h.cwd) : null, `${h.agent} · ${h.sessionId}`].filter(Boolean).join("\n")}
+      data-tip-side="right"
+      data-tip={[h.title, h.cwd ? shortPath(h.cwd) : null, `${h.agent} · ${h.sessionId}`].filter(Boolean).join("\n")}
       onClick={() => p.onOpen(h)}
     >
       <Mark icon="clock.arrow.circlepath" />

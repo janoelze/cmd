@@ -159,7 +159,7 @@ export function TextField({
       style={font ? { fontFamily: `${font}, var(--font-mono)` } : undefined}
       value={draft}
       placeholder={placeholder}
-      title={draft.length > 30 ? draft : undefined}
+      data-tip={draft.length > 30 ? draft : undefined}
       spellCheck={false}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}

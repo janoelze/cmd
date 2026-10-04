@@ -160,7 +160,7 @@ export function Slot({
   const text = (t: string) => (clipStart ? `‎${t}‎` : t);
   const cls = `${fade ? "fade" : ""} ${clipStart ? "clip-start" : ""}`;
   return (
-    <span ref={outer} className={`slot ${className} ${divider ? "divided" : ""} ${animate ? "" : "still"}`} title={title}>
+    <span ref={outer} className={`slot ${className} ${divider ? "divided" : ""} ${animate ? "" : "still"}`} data-tip={title}>
       {divider && <span className="slot-divider" aria-hidden />}
       {leaving && (
         <span key={`out-${leaving.id}`} className={`slot-v out ${cls}`} onAnimationEnd={() => setLeaving(null)} aria-hidden>
@@ -193,5 +193,5 @@ export function Mark({ light, icon }: { light?: Led; icon: string }) {
 
 /** Unsaved changes: a dot that scales in and out. */
 export function DirtyDot({ on }: { on: boolean }) {
-  return <span className={`dirty-dot ${on ? "on" : ""}`} title={on ? "Unsaved changes" : undefined} />;
+  return <span className={`dirty-dot ${on ? "on" : ""}`} data-tip={on ? "Unsaved changes" : undefined} />;
 }

@@ -220,7 +220,7 @@ function ProcessRow({
 }) {
   const tip = row.processes !== undefined ? `${row.processes} process${row.processes === 1 ? "" : "es"} in this terminal` : undefined;
   return (
-    <div className={`tm-row${child ? " child" : ""}${selected ? " sel" : ""}`} role="row" onMouseDown={onSelect} onDoubleClick={onOpen} title={tip}>
+    <div className={`tm-row${child ? " child" : ""}${selected ? " sel" : ""}`} role="row" onMouseDown={onSelect} onDoubleClick={onOpen} data-tip={tip}>
       <span className="tm-name">
         {!child && (
           <span

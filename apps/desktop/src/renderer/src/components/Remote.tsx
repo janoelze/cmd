@@ -10,6 +10,7 @@ import { cmd } from "../bridge.ts";
 import { getState, useStoreValue } from "../store.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { PairPrompt, scopeLabel } from "./PairPrompt.tsx";
+import { useTooltip } from "../tooltips.tsx";
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -49,7 +50,7 @@ export function RemoteBadge({ id, compact = false }: { id: string | null; compac
   const typed = useStoreValue((s) => (id ? s.remoteInput.get(id) : undefined));
   if (!watchers.length && !typed) return null;
   return (
-    <span className={`remote-badge${typed ? " typed" : ""}`} title={typed ? `${typed} typed here` : `Watched from ${watchers.join(", ")}`}>
+    <span className={`remote-badge${typed ? " typed" : ""}`} data-tip={typed ? `${typed} typed here` : `Watched from ${watchers.join(", ")}`}>
       <Symbol name="iphone" size={ICON.small} />
       {typed && !compact && <span>typed from {typed}</span>}
     </span>
@@ -63,13 +64,14 @@ const STATE_TEXT = { off: "Off", connecting: "Connecting to the relay…", onlin
 /**
  * In the status bar while remote access is on. Its colour says the state at a
  * glance: dim when ready, accent while a device is connected, pulsing while one
- * waits for approval, warning when the relay can't be reached. The popover says
- * who is in and what they watch, and offers Disconnect.
+ * waits for approval, warning when the relay can't be reached. Its tooltip says
+ * who is in and what they watch; the popover (a click) also offers Disconnect.
  */
 export function RemoteIndicator() {
   const status = useStoreValue((s) => s.remote);
   const [open, setOpen] = useState<DOMRect | null>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const tipRef = useTooltip(() => status && <RemoteTip status={status} />);
   if (!status || (!status.enabled && !status.sessions.length)) return null;
   const names = [...new Set(status.sessions.map((s) => s.name))];
   const tone = status.requests.length ? "asking" : names.length ? "connected" : status.state === "error" ? "error" : "idle";
@@ -81,16 +83,49 @@ export function RemoteIndicator() {
   return (
     <>
       <button
-        ref={button}
+        ref={(el) => ((button.current = el), tipRef(el))}
         className={`icon-btn remote-indicator ${tone}${open ? " on" : ""}`}
-        title={tip}
         aria-label={tip}
+        aria-expanded={!!open}
         onClick={() => setOpen(open ? null : button.current!.getBoundingClientRect())}
       >
         <Symbol name={names.length ? "iphone.radiowaves.left.and.right" : "iphone"} size={ICON.bar} />
       </button>
       {open && <RemotePopover at={open} status={status} onClose={() => setOpen(null)} />}
     </>
+  );
+}
+
+/** The indicator's tooltip: the state, who waits, who is in and what they watch. */
+function RemoteTip({ status }: { status: RemoteStatus }) {
+  const { sessions, requests } = status;
+  const paired = status.devices.length;
+  return (
+    <div className="remote-tip">
+      <div className="tip-head">Remote Access · {sessions.length && status.state === "online" ? "Connected" : STATE_TEXT[status.state]}</div>
+      {status.state === "error" && status.error && <div className="tip-dim">{status.error}</div>}
+      {requests.map((r) => (
+        <div key={r.requestId} className="remote-tip-row">
+          <Symbol name="iphone" size={ICON.small} />
+          <span>
+            <b>{r.name}</b> is waiting for you to allow it
+          </span>
+        </div>
+      ))}
+      {sessions.map((s) => (
+        <div key={s.id} className="remote-tip-row">
+          <Symbol name="iphone.radiowaves.left.and.right" size={ICON.small} />
+          <span>
+            <b>{s.name}</b> <span className={`remote-tag${s.scope === "control" ? " control" : ""}`}>{scopeLabel(s.scope)}</span>
+            <div className="tip-dim">
+              Since {clock(s.since)} · {s.watching.length ? `watching ${s.watching.map(windowTitle).join(", ")}` : "on its home screen"}
+            </div>
+          </span>
+        </div>
+      ))}
+      {!sessions.length && !requests.length && <div className="tip-dim">{paired ? `No device connected. ${paired} paired.` : "No devices paired yet."}</div>}
+      <div className="tip-foot">Click for options</div>
+    </div>
   );
 }
 

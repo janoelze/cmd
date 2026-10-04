@@ -120,7 +120,7 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
       ) : null}
       {building && <Progress live={live} showSteps={showSteps} overlay={widget} />}
       {asking && <MediaRequest origins={pending} onAnswer={(allow) => void cmd.call("magic.media", { id: win.id, allow })} />}
-      {s.error && !building && <div className="magic-error" title={s.error}>{s.error}</div>}
+      {s.error && !building && <div className="magic-error" data-tip={s.error}>{s.error}</div>}
       {working && <StopButton onStop={stop} />}
       {hint && <div className="magic-hint-flash">Right-click or press ⌘L to change it</div>}
     </div>
@@ -246,7 +246,7 @@ function MediaRequest({ origins, onAnswer }: { origins: string[]; onAnswer: (all
   const named = hosts.length > 3 ? `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} more` : hosts.join(", ");
   return (
     <div className="magic-overlay">
-      <div className="magic-media" role="alertdialog" aria-label="Allow media" title={hosts.join("\n")}>
+      <div className="magic-media" role="alertdialog" aria-label="Allow media" data-tip={hosts.join("\n")}>
         <div className="magic-media-title">Play media from {named}?</div>
         <div className="magic-media-text">This widget streams audio, video or images from the web. They stay blocked until you allow them.</div>
         <div className="magic-row">
@@ -365,7 +365,7 @@ function TerminalOffer({ win, command }: { win: AppWindow; command: string }) {
  */
 function StopButton({ onStop }: { onStop: () => void }) {
   return (
-    <button className="magic-stop" title="Stop (⌘.)" aria-label="Stop" onClick={onStop}>
+    <button className="magic-stop" data-tip="Stop" data-tip-key="⌘." aria-label="Stop" onClick={onStop}>
       <Symbol name="xmark" size={ICON.small} />
     </button>
   );

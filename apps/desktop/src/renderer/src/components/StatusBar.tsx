@@ -5,13 +5,14 @@
 import type { Pane } from "@cmd/protocol";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
-import { usageLabel, usageTooltip, windowIdOf, type SidebarRow } from "../model.ts";
+import { formatBytes, usageLabel, windowIdOf, type SidebarRow } from "../model.ts";
 import { useStoreValue } from "../store.ts";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
 import { useFields } from "./TileTitle.tsx";
 import type { ViewMode } from "./MainView.tsx";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { RemoteBadge, RemoteIndicator } from "./Remote.tsx";
+import { useTooltip } from "../tooltips.tsx";
 
 const ICONS: Record<ViewMode | "palette" | "settings" | "feedback", string> = {
   focus: "rectangle",
@@ -34,12 +35,17 @@ export function StatusBar({ mode, row, pane, run }: Props) {
   const keys = useKeybindings();
   const showUsage = useStoreValue((s) => s.settings.settings["ui.showResources"]);
   const f = useFields(row);
-  const tip = (label: string, id: CommandId) => {
-    const k = prettyAccelerator(keys.bindings[id]?.[0]);
-    return k ? `${label} (${k})` : label;
-  };
+  const usage = pane?.usage ?? null;
+  const usageTip = useTooltip(() => usage && <UsageTip usage={usage} />);
   const btn = (id: CommandId, icon: string, label: string, on = false) => (
-    <button key={id} className={`icon-btn ${on ? "on" : ""}`} title={tip(label, id)} aria-label={label} onClick={() => run(id)}>
+    <button
+      key={id}
+      className={`icon-btn ${on ? "on" : ""}`}
+      data-tip={label}
+      data-tip-key={prettyAccelerator(keys.bindings[id]?.[0])}
+      aria-label={label}
+      onClick={() => run(id)}
+    >
       <Symbol name={icon} size={ICON.bar} />
     </button>
   );
@@ -61,11 +67,9 @@ export function StatusBar({ mode, row, pane, run }: Props) {
             <RemoteBadge id={row ? windowIdOf(row) : null} />
           </>
         )}
-        <Slot
-          className="statusbar-usage"
-          value={showUsage && pane?.usage ? { text: usageLabel(pane.usage) ?? "", key: "usage" } : undefined}
-          title={usageTooltip(pane?.usage ?? null)}
-        />
+        <span ref={showUsage && usage ? usageTip : undefined} className="statusbar-usage-tip">
+          <Slot className="statusbar-usage" value={showUsage && usage ? { text: usageLabel(usage) ?? "", key: "usage" } : undefined} />
+        </span>
       </div>
       <div className="statusbar-actions">
         {btn("view.focus", ICONS.focus, "Focus", mode === "focus")}
@@ -79,5 +83,21 @@ export function StatusBar({ mode, row, pane, run }: Props) {
         {btn("app.settings", ICONS.settings, "Settings")}
       </div>
     </footer>
+  );
+}
+
+/** The usage's tooltip: totals, then the largest processes in the tree. */
+function UsageTip({ usage: u }: { usage: NonNullable<Pane["usage"]> }) {
+  return (
+    <>
+      <div className="tip-head">
+        {formatBytes(u.memory)} memory · {u.cpu.toFixed(1)}% CPU · {u.processes} process{u.processes === 1 ? "" : "es"}
+      </div>
+      {u.top.length > 0 && (
+        <div className="tip-rows">
+          {u.top.map((t, i) => [<span key={`m${i}`}>{formatBytes(t.memory)}</span>, <span key={`n${i}`}>{t.name}</span>])}
+        </div>
+      )}
+    </>
   );
 }

@@ -132,16 +132,16 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   return (
     <div className="browser">
       <div className="window-toolbar">
-        <button className="icon-btn" disabled={!nav.back} onClick={() => ref.current?.goBack()} title="Back">
+        <button className="icon-btn" disabled={!nav.back} onClick={() => ref.current?.goBack()} data-tip="Back">
           <Symbol name="chevron.left" size={ICON.toolbar} />
         </button>
-        <button className="icon-btn" disabled={!nav.forward} onClick={() => ref.current?.goForward()} title="Forward">
+        <button className="icon-btn" disabled={!nav.forward} onClick={() => ref.current?.goForward()} data-tip="Forward">
           <Symbol name="chevron.right" size={ICON.toolbar} />
         </button>
         <button
           className="icon-btn"
           onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())}
-          title={loading ? "Stop" : "Reload"}
+          data-tip={loading ? "Stop" : "Reload"}
         >
           <Symbol name={loading ? "xmark" : "arrow.clockwise"} size={ICON.toolbar} />
         </button>
@@ -165,7 +165,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
             }
           }}
         />
-        <button className="icon-btn" onClick={() => url && cmd.openPath(url)} title="Open in default browser">
+        <button className="icon-btn" onClick={() => url && cmd.openPath(url)} data-tip="Open in Default Browser">
           <Symbol name="safari" size={ICON.toolbar} />
         </button>
       </div>

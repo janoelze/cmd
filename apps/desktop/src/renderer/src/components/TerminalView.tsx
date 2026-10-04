@@ -167,19 +167,19 @@ function FindBar(p: { paneId: PaneId; handle: React.RefObject<FindHandle | null>
         }}
       />
       <span className="find-count">{count}</span>
-      <button className={caseSensitive ? "on" : ""} title="Match Case" onClick={() => setCase(!caseSensitive)}>
+      <button className={caseSensitive ? "on" : ""} data-tip="Match Case" onClick={() => setCase(!caseSensitive)}>
         Aa
       </button>
-      <button className={regex ? "on" : ""} title="Regular Expression" onClick={() => setRegex(!regex)}>
+      <button className={regex ? "on" : ""} data-tip="Regular Expression" onClick={() => setRegex(!regex)}>
         .*
       </button>
-      <button title="Previous (⇧↩)" onClick={() => step(-1)}>
+      <button data-tip="Previous" data-tip-key="⇧↩" onClick={() => step(-1)}>
         ↑
       </button>
-      <button title="Next (↩)" onClick={() => step(1)}>
+      <button data-tip="Next" data-tip-key="↩" onClick={() => step(1)}>
         ↓
       </button>
-      <button title="Close (⎋)" onClick={p.onClose}>
+      <button data-tip="Close" data-tip-key="⎋" onClick={p.onClose}>
         ✕
       </button>
     </div>

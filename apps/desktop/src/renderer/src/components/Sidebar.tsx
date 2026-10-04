@@ -136,7 +136,7 @@ export function Sidebar(p: Props) {
     <>
       <aside className="sidebar">
         <div className="sidebar-titlebar">
-          <button className="icon-btn" onClick={p.onNew} title="New…" aria-label="New">
+          <button className="icon-btn" onClick={p.onNew} data-tip="New…" aria-label="New">
             <Symbol name="plus" size={ICON.bar} />
           </button>
         </div>
@@ -152,7 +152,7 @@ export function Sidebar(p: Props) {
           />
           <IndexRing status={p.search} className={query ? "sb-search-ring with-clear" : "sb-search-ring"} />
           {query && (
-            <button className="sb-search-clear" aria-label="Clear" onClick={() => (setQuery(""), input.current?.focus())}>
+            <button className="sb-search-clear" aria-label="Clear" data-tip="Clear Search" onClick={() => (setQuery(""), input.current?.focus())}>
               <Symbol name="xmark.circle.fill" size={ICON.small} />
             </button>
           )}
@@ -293,7 +293,7 @@ function ResizeHandle({ onWidth }: { onWidth: (px: number | null) => void }) {
     handle.addEventListener("pointerup", end);
     handle.addEventListener("pointercancel", end);
   };
-  return <div className="sidebar-resize" onPointerDown={onPointerDown} onDoubleClick={() => onWidth(null)} title="Drag to resize · double-click to reset" />;
+  return <div className="sidebar-resize" onPointerDown={onPointerDown} onDoubleClick={() => onWidth(null)} data-tip="Drag to resize · double-click to reset" />;
 }
 
 /**
