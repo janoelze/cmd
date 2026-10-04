@@ -2,7 +2,7 @@
 // headings, toolbars, separators, key–value lists, cards, code blocks, and the
 // messages a view shows instead of or above its content (Callout, EmptyState).
 
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { IconButton } from "./button.tsx";
 import type { Tone } from "./status.tsx";
@@ -172,6 +172,8 @@ export function Callout({
   onDismiss,
   icon,
   banner,
+  compact,
+  className,
 }: {
   tone?: Tone;
   title?: ReactNode;
@@ -182,9 +184,12 @@ export function Callout({
   icon?: string | ReactNode | false;
   /** Full width along a view's edge (no radius, a line under it), not a box. */
   banner?: boolean;
+  /** One small line (under a widget, in a narrow pane). */
+  compact?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="ui-callout" data-tone={tone} data-banner={banner || undefined} role={tone === "danger" || tone === "warning" ? "alert" : "status"}>
+    <div className={cls("ui-callout", className)} data-tone={tone} data-banner={banner || undefined} data-compact={compact || undefined} role={tone === "danger" || tone === "warning" ? "alert" : "status"}>
       {icon !== false && <span className="ui-callout-icon">{iconNode(icon ?? TONE_ICON[tone], ICON.row)}</span>}
       <div className="ui-callout-text">
         {title && <div className="ui-callout-title">{title}</div>}
@@ -197,9 +202,25 @@ export function Callout({
 }
 
 /** What a view shows when it has nothing: an icon, what's missing, and how to get some. */
-export function EmptyState({ icon, title, children, action, compact }: { icon?: string | ReactNode; title?: ReactNode; children?: ReactNode; action?: ReactNode; compact?: boolean }) {
+export function EmptyState({
+  icon,
+  title,
+  children,
+  action,
+  compact,
+  className,
+  onMouseDown,
+}: {
+  icon?: string | ReactNode;
+  title?: ReactNode;
+  children?: ReactNode;
+  action?: ReactNode;
+  compact?: boolean;
+  className?: string;
+  onMouseDown?: (e: MouseEvent<HTMLDivElement>) => void;
+}) {
   return (
-    <div className="ui-empty" data-compact={compact || undefined}>
+    <div className={cls("ui-empty", className)} data-compact={compact || undefined} onMouseDown={onMouseDown}>
       {icon && <span className="ui-empty-icon">{iconNode(icon, compact ? 18 : ICON.empty, "light")}</span>}
       {title && <div className="ui-empty-title">{title}</div>}
       {children && <div className="ui-empty-text">{children}</div>}

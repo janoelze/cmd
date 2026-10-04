@@ -10,6 +10,7 @@
 // ⌘D duplicate · ⌘⌫ move to Trash · ⇧⌘N new folder. They are the list's own
 // (no menu items): nothing else in the app uses them, and ⌘⌫ must stay text editing's.
 
+import { IconButton } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AppWindow, FileEntry, GitFile, GitFileState, GitStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -437,9 +438,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   return (
     <div className="files">
       <div className="window-toolbar">
-        <button className="icon-btn" disabled={!rootParent} onClick={rootUp} data-tip="Enclosing Folder" data-tip-key="⌘↑">
-          <Symbol name="chevron.up" size={ICON.toolbar} />
-        </button>
+        <IconButton icon="chevron.up" label="Enclosing Folder" shortcut="⌘↑" disabled={!rootParent} onClick={rootUp} />
         <div className="crumbs" data-tip={root}>
           {crumbs.map((c) => (
             <button key={c.path} className="crumb" onClick={() => setRoot(c.path)}>
@@ -456,12 +455,13 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
             {changes.length > 0 && <span className="git-count">{changes.length}{git.truncated ? "+" : ""}</span>}
           </button>
         )}
-        <button className={`icon-btn ${showHidden ? "on" : ""}`} onClick={() => setShowHidden((h) => !h)} data-tip={showHidden ? "Hide Hidden Files" : "Show Hidden Files"}>
-          <Symbol name={showHidden ? "eye" : "eye.slash"} size={ICON.toolbar} />
-        </button>
-        <button className="icon-btn" onClick={() => void newTerminalIn(root)} data-tip="New Terminal Here">
-          <Symbol name="terminal" size={ICON.toolbar} />
-        </button>
+        <IconButton
+          icon={showHidden ? "eye" : "eye.slash"}
+          label={showHidden ? "Hide Hidden Files" : "Show Hidden Files"}
+          pressed={showHidden}
+          onClick={() => setShowHidden((h) => !h)}
+        />
+        <IconButton icon="terminal" label="New Terminal Here" onClick={() => void newTerminalIn(root)} />
       </div>
       <div
         className="file-list"

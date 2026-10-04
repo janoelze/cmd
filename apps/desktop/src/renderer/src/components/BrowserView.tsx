@@ -13,7 +13,7 @@ import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
-import { SCROLLBAR_CSS } from "@cmd/ui";
+import { IconButton, SCROLLBAR_CSS } from "@cmd/ui";
 import { setWindowStatus } from "../windowActions.ts";
 import { handleEmbedMessage } from "../embed.ts";
 import { deviceById, type Device } from "../devices.ts";
@@ -144,20 +144,9 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   return (
     <div className="browser">
       <div className="window-toolbar">
-        <button className="icon-btn" disabled={!nav.back} onClick={() => ref.current?.goBack()} data-tip="Back">
-          <Symbol name="chevron.left" size={ICON.toolbar} />
-        </button>
-        <button className="icon-btn" disabled={!nav.forward} onClick={() => ref.current?.goForward()} data-tip="Forward">
-          <Symbol name="chevron.right" size={ICON.toolbar} />
-        </button>
-        <button
-          className="icon-btn"
-          disabled={!live}
-          onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())}
-          data-tip={loading ? "Stop" : "Reload"}
-        >
-          <Symbol name={loading ? "xmark" : "arrow.clockwise"} size={ICON.toolbar} />
-        </button>
+        <IconButton icon="chevron.left" label="Back" disabled={!nav.back} onClick={() => ref.current?.goBack()} />
+        <IconButton icon="chevron.right" label="Forward" disabled={!nav.forward} onClick={() => ref.current?.goForward()} />
+        <IconButton icon={loading ? "xmark" : "arrow.clockwise"} label={loading ? "Stop" : "Reload"} disabled={!live} onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())} />
         <input
           ref={input}
           className="address"
@@ -174,9 +163,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
             }
           }}
         />
-        <button className="icon-btn" disabled={!live} onClick={() => url && cmd.openPath(url)} data-tip="Open in Default Browser">
-          <Symbol name="safari" size={ICON.toolbar} />
-        </button>
+        <IconButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url)} />
       </div>
       <div ref={stage} className={device ? "browser-stage device" : "browser-stage"}>
         {initial ? (

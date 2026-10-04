@@ -12,8 +12,10 @@ import { useFields } from "./TileTitle.tsx";
 import type { ViewMode } from "./MainView.tsx";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { RemoteBadge, RemoteIndicator } from "./Remote.tsx";
-import { useTooltip } from "@cmd/ui";
+import { IconButton, Segmented, useTooltip } from "@cmd/ui";
 import { countRender } from "../perf.ts";
+
+const MODE_LABEL: Record<ViewMode, string> = { focus: "Focus", grid: "Grid", strip: "Strip", canvas: "Canvas" };
 
 const ICONS: Record<ViewMode | "palette" | "settings" | "feedback", string> = {
   focus: "rectangle",
@@ -39,18 +41,9 @@ export function StatusBar({ mode, row, pane, run }: Props) {
   const f = useFields(row);
   const usage = pane?.usage ?? null;
   const usageTip = useTooltip(() => usage && <UsageTip usage={usage} />);
-  const btn = (id: CommandId, icon: string, label: string, on = false) => (
-    <button
-      key={id}
-      className={`icon-btn ${on ? "on" : ""}`}
-      data-tip={label}
-      data-tip-key={prettyAccelerator(keys.bindings[id]?.[0])}
-      aria-label={label}
-      onClick={() => run(id)}
-    >
-      <Symbol name={icon} size={ICON.bar} />
-    </button>
-  );
+  const key = (id: CommandId) => prettyAccelerator(keys.bindings[id]?.[0]);
+  const btn = (id: CommandId, icon: string, label: string) => <IconButton key={id} icon={icon} label={label} shortcut={key(id)} iconSize={ICON.bar} onClick={() => run(id)} />;
+  const modes = (["focus", "grid", "strip", "canvas"] as const).map((m) => ({ value: m, icon: ICONS[m], tip: MODE_LABEL[m], shortcut: key(`view.${m}`) }));
 
   return (
     <footer className="statusbar">
@@ -74,10 +67,7 @@ export function StatusBar({ mode, row, pane, run }: Props) {
         </span>
       </div>
       <div className="statusbar-actions">
-        {btn("view.focus", ICONS.focus, "Focus", mode === "focus")}
-        {btn("view.grid", ICONS.grid, "Grid", mode === "grid")}
-        {btn("view.strip", ICONS.strip, "Strip", mode === "strip")}
-        {btn("view.canvas", ICONS.canvas, "Canvas", mode === "canvas")}
+        <Segmented size="sm" label="View" value={mode} options={modes} onChange={(m) => run(`view.${m}`)} />
         <span className="statusbar-sep" />
         <RemoteIndicator />
         {btn("help.feedback", ICONS.feedback, "Send Feedback")}

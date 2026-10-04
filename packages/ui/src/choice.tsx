@@ -10,7 +10,7 @@ import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { ICON, Icon, iconNode } from "./icon.tsx";
 import type { Size } from "./button.tsx";
 
-export type Option<T extends string> = T | { value: T; label?: ReactNode; icon?: string | ReactNode; disabled?: boolean; tip?: string };
+export type Option<T extends string> = T | { value: T; label?: ReactNode; icon?: string | ReactNode; disabled?: boolean; tip?: string; shortcut?: string };
 
 interface Opt<T extends string> {
   value: T;
@@ -18,6 +18,7 @@ interface Opt<T extends string> {
   icon?: string | ReactNode;
   disabled?: boolean;
   tip?: string;
+  shortcut?: string;
 }
 
 function normalize<T extends string>(options: readonly Option<T>[], labels?: Readonly<Partial<Record<T, ReactNode>>>): Opt<T>[] {
@@ -184,6 +185,7 @@ export function Segmented<T extends string>({
           tabIndex={o.value === value ? 0 : -1}
           disabled={o.disabled}
           data-tip={o.tip}
+          data-tip-key={o.shortcut}
           onClick={() => onChange(o.value)}
         >
           {iconNode(o.icon, size === "sm" ? ICON.small : ICON.row)}

@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Button } from "@cmd/ui";
+import { Button, IconButton, TextField } from "@cmd/ui";
 import type { PaneId, Progress } from "@cmd/protocol";
 import { useStoreValue } from "../store.ts";
 import { terminals, type FindResults } from "../terminals.ts";
@@ -156,12 +156,13 @@ function FindBar(p: { paneId: PaneId; handle: React.RefObject<FindHandle | null>
 
   return (
     <div className="find-bar" onMouseDown={(e) => e.target !== input.current && e.preventDefault()}>
-      <input
+      <TextField
         ref={input}
+        size="sm"
+        width={180}
         value={query}
         placeholder="Find"
-        spellCheck={false}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={setQuery}
         onKeyDown={(e) => {
           if (e.key === "Enter") step(e.shiftKey ? -1 : 1);
           else if (e.key === "Escape") p.onClose();
@@ -170,21 +171,15 @@ function FindBar(p: { paneId: PaneId; handle: React.RefObject<FindHandle | null>
         }}
       />
       <span className="find-count">{count}</span>
-      <button className={caseSensitive ? "on" : ""} data-tip="Match Case" onClick={() => setCase(!caseSensitive)}>
+      <Button size="sm" variant="ghost" className="find-toggle" pressed={caseSensitive} data-tip="Match Case" onClick={() => setCase(!caseSensitive)}>
         Aa
-      </button>
-      <button className={regex ? "on" : ""} data-tip="Regular Expression" onClick={() => setRegex(!regex)}>
+      </Button>
+      <Button size="sm" variant="ghost" className="find-toggle" pressed={regex} data-tip="Regular Expression" onClick={() => setRegex(!regex)}>
         .*
-      </button>
-      <button data-tip="Previous" data-tip-key="⇧↩" onClick={() => step(-1)}>
-        ↑
-      </button>
-      <button data-tip="Next" data-tip-key="↩" onClick={() => step(1)}>
-        ↓
-      </button>
-      <button data-tip="Close" data-tip-key="⎋" onClick={p.onClose}>
-        ✕
-      </button>
+      </Button>
+      <IconButton size="sm" icon="chevron.up" label="Previous" shortcut="⇧↩" onClick={() => step(-1)} />
+      <IconButton size="sm" icon="chevron.down" label="Next" shortcut="↩" onClick={() => step(1)} />
+      <IconButton size="sm" icon="xmark" label="Close" shortcut="⎋" onClick={p.onClose} />
     </div>
   );
 }

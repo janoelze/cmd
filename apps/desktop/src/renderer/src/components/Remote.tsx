@@ -4,7 +4,7 @@
 // is in, with what access, watching which windows; disconnect in one click),
 // and the notifications that go with them.
 
-import { Button, useTooltip } from "@cmd/ui";
+import { Button, IconButton, useTooltip } from "@cmd/ui";
 import { useEffect, useRef, useState } from "react";
 import type { RemotePairRequest, RemoteStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -82,15 +82,17 @@ export function RemoteIndicator() {
       : `Remote access: ${STATE_TEXT[status.state]}`;
   return (
     <>
-      <button
+      <IconButton
         ref={(el) => ((button.current = el), tipRef(el))}
-        className={`icon-btn remote-indicator ${tone}${open ? " on" : ""}`}
-        aria-label={tip}
+        className={`remote-indicator ${tone}`}
+        icon={names.length ? "iphone.radiowaves.left.and.right" : "iphone"}
+        label={tip}
+        // The rich tooltip (tipRef) stands in for the plain one.
+        data-tip={undefined}
+        pressed={!!open}
         aria-expanded={!!open}
         onClick={() => setOpen(open ? null : button.current!.getBoundingClientRect())}
-      >
-        <Symbol name={names.length ? "iphone.radiowaves.left.and.right" : "iphone"} size={ICON.bar} />
-      </button>
+      />
       {open && <RemotePopover at={open} status={status} onClose={() => setOpen(null)} />}
     </>
   );

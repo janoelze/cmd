@@ -2,7 +2,7 @@
 // sections (Needs you, Agents, Windows, Recent past sessions), a footer with
 // the core's health, and a draggable right edge.
 
-import { Button } from "@cmd/ui";
+import { Button, IconButton } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PaneId, SearchHit, SearchStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -139,9 +139,7 @@ export function Sidebar(p: Props) {
     <>
       <aside className="sidebar">
         <div className="sidebar-titlebar">
-          <button className="icon-btn" onClick={p.onNew} data-tip="New…" aria-label="New">
-            <Symbol name="plus" size={ICON.bar} />
-          </button>
+          <IconButton icon="plus" label="New…" onClick={p.onNew} />
         </div>
         <div className="sb-search">
           <Symbol name="magnifyingglass" size={ICON.small} className="sb-search-icon" />

@@ -121,12 +121,12 @@ await win.screenshot({ path: path.join(shots, "1-empty.png") });
   // and tall enough for their tallest icon button.
   const left = await win.locator(".sidebar-status").boundingBox();
   const right = await win.locator(".statusbar").boundingBox();
-  const btn = await win.locator(".statusbar .icon-btn").first().boundingBox();
+  const btn = await win.locator(".statusbar :is(.ui-icon-button, .ui-seg button)").first().boundingBox();
   check(Math.abs(left.y - right.y) < 0.5 && Math.abs(left.height - right.height) < 0.5 && right.height >= btn.height,
     `bottom bars line up and fit their icons (${left.height} / ${right.height}, button ${btn.height})`);
   check(right.height === 30, `bottom bars keep their 30 px height (${right.height})`);
   // Icons sit on whole pixels, exactly centred in their buttons.
-  const offsets = await win.locator(".statusbar .icon-btn").evaluateAll((btns) =>
+  const offsets = await win.locator(".statusbar :is(.ui-icon-button, .ui-seg button)").evaluateAll((btns) =>
     btns.map((b) => {
       const s = b.querySelector(".sf").getBoundingClientRect();
       const r = b.getBoundingClientRect();

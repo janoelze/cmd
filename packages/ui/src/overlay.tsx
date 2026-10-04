@@ -29,26 +29,29 @@ export function placePopover(anchor: { left: number; top: number; bottom: number
 }
 
 /** Closes on Escape, on a press outside (other than on the anchor), and on blur of the window. */
-function useDismiss(open: boolean, onClose: () => void, refs: RefObject<HTMLElement | null>[]) {
+export type DismissReason = "escape" | "outside" | "blur";
+
+function useDismiss(open: boolean, onClose: (why: DismissReason) => void, refs: RefObject<HTMLElement | null>[]) {
   useEffect(() => {
     if (!open) return;
     const down = (e: PointerEvent) => {
       if (refs.some((r) => r.current?.contains(e.target as Node))) return;
-      onClose();
+      onClose("outside");
     };
     const key = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onClose("escape");
       }
     };
+    const blur = () => onClose("blur");
     window.addEventListener("pointerdown", down, true);
     window.addEventListener("keydown", key, true);
-    window.addEventListener("blur", onClose);
+    window.addEventListener("blur", blur);
     return () => {
       window.removeEventListener("pointerdown", down, true);
       window.removeEventListener("keydown", key, true);
-      window.removeEventListener("blur", onClose);
+      window.removeEventListener("blur", blur);
     };
   }, [open, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
 }
@@ -71,7 +74,7 @@ export function Popover({
 }: {
   anchor: RefObject<HTMLElement | null>;
   open: boolean;
-  onClose: () => void;
+  onClose: (why: DismissReason) => void;
   children: ReactNode;
   placement?: Placement;
   align?: "start" | "end";
@@ -99,6 +102,13 @@ export function Popover({
 
 // ── menu ───────────────────────────────────────────────
 
+/** How a menu item was chosen: with ⌘ held (open in a new window), say. */
+export interface MenuChoice {
+  metaKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
 export interface MenuItemProps {
   label: ReactNode;
   /** A second line, dim. */
@@ -109,12 +119,22 @@ export interface MenuItemProps {
   checked?: boolean;
   danger?: boolean;
   disabled?: boolean;
-  onSelect: () => void;
+  /** For the host's own styling of one item (an attention mark, say). */
+  className?: string;
+  /** Type-ahead matches this (default: the label, if it is text). */
+  text?: string;
+  onSelect: (how: MenuChoice) => void;
+  /** Right-click on the item: the menu closes first. */
+  onContextMenu?: () => void;
 }
 
+const TYPEAHEAD_MS = 700;
+
 /**
- * Actions in a popover. Arrow keys move the highlight (it follows the pointer
- * too), Enter chooses, typing jumps to an item. Choosing closes it.
+ * Actions in a popover. It opens on the checked item (else none); arrow keys,
+ * Home and End move the highlight (it follows the pointer too), Enter chooses,
+ * typing jumps to an item. Choosing closes it; Escape and Tab close it and give
+ * the anchor its focus back.
  */
 export function Menu({
   anchor,
@@ -122,8 +142,11 @@ export function Menu({
   onClose,
   items,
   width = 240,
+  matchWidth,
   placement,
   align,
+  label,
+  className,
 }: {
   anchor: RefObject<HTMLElement | null>;
   open: boolean;
@@ -131,44 +154,74 @@ export function Menu({
   /** null is a separator; a string is a section heading. */
   items: readonly (MenuItemProps | null | string)[];
   width?: number;
+  /** As wide as the anchor (a popup button's menu). */
+  matchWidth?: boolean;
   placement?: Placement;
   align?: "start" | "end";
+  label?: string;
+  className?: string;
 }) {
   const choosable = items.map((it, i) => (it && typeof it === "object" && !it.disabled ? i : -1)).filter((i) => i >= 0);
+  const checked = items.findIndex((it) => !!it && typeof it === "object" && !!it.checked);
   const [active, setActive] = useState(-1);
   const list = useRef<HTMLDivElement>(null);
+  const typed = useRef({ text: "", at: 0 });
   useEffect(() => {
-    if (open) {
-      setActive(-1);
-      requestAnimationFrame(() => list.current?.focus());
-    }
-  }, [open]);
-  const choose = (i: number) => {
+    if (!open) return;
+    setActive(checked);
+    requestAnimationFrame(() => list.current?.focus());
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (active >= 0) list.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+  const dismiss = (refocus: boolean) => {
+    onClose();
+    if (refocus) anchor.current?.focus();
+  };
+  const choose = (i: number, how: MenuChoice) => {
     const it = items[i];
     if (!it || typeof it !== "object" || it.disabled) return;
     onClose();
-    it.onSelect();
+    it.onSelect(how);
   };
   const keys = (e: KeyboardEvent) => {
     const at = choosable.indexOf(active);
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    const go = (n: number) => (e.preventDefault(), setActive(choosable[(n + choosable.length) % choosable.length] ?? -1));
+    if (e.key === "ArrowDown") go(at < 0 ? 0 : at + 1);
+    else if (e.key === "ArrowUp") go(at < 0 ? -1 : at - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(-1);
+    else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      const d = e.key === "ArrowDown" ? 1 : -1;
-      setActive(choosable[at < 0 ? (d > 0 ? 0 : choosable.length - 1) : (at + d + choosable.length) % choosable.length] ?? -1);
-    } else if (e.key === "Enter" || e.key === " ") {
+      if (active >= 0) choose(active, e);
+    } else if (e.key === "Tab") {
       e.preventDefault();
-      if (active >= 0) choose(active);
-    } else if (e.key.length === 1) {
-      const k = e.key.toLowerCase();
+      dismiss(true);
+    } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // Type-ahead, like a native menu: what was typed in quick succession.
+      const t = typed.current;
+      t.text = (e.timeStamp - t.at < TYPEAHEAD_MS ? t.text : "") + e.key.toLowerCase();
+      t.at = e.timeStamp;
       const hit = choosable.find((i) => {
         const it = items[i] as MenuItemProps;
-        return typeof it.label === "string" && it.label.toLowerCase().startsWith(k);
+        const text = it.text ?? (typeof it.label === "string" ? it.label : "");
+        return text.toLowerCase().startsWith(t.text);
       });
       if (hit !== undefined) setActive(hit);
     }
   };
   return (
-    <Popover anchor={anchor} open={open} onClose={onClose} role="menu" width={width} placement={placement} align={align} className="ui-menu">
+    <Popover
+      anchor={anchor}
+      open={open}
+      onClose={(why) => dismiss(why === "escape")}
+      role="menu"
+      label={label}
+      width={matchWidth ? anchor.current?.offsetWidth : width}
+      placement={placement}
+      align={align}
+      className={cls("ui-menu", className)}
+    >
       <div ref={list} tabIndex={-1} className="ui-menu-list" onKeyDown={keys}>
         {items.map((it, i) =>
           it === null ? (
@@ -180,15 +233,23 @@ export function Menu({
           ) : (
             <div
               key={i}
+              data-i={i}
               role={it.checked === undefined ? "menuitem" : "menuitemradio"}
               aria-checked={it.checked}
               aria-disabled={it.disabled || undefined}
-              className="ui-menu-item"
+              className={cls("ui-menu-item", it.className)}
               data-active={i === active || undefined}
               data-danger={it.danger || undefined}
               onPointerMove={() => !it.disabled && setActive(i)}
-              onPointerLeave={() => setActive(-1)}
-              onClick={() => choose(i)}
+              onClick={(e) => choose(i, e)}
+              onContextMenu={
+                it.onContextMenu &&
+                ((e) => {
+                  e.preventDefault();
+                  onClose();
+                  it.onContextMenu!();
+                })
+              }
             >
               <span className="ui-menu-check">{it.checked && iconNode("checkmark", ICON.control, "bold")}</span>
               {it.icon != null && <span className="ui-menu-icon">{iconNode(it.icon, ICON.row)}</span>}
@@ -196,7 +257,11 @@ export function Menu({
                 <span className="ui-menu-label">{it.label}</span>
                 {it.detail && <span className="ui-menu-detail">{it.detail}</span>}
               </span>
-              {it.shortcut && <kbd className="ui-kbd" data-plain>{it.shortcut}</kbd>}
+              {it.shortcut && (
+                <kbd className="ui-kbd" data-plain>
+                  {it.shortcut}
+                </kbd>
+              )}
             </div>
           ),
         )}
@@ -222,6 +287,9 @@ export function Dialog({
   dismissable = true,
   position = "top",
   label,
+  className,
+  padded = true,
+  scrim = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -234,6 +302,11 @@ export function Dialog({
   /** Top (like the palette, near where you were looking) or centred. */
   position?: "top" | "center";
   label?: string;
+  className?: string;
+  /** False: the content goes edge to edge (a search field and a list, like the palette). */
+  padded?: boolean;
+  /** False: no dimming behind it (a quick picker); outside clicks still close it. */
+  scrim?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -249,6 +322,7 @@ export function Dialog({
     <div
       className="ui-scrim"
       data-position={position}
+      data-clear={scrim ? undefined : true}
       onPointerDown={(e) => e.target === e.currentTarget && dismissable && onClose()}
       onKeyDown={(e) => {
         if (e.key === "Escape" && dismissable) {
@@ -257,14 +331,16 @@ export function Dialog({
         }
       }}
     >
-      <div ref={ref} className="ui-dialog" role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : undefined)} tabIndex={-1} style={{ width }}>
+      <div ref={ref} className={cls("ui-dialog", className)} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : undefined)} tabIndex={-1} style={{ width }}>
         {title && (
           <div className="ui-dialog-head">
             <div className="ui-dialog-title">{title}</div>
             {dismissable && <IconButton icon="xmark" size="sm" label="Close" onClick={onClose} />}
           </div>
         )}
-        <div className="ui-dialog-body">{children}</div>
+        <div className="ui-dialog-body" data-padded={padded || undefined}>
+          {children}
+        </div>
         {actions && <div className="ui-dialog-foot">{actions}</div>}
       </div>
     </div>,
@@ -364,9 +440,24 @@ export function Toaster() {
 }
 
 /** One toast, as Toaster shows it (also usable in place: a view's own transient note). */
-export function Toast({ tone = "neutral", icon, children, action, onDismiss }: { tone?: Tone; icon?: string | ReactNode; children: ReactNode; action?: { label: string; run: () => void }; onDismiss?: () => void }) {
+export function Toast({
+  tone = "neutral",
+  icon,
+  children,
+  action,
+  onDismiss,
+  className,
+}: {
+  tone?: Tone;
+  icon?: string | ReactNode;
+  children: ReactNode;
+  action?: { label: string; run: () => void };
+  onDismiss?: () => void;
+  /** Placing it yourself (in place, not in the Toaster). */
+  className?: string;
+}) {
   return (
-    <div className="ui-toast" data-tone={tone} role={tone === "danger" ? "alert" : "status"}>
+    <div className={cls("ui-toast", className)} data-tone={tone} role={tone === "danger" ? "alert" : "status"}>
       {icon != null && <span className="ui-toast-icon">{iconNode(icon, ICON.row)}</span>}
       <span className="ui-toast-text">{children}</span>
       {action && (
