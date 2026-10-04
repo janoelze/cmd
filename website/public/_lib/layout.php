@@ -28,8 +28,8 @@ function page_start(string $title, string $description, string $current): void
   color-scheme: dark;
   --bg: #050506; --surface: #121314; --ink: #e0e4e8; --ink-2: #a4aab3; --ink-3: #7d838c;
   --line: #1f2124; --accent: #71bef2; --link: #8ad4f5; --accent-soft: #15283a; --on-accent: #121314;
-  /* One type scale for the whole site. */
-  --fs-xs: 12px; --fs-sm: 13px; --fs-base: 14px; --fs-lede: 16px; --fs-h2: 18px; --fs-h1: 28px;
+  /* One type scale for the whole site: text at 14-15px, the title a little more. */
+  --fs-xs: 12px; --fs-sm: 14px; --fs-base: 14px; --fs-lede: 15px; --fs-h2: 15px; --fs-h1: 20px;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
 }
@@ -45,8 +45,8 @@ header a { color: var(--ink-2); text-decoration: none; font-weight: 500; }
 header a.current, header a:hover { color: var(--ink); }
 header a.brand { font-family: var(--mono); font-weight: 700; color: var(--ink); }
 a { color: var(--link); }
-h1 { font-size: var(--fs-h1); line-height: 1.2; margin: 24px 0 6px; letter-spacing: -0.01em; }
-h2 { font-size: var(--fs-h2); margin: 40px 0 14px; }
+h1 { font-size: var(--fs-h1); line-height: 1.2; margin: 24px 0 6px; }
+h2 { font-size: var(--fs-h2); margin: 36px 0 12px; }
 p.lede { color: var(--ink-2); font-size: var(--fs-lede); margin: 0 0 18px; max-width: 60ch; }
 code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
 .muted { color: var(--ink-3); }
@@ -83,7 +83,6 @@ td.num { font-variant-numeric: tabular-nums; }
 .features h3 { font-size: var(--fs-base); font-weight: 500; margin: 0 0 2px; }
 .features p { font-size: var(--fs-sm); line-height: 1.45; color: var(--ink-2); margin: 0; }
 @media (max-width: 640px) {
-  :root { --fs-h1: 24px; --fs-lede: 15px; }
   h1 { margin-top: 18px; }
   .features { grid-template-columns: 1fr 1fr; gap: 14px 16px; }
 }
