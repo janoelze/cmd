@@ -87,6 +87,20 @@ export const SETTINGS_SCHEMA = {
     description: "With the webgl renderer: max terminals using WebGL at once; others fall back to DOM. Browsers allow ~16 contexts.",
   },
 
+  "restore.terminals": {
+    title: "Reopen terminals",
+    type: "boolean",
+    default: true,
+    description: "After cmd or the Mac restarts, bring back the terminals that were open, in their folders, with what they showed. Commands that were running are put on the command line, not run.",
+  },
+  "restore.scrollback": { title: "Lines kept", unit: "lines", type: "number", default: 2000, min: 0, max: 20000, description: "Lines of each terminal's output kept for reopening it after a restart. 0 keeps none." },
+  "restore.resumeAgents": {
+    title: "Resume agent sessions",
+    type: "boolean",
+    default: true,
+    description: "In reopened terminals, resume the Claude and Codex sessions they ran. Off: the resume command is put on the command line for you to run.",
+  },
+
   "shell.program": { title: "Shell", placeholder: "$SHELL", code: true, type: "string", default: "", applies: "newTerminals", description: "Shell to run in new terminals. Empty uses $SHELL." },
   "shell.login": { title: "Login shell", type: "boolean", default: true, applies: "newTerminals", description: "Start shells as login shells (-l)." },
   "shell.integration": {
@@ -244,7 +258,7 @@ export const SETTINGS_SCHEMA = {
     title: "Send crash reports",
     type: "boolean",
     default: true,
-    description: "When cmd crashes or hits an internal error, send the error, its stack trace, the app version, macOS version and the last lines of the log to the developer. Your home folder is replaced by ~. Reports are also kept in the logs folder.",
+    description: "When cmd crashes or hits an internal error, send the error, its stack trace, the app version, macOS version, a random id for this Mac (not tied to its hardware) and the last lines of the log to the developer. Your home folder is replaced by ~. Reports are also kept in the logs folder.",
   },
   "magic.explore": { title: "Look around this Mac", type: "boolean", default: true, description: "Let the Magic agent run read-only commands and read files to answer requests about this Mac. Private files (keys, keychains, browser profiles) stay off limits." },
   "magic.showSteps": { title: "Show commands while building", type: "boolean", default: false, description: "Show the commands, files and URLs the Magic agent looks at while it builds a window, with their output. Off: only what it is doing, in a few words." },

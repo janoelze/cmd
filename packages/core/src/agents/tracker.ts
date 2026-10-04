@@ -33,6 +33,8 @@ export interface TrackerOptions {
 
 export interface TrackerEvents {
   updated: [agent: Agent];
+  /** Brought back from the store (restore()), just before its "updated": its state is old news. */
+  restored: [agent: Agent];
   removed: [agentId: AgentId];
 }
 
@@ -261,11 +263,57 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   /** Command that resumes this agent's session from any shell; null without one. */
   resumeCommand(id: AgentId): string | null {
     const a = this.#must(id);
+    const command = this.#resumeOf(a);
+    return command && `cd ${shq(a.cwd)} && ${command}`;
+  }
+
+  /**
+   * The command that resumes a session in its own folder; null without one.
+   * `saved`: only a session whose transcript exists (a session started with
+   * --session-id has none until its first prompt, and can't be resumed).
+   */
+  #resumeOf(a: Agent, saved = false): string | null {
     const sessionId = sessionIdOf(a);
     if (!sessionId || !this.#sources.get(a.kind)) return null;
+    if (saved && !(a.native.transcriptPath && fs.existsSync(a.native.transcriptPath))) return null;
     // The transcript's folder says which config dir (profile) the session lives in.
     const env = a.native.transcriptPath ? this.#sources.resumeEnv(a.kind, a.native.transcriptPath, locateContext()) : null;
-    return `cd ${shq(a.cwd)} && ${this.#sources.resumeCommand(a.kind, sessionId, env, false, this.#settings())}`;
+    return this.#sources.resumeCommand(a.kind, sessionId, env, false, this.#settings());
+  }
+
+  /** How a stored agent's session is resumed in a resurrected pane (see restore.ts); null: it can't be. */
+  resumeOfStored(a: Agent): string | null {
+    return this.#resumeOf(a, true);
+  }
+
+  /**
+   * Bring back an agent from the store: still running in a reattached pane
+   * (`live`), or being resumed in a resurrected one (its pane typed the resume
+   * command). Keeps its id, so its children, env and the UI's state still match.
+   */
+  restore(stored: Agent, live: boolean): Agent {
+    const parent = stored.parentId ? this.#agents.get(stored.parentId) : undefined;
+    const now = Date.now();
+    const agent: Agent = {
+      ...stored,
+      // A parent that didn't come back makes this the root of its own tree.
+      parentId: parent?.id ?? null,
+      rootId: parent?.rootId ?? stored.id,
+      depth: parent ? parent.depth + 1 : 0,
+      spaceId: (stored.paneId && this.#panes.get(stored.paneId)?.spaceId) || parent?.spaceId || stored.spaceId,
+      ...(live ? {} : { state: "starting" as const, stateSince: now, detail: null }),
+    };
+    this.#agents.set(agent.id, agent);
+    if (agent.paneId) this.#panes.setAgent(agent.paneId, agent.id);
+    if (live) {
+      // Its process kept running: return to the shell means it exited.
+      this.#started.add(agent.id);
+      if (agent.paneId) this.applyStatus(agent.paneId);
+    } else this.#expectStart(agent.id);
+    log.info(`agent ${agent.id.slice(0, 8)} ${live ? "reattached" : "resumed"}`, { pane: agent.paneId?.slice(0, 8) ?? null });
+    this.emit("restored", { ...agent });
+    this.#emitUpdate(agent);
+    return { ...agent };
   }
 
   async send(id: AgentId, text: string, submit = true): Promise<void> {
@@ -329,6 +377,13 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       if (a.paneId) this.#panes.setSpace(a.paneId, spaceId);
       if (a.spaceId !== spaceId) this.#update(a, {}, { spaceId });
     }
+  }
+
+  /** Drop every agent without a trace (no events, rows kept): their terminals are about to be restored (see PaneManager.replaceBackend). */
+  forget(): void {
+    this.#agents.clear();
+    this.#hooked.clear();
+    this.#started.clear();
   }
 
   markSeen(id: AgentId): void {
@@ -417,6 +472,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
 
   #remove(id: AgentId): void {
     if (!this.#agents.delete(id)) return;
+    this.#store?.deleteAgent(id);
     this.#hooked.delete(id);
     this.#started.delete(id);
     this.emit("removed", id);

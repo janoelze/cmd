@@ -36,9 +36,14 @@ export CMD_HOME=$PWD/.cmd-dev     # socket, SQLite and settings.json go here
 pnpm core                         # or let `pnpm dev` start it
 pnpm cmd ls
 pnpm core:stop                    # stop the core of $CMD_HOME (without it: the dev instance's; --release: the installed app's)
+pnpm core:stop --terminals        # … and its PTY host: its terminals close (they come back on the next start)
 ```
 
-Cores are detached and outlive the app, so after dev sessions they pile up, each holding its terminals' PTYs (macOS allows 511 in total). `pnpm core:stop-all` stops every dev and test core on the machine; the installed app's only with `-- --include-release`. `pnpm e2e` cleans up its own.
+Cores are detached and outlive the app, and their terminals run in a PTY host (`packages/core/src/terminals/host.ts`) that outlives the core, so stopping or restarting a core keeps the terminals: the next core takes them over. A host exits by itself once it has neither a core nor terminals. After dev sessions hosts can pile up with their terminals' PTYs (macOS allows 511 in total). `pnpm core:stop-all` stops every dev and test core and host on the machine; the installed app's only with `-- --include-release`. `pnpm e2e` cleans up its own.
+
+### Restore
+
+Each pane is recorded in `cmd.sqlite` (`panes`, with the backend instance it runs in), and its screen is saved every 10 s while it changes (`pane_screens`, the normal buffer only, `restore.scrollback` lines). Agents are stored while they live. At startup (`packages/core/src/restore.ts`) the core takes over the terminals the host still runs, and resurrects the others under the same pane id: in the old folder, with the old screen and a "Restored" line. Agent sessions are resumed with their own command (`claude --resume`); any other command that was running (reported by the zsh integration's preexec) is put on the command line and never run. The zsh integration also keeps each pane's own history (`$CMD_HOME/history/<pane id>.zsh_history`, written by zsh at each prompt, next to the user's own HISTFILE), and a resurrected pane loads it, so Up gives what ran there. If the host dies while the core runs, the core starts another and does the same. Same ids mean the layouts in `Space.view` still fit.
 
 Inside the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
@@ -64,9 +69,9 @@ An update replaces the app bundle while the old core keeps running. So the packa
 
 ### Logs and crash reports
 
-Each process logs to its own file (`packages/protocol/src/log.ts`): `core.log`, `main.log` (with the app pages' warnings and errors as `[renderer]`), `update.log`, and `core.out.log` for whatever bypasses the core's logger (Node's fatal errors). Files rotate at 5 MB, three kept. Release builds log to `~/Library/Logs/cmd`, development builds to `~/Library/Logs/cmd-dev` (Console.app shows both); with `$CMD_HOME` set it's `$CMD_HOME/logs`, and `$CMD_LOG_DIR` overrides all of them. `CMD_LOG_LEVEL=debug` adds debug lines (on by default in development builds). Log through `logger("scope")`, not `console`.
+Each process logs to its own file (`packages/protocol/src/log.ts`): `core.log`, `ptyhost.log`, `main.log` (with the app pages' warnings and errors as `[renderer]`), `update.log`, and `core.out.log` for whatever bypasses the core's logger (Node's fatal errors). Files rotate at 5 MB, three kept. Release builds log to `~/Library/Logs/cmd`, development builds to `~/Library/Logs/cmd-dev` (Console.app shows both); with `$CMD_HOME` set it's `$CMD_HOME/logs`, and `$CMD_LOG_DIR` overrides all of them. `CMD_LOG_LEVEL=debug` adds debug lines (on by default in development builds). Log through `logger("scope")`, not `console`.
 
-Crashes are written as JSON to `<logs>/crashes`: uncaught exceptions in the core (which then exits) and in main, unhandled rejections (logged, the process keeps running), TypeErrors and the like thrown by RPC handlers, renderers and GPU processes that die, uncaught errors in the app's pages, a core that dies of a signal, and Crashpad minidumps when main itself crashed. The app (`apps/desktop/src/main/crash.ts`) sends them to a Discord webhook with home folders replaced by `~`, at most once a day per crash and ten an hour, and moves them to `crashes/sent`. The webhook is baked in at build time from `$CMD_CRASH_WEBHOOK`, which CI sets from the `CMD_CRASH_WEBHOOK` secret for tagged releases only. Development builds don't send unless `CMD_CRASH_WEBHOOK` is set when they run. People can turn sending off with `diagnostics.crashReports` (Settings → About).
+Crashes are written as JSON to `<logs>/crashes`: uncaught exceptions in the core (which then exits) and in main, unhandled rejections (logged, the process keeps running), TypeErrors and the like thrown by RPC handlers, renderers and GPU processes that die, uncaught errors in the app's pages, a core that dies of a signal, and Crashpad minidumps when main itself crashed. Each report's context has `machine`, a random UUID made on first use and kept in `machine-id` in the release state dir (`$CMD_HOME` when set), so release and dev builds share it; reports from before it existed get it when they're sent. The app (`apps/desktop/src/main/crash.ts`) sends them to a Discord webhook with home folders replaced by `~`, at most once a day per crash and ten an hour, and moves them to `crashes/sent`. The webhook is baked in at build time from `$CMD_CRASH_WEBHOOK`, which CI sets from the `CMD_CRASH_WEBHOOK` secret for tagged releases only. Development builds don't send unless `CMD_CRASH_WEBHOOK` is set when they run. People can turn sending off with `diagnostics.crashReports` (Settings → About).
 
 Feedback (Help → Send Feedback…, or the speech bubble in the status bar) goes to a second Discord webhook from `apps/desktop/src/main/feedback.ts`, with the version and platform if the sender leaves that ticked. Like the crash webhook it is baked in at build time, from `$CMD_FEEDBACK_WEBHOOK` (the `CMD_FEEDBACK_WEBHOOK` secret, tagged releases only); development builds can only send when it is set when they run.
 
@@ -113,6 +118,7 @@ The schema is `packages/protocol/src/settings.ts`, with flat dotted keys. User v
 
 **Done**
 - Core: PTYs mirrored into headless terminals, OSC 0/2/7/9/777/133 parsing, launch commands typed once the shell is ready
+- Terminals survive core restarts (PTY host) and come back after reboots and crashes, agents resumed
 - Agents: detected from the foreground process's full argv (through wrappers), state from Claude/Codex hooks, Claude subagents as virtual children
 - Host API: spawn, send, read, wait, kill (`--tree`)
 - Transcript search (SQLite, indexed in a worker), resume from the palette and sidebar
@@ -121,7 +127,6 @@ The schema is `packages/protocol/src/settings.ts`, with flat dotted keys. User v
 - Packaging, CI and GitHub releases
 
 **Next**
-- Restore agents on relaunch
 - Plugin host (routines and monitors in the core)
 - Codex hook install
 - Bundle the CLI with the app

@@ -5,13 +5,14 @@
 // at 5 MB, keeping three.
 //
 // Crashes are written as JSON files to logDir()/crashes; Electron main sends
-// them on (main/crash.ts), so a core that dies still gets reported.
+// them on (main/crash.ts), so a core that dies still gets reported. Every
+// report carries machineId(), a random id made the first time it's needed.
 
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { instanceDir, instanceName } from "./instance.ts";
+import { instanceDir, instanceName, machineIdPath } from "./instance.ts";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 const LEVELS: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -130,7 +131,7 @@ export function logger(scope: string): Logger {
 
 // ── crashes ──────────────────────────────────────────────
 
-export type CrashProcess = "core" | "main" | "renderer" | "gpu" | "utility" | "native";
+export type CrashProcess = "core" | "ptyhost" | "main" | "renderer" | "gpu" | "utility" | "native";
 
 export interface CrashReport {
   id: string;
@@ -146,12 +147,60 @@ export interface CrashReport {
   log: string[];
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let cachedId: { file: string; id: string } | null = null;
+
+function readMachineId(file: string): string | null {
+  try {
+    const s = fs.readFileSync(file, "utf8").trim();
+    return UUID.test(s) ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A random id for this install, to tell crashes on one machine from the same
+ * crash on many. Not derived from the hardware. Made on first use (installs
+ * from before it existed get one then) and shared by every process: the core
+ * and main may race to make it, and linking a finished temp file means one
+ * wins and nobody reads a half-written file. Synchronous, for recordCrash.
+ * Null when it can't be stored (read-only home).
+ */
+export function machineId(): string | null {
+  const file = machineIdPath();
+  if (cachedId?.file === file) return cachedId.id;
+  let id = readMachineId(file);
+  if (!id) {
+    const tmp = `${file}.${process.pid}.tmp`;
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(tmp, `${randomUUID()}\n`);
+      try {
+        fs.linkSync(tmp, file);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+        if (!readMachineId(file)) fs.renameSync(tmp, file); // an unreadable id: replace it
+      }
+      id = readMachineId(file);
+    } catch {
+      id = null;
+    } finally {
+      fs.rmSync(tmp, { force: true });
+    }
+  }
+  if (id) cachedId = { file, id };
+  return id;
+}
+
 /** What every report says about where it happened. The app passes its version to the core in $CMD_APP_VERSION. */
 export function crashContext(extra: Record<string, string> = {}): Record<string, string> {
+  const machine = machineId();
   return {
     version: process.env.CMD_APP_VERSION ?? "unknown",
     channel: instanceName(),
     platform: `${process.platform} ${os.release()} ${process.arch}`,
+    ...(machine ? { machine } : {}),
     node: process.versions.node,
     ...(process.versions.electron ? { electron: process.versions.electron } : {}),
     ...extra,

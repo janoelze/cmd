@@ -124,7 +124,7 @@ describe("live apply", () => {
       };
       return svc as unknown as SearchService;
     };
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, search: fake });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, search: fake });
     const settle = () => new Promise((r) => setTimeout(r, 0));
     await settle();
     await core.call("settings.set", { key: "search.archiveDirs", value: "~/a, ~/b" });
@@ -149,7 +149,7 @@ describe("live apply", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-rules-"));
     const rules = path.join(dir, "shell-open.zsh");
     const { factory, ptys } = fakeFactory();
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: factory, pollMs: 0, shellRulesFile: rules });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: factory, pollMs: 0, shellRulesFile: rules });
     const read = (name: string) => execFileSync("/bin/zsh", ["-fc", `source ${rules}; print -r -- $${name}`], { encoding: "utf8" }).trim();
     expect(read("CMD_OPEN_URLS")).toBe("0");
     await core.call("settings.set", { key: "shell.openUrls", value: true });

@@ -17,7 +17,7 @@
 import { app, crashReporter } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import { connect, crashContext, crashDir, logger, recordCrash, type CrashProcess, type CrashReport } from "@cmd/protocol/node";
+import { connect, crashContext, crashDir, logger, machineId, recordCrash, type CrashProcess, type CrashReport } from "@cmd/protocol/node";
 import { payload, scrub, signature } from "./crash-format.ts";
 
 declare const __CRASH_WEBHOOK__: string;
@@ -78,6 +78,7 @@ export function startCrashReporting(o: { devBuild: boolean; context: () => Recor
   } catch (err) {
     log.warn("crash reporter didn't start", err);
   }
+  machineId(); // made now (also on installs from before it existed), not first inside a crash handler
   // Present at startup: the previous app didn't get to quit.
   const marker = path.join(crashDir(), "app.running");
   try {
@@ -217,6 +218,9 @@ async function sendReport(file: string, state: SentState): Promise<boolean> {
     fs.rmSync(claimed, { force: true }); // unreadable: nothing to send
     return true;
   }
+  // Recorded before reports carried it (an older version, or a core still running old code): same machine.
+  const machine = machineId();
+  if (machine) report.context = { ...report.context, machine: report.context?.machine ?? machine };
   const sig = signature(report);
   const seen = state.reports[sig];
   if (seen && Date.now() - seen.last < DEDUPE_MS) {

@@ -36,7 +36,7 @@ export class ResourceMonitor {
     if (this.#busy) return;
     this.#busy = true;
     try {
-      const panes = this.#panes.list().filter((p) => p.exitCode === null);
+      const panes = this.#panes.list().filter((p) => p.exitCode === null && p.pid > 0);
       const results = await this.#sample(panes.map((p) => p.pid));
       const byPid = new Map(results.map((r) => [r.pid, r]));
       const seen = new Set<number>();

@@ -51,6 +51,7 @@ export const SETTINGS_PAGES: Page[] = [
     sections: [
       { title: "Display", items: ["terminal.cursorBlink", "terminal.lineHeight", "terminal.scrollback", "terminal.renderer", "terminal.webglPool"] },
       { title: "Shell", items: ["shell.program", "shell.login", "shell.integration"] },
+      { title: "After a restart", items: ["restore.terminals", "restore.scrollback", "restore.resumeAgents"] },
     ],
   },
   {

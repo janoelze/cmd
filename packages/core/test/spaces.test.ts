@@ -216,7 +216,7 @@ describe("placement in the core", () => {
   const setup = (name: string) => {
     const fx = fixture(name);
     const f = fakeFactory();
-    const core = new Core({ socketPath: path.join(tmp, `${name}.sock`), dbPath: null, ptyFactory: f.factory, pollMs: 0, home: fx.home });
+    const core = new Core({ socketPath: path.join(tmp, `${name}.sock`), dbPath: null, terminals: f.factory, pollMs: 0, home: fx.home });
     return { ...fx, core, ptys: f.ptys };
   };
 

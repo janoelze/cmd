@@ -39,7 +39,7 @@ describe("secrets", () => {
   it("are served by the core without ever being sent", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0 });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     core.handlers["secrets.set"]({ key: "magic.anthropic.apiKey", value: "sk-ant-secretsecret" });
     const status = core.handlers["secrets.status"]({}) as unknown;
     expect(JSON.stringify(status)).not.toContain("secretsecret");
@@ -95,7 +95,7 @@ describe("model lists", () => {
   it("are listed by the core with the stored key, and need one", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0 });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     await expect(core.handlers["magic.models"]({ provider: "openai" })).rejects.toThrow(/No OpenAI API key/);
     await expect(core.handlers["magic.models"]({ provider: "gemini" })).rejects.toThrow(/unknown provider/);
     await core.close();
@@ -114,7 +114,7 @@ describe("choosing a backend", () => {
   it("a Magic window without a key says where to add one", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0 });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     const w = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
     core.handlers["magic.run"]({ id: w.id, prompt: "a pomodoro timer" });
     const state = core.windows.others().find((x) => x.id === w.id)!.state as { phase: string; error?: string };
@@ -160,7 +160,7 @@ describe("the window's workspace", () => {
         return { text: answer, model: "fake-1", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
       },
     };
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, home, magicBackend: () => backend as never });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, home, magicBackend: () => backend as never });
     const sp = (await core.call("space.open", { path: proj })).space;
     const inSpace = core.handlers["window.open"]({ kind: "magic", input: {}, spaceId: sp.id }) as unknown as { id: string };
     const inHome = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };

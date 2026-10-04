@@ -63,6 +63,8 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
       this.#running.delete(id);
     });
     agents.on("updated", (a) => this.#onAgent(a));
+    // An agent that needed you before a core restart was already announced.
+    agents.on("restored", (a) => this.#agentStates.set(a.id, a.state));
     agents.on("removed", (id) => this.#agentStates.delete(id));
   }
 

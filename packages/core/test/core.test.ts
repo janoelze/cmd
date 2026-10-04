@@ -20,7 +20,7 @@ beforeAll(async () => {
   core = new Core({
     socketPath,
     dbPath: path.join(dir, "db.sqlite"),
-    ptyFactory: await nodePtyFactory(),
+    terminals: await nodePtyFactory(),
     pollMs: 100,
     inspector: (pid) => procinfo.query(pid),
     sampler: (pids) => procinfo.trees(pids),

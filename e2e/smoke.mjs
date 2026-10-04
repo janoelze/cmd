@@ -9,14 +9,15 @@ import { corePid, stopCore } from "../scripts/stop-core.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const home = path.join(root, ".cmd-dev", "e2e");
-// The app starts a detached core that outlives it. Stop the last run's before
-// wiping its state (or it's orphaned), and this run's on any exit, pass or fail.
-await stopCore(home);
+// The app starts a detached core (and PTY host) that outlive it. Stop the last
+// run's before wiping its state (or they're orphaned), and this run's on any exit, pass or fail.
+await stopCore(home, { terminals: true });
 process.on("exit", () => {
-  const pid = corePid(home);
-  try {
-    if (pid) process.kill(pid, "SIGTERM");
-  } catch {}
+  for (const pid of [corePid(home), corePid(home, "ptyhost")]) {
+    try {
+      if (pid) process.kill(pid, "SIGTERM");
+    } catch {}
+  }
 });
 fs.rmSync(home, { recursive: true, force: true });
 fs.mkdirSync(home, { recursive: true });
@@ -1000,5 +1001,5 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
 }
 
 await closeApp();
-await stopCore(home);
+await stopCore(home, { terminals: true });
 console.log("all checks passed; screenshots in", shots);

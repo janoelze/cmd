@@ -39,6 +39,8 @@ export const PANE_ENV: readonly string[] = [
   "CMD_OPEN_EXTS",
   "CMD_OPEN_HANDLES_FOLDERS",
   "CMD_OPEN_HANDLES_TEXT",
+  "CMD_RESTORE_COMMAND",
+  "CMD_PANE_HISTFILE",
   "GHOSTTY_AGENTS_SURFACE_ID",
 ];
 
@@ -58,6 +60,16 @@ export function cmdHome(): string {
   return path.join(os.homedir(), "Library", "Application Support", instanceDir());
 }
 
+/**
+ * The file holding this install's machine id (see machineId in log.ts):
+ * $CMD_HOME/machine-id, else machine-id in the release instance's state dir,
+ * so release and dev builds on one Mac report the same id.
+ */
+export function machineIdPath(): string {
+  if (process.env.CMD_HOME) return path.join(process.env.CMD_HOME, "machine-id");
+  return path.join(path.dirname(cmdHome()), "cmd", "machine-id");
+}
+
 /** $CMD_CONFIG_DIR, else $CMD_HOME (isolated runs), else ~/.config/cmd, shared by release and dev. */
 export function configDir(): string {
   return process.env.CMD_CONFIG_DIR ?? process.env.CMD_HOME ?? path.join(os.homedir(), ".config", "cmd");
@@ -71,6 +83,11 @@ export function configDir(): string {
 export function coreSocketPath(): string {
   if (process.env.CMD_HOME) return path.join(process.env.CMD_HOME, "core.sock");
   return path.join(os.tmpdir(), instanceDir(), "core.sock");
+}
+
+/** The PTY host's socket, next to the core's (see packages/core/src/terminals/host.ts). */
+export function ptyHostSocketPath(): string {
+  return path.join(path.dirname(coreSocketPath()), "ptyhost.sock");
 }
 
 /**

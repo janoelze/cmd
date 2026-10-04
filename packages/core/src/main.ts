@@ -3,14 +3,17 @@
 // else $CMD_INSTANCE; $CMD_HOME relocates it (see protocol/instance.ts).
 
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
-import { cmdHome, configDir, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, logger, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, configDir, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, ipcPath, logDir, logger, ptyHostSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import { Core } from "./core.ts";
 import { nodePtyFactory } from "./panes.ts";
 import { ProcInfo } from "./agents/procinfo.ts";
 import { statusRoot } from "./agents/statusfiles.ts";
 import { locateContext } from "./search/sources.ts";
 import { SearchService } from "./search/service.ts";
+import { connectHost } from "./terminals/remote.ts";
+import type { TermBackend } from "./terminals/types.ts";
 
 // The packaged app runs the core as `Electron` with ELECTRON_RUN_AS_NODE; don't
 // pass that on to shells, or every Electron app started from a pane runs as Node.
@@ -35,6 +38,24 @@ const home = cmdHome();
 fs.mkdirSync(home, { recursive: true });
 const socketPath = coreSocketPath();
 
+// A second core must not get as far as taking the PTY host over from the first.
+if (await answers(socketPath)) {
+  log.error(`a core is already running on ${socketPath}`);
+  console.error(`cmd core: a core is already running on ${socketPath}`);
+  process.exit(1);
+}
+
+// Terminals run in the PTY host, so they outlive this process; if it can't be
+// started they run here and die with the core (restore.ts brings them back).
+const host = () => connectHost({ socketPath: ptyHostSocketPath(), instance: instanceName(), outputFile: path.join(logDir(), "ptyhost.out.log") });
+let terminals: TermBackend | Awaited<ReturnType<typeof nodePtyFactory>>;
+try {
+  terminals = await host();
+} catch (err) {
+  log.error(`no PTY host, terminals run in the core: ${(err as Error).message}`);
+  terminals = await nodePtyFactory();
+}
+
 const core = new Core({
   search: (s, sources) => {
     if (!s["search.enabled"]) return null;
@@ -46,7 +67,8 @@ const core = new Core({
   settingsPath: path.join(configDir(), "settings.json"),
   secretsPath: path.join(home, "secrets.json"),
   shellRulesFile: path.join(home, "shell-open.zsh"),
-  ptyFactory: await nodePtyFactory(),
+  terminals,
+  reconnectTerminals: host,
   inspector: procinfo.available ? (pid) => procinfo.query(pid) : null,
   sampler: procinfo.available ? (pids) => procinfo.trees(pids) : null,
   statusRoot: statusRoot(),
@@ -54,6 +76,7 @@ const core = new Core({
   stateDir: home,
 });
 
+core.restore();
 try {
   await core.listen();
 } catch (err) {
@@ -77,3 +100,11 @@ const shutdown = async () => {
 };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+function answers(sock: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const c = net.createConnection(ipcPath(sock));
+    c.once("connect", () => (c.destroy(), resolve(true)));
+    c.once("error", () => resolve(false));
+  });
+}

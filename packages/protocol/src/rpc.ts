@@ -23,6 +23,8 @@ export interface CoreInfo {
   socket: string;
   dbPath: string | null;
   settingsPath: string | null;
+  /** Where terminals run: the PTY host process, or null for in the core (it couldn't start). */
+  ptyHost: { pid: number; startedAt: number; root: string } | null;
 }
 
 export interface SettingsSnapshot {

@@ -64,7 +64,7 @@ describe("instances", () => {
     const before = new Set(Object.keys(process.env));
     const { factory, ptys } = fakeFactory();
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-pane-env-"));
-    const core = new Core({ socketPath: path.join(dir, "core.sock"), dbPath: null, settingsPath: null, ptyFactory: factory, shellRulesFile: path.join(dir, "rules.zsh") });
+    const core = new Core({ socketPath: path.join(dir, "core.sock"), dbPath: null, settingsPath: null, terminals: factory, shellRulesFile: path.join(dir, "rules.zsh") });
     core.panes.create({});
     const added = Object.keys(ptys[0]!.opts.env).filter((k) => !before.has(k) && !["TERM", "COLORTERM", "TERM_PROGRAM", "ZDOTDIR"].includes(k));
     expect(added.length).toBeGreaterThan(1);

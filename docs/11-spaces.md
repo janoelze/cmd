@@ -47,7 +47,7 @@ Sources: code.visualstudio.com/docs/configure/command-line · github.com/microso
    - **Close** kills the Space's terminals and agents (with a confirmation listing what still runs) and removes its windows. The record stays as a *recent* Space, so reopening it brings back its name, hue and layout preferences.
    - **Forget** deletes the record.
    - Archive and setup scripts are left for later.
-10. **Restart.** When the core restarts, Spaces and their non-terminal windows come back; terminals don't (PTYs die with the core, as today). Agent resume can be offered per Space later. Commands are never re-run without asking.
+10. **Restart.** When the core restarts, Spaces, their windows and their terminals come back: terminals keep running in the PTY host, and those lost (host died, reboot) are resurrected under the same id, agents resumed (DEVELOPMENT.md, "Restore"). Commands are never re-run without asking.
 
 ### Path matching
 

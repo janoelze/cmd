@@ -127,8 +127,9 @@ function ownCore(hello: { pid: number; stateDir?: string }): boolean {
 }
 
 /**
- * A core outlives the app on purpose, so after pulling or editing core code an
- * old core may still be serving. Detect that and offer to restart it.
+ * A core outlives the app on purpose, so after pulling or editing core code (or
+ * an update) an old core may still be serving. Restart it: its terminals keep
+ * running in the PTY host, and the new core takes them over.
  */
 async function checkCoreBuild(): Promise<void> {
   const conn = await connect(socketPath);
@@ -137,21 +138,7 @@ async function checkCoreBuild(): Promise<void> {
     if (!ownCore(hello)) return;
     const current = sourceBuildId(repoRoot);
     if (hello.build === current) return;
-    log.info(`core ${hello.pid} runs build ${hello.build}, this app ships ${current}`);
-    const panes = await conn.client.call("pane.list", {}).catch(() => []);
-    const { response } = await dialog.showMessageBox({
-      type: "warning",
-      message: "The running core is outdated",
-      detail:
-        `The core process (pid ${hello.pid}) was started from older code than this app. ` +
-        `Restart it to pick up the changes.\n\nRestarting closes ${panes.length} open terminal${panes.length === 1 ? "" : "s"}. ` +
-        `Claude and Codex sessions can be resumed afterwards.`,
-      buttons: ["Restart Core", "Keep Old Core"],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    log.info(response === 0 ? "restarting the outdated core" : "keeping the outdated core");
-    if (response !== 0) return;
+    log.info(`core ${hello.pid} runs build ${hello.build}, this app ships ${current}: restarting it`);
     await stopCore(hello.pid);
   } catch {
     // An unresponsive or very old core: leave it, the UI shows the error.
@@ -164,7 +151,8 @@ async function checkCoreBuild(): Promise<void> {
  * Packaged: the core runs from a copy of the bundle's runtime, one per build in
  * $CMD_HOME/runtime. An update replaces the bundle while the old core keeps
  * running; from its own copy it never loads the new version's files (search
- * worker, shell integration). The newest few copies are kept.
+ * worker, shell integration). The newest few copies are kept, and the one the
+ * PTY host runs from (it can outlive many cores, and starts every new shell).
  */
 function coreRoot(): string {
   if (!app.isPackaged) return repoRoot;
@@ -178,15 +166,27 @@ function coreRoot(): string {
     }
     const now = new Date();
     fs.utimesSync(dir, now, now);
+    const hostRoot = ptyHostRoot();
     const old = fs
       .readdirSync(base)
       .map((name) => ({ name, mtime: fs.statSync(path.join(base, name)).mtimeMs }))
       .sort((a, b) => b.mtime - a.mtime)
-      .slice(3);
+      .slice(3)
+      .filter((o) => path.join(base, o.name) !== hostRoot);
     for (const o of old) fs.rmSync(path.join(base, o.name), { recursive: true, force: true });
     return dir;
   } catch {
     return repoRoot;
+  }
+}
+
+/** The code folder of the running PTY host (written by packages/core/src/terminals/host-main.ts). */
+function ptyHostRoot(): string | null {
+  try {
+    process.kill(Number(fs.readFileSync(path.join(cmdHome(), "ptyhost.pid"), "utf8")), 0);
+    return fs.readFileSync(path.join(cmdHome(), "ptyhost.root"), "utf8").trim();
+  } catch {
+    return null;
   }
 }
 
@@ -208,7 +208,7 @@ async function stopCore(pid: number): Promise<void> {
   for (let i = 0; i < 50 && (await canConnect()); i++) await new Promise((r) => setTimeout(r, 100));
 }
 
-/** Settings → About: stop the core (its terminals close) and start one from this app's code. */
+/** Settings → About: stop the core and start one from this app's code (it takes the terminals over). */
 async function restartCore(): Promise<void> {
   const conn = await connect(socketPath).catch(() => null);
   if (conn) {

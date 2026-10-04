@@ -1,9 +1,12 @@
 // Stops cmd cores. Cores are detached and outlive the app on purpose, so dev and
-// test runs leave them behind (each holding its terminals' PTYs). The installed
-// app's core is only stopped when asked for, so this is safe to run in its terminals.
+// test runs leave them behind. Their terminals run in a PTY host that outlives
+// the core too (packages/core/src/terminals/host.ts): stopping a core keeps them,
+// --terminals stops its host as well. The installed app's core is only stopped
+// when asked for, so this is safe to run in its terminals.
 //   node scripts/stop-core.mjs                        the core of $CMD_HOME, else the dev instance's
+//   node scripts/stop-core.mjs --terminals            … and its PTY host (its terminals close)
 //   node scripts/stop-core.mjs --release              the installed app's core
-//   node scripts/stop-core.mjs --all                  every dev and test core on this machine
+//   node scripts/stop-core.mjs --all                  every dev and test core and PTY host on this machine
 //   node scripts/stop-core.mjs --all --include-release  … and the installed app's
 import fs from "node:fs";
 import path from "node:path";
@@ -28,17 +31,17 @@ export async function stopPid(pid, graceMs = 3000) {
   return true;
 }
 
-/** The pid in `<home>/core.pid`, if any. */
-export function corePid(home = cmdHome()) {
+/** The pid in `<home>/<name>.pid` (core, ptyhost), if any. */
+export function corePid(home = cmdHome(), name = "core") {
   try {
-    const pid = Number(fs.readFileSync(path.join(home, "core.pid"), "utf8"));
+    const pid = Number(fs.readFileSync(path.join(home, `${name}.pid`), "utf8"));
     return pid > 0 ? pid : null;
   } catch {
     return null;
   }
 }
 
-const isCore = (cmdline) => cmdline.replaceAll("\\", "/").includes("packages/core/src/main.ts");
+const isCore = (cmdline) => /packages\/core\/src\/(main|terminals\/host-main)\.ts/.test(cmdline.replaceAll("\\", "/"));
 
 /**
  * The installed app's core: started with --instance=release, or, by cores from
@@ -59,13 +62,15 @@ function looksLikeCore(pid) {
   }
 }
 
-/** Stops the core whose state dir is `home`; true if one was running. */
-export async function stopCore(home = cmdHome()) {
+/** Stops the core whose state dir is `home` (with `terminals`, its PTY host too); true if one was running. */
+export async function stopCore(home = cmdHome(), { terminals = false } = {}) {
   const pid = corePid(home);
-  return pid && looksLikeCore(pid) ? stopPid(pid) : false;
+  const stopped = pid && looksLikeCore(pid) ? await stopPid(pid) : false;
+  const host = terminals ? corePid(home, "ptyhost") : null;
+  return (host && looksLikeCore(host) ? await stopPid(host) : false) || stopped;
 }
 
-/** Pids of running cmd cores: dev (any checkout), tests, and with `release` the installed app's. */
+/** Pids of running cmd cores and PTY hosts: dev (any checkout), tests, and with `release` the installed app's. */
 function allCores(release) {
   const lines =
     process.platform === "win32"
@@ -84,9 +89,11 @@ if (path.resolve(process.argv[1] ?? "") === import.meta.filename) {
   if (args.includes("--all")) {
     const pids = allCores(args.includes("--include-release")).filter((p) => p !== process.pid);
     for (const pid of pids) await stopPid(pid);
-    console.log(pids.length ? `stopped ${pids.length} core${pids.length === 1 ? "" : "s"}: ${pids.join(", ")}` : "no cores running");
+    console.log(pids.length ? `stopped ${pids.length} core${pids.length === 1 ? "" : "s"} and PTY host${pids.length === 1 ? "" : "s"}: ${pids.join(", ")}` : "no cores running");
   } else {
     const home = cmdHome();
-    console.log((await stopCore(home)) ? `stopped the core of ${home}` : `no core running for ${home}`);
+    const terminals = args.includes("--terminals");
+    const what = terminals ? "the core and terminals" : "the core (its terminals keep running; --terminals stops them)";
+    console.log((await stopCore(home, { terminals })) ? `stopped ${what} of ${home}` : `no core running for ${home}`);
   }
 }

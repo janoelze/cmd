@@ -56,6 +56,7 @@ function debugText(a: AppInfo | null, c: CoreInfo | null): string {
       `Core pid ${c.pid}, build ${c.build}${a && c.build !== a.build ? " (outdated)" : ""}, Node ${c.node}`,
       `Core up ${duration(Date.now() - c.startedAt)}, ${mb(c.rssBytes)} memory, ${c.cpuSeconds.toFixed(1)} s CPU, ${c.panes} terminals, ${c.connections} connections`,
       `Core runs from ${c.root}`,
+      c.ptyHost ? `PTY host pid ${c.ptyHost.pid}, up ${duration(Date.now() - c.ptyHost.startedAt)}, runs from ${c.ptyHost.root}` : "PTY host: none (terminals run in the core)",
       `Socket ${c.socket}`,
     );
   else lines.push("Core: not connected");
@@ -144,14 +145,8 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode }) {
     return () => ((live = false), clearTimeout(timer));
   }, []);
 
+  // Terminals keep running in the PTY host (or come back, see the core's restore.ts): nothing to confirm.
   const restart = async () => {
-    const n = core?.panes ?? 0;
-    const ok = await cmd.confirm({
-      message: "Restart the core?",
-      detail: `This closes ${n} open terminal${n === 1 ? "" : "s"}. Claude and Codex sessions can be resumed afterwards.`,
-      confirm: "Restart Core",
-    });
-    if (!ok) return;
     setError(null);
     setRestarting(true);
     try {

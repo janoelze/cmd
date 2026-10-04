@@ -9,6 +9,8 @@ import { ipcPath, logger, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
 import { NotificationCenter } from "./notifications.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
+import { restoreSession } from "./restore.ts";
+import type { TermBackend } from "./terminals/types.ts";
 import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
 import { registerBuiltinSources } from "./search/builtin.ts";
@@ -35,7 +37,10 @@ export interface CoreOptions {
   settingsPath?: string | null;
   /** API keys (secrets.ts), or null for in-memory (tests). */
   secretsPath?: string | null;
-  ptyFactory: PtyFactory;
+  /** Where terminals run: the PTY host (main.ts), or a PtyFactory for in-process terminals (tests). */
+  terminals: TermBackend | PtyFactory;
+  /** A new backend when the PTY host died (its terminals are then resurrected); none: they are lost. */
+  reconnectTerminals?: () => Promise<TermBackend>;
   pollMs?: number;
   /** Foreground-process lookup (ProcInfo); null falls back to process names. */
   inspector?: Inspector | null;
@@ -101,7 +106,7 @@ export class Core {
     registerBuiltins(this.windowTypes);
     this.transcripts = registerBuiltinSources(new TranscriptSources());
     const overrides = () => parseOverrides(this.settings.settings["open.handlers"]);
-    this.panes = new PaneManager(opts.ptyFactory, {
+    this.panes = new PaneManager(opts.terminals, {
       socketPath: opts.socketPath,
       pollMs: opts.pollMs,
       settings,
@@ -109,6 +114,8 @@ export class Core {
       // The zsh `open` function learns what cmd can open from the registry.
       shellEnv: () => shellOpenEnv(this.windowTypes, overrides()),
       rulesFile: opts.shellRulesFile ?? null,
+      store: this.store,
+      historyDir: opts.stateDir ? path.join(opts.stateDir, "history") : null,
     });
     this.settings.bind(["shell.openFolders", "shell.openFiles", "shell.openUrls", "open.handlers"], () => {
       try {
@@ -130,7 +137,10 @@ export class Core {
       if (this.spaces.get(w.spaceId)?.closedAt !== null) this.windows.move(w.id, this.spaces.home().id);
     }
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
-    this.windows.on("removed", (id) => this.#broadcast({ type: "window.removed", id }));
+    this.windows.on("removed", (id) => {
+      this.store.deleteUiStateOf(id);
+      this.#broadcast({ type: "window.removed", id });
+    });
     this.secrets = new SecretsService(opts.secretsPath ?? null);
     this.secrets.on("updated", (status) => this.#broadcast({ type: "secrets.updated", status }));
     this.magic = new MagicService({ windows: this.windows, settings, secret: (k) => this.secrets.get(k), broadcast: (e) => this.#broadcast(e), backend: opts.magicBackend, cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root,
@@ -146,7 +156,10 @@ export class Core {
 
     this.panes.on("output", (paneId, data) => this.#broadcast({ type: "pane.output", paneId, data }));
     this.panes.on("updated", (pane) => this.#broadcast({ type: "pane.updated", pane }));
-    this.panes.on("removed", (paneId) => this.#broadcast({ type: "pane.removed", paneId }));
+    this.panes.on("removed", (paneId) => {
+      this.store.deleteUiStateOf(paneId);
+      this.#broadcast({ type: "pane.removed", paneId });
+    });
     this.agents.on("updated", (agent) => {
       this.#broadcast({ type: "agent.updated", agent });
       // Hooks report where the transcript is: picks up folders discovery doesn't know.
@@ -174,6 +187,7 @@ export class Core {
         socket: this.#opts.socketPath,
         dbPath: this.#opts.dbPath,
         settingsPath: this.#opts.settingsPath ?? null,
+        ptyHost: this.panes.backend.info?.() ?? null,
       };
     },
     "pane.create": (p) => {
@@ -333,6 +347,49 @@ export class Core {
     }
   }
 
+  /**
+   * Bring back the terminals and agents of the last session (restore.ts): take
+   * over those still running, resurrect the rest. At startup, before listen(),
+   * and again when the PTY host died.
+   */
+  restore(): void {
+    restoreSession({ panes: this.panes, agents: this.agents, spaces: this.spaces, store: this.store, settings: () => this.settings.settings });
+    this.#watchBackend();
+  }
+
+  #hostRestarts = 0;
+
+  #watchBackend(): void {
+    const backend = this.panes.backend;
+    backend.onLost?.(() => void this.#backendLost(backend));
+  }
+
+  /**
+   * The PTY host died, and its terminals with it: start a new one and bring them
+   * back as after a restart. UIs are disconnected so they reconnect and load the
+   * restored terminals afresh, as they do when the core restarts.
+   */
+  async #backendLost(lost: TermBackend): Promise<void> {
+    if (this.#closed || this.panes.backend !== lost) return;
+    const reconnect = this.#opts.reconnectTerminals;
+    if (!reconnect || ++this.#hostRestarts > 5) {
+      log.error(`the PTY host is gone; not starting another (${this.#hostRestarts - 1} restarts so far)`);
+      return;
+    }
+    log.info(`starting a new PTY host (restart ${this.#hostRestarts} of 5) to bring the terminals back`);
+    try {
+      const next = await reconnect();
+      if (this.#closed) return next.dispose();
+      this.agents.forget();
+      this.panes.replaceBackend(next);
+      this.restore();
+    } catch (err) {
+      log.error(`could not start a new PTY host: ${(err as Error).message}`);
+      return;
+    }
+    for (const s of this.#subscribers.keys()) s.destroy();
+  }
+
   async call<M extends Method>(method: M, params: Params<M>): Promise<Result<M>> {
     const h = this.handlers[method] as (p: Params<M>) => Result<M> | Promise<Result<M>>;
     if (!h) throw new Error(`unknown method: ${method}`);
@@ -414,7 +471,7 @@ export class Core {
 
   async close(): Promise<void> {
     this.magic.dispose();
-    this.panes.dispose();
+    await this.panes.shutdown();
     for (const s of this.#subscribers.keys()) s.destroy();
     await new Promise<void>((r) => (this.#server ? this.#server.close(() => r()) : r()));
     try {

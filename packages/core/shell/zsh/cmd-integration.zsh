@@ -25,7 +25,11 @@ _cmd_precmd() {
   _cmd_osc "133;A"
 }
 
-_cmd_preexec() { _cmd_osc "133;C" }
+# The command line, so a terminal brought back after a restart can offer it again.
+_cmd_preexec() {
+  _cmd_osc "133;C"
+  _cmd_request exec "${1//[[:cntrl:]]/ }"
+}
 
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd _cmd_precmd
@@ -35,6 +39,49 @@ _cmd_report_cwd
 
 # Ask cmd to do something: OSC 777;cmd;<token>;<action>;<argument>
 _cmd_request() { _cmd_osc "777;cmd;${CMD_PANE_TOKEN};$1;$2" }
+
+# Each terminal also keeps its own history ($CMD_PANE_HISTFILE), next to your
+# usual one (left as you configured it). A terminal brought back after a restart
+# loads it at its first prompt, after your config, so Up gives what ran there.
+# zsh writes the file itself, through a pushed history list saved when popped
+# (its format encodes some bytes, so appending by hand would corrupt them); not
+# from zshaddhistory, where adding to history is ignored, but at the next prompt.
+if [[ -n $CMD_PANE_HISTFILE ]]; then
+  _cmd_hist_line=
+  _cmd_hist_add() {
+    local line=${1%%$'\n'}
+    [[ -o histignorespace && $line == ' '* ]] || _cmd_hist_line=$line
+    return 0
+  }
+  _cmd_hist_save() {
+    [[ -n $_cmd_hist_line ]] || return 0
+    fc -p -a -- "$CMD_PANE_HISTFILE" 1000 1000
+    print -sr -- "$_cmd_hist_line"
+    _cmd_hist_line=
+  }
+  add-zsh-hook zshaddhistory _cmd_hist_add
+  add-zsh-hook precmd _cmd_hist_save
+  if [[ -s $CMD_PANE_HISTFILE ]]; then
+    _cmd_hist_load() {
+      add-zsh-hook -d precmd _cmd_hist_load
+      fc -R -- "$CMD_PANE_HISTFILE"
+    }
+    add-zsh-hook precmd _cmd_hist_load
+  fi
+fi
+
+# A terminal brought back after a restart: what ran there goes on the first
+# command line, to run again with Return (or not).
+if [[ -n $CMD_RESTORE_COMMAND ]]; then
+  _cmd_restore_command=$CMD_RESTORE_COMMAND
+  unset CMD_RESTORE_COMMAND
+  _cmd_restore() {
+    add-zsh-hook -d precmd _cmd_restore
+    print -z -- "$_cmd_restore_command"
+    unset _cmd_restore_command
+  }
+  add-zsh-hook precmd _cmd_restore
+fi
 
 # Would cmd open this itself? The rules come from cmd's settings and window type
 # registry: CMD_OPEN_FOLDERS/FILES/URLS, CMD_OPEN_EXTS, CMD_OPEN_HANDLES_FOLDERS/TEXT.

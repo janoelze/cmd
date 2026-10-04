@@ -317,7 +317,7 @@ describe("Magic windows in the core", () => {
     const answer = `{"kind":"widget","title":"Seven","source":${JSON.stringify(src)},"refresh":2,"size":"s"}\n---\n<div id=n></div><script>cmd.onData(d=>n.textContent=d.n)</script>`;
     const backend = scripted([{ calls: [{ name: "test_source", input: { why: "Counting", source: src } }], answer }]);
     process.env.CMD_MAGIC_UNSANDBOXED = "1";
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, magicBackend: () => backend });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, magicBackend: () => backend });
     const w = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string; state: { phase: string } };
     expect(w.state.phase).toBe("empty");
     core.handlers["magic.run"]({ id: w.id, prompt: "count to seven" });
@@ -339,7 +339,7 @@ describe("Magic windows in the core", () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
     const answer = '{"kind":"widget","title":"Radio","media":["https://a.example","https://b.example"]}\n---\n<audio id=au></audio>';
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, magicBackend: () => scripted([{ calls: [], answer }]) });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, magicBackend: () => scripted([{ calls: [], answer }]) });
     const w = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
     const state = () => core.windows.others().find((x) => x.id === w.id)!.state as Record<string, unknown>;
     core.handlers["magic.run"]({ id: w.id, prompt: "a dnb radio" });
@@ -356,7 +356,7 @@ describe("Magic windows in the core", () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
     const answer = '{"kind":"widget","title":"Clock","source":{"type":"fetch","url":"https://example.com/t"},"refresh":10}\n---\n<div></div>';
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, magicBackend: () => scripted([{ answer }, { answer }]) });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, magicBackend: () => scripted([{ answer }, { answer }]) });
     const w = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
     const state = () => core.windows.others().find((x) => x.id === w.id)!.state as Record<string, unknown>;
     core.handlers["magic.run"]({ id: w.id, prompt: "a clock" });
@@ -379,7 +379,7 @@ describe("Magic windows in the core", () => {
     const { fakeFactory } = await import("./fake-pty.ts");
     const answer = '{"kind":"widget","title":"Radio"}\n---\n<audio id=au></audio>';
     const backend = scripted([{ answer }, { answer }, { answer }]);
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, magicBackend: () => backend });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, magicBackend: () => backend });
     const w = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
     const state = () => core.windows.others().find((x) => x.id === w.id)!.state as Record<string, unknown>;
     const asks = ["a dnb radio from somafm, autoplay muted", "add a volume slider", "make it dark"];
@@ -411,7 +411,7 @@ describe("Magic windows in the core", () => {
         return { text, model: "fake-1", usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 } };
       },
     };
-    const core = new Core({ socketPath: "", dbPath: null, ptyFactory: fakeFactory().factory, pollMs: 0, magicBackend: () => backend });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, magicBackend: () => backend });
     const w = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
     const state = () => core.windows.others().find((x) => x.id === w.id)!.state as Record<string, unknown>;
     expect(() => core.handlers["magic.run"]({ id: w.id, prompt: "  " })).toThrow(/empty/);
