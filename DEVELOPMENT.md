@@ -67,7 +67,7 @@ Windows builds (x64) come from the same tag: CI's `windows` job runs the tests a
 
 Installed apps update themselves from GitHub releases with electron-updater (`apps/desktop/src/main/updater.ts`). It reads `latest-mac.yml` (`latest.yml` on Windows) from the latest non-prerelease, so `-beta` tags never reach users. `electron-builder.yml` has the `publish: github` config that generates that file (and the `.blockmap`s for partial downloads), and CI uploads them with the release. Squirrel.Mac only installs an update whose signature matches the running app, so updating needs Developer ID signed releases, which ad-hoc signed builds can't do.
 
-The `updates.mode` setting picks `auto` (download in the background, install on quit; the default), `notify` or `off`. The app checks 30 s after launch and every 4 hours, and logs to `update.log` in the logs folder (see Logs and crash reports).
+The `updates.mode` setting picks `auto` (download in the background, install on quit; the default), `notify` or `off`. The app checks 30 s after launch and every 30 minutes, and logs to `update.log` in the logs folder (see Logs and crash reports).
 
 An update replaces the app bundle while the old core keeps running. So the packaged app starts the core from a copy of the runtime in `$CMD_HOME/runtime/<build>` (the newest three are kept), and an old core never loads the new version's files. After an update the app shows the usual "core is outdated" prompt.
 

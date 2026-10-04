@@ -13,7 +13,7 @@ import { connect, formatLine, formatValue, LogFile } from "@cmd/protocol/node";
 const { autoUpdater } = electronUpdater;
 
 const FIRST_CHECK_MS = 30_000;
-const CHECK_EVERY_MS = 4 * 60 * 60_000;
+const CHECK_EVERY_MS = 30 * 60_000;
 
 let mode: Settings["updates.mode"] = "auto";
 /** A check the person asked for: answer it with a dialog, whatever the outcome. */
