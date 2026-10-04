@@ -791,6 +791,29 @@ kbd {
 .palette-list li.on .palette-snippet mark { background: color-mix(in srgb, var(--on-accent) 30%, transparent); color: var(--on-accent); }
 .palette-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 
+/* ── feedback sheet (components/Feedback.tsx) ───────── */
+
+.palette.feedback { padding: 14px 16px; gap: 10px; }
+.feedback-head { display: flex; align-items: center; justify-content: space-between; }
+.feedback-title { font: 600 13px var(--font-ui); color: var(--text); }
+.feedback-message, .feedback-contact {
+  font: 13px var(--font-ui);
+  color: var(--text);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border: 1px solid var(--separator);
+  border-radius: 6px;
+  padding: 8px 10px;
+  outline: none;
+}
+.feedback-message { resize: vertical; min-height: 90px; max-height: 50vh; line-height: 1.45; }
+.feedback-message:focus, .feedback-contact:focus { border-color: var(--accent); }
+.feedback-foot { display: flex; align-items: center; gap: 8px; }
+.feedback-info { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-dim); }
+.feedback-error { flex: 1; min-width: 0; font-size: 11.5px; color: var(--state-needs); text-align: right; }
+.btn.primary:not(:disabled) { color: var(--on-accent); background: var(--accent); }
+.btn:disabled { opacity: 0.45; }
+.feedback-sent { padding: 24px 0; text-align: center; color: var(--text); }
+
 /* ── browser and file windows ───────────────────────── */
 
 .browser, .files {

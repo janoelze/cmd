@@ -68,6 +68,8 @@ Each process logs to its own file (`packages/protocol/src/log.ts`): `core.log`, 
 
 Crashes are written as JSON to `<logs>/crashes`: uncaught exceptions in the core (which then exits) and in main, unhandled rejections (logged, the process keeps running), TypeErrors and the like thrown by RPC handlers, renderers and GPU processes that die, uncaught errors in the app's pages, a core that dies of a signal, and Crashpad minidumps when main itself crashed. The app (`apps/desktop/src/main/crash.ts`) sends them to a Discord webhook with home folders replaced by `~`, at most once a day per crash and ten an hour, and moves them to `crashes/sent`. The webhook is baked in at build time from `$CMD_CRASH_WEBHOOK`, which CI sets from the `CMD_CRASH_WEBHOOK` secret for tagged releases only. Development builds don't send unless `CMD_CRASH_WEBHOOK` is set when they run. People can turn sending off with `diagnostics.crashReports` (Settings → About).
 
+Feedback (Help → Send Feedback…, or the speech bubble in the status bar) goes to a second Discord webhook from `apps/desktop/src/main/feedback.ts`, with the version and platform if the sender leaves that ticked. Like the crash webhook it is baked in at build time, from `$CMD_FEEDBACK_WEBHOOK` (the `CMD_FEEDBACK_WEBHOOK` secret, tagged releases only); development builds can only send when it is set when they run.
+
 ### Signing and notarization
 
 Without signing secrets, CI ad-hoc signs the whole bundle (`-c.mac.identity=-`). It runs, but Gatekeeper blocks a downloaded copy until the user clicks Open Anyway in Privacy & Security (or installs with `scripts/install.sh`). To sign with Developer ID and notarize, which needs a paid Apple Developer Program membership:

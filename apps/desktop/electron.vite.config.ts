@@ -8,10 +8,13 @@ const bundleWorkspace = { externalizeDeps: { exclude: ["@cmd/protocol"] } };
 export default defineConfig({
   // The packaged app ships no node_modules for main: Lucide's icons and
   // electron-updater are bundled too.
-  // The crash report webhook (main/crash.ts) comes from the environment at build
-  // time (a CI secret), so it isn't in the repository.
+  // The crash report and feedback webhooks (main/crash.ts, main/feedback.ts) come
+  // from the environment at build time (CI secrets), so they aren't in the repository.
   main: {
-    define: { __CRASH_WEBHOOK__: JSON.stringify(process.env.CMD_CRASH_WEBHOOK ?? "") },
+    define: {
+      __CRASH_WEBHOOK__: JSON.stringify(process.env.CMD_CRASH_WEBHOOK ?? ""),
+      __FEEDBACK_WEBHOOK__: JSON.stringify(process.env.CMD_FEEDBACK_WEBHOOK ?? ""),
+    },
     build: { externalizeDeps: { exclude: ["@cmd/protocol", "lucide-static", "electron-updater"] } },
   },
   // Two preloads: the app's (index) and browser pages' (guest). CommonJS, because

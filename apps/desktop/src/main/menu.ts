@@ -159,7 +159,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
       ],
     },
     { role: "windowMenu" },
-    { role: "help", submenu: [...i("help.docs"), ...(mac ? [] : [sep, ...i("app.checkUpdates")])] },
+    { role: "help", submenu: [...i("help.docs"), ...i("help.feedback"), ...(mac ? [] : [sep, ...i("app.checkUpdates")])] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   if (lastState) applyMenuState(lastState);

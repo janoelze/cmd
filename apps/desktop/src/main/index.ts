@@ -19,6 +19,7 @@ import { lucideSymbol, type SymbolImage } from "./icons.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
+import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } from "./feedback.ts";
 import { ensureKeybindingsFile, loadKeybindings, resetKeybindings, watchKeybindings, writeKeybinding, type KeybindingsSnapshot } from "./keybindings.ts";
 
 // Loaded after launch: the updater isn't needed to show the first window.
@@ -46,6 +47,7 @@ const log = logger("main");
 const rendererLog = logger("renderer");
 installCrashHandlers("main", { exitOnException: false, context: () => crashContext() });
 startCrashReporting({ devBuild, context: () => crashContext() });
+startFeedback(devBuild);
 log.info(`${app.getName()} ${app.getVersion()} starting`, { pid: process.pid, electron: process.versions.electron, platform: `${process.platform} ${os.release()} ${process.arch}`, home: cmdHome() });
 
 let keybindings: KeybindingsSnapshot = loadKeybindings();
@@ -475,6 +477,8 @@ ipcMain.handle("app-info", async () => ({
   crashes: crashStatus(devBuild),
   updates: (await updater()).updateStatus(),
 }));
+ipcMain.handle("feedback-status", () => feedbackStatus(devBuild));
+ipcMain.handle("send-feedback", (_e, r: FeedbackRequest) => sendFeedback(r, crashContext()));
 ipcMain.on("open-settings", (_e, p: string) => {
   if (!fs.existsSync(p)) {
     fs.mkdirSync(path.dirname(p), { recursive: true });

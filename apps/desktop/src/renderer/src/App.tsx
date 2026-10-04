@@ -34,6 +34,7 @@ import { stateStr, viewFor } from "./windows/registry.ts";
 import { toggleMarkdownEdit } from "./windows/markdown.tsx";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
+import { Feedback } from "./components/Feedback.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
 import { Sidebar, SIDEBAR_WIDTH, type SidebarRequest } from "./components/Sidebar.tsx";
 import { SpaceBar } from "./components/SpaceBar.tsx";
@@ -104,6 +105,7 @@ export function App() {
   // Transient: sheets don't reopen on launch.
   /** Palette open, with an optional initial query ("?" for session search). */
   const [palette, setPalette] = useState<false | string>(false);
+  const [feedback, setFeedback] = useState(false);
   /** Space pickers (open/switch, move a window, rename); see spaces.tsx. */
   const [picker, setPicker] = useState<Picker | null>(null);
 
@@ -280,7 +282,8 @@ export function App() {
     "view.magicStop": () => windowActions(selected)?.stop?.(),
     "file.close": () => {
       // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
-      if (picker) setPicker(null);
+      if (feedback) setFeedback(false);
+      else if (picker) setPicker(null);
       else if (palette !== false) setPalette(false);
       else if (selected) void closePane(selected);
       else cmd.closeWindow();
@@ -348,6 +351,7 @@ export function App() {
       [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`space.select${n}`, () => openSpaces[n - 1] && showSpace(openSpaces[n - 1]!.id)]),
     ) as Record<`space.select${number}`, () => void>),
     "help.docs": () => cmd.openDocs(),
+    "help.feedback": () => (setPalette(false), setFeedback(true)),
   };
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
@@ -608,6 +612,7 @@ export function App() {
         />
       )}
       {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}
+      {feedback && <Feedback onClose={() => setFeedback(false)} />}
     </div>
   );
 }

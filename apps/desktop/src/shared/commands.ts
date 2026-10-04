@@ -87,6 +87,7 @@ export const COMMANDS = spec([
   })),
 
   { id: "help.docs", label: "cmd Documentation" },
+  { id: "help.feedback", label: "Send Feedback…" },
 ]);
 
 export type CommandId = (typeof COMMANDS)[number]["id"];

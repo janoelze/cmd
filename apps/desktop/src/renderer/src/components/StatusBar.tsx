@@ -12,13 +12,14 @@ import { useFields } from "./TileTitle.tsx";
 import type { ViewMode } from "./MainView.tsx";
 import { ICON, Symbol } from "./Symbol.tsx";
 
-const ICONS: Record<ViewMode | "palette" | "settings", string> = {
+const ICONS: Record<ViewMode | "palette" | "settings" | "feedback", string> = {
   focus: "rectangle",
   grid: "square.grid.2x2",
   strip: "rectangle.split.3x1",
   canvas: "rectangle.3.group",
   palette: "command",
   settings: "gearshape",
+  feedback: "bubble.left",
 };
 
 interface Props {
@@ -70,6 +71,7 @@ export function StatusBar({ mode, row, pane, run }: Props) {
         {btn("view.strip", ICONS.strip, "Strip", mode === "strip")}
         {btn("view.canvas", ICONS.canvas, "Canvas", mode === "canvas")}
         <span className="statusbar-sep" />
+        {btn("help.feedback", ICONS.feedback, "Send Feedback")}
         {btn("view.palette", ICONS.palette, "Command Palette")}
         {btn("app.settings", ICONS.settings, "Settings")}
       </div>

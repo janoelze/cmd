@@ -8,6 +8,7 @@ import type { KeybindingsSnapshot } from "../main/keybindings.ts";
 import type { Appearance } from "../main/appearance.ts";
 import type { UpdateStatus } from "../main/updater.ts";
 import type { CrashStatus } from "../main/crash.ts";
+import type { FeedbackRequest, FeedbackStatus } from "../main/feedback.ts";
 
 export interface AppInfo {
   version: string;
@@ -111,6 +112,9 @@ const api = {
   openSettingsFile: (p: string) => ipcRenderer.send("open-settings", p),
   openKeybindingsFile: () => ipcRenderer.send("open-keybindings"),
   openDocs: () => ipcRenderer.send("open-docs"),
+  /** Help → Send Feedback… (components/Feedback.tsx). */
+  feedbackStatus: (): Promise<FeedbackStatus> => ipcRenderer.invoke("feedback-status"),
+  sendFeedback: (r: FeedbackRequest): Promise<void> => ipcRenderer.invoke("send-feedback", r),
   closeWindow: () => ipcRenderer.send("close-window"),
 
   /** Menu bar / Dock menu commands, by command id. */
