@@ -4,7 +4,7 @@
 // pane is recorded in the store (and its screen saved now and then) so it can be
 // brought back after a restart (see restore.ts).
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -96,6 +96,8 @@ interface Live {
   saved: string;
   /** Output since the screen was last saved. */
   dirty: boolean;
+  /** Hash of the screen as last saved, to skip writing an identical one. */
+  screenHash: string;
   /** Clears a progress bar the program stopped updating (it may have crashed). */
   progressTimer: NodeJS.Timeout | null;
 }
@@ -328,7 +330,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   }
 
   #attach(pane: Pane, term: Term, token: string): Live {
-    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, saved: "", dirty: true, progressTimer: null };
+    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, saved: "", dirty: true, screenHash: "", progressTimer: null };
     this.#panes.set(pane.id, live);
     term.onData((data) => this.#onData(live, data));
     term.onExit((code) => this.#exited(live, code));
@@ -628,21 +630,32 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     if (!store || lines <= 0) return;
     let bytes = 0;
     const dirty = [...this.#panes.values()].filter((l) => l.dirty);
+    const changed: { l: Live; data: string; hash: string }[] = [];
     await Promise.all(
       dirty
         .map(async (l) => {
           l.dirty = false;
           try {
             const s = await l.term.snapshot({ scrollback: lines, restore: true });
-            bytes += s.data.length;
-            if (this.#panes.get(l.pane.id) === l) store.saveScreen(l.pane.id, s.data);
+            // Output doesn't always change the screen (a redraw, a cursor move back and forth).
+            const hash = createHash("sha1").update(s.data).digest("base64");
+            if (hash !== l.screenHash) changed.push({ l, data: s.data, hash });
           } catch (err) {
             l.dirty = true;
             log.warn(`could not save the screen of pane ${l.pane.id.slice(0, 8)}: ${(err as Error).message}`);
           }
         }),
     );
-    if (dirty.length) log.debug(`saved ${dirty.length} screens`, { kb: Math.round(bytes / 1024) });
+    if (!changed.length) return;
+    store.transaction(() => {
+      for (const { l, data, hash } of changed) {
+        if (this.#panes.get(l.pane.id) !== l) continue;
+        store.saveScreen(l.pane.id, data);
+        l.screenHash = hash;
+        bytes += data.length;
+      }
+    });
+    log.debug(`saved ${changed.length} screens`, { kb: Math.round(bytes / 1024), unchanged: dirty.length - changed.length });
   }
 
   /** The pane as the store keeps it. */
