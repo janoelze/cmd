@@ -1,6 +1,6 @@
 # Widgets and the Widget Library
 
-> Status (2026-10-05), branch `widget-library`: phases 1–3 are built (widgets apart from windows in the core; the library's protocol and CLI; the library sheet, the Widgets menu and the sidebar's Widgets section). Built-in widgets and examples are a proposal. It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
+> Status (2026-10-05), branch `widget-library`: phases 1–4 are built (widgets apart from windows in the core; the library's protocol and CLI; the library sheet, the Widgets menu and the sidebar's Widgets section; Agent Activity and Live Diff). Examples are a proposal. It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
 
 Magic widgets are windows today, in the code and to the people using them. "New Magic Widget" sits in File next to New Terminal, closing one throws it away (after 30 days in `widgets/closed/`), and nothing ships with cmd except the ability to make one. This proposal makes widgets their own thing for people, while the code keeps treating them almost like windows.
 
@@ -121,15 +121,18 @@ The folder format reaches the library as **Examples**: adding one copies its fol
 
 ### First built-ins
 
-- **Agent Activity**: agents in this Space or all of them; state (working, waiting for you, done), the last tool, subagents, how long. A click goes to the agent's pane. Data: `agent.list`, `agent.updated`, `agent.removed`. Config: scope (this Space, all).
-- **Live Diff**: changed files and their diff for a folder (default: the Space's root), kept current with `fs.watch`. Needs a `git.diff { path, file? }` method next to `git.status`. Config: folder, staged/unstaged/both.
+Built in phase 4 (core types in `windows/builtin.ts`, views in `renderer/src/components/AgentActivity.tsx` and `LiveDiff.tsx`):
+
+- **Agent Activity** (`agents`, state `{ scope: "space" | "all" }`): the agents of its Space or of all of them, waiting for you first, then working, then the rest by recency; subagents under their host. Each row says what the sidebar says (`fieldsOf`: name, status line, light), plus its project and how long ago its state changed; a click goes to the agent's terminal (a subagent's: its host's), in its Space. The bar counts who waits, works and is done, and switches scope (also in the window's menu). The data is the renderer's store (`agent.updated`), nothing new in the core.
+- **Live Diff** (`diff`, state `{ path }`, default the Space's root; titled "Changes · <folder>"): the branch, ahead/behind, and each changed file with its state, +/− counts and its hunks (open when there are 6 files or fewer; a click toggles, a double-click opens the file). Files come from `git.status`, lines from the new `git.diff { path, file? }` (staged and unstaged against HEAD; with `file`, one file, an untracked one as all added). It refreshes at once when git's index or HEAD changes (fs.watch on them: stage, commit, checkout) and every 3 s while cmd is in front. Outside a repository it offers Choose Folder…, as its window menu does.
+- No `config` schema on window types yet: both keep their one setting in their window state and change it in place. A schema is worth it when the edit view serves built-ins too.
 - Later, cheap: Resources (`resources.ts`), Notifications, Listening Ports.
 
 ### Protocol
 
 Built in phase 2:
 
-- `WindowType.role` (`"window"` by default, `"widget"`) and `description`, the same in `WindowTypeInfo`. `magic` is a widget type. A `config` schema for built-in widgets waits for the first one that needs it (phase 4).
+- `WindowType.role` (`"window"` by default, `"widget"`) and `description`, the same in `WindowTypeInfo`. `magic`, `agents` and `diff` are widget types.
 - Refs: `magic:<widget id>` for widgets made with Magic, `type:<kind>` for built-in widgets.
 - `widget.list` → `WidgetEntry[]` (`{ ref, source: "builtin" | "yours", kind, title, description?, icon, shot?, createdAt?, usedAt?, windows }`): built-in widget types (every type with role `widget` but `magic`, which is the ✦ card), then yours by last use. Examples come in phase 5.
 - `widget.add { ref, spaceId? | callerPaneId? }` → the new window. Refuses types that aren't widgets.
@@ -152,7 +155,7 @@ One worktree per phase; each ends green.
 1. **Widgets apart from windows** (core only, no visible change), built: widget ids, `widget.json`, no `closed/`, every copy updated on change, migration; `MagicService.library()`, `opened()`, `deleteWidget()`. Tests in `widgets.test.ts`.
 2. **Registry and protocol**, built: `role`/`description` on window types; `widget.*` methods and event; `cmd widget list/add`.
 3. **The library and the split**, built: the sheet, the Widgets menu, the sidebar's + and Widgets section, Remove from Desk and its toast, new labels in `shared/commands.ts`.
-4. **Built-ins**: Agent Activity, then Live Diff with `git.diff`.
+4. **Built-ins**, built: Agent Activity, then Live Diff with `git.diff`.
 5. **Examples** from the prompt's examples; then the README, positioning and changelog.
 
 ## Open questions

@@ -99,6 +99,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "fs.duplicate": "control",
   "fs.create": "control",
   "git.status": "view",
+  "git.diff": "view",
   "search.query": "never",
   "search.recent": "never",
   "search.status": "never",
@@ -211,6 +212,10 @@ const ARGS: { [M in Method]?: Check<M> } = {
   "fs.duplicate": (p, ctx) => allowedPath(ctx, p.path),
   "fs.create": (p, ctx) => allowedPath(ctx, p.dir),
   "git.status": (p, ctx) => allowedPath(ctx, p.path),
+  "git.diff": (p, ctx) => {
+    allowedPath(ctx, p.path);
+    if (p.file !== undefined) allowedPath(ctx, path.resolve(p.path, p.file));
+  },
 };
 
 export function scopeAllows(scope: RemoteScope, access: Access): boolean {

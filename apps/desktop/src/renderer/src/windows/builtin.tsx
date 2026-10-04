@@ -10,6 +10,8 @@ import { BrowserView } from "../components/BrowserView.tsx";
 import { DEVICES } from "../devices.ts";
 import { FilesView } from "../components/FilesView.tsx";
 import { MagicView, setEditing } from "../components/MagicView.tsx";
+import { AgentActivity } from "../components/AgentActivity.tsx";
+import { LiveDiff } from "../components/LiveDiff.tsx";
 import { intervalLabel, refreshChoices } from "../magic.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
@@ -138,4 +140,31 @@ registerWindowView({
       ...(stateStr(w, "html") ? [{ label: "Copy Widget HTML", run: () => copy(stateStr(w, "html")!) }] : []),
     ];
   },
+});
+
+// Built-in widgets (docs/16-widgets.md).
+registerWindowView({
+  kind: "agents",
+  View: AgentActivity,
+  describe: (w) => ({ place: w.state.scope === "all" ? "all Spaces" : undefined, kind: null }),
+  menu: (w) => [
+    { label: "This Space", checked: w.state.scope !== "all", run: () => void cmd.call("window.update", { id: w.id, state: { scope: "space" } }) },
+    { label: "All Spaces", checked: w.state.scope === "all", run: () => void cmd.call("window.update", { id: w.id, state: { scope: "all" } }) },
+  ],
+});
+
+registerWindowView({
+  kind: "diff",
+  View: LiveDiff,
+  describe: (w) => ({ place: shortPath(stateStr(w, "path") ?? ""), kind: null }),
+  menu: (w) => [
+    {
+      label: "Choose Folder…",
+      run: () =>
+        void cmd.chooseFolder().then((p) => {
+          if (p) void cmd.call("window.update", { id: w.id, state: { path: p } }).catch(() => {});
+        }),
+    },
+    { label: "Show in Finder", run: () => cmd.revealPath(stateStr(w, "path") ?? "") },
+  ],
 });

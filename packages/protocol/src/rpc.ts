@@ -251,6 +251,8 @@ export interface Methods {
   "fs.create": { params: { dir: string; kind: "file" | "dir" }; result: string };
   /** Git state of the repository a folder is in, limited to that folder; null outside a work tree or without git. */
   "git.status": { params: { path: string }; result: GitStatus | null };
+  /** Uncommitted changes under a folder (or one file of it) against HEAD, as a unified diff; null outside a repository. */
+  "git.diff": { params: { path: string; file?: string }; result: { root: string; diff: string; truncated: boolean } | null };
 
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };

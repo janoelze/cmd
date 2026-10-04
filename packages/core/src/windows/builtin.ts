@@ -156,6 +156,45 @@ export const magicType: WindowType<{ prompt: string; phase: string; widgetId?: s
   },
 };
 
+/**
+ * Built-in widgets (docs/16-widgets.md): native views over what the core
+ * already knows, offered in the Widget Library, not the File menu.
+ */
+export const agentsType: WindowType<{ scope: "space" | "all" }> = {
+  kind: "agents",
+  title: "Agent Activity",
+  icon: "person.2",
+  role: "widget",
+  description: "Every agent at a glance: who is working, who waits for you, what just finished.",
+  create(input) {
+    return { state: { scope: input.scope === "all" ? "all" : "space" }, title: "Agent Activity" };
+  },
+  update(state, patch) {
+    return { state: patch.scope === "all" || patch.scope === "space" ? { ...state, scope: patch.scope } : state };
+  },
+};
+
+/** What changed in a repository, under a folder (default: the Space's root), as it changes. */
+export const diffType: WindowType<{ path: string }> = {
+  kind: "diff",
+  title: "Live Diff",
+  icon: "plusminus",
+  role: "widget",
+  description: "The uncommitted changes in a folder's repository, updated as files change.",
+  create(input) {
+    const dir = path.resolve(expandHome(str(input.path) ?? str(input.cwd) ?? os.homedir()));
+    if (!fs.statSync(dir).isDirectory()) throw new Error(`not a folder: ${dir}`);
+    return { state: { path: dir }, title: `Changes · ${path.basename(dir) || dir}` };
+  },
+  update(state, patch) {
+    const p = str(patch.path);
+    if (p === undefined) return { state };
+    const dir = path.resolve(expandHome(p));
+    if (!fs.statSync(dir).isDirectory()) throw new Error(`not a folder: ${dir}`);
+    return { state: { ...state, path: dir }, title: `Changes · ${path.basename(dir) || dir}` };
+  },
+};
+
 export function registerBuiltins(types: WindowTypes): void {
   types.register(terminalType);
   types.register(browserType);
@@ -163,4 +202,6 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(textType);
   types.register(markdownType);
   types.register(magicType);
+  types.register(agentsType);
+  types.register(diffType);
 }

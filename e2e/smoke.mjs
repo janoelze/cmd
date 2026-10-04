@@ -1,5 +1,6 @@
 // Launches the built app against an isolated core, drives it through the real
 // menu bar, takes screenshots. usage: pnpm e2e
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -784,6 +785,31 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await menu("file.close");
     check((await win.locator(".widget-library").count()) === 0, "⌘W closes the Widget Library first");
     await call("window.close", { id: back.id });
+
+    // Built-in widgets: Live Diff shows a repository's changes; Agent Activity opens from the library too.
+    const repo = path.join(home, "diff-repo");
+    fs.mkdirSync(repo, { recursive: true });
+    const g = (...args) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd: repo, stdio: "pipe" });
+    g("init", "-q", "-b", "main");
+    fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
+    g("add", "-A");
+    g("commit", "-q", "-m", "init");
+    fs.writeFileSync(path.join(repo, "a.txt"), "two\n");
+    fs.writeFileSync(path.join(repo, "b.txt"), "new\n");
+    const ld = await call("widget.add", { ref: "type:diff" });
+    await call("window.update", { id: ld.id, state: { path: repo } });
+    const ldTile = win.locator(`.tile[data-pane="${ld.id}"]`);
+    for (let i = 0; i < 20 && (await ldTile.locator(".ld-path").count()) < 2; i++) await win.waitForTimeout(200);
+    const ldFiles = await ldTile.locator(".ld-path").allTextContents();
+    const ldLines = await ldTile.locator(".ld-line[data-kind=add]").allTextContents();
+    check(ldFiles.join(",") === "a.txt,b.txt" && ldLines.includes("+two") && ldLines.includes("+new"), `Live Diff shows a repository's changes, untracked files too (${ldFiles.join(", ")})`);
+    const aa = await call("widget.add", { ref: "type:agents" });
+    await win.locator(`.tile[data-pane="${aa.id}"] .aa`).waitFor({ timeout: 5000 });
+    const aaSummary = await win.locator(`.tile[data-pane="${aa.id}"] .aa-summary`).textContent();
+    const inWidgets = (await win.locator(".sb-widgets").textContent()) ?? "";
+    check(inWidgets.includes("Agent Activity") && inWidgets.includes("Changes · diff-repo") && !!aaSummary, `Agent Activity and Live Diff are listed under the sidebar's Widgets (${aaSummary})`);
+    await call("window.close", { id: ld.id });
+    await call("window.close", { id: aa.id });
 
     // Status and notifications from data.ts; actions from the view (after a click only).
     const b = await call("window.open", { kind: "magic", input: {} });

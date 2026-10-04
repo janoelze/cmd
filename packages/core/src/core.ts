@@ -21,7 +21,7 @@ import { registerBuiltinSources } from "./search/builtin.ts";
 import { locateContext, TranscriptSources } from "./search/sources.ts";
 import { listDir, parseOverrides, readText, resolvePaths, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
-import { gitStatus } from "./git.ts";
+import { gitDiff, gitStatus } from "./git.ts";
 import { createPath, duplicatePath, renamePath } from "./fileops.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
@@ -410,6 +410,7 @@ export class Core {
     "fs.duplicate": (p) => duplicatePath(p.path),
     "fs.create": (p) => createPath(p.dir, p.kind),
     "git.status": (p) => gitStatus(p.path),
+    "git.diff": (p) => gitDiff(p.path, p.file),
     // Connection-aware; handled in #serve. These run for in-process callers.
     "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),

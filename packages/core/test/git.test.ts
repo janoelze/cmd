@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { gitStatus } from "../src/git.ts";
+import { gitDiff, gitStatus } from "../src/git.ts";
 import { rmTemp } from "./tmp.ts";
 
 // Not realpath'd: on macOS the temp dir is a symlink (/var → /private/var), so this
@@ -62,5 +62,43 @@ describe("gitStatus", () => {
     const sub = (await gitStatus(path.join(dir, "src")))!;
     expect(sub.root).toBe(dir);
     expect(Object.keys(sub.files)).toEqual([path.join(dir, "src/a.ts")]);
+  });
+});
+
+describe("gitDiff", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-gitdiff-"));
+  const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd: repo, stdio: "pipe" });
+  afterAll(() => rmTemp(repo));
+
+  it("is null outside a repository", async () => {
+    expect(await gitDiff(repo)).toBeNull();
+  });
+
+  it("diffs staged and unstaged changes against HEAD, and an untracked file as added", async () => {
+    git("init", "-q", "-b", "main");
+    fs.writeFileSync(path.join(repo, "a.txt"), "one\ntwo\n");
+    fs.mkdirSync(path.join(repo, "sub"));
+    fs.writeFileSync(path.join(repo, "sub", "b.txt"), "b\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "init");
+    fs.writeFileSync(path.join(repo, "a.txt"), "one\nTWO\n");
+    fs.writeFileSync(path.join(repo, "sub", "b.txt"), "b\nc\n");
+    git("add", "sub/b.txt");
+    fs.writeFileSync(path.join(repo, "new.txt"), "fresh\n");
+
+    const all = (await gitDiff(repo))!;
+    expect(all.truncated).toBe(false);
+    expect(all.diff).toContain("+++ b/a.txt");
+    expect(all.diff).toContain("-two\n+TWO");
+    expect(all.diff).toContain("+++ b/sub/b.txt"); // staged counts too
+    expect(all.diff).not.toContain("new.txt"); // untracked: asked for one by one
+
+    const sub = (await gitDiff(path.join(repo, "sub")))!;
+    expect(sub.diff).toContain("sub/b.txt");
+    expect(sub.diff).not.toContain("a.txt");
+
+    const added = (await gitDiff(repo, "new.txt"))!;
+    expect(added.diff).toContain("+fresh");
+    expect(added.diff).toContain("+++ b/new.txt");
   });
 });

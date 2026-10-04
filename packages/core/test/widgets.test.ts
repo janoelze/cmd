@@ -540,9 +540,19 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
 
     core.handlers["magic.run"]({ id, prompt: "count" });
     await until(() => state().phase === "ready");
-    const list = () => core.handlers["widget.list"]({}) as unknown as { ref: string; title: string; source: string; windows: string[]; shot?: string }[];
+    const all = () => core.handlers["widget.list"]({}) as unknown as { ref: string; title: string; source: string; windows: string[]; shot?: string }[];
+    const list = () => all().filter((e) => e.source === "yours");
     const ref = `magic:${String(state().widgetId)}`;
     expect(list()).toEqual([expect.objectContaining({ ref, source: "yours", kind: "magic", title: "Count", icon: "sparkles", windows: [id] })]);
+    // Built-in widgets first: every widget type but Magic itself.
+    expect(all().slice(0, 2)).toEqual([
+      expect.objectContaining({ ref: "type:agents", source: "builtin", title: "Agent Activity", windows: [] }),
+      expect.objectContaining({ ref: "type:diff", source: "builtin", title: "Live Diff", windows: [] }),
+    ]);
+    const activity = core.handlers["widget.add"]({ ref: "type:agents" }) as unknown as { id: string; kind: string; state: { scope: string } };
+    expect(activity).toMatchObject({ kind: "agents", state: { scope: "space" } });
+    expect(all()[0]!.windows).toEqual([activity.id]);
+    core.handlers["window.close"]({ id: activity.id });
     await until(() => events.some((e) => e.type === "widget.library"));
 
     // A name sticks across a change that retitles the manifest.
@@ -570,7 +580,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(list().map((e) => e.ref)).toEqual([ref]);
     events.length = 0;
     core.handlers["window.close"]({ id: copy.id });
-    await until(() => events.some((e) => e.type === "widget.library" && (e as unknown as { entries: { windows: string[] }[] }).entries[0]!.windows.length === 1));
+    await until(() => events.some((e) => e.type === "widget.library" && (e as unknown as { entries: { ref: string; windows: string[] }[] }).entries.find((x) => x.ref === ref)?.windows.length === 1));
     await core.close();
   });
 

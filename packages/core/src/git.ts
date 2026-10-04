@@ -86,6 +86,54 @@ export async function gitStatus(dir: string): Promise<GitStatus | null> {
   return status;
 }
 
+/** At most this much diff text is returned (the rest is cut, `truncated`). */
+const MAX_DIFF = 2 * 1024 * 1024;
+
+/**
+ * The uncommitted changes under `dir` (staged and not) against HEAD, as a
+ * unified diff with paths from the repository root; with `file`, only that
+ * file, and an untracked one as all added. null outside a work tree.
+ */
+export async function gitDiff(dir: string, file?: string): Promise<{ root: string; diff: string; truncated: boolean } | null> {
+  const abs = path.resolve(expandHome(dir));
+  let top: string;
+  try {
+    top = (await git(abs, ["rev-parse", "--show-toplevel"])).trim();
+  } catch {
+    return null;
+  }
+  if (!top) return null;
+  const target = file ? path.resolve(abs, expandHome(file)) : abs;
+  const opts = ["--no-color", "--no-ext-diff", "-M", "--src-prefix=a/", "--dst-prefix=b/"];
+  let diff: string;
+  const tracked = file ? await git(abs, ["ls-files", "--", target]).then((o) => o.trim() !== "", () => false) : true;
+  if (!tracked) {
+    // `--no-index` exits 1 when the files differ: that's the answer, not a failure.
+    // Git's root is the real path (/private/var on macOS): relate the file's real path to it.
+    let real = target;
+    try {
+      real = fs.realpathSync(target);
+    } catch {}
+    diff = await gitAllowing1(top, ["diff", ...opts, "--no-index", "--", "/dev/null", path.relative(top, real)]);
+  } else {
+    const hasHead = await git(abs, ["rev-parse", "--verify", "--quiet", "HEAD"]).then(() => true, () => false);
+    diff = hasHead ? await git(abs, ["diff", ...opts, "HEAD", "--", target]) : await git(abs, ["diff", ...opts, "--cached", "--", target]);
+  }
+  const truncated = diff.length > MAX_DIFF;
+  return { root: top, diff: truncated ? diff.slice(0, diff.lastIndexOf("\n", MAX_DIFF) + 1) : diff, truncated };
+}
+
+function gitAllowing1(cwd: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "git",
+      ["-C", cwd, ...args],
+      { env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" }, maxBuffer: 64 * 1024 * 1024, timeout: 15_000 },
+      (err, stdout) => (err && (err as { code?: unknown }).code !== 1 ? reject(err) : resolve(stdout)),
+    );
+  });
+}
+
 /** The path field of a porcelain v2 line: everything after `n` space-separated fields (paths may contain spaces). */
 function field(line: string, n: number): string {
   let at = 0;
