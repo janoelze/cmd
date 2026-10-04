@@ -109,6 +109,10 @@ describe("widget store", () => {
     store.ensure("w1");
     expect(() => store.write("w1", "../escape.ts", "x")).toThrow(/a widget has only/);
     expect(() => store.write("w1", "notes.txt", "x")).toThrow();
+    store.write("w1", `${store.dir("w1")}/README.md`, "absolute paths inside the folder work");
+    expect(store.read("w1", "README.md")).toBe("absolute paths inside the folder work");
+    expect(() => store.write("w1", "/etc/passwd", "x")).toThrow(/a widget has only/);
+    store.remove("w1", "README.md");
     store.write("w1", "manifest.json", MANIFEST());
     store.write("w1", "view.html", VIEW_HTML);
     store.write("w1", "view.ts", VIEW_TS + `const s = "</script>";\n`);

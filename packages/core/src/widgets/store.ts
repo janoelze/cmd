@@ -62,7 +62,10 @@ export class WidgetStore {
   }
 
   #path(id: string, rel: string): string {
-    const clean = path.posix.normalize(rel.replace(/^\.?\//, ""));
+    // Absolute paths inside the folder (agents write them) are fine too.
+    const dir = this.dir(id);
+    const inside = path.isAbsolute(rel) && (rel === dir || rel.startsWith(dir + path.sep)) ? path.relative(dir, rel) : rel;
+    const clean = path.posix.normalize(inside.replace(/^\.?\//, ""));
     if (!isWidgetFile(clean)) throw new Error(`${rel}: a widget has only ${WIDGET_FILES.join(", ")} and fixtures/<name>.json`);
     return path.join(this.dir(id), clean);
   }
