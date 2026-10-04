@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`cmd`: a personal macOS terminal + coding-agent workbench (Electron UI, a long-lived TypeScript core process, a CLI). It replaces the `ghostty-agents` fork. Design research and rationale live in `docs/` (start at `docs/00-overview.md`). The README is user-facing (features, install, shortcuts, CLI); DEVELOPMENT.md covers building, packaging, internals and what is done or next.
+`cmd`: a macOS workbench for building software with AI: terminals, agents, browser, editor and Magic widgets on one desk (Electron UI, a long-lived TypeScript core process, a CLI). It replaces the `ghostty-agents` fork. Positioning and voice for user-facing copy: `docs/15-positioning.md`. Design research and rationale live in `docs/` (start at `docs/00-overview.md`). The README is user-facing (features, install, shortcuts, CLI); DEVELOPMENT.md covers building, packaging, internals and what is done or next.
 
 ## Commands
 

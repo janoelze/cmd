@@ -42,6 +42,9 @@ h1 { font-size: 30px; line-height: 1.2; margin: 32px 0 8px; letter-spacing: -0.0
 h2 { font-size: 15px; margin: 36px 0 12px; }
 p.lede { color: var(--ink-2); font-size: 17px; margin: 0 0 24px; max-width: 60ch; }
 .muted { color: var(--ink-3); }
+.pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 24px 0; }
+.card h2 { margin-top: 0; }
+.card p { margin-bottom: 0; color: var(--ink-2); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .tile .label { color: var(--ink-2); font-size: 13px; }
@@ -82,7 +85,7 @@ function page_end(): void
 {
     ?>
 </main>
-<footer>cmd · a terminal and coding-agent workbench for macOS · <a href="https://endtime-instruments.org">endtime instruments</a></footer>
+<footer>cmd · a workbench for building software with AI, on macOS · <a href="https://endtime-instruments.org">endtime instruments</a></footer>
 </body>
 </html>
 <?php

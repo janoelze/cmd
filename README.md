@@ -5,12 +5,12 @@
 <h1 align="center">cmd</h1>
 
 <p align="center">
-  A terminal for working with coding agents, on macOS.
+  A workbench for building software with AI, on macOS.
 </p>
 
 <p align="center">
   <a href="https://github.com/janoelze/cmd/releases/latest">Download</a> ·
-  <a href="#features">Features</a> ·
+  <a href="#what-it-does">What it does</a> ·
   <a href="#magic-widgets">Magic widgets</a> ·
   <a href="#keyboard-shortcuts">Shortcuts</a> ·
   <a href="#cli">CLI</a> ·
@@ -22,21 +22,19 @@
   <img alt="cmd in the grid layout: agents grouped by what needs you in the sidebar, three Claude sessions, htop, an editor and a browser window" src="docs/screenshots/hero-light.png">
 </picture>
 
-Run Claude Code, Codex and your shells side by side, and see at a glance which agent is waiting for you. Lay out terminals, editors and browser windows in a grid, a scrolling strip inspired by PaperWM, or on an infinite canvas. Terminals live in a background process, so quitting or reloading the app never kills them.
+Terminals, coding agents, a browser, an editor and widgets you make by asking, side by side on one desk. Nothing gets lost, nothing dies, and the agent that needs you is always on top.
 
-## Features
+Terminals are where we'll work with agents for years to come, and they still feel like 1995: a window and a row of tabs. Flipping through hundreds of them to find the agent that's waiting, the log you were tailing or the server you started yesterday doesn't scale. cmd is a desk instead. It isn't an IDE and it doesn't bring its own agent: you keep your editor and Claude Code or Codex, and cmd gives them a place to live.
 
-- **Knows your agents.** Claude Code, Codex, Gemini, Aider and others are detected on their own, even behind wrappers and sandboxes. The sidebar puts agents waiting for input first, then the ones working, then the ones done; subagents show as children.
-- **Terminals that outlive the app.** A long-lived core process owns every terminal. Close the window or restart the app: your sessions are still there.
-- **Four layouts.** Focus on one window, tile them in a grid, scroll through a horizontal strip of windows inspired by [PaperWM](https://github.com/paperwm/PaperWM), or arrange them freely on a zoomable canvas with a minimap.
-- **Every past session, searchable.** Typo-tolerant full-text search over your Claude Code, Codex, Qwen Code and Copilot CLI transcripts (including profiles and custom config dirs), from the palette or the sidebar. Return resumes a session in a new terminal.
-- **More than terminals.** Browser, file tree, text editor and Markdown windows sit next to your terminals. `open README.md` in the shell opens it in cmd. Right-click a browser window for Device Size to see a page at a phone, tablet or desktop size.
-- **Magic widgets.** Describe what you want to see ("show my VPN status", a JSON URL, "my open pull requests") and an agent builds a live widget for it, in your theme, that keeps itself up to date. [More below](#magic-widgets).
-- **Notifications that lead somewhere.** An agent waiting, a bell, a long command finishing, an OSC 9/777/99 notification or `cmd notify`: the terminal is marked until you look at it, and counts toward the Dock badge.
-- **A complete terminal.** Find in scrollback, jump between prompts, copy a command's output, inline images (Sixel, iTerm2's protocol), programs copying over ssh (OSC 52), drag files in for their paths, a check before risky pastes, Option as Meta on either side, modern Unicode widths.
-- **Keyboard first.** Every action is in the menu bar and the command palette (⌘K), and every shortcut can be remapped.
-- **Scriptable.** The `cmd` CLI spawns, messages, waits on and stops agents, so an agent can run other agents.
-- **16 themes**, light and dark, following the system or not.
+It's made for the serious, normal work, not for running 600 agents overnight.
+
+## What it does
+
+**One desk for everything you're working on.** Terminals, agents, browser, editor, Markdown and widgets are all windows on the same desk. Focus on one, tile them in a grid, scroll through a strip inspired by [PaperWM](https://github.com/paperwm/PaperWM), or lay them out on an infinite canvas with a minimap. ⌘K finds any window, command or past session, and `open README.md` in a shell opens it on the desk.
+
+**Agents live in terminals, and cmd knows them.** Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes, with no setup. The sidebar puts the agents waiting for you first, then the ones working, then the ones done, and ⌃⌘J jumps to the next one that needs you. Terminals live in a background process, so quitting, reloading or updating the app never kills them. Every past session (Claude Code, Codex, Qwen Code, Copilot CLI) is searchable, typos and all, and Return resumes it.
+
+**Magic widgets: ask for a window, throw it away tomorrow.** Type what you want to see ("my open merge requests", "the last CI runs", a JSON URL) and an agent builds a small live widget for it, in your theme. It refreshes on its own without calling the model. When you don't need it any more, close it. [More below](#magic-widgets).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/canvas-dark.png">
@@ -48,6 +46,15 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
   <img alt="Session search in the command palette" src="docs/screenshots/search-light.png">
 </picture>
 
+**Also:**
+
+- **Notifications that lead somewhere.** An agent waiting, a bell, a long command finishing, an OSC 9/777/99 notification or `cmd notify`: the terminal is marked until you look at it, and counts toward the Dock badge.
+- **A complete terminal.** Find in scrollback, jump between prompts, copy a command's output, inline images (Sixel, iTerm2's protocol), programs copying over ssh (OSC 52), drag files in for their paths, a check before risky pastes, Option as Meta on either side, modern Unicode widths.
+- **Keyboard first.** Every action is in the menu bar and the command palette, and every shortcut can be remapped.
+- **Scriptable.** The `cmd` CLI spawns, messages, waits on and stops agents, so an agent can run other agents.
+- **Device sizes.** Right-click a browser window for Device Size to see a page at a phone, tablet or desktop size.
+- **16 themes**, light and dark, following the system or not.
+
 ## Magic widgets
 
 <picture>
@@ -55,7 +62,7 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
   <img alt="Magic widgets in a grid: GitHub Actions runs, the weather in Tokyo, a EUR to JPY chart, disk space, a tea timer, and an empty Magic widget asking what it should show" src="docs/screenshots/magic-light.png">
 </picture>
 
-Press ⇧⌘M and type what the window should show: a question, a URL, some JSON, a command. cmd turns it into a small live window:
+Press ⇧⌘M and type what you want to see: a question, a URL, some JSON, a command. cmd turns it into a small live widget. Make one for today's problem and close it tomorrow, or keep it for months:
 
 - **It looks around first when it needs to.** For "show my VPN connection status", the agent checks your network interfaces, routes and VPN clients with read-only commands before deciding what to show. You watch its steps in the window while it works.
 - **It's a small app that has to work.** The agent writes the widget as a few files: `data.ts` fetches the data (TypeScript, run by Deno with only the permissions it declares), checked against a schema; the view is type-checked against that data. Before it shows anything, it runs the data, renders the widget in both themes and looks at the result; cmd then checks it all again.

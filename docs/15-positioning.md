@@ -1,6 +1,6 @@
 # Positioning and voice
 
-Date: 2026-10-04. What cmd is, who it is for and how it talks about itself. The README, the website, the app's About box and release notes take their wording from here. "cmd" is a placeholder: the name is under review (see [Name](#name)).
+Date: 2026-10-04. What cmd is, who it is for and how it talks about itself. The README, the website, the app's About box and release notes take their wording from here.
 
 ## The story
 
@@ -100,20 +100,12 @@ We don't name them in public copy. Internally, the differences are:
 - **Windows** are the things on the desk. **Spaces** group them by project. **Agents** are terminals with a coding agent in them. **Sessions** are an agent's transcript, live or past.
 - The **desk** is the word for the main area (grid, strip, canvas and focus are ways of arranging it).
 
-## Name
+## Name and icon
 
-"cmd" is hard to search for, already means Windows' `cmd.exe`, and is the word people say for the ⌘ key. The icon (Apple's ⌘ glyph) has the same problem. Criteria for a new name:
+**cmd**, with the ⌘ icon. Decided 2026-10-04 after two rounds of name research (kerf, tisch, werk, pult and about 40 others; "atelier", "jig" and "easel" already belong to products like this one).
 
-- Short: it is also the CLI (`<name> spawn claude "fix the tests"`), so 3–6 letters, easy to type, no collision with a common Unix command.
-- Fits a workbench, desk or workshop: calm, made by hand, serious.
-- Searchable, and a plausible `.app`/`.dev` domain.
-- Says nothing about AI (that ages fast).
+Why it holds up: ⌘ is the key you press for every command on a Mac, and cmd is a keyboard-first app where every action is a command (⌘K finds anything). It is short to type as a CLI (`cmd spawn claude "fix the tests"`). Write it lowercase, `cmd`, in body text and in headings.
 
-Shortlist: pending research.
+The known costs, accepted: it's hard to search for (so use "cmd for macOS" or "cmd workbench" where search matters, e.g. the website's title and the GitHub description), it shares a name with Windows' `cmd.exe` (cmd is macOS-only), and the ⌘ glyph is Apple's (fine as an icon, never as a logo in our own lettering).
 
-## Visual identity (direction)
-
-- **Retire the ⌘ glyph.** It belongs to Apple and says "system utility".
-- **Build it on the desk.** An icon of a few windows laid out on a surface (the grid/strip/canvas idea), in the dark, solid style the app already has (no glass gimmicks beyond what macOS 26 applies).
-- **The status dot is the accent.** Orange (needs you), blue (working) and green (done) are the most recognisable thing in the UI. One small orange dot on the icon says "something is waiting" without words.
-- **Type:** the UI uses the system font and terminals use JetBrains Mono. The wordmark is lowercase, set in a monospace or a tight grotesk.
+The status colours (orange: needs you, blue: working, green: done) stay in the product. They're how cmd shows attention, not part of the brand mark.
