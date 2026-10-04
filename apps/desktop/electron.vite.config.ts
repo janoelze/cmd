@@ -29,13 +29,15 @@ export default defineConfig({
     },
   },
   // electron-vite leaves minification off; the renderer bundle is parsed on every launch.
-  // Two pages: the app (index.html) and the Settings window (settings.html).
+  // Three pages: the app (index.html), the Settings window (settings.html) and the Task Manager (tasks.html).
   renderer: {
     plugins: [react()],
     build: {
       minify: true,
       rollupOptions: {
-        input: { index: resolve(import.meta.dirname, "src/renderer/index.html"), settings: resolve(import.meta.dirname, "src/renderer/settings.html") },
+        input: { index: resolve(import.meta.dirname, "src/renderer/index.html"), settings: resolve(import.meta.dirname, "src/renderer/settings.html"),
+          tasks: resolve(import.meta.dirname, "src/renderer/tasks.html"),
+        },
       },
     },
   },

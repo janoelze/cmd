@@ -16,6 +16,7 @@ import { cmdHome, connect, coreSocketPath, enterInstance, initLog, isOwnCore, in
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { lucideSymbol, type SymbolImage } from "./icons.ts";
+import { appMetrics } from "./metrics.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
@@ -348,25 +349,26 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
 
 const spaces = new SpaceWindows(createWindow);
 
-// ── settings window ─────────────────────────────────────
+// ── utility windows ─────────────────────────────────────
 // One native Settings window (⌘,), like a macOS app's: a sidebar of categories,
-// drawn like the main window's. Its own page and bundle (renderer/settings.html).
+// drawn like the main window's. And one Task Manager (Window menu): what cmd's
+// processes use. Each has its own page and bundle (renderer/<page>.html).
 
-let settingsWin: BrowserWindow | null = null;
-const isSettings = (w: BrowserWindow | null | undefined) => !!w && w === settingsWin;
+type UtilityPage = "settings" | "tasks";
+const utility = new Map<UtilityPage, BrowserWindow>();
+const isSettings = (w: BrowserWindow | null | undefined) => !!w && w === utility.get("settings");
+/** Settings or the Task Manager: not an app window. */
+const isUtility = (w: BrowserWindow | null | undefined) => !!w && [...utility.values()].includes(w);
 
-function openSettings(): BrowserWindow {
-  if (settingsWin && !settingsWin.isDestroyed()) {
-    settingsWin.show();
-    settingsWin.focus();
-    return settingsWin;
+function openUtility(page: UtilityPage, o: { title: string; width: number; height: number; minWidth: number; minHeight: number }): BrowserWindow {
+  const open = utility.get(page);
+  if (open && !open.isDestroyed()) {
+    open.show();
+    open.focus();
+    return open;
   }
   const win = new BrowserWindow({
-    width: 860,
-    height: 620,
-    minWidth: 700,
-    minHeight: 440,
-    title: "Settings",
+    ...o,
     show: false,
     ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 14, y: 12 } } : {}),
     backgroundColor: savedAppearance().background,
@@ -377,16 +379,19 @@ function openSettings(): BrowserWindow {
       contextIsolation: true,
     },
   });
-  settingsWin = win;
-  win.on("closed", () => (settingsWin = null));
+  utility.set(page, win);
+  win.on("closed", () => utility.get(page) === win && utility.delete(page));
   win.once("ready-to-show", () => win.show());
-  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/settings.html`);
-  else win.loadFile(path.join(here, "../renderer/settings.html"));
+  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/${page}.html`);
+  else win.loadFile(path.join(here, `../renderer/${page}.html`));
   return win;
 }
 
-/** App windows, not the Settings window. */
-const appWindows = () => BrowserWindow.getAllWindows().filter((w) => !isSettings(w));
+const openSettings = () => openUtility("settings", { title: "Settings", width: 860, height: 620, minWidth: 700, minHeight: 440 });
+const openTaskManager = () => openUtility("tasks", { title: "Task Manager", width: 720, height: 520, minWidth: 520, minHeight: 300 });
+
+/** App windows, not Settings or the Task Manager. */
+const appWindows = () => BrowserWindow.getAllWindows().filter((w) => !isUtility(w));
 
 // ── IPC ─────────────────────────────────────────────────
 
@@ -463,6 +468,9 @@ ipcMain.on("edit-native", (e, op: string, guestId?: number) => editNative(e.send
 ipcMain.on("open-path", (_e, p: string) => void (/^[a-z][\w+.-]+:/i.test(p) ? shell.openExternal(p) : shell.openPath(p)));
 ipcMain.on("settings-window", () => void openSettings());
 ipcMain.on("check-updates", () => checkForUpdates());
+// The Task Manager: Electron's own processes, and showing a terminal in the app window of its Space.
+ipcMain.handle("app-metrics", () => appMetrics());
+ipcMain.on("show-pane", (_e, spaceId: string, paneId: string) => spaces.show(spaceId, { select: paneId }, appWindows()[0] ?? null));
 ipcMain.on("install-update", () => void updater().then((u) => u.installUpdate()));
 ipcMain.handle("restart-core", () => restartCore());
 // The preload connects where main decided (dev builds use their own core).
@@ -475,7 +483,8 @@ ipcMain.on("renderer-error", (e, r: { kind: string; message: string; stack: stri
   const key = `${r.message}\n${r.stack?.split("\n").find((l) => l.trim().startsWith("at ")) ?? ""}`;
   if (rendererErrors.has(key)) return;
   rendererErrors.add(key);
-  const page = isSettings(BrowserWindow.fromWebContents(e.sender)) ? "settings" : "app";
+  const from = BrowserWindow.fromWebContents(e.sender);
+  const page = isSettings(from) ? "settings" : isUtility(from) ? "tasks" : "app";
   recordCrash("renderer", r.kind, r.message, r.stack, { page });
 });
 /** Settings → About: the app's side of the diagnostics (core.info is the core's). */
@@ -672,7 +681,7 @@ app.whenReady().then(async () => {
   );
   followCrashReports(socketPath);
   if (!devBuild) void updater().then((u) => u.startUpdater(socketPath));
-  const send = commandSender(() => spaces.reopen(), { openSettings, checkForUpdates, isSettings, appWindows });
+  const send = commandSender(() => spaces.reopen(), { openSettings, openTaskManager, checkForUpdates, isUtility, appWindows });
   refreshMenu = () => buildMenu(send, recordingShortcut ? {} : keybindings.bindings);
   refreshMenu();
   watchKeybindings((next) => {

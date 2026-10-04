@@ -9,6 +9,7 @@ import type { Appearance } from "../main/appearance.ts";
 import type { UpdateStatus } from "../main/updater.ts";
 import type { CrashStatus } from "../main/crash.ts";
 import type { FeedbackRequest, FeedbackStatus } from "../main/feedback.ts";
+import type { AppProcess } from "../main/metrics.ts";
 
 export interface AppInfo {
   version: string;
@@ -101,6 +102,9 @@ const api = {
   /** The Settings window (opens it, or brings it to the front). */
   openSettings: () => ipcRenderer.send("settings-window"),
   checkForUpdates: () => ipcRenderer.send("check-updates"),
+  /** Task Manager: Electron's processes (CPU% since the previous call), and showing a terminal in its Space's window. */
+  appMetrics: (): Promise<AppProcess[]> => ipcRenderer.invoke("app-metrics"),
+  showPane: (spaceId: string, paneId: string) => ipcRenderer.send("show-pane", spaceId, paneId),
   /** Restart into a downloaded update. */
   installUpdate: () => ipcRenderer.send("install-update"),
   /** Settings → About. */

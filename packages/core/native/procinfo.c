@@ -11,6 +11,9 @@
 //   stdout: [{"pid":<root>,"mem":<bytes>,"cpu":<ns>,"procs":<n>,
 //             "top":[{"pid":…,"name":"…","path":"…","mem":<bytes>}, …]}, …]\n
 //
+//   stdin:  p <pid> <pid> …\n          (resource usage of each process alone)
+//   stdout: [{"pid":…,"mem":<bytes>,"cpu":<ns>}, …]\n   (pids that are gone are left out)
+//
 // mem is the physical footprint (what Activity Monitor shows as "Memory");
 // cpu is cumulative user+system time, so callers compute % from deltas.
 //
@@ -173,6 +176,23 @@ static void report_trees(char *line) {
   free(pids);
 }
 
+static void report_procs(char *line) {
+  printf("[");
+  int first = 1;
+  char *save = NULL;
+  for (char *tok = strtok_r(line, " \t\n", &save); tok; tok = strtok_r(NULL, " \t\n", &save)) {
+    proc_t p = {0};
+    p.pid = (pid_t)atoi(tok);
+    if (p.pid <= 0) continue;
+    usage_of(&p);
+    if (!p.have_usage) continue;
+    printf("%s{\"pid\":%d,\"mem\":%llu,\"cpu\":%llu}", first ? "" : ",", p.pid, (unsigned long long)p.mem,
+           (unsigned long long)p.cpu);
+    first = 0;
+  }
+  printf("]\n");
+}
+
 int main(void) {
   mach_timebase_info(&timebase);
   int argmax = 0;
@@ -184,6 +204,11 @@ int main(void) {
   while (fgets(line, sizeof line, stdin)) {
     if (line[0] == 't') {
       report_trees(line + 1);
+      fflush(stdout);
+      continue;
+    }
+    if (line[0] == 'p') {
+      report_procs(line + 1);
       fflush(stdout);
       continue;
     }

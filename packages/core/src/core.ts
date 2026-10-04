@@ -11,7 +11,7 @@ import { NotificationCenter } from "./notifications.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { restoreSession } from "./restore.ts";
 import type { TermBackend } from "./terminals/types.ts";
-import { ResourceMonitor, type TreeSampler } from "./resources.ts";
+import { ProcessSampler, ResourceMonitor, type ProcSampler, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
 import { registerBuiltinSources } from "./search/builtin.ts";
 import { TranscriptSources } from "./search/sources.ts";
@@ -48,6 +48,8 @@ export interface CoreOptions {
   inspector?: Inspector | null;
   /** Process-tree usage sampler (ProcInfo.trees); null disables resource monitoring. */
   sampler?: TreeSampler | null;
+  /** Single-process usage sampler (ProcInfo.procs) for the Task Manager; null: no core/PTY host usage. */
+  procSampler?: ProcSampler | null;
   /** Hook status directory (statusRoot()); null disables file-based hooks. */
   statusRoot?: string | null;
   /**
@@ -78,6 +80,7 @@ export class Core {
   readonly store: Store;
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
+  readonly processes: ProcessSampler | null;
   readonly windows: WindowManager;
   readonly windowTypes: WindowTypes;
   /** Where each agent keeps transcripts and how to resume them. */
@@ -130,6 +133,7 @@ export class Core {
     this.notifications = new NotificationCenter(this.panes, this.agents, settings);
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler) : null;
+    this.processes = opts.procSampler ? new ProcessSampler(opts.procSampler) : null;
     this.spaces = new SpaceManager(this.store, opts.home);
     this.spaces.on("updated", (space) => this.#broadcast({ type: "space.updated", space }));
     this.spaces.on("removed", (id) => this.#broadcast({ type: "space.removed", id }));
@@ -191,6 +195,11 @@ export class Core {
         settingsPath: this.#opts.settingsPath ?? null,
         ptyHost: this.panes.backend.info?.() ?? null,
       };
+    },
+    "core.processes": async () => {
+      const host = this.panes.backend.info?.()?.pid ?? null;
+      const stats = (await this.processes?.sample(host ? [process.pid, host] : [process.pid])) ?? new Map();
+      return { core: stats.get(process.pid) ?? null, ptyHost: host ? (stats.get(host) ?? null) : null };
     },
     "pane.create": (p) => {
       const space = this.#place(p, { path: p.cwd });

@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, Pane, PaneId, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, Pane, PaneId, ProcessStat, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { MagicModel, MagicProgress } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
@@ -51,6 +51,8 @@ export interface Methods {
   "core.hello": { params: {}; result: { version: string; pid: number; socket: string; build: string; stateDir?: string } };
   /** Diagnostics for the Settings window's About page. */
   "core.info": { params: {}; result: CoreInfo };
+  /** The core's and PTY host's own usage (Task Manager); CPU% is since the previous call. Null where unknown. */
+  "core.processes": { params: {}; result: { core: ProcessStat | null; ptyHost: ProcessStat | null } };
 
   /** cwd defaults to the Space's root. */
   "pane.create": {

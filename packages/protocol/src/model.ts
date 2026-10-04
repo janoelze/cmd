@@ -89,6 +89,15 @@ export interface PaneUsage {
   sampledAt: number;
 }
 
+/** One process's own usage (not its children's); see the Task Manager. */
+export interface ProcessStat {
+  pid: number;
+  /** Physical footprint in bytes. */
+  memory: number;
+  /** Percent of one core since the previous sample. */
+  cpu: number;
+}
+
 export type AgentKind = "claude" | "codex" | "gemini" | "opencode" | (string & {});
 
 export type AgentState =

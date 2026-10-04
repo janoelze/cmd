@@ -158,7 +158,10 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("space.close"),
       ],
     },
-    { role: "windowMenu" },
+    {
+      role: "windowMenu",
+      submenu: [{ role: "minimize" }, { role: "zoom" }, sep, ...i("app.taskManager"), ...(mac ? [sep, { role: "front" as const }] : [])],
+    },
     { role: "help", submenu: [...i("help.docs"), ...i("help.feedback"), ...(mac ? [] : [sep, ...i("app.checkUpdates")])] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -180,27 +183,30 @@ export function applyMenuState(state: MenuState): void {
 }
 
 /** Sends a command to the focused window, creating one if needed. */
-interface SettingsWindow {
+interface UtilityWindows {
   openSettings: () => void;
+  openTaskManager: () => void;
   checkForUpdates: () => void;
-  isSettings: (w: BrowserWindow | null) => boolean;
+  /** Settings or the Task Manager. */
+  isUtility: (w: BrowserWindow | null) => boolean;
   appWindows: () => BrowserWindow[];
 }
 
-/** The Settings window handles closing and text editing itself; other commands go to an app window. */
-const SETTINGS_COMMANDS = new Set(["edit.copy", "edit.selectAll"]);
+/** Utility windows handle closing and text editing themselves; other commands go to an app window. */
+const UTILITY_COMMANDS = new Set(["edit.copy", "edit.selectAll"]);
 
-export function commandSender(createWindow: () => BrowserWindow, s: SettingsWindow): Send {
+export function commandSender(createWindow: () => BrowserWindow, s: UtilityWindows): Send {
   return (id) => {
     if (id === "app.settings") return s.openSettings();
+    if (id === "app.taskManager") return s.openTaskManager();
     if (id === "app.checkUpdates") return s.checkForUpdates();
     const focused = BrowserWindow.getFocusedWindow();
-    if (s.isSettings(focused)) {
+    if (s.isUtility(focused)) {
       if (id === "file.close" || id === "file.closeWindow") return focused!.close();
-      if (SETTINGS_COMMANDS.has(id)) return focused!.webContents.send("command", id);
+      if (UTILITY_COMMANDS.has(id)) return focused!.webContents.send("command", id);
     }
-    let win = (focused && !s.isSettings(focused) ? focused : null) ?? s.appWindows()[0];
-    if (win && s.isSettings(focused)) win.focus();
+    let win = (focused && !s.isUtility(focused) ? focused : null) ?? s.appWindows()[0];
+    if (win && s.isUtility(focused)) win.focus();
     if (!win) {
       win = createWindow();
       win.webContents.once("did-finish-load", () => win!.webContents.send("command", id));

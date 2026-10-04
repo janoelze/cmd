@@ -71,6 +71,7 @@ const core = new Core({
   reconnectTerminals: host,
   inspector: procinfo.available ? (pid) => procinfo.query(pid) : null,
   sampler: procinfo.available ? (pids) => procinfo.trees(pids) : null,
+  procSampler: procinfo.available ? (pids) => procinfo.procs(pids) : null,
   statusRoot: statusRoot(),
   build,
   stateDir: home,

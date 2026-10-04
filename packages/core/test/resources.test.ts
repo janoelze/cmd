@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PaneManager } from "../src/panes.ts";
-import { processName, ResourceMonitor, usageChanged } from "../src/resources.ts";
+import { ProcessSampler, processName, ResourceMonitor, usageChanged } from "../src/resources.ts";
+import { ProcInfo } from "../src/agents/procinfo.ts";
 import { fakeFactory } from "./fake-pty.ts";
 
 describe("ResourceMonitor", () => {
@@ -37,5 +38,30 @@ describe("ResourceMonitor", () => {
   it("names processes like the detector does", () => {
     expect(processName("2.1.288", "/Users/me/.local/share/claude/versions/2.1.288")).toBe("claude");
     expect(processName("node", "/opt/homebrew/bin/node")).toBe("node");
+  });
+});
+
+describe("ProcessSampler", () => {
+  it("reports each process's memory and CPU% since the previous sample, leaving out gone ones", async () => {
+    let cpu = 0;
+    const s = new ProcessSampler(async (pids) => pids.filter((p) => p !== 3).map((pid) => ({ pid, mem: pid * 1e6, cpu })));
+    const first = await s.sample([1, 2, 3], 1000);
+    expect([...first.values()]).toEqual([
+      { pid: 1, memory: 1e6, cpu: 0 },
+      { pid: 2, memory: 2e6, cpu: 0 },
+    ]);
+    cpu = 1e9; // 1 s of CPU over 2 s = 50%
+    expect((await s.sample([1], 3000)).get(1)!.cpu).toBe(50);
+  });
+
+  it.runIf(process.platform === "darwin" && new ProcInfo().available)("samples real processes with the procinfo helper", async () => {
+    const p = new ProcInfo();
+    try {
+      const [me] = await p.procs([process.pid, 999_999_999]);
+      expect(me).toMatchObject({ pid: process.pid });
+      expect(me!.mem).toBeGreaterThan(0);
+    } finally {
+      p.close();
+    }
   });
 });

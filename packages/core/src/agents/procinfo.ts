@@ -81,6 +81,13 @@ export interface TreeUsage {
   top: { pid: number; name: string; path: string; mem: number }[];
 }
 
+/** Resource usage of one process alone (see procinfo.c, `p` command). */
+export interface ProcUsage {
+  pid: number;
+  mem: number;
+  cpu: number;
+}
+
 /** Long-lived helper process; one request/response line per query. */
 export class ProcInfo {
   #child: ChildProcessWithoutNullStreams | null = null;
@@ -127,6 +134,24 @@ export class ProcInfo {
         }
       });
       child.stdin.write(`t ${pids.join(" ")}\n`);
+    });
+  }
+
+  /** Memory/CPU of each pid on its own; pids that are gone are left out. */
+  procs(pids: number[]): Promise<ProcUsage[]> {
+    const child = this.#ensure();
+    if (!child || pids.length === 0) return Promise.resolve([]);
+    return new Promise((resolve) => {
+      this.#queue.push((line) => {
+        try {
+          const r: unknown = line ? JSON.parse(line) : [];
+          // A helper built before `p` existed answers with an error object.
+          resolve(Array.isArray(r) ? (r as ProcUsage[]) : []);
+        } catch {
+          resolve([]);
+        }
+      });
+      child.stdin.write(`p ${pids.join(" ")}\n`);
     });
   }
 
