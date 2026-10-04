@@ -15,10 +15,10 @@ foreach ($releases as $r) {
     }
 }
 
-page_start('cmd — terminals and coding agents, side by side', 'A macOS app for running terminals and coding agents side by side, in a grid, a strip or on a canvas.', '');
+page_start('cmd — terminals and coding agents, side by side', 'A macOS app for running terminals and coding agents side by side, with web and file browsers, an editor and widgets an agent builds live.', '');
 ?>
 <h1>cmd</h1>
-<p class="lede">A macOS app for running terminals and coding agents side by side.</p>
+<p class="lede">A macOS app for running terminals and coding agents side by side, with web and file browsers, an editor, and widgets an agent builds live when you ask.</p>
 <p class="cta">
 <?php if ($latest): ?>
   <a class="button" href="<?= h($latest['dmg'] ?? $latest['url']) ?>">Download <?= h($latest['tag']) ?></a>
@@ -50,23 +50,29 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
 })();
 </script>
 
-<p>Terminals, Claude Code and Codex sessions, browsers, editors and widgets are all windows in one app. It isn't an IDE and has no agent of its own: you bring Claude Code, Codex or whichever agent you use.</p>
+<p>It isn't an IDE and has no agent of its own: you bring Claude Code, Codex or whichever agent you use, and cmd runs them next to everything else you have open.</p>
 
 <section class="pillar">
   <h2>Layouts</h2>
   <p>Show one window at a time, tile them in a grid, scroll through them in a strip, or place them on a canvas. ⌘K finds any window, command or past session.</p>
-  <img class="shot" src="assets/grid.png" width="1505" height="950" loading="lazy" alt="The grid: twelve windows at once, agents, widgets, a file browser, a shell and the weather">
+  <img class="shot" src="assets/canvas.png" width="1505" height="950" loading="lazy" alt="The canvas: a widget and a Claude Code session placed freely">
 </section>
 
 <section class="pillar">
   <h2>Agents</h2>
   <p>cmd detects Claude Code, Codex and other agents in any terminal and lists the ones waiting for input first. Terminals run in a background process, so quitting or updating the app doesn't end them. Past sessions are searchable and can be resumed.</p>
+  <img class="shot" src="assets/grid.png" width="1505" height="950" loading="lazy" alt="The grid: twelve windows at once, agents, widgets, a file browser, a shell and the weather">
+</section>
+
+<section class="pillar">
+  <h2>Browsers and files</h2>
+  <p>Web browser, file browser, text editor and Markdown windows sit next to your terminals. <code>open README.md</code> in a shell opens it in cmd, and a browser window can show a page at phone, tablet or desktop size.</p>
   <img class="shot" src="assets/agents.png" width="1505" height="950" loading="lazy" alt="The strip: a Claude Code session, a file browser and a shell, with six agents and recent sessions in the sidebar">
 </section>
 
 <section class="pillar">
   <h2>Magic widgets</h2>
-  <p>Describe what you want to see, like your CI runs or a JSON URL, and an agent writes a small widget that shows it and keeps it up to date. Uses your own Anthropic or OpenAI API key.</p>
+  <p>Describe what you want to see, like your CI runs, a JSON URL or the weather, and an agent builds a small live widget for it while you watch. It refreshes on its own, you can change it by asking, and you close it when you're done. Uses your own Anthropic or OpenAI API key.</p>
   <img class="shot" src="assets/widgets.png" width="1505" height="950" loading="lazy" alt="A weather widget next to top in the strip">
 </section>
 

@@ -40,6 +40,7 @@ a { color: var(--accent); }
 h1 { font-size: 30px; line-height: 1.2; margin: 32px 0 8px; letter-spacing: -0.01em; }
 h2 { font-size: 15px; margin: 36px 0 12px; }
 p.lede { color: var(--ink-2); font-size: 17px; margin: 0 0 24px; max-width: 60ch; }
+code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
 .muted { color: var(--ink-3); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
