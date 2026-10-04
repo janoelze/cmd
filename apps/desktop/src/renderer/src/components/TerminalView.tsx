@@ -1,4 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Button } from "@cmd/ui";
 import type { PaneId, Progress } from "@cmd/protocol";
 import { useStoreValue } from "../store.ts";
 import { terminals, type FindResults } from "../terminals.ts";
@@ -80,9 +81,9 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
           <span>
             Sized for {sizedBy} · {cols}×{rows}
           </span>
-          <button className="btn" onClick={() => void cmd.call("pane.reclaim", { paneId }).then(() => terminals.focus(paneId))}>
+          <Button onClick={() => void cmd.call("pane.reclaim", { paneId }).then(() => terminals.focus(paneId))}>
             Take Back
-          </button>
+          </Button>
         </div>
       )}
       {finding && (

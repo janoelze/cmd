@@ -2,6 +2,7 @@
 // a kind, a message and an optional way to answer, sent by main to the
 // feedback webhook (main/feedback.ts) with the version and platform if wanted.
 
+import { Button, Checkbox, Segmented, TextArea, TextField } from "@cmd/ui";
 import { useEffect, useRef, useState } from "react";
 import { cmd } from "../bridge.ts";
 
@@ -69,42 +70,37 @@ export function Feedback({ onClose }: { onClose: () => void }) {
           <>
             <div className="feedback-head">
               <span className="feedback-title">Send Feedback</span>
-              <div className="segmented">
-                {KINDS.map((k) => (
-                  <button key={k.id} type="button" className={kind === k.id ? "on" : ""} onClick={() => setKind(k.id)}>
-                    {k.label}
-                  </button>
-                ))}
-              </div>
+              <Segmented size="sm" label="Kind" value={kind} options={KINDS.map((k) => ({ value: k.id, label: k.label }))} onChange={setKind} />
             </div>
-            <textarea
+            <TextArea
               ref={text}
-              className="feedback-message"
               value={message}
               placeholder={KINDS.find((k) => k.id === kind)!.placeholder}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={setMessage}
               maxLength={4000}
               rows={7}
             />
-            <input
-              className="feedback-contact"
+            <TextField
+              fill
+              size="lg"
               value={contact}
               placeholder="Email or Discord name, if you'd like an answer (optional)"
-              onChange={(e) => setContact(e.target.value)}
+              onChange={setContact}
               maxLength={200}
             />
             <div className="feedback-foot">
-              <label className="feedback-info" data-tip="App version, build, macOS version and architecture. Home folders are replaced by ~.">
-                <input type="checkbox" checked={includeInfo} onChange={(e) => setIncludeInfo(e.target.checked)} />
-                Include app version and system info
-              </label>
+              <span className="feedback-info" data-tip="App version, build, macOS version and architecture. Home folders are replaced by ~.">
+                <Checkbox checked={includeInfo} onChange={setIncludeInfo}>
+                  Include app version and system info
+                </Checkbox>
+              </span>
               <span className="feedback-error">{unavailable ?? error}</span>
-              <button type="button" className="btn" onClick={onClose}>
+              <Button onClick={onClose}>
                 Cancel
-              </button>
-              <button type="submit" className="btn primary" disabled={!canSend} data-tip="Send" data-tip-key="⌘↵">
+              </Button>
+              <Button variant="primary" type="submit" disabled={!canSend} data-tip="Send" data-tip-key="⌘↵">
                 {state === "sending" ? "Sending…" : "Send"}
-              </button>
+              </Button>
             </div>
           </>
         )}

@@ -578,7 +578,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const radioText = () => win.frameLocator(`.tile[data-pane="${radio.id}"] iframe.magic-frame`).locator("#r").textContent({ timeout: 5000 });
   const asked = await radioTile.locator(".magic-media").isVisible();
   const before = await radioText();
-  await radioTile.locator(".magic-media .btn.primary").click();
+  await radioTile.locator(".magic-media .ui-button[data-variant=primary]").click();
   await win.waitForTimeout(2500);
   const after = await radioText();
   const stored = (await call("window.list")).find((x) => x.id === radio.id).state.mediaAllowed;
@@ -742,9 +742,9 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.waitForTimeout(600);
     const tile = win.locator(`.tile[data-pane="${w.id}"]`);
     const versions = await tile.locator(".magic-revision").count();
-    const tabs = await tile.locator(".magic-tab").allTextContents();
-    await tile.locator(".magic-tab", { hasText: "Settings" }).click();
-    const fields = await tile.locator(".magic-field").allTextContents();
+    const tabs = await tile.locator(".ui-tabs [role=tab]").allTextContents();
+    await tile.locator(".ui-tabs [role=tab]", { hasText: "Settings" }).click();
+    const fields = await tile.locator(".ui-row").allTextContents();
     await win.screenshot({ path: path.join(shots, "magic-edit.png") });
     await menu("view.toggleEdit");
     await win.waitForTimeout(400);
@@ -766,32 +766,32 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   // Magic Windows: the chosen provider's API key above its model; keys are stored outside settings.json.
   await sw.locator(".sw-nav-item", { hasText: "Magic Windows" }).click();
   await sw.waitForTimeout(300);
-  const rowTitles = () => sw.locator(".sw-row-title").allTextContents();
+  const rowTitles = () => sw.locator(".ui-row-title").allTextContents();
   let titles = await rowTitles();
   const notes = await sw.locator(".sw-model-note").allTextContents();
   check(
     titles.indexOf("Anthropic API key") === titles.indexOf("Anthropic model") - 1 && !titles.includes("OpenAI API key") && notes.length === 1 && notes[0].includes("Add the API key"),
     "Magic Windows shows the chosen provider's API key above its model, and the model waits for the key",
   );
-  await sw.locator(".sw-row", { hasText: "Provider" }).locator(".sw-seg button", { hasText: "OpenAI" }).click();
-  await sw.waitForSelector(".sw-row:has-text('OpenAI API key')");
+  await sw.locator(".ui-row", { hasText: "Provider" }).locator(".ui-seg button", { hasText: "OpenAI" }).click();
+  await sw.waitForSelector(".ui-row:has-text('OpenAI API key')");
   titles = await rowTitles();
   check(titles.includes("OpenAI model") && !titles.includes("Anthropic API key"), "switching the provider shows its key and model instead");
-  await sw.locator(".sw-row", { hasText: "OpenAI API key" }).locator("input[type=password]").fill("sk-e2e-not-a-real-key-1234");
+  await sw.locator(".ui-row", { hasText: "OpenAI API key" }).locator("input[type=password]").fill("sk-e2e-not-a-real-key-1234");
   await sw.keyboard.press("Enter");
   await sw.waitForTimeout(400);
   const rpc = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   const keyStatus = (await rpc("secrets.status", {}))["magic.openai.apiKey"];
   const settingsFile = fs.readFileSync(path.join(home, "settings.json"), "utf8");
   check(
-    keyStatus.set && keyStatus.hint === "…1234" && (await sw.locator(".sw-secret-set").count()) === 1 && !settingsFile.includes("sk-e2e") && fs.existsSync(path.join(home, "secrets.json")),
+    keyStatus.set && keyStatus.hint === "…1234" && (await sw.locator(".ui-secret-set").count()) === 1 && !settingsFile.includes("sk-e2e") && fs.existsSync(path.join(home, "secrets.json")),
     "an API key typed in Settings is stored outside settings.json and shown only as a hint",
   );
   await rpc("secrets.set", { key: "magic.openai.apiKey", value: null });
   await rpc("settings.reset", { key: "magic.provider" });
   await sw.screenshot({ path: path.join(shots, "5-settings-terminal.png") });
   const page = (name) => sw.locator(".sw-nav-item", { has: sw.getByText(name, { exact: true }) }).click();
-  const row = (title) => sw.locator(".sw-row", { has: sw.locator(".sw-row-title", { hasText: title }) });
+  const row = (title) => sw.locator(".ui-row", { has: sw.locator(".ui-row-title", { hasText: title }) });
   const saved = () => JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8").replace(/^\/\/.*$/gm, ""));
   const waitFor = async (fn, what) => {
     for (let i = 0; i < 40 && !fn(); i++) await sw.waitForTimeout(50);
@@ -799,7 +799,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   };
 
   await page("About");
-  await sw.waitForSelector(".sw-row:has-text('Status') .sw-value");
+  await sw.waitForSelector(".ui-row:has-text('Status') .sw-value");
   const status = await row("Status").locator(".sw-value").textContent();
   check(/^pid \d+$/.test(status ?? ""), `About shows the running core (${status})`);
 
@@ -808,16 +808,16 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(tags.filter((t) => t.includes("new terminals")).length === 3, `settings that don't apply live say so (${tags.join(", ")})`);
 
   await page("Windows");
-  await row("Show resource usage").locator(".sw-switch").click();
+  await row("Show resource usage").locator(".ui-switch").click();
   await waitFor(() => saved()["ui.showResources"] === false, "a switch saves to settings.json");
-  await row("Window corner radius").locator(".nf button[aria-label=Increase]").click();
+  await row("Window corner radius").locator(".ui-number button[aria-label=Increase]").click();
   await waitFor(() => saved()["ui.windowRadius"] === 12, "+ steps a number field and saves");
   const radius = () => win.evaluate(() => document.querySelector(".app")?.style.getPropertyValue("--window-radius"));
   for (let i = 0; i < 40 && (await radius()) !== "12px"; i++) await win.waitForTimeout(50);
   check((await radius()) === "12px", "the app window applies it live");
-  await row("Window corner radius").locator(".sw-reset").click();
+  await row("Window corner radius").locator(".ui-reset").click();
   await sw.screenshot({ path: path.join(shots, "5-settings-interface.png") });
-  await row("Show resource usage").locator(".sw-reset").click();
+  await row("Show resource usage").locator(".ui-reset").click();
   await waitFor(() => !("ui.showResources" in saved()), "restore default removes the override");
 
   await page("Appearance");
@@ -837,10 +837,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(fonts[0] && /Monaspace/.test(fonts[0][1]) && fonts[0][2] === `${16 * 0.9}px`, `file browser rows use the code font (${fonts[0]})`);
   check(fonts[1] && /system-ui|-apple-system/.test(fonts[1][1]), `Markdown prose uses the text font (${fonts[1]})`);
   check(!fonts[2] || /Monaspace/.test(fonts[2][1]), `Markdown code uses the code font (${fonts[2]})`);
-  await row("Code font size").locator(".sw-reset").click();
+  await row("Code font size").locator(".ui-reset").click();
 
   await page("Terminal");
-  await row("Renderer").locator(".sw-seg button", { hasText: "WebGL" }).click();
+  await row("Renderer").locator(".ui-seg button", { hasText: "WebGL" }).click();
   await waitFor(() => saved()["terminal.renderer"] === "webgl", "a segmented control saves its option");
   await page("Appearance");
   const size = row("Code font size").locator("input");
@@ -850,21 +850,21 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await size.fill("99");
   await size.press("Enter");
   await waitFor(() => saved()["font.codeSize"] === 32, "a number field clamps to the setting's range");
-  await row("Code font size").locator(".sw-reset").click();
+  await row("Code font size").locator(".ui-reset").click();
   await page("Terminal");
-  await row("Line height").locator(".nf input").focus();
-  await row("Line height").locator(".nf input").press("ArrowUp");
+  await row("Line height").locator(".ui-number input").focus();
+  await row("Line height").locator(".ui-number input").press("ArrowUp");
   await waitFor(() => Math.abs(saved()["terminal.lineHeight"] - 1.15) < 1e-9, "↑ steps a number field by its step");
-  await sw.locator(".sw-page-foot .sw-button").click();
+  await sw.locator(".sw-page-foot .ui-button").click();
   await waitFor(() => !("terminal.lineHeight" in saved()) && !("terminal.renderer" in saved()), "Restore Defaults resets the page");
 
   await sw.locator(".sb-search input").fill("zoom");
-  const found = await sw.locator(".sw-row-title").allTextContents();
+  const found = await sw.locator(".ui-row-title").allTextContents();
   check(["Minimum zoom", "Maximum zoom"].every((t) => found.some((f) => f.startsWith(t))), `search finds settings across pages (${found.join(", ")})`);
   await sw.locator(".sb-search input").fill("");
 
   await page("Keyboard Shortcuts");
-  check((await sw.locator(".sw-row.shortcut kbd").count()) > 10, "keyboard shortcuts are listed");
+  check((await sw.locator(".ui-row[data-compact] kbd").count()) > 10, "keyboard shortcuts are listed");
   // Recording a shortcut: the menu lets go of its keys meanwhile; it's saved to keybindings.json.
   const kbFile = path.join(home, "keybindings.json");
   const lastSpace = row("Last Space");
@@ -874,17 +874,17 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await sw.keyboard.press("Control+Alt+L");
   await waitFor(() => fs.existsSync(kbFile) && fs.readFileSync(kbFile, "utf8").includes('"space.last": ["Ctrl+Alt+L"]'), "a recorded shortcut is saved to keybindings.json");
   await waitFor(async () => (await accel("space.last")) === "Ctrl+Alt+L" && (await accel("view.palette")) !== null, "the menu takes the new shortcut and its others back");
-  await lastSpace.locator(".sw-reset").click();
+  await lastSpace.locator(".ui-reset").click();
   await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("space.last"), "Restore default removes the shortcut from keybindings.json");
   await lastSpace.hover();
   await lastSpace.locator(".sw-key-add").click();
   await sw.keyboard.press("Control+Alt+L");
   await waitFor(() => fs.readFileSync(kbFile, "utf8").includes("space.last"), "a second recording is saved");
-  await sw.locator(".sw-page-foot .sw-button", { hasText: "Restore Defaults" }).click();
+  await sw.locator(".sw-page-foot .ui-button", { hasText: "Restore Defaults" }).click();
   await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("space.last"), "Restore Defaults puts every shortcut back");
   await sw.locator(".sb-search input").fill("palette");
   await sw.waitForTimeout(100);
-  const paletteRows = await sw.locator(".sw-row.shortcut .sw-row-name").allTextContents();
+  const paletteRows = await sw.locator(".ui-row[data-compact] .ui-row-name").allTextContents();
   check(paletteRows.includes("Command Palette"), `search finds shortcuts (${paletteRows.join(", ")})`);
   await sw.locator(".sb-search input").fill("");
   await sw.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });

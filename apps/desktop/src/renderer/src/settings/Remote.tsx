@@ -9,8 +9,7 @@ import { renderSVG } from "uqr";
 import type { RemoteDevice, RemoteLogEntry, RemoteScope, RemoteStatus, SettingKey } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { PairPrompt, scopeLabel } from "../components/PairPrompt.tsx";
-import { RowShell, SectionView } from "./SettingsWindow.tsx";
-import { Segmented, Switch } from "./controls.tsx";
+import { Button, Callout, FormRow, FormSection, Segmented, Switch } from "@cmd/ui";
 
 const STATE_LINE: Record<RemoteStatus["state"], string> = {
   off: "Off.",
@@ -55,63 +54,63 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
 
   return (
     <>
-      <SectionView>
-        <RowShell
+      <FormSection>
+        <FormRow
           title="Remote access"
-          desc="Use your terminals and agents from your phone or any browser, end-to-end encrypted."
+          description="Use your terminals and agents from your phone or any browser, end-to-end encrypted."
           note={enabled ? (status?.error && status.state === "error" ? `Can't reach the relay: ${status.error}` : STATE_LINE[status?.state ?? "connecting"]) : undefined}
-          noteError={status?.state === "error"}
+          noteTone={status?.state === "error" ? "danger" : "accent"}
         >
-          <Switch value={enabled} label="Remote access" onChange={(v) => void cmd.call(v ? "remote.enable" : "remote.disable", {})} />
-        </RowShell>
-      </SectionView>
+          <Switch checked={enabled} label="Remote access" onChange={(v) => void cmd.call(v ? "remote.enable" : "remote.disable", {})} />
+        </FormRow>
+      </FormSection>
 
       {request ? (
-        <SectionView title="Pair a Device">
+        <FormSection title="Pair a Device">
           <div className="rm-card">
             <PairPrompt request={request} autoFocus={false} />
           </div>
-        </SectionView>
+        </FormSection>
       ) : pairing ? (
-        <SectionView title="Pair a Device">
+        <FormSection title="Pair a Device">
           <PairCode status={status} onDone={devices.length ? () => setShowPair(false) : undefined} />
-        </SectionView>
+        </FormSection>
       ) : null}
 
       {sessions.length > 0 && (
-        <SectionView title="Connected Now">
+        <FormSection title="Connected Now">
           {sessions.map((s) => (
-            <RowShell key={s.id} title={s.name} desc={`${scopeLabel(s.scope)} · since ${new Date(s.since).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${s.watching.length ? `watching ${s.watching.length} window${s.watching.length === 1 ? "" : "s"}` : "on its home screen"} · ${s.ip}`}>
-              <button className="sw-button" onClick={() => void cmd.call("remote.disconnect", { id: s.deviceId })}>
+            <FormRow key={s.id} title={s.name} description={`${scopeLabel(s.scope)} · since ${new Date(s.since).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${s.watching.length ? `watching ${s.watching.length} window${s.watching.length === 1 ? "" : "s"}` : "on its home screen"} · ${s.ip}`}>
+              <Button onClick={() => void cmd.call("remote.disconnect", { id: s.deviceId })}>
                 Disconnect
-              </button>
-            </RowShell>
+              </Button>
+            </FormRow>
           ))}
-        </SectionView>
+        </FormSection>
       )}
 
       {devices.length > 0 && (
-        <SectionView title="Paired Devices">
+        <FormSection title="Paired Devices">
           {devices.map((d) => (
             <DeviceRow key={d.id} d={d} />
           ))}
           {enabled && !pairing && (
             <div className="rm-actions">
-              <button className="sw-button" onClick={() => setShowPair(true)}>
+              <Button onClick={() => setShowPair(true)}>
                 Pair a Device…
-              </button>
+              </Button>
             </div>
           )}
-        </SectionView>
+        </FormSection>
       )}
 
       <Activity key={devices.length + sessions.length} />
 
-      <SectionView title="Connection">
+      <FormSection title="Connection">
         {row("remote.relay")}
         {row("remote.client")}
         {row("remote.deviceExpiryDays")}
-      </SectionView>
+      </FormSection>
     </>
   );
 }
@@ -145,7 +144,7 @@ function PairCode({ status, onDone }: { status: RemoteStatus | null; onDone?: ()
 
   const svg = useMemo(() => (code ? renderSVG(code.url, { ecc: "L", border: 2, pixelSize: 6 }) : null), [code]);
   if (!online) return <div className="rm-card rm-wait">{STATE_LINE[status?.state ?? "connecting"]}</div>;
-  if (error) return <div className="rm-card rm-wait sw-error">{/client/.test(error) ? "Set the web client's address under Connection first." : error}</div>;
+  if (error) return <Callout tone="danger">{/client/.test(error) ? "Set the web client's address under Connection first." : error}</Callout>;
   const left = code ? Math.max(0, Math.round((code.expiresAt - 60_000 - now) / 1000)) : 0;
   return (
     <div className="rm-card rm-pair">
@@ -157,17 +156,16 @@ function PairCode({ status, onDone }: { status: RemoteStatus | null; onDone?: ()
           <li>Allow it here, with view-only access or control.</li>
         </ol>
         <div className="rm-pair-foot">
-          <button
-            className="sw-button"
+          <Button
             disabled={!code}
             onClick={() => code && void navigator.clipboard.writeText(code.url).then(() => (setCopied(true), setTimeout(() => setCopied(false), 1500)))}
           >
             {copied ? "Copied" : "Copy Link"}
-          </button>
+          </Button>
           {onDone && (
-            <button className="sw-button" onClick={onDone}>
+            <Button onClick={onDone}>
               Done
-            </button>
+            </Button>
           )}
         </div>
         <div className="rm-dim">Works once. A new code in {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}.</div>
@@ -184,12 +182,12 @@ function DeviceRow({ d }: { d: RemoteDevice }) {
   };
   const seen = d.connected ? "Connected" : `Last seen ${ago(d.lastSeenAt)}`;
   return (
-    <RowShell title={d.name} desc={`${seen} · paired ${day(d.pairedAt)}`}>
+    <FormRow title={d.name} description={`${seen} · paired ${day(d.pairedAt)}`}>
       <Segmented value={d.scope} options={["view", "control"]} labels={{ view: "View only", control: "Control" }} onChange={(v) => void cmd.call("remote.setScope", { id: d.id, scope: v as RemoteScope })} />
-      <button className="sw-button" onClick={() => void unpair()}>
+      <Button onClick={() => void unpair()}>
         Unpair
-      </button>
-    </RowShell>
+      </Button>
+    </FormRow>
   );
 }
 
@@ -200,19 +198,19 @@ function Activity() {
   useEffect(() => void cmd.call("remote.log", { limit: all ? 100 : 8 }).then(setLog, () => setLog(null)), [all]);
   if (!log?.length) return null;
   return (
-    <SectionView title="Recent Activity">
+    <FormSection title="Recent Activity">
       {log.map((e, i) => (
-        <RowShell key={`${e.at}-${i}`} title={`${LOG_TEXT[e.kind] ?? e.kind}${e.device ? ` · ${e.device}` : ""}`} desc={e.detail ?? undefined}>
+        <FormRow key={`${e.at}-${i}`} title={`${LOG_TEXT[e.kind] ?? e.kind}${e.device ? ` · ${e.device}` : ""}`} description={e.detail ?? undefined}>
           <span className="rm-dim">{new Date(e.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-        </RowShell>
+        </FormRow>
       ))}
       {!all && log.length >= 8 && (
         <div className="rm-actions">
-          <button className="sw-button" onClick={() => setAll(true)}>
+          <Button onClick={() => setAll(true)}>
             Show More
-          </button>
+          </Button>
         </div>
       )}
-    </SectionView>
+    </FormSection>
   );
 }

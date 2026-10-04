@@ -4,13 +4,13 @@
 // is in, with what access, watching which windows; disconnect in one click),
 // and the notifications that go with them.
 
+import { Button, useTooltip } from "@cmd/ui";
 import { useEffect, useRef, useState } from "react";
 import type { RemotePairRequest, RemoteStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { getState, useStoreValue } from "../store.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { PairPrompt, scopeLabel } from "./PairPrompt.tsx";
-import { useTooltip } from "@cmd/ui";
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -168,9 +168,9 @@ function RemotePopover({ at, status, onClose }: { at: DOMRect; status: RemoteSta
               Since {clock(s.since)} · {s.watching.length ? `watching ${s.watching.map(windowTitle).join(", ")}` : "on its home screen"}
             </div>
           </div>
-          <button className="btn" onClick={act(() => cmd.call("remote.disconnect", { id: s.deviceId }))}>
+          <Button onClick={act(() => cmd.call("remote.disconnect", { id: s.deviceId }))}>
             Disconnect
-          </button>
+          </Button>
         </div>
       ))}
       {!sessions.length && !status.requests.length && (
@@ -180,20 +180,20 @@ function RemotePopover({ at, status, onClose }: { at: DOMRect; status: RemoteSta
       )}
       <div className="remote-pop-foot">
         {sessions.length > 0 && (
-          <button className="btn" onClick={act(() => cmd.call("remote.disconnect", {}))}>
+          <Button onClick={act(() => cmd.call("remote.disconnect", {}))}>
             Disconnect All
-          </button>
+          </Button>
         )}
-        <button className="btn" onClick={act(() => cmd.call("remote.disable", {}))}>
+        <Button onClick={act(() => cmd.call("remote.disable", {}))}>
           Turn Off
-        </button>
+        </Button>
         <span className="remote-pop-spacer" />
-        <button className="btn" onClick={act(() => cmd.openSettings("remote/pair"))}>
+        <Button onClick={act(() => cmd.openSettings("remote/pair"))}>
           Pair a Device…
-        </button>
-        <button className="btn" onClick={act(() => cmd.openSettings("remote"))}>
+        </Button>
+        <Button onClick={act(() => cmd.openSettings("remote"))}>
           Settings…
-        </button>
+        </Button>
       </div>
     </div>
   );

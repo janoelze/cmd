@@ -2,6 +2,7 @@
 // light, memory, CPU). Clicking it opens the details (uptime, response time,
 // the core and PTY host processes) with Restart Core and the Task Manager.
 
+import { Button } from "@cmd/ui";
 import { useEffect, useRef, useState } from "react";
 import { cmd } from "../bridge.ts";
 import { formatUptime, restartCore, SLOW_MS, useCoreHealth, useRestart, type CoreHealth } from "../coreHealth.ts";
@@ -102,12 +103,12 @@ function Details(p: { summary: Summary; health: CoreHealth; connected: boolean; 
         </dl>
       )}
       <div className="core-details-actions">
-        <button className={`btn${p.health.outdated || p.health.unresponsive || !p.connected ? " primary" : ""}`} disabled={p.restart.restarting} onClick={() => void restartCore()}>
+        <Button variant={p.health.outdated || p.health.unresponsive || !p.connected ? "primary" : "default"} disabled={p.restart.restarting} onClick={() => void restartCore()}>
           {p.restart.restarting ? "Restarting…" : "Restart Core"}
-        </button>
-        <button className="btn" onClick={() => cmd.openTaskManager()}>
+        </Button>
+        <Button onClick={() => cmd.openTaskManager()}>
           Task Manager
-        </button>
+        </Button>
       </div>
     </div>
   );

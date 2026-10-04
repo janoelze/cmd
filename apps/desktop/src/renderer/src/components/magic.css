@@ -67,7 +67,6 @@
 .magic-prompt { color: var(--state-done); }
 .magic-row { display: flex; gap: 8px; }
 .magic-hint { font: 11px var(--font-ui); color: var(--text-dim); }
-.btn.primary { background: var(--accent); color: #fff; }
 
 /* errors: a line under the widget, with Fix and Details */
 .magic-error {
@@ -109,65 +108,26 @@
 .magic-mark-small { color: var(--accent); font-size: 11px; }
 .magic-step, .magic-row, .magic-error { cursor: default; user-select: none; }
 
-/* the edit view (MagicEditor.tsx) */
-.magic-edit { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--well); font: 12px/1.45 var(--font-ui); color: var(--text); }
-.magic-edit-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
-.magic-tabs { display: flex; gap: 2px; }
-.magic-tab {
-  display: inline-flex; align-items: center; gap: 5px; font: 12px var(--font-ui); color: var(--text-dim); background: none; border: 0;
-  padding: 3px 9px; border-radius: 5px; cursor: default;
-}
-.magic-tab:hover { color: var(--text); }
-.magic-tab.on { color: var(--text); background: color-mix(in srgb, var(--ink) 9%, transparent); }
-.magic-tab-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--state-needs, var(--accent)); }
-.magic-spacer { flex: 1; }
-.magic-dim { color: var(--text-dim); }
-.magic-small { font-size: 11px; }
-.magic-edit-body { flex: 1; overflow: auto; padding: 12px 14px 20px; display: flex; flex-direction: column; gap: 16px; }
-.magic-section { display: flex; flex-direction: column; gap: 6px; }
-.magic-section-title {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-  font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim);
-}
-.magic-section-title > span:last-child:not(:first-child) { text-transform: none; letter-spacing: 0; font-weight: 400; }
+/* the edit view (MagicEditor.tsx): @cmd/ui controls; only its lists are its own */
+.magic-edit { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--well); font: var(--text-base)/1.45 var(--font-ui); color: var(--text); }
+.magic-edit .ui-toolbar { background: var(--well); }
+.magic-working { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-dim); }
+.magic-edit-body { flex: 1; overflow: auto; padding: 14px 16px 24px; display: flex; flex-direction: column; gap: 22px; }
+.magic-edit-body .ui-form-section + .ui-form-section { margin-top: 0; }
+.magic-note { font-size: var(--text-sm); color: var(--text-dim); }
+.magic-note .ui-dot { vertical-align: 0; }
+.magic-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .magic-stack { display: flex; flex-direction: column; gap: 6px; }
-.magic-row-end { align-items: center; }
-.magic-edit-input {
-  font: 13px/1.45 var(--font-ui); color: var(--text); background: color-mix(in srgb, var(--ink) 4%, transparent); resize: vertical;
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 6px; padding: 7px 9px; outline: 0; min-height: 52px;
-}
-.magic-edit-input:focus { border-color: var(--accent); }
-.magic-revisions, .magic-files, .magic-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.magic-revision { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
-.magic-revision:last-child { border-bottom: 0; }
+.magic-revisions, .magic-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.magic-revision { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.magic-revision + .magic-revision { box-shadow: inset 0 1px 0 var(--separator); }
 .magic-revision.current .magic-revision-prompt { font-weight: 600; }
-.magic-shot { width: 72px; height: 48px; flex: none; object-fit: cover; object-position: top left; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); background: var(--bg-elevated); }
-.magic-shot.none { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.magic-shot { width: 72px; height: 48px; flex: none; object-fit: cover; object-position: top left; border-radius: var(--radius-sm); box-shadow: 0 0 0 1px var(--separator); background: var(--bg-elevated); }
+.magic-shot.none { background: var(--code-bg); }
 .magic-revision-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .magic-revision-prompt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.magic-revision .k-dot, .magic-edit .k-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); vertical-align: 0; }
-.magic-edit .k-dot.k-good { background: var(--state-done); }
-.magic-edit .k-dot.k-warn { background: var(--state-working); }
-.magic-edit .k-dot.k-bad { background: var(--state-needs); }
 .magic-history li { padding: 2px 0; color: var(--text-dim); }
 .magic-history li::before { content: "› "; }
-.magic-field { display: flex; align-items: center; gap: 10px; min-height: 26px; }
-.magic-field > span:first-child { width: 160px; flex: none; color: var(--text-dim); }
-.magic-field select, .magic-text {
-  font: 12px var(--font-ui); color: var(--text); background: color-mix(in srgb, var(--ink) 5%, transparent);
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 5px; padding: 3px 7px; min-width: 0; outline: 0;
-}
-.magic-text { flex: 1; max-width: 320px; }
-.magic-text:focus { border-color: var(--accent); }
-.magic-perms { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0; }
-.magic-perms dt { color: var(--text-dim); }
-.magic-perms dd { margin: 0; display: flex; gap: 10px; align-items: baseline; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 11px; }
-.magic-files li { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; }
-.magic-file { font: 12px var(--font-mono); color: var(--accent); background: none; border: 0; padding: 0; cursor: default; }
-.magic-file:hover { text-decoration: underline; }
-.magic-pre {
-  margin: 0; padding: 6px 8px; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
-  font: 11px/1.45 var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 5px;
-}
-.magic-edit code { font: 11px var(--font-mono); }
+.magic-file { font: var(--text-md) var(--font-mono); }
+.magic-edit code { font: var(--text-sm) var(--font-mono); }
 .magic-steps-inline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }

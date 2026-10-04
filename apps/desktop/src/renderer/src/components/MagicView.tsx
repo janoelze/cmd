@@ -8,6 +8,7 @@
 // theme tokens, its data and its saved cmd.state. Data that stops coming shows
 // as "Stale" with the reason; problems a build left show in a line with Fix.
 
+import { Button, LinkButton } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { requestedMedia, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -149,12 +150,12 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
       {!building && (s.error || problems || broken) && (
         <div className="magic-error" data-tip={[s.error, ...(problems ?? []), broken ? s.health?.error : ""].filter(Boolean).join("\n")}>
           <span className="magic-error-text">{s.error ?? (problems ? `${problems.length === 1 ? "A problem is" : `${problems.length} problems are`} left: ${problems[0]}` : `Data keeps failing: ${s.health?.error}`)}</span>
-          <button className="magic-link" onClick={() => void cmd.call("magic.fix", { id: win.id })}>
+          <LinkButton onClick={() => void cmd.call("magic.fix", { id: win.id })}>
             Fix
-          </button>
-          <button className="magic-link" onClick={() => setEditing(win.id, true)}>
+          </LinkButton>
+          <LinkButton onClick={() => setEditing(win.id, true)}>
             Details
-          </button>
+          </LinkButton>
         </div>
       )}
       {working && <StopButton onStop={stop} />}
@@ -290,12 +291,12 @@ function MediaRequest({ origins, onAnswer }: { origins: string[]; onAnswer: (all
         <div className="magic-media-title">Play media from {named}?</div>
         <div className="magic-media-text">This widget streams audio, video or images from the web. They stay blocked until you allow them.</div>
         <div className="magic-row">
-          <button className="btn" onClick={() => onAnswer(false)}>
+          <Button onClick={() => onAnswer(false)}>
             Don't Allow
-          </button>
-          <button className="btn primary" onClick={() => onAnswer(true)}>
+          </Button>
+          <Button variant="primary" onClick={() => onAnswer(true)}>
             Allow
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -399,12 +400,12 @@ function TerminalOffer({ win, command }: { win: AppWindow; command: string }) {
         <span className="magic-prompt">❯</span> {command}
       </div>
       <div className="magic-row">
-        <button className="btn primary" onClick={() => void runIt()}>
+        <Button variant="primary" onClick={() => void runIt()}>
           Open in Terminal
-        </button>
-        <button className="btn" onClick={() => copy(command)}>
+        </Button>
+        <Button onClick={() => copy(command)}>
           Copy
-        </button>
+        </Button>
       </div>
       <div className="magic-hint">Opens a terminal with the command typed in; press Return to run it.</div>
     </div>

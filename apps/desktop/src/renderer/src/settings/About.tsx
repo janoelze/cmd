@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { CoreInfo } from "@cmd/protocol";
 import type { AppInfo } from "../../../preload/index.ts";
+import { Badge, Button, Callout, FormRow, FormSection, Progress } from "@cmd/ui";
 import { Symbol } from "../components/Symbol.tsx";
 import { cmd } from "../bridge.ts";
 
@@ -64,29 +65,17 @@ function debugText(a: AppInfo | null, c: CoreInfo | null): string {
   return lines.join("\n");
 }
 
-function Row(p: { title: string; desc?: ReactNode; children?: ReactNode }) {
-  return (
-    <div className="sw-row">
-      <div className="sw-row-text">
-        <div className="sw-row-title">{p.title}</div>
-        {p.desc && <div className="sw-row-desc">{p.desc}</div>}
-      </div>
-      <div className="sw-row-control">{p.children}</div>
-    </div>
-  );
-}
-
 /** A value to read and select, e.g. a path or a hash. */
 const Value = (p: { children: ReactNode }) => <span className="sw-value">{p.children}</span>;
 
 function PathRow(p: { title: string; path: string | null | undefined }) {
   if (!p.path) return null;
   return (
-    <Row title={p.title} desc={<span className="sw-path">{p.path}</span>}>
-      <button className="sw-button" onClick={() => cmd.revealPath(p.path!)}>
+    <FormRow title={p.title} description={<span className="sw-path">{p.path}</span>}>
+      <Button onClick={() => cmd.revealPath(p.path!)}>
         {REVEAL}
-      </button>
-    </Row>
+      </Button>
+    </FormRow>
   );
 }
 
@@ -98,15 +87,15 @@ function UpdateButton(p: { app: AppInfo | null; poll: () => void }) {
   const check = () => (cmd.checkForUpdates(), setTimeout(p.poll, 100));
   if (u?.ready)
     return (
-      <button className="sw-button" onClick={() => cmd.installUpdate()}>
+      <Button onClick={() => cmd.installUpdate()}>
         Restart to Update
-      </button>
+      </Button>
     );
-  if (u?.downloading) return <progress className="sw-progress" max={100} value={u.downloading.percent} />;
+  if (u?.downloading) return <Progress value={u.downloading.percent / 100} label="Downloading" />;
   return (
-    <button className="sw-button" disabled={!p.app || p.app.dev || u?.checking} onClick={check}>
+    <Button disabled={!p.app || p.app.dev || u?.checking} onClick={check}>
       {u?.checking ? "Checking…" : u?.available ? "Download" : "Check Now"}
-    </button>
+    </Button>
   );
 }
 
@@ -170,31 +159,23 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode; usageSta
   return (
     <>
       {error && (
-        <div className="sw-error">
-          <Symbol name="exclamationmark.triangle.fill" size={11} />
-          {error}
-        </div>
+        <Callout tone="danger">{error}</Callout>
       )}
-      <section className="sw-section">
-        <h2 className="sw-section-title">cmd</h2>
-        <div className="sw-list">
-          <Row title="Version" desc={app && `Electron ${app.electron}, Chromium ${app.chrome}`}>
+      <FormSection title="cmd">
+          <FormRow title="Version" description={app && `Electron ${app.electron}, Chromium ${app.chrome}`}>
             <Value>{app?.version ?? "…"}</Value>
-            {app?.dev && <span className="sw-tag">development</span>}
-          </Row>
+            {app?.dev && <Badge>development</Badge>}
+          </FormRow>
           {p.updates}
-          <Row title="Latest version" desc={app && updateLine(app)}>
+          <FormRow title="Latest version" description={app && updateLine(app)}>
             <UpdateButton app={app} poll={() => poll.current()} />
-          </Row>
-        </div>
-      </section>
+          </FormRow>
+      </FormSection>
 
-      <section className="sw-section">
-        <h2 className="sw-section-title">Core</h2>
-        <div className="sw-list">
-          <Row
+      <FormSection title="Core">
+          <FormRow
             title="Status"
-            desc={
+            description={
               core
                 ? outdated
                   ? "Started from an older version than this app. Restart it to pick up the changes."
@@ -205,56 +186,50 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode; usageSta
             }
           >
             {core ? <Value>pid {core.pid}</Value> : <span className="sw-none">offline</span>}
-            {outdated && <span className="sw-tag accent">outdated</span>}
-          </Row>
+            {outdated && <Badge tone="accent">outdated</Badge>}
+          </FormRow>
           {core && (
             <>
-              <Row title="Uptime" desc={`Started ${new Date(core.startedAt).toLocaleString()}`}>
+              <FormRow title="Uptime" description={`Started ${new Date(core.startedAt).toLocaleString()}`}>
                 <Value>{duration(Date.now() - core.startedAt)}</Value>
-              </Row>
-              <Row title="Memory" desc={`${mb(core.heapBytes)} JavaScript heap; terminals' own processes not included.`}>
+              </FormRow>
+              <FormRow title="Memory" description={`${mb(core.heapBytes)} JavaScript heap; terminals' own processes not included.`}>
                 <Value>{mb(core.rssBytes)}</Value>
-              </Row>
-              <Row title="CPU time">
+              </FormRow>
+              <FormRow title="CPU time">
                 <Value>{core.cpuSeconds.toFixed(1)} s</Value>
-              </Row>
-              <Row title="Terminals" desc={`${core.connections} connection${core.connections === 1 ? "" : "s"} (app windows, CLI)`}>
+              </FormRow>
+              <FormRow title="Terminals" description={`${core.connections} connection${core.connections === 1 ? "" : "s"} (app windows, CLI)`}>
                 <Value>{core.panes}</Value>
-              </Row>
-              <Row title="Build" desc={outdated ? `This app ships ${app!.build}.` : `Node ${core.node}`}>
+              </FormRow>
+              <FormRow title="Build" description={outdated ? `This app ships ${app!.build}.` : `Node ${core.node}`}>
                 <Value>{core.build || "unknown"}</Value>
-              </Row>
+              </FormRow>
             </>
           )}
-        </div>
-        <div className="sw-page-foot">
-          {app && (
-            <button className="sw-button" onClick={() => cmd.openPath(app.coreLog)}>
-              Open Log
-            </button>
-          )}
-          <button className="sw-button" disabled={restarting} onClick={() => void restart()}>
-            {restarting ? "Restarting…" : "Restart Core…"}
-          </button>
-        </div>
-      </section>
+      </FormSection>
+      <div className="sw-page-foot">
+        {app && (
+          <Button onClick={() => cmd.openPath(app.coreLog)}>
+            Open Log
+          </Button>
+        )}
+        <Button disabled={restarting} onClick={() => void restart()}>
+          {restarting ? "Restarting…" : "Restart Core…"}
+        </Button>
+      </div>
 
-      <section className="sw-section">
-        <h2 className="sw-section-title">Diagnostics</h2>
-        <div className="sw-list">
+      <FormSection title="Diagnostics">
           {p.crashReports}
-          <Row title="Crash reports" desc={app && crashLine(app)}>
-            <button className="sw-button" disabled={!app} onClick={() => cmd.revealPath(app!.crashes.folder)}>
+          <FormRow title="Crash reports" description={app && crashLine(app)}>
+            <Button disabled={!app} onClick={() => cmd.revealPath(app!.crashes.folder)}>
               {REVEAL}
-            </button>
-          </Row>
+            </Button>
+          </FormRow>
           {p.usageStats}
-        </div>
-      </section>
+      </FormSection>
 
-      <section className="sw-section">
-        <h2 className="sw-section-title">Files</h2>
-        <div className="sw-list">
+      <FormSection title="Files">
           <PathRow title="State folder" path={app?.home} />
           <PathRow title="Settings" path={core?.settingsPath} />
           <PathRow title="Logs" path={app?.logs} />
@@ -262,13 +237,12 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode; usageSta
           <PathRow title="Update log" path={app && !app.dev ? app.updateLog : null} />
           <PathRow title="Core runs from" path={core?.root} />
           <PathRow title="Socket" path={core?.socket} />
-        </div>
-        <div className="sw-page-foot">
-          <button className="sw-button" onClick={copy}>
-            {copied ? "Copied" : "Copy Debug Info"}
-          </button>
-        </div>
-      </section>
+      </FormSection>
+      <div className="sw-page-foot">
+        <Button onClick={copy}>
+          {copied ? "Copied" : "Copy Debug Info"}
+        </Button>
+      </div>
     </>
   );
 }

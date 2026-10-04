@@ -4,6 +4,7 @@
 // answers Don't Allow. Used by the main window's sheet and inline in Settings,
 // so it talks to the core directly and not through either window's store.
 
+import { Button } from "@cmd/ui";
 import { useEffect, useRef, useState } from "react";
 import type { RemotePairRequest, RemoteScope } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -43,15 +44,15 @@ export function PairPrompt({ request, autoFocus = true }: { request: RemotePairR
         <span className="pair-expiry">
           Expires in {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}
         </span>
-        <button className="btn" disabled={busy} onClick={() => answer(false)}>
+        <Button disabled={busy} onClick={() => answer(false)}>
           Don't Allow
-        </button>
-        <button className="btn" disabled={busy} onClick={() => answer(true, "view")}>
+        </Button>
+        <Button disabled={busy} onClick={() => answer(true, "view")}>
           Allow View Only
-        </button>
-        <button className="btn" disabled={busy} onClick={() => answer(true, "control")}>
+        </Button>
+        <Button disabled={busy} onClick={() => answer(true, "control")}>
           Allow Control
-        </button>
+        </Button>
       </div>
     </div>
   );

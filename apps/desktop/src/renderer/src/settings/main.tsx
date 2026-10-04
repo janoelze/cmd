@@ -1,12 +1,13 @@
 // Entry point of the Settings window (settings.html): its own small bundle, so
 // it doesn't load the app or subscribe to every pane.
 import { createRoot } from "react-dom/client";
+import { Symbol } from "../components/Symbol.tsx";
 import "@cmd/ui/ui.css";
 import "../styles.css";
 import "./settings.css";
 import { cmd } from "../bridge.ts";
 import { installErrorReporting } from "../errors.ts";
-import { installScrollbars, installTooltips } from "@cmd/ui";
+import { installScrollbars, installTooltips, UIProvider } from "@cmd/ui";
 import "@cmd/ui/themes/builtin";
 import { bootTheme } from "@cmd/ui/themes";
 import { SettingsWindow } from "./SettingsWindow.tsx";
@@ -24,4 +25,9 @@ cmd.onCommand((id) => {
 
 // macOS draws the traffic lights over the page; elsewhere the platform's frame sits above it.
 document.documentElement.classList.add(navigator.platform.startsWith("Mac") ? "platform-mac" : "platform-other");
-createRoot(document.getElementById("root")!).render(<SettingsWindow />);
+createRoot(document.getElementById("root")!).render(
+  // Kit controls draw their icons as native SF Symbols.
+  <UIProvider icon={Symbol}>
+    <SettingsWindow />
+  </UIProvider>,
+);

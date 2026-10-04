@@ -2,6 +2,7 @@
 // sections (Needs you, Agents, Windows, Recent past sessions), a footer with
 // the core's health, and a draggable right edge.
 
+import { Button } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PaneId, SearchHit, SearchStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -203,9 +204,9 @@ export function Sidebar(p: Props) {
               {rows.length === 0 && (
                 <div className="empty">
                   <p>Nothing open.</p>
-                  <button className="btn" onClick={p.onNewTerminal}>
+                  <Button onClick={p.onNewTerminal}>
                     New Terminal <kbd>⌘T</kbd>
-                  </button>
+                  </Button>
                 </div>
               )}
               {recent.length > 0 && (

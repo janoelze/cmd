@@ -92,14 +92,3 @@ body.tasks-window { background: var(--bg); }
   font-size: 12px;
 }
 .tm-total { flex: 1; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.tm-foot button {
-  height: 22px;
-  padding: 0 10px;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--input-bg);
-  border: 1px solid var(--input-edge);
-  border-radius: var(--radius);
-}
-.tm-foot button:hover:not(:disabled) { background: var(--bg-hover); }
-.tm-foot button:disabled { opacity: 0.4; }

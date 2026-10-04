@@ -6,10 +6,6 @@
 body.settings-window { background: var(--bg); }
 
 .sw {
-  --sw-control-h: 24px;
-  --sw-field: var(--input-bg);
-  --sw-field-edge: var(--input-edge);
-  --sw-ring: var(--input-ring);
   height: 100%;
   display: grid;
   grid-template-columns: 220px 1fr;
@@ -90,85 +86,14 @@ body.settings-window { background: var(--bg); }
 .sw-bar h1 { margin: 0; font: 600 17px var(--font-ui); letter-spacing: -0.01em; }
 .sw-scroll { flex: 1; overflow-y: auto; scrollbar-gutter: stable both-edges; padding: 6px 20px 28px; }
 .sw-page { max-width: 680px; margin: 0 auto; }
-
-.sw-section + .sw-section { margin-top: 22px; }
-.sw-section-title { margin: 0 2px 7px; font: 600 12px var(--font-ui); color: var(--text-dim); }
-
-.sw-list {
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--ink) 3.5%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent);
-}
-
-.sw-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  min-height: 44px;
-  padding: 10px 14px;
-}
-.sw-row + .sw-row::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 14px;
-  right: 14px;
-  height: 1px;
-  background: var(--separator);
-}
-.sw-row.shortcut { min-height: 34px; padding-top: 6px; padding-bottom: 6px; }
-.sw-row-text { flex: 1 1 auto; min-width: 0; }
-.sw-row-title { display: flex; align-items: center; gap: 6px; line-height: 18px; color: var(--text); }
-.sw-row-name { min-width: 0; }
-.sw-row-desc { margin-top: 2px; font-size: 11.5px; line-height: 1.4; color: var(--text-dim); text-wrap: pretty; }
-.sw-row-desc code { font: 10.5px var(--font-mono); padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .sw-applies { color: color-mix(in srgb, var(--text-dim) 75%, transparent); font-style: italic; }
-.sw-row-note { margin-top: 4px; font-size: 11.5px; line-height: 1.4; color: var(--accent); }
-.sw-row-note.error { color: var(--state-needs); }
-/* The control column: wide enough for a text field, never more than half the row. */
-.sw-row-control {
-  flex: 0 1 auto;
-  max-width: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
 
-.sw-tag {
-  flex: none;
-  font-size: 10.5px;
-  line-height: 16px;
-  padding: 0 6px;
-  border-radius: 4px;
-  color: var(--text-dim);
-  background: color-mix(in srgb, var(--ink) 7%, transparent);
-}
-.sw-tag.accent { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.sw-reset {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  color: var(--accent);
-  background: none;
-}
-.sw-reset:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-
+.sw-page-foot + .ui-form-section { margin-top: 22px; }
 .sw-page-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 12px; }
 .sw-index-status { display: inline-flex; align-items: center; gap: 6px; }
-.sw-empty { margin-top: 60px; text-align: center; color: var(--text-dim); }
 .sw-value { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--text-dim); user-select: text; }
 .sw-path { font-family: var(--font-mono); font-size: 11px; user-select: text; word-break: break-all; }
 .sw-none { color: var(--text-dim); }
-.sw-progress { width: 96px; height: 4px; border: 0; border-radius: 2px; overflow: hidden; appearance: none; background: color-mix(in srgb, var(--ink) 10%, transparent); }
-.sw-progress::-webkit-progress-bar { background: transparent; }
-.sw-progress::-webkit-progress-value { background: var(--accent); border-radius: 2px; transition: width 0.3s; }
 .sw-keys { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; }
 .sw-key { position: relative; display: inline-flex; }
 .sw-keys kbd:not(.recording) { cursor: default; }
@@ -202,7 +127,7 @@ body.settings-window { background: var(--bg); }
   background: none;
   opacity: 0;
 }
-.sw-row.shortcut:hover .sw-key-add, .sw-key-add:focus-visible { opacity: 1; }
+.ui-row:hover .sw-key-add, .sw-key-add:focus-visible { opacity: 1; }
 .sw-key-add:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .sw-hint { margin-right: auto; font-size: 11.5px; color: var(--text-dim); }
 .sw-keys kbd {
@@ -212,24 +137,11 @@ body.settings-window { background: var(--bg); }
   text-align: center;
   padding: 1px 6px;
   border-radius: 5px;
-  background: var(--sw-field);
-  box-shadow: inset 0 0 0 1px var(--sw-field-edge);
+  background: var(--control-bg);
+  box-shadow: inset 0 0 0 1px var(--control-edge);
 }
 .sw-keys kbd.recording { color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); animation: sw-recording 1.2s ease-in-out infinite; }
 @keyframes sw-recording { 50% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 35%, transparent); } }
-
-.sw-error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--state-needs);
-  background: color-mix(in srgb, var(--state-needs) 10%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--state-needs) 25%, transparent);
-}
 .sw-offline {
   position: absolute;
   left: 50%;
@@ -243,170 +155,9 @@ body.settings-window { background: var(--bg); }
   box-shadow: 0 4px 16px var(--shadow), inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
-/* ── controls: one height, the UI font ───────────────── */
-
-.sw-button {
-  flex: none;
-  height: var(--sw-control-h);
-  font-size: 12.5px;
-  color: var(--text);
-  padding: 0 11px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--sw-field);
-  box-shadow: inset 0 0 0 1px var(--sw-field-edge);
-  white-space: nowrap;
-}
-.sw-button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 10%, transparent); }
-.sw-button:active:not(:disabled) { background: color-mix(in srgb, var(--ink) 14%, transparent); }
-.sw-button:disabled { opacity: 0.4; }
-.sw-button.primary:not(:disabled) { color: var(--on-accent); background: var(--accent); box-shadow: none; }
-.sw-button.icon { width: var(--sw-control-h); padding: 0; display: grid; place-items: center; color: var(--text-dim); }
-
-.sw-switch {
-  position: relative;
-  flex: none;
-  width: 30px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--ink) 16%, transparent);
-  transition: background 0.15s var(--ease);
-}
-.sw-switch[aria-checked="true"] { background: var(--accent); }
-.sw-switch-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
-  transition: transform 0.15s var(--ease);
-}
-.sw-switch[aria-checked="true"] .sw-switch-knob { transform: translateX(12px); }
-.sw-switch:focus-visible, .sw-seg button:focus-visible, .sw-button:focus-visible { outline: none; box-shadow: var(--sw-ring); }
-
-.sw-seg {
-  flex: none;
-  display: inline-flex;
-  height: var(--sw-control-h);
-  padding: 2px;
-  gap: 2px;
-  border-radius: 7px;
-  background: var(--sw-field);
-  box-shadow: inset 0 0 0 1px var(--sw-field-edge);
-}
-.sw-seg button {
-  padding: 0 10px;
-  font-size: 12px;
-  color: var(--text-dim);
-  background: none;
-  border: 0;
-  border-radius: 5px;
-  white-space: nowrap;
-}
-.sw-seg button:hover:not(.on) { color: var(--text); }
-.sw-seg button.on { color: var(--text); background: color-mix(in srgb, var(--ink) 14%, var(--bg)); box-shadow: 0 1px 2px rgb(0 0 0 / 0.18); }
-
-.sw-popup { position: relative; display: inline-flex; align-items: center; min-width: 0; }
-.sw-popup select {
-  appearance: none;
-  min-width: 150px;
-  max-width: 100%;
-  height: var(--sw-control-h);
-  font: 12.5px var(--font-ui);
-  color: var(--text);
-  padding: 0 26px 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--sw-field);
-  box-shadow: inset 0 0 0 1px var(--sw-field-edge);
-  outline: none;
-  text-overflow: ellipsis;
-}
-.sw-popup select:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 10%, transparent); }
-.sw-popup select:focus-visible { box-shadow: var(--sw-ring); }
-.sw-popup select:disabled { color: var(--text-dim); }
-.sw-popup .sf { position: absolute; right: 9px; pointer-events: none; color: var(--text-dim); }
-
-.sw-field {
-  width: 240px;
-  max-width: 100%;
-  height: var(--sw-control-h);
-  font: 12.5px var(--font-ui);
-  color: var(--text);
-  padding: 0 9px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--well);
-  box-shadow: inset 0 0 0 1px var(--sw-field-edge);
-  outline: none;
-  text-overflow: ellipsis;
-  user-select: text;
-}
-.sw-field.code { font: 12px var(--font-mono); }
-.sw-field:focus { box-shadow: var(--sw-ring); }
-
-/* Number: the value and its unit in one box, a stepper beside it. */
-.nf { flex: none; display: inline-flex; align-items: center; gap: 4px; }
-.nf-box {
-  display: inline-flex;
-  align-items: center;
-  width: 84px;
-  height: var(--sw-control-h);
-  padding: 0 8px;
-  border-radius: 6px;
-  background: var(--well);
-  box-shadow: inset 0 0 0 1px var(--sw-field-edge);
-}
-.nf-box:focus-within { box-shadow: var(--sw-ring); }
-.nf input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  padding: 0;
-  font: 12.5px var(--font-ui);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--text);
-  background: none;
-  border: 0;
-  outline: none;
-  user-select: text;
-}
-.nf-unit { padding-left: 4px; font-size: 11.5px; color: var(--text-dim); }
-.nf-step {
-  display: inline-flex;
-  flex-direction: column;
-  width: 16px;
-  height: var(--sw-control-h);
-  border-radius: 5px;
-  overflow: hidden;
-  background: var(--sw-field);
-  box-shadow: inset 0 0 0 1px var(--sw-field-edge);
-}
-.nf-step button {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  color: var(--text-dim);
-  background: none;
-  border: 0;
-}
-.nf-step button:hover:not(:disabled) { color: var(--text); background: color-mix(in srgb, var(--ink) 10%, transparent); }
-.nf-step button:disabled { opacity: 0.3; }
-
-/* Secrets (API keys) and the model popup. */
-.sw-secret { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.sw-secret .sw-field { width: 190px; }
-.sw-secret-set { font: 12px var(--font-mono); color: var(--text-dim); margin-right: 4px; letter-spacing: 0.04em; }
+/* The model popup. */
 .sw-model { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .sw-model > span { min-width: 0; display: flex; }
-.sw-model .sw-popup select { max-width: 240px; }
 
 /* ── Remote Access (Remote.tsx) ─────────────────────── */
 

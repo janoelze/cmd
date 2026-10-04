@@ -7,24 +7,8 @@ import { cmd } from "../bridge.ts";
 
 type Img = { url: string; w: number; h: number; contain?: boolean } | null;
 
-/**
- * Icon sizes (points). Every size renders natively and crisp (no scaling); these
- * follow macOS conventions for small controls. Change the scale here, not per use.
- */
-export const ICON = {
-  /** bottom status/action bars */
-  bar: 12,
-  /** window toolbars (browser, files) */
-  toolbar: 12,
-  /** rows in lists and trees */
-  row: 12,
-  /** small marks: window-kind icons in sidebar rows and title bars */
-  small: 11,
-  /** disclosure chevrons */
-  disclosure: 8,
-  /** the mark of an empty view (a blank browser window) */
-  empty: 28,
-} as const;
+/** Icon sizes (points): the kit's scale. */
+export { ICON } from "@cmd/ui";
 
 // ── pixel density (re-render symbols when the window moves to another display) ──
 const dprListeners = new Set<() => void>();

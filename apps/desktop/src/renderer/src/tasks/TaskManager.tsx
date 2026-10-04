@@ -7,6 +7,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { Pane, ProcessStat, Space } from "@cmd/protocol";
 import type { AppProcess } from "../../../main/metrics.ts";
+import { Button } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
 import { formatBytes } from "../model.ts";
 
@@ -189,12 +190,12 @@ export function TaskManager() {
           {snap ? `${formatBytes(sum(all, "memory"))} · ${sum(all, "cpu").toFixed(1)}% CPU` : ""}
           {error && snap ? " · core not responding" : ""}
         </span>
-        <button disabled={!sel?.pane} onClick={() => show(sel)}>
+        <Button size="sm" disabled={!sel?.pane} onClick={() => show(sel)}>
           Show
-        </button>
-        <button disabled={!sel?.pane} onClick={() => end(sel)}>
+        </Button>
+        <Button size="sm" variant="danger" disabled={!sel?.pane} onClick={() => end(sel)}>
           End Terminal
-        </button>
+        </Button>
       </div>
     </div>
   );
