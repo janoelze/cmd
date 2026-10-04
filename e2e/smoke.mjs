@@ -977,6 +977,20 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   check(Math.abs((await trackX()) - scrolled) < 1 && Math.abs(selX2 - selX) < 1,
     `toggling focus returns the strip to its scroll position (${Math.round(scrolled)} → ${Math.round(await trackX())})`);
 
+  // resizing the app window keeps the strip where it was scrolled to, even with
+  // the selected window out of view
+  {
+    await win.locator(".windows-scroller").evaluate((e) => (e.scrollLeft = 0));
+    await win.waitForTimeout(300);
+    const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
+    for (const dw of [-120, -60, 0]) {
+      await app.evaluate(({ BrowserWindow }, w) => BrowserWindow.getAllWindows()[0].setSize(w, BrowserWindow.getAllWindows()[0].getSize()[1]), size[0] + dw);
+      await win.waitForTimeout(250);
+    }
+    await win.waitForTimeout(400);
+    check((await trackX()) === 0, `resizing the window keeps the strip scrolled to the start (${Math.round(-(await trackX()))})`);
+  }
+
   // resize by the right edge, capped at the pane width
   await win.evaluate((id) => window.__cmdSelect(id), await (await visualTiles())[0].getAttribute("data-pane"));
   await win.waitForTimeout(500);

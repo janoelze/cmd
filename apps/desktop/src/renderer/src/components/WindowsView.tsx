@@ -427,12 +427,28 @@ export function WindowsView(p: Props) {
     if (offsetRef.current > maxOff) setOffset(maxOff);
   }, [maxOff, setOffset]);
 
-  // Strip: selecting a window scrolls just enough to show it.
+  // Strip: resizing the app window scales the windows with it; the offset scales
+  // too, so the same part of the strip stays in view (and the start stays at 0).
+  const scaledFor = useRef({ w: 0, content: 0, mode });
+  useLayoutEffect(() => {
+    const was = scaledFor.current;
+    scaledFor.current = { w: vp.w, content: lay.contentWidth, mode };
+    if (mode !== "strip" || was.mode !== mode || glidingRef.current || !was.w || was.w === vp.w || !was.content) return;
+    stopScroll();
+    setOffset((offsetRef.current * lay.contentWidth) / was.content);
+  });
+
+  // Strip: selecting a window scrolls just enough to show it. Not when only the
+  // viewport changed: a resize would scroll away from where the user scrolled to.
   const selIdx = ids.indexOf(selected ?? "");
   const selSlot = selIdx >= 0 ? stripSlots[selIdx] : undefined;
+  const revealedFor = useRef({ w: 0, mode, selected });
   useEffect(() => {
     if (mode !== "strip" || !selSlot || !vp.w || drag) return;
+    const was = revealedFor.current;
+    revealedFor.current = { w: vp.w, mode, selected };
     if (skipReveal.current) return void (skipReveal.current = false);
+    if (was.w && was.w !== vp.w && was.mode === mode && was.selected === selected) return;
     const target = revealOffset(offsetRef.current, selSlot, vp.w, padX, lay.contentWidth);
     if (Math.abs(target - offsetRef.current) > 0.5) animateTo(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
