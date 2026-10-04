@@ -2,8 +2,8 @@
 // light, memory, CPU). Clicking it opens the details (uptime, response time,
 // the core and PTY host processes) with Restart Core and the Task Manager.
 
-import { Button } from "@cmd/ui";
-import { useEffect, useRef, useState } from "react";
+import { Button, Popover } from "@cmd/ui";
+import { useRef, useState } from "react";
 import { cmd } from "../bridge.ts";
 import { formatUptime, restartCore, SLOW_MS, useCoreHealth, useRestart, type CoreHealth } from "../coreHealth.ts";
 import { formatBytes, usageLabel } from "../model.ts";
@@ -43,25 +43,14 @@ export function CoreStatus(p: Props) {
   const s = summarize(p, health, restart.restarting);
   // Same key while it changes: the numbers update in place, only showing and hiding animate.
   const usage = p.connected && !restart.restarting && !health.unresponsive ? usageLabel(health.core) : null;
-  const root = useRef<HTMLDivElement>(null);
-
-  // Close on a click elsewhere or Escape.
-  useEffect(() => {
-    if (!open) return;
-    const down = (e: MouseEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
-    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    window.addEventListener("mousedown", down, true);
-    window.addEventListener("keydown", key, true);
-    return () => {
-      window.removeEventListener("mousedown", down, true);
-      window.removeEventListener("keydown", key, true);
-    };
-  }, [open]);
+  const button = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="core-status" ref={root}>
-      {open && <Details summary={s} health={health} connected={p.connected} restart={restart} />}
-      <button className={`core-status-button${open ? " open" : ""}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+    <div className="core-status">
+      <Popover anchor={button} open={open} onClose={() => setOpen(false)} placement="above" width={Math.max(280, button.current?.offsetWidth ?? 0)} className="core-details" label="Core">
+        <Details summary={s} health={health} connected={p.connected} restart={restart} />
+      </Popover>
+      <button ref={button} className={`core-status-button${open ? " open" : ""}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className={`led led-${s.led === "ok" ? "core-ok" : s.led}`} />
         <Slot className="core-status-text" value={{ text: s.text }} />
         <Slot className="core-status-usage" value={usage ? { text: usage, key: "usage" } : undefined} divider />
@@ -85,7 +74,7 @@ function Details(p: { summary: Summary; health: CoreHealth; connected: boolean; 
       ]
     : [];
   return (
-    <div className="core-details" role="dialog" aria-label="Core">
+    <>
       <div className="core-details-head">
         <span className={`led led-${p.summary.led === "ok" ? "core-ok" : p.summary.led}`} />
         <span>{p.summary.detail}</span>
@@ -110,6 +99,6 @@ function Details(p: { summary: Summary; health: CoreHealth; connected: boolean; 
           Task Manager
         </Button>
       </div>
-    </div>
+    </>
   );
 }

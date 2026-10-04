@@ -4,8 +4,8 @@
 // is in, with what access, watching which windows; disconnect in one click),
 // and the notifications that go with them.
 
-import { Button, IconButton, useTooltip } from "@cmd/ui";
-import { useEffect, useRef, useState } from "react";
+import { Badge, Button, IconButton, Popover, useTooltip } from "@cmd/ui";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { RemotePairRequest, RemoteStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { getState, useStoreValue } from "../store.ts";
@@ -69,7 +69,7 @@ const STATE_TEXT = { off: "Off", connecting: "Connecting to the relay…", onlin
  */
 export function RemoteIndicator() {
   const status = useStoreValue((s) => s.remote);
-  const [open, setOpen] = useState<DOMRect | null>(null);
+  const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const tipRef = useTooltip(() => status && <RemoteTip status={status} />);
   if (!status || (!status.enabled && !status.sessions.length)) return null;
@@ -89,11 +89,11 @@ export function RemoteIndicator() {
         label={tip}
         // The rich tooltip (tipRef) stands in for the plain one.
         data-tip={undefined}
-        pressed={!!open}
-        aria-expanded={!!open}
-        onClick={() => setOpen(open ? null : button.current!.getBoundingClientRect())}
+        pressed={open}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
       />
-      {open && <RemotePopover at={open} status={status} onClose={() => setOpen(null)} />}
+      {open && <RemotePopover anchor={button} status={status} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -118,7 +118,7 @@ function RemoteTip({ status }: { status: RemoteStatus }) {
         <div key={s.id} className="remote-tip-row">
           <Symbol name="iphone.radiowaves.left.and.right" size={ICON.small} />
           <span>
-            <b>{s.name}</b> <span className={`remote-tag${s.scope === "control" ? " control" : ""}`}>{scopeLabel(s.scope)}</span>
+            <b>{s.name}</b> <Badge tone={s.scope === "control" ? "accent" : "neutral"}>{scopeLabel(s.scope)}</Badge>
             <div className="tip-dim">
               Since {clock(s.since)} · {s.watching.length ? `watching ${s.watching.map(windowTitle).join(", ")}` : "on its home screen"}
             </div>
@@ -131,22 +131,13 @@ function RemoteTip({ status }: { status: RemoteStatus }) {
   );
 }
 
-function RemotePopover({ at, status, onClose }: { at: DOMRect; status: RemoteStatus; onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const down = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && onClose();
-    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    // Next tick: the click that opened it mustn't close it.
-    const t = setTimeout(() => (window.addEventListener("mousedown", down), window.addEventListener("keydown", key)));
-    return () => (clearTimeout(t), window.removeEventListener("mousedown", down), window.removeEventListener("keydown", key));
-  }, [onClose]);
+function RemotePopover({ anchor, status, onClose }: { anchor: RefObject<HTMLElement | null>; status: RemoteStatus; onClose: () => void }) {
   const { sessions } = status;
   const act = (fn: () => unknown) => () => (void fn(), onClose());
-  // Opens upward from the status bar, its right edge at the button's.
-  const right = Math.max(8, window.innerWidth - at.right);
   const paired = status.devices.length;
   return (
-    <div className="remote-popover" ref={ref} style={{ bottom: window.innerHeight - at.top + 6, right }}>
+    // Opens upward from the status bar, its right edge at the button's.
+    <Popover anchor={anchor} open onClose={onClose} placement="above" align="end" width={420} className="remote-popover" label="Remote Access">
       <div className="remote-pop-head">
         Remote Access · {sessions.length && status.state === "online" ? "Connected" : STATE_TEXT[status.state]}
         {status.state === "error" && status.error ? <div className="remote-pop-dim">{status.error}</div> : null}
@@ -164,7 +155,7 @@ function RemotePopover({ at, status, onClose }: { at: DOMRect; status: RemoteSta
           <Symbol name="iphone.radiowaves.left.and.right" size={ICON.row} />
           <div className="remote-pop-text">
             <div>
-              <b>{s.name}</b> <span className={`remote-tag${s.scope === "control" ? " control" : ""}`}>{scopeLabel(s.scope)}</span>
+              <b>{s.name}</b> <Badge tone={s.scope === "control" ? "accent" : "neutral"}>{scopeLabel(s.scope)}</Badge>
             </div>
             <div className="remote-pop-dim">
               Since {clock(s.since)} · {s.watching.length ? `watching ${s.watching.map(windowTitle).join(", ")}` : "on its home screen"}
@@ -197,7 +188,7 @@ function RemotePopover({ at, status, onClose }: { at: DOMRect; status: RemoteSta
           Settings…
         </Button>
       </div>
-    </div>
+    </Popover>
   );
 }
 

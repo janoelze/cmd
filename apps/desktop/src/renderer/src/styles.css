@@ -408,21 +408,7 @@ kbd {
 .core-status-button .led { margin-right: 8px; }
 .core-status-usage .slot-v { --gap: 15px; }
 .core-status-usage { flex-shrink: 10; }
-.core-details {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 8px);
-  z-index: 20;
-  width: max(100%, 280px);
-  padding: 10px 12px;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--bg-elevated);
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  border-radius: 10px;
-  box-shadow: 0 10px 30px var(--shadow);
-  -webkit-app-region: no-drag;
-}
+.core-details { padding: 10px 12px; font-size: 12px; }
 .core-details-head { display: flex; align-items: baseline; gap: 8px; line-height: 1.4; }
 .core-details-head .led { transform: translateY(-1px); }
 .core-details-error { margin-top: 8px; color: var(--state-needs); line-height: 1.4; overflow-wrap: anywhere; }
@@ -1280,57 +1266,11 @@ kbd {
 }
 .space-icon.attn-needs::after { background: var(--state-needs); }
 .space-icon.attn-unseen::after { background: var(--state-done); }
-/* Other Spaces want you: a count in the state colour on the button. */
-.space-badge {
-  flex: none;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 4px;
-  border-radius: 7px;
-  font: 600 10px/14px var(--font-ui);
-  text-align: center;
-  color: var(--on-accent);
-}
-.space-badge.attn-needs { background: var(--state-needs); }
-.space-badge.attn-unseen { background: var(--state-done); }
-/* The menu (SpaceBar.tsx): fixed, so the sidebar's overflow doesn't clip it; scrolls when long. */
-.space-menu {
-  position: fixed;
-  z-index: 20;
-  width: 260px;
-  max-width: calc(100vw - 16px);
-  overflow-y: auto;
-  padding: 5px;
-  background: var(--bg-elevated);
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  border-radius: 10px;
-  box-shadow: 0 10px 30px var(--shadow);
-  outline: none;
-  animation: space-menu-in 120ms ease-out;
-}
-@keyframes space-menu-in { from { opacity: 0; transform: scale(0.97); } }
-.space-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 5px 8px;
-  border-radius: var(--radius);
-  color: var(--text);
-  font: 12px var(--font-ui);
-  cursor: default;
-}
-.space-item.active { background: var(--accent); color: var(--on-accent); }
-.space-item.active .space-item-meta, .space-item.active kbd { color: color-mix(in srgb, var(--on-accent) 75%, transparent); }
-.space-item.on .space-item-name { font-weight: 600; }
-.space-item.active .space-icon { color: var(--on-accent); }
-.space-item.active .space-icon::after { box-shadow: 0 0 0 1.5px var(--accent); }
-.space-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.space-item-name, .space-item-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.space-item-meta { font-size: 11px; color: var(--text-dim); }
-.space-item.attn-needs:not(.active) .space-item-meta { color: var(--state-needs); }
-.space-item kbd { flex: none; }
-.space-item-open { color: var(--text-dim); }
-.space-menu-sep { height: 1px; margin: 4px 6px; background: var(--separator); }
+/* The menu (SpaceBar.tsx) is @cmd/ui's Menu; a Space's attention tints its folder line. */
+.space-item.attn-needs:not([data-active]) .ui-menu-detail { color: var(--warning); }
+.space-item[data-active] .space-icon { color: inherit; }
+.space-item[data-active] .space-icon::after { box-shadow: 0 0 0 1.5px var(--accent); }
+.space-item-open .ui-menu-icon { color: var(--text-dim); }
 /* SpaceIconPicker: the palette's frame around a grid of symbols. */
 .icon-picker { width: min(460px, calc(100vw - 32px)); }
 .icon-grid {
@@ -1370,18 +1310,7 @@ kbd {
 .ui-icon-button.remote-indicator.asking .sf { animation: remote-ask 1.2s var(--ease) infinite alternate; }
 @keyframes remote-ask { from { opacity: 1; } to { opacity: 0.35; } }
 
-.remote-popover {
-  position: fixed;
-  z-index: 20;
-  width: 420px;
-  padding: 6px;
-  background: var(--bg-elevated);
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  border-radius: 10px;
-  box-shadow: 0 10px 30px var(--shadow);
-  font-size: 12px;
-  color: var(--text);
-}
+.remote-popover { padding: 6px; font-size: 12px; }
 .remote-pop-head { padding: 4px 8px 6px; font: 600 11px var(--font-ui); color: var(--text-dim); }
 .remote-pop-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius); }
 .remote-pop-row > .sf { color: var(--text-dim); }
@@ -1389,8 +1318,6 @@ kbd {
 .remote-pop-dim { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .remote-pop-foot { display: flex; gap: 6px; padding: 8px 8px 4px; margin-top: 4px; border-top: 1px solid var(--separator); }
 .remote-pop-spacer { flex: 1; }
-.remote-tag { font-size: 10.5px; padding: 1px 5px; border-radius: 4px; color: var(--text-dim); background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.remote-tag.control { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 
 .remote-tip { min-width: 220px; }
 .remote-tip-row { display: flex; gap: 8px; padding: 3px 0; }
