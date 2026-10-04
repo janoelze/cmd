@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { HOME_SPACE_ID, hueOf, type Space, type SpaceId } from "@cmd/protocol";
+import { HOME_SPACE_ID, hueOf, ICON_NAME, type Space, type SpaceId } from "@cmd/protocol";
 import type { Store } from "../store.ts";
 import { canonical, deepest, gitRoot, nameFor } from "./paths.ts";
 
@@ -22,7 +22,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     super();
     this.#store = store;
     this.#home = canonical(home, "/", home);
-    for (const s of store?.spaces() ?? []) this.#spaces.set(s.id, s);
+    for (const s of store?.spaces() ?? []) this.#spaces.set(s.id, { ...s, icon: s.icon ?? null });
     const h = this.#spaces.get(HOME_SPACE_ID);
     if (!h || h.root !== this.#home || h.closedAt !== null) {
       const now = Date.now();
@@ -32,6 +32,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
         root: this.#home,
         home: true,
         hue: hueOf("Home"),
+        icon: h?.icon ?? null,
         order: 0,
         closedAt: null,
         createdAt: h?.createdAt ?? now,
@@ -92,6 +93,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
       root,
       home: false,
       hue: hueOf(name),
+      icon: null,
       order: this.#nextOrder(),
       closedAt: null,
       createdAt: now,
@@ -111,13 +113,17 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     return { ...(deepest(this.#open(), c) ?? this.home()) };
   }
 
-  update(id: SpaceId, patch: { name?: string; order?: number; view?: Record<string, unknown>; active?: boolean }): Space {
+  update(id: SpaceId, patch: { name?: string; icon?: string | null; order?: number; view?: Record<string, unknown>; active?: boolean }): Space {
     const s = this.#must(id);
     if (patch.active) s.lastActiveAt = Date.now();
     if (patch.name !== undefined) {
       const name = patch.name.trim().slice(0, 100);
       if (!name) throw new Error("a Space needs a name");
       s.name = name;
+    }
+    if (patch.icon !== undefined) {
+      if (patch.icon !== null && (patch.icon.length > 64 || !ICON_NAME.test(patch.icon))) throw new Error(`not an SF Symbol name: ${patch.icon}`);
+      s.icon = patch.icon;
     }
     if (patch.order !== undefined) s.order = patch.order;
     if (patch.view) {

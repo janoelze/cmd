@@ -1,13 +1,15 @@
 // The Space switcher at the bottom of the sidebar (docs/11-spaces.md): a button
-// with the shown Space's name that drops down a menu of the open Spaces in
-// switcher order (⌃1–9), each with its folder and marked when something in it
-// needs you or finished unseen. The button carries the same mark for the other
-// Spaces, so a background Space that wants you shows without opening the menu.
+// with the shown Space's icon and name that drops down a menu of the open Spaces
+// in switcher order (⌃1–9), each with its folder and its icon marked when
+// something in it needs you or finished unseen. The button carries the same mark
+// for the other Spaces, so a background Space that wants you shows without
+// opening the menu.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Space, SpaceId } from "@cmd/protocol";
 import { shortPath } from "../model.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
+import { SpaceIcon } from "./SpaceIcon.tsx";
 
 type Attention = "needs" | "unseen";
 
@@ -37,7 +39,6 @@ export function SpaceBar(p: Props) {
       <button
         ref={button}
         className={`space-trigger ${open ? "open" : ""}`}
-        style={{ ["--hue" as string]: shown?.hue ?? 240 }}
         aria-haspopup="menu"
         aria-expanded={open}
         title={shown ? shortPath(shown.root) : undefined}
@@ -47,7 +48,7 @@ export function SpaceBar(p: Props) {
           if (e.key === "ArrowDown" || e.key === "ArrowUp") e.preventDefault(), setOpen(true);
         }}
       >
-        <span className="space-dot" />
+        {shown && <SpaceIcon space={shown} />}
         <span className="space-name">{shown?.name ?? "—"}</span>
         {mark && (
           <span className={`space-badge attn-${mark}`} title={`${others.length} other Space${others.length === 1 ? "" : "s"} ${mark === "needs" ? "need you" : "finished"}`}>
@@ -145,12 +146,11 @@ function SpaceMenu(p: Props & { anchor: HTMLElement; onClose: (refocus: boolean)
             role="menuitemradio"
             aria-checked={on}
             className={`space-item ${on ? "on" : ""} ${i === active ? "active" : ""} ${attn && !on ? `attn-${attn}` : ""}`}
-            style={{ ["--hue" as string]: sp.hue }}
             onPointerMove={() => setActive(i)}
             onClick={(e) => pick(i, e.metaKey)}
             onContextMenu={(e) => (e.preventDefault(), p.onClose(false), p.onMenu(sp))}
           >
-            <span className="space-dot" />
+            <SpaceIcon space={sp} attention={on ? undefined : attn} />
             <span className="space-item-text">
               <span className="space-item-name">{sp.name}</span>
               <span className="space-item-meta">

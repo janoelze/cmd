@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { HOME_SPACE_ID, type CoreEvent } from "@cmd/protocol";
+import { HOME_SPACE_ID, spaceIcon, type CoreEvent } from "@cmd/protocol";
 import { Core } from "../src/core.ts";
 import { Store } from "../src/store.ts";
 import { SpaceManager } from "../src/spaces/manager.ts";
@@ -183,6 +183,15 @@ describe("SpaceManager", () => {
     spaces.update(HOME_SPACE_ID, { view: { a: 1, b: 2 } });
     expect(spaces.update(HOME_SPACE_ID, { view: { b: null, c: 3 } }).view).toEqual({ a: 1, c: 3 });
     expect(() => spaces.update(HOME_SPACE_ID, { name: "  " })).toThrow();
+  });
+
+  it("sets an SF Symbol as the icon; null goes back to the default", () => {
+    const spaces = new SpaceManager(null, fixture("icon").home);
+    expect(spaces.home().icon).toBeNull();
+    expect(spaces.update(HOME_SPACE_ID, { icon: "leaf.fill" }).icon).toBe("leaf.fill");
+    expect(() => spaces.update(HOME_SPACE_ID, { icon: "Not A Symbol" })).toThrow(/SF Symbol/);
+    expect(spaces.update(HOME_SPACE_ID, { icon: null }).icon).toBeNull();
+    expect(spaceIcon(spaces.home())).toBe("house");
   });
 
   it("guards Home and open Spaces", () => {

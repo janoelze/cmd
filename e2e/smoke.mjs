@@ -1001,6 +1001,16 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   check(listed === 2, `the switcher's menu lists both Spaces (${listed})`);
   await win.screenshot({ path: path.join(shots, "8-space-menu.png") });
   await win.keyboard.press("Escape");
+  // Change Icon…: the grid picker sets an SF Symbol on the Space, shown in the switcher.
+  await win.evaluate((id) => window.cmd.call("space.update", { id, icon: null }), "home");
+  await menu("space.icon");
+  await win.locator(".icon-picker").waitFor();
+  await win.keyboard.type("leaf");
+  await win.screenshot({ path: path.join(shots, "8-space-icon.png") });
+  await win.keyboard.press("Enter");
+  await win.waitForTimeout(400);
+  const icon = await win.evaluate(() => window.cmd.call("space.list", {}).then((l) => l.find((x) => x.home).icon));
+  check(icon === "leaf", `Change Space Icon… sets the Space's icon (${icon})`);
   await win.evaluate((id) => window.cmd.call("space.close", { id }), sp.id);
   await win.waitForTimeout(500);
   await win.locator(".space-trigger").click();

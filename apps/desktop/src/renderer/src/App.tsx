@@ -39,6 +39,7 @@ import { Feedback } from "./components/Feedback.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
 import { Sidebar, SIDEBAR_WIDTH, type SidebarRequest } from "./components/Sidebar.tsx";
 import { SpaceBar } from "./components/SpaceBar.tsx";
+import { SpaceIconPicker } from "./components/SpaceIcon.tsx";
 import { closeSpace, showSpace, usePickers, type Picker } from "./spaces.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 
@@ -353,6 +354,7 @@ export function App() {
     "space.last": () => lastSpace.current && all.spaces.has(lastSpace.current) && showSpace(lastSpace.current),
     "space.moveWindow": () => selected && setPicker({ kind: "move", windowId: selected }),
     "space.rename": () => space && setPicker({ kind: "rename", space }),
+    "space.icon": () => space && setPicker({ kind: "icon", space }),
     "space.reveal": () => space && cmd.openPath(space.root),
     "space.close": () => space && void closeSpace(space),
     ...(Object.fromEntries(
@@ -394,6 +396,7 @@ export function App() {
         "space.moveWindow": hasPane && openSpaces.length > 1,
         "space.close": !!space && !space.home,
         "space.rename": !!space,
+        "space.icon": !!space,
       },
     });
   }, [mode, sidebarOpen, selected, withPane.length, currentAgent, attention, openSpaces.length, space]);
@@ -444,6 +447,7 @@ export function App() {
       { label: "Open in New Window", run: () => showSpace(sp.id, { newWindow: true }), enabled: sp.id !== all.spaceId },
       "-",
       { label: "Rename…", run: () => setPicker({ kind: "rename", space: sp }) },
+      { label: "Change Icon…", run: () => setPicker({ kind: "icon", space: sp }) },
       { label: "Show Folder in Finder", run: () => cmd.openPath(sp.root) },
       { label: "Copy Path", run: () => copy(sp.root) },
       "-",
@@ -621,6 +625,7 @@ export function App() {
         />
       )}
       {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}
+      {picker?.kind === "icon" && <SpaceIconPicker space={all.spaces.get(picker.space.id) ?? picker.space} onClose={() => setPicker(null)} />}
       {feedback && <Feedback onClose={() => setFeedback(false)} />}
     </div>
   );

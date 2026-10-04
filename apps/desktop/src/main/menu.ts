@@ -153,6 +153,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         sep,
         ...i("space.moveWindow"),
         ...i("space.rename"),
+        ...i("space.icon"),
         ...i("space.reveal"),
         sep,
         ...i("space.close"),

@@ -17,6 +17,7 @@ usage: cmd <command> [options]
   space [ls] [--all] [--json]         open Spaces (--all: recent ones too)
   space which [PATH]                  the Space a path belongs to
   space close|rename|forget [SPACE] [NAME]
+  space icon [SPACE] SYMBOL           its icon: an SF Symbol name (- for the default)
                                       SPACE: id prefix, name or folder; default: this terminal's
   ls [--json]                         panes and their agents (tree)
   identify [--json]                   this pane and agent (inside cmd)
@@ -429,6 +430,15 @@ async function space(client: Connection["client"]): Promise<number> {
       const s = await findSpace(client, b === undefined ? undefined : a);
       const next = await client.call("space.update", { id: s.id, name: b ?? a });
       return out(`renamed to ${next.name}`);
+    }
+    case "icon": {
+      // `icon SYMBOL` sets this terminal's Space's icon; `icon SPACE SYMBOL` another's; `-` resets it.
+      const [a, b] = rest;
+      if (!a) return fail("usage: cmd space icon [SPACE] SYMBOL");
+      const s = await findSpace(client, b === undefined ? undefined : a);
+      const symbol = b ?? a;
+      const next = await client.call("space.update", { id: s.id, icon: symbol === "-" ? null : symbol });
+      return out(`${next.name}: ${next.icon ?? "default icon"}`);
     }
     default:
       return fail(`unknown space command: ${sub}\n\n${HELP}`);

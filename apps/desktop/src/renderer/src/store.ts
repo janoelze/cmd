@@ -145,7 +145,7 @@ const withPending = (s: Space, prev?: Space): Space => {
 function sameSpace(a: Space, b: Space): boolean {
   const keys = Object.keys(b.view);
   return (
-    a.name === b.name && a.root === b.root && a.order === b.order && a.hue === b.hue && a.closedAt === b.closedAt && a.lastActiveAt === b.lastActiveAt &&
+    a.name === b.name && a.root === b.root && a.order === b.order && a.hue === b.hue && a.icon === b.icon && a.closedAt === b.closedAt && a.lastActiveAt === b.lastActiveAt &&
     keys.length === Object.keys(a.view).length && keys.every((k) => a.view[k] === b.view[k])
   );
 }

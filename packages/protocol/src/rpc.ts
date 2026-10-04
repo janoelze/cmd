@@ -152,8 +152,8 @@ export interface Methods {
   };
   /** The Space a path belongs to (longest open root containing it, else Home), without creating one. */
   "space.match": { params: { path: string; cwd?: string }; result: Space };
-  /** view: keys merged into the Space's view (null deletes a key). active: it was just shown (recency for the picker). */
-  "space.update": { params: { id: SpaceId; name?: string; order?: number; view?: Record<string, unknown>; active?: boolean }; result: Space };
+  /** view: keys merged into the Space's view (null deletes a key). active: it was just shown (recency for the picker). icon: an SF Symbol name, null for the default. */
+  "space.update": { params: { id: SpaceId; name?: string; icon?: string | null; order?: number; view?: Record<string, unknown>; active?: boolean }; result: Space };
   /** Kill its terminals and agents, remove its windows; the Space stays as a recent one. Home can't be closed. */
   "space.close": { params: { id: SpaceId }; result: null };
   /** Delete a closed Space's record. */

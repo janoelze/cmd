@@ -77,6 +77,7 @@ export const COMMANDS = spec([
   { id: "space.last", label: "Last Space" },
   { id: "space.moveWindow", label: "Move Window to Space…" },
   { id: "space.rename", label: "Rename Space…" },
+  { id: "space.icon", label: "Change Space Icon…" },
   { id: "space.reveal", label: "Show Space Folder in Finder" },
   { id: "space.close", label: "Close Space…" },
   // Ctrl+1–9 like Arc's spaces; ⌘1–9 stay for sessions.

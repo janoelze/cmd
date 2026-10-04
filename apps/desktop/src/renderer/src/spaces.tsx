@@ -10,7 +10,7 @@ import { shortPath } from "./model.ts";
 import { getState, useStoreValue } from "./store.ts";
 import type { Palette, PaletteItem } from "./components/Palette.tsx";
 
-export type Picker = { kind: "space" } | { kind: "move"; windowId: string } | { kind: "rename"; space: Space };
+export type Picker = { kind: "space" } | { kind: "move"; windowId: string } | { kind: "rename"; space: Space } | { kind: "icon"; space: Space };
 
 /** Show a Space here, or in the window that already shows it (newWindow: in a new one). */
 export function showSpace(id: SpaceId, o: { select?: string; newWindow?: boolean } = {}): void {
@@ -86,7 +86,7 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
     return () => void (live = false);
   }, [kind]);
 
-  if (!picker) return null;
+  if (!picker || picker.kind === "icon") return null; // its own grid: SpaceIconPicker
   const open = [...spaces.values()].sort((a, b) => a.order - b.order);
   const known = new Set([...open, ...recent].map((x) => x.root));
   const typed = (q: string, label: (p: string) => string, run: (p: string) => void): PaletteItem[] =>

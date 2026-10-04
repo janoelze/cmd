@@ -16,7 +16,10 @@ export interface Space {
   /** Canonical path (realpath, on-disk case); unique among Spaces. Home: the home folder. */
   root: string;
   home: boolean;
+  /** Tints its icon (derived from the name when the Space is created). */
   hue: number;
+  /** SF Symbol name; null: the default (spaceIcon). */
+  icon: string | null;
   /** Position in the switcher (⌘1–9); user-chosen, never reshuffled by recency. */
   order: number;
   /** null = open; otherwise closed and kept as a recent Space. */

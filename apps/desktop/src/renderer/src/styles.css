@@ -1180,9 +1180,8 @@ kbd {
   -webkit-app-region: no-drag;
 }
 .drag-strip .spacebar { position: absolute; left: 80px; top: 0; height: 100%; width: 220px; flex: none; }
-/* The button: full width, like the search field above; the Space's hue only on its dot. */
+/* The button: full width, like the search field above; the Space's hue only on its icon. */
 .space-trigger {
-  --hue: 240;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1204,13 +1203,27 @@ kbd {
 .space-trigger .space-name { flex: 1; }
 .space-trigger > .sf { flex: none; color: var(--text-dim); }
 .space-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.space-dot {
+/* SpaceIcon.tsx: the Space's symbol in its hue; a dot on its corner when it wants you. */
+.space-icon {
+  --hue: 240;
+  position: relative;
   flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: hsl(var(--hue) var(--chip-fg));
+  display: inline-grid;
+  place-items: center;
+  color: hsl(var(--hue) var(--chip-fg));
 }
+.space-icon.attn-needs::after, .space-icon.attn-unseen::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--bg-elevated);
+}
+.space-icon.attn-needs::after { background: var(--state-needs); }
+.space-icon.attn-unseen::after { background: var(--state-done); }
 /* Other Spaces want you: a count in the state colour on the button. */
 .space-badge {
   flex: none;
@@ -1241,7 +1254,6 @@ kbd {
 }
 @keyframes space-menu-in { from { opacity: 0; transform: scale(0.97); } }
 .space-item {
-  --hue: 240;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1254,10 +1266,8 @@ kbd {
 .space-item.active { background: var(--accent); color: var(--on-accent); }
 .space-item.active .space-item-meta, .space-item.active kbd { color: color-mix(in srgb, var(--on-accent) 75%, transparent); }
 .space-item.on .space-item-name { font-weight: 600; }
-/* Something in a background Space wants you: a ring in the state colour. */
-.space-item .space-dot { box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 2px transparent; }
-.space-item.attn-needs .space-dot { box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 3.5px var(--state-needs); }
-.space-item.attn-unseen .space-dot { box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 3.5px var(--state-done); }
+.space-item.active .space-icon { color: var(--on-accent); }
+.space-item.active .space-icon::after { box-shadow: 0 0 0 1.5px var(--accent); }
 .space-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .space-item-name, .space-item-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .space-item-meta { font-size: 11px; color: var(--text-dim); }
@@ -1265,6 +1275,33 @@ kbd {
 .space-item kbd { flex: none; }
 .space-item-open { color: var(--text-dim); }
 .space-menu-sep { height: 1px; margin: 4px 6px; background: var(--separator); }
+/* SpaceIconPicker: the palette's frame around a grid of symbols in the Space's hue. */
+.icon-picker { width: min(460px, calc(100vw - 32px)); }
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 2px;
+  padding: 8px;
+  max-height: 40vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.icon-grid .palette-empty { grid-column: 1 / -1; padding: 12px 6px; }
+.icon-cell {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: hsl(var(--hue) var(--chip-fg));
+}
+.icon-cell.current { background: hsl(var(--hue) var(--chip-bg)); }
+.icon-cell.active { background: var(--accent); color: var(--on-accent); }
+.icon-picker-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.icon-picker-reset { border: 0; padding: 0; background: none; font: inherit; color: var(--link); cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .space-trigger, .space-menu { transition: none; animation: none; }
 }
