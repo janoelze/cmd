@@ -20,16 +20,17 @@ body.settings-window { background: var(--bg); }
 
 /* ── sidebar: the main window's ───────────────────────── */
 
-.sw-nav { display: flex; flex-direction: column; gap: 1px; padding-top: 4px; }
+.sw-nav { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
 .sw-nav-item {
   font: 13px var(--font-ui);
   color: var(--text);
   text-align: left;
   background: none;
   border: 0;
-  gap: 9px;
+  gap: 10px;
   padding-left: 5px;
 }
+.sw-nav-item.row.short { height: 32px; }
 .sw-nav-icon {
   flex: none;
   width: 22px;
