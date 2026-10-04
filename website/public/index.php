@@ -77,7 +77,7 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <div><h3>Layouts</h3><p>Focus on one window, tile them in a grid, scroll through a strip, or place them on an infinite canvas with a minimap.</p></div>
   <div><h3>Agent detection</h3><p>Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes.</p></div>
   <div><h3>Waiting agents first</h3><p>Agents waiting for input are listed first, then working, then done. ⌃⌘J jumps to the next one.</p></div>
-  <div><h3>Remote access</h3><p>Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted. In preview.</p></div>
+  <div><h3>Remote access <span class="pill">Beta</span></h3><p>Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted.</p></div>
   <div><h3>Terminals keep running</h3><p>A background process owns them, so quitting, reloading or updating the app doesn't end them.</p></div>
   <div><h3>Session search</h3><p>Full-text search over Claude Code, Codex, Qwen Code and Copilot CLI transcripts. Return resumes a session.</p></div>
   <div><h3>Magic widgets</h3><p>Describe what to show and an agent builds a live widget for it. Change it by asking. Uses your own API key.</p></div>

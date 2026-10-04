@@ -107,6 +107,7 @@ td.num { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .hero-shots.loading { translate: none; } }
 .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px 28px; margin-bottom: 8px; }
 .features h3 { font-size: var(--fs-base); font-weight: 500; margin: 0 0 2px; }
+.features h3 .pill { font-weight: 400; vertical-align: 1px; }
 .features p { font-size: var(--fs-sm); color: var(--ink-2); margin: 0; }
 @media (max-width: 640px) {
   h1 { margin-top: 18px; }
