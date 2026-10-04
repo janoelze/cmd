@@ -12,6 +12,7 @@ function h(string $s): string
 function page_start(string $title, string $description, string $current): void
 {
     $nav = ['' => 'cmd', 'usage/' => 'Usage'];
+    $GLOBALS['site_root'] = str_repeat('../', substr_count($current, '/')); // relative, so it works under /cmd/ and locally
     ?><!doctype html>
 <html lang="en">
 <head>
@@ -33,7 +34,10 @@ function page_start(string $title, string $description, string $current): void
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
 main, header { max-width: 880px; margin: 0 auto; padding: 0 16px; }
-main { padding-bottom: 48px; }
+main { padding-bottom: 8px; }
+footer { display: flex; justify-content: center; padding: 48px 16px 40px; }
+footer img { opacity: 0.3; transition: opacity 0.3s; }
+footer img:hover { opacity: 0.85; }
 header { display: flex; gap: 18px; align-items: baseline; padding-top: 20px; padding-bottom: 4px; font-size: 14px; }
 header a { color: var(--ink-2); text-decoration: none; font-weight: 500; }
 header a.current, header a:hover { color: var(--ink); }
@@ -120,6 +124,7 @@ function page_end(): void
 {
     ?>
 </main>
+<footer><img src="<?= h($GLOBALS['site_root'] ?? '') ?>assets/hack-the-planet.svg" width="105" height="14" alt="Hack the planet" title="Hack the planet!"></footer>
 </body>
 </html>
 <?php
