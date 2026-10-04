@@ -19,26 +19,35 @@ page_start('cmd — a workbench for building software with AI', 'Terminals, codi
 ?>
 <h1>cmd</h1>
 <p class="lede">A workbench for building software with AI. Terminals, coding agents, a browser, an editor and widgets you make by asking, side by side on one desk. Nothing gets lost, nothing dies, and the agent that needs you is always on top.</p>
+<p class="cta">
 <?php if ($latest): ?>
-<p><a class="button" href="<?= h($latest['dmg'] ?? $latest['url']) ?>">Download <?= h($latest['tag']) ?></a> <span class="muted">for Macs with Apple silicon</span></p>
+  <a class="button" href="<?= h($latest['dmg'] ?? $latest['url']) ?>">Download <?= h($latest['tag']) ?></a>
 <?php endif ?>
+  <a class="button secondary" href="https://github.com/janoelze/cmd">View on GitHub</a>
+  <span class="muted">For Macs with Apple silicon</span>
+</p>
+
+<img class="shot hero" src="assets/hero.png" width="1505" height="950" alt="cmd with a usage widget, a Claude Code session finishing a release, and a CI widget side by side; six agents in the sidebar">
 
 <p>Terminals are where we'll work with agents for years to come, and they still feel like 1995: a window and a row of tabs. cmd is a desk instead. It isn't an IDE and it doesn't bring its own agent: you keep your editor and Claude Code or Codex, and cmd gives them a place to live. It's made for the serious, normal work, not for running 600 agents overnight.</p>
 
-<div class="pillars">
-  <div class="card">
-    <h2>One desk</h2>
-    <p>Terminals, agents, browser, editor and widgets are windows on the same desk. Focus on one, tile them in a grid, scroll through a strip, or lay them out on an infinite canvas. ⌘K finds anything.</p>
-  </div>
-  <div class="card">
-    <h2>Knows your agents</h2>
-    <p>Claude Code, Codex and others are recognised in any terminal. The one waiting for you is on top. Terminals survive quits and updates, and every past session is searchable and resumable.</p>
-  </div>
-  <div class="card">
-    <h2>Magic widgets</h2>
-    <p>Ask for a window: “the last CI runs”, “my open merge requests”, a JSON URL. An agent builds a live widget for it, in your theme. Close it tomorrow.</p>
-  </div>
-</div>
+<section class="pillar">
+  <h2>One desk</h2>
+  <p>Terminals, agents, browser, editor and widgets are windows on the same desk. Focus on one, tile them in a grid, scroll through a strip, or lay them out on an infinite canvas. ⌘K finds anything.</p>
+  <img class="shot" src="assets/canvas.png" width="1505" height="950" loading="lazy" alt="The canvas: a widget and a Claude Code session placed freely">
+</section>
+
+<section class="pillar">
+  <h2>Knows your agents</h2>
+  <p>Claude Code, Codex and others are recognised in any terminal. The one waiting for you is on top. Terminals survive quits and updates, and every past session is searchable and resumable.</p>
+  <img class="shot" src="assets/agents.png" width="1505" height="950" loading="lazy" alt="The strip: a Claude Code session, a file browser and a shell, with six agents and recent sessions in the sidebar">
+</section>
+
+<section class="pillar">
+  <h2>Magic widgets</h2>
+  <p>Ask for a window: “the last CI runs”, “my open merge requests”, a JSON URL. An agent builds a live widget for it, in your theme. Close it tomorrow.</p>
+  <img class="shot" src="assets/widgets.png" width="1505" height="950" loading="lazy" alt="A weather widget next to top in the strip">
+</section>
 
 <h2>Releases</h2>
 <?php if (!$releases): ?>

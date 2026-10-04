@@ -42,9 +42,6 @@ h1 { font-size: 30px; line-height: 1.2; margin: 32px 0 8px; letter-spacing: -0.0
 h2 { font-size: 15px; margin: 36px 0 12px; }
 p.lede { color: var(--ink-2); font-size: 17px; margin: 0 0 24px; max-width: 60ch; }
 .muted { color: var(--ink-3); }
-.pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 24px 0; }
-.card h2 { margin-top: 0; }
-.card p { margin-bottom: 0; color: var(--ink-2); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .tile .label { color: var(--ink-2); font-size: 13px; }
@@ -66,6 +63,13 @@ th { color: var(--ink-2); font-weight: 500; font-size: 13px; }
 td.num { font-variant-numeric: tabular-nums; }
 .tag { font-family: var(--mono); }
 .pill { font-size: 11px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
+.cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
+.button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+.shot { display: block; width: 100%; height: auto; margin: 24px 0 8px; }
+.shot.hero { width: min(1200px, calc(100vw - 32px)); margin: 32px 0 40px 50%; transform: translateX(-50%); }
+.pillar { margin: 56px 0; }
+.pillar h2 { font-size: 22px; margin: 0 0 8px; }
+.pillar p { color: var(--ink-2); max-width: 60ch; margin: 0; }
 .button { display: inline-block; background: var(--ink); color: var(--bg); text-decoration: none; padding: 9px 16px; border-radius: 8px; font-weight: 500; }
 footer { color: var(--ink-3); font-size: 13px; padding-top: 48px; padding-bottom: 32px; }
 </style>
