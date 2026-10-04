@@ -216,9 +216,9 @@ export function SettingsWindow() {
               className={`row short sw-nav-item${!q && n.id === page ? " sel" : ""}${q && !hitPages.has(n.id) ? " dim" : ""}`}
               onClick={() => (setQuery(""), setPage(n.id), setScrolled(false))}
             >
-              {/* fixed-width box: symbols differ in width, the labels should line up */}
+              {/* a fixed-size tile: symbols differ in width, the labels should line up */}
               <span className="sw-nav-icon">
-                <Symbol name={n.icon} size={12} />
+                <Symbol name={n.icon} size={13} weight="semibold" />
               </span>
               <span className="sw-nav-label">{n.title}</span>
             </button>
