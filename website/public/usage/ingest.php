@@ -8,7 +8,7 @@
 // 410, and apps stop sending until their core restarts.
 
 declare(strict_types=1);
-require __DIR__ . '/../../lib/db.php';
+require __DIR__ . '/../_lib/db.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     http_response_code(405);

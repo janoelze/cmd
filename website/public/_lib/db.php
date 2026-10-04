@@ -1,6 +1,6 @@
 <?php
-// The usage stats store: SQLite in the data dir, outside the deployed tree
-// (~/cmd-website-data on the server; $CMD_WEBSITE_DATA elsewhere). Batches from
+// The usage stats store: SQLite in the data dir, outside the docroot
+// (~/cmd-website-data; $CMD_WEBSITE_DATA elsewhere). Batches from
 // the app (packages/core/src/usage.ts) are folded into daily rows as they
 // arrive: which installs were active on a day (with their version, macOS and
 // arch) and how often each counter fired for each install that day, so the
@@ -17,7 +17,7 @@ const CRASH_PROCESSES = ['core', 'ptyhost', 'main', 'renderer', 'gpu', 'utility'
 
 function data_dir(): string
 {
-    return getenv('CMD_WEBSITE_DATA') ?: dirname(__DIR__, 2) . '/cmd-website-data';
+    return getenv('CMD_WEBSITE_DATA') ?: posix_getpwuid(posix_geteuid())['dir'] . '/cmd-website-data';
 }
 
 function db(): PDO

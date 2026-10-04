@@ -3,8 +3,8 @@
 // list of releases from GitHub (lib/releases.php).
 
 declare(strict_types=1);
-require __DIR__ . '/../lib/releases.php';
-require __DIR__ . '/../lib/layout.php';
+require __DIR__ . '/_lib/releases.php';
+require __DIR__ . '/_lib/layout.php';
 
 $releases = releases();
 $latest = null;

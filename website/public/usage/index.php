@@ -3,8 +3,8 @@
 // over the last 30 days. ?format=json gives the same numbers as JSON.
 
 declare(strict_types=1);
-require __DIR__ . '/../../lib/db.php';
-require __DIR__ . '/../../lib/layout.php';
+require __DIR__ . '/../_lib/db.php';
+require __DIR__ . '/../_lib/layout.php';
 
 $s = summary(30);
 if (($_GET['format'] ?? '') === 'json') {
