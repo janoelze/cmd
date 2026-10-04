@@ -11,6 +11,7 @@ packages/cli        `cmd` — the same API from any shell, hook entry point, hos
 packages/remote-crypto  Noise handshakes and framing for remote access, shared by the core and the web client
 apps/desktop        Electron UI (React + xterm.js), a client of the core
 apps/relay          the remote-access relay: forwards encrypted bytes between a Mac and its devices
+apps/web            the remote-access web client for phones and browsers (prototype)
 e2e/                Playwright smoke test driving the real app
 scripts/            postinstall, packaging, releases, icons, README screenshots
 ```
@@ -131,6 +132,8 @@ pnpm remote:device call pane.list                # through the relay, end-to-end
 pnpm remote:device watch                         # bootstrap, follow terminals, print events
 ```
 
+The phone side is `apps/web`, a prototype web client (pair, Now, a terminal with a key row and compose bar). `pnpm web` serves it on http://localhost:5180; set `remote.client` to that and open the pairing link in a desktop browser. A phone needs the page over HTTPS (WebCrypto only runs in a secure context) and a relay it can reach, e.g. both behind `tailscale serve`. `pnpm e2e:web` runs it in an emulated iPhone against a real core and relay.
+
 `pnpm e2e:remote` walks the whole journey through the built app (pair from Settings, approve, the status bar indicator and its popover, the watched window's badge) with a local relay and a pretend phone; screenshots land in `.cmd-dev/shots/remote-*.png`.
 
 The host key and route live in `$CMD_HOME/remote/host.json`, paired devices and the audit log in SQLite (`remote_devices`, `remote_log`), the pretend phone's identity in `$CMD_HOME/remote-device.json`.
@@ -148,7 +151,7 @@ The host key and route live in `$CMD_HOME/remote/host.json`, paired devices and 
 - Packaging, CI and GitHub releases
 
 **In progress**
-- Remote access (docs/13): crypto, relay, core gateway, policy, `cmd remote`, and in the app the Remote Access settings page, the approval sheet and the status bar indicator are in; next are the web client (Now, tabs, terminals on a phone) and fit-to-phone
+- Remote access (docs/13): crypto, relay, core gateway, policy, `cmd remote`, and in the app the Remote Access settings page, the approval sheet and the status bar indicator are in; the web client is a prototype (pair, Now, a terminal with key row and compose bar); next are hosting it, push, and fit-to-phone
 
 **Next**
 - Plugin host (routines and monitors in the core)
