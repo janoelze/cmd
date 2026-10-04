@@ -1,6 +1,6 @@
 <?php
 // Page chrome shared by the product page and the usage page: head, nav, footer
-// and the stylesheet (light and dark from the same tokens).
+// and the stylesheet (dark only, see :root).
 
 declare(strict_types=1);
 
@@ -21,14 +21,13 @@ function page_start(string $title, string $description, string $current): void
 <meta name="description" content="<?= h($description) ?>">
 <style>
 :root {
-  --bg: #fbfbfa; --surface: #ffffff; --ink: #1b1b1a; --ink-2: #5d5d58; --ink-3: #8a8a84;
-  --line: #e4e4e0; --accent: #2f6fd6; --accent-soft: #dbe6f8;
+  /* Dark only, and darker than the app's own background (about #0a0b0b), so
+     the screenshots sit on the page as windows. */
+  color-scheme: dark;
+  --bg: #030303; --surface: #0e0e0f; --ink: #ededea; --ink-2: #a3a39e; --ink-3: #6f6f6a;
+  --line: #222223; --accent: #6b9cf0; --accent-soft: #1c2738;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #161615; --surface: #1f1f1e; --ink: #ededea; --ink-2: #a8a8a2; --ink-3: #75756f;
-    --line: #333331; --accent: #6b9cf0; --accent-soft: #24324a; }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
@@ -66,7 +65,10 @@ td.num { font-variant-numeric: tabular-nums; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
 .button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
 .shot { display: block; width: 100%; height: auto; margin: 24px 0 8px; }
-.shot.hero { width: min(1400px, calc(100vw - 32px)); margin: 32px 0 40px 50%; transform: translateX(-50%); }
+.hero-shots { position: relative; width: min(1400px, calc(100vw - 32px)); margin: 32px 0 40px 50%; transform: translateX(-50%); }
+.hero-shots img { display: block; width: 100%; height: auto; opacity: 0; transition: opacity 0.9s ease; }
+.hero-shots img + img { position: absolute; inset: 0; }
+.hero-shots img.on { opacity: 1; }
 .pillar { margin: 56px 0; }
 .pillar h2 { font-size: 22px; margin: 0 0 8px; }
 .pillar p { color: var(--ink-2); max-width: 60ch; margin: 0; }

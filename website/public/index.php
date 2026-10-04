@@ -27,7 +27,26 @@ page_start('cmd — a workbench for building software with AI', 'Terminals, codi
   <span class="muted">For Macs with Apple silicon</span>
 </p>
 
-<img class="shot hero" src="assets/hero.png" width="1505" height="950" alt="cmd with a usage widget, a Claude Code session finishing a release, and a CI widget side by side; six agents in the sidebar">
+<div class="hero-shots" aria-roledescription="slideshow">
+  <img class="on" src="assets/hero.png" width="1505" height="950" alt="cmd with a usage widget, a Claude Code session finishing a release, and a CI widget side by side; six agents in the sidebar">
+  <img src="assets/agents.png" width="1505" height="950" alt="The strip: a Claude Code session, a file browser and a shell, with six agents and recent sessions in the sidebar">
+  <img src="assets/widgets.png" width="1505" height="950" alt="A weather widget next to top in the strip">
+  <img src="assets/canvas.png" width="1505" height="950" alt="The canvas: a widget and a Claude Code session placed freely">
+</div>
+<script>
+// Crossfade the hero screenshots; reduced motion keeps the first.
+(() => {
+  const shots = document.querySelectorAll(".hero-shots img");
+  if (shots.length < 2 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let i = 0;
+  setInterval(() => {
+    if (document.hidden) return;
+    shots[i].classList.remove("on");
+    i = (i + 1) % shots.length;
+    shots[i].classList.add("on");
+  }, 3500);
+})();
+</script>
 
 <p>Terminals are where we'll work with agents for years to come, and they still feel like 1995: a window and a row of tabs. cmd is a desk instead. It isn't an IDE and it doesn't bring its own agent: you keep your editor and Claude Code or Codex, and cmd gives them a place to live. It's made for the serious, normal work, not for running 600 agents overnight.</p>
 
