@@ -116,7 +116,7 @@ function crashLine(a: AppInfo): string {
   return c.sending ? `Sent when cmd crashes or hits an internal error.${waiting}` : `${c.reason} Reports are kept in the logs folder.`;
 }
 
-export function About(p: { updates: ReactNode; crashReports: ReactNode }) {
+export function About(p: { updates: ReactNode; crashReports: ReactNode; usageStats: ReactNode }) {
   const [app, setApp] = useState<AppInfo | null>(null);
   const [core, setCore] = useState<CoreInfo | null>(null);
   const [restarting, setRestarting] = useState(false);
@@ -248,6 +248,7 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode }) {
               {REVEAL}
             </button>
           </Row>
+          {p.usageStats}
         </div>
       </section>
 

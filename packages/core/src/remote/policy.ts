@@ -22,6 +22,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "core.hello": "view",
   "core.info": "never", // paths, sockets, process details
   "core.processes": "never", // Task Manager diagnostics
+  "usage.launch": "never", // the app's own launches only
   "pane.create": "control", // no more power than typing into an existing terminal
   "pane.list": "view",
   "pane.write": "control",

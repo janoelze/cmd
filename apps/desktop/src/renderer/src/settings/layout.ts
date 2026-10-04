@@ -119,8 +119,8 @@ export const SETTINGS_PAGES: Page[] = [
   },
 ];
 
-/** Settings shown on a page of their own making (About shows the update mode and crash reports). */
-export const PLACED_ELSEWHERE: readonly ItemKey[] = ["updates.mode", "diagnostics.crashReports"];
+/** Settings shown on a page of their own making (About shows the update mode, crash reports and usage stats). */
+export const PLACED_ELSEWHERE: readonly ItemKey[] = ["updates.mode", "diagnostics.crashReports", "diagnostics.usageStats"];
 
 export const itemKey = (it: Item): ItemKey => (typeof it === "string" ? it : it.key);
 export const itemShown = (it: Item, s: Settings) => typeof it === "string" || it.when(s);

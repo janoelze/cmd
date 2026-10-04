@@ -54,6 +54,9 @@ export interface Methods {
   /** The core's and PTY host's own usage (Task Manager); CPU% is since the previous call. Null where unknown. */
   "core.processes": { params: {}; result: { core: ProcessStat | null; ptyHost: ProcessStat | null } };
 
+  /** The app started (usage stats, core/usage.ts). */
+  "usage.launch": { params: {}; result: null };
+
   /** cwd defaults to the Space's root. */
   "pane.create": {
     params: Placement & { cwd?: string; command?: string; cols?: number; rows?: number; env?: Record<string, string> };

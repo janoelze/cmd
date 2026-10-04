@@ -204,6 +204,19 @@ function editNative(sender: WebContents, op: string, guestId?: number): void {
   else if (op === "selectAll") wc.selectAll();
 }
 
+/** One app launch for usage stats (the core counts and sends them, core/usage.ts). */
+async function countLaunch(): Promise<void> {
+  const conn = await connect(socketPath).catch(() => null);
+  if (!conn) return;
+  try {
+    await conn.client.call("usage.launch", {});
+  } catch (err) {
+    log.debug("usage.launch failed", err);
+  } finally {
+    conn.close();
+  }
+}
+
 async function stopCore(pid: number): Promise<void> {
   process.kill(pid, "SIGTERM");
   for (let i = 0; i < 50 && (await canConnect()); i++) await new Promise((r) => setTimeout(r, 100));
@@ -682,7 +695,7 @@ app.whenReady().then(async () => {
   // checked or started; the preload connects as soon as the socket answers.
   spaces.restore();
   ensureCore().then(
-    () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows)),
+    () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows), void countLaunch()),
     (err: Error) => (log.error("the core did not start", err), dialog.showErrorBox("cmd: the core did not start", err.message)),
   );
   followCrashReports(socketPath);

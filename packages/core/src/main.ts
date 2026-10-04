@@ -7,6 +7,7 @@ import net from "node:net";
 import path from "node:path";
 import { cmdHome, configDir, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, ipcPath, logDir, logger, ptyHostSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import { Core } from "./core.ts";
+import { USAGE_URL } from "./usage.ts";
 import { nodePtyFactory } from "./panes.ts";
 import { ProcInfo } from "./agents/procinfo.ts";
 import { statusRoot } from "./agents/statusfiles.ts";
@@ -75,6 +76,8 @@ const core = new Core({
   statusRoot: statusRoot(),
   build,
   stateDir: home,
+  // Release builds started by the app; anything else only when asked to.
+  usageUrl: process.env.CMD_USAGE_URL || (instanceName() === "release" && process.env.CMD_APP_VERSION ? USAGE_URL : null),
 });
 
 core.restore();

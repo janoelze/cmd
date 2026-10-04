@@ -161,7 +161,7 @@ export function SettingsWindow() {
   } else if (page === "remote") {
     body = <Remote key={pairAsk} status={remote} enabled={snap.settings["remote.enabled"]} pair={pairAsk > 0} row={(k) => <ItemRow k={k} ctx={ctx} />} />;
   } else if (page === "about") {
-    body = <About updates={<ItemRow k="updates.mode" ctx={ctx} />} crashReports={<ItemRow k="diagnostics.crashReports" ctx={ctx} />} />;
+    body = <About updates={<ItemRow k="updates.mode" ctx={ctx} />} crashReports={<ItemRow k="diagnostics.crashReports" ctx={ctx} />} usageStats={<ItemRow k="diagnostics.usageStats" ctx={ctx} />} />;
   } else {
     const p = PAGES.find((x) => x.id === page)!;
     const keys = p.sections.flatMap((s) => s.items.map(itemKey)).filter((k): k is SettingKey => !isSecretKey(k));

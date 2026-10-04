@@ -5,9 +5,9 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { AgentId, AppWindow, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AppWindow, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
-import { ipcPath, logger, recordCrash } from "@cmd/protocol/node";
+import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
 import { NotificationCenter } from "./notifications.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
@@ -30,6 +30,7 @@ import type { Backend } from "./magic/backends.ts";
 import type { Connection, Served } from "./connection.ts";
 import { checkRemoteCall, RemoteDenied, remoteEventVisible, type PolicyContext } from "./remote/policy.ts";
 import { RemoteService } from "./remote/service.ts";
+import { UsageStats } from "./usage.ts";
 
 export const VERSION = "0.0.1";
 
@@ -72,6 +73,8 @@ export interface CoreOptions {
   home?: string;
   /** Tests: the model backend for Magic windows (default: from the magic.* settings). */
   magicBackend?: (settings: Settings) => Backend;
+  /** Where usage stats go (usage.ts); none: not counted (tests, development builds). */
+  usageUrl?: string | null;
 }
 
 const NO_SEARCH = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
@@ -94,6 +97,10 @@ export class Core {
   readonly magic: MagicService;
   readonly secrets: SecretsService;
   readonly remote: RemoteService;
+  readonly usage: UsageStats;
+  /** Agents already counted for usage stats. */
+  #countedAgents = new Set<AgentId>();
+  #startedAt = Date.now();
   #server: net.Server | null = null;
   /** Subscribed connections and which events each wants. */
   #subscribers = new Map<Connection, (e: CoreEvent) => boolean>();
@@ -174,12 +181,22 @@ export class Core {
       this.store.deleteUiStateOf(paneId);
       this.#broadcast({ type: "pane.removed", paneId });
     });
+    this.usage = new UsageStats({
+      url: opts.usageUrl ?? null,
+      enabled: () => this.settings.settings["diagnostics.usageStats"],
+      id: machineId,
+      version: process.env.CMD_APP_VERSION ?? "source",
+    });
     this.agents.on("updated", (agent) => {
       this.#broadcast({ type: "agent.updated", agent });
+      this.#countAgent(agent);
       // Hooks report where the transcript is: picks up folders discovery doesn't know.
       if (agent.native.transcriptPath) this.#search?.learn(agent.kind, agent.native.transcriptPath);
     });
-    this.agents.on("removed", (agentId) => this.#broadcast({ type: "agent.removed", agentId }));
+    this.agents.on("removed", (agentId) => {
+      this.#countedAgents.delete(agentId);
+      this.#broadcast({ type: "agent.removed", agentId });
+    });
     this.remote = new RemoteService({
       store: this.store,
       settings: this.settings,
@@ -216,9 +233,12 @@ export class Core {
       const stats = (await this.processes?.sample(host ? [process.pid, host] : [process.pid])) ?? new Map();
       return { core: stats.get(process.pid) ?? null, ptyHost: host ? (stats.get(host) ?? null) : null };
     },
+    "usage.launch": () => (this.usage.launch(), null),
     "pane.create": (p) => {
       const space = this.#place(p, { path: p.cwd });
-      return this.panes.create({ ...p, cwd: p.cwd ?? space.root, spaceId: space.id });
+      const pane = this.panes.create({ ...p, cwd: p.cwd ?? space.root, spaceId: space.id });
+      this.usage.window("terminal");
+      return pane;
     },
     "pane.list": () => this.panes.list(),
     "pane.write": (p) => (this.panes.write(p.paneId, p.data), null),
@@ -256,14 +276,14 @@ export class Core {
     "window.open": (p) => {
       const input = p.input ?? {};
       const at = [input.cwd, input.path].find((v): v is string => typeof v === "string");
-      return this.windows.open(p.kind, input, this.#place(p, { path: at }));
+      return this.#opened(this.windows.open(p.kind, input, this.#place(p, { path: at })));
     },
     "window.update": (p) => this.windows.update(p.id, p),
     "window.types": () => this.windowTypes.info(),
     "window.close": (p) => (this.windows.close(p.id), null),
     "window.list": () => this.windows.list(),
     "window.openTarget": (p) =>
-      this.windows.openTarget(p.target, this.#place(p, { path: /^[a-z][\w+.-]+:/i.test(p.target) ? undefined : p.target })),
+      this.#opened(this.windows.openTarget(p.target, this.#place(p, { path: /^[a-z][\w+.-]+:/i.test(p.target) ? undefined : p.target }))),
     "window.move": (p) => this.#moveWindow(p.id, p.spaceId),
     "space.list": (p) => this.spaces.list(p.closed),
     "space.open": (p) => {
@@ -391,11 +411,30 @@ export class Core {
     this.spaces.markClosed(id);
   }
 
+  /** Count a window someone opened (not restored ones) for usage stats. */
+  #opened<W extends AppWindow | null>(w: W): W {
+    if (w) this.usage.window(w.kind);
+    return w;
+  }
+
+  /**
+   * Count an agent once, when it starts: not subagents, restored ones, or ones
+   * that were already running when this core started (re-detected after a restart).
+   */
+  #countAgent(a: Agent): void {
+    if (this.#countedAgents.has(a.id)) return;
+    this.#countedAgents.add(a.id);
+    if (a.parentId || a.spawn.source === "restored") return;
+    const since = a.spawn.source === "detected" && a.paneId ? this.panes.foreground(a.paneId)?.startedAt : undefined;
+    if (since && since < this.#startedAt) return; // 0: unknown (no native helper)
+    this.usage.agent(a.kind);
+  }
+
   /** Requests from a pane's shell integration, e.g. `open .` → file window in the pane's Space. */
   #onShellRequest(paneId: string, action: string, arg: string): void {
     if (action !== "open" || !arg) return;
     try {
-      const w = this.windows.openTarget(arg, this.#place({ callerPaneId: paneId }));
+      const w = this.#opened(this.windows.openTarget(arg, this.#place({ callerPaneId: paneId })));
       if (w) this.#broadcast({ type: "window.focus", id: w.id });
     } catch {
       // not a folder / URL: ignore
@@ -592,6 +631,8 @@ export class Core {
   }
 
   async close(): Promise<void> {
+    this.usage.close();
+    await this.usage.flush();
     this.magic.dispose();
     this.remote.close();
     await this.panes.shutdown();
