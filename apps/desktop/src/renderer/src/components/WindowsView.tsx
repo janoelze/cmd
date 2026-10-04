@@ -936,7 +936,8 @@ function StripScrollbar(p: {
     place();
     sc.addEventListener("scroll", place, { passive: true });
     return () => sc.removeEventListener("scroll", place);
-  });
+    // Not on every render: reading scrollLeft after each commit forced a layout.
+  }, [shown, p.total, p.scroller]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!shown) return null;
   const offset = () => p.scroller.current?.scrollLeft ?? 0;
   return (

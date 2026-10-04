@@ -94,10 +94,17 @@ export function DotMatrix({ className }: { className?: string }) {
       draw((now - t0) / 1000);
     };
     if (still) draw(PERIOD / 2);
-    else raf = requestAnimationFrame(frame);
+    // Animate only while on screen (not in a tile scrolled off in the strip or canvas).
+    const io = new IntersectionObserver(([e]) => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (!still && e?.isIntersecting) raf = requestAnimationFrame(frame);
+    });
+    io.observe(c);
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      io.disconnect();
     };
   }, []);
   return <canvas ref={ref} className={className} aria-hidden />;

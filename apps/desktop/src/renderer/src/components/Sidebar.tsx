@@ -306,13 +306,16 @@ function useFrozenOrder(rows: SidebarRow[]): SidebarRow[] {
   const hovering = useRef(false);
   const frozen = useRef<string[] | null>(null);
   const [, force] = useState(0);
+  const latest = useRef(rows);
+  latest.current = rows;
 
+  // Bound once (it re-queried the DOM and re-bound both listeners on every render).
   useEffect(() => {
     const el = document.querySelector(".sidebar-scroll");
     if (!el) return;
     const enter = () => {
       hovering.current = true;
-      frozen.current = rows.map((r) => r.key);
+      frozen.current = latest.current.map((r) => r.key);
     };
     const leave = () => {
       hovering.current = false;
@@ -325,7 +328,7 @@ function useFrozenOrder(rows: SidebarRow[]): SidebarRow[] {
       el.removeEventListener("mouseenter", enter);
       el.removeEventListener("mouseleave", leave);
     };
-  });
+  }, []);
 
   if (!hovering.current || !frozen.current) return rows;
   const byKey = new Map(rows.map((r) => [r.key, r]));
