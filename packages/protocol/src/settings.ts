@@ -316,6 +316,12 @@ export const SETTINGS_SCHEMA = {
   },
   "agents.codex.command": { title: "Codex command", code: true, type: "string", default: "codex", description: "Command used to start Codex." },
   "agents.qwen.command": { title: "Qwen Code command", code: true, type: "string", default: "qwen", description: "Command used to resume Qwen Code sessions." },
+  "agents.peers": {
+    title: "Tell agents about each other (beta)",
+    type: "boolean",
+    default: false,
+    description: "When an agent starts in a repository where other agents are working (in any of its worktrees), tell it who they are, where and on what, and that it can message them with `cmd send`. Told again when agents come or go. Needs cmd's hook (`cmd hooks claude`).",
+  },
   "agents.copilot.command": { title: "Copilot CLI command", code: true, type: "string", default: "copilot", description: "Command used to resume GitHub Copilot CLI sessions." },
 
   "magic.provider": {

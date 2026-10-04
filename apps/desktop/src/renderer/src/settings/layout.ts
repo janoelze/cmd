@@ -86,6 +86,7 @@ export const SETTINGS_PAGES: Page[] = [
     icon: "sparkles",
     sections: [
       { title: "Commands", items: ["agents.claude.command", "agents.codex.command", "agents.qwen.command", "agents.copilot.command"] },
+      { title: "Working together", items: ["agents.peers"] },
       { title: "Transcript search", items: ["search.enabled", "search.archiveDirs"] },
     ],
   },

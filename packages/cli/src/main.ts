@@ -353,8 +353,10 @@ async function hook(kind: string): Promise<number> {
   const timer = setTimeout(() => process.exit(0), 2000);
   try {
     const conn = await connect();
-    await conn.client.call("hook.ingest", { paneId, agent: kind, event, payload });
+    const { context } = await conn.client.call("hook.ingest", { paneId, agent: kind, event, payload });
     conn.close();
+    // Claude, Codex and Gemini all read extra context from this shape.
+    if (context) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: context } }) + "\n");
   } catch {
     // core not running: ignore
   }

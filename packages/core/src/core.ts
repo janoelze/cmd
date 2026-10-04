@@ -296,9 +296,11 @@ export class Core {
     "agent.wait": (p) => this.agents.wait(p.agentIds, p.until, p.mode, p.timeoutMs),
     "agent.kill": (p) => ({ killed: this.agents.kill(p.agentId, p.tree) }),
     "agent.markSeen": (p) => (this.agents.markSeen(p.agentId), null),
-    "hook.ingest": (p) => ({
-      agentId: this.agents.ingestHook(p.paneId, p.agent, p.event, p.payload)?.id ?? null,
-    }),
+    "hook.ingest": (p) => {
+      const agentId = this.agents.ingestHook(p.paneId, p.agent, p.event, p.payload)?.id ?? null;
+      const context = agentId ? this.agents.peerBriefing(agentId, p.event) : null;
+      return context ? { agentId, context } : { agentId };
+    },
     identify: (p) => {
       const pane = this.panes.get(p.paneId);
       return { pane, agent: pane?.agentId ? this.agents.get(pane.agentId) : null };

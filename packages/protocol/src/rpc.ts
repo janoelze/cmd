@@ -116,7 +116,8 @@ export interface Methods {
   /** Called by `cmd hook` from inside agent hooks. */
   "hook.ingest": {
     params: { paneId: PaneId; agent: AgentKind; event: string; payload: Record<string, unknown> };
-    result: { agentId: AgentId | null };
+    /** context: text for the hook to hand the agent (peer briefings, `agents.peers`). */
+    result: { agentId: AgentId | null; context?: string };
   };
   "identify": { params: { paneId: PaneId }; result: { pane: Pane | null; agent: Agent | null } };
 

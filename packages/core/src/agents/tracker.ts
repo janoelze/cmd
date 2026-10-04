@@ -15,6 +15,7 @@ import type { Store } from "../store.ts";
 import { shq } from "../shell.ts";
 import { registerBuiltinSources } from "../search/builtin.ts";
 import { locateContext, TranscriptSources } from "../search/sources.ts";
+import { briefing, checkoutOf } from "./peers.ts";
 import { applyHook, nativeSession, type StateChange } from "./state.ts";
 import { readStatus, removeStatus, StatusWatcher, type HookStatus } from "./statusfiles.ts";
 
@@ -44,6 +45,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #agents = new Map<AgentId, Agent>();
   /** Agents for which a hook has reported; OSC notifications are only a fallback. */
   #hooked = new Set<AgentId>();
+  /** Per agent, the peers it was last briefed about (peerBriefing). */
+  #told = new Map<AgentId, string>();
   /** Spawned agents whose process has been seen; until then a shell foreground is expected. */
   #started = new Set<AgentId>();
   #panes: PaneManager;
@@ -93,6 +96,30 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   get(id: AgentId): Agent | null {
     const a = this.#agents.get(id);
     return a ? { ...a } : null;
+  }
+
+  /**
+   * Context for a hook to hand the agent (`agents.peers`): the other live agents in
+   * its repository. Always at SessionStart, then on a prompt only if they changed.
+   */
+  peerBriefing(id: AgentId, event: string): string | null {
+    if (!this.#settings()["agents.peers"]) return null;
+    if (event !== "SessionStart" && event !== "UserPromptSubmit") return null;
+    const self = this.#agents.get(id);
+    const at = self && this.#checkout(self);
+    if (!self || !at) return null;
+    const peers = [...this.#agents.values()]
+      .filter((a) => a.id !== id && a.paneId && a.state !== "exited")
+      .map((agent) => ({ agent, at: this.#checkout(agent) }))
+      .filter((p): p is { agent: Agent; at: NonNullable<typeof at> } => p.at?.repo === at.repo);
+    const key = peers.map((p) => p.agent.id).sort().join(",");
+    if (event === "UserPromptSubmit" && key === (this.#told.get(id) ?? "")) return null;
+    this.#told.set(id, key);
+    return briefing({ agent: self, at }, peers) ?? (event === "SessionStart" ? null : "[cmd] The other agents in this repository have finished; none are working in parallel with you now.");
+  }
+
+  #checkout(a: Agent) {
+    return checkoutOf(a.cwd || (a.paneId && this.#panes.get(a.paneId)?.cwd) || "");
   }
 
   // ── detection ──────────────────────────────────────────────
@@ -147,6 +174,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   }
 
   #exit(agent: Agent): void {
+    this.#told.delete(agent.id);
     if (agent.paneId) this.#panes.setAgent(agent.paneId, null);
     this.#started.delete(agent.id);
     this.#hooked.delete(agent.id);
@@ -180,7 +208,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       this.#exit(agent);
       return null;
     }
-    this.#update(agent, change);
+    const prompt = event === "UserPromptSubmit" && typeof payload.prompt === "string" ? payload.prompt.trim().split(/\r?\n/)[0] : undefined;
+    this.#update(agent, change, prompt ? { lastPrompt: prompt } : {});
     return this.get(agent.id);
   }
 
