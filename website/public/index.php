@@ -88,7 +88,8 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
     <a class="tag" href="<?= h($r['url']) ?>"><?= h($r['tag']) ?></a>
     <span class="badges"><?= $r === $latest ? '<span class="pill accent">Latest</span>' : '' ?><?= $r['prerelease'] ? '<span class="pill">Pre-release</span>' : '' ?></span>
     <time datetime="<?= h($r['published']) ?>"><?= h($r['date']) ?></time>
-    <?php if ($r['dmg']): ?><a class="dmg" href="<?= h($r['dmg']) ?>">Download<?= $r['size'] ? ' <span class="muted">' . h(number_format($r['size'] / 1048576)) . ' MB</span>' : '' ?></a><?php else: ?><span></span><?php endif ?>
+    <span class="size"><?= $r['size'] ? h(number_format($r['size'] / 1048576)) . ' MB' : '' ?></span>
+    <?php if ($r['dmg']): ?><a class="button secondary small" href="<?= h($r['dmg']) ?>">Download</a><?php else: ?><span></span><?php endif ?>
   </li>
 <?php endforeach ?>
 </ol>
