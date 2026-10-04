@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "electron-vite";
 import react from "@vitejs/plugin-react";
@@ -50,7 +51,9 @@ export default defineConfig({
   },
   // electron-vite leaves minification off; the renderer bundle is parsed on every launch.
   // Three pages: the app (index.html), the Settings window (settings.html) and the Task Manager (tasks.html).
+  // The app's version for What's New (CI's release tags have bumped package.json).
   renderer: {
+    define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(resolve(import.meta.dirname, "package.json"), "utf8")).version) },
     plugins: [react(), xtermScaledCoords()],
     optimizeDeps: { exclude: ["@xterm/xterm"] },
     build: {

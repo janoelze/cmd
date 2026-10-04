@@ -38,6 +38,8 @@ import { toggleMarkdownEdit } from "./windows/markdown.tsx";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Feedback } from "./components/Feedback.tsx";
+import { APP_VERSION, RELEASES, releasesSince, WhatsNew } from "./components/WhatsNew.tsx";
+import { compareVersions, type Release } from "../../shared/changelog.ts";
 import { PairSheet, useRemoteNotifications } from "./components/Remote.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
 import { Sidebar, SIDEBAR_WIDTH, type SidebarRequest } from "./components/Sidebar.tsx";
@@ -115,6 +117,8 @@ export function App() {
   /** Palette open, with an optional initial query ("?" for session search). */
   const [palette, setPalette] = useState<false | string>(false);
   const [feedback, setFeedback] = useState(false);
+  /** The releases the What's New sheet shows, when it's open. */
+  const [whatsNew, setWhatsNew] = useState<Release[] | null>(null);
   /** Space pickers (open/switch, move a window, rename); see spaces.tsx. */
   const [picker, setPicker] = useState<Picker | null>(null);
 
@@ -321,6 +325,7 @@ export function App() {
     "file.close": () => {
       // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
       if (feedback) setFeedback(false);
+      else if (whatsNew) setWhatsNew(null);
       else if (picker) setPicker(null);
       else if (palette !== false) setPalette(false);
       else if (selected) void closePane(selected);
@@ -401,6 +406,7 @@ export function App() {
     ) as Record<`space.select${number}`, () => void>),
     "help.docs": () => cmd.openDocs(),
     "help.feedback": () => (setPalette(false), setFeedback(true)),
+    "help.whatsNew": () => (setPalette(false), setWhatsNew(RELEASES.filter((r) => compareVersions(r.version, APP_VERSION) <= 0))),
   };
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
@@ -408,6 +414,13 @@ export function App() {
 
   useEffect(() => cmd.onCommand(run), [run]);
   useEffect(() => cmd.onOpenUrl(openLink), []);
+  // After an update, once, in the first window: what changed since the version the app last ran as.
+  useEffect(() => {
+    void cmd.whatsNew().then((claim) => {
+      const since = claim && releasesSince(claim.after);
+      if (since?.length) setWhatsNew(since);
+    });
+  }, []);
   // `open` in a terminal: follow it, unless it came from another Space while this window is in the background.
   useEffect(() => onWindowFocus((id) => (document.hasFocus() || spaceOfWindow(id) === getState().spaceId) && select(id)), [select]);
 
@@ -672,6 +685,7 @@ export function App() {
       {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}
       {picker?.kind === "icon" && <SpaceIconPicker space={all.spaces.get(picker.space.id) ?? picker.space} onClose={() => setPicker(null)} />}
       {feedback && <Feedback onClose={() => setFeedback(false)} />}
+      {whatsNew && <WhatsNew releases={whatsNew} onClose={() => setWhatsNew(null)} onLink={(url) => (setWhatsNew(null), openLink(url))} />}
       {all.pairRequests[0] && <PairSheet key={all.pairRequests[0].requestId} request={all.pairRequests[0]} />}
     </div>
   );

@@ -17,7 +17,7 @@ import { countRender } from "../perf.ts";
 
 const MODE_LABEL: Record<ViewMode, string> = { focus: "Focus", grid: "Grid", strip: "Strip", canvas: "Canvas" };
 
-const ICONS: Record<ViewMode | "palette" | "settings" | "feedback", string> = {
+const ICONS: Record<ViewMode | "palette" | "settings" | "feedback" | "whatsNew", string> = {
   focus: "rectangle",
   grid: "square.grid.2x2",
   strip: "rectangle.split.3x1",
@@ -25,6 +25,7 @@ const ICONS: Record<ViewMode | "palette" | "settings" | "feedback", string> = {
   palette: "command",
   settings: "gearshape",
   feedback: "bubble.left",
+  whatsNew: "sparkles",
 };
 
 interface Props {
@@ -70,6 +71,7 @@ export function StatusBar({ mode, row, pane, run }: Props) {
         <Segmented size="sm" label="View" value={mode} options={modes} onChange={(m) => run(`view.${m}`)} />
         <span className="statusbar-sep" />
         <RemoteIndicator />
+        {btn("help.whatsNew", ICONS.whatsNew, "What's New")}
         {btn("help.feedback", ICONS.feedback, "Send Feedback")}
         {btn("view.palette", ICONS.palette, "Command Palette")}
         {btn("app.settings", ICONS.settings, "Settings")}

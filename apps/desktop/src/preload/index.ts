@@ -9,6 +9,7 @@ import type { Appearance } from "../main/appearance.ts";
 import type { UpdateStatus } from "../main/updater.ts";
 import type { CrashStatus } from "../main/crash.ts";
 import type { FeedbackRequest, FeedbackStatus } from "../main/feedback.ts";
+import type { WhatsNewClaim } from "../main/whats-new.ts";
 import type { AppProcess } from "../main/metrics.ts";
 
 export interface AppInfo {
@@ -132,6 +133,8 @@ const api = {
   /** Help → Send Feedback… (components/Feedback.tsx). */
   feedbackStatus: (): Promise<FeedbackStatus> => ipcRenderer.invoke("feedback-status"),
   sendFeedback: (r: FeedbackRequest): Promise<void> => ipcRenderer.invoke("send-feedback", r),
+  /** After an update, the first app window gets the version to show What's New since (main/whats-new.ts). */
+  whatsNew: (): Promise<WhatsNewClaim> => ipcRenderer.invoke("whats-new"),
   closeWindow: () => ipcRenderer.send("close-window"),
   /** Copy / Select All natively in the focused frame, or in a browser window's page by its WebContents id (main/index.ts). */
   editNative: (op: "copy" | "selectAll", guestId?: number) => ipcRenderer.send("edit-native", op, guestId),

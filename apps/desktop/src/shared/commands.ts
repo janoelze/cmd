@@ -100,6 +100,7 @@ export const COMMANDS = spec([
   })),
 
   { id: "help.docs", label: "cmd Documentation" },
+  { id: "help.whatsNew", label: "What's New" },
   { id: "help.feedback", label: "Send Feedback…" },
 ]);
 

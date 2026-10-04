@@ -24,6 +24,7 @@ import { setDockIcon, startDockIcon } from "./dock-icon.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
 import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } from "./feedback.ts";
+import { claimWhatsNew } from "./whats-new.ts";
 import { ensureKeybindingsFile, loadKeybindings, resetKeybindings, watchKeybindings, writeKeybinding, type KeybindingsSnapshot } from "./keybindings.ts";
 
 // Loaded after launch: the updater isn't needed to show the first window.
@@ -109,6 +110,8 @@ if (!process.env.CMD_HOME && !devBuild && !fs.existsSync(uiData) && fs.existsSyn
     fs.renameSync(legacyUiData, uiData);
   } catch {}
 }
+// Before Electron creates it: an existing dir means an existing user (whats-new.ts).
+const hadUiData = fs.existsSync(uiData);
 app.setPath("userData", uiData);
 
 // Packaged builds carry their icon in the bundle (.icns / .ico); dev runs use the PNG.
@@ -574,6 +577,7 @@ ipcMain.handle("app-info", async () => ({
   updates: (await updater()).updateStatus(),
 }));
 ipcMain.handle("feedback-status", () => feedbackStatus(devBuild));
+ipcMain.handle("whats-new", () => claimWhatsNew(uiData, app.getVersion(), hadUiData, devBuild));
 ipcMain.handle("send-feedback", (_e, r: FeedbackRequest) => sendFeedback(r, crashContext()));
 ipcMain.on("open-settings", (_e, p: string) => {
   if (!fs.existsSync(p)) {
