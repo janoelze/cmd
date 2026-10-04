@@ -9,6 +9,7 @@ import { cmdHome, configDir, coreSocketPath, enterInstance, initLog, instanceNam
 import { Core } from "./core.ts";
 import { USAGE_URL } from "./usage.ts";
 import { nodePtyFactory } from "./panes.ts";
+import { adoptLoginPath } from "./loginpath.ts";
 import { ProcInfo } from "./agents/procinfo.ts";
 import { statusRoot } from "./agents/statusfiles.ts";
 import { locateContext } from "./search/sources.ts";
@@ -45,6 +46,9 @@ if (await answers(socketPath)) {
   console.error(`cmd core: a core is already running on ${socketPath}`);
   process.exit(1);
 }
+
+// The user's PATH, in the background: launch isn't held up, and commands the core runs wait for it.
+void adoptLoginPath();
 
 // Terminals run in the PTY host, so they outlive this process; if it can't be
 // started they run here and die with the core (restore.ts brings them back).

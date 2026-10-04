@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { expandPath, type Credentials } from "./policy.ts";
+import { pathReady } from "../loginpath.ts";
 
 export type SandboxMode = "required" | "off";
 
@@ -121,7 +122,13 @@ export function execCommand(command: string, o: ExecOptions = {}): Promise<ExecR
 }
 
 /** Run a program with arguments under the sandbox. Never throws for the program's own failure. */
-export function execArgv(cmdArgv: string[], o: ExecOptions = {}): Promise<ExecResult> {
+export async function execArgv(cmdArgv: string[], o: ExecOptions = {}): Promise<ExecResult> {
+  // Programs are looked up in PATH, which is the login shell's only once that's known.
+  await pathReady;
+  return execArgvNow(cmdArgv, o);
+}
+
+function execArgvNow(cmdArgv: string[], o: ExecOptions): Promise<ExecResult> {
   const mode = o.sandbox ?? "required";
   const sandboxed = mode === "required";
   const start = Date.now();
