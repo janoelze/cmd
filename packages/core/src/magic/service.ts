@@ -1,4 +1,4 @@
-// Magic windows in the core (docs/14-magic-v2.md). Each window has a widget
+// Magic widgets in the core (docs/14-magic-v2.md). Each window has a widget
 // folder ($CMD_HOME/widgets/<window id>): the agent builds it there
 // (buildWidget), every build and hand edit is kept as a revision, and the
 // window's state holds what it needs to draw (the composed view, the last
@@ -146,7 +146,7 @@ export class MagicService {
 
   #window(id: WindowId): AppWindow {
     const w = this.#o.windows.others().find((x) => x.id === id);
-    if (!w || w.kind !== "magic") throw new Error(`not a Magic window: ${id}`);
+    if (!w || w.kind !== "magic") throw new Error(`not a Magic widget: ${id}`);
     return w;
   }
 

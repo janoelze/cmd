@@ -1,4 +1,4 @@
-// Magic window (docs/14-magic-v2.md): a request in, a live widget (or a
+// Magic widget (docs/14-magic-v2.md): a request in, a live widget (or a
 // terminal command) out. Empty, the window is one prompt field. While the agent
 // builds, a dot-matrix animation and its current step show (every tool call too
 // with magic.showSteps); the widget appears only once its frame has painted it.

@@ -174,7 +174,7 @@ export interface Methods {
   "window.list": { params: {}; result: AppWindow[] };
 
   /**
-   * Make a Magic window's content from a request (docs/12-magic-windows.md), or
+   * Make a Magic widget's content from a request (docs/12-magic-windows.md), or
    * refine what it shows. Returns at once; progress arrives as magic.stream
    * events and the result in the window's state.
    */
@@ -189,7 +189,7 @@ export interface Methods {
   "magic.models": { params: { provider: string; refresh?: boolean }; result: MagicModel[] };
   /** Allow (or decline) the media origins the widget asks for (MagicState.media); the frame's CSP opens only allowed ones. */
   "magic.media": { params: { id: WindowId; allow: boolean }; result: null };
-  /** A Magic window's widget for the edit view: folder, files, revisions, manifest, which secrets are set. */
+  /** A Magic widget, for the edit view: folder, files, revisions, manifest, which secrets are set. */
   "magic.widget": { params: { id: WindowId }; result: MagicWidgetInfo | null };
   /** Bring back a revision of the widget (as a new revision). */
   "magic.restore": { params: { id: WindowId; revision: number }; result: null };
@@ -334,7 +334,7 @@ export type CoreEvent =
   | { type: "space.removed"; id: SpaceId }
   /** Show this Space (cmd ., ⌘O from elsewhere); the app picks or creates the app window. */
   | { type: "space.show"; spaceId: SpaceId; newWindow: boolean }
-  /** A Magic window's run: agent steps, the header, the body so far, done or failed. */
+  /** A Magic widget's run: agent steps, the header, the body so far, done or failed. */
   | { type: "magic.stream"; id: WindowId; progress: MagicProgress }
   /** New data from a Magic widget's source (error: the source failed; the widget keeps its last data). */
   | { type: "magic.data"; id: WindowId; data: unknown; at: number; error?: string }

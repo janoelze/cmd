@@ -532,7 +532,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
 
 // Embedded pages: browser pages and Magic widgets run in their own process, so
 // they report presses and sideways scrolls (renderer/src/embed.ts; browser pages
-// through preload/guest.ts, widgets by postMessage). Magic windows are staged
+// through preload/guest.ts, widgets by postMessage). Magic widgets are staged
 // with a widget and its data, so no model runs.
 {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
@@ -665,7 +665,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await menu("view.magicChange");
   const input = win.locator(`.tile[data-pane="${magic[0]}"] .tile-title-input`);
   await input.waitFor({ timeout: 3000 });
-  check(await input.evaluate((el) => el === document.activeElement), "⌘L (a menu command) opens Change in the selected Magic window's title bar, even with the widget focused");
+  check(await input.evaluate((el) => el === document.activeElement), "⌘L (a menu command) opens Change in the selected Magic widget's title bar, even with the widget focused");
   await win.keyboard.press("Escape");
 
   await menu("view.strip");
@@ -824,17 +824,17 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
   await sw.waitForSelector(".sw-nav-item");
   const pages = await sw.locator(".sw-nav-label").allTextContents();
-  check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "Agents", "Magic Windows", "Keyboard Shortcuts", "About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
+  check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "Agents", "Magic Widgets", "Keyboard Shortcuts", "About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
 
-  // Magic Windows: the chosen provider's API key above its model; keys are stored outside settings.json.
-  await sw.locator(".sw-nav-item", { hasText: "Magic Windows" }).click();
+  // Magic Widgets: the chosen provider's API key above its model; keys are stored outside settings.json.
+  await sw.locator(".sw-nav-item", { hasText: "Magic Widgets" }).click();
   await sw.waitForTimeout(300);
   const rowTitles = () => sw.locator(".ui-row-title").allTextContents();
   let titles = await rowTitles();
   const notes = await sw.locator(".sw-model-note").allTextContents();
   check(
     titles.indexOf("Anthropic API key") === titles.indexOf("Anthropic model") - 1 && !titles.includes("OpenAI API key") && notes.length === 1 && notes[0].includes("Add the API key"),
-    "Magic Windows shows the chosen provider's API key above its model, and the model waits for the key",
+    "Magic Widgets shows the chosen provider's API key above its model, and the model waits for the key",
   );
   await sw.locator(".ui-row", { hasText: "Provider" }).locator(".ui-seg button", { hasText: "OpenAI" }).click();
   await sw.waitForSelector(".ui-row:has-text('OpenAI API key')");

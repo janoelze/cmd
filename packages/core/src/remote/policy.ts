@@ -249,7 +249,7 @@ function window(ctx: PolicyContext, id: unknown): void {
 
 function magicWindow(ctx: PolicyContext, id: unknown): void {
   window(ctx, id);
-  if (ctx.windows.list().find((x) => x.id === id)?.kind !== "magic") throw new RemoteDenied("not a Magic window");
+  if (ctx.windows.list().find((x) => x.id === id)?.kind !== "magic") throw new RemoteDenied("not a Magic widget");
 }
 
 /**

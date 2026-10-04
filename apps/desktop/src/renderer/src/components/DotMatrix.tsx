@@ -1,4 +1,4 @@
-// The animation while a Magic window is being made: a grid of dots across the
+// The animation while a Magic widget is being made: a grid of dots across the
 // window (inset by a margin), barely lighter than the background, with a soft
 // band of lighter dots, leaning 25°, sweeping slowly from left to right. One colour, the
 // text colour at low opacity (re-read now and then so theme changes apply).

@@ -1,11 +1,11 @@
-// Magic windows (docs/12-magic-windows.md): the window state the core stores,
+// Magic widgets (docs/12-magic-windows.md): the window state the core stores,
 // the progress events it streams, and the widget token vocabulary shared by the
 // core (standalone pages, the prompt lab) and the renderer (live frames).
 
 import { DEFAULT_SETTINGS } from "./settings.ts";
 import type { Attention } from "./model.ts";
 
-/** The model providers Magic windows can use; each has its own API key (secrets.ts) and model setting. */
+/** The model providers Magic widgets can use; each has its own API key (secrets.ts) and model setting. */
 export const MAGIC_PROVIDERS = {
   anthropic: { title: "Anthropic", keySecret: "magic.anthropic.apiKey", modelSetting: "magic.anthropic.model" },
   openai: { title: "OpenAI", keySecret: "magic.openai.apiKey", modelSetting: "magic.openai.model" },
@@ -68,7 +68,7 @@ export interface MagicNotify {
   urgent?: boolean;
 }
 
-/** A Magic window's state (AppWindow.state of kind "magic"). */
+/** A Magic widget's state (AppWindow.state of kind "magic"). */
 export interface MagicState {
   [key: string]: unknown;
   /** The request, as typed; refinements are appended to `history`. */

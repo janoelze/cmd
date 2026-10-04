@@ -26,7 +26,7 @@ const here = () => getState().spaceId;
 /**
  * The folder a window is in: a terminal's working directory, a file browser's
  * folder, the folder of a text or Markdown window's file (an untitled one's
- * save folder). Browser and Magic windows have none.
+ * save folder). Browser and Magic widgets have none.
  */
 function folderOf(id: string | null): string | undefined {
   if (!id) return undefined;
@@ -179,7 +179,7 @@ export async function openPath(target: string): Promise<void> {
   else cmd.openPath(t);
 }
 
-/** New Magic window (docs/12-magic-windows.md); with a request, it starts making it right away. */
+/** New Magic widget (docs/12-magic-windows.md); with a request, it starts making it right away. */
 export async function newMagic(prompt?: string): Promise<void> {
   const w = await cmd.call("window.open", { kind: "magic", input: {}, spaceId: here() });
   select(w.id);

@@ -1,4 +1,4 @@
-// Data sources of v1 Magic windows (an HTTP GET or a shell command in the
+// Data sources of v1 Magic widgets (an HTTP GET or a shell command in the
 // window's state), still refreshed for windows made before widgets had their
 // own data.ts (docs/14-magic-v2.md). preview() shortens data for the model.
 

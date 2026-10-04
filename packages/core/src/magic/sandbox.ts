@@ -1,4 +1,4 @@
-// Running commands for Magic windows: the agent's `run` tool and command data
+// Running commands for Magic widgets: the agent's `run` tool and command data
 // sources. Every command runs without a PTY, with a timeout and an output cap,
 // with secret-looking variables removed from its environment, and under
 // sandbox-exec with a profile that denies writes and reading private paths.

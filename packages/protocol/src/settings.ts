@@ -324,7 +324,7 @@ export const SETTINGS_SCHEMA = {
     default: "anthropic",
     options: ["anthropic", "openai"],
     labels: { anthropic: "Anthropic", openai: "OpenAI" },
-    description: "Who makes Magic windows. Each provider uses its own API key and model, set below.",
+    description: "Who makes Magic widgets. Each provider uses its own API key and model, set below.",
   },
   "magic.anthropic.model": {
     title: "Anthropic model",
@@ -332,7 +332,7 @@ export const SETTINGS_SCHEMA = {
     control: "model",
     provider: "anthropic",
     default: "claude-opus-5-5",
-    description: "The model Magic windows use with Anthropic. The list shows the models your API key can use.",
+    description: "The model Magic widgets use with Anthropic. The list shows the models your API key can use.",
   },
   "magic.openai.model": {
     title: "OpenAI model",
@@ -340,7 +340,7 @@ export const SETTINGS_SCHEMA = {
     control: "model",
     provider: "openai",
     default: "gpt-5.5",
-    description: "The model Magic windows use with OpenAI. The list shows the chat models your API key can use.",
+    description: "The model Magic widgets use with OpenAI. The list shows the chat models your API key can use.",
   },
   "updates.mode": {
     title: "Updates",

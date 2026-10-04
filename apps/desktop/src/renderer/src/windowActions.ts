@@ -2,14 +2,14 @@
 //  - actions: commands route here (⌘S → the focused text window's save)
 //  - status: what a window wants shown in its title bar / the status bar
 //    (e.g. "Edited", "682 lines · 17 KB"), set by the content component.
-//  - title edits: the title bar as an input for a moment (Magic windows' Change)
+//  - title edits: the title bar as an input for a moment (Magic widgets' Change)
 
 import { useSyncExternalStore } from "react";
 
 type Actions = {
   save?: () => void | Promise<void>;
   openExternally?: () => void;
-  /** Magic windows: change (refine), refresh the data, stop a run. */
+  /** Magic widgets: change (refine), refresh the data, stop a run. */
   change?: () => void;
   refresh?: () => void;
   stop?: () => void;

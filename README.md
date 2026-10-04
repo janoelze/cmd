@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/janoelze/cmd/releases/latest">Download</a> ·
   <a href="#features">Features</a> ·
-  <a href="#magic-windows">Magic windows</a> ·
+  <a href="#magic-widgets">Magic widgets</a> ·
   <a href="#keyboard-shortcuts">Shortcuts</a> ·
   <a href="#cli">CLI</a> ·
   <a href="DEVELOPMENT.md">Development</a>
@@ -31,7 +31,7 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
 - **Four layouts.** Focus on one window, tile them in a grid, scroll through a horizontal strip of windows inspired by [PaperWM](https://github.com/paperwm/PaperWM), or arrange them freely on a zoomable canvas with a minimap.
 - **Every past session, searchable.** Typo-tolerant full-text search over your Claude Code, Codex, Qwen Code and Copilot CLI transcripts (including profiles and custom config dirs), from the palette or the sidebar. Return resumes a session in a new terminal.
 - **More than terminals.** Browser, file tree, text editor and Markdown windows sit next to your terminals. `open README.md` in the shell opens it in cmd. Right-click a browser window for Device Size to see a page at a phone, tablet or desktop size.
-- **Magic windows.** Describe what you want to see ("show my VPN status", a JSON URL, "my open pull requests") and an agent builds a live widget for it, in your theme, that keeps itself up to date. [More below](#magic-windows).
+- **Magic widgets.** Describe what you want to see ("show my VPN status", a JSON URL, "my open pull requests") and an agent builds a live widget for it, in your theme, that keeps itself up to date. [More below](#magic-widgets).
 - **Notifications that lead somewhere.** An agent waiting, a bell, a long command finishing, an OSC 9/777/99 notification or `cmd notify`: the terminal is marked until you look at it, and counts toward the Dock badge.
 - **A complete terminal.** Find in scrollback, jump between prompts, copy a command's output, inline images (Sixel, iTerm2's protocol), programs copying over ssh (OSC 52), drag files in for their paths, a check before risky pastes, Option as Meta on either side, modern Unicode widths.
 - **Keyboard first.** Every action is in the menu bar and the command palette (⌘K), and every shortcut can be remapped.
@@ -48,11 +48,11 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
   <img alt="Session search in the command palette" src="docs/screenshots/search-light.png">
 </picture>
 
-## Magic windows
+## Magic widgets
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/magic-dark.png">
-  <img alt="Magic windows in a grid: GitHub Actions runs, the weather in Tokyo, a EUR to JPY chart, disk space, a tea timer, and an empty Magic window asking what it should show" src="docs/screenshots/magic-light.png">
+  <img alt="Magic widgets in a grid: GitHub Actions runs, the weather in Tokyo, a EUR to JPY chart, disk space, a tea timer, and an empty Magic widget asking what it should show" src="docs/screenshots/magic-light.png">
 </picture>
 
 Press ⇧⌘M and type what the window should show: a question, a URL, some JSON, a command. cmd turns it into a small live window:
@@ -65,7 +65,7 @@ Press ⇧⌘M and type what the window should show: a question, a URL, some JSON
 - **Edit it.** ⌘E turns the window around: every version with a screenshot (restore any of them), the widget's settings (a city, a repository, a token), its files (edit them anywhere, Claude Code included), and its health.
 - **Or it's a command.** When a terminal program already does the job (`btop`, `log stream`), you get the command, typed into a new terminal for you to run.
 
-**Setup.** Magic windows use your own API key, from Anthropic or OpenAI. Under Settings → Magic Windows, pick the provider, paste its key and choose a model: the list shows the models your key can use. Keys are stored by cmd outside `settings.json`, readable only by you, and nothing is read from your environment. From a terminal: `pbpaste | cmd settings secret magic.anthropic.apiKey`.
+**Setup.** Magic widgets use your own API key, from Anthropic or OpenAI. Under Settings → Magic Widgets, pick the provider, paste its key and choose a model: the list shows the models your key can use. Keys are stored by cmd outside `settings.json`, readable only by you, and nothing is read from your environment. From a terminal: `pbpaste | cmd settings secret magic.anthropic.apiKey`.
 
 **Setup, part two.** Widgets' data runs on [Deno](https://deno.com). cmd uses the one on your PATH or Homebrew's, or downloads its own the first time a widget needs it.
 
@@ -93,7 +93,7 @@ Settings → Keyboard Shortcuts lists all shortcuts.
 |---|---|
 | ⌘N | new terminal |
 | ⌥⌘N | new Claude session |
-| ⇧⌘M | new Magic window |
+| ⇧⌘M | new Magic widget |
 | ⌘K | command palette: type to find anything, `>` commands, `@` sessions, `?` past sessions |
 | ⌥⌘1 / 2 / 3 / 4 | focus / grid / strip / canvas |
 | ⌘↩ | focus on the selected window, and back |
@@ -108,7 +108,7 @@ Every shortcut is a real menu-bar item. Remap any of them under Settings → Key
 |---|---|
 | ⌘N (⌘T) | new terminal, in the folder of the selected window (terminal, file browser, file) |
 | ⌥⌘N | new Claude session |
-| ⇧⌘M | new Magic window; in one, ⌘L changes it, ⌘E edits it (versions, settings, files, health), ⌘R refreshes its data, ⌘. stops it while it is being made |
+| ⇧⌘M | new Magic widget; in one, ⌘L changes it, ⌘E edits it (versions, settings, files, health), ⌘R refreshes its data, ⌘. stops it while it is being made |
 | ⌘W | close the frontmost thing: the palette, then the terminal (asks if something is running), then the window |
 | ⇧⌘W | close window (terminals keep running) |
 | ⌥⌘← / ⌥⌘→ (⇧⌘[ / ⇧⌘]) | previous / next session |

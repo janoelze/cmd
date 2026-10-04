@@ -73,7 +73,7 @@ export interface CoreOptions {
   stateDir?: string;
   /** Home's root (default: the user's home folder); tests use a temp dir. */
   home?: string;
-  /** Tests: the model backend for Magic windows (default: from the magic.* settings). */
+  /** Tests: the model backend for Magic widgets (default: from the magic.* settings). */
   magicBackend?: (settings: Settings) => Backend;
   /** Where usage stats go (usage.ts); none: not counted (tests, development builds). */
   usageUrl?: string | null;

@@ -18,7 +18,7 @@ usage: cmd widget new <dir>        a new widget folder (manifest.json, data.ts, 
                                    a data run (kept as fixtures/live.json), renders with every fixture
        cmd widget run [dir]        run data.ts once and print its data (validated against its schema)
        cmd widget preview [dir]    render it (dark, light, small) and save preview-*.png in the folder
-       cmd widget list             the widgets of this cmd's Magic windows
+       cmd widget list             this cmd's Magic widgets
 
   --config key=value   a config value for the run (repeatable)
   --cwd DIR            where run() starts by default (default: the current folder)
@@ -70,7 +70,7 @@ cmd.onData<Data>((d) => {
 function agentNotes(): string {
   return `# A cmd Magic widget
 
-This folder is a widget for cmd's Magic windows. The full contract (files, the
+This folder is one of cmd's Magic widgets. The full contract (files, the
 \`cmd\` module for data.ts, the view's \`cmd\` object, the kit's CSS classes and
 how widgets should look) is in:
 

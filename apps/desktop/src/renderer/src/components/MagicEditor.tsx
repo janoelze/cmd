@@ -1,4 +1,4 @@
-// A Magic window's edit view (docs/14-magic-v2.md), ⌘E from its widget:
+// A Magic widget's edit view (docs/14-magic-v2.md), ⌘E from its widget:
 //  - Changes: ask for a change, and every version so far (what was asked, a
 //    screenshot, whether its checks passed), any of which can be brought back.
 //  - Settings: how often the data runs, the widget's own settings (from its

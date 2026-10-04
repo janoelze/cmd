@@ -101,7 +101,7 @@ export const SETTINGS_PAGES: Page[] = [
   },
   {
     id: "magic",
-    title: "Magic Windows",
+    title: "Magic Widgets",
     icon: "wand.and.stars",
     sections: [
       {

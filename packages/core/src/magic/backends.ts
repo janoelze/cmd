@@ -6,7 +6,7 @@
 // for every provider.
 
 // The AI SDK is imported when a run starts, not with the core: a problem with
-// it (or with a provider package) can break Magic windows, never the core.
+// it (or with a provider package) can break Magic widgets, never the core.
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import { MAGIC_PROVIDERS, type MagicProvider } from "@cmd/protocol";
 import type { ToolOutput, ToolSpec } from "./tools.ts";
@@ -149,9 +149,9 @@ export function isProvider(p: string): p is MagicProvider {
 }
 
 export function backendFor(c: BackendChoice): Backend {
-  if (!isProvider(c.provider)) throw new Error(`Unknown provider "${c.provider}": choose Anthropic or OpenAI in Settings → Magic Windows.`);
+  if (!isProvider(c.provider)) throw new Error(`Unknown provider "${c.provider}": choose Anthropic or OpenAI in Settings → Magic Widgets.`);
   const title = MAGIC_PROVIDERS[c.provider].title;
-  if (!c.apiKey) throw new Error(`No ${title} API key: add one in Settings → Magic Windows.`);
-  if (!c.model.trim()) throw new Error(`No ${title} model: choose one in Settings → Magic Windows.`);
+  if (!c.apiKey) throw new Error(`No ${title} API key: add one in Settings → Magic Widgets.`);
+  if (!c.model.trim()) throw new Error(`No ${title} model: choose one in Settings → Magic Widgets.`);
   return aiBackend({ provider: c.provider, model: c.model.trim(), apiKey: c.apiKey, effort: c.effort });
 }

@@ -1,6 +1,6 @@
 // Magic v2 (docs/14-magic-v2.md): widget folders, their manifest, revisions,
 // running data.ts in Deno against its schema, the build loop's own check, and
-// Magic windows in the core (refresh, health, config, revisions, hand edits).
+// Magic widgets in the core (refresh, health, config, revisions, hand edits).
 
 import fs from "node:fs";
 import http from "node:http";
@@ -319,7 +319,7 @@ describe.skipIf(!DENO)("buildWidget", () => {
   });
 });
 
-describe.skipIf(!DENO)("Magic windows in the core", () => {
+describe.skipIf(!DENO)("Magic widgets in the core", () => {
   beforeAll(() => void (process.env.CMD_MAGIC_UNSANDBOXED = "1"));
   afterAll(() => void delete process.env.CMD_MAGIC_UNSANDBOXED);
 

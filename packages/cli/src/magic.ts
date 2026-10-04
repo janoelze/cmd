@@ -1,4 +1,4 @@
-// `cmd magic`: the Magic window prompt lab (docs/14-magic-v2.md). Builds a
+// `cmd magic`: the Magic widget prompt lab (docs/14-magic-v2.md). Builds a
 // widget from a request in this process (no core needed), printing the agent's
 // steps, into a widget folder you can open, check and change with `cmd widget`.
 // The system prompt is read from packages/core/src/magic/prompt/ on every run,
@@ -45,7 +45,7 @@ usage: cmd magic <request…> [options]
   --json            print events as NDJSON instead of the trace
   --unsandboxed     run commands without sandbox-exec (only the policy and Deno's permissions guard them)
 
-The API key is the one stored in Settings → Magic Windows (or with
+The API key is the one stored in Settings → Magic Widgets (or with
 \`cmd settings secret KEY\`); nothing is read from the environment.
 
 env: CMD_MAGIC_UNSANDBOXED=1`;

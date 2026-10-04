@@ -1,4 +1,4 @@
-// Live progress of Magic windows (docs/14-magic-v2.md), from the core's
+// Live progress of Magic widgets (docs/14-magic-v2.md), from the core's
 // magic.stream / magic.data events. Kept out of the main store: progress and
 // refreshes re-render only the window they belong to.
 

@@ -1,4 +1,4 @@
-// Magic windows' providers: API keys kept out of settings (secrets.ts), the
+// Magic widgets' providers: API keys kept out of settings (secrets.ts), the
 // model lists (magic/models.ts), choosing a backend, and the old settings.
 
 import fs from "node:fs";
@@ -111,7 +111,7 @@ describe("choosing a backend", () => {
     expect(() => backendFor({ provider: "claude-cli", model: "x", apiKey: "k" })).toThrow(/Unknown provider/);
   });
 
-  it("a Magic window without a key says where to add one", async () => {
+  it("a Magic widget without a key says where to add one", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
     const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
@@ -119,7 +119,7 @@ describe("choosing a backend", () => {
     core.handlers["magic.run"]({ id: w.id, prompt: "a pomodoro timer" });
     const state = core.windows.others().find((x) => x.id === w.id)!.state as { phase: string; error?: string };
     expect(state.phase).toBe("error");
-    expect(state.error).toMatch(/No Anthropic API key: add one in Settings → Magic Windows/);
+    expect(state.error).toMatch(/No Anthropic API key: add one in Settings → Magic Widgets/);
     await core.close();
   });
 
