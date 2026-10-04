@@ -26,10 +26,13 @@ svg { display: block; }
 .k-center { display: flex; align-items: center; justify-content: center; text-align: center; }
 /* Sections, as panes in a terminal UI: one column, side by side from 720px.
    host.js hides panes that don't fit the height and cuts their rows to fit. */
-.k-panes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px 24px; align-content: start; }
-@media (min-width: 720px) { .k-panes { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); } }
-.k-pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.k-panes > :not(.k-pane) { grid-column: 1 / -1; min-width: 0; } /* the status line spans every column */
+/* Panes wrap into rows and grow to fill them, so tables in them always span the
+   window: a lone pane (or one left after host.js hides others) takes the whole
+   width. A grid with auto-fit columns left empty tracks beside a spanning row. */
+.k-panes { display: flex; flex-wrap: wrap; gap: 16px 24px; align-content: flex-start; }
+.k-pane { flex: 1 1 100%; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+@media (min-width: 720px) { .k-pane { flex-basis: 300px; } }
+.k-panes > :not(.k-pane) { flex: 1 0 100%; min-width: 0; } /* the status line is a row of its own */
 .k-cut { display: none !important; }
 
 .k-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -73,6 +76,9 @@ a.k-ellipsis, span.k-ellipsis { display: block; }
 .k-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .k-table tr:last-child td { border-bottom: 0; }
 .k-table .k-num, .k-num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.k-table .k-num { white-space: nowrap; }
+/* The column that takes the width left over and truncates (a name, title or path); the others keep their natural width. */
+.k-table .k-grow { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .k-list { list-style: none; margin: 0; padding: 0; }
 .k-list > li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); min-width: 0; }

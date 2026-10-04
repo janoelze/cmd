@@ -3,7 +3,7 @@ Notes: test_source returned text: three sysctl lines (cores, memory in bytes, lo
 
 {"kind":"widget","title":"System","loading":["Reading memory and disk…"],"source":{"type":"command","command":"sysctl -n hw.ncpu hw.memsize vm.loadavg; vm_stat; df -k /"},"refresh":5,"size":"m"}
 ---
-<style>.m td{vertical-align:middle}.m .l{width:1%;white-space:nowrap}.m .b{width:100%}.m .k-num{white-space:nowrap}</style>
+<style>.m td{vertical-align:middle}.m .l{width:1%;white-space:nowrap}.m .b{width:100%}</style>
 <div class="k-panes">
   <div class="k-pane">
     <table class="k-table m"><tbody>

@@ -3,7 +3,7 @@ Notes: the workspace ~/src/shop is a git repository on github.com/acme/shop; `gh
 
 {"kind":"widget","title":"acme/shop","loading":["Reading git and GitHub Actions…"],"source":{"type":"command","command":"echo @@STATUS; git status --porcelain=v2 --branch; echo @@LOG; git log -15 --format='%h%x09%H%x09%cI%x09%s'; echo @@FILES; git log -30 --name-only --format= | sort | uniq -c | sort -rn | head -12; echo @@RUNS; gh run list --limit 30 --json headSha,status,conclusion,number"},"refresh":30,"size":"l"}
 ---
-<style>.k-table td{vertical-align:middle}.dotc{width:14px}.wide{max-width:0;width:100%}.k-num{white-space:nowrap}.path{display:flex;min-width:0}.path .k-dim{flex:0 1 auto}.path b{font-weight:400;flex:none}</style>
+<style>.k-table td{vertical-align:middle}.dotc{width:14px}.path{display:flex;min-width:0}.path .k-dim{flex:0 1 auto}.path b{font-weight:400;flex:none}</style>
 <div class="k-panes">
   <div class="k-row k-between">
     <div class="k-row" style="min-width:0"><span class="k-dot" id="dot"></span><b class="k-mono" id="branch">–</b><span class="k-dim k-ellipsis" id="facts"></span></div>
@@ -41,10 +41,10 @@ cmd.onData(raw=>{
   const [cc,cw]=ciOf(runs[0]);ciDot.className="k-dot "+cc;ci.textContent=runs[0]?`CI ${cw} #${runs[0].number}`:"no CI runs";
   const log=(S.LOG||"").split("\n").filter(Boolean).map(l=>l.split("\t"));
   logCount.textContent=log.length?`last ${log.length}`:"";
-  commits.replaceChildren(...(log.length?log.map(([h,sha,when,...s])=>{const [c,w]=ciOf(bySha.get(sha));return row(`<td class="dotc">${w?`<span class="k-dot ${c}" title="CI ${w}"></span>`:""}</td><td class="k-dim">${h}</td><td class="k-text wide"><span class="k-ellipsis">${esc(s.join(" "))}</span></td><td class="k-num k-dim">${cmd.fmt.ago(when)}</td>`);}):[none("No commits yet")]));
+  commits.replaceChildren(...(log.length?log.map(([h,sha,when,...s])=>{const [c,w]=ciOf(bySha.get(sha));return row(`<td class="dotc">${w?`<span class="k-dot ${c}" title="CI ${w}"></span>`:""}</td><td class="k-dim">${h}</td><td class="k-text k-grow">${esc(s.join(" "))}</td><td class="k-num k-dim">${cmd.fmt.ago(when)}</td>`);}):[none("No commits yet")]));
   changeCount.textContent=files.length||"";
-  changes.replaceChildren(...(files.length?files.map(f=>row(`<td class="dotc ${f.k==="?"?"k-dim":f.k==="D"?"k-bad":"k-warn"}">${f.k}</td><td class="wide">${path(f.p)}</td>`)):[none("Nothing uncommitted")]));
+  changes.replaceChildren(...(files.length?files.map(f=>row(`<td class="dotc ${f.k==="?"?"k-dim":f.k==="D"?"k-bad":"k-warn"}">${f.k}</td><td class="k-grow">${path(f.p)}</td>`)):[none("Nothing uncommitted")]));
   const hotRows=(S.FILES||"").split("\n").map(l=>/^\s*(\d+)\s+(.+)$/.exec(l)).filter(Boolean);
-  hot.replaceChildren(...hotRows.map(([,n,p])=>row(`<td class="wide">${path(p)}</td><td class="k-num k-dim">${n}</td>`)));
+  hot.replaceChildren(...hotRows.map(([,n,p])=>row(`<td class="k-grow">${path(p)}</td><td class="k-num k-dim">${n}</td>`)));
 });
 </script>

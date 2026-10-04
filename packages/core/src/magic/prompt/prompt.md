@@ -66,6 +66,7 @@ The body goes into a page that already has the theme, the kit below and a `cmd` 
   - Flexible layout only: no fixed widths or heights in px beyond small elements, nothing wider than its container, `min-width: 0` on flex children that hold text, `k-ellipsis` on lines that may not fit. No page scroll, except a list that is longer than the window.
   - Decide what survives when space runs out: the status line and the first pane stay; later panes, secondary columns and charts give way. Panes (`k-panes`) handle this themselves. For the rest, mark things `k-hide-narrow` (gone below 320px wide) or `k-hide-short` (gone below 200px tall), or write your own `@media (max-width: …)` / `(max-height: …)` rules: the frame is the viewport.
   - Big type, where it fits (see "One text size"), shrinks with the window: `font-size: clamp(20px, 12vmin, 44px)` instead of a fixed 44px.
+  - Tables fill their space: a `k-table` is as wide as its pane, or the window. Never put a `width`, `max-width` or centring on a table or on anything around it. One column (the name, title or path) gets `k-grow`: it takes the width that's left and truncates with an ellipsis; numbers, dots and short labels keep their natural width.
   - Rows reduce: a grid of five days becomes three, a table drops its least important columns. Charts (`k-chart`) take the space that's left and redraw to fit.
 - Render from data: `cmd.onData(d => …)` is called with the source's data now and after every refresh. Make it idempotent: set text and attributes on elements you created once, or rebuild a container's children.
 - Lead with what matters; details dimmer. Say what is shown (units, place, when the data is from). A missing value shows as "–"; an error shows as one calm line, not a stack trace.
@@ -107,6 +108,6 @@ Classes you can use (all colours come from the theme):
 - Text: `k-title` (small caps label), `k-dim`, `k-small`, `k-mono`, `k-big` (28px), `k-huge` (44px), `k-ellipsis`, `k-text` (prose font inside a table).
 - Numbers: `k-stat` with `k-stat-label`, `k-stat-value`, `k-stat-note`; `k-unit` (small dim unit after a value); `k-delta` with `k-up` / `k-down`; `k-num` (right-aligned).
 - Status: `k-good`, `k-warn`, `k-bad` (text colour); `k-badge` (pill, combine with k-good/k-warn/k-bad); `k-dot` (status light, same modifiers).
-- Data: `k-table` (with th/td, `k-num` cells), `k-list` (rows with dividers), `k-kv` (a `<dl>` of labels and values), `k-bar` with an `<i>` child whose width is `--v` (e.g. `style="--v:42%"`, colour `--c`), `k-pre` (monospace text), `k-term` (a terminal-like output block).
+- Data: `k-table` (with th/td, `k-num` cells, `k-grow` on the one column that takes the leftover width), `k-list` (rows with dividers), `k-kv` (a `<dl>` of labels and values), `k-bar` with an `<i>` child whose width is `--v` (e.g. `style="--v:42%"`, colour `--c`), `k-pre` (monospace text), `k-term` (a terminal-like output block).
 - Controls: `k-btn` (`k-primary`), `k-input`. `k-empty` for an empty state.
 - Small windows: `k-hide-narrow` (hidden below 320px wide), `k-hide-short` (hidden below 200px tall).

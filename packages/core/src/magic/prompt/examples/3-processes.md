@@ -10,7 +10,7 @@ cmd.onData(text=>{
   const procs=String(text).trim().split("\n").slice(1).map(l=>{const m=l.trim().split(/\s+/);return{cpu:+m[1],rss:+m[2]*1024,name:m.slice(3).join(" ").split("/").pop()}});
   rows.replaceChildren(...procs.map(p=>{
     const tr=document.createElement("tr");
-    tr.innerHTML=`<td class="k-ellipsis" style="max-width:220px">${p.name}</td><td class="k-num">${cmd.fmt.pct(p.cpu)}</td><td><div class="k-bar bar"><i style="--v:${Math.min(100,p.cpu)}%;--c:${p.cpu>80?"var(--bad)":"var(--c1)"}"></i></div></td><td class="k-num k-dim">${cmd.fmt.bytes(p.rss)}</td>`;
+    tr.innerHTML=`<td class="k-grow">${p.name}</td><td class="k-num">${cmd.fmt.pct(p.cpu)}</td><td><div class="k-bar bar"><i style="--v:${Math.min(100,p.cpu)}%;--c:${p.cpu>80?"var(--bad)":"var(--c1)"}"></i></div></td><td class="k-num k-dim">${cmd.fmt.bytes(p.rss)}</td>`;
     return tr;
   }));
 });
