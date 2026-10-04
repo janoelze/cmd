@@ -884,7 +884,7 @@ kbd {
 .file-row {
   --depth: 0;
   display: grid;
-  grid-template-columns: 12px 16px minmax(0, 1fr) 72px 110px;
+  grid-template-columns: 12px 16px minmax(0, 1fr) 12px 72px 110px;
   align-items: center;
   gap: 6px;
   height: max(24px, calc(var(--font-code-size) * 1.7));
@@ -900,8 +900,60 @@ kbd {
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-size, .file-date { font-size: 0.85em; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
 .file-error { padding: 16px; color: var(--text-dim); font-size: 12px; }
+.file-op-error { margin: 2px 8px 4px; padding: 4px 8px; font: 12px var(--font-ui); color: var(--git-deleted); background: color-mix(in srgb, var(--git-deleted) 12%, transparent); border-radius: 5px; }
+.file-rename {
+  min-width: 0;
+  height: calc(100% - 4px);
+  padding: 0 4px;
+  margin-left: -5px;
+  font: inherit;
+  color: var(--text);
+  background: var(--well);
+  border: 1px solid var(--input-focus-edge);
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--input-glow);
+  outline: none;
+  user-select: text;
+}
 .file-list:focus .file-row.sel { background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .file-row .twisty { color: var(--text-dim); }
+/* Git state (FilesView): name and mark coloured; ignored files dimmed like hidden ones. */
+.git-mark { font-size: 0.85em; font-weight: 600; text-align: center; }
+.file-row.git-modified, .file-row.git-renamed { --git: var(--git-modified); }
+.file-row.git-added, .file-row.git-untracked { --git: var(--git-added); }
+.file-row.git-deleted { --git: var(--git-deleted); }
+.file-row.git-conflict { --git: var(--git-conflict); }
+.file-row[class*="git-"]:not(.git-ignored) :is(.file-name, .git-mark) { color: var(--git); }
+.file-row.git-deleted .file-name { text-decoration: line-through; }
+.file-row.git-ignored { opacity: 0.5; }
+.file-row.git-ignored.hidden-file { opacity: 0.4; }
+.git-branch {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  height: 22px;
+  padding: 0 6px;
+  font: 12px var(--font-ui);
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  border-radius: 5px;
+}
+.git-branch:hover { color: var(--text); background: var(--bg-hover); }
+.git-branch.on { color: var(--text); background: var(--bg-selected); }
+.git-branch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-ab { font-variant-numeric: tabular-nums; }
+.git-count {
+  padding: 0 5px;
+  font-size: 10.5px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: var(--bg-selected);
+  border-radius: 8px;
+}
 
 /* Text windows */
 .textwin { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); }

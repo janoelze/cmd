@@ -72,6 +72,9 @@ export function themeVars(t: Theme): Record<string, string> {
   if (t.appearance === "light") for (const [k, v] of Object.entries(LIGHT_VARS)) vars[`--${k}`] = v;
   for (const [k, v] of Object.entries(t.colors)) vars[`--${kebab(k)}`] = v;
   for (const [k, v] of Object.entries(syntaxColors(t))) vars[`--syn-${k}`] = v;
+  // Git states in file windows, from the terminal palette.
+  const p = t.terminal;
+  for (const [k, v] of Object.entries({ added: p.green, modified: p.yellow, deleted: p.red, conflict: p.magenta })) vars[`--git-${k}`] = v;
   for (const [k, v] of Object.entries(t.vars ?? {})) vars[`--${k}`] = v;
   return vars;
 }

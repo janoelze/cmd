@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, Pane, PaneId, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, Pane, PaneId, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { MagicModel, MagicProgress } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
@@ -188,6 +188,14 @@ export interface Methods {
   "fs.unwatch": { params: { path: string }; result: null };
   /** Write a text file; fails if it changed on disk since `expectMtime`. */
   "fs.write": { params: { path: string; text: string; expectMtime?: number }; result: { size: number; mtime: number } };
+  /** Rename in place (`name` has no slashes); fails if the name is taken. Returns the new path. */
+  "fs.rename": { params: { path: string; name: string }; result: string };
+  /** Copy a file or folder next to itself as "name copy", "name copy 2"…; returns the copy's path. */
+  "fs.duplicate": { params: { path: string }; result: string };
+  /** New empty file or folder in `dir`, named "untitled" / "untitled folder" (then " 2"…); returns its path. */
+  "fs.create": { params: { dir: string; kind: "file" | "dir" }; result: string };
+  /** Git state of the repository a folder is in, limited to that folder; null outside a work tree or without git. */
+  "git.status": { params: { path: string }; result: GitStatus | null };
 
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };

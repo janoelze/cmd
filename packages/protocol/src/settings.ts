@@ -133,6 +133,12 @@ export const SETTINGS_SCHEMA = {
   "shell.openUrls": { title: "Open URLs in cmd", type: "boolean", default: false, description: "With shell integration, `open <http(s) URL>` opens a cmd browser window." },
 
   "ui.defaultView": { title: "Default view", labels: { focus: "Focus", grid: "Grid", strip: "Strip", canvas: "Canvas" }, type: "enum", default: "focus", applies: "firstLaunch", options: ["focus", "grid", "strip", "canvas"], description: "View mode on first launch; after that the last used mode is remembered." },
+  "files.git": {
+    title: "Show git status",
+    type: "boolean",
+    default: true,
+    description: "File windows inside a git repository colour changed files, mark them (M, A, U, D) and show the branch, which switches to a list of the changes.",
+  },
   "ui.showResources": {
     title: "Show resource usage",
     type: "boolean",

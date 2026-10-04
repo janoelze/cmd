@@ -107,6 +107,8 @@ const api = {
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke("app-info"),
   restartCore: (): Promise<void> => ipcRenderer.invoke("restart-core"),
   revealPath: (p: string) => ipcRenderer.send("reveal-path", p),
+  /** Move a file or folder to the Trash (Finder's Put Back works). */
+  trashPath: (p: string): Promise<void> => ipcRenderer.invoke("trash-path", p),
   /** An uncaught error in this page (renderer/src/errors.ts). */
   reportError: (r: { kind: string; message: string; stack: string | null }) => ipcRenderer.send("renderer-error", r),
   openSettingsFile: (p: string) => ipcRenderer.send("open-settings", p),

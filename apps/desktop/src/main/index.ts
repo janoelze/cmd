@@ -468,6 +468,7 @@ ipcMain.handle("restart-core", () => restartCore());
 // The preload connects where main decided (dev builds use their own core).
 ipcMain.on("core-socket", (e) => (e.returnValue = socketPath));
 ipcMain.on("reveal-path", (_e, p: string) => shell.showItemInFolder(p));
+ipcMain.handle("trash-path", (_e, p: string) => shell.trashItem(p));
 // Uncaught errors in the app's pages (renderer/src/errors.ts): each one once per launch.
 const rendererErrors = new Set<string>();
 ipcMain.on("renderer-error", (e, r: { kind: string; message: string; stack: string | null }) => {

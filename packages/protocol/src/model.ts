@@ -190,3 +190,34 @@ export interface FileEntry {
   mtime: number;
   hidden: boolean;
 }
+
+/** How git sees a path in a file window (git.status). */
+export type GitFileState = "modified" | "added" | "deleted" | "renamed" | "untracked" | "ignored" | "conflict";
+
+export interface GitFile {
+  state: GitFileState;
+  /** All of its changes are staged (nothing left in the work tree). */
+  staged: boolean;
+}
+
+/** The repository a folder is in, and what changed under that folder. */
+export interface GitStatus {
+  /** Work tree root. */
+  root: string;
+  /** Git dir of this work tree (index, HEAD, logs/HEAD change on stage, commit, checkout). */
+  gitDir: string;
+  /** Branch name; null when detached or before the first commit's branch exists. */
+  branch: string | null;
+  /** Short commit id; null before the first commit. */
+  head: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  /**
+   * Changed paths under the folder asked about, spelled from that folder (absolute).
+   * An untracked or ignored folder is one entry and covers everything inside it.
+   */
+  files: Record<string, GitFile>;
+  /** More changes than were listed. */
+  truncated: boolean;
+}
