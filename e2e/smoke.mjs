@@ -750,6 +750,57 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.waitForTimeout(400);
     check(versions === 2 && tabs.join(",").startsWith("Changes,Settings,Files,Health") && fields.some((f) => f.includes("Start")) && !(await tile.locator(".magic-edit").count()), `⌘E shows a widget's edit view (versions, settings) and back (${versions}, ${tabs.join("/")})`);
     await call("window.close", { id: w.id });
+
+    // Status and notifications from data.ts; actions from the view (after a click only).
+    const b = await call("window.open", { kind: "magic", input: {} });
+    const bdir = path.join(home, "widgets", b.id, "revisions", "0001");
+    const bfiles = {
+      "manifest.json": JSON.stringify({ cmd: 2, kind: "widget", title: "Builds", size: "s", refresh: 0, config: [{ key: "fail", title: "Failing", type: "number", default: 0 }] }),
+      "data.ts": 'import { s, status, notify, type Infer } from "cmd";\nexport const schema = s.object({ fail: s.number() });\nexport type Data = Infer<typeof schema>;\nexport default async (c: { fail: number }): Promise<Data> => {\n  status({ text: c.fail ? `${c.fail} failing` : "all good", tone: c.fail ? "bad" : "good" });\n  if (c.fail) notify({ key: `fail-${c.fail}`, title: "Build failed", body: `run ${c.fail}` });\n  return { fail: c.fail };\n};\n',
+      "view.html": '<button class="k-btn" id="go">Rerun</button>',
+      "view.ts": 'import type { Data } from "./data.ts";\ncmd.terminal("echo refused-without-a-click");\ndocument.getElementById("go")!.onclick = () => cmd.terminal("echo clicked-rerun");\ncmd.onData<Data>(() => {});\n',
+    };
+    fs.mkdirSync(path.join(bdir, "files"), { recursive: true });
+    for (const [f, t] of Object.entries(bfiles)) fs.writeFileSync(path.join(bdir, "files", f), t);
+    fs.writeFileSync(path.join(bdir, "meta.json"), JSON.stringify({ n: 1, at: Date.now(), prompt: "builds", ok: true }));
+    await call("window.update", { id: b.id, state: { prompt: "builds", phase: "ready", widgetId: b.id } });
+    await call("magic.restore", { id: b.id, revision: 1 });
+    const btile = win.locator(`.tile[data-pane="${b.id}"]`);
+    const bstate = async () => (await call("window.list")).find((x) => x.id === b.id).state;
+    const statusText = () => btile.locator(".tile-status").textContent();
+    for (let i = 0; i < 20 && !(await statusText()).includes("all good"); i++) await win.waitForTimeout(300);
+    check((await statusText()).includes("all good") && (await btile.locator(".mark.has-light").count()) === 1, `a widget's status line shows in its title bar with a light (${await statusText()})`);
+
+    // Select another window, so the news isn't seen at once.
+    const other = (await call("pane.list"))[0];
+    await win.evaluate((id) => window.__cmdSelect?.(id), other.id);
+    await call("magic.config", { id: b.id, values: { fail: 1 } });
+    for (let i = 0; i < 20 && !(await bstate()).attention; i++) await win.waitForTimeout(300);
+    for (let i = 0; i < 20 && !(await statusText()).includes("Build failed"); i++) await win.waitForTimeout(100);
+    const marked = (await bstate()).attention;
+    await win.screenshot({ path: path.join(shots, "magic-attention.png") });
+    check(marked?.text === "Build failed" && (await statusText()).includes("Build failed"), `a widget's notification marks its window until seen (${marked?.text}, ${await statusText()})`);
+    // Looking at it (selected, with the app in front) is seeing it.
+    await win.evaluate((id) => window.__cmdSelect?.(id), b.id);
+    for (let i = 0; i < 20 && (await bstate()).attention; i++) await win.waitForTimeout(200);
+    for (let i = 0; i < 20 && !(await statusText()).endsWith("1 failing"); i++) await win.waitForTimeout(100);
+    check(!(await bstate()).attention && (await statusText()).endsWith("1 failing"), `looking at the widget clears it, and its status shows again (${await statusText()})`);
+
+    // cmd.terminal: refused at load, typed (not run) into a new terminal after a click.
+    const known = new Set((await call("pane.list")).map((p) => p.id));
+    const before = known.size;
+    await win.frameLocator(`.tile[data-pane="${b.id}"] iframe.magic-frame`).locator("#go").click();
+    let panes = await call("pane.list");
+    for (let i = 0; i < 20 && panes.length === before; i++) (await win.waitForTimeout(200), (panes = await call("pane.list")));
+    const fresh = panes.filter((p) => !known.has(p.id));
+    let typed = "";
+    for (let i = 0; i < 20 && !typed.includes("clicked-rerun"); i++) {
+      await win.waitForTimeout(200);
+      typed = fresh.length ? (await call("pane.read", { paneId: fresh.at(-1).id })).text ?? "" : "";
+    }
+    check(panes.length === before + 1 && typed.includes("echo clicked-rerun") && !typed.includes("refused"), `cmd.terminal types a command into a new terminal only after a click (${panes.length - before} new)`);
+    await call("pane.kill", { paneId: fresh.at(-1).id }).catch(() => {});
+    await call("window.close", { id: b.id });
   }
 }
 
