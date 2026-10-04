@@ -9,10 +9,14 @@ import type { WindowType, WindowTypes } from "./types.ts";
 export const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
 
-/** Accepts "example.com", "localhost:3000", full URLs; rejects anything else. */
+/** Accepts "example.com", "localhost:3000", full URLs, file paths (~ expanded); rejects anything else. */
 export function normalizeUrl(input: string): string {
   const t = input.trim();
   if (!t) return "about:blank";
+  // file://~/x: Chromium would take "~" for a host and abort the load.
+  const home = t.match(/^file:(?:\/\/)?~(?=$|\/)/i);
+  if (home) return pathToFileURL(os.homedir()).href + t.slice(home[0].length);
+  if (/^(~|\/)/.test(t)) return pathToFileURL(expandHome(t)).href;
   if (/^(https?|file|about):/i.test(t)) return t;
   if (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(t)) return `http://${t}`;
   if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/|$)/.test(t)) return `https://${t}`;

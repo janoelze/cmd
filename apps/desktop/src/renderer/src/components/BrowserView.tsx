@@ -107,7 +107,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const wv = ref.current;
     if (!wv || !url) return;
     try {
-      if (wv.getURL() !== url) void wv.loadURL(url);
+      if (wv.getURL() !== url) wv.loadURL(url).catch(() => {});
     } catch {
       // not attached yet; the initial src covers it
     }
@@ -122,7 +122,8 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     try {
       const w = await cmd.call("window.update", { id: win.id, state: { url: text } });
       setEditing(false);
-      ref.current?.loadURL(typeof w.state.url === "string" ? w.state.url : "about:blank");
+      // Rejects when the load fails or another navigation supersedes it; the webview shows that itself.
+      ref.current?.loadURL(typeof w.state.url === "string" ? w.state.url : "about:blank").catch(() => {});
       ref.current?.focus();
     } catch {
       input.current?.select();

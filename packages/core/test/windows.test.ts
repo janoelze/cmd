@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { PaneManager } from "../src/panes.ts";
 import { Store } from "../src/store.ts";
@@ -101,6 +102,11 @@ describe("window manager", () => {
     expect(normalizeUrl("example.com")).toBe("https://example.com");
     expect(normalizeUrl("localhost:3000/app")).toBe("http://localhost:3000/app");
     expect(normalizeUrl("")).toBe("about:blank");
+    const home = pathToFileURL(os.homedir()).href;
+    expect(normalizeUrl("file://~/web/a.html#x")).toBe(`${home}/web/a.html#x`);
+    expect(normalizeUrl("~/web/a.html")).toBe(`${home}/web/a.html`);
+    expect(normalizeUrl("/tmp/a.html")).toBe("file:///tmp/a.html");
+    expect(normalizeUrl("file:///tmp/a.html")).toBe("file:///tmp/a.html");
     expect(() => normalizeUrl("not a url")).toThrow();
   });
 
