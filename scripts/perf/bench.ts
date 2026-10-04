@@ -230,7 +230,29 @@ async function search(): Promise<Result> {
   return r;
 }
 
-const scenarios: Record<string, (u: Under) => Promise<Result>> = { idle, flood, memory };
+/** What a window waits for at startup: snapshots of N terminals with some scrollback, asked in parallel. */
+async function snapshot(u: Under): Promise<Result> {
+  const panes: PaneId[] = [];
+  for (let i = 0; i < PANES; i++) panes.push(await shell(u));
+  for (const p of panes) {
+    const done = waitFor(u, p, MARK);
+    await u.conn.client.call("pane.write", { paneId: p, data: `for i in {1..3000}; do echo "\\033[3$((i % 7))mline $i\\033[0m of some output"; done; ${printMark}\r` });
+    await done;
+  }
+  await sleep(500);
+  const times: number[] = [];
+  let bytes = 0;
+  for (let round = 0; round < 5; round++) {
+    const t0 = performance.now();
+    const snaps = await Promise.all(panes.map((paneId) => u.conn.client.call("pane.snapshot", { paneId })));
+    times.push(performance.now() - t0);
+    bytes = snaps.reduce((n, s) => n + s.data.length, 0);
+  }
+  times.sort((a, b) => a - b);
+  return { panes: PANES, "all snapshots ms (median)": times[2]!, "first ms": times[0]!, "KB total": bytes / 1024 };
+}
+
+const scenarios: Record<string, (u: Under) => Promise<Result>> = { idle, flood, memory, snapshot };
 const run = scenario === "all" ? [...Object.keys(scenarios), "search"] : [scenario];
 const out = path.join(root, ".cmd-dev/perf/results.jsonl");
 fs.mkdirSync(path.dirname(out), { recursive: true });

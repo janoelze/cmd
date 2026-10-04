@@ -459,8 +459,12 @@ cmd.onStatus(async (status) => {
   // An older core has no remote access: leave it null.
   void cmd.call("remote.status", {}).then((remote) => set({ remote, pairRequests: remote.requests ?? [] }), () => {});
   // The windows show now; each terminal opens once its content is written (hold).
+  // Answers come back in the order asked (one socket): the selected terminal first,
+  // then the rest of this window's Space, then other Spaces.
+  const selected = state.spaces.get(state.spaceId)?.view?.["selection.pane"];
+  const rank = (p: Pane) => (p.id === selected ? 0 : p.spaceId === state.spaceId ? 1 : 2);
   await Promise.allSettled(
-    snap.panes.map(async (p) => {
+    [...snap.panes].sort((a, b) => rank(a) - rank(b)).map(async (p) => {
       try {
         const { data, cols, rows } = await cmd.call("pane.snapshot", { paneId: p.id });
         terminals.reset(p.id);

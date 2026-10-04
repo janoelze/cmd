@@ -710,7 +710,6 @@ app.on("web-contents-created", (_e, contents) => {
 app.whenReady().then(async () => {
   performance.mark("boot:app-ready");
   nativeTheme.themeSource = savedAppearance().source;
-  if (devIcon) app.dock?.setIcon(devIcon);
   app.setAboutPanelOptions({
     applicationName: app.getName(),
     applicationVersion: app.getVersion(),
@@ -736,6 +735,8 @@ app.whenReady().then(async () => {
   // First: the window loads its bundle while the menu is built and the core is
   // checked or started; the preload connects as soon as the socket answers.
   spaces.restore();
+  // Decoding and setting it takes ~80 ms on this thread: not while the first window starts (dev builds only).
+  if (devIcon) setTimeout(() => app.dock?.setIcon(devIcon), 1000);
   ensureCore().then(
     () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows), servePreviews(socketPath), void countLaunch()),
     (err: Error) => (log.error("the core did not start", err), dialog.showErrorBox("cmd: the core did not start", err.message)),
