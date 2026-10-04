@@ -1,7 +1,7 @@
 {
   "name": "@cmd/desktop",
   "productName": "cmd",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Terminal and coding-agent workbench",
   "author": "Jan Oelze",
   "homepage": "https://github.com/janoelze/cmd",
