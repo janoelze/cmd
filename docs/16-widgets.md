@@ -47,7 +47,7 @@ Each action has one place and does one thing.
 
 | Intent | How |
 |---|---|
-| "What's available?" | **Widget Library…** (⌥⌘M): a gallery. Its search field only searches. |
+| "What's available?" | **Widget Library…** (⇧⌘L): a gallery. Its search field only searches. |
 | "Make a new one" | **New Widget with Magic…** (⇧⌘M), or the ✦ card in the library |
 | "Change this one" | **Edit Widget** (⌘E), **Change…** (⌘L) |
 | "Take it off my desk" | ⌘W: **Remove from Desk** |
@@ -55,7 +55,7 @@ Each action has one place and does one thing.
 
 ### Menus and sidebar
 
-Both widget shortcuts are on M: ⇧⌘M makes a widget, ⌥⌘M opens the library. ⌥⌘M is free (the app has no Minimize item, so no ⌘M family in use), and on Windows the two map to Ctrl+Alt+Shift+M and Ctrl+Alt+M, which don't collide (`otherPlatformKey`).
+The library is ⇧⌘L, as Xcode's Library is: L for Library. ⌥⌘M looks natural next to ⇧⌘M but is taken: the Window menu's Minimize (⌘M) gets Minimize All (⌥⌘M) as its macOS alternate. ⌃⌘M would collide with ⇧⌘M on Windows (both become Ctrl+Alt+Shift+M, `otherPlatformKey`). ⇧⌘L becomes Ctrl+Alt+Shift+L there, also free.
 
 
 - **File** holds windows only: Terminal, Claude, Codex, Browser, File Browser, Text.
