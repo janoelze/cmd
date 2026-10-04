@@ -1069,6 +1069,10 @@ check(restored === selectedBefore && !!selectedBefore, `selected terminal restor
   const text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 500 }).then((r) => r.text), markerPane);
   await win.evaluate((id) => window.__cmdSelect(id), markerPane);
   await menu("view.focus");
+  // WebGL draws to a canvas: read the screen through the DOM renderer (settings apply live).
+  const settingsPath = path.join(home, "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8").replace(/^\/\/.*$/gm, ""));
+  fs.writeFileSync(settingsPath, JSON.stringify({ ...settings, "terminal.renderer": "dom" }));
   await win.waitForTimeout(600);
   const shown = await win.locator(`.tile[data-pane="${markerPane}"] .xterm-rows`).textContent();
   const count = (shown.match(/MARKER-42/g) ?? []).length;
