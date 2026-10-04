@@ -103,6 +103,13 @@ export const SETTINGS_SCHEMA = {
     labels: { both: "Both", left: "Left Option", right: "Right Option", off: "Off" },
     description: "Option+key sends Escape+key (Meta), for shell and editor shortcuts. Off, or on one side only, keeps that Option key typing characters like @ and € on international layouts.",
   },
+  "terminal.clickMovesCursor": {
+    title: "Click moves the cursor",
+    type: "boolean",
+    default: true,
+    description: "At a shell prompt, clicking in the command line moves the cursor there. Needs shell integration.",
+  },
+  "terminal.hideMouseWhileTyping": { title: "Hide pointer while typing", type: "boolean", default: false, description: "Hide the mouse pointer over a terminal while you type; moving the mouse brings it back." },
   "terminal.copyOnSelect": { title: "Copy on select", type: "boolean", default: false, description: "Copy text to the clipboard as soon as it's selected." },
   "terminal.pasteProtection": {
     title: "Confirm risky pastes",

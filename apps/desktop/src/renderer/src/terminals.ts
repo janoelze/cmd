@@ -668,6 +668,21 @@ class Terminals {
   /** Mouse and drag-and-drop on the terminal's element. */
   #dom(h: Host): void {
     const { el, term, paneId } = h;
+    // Click to move the cursor at a prompt: a plain click (no drag, no selection)
+    // in an already focused terminal, on the command line being typed.
+    let down: { x: number; y: number; focused: boolean } | null = null;
+    el.addEventListener("mousedown", (e) => {
+      down = e.button === 0 && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey ? { x: e.clientX, y: e.clientY, focused: el.contains(document.activeElement) } : null;
+    });
+    el.addEventListener("mouseup", (e) => {
+      const d = down;
+      down = null;
+      if (!d?.focused || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3 || e.detail > 1 || !this.#settings["terminal.clickMovesCursor"]) return;
+      setTimeout(() => this.#moveCursorTo(h, e.clientX, e.clientY));
+    });
+    // Hide the pointer while typing; it comes back when the mouse moves.
+    el.addEventListener("keydown", () => this.#settings["terminal.hideMouseWhileTyping"] && el.classList.add("typing"), true);
+    el.addEventListener("mousemove", () => el.classList.remove("typing"));
     // Copy on select: when the mouse lets go (not on every step of a drag).
     el.addEventListener("mouseup", () => {
       if (this.#settings["terminal.copyOnSelect"] && term.hasSelection()) setTimeout(() => cmd.writeClipboard(term.getSelection()));
@@ -702,6 +717,33 @@ class Terminals {
       e.stopPropagation();
       void this.paste(paneId, text);
     });
+  }
+
+  /**
+   * Send the arrow keys that take the shell's cursor to the clicked cell, when
+   * the shell is at its prompt (a prompt mark with no command started after it)
+   * and the click is on the command line, between that prompt and the cursor's
+   * line or the lines it wraps onto.
+   */
+  #moveCursorTo(h: Host, clientX: number, clientY: number): void {
+    const t = h.term;
+    const buf = t.buffer.active;
+    if (t.hasSelection() || buf.type !== "normal" || t.modes.mouseTrackingMode !== "none") return;
+    const prompt = h.prompts.findLast((m) => !m.isDisposed);
+    const output = h.outputs.at(-1);
+    if (!prompt || (output && !output.start.isDisposed && output.start.line >= prompt.line)) return;
+    const screen = h.el.querySelector(".xterm-screen")?.getBoundingClientRect();
+    if (!screen?.width) return;
+    const col = Math.max(0, Math.min(t.cols - 1, Math.floor(((clientX - screen.left) / screen.width) * t.cols)));
+    const line = buf.viewportY + Math.floor(((clientY - screen.top) / screen.height) * t.rows);
+    const cursorLine = buf.baseY + buf.cursorY;
+    let last = cursorLine;
+    while (buf.getLine(last + 1)?.isWrapped) last++;
+    if (line < prompt.line || line > last) return;
+    const delta = (line - cursorLine) * t.cols + (col - buf.cursorX);
+    if (!delta || Math.abs(delta) > 2000) return;
+    const key = t.modes.applicationCursorKeysMode ? (delta > 0 ? "\x1bOC" : "\x1bOD") : delta > 0 ? "\x1b[C" : "\x1b[D";
+    this.#reply(h, key.repeat(Math.abs(delta)));
   }
 
   #setImages(h: Host, on: boolean): void {

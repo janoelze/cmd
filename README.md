@@ -119,6 +119,7 @@ Every shortcut is a real menu-bar item. Remap any of them under Settings → Key
 | ⇧⌘A | copy the last command's output |
 | ⌘Home / ⌘End, ⌘PgUp / ⌘PgDn | terminal: scroll to the top / bottom, by a page |
 | ⌥-drag | select text in programs that use the mouse (Claude Code, vim) |
+| click | at a shell prompt, move the cursor to where you clicked |
 | ⌘+ / ⌘− / ⌘0 | terminal text size (this session only) |
 | ⌥⌘1/2/3/4 | focus / grid / strip / canvas |
 | ⌘↩ | toggle focus: the selected window fills the pane; again returns to grid, strip or canvas |

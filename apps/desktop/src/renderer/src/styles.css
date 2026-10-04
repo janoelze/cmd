@@ -538,6 +538,7 @@ kbd {
 }
 .find-bar button:hover { background: var(--bg-hover); color: var(--text); }
 .find-bar button.on { background: var(--bg-selected); color: var(--text); }
+.xterm-host.typing, .xterm-host.typing * { cursor: none !important; }
 /* OSC 9;4 progress, along the terminal's top edge. */
 .term-progress { position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 4; pointer-events: none; overflow: hidden; }
 .term-progress > div { height: 100%; background: var(--accent); transition: width 200ms var(--ease); }
