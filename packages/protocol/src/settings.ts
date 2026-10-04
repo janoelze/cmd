@@ -268,7 +268,7 @@ export const SETTINGS_SCHEMA = {
     title: "Remote access",
     type: "boolean",
     default: false,
-    description: "Use this Mac's Spaces from a phone or any browser, end-to-end encrypted through a relay. Control access is a shell on this Mac.",
+    description: "Use this Mac's Spaces from your phone or any browser, end-to-end encrypted.",
   },
   "remote.relay": {
     title: "Relay",
@@ -276,7 +276,7 @@ export const SETTINGS_SCHEMA = {
     code: true,
     type: "string",
     default: "wss://relay.endtime-instruments.org",
-    description: "The relay this Mac connects out to. It only forwards encrypted bytes, but sees when you're connected; run your own (apps/relay) for more privacy. Changing it means pairing devices again.",
+    description: "Where this Mac connects to. Changing it means pairing devices again.",
   },
   "remote.client": {
     title: "Web client",
@@ -284,9 +284,9 @@ export const SETTINGS_SCHEMA = {
     code: true,
     type: "string",
     default: "https://cmd.endtime-instruments.org",
-    description: "Where phones open cmd. Pairing links point there; a relay of your own must allow its origin (RELAY_ORIGINS).",
+    description: "Where phones open cmd.",
   },
-  "remote.deviceExpiryDays": { title: "Unpair devices unseen for", unit: "days", type: "number", default: 30, min: 1, max: 365, description: "Paired devices that haven't connected for this long are unpaired." },
+  "remote.deviceExpiryDays": { title: "Unpair devices unseen for", unit: "days", type: "number", default: 30, min: 1, max: 365, description: "Unused devices are unpaired after this." },
 
   "agents.claude.command": {
     title: "Claude Code command",

@@ -58,7 +58,7 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
       <SectionView>
         <RowShell
           title="Remote access"
-          desc="Use your terminals, agents and files from your phone or any browser. End-to-end encrypted: the relay in between only forwards scrambled bytes."
+          desc="Use your terminals and agents from your phone or any browser, end-to-end encrypted."
           note={enabled ? (status?.error && status.state === "error" ? `Can't reach the relay: ${status.error}` : STATE_LINE[status?.state ?? "connecting"]) : undefined}
           noteError={status?.state === "error"}
         >
@@ -184,7 +184,7 @@ function DeviceRow({ d }: { d: RemoteDevice }) {
   };
   const seen = d.connected ? "Connected" : `Last seen ${ago(d.lastSeenAt)}`;
   return (
-    <RowShell title={d.name} desc={`${seen} · paired ${day(d.pairedAt)} · unpaired if unused until ${day(d.expiresAt)}`}>
+    <RowShell title={d.name} desc={`${seen} · paired ${day(d.pairedAt)}`}>
       <Segmented value={d.scope} options={["view", "control"]} labels={{ view: "View only", control: "Control" }} onChange={(v) => void cmd.call("remote.setScope", { id: d.id, scope: v as RemoteScope })} />
       <button className="sw-button" onClick={() => void unpair()}>
         Unpair
