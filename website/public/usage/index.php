@@ -21,7 +21,7 @@ $maxDaily = max($s['daily']) ?: 1;
 page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 ?>
 <h1>Usage</h1>
-<p class="lede">cmd counts a few things and sends the counts here once a minute: app launches, windows opened by type, agents started by kind and crashes by process, with the app version, macOS version, processor type and a random id per install. Never commands, paths, titles, anything typed or where you are. Turn it off in Settings → About.</p>
+<p class="lede">cmd sends counts of launches, windows, agents and crashes, with its version, macOS version, processor and a random install id. Never commands, paths or anything you type. Turn it off in Settings → About.</p>
 
 <div class="tiles">
   <div class="card tile"><div class="label">Active today</div><div class="value"><?= number_format($s['activeToday']) ?></div></div>
