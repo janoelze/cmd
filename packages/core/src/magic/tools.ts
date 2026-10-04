@@ -29,8 +29,8 @@ export interface ToolContext {
 export interface ToolOutput {
   output: string;
   isError: boolean;
-  /** A screenshot (base64 PNG) for the model to look at. */
-  image?: string;
+  /** Screenshots (base64 PNG) for the model to look at. */
+  images?: string[];
 }
 
 const why = { type: "string", description: "A few words for the user saying what this step does, e.g. \"Looking at network services\"." };

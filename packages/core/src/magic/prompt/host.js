@@ -324,6 +324,24 @@
     { capture: true },
   );
 
+  // Sliders (.k-range) show their value as a filled track (--v), as the person drags and when code sets it.
+  const syncRange = (el) => {
+    const min = Number(el.min || 0), max = Number(el.max || 100), v = Number(el.value);
+    el.style.setProperty("--v", `${((v - min) / (max - min || 1)) * 100}%`);
+  };
+  const syncRanges = () => document.querySelectorAll("input.k-range").forEach(syncRange);
+  document.addEventListener("input", (e) => e.target instanceof HTMLInputElement && e.target.classList.contains("k-range") && syncRange(e.target), true);
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  Object.defineProperty(HTMLInputElement.prototype, "value", {
+    get() {
+      return valueSetter.get.call(this);
+    },
+    set(v) {
+      valueSetter.set.call(this, v);
+      if (this.classList?.contains("k-range")) syncRange(this);
+    },
+  });
+
   // Theme: CSS variables update by themselves; code that draws with colours
   // (a canvas) re-reads them in cmd.onTheme, called now and on every change.
   const themeListeners = [];
@@ -373,6 +391,7 @@
       render(m.html);
       if ("data" in m && m.data !== undefined) receive(m.data);
       else fit();
+      syncRanges();
       // Painted with its data: the host shows the frame only now (two frames: after layout and paint).
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
@@ -393,5 +412,6 @@
   document.addEventListener("DOMContentLoaded", () => {
     if ("__CMD_DATA__" in window) receive(window.__CMD_DATA__);
     else fit();
+    syncRanges();
   });
 })();

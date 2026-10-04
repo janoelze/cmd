@@ -28,6 +28,8 @@ export interface PreviewShot {
   drawn: boolean;
   scrollW: number;
   scrollH: number;
+  /** Bounds of the visible content in the viewport. */
+  box?: { top: number; left: number; bottom: number; right: number } | null;
   png?: string;
 }
 
@@ -59,6 +61,10 @@ export function previewPage(body: string, data: unknown, theme: ThemeLike, media
 }
 
 export const SMALL: [number, number] = [240, 150];
+/** A window in the strip (cmd's default layout): a column the full height of the screen. */
+export const STRIP: [number, number] = [440, 880];
+/** A window in focus mode, or a wide grid cell. */
+export const WIDE: [number, number] = [1000, 560];
 
 export interface PreviewCase {
   label: string;
@@ -67,6 +73,8 @@ export interface PreviewCase {
   size: [number, number];
   /** Problems here fail the build (else they are warnings). */
   strict: boolean;
+  /** Check how the content uses the window (it doesn't float in the middle). */
+  layout?: boolean;
   shot?: boolean;
 }
 
@@ -74,22 +82,49 @@ export interface PreviewReport {
   ok: boolean;
   problems: string[];
   warnings: string[];
-  /** The main screenshot (live data, its size, dark), base64 PNG. */
+  /** The main screenshot (live data, a strip window, dark), base64 PNG. */
   shot?: string;
+  /** More screenshots for the agent (light at its size, wide). */
+  shots?: string[];
   /** No previewer was available: nothing was rendered. */
   skipped?: boolean;
 }
 
-/** The renders a widget gets: live data dark and light at its size, small, and each fixture. */
+/**
+ * The renders a widget gets: live data in a tall strip window (dark) and at its
+ * own size (light), wide, small, and each fixture in a strip window.
+ */
 export function previewCases(m: WidgetManifest, live: unknown, fixtures: { name: string; data: unknown }[]): PreviewCase[] {
   const size = [...MAGIC_SIZES[m.size]] as [number, number];
   const cases: PreviewCase[] = [
-    { label: "live data, dark", data: live, theme: "dark", size, strict: true, shot: true },
-    { label: "live data, light", data: live, theme: "light", size, strict: true },
+    { label: `live data, a strip window (${STRIP.join("×")}), dark`, data: live, theme: "dark", size: STRIP, strict: true, layout: true, shot: true },
+    { label: `live data at its size (${size.join("×")}), light`, data: live, theme: "light", size, strict: true, layout: true, shot: true },
+    { label: `live data, wide (${WIDE.join("×")})`, data: live, theme: "dark", size: WIDE, strict: false, layout: true, shot: true },
     { label: `live data at ${SMALL.join("×")}`, data: live, theme: "dark", size: SMALL, strict: false },
   ];
-  for (const f of fixtures) if (f.name !== "live") cases.push({ label: `fixture ${f.name}`, data: f.data, theme: "dark", size, strict: true });
+  for (const f of fixtures) if (f.name !== "live") cases.push({ label: `fixture ${f.name}, a strip window`, data: f.data, theme: "dark", size: STRIP, strict: true });
   return cases;
+}
+
+/**
+ * How the content sits in the window (prompt.md → Layout): it starts at the top
+ * and, in a tall window, something grows to use the height. Content in a band
+ * in the middle (centred, with empty space above and below) is a web page
+ * demo, not an app.
+ */
+export function layoutIssues(box: PreviewShot["box"], w: number, h: number): { problems: string[]; warnings: string[] } {
+  const problems: string[] = [];
+  const warnings: string[] = [];
+  if (!box) return { problems, warnings };
+  const above = box.top;
+  const below = h - box.bottom;
+  const used = (box.bottom - box.top) / h;
+  if (above > Math.max(48, h * 0.15) && below > Math.max(48, h * 0.15)) problems.push(`the content floats in the middle of the window (${above}px empty above it, ${below}px below): start at the top, put controls in a footer at the bottom, and let one part grow into the height (see Layout)`);
+  else if (above > Math.max(64, h * 0.25)) problems.push(`the content starts ${above}px down the window, leaving the top empty: start at the top (see Layout)`);
+  else if (h >= 500 && used < 0.45) warnings.push(`the content uses only the top ${Math.round(used * 100)}% of a ${h}px tall window: in a tall window let a list, chart or visualizer take the rest of the height (k-main / k-grow-v)`);
+  const side = Math.min(box.left, w - box.right);
+  if (w >= 800 && side > w * 0.2) warnings.push(`the content is a narrow column centred in a ${w}px wide window (${side}px empty at each side): let it span the width, or lay out panes side by side`);
+  return { problems, warnings };
 }
 
 export async function preview(previewer: Previewer | null, body: string, m: WidgetManifest, cases: PreviewCase[]): Promise<PreviewReport> {
@@ -97,18 +132,23 @@ export async function preview(previewer: Previewer | null, body: string, m: Widg
   const shots = await previewer.render(cases.map((c) => ({ page: previewPage(body, c.data, PREVIEW_THEMES[c.theme], m.media), width: c.size[0], height: c.size[1], shot: c.shot })));
   const problems: string[] = [];
   const warnings: string[] = [];
-  let shot: string | undefined;
+  const pngs: string[] = [];
   cases.forEach((c, i) => {
     const s = shots[i];
     if (!s) return;
-    if (c.shot && s.png) shot = s.png;
+    if (c.shot && s.png) pngs.push(s.png);
     const add = (msg: string, hard = c.strict) => (hard ? problems : warnings).push(`${c.label}: ${msg}`);
     for (const e of new Set(s.errors)) add(`script error: ${e}`, true);
     if (s.text === 0 && !s.drawn && s.nodes < 3) add("draws nothing", true);
     if (s.scrollW > c.size[0] + 2) add(`content is ${s.scrollW}px wide in a ${c.size[0]}px window (it scrolls sideways)`);
     if (s.scrollH > c.size[1] + 2) add(`content is ${s.scrollH}px tall in a ${c.size[1]}px window`, false);
+    if (c.layout) {
+      const l = layoutIssues(s.box, c.size[0], c.size[1]);
+      for (const p of l.problems) add(p);
+      for (const w of l.warnings) add(w, false);
+    }
   });
-  return { ok: !problems.length, problems, warnings, shot };
+  return { ok: !problems.length, problems, warnings, shot: pngs[0], shots: pngs.slice(1) };
 }
 
 // ── Playwright ───────────────────────────────────────────

@@ -7,6 +7,13 @@ cmd.onData<Data>((d) => {
   $("temp").textContent = Math.round(d.temp) + "°";
   $("what").textContent = WEATHER[d.code] ?? "";
   $("more").textContent = `${d.place} · feels ${Math.round(d.feels)}° · wind ${Math.round(d.wind)} km/h`;
+  cmd.chart($("hours"), {
+    type: "line",
+    area: true,
+    labels: d.hours.map((h) => h.time.slice(11, 16)),
+    series: [{ name: "°C", values: d.hours.map((h) => h.temp) }],
+    format: (n) => Math.round(n) + "°",
+  });
   $("days").replaceChildren(
     ...d.days.map((day, i) => {
       const e = document.createElement("div");

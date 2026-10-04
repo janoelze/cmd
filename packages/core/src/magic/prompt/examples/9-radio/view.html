@@ -1,0 +1,28 @@
+<style>
+.meter{display:flex;align-items:flex-end;gap:3px;height:22px}
+.meter i{width:4px;height:100%;border-radius:2px;background:var(--fill);transform-origin:bottom;transform:scaleY(.15)}
+.on .meter i{background:var(--accent)}
+.vol{max-width:220px}
+</style>
+<div class="k-app" id="app">
+  <div class="k-toolbar k-plain">
+    <div class="k-stack" style="gap:1px;min-width:0">
+      <b class="k-ellipsis">Bassdrive</b>
+      <span class="k-dim k-small k-ellipsis">24/7 drum &amp; bass · 192 kbps</span>
+    </div>
+    <span class="k-spacer"></span>
+    <span class="k-dot" id="dot"></span><span class="k-small" id="state">Off</span>
+  </div>
+  <div class="k-hero">
+    <button class="k-btn k-primary k-xl" id="play" aria-label="Play"><i class="k-icon" data-icon="play" id="glyph"></i></button>
+    <div class="meter" id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <span class="k-dim k-small" id="detail">Press play to tune in</span>
+  </div>
+  <div class="k-footer k-plain">
+    <button class="k-btn k-ghost k-icon-only" id="mute" aria-label="Mute"><i class="k-icon" data-icon="volume" id="muteIcon"></i></button>
+    <input class="k-range vol" id="volume" type="range" min="0" max="1" step="0.01" aria-label="Volume">
+    <span class="k-spacer"></span>
+    <a class="k-small k-dim" href="https://bassdrive.com/">bassdrive.com</a>
+  </div>
+  <audio id="audio" preload="none" crossorigin="anonymous" src="https://bassdrive.radioca.st/stream"></audio>
+</div>

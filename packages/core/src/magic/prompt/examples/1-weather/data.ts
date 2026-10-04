@@ -6,13 +6,15 @@ export const schema = s.object({
   feels: s.number(),
   wind: s.number(),
   code: s.number(),
+  hours: s.array(s.object({ time: s.string(), temp: s.number() })),
   days: s.array(s.object({ date: s.string(), max: s.number(), min: s.number(), code: s.number() })),
 });
 export type Data = Infer<typeof schema>;
 
 type Geo = { results?: { name: string; country_code: string; latitude: number; longitude: number }[] };
 type Forecast = {
-  current: { temperature_2m: number; apparent_temperature: number; wind_speed_10m: number; weather_code: number };
+  current: { time: string; temperature_2m: number; apparent_temperature: number; wind_speed_10m: number; weather_code: number };
+  hourly: { time: string[]; temperature_2m: number[] };
   daily: { time: string[]; temperature_2m_max: number[]; temperature_2m_min: number[]; weather_code: number[] };
 };
 
@@ -21,7 +23,7 @@ export default async function data(config: { city: string }): Promise<Data> {
   const at = geo.results?.[0];
   if (!at) throw new Error(`No place called "${config.city}"`);
   const f = await fetchJson<Forecast>(
-    `https://api.open-meteo.com/v1/forecast?latitude=${at.latitude}&longitude=${at.longitude}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=5`,
+    `https://api.open-meteo.com/v1/forecast?latitude=${at.latitude}&longitude=${at.longitude}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&hourly=temperature_2m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=5`,
   );
   return {
     place: `${at.name}, ${at.country_code}`,
@@ -29,6 +31,11 @@ export default async function data(config: { city: string }): Promise<Data> {
     feels: f.current.apparent_temperature,
     wind: f.current.wind_speed_10m,
     code: f.current.weather_code,
+    // The next 24 hours, from the current hour (times are local to the place).
+    hours: f.hourly.time
+      .map((time, i) => ({ time, temp: f.hourly.temperature_2m[i]! }))
+      .filter((h) => h.time.slice(0, 13) >= f.current.time.slice(0, 13))
+      .slice(0, 24),
     days: f.daily.time.map((date, i) => ({ date, max: f.daily.temperature_2m_max[i]!, min: f.daily.temperature_2m_min[i]!, code: f.daily.weather_code[i]! })),
   };
 }

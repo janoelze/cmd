@@ -1,0 +1,8 @@
+{
+  "cmd": 2,
+  "kind": "widget",
+  "title": "Bassdrive",
+  "size": "s",
+  "refresh": 0,
+  "media": ["https://bassdrive.radioca.st"]
+}

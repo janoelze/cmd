@@ -1,13 +1,15 @@
 import type { Data } from "./data.ts";
 
-const list = document.getElementById("list")!;
+const $ = (id: string) => document.getElementById(id)!;
 
 cmd.onData<Data>((d) => {
+  $("topic").textContent = `${d.query} · last 24 hours`;
+  $("count").textContent = d.stories.length ? `${d.stories.length} stories` : "";
   if (!d.stories.length) {
-    list.innerHTML = '<li class="k-empty">No stories in the last day</li>';
+    $("list").innerHTML = '<li class="k-empty">No stories in the last day</li>';
     return;
   }
-  list.replaceChildren(
+  $("list").replaceChildren(
     ...d.stories.map((st) => {
       const li = document.createElement("li");
       li.className = "story";

@@ -311,10 +311,12 @@ export async function fetchText(url: string, init: RequestInit = {}): Promise<st
 export function xmlItems(xml: string, tag: string): Record<string, string>[] {
   const out: Record<string, string>[] = [];
   const re = new RegExp(`<${tag}[\\s>][\\s\\S]*?</${tag}>`, "g");
-  for (const m of xml.match(re) ?? []) {
+  for (const whole of xml.match(re) ?? []) {
+    // Inside the element: its children, not the element itself.
+    const m = whole.slice(whole.indexOf(">") + 1, whole.lastIndexOf("</"));
     const item: Record<string, string> = {};
     for (const c of m.matchAll(/<([\w:-]+)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/g)) {
-      if (c[1] === tag || c[1]! in item) continue;
+      if (c[1]! in item) continue;
       item[c[1]!] = decode(c[2]!.replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/, "$1").trim());
     }
     for (const c of m.matchAll(/<([\w:-]+)\s([^>]*?)\/>/g)) if (!(c[1]! in item)) item[c[1]!] = /href="([^"]*)"/.exec(c[2]!)?.[1] ?? "";

@@ -12,6 +12,7 @@ import {
   checkTypes,
   findDeno,
   parseManifest,
+  layoutIssues,
   configValues,
   runData,
   sandboxAvailable,
@@ -73,6 +74,22 @@ describe("manifest", () => {
     expect(bad({ title: "x", kind: "terminal" })[0]).toMatch(/command/);
     expect(bad({ kind: "widget" })[0]).toMatch(/title/);
     expect(bad({ title: "x", media: ["http://radio.example"] })[0]).toMatch(/https origin/);
+  });
+});
+
+describe("layout check", () => {
+  it("fails content floating in the middle of a tall window, passes edge-to-edge layouts", () => {
+    // The player from a real report: a block in the middle of a 440×880 strip window.
+    expect(layoutIssues({ top: 373, bottom: 506, left: 12, right: 428 }, 440, 880).problems[0]).toMatch(/floats in the middle/);
+    expect(layoutIssues({ top: 300, bottom: 870, left: 12, right: 428 }, 440, 880).problems[0]).toMatch(/starts 300px down/);
+    // Title at the top, play button in the middle, slider at the bottom: covers the window.
+    expect(layoutIssues({ top: 12, bottom: 868, left: 12, right: 428 }, 440, 880)).toEqual({ problems: [], warnings: [] });
+    // Everything at the top of a tall window: allowed, with a nudge to use the height.
+    const top = layoutIssues({ top: 12, bottom: 120, left: 12, right: 428 }, 440, 880);
+    expect(top.problems).toEqual([]);
+    expect(top.warnings[0]).toMatch(/uses only the top/);
+    expect(layoutIssues({ top: 12, bottom: 300, left: 350, right: 650 }, 1000, 560).warnings.join()).toMatch(/narrow column/);
+    expect(layoutIssues(null, 440, 880)).toEqual({ problems: [], warnings: [] });
   });
 });
 
@@ -193,6 +210,18 @@ export default async () => {
     const missing = `import { s, run } from "cmd";\nexport const schema = s.object({ n: s.number() });\nexport default async () => (await run("cmd-no-such-program", []), { n: 1 });\n`;
     const w = widget({ "manifest.json": MANIFEST({ permissions: { run: ["cmd-no-such-program"] } }), "data.ts": missing });
     expect((await runData(w.dir, w.m, { ...denoEnv(), cwd: os.tmpdir(), config: {} })).error).toMatch(/cmd-no-such-program isn't installed/);
+  });
+
+  it("reads RSS and Atom items with xmlItems", async () => {
+    const feed = '<rss><channel><title>Feed</title><item><title>A &amp; B</title><link>https://a</link><pubDate>Sun, 04 Oct 2026 10:00:00 GMT</pubDate></item><item><title><![CDATA[C <i>D</i>]]></title><link>https://c</link></item></channel></rss>';
+    const data = `import { s, xmlItems } from "cmd";\nexport const schema = s.array(s.record(s.string()));\nexport default async () => [...xmlItems(${JSON.stringify(feed)}, "item"), ...xmlItems('<feed><entry><title>E</title><link href="https://e"/></entry></feed>', "entry")];\n`;
+    const { dir, m } = widget({ "manifest.json": MANIFEST(), "data.ts": data });
+    const r = await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {} });
+    expect(r.data).toEqual([
+      { title: "A & B", link: "https://a", pubDate: "Sun, 04 Oct 2026 10:00:00 GMT" },
+      { title: "C <i>D</i>", link: "https://c" },
+      { title: "E", link: "https://e" },
+    ]);
   });
 
   it("type-checks the view against the data's schema", async () => {

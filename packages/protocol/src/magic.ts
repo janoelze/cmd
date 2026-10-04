@@ -180,6 +180,8 @@ export interface MagicPreviewShot {
   drawn: boolean;
   scrollW: number;
   scrollH: number;
+  /** Bounds of the visible content in the viewport (null: nothing visible). */
+  box?: { top: number; left: number; bottom: number; right: number } | null;
   png?: string;
 }
 
@@ -240,13 +242,36 @@ export function widgetTokens(t: ThemeLike, fonts: { text?: string; mono?: string
 
 /**
  * Evaluated in a rendered widget page (previews) once it settled: visible text,
- * elements, whether something was drawn, its scroll size, and script errors
- * host.js caught.
+ * elements, whether something was drawn, its scroll size, script errors host.js
+ * caught, and `box`: the bounds of everything visible (text, controls, drawings,
+ * filled or bordered boxes), to tell whether the content uses the window or
+ * floats in it.
  */
 export const WIDGET_MEASURE = `(() => {
   const b = document.body;
+  const vw = innerWidth, vh = innerHeight;
   const drawn = [...b.querySelectorAll("canvas,svg,img,video")].some((e) => { const r = e.getBoundingClientRect(); return r.width > 4 && r.height > 4; });
-  return { text: b.innerText.trim().length, nodes: b.querySelectorAll("*").length, drawn, scrollW: document.documentElement.scrollWidth, scrollH: document.documentElement.scrollHeight, errors: (window.__CMD_ERRORS__ || []).map((e) => e.message) };
+  let top = Infinity, left = Infinity, bottom = -Infinity, right = -Infinity;
+  const add = (r) => {
+    if (r.width < 1 || r.height < 1 || r.bottom <= 0 || r.right <= 0 || r.top >= vh || r.left >= vw) return;
+    top = Math.min(top, Math.max(0, r.top)); left = Math.min(left, Math.max(0, r.left));
+    bottom = Math.max(bottom, Math.min(vh, r.bottom)); right = Math.max(right, Math.min(vw, r.right));
+  };
+  const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (!n.textContent.trim()) continue;
+    const range = document.createRange(); range.selectNodeContents(n);
+    for (const r of range.getClientRects()) add(r);
+  }
+  for (const e of b.querySelectorAll("*")) {
+    const cs = getComputedStyle(e);
+    if (cs.visibility === "hidden" || cs.display === "none" || Number(cs.opacity) === 0) continue;
+    const solid = /^(CANVAS|SVG|IMG|VIDEO|INPUT|BUTTON|SELECT|TEXTAREA|PROGRESS|METER)$/i.test(e.tagName) ||
+      (cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== "transparent") || parseFloat(cs.borderTopWidth) > 0 || parseFloat(cs.borderBottomWidth) > 0 || cs.boxShadow !== "none" || cs.maskImage !== "none" || cs.webkitMaskImage !== "none";
+    if (solid) add(e.getBoundingClientRect());
+  }
+  const box = top === Infinity ? null : { top: Math.round(top), left: Math.round(left), bottom: Math.round(bottom), right: Math.round(right) };
+  return { text: b.innerText.trim().length, nodes: b.querySelectorAll("*").length, drawn, scrollW: document.documentElement.scrollWidth, scrollH: document.documentElement.scrollHeight, box, errors: (window.__CMD_ERRORS__ || []).map((e) => e.message) };
 })()`;
 
 /** Widget size hints → the viewport the model is told about. */

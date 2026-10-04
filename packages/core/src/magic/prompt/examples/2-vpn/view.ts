@@ -13,6 +13,8 @@ cmd.onData<Data>((d) => {
   $("dot").className = "k-dot " + (d.connected ? "k-good" : "");
   $("state").textContent = d.connected ? "Connected" : "Off";
   $("sub").textContent = active ? `${active.name} · ${active.type}` : d.tunnels[0] ? `${d.tunnels[0].name} · client unknown` : `${d.services.length} configured`;
+  const routes = d.tunnels.flatMap((t) => t.routes);
+  $("routes").textContent = routes.length ? `Routes ${routes.slice(0, 4).join(", ")}${routes.length > 4 ? ` and ${routes.length - 4} more` : ""}` : d.connected ? "" : "No tunnel interface is up";
   const rows = d.tunnels.map((t) => {
     const tr = document.createElement("tr");
     tr.append(cell(t.name), cell(t.address, "k-grow"), cell(t.routes.slice(0, 2).join(", ") || "–", "k-num k-dim k-hide-narrow"));

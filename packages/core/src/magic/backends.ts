@@ -84,11 +84,11 @@ export function aiBackend(o: AiBackendOptions): Backend {
           description: spec.description,
           inputSchema: jsonSchema(spec.schema as never),
           execute: async (input: unknown) => r.exec(spec.name, (input ?? {}) as Record<string, unknown>),
-          // Text, plus the preview's screenshot so the model sees what it made.
+          // Text, plus the preview's screenshots so the model sees what it made.
           toModelOutput: ({ output }: { output: ToolOutput }) => {
             const text = output.isError ? `Error: ${output.output}` : output.output;
-            return output.image
-              ? { type: "content" as const, value: [{ type: "text" as const, text }, { type: "image-data" as const, data: output.image, mediaType: "image/png" }] }
+            return output.images?.length
+              ? { type: "content" as const, value: [{ type: "text" as const, text }, ...output.images.map((data) => ({ type: "image-data" as const, data, mediaType: "image/png" }))] }
               : { type: "text" as const, value: text };
           },
         });

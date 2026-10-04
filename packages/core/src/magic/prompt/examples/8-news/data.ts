@@ -1,6 +1,7 @@
 import { s, fetchText, xmlItems, type Infer } from "cmd";
 
 export const schema = s.object({
+  query: s.string(),
   stories: s.array(s.object({ title: s.string(), source: s.string(), link: s.string(), at: s.number() })),
 });
 export type Data = Infer<typeof schema>;
@@ -16,5 +17,5 @@ export default async function data(config: { query: string }): Promise<Data> {
     .filter((x) => x.title && x.link)
     .sort((a, b) => b.at - a.at)
     .slice(0, 40);
-  return { stories };
+  return { query: config.query, stories };
 }

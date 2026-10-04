@@ -47,7 +47,7 @@ export const WIDGET_TOOL_SPECS: ToolSpec[] = [
   {
     name: "preview",
     explores: false,
-    description: "Render the view with the live data and every fixture (dark and light, at its size and small) and report script errors, empty renders and overflow. Returns a screenshot.",
+    description: "Render the view with the live data and every fixture: in a tall strip window, at its own size, wide and small, dark and light. Reports script errors, empty renders, overflow and layout problems (content floating in the middle, an empty tall window), and returns screenshots: look at them.",
     schema: obj({}, []),
   },
 ];
@@ -136,9 +136,10 @@ export async function runWidgetTool(name: string, input: Record<string, unknown>
       if (st.errors.length) return err(st.errors.join("\n"));
       const live = c.store.fixtures(c.id).find((f) => f.name === "live")?.data ?? c.store.staticData(c.id);
       const r = await previewWidget(c, st.manifest, st.html, live);
+      const pictures = r.skipped ? "" : "\nScreenshots: a strip window (dark), its own size (light), wide.";
       const text = r.skipped ? r.warnings.join("\n") : r.ok ? `Renders cleanly in every case.${r.warnings.length ? `\nWarnings:\n- ${r.warnings.join("\n- ")}` : ""}` : `Problems:\n- ${r.problems.join("\n- ")}${r.warnings.length ? `\nWarnings:\n- ${r.warnings.join("\n- ")}` : ""}`;
       if (r.ok) state.dirty = false;
-      return { output: text + (live === undefined && c.store.read(c.id, "data.ts") !== null ? "\n(No live data yet: run run_data first.)" : ""), isError: !r.ok, image: r.shot };
+      return { output: text + pictures + (live === undefined && c.store.read(c.id, "data.ts") !== null ? "\n(No live data yet: run run_data first.)" : ""), isError: !r.ok, images: [r.shot, ...(r.shots ?? [])].filter((x): x is string => !!x) };
     }
   }
   return null;

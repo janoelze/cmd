@@ -26,6 +26,32 @@ svg { display: block; }
 .k-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 .k-fill { height: 100%; }
 .k-center { display: flex; align-items: center; justify-content: center; text-align: center; }
+/* App layout (prompt.md → Layout): a window-filling column, like a native app.
+   .k-app replaces the body's padding: bars run edge to edge. */
+body:has(> .k-app) { padding: 0; }
+.k-app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.k-toolbar, .k-footer {
+  flex: none; display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 36px; padding: 6px 12px;
+}
+.k-toolbar { border-bottom: 1px solid var(--line); }
+.k-footer { border-top: 1px solid var(--line); }
+.k-toolbar.k-plain, .k-footer.k-plain { border: 0; }
+/* The part that takes the rest of the height; scrolls when it has more. */
+.k-main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.k-main.k-flush { padding: 0; gap: 0; }
+/* Edge to edge (prompt.md → Layout): a window-high column whose first child sits at the
+   top and last at the bottom (a status line up top, the table down to the bottom edge). */
+.k-edges { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; height: 100%; min-height: 0; }
+/* A table or list at the bottom goes in a .k-pane: it keeps its height (on the bottom edge)
+   and host.js drops the rows that don't fit, like htop. */
+.k-edges > .k-pane { flex: 0 1 auto; min-height: 0; }
+/* The middle of the window for one hero element (a play button, a timer's digits),
+   between something at the top and something at the bottom. */
+.k-hero { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; }
+/* Inside any column: this element grows into the space left (a chart, a list, a canvas). */
+.k-grow-v { flex: 1 1 0; min-height: 60px; }
+canvas.k-grow-v, .k-grow-v > canvas { display: block; width: 100%; height: 100%; }
+
 /* Sections, as panes in a terminal UI: one column, side by side from 720px.
    host.js hides panes that don't fit the height and cuts their rows to fit. */
 /* Panes wrap into rows and grow to fill them, so tables in them always span the
@@ -98,13 +124,69 @@ a.k-ellipsis, span.k-ellipsis { display: block; }
 .k-prompt::before { content: "❯ "; color: var(--c2); }
 .k-empty { color: var(--text-dim); text-align: center; padding: 16px; }
 
-.k-btn { font: inherit; color: var(--text); background: var(--fill); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: default; }
-.k-btn:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
-.k-btn.k-primary { background: var(--accent); border-color: transparent; color: var(--on-accent); }
-.k-input { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; min-width: 0; }
+/* Controls, like cmd's own (its @cmd/ui kit): 24px high, 6px radius, quiet fills. */
+.k-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: none; height: 24px; padding: 0 11px;
+  font: 12.5px/1 var(--font); color: var(--text); white-space: nowrap; border: 0; border-radius: 6px;
+  background: var(--fill); box-shadow: inset 0 0 0 1px var(--line); cursor: default;
+}
+.k-btn:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.k-btn:active, .k-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--text) 14%, transparent); }
+.k-btn:disabled { opacity: .4; }
+.k-btn.k-primary { color: var(--on-accent); background: var(--accent); box-shadow: none; }
+.k-btn.k-primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--text)); }
+.k-btn.k-ghost { background: transparent; box-shadow: none; }
+.k-btn.k-ghost:hover { background: var(--fill); }
+.k-btn.k-sm { height: 20px; padding: 0 8px; font-size: 11.5px; border-radius: 4px; }
+.k-btn.k-lg { height: 28px; padding: 0 14px; font-size: 13px; }
+/* Icon-only button: square; .k-round for a transport button (play). */
+.k-btn.k-icon-only { width: 24px; padding: 0; }
+.k-btn.k-lg.k-icon-only { width: 28px; }
+.k-btn.k-round { border-radius: 999px; }
+/* The hero control of an instrument (a play button): big, round, its icon scaled with it. */
+.k-btn.k-xl { width: clamp(56px, 16vmin, 84px); height: clamp(56px, 16vmin, 84px); padding: 0; border-radius: 999px; }
+.k-btn.k-xl > .k-icon { width: 40%; height: 40%; }
+.k-input, .k-select {
+  height: 24px; font: 12.5px var(--font); color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent);
+  border: 0; box-shadow: inset 0 0 0 1px var(--line); border-radius: 6px; padding: 0 8px; min-width: 0; outline: 0;
+}
+.k-input:focus, .k-select:focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, var(--line)), 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent); }
+/* A segmented control: buttons in a .k-seg, the chosen one aria-pressed="true". */
+.k-seg { display: inline-flex; flex: none; padding: 2px; gap: 2px; border-radius: 7px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--line); }
+.k-seg > button { height: 20px; padding: 0 9px; font: 11.5px var(--font); color: var(--text-dim); background: none; border: 0; border-radius: 5px; cursor: default; }
+.k-seg > button:hover { color: var(--text); }
+.k-seg > button[aria-pressed="true"] { color: var(--text); background: color-mix(in srgb, var(--text) 13%, var(--bg)); }
+/* A slider (<input type="range" class="k-range">): a thin track, filled up to the value via --v. */
+.k-range { -webkit-appearance: none; appearance: none; flex: 1; min-width: 40px; height: 16px; background: none; margin: 0; cursor: default; --v: 50%; }
+.k-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--v) 100% no-repeat, var(--fill); box-shadow: inset 0 0 0 1px var(--line); }
+.k-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 1px var(--line); }
+.k-check { accent-color: var(--accent); }
 
 .k-chart { width: 100%; height: 120px; }
 .k-spark { width: 100%; height: 28px; }
+
+/* Icons: <i class="k-icon" data-icon="play"></i>, drawn in currentColor (16px; .k-icon-sm 12px, .k-icon-lg 20px).
+   play pause stop next prev volume mute refresh external plus minus check x search chevron clock reset */
+.k-icon { display: inline-block; flex: none; width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--k-i) center / contain no-repeat; mask: var(--k-i) center / contain no-repeat; }
+.k-icon-sm { width: 12px; height: 12px; }
+.k-icon-lg { width: 20px; height: 20px; }
+.k-icon[data-icon="play"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23000' d='M7 4.5v15l12-7.5z'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="pause"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect fill='%23000' x='6' y='4.5' width='4' height='15' rx='1'/%3E%3Crect fill='%23000' x='14' y='4.5' width='4' height='15' rx='1'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="stop"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect fill='%23000' x='5.5' y='5.5' width='13' height='13' rx='2'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="next"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23000' d='M5 5v14l10-7z'/%3E%3Cpath d='M19 5v14'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="prev"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23000' d='M19 5v14L9 12z'/%3E%3Cpath d='M5 5v14'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="volume"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23000' d='M4 9v6h4l5 4V5L8 9z'/%3E%3Cpath d='M16.5 8.5a5 5 0 0 1 0 7M19.5 5.5a9 9 0 0 1 0 13'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="mute"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23000' d='M4 9v6h4l5 4V5L8 9z'/%3E%3Cpath d='m17 9 5 5m0-5-5 5'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="refresh"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 11a8 8 0 0 0-14.6-4.5L4 8'/%3E%3Cpath d='M4 3v5h5'/%3E%3Cpath d='M4 13a8 8 0 0 0 14.6 4.5L20 16'/%3E%3Cpath d='M20 21v-5h-5'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="external"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 4h6v6'/%3E%3Cpath d='M20 4 11 13'/%3E%3Cpath d='M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="plus"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="minus"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="check"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="x"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 6l12 12M18 6 6 18'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="search"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='m20 20-4.2-4.2'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="chevron"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="clock"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Cpath d='M12 7.5V12l3 2'/%3E%3C/svg%3E"); }
+.k-icon[data-icon="reset"] { --k-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12a8 8 0 1 0 2.4-5.7L4 8.5'/%3E%3Cpath d='M4 3.5v5h5'/%3E%3C/svg%3E"); }
 
 /* Small windows: what gives way first (prompt.md → Any size). */
 @media (max-width: 319px) { .k-hide-narrow { display: none !important; } }

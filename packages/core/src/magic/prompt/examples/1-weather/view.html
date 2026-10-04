@@ -1,6 +1,12 @@
-<style>.now{align-items:flex-end;gap:12px}.t{font-size:clamp(28px,14vmin,44px)}.days{display:grid;grid-template-columns:repeat(auto-fit,minmax(56px,1fr));gap:6px;text-align:center}</style>
-<div class="k-stack k-fill">
-  <div class="k-row now"><div class="k-huge t k-mono" id="temp">–</div><div class="k-stack" style="gap:2px;min-width:0"><div id="what"></div><div class="k-dim k-small k-ellipsis" id="more"></div></div></div>
-  <div class="k-spacer"></div>
-  <div class="days k-hide-short" id="days"></div>
+<style>.t{font-size:clamp(32px,14vmin,64px)}.days{display:grid;grid-template-columns:repeat(auto-fit,minmax(56px,1fr));gap:6px;text-align:center}.hours{min-height:80px}</style>
+<div class="k-edges">
+  <div class="k-row" style="align-items:flex-end;gap:12px">
+    <div class="k-huge t k-mono" id="temp">–</div>
+    <div class="k-stack" style="gap:2px;min-width:0"><div id="what"></div><div class="k-dim k-small k-ellipsis" id="more"></div></div>
+  </div>
+  <div class="k-stack k-grow-v k-hide-short">
+    <div class="k-title">Next 24 hours</div>
+    <div class="k-chart k-grow-v hours" id="hours"></div>
+  </div>
+  <div class="days" id="days"></div>
 </div>
