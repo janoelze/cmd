@@ -87,8 +87,8 @@ We don't name them in public copy. Internally, the differences are:
 
 ## Naming in the product
 
-- **Magic windows → Magic widgets.** "Window" is what everything on the desk is, so a widget is one kind of window. Copy says *Magic widget*, and the command is "New Magic Widget". Docs and comments say *Magic widget* too. Wire and storage names stay `magic` (the `magic` window kind, `magic.*` settings and RPC methods, `cmd magic`): they never said "window", and renaming them would break stored state.
-- **Windows** are the things on the desk. **Spaces** group them by project. **Agents** are terminals with a coding agent in them. **Sessions** are an agent's transcript, live or past.
+- **Widgets and Magic** (2026-10-05, [16-widgets.md](16-widgets.md)): *widget* is the one noun, and widgets are no longer "a kind of window" to people: windows are where you work, widgets show you something at a glance and live in the Widget Library. *Magic* is how you make one ("New Widget with Magic", "Made with Magic"). Wire and storage names stay `magic` (the `magic` window kind, `magic.*` settings and RPC methods, `cmd magic`): renaming them would break stored state.
+- **Windows** and **widgets** are the things on the desk. **Spaces** group them by project. **Agents** are terminals with a coding agent in them. **Sessions** are an agent's transcript, live or past.
 - The **desk** is the word for the main area (grid, strip, canvas and focus are ways of arranging it).
 
 ## Name and icon

@@ -26,6 +26,7 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 12 | [Magic widgets](12-magic-widgets.md) | v1: a request in, a live widget out; research, agent, security |
 | 14 | [Magic widgets v2](14-magic-v2.md) | Widgets as typed apps: Deno data.ts, checked views, previews, revisions, health, the edit view; toward a store |
 | 15 | [Positioning and voice](15-positioning.md) | The story, the category (a software workbench), pillars, voice, copy bank, naming, visual direction |
+| 16 | [Widgets](16-widgets.md) | Widgets apart from windows: the Widget Library, Magic as how you make one, built-in widgets, how they stay windows underneath |
 
 ## Key findings
 1. **Nothing has to be invented for agent awareness.** Every tool in this space combines three things:
