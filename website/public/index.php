@@ -88,7 +88,7 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <div><h3>CLI</h3><p><code>cmd</code> spawns, messages, waits on and stops agents, so an agent can run other agents.</p></div>
   <div><h3>A complete terminal</h3><p>Find in scrollback, jump between prompts, inline images, copy from programs over ssh, and a check before risky pastes.</p></div>
   <div><h3>Themes</h3><p>16 themes, light and dark, following the system or not.</p></div>
-  <div><h3>Updates</h3><p>cmd updates itself in the background and installs when you quit. Terminals keep running.</p></div>
+  <div><h3>Updates</h3><p>cmd updates itself in the background and installs the update when you quit.</p></div>
 </div>
 
 <h2>Releases</h2>
