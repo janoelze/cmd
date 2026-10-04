@@ -10,7 +10,7 @@ import { cmd } from "../bridge.ts";
 import { getState, useStoreValue } from "../store.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { PairPrompt, scopeLabel } from "./PairPrompt.tsx";
-import { useTooltip } from "../tooltips.tsx";
+import { useTooltip } from "@cmd/ui";
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 

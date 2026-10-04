@@ -1,14 +1,14 @@
 // Entry point of the Task Manager window (tasks.html): its own small bundle,
 // like the Settings window's.
 import { createRoot } from "react-dom/client";
+import "@cmd/ui/ui.css";
 import "../styles.css";
 import "./tasks.css";
 import { cmd } from "../bridge.ts";
 import { installErrorReporting } from "../errors.ts";
-import { installScrollbars } from "../scrollbars.ts";
-import { installTooltips } from "../tooltips.tsx";
-import "../themes/builtin.ts";
-import { bootTheme } from "../themes/registry.ts";
+import { installScrollbars, installTooltips } from "@cmd/ui";
+import "@cmd/ui/themes/builtin";
+import { bootTheme } from "@cmd/ui/themes";
 import { TaskManager } from "./TaskManager.tsx";
 
 installErrorReporting();

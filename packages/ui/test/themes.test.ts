@@ -1,11 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-// registry.ts talks to the preload bridge and matchMedia at load; neither exists here.
-vi.mock("../src/renderer/src/bridge.ts", () => ({ cmd: {} }));
-vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener() {} }));
-
-const { allThemes } = await import("../src/renderer/src/themes/registry.ts");
-await import("../src/renderer/src/themes/builtin.ts");
+import { allThemes } from "../src/themes/registry.ts";
+import "../src/themes/builtin.ts";
 
 const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
 const luminance = (hex: string) => {

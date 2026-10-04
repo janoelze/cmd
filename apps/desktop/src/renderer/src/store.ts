@@ -9,7 +9,7 @@ import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
 import { applyFonts } from "./fonts.ts";
-import { applyThemeSettings } from "./themes/registry.ts";
+import { applyThemeSettings } from "./theme.ts";
 import { setWindowTypes } from "./windows/registry.ts";
 import { handleMagicEvent } from "./magic.ts";
 import { countEvent, perf } from "./perf.ts";

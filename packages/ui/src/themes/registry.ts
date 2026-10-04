@@ -1,11 +1,10 @@
-// Theme registry and the active theme. applyThemeSettings picks the theme from
-// the theme.* settings (Auto follows the system), writes its tokens on :root,
-// and tells listeners (terminals, editors) and the main process (native
-// appearance, window background). Both the app and the Settings window call it.
+// Theme registry and the active theme: applyTheme writes a theme's tokens on
+// :root and tells listeners (terminals, editors). Which theme is active is the
+// app's business (the desktop picks it from the theme.* settings and tells the
+// native window, apps/desktop/src/renderer/src/theme.ts); the gallery picks one
+// from a menu.
 
 import { useSyncExternalStore } from "react";
-import type { Settings } from "@cmd/protocol";
-import { cmd } from "../bridge.ts";
 import type { SyntaxColors, TerminalColors, Theme } from "./types.ts";
 
 const themes = new Map<string, Theme>();
@@ -64,6 +63,9 @@ const LIGHT_VARS: Readonly<Record<string, string>> = {
   "pane-edge": ink(10),
   "chip-fg": "55% 38%",
   "chip-bg": "60% 92%",
+  // The chosen segment is raised and white, as in macOS.
+  "control-thumb": "var(--bg-elevated)",
+  "control-thumb-shadow": "0 1px 2px rgb(0 0 0 / 0.14), 0 0 0 0.5px rgb(0 0 0 / 0.06)",
 };
 
 /** Every CSS custom property a theme sets, name → value. */
@@ -83,9 +85,7 @@ export function themeVars(t: Theme): Record<string, string> {
 
 let current: Theme | undefined;
 let applied: string[] = [];
-let lastSettings: Pick<Settings, "theme.appearance" | "theme.dark" | "theme.light"> | undefined;
 const listeners = new Set<() => void>();
-const systemDark = matchMedia("(prefers-color-scheme: dark)");
 
 /** The theme in use; the built-in dark one until settings arrive. */
 export function currentTheme(): Theme {
@@ -101,14 +101,14 @@ export function useTheme(): Theme {
   return useSyncExternalStore(onThemeChange, currentTheme);
 }
 
-/** The theme for these settings: unknown ids (a removed theme) fall back to the built-in of that appearance. */
-export function resolveTheme(s: NonNullable<typeof lastSettings>): Theme {
-  const appearance = s["theme.appearance"] === "auto" ? (systemDark.matches ? "dark" : "light") : s["theme.appearance"];
-  const t = themes.get(appearance === "dark" ? s["theme.dark"] : s["theme.light"]);
+/** The theme for an appearance choice: unknown ids (a removed theme) fall back to the built-in of that appearance. */
+export function resolveTheme(appearance: "dark" | "light", darkId: string, lightId: string): Theme {
+  const t = themes.get(appearance === "dark" ? darkId : lightId);
   return t?.appearance === appearance ? t : (themes.get(appearance) ?? currentTheme());
 }
 
-function apply(t: Theme): void {
+/** Make this the active theme: its tokens on :root, listeners told. */
+export function applyTheme(t: Theme): void {
   const root = document.documentElement.style;
   const vars = themeVars(t);
   for (const name of applied) if (!(name in vars)) root.removeProperty(name);
@@ -125,29 +125,11 @@ function apply(t: Theme): void {
   listeners.forEach((fn) => fn());
 }
 
-/** Apply the theme the settings choose; call on every settings snapshot. */
-export function applyThemeSettings(s: Settings): void {
-  lastSettings = { "theme.appearance": s["theme.appearance"], "theme.dark": s["theme.dark"], "theme.light": s["theme.light"] };
-  sync();
-}
-
-function sync(): void {
-  if (!lastSettings) return;
-  const t = resolveTheme(lastSettings);
-  apply(t);
-  // Auto lets macOS decide, so prefers-color-scheme (above) tracks the system.
-  const source = lastSettings["theme.appearance"] === "auto" ? "system" : t.appearance;
-  cmd.setAppearance({ source, background: t.colors.bg });
-}
-
-// Auto: the system switched between light and dark.
-systemDark.addEventListener("change", sync);
-
 /** Before settings arrive: the theme the last run used, so the first frame isn't the wrong one. */
 export function bootTheme(): void {
   let id: string | null = null;
   try {
     id = localStorage.getItem("cmd.theme");
   } catch {}
-  apply((id && themes.get(id)) || currentTheme());
+  applyTheme((id && themes.get(id)) || currentTheme());
 }

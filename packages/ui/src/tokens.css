@@ -1,0 +1,108 @@
+/* cmd's design tokens. Colours come from the active theme (themes/), which sets
+   its tokens on :root (themes/types.ts ThemeColors: --bg, --bg-sidebar,
+   --bg-elevated, --well, --text, --text-dim, --icon, --accent, --link, --match,
+   --ink, --scrim, --state-needs/-done/-working/-idle, --syn-*, --git-*,
+   --danger). Everything else here is derived from them, and a theme's `vars`
+   can override any of it (light themes: LIGHT_VARS in themes/registry.ts).
+
+   Components (components.css) use these and nothing else: no hex colours, no
+   one-off sizes. A new look is a new theme, not new CSS.
+
+   .ui-theme re-derives them inside a subtree that sets a theme's colours on
+   itself (themeVars as its style): a theme preview inside a page of another. */
+
+:root, .ui-theme {
+  /* ── type ── */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: "SF Mono", Menlo, monospace;
+  /* The scale. Controls use --text-md; body copy --text-base; descriptions and
+     status lines --text-sm; badges and section headings --text-xs. */
+  --text-2xs: 10px;
+  --text-xs: 10.5px;
+  --text-sm: 11.5px;
+  --text-md: 12.5px;
+  --text-base: 13px;
+  --text-lg: 15px;
+  --text-xl: 17px;
+
+  /* ── surfaces and lines (derived from --ink and --scrim) ── */
+  --bg-hover: color-mix(in srgb, var(--ink) 6%, transparent);
+  --bg-selected: color-mix(in srgb, var(--ink) 10%, transparent);
+  --separator: color-mix(in srgb, var(--ink) 9%, transparent);
+  --on-accent: #fff; /* text on an accent background */
+  --folder: var(--link);
+  --shadow: rgb(0 0 0 / 0.5);
+  /* Recessed fields (settings window) and project chips (lightness for hsl(var(--hue) …)). */
+  --field: color-mix(in srgb, var(--scrim) 28%, transparent);
+  /* Dividers between a window's panes (the Settings window's sidebar and bar). */
+  --pane-edge: color-mix(in srgb, var(--scrim) 50%, transparent);
+  /* Recessed areas: unassigned grid cells. */
+  --recess: color-mix(in srgb, var(--scrim) 22%, transparent);
+  --recess-edge: color-mix(in srgb, var(--scrim) 35%, transparent);
+  --chip-fg: 70% 78%;
+  --chip-bg: 30% 22% / 0.8;
+  /* Grouped lists (a Settings section): a faint fill and hairline. */
+  --group-bg: color-mix(in srgb, var(--ink) 3.5%, transparent);
+  --group-edge: color-mix(in srgb, var(--ink) 6%, transparent);
+  /* Floating surfaces: menus, popovers, dialogs, tooltips. */
+  --popover-bg: var(--bg-elevated);
+  --popover-edge: color-mix(in srgb, var(--ink) 12%, transparent);
+  --popover-shadow: 0 10px 30px var(--shadow);
+  /* Code and output blocks. */
+  --code-bg: color-mix(in srgb, var(--ink) 5%, transparent);
+
+  /* ── tones: what a message or badge is about ── */
+  --danger: var(--git-deleted, #ff453a);
+  --warning: var(--state-needs);
+  --success: var(--state-done);
+  --info: var(--accent);
+
+  /* ── controls ── */
+  /* Text inputs, system style: a faint fill and hairline edge; on focus the edge
+     takes some accent and a soft halo surrounds it, rather than a hard accent line. */
+  --input-bg: color-mix(in srgb, var(--ink) 5%, transparent);
+  --input-edge: color-mix(in srgb, var(--ink) 10%, transparent);
+  --input-focus-edge: color-mix(in srgb, var(--accent) 50%, var(--input-edge));
+  --input-glow: color-mix(in srgb, var(--accent) 16%, transparent);
+  --input-ring: inset 0 0 0 1px var(--input-focus-edge), 0 0 0 2px var(--input-glow);
+  --input-placeholder: var(--text-dim);
+  /* Buttons, popups, segmented controls share a fill; text fields sit in the well. */
+  --control-bg: var(--input-bg);
+  --control-edge: var(--input-edge);
+  --control-hover: color-mix(in srgb, var(--ink) 10%, transparent);
+  --control-active: color-mix(in srgb, var(--ink) 14%, transparent);
+  --control-thumb: color-mix(in srgb, var(--ink) 14%, var(--bg)); /* the chosen segment */
+  --control-thumb-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  --field-bg: var(--well);
+  --switch-off: color-mix(in srgb, var(--ink) 16%, transparent);
+  --knob: #fff;
+  /* Heights: every control in a row shares one, so they line up. */
+  --control-h-sm: 20px;
+  --control-h: 24px;
+  --control-h-lg: 28px;
+  --disabled-opacity: 0.4;
+
+  /* ── shape ── */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius: 6px; /* controls, rows */
+  --radius-md: 8px; /* cards, callouts */
+  --radius-lg: 10px; /* menus, popovers */
+  --radius-xl: 12px; /* dialogs, the palette */
+  --radius-pill: 999px;
+
+  /* ── motion ── */
+  /* Window moves, title-bar slots and controls share this curve. */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 150ms;
+}
+
+* { box-sizing: border-box; }
+
+/* Every input's placeholder, so no field falls back to the browser's grey. */
+::placeholder { color: var(--input-placeholder); opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}

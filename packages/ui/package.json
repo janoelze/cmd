@@ -1,0 +1,34 @@
+{
+  "name": "@cmd/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./themes": "./src/themes/registry.ts",
+    "./themes/builtin": "./src/themes/builtin.ts",
+    "./themes/types": "./src/themes/types.ts",
+    "./ui.css": "./src/ui.css",
+    "./lucide": "./src/lucide.ts"
+  },
+  "scripts": {
+    "gallery": "vite --config gallery/vite.config.ts",
+    "build": "vite build --config gallery/vite.config.ts",
+    "shots": "node gallery/shots.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "lucide-static": "^1.50.0"
+  },
+  "peerDependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "vite": "^7.0.0"
+  }
+}

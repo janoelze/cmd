@@ -17,7 +17,7 @@ import type { WebglAddon } from "@xterm/addon-webgl";
 import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
-import { currentTheme, onThemeChange, terminalColors } from "./themes/registry.ts";
+import { currentTheme, onThemeChange, terminalColors } from "@cmd/ui/themes";
 import { findLinks } from "./links.ts";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
 

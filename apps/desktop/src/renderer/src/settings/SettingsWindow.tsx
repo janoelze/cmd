@@ -31,7 +31,7 @@ import { NumberField, Popup, SecretField, Segmented, Switch, TextField } from ".
 import { useSettings } from "./useSettings.ts";
 import { About } from "./About.tsx";
 import { Remote } from "./Remote.tsx";
-import { allThemes } from "../themes/registry.ts";
+import { allThemes } from "@cmd/ui/themes";
 import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page as SettingsPage } from "./layout.ts";
 
 const PAGES: SettingsPage[] = settingsPages();

@@ -2,14 +2,14 @@
 performance.mark("boot:renderer-script");
 import { createRoot } from "react-dom/client";
 import "@xterm/xterm/css/xterm.css";
+import "@cmd/ui/ui.css";
 import "./styles.css";
 import "./windows/builtin.tsx"; // built-in window views (browser, files, text)
 import { App } from "./App.tsx";
 import { installErrorReporting } from "./errors.ts";
-import { installScrollbars } from "./scrollbars.ts";
-import { installTooltips } from "./tooltips.tsx";
-import "./themes/builtin.ts";
-import { bootTheme } from "./themes/registry.ts";
+import { installScrollbars, installTooltips } from "@cmd/ui";
+import "@cmd/ui/themes/builtin";
+import { bootTheme } from "@cmd/ui/themes";
 
 installErrorReporting();
 bootTheme();

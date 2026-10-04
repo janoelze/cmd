@@ -14,7 +14,7 @@ import { cmd } from "../bridge.ts";
 import { copy, openLink } from "../actions.ts";
 import { resetMagic, useMagicLive, type MagicLive } from "../magic.ts";
 import { useStoreValue } from "../store.ts";
-import { useTheme } from "../themes/registry.ts";
+import { useTheme } from "@cmd/ui/themes";
 import { editTitle, registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { ago } from "../model.ts";
 import { handleEmbedMessage } from "../embed.ts";

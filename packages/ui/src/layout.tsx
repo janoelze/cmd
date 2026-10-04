@@ -1,0 +1,209 @@
+// Arranging: forms (Section, Group, Row: the Settings window's grouped rows),
+// headings, toolbars, separators, key–value lists, cards, code blocks, and the
+// messages a view shows instead of or above its content (Callout, EmptyState).
+
+import type { ReactNode } from "react";
+import { ICON, iconNode } from "./icon.tsx";
+import { IconButton } from "./button.tsx";
+import type { Tone } from "./status.tsx";
+
+const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
+
+// ── forms ──────────────────────────────────────────────
+
+/** A titled part of a page: a heading, then its rows in a group box. */
+export function FormSection({ title, aside, children, plain }: { title?: ReactNode; aside?: ReactNode; children: ReactNode; plain?: boolean }) {
+  return (
+    <section className="ui-form-section">
+      {(title || aside) && (
+        <div className="ui-form-section-head">
+          {title && <h2 className="ui-form-section-title">{title}</h2>}
+          {aside && <span className="ui-form-section-aside">{aside}</span>}
+        </div>
+      )}
+      {plain ? children : <div className="ui-group">{children}</div>}
+    </section>
+  );
+}
+
+/**
+ * One setting: the title and description on the left, the control on the right
+ * in a column that lines up down the page whatever the labels.
+ */
+export function FormRow({
+  title,
+  description,
+  note,
+  noteTone = "accent",
+  tip,
+  accessory,
+  children,
+  compact,
+  stacked,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  /** Under the description: what just happened, or what's wrong. */
+  note?: ReactNode;
+  noteTone?: "accent" | "danger" | "warning" | "dim";
+  /** The title's tooltip (the setting's key). */
+  tip?: string;
+  /** After the title: a tag, a reset button. */
+  accessory?: ReactNode;
+  children?: ReactNode;
+  /** Shorter rows for long lists (shortcuts). */
+  compact?: boolean;
+  /** The control under the text, full width (a long text, a list). */
+  stacked?: boolean;
+}) {
+  return (
+    <div className="ui-row" data-compact={compact || undefined} data-stacked={stacked || undefined}>
+      <div className="ui-row-text">
+        <div className="ui-row-title" data-tip={tip}>
+          <span className="ui-row-name">{title}</span>
+          {accessory}
+        </div>
+        {description && <div className="ui-row-desc">{description}</div>}
+        {note && (
+          <div className="ui-row-note" data-tone={noteTone}>
+            {note}
+          </div>
+        )}
+      </div>
+      {children != null && <div className="ui-row-control">{children}</div>}
+    </div>
+  );
+}
+
+/** A group box of rows without a section (or with your own heading). */
+export function Group({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cls("ui-group", className)}>{children}</div>;
+}
+
+/** The reset glyph beside a changed setting's title. */
+export function ResetButton({ onClick, label = "Reset to default" }: { onClick: () => void; label?: string }) {
+  return <IconButton className="ui-reset" icon="arrow.uturn.backward" iconSize={9} size="sm" label={label} onClick={onClick} />;
+}
+
+// ── headings, bars, lines ──────────────────────────────
+
+/**
+ * A heading over a part of a view. "caps" (small capitals, dim) for dense panes
+ * and sidebars, where it labels a list; "title" for a page's sections.
+ */
+export function SectionHeading({ children, aside, variant = "caps", tone }: { children: ReactNode; aside?: ReactNode; variant?: "caps" | "title"; tone?: "warning" }) {
+  return (
+    <div className="ui-heading" data-variant={variant} data-tone={tone}>
+      <span>{children}</span>
+      {aside != null && <span className="ui-heading-aside">{aside}</span>}
+    </div>
+  );
+}
+
+/** A bar of controls along a view's edge: the window toolbar, an editor's tab bar. */
+export function Toolbar({ children, edge = "bottom", className, label }: { children: ReactNode; edge?: "top" | "bottom" | "none"; className?: string; label?: string }) {
+  return (
+    <div className={cls("ui-toolbar", className)} role="toolbar" aria-label={label} data-edge={edge}>
+      {children}
+    </div>
+  );
+}
+
+/** Pushes what follows to the end of a row or toolbar. */
+export function Spacer() {
+  return <span className="ui-spacer" />;
+}
+
+export function Separator({ vertical }: { vertical?: boolean }) {
+  return <span className="ui-separator" role="separator" aria-orientation={vertical ? "vertical" : "horizontal"} data-vertical={vertical || undefined} />;
+}
+
+// ── content ────────────────────────────────────────────
+
+/** Names and values in two aligned columns (a tooltip's details, a manifest's permissions). */
+export function KeyValue({ items, mono }: { items: readonly (readonly [ReactNode, ReactNode])[]; mono?: boolean }) {
+  return (
+    <dl className="ui-kv" data-mono={mono || undefined}>
+      {items.map(([k, v], i) => (
+        <div key={i} className="ui-kv-row">
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** A box around a piece of content that isn't a row of a form. */
+export function Card({ children, className, padded = true }: { children: ReactNode; className?: string; padded?: boolean }) {
+  return (
+    <div className={cls("ui-card", className)} data-padded={padded || undefined}>
+      {children}
+    </div>
+  );
+}
+
+/** Output, errors, a command: mono, wrapped, scrolls past a height. */
+export function CodeBlock({ children, maxHeight = 180, tone }: { children: ReactNode; maxHeight?: number; tone?: "danger" }) {
+  return (
+    <pre className="ui-code" data-tone={tone} style={{ maxHeight }}>
+      {children}
+    </pre>
+  );
+}
+
+const TONE_ICON: Record<Tone, string> = {
+  neutral: "info.circle",
+  accent: "info.circle",
+  success: "checkmark.circle.fill",
+  warning: "exclamationmark.triangle.fill",
+  danger: "exclamationmark.triangle.fill",
+};
+
+/**
+ * A message above content: something failed, needs doing, or is worth knowing.
+ * One line with actions on the right, or a title and text.
+ */
+export function Callout({
+  tone = "neutral",
+  title,
+  children,
+  actions,
+  onDismiss,
+  icon,
+  banner,
+}: {
+  tone?: Tone;
+  title?: ReactNode;
+  children?: ReactNode;
+  actions?: ReactNode;
+  onDismiss?: () => void;
+  /** An SF Symbol name, a node, or false for none; by default the tone's. */
+  icon?: string | ReactNode | false;
+  /** Full width along a view's edge (no radius, a line under it), not a box. */
+  banner?: boolean;
+}) {
+  return (
+    <div className="ui-callout" data-tone={tone} data-banner={banner || undefined} role={tone === "danger" || tone === "warning" ? "alert" : "status"}>
+      {icon !== false && <span className="ui-callout-icon">{iconNode(icon ?? TONE_ICON[tone], ICON.row)}</span>}
+      <div className="ui-callout-text">
+        {title && <div className="ui-callout-title">{title}</div>}
+        {children && <div className="ui-callout-body">{children}</div>}
+      </div>
+      {actions && <div className="ui-callout-actions">{actions}</div>}
+      {onDismiss && <IconButton icon="xmark" size="sm" label="Dismiss" onClick={onDismiss} />}
+    </div>
+  );
+}
+
+/** What a view shows when it has nothing: an icon, what's missing, and how to get some. */
+export function EmptyState({ icon, title, children, action, compact }: { icon?: string | ReactNode; title?: ReactNode; children?: ReactNode; action?: ReactNode; compact?: boolean }) {
+  return (
+    <div className="ui-empty" data-compact={compact || undefined}>
+      {icon && <span className="ui-empty-icon">{iconNode(icon, compact ? 18 : ICON.empty, "light")}</span>}
+      {title && <div className="ui-empty-title">{title}</div>}
+      {children && <div className="ui-empty-text">{children}</div>}
+      {action && <div className="ui-empty-action">{action}</div>}
+    </div>
+  );
+}

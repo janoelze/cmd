@@ -1,10 +1,9 @@
-/* App styles in macOS system style, in the system font. Everything is a token.
-   Colours come from the active theme (themes/), which sets its tokens on :root;
-   the rest here is derived from them, and a theme's `vars` can override any of it. */
+/* App styles in macOS system style, in the system font. Everything is a token:
+   the design tokens and controls are @cmd/ui's (packages/ui/src/tokens.css,
+   components.css, imported before this file); these are the app's layout tokens
+   and its own views. */
 
 :root {
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  --font-mono: "SF Mono", Menlo, monospace;
   /* Content fonts, from the font.* settings (fonts.ts): code (terminals, editor,
      file browsers, Markdown code) and text (Markdown prose). */
   --font-code: var(--font-mono);
@@ -12,35 +11,6 @@
   --font-text: var(--font-ui);
   --font-text-size: 14px;
 
-  /* Set by the theme (themes/types.ts ThemeColors): --bg, --bg-sidebar,
-     --bg-elevated, --well, --text, --text-dim, --icon, --accent, --link, --match,
-     --ink, --scrim, --state-needs/-done/-working/-idle, and the --syn-* syntax
-     colours. Derived from them: */
-  --bg-hover: color-mix(in srgb, var(--ink) 6%, transparent);
-  --bg-selected: color-mix(in srgb, var(--ink) 10%, transparent);
-  --separator: color-mix(in srgb, var(--ink) 9%, transparent);
-  --on-accent: #fff; /* text on an accent background */
-  --folder: var(--link);
-  --shadow: rgb(0 0 0 / 0.5);
-  /* Recessed fields (settings window) and project chips (lightness for hsl(var(--hue) …)). */
-  --field: color-mix(in srgb, var(--scrim) 28%, transparent);
-  /* Text inputs, system style: a faint fill and hairline edge; on focus the edge
-     takes some accent and a soft halo surrounds it, rather than a hard accent line. */
-  --input-bg: color-mix(in srgb, var(--ink) 5%, transparent);
-  --input-edge: color-mix(in srgb, var(--ink) 10%, transparent);
-  --input-focus-edge: color-mix(in srgb, var(--accent) 50%, var(--input-edge));
-  --input-glow: color-mix(in srgb, var(--accent) 16%, transparent);
-  --input-ring: inset 0 0 0 1px var(--input-focus-edge), 0 0 0 2px var(--input-glow);
-  --input-placeholder: var(--text-dim);
-  /* Dividers between a window's panes (the Settings window's sidebar and bar). */
-  --pane-edge: color-mix(in srgb, var(--scrim) 50%, transparent);
-  /* Recessed areas: unassigned grid cells. */
-  --recess: color-mix(in srgb, var(--scrim) 22%, transparent);
-  --recess-edge: color-mix(in srgb, var(--scrim) 35%, transparent);
-  --chip-fg: 70% 78%;
-  --chip-bg: 30% 22% / 0.8;
-
-  --radius: 6px;
   --sidebar-w: 280px;
   --sidebar-pad: 14px; /* rows' inset from the sidebar edges (ui.sidebarPadding, set on .app / .sw) */
   --titlebar-h: 38px; /* traffic-light area at the top of the sidebar */
@@ -64,16 +34,9 @@
   --window-edge: color-mix(in srgb, var(--ink) var(--window-edge-mix, 9%), var(--bg-sidebar));
   --window-highlight: var(--accent);
   --window-dim: 1; /* theme factor on ui.unfocusedDim (darkening of unfocused windows) */
-  /* Motion: window moves and title-bar slots share this curve. */
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 /* Outside macOS the window has its own frame: no traffic-light area to keep free. */
 .platform-other { --titlebar-h: 28px; } /* the sidebar's top row (+) still needs its height */
-
-* { box-sizing: border-box; }
-
-/* Every input's placeholder, so no field falls back to the browser's grey. */
-::placeholder { color: var(--input-placeholder); opacity: 1; }
 
 html, body, #root { height: 100%; margin: 0; }
 
@@ -779,20 +742,6 @@ kbd {
   font-size: 11px;
   color: var(--text-dim);
   border-top: 1px solid var(--separator);
-}
-
-/* SF Symbol, tinted like an AppKit template image */
-.sf {
-  display: inline-block;
-  flex: none;
-  background-color: currentColor;
-  /* Rendered at the exact size shown (see Symbol.tsx): map 1:1, no scaling. */
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
 }
 
 /* ── windows (all view modes, see WindowsView / layouts.ts) ── */
@@ -1570,64 +1519,4 @@ kbd {
   box-shadow: 0 4px 14px var(--shadow);
   font-size: 11.5px;
   color: var(--text-dim);
-}
-
-/* ── tooltips (tooltips.tsx) ── */
-
-/* Positioned by transform from the top left; glides between neighbouring anchors. */
-.tip-pos {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 1000;
-  pointer-events: none;
-  transition: transform 120ms var(--ease);
-}
-.tip {
-  --tip-from: translateY(3px);
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  max-width: min(320px, calc(100vw - 16px));
-  padding: 4px 8px;
-  background: var(--bg-elevated);
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  border-radius: 6px;
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--shadow) 55%, transparent);
-  color: var(--text);
-  font: 11.5px/1.35 var(--font-ui);
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-  opacity: 0;
-  transform: var(--tip-from) scale(0.96);
-  /* Out: quick and plain. In (data-shown): a little longer, eased. */
-  transition: opacity 90ms ease-in, transform 90ms ease-in;
-}
-.tip[data-side="bottom"] { --tip-from: translateY(-3px); }
-.tip[data-side="left"] { --tip-from: translateX(3px); }
-.tip[data-side="right"] { --tip-from: translateX(-3px); }
-.tip[data-shown] {
-  opacity: 1;
-  transform: none;
-  transition: opacity 120ms var(--ease), transform 160ms var(--ease);
-}
-.tip-key { flex: none; color: var(--text-dim); font: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
-/* Rich tips: a card, like the popovers. */
-.tip.rich {
-  display: block;
-  max-width: min(400px, calc(100vw - 16px));
-  padding: 8px 10px;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px color-mix(in srgb, var(--shadow) 70%, transparent);
-  font-size: 12px;
-  white-space: normal;
-}
-.tip-head { font: 600 11px var(--font-ui); color: var(--text-dim); margin-bottom: 4px; }
-.tip-rows { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; align-items: baseline; }
-.tip-rows > :nth-child(odd) { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim); }
-.tip-rows > :nth-child(even) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tip-dim { color: var(--text-dim); }
-.tip-foot { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--separator); color: var(--text-dim); font-size: 11px; }
-@media (prefers-reduced-motion: reduce) {
-  .tip-pos, .tip, .tip[data-shown] { transition: opacity 80ms linear; transform: none; }
 }

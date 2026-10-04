@@ -25,7 +25,7 @@ import { formatBytes } from "../model.ts";
 import { onFsChanged, useStoreValue } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { syntax } from "../editor/syntax.ts";
-import { useTheme } from "../themes/registry.ts";
+import { useTheme } from "@cmd/ui/themes";
 
 /** Editor chrome from the app's design tokens. */
 const appTheme = (fontFamily: string, fontSize: number, dark: boolean) =>

@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@cmd/protocol": "workspace:*",
+    "@cmd/ui": "workspace:*",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/language": "^6.12.4",
     "@codemirror/language-data": "^6.5.2",

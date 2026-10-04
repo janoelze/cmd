@@ -13,7 +13,7 @@ import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
-import { SCROLLBAR_CSS } from "../scrollbars.ts";
+import { SCROLLBAR_CSS } from "@cmd/ui";
 import { setWindowStatus } from "../windowActions.ts";
 import { handleEmbedMessage } from "../embed.ts";
 import { deviceById, type Device } from "../devices.ts";

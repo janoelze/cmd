@@ -1,0 +1,4 @@
+/* @cmd/ui's styles: import once per page, before the app's own CSS. */
+@import "./tokens.css";
+@import "./components.css";
+@import "./tooltips.css";

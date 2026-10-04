@@ -17,7 +17,7 @@ import { SETTINGS_TEMPLATE, mediaOrigin, widgetCsp } from "@cmd/protocol";
 import { cmdHome, connect, coreSocketPath, enterInstance, initLog, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
-import { lucideSymbol, type SymbolImage } from "./icons.ts";
+import { lucideSymbol, type SymbolImage } from "@cmd/ui/lucide";
 import { appMetrics } from "./metrics.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";

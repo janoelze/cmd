@@ -1,8 +1,9 @@
 // Icons outside macOS. The UI names its icons by SF Symbol name (see
-// renderer/src/components/Symbol.tsx); on macOS a native helper renders the
-// real symbols. SF Symbols may only be used on Apple platforms, so elsewhere
-// each name maps to its closest Lucide icon (ISC licence), returned as an SVG
-// the Symbol component uses as a mask, like the helper's bitmaps.
+// apps/desktop renderer/src/components/Symbol.tsx); on macOS a native helper
+// renders the real symbols. SF Symbols may only be used on Apple platforms, so
+// elsewhere (the main process's fallback, the gallery in a browser) each name
+// maps to its closest Lucide icon (ISC licence), as an SVG used as a mask, like
+// the helper's bitmaps.
 
 import {
   AppWindow,
@@ -10,10 +11,13 @@ import {
   BookText,
   Braces,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   ChevronUp,
+  CircleAlert,
+  CircleCheck,
   CircleX,
   CodeXml,
   Columns3,
@@ -37,6 +41,7 @@ import {
   LayoutGrid,
   MessageSquare,
   Link,
+  OctagonX,
   Palette,
   PanelLeft,
   Pencil,
@@ -68,6 +73,7 @@ const LUCIDE: Record<string, string> = {
   "chevron.left.forwardslash.chevron.right": CodeXml,
   "chevron.right": ChevronRight,
   "chevron.up": ChevronUp,
+  "chevron.down": ChevronDown,
   "chevron.up.chevron.down": ChevronsUpDown,
   "clock.arrow.circlepath": History,
   command: Command,
@@ -86,6 +92,9 @@ const LUCIDE: Record<string, string> = {
   globe: Globe,
   house: House,
   "info.circle": Info,
+  "checkmark.circle.fill": CircleCheck,
+  "exclamationmark.circle": CircleAlert,
+  "xmark.octagon": OctagonX,
   keyboard: Keyboard,
   link: Link,
   macwindow: AppWindow,

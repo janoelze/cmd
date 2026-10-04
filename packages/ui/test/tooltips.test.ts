@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeTip } from "../src/renderer/src/tooltips.tsx";
+import { placeTip } from "../src/tooltips.tsx";
 
 const rect = (left: number, top: number, width = 20, height = 20) => ({ left, top, width, height, right: left + width, bottom: top + height });
 

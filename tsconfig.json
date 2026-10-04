@@ -7,5 +7,6 @@
     "apps/relay/test/**/*.ts"
   ],
   // Example widgets are Deno code (deno check covers them: cmd widget check).
-  "exclude": ["packages/core/src/magic/prompt/examples/**"]
+  // @cmd/ui is React (TSX) with its own tsconfig (pnpm --filter @cmd/ui typecheck).
+  "exclude": ["packages/core/src/magic/prompt/examples/**", "packages/ui/**"]
 }

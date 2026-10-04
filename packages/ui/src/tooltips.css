@@ -1,0 +1,59 @@
+/* Tooltips (tooltips.tsx). */
+
+/* Positioned by transform from the top left; glides between neighbouring anchors. */
+.tip-pos {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  pointer-events: none;
+  transition: transform 120ms var(--ease);
+}
+.tip {
+  --tip-from: translateY(3px);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--shadow) 55%, transparent);
+  color: var(--text);
+  font: 11.5px/1.35 var(--font-ui);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  opacity: 0;
+  transform: var(--tip-from) scale(0.96);
+  /* Out: quick and plain. In (data-shown): a little longer, eased. */
+  transition: opacity 90ms ease-in, transform 90ms ease-in;
+}
+.tip[data-side="bottom"] { --tip-from: translateY(-3px); }
+.tip[data-side="left"] { --tip-from: translateX(3px); }
+.tip[data-side="right"] { --tip-from: translateX(-3px); }
+.tip[data-shown] {
+  opacity: 1;
+  transform: none;
+  transition: opacity 120ms var(--ease), transform 160ms var(--ease);
+}
+.tip-key { flex: none; color: var(--text-dim); font: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+/* Rich tips: a card, like the popovers. */
+.tip.rich {
+  display: block;
+  max-width: min(400px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--shadow) 70%, transparent);
+  font-size: 12px;
+  white-space: normal;
+}
+.tip-head { font: 600 11px var(--font-ui); color: var(--text-dim); margin-bottom: 4px; }
+.tip-rows { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; align-items: baseline; }
+.tip-rows > :nth-child(odd) { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.tip-rows > :nth-child(even) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tip-dim { color: var(--text-dim); }
+.tip-foot { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--separator); color: var(--text-dim); font-size: 11px; }
+@media (prefers-reduced-motion: reduce) {
+  .tip-pos, .tip, .tip[data-shown] { transition: opacity 80ms linear; transform: none; }
+}
