@@ -64,9 +64,9 @@ td.num { font-variant-numeric: tabular-nums; }
 .pill { font-size: 11px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
 .button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-.shot { display: block; width: 100%; height: auto; margin: 24px 0 8px; }
+.shot { display: block; width: 100%; height: auto; border-radius: 1px; margin: 24px 0 8px; }
 .hero-shots { position: relative; width: min(1400px, calc(100vw - 32px)); margin: 32px 0 40px 50%; transform: translateX(-50%); }
-.hero-shots img { display: block; width: 100%; height: auto; opacity: 0; transition: opacity 0.9s ease; }
+.hero-shots img { display: block; width: 100%; height: auto; border-radius: 1px; opacity: 0; transition: opacity 0.9s ease; }
 .hero-shots img + img { position: absolute; inset: 0; }
 .hero-shots img.on { opacity: 1; }
 .pillar { margin: 56px 0; }
