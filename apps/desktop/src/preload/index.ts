@@ -97,7 +97,7 @@ const api = {
     ipcRenderer.on("notification-click", h);
     return () => ipcRenderer.off("notification-click", h);
   },
-  /** Native appearance (traffic lights, menus, vibrancy) and window background for the active theme. */
+  /** Native appearance (traffic lights, menus, vibrancy), window background and Dock icon for the active theme. */
   setAppearance: (a: Appearance) => ipcRenderer.send("appearance", a),
   focusWindow: () => ipcRenderer.send("focus"),
   openPath: (p: string) => ipcRenderer.send("open-path", p),

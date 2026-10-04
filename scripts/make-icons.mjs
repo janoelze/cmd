@@ -6,11 +6,16 @@
 //   icon.png    (1024, Linux), icon.ico (Windows)
 // and a red variant for development builds (pnpm dev, pnpm dist) in build/dev/
 // (Assets.car, icon.icns, icon.png, icon.ico), so they're easy to tell from the installed app.
+// Plus build/themes/<theme id>.png: the icon in each built-in theme's colours, rendered
+// by ictool (glass, rim and all) for the Dock while the app runs (src/main/dock-icon.ts),
+// and default.png, the icon itself, to go back to.
 // The outputs are committed, so packaging needs no Xcode. Needs Xcode 26+. usage: pnpm icons
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import "../packages/ui/src/themes/builtin.ts";
+import { allThemes } from "../packages/ui/src/themes/registry.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
 const build = path.join(root, "apps/desktop/build");
@@ -115,7 +120,35 @@ function render(iconDoc, outDir, { ico = false } = {}) {
   fs.copyFileSync(png(1024), path.join(outDir, "icon.png"));
 }
 
+/** A flat 512 px render (the Dock's largest size, magnified on a 2x screen) with the macOS grid's padding. */
+function dockPng(iconDoc, out) {
+  run(ictool, [iconDoc, "--export-image", "--output-file", out, "--platform", "macOS", "--rendition", "Default", "--width", "412", "--height", "412", "--scale", "1"]);
+  run("sips", ["-p", "512", "512", out]);
+}
+
+// 2. One Dock icon per built-in theme: the background from the theme's bg (lit
+//    towards ink at the top on dark themes), the glyph in its accent. Light themes
+//    get less translucency, or the glass washes the glyph out.
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+const srgb = (c) => `srgb:${c.map((v) => v.toFixed(5)).join(",")},1.00000`;
+const themesDir = path.join(build, "themes");
+fs.rmSync(themesDir, { recursive: true, force: true });
+fs.mkdirSync(themesDir);
+for (const t of allThemes()) {
+  const dark = t.appearance === "dark", bg = hex(t.colors.bg);
+  const themed = path.join(tmp, `${t.id}.icon`);
+  fs.cpSync(source, themed, { recursive: true });
+  const doc = JSON.parse(fs.readFileSync(path.join(themed, "icon.json"), "utf8"));
+  doc.fill["linear-gradient"] = [srgb(mix(bg, hex(t.colors.ink), dark ? 0.12 : 0)), srgb(mix(bg, hex(t.colors.scrim), dark ? 0.4 : 0.1))];
+  doc.groups[0].layers[0].fill = { solid: srgb(hex(t.colors.accent)) };
+  if (!dark) doc.groups[0].translucency.value = 0.05;
+  fs.writeFileSync(path.join(themed, "icon.json"), JSON.stringify(doc, null, 2) + "\n");
+  dockPng(themed, path.join(themesDir, `${t.id}.png`));
+}
+dockPng(source, path.join(themesDir, "default.png"));
+
 render(source, build, { ico: true });
 render(devSource, path.join(build, "dev"), { ico: true });
 fs.rmSync(tmp, { recursive: true, force: true });
-console.log("wrote apps/desktop/build/{Assets.car,icon.icns,icon.png,icon.ico} and build/dev/ (the same, red)");
+console.log("wrote apps/desktop/build/{Assets.car,icon.icns,icon.png,icon.ico}, build/dev/ (the same, red) and build/themes/ (Dock icons)");

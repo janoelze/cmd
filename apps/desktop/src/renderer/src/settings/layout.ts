@@ -29,7 +29,7 @@ export const SETTINGS_PAGES: Page[] = [
     title: "Appearance",
     icon: "paintpalette",
     sections: [
-      { title: "Theme", items: ["theme.appearance", "theme.dark", "theme.light"] },
+      { title: "Theme", items: ["theme.appearance", "theme.dark", "theme.light", "theme.dockIcon"] },
       { title: "Fonts", items: ["font.code", "font.codeSize", "font.text", "font.textSize"] },
       { title: "Sidebar", items: ["ui.sidebarPadding"] },
     ],

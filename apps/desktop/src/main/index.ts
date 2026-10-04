@@ -20,6 +20,7 @@ import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { lucideSymbol, type SymbolImage } from "@cmd/ui/lucide";
 import { appMetrics } from "./metrics.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
+import { setDockIcon, startDockIcon } from "./dock-icon.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
 import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } from "./feedback.ts";
@@ -112,6 +113,8 @@ app.setPath("userData", uiData);
 
 // Packaged builds carry their icon in the bundle (.icns / .ico); dev runs use the PNG.
 const devIcon = app.isPackaged ? undefined : path.join(here, "../../build/dev/icon.png");
+// The themed Dock icons (dock-icon.ts); dev builds keep their red one.
+const dockIcons = app.isPackaged ? path.join(process.resourcesPath, "dock-icons") : path.join(here, "../../build/themes");
 
 function canConnect(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -464,6 +467,7 @@ ipcMain.on("notify-close", (_e, tag: string) => {
 });
 ipcMain.on("appearance", (_e, a: Appearance) => {
   setAppearance(a);
+  setDockIcon(a.dockIcon ?? null);
   for (const w of appWindows()) w.setBackgroundColor(a.background);
 });
 ipcMain.on("menu-state", (_e, state: MenuState) => applyMenuState(state));
@@ -748,6 +752,7 @@ app.whenReady().then(async () => {
   spaces.restore();
   // Decoding and setting it takes ~80 ms on this thread: not while the first window starts (dev builds only).
   if (devIcon) setTimeout(() => app.dock?.setIcon(devIcon), 1000);
+  else if (!devBuild) setTimeout(() => startDockIcon(dockIcons, savedAppearance().dockIcon ?? null), 1000);
   ensureCore().then(
     () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows), servePreviews(socketPath), void countLaunch()),
     (err: Error) => (log.error("the core did not start", err), dialog.showErrorBox("cmd: the core did not start", err.message)),

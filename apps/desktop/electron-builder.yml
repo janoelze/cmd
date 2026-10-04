@@ -25,6 +25,9 @@ mac:
   extraResources:
     - from: build/Assets.car
       to: Assets.car
+    # The Dock icon per theme (src/main/dock-icon.ts), from `pnpm icons` too.
+    - from: build/themes
+      to: dock-icons
   extendInfo:
     CFBundleIconName: Icon
   target:

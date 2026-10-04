@@ -67,6 +67,12 @@ export const SETTINGS_SCHEMA = {
   },
   "theme.dark": { title: "Dark theme", type: "string", control: "theme", appearance: "dark", default: "pastel-dark", description: "Theme used in dark appearance." },
   "theme.light": { title: "Light theme", type: "string", control: "theme", appearance: "light", default: "pastel-light", description: "Theme used in light appearance." },
+  "theme.dockIcon": {
+    title: "Themed Dock icon",
+    type: "boolean",
+    default: true,
+    description: "Show the app icon in the theme's colours in the Dock while cmd runs. Built-in themes only; the Tinted and Clear icon styles keep the standard icon.",
+  },
 
   "terminal.renderer": {
     title: "Renderer", labels: { dom: "DOM", webgl: "WebGL" },
