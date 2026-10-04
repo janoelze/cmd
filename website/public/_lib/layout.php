@@ -65,15 +65,15 @@ td.num { font-variant-numeric: tabular-nums; }
 .pill { font-size: 11px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
 .button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-.shot, .hero-shots { border-radius: 1.196% / 1.895%; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14); } /* the screenshots' own 18px window corners, at any size */
-.shot { display: block; width: 100%; height: auto; margin: 24px 0 8px; }
+.hero-shots { border-radius: 1.196% / 1.895%; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14); } /* the screenshots' own 18px window corners, at any size */
 .hero-shots { position: relative; width: min(1400px, calc(100vw - 32px)); margin: 32px 0 40px 50%; transform: translateX(-50%); }
 .hero-shots img { display: block; width: 100%; height: auto; border-radius: inherit; opacity: 0; transition: opacity 0.9s ease; }
 .hero-shots img + img { position: absolute; inset: 0; }
 .hero-shots img.on { opacity: 1; }
-.pillar { margin: 56px 0; }
-.pillar h2 { font-size: 22px; margin: 0 0 8px; }
-.pillar p { color: var(--ink-2); max-width: 60ch; margin: 0; }
+h2.section { font-size: 22px; margin: 64px 0 20px; }
+.features { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 24px 32px; margin-bottom: 24px; }
+.features h3 { font-size: 15px; margin: 0 0 4px; }
+.features p { font-size: 14px; color: var(--ink-2); margin: 0; }
 .button { display: inline-block; background: var(--ink); color: var(--bg); text-decoration: none; padding: 9px 16px; border-radius: 8px; font-weight: 500; }
 footer { color: var(--ink-3); font-size: 13px; padding-top: 48px; padding-bottom: 32px; }
 </style>

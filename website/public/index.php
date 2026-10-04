@@ -37,9 +37,17 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <img src="assets/canvas-pan.png" width="1505" height="950" alt="The canvas, panned across a log, a usage widget and a Claude Code session">
 </div>
 <script>
-// Crossfade the hero screenshots; reduced motion keeps the first.
+// Shuffle the hero screenshots, then crossfade through them; reduced motion
+// shows one at random. Without script the first one shows.
 (() => {
-  const shots = document.querySelectorAll(".hero-shots img");
+  const box = document.querySelector(".hero-shots");
+  const shots = [...box.children];
+  for (let i = shots.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shots[i], shots[j]] = [shots[j], shots[i]];
+  }
+  for (const s of shots) { s.classList.remove("on"); box.append(s); }
+  shots[0].classList.add("on");
   if (shots.length < 2 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   let i = 0;
   setInterval(() => {
@@ -53,29 +61,24 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
 
 <p>It isn't an IDE and has no agent of its own: you bring Claude Code, Codex or whichever agent you use, and cmd runs them next to everything else you have open.</p>
 
-<section class="pillar">
-  <h2>Layouts</h2>
-  <p>Show one window at a time, tile them in a grid, scroll through them in a strip, or place them on a canvas. ⌘K finds any window, command or past session. There are 16 themes, light and dark.</p>
-  <img class="shot" src="assets/canvas.png" width="1505" height="950" loading="lazy" alt="The canvas: a widget and a Claude Code session placed freely">
-</section>
-
-<section class="pillar">
-  <h2>Agents</h2>
-  <p>cmd detects Claude Code, Codex and other agents in any terminal and lists the ones waiting for input first. Terminals run in a background process, so quitting or updating the app doesn't end them. Past sessions are searchable and can be resumed.</p>
-  <img class="shot" src="assets/grid.png" width="1505" height="950" loading="lazy" alt="The grid: twelve windows at once, agents, widgets, a file browser, a shell and the weather">
-</section>
-
-<section class="pillar">
-  <h2>Browsers and files</h2>
-  <p>Web browser, file browser, text editor and Markdown windows sit next to your terminals. <code>open README.md</code> in a shell opens it in cmd, and a browser window can show a page at phone, tablet or desktop size.</p>
-  <img class="shot" src="assets/agents.png" width="1505" height="950" loading="lazy" alt="The strip: a Claude Code session, a file browser and a shell, with six agents and recent sessions in the sidebar">
-</section>
-
-<section class="pillar">
-  <h2>Magic widgets</h2>
-  <p>Describe what you want to see, like your CI runs, a JSON URL or the weather, and an agent builds a small live widget for it while you watch. It refreshes on its own, you can change it by asking, and you close it when you're done. Uses your own Anthropic or OpenAI API key.</p>
-  <img class="shot" src="assets/widgets.png" width="1505" height="950" loading="lazy" alt="A weather widget next to top in the strip">
-</section>
+<h2 class="section">Features</h2>
+<div class="features">
+  <div><h3>Layouts</h3><p>Focus on one window, tile them in a grid, scroll through a strip, or place them on an infinite canvas with a minimap.</p></div>
+  <div><h3>Agent detection</h3><p>Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes.</p></div>
+  <div><h3>Waiting agents first</h3><p>Agents waiting for input are listed first, then working, then done. ⌃⌘J jumps to the next one.</p></div>
+  <div><h3>Terminals keep running</h3><p>A background process owns them, so quitting, reloading or updating the app doesn't end them.</p></div>
+  <div><h3>Session search</h3><p>Full-text search over Claude Code, Codex, Qwen Code and Copilot CLI transcripts. Return resumes a session.</p></div>
+  <div><h3>Magic widgets</h3><p>Describe what to show and an agent builds a live widget for it. Change it by asking. Uses your own API key.</p></div>
+  <div><h3>Web browser</h3><p>Next to your terminals, with phone, tablet and desktop sizes.</p></div>
+  <div><h3>Files and editor</h3><p>A file browser, a text editor and Markdown windows. <code>open</code> in a shell opens files in cmd.</p></div>
+  <div><h3>Notifications</h3><p>Waiting agents, bells, finished commands and OSC 9/777/99 mark the terminal until you look, and count on the Dock badge.</p></div>
+  <div><h3>Command palette</h3><p>⌘K finds windows, commands and past sessions.</p></div>
+  <div><h3>Keyboard first</h3><p>Every action is in the menu bar, and every shortcut can be remapped.</p></div>
+  <div><h3>CLI</h3><p><code>cmd</code> spawns, messages, waits on and stops agents, so an agent can run other agents.</p></div>
+  <div><h3>A complete terminal</h3><p>Find in scrollback, jump between prompts, inline images, OSC 52 copy over ssh, a check before risky pastes.</p></div>
+  <div><h3>Themes</h3><p>16 themes, light and dark, following the system or not.</p></div>
+  <div><h3>Updates</h3><p>Signed and notarized. Updates install when you quit, and terminals keep running.</p></div>
+</div>
 
 <h2>Releases</h2>
 <?php if (!$releases): ?>
