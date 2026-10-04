@@ -24,7 +24,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 import { flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
 import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type Spacing, type ViewMode } from "../layouts.ts";
-import { arrangeTiles, moveInOrder, windowIdOf, type SidebarRow } from "../model.ts";
+import { arrangeTiles, moveInOrder, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
 import { useStoreValue } from "../store.ts";
 import {
@@ -127,6 +127,7 @@ export function WindowsView(p: Props) {
   const padX = useStoreValue((s) => s.settings.settings["ui.paddingX"]);
   const padY = useStoreValue((s) => s.settings.settings["ui.paddingY"]);
   const gap = useStoreValue((s) => s.settings.settings["ui.gutter"]);
+  const attention = useStoreValue((s) => s.settings.settings["ui.attentionOutline"]);
   const spacing: Spacing = { x: padX, y: padY, gap };
   const padRef = useRef(padX);
   padRef.current = padX;
@@ -771,7 +772,7 @@ export function WindowsView(p: Props) {
             <div
               key={id}
               data-pane={id}
-              className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${settling === id ? "settling" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""}`}
+              className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${settling === id ? "settling" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""} ${attention && needsYou(r) ? "needs" : ""}`}
               style={{
                 transform: `translate(${x}px, ${y}px)`,
                 width: rect.w,
@@ -805,6 +806,9 @@ export function WindowsView(p: Props) {
                   <WindowContent win={r.win} focused={id === selected} />
                 ) : null}
               </div>
+              {/* Outline rings, glow, shadow and dimming: a leaf, so the canvas zoom can be
+                  set on it (screen-constant widths) without restyling the window's content. */}
+              <div className="tile-frame" style={canvas ? zVar : undefined} />
               {lay.resizable && (
                 <div
                   className="strip-resize"

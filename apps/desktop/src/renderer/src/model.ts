@@ -101,6 +101,11 @@ export function sectionOf(r: SidebarRow): Section {
   return r.agent ? "agents" : "windows";
 }
 
+/** Waiting on you: an agent needing input, or a terminal's urgent attention marker (window outline). */
+export function needsYou(r: SidebarRow): boolean {
+  return sectionOf(r) === "needs" || (!r.agent && !!r.pane?.attention?.urgent);
+}
+
 /**
  * Sidebar search over open rows, children included, as a flat list: every
  * whitespace-separated term must appear in the row's name, place, kind or cwd.

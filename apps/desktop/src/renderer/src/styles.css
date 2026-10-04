@@ -49,15 +49,20 @@
   --gutter: 8px; /* between windows */
   --pad-x: 8px; /* to the left and right edges */
   --pad-y: 8px; /* to the top and bottom edges */
-  /* Windows: rounded corners (the ui.windowRadius setting, set on .app), crisp 1px
-     outlines (fractional widths look fuzzy), blue highlight with a soft glow. */
+  /* Windows: rounded corners and crisp whole-pixel outlines, the selected one in the
+     accent with a soft glow. Set on .app from settings: --window-radius
+     (ui.windowRadius), --window-outline (ui.windowOutline), --window-edge-mix
+     (ui.windowOutlineContrast), --focus-outline (ui.focusOutline), --focus-glow
+     (ui.focusGlow, 1 = the default halo). What's built from them is declared on
+     .tile, where those values resolve. */
   --window-radius: 8px;
   --window-outline: 1px;
+  --focus-outline: 1px;
+  --focus-glow: 1;
   /* Window outline and the line under the title bar: one opaque colour (the
      separator over the title bar), so both look the same over any background. */
-  --window-edge: color-mix(in srgb, var(--ink) 9%, var(--bg-sidebar));
+  --window-edge: color-mix(in srgb, var(--ink) var(--window-edge-mix, 9%), var(--bg-sidebar));
   --window-highlight: var(--accent);
-  --window-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
   --window-dim: 1; /* theme factor on ui.unfocusedDim (darkening of unfocused windows) */
   /* Motion: window moves and title-bar slots share this curve. */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -563,6 +568,9 @@ kbd {
      Declared here, not on :root: a variable built from another resolves where it's
      declared, and the radius is set per app (setting) and per mode (focus). */
   --window-radius-inner: max(0px, calc(var(--window-radius) - var(--window-outline)));
+  --window-edge: color-mix(in srgb, var(--ink) var(--window-edge-mix, 9%), var(--bg-sidebar));
+  /* The outline colour where it's emphasised: selected (ui.focusColor), or needing you. */
+  --ring-color: var(--window-highlight);
 }
 /* Clips the content; the tile itself doesn't, so resize handles can sit outside it. */
 .tile-body {
@@ -573,7 +581,47 @@ kbd {
   overflow: hidden;
   border-radius: var(--window-radius-inner);
 }
-.tile.sel { border-color: var(--window-highlight); box-shadow: var(--window-glow); }
+/* ui.focusColor neutral: the theme's text colour instead of the accent (minimap too). */
+.app.focus-neutral { --window-highlight: color-mix(in srgb, var(--ink) 70%, var(--bg-sidebar)); }
+.tile.sel { border-color: var(--ring-color); }
+.tile.needs { --ring-color: var(--state-needs); border-color: var(--ring-color); }
+.tile.sel.needs { --ring-color: var(--window-highlight); }
+
+/* The frame (.tile-frame, over the window's outline) draws everything outside the
+   border as box-shadows: the outline's extra width, the emphasised ring and glow,
+   the drop shadow. Rings add width outside the border rather than thickening it,
+   so selecting a window never moves its content. On the canvas the frame gets the
+   zoom (--z) and widths are divided by it: the track is scaled, and a 1px outline
+   would vanish at 30%. The border itself stays put, so zooming never resizes a
+   terminal. */
+.tile-frame {
+  position: absolute;
+  inset: calc(-1 * var(--window-outline));
+  border-radius: var(--window-radius);
+  pointer-events: none;
+  z-index: 3;
+  /* Outline: what the border lacks on screen when zoomed out. */
+  --edge-w: max(0px, calc(var(--window-outline) / var(--z, 1) - var(--window-outline)));
+  /* Emphasised: up to ui.focusOutline on screen, then a 1px halo and a blur (ui.focusGlow). */
+  --ring-w: max(0px, calc(var(--focus-outline) / var(--z, 1) - var(--window-outline)));
+  --ring:
+    0 0 0 var(--ring-w) var(--ring-color),
+    0 0 0 calc(var(--ring-w) + 1px / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(55% * var(--focus-glow))), transparent),
+    0 0 calc(14px * var(--focus-glow) / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(35% * var(--focus-glow))), transparent);
+  --drop: 0 0 transparent;
+  box-shadow: 0 0 0 var(--edge-w) var(--window-edge), var(--drop);
+}
+/* ui.windowShadow */
+.app.shadow-subtle .tile-frame { --drop: 0 2px 6px color-mix(in srgb, var(--shadow) 60%, transparent); }
+.app.shadow-strong .tile-frame { --drop: 0 8px 28px var(--shadow); }
+.tile.sel > .tile-frame, .tile.needs > .tile-frame { box-shadow: var(--ring), var(--drop); }
+.mode-focus .windows-track > .tile > .tile-frame { box-shadow: none; }
+
+/* ui.focusTitleBar: the selected window's title bar takes some of its outline colour. */
+.app.title-tint-subtle .tile.sel .tile-title { background: color-mix(in srgb, var(--ring-color) 8%, var(--bg-sidebar)); }
+.app.title-tint-strong .tile.sel .tile-title { background: color-mix(in srgb, var(--ring-color) 18%, var(--bg-sidebar)); }
+.app.title-tint-subtle .mode-focus .tile.sel .tile-title,
+.app.title-tint-strong .mode-focus .tile.sel .tile-title { background: var(--bg-sidebar); }
 .tile .term-well { padding-top: 6px; }
 .tile-title {
   flex: none;
@@ -723,41 +771,38 @@ kbd {
 }
 /* Windows glide to new positions: pushes while dragging, mode switches, resizes. */
 .windows-track > .tile { transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
-.windows-track > .tile.lifted {
-  z-index: 10;
-  transition: none;
-  border-color: var(--window-highlight);
-  box-shadow: var(--window-glow);
-}
+.windows-track > .tile.lifted { z-index: 10; transition: none; border-color: var(--ring-color); }
+.windows-track > .tile.lifted > .tile-frame { box-shadow: var(--ring), var(--drop); }
 /* A dropped window snaps into place quicker than other moves (WindowsView SETTLE_MS). */
 .windows-track > .tile.settling { transition-duration: 110ms; }
 .windows-track > .tile.hidden-tile { visibility: hidden; pointer-events: none; }
 
 /* Unfocused windows are dimmed by an overlay (not a filter, which would soften text).
-   It covers the outline too, so the outline dims with the line under the title.
-   Amount: ui.unfocusedDim (--window-dim-amount, set in App) times the theme's --window-dim. */
-.windows-track > .tile::after {
+   It covers the outline too (and its extra width on the canvas), so the outline dims
+   with the line under the title. Amount: ui.unfocusedDim (--window-dim-amount, set
+   in App) times the theme's --window-dim. A window that needs you isn't dimmed. */
+.windows-track > .tile > .tile-frame::after {
   content: "";
   position: absolute;
-  inset: calc(-1 * var(--window-outline));
+  inset: calc(-1 * var(--edge-w));
   background: var(--scrim);
   opacity: min(1, calc(var(--window-dim) * var(--window-dim-amount, 0.1)));
-  border-radius: var(--window-radius);
-  pointer-events: none;
+  border-radius: calc(var(--window-radius) + var(--edge-w));
   transition: opacity 160ms ease;
-  z-index: 3;
 }
-.windows-track > .tile.sel::after,
-.windows-track > .tile.lifted::after,
-.mode-focus .windows-track > .tile::after { opacity: 0; }
+.windows-track > .tile.sel > .tile-frame::after,
+.windows-track > .tile.lifted > .tile-frame::after,
+.windows-track > .tile.needs > .tile-frame::after,
+.mode-focus .windows-track > .tile > .tile-frame::after { opacity: 0; }
 
-/* Visual bell (notifications.visualBell): the outline flashes once. */
-.windows-track > .tile.bell { animation: tile-bell 450ms ease-out; }
-@keyframes tile-bell {
-  0%, 30% { border-color: var(--state-needs); box-shadow: 0 0 0 1px var(--state-needs), 0 0 18px color-mix(in srgb, var(--state-needs) 45%, transparent); }
-}
+/* Visual bell (notifications.visualBell): the outline flashes once, as wide as the
+   selected one, in the attention colour. */
+.windows-track > .tile.bell { --ring-color: var(--state-needs); animation: tile-bell 450ms ease-out; }
+.windows-track > .tile.bell > .tile-frame { animation: tile-bell-ring 450ms ease-out; }
+@keyframes tile-bell { 0%, 30% { border-color: var(--state-needs); } }
+@keyframes tile-bell-ring { 0%, 30% { box-shadow: var(--ring), var(--drop); } }
 @media (prefers-reduced-motion: reduce) {
-  .windows-track > .tile.bell { animation-duration: 1ms; }
+  .windows-track > .tile.bell, .windows-track > .tile.bell > .tile-frame { animation-duration: 1ms; }
 }
 
 /* ui.unfocusedDesaturation: unfocused windows lose their colour. This one has to
