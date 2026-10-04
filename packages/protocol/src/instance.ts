@@ -24,7 +24,7 @@ export function instanceName(): InstanceName {
 /** "cmd" or "cmd-dev": the folder name the instance uses next to the other one. */
 export const instanceDir = (): string => (instanceName() === "dev" ? "cmd-dev" : "cmd");
 
-/** Pane context set by a core in its shells (see panes.ts and shell/zsh); a test keeps this complete. */
+/** Pane context set by a core in its shells (see panes.ts, shells.ts and shell/); a test keeps this complete. */
 export const PANE_ENV: readonly string[] = [
   ENV.socket,
   ENV.paneId,
@@ -32,6 +32,11 @@ export const PANE_ENV: readonly string[] = [
   ENV.parentId,
   "CMD_PANE_TOKEN",
   "CMD_USER_ZDOTDIR",
+  "CMD_BASH_INJECT",
+  "CMD_USER_ENV",
+  "CMD_BASH_UNEXPORT_HISTFILE",
+  "CMD_FISH_INJECT",
+  "CMD_USER_XDG_DATA_DIRS",
   "CMD_OPEN_RULES",
   "CMD_OPEN_FOLDERS",
   "CMD_OPEN_URLS",

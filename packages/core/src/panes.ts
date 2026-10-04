@@ -17,6 +17,7 @@ import { DEVICE_REPLIES, OscScanner, type OscEvent } from "./osc.ts";
 import { classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
 import { STATUS_ENV } from "./agents/statusfiles.ts";
 import type { Store } from "./store.ts";
+import { integrate, shellName } from "./shells.ts";
 import { LocalBackend } from "./terminals/local.ts";
 import type { PtyFactory } from "./terminals/pty.ts";
 import type { Term, TermBackend } from "./terminals/types.ts";
@@ -71,8 +72,7 @@ export function defaultShell(): string {
   return dirs.some((d) => fs.existsSync(path.join(d, "pwsh.exe"))) ? "pwsh.exe" : "powershell.exe";
 }
 
-/** "zsh" for /bin/zsh, "pwsh" for C:\\…\\pwsh.exe. */
-export const shellName = (shell: string) => path.basename(shell.replace(/\\/g, "/")).replace(/\.exe$/i, "");
+export { shellName };
 
 /** Scrollback lines included when a UI re-attaches (the headless terminal keeps more). */
 const SNAPSHOT_SCROLLBACK = 5000;
@@ -99,9 +99,6 @@ interface Live {
   /** Clears a progress bar the program stopped updating (it may have crashed). */
   progressTimer: NodeJS.Timeout | null;
 }
-
-/** zsh integration (shell/zsh): .zshenv restores the user's ZDOTDIR, then adds hooks. */
-export const ZSH_INTEGRATION_DIR = path.resolve(import.meta.dirname, "../shell/zsh");
 
 /** Shell counts as ready once its startup output has been quiet this long. */
 const READY_QUIET_MS = 250;
@@ -134,7 +131,7 @@ export interface PaneManagerOptions {
   rulesFile?: string | null;
   /** Where pane records and screens are kept for restoring; null: nowhere (tests). */
   store?: Store | null;
-  /** Folder for each pane's own shell history (zsh integration), kept for restoring; null: none. */
+  /** Folder for each pane's own shell history (zsh and bash integration), kept for restoring; null: none. */
   historyDir?: string | null;
 }
 
@@ -205,7 +202,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.#backend = next;
   }
 
-  /** What the zsh `open` function hands to cmd, as CMD_OPEN_* variables. */
+  /** What the shell integration's `open` hands to cmd, as CMD_OPEN_* variables. */
   #openRules(): Record<string, string> {
     const cfg = this.#settings();
     return {
@@ -216,7 +213,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     };
   }
 
-  /** Rewrite the rules file; the zsh `open` sources it on every call. Atomic, so a shell never reads half a file. */
+  /** Rewrite the rules file; the shells' `open` reads it on every call. Atomic, so a shell never reads half a file. */
   writeShellRules(): void {
     if (!this.#rulesFile) return;
     const body = Object.entries(this.#openRules())
@@ -241,15 +238,18 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       if (v !== undefined && !k.startsWith("ELECTRON_") && k !== "NODE_OPTIONS" && k !== "CMD_APP_VERSION") env[k] = v;
     }
     const token = randomBytes(12).toString("hex");
-    if (cfg["shell.integration"] && shellName(shell) === "zsh" && fs.existsSync(ZSH_INTEGRATION_DIR)) {
-      if (env.ZDOTDIR !== undefined) env.CMD_USER_ZDOTDIR = env.ZDOTDIR;
-      env.ZDOTDIR = ZSH_INTEGRATION_DIR;
+    // -l means "login shell" to POSIX shells; PowerShell and cmd.exe don't take it.
+    const login = cfg["shell.login"] && !isWindows;
+    let args = login ? ["-l"] : [];
+    const integration = cfg["shell.integration"] ? integrate(shell, login, env) : null;
+    if (integration) {
+      args = integration.args;
       env.CMD_PANE_TOKEN = token;
       Object.assign(env, this.#openRules());
       if (this.#rulesFile) env.CMD_OPEN_RULES = this.#rulesFile;
-      if (this.#historyDir) {
+      if (this.#historyDir && integration.kind !== "fish") {
         fs.mkdirSync(this.#historyDir, { recursive: true, mode: 0o700 });
-        env.CMD_PANE_HISTFILE = this.#historyFile(id)!;
+        env.CMD_PANE_HISTFILE = this.#historyFile(id, integration.kind);
       }
     }
     Object.assign(env, {
@@ -263,9 +263,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       ...opts.env,
     });
 
-    // -l means "login shell" to POSIX shells; PowerShell and cmd.exe don't take it.
-    const login = cfg["shell.login"] && !isWindows;
-    const term = this.#backend.spawn({ id, shell, args: login ? ["-l"] : [], cwd, cols, rows, env, scrollback: cfg["terminal.scrollback"], replay: opts.replay });
+    const term = this.#backend.spawn({ id, shell, args, cwd, cols, rows, env, scrollback: cfg["terminal.scrollback"], replay: opts.replay });
     const now = Date.now();
     const pane: Pane = {
       id,
@@ -553,16 +551,15 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.emit("removed", pane.id);
   }
 
-  /** The pane's own shell history (see shell/zsh). */
-  #historyFile(id: PaneId): string | null {
-    return this.#historyDir && path.join(this.#historyDir, `${id}.zsh_history`);
+  /** The pane's own shell history (see shell/zsh, shell/bash), in that shell's format. */
+  #historyFile(id: PaneId, shell: "zsh" | "bash"): string {
+    return path.join(this.#historyDir!, `${id}.${shell}_history`);
   }
 
   /** Forget a pane for good: its record, screen and shell history. */
   discard(id: PaneId): void {
     this.#store?.deletePane(id);
-    const h = this.#historyFile(id);
-    if (h) fs.rmSync(h, { force: true });
+    if (this.#historyDir) for (const sh of ["zsh", "bash"] as const) fs.rmSync(this.#historyFile(id, sh), { force: true });
   }
 
   /** Serialized terminal state for a UI to restore exactly what is on screen. */

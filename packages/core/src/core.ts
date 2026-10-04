@@ -116,7 +116,7 @@ export class Core {
       pollMs: opts.pollMs,
       settings,
       inspector: opts.inspector ?? null,
-      // The zsh `open` function learns what cmd can open from the registry.
+      // The shells' `open` learns what cmd can open from the registry.
       shellEnv: () => shellOpenEnv(this.windowTypes, overrides()),
       rulesFile: opts.shellRulesFile ?? null,
       store: this.store,

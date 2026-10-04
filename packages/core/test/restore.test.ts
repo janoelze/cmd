@@ -205,4 +205,21 @@ describe("each terminal's own shell history", () => {
     expect(fs.existsSync(file)).toBe(false);
     await core.close();
   });
+
+  it("is in the shell's own format: bash's for bash, none for fish", async () => {
+    const f = fakeFactory();
+    const core = new Core({ socketPath: path.join(dir, "h2.sock"), dbPath: null, terminals: f.factory, pollMs: 0, home: dir, stateDir: dir });
+    core.settings.set("shell.program", "/usr/local/bin/bash");
+    const pane = core.panes.create({ cwd: dir });
+    const file = f.ptys[0]!.opts.env.CMD_PANE_HISTFILE!;
+    expect(file).toBe(path.join(dir, "history", `${pane.id}.bash_history`));
+    fs.writeFileSync(file, "echo hi\n");
+    f.ptys[0]!.exit(0);
+    expect(fs.existsSync(file)).toBe(false);
+    core.settings.set("shell.program", "/usr/local/bin/fish");
+    core.panes.create({ cwd: dir });
+    expect(f.ptys[1]!.opts.env.CMD_PANE_HISTFILE).toBeUndefined();
+    expect(f.ptys[1]!.opts.env.CMD_PANE_TOKEN).toBeTruthy();
+    await core.close();
+  });
 });

@@ -154,7 +154,7 @@ export const SETTINGS_SCHEMA = {
     type: "boolean",
     default: true,
     applies: "newTerminals",
-    description: "zsh integration: report the working directory and prompt marks to cmd. Loads your normal config first.",
+    description: "zsh, bash and fish integration: report the working directory, prompt marks and running command to cmd, and route `open` to it. Loads your normal config first.",
   },
   "shell.openFolders": { title: "Open folders in cmd", type: "boolean", default: true, description: "With shell integration, `open <folder>` opens a cmd file window instead of Finder." },
   "shell.openFiles": {

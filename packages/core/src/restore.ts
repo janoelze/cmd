@@ -9,7 +9,7 @@
 //    id, in its folder, with its last screen and a "Restored" line. An agent
 //    session is resumed by the agent's own command (claude --resume …); anything
 //    else that was running is put on the command line, never run (a shell with
-//    our zsh integration);
+//    our shell integration; bash puts it in history);
 //  - a record from this instance that isn't running exited while the core was
 //    away: dropped.
 // Pane ids stay the same, so the layouts and selections in Space.view still fit.
@@ -25,7 +25,7 @@ import type { Store } from "./store.ts";
 
 const log = logger("restore");
 
-/** Set in a resurrected shell: what the zsh integration puts on its first command line. */
+/** Set in a resurrected shell: what the shell integration offers on its first command line (bash: in history). */
 export const RESTORE_COMMAND_ENV = "CMD_RESTORE_COMMAND";
 
 export interface RestoreContext {
