@@ -66,7 +66,7 @@ td.num { font-variant-numeric: tabular-nums; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
 .button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
 .shot { display: block; width: 100%; height: auto; margin: 24px 0 8px; }
-.shot.hero { width: min(1200px, calc(100vw - 32px)); margin: 32px 0 40px 50%; transform: translateX(-50%); }
+.shot.hero { width: min(1400px, calc(100vw - 32px)); margin: 32px 0 40px 50%; transform: translateX(-50%); }
 .pillar { margin: 56px 0; }
 .pillar h2 { font-size: 22px; margin: 0 0 8px; }
 .pillar p { color: var(--ink-2); max-width: 60ch; margin: 0; }
