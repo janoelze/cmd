@@ -6,6 +6,7 @@ import { WindowsView } from "./WindowsView.tsx";
 
 export type { ViewMode } from "../layouts.ts";
 import type { ViewMode } from "../layouts.ts";
+import { countRender } from "../perf.ts";
 
 interface Props {
   mode: ViewMode;
@@ -42,6 +43,7 @@ export function MainView({
   onCamera,
   onDeselect,
 }: Props) {
+  countRender("MainView");
   // Every row that has a window: terminals and browser/file windows.
   const withPane = rows.filter((r) => !!(r.pane || r.win));
 

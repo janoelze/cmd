@@ -12,6 +12,8 @@ import { applyFonts } from "./fonts.ts";
 import { applyThemeSettings } from "./themes/registry.ts";
 import { setWindowTypes } from "./windows/registry.ts";
 import { handleMagicEvent } from "./magic.ts";
+import { countEvent, perf } from "./perf.ts";
+import { cleanTitle } from "./model.ts";
 
 export interface State {
   connected: boolean;
@@ -77,6 +79,7 @@ export function onWindowFocus(fn: (id: WindowId) => void): () => void {
 }
 
 function set(next: Partial<State>): void {
+  perf.sets++;
   state = { ...state, ...next };
   for (const fn of listeners) fn();
 }
@@ -252,6 +255,33 @@ function checkSpace(): void {
   if (state.connected && !state.spaces.has(state.spaceId)) cmd.spaceLost();
 }
 
+/** The pane whose resource usage this window shows (the selected one; see setUsageShown). */
+let usageShown: PaneId | null = null;
+
+/** The selected pane changed: its usage, kept current without re-renders, shows now. */
+export function setUsageShown(id: PaneId | null): void {
+  if (id === usageShown) return;
+  usageShown = id;
+  set({});
+}
+
+/**
+ * The same pane as far as anything shows it: only its title's spinner glyphs
+ * differ, its activity time (which only orders the sidebar; the next render that
+ * happens anyway sorts by the fresh value), or the usage of a pane not selected.
+ */
+function looksSame(a: Pane, b: Pane): boolean {
+  if (a.title !== b.title && cleanTitle(a.title) !== cleanTitle(b.title)) return false;
+  for (const k of Object.keys(b) as (keyof Pane)[]) {
+    if (k === "title" || k === "lastActivityAt" || a[k] === b[k]) continue;
+    // Resource samples (every 2 s per busy terminal) only show in the status bar, for the selected one.
+    if (k === "usage" && b.id !== usageShown) continue;
+    // Nested values arrive as new objects with every event.
+    if (typeof b[k] !== "object" || JSON.stringify(a[k]) !== JSON.stringify(b[k])) return false;
+  }
+  return true;
+}
+
 const MISSING = Symbol("missing");
 
 /**
@@ -276,11 +306,19 @@ export function usePersisted<T>(key: string, fallback: T): [T, (v: T | ((prev: T
 const awaitingSnapshot = new Set<PaneId>();
 
 function handle(e: CoreEvent): void {
+  countEvent(e.type);
   switch (e.type) {
     case "pane.output":
       if (!awaitingSnapshot.has(e.paneId)) terminals.write(e.paneId, e.data);
       return;
     case "pane.updated": {
+      const prev = state.panes.get(e.pane.id);
+      // Agents animate a spinner in their title many times a second; the UI shows titles
+      // without it (cleanTitle). Keep the pane current, but don't re-render for that.
+      if (prev && looksSame(prev, e.pane)) {
+        state.panes.set(e.pane.id, e.pane);
+        return;
+      }
       const panes = new Map(state.panes);
       panes.set(e.pane.id, e.pane);
       set({ panes });

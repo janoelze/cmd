@@ -13,6 +13,7 @@ import type { ViewMode } from "./MainView.tsx";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { RemoteBadge, RemoteIndicator } from "./Remote.tsx";
 import { useTooltip } from "../tooltips.tsx";
+import { countRender } from "../perf.ts";
 
 const ICONS: Record<ViewMode | "palette" | "settings" | "feedback", string> = {
   focus: "rectangle",
@@ -32,6 +33,7 @@ interface Props {
 }
 
 export function StatusBar({ mode, row, pane, run }: Props) {
+  countRender("StatusBar");
   const keys = useKeybindings();
   const showUsage = useStoreValue((s) => s.settings.settings["ui.showResources"]);
   const f = useFields(row);

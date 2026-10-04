@@ -27,7 +27,7 @@ import {
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, nextAfterClose, pushHistory, shortPath, spaceAttention, windowIdOf, type SidebarRow } from "./model.ts";
-import { getState, onNotification, onWindowFocus, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
+import { getState, onNotification, onWindowFocus, setUsageShown, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset, withWidth } from "./strip.ts";
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
@@ -45,6 +45,7 @@ import { SpaceBar } from "./components/SpaceBar.tsx";
 import { SpaceIconPicker } from "./components/SpaceIcon.tsx";
 import { closeSpace, showSpace, usePickers, type Picker } from "./spaces.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
+import { countRender } from "./perf.ts";
 
 /** True when a text field (palette, settings) has focus, so Edit commands target it. */
 const editingText = () => {
@@ -76,6 +77,7 @@ function flashWindow(paneId: PaneId): void {
 }
 
 export function App() {
+  countRender("App");
   /** Everything, every Space: attention, the Dock badge, cross-Space jumps. */
   const all = useStore();
   /** What this app window shows: its Space's terminals, agents and windows. */
@@ -156,6 +158,7 @@ export function App() {
 
   useEffect(() => bindSelection(select, () => selectedRef.current), [select]);
   useEffect(() => windowSelected(selected), [selected]);
+  useEffect(() => setUsageShown(selected), [selected]);
   useEffect(() => void performance.mark("boot:app-mounted"), []);
   // Test hook for the e2e smoke test.
   useEffect(() => {
@@ -203,14 +206,17 @@ export function App() {
     window.addEventListener("blur", off);
     return () => (window.removeEventListener("focus", on), window.removeEventListener("blur", off));
   }, []);
+  // Only what it reads: on every store change this sent IPC (closeNotification) and repeated RPCs.
+  const selectedPane = selected ? s.panes.get(selected) : undefined;
+  const selectedAgent = selectedPane ? s.agents.get(selectedPane.agentId ?? "") : undefined;
+  const selectedUnseen = !!selectedAgent && bucketOf(selectedAgent) === "unseen";
+  const selectedAttention = !!selectedPane?.attention;
   useEffect(() => {
     if (!selected || !appFocused) return;
-    const pane = s.panes.get(selected);
-    const a = pane ? s.agents.get(pane.agentId ?? "") : undefined;
-    if (a && bucketOf(a) === "unseen") void cmd.call("agent.markSeen", { agentId: a.id });
-    if (pane?.attention) void cmd.call("pane.clearAttention", { paneId: pane.id });
+    if (selectedUnseen && selectedAgent) void cmd.call("agent.markSeen", { agentId: selectedAgent.id });
+    if (selectedAttention) void cmd.call("pane.clearAttention", { paneId: selected });
     cmd.closeNotification(selected);
-  }, [s, selected, appFocused]);
+  }, [selected, appFocused, selectedUnseen, selectedAttention]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dock badge: agents and terminals waiting for you, in every Space.
   const attention = useMemo(
@@ -400,8 +406,9 @@ export function App() {
   // `open` in a terminal: follow it, unless it came from another Space while this window is in the background.
   useEffect(() => onWindowFocus((id) => (document.hasFocus() || spaceOfWindow(id) === getState().spaceId) && select(id)), [select]);
 
-  // Tell the menu bar what is checked/enabled.
+  // Tell the menu bar what is checked/enabled (only when that changes: it's IPC and native menu work).
   const selectedIsPane = !!selected && s.panes.has(selected);
+  const hasSession = !!(currentAgent && sessionId(currentAgent));
   useEffect(() => {
     const hasPane = !!selected;
     cmd.setMenuState({
@@ -419,8 +426,8 @@ export function App() {
         "terminal.nextPrompt": selectedIsPane,
         "session.next": withPane.length > 1,
         "session.prev": withPane.length > 1,
-        "session.copyResume": !!(currentAgent && sessionId(currentAgent)),
-        "session.copyId": !!(currentAgent && sessionId(currentAgent)),
+        "session.copyResume": hasSession,
+        "session.copyId": hasSession,
         "session.reveal": hasPane,
         "session.nextAttention": attention > 0,
         "space.next": openSpaces.length > 1,
@@ -431,7 +438,7 @@ export function App() {
         "space.icon": !!space,
       },
     });
-  }, [mode, sidebarOpen, selected, selectedIsPane, withPane.length, currentAgent, attention, openSpaces.length, space]);
+  }, [mode, sidebarOpen, selected, selectedIsPane, withPane.length, hasSession, attention > 0, openSpaces.length, !!space, !!space?.home]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── context menus ──────────────────────────────────────
 
@@ -515,7 +522,7 @@ export function App() {
     };
   };
 
-  const terminalMenu = (paneId: PaneId) => {
+  const terminalMenuImpl = (paneId: PaneId) => {
     select(paneId);
     void showContextMenu([
       { label: "Copy", run: () => terminals.copy(paneId), enabled: terminals.hasSelection(paneId) },
@@ -539,6 +546,10 @@ export function App() {
       { label: "Close Terminal", run: () => void closePane(paneId) },
     ]);
   };
+  // Stable, so the memoized TerminalViews don't re-render with every App render.
+  const terminalMenuRef = useRef(terminalMenuImpl);
+  terminalMenuRef.current = terminalMenuImpl;
+  const terminalMenu = useCallback((paneId: PaneId) => terminalMenuRef.current(paneId), []);
 
   // ── palette ────────────────────────────────────────────
 

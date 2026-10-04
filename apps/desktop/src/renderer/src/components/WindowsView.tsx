@@ -54,6 +54,7 @@ import {
 import { TerminalView } from "./TerminalView.tsx";
 import { TileTitle } from "./TileTitle.tsx";
 import { SlotMotion } from "./Slot.tsx";
+import { countRender } from "../perf.ts";
 
 const DRAG_THRESHOLD = 4;
 const SCROLL_ANIM_MS = 260;
@@ -114,6 +115,7 @@ interface Drag {
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
 export function WindowsView(p: Props) {
+  countRender("WindowsView");
   const { mode, selected, onSelect } = p;
   const rootRef = useRef<HTMLElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);

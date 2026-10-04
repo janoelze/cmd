@@ -143,7 +143,7 @@ export function flatten(rows: SidebarRow[]): SidebarRow[] {
 const GENERIC_TITLES = new Set(["claude code", "claude", "codex", "gemini", "opencode", "amp", "zsh", "bash", "pwsh", "powershell", "windows powershell", "cmd", "command prompt"]);
 
 /** Terminal title without agent spinner glyphs (✳ ◐ ⠋ …) and Windows' "Administrator: " prefix. */
-function cleanTitle(t: string | undefined): string {
+export function cleanTitle(t: string | undefined): string {
   return (t ?? "").replace(/^[\s✳✻✽✶✢·•*◐◑◒◓⠀-⣿]+/u, "").replace(/^Administrator:\s*/i, "").trim();
 }
 

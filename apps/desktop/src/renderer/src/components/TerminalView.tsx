@@ -3,10 +3,12 @@ import type { PaneId, Progress } from "@cmd/protocol";
 import { useStoreValue } from "../store.ts";
 import { terminals, type FindResults } from "../terminals.ts";
 import { cmd } from "../bridge.ts";
+import { countRender } from "../perf.ts";
 
 // Memoized: the canvas re-renders every window on each camera frame; the content
 // only needs to when its own props change.
 export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focused: boolean; onMenu: (paneId: PaneId) => void }) {
+  countRender("TerminalView");
   const { paneId, focused } = p;
   const ref = useRef<HTMLDivElement>(null);
   const focusedRef = useRef(focused);

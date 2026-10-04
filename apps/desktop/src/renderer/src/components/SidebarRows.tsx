@@ -10,6 +10,7 @@ import { Highlighted } from "./Palette.tsx";
 import { useFields } from "./TileTitle.tsx";
 import { ago, project, projectHue, shortPath, windowIdOf, type SidebarRow } from "../model.ts";
 import { RemoteBadge } from "./Remote.tsx";
+import { countRender } from "../perf.ts";
 
 /** "2h ago" → "2h": the column is narrow. */
 export const shortAgo = (ts: number, now: number) => ago(ts, now).replace(/ ago$/, "");
@@ -56,6 +57,7 @@ export function SessionRow(props: {
   gutter?: boolean;
   active?: boolean;
 }) {
+  countRender("SessionRow");
   const { row, depth, now, selected, onSelect } = props;
   const shortcut = props.shortcutOf.get(row.key);
   const [collapsed, setCollapsed] = usePersisted<string[]>("sidebar.collapsed", []);

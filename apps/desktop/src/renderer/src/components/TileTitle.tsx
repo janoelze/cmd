@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { editTitle, useTitleEdit, useWindowStatus, type TitleEdit } from "../windowActions.ts";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
 import { RemoteBadge } from "./Remote.tsx";
+import { countRender } from "../perf.ts";
 
 /** SF Symbol for a window kind (from the core's window type registry). */
 export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "macwindow";
@@ -31,6 +32,7 @@ export function TileTitle({
   onDoubleClick?: (e: React.MouseEvent) => void;
   title?: string;
 }) {
+  countRender("TileTitle");
   const f = useFields(row)!;
   // A status can be a button ("Updated 12s ago" refreshes); presses on it don't start a drag.
   const action = useWindowStatus(row.win?.id ?? null)?.action;

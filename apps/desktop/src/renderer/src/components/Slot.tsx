@@ -12,6 +12,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Led } from "../model.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
+import { countRender } from "../perf.ts";
 
 const DWELL = 600;
 const DELAY = 200;
@@ -87,6 +88,7 @@ export function Slot({
   divider?: boolean;
   title?: string;
 }) {
+  countRender("Slot");
   const animate = useContext(SlotMotion);
   const shown = useSettled(value, animate) ?? fallback;
   const key = keyOf(shown);

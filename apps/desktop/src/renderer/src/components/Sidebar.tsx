@@ -13,6 +13,7 @@ import { ICON, Symbol } from "./Symbol.tsx";
 import { HistoryRow, SectionHeading, SessionRow } from "./SidebarRows.tsx";
 import { IndexRing } from "./IndexRing.tsx";
 import { CoreStatus } from "./CoreStatus.tsx";
+import { countRender } from "../perf.ts";
 
 export const SIDEBAR_WIDTH = { default: 280, min: 200, max: 480 } as const;
 
@@ -42,6 +43,7 @@ interface Props {
 const TITLES: Record<Section, string> = { needs: "Needs you", agents: "Agents", windows: "Windows" };
 
 export function Sidebar(p: Props) {
+  countRender("Sidebar");
   const rows = useFrozenOrder(p.rows);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
