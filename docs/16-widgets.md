@@ -47,13 +47,16 @@ Each action has one place and does one thing.
 
 | Intent | How |
 |---|---|
-| "What's available?" | **Widget Library…** (⇧⌘L): a gallery. Its search field only searches. |
+| "What's available?" | **Widget Library…** (⌥⌘M): a gallery. Its search field only searches. |
 | "Make a new one" | **New Widget with Magic…** (⇧⌘M), or the ✦ card in the library |
 | "Change this one" | **Edit Widget** (⌘E), **Change…** (⌘L) |
 | "Take it off my desk" | ⌘W: **Remove from Desk** |
 | "Get rid of it" | **Delete Widget**, only in the library or the widget's edit view, with a confirmation |
 
 ### Menus and sidebar
+
+Both widget shortcuts are on M: ⇧⌘M makes a widget, ⌥⌘M opens the library. ⌥⌘M is free (the app has no Minimize item, so no ⌘M family in use), and on Windows the two map to Ctrl+Alt+Shift+M and Ctrl+Alt+M, which don't collide (`otherPlatformKey`).
+
 
 - **File** holds windows only: Terminal, Claude, Codex, Browser, File Browser, Text.
 - A **Widgets** menu (between View and Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Edit, Change…, Refresh, Remove from Desk. The Magic View-menu items (`view.magicChange`, `view.magicRefresh`, `view.magicStop`) move here.
@@ -137,6 +140,5 @@ One worktree per phase; each ends green.
 ## Open questions
 
 - **A Widgets menu or a group in File?** The menu makes the split plainest, at the cost of one more menu bar item. Proposed: the menu.
-- **Library shortcut:** ⇧⌘L is free; ⌘L (Change…) next to it may be confusing.
 - **Shared refreshes:** two copies with the same config and folder could share one data run. Not needed at first.
 - **Per-Space libraries:** not proposed. A widget runs in the Space it's in, so one library serves every project.
