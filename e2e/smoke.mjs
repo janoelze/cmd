@@ -585,13 +585,24 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(asked && before === "blocked" && after === "loaded" && !(await radioTile.locator(".magic-media").count()) && stored?.[0] === "https://radio.invalid", `a widget's media origins are asked for and then allowed by the frame's CSP (${asked}, ${before} → ${after})`);
   await call("window.close", { id: themed.id });
 
-  // Links in a widget: a cmd browser window by default; the default browser with open.links = "browser".
+  // Links in a widget work only while its window is selected (underlined then): a click on
+  // another window's link selects that window. Then a cmd browser window by default; the
+  // default browser with open.links = "browser".
   const linked = await call("window.open", { kind: "magic", input: {} });
-  const linkHtml = '<a id="l" href="https://link.invalid/a" target="_blank" style="display:block;padding:40px">link</a>';
+  const linkHtml = '<a id="l" href="https://link.invalid/a" target="_blank" style="display:block;padding:40px;text-decoration:none">link</a>';
   await call("window.update", { id: linked.id, title: "Links", state: { prompt: "links", phase: "ready", kind: "widget", html: linkHtml, source: null, refresh: 0, size: "s", lastData: null } });
+  await win.evaluate((id) => window.__cmdSelect?.(id), (await call("pane.list"))[0].id);
   await win.waitForTimeout(1500);
   const link = win.frameLocator(`.tile[data-pane="${linked.id}"] iframe.magic-frame`).locator("#l");
+  const underline = () => link.evaluate((a) => getComputedStyle(a).textDecorationLine);
   const linkWindows = async () => (await call("window.list")).filter((x) => x.kind === "browser" && JSON.stringify(x.state).includes("link.invalid"));
+  const lockedLook = await underline();
+  await link.click({ timeout: 5000 });
+  await win.waitForTimeout(800);
+  const lockedOpened = (await linkWindows()).length;
+  const selectedNow = await win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
+  const liveLook = await underline();
+  check(lockedLook === "none" && lockedOpened === 0 && selectedNow === linked.id && liveLook === "underline", `a widget's links wait until its window is selected, then show underlined (${lockedLook} → ${liveLook}, ${lockedOpened} opened)`);
   await link.click({ timeout: 5000 });
   await win.waitForTimeout(1000);
   const inCmd = await linkWindows();
@@ -600,6 +611,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     shell.openExternal = async (u) => void (globalThis.__opened = u);
   });
   await call("settings.set", { key: "open.links", value: "browser" });
+  await win.evaluate((id) => window.__cmdSelect?.(id), linked.id);
   await win.waitForTimeout(300);
   await link.click({ timeout: 5000 });
   await win.waitForTimeout(1000);

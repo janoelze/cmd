@@ -143,7 +143,7 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
       {s.kind === "terminal" && !building ? (
         <TerminalOffer win={win} command={s.command ?? ""} />
       ) : widget ? (
-        <WidgetFrame win={win} html={s.html!} data={live.data?.data ?? s.lastData?.data} kv={s.kv} media={allowed} onPainted={setPainted} />
+        <WidgetFrame win={win} active={focused} html={s.html!} data={live.data?.data ?? s.lastData?.data} kv={s.kv} media={allowed} onPainted={setPainted} />
       ) : null}
       {building && <Progress live={live} showSteps={showSteps} overlay={widget} />}
       {asking && <MediaRequest origins={pending} onAnswer={(allow) => void cmd.call("magic.media", { id: win.id, allow })} />}
@@ -316,7 +316,7 @@ function MediaRequest({ origins, onAnswer }: { origins: string[]; onAnswer: (all
 /** The frame's URL decides its CSP (main process), so a new set of allowed origins loads a new frame.
  *  So does new HTML: its scripts run at the page's top level, and a second set in the same page
  *  would collide with the first's let/const (and leave its timers and listeners running). */
-export function WidgetFrame({ media, ...props }: { win: AppWindow; html: string; data: unknown; kv?: Record<string, unknown>; media: string[]; onPainted?: (html: string) => void }) {
+export function WidgetFrame({ media, ...props }: { win: AppWindow; active: boolean; html: string; data: unknown; kv?: Record<string, unknown>; media: string[]; onPainted?: (html: string) => void }) {
   const [src, setSrc] = useState<string | null>(media.length ? null : "cmd-widget://frame/");
   const key = media.join(" ");
   useEffect(() => {
@@ -328,7 +328,8 @@ export function WidgetFrame({ media, ...props }: { win: AppWindow; html: string;
   return src ? <Frame key={`${src}\n${props.html}`} src={src} {...props} /> : <div className="magic-frame" />;
 }
 
-function Frame({ win, src, html, data, kv, onPainted }: { win: AppWindow; src: string; html: string; data: unknown; kv?: Record<string, unknown>; onPainted?: (html: string) => void }) {
+/** `active`: the window is selected; only then do its links and actions work (host.js). */
+function Frame({ win, src, active, html, data, kv, onPainted }: { win: AppWindow; src: string; active: boolean; html: string; data: unknown; kv?: Record<string, unknown>; onPainted?: (html: string) => void }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   // Hidden until the page reports the current HTML painted (host.js "rendered").
@@ -338,6 +339,8 @@ function Frame({ win, src, html, data, kv, onPainted }: { win: AppWindow; src: s
   paintedRef.current = onPainted;
   const kvRef = useRef(kv);
   kvRef.current = kv;
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const markPainted = (h: string) => {
     setPainted(h);
     paintedRef.current?.(h);
@@ -399,7 +402,7 @@ function Frame({ win, src, html, data, kv, onPainted }: { win: AppWindow; src: s
   useEffect(() => {
     if (!ready) return;
     sent.current = html;
-    post({ type: "render", html, tokens, data, kv: kvRef.current ?? {} });
+    post({ type: "render", html, tokens, data, kv: kvRef.current ?? {}, active: activeRef.current });
     // Never stay hidden if the page doesn't answer.
     const t = setTimeout(() => markPainted(html), 1500);
     return () => clearTimeout(t);
@@ -408,6 +411,9 @@ function Frame({ win, src, html, data, kv, onPainted }: { win: AppWindow; src: s
   useEffect(() => {
     if (ready) post({ type: "tokens", tokens });
   }, [ready, tokens]);
+  useEffect(() => {
+    if (ready) post({ type: "active", active });
+  }, [ready, active]);
   useEffect(() => {
     if (ready && data !== undefined) post({ type: "data", data });
   }, [ready, data]);

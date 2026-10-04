@@ -12,7 +12,9 @@ body {
   font-variant-numeric: tabular-nums;
   overflow: auto;
 }
-a { color: var(--accent); text-decoration: none; }
+a { color: var(--accent); text-decoration: none; cursor: default; }
+/* Links work only while the window is selected (host.js sets k-active): underlined then, so it shows. */
+:root.k-active a[href] { text-decoration: underline !important; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent) !important; text-underline-offset: 2px; cursor: pointer; }
 h1, h2, h3, p { margin: 0; }
 svg { display: block; }
 

@@ -227,6 +227,7 @@
       return h;
     },
     openUrl(url) {
+      if (locked()) return;
       try {
         parent.postMessage({ type: "open-url", url: String(url) }, "*");
       } catch {}
@@ -253,6 +254,7 @@
   // Things done on the person's behalf only follow a click or key press in the
   // widget, so code that runs on every refresh can't open terminals.
   const act = (m) => {
+    if (m.type !== "copy" && locked()) return;
     if (navigator.userActivation && !navigator.userActivation.isActive) {
       report(new Error(`cmd.${m.type}() only works in response to a click or key press`));
       return;
@@ -262,12 +264,27 @@
     } catch {}
   };
 
+  // Links and actions that open things work only while the window is selected
+  // (the host says, {type:"active"}), so scrolling past windows in a strip
+  // can't open browser windows by accident. A click that began on a window
+  // that wasn't selected only selects it, though that press selects it before
+  // the click arrives. Standalone pages (previews) are always active.
+  let active = parent === window;
+  let pressedInactive = false;
+  const setActive = (v) => {
+    active = !!v;
+    document.documentElement.classList.toggle("k-active", active);
+  };
+  setActive(active);
+  const locked = () => !active || pressedInactive;
+
   // The app can't see the pointer over this page (it runs in its own process),
   // so report presses (the window gets selected, like any other) and
   // right-clicks (the window's menu opens: Change, Refresh, …).
   window.addEventListener(
     "pointerdown",
     (e) => {
+      pressedInactive = !active;
       if (e.button !== 0) return;
       try {
         parent.postMessage({ type: "press" }, "*");
@@ -285,7 +302,7 @@
     const href = a.getAttribute("href") || "";
     if (href.startsWith("#")) return;
     e.preventDefault();
-    if (/^https?:$/i.test(a.protocol)) window.cmd.openUrl(a.href);
+    if (/^https?:$/i.test(a.protocol)) window.cmd.openUrl(a.href); // a no-op while locked
   };
   window.addEventListener("click", follow);
   window.addEventListener("auxclick", follow);
@@ -347,9 +364,11 @@
     const m = e.data;
     if (!m || typeof m !== "object") return;
     if (m.type === "tokens") setTokens(m.tokens);
+    if (m.type === "active") setActive(m.active);
     if (m.type === "stream") (setTokens(m.tokens), stream(m.html));
     if (m.type === "render") {
       setTokens(m.tokens);
+      if ("active" in m) setActive(m.active);
       if (m.kv && typeof m.kv === "object") kv = m.kv;
       render(m.html);
       if ("data" in m && m.data !== undefined) receive(m.data);

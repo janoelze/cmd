@@ -114,7 +114,7 @@ The `cmd` object in the view:
 - `cmd.spark(el, values)`: a sparkline (class `k-spark`).
 - `cmd.history(key, value, max = 60)`: remembers the last `max` values of a live number across refreshes and restarts and returns them, for sparklines of things the data only reports now (CPU, a price). A fresh window has one value: make sure the widget still reads well then (the current value shown as text, the chart filling in over time).
 - `cmd.state.get(key)` / `cmd.state.set(key, value)`: small values kept for this window across reloads and restarts (a chosen tab, a timer's start, a volume).
-- Links: a plain `<a href="https://…">` opens in a browser window when clicked; from code, `cmd.openUrl(url)`. The widget itself never navigates.
+- Links: a plain `<a href="https://…">` opens in a browser window when clicked; from code, `cmd.openUrl(url)`. The widget itself never navigates. Links and actions work only while the window is selected (a first click selects it), and cmd underlines links then: style links as plain text in the theme's colours, without underlines or link icons of your own.
 - Actions, only in a click or key handler (anywhere else they're refused):
   - `cmd.terminal(command)`: a new terminal in the window's folder with the command typed in; the person presses Return. This is how a widget does things: a "Rerun" button on a failed job (`gh run rerun 123 --failed`), "Logs" on a pod (`kubectl logs -f pod`), "Pull" on a branch behind. The widget itself never changes anything.
   - `cmd.open(path)`: opens an absolute or `~/` file or folder in a cmd window.
