@@ -1180,7 +1180,7 @@ kbd {
   -webkit-app-region: no-drag;
 }
 .drag-strip .spacebar { position: absolute; left: 80px; top: 0; height: 100%; width: 220px; flex: none; }
-/* The button: full width, like the search field above; the Space's hue only on its icon. */
+/* The button: full width, like the search field above. */
 .space-trigger {
   flex: 1;
   min-width: 0;
@@ -1203,14 +1203,13 @@ kbd {
 .space-trigger .space-name { flex: 1; }
 .space-trigger > .sf { flex: none; color: var(--text-dim); }
 .space-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* SpaceIcon.tsx: the Space's symbol in its hue; a dot on its corner when it wants you. */
+/* SpaceIcon.tsx: the Space's symbol; a dot on its corner when it wants you. */
 .space-icon {
-  --hue: 240;
   position: relative;
   flex: none;
   display: inline-grid;
   place-items: center;
-  color: hsl(var(--hue) var(--chip-fg));
+  color: var(--icon);
 }
 .space-icon.attn-needs::after, .space-icon.attn-unseen::after {
   content: "";
@@ -1275,7 +1274,7 @@ kbd {
 .space-item kbd { flex: none; }
 .space-item-open { color: var(--text-dim); }
 .space-menu-sep { height: 1px; margin: 4px 6px; background: var(--separator); }
-/* SpaceIconPicker: the palette's frame around a grid of symbols in the Space's hue. */
+/* SpaceIconPicker: the palette's frame around a grid of symbols. */
 .icon-picker { width: min(460px, calc(100vw - 32px)); }
 .icon-grid {
   display: grid;
@@ -1296,9 +1295,10 @@ kbd {
   border: 0;
   border-radius: var(--radius);
   background: transparent;
-  color: hsl(var(--hue) var(--chip-fg));
+  color: var(--icon);
 }
-.icon-cell.current { background: hsl(var(--hue) var(--chip-bg)); }
+.icon-cell:hover { background: var(--bg-hover); }
+.icon-cell.current { background: var(--bg-selected); color: var(--text); }
 .icon-cell.active { background: var(--accent); color: var(--on-accent); }
 .icon-picker-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
 .icon-picker-reset { border: 0; padding: 0; background: none; font: inherit; color: var(--link); cursor: pointer; }

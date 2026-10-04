@@ -10,10 +10,3 @@ export function spaceIcon(s: { icon: string | null; home: boolean }): string {
 
 /** SF Symbol names: lowercase words joined by dots. */
 export const ICON_NAME = /^[a-z0-9]+(\.[a-z0-9]+)*$/;
-
-/** Stable hue for a name (FNV-1a), as the ghostty-agents fork colored project tabs. */
-export function hueOf(name: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 0x01000193);
-  return (h >>> 0) % 360;
-}

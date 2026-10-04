@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { HOME_SPACE_ID, hueOf, ICON_NAME, type Space, type SpaceId } from "@cmd/protocol";
+import { HOME_SPACE_ID, ICON_NAME, type Space, type SpaceId } from "@cmd/protocol";
 import type { Store } from "../store.ts";
 import { canonical, deepest, gitRoot, nameFor } from "./paths.ts";
 
@@ -22,7 +22,8 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     super();
     this.#store = store;
     this.#home = canonical(home, "/", home);
-    for (const s of store?.spaces() ?? []) this.#spaces.set(s.id, { ...s, icon: s.icon ?? null });
+    // Older records: no icon yet, and a hue Spaces no longer have.
+    for (const { hue: _, ...s } of (store?.spaces() ?? []) as (Space & { hue?: number })[]) this.#spaces.set(s.id, { ...s, icon: s.icon ?? null });
     const h = this.#spaces.get(HOME_SPACE_ID);
     if (!h || h.root !== this.#home || h.closedAt !== null) {
       const now = Date.now();
@@ -31,7 +32,6 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
         name: "Home",
         root: this.#home,
         home: true,
-        hue: hueOf("Home"),
         icon: h?.icon ?? null,
         order: 0,
         closedAt: null,
@@ -92,7 +92,6 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
       name,
       root,
       home: false,
-      hue: hueOf(name),
       icon: null,
       order: this.#nextOrder(),
       closedAt: null,

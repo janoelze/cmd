@@ -22,7 +22,7 @@ Sources: code.visualstudio.com/docs/configure/command-line · github.com/microso
 
 ## Behaviour
 
-1. **A Space is a live core object, not a snapshot.** It has an id, a **root** (canonical `realpath`), a display name (default: the root's basename, editable), an icon (an SF Symbol, editable; default a folder, a house for Home) and a hue derived from the name that tints the icon. Panes, agents and windows each belong to exactly one Space.
+1. **A Space is a live core object, not a snapshot.** It has an id, a **root** (canonical `realpath`), a display name (default: the root's basename, editable), and an icon (an SF Symbol, editable; default a folder, a house for Home). Panes, agents and windows each belong to exactly one Space.
 2. **Opening is attach-or-create by root.** `cmd .`, ⌘O, `cmd space open DIR`: if a Space has that root, show it; otherwise create it. A path never yields two Spaces. The root is the exact directory (like `code .`); `--git-root` snaps to the repository root. A linked git worktree is its own directory, so it gets its own Space.
 3. **Home.** There is always a *Home* Space rooted at `~`. It can't be closed and catches everything that has no better Space. A fresh install is just Home, so cmd works as before until you open a folder.
 4. **An app window shows one Space at a time and switches in place.** Switching to a Space that another app window already shows focuses that window instead. One Space is never shown in two windows at once, because its layout (strip widths, canvas camera) is fitted to one viewport. ⌘⏎ in the picker, or "Open Space in New Window", opens a Space in its own app window.
@@ -44,7 +44,7 @@ Sources: code.visualstudio.com/docs/configure/command-line · github.com/microso
    5. Home.
 8. **Moving.** "Move to Space…" (context menu, palette, `cmd move`) moves a window into another Space. Moving a terminal moves its agent tree with it.
 9. **Lifecycle.**
-   - **Close** kills the Space's terminals and agents (with a confirmation listing what still runs) and removes its windows. The record stays as a *recent* Space, so reopening it brings back its name, icon, hue and layout preferences.
+   - **Close** kills the Space's terminals and agents (with a confirmation listing what still runs) and removes its windows. The record stays as a *recent* Space, so reopening it brings back its name, icon and layout preferences.
    - **Forget** deletes the record.
    - Archive and setup scripts are left for later.
 10. **Restart.** When the core restarts, Spaces, their windows and their terminals come back: terminals keep running in the PTY host, and those lost (host died, reboot) are resurrected under the same id, agents resumed (DEVELOPMENT.md, "Restore"). Commands are never re-run without asking.
@@ -77,7 +77,7 @@ A Space's identity is its root, so matching has to treat every spelling of a fol
   - A full-width button with the shown Space's icon and name; a count in the state colour when other Spaces need you or finished unseen.
   - Clicking it drops down a menu of the open Spaces in switcher order (icon, name, folder, ⌃1–9), the icon marked with a dot in the state colour when something in the Space needs you or finished unseen, then "Open Space…" (⌘O). Arrow keys and type-ahead move, ⏎ shows, ⌘⏎ (or ⌘-click) opens in a new window. Right-click a Space (or the button) for Rename, Change Icon, Show in Finder, Open in New Window, Close. Reordering is not built yet.
   - A menu rather than a dot per Space, so it stays usable with many Spaces.
-- **Icons:** each Space has an SF Symbol tinted with its hue. Change Icon… (Space menu, right-click, `cmd space icon [SPACE] SYMBOL`) opens a filterable grid; any SF Symbol name typed in full works too, and "Use the default" goes back to the folder (house for Home).
+- **Icons:** each Space has an SF Symbol. Change Icon… (Space menu, right-click, `cmd space icon [SPACE] SYMBOL`) opens a filterable grid; any SF Symbol name typed in full works too, and "Use the default" goes back to the folder (house for Home).
 - **⌘O: Space picker** (fuzzy):
   - Lists open Spaces, then recent (closed) Spaces, then cwds from recent transcripts and a typed path; "Browse…" opens the native folder dialog.
   - ⏎ shows the Space in this window; ⌘⏎ opens it in a new app window.
@@ -104,8 +104,6 @@ export interface Space {
   /** Canonical realpath; unique among Spaces. Home: os.homedir(). */
   root: string;
   home: boolean;
-  /** Tints the icon; derived from the name at creation. */
-  hue: number;
   /** SF Symbol name; null: the default (folder; house for Home). */
   icon: string | null;
   /** Position in the switcher (⌃1–9). */

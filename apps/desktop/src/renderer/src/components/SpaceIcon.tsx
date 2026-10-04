@@ -1,4 +1,4 @@
-// A Space's icon (an SF Symbol tinted with the Space's hue, marked when something
+// A Space's icon (an SF Symbol, marked with a dot when something
 // in it needs you or finished unseen) and the picker that sets it: a filterable
 // grid of symbols, or any SF Symbol name typed in full.
 
@@ -9,7 +9,7 @@ import { ICON, Symbol } from "./Symbol.tsx";
 
 export function SpaceIcon(p: { space: Space; attention?: "needs" | "unseen"; size?: number }) {
   return (
-    <span className={`space-icon ${p.attention ? `attn-${p.attention}` : ""}`} style={{ ["--hue" as string]: p.space.hue }}>
+    <span className={`space-icon ${p.attention ? `attn-${p.attention}` : ""}`}>
       <Symbol name={spaceIcon(p.space)} size={p.size ?? ICON.row} />
     </span>
   );
@@ -83,7 +83,7 @@ export function SpaceIconPicker(p: { space: Space; onClose: () => void }) {
 
   return (
     <div className="palette-backdrop" onMouseDown={p.onClose}>
-      <div className="palette icon-picker" onMouseDown={(e) => e.stopPropagation()} style={{ ["--hue" as string]: p.space.hue }}>
+      <div className="palette icon-picker" onMouseDown={(e) => e.stopPropagation()}>
         <input
           autoFocus
           className="palette-input"
