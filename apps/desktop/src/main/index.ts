@@ -26,7 +26,10 @@ import { ensureKeybindingsFile, loadKeybindings, resetKeybindings, watchKeybindi
 
 // Loaded after launch: the updater isn't needed to show the first window.
 const updater = () => import("./updater.ts");
-const checkForUpdates = () => void updater().then((u) => u.checkForUpdates(devBuild));
+/** Configures the updater once (packaged builds); deferred at launch, or first when asked to check. */
+let updaterStarted: Promise<void> | null = null;
+const startUpdater = () => (updaterStarted ??= devBuild ? Promise.resolve() : updater().then((u) => u.startUpdater(socketPath)));
+const checkForUpdates = () => void startUpdater().then(() => updater()).then((u) => u.checkForUpdates(devBuild));
 
 /**
  * Development builds (pnpm dev, and pnpm dist, which packages as "cmd dev") sit
@@ -738,7 +741,8 @@ app.whenReady().then(async () => {
     (err: Error) => (log.error("the core did not start", err), dialog.showErrorBox("cmd: the core did not start", err.message)),
   );
   followCrashReports(socketPath);
-  if (!devBuild) void updater().then((u) => u.startUpdater(socketPath));
+  // Its bundle (about 570 KB) is parsed on this thread; its first check is 30 s away anyway.
+  setTimeout(() => void startUpdater(), 5000);
   const send = commandSender(() => spaces.reopen(), { openSettings, openTaskManager, checkForUpdates, isUtility, appWindows });
   refreshMenu = () => buildMenu(send, recordingShortcut ? {} : keybindings.bindings);
   refreshMenu();
