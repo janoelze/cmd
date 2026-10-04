@@ -89,7 +89,8 @@ Your widget sits inside a cmd window, next to terminals running Claude Code, hto
 - **The window already has a title bar** showing the widget's title, its place (host, folder) and its status ("Updated 12s ago"). Don't repeat the title as a heading, and don't add an "updated at" line; a label for a section or a subject ("Macintosh HD", "utun4") is fine.
 - **Numbers are the content.** A metric is a small uppercase label (`k-title`), then a big tabular value with a small dim unit (`k-unit`: `48.2<span class="k-unit">MB/s</span>`), then optionally a small coloured change (`k-delta k-up`: "▲ 12%"). Mono (`k-mono`) suits IDs, IPs, paths, hashes and code.
 - **Status is a small coloured dot** (`k-dot`) next to a word, as in cmd's sidebar: green good or done, amber needs attention, red failed, dim off. Colour is for state and series, never decoration; most of the widget is `--text` and `--text-dim`.
-- **Groups** are `k-card`s in a `k-grid` or a `k-stack`; lists and tables use thin dividers, no zebra stripes or filled header rows.
+- **No boxes in the box.** The window is already the frame: content sits straight on `--bg`. Sections are a `k-title` label and what follows, separated by spacing or one hairline; don't wrap the widget, a section, a list or a table in a `k-card`, and never nest cards. Rows with columns are a plain `k-table`, a list is a `k-list` of `<li>`, stats sit side by side in a `k-grid` without a frame. A `k-card` is only for a few peer tiles that are each a thing of their own (three servers, five days), and even those usually read better flat.
+- **Lists and tables** use thin dividers, no zebra stripes or filled header rows.
 - **Charts** are thin lines with a soft area (`area: true`) or thin bars, few labels; a breakdown is rows of label · thin `k-bar` · right-aligned value.
 - **Light and dark** both occur, and so do coloured themes (Nord, Dracula, Solarized…): only the variables keep you right in all of them.
 - **Kin to the terminals beside it.** `--bg` is the terminals' background, so a widget sits flush with them; `--mono` is the person's terminal font, and `--c1` … `--c6`, `--good`, `--warn`, `--bad` are their terminal's ANSI blue, green, yellow, magenta, cyan and red. Lean on that: values, numbers, IDs, paths and data rows in `--mono` (the kit's `k-stat-value`, `k-num`, `k-table` cells already are; use `k-text` on a table cell that holds prose), labels and sentences in `--font`. Command-line output that is worth showing as-is goes in `k-term` (a terminal-like block; `k-prompt` on a line prefixes "❯ "). Colour text the way a good CLI does: mostly plain, dim for secondary, one ANSI colour for the thing that matters.
@@ -98,7 +99,7 @@ Your widget sits inside a cmd window, next to terminals running Claude Code, hto
 
 Classes you can use (all colours come from the theme):
 - Layout: `k-stack` (vertical, 8px gap), `k-row` (horizontal, centred), `k-wrap`, `k-between`, `k-spacer`, `k-grid` (auto-fit columns of ≥120px), `k-center`, `k-fill`.
-- Surfaces: `k-card`.
+- Surfaces: `k-card` (rarely; see "No boxes in the box").
 - Text: `k-title` (small caps label), `k-dim`, `k-small`, `k-mono`, `k-big` (28px), `k-huge` (44px), `k-ellipsis`, `k-text` (prose font inside a table).
 - Numbers: `k-stat` with `k-stat-label`, `k-stat-value`, `k-stat-note`; `k-unit` (small dim unit after a value); `k-delta` with `k-up` / `k-down`; `k-num` (right-aligned).
 - Status: `k-good`, `k-warn`, `k-bad` (text colour); `k-badge` (pill, combine with k-good/k-warn/k-bad); `k-dot` (status light, same modifiers).

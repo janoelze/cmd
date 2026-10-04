@@ -17,7 +17,7 @@ export function buildSystem(file?: string): string {
   const examples = fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".md"))
-    .sort()
+    .sort((a, b) => a.localeCompare(b, "en", { numeric: true }))
     .map((f) => {
       const text = fs.readFileSync(path.join(dir, f), "utf8").trim();
       const lines = text.split("\n");
