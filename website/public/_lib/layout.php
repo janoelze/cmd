@@ -73,7 +73,7 @@ td.num { font-variant-numeric: tabular-nums; }
 .hero-shots img.on { opacity: 1; }
 h2.section { font-size: 18px; margin: 40px 0 14px; }
 .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 28px; margin-bottom: 8px; }
-.features h3 { font-size: 14px; margin: 0 0 2px; }
+.features h3 { font-size: 14px; font-weight: 500; margin: 0 0 2px; }
 .features p { font-size: 13px; line-height: 1.45; color: var(--ink-2); margin: 0; }
 @media (max-width: 640px) {
   h1 { font-size: 24px; margin-top: 18px; }
@@ -81,6 +81,26 @@ h2.section { font-size: 18px; margin: 40px 0 14px; }
   .features { grid-template-columns: 1fr 1fr; gap: 14px 16px; }
 }
 .button { display: inline-block; background: var(--accent); color: var(--on-accent); text-decoration: none; padding: 9px 16px; border-radius: 8px; font-weight: 500; }
+.releases { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.releases li { display: grid; grid-template-columns: 5.5em 1fr auto 9em; align-items: center; gap: 12px; padding: 9px 14px; font-size: 14px; }
+.releases li + li { border-top: 1px solid var(--line); }
+.releases li.latest { background: var(--surface); }
+.releases .tag { color: var(--ink); text-decoration: none; font-size: 13px; }
+.releases .dmg .muted { font-variant-numeric: tabular-nums; }
+.releases .tag:hover { color: var(--link); }
+.releases time { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.releases .dmg { text-align: right; text-decoration: none; }
+.releases .dmg:hover { text-decoration: underline; }
+.releases .pill { margin-left: 0; }
+.pill.accent { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
+.pill + .pill { margin-left: 4px; }
+p.more { margin: 10px 0 0; font-size: 14px; }
+p.more a { color: var(--ink-2); text-decoration: none; }
+p.more a:hover { color: var(--link); }
+@media (max-width: 640px) {
+  .releases li { grid-template-columns: 5em 1fr auto; padding: 9px 12px; }
+  .releases time { display: none; }
+}
 footer { color: var(--ink-3); font-size: 13px; padding-top: 32px; padding-bottom: 24px; }
 </style>
 </head>

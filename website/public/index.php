@@ -78,20 +78,28 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <div><h3>Updates</h3><p>Signed and notarized. Updates install when you quit, and terminals keep running.</p></div>
 </div>
 
-<h2>Releases</h2>
+<h2 class="section">Releases</h2>
 <?php if (!$releases): ?>
 <p class="muted">The release list is unavailable right now. See <a href="https://github.com/janoelze/cmd/releases">GitHub</a>.</p>
 <?php else: ?>
-<table>
-  <tr><th>Version</th><th>Date</th><th></th></tr>
-<?php foreach ($releases as $r): ?>
-  <tr>
-    <td><a class="tag" href="<?= h($r['url']) ?>"><?= h($r['tag']) ?></a><?= $r['prerelease'] ? '<span class="pill">pre-release</span>' : '' ?></td>
-    <td class="num"><?= h($r['date']) ?></td>
-    <td><?= $r['dmg'] ? '<a href="' . h($r['dmg']) . '">.dmg</a>' : '' ?></td>
-  </tr>
+<ol class="releases">
+<?php foreach (array_slice($releases, 0, 6) as $r): ?>
+  <li<?= $r === $latest ? ' class="latest"' : '' ?>>
+    <a class="tag" href="<?= h($r['url']) ?>"><?= h($r['tag']) ?></a>
+    <span class="badges"><?= $r === $latest ? '<span class="pill accent">Latest</span>' : '' ?><?= $r['prerelease'] ? '<span class="pill">Pre-release</span>' : '' ?></span>
+    <time datetime="<?= h($r['published']) ?>"><?= h($r['date']) ?></time>
+    <?php if ($r['dmg']): ?><a class="dmg" href="<?= h($r['dmg']) ?>">Download<?= $r['size'] ? ' <span class="muted">' . h(number_format($r['size'] / 1048576)) . ' MB</span>' : '' ?></a><?php else: ?><span></span><?php endif ?>
+  </li>
 <?php endforeach ?>
-</table>
+</ol>
+<p class="more"><a href="https://github.com/janoelze/cmd/releases">All <?= count($releases) ?> releases on GitHub →</a></p>
+<script>
+// Release times in the reader's time zone ("Oct 4, 22:58").
+for (const t of document.querySelectorAll(".releases time")) {
+  const d = new Date(t.dateTime);
+  if (!isNaN(d)) t.textContent = d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+</script>
 <?php endif ?>
 <?php
 page_end();
