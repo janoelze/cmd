@@ -1,5 +1,5 @@
 <?php
-// Page chrome shared by the product page and the usage page: head, nav, footer
+// Page chrome shared by the product page and the usage page: head, nav
 // and the stylesheet (dark only, see :root).
 
 declare(strict_types=1);
@@ -32,7 +32,8 @@ function page_start(string $title, string $description, string $current): void
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
-main, header, footer { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+main, header { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+main { padding-bottom: 48px; }
 header { display: flex; gap: 18px; align-items: baseline; padding-top: 20px; padding-bottom: 4px; font-size: 14px; }
 header a { color: var(--ink-2); text-decoration: none; font-weight: 500; }
 header a.current, header a:hover { color: var(--ink); }
@@ -101,7 +102,6 @@ p.more a:hover { color: var(--link); }
   .releases li { grid-template-columns: 5em 1fr auto; padding: 9px 12px; }
   .releases time { display: none; }
 }
-footer { color: var(--ink-3); font-size: 13px; padding-top: 32px; padding-bottom: 24px; }
 </style>
 </head>
 <body>
@@ -119,7 +119,6 @@ function page_end(): void
 {
     ?>
 </main>
-<footer>cmd · terminals and coding agents, side by side, on macOS · <a href="https://endtime-instruments.org">endtime instruments</a></footer>
 </body>
 </html>
 <?php
