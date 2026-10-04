@@ -78,7 +78,7 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <div><h3>Updates</h3><p>Signed and notarized. Updates install when you quit, and terminals keep running.</p></div>
 </div>
 
-<h2 class="section">Releases</h2>
+<h2>Releases</h2>
 <?php if (!$releases): ?>
 <p class="muted">The release list is unavailable right now. See <a href="https://github.com/janoelze/cmd/releases">GitHub</a>.</p>
 <?php else: ?>
