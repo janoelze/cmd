@@ -116,6 +116,8 @@ const api = {
   feedbackStatus: (): Promise<FeedbackStatus> => ipcRenderer.invoke("feedback-status"),
   sendFeedback: (r: FeedbackRequest): Promise<void> => ipcRenderer.invoke("send-feedback", r),
   closeWindow: () => ipcRenderer.send("close-window"),
+  /** Copy / Select All natively in the focused frame, or in a browser window's page by its WebContents id (main/index.ts). */
+  editNative: (op: "copy" | "selectAll", guestId?: number) => ipcRenderer.send("edit-native", op, guestId),
 
   /** Menu bar / Dock menu commands, by command id. */
   onCommand(fn: (id: string) => void): () => void {

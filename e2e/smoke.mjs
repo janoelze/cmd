@@ -152,6 +152,18 @@ await win.waitForSelector(".xterm");
 await win.waitForTimeout(1500); // let the login shell finish starting
 await win.keyboard.type("echo hello from cmd");
 await win.keyboard.press("Enter");
+{
+  // ⇧↩ reaches the PTY as ESC CR (agents' newline), not a plain CR.
+  await win.keyboard.type("cat -v");
+  await win.keyboard.press("Enter");
+  await win.waitForTimeout(300);
+  await win.keyboard.press("Shift+Enter");
+  await win.waitForTimeout(300);
+  const id = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p[0].id));
+  const text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 50 }).then((r) => r.text), id);
+  await win.keyboard.press("Control+C");
+  check(/^\^\[$/m.test(text), "⇧↩ sends ESC CR to the terminal");
+}
 await menu("file.newTerminal");
 await win.waitForTimeout(1500);
 await win.keyboard.type("ls -la");
@@ -311,6 +323,21 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     browserWin = all.find((w) => w.kind === "browser" && w.title === "E2E Page");
   }
   check(!!browserWin && browserWin.state.url.startsWith(`http://localhost:${port}`), "browser window loads the page and reports its title");
+
+  // Edit → Select All / Copy reach the page, which is its own WebContents (main/index.ts editNative).
+  {
+    const saved = await app.evaluate(({ clipboard }) => clipboard.readText());
+    await app.evaluate(({ clipboard }) => clipboard.writeText(""));
+    await win.locator(".tile.kind-browser webview").click();
+    await win.waitForTimeout(200);
+    await menu("edit.selectAll");
+    await win.waitForTimeout(200);
+    await menu("edit.copy");
+    await win.waitForTimeout(300);
+    const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
+    await app.evaluate(({ clipboard }, t) => clipboard.writeText(t), saved);
+    check(copied.includes("Hello from a cmd browser window"), `Select All and Copy work in a browser page (${JSON.stringify(copied)})`);
+  }
 
   fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
   fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# hi");

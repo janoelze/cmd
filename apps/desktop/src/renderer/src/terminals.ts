@@ -127,7 +127,13 @@ class Terminals {
     // App shortcuts are menu key equivalents (main process); keep them out of the PTY:
     // ⌘-anything on macOS, the bound Ctrl combinations elsewhere (Ctrl+Shift+K…).
     // Except the line-editing keys macOS terminals translate (⌘⌫ ⌘← ⌘→, as Ghostty does).
+    // ⇧↩ sends ESC CR, which agents (Claude Code, Codex) read as a newline in their input
+    // and zsh inserts as one; xterm.js would send a plain CR, the same as ↩.
     term.attachCustomKeyEventHandler((e) => {
+      if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (e.type === "keydown") void cmd.call("pane.write", { paneId, data: "\x1b\r" });
+        return false;
+      }
       if (!MAC_KEYMAP) return !isAppShortcut(e);
       if (!e.metaKey) return true;
       const seq = !e.ctrlKey && !e.altKey && !e.shiftKey ? CMD_KEYS[e.key] : undefined;

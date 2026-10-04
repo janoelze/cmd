@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PaneId, Space, SpaceId } from "@cmd/protocol";
+import type { WebviewTag } from "electron";
 import { bucketOf, needsAttention } from "@cmd/protocol";
 import { COMMANDS, prettyAccelerator, type CommandId } from "../../shared/commands.ts";
 import { cmd } from "./bridge.ts";
@@ -46,6 +47,12 @@ const editingText = () => {
   const el = document.activeElement;
   if (el instanceof HTMLElement && el.isContentEditable) return true; // CodeMirror (text windows)
   return (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && !el.closest(".xterm");
+};
+
+/** Copy / Select All in the focused browser page (its own WebContents), input, text window or Magic widget. */
+const editNative = (op: "copy" | "selectAll") => {
+  const el = document.activeElement;
+  cmd.editNative(op, el?.tagName === "WEBVIEW" ? (el as WebviewTag).getWebContentsId() : undefined);
 };
 
 /** Visual bell: flash the window's outline (restarts if it's already flashing). */
@@ -291,12 +298,13 @@ export function App() {
     "file.closeWindow": () => cmd.closeWindow(),
     "file.save": () => void windowActions(selected)?.save?.(),
     "file.openSettingsFile": () => cmd.openSettingsFile(getState().settings.path),
+    // Terminals copy and select their own buffer; everything else (inputs, text and
+    // files windows, browser pages, Magic widgets) gets the native command.
     "edit.copy": () => {
-      if (selected && !s.panes.has(selected)) return void document.execCommand("copy");
-      if (editingText() || !selected || !terminals.copy(selected)) document.execCommand("copy");
+      if (editingText() || !selected || !s.panes.has(selected) || !terminals.copy(selected)) editNative("copy");
     },
     "edit.selectAll": () => {
-      if (editingText() || !selected) document.execCommand("selectAll");
+      if (editingText() || !selected || !s.panes.has(selected)) editNative("selectAll");
       else terminals.selectAll(selected);
     },
     "edit.clear": () => selected && terminals.clear(selected),

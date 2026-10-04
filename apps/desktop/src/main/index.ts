@@ -3,7 +3,7 @@
 
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, webContents, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
@@ -188,6 +188,19 @@ function coreRoot(): string {
   } catch {
     return repoRoot;
   }
+}
+
+/**
+ * Run an edit command natively: in the focused <webview> guest (a browser
+ * window's page, its own WebContents) when the page names one, else in the
+ * page's focused frame (inputs, text windows, Magic widgets' iframes).
+ * document.execCommand in the app's page reaches neither guests nor iframes.
+ */
+function editNative(sender: WebContents, op: string, guestId?: number): void {
+  const guest = guestId ? webContents.fromId(guestId) : undefined;
+  const wc = guest?.hostWebContents === sender ? guest : sender;
+  if (op === "copy") wc.copy();
+  else if (op === "selectAll") wc.selectAll();
 }
 
 async function stopCore(pid: number): Promise<void> {
@@ -445,6 +458,7 @@ ipcMain.handle("choose-save-path", async (e, defaultPath: string) => {
   return r.canceled ? null : (r.filePath ?? null);
 });
 ipcMain.on("close-window", (e) => winOf(e)?.close());
+ipcMain.on("edit-native", (e, op: string, guestId?: number) => editNative(e.sender, op, guestId));
 // URLs (https:, mailto:) go to their default app; anything else is a file path.
 ipcMain.on("open-path", (_e, p: string) => void (/^[a-z][\w+.-]+:/i.test(p) ? shell.openExternal(p) : shell.openPath(p)));
 ipcMain.on("settings-window", () => void openSettings());

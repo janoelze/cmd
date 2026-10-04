@@ -16,8 +16,8 @@ installScrollbars();
 
 // The menu bar sends the edit commands it can't do natively (main/menu.ts); ⌘W closes in main.
 cmd.onCommand((id) => {
-  if (id === "edit.copy") document.execCommand("copy");
-  else if (id === "edit.selectAll") document.execCommand("selectAll");
+  if (id === "edit.copy") cmd.editNative("copy");
+  else if (id === "edit.selectAll") cmd.editNative("selectAll");
 });
 
 // macOS draws the traffic lights over the page; elsewhere the platform's frame sits above it.
