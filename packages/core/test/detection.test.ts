@@ -146,3 +146,23 @@ describe("foreground polling", () => {
     panes.dispose();
   });
 });
+
+describe("headless scrollback", () => {
+  it("keeps only what is read back (a UI's snapshot, the saved screen), within terminal.scrollback", async () => {
+    const { LocalBackend } = await import("../src/terminals/local.ts");
+    const { DEFAULT_SETTINGS } = await import("@cmd/protocol");
+    const kept = (s: Partial<typeof DEFAULT_SETTINGS>) => {
+      let asked = -1;
+      const backend = new LocalBackend(fakeFactory().factory);
+      const spawn = backend.spawn.bind(backend);
+      backend.spawn = (o) => ((asked = o.scrollback), spawn(o));
+      const panes = new PaneManager(backend, { socketPath: "/tmp/t.sock", pollMs: 0, settings: () => ({ ...DEFAULT_SETTINGS, ...s }) });
+      panes.create();
+      panes.dispose();
+      return asked;
+    };
+    expect(kept({ "terminal.scrollback": 10000, "restore.scrollback": 2000 })).toBe(5000);
+    expect(kept({ "terminal.scrollback": 1000 })).toBe(1000);
+    expect(kept({ "terminal.scrollback": 50000, "restore.scrollback": 8000 })).toBe(8000);
+  });
+});

@@ -71,9 +71,9 @@ export const SETTINGS_SCHEMA = {
   "terminal.renderer": {
     title: "Renderer", labels: { dom: "DOM", webgl: "WebGL" },
     type: "enum",
-    default: "dom",
+    default: "webgl",
     options: ["dom", "webgl"],
-    description: "dom draws text natively (matches macOS rendering); webgl is faster for heavy output but rasterizes glyphs itself.",
+    description: "webgl is much cheaper for heavy output and scrolling (up to terminal.webglPool terminals; the rest use dom); dom draws text natively (matches macOS rendering).",
   },
   "terminal.lineHeight": { title: "Line height", type: "number", default: 1.15, min: 1, max: 2, step: 0.05, description: "Terminal line height." },
   "terminal.cursorBlink": { title: "Blinking cursor", type: "boolean", default: true, description: "Blink the terminal cursor." },

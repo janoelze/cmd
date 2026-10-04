@@ -78,7 +78,7 @@ Ordered by expected win. Risk means the risk of a visible change in behaviour. â
 
 ### Open questions
 
-- **The terminal renderer defaults to DOM.** WebGL is much cheaper when scrolling and streaming, but glyphs rasterize slightly differently, so switching the default is a visible change. Measure it first.
+- âœ… **The terminal renderer defaulted to DOM.** Now WebGL (decided 2026-10-04), up to `terminal.webglPool` terminals; `"terminal.renderer": "dom"` keeps native text rendering.
 - **No flow control between the PTY and xterm.** `docs/02` calls for it. A `cat` of a huge file floods the renderer's write buffer.
 
 ## Wins
@@ -96,6 +96,7 @@ Measured with the bench and `e2e/perf.mjs` on the same machine. "UI" rows are th
 | 7 | Search reads transcripts in 1 MB chunks instead of whole | cold index peak 1,623 MB, 484 MB kept by the core afterwards | peak 229 MB, 110 MB afterwards (same speed, identical documents) |
 | 8 | Magic's dot matrix animates only on screen; StripScrollbar and the sidebar's hover order no longer run DOM work after every render | a 30 fps canvas loop in off-screen tiles; a forced layout per render | none off screen |
 | 9 | Files windows poll git only while cmd is in front | two git processes every 5 s per Files window, also in the background | none in the background; one refresh on focus |
+| 11 | The PTY host keeps only the lines ever read back (a UI's snapshot: 5,000, or `restore.scrollback` if larger) instead of `terminal.scrollback` (10,000) | host memory per full terminal: 26 MB | 15.5 MB (`cmd read` returns at most 5,000 lines of scrollback) |
 | 10 | The updater bundle loads 5 s after launch | 570 KB parsed on the main thread during the first window's load | after it |
 
 Already fine: no frame over 33 ms while flooding (25 MB through `cat`) or scrolling 10,000 lines of scrollback (p95 frame 9 ms at 120 Hz); the core serializes each broadcast once for all connections.

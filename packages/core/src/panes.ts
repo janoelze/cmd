@@ -74,7 +74,11 @@ export function defaultShell(): string {
 
 export { shellName };
 
-/** Scrollback lines included when a UI re-attaches (the headless terminal keeps more). */
+/**
+ * Scrollback lines included when a UI re-attaches. The headless terminal keeps no
+ * more than this (or restore.scrollback, if larger): each kept line of a wide
+ * terminal costs a few KB in the PTY host.
+ */
 const SNAPSHOT_SCROLLBACK = 5000;
 /** How often changed screens are saved for restoring after a restart. */
 const SCREEN_SAVE_MS = 10_000;
@@ -273,7 +277,9 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       ...opts.env,
     });
 
-    const term = this.#backend.spawn({ id, shell, args, cwd, cols, rows, env, scrollback: cfg["terminal.scrollback"], replay: opts.replay });
+    // The headless copy only needs what is ever read back from it: a UI's snapshot and the saved screen.
+    const kept = Math.min(cfg["terminal.scrollback"], Math.max(SNAPSHOT_SCROLLBACK, cfg["restore.scrollback"]));
+    const term = this.#backend.spawn({ id, shell, args, cwd, cols, rows, env, scrollback: kept, replay: opts.replay });
     const now = Date.now();
     const pane: Pane = {
       id,
