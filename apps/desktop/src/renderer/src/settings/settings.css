@@ -7,9 +7,9 @@ body.settings-window { background: var(--bg); }
 
 .sw {
   --sw-control-h: 24px;
-  --sw-field: color-mix(in srgb, var(--ink) 6%, transparent);
-  --sw-field-edge: color-mix(in srgb, var(--ink) 11%, transparent);
-  --sw-ring: 0 0 0 1px var(--accent), 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+  --sw-field: var(--input-bg);
+  --sw-field-edge: var(--input-edge);
+  --sw-ring: var(--input-ring);
   height: 100%;
   display: grid;
   grid-template-columns: 220px 1fr;

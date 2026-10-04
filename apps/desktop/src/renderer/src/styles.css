@@ -26,6 +26,13 @@
   --shadow: rgb(0 0 0 / 0.5);
   /* Recessed fields (settings window) and project chips (lightness for hsl(var(--hue) …)). */
   --field: color-mix(in srgb, var(--scrim) 28%, transparent);
+  /* Text inputs, system style: a faint fill and hairline edge; on focus the edge
+     takes some accent and a soft halo surrounds it, rather than a hard accent line. */
+  --input-bg: color-mix(in srgb, var(--ink) 5%, transparent);
+  --input-edge: color-mix(in srgb, var(--ink) 10%, transparent);
+  --input-focus-edge: color-mix(in srgb, var(--accent) 50%, var(--input-edge));
+  --input-glow: color-mix(in srgb, var(--accent) 16%, transparent);
+  --input-ring: inset 0 0 0 1px var(--input-focus-edge), 0 0 0 2px var(--input-glow);
   /* Dividers between a window's panes (the Settings window's sidebar and bar). */
   --pane-edge: color-mix(in srgb, var(--scrim) 50%, transparent);
   /* Recessed areas: unassigned grid cells. */
@@ -238,14 +245,14 @@ kbd {
   padding: 0 24px 0 26px;
   font: 12.5px var(--font-ui);
   color: var(--text);
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  background: var(--input-bg);
   border: 1px solid transparent;
   border-radius: 7px;
   outline: none;
   user-select: text;
 }
 .sb-search input::placeholder { color: var(--text-dim); }
-.sb-search input:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: var(--well); }
+.sb-search input:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); background: var(--well); }
 .sb-search-icon { position: absolute; left: 9px; color: var(--text-dim); pointer-events: none; }
 .sb-search-clear {
   position: absolute;
@@ -799,14 +806,14 @@ kbd {
 .feedback-message, .feedback-contact {
   font: 13px var(--font-ui);
   color: var(--text);
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
-  border: 1px solid var(--separator);
+  background: var(--input-bg);
+  border: 1px solid var(--input-edge);
   border-radius: 6px;
   padding: 8px 10px;
   outline: none;
 }
 .feedback-message { resize: vertical; min-height: 90px; max-height: 50vh; line-height: 1.45; }
-.feedback-message:focus, .feedback-contact:focus { border-color: var(--accent); }
+.feedback-message:focus, .feedback-contact:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
 .feedback-foot { display: flex; align-items: center; gap: 8px; }
 .feedback-info { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-dim); }
 .feedback-error { flex: 1; min-width: 0; font-size: 11.5px; color: var(--state-needs); text-align: right; }
@@ -843,12 +850,12 @@ kbd {
   font: 12px var(--font-ui);
   color: var(--text);
   background: var(--well);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--input-edge);
   border-radius: 5px;
   outline: none;
   user-select: text;
 }
-.address:focus { border-color: var(--accent); }
+.address:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
 .webview { flex: 1; min-height: 0; background: #fff; }
 /* While dragging or resizing windows, embedded pages ([data-embed], embed.ts) must not swallow pointer events. */
 .main.windows.dragging [data-embed], .main.windows.resizing [data-embed], .main.windows.held [data-embed] { pointer-events: none; }
