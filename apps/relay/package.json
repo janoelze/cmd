@@ -1,0 +1,15 @@
+{
+  "name": "@cmd/relay",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --no-warnings src/main.ts"
+  },
+  "dependencies": {
+    "@cmd/protocol": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12"
+  }
+}

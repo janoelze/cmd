@@ -6,3 +6,4 @@ export * from "./settings.ts";
 export * from "./client.ts";
 export * from "./magic.ts";
 export * from "./secrets.ts";
+export * from "./relay.ts";
