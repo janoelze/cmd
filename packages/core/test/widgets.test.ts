@@ -172,6 +172,29 @@ describe.skipIf(!DENO)("data.ts in Deno", () => {
     expect(await runData(limited.dir, limited.m, { ...denoEnv(), cwd: os.tmpdir(), config: {} })).toMatchObject({ ok: false, status: 429, retryAfter: 120 });
   });
 
+  it("reports the run's status line and notifications, and names a program that isn't installed", async () => {
+    const signalling = `import { s, status, notify } from "cmd";
+export const schema = s.object({ n: s.number() });
+export default async () => {
+  status({ text: "2 failing", tone: "bad" });
+  notify({ key: "a", title: "Build failed", body: "#12 on master" });
+  notify({ key: "a", body: "the same key again is dropped" });
+  notify({ key: "b", body: "quiet", urgent: false });
+  return { n: 1 };
+};
+`;
+    const { dir, m } = widget({ "manifest.json": MANIFEST(), "data.ts": signalling });
+    expect(await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {} })).toMatchObject({
+      ok: true,
+      statusLine: { text: "2 failing", tone: "bad" },
+      notify: [{ key: "a", title: "Build failed", body: "#12 on master" }, { key: "b", body: "quiet", urgent: false }],
+    });
+
+    const missing = `import { s, run } from "cmd";\nexport const schema = s.object({ n: s.number() });\nexport default async () => (await run("cmd-no-such-program", []), { n: 1 });\n`;
+    const w = widget({ "manifest.json": MANIFEST({ permissions: { run: ["cmd-no-such-program"] } }), "data.ts": missing });
+    expect((await runData(w.dir, w.m, { ...denoEnv(), cwd: os.tmpdir(), config: {} })).error).toMatch(/cmd-no-such-program isn't installed/);
+  });
+
   it("type-checks the view against the data's schema", async () => {
     const { dir } = widget({ "manifest.json": MANIFEST(), "data.ts": DATA(), "view.html": VIEW_HTML, "view.ts": VIEW_TS.replace("d.n", "d.count") });
     const r = await checkTypes(dir, denoEnv());
@@ -366,6 +389,38 @@ describe.skipIf(!DENO)("Magic windows in the core", () => {
     expect(events.some((e) => e.type === "magic.data" && e.error?.includes("the service is down"))).toBe(true);
     core.handlers["magic.config"]({ id, values: { start: null } });
     await until(() => (state().health as { ok?: boolean }).ok === true);
+    await core.close();
+  });
+
+  it("notifies once per key a data run reports, marks the window until seen, and keeps a muted widget quiet", async () => {
+    const signalling = DATA().replace('import { s, type Infer } from "cmd";', 'import { s, notify, status, type Infer } from "cmd";').replace(
+      'console.log("noise on stdout");',
+      'const k = config.start ?? 0;\n  status({ text: k ? `${k} failing` : "all good", tone: k ? "bad" : "good" });\n  if (k) notify({ key: `fail-${k}`, title: "Build failed", body: `run ${k}` });',
+    );
+    const { core, id, state, events } = await setup(scripted([{ calls: WIDGET_CALLS(signalling), answer: "ok" }]));
+    const notes = () => events.filter((e) => e.type === "notification").map((e) => (e as unknown as { notification: Record<string, unknown> }).notification);
+    core.handlers["magic.run"]({ id, prompt: "builds" });
+    await until(() => state().phase === "ready" && Array.isArray(state().notified));
+    expect(state()).toMatchObject({ status: { text: "all good", tone: "good" }, notified: [] });
+
+    core.handlers["magic.config"]({ id, values: { start: 1 } });
+    await until(() => notes().length === 1);
+    expect(notes()[0]).toMatchObject({ source: "widget", windowId: id, paneId: null, title: "Build failed", body: "run 1", alert: true, urgent: true });
+    expect(state()).toMatchObject({ status: { text: "1 failing", tone: "bad" }, notified: ["fail-1"], attention: { kind: "notify", text: "Build failed", urgent: true } });
+
+    // Still failing on the next refresh: no second notification.
+    core.handlers["magic.refresh"]({ id });
+    await until(() => events.filter((e) => e.type === "magic.data" && e.id === id && (e.data as { n?: number })?.n === 4).length >= 2);
+    expect(notes()).toHaveLength(1);
+
+    core.handlers["window.clearAttention"]({ id });
+    expect(state().attention).toBeNull();
+
+    core.handlers["magic.mute"]({ id, muted: true });
+    core.handlers["magic.config"]({ id, values: { start: 2 } });
+    await until(() => notes().length === 2);
+    expect(notes()[1]).toMatchObject({ body: "run 2", alert: false });
+    expect(state().attention).toMatchObject({ text: "Build failed" });
     await core.close();
   });
 

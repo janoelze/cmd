@@ -9,7 +9,9 @@
 //
 // cmd validates what data() returns against `schema` on every refresh: the view
 // only ever gets data of that shape, and a change on the other end shows up as
-// a clear error instead of a broken view.
+// a clear error instead of a broken view. Besides the data, a run can report a
+// status line (status()) and notifications (notify()), which cmd shows even
+// while the window is out of sight.
 
 // ── schema ───────────────────────────────────────────────
 
@@ -221,17 +223,30 @@ export interface RunOptions {
 export async function run(program: string, args: string[] = [], o: RunOptions = {}): Promise<RunResult> {
   const cmd = new Deno.Command(program, { args, cwd: expandHome(o.cwd ?? Deno.env.get("CMD_WIDGET_CWD") ?? home()), stdin: o.stdin === undefined ? "null" : "piped", stdout: "piped", stderr: "piped" });
   let out: Deno.CommandOutput;
-  if (o.stdin === undefined) out = await cmd.output();
-  else {
-    const child = cmd.spawn();
-    const w = child.stdin.getWriter();
-    await w.write(new TextEncoder().encode(o.stdin));
-    await w.close();
-    out = await child.output();
+  try {
+    if (o.stdin === undefined) out = await cmd.output();
+    else {
+      const child = cmd.spawn();
+      const w = child.stdin.getWriter();
+      await w.write(new TextEncoder().encode(o.stdin));
+      await w.close();
+      out = await child.output();
+    }
+  } catch (e) {
+    // Say which program, and that it's missing rather than failing.
+    if (e instanceof Deno.errors.NotFound) throw new NotInstalledError(program);
+    throw e;
   }
   const r = { stdout: new TextDecoder().decode(out.stdout), stderr: new TextDecoder().decode(out.stderr), code: out.code };
   if (r.code !== 0 && !o.allowFail) throw new Error(`${program} ${args.join(" ")} exited ${r.code}: ${r.stderr.trim().slice(0, 400) || r.stdout.trim().slice(0, 200) || "(no output)"}`);
   return r;
+}
+
+/** run() of a program that isn't installed (not found on PATH). */
+export class NotInstalledError extends Error {
+  constructor(readonly program: string) {
+    super(`${program} isn't installed (not found on PATH)`);
+  }
 }
 
 /** run() and parse stdout as JSON. */
@@ -329,4 +344,46 @@ export function columns(text: string, o: { skip?: number; max?: number } = {}): 
       const parts = l.trim().split(/\s+/);
       return o.max && parts.length > o.max ? [...parts.slice(0, o.max - 1), parts.slice(o.max - 1).join(" ")] : parts;
     });
+}
+
+// ── status and notifications ─────────────────────────────
+
+export type Tone = "good" | "warn" | "bad" | "dim";
+
+export interface Status {
+  /** A few words: "2 failing", "Connected · utun4", "3 changed". */
+  text: string;
+  /** The window's light: good (green), warn (amber), bad (red), dim (off). */
+  tone?: Tone;
+}
+
+export interface Notification {
+  /**
+   * What this is about, stable while it lasts ("ci-failed-1234", "vpn-down").
+   * cmd notifies when a key appears that the previous run didn't report, so
+   * report it on every run while it holds: once, not on every refresh.
+   */
+  key: string;
+  title?: string;
+  body: string;
+  /** Needs the person (plays the sound, may bounce the Dock); default true. */
+  urgent?: boolean;
+}
+
+const signals: { status: Status | null; notify: Notification[] } = { status: null, notify: [] };
+
+/** The window's status line this run (title bar, sidebar): a light and a few words. */
+export function status(s: Status): void {
+  signals.status = { text: String(s.text).slice(0, 80), ...(s.tone ? { tone: s.tone } : {}) };
+}
+
+/** A notification, shown once per key while it lasts (see Notification.key). */
+export function notify(n: Notification): void {
+  if (signals.notify.length >= 5 || signals.notify.some((x) => x.key === n.key)) return;
+  signals.notify.push({ key: String(n.key).slice(0, 200), body: String(n.body ?? "").slice(0, 300), ...(n.title ? { title: String(n.title).slice(0, 120) } : {}), ...(n.urgent === false ? { urgent: false } : {}) });
+}
+
+/** For the runner: what this run reported. */
+export function takeSignals(): { status: Status | null; notify: Notification[] } {
+  return { status: signals.status, notify: [...signals.notify] };
 }

@@ -12,6 +12,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { credentialsForPrograms, DEFAULT_DENY_PATHS, expandPath, redact } from "../magic/policy.ts";
 import { execArgv, type SandboxMode } from "../magic/sandbox.ts";
+import type { MagicNotify, MagicStatus } from "@cmd/protocol";
 import type { WidgetManifest } from "./manifest.ts";
 
 export const RUNTIME_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../widget-runtime");
@@ -130,6 +131,9 @@ export interface DataResult {
   /** A permission was missing (net host, program, env var): manifest.json needs it. */
   permission?: boolean;
   stack?: string;
+  /** What the run reported besides the data (status(), notify() in data.ts). */
+  statusLine?: MagicStatus | null;
+  notify?: MagicNotify[];
   /** The data function's console output and Deno's own messages. */
   stderr: string;
   ms: number;

@@ -65,7 +65,11 @@ export interface Progress {
   value: number;
 }
 
-/** Why a terminal wants you; see packages/core/src/notifications.ts. */
+/**
+ * Why a window wants you, kept until you look (see packages/core/src/notifications.ts):
+ * a terminal's in Pane.attention, another window's (a widget's notification) in
+ * AppWindow.state.attention.
+ */
 export interface Attention {
   kind: "bell" | "notify" | "command";
   /** Short text for the title bar and sidebar ("Bell", the notification, "make finished · 42s"). */
@@ -81,9 +85,11 @@ export interface Attention {
  */
 export interface AppNotification {
   id: string;
-  source: "agent-input" | "agent-done" | "bell" | "terminal" | "command" | "cli";
+  source: "agent-input" | "agent-done" | "bell" | "terminal" | "command" | "cli" | "widget";
   /** The terminal it came from, if any (clicking the notification selects it). */
   paneId: PaneId | null;
+  /** The window it came from, when not a terminal (a widget). */
+  windowId?: WindowId | null;
   title: string;
   body: string;
   /** Show a system notification (false: only the attention marker / visual bell). */

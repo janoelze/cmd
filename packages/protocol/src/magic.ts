@@ -3,6 +3,7 @@
 // core (standalone pages, the prompt lab) and the renderer (live frames).
 
 import { DEFAULT_SETTINGS } from "./settings.ts";
+import type { Attention } from "./model.ts";
 
 /** The model providers Magic windows can use; each has its own API key (secrets.ts) and model setting. */
 export const MAGIC_PROVIDERS = {
@@ -53,6 +54,20 @@ export interface MagicHealth {
   permission?: boolean;
 }
 
+/** A widget's status line (data.ts status()): the window's light and a few words. */
+export interface MagicStatus {
+  text: string;
+  tone?: "good" | "warn" | "bad" | "dim";
+}
+
+/** A notification a widget's data.ts reported (notify()); shown once per key while it lasts. */
+export interface MagicNotify {
+  key: string;
+  title?: string;
+  body: string;
+  urgent?: boolean;
+}
+
 /** A Magic window's state (AppWindow.state of kind "magic"). */
 export interface MagicState {
   [key: string]: unknown;
@@ -78,6 +93,14 @@ export interface MagicState {
   /** The last data, so the widget draws at once after a restart. */
   lastData?: { data: unknown; at: number } | null;
   health?: MagicHealth;
+  /** The status line the last data run reported. */
+  status?: MagicStatus | null;
+  /** Notification keys the last data run reported; absent until the first run (which notifies nothing). */
+  notified?: string[];
+  /** A notification not yet seen (cleared by looking at the window: window.clearAttention). */
+  attention?: Attention | null;
+  /** Notifications from this widget are shown only as its attention marker. */
+  muted?: boolean;
   /** A problem with the window itself (the build failed). */
   error?: string;
   /** Problems the last build's checks left (the widget still renders). */

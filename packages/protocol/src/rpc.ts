@@ -76,6 +76,8 @@ export interface Methods {
   /** Notifications (packages/core/src/notifications.ts). */
   "pane.setMuted": { params: { paneId: PaneId; muted: boolean }; result: null };
   "pane.clearAttention": { params: { paneId: PaneId }; result: null };
+  /** Looking at a window that isn't a terminal clears its attention marker (state.attention). */
+  "window.clearAttention": { params: { id: WindowId }; result: null };
   /** `cmd notify`: from a terminal (paneId) or from anywhere. */
   "notify.send": { params: { paneId?: PaneId | null; title?: string; body: string }; result: null };
   /** Terminal state, for re-attaching a view after a UI reload; replay it into a terminal of `cols` x `rows`. */
@@ -199,6 +201,8 @@ export interface Methods {
   "magic.state": { params: { id: WindowId; key: string; value: unknown }; result: null };
   /** Ask the agent to fix what is wrong (the data's last error, the checks' problems). */
   "magic.fix": { params: { id: WindowId }; result: null };
+  /** Mute a widget: its notifications only mark the window, without a system notification or sound. */
+  "magic.mute": { params: { id: WindowId; muted: boolean }; result: null };
   /** What widgets run on: Deno, the sandbox, the previewer. */
   "magic.runtime": { params: {}; result: MagicRuntime };
   /** Download Deno into cmd's state folder. */

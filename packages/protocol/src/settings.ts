@@ -219,6 +219,7 @@ export const SETTINGS_SCHEMA = {
 
   "notifications.needsInput": { title: "Agent needs input", type: "boolean", default: true, description: "Notify when an agent needs input." },
   "notifications.done": { title: "Agent finished a turn", type: "boolean", default: true, description: "Notify when an agent finishes a turn." },
+  "notifications.widgets": { title: "Widgets report something", type: "boolean", default: true, description: "Notify when a Magic widget reports news (a failed build, a dropped VPN). Mute a single widget from its menu." },
   "notifications.dockBadge": { title: "Badge the Dock icon", type: "boolean", default: true, description: "Show the attention count on the Dock icon." },
   "notifications.when": {
     title: "Show notifications",

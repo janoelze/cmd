@@ -1,6 +1,7 @@
 // Notifications: one path for every source. Agents (needs input, finished a
 // turn), terminal bells, notifications programs ask for (OSC 9/777/99), long
-// commands finishing (OSC 133 from the shell integration) and `cmd notify`.
+// commands finishing (OSC 133 from the shell integration), `cmd notify` and
+// widgets (data.ts notify(), via MagicService).
 //
 // The core decides what is worth telling, from the notifications.* settings and
 // the terminal's mute; it sets the terminal's attention marker and emits an
@@ -11,7 +12,7 @@
 import { EventEmitter } from "node:events";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
-import type { Agent, AppNotification, Attention, Pane, PaneId, Settings } from "@cmd/protocol";
+import type { Agent, AppNotification, Attention, Pane, PaneId, Settings, WindowId } from "@cmd/protocol";
 import type { OscEvent } from "./osc.ts";
 import type { PaneManager } from "./panes.ts";
 import type { AgentTracker } from "./agents/tracker.ts";
@@ -77,6 +78,12 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
     }
     this.#mark(pane, { kind: "notify", text: body || title || "Notification", urgent: true });
     this.#emit({ source: "cli", paneId: pane.id, title: title || label(pane), body, alert: !pane.muted, urgent: true });
+  }
+
+  /** A widget's notification (MagicService keeps the window's attention marker). */
+  widget(n: { windowId: WindowId; title: string; body: string; urgent: boolean; muted: boolean }): void {
+    if (!this.#settings()["notifications.widgets"]) return;
+    this.#emit({ source: "widget", paneId: null, windowId: n.windowId, title: n.title, body: n.body, alert: !n.muted, urgent: n.urgent });
   }
 
   clearAttention(paneId: PaneId): void {

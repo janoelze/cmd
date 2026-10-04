@@ -1,11 +1,11 @@
 // Runs a widget's data.ts once (deno run … runner.ts <widget dir>), with its
 // config on stdin, and prints one result line for cmd:
-//   {"ok":true,"data":…,"ms":12}
+//   {"ok":true,"data":…,"ms":12,"statusLine":{…},"notify":[…]}
 //   {"ok":false,"error":"…","issues":[…],"retryAfter":60}
 // The data function's own console output goes to stderr, so it can't corrupt
 // the result. The data is validated against the exported `schema`.
 
-import { HttpError, Schema, SchemaError } from "./cmd.ts";
+import { HttpError, Schema, SchemaError, takeSignals } from "./cmd.ts";
 
 const MARK = "\u0000cmd-result ";
 const out = (r: Record<string, unknown>) => Deno.stdout.writeSync(new TextEncoder().encode(MARK + JSON.stringify(r) + "\n"));
@@ -39,7 +39,8 @@ try {
     out({ ok: false, error: new SchemaError(issues).message, issues: issues.slice(0, 20), data, ms: Math.round(performance.now() - start) });
     Deno.exit(1);
   }
-  out({ ok: true, data, ms: Math.round(performance.now() - start) });
+  const { status, notify } = takeSignals();
+  out({ ok: true, data, ms: Math.round(performance.now() - start), statusLine: status, notify });
   Deno.exit(0);
 } catch (e) {
   const err = e as Error;

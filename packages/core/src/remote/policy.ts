@@ -32,6 +32,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "pane.kill": "control",
   "pane.setMuted": "control",
   "pane.clearAttention": "view",
+  "window.clearAttention": "view",
   "notify.send": "never",
   "pane.snapshot": "view",
   "pane.reset": "control",
@@ -75,6 +76,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "magic.secret": "never",
   "magic.state": "never",
   "magic.fix": "never", // spends API keys; from the Mac only for now
+  "magic.mute": "never",
   "magic.runtime": "never",
   "magic.installRuntime": "never",
   "magic.previewer": "never",
@@ -174,6 +176,7 @@ const ARGS: { [M in Method]?: Check<M> } = {
     if (JSON.stringify(p.state ?? null).length > MAX_WRITE) throw new RemoteDenied("state too large");
   },
   "window.close": (p, ctx) => window(ctx, p.id),
+  "window.clearAttention": (p, ctx) => window(ctx, p.id),
   "window.follow": (p, ctx) => {
     if (!Array.isArray(p.ids) || p.ids.length > 64) throw new RemoteDenied("follow up to 64 windows");
     for (const id of p.ids) window(ctx, id);

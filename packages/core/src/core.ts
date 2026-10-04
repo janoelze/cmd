@@ -180,6 +180,7 @@ export class Core {
       settings,
       secret: (k) => this.secrets.get(k),
       broadcast: (e) => this.#broadcast(e),
+      notify: (n) => this.notifications.widget(n),
       backend: opts.magicBackend,
       stateDir: opts.stateDir ?? null,
       previewer: () => this.#previewer(),
@@ -302,6 +303,11 @@ export class Core {
     "window.update": (p) => this.windows.update(p.id, p),
     "window.types": () => this.windowTypes.info(),
     "window.close": (p) => (this.windows.close(p.id), null),
+    "window.clearAttention": (p) => {
+      const w = this.windows.others().find((x) => x.id === p.id);
+      if (w?.state.attention) this.windows.update(p.id, { state: { attention: null } });
+      return null;
+    },
     "window.list": () => this.windows.list(),
     "window.openTarget": (p) =>
       this.#opened(this.windows.openTarget(p.target, this.#place(p, { path: /^[a-z][\w+.-]+:/i.test(p.target) ? undefined : p.target }))),
@@ -328,6 +334,7 @@ export class Core {
     "magic.secret": (p) => (this.magic.setSecret(p.id, p.key, p.value), null),
     "magic.state": (p) => (this.magic.setState(p.id, p.key, p.value), null),
     "magic.fix": (p) => (this.magic.fix(p.id), null),
+    "magic.mute": (p) => (this.magic.setMuted(p.id, p.muted), null),
     "magic.runtime": () => this.magic.runtime(),
     "magic.installRuntime": () => this.magic.installRuntime(),
     // Connection-aware (#afterCall): the caller becomes a previewer.

@@ -20,8 +20,10 @@ import {
   type CoreEvent,
   type MagicHealth,
   type MagicModel,
+  type MagicNotify,
   type MagicRuntime,
   type MagicState,
+  type MagicStatus,
   type MagicStep,
   type MagicWidgetInfo,
   type SecretKey,
@@ -51,9 +53,20 @@ export interface MagicWindows {
   on(event: "removed", fn: (id: WindowId) => void): unknown;
 }
 
+/** A widget's notification, for the core's NotificationCenter (the window's attention marker is set here). */
+export interface WidgetNotification {
+  windowId: WindowId;
+  title: string;
+  body: string;
+  urgent: boolean;
+  muted: boolean;
+}
+
 export interface MagicServiceOptions {
   windows: MagicWindows;
   settings: () => Settings;
+  /** Show a widget's notification (data.ts notify()). */
+  notify?: (n: WidgetNotification) => void;
   /** The user's stored API keys (SecretsService). */
   secret: (key: SecretKey) => string | undefined;
   broadcast: (e: CoreEvent) => void;
@@ -564,6 +577,8 @@ export class MagicService {
     let error = "";
     let retryAfter: number | undefined;
     let permission = false;
+    let statusLine: MagicStatus | null = null;
+    let notify: MagicNotify[] = [];
     if (!m.ok) error = `manifest.json: ${m.errors[0]}`;
     else if (!deno) error = "Deno isn't installed (the widget's Health tab installs it)";
     else {
@@ -573,10 +588,13 @@ export class MagicService {
       data = r.data;
       retryAfter = r.retryAfter;
       permission = !!r.permission;
+      statusLine = r.statusLine ?? null;
+      notify = r.notify ?? [];
       if (!r.ok) error = describeDataError(r, Object.values(secrets));
     }
-    if (!this.#o.windows.others().some((x) => x.id === id) || this.#runs.has(id)) return;
+    if (this.#disposed || !this.#o.windows.others().some((x) => x.id === id) || this.#runs.has(id)) return;
     this.#afterRun(id, { ok, data, error, retryAfter, permission, ms: Date.now() - t0 });
+    if (ok) this.#signals(id, statusLine, notify);
   }
 
   async #tickLegacy(w: AppWindow, s: MagicState): Promise<void> {
@@ -618,6 +636,34 @@ export class MagicService {
       this.#maybeAutoFix(id, failures, r);
     }
     if (delay) this.#schedule(id, delay);
+  }
+
+  /**
+   * What a successful run reported besides its data: the status line, and
+   * notifications for keys the previous run didn't report (the first run of a
+   * widget only records them, so making or restoring one doesn't notify).
+   */
+  #signals(id: WindowId, status: MagicStatus | null, notify: MagicNotify[]): void {
+    const w = this.#window(id);
+    const s = stateOf(w);
+    const patch: Partial<MagicState> = {};
+    if (JSON.stringify(s.status ?? null) !== JSON.stringify(status)) patch.status = status;
+    const keys = notify.map((n) => n.key);
+    const fresh = s.notified ? notify.filter((n) => !s.notified!.includes(n.key)) : [];
+    if (!s.notified || keys.join("\n") !== s.notified.join("\n")) patch.notified = keys;
+    if (fresh.length) {
+      const latest = fresh.at(-1)!;
+      const urgent = fresh.some((n) => n.urgent !== false);
+      patch.attention = { kind: "notify", text: latest.title || latest.body, urgent, at: Date.now() };
+      for (const n of fresh) this.#o.notify?.({ windowId: id, title: n.title || w.title, body: n.title ? n.body : "", urgent: n.urgent !== false, muted: !!s.muted });
+    }
+    if (Object.keys(patch).length) this.#o.windows.update(id, { state: patch });
+  }
+
+  /** magic.mute: notifications only mark the window. */
+  setMuted(id: WindowId, muted: boolean): void {
+    this.#window(id);
+    this.#o.windows.update(id, { state: { muted: muted || undefined } });
   }
 
   /** magic.autoFix: data that keeps failing for reasons other than a busy server gets one agent fix per revision. */
