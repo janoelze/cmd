@@ -2,6 +2,16 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.9.2 — 2026-10-05
+
+### New
+
+- **What's New.** After an update, cmd shows what changed since the version you had. Reopen it from the sparkles in the status bar or Help → What's New.
+
+### Improved
+
+- Updates arrive sooner: cmd checks for them every 30 minutes instead of every 4 hours.
+
 ## 0.9.1 — 2026-10-05
 
 ### Fixed
