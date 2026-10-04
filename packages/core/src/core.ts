@@ -1,7 +1,9 @@
 // The core process: owns panes and agents, serves JSON-RPC on a Unix socket.
 
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import type { AgentId, AppWindow, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
@@ -327,6 +329,7 @@ export class Core {
       spaces: this.spaces.list(),
       windowTypes: this.windowTypes.info(),
       device: null,
+      host: { name: computerName() },
     }),
     "window.follow": () => null,
     "events.subscribe": () => ({
@@ -609,6 +612,16 @@ export class Core {
 }
 
 const EMPTY: ReadonlySet<string> = new Set();
+
+let hostName: string | null = null;
+/** The Mac's name as set in System Settings ("Jan's MacBook Pro"), else the host name. */
+function computerName(): string {
+  if (hostName) return hostName;
+  try {
+    if (process.platform === "darwin") hostName = execFileSync("/usr/sbin/scutil", ["--get", "ComputerName"], { encoding: "utf8", timeout: 2000 }).trim();
+  } catch {}
+  return (hostName ||= os.hostname().replace(/\.local$/, ""));
+}
 
 /** Refuse to start if another core is alive on this socket; remove it if stale. */
 async function removeStaleSocket(sock: string): Promise<void> {

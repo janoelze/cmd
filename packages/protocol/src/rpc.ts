@@ -256,7 +256,16 @@ export interface Methods {
    */
   "remote.bootstrap": {
     params: {};
-    result: { panes: Pane[]; agents: Agent[]; windows: AppWindow[]; spaces: Space[]; windowTypes: WindowTypeInfo[]; device: { id: string; scope: RemoteScope } | null };
+    result: {
+      panes: Pane[];
+      agents: Agent[];
+      windows: AppWindow[];
+      spaces: Space[];
+      windowTypes: WindowTypeInfo[];
+      device: { id: string; scope: RemoteScope } | null;
+      /** This Mac, as the phone names it ("Jan's MacBook Pro"). */
+      host: { name: string };
+    };
   };
   /** The windows this connection shows (terminals, Magic): remote sessions get pane.output and magic.data only for these. */
   "window.follow": { params: { ids: WindowId[] }; result: null };

@@ -79,13 +79,12 @@ try {
   check(/iPhone/.test(requests[0].name), `the Mac sees the device's name (${requests[0].name})`);
   await shot("1-approve");
   await call("remote.approve", { requestId: requests[0].requestId, allow: true, scope: "control" });
-  await page.getByText("Nothing running").waitFor();
+  await page.locator(".empty").waitFor();
   check(true, "approved: the phone lands on Now");
 
   const pane = await call("pane.create", {});
   await page.locator(".row").first().waitFor();
   check(true, "a new terminal shows up in Now");
-  await shot("2-now");
   await page.locator(".row").first().click();
   await page.locator(".term .xterm-rows").waitFor();
   await until(async () => (await call("remote.status")).sessions[0]?.watching.includes(pane.id), "opening it follows it on the Mac");
@@ -100,15 +99,79 @@ try {
   await until(async () => (await call("pane.list")).find((p) => p.id === pane.id).rows < fitted.rows, "a smaller viewport (keyboard) refits the rows");
   await page.setViewportSize(vp);
   await page.locator(".compose input").fill("echo phone-was-here");
-  await page.locator(".compose button").click();
+  await page.locator(".compose .send").click();
   await until(async () => (await call("pane.read", { paneId: pane.id })).text.includes("phone-was-here\n"), "the compose bar types into the terminal");
   await until(async () => (await page.locator(".term").innerText()).includes("phone-was-here"), "the output comes back to the phone");
   await page.getByRole("button", { name: "^C" }).click();
   await shot("3-terminal");
 
   // Back to Now: the Mac gets its size back.
-  await page.getByRole("button", { name: "‹ Now" }).click();
+  await page.getByRole("button", { name: "Back to Now" }).click();
   await until(async () => (await call("pane.list")).find((p) => p.id === pane.id).sizedBy === null, "leaving the terminal gives the Mac its size back");
+
+  // The phone starts a terminal of its own, in Now's bottom bar, and lands in it.
+  const before = (await call("pane.list")).length;
+  await page.locator(".actions").getByRole("button", { name: "Terminal" }).click();
+  await page.locator(".term .xterm-rows").waitFor();
+  await until(async () => (await call("pane.list")).length === before + 1, "the phone starts a terminal on the Mac");
+  await page.getByRole("button", { name: "Back to Now" }).click();
+  // Settings: which Mac, what access, forget.
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.locator(".sheet").getByText("Control: can type and change files").waitFor();
+  check(true, "Settings says what this device may do");
+  await page.waitForTimeout(300); // the sheet's rise
+  await shot("2b-settings");
+  await page.keyboard.press("Escape");
+
+  // A busy Mac: two Spaces, Claude sessions waiting, working and done (the hook
+  // events Claude Code sends), and a shell. Now sorts them; the chips filter.
+  const space = async (name) => {
+    fs.mkdirSync(path.join(home, "work", name), { recursive: true });
+    return (await call("space.open", { path: path.join(home, "work", name) })).space;
+  };
+  const [api, site] = [await space("api"), await space("site")];
+  // A stand-in Claude: a process really named claude (node, sleeping) that sets its
+  // title, so the core detects it as Claude does; then the hook events it would send.
+  const bin = path.join(home, "bin");
+  fs.mkdirSync(bin, { recursive: true });
+  fs.symlinkSync(process.execPath, path.join(bin, "claude"));
+  const claude = async (sp, title, events) => {
+    const command = `printf '\\033]0;${title}\\007'; clear; exec ${bin}/claude -e 'setInterval(() => {}, 1e9)'`;
+    const p = await call("pane.create", { spaceId: sp.id, command });
+    await until(async () => (await call("agent.list")).some((a) => a.paneId === p.id), `the core detects Claude in “${title}”`);
+    for (const [event, payload] of events) await call("hook.ingest", { paneId: p.id, agent: "claude", event, payload });
+    return p;
+  };
+  const waiting = await claude(api, "Webhook retries", [
+    ["UserPromptSubmit", { prompt: "add retries with backoff to the webhook sender" }],
+    ["PermissionRequest", { tool_name: "Bash", message: "Allow Bash: pnpm test --filter api?" }],
+  ]);
+  await claude(site, "Pricing page", [
+    ["UserPromptSubmit", { prompt: "make the pricing table responsive" }],
+    ["PreToolUse", { tool_name: "Edit", tool_input: { file_path: path.join(home, "work/site/src/Pricing.tsx") } }],
+  ]);
+  await claude(api, "Rate limiter", [
+    ["UserPromptSubmit", { prompt: "rate limit the public endpoints" }],
+    ["Stop", { last_assistant_message: "Added a token-bucket limiter to /v1/*; 42 tests pass." }],
+  ]);
+  await page.locator(".row-needs").waitFor();
+  check(/^needs you/i.test((await page.locator("h2").allInnerTexts())[0] ?? ""), "Now puts what needs you first");
+  await shot("2-now");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await shot("2d-now-dark");
+  await page.emulateMedia({ colorScheme: "light" });
+
+  await page.locator(".chip", { hasText: "site" }).click();
+  await page.locator(".row", { hasText: "Pricing page" }).waitFor();
+  check((await page.locator(".row").count()) === 1, "a Space chip filters Now");
+  await shot("2c-space");
+  await page.locator(".chip", { hasText: "All" }).click();
+  await page.locator(".actions").getByRole("button", { name: "Next" }).click();
+  await page.locator(".term-state", { hasText: "Needs you" }).waitFor();
+  check(true, "Next opens the oldest thing that needs you");
+  await shot("3b-agent");
+  await page.getByRole("button", { name: "Back to Now" }).click();
+  void waiting;
 
   // The phone comes back after a reload: it remembers the Mac, no pairing.
   await page.reload();
