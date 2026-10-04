@@ -723,7 +723,7 @@ kbd {
 .empty-main { display: grid; place-items: center; }
 /* Monochrome logo drawn as a mask so it takes the theme's colour. */
 .hello {
-  width: 220px;
+  width: 110px;
   aspect-ratio: 663 / 89;
   background-color: var(--text-dim);
   mask: url("./assets/hack-the-planet.svg") center / contain no-repeat;
