@@ -21,11 +21,12 @@ function page_start(string $title, string $description, string $current): void
 <meta name="description" content="<?= h($description) ?>">
 <style>
 :root {
-  /* Dark only, and darker than the app's own background (about #0a0b0b), so
-     the screenshots sit on the page as windows. */
+  /* The app's Pastel Dark theme (packages/ui/src/themes/pastel-dark.ts), on a
+     background darker than the app's own #0a0b0c, so the screenshots sit on
+     the page as windows. Dark only. */
   color-scheme: dark;
-  --bg: #030303; --surface: #0e0e0f; --ink: #ededea; --ink-2: #a3a39e; --ink-3: #6f6f6a;
-  --line: #222223; --accent: #6b9cf0; --accent-soft: #1c2738;
+  --bg: #050506; --surface: #121314; --ink: #e0e4e8; --ink-2: #a4aab3; --ink-3: #7d838c;
+  --line: #1f2124; --accent: #71bef2; --link: #8ad4f5; --accent-soft: #15283a; --on-accent: #121314;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
 }
@@ -36,7 +37,7 @@ header { display: flex; gap: 18px; align-items: baseline; padding-top: 20px; pad
 header a { color: var(--ink-2); text-decoration: none; font-weight: 500; }
 header a.current, header a:hover { color: var(--ink); }
 header a.brand { font-family: var(--mono); font-weight: 700; color: var(--ink); }
-a { color: var(--accent); }
+a { color: var(--link); }
 h1 { font-size: 28px; line-height: 1.2; margin: 24px 0 6px; letter-spacing: -0.01em; }
 h2 { font-size: 15px; margin: 28px 0 10px; }
 p.lede { color: var(--ink-2); font-size: 16px; margin: 0 0 18px; max-width: 60ch; }
@@ -55,7 +56,7 @@ code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
 .daily { display: flex; align-items: flex-end; gap: 2px; height: 140px; }
 .daily .col { flex: 1; height: 100%; display: flex; align-items: flex-end; }
 .daily .col span { display: block; width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 1px; }
-.daily .col:hover span { background: var(--ink); }
+.daily .col:hover span { background: var(--link); }
 .axis { display: flex; justify-content: space-between; color: var(--ink-3); font-size: 12px; margin-top: 6px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 td, th { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -79,7 +80,7 @@ h2.section { font-size: 18px; margin: 40px 0 14px; }
   p.lede { font-size: 15px; }
   .features { grid-template-columns: 1fr 1fr; gap: 14px 16px; }
 }
-.button { display: inline-block; background: var(--ink); color: var(--bg); text-decoration: none; padding: 9px 16px; border-radius: 8px; font-weight: 500; }
+.button { display: inline-block; background: var(--accent); color: var(--on-accent); text-decoration: none; padding: 9px 16px; border-radius: 8px; font-weight: 500; }
 footer { color: var(--ink-3); font-size: 13px; padding-top: 32px; padding-bottom: 24px; }
 </style>
 </head>
