@@ -29,10 +29,11 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
 
 <div class="hero-shots" aria-roledescription="slideshow">
   <img class="on" src="assets/hero.png" width="1505" height="950" alt="cmd with a usage widget, a Claude Code session finishing a release, and a CI widget side by side; six agents in the sidebar">
+  <img src="assets/theme-slate.png" width="1505" height="950" alt="The strip in a slate theme: a Claude Code session, a CI widget and another session">
   <img src="assets/grid.png" width="1505" height="950" alt="The grid: twelve windows at once, agents, widgets, a file browser, a shell and the weather">
   <img src="assets/agents.png" width="1505" height="950" alt="The strip: a Claude Code session, a file browser and a shell, with six agents and recent sessions in the sidebar">
+  <img src="assets/theme-warm.png" width="1505" height="950" alt="The canvas in a warm theme: a shader widget next to top">
   <img src="assets/widgets.png" width="1505" height="950" alt="A weather widget next to top in the strip">
-  <img src="assets/canvas.png" width="1505" height="950" alt="The canvas: a widget and a Claude Code session placed freely">
   <img src="assets/canvas-pan.png" width="1505" height="950" alt="The canvas, panned across a log, a usage widget and a Claude Code session">
 </div>
 <script>
@@ -54,7 +55,7 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
 
 <section class="pillar">
   <h2>Layouts</h2>
-  <p>Show one window at a time, tile them in a grid, scroll through them in a strip, or place them on a canvas. ⌘K finds any window, command or past session.</p>
+  <p>Show one window at a time, tile them in a grid, scroll through them in a strip, or place them on a canvas. ⌘K finds any window, command or past session. There are 16 themes, light and dark.</p>
   <img class="shot" src="assets/canvas.png" width="1505" height="950" loading="lazy" alt="The canvas: a widget and a Claude Code session placed freely">
 </section>
 
