@@ -487,7 +487,17 @@ ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("edit-native", (e, op: string, guestId?: number) => editNative(e.sender, op, guestId));
 // URLs (https:, mailto:) go to their default app; anything else is a file path.
 ipcMain.on("clipboard-write", (_e, text: unknown) => typeof text === "string" && clipboard.writeText(text));
-ipcMain.on("open-path", (_e, p: string) => void (/^[a-z][\w+.-]+:/i.test(p) ? shell.openExternal(p) : shell.openPath(p)));
+// Nothing to open it with (an unknown scheme, a missing file) is the user's to know, not a crash.
+ipcMain.on("open-path", async (e, p: string) => {
+  const error = /^[a-z][\w+.-]+:/i.test(p)
+    ? await shell.openExternal(p).then(() => "", (err: Error) => err.message)
+    : await shell.openPath(p);
+  if (!error) return;
+  log.warn("could not open", { target: p, error });
+  const opts = { type: "warning" as const, message: `cmd could not open ${p}`, detail: error };
+  const win = winOf(e);
+  void (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts));
+});
 ipcMain.on("settings-window", (_e, page?: string) => void openSettings(typeof page === "string" ? page : undefined));
 ipcMain.on("check-updates", () => checkForUpdates());
 // The Task Manager: Electron's own processes, and showing a terminal in the app window of its Space.
