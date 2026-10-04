@@ -694,6 +694,12 @@ function ContentPage() {
           </Callout>
           <div style={{ padding: 16, background: "var(--well)", font: "var(--text-md) var(--font-mono)" }}># Notes</div>
         </div>
+        <div style={{ borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--separator)" }}>
+          <div style={{ height: 60, background: "var(--well)" }} />
+          <Callout banner="bottom" compact tone="danger" actions={<><LinkButton>Fix</LinkButton><LinkButton>Details</LinkButton></>}>
+            Data keeps failing: fetch failed (503)
+          </Callout>
+        </div>
       </Spec>
       <Spec title="EmptyState" code="<EmptyState icon title action compact>">
         <EmptyState icon="safari" title="Blank page" action={<Button>Open a URL</Button>}>
