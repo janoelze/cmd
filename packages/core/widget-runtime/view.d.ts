@@ -48,6 +48,17 @@ interface CmdFrame {
   history(key: string, value: number | null | undefined, max?: number): number[];
   /** Open a link in a browser window (the widget itself never navigates). */
   openUrl(url: string): void;
+  /**
+   * Open a new terminal in the window's folder with `command` typed in (not
+   * run: the person presses Return). Only in response to a click or key press.
+   */
+  terminal(command: string): void;
+  /** Open a file or folder (an absolute or ~/ path) in a cmd window. Only in response to a click or key press. */
+  open(path: string): void;
+  /** Copy text to the clipboard. Only in response to a click or key press. */
+  copy(text: string): void;
+  /** Play a macOS system sound; silent while the widget is muted. */
+  sound(name?: "Basso" | "Blow" | "Bottle" | "Frog" | "Funk" | "Glass" | "Hero" | "Morse" | "Ping" | "Pop" | "Purr" | "Sosumi" | "Submarine" | "Tink"): void;
 }
 
 declare const cmd: CmdFrame;

@@ -27,7 +27,17 @@ cmd.onData<Data>((d) => {
       const when = document.createElement("td");
       when.className = "k-num k-dim";
       when.textContent = cmd.fmt.ago(r.createdAt);
-      tr.append(dot, title, branch, when);
+      // A failed run can be rerun: typed into a terminal, the person presses Return.
+      const act = document.createElement("td");
+      if (r.state === "failed") {
+        const b = document.createElement("button");
+        b.className = "k-btn";
+        b.textContent = "Rerun";
+        b.title = `gh run rerun ${r.id} --failed`;
+        b.onclick = () => cmd.terminal(`gh run rerun ${r.id} --failed --repo ${d.repo}`);
+        act.append(b);
+      }
+      tr.append(dot, title, branch, when, act);
       return tr;
     }),
   );

@@ -10,9 +10,9 @@
 
 import { Button, Callout, LinkButton, Toast } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
-import { requestedMedia, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
+import { requestedMedia, SYSTEM_SOUNDS, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { copy, openLink } from "../actions.ts";
+import { copy, openLink, selectPane, typeInTerminal } from "../actions.ts";
 import { resetMagic, useMagicLive, type MagicLive } from "../magic.ts";
 import { useStoreValue } from "../store.ts";
 import { useTheme } from "@cmd/ui/themes";
@@ -358,15 +358,35 @@ function Frame({ win, src, html, data, kv, onPainted }: { win: AppWindow; src: s
   useEffect(() => () => void (stateTimer.current && (clearTimeout(stateTimer.current), flushState())), []);
 
   // Messages from the frame: only from our own frame (opaque origins all say "null").
+  // What the widget does on the person's behalf (host.js sends those only after
+  // a click) is limited again here: a terminal or path at most once a second.
+  const winRef = useRef(win);
+  winRef.current = win;
+  const lastAct = useRef(0);
+  const lastSound = useRef(0);
   useEffect(() => {
+    const often = (last: { current: number }) => {
+      const now = Date.now();
+      if (now - last.current < 1000) return true;
+      last.current = now;
+      return false;
+    };
     const onMessage = (e: MessageEvent) => {
       if (e.source !== ref.current?.contentWindow || !e.data || typeof e.data !== "object") return;
-      const m = e.data as { type?: string; url?: string; message?: string; key?: unknown; value?: unknown };
+      const m = e.data as { type?: string; url?: string; message?: string; key?: unknown; value?: unknown; command?: unknown; path?: unknown; text?: unknown; name?: unknown };
+      const w = winRef.current;
       if (m.type === "ready") setReady(true);
       else if (m.type === "rendered") sent.current !== null && markPainted(sent.current);
       else if (handleEmbedMessage(ref.current!, m)) return;
       else if (m.type === "open-url" && typeof m.url === "string" && /^https?:\/\//i.test(m.url)) openLink(m.url);
-      else if (m.type === "state-set" && typeof m.key === "string") {
+      else if (m.type === "terminal" && typeof m.command === "string" && m.command.trim() && !often(lastAct)) void typeInTerminal(w.spaceId, m.command);
+      else if (m.type === "open" && typeof m.path === "string" && /^(\/|~\/)/.test(m.path) && !often(lastAct)) {
+        // Only into cmd's own windows: a path no type opens is not handed to macOS (it could be an app or a script).
+        void cmd.call("window.openTarget", { target: m.path, spaceId: w.spaceId }).then((o) => o && selectPane(o.id), () => {});
+      } else if (m.type === "copy" && typeof m.text === "string") copy(m.text.slice(0, 100_000));
+      else if (m.type === "sound" && typeof m.name === "string" && (SYSTEM_SOUNDS as readonly string[]).includes(m.name)) {
+        if (!w.state.muted && !often(lastSound)) cmd.playSound(m.name);
+      } else if (m.type === "state-set" && typeof m.key === "string") {
         pendingState.current.set(m.key, m.value ?? null);
         stateTimer.current ??= setTimeout(flushState, 800);
       } else if (m.type === "error") console.warn(`magic ${win.id}:`, m.message);
@@ -399,9 +419,7 @@ function Frame({ win, src, html, data, kv, onPainted }: { win: AppWindow; src: s
 
 function TerminalOffer({ win, command }: { win: AppWindow; command: string }) {
   const runIt = async () => {
-    const t = await cmd.call("window.open", { kind: "terminal", input: {}, spaceId: win.spaceId });
-    // Typed, not run: the person presses Return.
-    await cmd.call("pane.write", { paneId: t.id, data: command });
+    await typeInTerminal(win.spaceId, command);
     await cmd.call("window.close", { id: win.id });
   };
   return (

@@ -10,8 +10,7 @@
 // Mark is the window's status light or type icon, cross-fading between them.
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Led } from "../model.ts";
-import { StatusDot } from "@cmd/ui";
+import { StatusDot, type DotState } from "@cmd/ui";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { countRender } from "../perf.ts";
 
@@ -184,8 +183,8 @@ export function Slot({
   );
 }
 
-/** The window's mark: an agent's status light, else the type icon. */
-export function Mark({ light, icon }: { light?: Led; icon: string }) {
+/** The window's mark: a status light (an agent's, a window's news or status), else the type icon. */
+export function Mark({ light, icon }: { light?: DotState; icon: string }) {
   return (
     <span className={`mark ${light ? "has-light" : ""}`}>
       <Symbol name={icon} size={ICON.small} className="mark-icon" />

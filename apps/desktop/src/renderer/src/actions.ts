@@ -145,6 +145,17 @@ export async function newTerminalIn(cwd: string): Promise<void> {
   select(pane.id);
 }
 
+/**
+ * A new terminal in a Space with `command` typed in, not run: the person
+ * presses Return. One line without control characters, so nothing typed can
+ * press Return (or end a bracketed paste) itself.
+ */
+export async function typeInTerminal(spaceId: string, command: string): Promise<void> {
+  const t = await cmd.call("window.open", { kind: "terminal", input: {}, spaceId });
+  select(t.id);
+  await cmd.call("pane.write", { paneId: t.id, data: command.replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, 4000) });
+}
+
 /** New browser window (blank, address field focused, unless a URL is given). */
 export async function newBrowser(url?: string): Promise<void> {
   const w = await cmd.call("window.open", { kind: "browser", input: { url }, spaceId: here() });

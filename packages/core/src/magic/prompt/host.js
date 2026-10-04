@@ -231,6 +231,35 @@
         parent.postMessage({ type: "open-url", url: String(url) }, "*");
       } catch {}
     },
+    /** A new terminal in the window's folder with `command` typed in; the person presses Return. */
+    terminal(command) {
+      act({ type: "terminal", command: String(command) });
+    },
+    /** Open a file or folder (an absolute or ~/ path) in a cmd window. */
+    open(path) {
+      act({ type: "open", path: String(path) });
+    },
+    copy(text) {
+      act({ type: "copy", text: String(text) });
+    },
+    /** Play a macOS system sound ("Glass", "Ping", "Basso", …). */
+    sound(name = "Glass") {
+      try {
+        parent.postMessage({ type: "sound", name: String(name) }, "*");
+      } catch {}
+    },
+  };
+
+  // Things done on the person's behalf only follow a click or key press in the
+  // widget, so code that runs on every refresh can't open terminals.
+  const act = (m) => {
+    if (navigator.userActivation && !navigator.userActivation.isActive) {
+      report(new Error(`cmd.${m.type}() only works in response to a click or key press`));
+      return;
+    }
+    try {
+      parent.postMessage(m, "*");
+    } catch {}
   };
 
   // The app can't see the pointer over this page (it runs in its own process),

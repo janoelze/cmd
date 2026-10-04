@@ -10,6 +10,7 @@ function tick() {
   if (t.end) {
     t.left = Math.max(0, Math.round((t.end - Date.now()) / 1000));
     if (!t.left) {
+      cmd.sound(t.phase === "Focus" ? "Glass" : "Hero");
       t.phase = t.phase === "Focus" ? "Break" : "Focus";
       t = { phase: t.phase, left: LEN[t.phase], end: null };
       save();

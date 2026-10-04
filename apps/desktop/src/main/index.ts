@@ -13,7 +13,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { SETTINGS_TEMPLATE, mediaOrigin, widgetCsp } from "@cmd/protocol";
+import { SETTINGS_TEMPLATE, SYSTEM_SOUNDS, mediaOrigin, widgetCsp } from "@cmd/protocol";
 import { cmdHome, connect, coreSocketPath, enterInstance, initLog, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
@@ -424,6 +424,13 @@ const winOf = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => Browse
 ipcMain.on("badge", (_e, count: number) => app.dock?.setBadge(count > 0 ? String(count) : ""));
 ipcMain.on("progress", (e, value: number) => BrowserWindow.fromWebContents(e.sender)?.setProgressBar(typeof value === "number" ? value : -1));
 ipcMain.on("bounce", () => app.dock?.bounce("informational"));
+// System sounds by name (a widget's cmd.sound); one at a time, so a burst doesn't pile up.
+let sounding = false;
+ipcMain.on("play-sound", (_e, name: string) => {
+  if (sounding || process.platform !== "darwin" || !(SYSTEM_SOUNDS as readonly string[]).includes(name)) return;
+  sounding = true;
+  execFile("/usr/bin/afplay", [`/System/Library/Sounds/${name}.aiff`], () => (sounding = false));
+});
 
 // System notifications (the UI decides when; see packages/core/src/notifications.ts).
 // Shown from here, not the renderer, for system sounds by name and so a window's

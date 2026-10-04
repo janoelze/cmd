@@ -125,6 +125,7 @@ registerWindowView({
       ...(phase === "ready" || stateStr(w, "html") ? [{ label: "Change…", run: () => a()?.change?.() }] : []),
       ...(phase !== "empty" ? [{ label: "Edit Widget (⌘E)", run: () => setEditing(w.id, true) }] : []),
       ...(hasData ? [{ label: "Refresh Now", run: () => a()?.refresh?.() }, refreshEvery(w)] : []),
+      ...(w.state.widgetId && hasData ? [{ label: "Mute Notifications", checked: !!w.state.muted, run: () => void cmd.call("magic.mute", { id: w.id, muted: !w.state.muted }) }] : []),
       ...((health && health.ok === false) || problems || w.state.error ? [{ label: "Fix It", run: () => void cmd.call("magic.fix", { id: w.id }) }] : []),
     ];
   },

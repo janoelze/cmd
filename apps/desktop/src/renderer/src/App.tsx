@@ -26,7 +26,7 @@ import {
 } from "./actions.ts";
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
-import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, nextAfterClose, pushHistory, shortPath, spaceAttention, windowIdOf, type SidebarRow } from "./model.ts";
+import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, nextAfterClose, pushHistory, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
 import { getState, onNotification, onWindowFocus, setUsageShown, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset, withWidth } from "./strip.ts";
@@ -211,19 +211,22 @@ export function App() {
   const selectedAgent = selectedPane ? s.agents.get(selectedPane.agentId ?? "") : undefined;
   const selectedUnseen = !!selectedAgent && bucketOf(selectedAgent) === "unseen";
   const selectedAttention = !!selectedPane?.attention;
+  const selectedWindowAttention = !!windowAttention(selected ? s.windows.get(selected) : null);
   useEffect(() => {
     if (!selected || !appFocused) return;
     if (selectedUnseen && selectedAgent) void cmd.call("agent.markSeen", { agentId: selectedAgent.id });
     if (selectedAttention) void cmd.call("pane.clearAttention", { paneId: selected });
+    if (selectedWindowAttention) void cmd.call("window.clearAttention", { id: selected });
     cmd.closeNotification(selected);
-  }, [selected, appFocused, selectedUnseen, selectedAttention]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected, appFocused, selectedUnseen, selectedAttention, selectedWindowAttention]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Dock badge: agents and terminals waiting for you, in every Space.
+  // Dock badge: agents, terminals and other windows (widgets) waiting for you, in every Space.
   const attention = useMemo(
     () =>
       [...all.agents.values()].filter(needsAttention).length +
-      [...all.panes.values()].filter((p) => p.attention && !p.agentId).length,
-    [all.agents, all.panes],
+      [...all.panes.values()].filter((p) => p.attention && !p.agentId).length +
+      [...all.windows.values()].filter((w) => windowAttention(w)).length,
+    [all.agents, all.panes, all.windows],
   );
   useEffect(() => cmd.setBadge(cfg["notifications.dockBadge"] ? attention : 0), [attention, cfg]);
 
@@ -245,15 +248,17 @@ export function App() {
       const c = getState().settings.settings;
       if (n.source === "bell" && n.paneId && c["notifications.visualBell"]) flashWindow(n.paneId);
       if (!n.alert) return;
-      const looking = document.hasFocus() && n.paneId !== null && n.paneId === selectedRef.current;
+      // The window it's about: a terminal, or another window (a widget).
+      const from = n.paneId ?? n.windowId ?? null;
+      const looking = document.hasFocus() && from !== null && from === selectedRef.current;
       if (c["notifications.when"] === "never" || (c["notifications.when"] === "background" && looking)) return;
       const sound = c["notifications.sound"];
       cmd.notify({
-        tag: n.paneId ?? n.id,
+        tag: from ?? n.id,
         title: n.title,
         body: n.body,
         sound: n.urgent && sound !== "none" ? sound : null,
-        paneId: n.paneId,
+        paneId: from,
       });
       const bounce = c["notifications.bounceDock"];
       if (!document.hasFocus() && (bounce === "any" || (bounce === "needsInput" && n.urgent))) cmd.bounce();
@@ -369,9 +374,9 @@ export function App() {
     "session.prev": () => step(-1),
     "session.nextAttention": () => {
       // This Space first, then the others (select switches Space).
-      const wants = (r: SidebarRow) => r.pane && ((r.agent && needsAttention(r.agent)) || (!r.agent && r.pane.attention));
-      const target = flat.find(wants) ?? flatten(buildRows(all)).find(wants);
-      if (target?.pane) select(target.pane.id);
+      const target = flat.find(wantsYou) ?? flatten(buildRows(all)).find(wantsYou);
+      const id = target && windowIdOf(target);
+      if (id) select(id);
     },
     "session.copyResume": () => currentAgent && void copyResumeCommand(currentAgent),
     "session.copyId": () => {

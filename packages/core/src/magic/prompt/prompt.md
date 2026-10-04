@@ -56,6 +56,9 @@ All in the widget folder; write them with `write_file` (or `edit_file` for small
 - `home()`, `expandHome("~/src/x")`: the home folder, and paths starting with ~ (`run`'s cwd expands ~ by itself).
 - `xmlItems(xml, "item")`: the `<item>`/`<entry>` elements of an RSS/Atom feed as `{title, link, pubDate, …}` records (there is no DOMParser in data.ts).
 - `columns(text, {skip?, max?})`: whitespace-separated columns of text output (ps, df), `max` keeping the rest of the line in the last column.
+- `status({text, tone})`: the window's status line in cmd's title bar and sidebar, seen even when the widget is out of sight: a few words and a light (`tone`: "good", "warn", "bad", "dim"). Call it on every run when the subject has a state: `status({ text: "2 failing", tone: "bad" })`, `status({ text: "utun4 · connected", tone: "good" })`. Without it the title bar shows when the data was updated.
+- `notify({key, title, body, urgent?})`: tells the person something happened, with a system notification and a mark on the window until they look. cmd notifies when a `key` appears that the previous run didn't report, so report the same key on **every** run while the thing lasts ("ci-failed-<run id>", "vpn-down") and it notifies once; a new failure gets a new key. Only for changes worth interrupting someone for (a build failed, a VPN dropped, a price crossed the threshold in the config), never for routine updates. `urgent: false` for good news (a deploy finished). The first run after the widget is made only records keys.
+- `run()` throws a "<program> isn't installed" error when a program is missing; catch it to say so in the data (`NotInstalledError`).
 - Deno's standard APIs work (`fetch`, `Deno.readTextFile` within permissions.read, `URL`, `Intl`). Nothing else can be imported: no npm, jsr or URL imports.
 
 Do all parsing in data.ts, not in the view: the view gets clean, typed data. Make data.ts robust: a field that may be missing is `.optional()` and handled; a list may be empty; one bad row shouldn't fail the whole run. When something the widget needs is missing (no VPN interface, CLI not logged in), return data that says so (`{ "connected": false, "reason": "no tunnel interface" }`) instead of throwing, and have the view show it calmly. Throw only for real failures (network down, rate limited): cmd keeps the last good data on screen and marks it stale.
@@ -112,6 +115,12 @@ The `cmd` object in the view:
 - `cmd.history(key, value, max = 60)`: remembers the last `max` values of a live number across refreshes and restarts and returns them, for sparklines of things the data only reports now (CPU, a price). A fresh window has one value: make sure the widget still reads well then (the current value shown as text, the chart filling in over time).
 - `cmd.state.get(key)` / `cmd.state.set(key, value)`: small values kept for this window across reloads and restarts (a chosen tab, a timer's start, a volume).
 - Links: a plain `<a href="https://…">` opens in a browser window when clicked; from code, `cmd.openUrl(url)`. The widget itself never navigates.
+- Actions, only in a click or key handler (anywhere else they're refused):
+  - `cmd.terminal(command)`: a new terminal in the window's folder with the command typed in; the person presses Return. This is how a widget does things: a "Rerun" button on a failed job (`gh run rerun 123 --failed`), "Logs" on a pod (`kubectl logs -f pod`), "Pull" on a branch behind. The widget itself never changes anything.
+  - `cmd.open(path)`: opens an absolute or `~/` file or folder in a cmd window.
+  - `cmd.copy(text)`: copies an ID, URL or command.
+  Make them small `k-btn`s or clickable rows, labelled with what happens.
+- `cmd.sound(name?)`: plays a macOS system sound ("Glass" by default; "Ping", "Hero", "Basso", "Submarine", …), e.g. when a timer the person started ends. Only while the window is on screen; for news that should reach them anywhere, use notify() in data.ts.
 - `cmd.onTheme(fn)`: called with "dark" or "light" now and whenever the theme changes. CSS variables follow the theme by themselves; anything that draws colours from JavaScript (a `<canvas>`) must read them inside this callback (`getComputedStyle(document.documentElement).getPropertyValue("--c1")`) and redraw. Don't use `prefers-color-scheme` or `matchMedia` for light/dark: inside the widget they follow macOS, not cmd's theme.
 
 # How cmd looks

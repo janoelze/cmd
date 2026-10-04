@@ -88,6 +88,8 @@ const api = {
   /** The Dock icon's progress bar: 0–1, >1 indeterminate, <0 none. */
   setProgress: (value: number) => ipcRenderer.send("progress", value),
   bounce: () => ipcRenderer.send("bounce"),
+  /** A macOS system sound by name (SYSTEM_SOUNDS), e.g. a widget's cmd.sound(). */
+  playSound: (name: string) => ipcRenderer.send("play-sound", name),
   /** A system notification; a newer one with the same tag replaces it (see main/index.ts). */
   notify: (o: { tag: string; title: string; body: string; sound: string | null; paneId: string | null }) =>
     ipcRenderer.send("notify", o),

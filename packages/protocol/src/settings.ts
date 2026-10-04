@@ -38,6 +38,10 @@ type Def = Common &
     | { type: "enum"; default: string; options: readonly string[]; labels?: Readonly<Record<string, string>> }
   );
 
+/** macOS's system sounds (/System/Library/Sounds), by name: notifications and widgets (cmd.sound) play these. */
+export const SYSTEM_SOUNDS = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"] as const;
+export type SystemSound = (typeof SYSTEM_SOUNDS)[number];
+
 export const SETTINGS_SCHEMA = {
   "font.code": {
     title: "Code font",
@@ -233,7 +237,7 @@ export const SETTINGS_SCHEMA = {
     title: "Sound",
     type: "enum",
     default: "default",
-    options: ["default", "none", "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"],
+    options: ["default", "none", ...SYSTEM_SOUNDS],
     labels: { default: "System default", none: "None" },
     description: "Sound for notifications that need you (input, bells, failed commands). Others are silent.",
   },

@@ -1,6 +1,7 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, needsAttention, type Agent, type AppWindow, type Pane, type PaneId, type SpaceId } from "@cmd/protocol";
+import { bucketOf, needsAttention, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type PaneId, type SpaceId } from "@cmd/protocol";
+import type { DotState } from "@cmd/ui";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "./windows/registry.ts";
 
@@ -20,6 +21,20 @@ export interface SidebarRow {
   urgent: Agent | null;
 }
 
+/** A window's attention marker (a widget's notification), kept in its state until seen. */
+export function windowAttention(w: AppWindow | null | undefined): Attention | null {
+  const a = w?.state.attention as Attention | null | undefined;
+  return a && typeof a.text === "string" ? a : null;
+}
+
+/** A widget's status line (data.ts status()). */
+function widgetStatus(w: AppWindow): MagicStatus | null {
+  const st = w.state.status as MagicStatus | null | undefined;
+  return st && typeof st.text === "string" && st.text ? st : null;
+}
+
+const TONE_LIGHT: Record<NonNullable<MagicStatus["tone"]>, DotState> = { good: "success", warn: "warning", bad: "danger", dim: "off" };
+
 const RANK = { needs: 0, unseen: 1, rest: 2 } as const;
 
 /** The state as one Space sees it: only its terminals, agents and windows. */
@@ -36,6 +51,10 @@ export function spaceAttention(s: State): Map<SpaceId, "needs" | "unseen"> {
     if (needsAttention(a)) mark(a.spaceId, bucketOf(a) === "needs" ? "needs" : "unseen");
   }
   for (const p of s.panes.values()) if (p.attention && !p.agentId) mark(p.spaceId, p.attention.urgent ? "needs" : "unseen");
+  for (const w of s.windows.values()) {
+    const a = windowAttention(w);
+    if (a) mark(w.spaceId, a.urgent ? "needs" : "unseen");
+  }
   return out;
 }
 
@@ -101,9 +120,14 @@ export function sectionOf(r: SidebarRow): Section {
   return r.agent ? "agents" : "windows";
 }
 
-/** Waiting on you: an agent needing input, or a terminal's urgent attention marker (window outline). */
+/** Waiting on you: an agent needing input, or a window's urgent attention marker (window outline). */
 export function needsYou(r: SidebarRow): boolean {
-  return sectionOf(r) === "needs" || (!r.agent && !!r.pane?.attention?.urgent);
+  return sectionOf(r) === "needs" || (!r.agent && !!r.pane?.attention?.urgent) || !!windowAttention(r.win)?.urgent;
+}
+
+/** Has news you haven't seen: an agent's, a terminal's or another window's attention marker. */
+export function wantsYou(r: SidebarRow): boolean {
+  return !!r.pane && ((!!r.agent && needsAttention(r.agent)) || (!r.agent && !!r.pane.attention)) || !!windowAttention(r.win);
 }
 
 /**
@@ -169,8 +193,8 @@ export interface WindowFields {
   /** Live state; `key` says which state, so a changed text with the same key updates in place. */
   status?: { text: string; key: string; transient?: boolean };
   dirty?: boolean;
-  /** Agents: the status light (Mark). Everything else shows `icon`. */
-  light?: Led;
+  /** Agents, and windows with news or a status: the status light (Mark). Everything else shows `icon`. */
+  light?: Led | DotState;
   icon: string;
 }
 
@@ -180,12 +204,24 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
     const w = r.win;
     const type = typeFor(w.kind);
     const d = viewFor(w.kind)?.describe?.(w) ?? {};
+    // Unseen news first (like a terminal's marker), then a widget's own status
+    // line unless the window has something more pressing to say (stale, working).
+    const attn = windowAttention(w);
+    const ws = widgetStatus(w);
+    const own = live && (live.key !== "updated" || !ws);
     f = {
       name: d.name || w.title || type?.title || w.kind,
       kind: d.kind === null ? undefined : (d.kind ?? type?.title ?? w.kind).toLowerCase(),
       place: d.place || undefined,
-      status: live ? { text: live.label, key: live.key ?? live.label, transient: live.transient } : undefined,
+      status: attn
+        ? { text: attn.text, key: `attention:${attn.kind}` }
+        : own
+          ? { text: live.label, key: live.key ?? live.label, transient: live.transient }
+          : ws
+            ? { text: ws.text, key: "widget-status" }
+            : undefined,
       dirty: live?.dirty,
+      light: attn ? (attn.urgent ? "needs" : "unseen") : ws?.tone ? TONE_LIGHT[ws.tone] : undefined,
       icon: type?.icon ?? "macwindow",
     };
   } else {

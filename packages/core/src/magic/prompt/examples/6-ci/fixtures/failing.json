@@ -1,8 +1,8 @@
 {
   "repo": "acme/shop",
   "runs": [
-    { "number": 412, "title": "Fix checkout rounding", "workflow": "CI", "branch": "main", "state": "running", "createdAt": "2026-10-04T09:12:00Z", "url": "https://github.com/acme/shop/actions/runs/1" },
-    { "number": 411, "title": "Bump dependencies across the whole monorepo including the storefront and the admin app", "workflow": "CI", "branch": "renovate/all-dependencies-with-a-very-long-branch-name", "state": "failed", "createdAt": "2026-10-04T08:40:00Z", "url": "https://github.com/acme/shop/actions/runs/2" },
-    { "number": 410, "title": "Release 2.3", "workflow": "Release", "branch": "main", "state": "passed", "createdAt": "2026-10-03T17:02:00Z", "url": "https://github.com/acme/shop/actions/runs/3" }
+    { "id": 9012, "number": 412, "title": "Fix checkout rounding", "workflow": "CI", "branch": "main", "state": "running", "createdAt": "2026-10-04T09:12:00Z", "url": "https://github.com/acme/shop/actions/runs/1" },
+    { "id": 9011, "number": 411, "title": "Bump dependencies across the whole monorepo including the storefront and the admin app", "workflow": "CI", "branch": "renovate/all-dependencies-with-a-very-long-branch-name", "state": "failed", "createdAt": "2026-10-04T08:40:00Z", "url": "https://github.com/acme/shop/actions/runs/2" },
+    { "id": 9010, "number": 410, "title": "Release 2.3", "workflow": "Release", "branch": "main", "state": "passed", "createdAt": "2026-10-03T17:02:00Z", "url": "https://github.com/acme/shop/actions/runs/3" }
   ]
 }
