@@ -2,6 +2,12 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.9.1 — 2026-10-05
+
+### Fixed
+
+- Restart Core no longer leaves a second copy of cmd's background process running, which could make terminals reconnect over and over and crash cmd.
+
 ## 0.9.0 — 2026-10-04
 
 ### Improved
