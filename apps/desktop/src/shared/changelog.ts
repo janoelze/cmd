@@ -59,7 +59,20 @@ export function releaseNotes(r: Release): string {
   return parts.join("\n\n") + "\n";
 }
 
-const MAX_ENTRY = 240;
+/**
+ * Hard caps, so release notes stay short however many releases an agent writes:
+ * characters and sentences per entry (New entries get room for a bold name and
+ * a second sentence), entries per section and per release. A release with more
+ * to say folds related changes together and leaves the small ones out.
+ */
+export const LIMITS = {
+  newEntry: { chars: 200, sentences: 2 },
+  entry: { chars: 140, sentences: 1 },
+  summary: { chars: 100, sentences: 1 },
+  name: 40,
+  perSection: 5,
+  perRelease: 10,
+} as const;
 const BANNED = [
   "supercharge",
   "unleash",
@@ -90,12 +103,21 @@ const INTERNALS: [RegExp, string][] = [
   [/\b(pane|core|settings|agents?|events?)\.[a-z]+[A-Z]?\w*\(/, "names an RPC method"],
 ];
 
-/** Lint one entry's text; returns the problems. */
-function lintEntry(e: string, kind: ChangeKind): string[] {
+/** Sentences in an entry, after its bold name: ". " or a final "." ends one. */
+const sentences = (plain: string) => plain.replace(/^\*\*[^*]+\*\* /, "").match(/[.?](\s|$)/g)?.length ?? 0;
+
+/** Lint one entry's (or the summary's) text; returns the problems. */
+function lintEntry(e: string, kind: ChangeKind | "summary"): string[] {
   const problems: string[] = [];
   const plain = e.replace(/`[^`]*`/g, "code").replace(/\]\([^)]*\)/g, "]");
+  const limit = kind === "New" ? LIMITS.newEntry : kind === "summary" ? LIMITS.summary : LIMITS.entry;
+  const what = kind === "New" ? "New entries" : kind === "summary" ? "summaries" : `${kind} entries`;
   if (!/\.(\*\*)?$|\.\)$/.test(e)) problems.push("doesn't end with a period");
-  if (e.length > MAX_ENTRY) problems.push(`is ${e.length} characters (at most ${MAX_ENTRY})`);
+  if (e.length > limit.chars) problems.push(`is ${e.length} characters; ${what} have at most ${limit.chars}`);
+  const n = sentences(plain);
+  if (n > limit.sentences) problems.push(`has ${n} sentences; ${what} have at most ${limit.sentences}`);
+  const name = /^\*\*([^*]+)\*\*/.exec(e)?.[1];
+  if (name && name.length > LIMITS.name) problems.push(`has a ${name.length}-character name; at most ${LIMITS.name}`);
   if (plain.includes("!")) problems.push("has an exclamation mark");
   if (/^[a-z]/.test(e)) problems.push("starts with a lowercase letter");
   if (kind === "New" && !/^\*\*[^*]+\.\*\* \S/.test(e)) problems.push('New entries start with a bold name ending in a period ("**Name.** What you can do.")');
@@ -120,6 +142,7 @@ export function lintChangelog(text: string): string[] {
   let kinds: ChangeKind[] = [];
   let kind: ChangeKind | null = null;
   let entries = 0;
+  let total = 0;
   let headingLine = 0;
   let hasSummary = false;
   const endRelease = () => {
@@ -138,7 +161,7 @@ export function lintChangelog(text: string): string[] {
       version = previous = v;
       kinds = [];
       kind = null;
-      entries = 0;
+      entries = total = 0;
       headingLine = i;
       hasSummary = false;
       return;
@@ -159,6 +182,9 @@ export function lintChangelog(text: string): string[] {
     if (line.startsWith("- ")) {
       if (!kind) return at(i, "an entry outside a section");
       entries++;
+      total++;
+      if (entries === LIMITS.perSection + 1) at(i, `"### ${kind}" in ${version} has more than ${LIMITS.perSection} entries; fold related ones, leave small ones out`);
+      if (total === LIMITS.perRelease + 1) at(i, `${version} has more than ${LIMITS.perRelease} entries; fold related ones, leave small ones out`);
       for (const p of lintEntry(line.slice(2).trim(), kind)) at(i, `entry ${p}`);
       return;
     }
@@ -167,7 +193,7 @@ export function lintChangelog(text: string): string[] {
     if (kind || kinds.length) return at(i, "text inside a section that isn't a \"- \" entry");
     if (hasSummary) return at(i, "the summary is one line");
     hasSummary = true;
-    for (const p of lintEntry(line.trim(), "Improved")) at(i, `summary ${p}`);
+    for (const p of lintEntry(line.trim(), "summary")) at(i, `summary ${p}`);
   });
   endRelease();
   return problems;

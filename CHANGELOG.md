@@ -6,13 +6,13 @@ What changed in each cmd release, newest first. cmd shows the releases since you
 
 ### Fixed
 
-- Restart Core no longer leaves a second copy of cmd's background process running, which could make terminals reconnect over and over and crash cmd.
+- Restart Core no longer leaves a second copy running, which made terminals reconnect over and over and could crash cmd.
 
 ## 0.9.0 — 2026-10-04
 
 ### Improved
 
-- Magic widgets are laid out like small apps: edge to edge, with the status at the top, tables along the bottom and controls in a bar, so they fit a tall strip window as well as a wide one.
+- Magic widgets are laid out edge to edge like small apps, so they fit a tall strip window as well as a wide one.
 - Magic windows are now called Magic widgets, in the menus, Settings and the CLI.
 
 ### Fixed
@@ -30,7 +30,7 @@ What changed in each cmd release, newest first. cmd shows the releases since you
 
 ### New
 
-- **Widget status and notifications.** A Magic widget can show a status line in its title bar and sidebar row, and notify you when something changes, like a terminal that needs you. Mute it from the widget's menu.
+- **Widget status and notifications.** A Magic widget can show a status line in its title bar and notify you when something changes. Mute it from its menu.
 - **Dock icon in your theme.** The Dock icon takes the colours of the current theme.
 
 ### Improved
@@ -46,7 +46,7 @@ What changed in each cmd release, newest first. cmd shows the releases since you
 
 ### Improved
 
-- Settings, the Task Manager, Remote Access, the Magic widget editor and the feedback form share one consistent set of buttons, fields, menus and dialogs.
+- Settings, the Task Manager and the other panels share one consistent set of buttons, fields, menus and dialogs.
 - Agent status lights are small animated dot glyphs, one for each state: working, needs you, unseen, done and idle.
 
 ## 0.7.1 — 2026-10-04
@@ -63,13 +63,13 @@ What changed in each cmd release, newest first. cmd shows the releases since you
 
 ### Improved
 
-- New defaults: a pastel theme, a subtle window shadow, a neutral focus outline, roomier spacing and a terminal line height of 1.1. Settings you changed yourself stay as they are.
+- New defaults: a pastel theme, a subtle window shadow and roomier spacing, while settings you changed stay as they are.
 
 ## 0.6.0 — 2026-10-04
 
 ### New
 
-- **Magic widgets, rebuilt.** Each widget is a folder with typed data code and a view, checked before it shows. Press ⌘E on one to ask for changes, restore an earlier version, edit its settings or see why its data fails.
+- **Magic widgets, rebuilt.** Widgets are checked before they show. Press ⌘E on one to ask for changes, restore an earlier version or see why its data fails.
 - **Usage stats.** cmd sends anonymous counts of launches, window types, agents and crashes. Turn it off with `diagnostics.usageStats`.
 
 ### Improved
@@ -93,7 +93,7 @@ What changed in each cmd release, newest first. cmd shows the releases since you
 
 ### Improved
 
-- The sidebar footer shows cmd's health, memory and CPU. Click it for details, Restart Core and the Task Manager.
+- The sidebar footer shows cmd's health, memory and CPU, and a click opens details, Restart Core and the Task Manager.
 - Tooltips appear quickly in your theme, and show the shortcut where there is one.
 - Tables in Magic widgets fill the window.
 - The Settings sidebar has larger icons and more room between items.
@@ -110,33 +110,30 @@ What changed in each cmd release, newest first. cmd shows the releases since you
 
 ### Improved
 
-- Remote access on a phone has a proper mobile layout: what needs you, a Next button, Space filters, and terminals that fit the screen with a compose bar and extra keys.
+- Remote access has a proper phone layout, with terminals that fit the screen, a compose bar and extra keys.
 
 ## 0.5.1 — 2026-10-04
 
 ### Fixed
 
-- The installed app starts again. In 0.5.0 it could not start.
+- The installed app starts again, which it couldn't in 0.5.0.
 
 ## 0.5.0 — 2026-10-04
 
 ### New
 
-- **Remote access (beta).** Pair your phone in Settings → Remote Access to see what needs you and type into terminals from anywhere. Every device is approved on your Mac, and a status bar icon shows when one is connected.
-- **Git in file windows.** File windows show each file's git status, the branch and a change count. Rename (F2), duplicate (⌘D), trash (⌘⌫) and create files and folders from the keyboard or the context menu.
-- **Find in terminals.** ⌘F searches a terminal's scrollback, with match case and regular expressions. ⌘↑ and ⌘↓ jump between prompts, and ⇧⌘A copies the last command's output.
+- **Remote access (beta).** Pair your phone in Settings → Remote Access to see what needs you and type into terminals from anywhere. You approve every device on your Mac.
+- **Git in file windows.** File windows show each file's git status and the branch. Rename, duplicate, trash and create files from the keyboard.
+- **Find in terminals.** ⌘F searches a terminal's scrollback. ⌘↑ and ⌘↓ jump between prompts, and ⇧⌘A copies the last command's output.
 - **Clickable links and paths.** ⌘-click a URL or a file path in a terminal to open it, including `file:line:col` paths.
-- **Task Manager.** Window → Task Manager shows what each part of cmd and each terminal's processes use, and can end a terminal.
-- **Progress bars.** Programs that report progress show a bar along the top of their terminal and on the Dock icon.
-- **Space icons.** Each Space has an icon you can change, and the Space switcher is a dropdown that lists every open Space.
+- **Task Manager.** Window → Task Manager shows what each part of cmd and each terminal uses, and can end a terminal.
 
 ### Improved
 
-- Shell integration works in bash and fish as well as zsh.
-- Terminals show inline images, copy from programs over ssh and tmux, type the paths of files dropped on them and ask before pasting several lines.
-- Clicking in the command you are typing moves the cursor there, and the pointer can hide while you type.
-- New windows open in the folder of the window selected before, not only a terminal's.
-- The desk has a plain background, without pinstripes or the canvas dot grid.
+- Terminals show inline images and progress bars, and shell integration works in bash and fish too.
+- Pasting several lines into a terminal asks first, and dropping a file types its path.
+- Spaces have icons, and the Space switcher lists every open Space.
+- Clicking in the command you are typing moves the cursor there.
 
 ### Fixed
 
@@ -240,7 +237,7 @@ Fixes to how cmd is tested before release.
 ### Improved
 
 - Magic widgets use the provider, model and API key you choose in Settings, from Anthropic or OpenAI.
-- Building a Magic widget is quieter, and the widget shows only once it is drawn with its data. Change, Refresh and Stop are in its right-click menu.
+- A Magic widget shows only once it is drawn with its data, and Change, Refresh and Stop are in its right-click menu.
 
 ## 0.2.6 — 2026-10-03
 
@@ -290,7 +287,7 @@ Fixes to how cmd is tested before release.
 
 ### Fixed
 
-- The installed app starts again. In 0.2.0 and 0.2.1 it could not start.
+- The installed app starts again, which it couldn't in 0.2.0 and 0.2.1.
 
 ## 0.2.1 — 2026-10-03
 
@@ -326,4 +323,3 @@ The first release.
 - **Terminals keep running.** Closing or reloading the app never ends your terminals.
 - **Session search.** Search every past Claude Code and Codex session, and resume one.
 - **The `cmd` command line.** Run `open` in a shell to open a file or folder on the desk, and use `cmd` to start, read and message agents.
-- **Themes and settings.** Built-in themes, a Settings window and notification settings.

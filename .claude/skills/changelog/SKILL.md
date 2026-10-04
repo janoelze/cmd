@@ -68,6 +68,32 @@ Optional one-line summary of the release, shown as its headline.
 - **New** entries start with a bold name, ending in a period: `**Magic widgets.**` Then one or two
   sentences on what you can do now. Other sections don't need a bold name.
 
+## Limits
+
+Hard caps, enforced by the lint (`LIMITS` in `apps/desktop/src/shared/changelog.ts`). They don't
+grow with the release, and they're the most an entry may be, not a target: most entries should be
+one plain sentence well under them.
+
+| | Characters | Sentences |
+|---|---|---|
+| New entry (bold name + text) | 200 | 2 |
+| Improved, Fixed, Removed entry | 140 | 1 |
+| Summary | 100 | 1 |
+| Bold name | 40 | |
+
+At most **5 entries per section** and **10 per release**. A bigger release folds related changes
+into one entry and leaves the small ones out. What's New is a glance, not an inventory.
+
+When an entry doesn't fit, cut it; don't rephrase it to squeeze under the cap:
+
+- **No lists inside entries.** "a pastel theme, a subtle shadow, a neutral focus outline, roomier
+  spacing and a line height of 1.1" → "a pastel theme and roomier spacing". Name the one or two
+  things people will notice.
+- **No how-it-works.** Say what people get, not the mechanism behind it.
+- **No second sentence that restates the first,** and no "This means…" or "so that…" tails.
+- Never raise a limit to fit a release. If the user asks for one, change `LIMITS` and this table
+  together.
+
 ## Style
 
 Follow the voice in `docs/15-positioning.md`: calm, plain, concrete, first-hand.
@@ -77,7 +103,7 @@ Follow the voice in `docs/15-positioning.md`: calm, plain, concrete, first-hand.
 - **Fixed entries describe the fixed behaviour or the symptom that's gone,** not the cause:
   "Pasting into a terminal no longer drops the last character." Not "Fix off-by-one in paste
   handler."
-- **One or two short sentences,** each ending with a period. Under 240 characters.
+- **Short, within the limits below.** Every sentence ends with a period.
 - **Name things as the app names them:** windows, spaces, the desk, agents, sessions, Magic
   widgets, the command palette. Menu paths as `Settings → Terminal`. Shortcuts as the menu shows
   them (⌘K, ⇧⌘T). Setting keys in backticks only when someone would type them (`updates.mode`).

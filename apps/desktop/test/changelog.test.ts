@@ -33,7 +33,7 @@ Fixes to how cmd updates itself.
 
 ### Improved
 
-- The palette finds windows by folder. See [the docs](https://example.com/docs).
+- The palette finds windows by folder, as [the docs](https://example.com/docs) explain.
 `;
 
 describe("CHANGELOG.md", () => {
@@ -110,10 +110,23 @@ describe("lintChangelog", () => {
     expect(one("Paste works in panes.ts.")).toEqual([expect.stringMatching(/source file/)]);
     expect(one("A seamless restore.")).toEqual([expect.stringMatching(/"seamless"/)]);
     expect(one("Various fixes.")).toEqual([expect.stringMatching(/"various"/)]);
-    expect(one(`${"Long. ".repeat(50)}`.trim())).toEqual([expect.stringMatching(/characters/)]);
     expect(one("Search finds sessions.", "New")).toEqual([expect.stringMatching(/bold name/)]);
     expect(one("**Search.** Finds sessions.", "New")).toEqual([]);
     expect(one("Set `updates.mode` to `off` to stop it.")).toEqual([]);
+  });
+  it("caps length, sentences and counts", () => {
+    const one = (entry: string, kind = "Fixed") => lint(`### ${kind}\n\n- ${entry}`);
+    expect(one(`Terminals ${"keep going ".repeat(14)}now.`)).toEqual([expect.stringMatching(/characters; Fixed entries have at most 140/)]);
+    expect(one("Search works. It is faster.")).toEqual([expect.stringMatching(/2 sentences; Fixed entries have at most 1/)]);
+    expect(one("Version 1.1 of the theme works, see `a. b`.")).toEqual([]);
+    expect(one("**Search.** It works. It is fast. It is new.", "New")).toEqual([expect.stringMatching(/3 sentences; New entries have at most 2/)]);
+    expect(one(`**Search.** ${"Finds sessions ".repeat(14)}fast.`, "New")).toEqual([expect.stringMatching(/New entries have at most 200/)]);
+    expect(one(`**${"Long name ".repeat(5)}x.** It works.`, "New")).toEqual([expect.stringMatching(/name; at most 40/)]);
+    expect(lint(`${"A long summary ".repeat(8)}here.`)).toEqual([expect.stringMatching(/summaries have at most 100/)]);
+    const items = (n: number) => Array.from({ length: n }, (_, i) => `- Fix ${i + 1} works.`).join("\n");
+    expect(lint(`### Fixed\n\n${items(6)}`)).toEqual([expect.stringMatching(/more than 5 entries/)]);
+    expect(lint(`### Improved\n\n${items(5)}\n\n### Fixed\n\n${items(5)}`)).toEqual([]);
+    expect(lint(`### Improved\n\n${items(5)}\n\n### Fixed\n\n${items(5)}\n\n### Removed\n\n${items(1)}`)).toEqual([expect.stringMatching(/1.0.0 has more than 10 entries/)]);
   });
   it("keeps entries on one line and the summary to one line", () => {
     expect(lint("### Fixed\n\n- A long\n  entry.")).toContainEqual(expect.stringMatching(/stay on one line/));
