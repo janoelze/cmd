@@ -61,3 +61,18 @@ export function revealOffset(offset: number, slot: Slot, viewport: number, pad: 
   if (right > offset) return clamp(Math.min(right, left), 0, max);
   return clamp(offset, 0, max);
 }
+
+/**
+ * Stored widths with `id` set to `fraction`, dropping windows that no longer
+ * exist. The strip holds terminals (panes) and other windows alike.
+ */
+export function withWidth(
+  widths: Record<string, number>,
+  id: string,
+  fraction: number,
+  live: { panes: ReadonlyMap<string, unknown>; windows: ReadonlyMap<string, unknown> },
+): Record<string, number> {
+  const next = Object.fromEntries(Object.entries(widths).filter(([k]) => live.panes.has(k) || live.windows.has(k)));
+  next[id] = fraction;
+  return next;
+}

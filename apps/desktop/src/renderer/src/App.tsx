@@ -29,7 +29,7 @@ import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, nextAfterClose, pushHistory, shortPath, spaceAttention, windowIdOf, type SidebarRow } from "./model.ts";
 import { getState, onNotification, onWindowFocus, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
-import { DEFAULT_FRACTION, nextPreset } from "./strip.ts";
+import { DEFAULT_FRACTION, nextPreset, withWidth } from "./strip.ts";
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
 import type { Rect } from "./layouts.ts";
 import { windowActions } from "./windowActions.ts";
@@ -108,13 +108,7 @@ export function App() {
   const [canvasRects, setCanvasRects] = useSpaceView<Record<PaneId, Rect>>("canvas.rects", {});
   const [camera, setCamera] = useSpaceView<Camera>("canvas.camera", DEFAULT_CAMERA);
   const setStripWidth = (id: PaneId, fraction: number) =>
-    setStripWidths((w) => {
-      // Drop closed windows; the strip holds terminals and other windows alike.
-      const { panes, windows } = getState();
-      const next = Object.fromEntries(Object.entries(w).filter(([k]) => panes.has(k) || windows.has(k)));
-      next[id] = fraction;
-      return next;
-    });
+    setStripWidths((w) => withWidth(w, id, fraction, getState()));
   // Transient: sheets don't reopen on launch.
   /** Palette open, with an optional initial query ("?" for session search). */
   const [palette, setPalette] = useState<false | string>(false);
