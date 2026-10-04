@@ -170,7 +170,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
     },
     {
       role: "windowMenu",
-      submenu: [{ role: "minimize" }, { role: "zoom" }, sep, ...i("app.taskManager"), ...(mac ? [sep, { role: "front" as const }] : [])],
+      submenu: [{ role: "minimize" }, { role: "zoom" }, sep, ...i("app.taskManager"), ...i("app.restartCore"), ...(mac ? [sep, { role: "front" as const }] : [])],
     },
     { role: "help", submenu: [...i("help.docs"), ...i("help.feedback"), ...(mac ? [] : [sep, ...i("app.checkUpdates")])] },
   ];

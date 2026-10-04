@@ -1,6 +1,6 @@
 // The sidebar: a search field over open windows and the transcript index, then
-// sections (Needs you, Agents, Windows, Recent past sessions), a footer
-// that only speaks when there is news, and a draggable right edge.
+// sections (Needs you, Agents, Windows, Recent past sessions), a footer with
+// the core's health, and a draggable right edge.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PaneId, SearchHit, SearchStatus } from "@cmd/protocol";
@@ -12,6 +12,7 @@ import { filterRows, flatten, sectionOf, SECTIONS, type Section, type SidebarRow
 import { ICON, Symbol } from "./Symbol.tsx";
 import { HistoryRow, SectionHeading, SessionRow } from "./SidebarRows.tsx";
 import { IndexRing } from "./IndexRing.tsx";
+import { CoreStatus } from "./CoreStatus.tsx";
 
 export const SIDEBAR_WIDTH = { default: 280, min: 200, max: 480 } as const;
 
@@ -33,7 +34,6 @@ interface Props {
   onNewTerminal: () => void;
   onWidth: (px: number | null) => void;
   request: SidebarRequest | null;
-  stats: { agents: number; working: number; waiting: number };
   search: SearchStatus | null;
   connected: boolean;
   error?: string;
@@ -131,7 +131,6 @@ export function Sidebar(p: Props) {
   };
 
   const rowProps = { now, selected: p.selected, onSelect: p.onSelect, onMenu: p.onRowMenu, onClose: p.onClose, shortcutOf };
-  const footer = footerOf(p);
 
   return (
     <>
@@ -221,21 +220,10 @@ export function Sidebar(p: Props) {
       </aside>
       {/* In the app's bottom row, beside the main status bar: both share one height. */}
       <footer className="sidebar-status">
-        <span className={`led led-${footer.led}`} />
-        <span className="sidebar-status-text">{footer.text}</span>
+        <CoreStatus connected={p.connected} error={p.error} />
       </footer>
     </>
   );
-}
-
-function footerOf(p: Props): { text: string; led: "idle" | "off" | "working" } {
-  if (!p.connected) return { text: p.error ? `core error: ${p.error}` : "core offline — reconnecting…", led: "off" };
-  const { agents, working, waiting } = p.stats;
-  if (agents) {
-    const parts = [`${agents} agent${agents === 1 ? "" : "s"}`, working ? `${working} working` : null, waiting ? `${waiting} waiting` : null];
-    return { text: parts.filter(Boolean).join(" · "), led: working ? "working" : "idle" };
-  }
-  return { text: "", led: "idle" };
 }
 
 /** The newest past sessions that aren't open; refreshed when the index or the open agents change. */

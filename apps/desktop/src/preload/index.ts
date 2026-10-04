@@ -112,6 +112,7 @@ const api = {
   checkForUpdates: () => ipcRenderer.send("check-updates"),
   /** Task Manager: Electron's processes (CPU% since the previous call), and showing a terminal in its Space's window. */
   appMetrics: (): Promise<AppProcess[]> => ipcRenderer.invoke("app-metrics"),
+  openTaskManager: () => ipcRenderer.send("task-manager"),
   showPane: (spaceId: string, paneId: string) => ipcRenderer.send("show-pane", spaceId, paneId),
   /** Restart into a downloaded update. */
   installUpdate: () => ipcRenderer.send("install-update"),

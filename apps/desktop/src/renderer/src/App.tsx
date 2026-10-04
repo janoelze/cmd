@@ -4,6 +4,7 @@ import type { WebviewTag } from "electron";
 import { bucketOf, needsAttention } from "@cmd/protocol";
 import { COMMANDS, prettyAccelerator, type CommandId } from "../../shared/commands.ts";
 import { cmd } from "./bridge.ts";
+import { restartCore } from "./coreHealth.ts";
 import {
   bindSelection,
   windowSelected,
@@ -297,6 +298,7 @@ export function App() {
   const handlers: Record<CommandId, () => void> = {
     "app.settings": () => cmd.openSettings(),
     "app.checkUpdates": () => cmd.checkForUpdates(),
+    "app.restartCore": () => void restartCore(),
     "app.remoteAccess": () => cmd.openSettings("remote"),
     "app.pairDevice": () => cmd.openSettings("remote/pair"),
     "app.disconnectRemote": () => void cmd.call("remote.disconnect", {}).catch(() => {}),
@@ -543,15 +545,6 @@ export function App() {
 
   // ── palette ────────────────────────────────────────────
 
-  const stats = useMemo(() => {
-    const agents = [...s.agents.values()];
-    return {
-      agents: agents.length,
-      working: agents.filter((a) => a.state === "working").length,
-      waiting: agents.filter((a) => a.state === "needs_input").length,
-    };
-  }, [s.agents]);
-
   // ?query in the palette: past agent sessions. Enter switches to a live one, else resumes it.
   const searchSessions = useCallback(async (text: string): Promise<PaletteItem[]> => {
     const hits = await cmd.call("search.query", { text, limit: 40 });
@@ -619,7 +612,6 @@ export function App() {
           onNewTerminal={() => void newTerminal()}
           onWidth={setSidebarWidth}
           request={sidebarRequest}
-          stats={stats}
           search={s.search}
           connected={s.connected}
           error={s.error}

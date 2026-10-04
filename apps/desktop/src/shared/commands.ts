@@ -22,6 +22,7 @@ export const COMMANDS = spec([
   { id: "app.settings", label: "Settings…", keys: ["Cmd+,"] },
   { id: "app.checkUpdates", label: "Check for Updates…" },
   { id: "app.taskManager", label: "Task Manager" },
+  { id: "app.restartCore", label: "Restart Core" },
   { id: "app.remoteAccess", label: "Remote Access…" },
   { id: "app.pairDevice", label: "Pair a Device…" },
   { id: "app.disconnectRemote", label: "Disconnect Remote Devices" },

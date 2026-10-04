@@ -355,7 +355,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.screenshot({ path: path.join(shots, "browser-device.png") });
     await win.evaluate((id) => window.cmd.call("window.update", { id, state: { device: null } }), browserWin.id);
     const back = await until("/iPhone/.test(navigator.userAgent)", false);
-    check(back === false && (await page("innerWidth")) !== 393, "Fit Window restores the window's size and the app's user agent");
+    const fit = await until("innerWidth !== 393", true);
+    check(back === false && fit === true, "Fit Window restores the window's size and the app's user agent");
   }
 
   fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
@@ -988,6 +989,29 @@ check(restored === selectedBefore && !!selectedBefore, `selected terminal restor
 }
 check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows survive an app restart");
 await win.screenshot({ path: path.join(shots, "7-restored.png") });
+
+// The sidebar footer shows the core's health; its details restart the core, and the terminals live on.
+{
+  const button = win.locator(".core-status-button");
+  await win.waitForFunction(() => document.querySelector(".core-status-button .led-core-ok") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 10_000 });
+  check((await button.locator(".led-core-ok").count()) === 1, `core status is healthy (${await button.textContent()})`);
+  await button.click();
+  await win.waitForSelector(".core-details dl");
+  const details = await win.locator(".core-details").textContent();
+  await win.screenshot({ path: path.join(shots, "7b-core-status.png") });
+  check(/Uptime/.test(details) && /PTY host\d/.test(details) && /pid \d+/.test(details), `core details show uptime and both processes (${details})`);
+  const pidBefore = await win.evaluate(() => window.cmd.call("core.hello", {}).then((h) => h.pid));
+  const clients = await win.evaluate(() => window.cmd.call("core.info", {}).then((i) => i.connections));
+  const before = await panes();
+  await win.locator(".core-details button", { hasText: "Restart Core" }).click();
+  await win.waitForFunction((pid) => window.cmd.call("core.hello", {}).then((h) => h.pid !== pid), pidBefore, { timeout: 15_000 });
+  await win.waitForFunction(() => document.querySelector(".core-status-button .led-core-ok") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 15_000 });
+  // Every client (this window, main's space.show listener) is back before going on.
+  await win.waitForFunction((n) => window.cmd.call("core.info", {}).then((i) => i.connections >= n), clients, { timeout: 10_000 });
+  check((await panes()) === before, `terminals survive Restart Core (${before} → ${await panes()})`);
+  await win.keyboard.press("Escape");
+  check((await win.locator(".core-details").count()) === 0, "Escape closes the core details");
+}
 
 // Spaces: `cmd .` (space.open with show) switches the window to a new, empty
 // Space; new terminals start at its root; ⌃⌘[ goes back; closing ends its terminals.

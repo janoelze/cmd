@@ -168,9 +168,10 @@ export class SpaceWindows {
           this.show(e.spaceId, { newWindow: e.newWindow }, from);
         });
         await conn.client.call("events.subscribe", { types: ["space.show"] });
-        conn.closed.then(() => setTimeout(attach, 1000));
+        // Soon after a restart (Restart Core), or `cmd .` goes unheard meanwhile.
+        conn.closed.then(() => setTimeout(attach, 250));
       } catch {
-        setTimeout(attach, 1000);
+        setTimeout(attach, 250);
       }
     };
     void attach();

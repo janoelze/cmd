@@ -209,7 +209,7 @@ async function stopCore(pid: number): Promise<void> {
   for (let i = 0; i < 50 && (await canConnect()); i++) await new Promise((r) => setTimeout(r, 100));
 }
 
-/** Settings → About: stop the core and start one from this app's code (it takes the terminals over). */
+/** Settings → About, the sidebar's core status, Restart Core: stop the core and start one from this app's code (it takes the terminals over). */
 async function restartCore(): Promise<void> {
   const conn = await connect(socketPath).catch(() => null);
   if (conn) {
@@ -475,6 +475,7 @@ ipcMain.on("settings-window", (_e, page?: string) => void openSettings(typeof pa
 ipcMain.on("check-updates", () => checkForUpdates());
 // The Task Manager: Electron's own processes, and showing a terminal in the app window of its Space.
 ipcMain.handle("app-metrics", () => appMetrics());
+ipcMain.on("task-manager", () => openTaskManager());
 ipcMain.on("show-pane", (_e, spaceId: string, paneId: string) => spaces.show(spaceId, { select: paneId }, appWindows()[0] ?? null));
 ipcMain.on("install-update", () => void updater().then((u) => u.installUpdate()));
 ipcMain.handle("restart-core", () => restartCore());
