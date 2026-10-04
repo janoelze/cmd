@@ -83,12 +83,12 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <div><h3>Magic widgets</h3><p>Describe what to show and an agent builds a live widget for it. Change it by asking. Uses your own API key.</p></div>
   <div><h3>Web browser</h3><p>Next to your terminals, with phone, tablet and desktop sizes.</p></div>
   <div><h3>Files and editor</h3><p>A file browser, a text editor and Markdown windows. <code>open</code> in a shell opens files in cmd.</p></div>
-  <div><h3>Notifications</h3><p>Waiting agents, bells, finished commands and OSC 9/777/99 mark the terminal until you look, and count on the Dock badge.</p></div>
+  <div><h3>Notifications</h3><p>Waiting agents, bells and finished commands mark the terminal until you look, and count on the Dock badge.</p></div>
   <div><h3>Keyboard first</h3><p>⌘K finds windows, commands and past sessions. Every action is in the menu bar, and every shortcut can be remapped.</p></div>
   <div><h3>CLI</h3><p><code>cmd</code> spawns, messages, waits on and stops agents, so an agent can run other agents.</p></div>
-  <div><h3>A complete terminal</h3><p>Find in scrollback, jump between prompts, inline images, OSC 52 copy over ssh, a check before risky pastes.</p></div>
+  <div><h3>A complete terminal</h3><p>Find in scrollback, jump between prompts, inline images, copy from programs over ssh, and a check before risky pastes.</p></div>
   <div><h3>Themes</h3><p>16 themes, light and dark, following the system or not.</p></div>
-  <div><h3>Updates</h3><p>Signed and notarized. Updates install when you quit, and terminals keep running.</p></div>
+  <div><h3>Updates</h3><p>cmd updates itself in the background and installs when you quit. Terminals keep running.</p></div>
 </div>
 
 <h2>Releases</h2>
