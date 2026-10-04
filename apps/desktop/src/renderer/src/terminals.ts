@@ -238,6 +238,11 @@ class Terminals {
     const h = this.#hosts.get(paneId);
     if (!h) return;
     if (h.fitTimer) clearTimeout(h.fitTimer);
+    // With mouse reporting on (Claude Code, vim), a mousedown adds mousemove/mouseup
+    // listeners on the document that only a mouseup removes, and dispose doesn't.
+    // Closing the pane mid-drag would leave them calling into the disposed renderer
+    // ("reading 'dimensions'") on every later drag, so end the drag first.
+    if (h.opened && h.term.modes.mouseTrackingMode !== "none") document.dispatchEvent(new MouseEvent("mouseup"));
     h.webgl?.dispose();
     h.term.dispose();
     h.el.remove();
