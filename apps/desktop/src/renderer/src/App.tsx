@@ -109,8 +109,9 @@ export function App() {
   const [camera, setCamera] = useSpaceView<Camera>("canvas.camera", DEFAULT_CAMERA);
   const setStripWidth = (id: PaneId, fraction: number) =>
     setStripWidths((w) => {
-      const alive = getState().panes;
-      const next = Object.fromEntries(Object.entries(w).filter(([k]) => alive.has(k)));
+      // Drop closed windows; the strip holds terminals and other windows alike.
+      const { panes, windows } = getState();
+      const next = Object.fromEntries(Object.entries(w).filter(([k]) => panes.has(k) || windows.has(k)));
       next[id] = fraction;
       return next;
     });
