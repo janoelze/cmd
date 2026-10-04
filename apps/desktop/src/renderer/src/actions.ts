@@ -24,14 +24,39 @@ export function bindSelection(fn: Selector, current: () => PaneId | null): void 
 const here = () => getState().spaceId;
 
 /**
- * New panes inherit the working directory of the selected pane while it is
- * inside the Space's root; otherwise (undefined) the core starts them at the root.
+ * The folder a window is in: a terminal's working directory, a file browser's
+ * folder, the folder of a text or Markdown window's file (an untitled one's
+ * save folder). Browser and Magic windows have none.
+ */
+function folderOf(id: string | null): string | undefined {
+  if (!id) return undefined;
+  const s = getState();
+  const pane = s.panes.get(id);
+  if (pane) return pane.cwd || undefined;
+  const st = s.windows.get(id)?.state as { path?: unknown; dir?: unknown } | undefined;
+  const w = s.windows.get(id);
+  if (!w || !st) return undefined;
+  if (w.kind === "files" && typeof st.path === "string") return st.path || undefined;
+  if (typeof st.path === "string" && st.path) return st.path.slice(0, st.path.lastIndexOf("/")) || "/";
+  if (typeof st.dir === "string") return st.dir || undefined;
+  return undefined;
+}
+
+/** The last selected window that is in a folder, for when the selected one isn't (a browser). */
+let lastWithFolder: string | null = null;
+export function windowSelected(id: string | null): void {
+  if (folderOf(id)) lastWithFolder = id;
+}
+
+/**
+ * New terminals, agents, file browsers and text windows open where the selected
+ * window is (or the last selected one that is in a folder): anywhere in Home,
+ * inside the root in other Spaces; otherwise (undefined) the core starts them at the root.
  */
 function contextCwd(): string | undefined {
-  const id = currentPane();
-  const cwd = id ? getState().panes.get(id)?.cwd : undefined;
-  const root = getState().spaces.get(here())?.root;
-  return cwd && root && under(root, cwd) ? cwd : undefined;
+  const cwd = folderOf(currentPane()) ?? folderOf(lastWithFolder);
+  const space = getState().spaces.get(here());
+  return cwd && space && (space.home || under(space.root, cwd)) ? cwd : undefined;
 }
 
 /** Session ids of agents open in a terminal (transcript search leaves them out of Recent). */

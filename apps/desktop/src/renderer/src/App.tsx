@@ -6,6 +6,7 @@ import { COMMANDS, prettyAccelerator, type CommandId } from "../../shared/comman
 import { cmd } from "./bridge.ts";
 import {
   bindSelection,
+  windowSelected,
   closePane,
   copy,
   newAgent,
@@ -156,6 +157,7 @@ export function App() {
   }, []);
 
   useEffect(() => bindSelection(select, () => selectedRef.current), [select]);
+  useEffect(() => windowSelected(selected), [selected]);
   useEffect(() => void performance.mark("boot:app-mounted"), []);
   // Test hook for the e2e smoke test.
   useEffect(() => {
