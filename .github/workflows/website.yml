@@ -1,0 +1,39 @@
+# Deploys the website (website/deploy.sh): product page, releases and the
+# public usage stats at https://endtime-instruments.org/cmd. Needs the secret
+# UBERSPACE_SSH_KEY, the same deploy key as remote.yml.
+name: website
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - website/**
+      - .github/workflows/website.yml
+  workflow_dispatch:
+
+concurrency:
+  group: website-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      # The host runs PHP 8.3.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+
+      - name: SSH
+        env:
+          KEY: ${{ secrets.UBERSPACE_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "aquila.uberspace.de ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOOdDXepVcufKsQDWFOnPKRZsYCW2HQ9sd9vi8P6n3uz" > ~/.ssh/known_hosts
+
+      - run: website/deploy.sh
