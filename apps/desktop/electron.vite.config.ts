@@ -1,6 +1,26 @@
 import { resolve } from "node:path";
 import { defineConfig } from "electron-vite";
 import react from "@vitejs/plugin-react";
+import type { Plugin } from "vite";
+
+// xterm maps a mouse event to a cell from getBoundingClientRect() (screen px) and its
+// cell size (layout px), so under a CSS scale() (the canvas zoom) selection, links and
+// mouse reporting land on the wrong cells. Undo the element's scale where it does that.
+// Excluded from dep pre-bundling below so this applies in dev too.
+const XTERM_COORDS = "return[t.clientX-i.left-n,t.clientY-i.top-o]}";
+function xtermScaledCoords(): Plugin {
+  return {
+    name: "xterm-scaled-coords",
+    transform(code, id) {
+      if (!/@xterm[/+]xterm.*[/]lib[/]xterm\.mjs$/.test(id)) return;
+      if (!code.includes(XTERM_COORDS)) throw new Error("xterm-scaled-coords: getCoordsRelativeToElement changed, update the patch");
+      return code.replace(
+        XTERM_COORDS,
+        "return[(t.clientX-i.left)/(e.offsetWidth?i.width/e.offsetWidth:1)-n,(t.clientY-i.top)/(e.offsetHeight?i.height/e.offsetHeight:1)-o]}",
+      );
+    },
+  };
+}
 
 // @cmd/protocol ships TypeScript source, so it must be bundled, not externalized.
 const bundleWorkspace = { externalizeDeps: { exclude: ["@cmd/protocol"] } };
@@ -31,7 +51,8 @@ export default defineConfig({
   // electron-vite leaves minification off; the renderer bundle is parsed on every launch.
   // Three pages: the app (index.html), the Settings window (settings.html) and the Task Manager (tasks.html).
   renderer: {
-    plugins: [react()],
+    plugins: [react(), xtermScaledCoords()],
+    optimizeDeps: { exclude: ["@xterm/xterm"] },
     build: {
       minify: true,
       rollupOptions: {
