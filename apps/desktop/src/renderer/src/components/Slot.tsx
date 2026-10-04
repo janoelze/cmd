@@ -11,6 +11,7 @@
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Led } from "../model.ts";
+import { StatusDot } from "@cmd/ui";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { countRender } from "../perf.ts";
 
@@ -188,7 +189,9 @@ export function Mark({ light, icon }: { light?: Led; icon: string }) {
   return (
     <span className={`mark ${light ? "has-light" : ""}`}>
       <Symbol name={icon} size={ICON.small} className="mark-icon" />
-      <span className={`led led-${light ?? "off"} mark-light`} />
+      <span className="mark-light">
+        <StatusDot state={light ?? "off"} />
+      </span>
     </span>
   );
 }

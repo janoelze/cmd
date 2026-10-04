@@ -537,8 +537,16 @@ function FieldsPage() {
 
 // ── status ─────────────────────────────────────────────
 
+/** An agent's life, to show the dot's transitions: [state, ms]. */
+const LIFE: [DotState, number][] = [["idle", 1400], ["working", 3600], ["needs", 3000], ["working", 2400], ["unseen", 3000], ["done", 2000], ["off", 1400]];
+
 function StatusPage() {
   const [p, setP] = useState(0.35);
+  const [life, setLife] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setLife((i) => (i + 1) % LIFE.length), LIFE[life]![1]);
+    return () => clearTimeout(t);
+  }, [life]);
   useEffect(() => {
     const t = setInterval(() => setP((v) => (v >= 1 ? 0 : v + 0.05)), 300);
     return () => clearInterval(t);
@@ -547,13 +555,18 @@ function StatusPage() {
   return (
     <>
       <h1>Status</h1>
-      <Spec title="StatusDot" code="<StatusDot state>" note="The agent states, as the sidebar shows them; and tones for anything else.">
+      <Spec title="StatusDot" code="<StatusDot state>" note="A 2×2 dot matrix. The agent states, as the sidebar shows them, each its own glyph; and tones for anything else. Entering needs pops, entering unseen bursts.">
         <Row label="agents">
           {states.map((s) => (
             <span key={s} className="g-row" style={{ gap: 6 }}>
               <StatusDot state={s} /> <span className="g-dim">{s}</span>
             </span>
           ))}
+        </Row>
+        <Row label="lifecycle">
+          <span className="g-row" style={{ gap: 6 }}>
+            <StatusDot state={LIFE[life]![0]} /> <span className="g-dim">{LIFE[life]![0]}</span>
+          </span>
         </Row>
         <Row label="tones">
           {(["neutral", "accent", "success", "warning", "danger"] as const).map((s) => (

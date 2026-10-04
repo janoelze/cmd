@@ -237,10 +237,10 @@ function agentStatus(a: Agent, now: number): { text: string; key: string } {
   return { text, key: a.state };
 }
 
-export type Led = "needs" | "unseen" | "done" | "working" | "idle" | "shell" | "off";
+/** An agent's status light (StatusDot's agent states). Terminals without an agent show their icon. */
+export type Led = "needs" | "unseen" | "done" | "working" | "idle" | "off";
 
-export function ledOf(a: Agent | null): Led {
-  if (!a) return "shell";
+export function ledOf(a: Agent): Led {
   const b = bucketOf(a);
   if (b === "needs") return "needs";
   if (b === "unseen") return "unseen";

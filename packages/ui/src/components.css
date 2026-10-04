@@ -399,24 +399,62 @@
 
 /* ── status ── */
 
+/* StatusDot: a 2×2 dot matrix. Each state is a glyph, so it reads without its
+   colour: working chases round, needs blinks its diagonals, unseen is all lit,
+   done keeps one diagonal, idle is all dim, off a single pixel. Loops share one
+   clock (--ui-dot-phase, set by StatusDot), so every working dot turns in step;
+   data-enter plays once on a change into needs (a pop) or unseen (a burst). */
 .ui-dot {
   --size: 8px;
+  --gap: 1px;
   flex: none;
-  display: inline-block;
+  display: inline-grid;
+  grid-template: 1fr 1fr / 1fr 1fr;
+  gap: var(--gap);
   width: var(--size);
   height: var(--size);
-  border-radius: 50%;
-  background: var(--tone);
   vertical-align: middle;
 }
 .ui-dot[data-size="sm"] { --size: 6px; }
+.ui-dot > i {
+  border-radius: 1px;
+  background: var(--tone);
+  transition: opacity 240ms ease, background-color 240ms ease;
+}
 .ui-dot[data-state="needs"] { --tone: var(--state-needs); }
-.ui-dot[data-state="unseen"] { --tone: var(--state-done); }
-.ui-dot[data-state="working"] { --tone: var(--state-working); animation: ui-pulse 1.4s ease-in-out infinite; }
-.ui-dot[data-state="done"] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--state-done); }
-.ui-dot[data-state="idle"] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--state-idle); }
-.ui-dot[data-state="off"] { --tone: var(--state-idle); opacity: 0.5; }
-@keyframes ui-pulse { 50% { opacity: 0.4; } }
+.ui-dot:is([data-state="unseen"], [data-state="done"]) { --tone: var(--state-done); }
+.ui-dot[data-state="working"] { --tone: var(--state-working); }
+.ui-dot:is([data-state="idle"], [data-state="off"]) { --tone: var(--state-idle); }
+.ui-dot:is([data-state="working"], [data-state="done"]) > i { opacity: 0.22; }
+.ui-dot[data-state="done"] > :is(:nth-child(1), :nth-child(4)) { opacity: 1; }
+.ui-dot[data-state="idle"] > i { opacity: 0.45; }
+.ui-dot[data-state="off"] > i { opacity: 0; }
+.ui-dot[data-state="off"] > :nth-child(3) { opacity: 0.5; }
+/* Clockwise: top left, top right, bottom right, bottom left. */
+.ui-dot[data-state="working"] > i { animation: ui-dot-chase 1.2s linear var(--ui-dot-phase, 0s) infinite; }
+.ui-dot[data-state="working"] > :nth-child(2) { animation-delay: calc(var(--ui-dot-phase, 0s) - 0.9s); }
+.ui-dot[data-state="working"] > :nth-child(4) { animation-delay: calc(var(--ui-dot-phase, 0s) - 0.6s); }
+.ui-dot[data-state="working"] > :nth-child(3) { animation-delay: calc(var(--ui-dot-phase, 0s) - 0.3s); }
+@keyframes ui-dot-chase { 0% { opacity: 1; } 60%, 100% { opacity: 0.2; } }
+.ui-dot[data-state="needs"] > i { animation: ui-dot-blink 1s steps(1) var(--ui-dot-phase, 0s) infinite; }
+.ui-dot[data-state="needs"] > :is(:nth-child(2), :nth-child(3)) { animation-delay: calc(var(--ui-dot-phase, 0s) - 0.5s); }
+@keyframes ui-dot-blink { 0% { opacity: 1; } 50% { opacity: 0.18; } }
+.ui-dot[data-enter="needs"] { animation: ui-dot-pop 480ms cubic-bezier(0.3, 1.6, 0.5, 1); }
+@keyframes ui-dot-pop { from { transform: scale(0.3); } }
+/* unseen: the pixels fly apart and snap back together, lit. */
+.ui-dot[data-enter="unseen"] > i { animation: ui-dot-burst 560ms cubic-bezier(0.2, 0.9, 0.3, 1); }
+.ui-dot[data-enter="unseen"] > :nth-child(1) { --dx: -1; --dy: -1; }
+.ui-dot[data-enter="unseen"] > :nth-child(2) { --dx: 1; --dy: -1; }
+.ui-dot[data-enter="unseen"] > :nth-child(3) { --dx: -1; --dy: 1; }
+.ui-dot[data-enter="unseen"] > :nth-child(4) { --dx: 1; --dy: 1; }
+@keyframes ui-dot-burst {
+  0% { transform: none; }
+  35% { transform: translate(calc(var(--dx) * var(--size) * 0.3), calc(var(--dy) * var(--size) * 0.3)) scale(0.7); box-shadow: 0 0 calc(var(--size) * 0.6) var(--tone); }
+  100% { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-dot, .ui-dot > i { animation: none !important; transition: none; }
+}
 
 /* Tones, shared by every toned component: --tone is the colour. */
 [data-tone="neutral"], .ui-dot[data-state="neutral"] { --tone: var(--text-dim); }

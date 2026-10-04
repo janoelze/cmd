@@ -2,19 +2,46 @@
 // count or a short tag), Kbd (a key or shortcut), Progress (a bar), Spinner,
 // and ProgressRing (a small determinate ring).
 
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 
 export type Tone = "neutral" | "accent" | "success" | "warning" | "danger";
 
 /**
- * A small light. Agent states follow the sidebar's: needs (wants you), unseen
- * (finished, not looked at), working (pulses), done and idle (rings), off.
- * The tones are for anything else (a check passed, data failing).
+ * A small light: a 2×2 dot matrix. Agent states follow the sidebar's: needs
+ * (wants you, blinks), unseen (finished, not looked at), working (chases round),
+ * done, idle, off. The tones are for anything else (a check passed, data failing).
  */
 export type DotState = "needs" | "unseen" | "working" | "done" | "idle" | "off" | Tone;
 
+/** States entered with a one-off animation (components.css, data-enter). */
+const ENTER = new Set<DotState>(["needs", "unseen"]);
+/** The loops' period; their phase follows the document clock so every dot is in step. */
+const LOOP_MS = 1200;
+
 export function StatusDot({ state = "neutral", size = "md", label }: { state?: DotState; size?: "sm" | "md"; label?: string }) {
-  return <span className="ui-dot" data-state={state} data-size={size} role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true} />;
+  const ref = useRef<HTMLSpanElement>(null);
+  const prev = useRef(state);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.setProperty("--ui-dot-phase", `${-((performance.now() % LOOP_MS) / 1000).toFixed(3)}s`);
+    if (prev.current === state) return;
+    prev.current = state;
+    if (!ENTER.has(state)) return void delete el.dataset.enter;
+    el.dataset.enter = state;
+    // The pop ends on the dot, the burst on its pixels (bubbling); loops never end.
+    const end = () => delete el.dataset.enter;
+    el.addEventListener("animationend", end, { once: true });
+    return () => el.removeEventListener("animationend", end);
+  }, [state]);
+  return (
+    <span ref={ref} className="ui-dot" data-state={state} data-size={size} role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+      <i />
+      <i />
+      <i />
+      <i />
+    </span>
+  );
 }
 
 /** A count ("3") or a short tag ("Beta", "Default"). */

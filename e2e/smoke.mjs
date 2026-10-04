@@ -1094,8 +1094,8 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
 // The sidebar footer shows the core's health; its details restart the core, and the terminals live on.
 {
   const button = win.locator(".core-status-button");
-  await win.waitForFunction(() => document.querySelector(".core-status-button .led-core-ok") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 10_000 });
-  check((await button.locator(".led-core-ok").count()) === 1, `core status is healthy (${await button.textContent()})`);
+  await win.waitForFunction(() => document.querySelector(".core-status-button .ui-dot[data-state=\"success\"]") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 10_000 });
+  check((await button.locator(".ui-dot[data-state=\"success\"]").count()) === 1, `core status is healthy (${await button.textContent()})`);
   await button.click();
   await win.waitForSelector(".core-details dl");
   const details = await win.locator(".core-details").textContent();
@@ -1105,10 +1105,11 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   const clients = await win.evaluate(() => window.cmd.call("core.info", {}).then((i) => i.connections));
   const before = await panes();
   await win.locator(".core-details button", { hasText: "Restart Core" }).click();
-  await win.waitForFunction((pid) => window.cmd.call("core.hello", {}).then((h) => h.pid !== pid), pidBefore, { timeout: 15_000 });
-  await win.waitForFunction(() => document.querySelector(".core-status-button .led-core-ok") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 15_000 });
+  // A call can land while the old core shuts down and reject; that's "not yet".
+  await win.waitForFunction((pid) => window.cmd.call("core.hello", {}).then((h) => h.pid !== pid, () => false), pidBefore, { timeout: 15_000 });
+  await win.waitForFunction(() => document.querySelector(".core-status-button .ui-dot[data-state=\"success\"]") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 15_000 });
   // Every client (this window, main's space.show listener) is back before going on.
-  await win.waitForFunction((n) => window.cmd.call("core.info", {}).then((i) => i.connections >= n), clients, { timeout: 10_000 });
+  await win.waitForFunction((n) => window.cmd.call("core.info", {}).then((i) => i.connections >= n, () => false), clients, { timeout: 10_000 });
   check((await panes()) === before, `terminals survive Restart Core (${before} → ${await panes()})`);
   await win.keyboard.press("Escape");
   check((await win.locator(".core-details").count()) === 0, "Escape closes the core details");

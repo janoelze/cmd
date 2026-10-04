@@ -2,7 +2,7 @@
 // light, memory, CPU). Clicking it opens the details (uptime, response time,
 // the core and PTY host processes) with Restart Core and the Task Manager.
 
-import { Button, Popover } from "@cmd/ui";
+import { Button, Popover, StatusDot } from "@cmd/ui";
 import { useRef, useState } from "react";
 import { cmd } from "../bridge.ts";
 import { formatUptime, restartCore, SLOW_MS, useCoreHealth, useRestart, type CoreHealth } from "../coreHealth.ts";
@@ -51,7 +51,7 @@ export function CoreStatus(p: Props) {
         <Details summary={s} health={health} connected={p.connected} restart={restart} />
       </Popover>
       <button ref={button} className={`core-status-button${open ? " open" : ""}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className={`led led-${s.led === "ok" ? "core-ok" : s.led}`} />
+        <StatusDot state={s.led === "ok" ? "success" : s.led} />
         <Slot className="core-status-text" value={{ text: s.text }} />
         <Slot className="core-status-usage" value={usage ? { text: usage, key: "usage" } : undefined} divider />
       </button>
@@ -76,7 +76,7 @@ function Details(p: { summary: Summary; health: CoreHealth; connected: boolean; 
   return (
     <>
       <div className="core-details-head">
-        <span className={`led led-${p.summary.led === "ok" ? "core-ok" : p.summary.led}`} />
+        <StatusDot state={p.summary.led === "ok" ? "success" : p.summary.led} />
         <span>{p.summary.detail}</span>
       </div>
       {p.restart.error && <div className="core-details-error">{p.restart.error}</div>}
