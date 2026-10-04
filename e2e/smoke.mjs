@@ -149,7 +149,7 @@ if (mac) {
 }
 
 await menu("file.newTerminal");
-await win.waitForSelector(".xterm");
+await win.locator(".xterm:visible").first().waitFor(); // hidden ones exist too (other Spaces, previews)
 await win.waitForTimeout(1500); // let the login shell finish starting
 await win.keyboard.type("echo hello from cmd");
 await win.keyboard.press("Enter");
@@ -159,9 +159,14 @@ await win.keyboard.press("Enter");
   await win.keyboard.press("Enter");
   await win.waitForTimeout(300);
   await win.keyboard.press("Shift+Enter");
-  await win.waitForTimeout(300);
-  const id = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p[0].id));
-  const text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 50 }).then((r) => r.text), id);
+  // Poll every pane's screen: the shell may still be starting, and the focused one needn't be first.
+  const screens = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((ps) =>
+    Promise.all(ps.map((p) => window.cmd.call("pane.read", { paneId: p.id, lines: 50 }).then((r) => r.text)))).then((t) => t.join("\n")));
+  let text = await screens();
+  for (let i = 0; i < 30 && !/^\^\[$/m.test(text); i++) {
+    await win.waitForTimeout(100);
+    text = await screens();
+  }
   await win.keyboard.press("Control+C");
   check(/^\^\[$/m.test(text), "⇧↩ sends ESC CR to the terminal");
 }
@@ -218,12 +223,15 @@ check(Array.isArray(order1) && order1.length === 2, `dragging a tile onto anothe
 // Let the windows glide into their new places first: mid-animation, positions (and so the drag target) are stale.
 await win.waitForFunction(() => !document.querySelector(".tile.settling, .tile.lifted"), null, { timeout: 3000 }).catch(() => {});
 await win.waitForTimeout(400);
-{ const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
 // The order is saved debounced: wait for it to change rather than a fixed time (slow CI runners).
-let order2 = await panesOrder();
-for (let i = 0; i < 30 && JSON.stringify(order2) === JSON.stringify(order1); i++) {
-  await win.waitForTimeout(100);
-  order2 = await panesOrder();
+// A drag that lands while a tile still glides can miss its target: take fresh positions and drag again.
+let order2 = order1;
+for (let attempt = 0; attempt < 3 && JSON.stringify(order2) === JSON.stringify(order1); attempt++) {
+  { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
+  for (let i = 0; i < 30 && JSON.stringify(order2) === JSON.stringify(order1); i++) {
+    await win.waitForTimeout(100);
+    order2 = await panesOrder();
+  }
 }
 check(order2[0] === order1[1] && order2[1] === order1[0], "dragging back swaps the slots again");
 // A real drag through three tiles: the dragged tile follows the pointer, the others make room.
@@ -1159,3 +1167,5 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
 await closeApp();
 await stopCore(home, { terminals: true });
 console.log("all checks passed; screenshots in", shots);
+// Done: don't let a handle Playwright leaves open keep us alive until the watchdog fires.
+process.exit(0);
