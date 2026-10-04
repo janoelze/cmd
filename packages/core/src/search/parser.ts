@@ -35,6 +35,13 @@ const MAX_TEXT = 20_000;
 const LARGE_LINE = 200_000;
 const TOOL_OUTPUT_MARKERS = ["tool_result", "function_call_output", "file-history"];
 
+/**
+ * A transcript's text, or its lines read from the file on demand (see fileLines
+ * in index.ts): reading a large transcript whole leaves its size in memory the
+ * process doesn't hand back. A reader calls `fn` per line, stopping when it returns false.
+ */
+export type TranscriptText = string | ((fn: (line: string) => boolean | void) => void);
+
 export type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -44,32 +51,40 @@ export function isEmpty(d: SessionDocument): boolean {
   return d.prompts.length === 0 && d.responses.length === 0;
 }
 
-function forEachObject(text: string, fn: (o: Obj) => void): void {
+function forEachLine(text: TranscriptText, fn: (line: string) => boolean | void): void {
+  if (typeof text !== "string") return text(fn);
   let start = 0;
   while (start < text.length) {
     let end = text.indexOf("\n", start);
     if (end < 0) end = text.length;
-    if (end > start) {
-      const line = text.slice(start, end);
-      if (!(line.length > LARGE_LINE && TOOL_OUTPUT_MARKERS.some((m) => line.includes(m)))) {
-        try {
-          const o = JSON.parse(line);
-          if (isObj(o)) fn(o);
-        } catch {
-          // partial or foreign line
-        }
-      }
-    }
+    if (end > start && fn(text.slice(start, end)) === false) return;
     start = end + 1;
   }
 }
 
-/** The first `n` JSON objects of a transcript, for telling formats apart. */
-export function headObjects(text: string, n: number): Obj[] {
+/** Calls `fn` per JSON object line. */
+function forEachObject(text: TranscriptText, fn: (o: Obj) => void): void {
+  forEachLine(text, (line) => {
+    if (!line || (line.length > LARGE_LINE && TOOL_OUTPUT_MARKERS.some((m) => line.includes(m)))) return;
+    let o: unknown;
+    try {
+      o = JSON.parse(line);
+    } catch {
+      return; // partial or foreign line
+    }
+    if (isObj(o)) fn(o);
+  });
+}
+
+/** The first `n` JSON objects of a transcript (within its first MB), for telling formats apart. */
+export function headObjects(text: TranscriptText, n: number): Obj[] {
   const out: Obj[] = [];
-  const head = text.length > 1_000_000 ? text.slice(0, 1_000_000) : text;
-  forEachObject(head, (o) => {
-    if (out.length < n) out.push(o);
+  let read = 0;
+  forEachLine(text, (line) => {
+    read += line.length + 1;
+    if (read > 1_000_000) return false;
+    forEachObject(line, (o) => void out.push(o));
+    return out.length < n;
   });
   return out;
 }
@@ -145,7 +160,7 @@ export function cleanClaudePrompt(text: string): string {
   return r.trim();
 }
 
-export function parseClaude(text: string, path: string): SessionDocument | null {
+export function parseClaude(text: TranscriptText, path: string): SessionDocument | null {
   const doc: SessionDocument = {
     id: (path.split(/[\\/]/).pop() ?? "").replace(/\.jsonl$/, ""),
     agent: "claude",
@@ -203,7 +218,7 @@ export function parseClaude(text: string, path: string): SessionDocument | null 
   return isEmpty(doc) ? null : doc;
 }
 
-export function parseCodex(text: string, path: string): SessionDocument | null {
+export function parseCodex(text: TranscriptText, path: string): SessionDocument | null {
   const doc: SessionDocument = { id: "", agent: "codex", path, prompts: [], responses: [], tools: [] };
   // Codex logs user text twice (as an event and as a model input item that also
   // carries environment context); prefer the events, fall back to the items.
@@ -284,7 +299,7 @@ function partsText(parts: Obj[]): string | undefined {
  * whose message is Gemini-style ({role, parts}). The prompt as the user typed it
  * is in systemPayload.displayText; titles are system records (custom_title).
  */
-export function parseQwen(text: string, path: string): SessionDocument | null {
+export function parseQwen(text: TranscriptText, path: string): SessionDocument | null {
   const doc: SessionDocument = { id: (path.split("/").pop() ?? "").replace(/\.jsonl$/, ""), agent: "qwen", path, prompts: [], responses: [], tools: [] };
   forEachObject(text, (o) => {
     if (o.isSidechain === true) return;
@@ -319,7 +334,7 @@ export function parseQwen(text: string, path: string): SessionDocument | null {
  * line ({type, timestamp, data}): session.start (id, context.cwd/branch),
  * user.message, assistant.message (content, toolRequests).
  */
-export function parseCopilot(text: string, path: string): SessionDocument | null {
+export function parseCopilot(text: TranscriptText, path: string): SessionDocument | null {
   const doc: SessionDocument = { id: path.split("/").at(-2) ?? "", agent: "copilot", path, prompts: [], responses: [], tools: [] };
   forEachObject(text, (o) => {
     const data = isObj(o.data) ? o.data : {};
@@ -371,7 +386,7 @@ export function parseCopilot(text: string, path: string): SessionDocument | null
  * Used when the known layout yields nothing (e.g. a format change): collects strings
  * under text-like keys anywhere, skipping subtrees with tool output or internal state.
  */
-function fallback(text: string, doc: SessionDocument): void {
+function fallback(text: TranscriptText, doc: SessionDocument): void {
   const textKeys = new Set(["text", "message", "prompt", "content", "aiTitle", "summary"]);
   const skipKeys = new Set([
     "toolUseResult",

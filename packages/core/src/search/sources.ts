@@ -12,7 +12,7 @@ import path from "node:path";
 import type { AgentKind, Settings } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { envPrefix } from "../shell.ts";
-import { headObjects, type Obj, type SessionDocument } from "./parser.ts";
+import { headObjects, type Obj, type SessionDocument, type TranscriptText } from "./parser.ts";
 
 const log = logger("search");
 
@@ -49,7 +49,7 @@ export interface TranscriptSource {
   rootFor?(transcriptPath: string, ctx: LocateContext): TranscriptRoot | null;
   /** Whether a transcript is this agent's, from its first JSON lines (for mixed folders). */
   sniff(head: Obj[]): boolean;
-  parse(text: string, path: string): SessionDocument | null;
+  parse(text: TranscriptText, path: string): SessionDocument | null;
   /** Whether resume can fork a session (continue it as a new one). */
   forks: boolean;
   /** Shell command that resumes (or forks) a session; the root's env is added by the caller. */
@@ -107,7 +107,7 @@ export class TranscriptSources {
   }
 
   /** Parses a transcript; in a mixed folder the agent is sniffed, else every source is tried. */
-  parse(root: TranscriptRoot, text: string, file: string): SessionDocument | null {
+  parse(root: TranscriptRoot, text: TranscriptText, file: string): SessionDocument | null {
     const fixed = root.agent ? this.get(root.agent) : undefined;
     if (root.agent) return fixed?.parse(text, file) ?? null;
     const head = headObjects(text, 20);

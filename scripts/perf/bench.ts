@@ -250,7 +250,8 @@ for (const name of run) {
     await stop(u);
   }
 }
-fs.rmSync(home, { recursive: true, force: true });
+if (args.includes("--keep")) console.log(`state kept in ${home}`);
+else fs.rmSync(home, { recursive: true, force: true });
 
 function report(name: string, r: Result): void {
   const rounded = Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === "number" ? Math.round(v * 1000) / 1000 : v]));

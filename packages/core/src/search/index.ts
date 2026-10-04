@@ -5,8 +5,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { StringDecoder } from "node:string_decoder";
 import type { AgentKind } from "@cmd/protocol";
-import { PARSER_VERSION, isEmpty, type SessionDocument } from "./parser.ts";
+import { PARSER_VERSION, isEmpty, type SessionDocument, type TranscriptText } from "./parser.ts";
 import { identifierParts, SearchQuery, Vocabulary } from "./query.ts";
 import type { TranscriptRoot, TranscriptSources } from "./sources.ts";
 
@@ -182,14 +183,42 @@ function insert(db: DatabaseSync, d: SessionDocument, env: Record<string, string
 }
 
 export function parseFile(f: TranscriptFile, sources: TranscriptSources): SessionDocument | null {
-  let text: string;
   try {
-    text = fs.readFileSync(f.path, "utf8");
+    const doc = sources.parse(f.root, fileLines(f.path), f.path);
+    return doc && !isEmpty(doc) ? doc : null;
   } catch {
-    return null;
+    return null; // gone or unreadable
   }
-  const doc = sources.parse(f.root, text, f.path);
-  return doc && !isEmpty(doc) ? doc : null;
+}
+
+/** One read buffer, reused for every transcript. */
+const chunk = Buffer.allocUnsafe(1 << 20);
+
+/**
+ * A transcript's lines, read in 1 MB chunks each time they are walked. Reading
+ * transcripts whole (up to 140 MB each) left a first index's worth of freed
+ * buffers in the process's footprint: about 480 MB that macOS's allocator kept.
+ */
+export function fileLines(file: string): TranscriptText {
+  return (fn) => {
+    const fd = fs.openSync(file, "r");
+    try {
+      const decoder = new StringDecoder("utf8");
+      let rest = "";
+      for (let n; (n = fs.readSync(fd, chunk, 0, chunk.length, null)) > 0; ) {
+        const text = rest + decoder.write(chunk.subarray(0, n));
+        let start = 0;
+        for (let i; (i = text.indexOf("\n", start)) >= 0; start = i + 1) {
+          if (fn(text.slice(start, i)) === false) return;
+        }
+        rest = text.slice(start);
+      }
+      rest += decoder.end();
+      if (rest) fn(rest);
+    } finally {
+      fs.closeSync(fd);
+    }
+  };
 }
 
 /**
