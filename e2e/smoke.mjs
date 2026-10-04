@@ -359,6 +359,21 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(back === false && fit === true, "Fit Window restores the window's size and the app's user agent");
   }
 
+  // A new, blank browser window shows the themed empty view, not a white page, until it loads one.
+  const blankWin = await win.evaluate(() => window.cmd.call("window.open", { kind: "browser", input: {} }));
+  await win.waitForTimeout(200);
+  await win.evaluate((id) => window.__cmdSelect(id), blankWin.id);
+  await win.waitForTimeout(200);
+  await win.evaluate((id) => window.__cmdSelect(id), blankWin.id);
+  const blankView = win.locator(`.tile[data-pane="${blankWin.id}"] .browser-blank`);
+  await blankView.waitFor({ timeout: 5000 }).catch(() => {});
+  await win.screenshot({ path: path.join(shots, "browser-blank.png") });
+  check(await blankView.isVisible(), "a blank browser window shows the empty view, not a white page");
+  await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [blankWin.id, `http://localhost:${port}`]);
+  await blankView.waitFor({ state: "detached", timeout: 5000 }).catch(() => {});
+  check((await blankView.count()) === 0, "a blank window gets its page once given an address");
+  await win.evaluate((id) => window.cmd.call("window.close", { id }), blankWin.id);
+
   fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
   fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# hi");
   fs.writeFileSync(path.join(home, "files-fixture", "sub-folder", "inner.txt"), "inside");

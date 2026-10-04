@@ -22,6 +22,8 @@ export const ICON = {
   small: 11,
   /** disclosure chevrons */
   disclosure: 8,
+  /** the mark of an empty view (a blank browser window) */
+  empty: 28,
 } as const;
 
 // ── pixel density (re-render symbols when the window moves to another display) ──

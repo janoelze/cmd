@@ -1021,6 +1021,20 @@ kbd {
 .address:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
 .browser-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
 .webview { flex: 1; min-height: 0; background: #fff; }
+.browser-blank {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: 12px var(--font-ui);
+  color: var(--text-dim);
+  background: var(--well);
+  cursor: text;
+}
+.browser-blank .sf { opacity: 0.6; margin-bottom: 4px; }
+.browser-blank-title { font: 600 15px var(--font-ui); color: var(--text); }
 .browser-stage.device .webview { box-shadow: 0 0 0 1px var(--separator), 0 4px 18px rgba(0, 0, 0, 0.18); }
 .device-caption {
   position: absolute;

@@ -4,7 +4,9 @@
 // WebContentsView would always sit on top. Navigation and titles are reported to
 // the core (window.update), so the window survives restarts. A device size
 // (devices.ts, chosen from the window's menu) pins the page to that viewport,
-// scaled down to fit and centred in the window.
+// scaled down to fit and centred in the window. A new, blank window has no
+// webview yet (about:blank would paint white): it shows a themed empty view and
+// creates the webview with the first address entered.
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { WebviewTag } from "electron";
@@ -20,18 +22,20 @@ import { deviceById, type Device } from "../devices.ts";
 const PAD = 16;
 const CAPTION = 28;
 
+const isBlank = (u: string | null | undefined): u is null | undefined | "" | "about:blank" =>
+  !u || u === "about:blank";
+
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const url = typeof win.state.url === "string" ? win.state.url : null;
   const ref = useRef<WebviewTag | null>(null);
-  const [address, setAddress] = useState(url ?? "");
-  const [editing, setEditing] = useState(false);
+  const [address, setAddress] = useState(isBlank(url) ? "" : url);
   const [loading, setLoading] = useState(false);
   const [nav, setNav] = useState({ back: false, forward: false });
   const input = useRef<HTMLInputElement>(null);
-  // The URL the webview was created with; later navigation happens inside it.
-  const [initial] = useState(url ?? "about:blank");
   const device = deviceById(typeof win.state.device === "string" ? win.state.device : undefined);
-  const [initialAgent] = useState(device?.userAgent);
+  // What the webview was created with (null: not yet, the window is blank); later navigation happens inside it.
+  const [initial, setInitial] = useState(() => (isBlank(url) ? null : { src: url, agent: device?.userAgent }));
+  const live = initial !== null;
   const stage = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState({ w: 0, h: 0 });
 
@@ -93,7 +97,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       wv.removeEventListener("dom-ready", ready);
       wv.removeEventListener("ipc-message", reported as never);
     };
-  }, [win.id]);
+  }, [win.id, live]);
 
   // Status: "Loading…" (transient, so fast loads don't flash it; see components/Slot.tsx).
   useEffect(
@@ -102,10 +106,15 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   );
   useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
 
-  // Navigation requested from elsewhere (cmd open, another client): follow it.
+  // Navigation requested from elsewhere (cmd open, another client), or the first
+  // address entered in a blank window: follow it.
   useEffect(() => {
+    if (isBlank(url)) return;
     const wv = ref.current;
-    if (!wv || !url) return;
+    if (!wv) {
+      setInitial((cur) => cur ?? { src: url, agent });
+      return;
+    }
     try {
       if (wv.getURL() !== url) wv.loadURL(url).catch(() => {});
     } catch {
@@ -113,18 +122,20 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     }
   }, [url]);
 
-  // A new, blank browser window starts with the address field focused.
+  // A blank browser window has the address field focused.
   useEffect(() => {
-    if (focused && initial === "about:blank") input.current?.focus();
-  }, [focused, initial]);
+    if (focused && !live) input.current?.focus();
+  }, [focused, live]);
 
   const go = async (text: string) => {
     try {
       const w = await cmd.call("window.update", { id: win.id, state: { url: text } });
-      setEditing(false);
+      const next = typeof w.state.url === "string" ? w.state.url : null;
+      if (isBlank(next)) return;
+      if (!ref.current) return setInitial({ src: next, agent });
       // Rejects when the load fails or another navigation supersedes it; the webview shows that itself.
-      ref.current?.loadURL(typeof w.state.url === "string" ? w.state.url : "about:blank").catch(() => {});
-      ref.current?.focus();
+      ref.current.loadURL(next).catch(() => {});
+      ref.current.focus();
     } catch {
       input.current?.select();
     }
@@ -141,6 +152,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
         </button>
         <button
           className="icon-btn"
+          disabled={!live}
           onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())}
           data-tip={loading ? "Stop" : "Reload"}
         >
@@ -149,38 +161,42 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
         <input
           ref={input}
           className="address"
-          value={editing ? address : address === "about:blank" ? "" : address}
+          value={isBlank(address) ? "" : address}
           placeholder="Enter a URL"
           spellCheck={false}
-          onFocus={(e) => {
-            setEditing(true);
-            e.currentTarget.select();
-          }}
-          onBlur={() => setEditing(false)}
+          onFocus={(e) => e.currentTarget.select()}
           onChange={(e) => setAddress(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") void go(address);
             if (e.key === "Escape") {
-              setAddress(ref.current?.getURL() ?? url ?? "");
+              setAddress(ref.current?.getURL() ?? (isBlank(url) ? "" : url));
               ref.current?.focus();
             }
           }}
         />
-        <button className="icon-btn" onClick={() => url && cmd.openPath(url)} data-tip="Open in Default Browser">
+        <button className="icon-btn" disabled={!live} onClick={() => url && cmd.openPath(url)} data-tip="Open in Default Browser">
           <Symbol name="safari" size={ICON.toolbar} />
         </button>
       </div>
       <div ref={stage} className={device ? "browser-stage device" : "browser-stage"}>
-        <webview
-          ref={ref as never}
-          className="webview"
-          data-embed
-          src={initial}
-          partition="persist:cmd-browser"
-          {...(initialAgent ? { useragent: initialAgent } : {})}
-          style={device ? deviceStyle(device, room) : undefined}
-        />
-        {device && <div className="device-caption">{caption(device, room)}</div>}
+        {initial ? (
+          <webview
+            ref={ref as never}
+            className="webview"
+            data-embed
+            src={initial.src}
+            partition="persist:cmd-browser"
+            {...(initial.agent ? { useragent: initial.agent } : {})}
+            style={device ? deviceStyle(device, room) : undefined}
+          />
+        ) : (
+          <div className="browser-blank" onMouseDown={(e) => (e.preventDefault(), input.current?.focus())}>
+            <Symbol name="globe" size={ICON.empty} />
+            <div className="browser-blank-title">New Tab</div>
+            <div>Type a web address, localhost:3000, or a file path</div>
+          </div>
+        )}
+        {device && initial && <div className="device-caption">{caption(device, room)}</div>}
       </div>
     </div>
   );
