@@ -58,14 +58,18 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
 Press ⇧⌘M and type what the window should show: a question, a URL, some JSON, a command. cmd turns it into a small live window:
 
 - **It looks around first when it needs to.** For "show my VPN connection status", the agent checks your network interfaces, routes and VPN clients with read-only commands before deciding what to show. You watch its steps in the window while it works.
-- **It stays live.** The agent writes the widget once, together with a data source (a URL or a read-only command). cmd re-runs the source on its own schedule, so refreshing costs nothing and never calls the model again. The title bar says how fresh the data is.
+- **It's a small app that has to work.** The agent writes the widget as a few files: `data.ts` fetches the data (TypeScript, run by Deno with only the permissions it declares), checked against a schema; the view is type-checked against that data. Before it shows anything, it runs the data, renders the widget in both themes and looks at the result; cmd then checks it all again.
+- **It stays live.** cmd re-runs the widget's data on its own schedule, so refreshing never calls the model. The title bar says how fresh the data is, or why it is stale ("HTTP 403 (rate limited?)"), and waits as long as a server asks. Fix hands the error to the agent.
 - **It matches cmd.** Widgets use your theme's colours, your terminal font and a small built-in kit, so they look right next to your terminals in every theme, light or dark.
 - **Change it by asking.** Right-click a widget and choose Change… (or press ⌘L), then type in its title bar: "bigger numbers", "make it a line chart", "only failed runs".
+- **Edit it.** ⌘E turns the window around: every version with a screenshot (restore any of them), the widget's settings (a city, a repository, a token), its files (edit them anywhere, Claude Code included), and its health.
 - **Or it's a command.** When a terminal program already does the job (`btop`, `log stream`), you get the command, typed into a new terminal for you to run.
 
 **Setup.** Magic windows use your own API key, from Anthropic or OpenAI. Under Settings → Magic Windows, pick the provider, paste its key and choose a model: the list shows the models your key can use. Keys are stored by cmd outside `settings.json`, readable only by you, and nothing is read from your environment. From a terminal: `pbpaste | cmd settings secret magic.anthropic.apiKey`.
 
-**Safety.** The agent can only read. Every command it runs, and every command a widget refreshes with, must pass a read-only policy and runs in a sandbox that blocks writes. Your keys, keychains, browser profiles and `.env` files stay off limits to it. Logged-in tools like `gh` and `glab` may use your login to fetch data, but tokens never reach the model. Widgets run in a sandboxed frame without network access.
+**Setup, part two.** Widgets' data runs on [Deno](https://deno.com). cmd uses the one on your PATH or Homebrew's, or downloads its own the first time a widget needs it.
+
+**Safety.** The agent can only read. Every command it runs must pass a read-only policy, and its widgets' data.ts runs with only the hosts and programs its manifest lists, all inside a sandbox that blocks writes. Your keys, keychains, browser profiles and `.env` files stay off limits to it. Logged-in tools like `gh` and `glab` may use your login to fetch data, but tokens never reach the model. Widgets run in a sandboxed frame without network access.
 
 ## Install
 
@@ -104,7 +108,7 @@ Every shortcut is a real menu-bar item. Remap any of them under Settings → Key
 |---|---|
 | ⌘N (⌘T) | new terminal, in the folder of the selected window (terminal, file browser, file) |
 | ⌥⌘N | new Claude session |
-| ⇧⌘M | new Magic window; in one, ⌘L changes it, ⌘R refreshes its data, ⌘. stops it while it is being made |
+| ⇧⌘M | new Magic window; in one, ⌘L changes it, ⌘E edits it (versions, settings, files, health), ⌘R refreshes its data, ⌘. stops it while it is being made |
 | ⌘W | close the frontmost thing: the palette, then the terminal (asks if something is running), then the window |
 | ⇧⌘W | close window (terminals keep running) |
 | ⌥⌘← / ⌥⌘→ (⇧⌘[ / ⇧⌘]) | previous / next session |
@@ -146,8 +150,9 @@ cmd notify "deploy finished"         # a notification; inside cmd it marks this 
 cmd events                           # NDJSON event stream
 cmd settings                         # list; `set KEY VALUE`, `reset KEY`, `path`
 cmd hooks claude                     # print the hook config for ~/.claude/settings.json
-cmd magic "how full is my disk"      # make a Magic widget without the app: shows its steps, saves it as a page
-cmd magic eval                       # run the Magic eval cases (for tuning its prompt)
+cmd magic "how full is my disk"      # build a Magic widget without the app: shows its steps, prints its folder
+cmd magic eval                       # build the Magic eval cases and judge them (for tuning its prompt)
+cmd widget check [dir]               # a widget folder: types, a data run, renders (new | check | run | preview)
 ```
 
 The CLI is not bundled with the app yet. Run it from a checkout (see [DEVELOPMENT.md](DEVELOPMENT.md)) and link it onto your PATH: `ln -s $PWD/packages/cli/bin/cmd ~/bin/cmd`.

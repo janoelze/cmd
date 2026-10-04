@@ -1,5 +1,7 @@
 # Magic windows
 
+> **Superseded in part by [14-magic-v2.md](14-magic-v2.md) (2026-10-04):** widgets are now folders with a typed Deno data.ts, a type-checked view, revisions and checks before they show. The output contract, data sources and data model below are v1.
+
 > Status (2026-10-03), branch `magic-windows`:
 > - **Built:** the prompt lab (`cmd magic`, `cmd magic view`, `cmd magic eval`); the AI SDK backend with Anthropic and OpenAI, keys and models set by the user (see Providers); Magic windows in the app (⇧⌘M, File → New Magic Window, the sidebar's +): the empty prompt, the live step trace, streaming, the widget frame, refresh scheduling in the core, the refine line (⌘L), Refresh Every (per window, kept across refinements), terminal answers, the magic.* settings.
 > - **Not yet:** versions and "How this was made" as a panel, recipes, the palette fallback, paste and drop, attention from widgets, Edit code, pausing refreshes while hidden, Keychain keys (API keys come from ANTHROPIC_API_KEY / CMD_MAGIC_API_KEY).

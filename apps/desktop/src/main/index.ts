@@ -3,6 +3,7 @@
 
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
+import { servePreviews } from "./preview.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, webContents, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -695,7 +696,7 @@ app.whenReady().then(async () => {
   // checked or started; the preload connects as soon as the socket answers.
   spaces.restore();
   ensureCore().then(
-    () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows), void countLaunch()),
+    () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows), servePreviews(socketPath), void countLaunch()),
     (err: Error) => (log.error("the core did not start", err), dialog.showErrorBox("cmd: the core did not start", err.message)),
   );
   followCrashReports(socketPath);

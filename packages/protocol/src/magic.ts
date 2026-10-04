@@ -215,6 +215,17 @@ export function widgetTokens(t: ThemeLike, fonts: { text?: string; mono?: string
   };
 }
 
+/**
+ * Evaluated in a rendered widget page (previews) once it settled: visible text,
+ * elements, whether something was drawn, its scroll size, and script errors
+ * host.js caught.
+ */
+export const WIDGET_MEASURE = `(() => {
+  const b = document.body;
+  const drawn = [...b.querySelectorAll("canvas,svg,img,video")].some((e) => { const r = e.getBoundingClientRect(); return r.width > 4 && r.height > 4; });
+  return { text: b.innerText.trim().length, nodes: b.querySelectorAll("*").length, drawn, scrollW: document.documentElement.scrollWidth, scrollH: document.documentElement.scrollHeight, errors: (window.__CMD_ERRORS__ || []).map((e) => e.message) };
+})()`;
+
 /** Widget size hints → the viewport the model is told about. */
 export const MAGIC_SIZES = { s: [320, 200], m: [480, 320], l: [720, 480], wide: [960, 280] } as const;
 

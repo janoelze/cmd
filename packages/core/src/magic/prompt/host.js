@@ -1,24 +1,24 @@
-// The runtime inside every Magic widget: the `cmd` object the model's views
-// use. Data and theme arrive from the host by postMessage ({type:"data"} /
-// {type:"tokens"}); a standalone page (cmd magic --out) sets window.__CMD_DATA__.
+// The runtime inside every Magic widget: the `cmd` object the views use. Data,
+// theme and the window's saved state arrive from the host by postMessage
+// ({type:"render"} / {type:"data"} / {type:"tokens"}); a standalone page (a
+// preview) sets window.__CMD_DATA__. cmd.state is kept by the core in the
+// window's state (the frame is sandboxed without an origin of its own, so it
+// has no localStorage): set() posts the change to the host.
 (() => {
   const listeners = [];
   let latest;
   let has = false;
-  const mem = {};
+  let kv = {};
   const store = {
     get(k) {
-      try {
-        const v = localStorage.getItem("cmd:" + k);
-        return v === null ? mem[k] : JSON.parse(v);
-      } catch {
-        return mem[k];
-      }
+      const v = kv[k];
+      return v === undefined ? undefined : JSON.parse(JSON.stringify(v));
     },
     set(k, v) {
-      mem[k] = v;
+      if (v === undefined || v === null) delete kv[k];
+      else kv[k] = JSON.parse(JSON.stringify(v));
       try {
-        localStorage.setItem("cmd:" + k, JSON.stringify(v));
+        if (parent !== window) parent.postMessage({ type: "state-set", key: String(k), value: v ?? null }, "*");
       } catch {}
     },
   };
@@ -321,6 +321,7 @@
     if (m.type === "stream") (setTokens(m.tokens), stream(m.html));
     if (m.type === "render") {
       setTokens(m.tokens);
+      if (m.kv && typeof m.kv === "object") kv = m.kv;
       render(m.html);
       if ("data" in m && m.data !== undefined) receive(m.data);
       else fit();

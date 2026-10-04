@@ -149,7 +149,7 @@ describe("the window's workspace", () => {
     const proj = path.join(home, "shop");
     fs.mkdirSync(proj);
     const seen: string[] = [];
-    const answer = '{"kind":"widget","title":"T","size":"s"}\n---\n<div>t</div>';
+    const answer = "Done.";
     const backend = {
       name: "fake",
       model: "fake-1",
@@ -170,7 +170,9 @@ describe("the window's workspace", () => {
     while (seen.length < 2 && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
     // The path may be shortened to ~ (Windows keeps temp folders in the home folder).
     expect(seen.find((t) => t.includes("Workspace:"))).toMatch(/the Space "shop" at \S*shop \(/);
-    expect(seen.filter((t) => t.includes("Workspace:"))).toHaveLength(1);
+    // Each window's request (its repair turns resend it): only the Space's names a workspace.
+    expect(new Set(seen.filter((t) => t.includes("Workspace:"))).size).toBe(1);
+    expect(seen.some((t) => !t.includes("Workspace:"))).toBe(true);
     await core.close();
   });
 });

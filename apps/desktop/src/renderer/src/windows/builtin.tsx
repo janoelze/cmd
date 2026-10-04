@@ -9,7 +9,8 @@ import { windowActions } from "../windowActions.ts";
 import { BrowserView } from "../components/BrowserView.tsx";
 import { DEVICES } from "../devices.ts";
 import { FilesView } from "../components/FilesView.tsx";
-import { MagicView } from "../components/MagicView.tsx";
+import { MagicView, setEditing } from "../components/MagicView.tsx";
+import { intervalLabel, refreshChoices } from "../magic.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
 
@@ -86,18 +87,11 @@ registerWindowView({
   },
 });
 
-/** Choices for a widget's source interval, in seconds (0: only on Refresh Now). */
-const REFRESH_CHOICES = [2, 5, 10, 30, 60, 300, 900, 3600, 0];
-function intervalLabel(s: number): string {
-  const [n, unit] = s % 3600 === 0 ? [s / 3600, "Hour"] : s % 60 === 0 ? [s / 60, "Minute"] : [s, "Second"];
-  return s === 0 ? "Never" : `${n} ${unit}${n === 1 ? "" : "s"}`;
-}
-
 /** Refresh Every ▸: the widget's interval, chosen by the model until the person picks one. */
 function refreshEvery(w: AppWindow): MenuEntry {
   const cur = typeof w.state.refresh === "number" ? w.state.refresh : 0;
   // The model's own interval (e.g. 3 s) is listed too, so it shows as checked.
-  const choices = REFRESH_CHOICES.includes(cur) ? REFRESH_CHOICES : [...REFRESH_CHOICES.slice(0, -1), cur].sort((x, y) => x - y).concat(0);
+  const choices = refreshChoices(cur);
   return {
     label: "Refresh Every",
     submenu: choices.map((s) => ({
@@ -123,10 +117,15 @@ registerWindowView({
   actions: (w) => {
     const phase = stateStr(w, "phase");
     const a = () => windowActions(w.id);
-    if (phase === "working") return [{ label: "Stop", run: () => a()?.stop?.() }];
+    const hasData = !!(w.state.source || w.state.hasData);
+    const health = w.state.health as { ok?: boolean } | undefined;
+    const problems = Array.isArray(w.state.problems) && w.state.problems.length > 0;
+    if (phase === "working") return [{ label: "Stop", run: () => a()?.stop?.() }, { label: "Edit Widget (⌘E)", run: () => setEditing(w.id, true) }];
     return [
       ...(phase === "ready" || stateStr(w, "html") ? [{ label: "Change…", run: () => a()?.change?.() }] : []),
-      ...(w.state.source ? [{ label: "Refresh Now", run: () => a()?.refresh?.() }, refreshEvery(w)] : []),
+      ...(phase !== "empty" ? [{ label: "Edit Widget (⌘E)", run: () => setEditing(w.id, true) }] : []),
+      ...(hasData ? [{ label: "Refresh Now", run: () => a()?.refresh?.() }, refreshEvery(w)] : []),
+      ...((health && health.ok === false) || problems || w.state.error ? [{ label: "Fix It", run: () => void cmd.call("magic.fix", { id: w.id }) }] : []),
     ];
   },
   menu: (w) => {

@@ -230,6 +230,19 @@ export class MagicService {
     }
     log.info(`run ${id.slice(0, 8)}${refining ? " (change)" : ""}`, { provider: s["magic.provider"], model: s[MAGIC_PROVIDERS[s["magic.provider"]].modelSetting] || "default" });
     void (async () => {
+      // The first widget on a Mac without Deno: get cmd's own copy before building.
+      if (!this.#deno() && this.#o.stateDir && this.#o.deno === undefined) {
+        const step: MagicStep = { id: 0, tool: "install", why: "Installing Deno for widgets (once)", detail: "deno.com" };
+        send({ type: "step", step });
+        const t0 = Date.now();
+        try {
+          await installDeno(this.#o.stateDir);
+          send({ type: "step", step: { ...step, ms: Date.now() - t0 } });
+        } catch (e) {
+          send({ type: "step", step: { ...step, ms: Date.now() - t0, isError: true, output: (e as Error).message } });
+          log.warn(`installing Deno failed: ${(e as Error).message}`);
+        }
+      }
       const ctx = await this.#verifyContext(this.#window(id), widgetId, ac.signal);
       return buildWidget({
         prompt: refining ? refineRequest(prev, text) : text,
@@ -536,7 +549,7 @@ export class MagicService {
     let retryAfter: number | undefined;
     let permission = false;
     if (!m.ok) error = `manifest.json: ${m.errors[0]}`;
-    else if (!deno) error = "Deno isn't installed (Settings → Magic Windows)";
+    else if (!deno) error = "Deno isn't installed (the widget's Health tab installs it)";
     else {
       const secrets = this.widgetSecrets.get(id);
       const r = await runData(this.store.dir(s.widgetId!), m.manifest, { ...deno, cwd: this.#cwd(w), config: { ...configValues(m.manifest, s.config), ...secrets } });

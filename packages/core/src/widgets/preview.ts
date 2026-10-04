@@ -5,7 +5,7 @@
 // an offscreen Electron window (main/preview.ts, through the core); the CLI
 // and a core without an app use Playwright's Chromium.
 
-import { MAGIC_SIZES, widgetCsp, widgetTokens, type ThemeLike } from "@cmd/protocol";
+import { MAGIC_SIZES, WIDGET_MEASURE, widgetCsp, widgetTokens, type ThemeLike } from "@cmd/protocol";
 import { widgetHtml } from "../magic/host.ts";
 import type { WidgetManifest } from "./manifest.ts";
 
@@ -37,11 +37,7 @@ export interface Previewer {
 }
 
 /** Evaluated in the page after it settled. */
-export const MEASURE = `(() => {
-  const b = document.body;
-  const drawn = [...b.querySelectorAll("canvas,svg,img,video")].some((e) => { const r = e.getBoundingClientRect(); return r.width > 4 && r.height > 4; });
-  return { text: b.innerText.trim().length, nodes: b.querySelectorAll("*").length, drawn, scrollW: document.documentElement.scrollWidth, scrollH: document.documentElement.scrollHeight, errors: (window.__CMD_ERRORS__ || []).map((e) => e.message) };
-})()`;
+export const MEASURE = WIDGET_MEASURE;
 
 /** Two themes to render with (from cmd's default dark and light themes). */
 export const PREVIEW_THEMES: Record<"dark" | "light", ThemeLike> = {

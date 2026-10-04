@@ -9,10 +9,12 @@ import { useSyncExternalStore } from "react";
 type Actions = {
   save?: () => void | Promise<void>;
   openExternally?: () => void;
-  /** Magic windows: change (refine), refresh the source, stop a run. */
+  /** Magic windows: change (refine), refresh the data, stop a run. */
   change?: () => void;
   refresh?: () => void;
   stop?: () => void;
+  /** ⌘E: a window's other face (Markdown preview / source, a Magic widget's edit view). */
+  toggleEdit?: () => void;
   /** ⌘F / ⌘G / ⇧⌘G. */
   find?: (r: "open" | "next" | "prev") => void;
 };

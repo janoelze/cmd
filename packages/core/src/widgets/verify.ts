@@ -31,7 +31,7 @@ export interface StaticCheck {
   warnings: string[];
 }
 
-const NO_DENO = "Deno isn't installed, so data.ts can't run (cmd can install it: Settings → Magic Windows)";
+const NO_DENO = "Deno isn't installed, so data.ts can't run (a widget's Health tab installs it, or: brew install deno)";
 
 /** Manifest, composing the view, and type-checking (no code runs). */
 export async function checkWidget(c: VerifyContext): Promise<StaticCheck> {

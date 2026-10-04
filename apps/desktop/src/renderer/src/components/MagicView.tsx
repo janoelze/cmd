@@ -1,15 +1,14 @@
-// Magic window (docs/12-magic-windows.md): a request in, a live widget or a
-// terminal command out. Empty, the window is one prompt field. While the agent
-// works, a dot-matrix animation and its current step show (every command too
-// with magic.showSteps); the widget appears only once its frame has painted
-// it. The widget runs in a sandboxed frame (cmd-widget://, see the main
-// process), fed with theme tokens and its source's data. Change (in the title
-// bar), Refresh and Stop are in the window's menu and the View menu; only Stop
-// shows on the window, while it is being made. A widget that streams media
-// asks once for its origins, over the dimmed widget; the frame's CSP opens
-// only the ones allowed.
+// Magic window (docs/14-magic-v2.md): a request in, a live widget (or a
+// terminal command) out. Empty, the window is one prompt field. While the agent
+// builds, a dot-matrix animation and its current step show (every tool call too
+// with magic.showSteps); the widget appears only once its frame has painted it.
+// ⌘E (and "Edit Widget" in its menu) turns the window to its edit view
+// (MagicEditor): changes and versions, settings, files, health. The widget
+// runs in a sandboxed frame (cmd-widget://, see the main process), fed with
+// theme tokens, its data and its saved cmd.state. Data that stops coming shows
+// as "Stale" with the reason; problems a build left show in a line with Fix.
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { requestedMedia, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { copy, openLink } from "../actions.ts";
@@ -21,17 +20,38 @@ import { ago } from "../model.ts";
 import { handleEmbedMessage } from "../embed.ts";
 import { DotMatrix } from "./DotMatrix.tsx";
 import { ICON, Symbol } from "./Symbol.tsx";
+import { MagicEditor } from "./MagicEditor.tsx";
 import "./magic.css";
 
 const EXAMPLES = ["show my VPN connection status", "weather in Lisbon this week", "how full is my disk", "my open pull requests on GitHub", "a 25 minute focus timer"];
+
+// Which windows show their edit view (kept across remounts, not across restarts).
+let editing = new Set<string>();
+const editListeners = new Set<() => void>();
+export function setEditing(id: string, on: boolean): void {
+  if (editing.has(id) === on) return;
+  editing = new Set(editing);
+  if (on) editing.add(id);
+  else editing.delete(id);
+  for (const fn of editListeners) fn();
+}
+function useEditing(id: string): boolean {
+  const set = useSyncExternalStore(
+    (fn) => (editListeners.add(fn), () => editListeners.delete(fn)),
+    () => editing,
+  );
+  return set.has(id);
+}
 
 export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const s = win.state as MagicState;
   const live = useMagicLive(win.id);
   const working = s.phase === "working";
   const showSteps = useStoreValue((x) => x.settings.settings["magic.showSteps"]);
-  const now = useNow(s.source ? 5000 : 0);
+  const hasData = !!(s.source || s.hasData);
+  const now = useNow(hasData ? 5000 : 0);
   const widget = s.kind === "widget" && !!s.html;
+  const edit = useEditing(win.id);
 
   // A run's progress stays up until the frame has painted the finished widget
   // with its data, so a half-built page never shows. `painted` is the HTML the
@@ -50,17 +70,17 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
   }, [awaiting, working]);
   const building = working || awaiting;
 
-  // Status in the title bar: working, how fresh the data is, or a stale source.
-  const dataAt = live.data?.at ?? s.lastData?.at;
+  // Status in the title bar: working, how fresh the data is, or why it's stale.
+  const dataAt = live.data && !live.data.error ? live.data.at : (s.health?.lastOk ?? s.lastData?.at);
+  const staleWhy = live.data?.error ?? (s.health && !s.health.ok ? s.health.error : undefined);
   useEffect(() => {
     let status: Parameters<typeof setWindowStatus>[1] = null;
-    // With a source, the status refreshes it on click, like ↻ and ⌘R.
     const refresh = { title: "Refresh now (⌘R)", run: () => void cmd.call("magic.refresh", { id: win.id }) };
-    if (building) status = { label: live.header ? "Drawing…" : "Working…", key: "working" };
-    else if (live.data?.error) status = { label: "Stale", key: "stale", action: s.source ? refresh : undefined };
-    else if (s.phase === "ready" && s.source && dataAt) status = { label: `Updated ${ago(dataAt, now)}`, key: "updated", action: refresh };
+    if (building) status = { label: live.verifying ? "Checking…" : "Working…", key: "working" };
+    else if (staleWhy && hasData) status = { label: `Stale · ${shortReason(staleWhy)}`, key: "stale", action: { title: `${staleWhy}\n\nRefresh now (⌘R)`, run: refresh.run } };
+    else if (s.phase === "ready" && hasData && dataAt) status = { label: `Updated ${ago(dataAt, now)}`, key: "updated", action: refresh };
     setWindowStatus(win.id, status);
-  }, [win.id, building, live.header, live.data?.error, s.phase, s.source, dataAt, now]);
+  }, [win.id, building, live.verifying, staleWhy, s.phase, hasData, dataAt, now]);
   useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
 
   const asked = useMemo(() => requestedMedia(s), [s.media, s.html]);
@@ -73,17 +93,19 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
     void cmd.call("magic.run", { id: win.id, prompt }).catch((e: Error) => console.error("magic.run", e));
   };
 
-  // Change (title-bar input), Refresh and Stop: the window's menu and the View
-  // menu (⌘L, ⌘R, ⌘.) route here, so they work while the widget has the keyboard.
+  // Change (title-bar input), Refresh, Stop and the edit view: the window's
+  // menu and the View menu (⌘L, ⌘R, ⌘., ⌘E) route here, so they work while the
+  // widget has the keyboard.
   const stop = () => void cmd.call("magic.cancel", { id: win.id });
-  const latest = useRef({ ready: !building && s.phase !== "empty", source: !!s.source, working, run });
-  latest.current = { ready: !building && s.phase !== "empty", source: !!s.source, working, run };
+  const latest = useRef({ ready: !building && s.phase !== "empty", data: hasData, working, run, empty: s.phase === "empty" });
+  latest.current = { ready: !building && s.phase !== "empty", data: hasData, working, run, empty: s.phase === "empty" };
   useEffect(
     () =>
       registerWindowActions(win.id, {
         change: () => latest.current.ready && editTitle(win.id, { placeholder: "Change something…", submit: (t) => latest.current.run(t) }),
-        refresh: () => latest.current.source && void cmd.call("magic.refresh", { id: win.id }),
+        refresh: () => latest.current.data && void cmd.call("magic.refresh", { id: win.id }),
         stop: () => latest.current.working && void cmd.call("magic.cancel", { id: win.id }),
+        toggleEdit: () => !latest.current.empty && setEditing(win.id, !editing.has(win.id)),
       }),
     [win.id],
   );
@@ -107,24 +129,45 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
     }
   }, [building, widget, s.phase]);
 
-  if (s.phase === "empty" || (s.phase === "error" && !s.html && !s.command)) {
+  if (s.phase === "empty" || (s.phase === "error" && !s.html && !s.command && !edit)) {
     return <PromptPane focused={focused} error={s.phase === "error" ? s.error : undefined} initial={s.prompt} onSubmit={run} />;
   }
+  if (edit) return <MagicEditor win={win} live={live} onRun={run} onClose={() => setEditing(win.id, false)} />;
+
+  const problems = s.problems?.length ? s.problems : null;
+  const broken = s.health && !s.health.ok && s.health.failures >= 3 && !s.health.retryAt;
   return (
     <div className={`magic${asking ? " needs-action" : ""}`}>
-      {/* While a refinement runs, the current widget stays underneath, dimmed. */}
+      {/* While a change runs, the current widget stays underneath, dimmed. */}
       {s.kind === "terminal" && !building ? (
         <TerminalOffer win={win} command={s.command ?? ""} />
       ) : widget ? (
-        <WidgetFrame win={win} html={s.html!} data={live.data?.data ?? s.lastData?.data} media={allowed} onPainted={setPainted} />
+        <WidgetFrame win={win} html={s.html!} data={live.data?.data ?? s.lastData?.data} kv={s.kv} media={allowed} onPainted={setPainted} />
       ) : null}
       {building && <Progress live={live} showSteps={showSteps} overlay={widget} />}
       {asking && <MediaRequest origins={pending} onAnswer={(allow) => void cmd.call("magic.media", { id: win.id, allow })} />}
-      {s.error && !building && <div className="magic-error" data-tip={s.error}>{s.error}</div>}
+      {!building && (s.error || problems || broken) && (
+        <div className="magic-error" data-tip={[s.error, ...(problems ?? []), broken ? s.health?.error : ""].filter(Boolean).join("\n")}>
+          <span className="magic-error-text">{s.error ?? (problems ? `${problems.length === 1 ? "A problem is" : `${problems.length} problems are`} left: ${problems[0]}` : `Data keeps failing: ${s.health?.error}`)}</span>
+          <button className="magic-link" onClick={() => void cmd.call("magic.fix", { id: win.id })}>
+            Fix
+          </button>
+          <button className="magic-link" onClick={() => setEditing(win.id, true)}>
+            Details
+          </button>
+        </div>
+      )}
       {working && <StopButton onStop={stop} />}
-      {hint && <div className="magic-hint-flash">Right-click or press ⌘L to change it</div>}
+      {hint && <div className="magic-hint-flash">Right-click to change it · ⌘E to edit</div>}
     </div>
   );
+}
+
+/** "HTTP 403 (rate limited?) from api.github.com: …" → "HTTP 403 (rate limited?)". */
+function shortReason(e: string): string {
+  const first = e.split("\n")[0]!.replace(/^data\.ts: /, "");
+  const http = /^HTTP \d+( \([^)]*\))?/.exec(first);
+  return (http?.[0] ?? first).slice(0, 48);
 }
 
 function useNow(every: number): number {
@@ -181,15 +224,12 @@ function PromptPane({ focused, error, initial, onSubmit }: { focused: boolean; e
 
 // ── working: the agent's steps ──────────────────────────
 
-/**
- * What the agent is doing, in its own few words (each step's `why`), newest
- * last. The commands behind them show only with magic.showSteps.
- */
+/** What the agent is doing, in its own few words (each step's `why`), newest last. */
 function messagesOf(live: MagicLive): string[] {
   const out: string[] = [];
   for (const st of live.steps) if (st.why && out.at(-1) !== st.why) out.push(st.why);
-  if (live.repair) out.push("Checking it once more…");
-  else if (live.header) out.push(live.header.loading[0] ?? `Drawing ${live.header.title}…`);
+  if (live.verifying) out.push("Checking that it works…");
+  else if (live.repair) out.push("Fixing what the check found…");
   if (!out.length) out.push("Reading the request…");
   return out;
 }
@@ -210,13 +250,13 @@ function Progress({ live, showSteps, overlay }: { live: MagicLive; showSteps: bo
 }
 
 /** magic.showSteps: every tool call with its command, time and (on click) output. */
-function StepList({ live }: { live: MagicLive }) {
+export function StepList({ live, steps, className }: { live?: MagicLive; steps?: MagicStep[]; className?: string }) {
   return (
-    <ol className="magic-steps">
-      {live.steps.map((st) => (
+    <ol className={className ?? "magic-steps"}>
+      {(steps ?? live?.steps ?? []).map((st) => (
         <StepRow key={st.id} step={st} />
       ))}
-      {live.repair && <li className="magic-step magic-repair">↻ {live.repair}</li>}
+      {live?.repair && <li className="magic-step magic-repair">↻ {live.repair}</li>}
     </ol>
   );
 }
@@ -265,7 +305,7 @@ function MediaRequest({ origins, onAnswer }: { origins: string[]; onAnswer: (all
 /** The frame's URL decides its CSP (main process), so a new set of allowed origins loads a new frame.
  *  So does new HTML: its scripts run at the page's top level, and a second set in the same page
  *  would collide with the first's let/const (and leave its timers and listeners running). */
-function WidgetFrame({ media, ...props }: { win: AppWindow; html: string; data: unknown; media: string[]; onPainted: (html: string) => void }) {
+export function WidgetFrame({ media, ...props }: { win: AppWindow; html: string; data: unknown; kv?: Record<string, unknown>; media: string[]; onPainted?: (html: string) => void }) {
   const [src, setSrc] = useState<string | null>(media.length ? null : "cmd-widget://frame/");
   const key = media.join(" ");
   useEffect(() => {
@@ -277,7 +317,7 @@ function WidgetFrame({ media, ...props }: { win: AppWindow; html: string; data: 
   return src ? <Frame key={`${src}\n${props.html}`} src={src} {...props} /> : <div className="magic-frame" />;
 }
 
-function Frame({ win, src, html, data, onPainted }: { win: AppWindow; src: string; html: string; data: unknown; onPainted: (html: string) => void }) {
+function Frame({ win, src, html, data, kv, onPainted }: { win: AppWindow; src: string; html: string; data: unknown; kv?: Record<string, unknown>; onPainted?: (html: string) => void }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   // Hidden until the page reports the current HTML painted (host.js "rendered").
@@ -285,25 +325,40 @@ function Frame({ win, src, html, data, onPainted }: { win: AppWindow; src: strin
   const sent = useRef<string | null>(null);
   const paintedRef = useRef(onPainted);
   paintedRef.current = onPainted;
+  const kvRef = useRef(kv);
+  kvRef.current = kv;
   const markPainted = (h: string) => {
     setPainted(h);
-    paintedRef.current(h);
+    paintedRef.current?.(h);
   };
   const theme = useTheme();
   const fonts = useStoreValue((s) => s.settings.settings);
   const tokens = useMemo(() => widgetTokens(theme, { text: fonts["font.text"], mono: fonts["font.code"] }), [theme, fonts]);
   const post = (m: unknown) => ref.current?.contentWindow?.postMessage(m, "*");
 
+  // cmd.state.set from the widget: kept in the window's state by the core, a moment later (sliders send many).
+  const pendingState = useRef(new Map<string, unknown>());
+  const stateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushState = () => {
+    stateTimer.current = null;
+    for (const [key, value] of pendingState.current) void cmd.call("magic.state", { id: win.id, key, value }).catch(() => {});
+    pendingState.current.clear();
+  };
+  useEffect(() => () => void (stateTimer.current && (clearTimeout(stateTimer.current), flushState())), []);
+
   // Messages from the frame: only from our own frame (opaque origins all say "null").
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.source !== ref.current?.contentWindow || !e.data || typeof e.data !== "object") return;
-      const m = e.data as { type?: string; url?: string; message?: string };
+      const m = e.data as { type?: string; url?: string; message?: string; key?: unknown; value?: unknown };
       if (m.type === "ready") setReady(true);
       else if (m.type === "rendered") sent.current !== null && markPainted(sent.current);
       else if (handleEmbedMessage(ref.current!, m)) return;
       else if (m.type === "open-url" && typeof m.url === "string" && /^https?:\/\//i.test(m.url)) openLink(m.url);
-      else if (m.type === "error") console.warn(`magic ${win.id}:`, m.message);
+      else if (m.type === "state-set" && typeof m.key === "string") {
+        pendingState.current.set(m.key, m.value ?? null);
+        stateTimer.current ??= setTimeout(flushState, 800);
+      } else if (m.type === "error") console.warn(`magic ${win.id}:`, m.message);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -313,7 +368,7 @@ function Frame({ win, src, html, data, onPainted }: { win: AppWindow; src: strin
   useEffect(() => {
     if (!ready) return;
     sent.current = html;
-    post({ type: "render", html, tokens, data });
+    post({ type: "render", html, tokens, data, kv: kvRef.current ?? {} });
     // Never stay hidden if the page doesn't answer.
     const t = setTimeout(() => markPainted(html), 1500);
     return () => clearTimeout(t);

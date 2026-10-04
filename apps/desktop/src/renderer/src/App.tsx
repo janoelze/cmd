@@ -346,7 +346,9 @@ export function App() {
     "view.canvasZoomWindow": () => (setMode("canvas"), requestCanvas("window")),
     "view.toggleEdit": () => {
       const w = selected ? s.windows.get(selected) : undefined;
-      if (w) toggleMarkdownEdit(w);
+      const own = windowActions(selected)?.toggleEdit;
+      if (own) own();
+      else if (w) toggleMarkdownEdit(w);
     },
     "view.cycleWidth": () => {
       if (!selected) return;

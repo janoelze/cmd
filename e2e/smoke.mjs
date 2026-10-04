@@ -43,7 +43,7 @@ const launch = async () => {
   const app = await electron.launch({
     executablePath: require("electron"),
     args: [path.join(root, "apps/desktop")],
-    env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_TRANSCRIPTS_HOME: transcripts },
+    env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts },
   });
   const win = await app.firstWindow();
   win.on("pageerror", (e) => console.log("pageerror:", e.message));
@@ -669,6 +669,80 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(await scrolls(page, pageId), "sideways scrolling over a browser page scrolls the strip");
   await menu("view.grid");
   for (const id of magic) await call("window.close", { id });
+}
+
+// Magic v2 (docs/14-magic-v2.md): cmd.state survives the frame, the app renders
+// previews for the core, and a widget folder's data.ts runs in the core (Deno,
+// validated against its schema). The folder is staged as a revision and brought
+// back with magic.restore, the path a real build ends in; no model runs.
+{
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const rt = await call("magic.runtime");
+  check(rt.previewer === "app", `the app renders widget previews for the core (${rt.previewer})`);
+
+  // cmd.state: kept by the core, there again in a new frame.
+  const kept = await call("window.open", { kind: "magic", input: {} });
+  const counter = (v) => `<div id="k"></div><script>/*${v}*/const n=(cmd.state.get("n")||0)+1;cmd.state.set("n",n);k.textContent=String(n)</script>`;
+  await call("window.update", { id: kept.id, title: "Kept", state: { prompt: "kept", phase: "ready", kind: "widget", html: counter(1), refresh: 0, size: "s", lastData: null } });
+  await win.waitForTimeout(2500);
+  const storedN = (await call("window.list")).find((x) => x.id === kept.id).state.kv?.n;
+  await call("window.update", { id: kept.id, state: { html: counter(2) } });
+  await win.waitForTimeout(1500);
+  const shownN = await win.frameLocator(`.tile[data-pane="${kept.id}"] iframe.magic-frame`).locator("#k").textContent({ timeout: 5000 });
+  check(storedN === 1 && shownN === "2", `cmd.state is kept by the core across frames (${storedN}, ${shownN})`);
+  await call("window.close", { id: kept.id });
+
+  const deno = rt.deno;
+  if (!deno) console.log("  (skipped: no Deno for widget data)");
+  else {
+    const w = await call("window.open", { kind: "magic", input: {} });
+    const dir = path.join(home, "widgets", w.id);
+    const files = {
+      "manifest.json": JSON.stringify({ cmd: 2, kind: "widget", title: "Counter", size: "s", refresh: 0, config: [{ key: "start", title: "Start", type: "number", default: 40 }] }),
+      "data.ts": 'import { s, type Infer } from "cmd";\nexport const schema = s.object({ n: s.number() });\nexport type Data = Infer<typeof schema>;\nexport default async (c: { start: number }): Promise<Data> => ({ n: c.start + 2 });\n',
+      "view.html": '<div class="k-big" id="n">–</div>',
+      "view.ts": 'import type { Data } from "./data.ts";\nconst el = document.getElementById("n")!;\ncmd.onData<Data>((d) => { el.textContent = String(d.n); });\n',
+    };
+    const rev = path.join(dir, "revisions", "0001");
+    for (const [f, t] of Object.entries(files)) {
+      fs.mkdirSync(path.join(rev, "files"), { recursive: true });
+      fs.writeFileSync(path.join(rev, "files", f), t);
+    }
+    fs.writeFileSync(path.join(rev, "meta.json"), JSON.stringify({ n: 1, at: Date.now(), prompt: "a counter", ok: true }));
+    await call("window.update", { id: w.id, state: { prompt: "a counter", phase: "ready", widgetId: w.id } });
+    await call("magic.restore", { id: w.id, revision: 1 });
+    const frameN = () => win.frameLocator(`.tile[data-pane="${w.id}"] iframe.magic-frame`).locator("#n").textContent({ timeout: 8000 });
+    let shown = "";
+    for (let i = 0; i < 20 && shown !== "42"; i++) {
+      await win.waitForTimeout(500);
+      shown = await frameN().catch(() => "");
+    }
+    const st = (await call("window.list")).find((x) => x.id === w.id);
+    check(shown === "42" && st.title === "Counter" && st.state.hasData && st.state.revision === 2, `a widget's data.ts runs in the core and its typed view shows it (${shown}, ${st.title}, v${st.state.revision})`);
+
+    // Its settings reach data.ts.
+    await call("magic.config", { id: w.id, values: { start: 98 } });
+    for (let i = 0; i < 20 && shown !== "100"; i++) {
+      await win.waitForTimeout(500);
+      shown = await frameN().catch(() => "");
+    }
+    check(shown === "100", `a widget's settings reach its data (${shown})`);
+
+    // ⌘E: the edit view, with its versions; ⌘E again: back to the widget.
+    await win.locator(`.tile[data-pane="${w.id}"]`).click({ position: { x: 20, y: 10 } });
+    await menu("view.toggleEdit");
+    await win.waitForTimeout(600);
+    const tile = win.locator(`.tile[data-pane="${w.id}"]`);
+    const versions = await tile.locator(".magic-revision").count();
+    const tabs = await tile.locator(".magic-tab").allTextContents();
+    await tile.locator(".magic-tab", { hasText: "Settings" }).click();
+    const fields = await tile.locator(".magic-field").allTextContents();
+    await win.screenshot({ path: path.join(shots, "magic-edit.png") });
+    await menu("view.toggleEdit");
+    await win.waitForTimeout(400);
+    check(versions === 2 && tabs.join(",").startsWith("Changes,Settings,Files,Health") && fields.some((f) => f.includes("Start")) && !(await tile.locator(".magic-edit").count()), `⌘E shows a widget's edit view (versions, settings) and back (${versions}, ${tabs.join("/")})`);
+    await call("window.close", { id: w.id });
+  }
 }
 
 // Settings: its own native window (⌘,), generated from the schema; changes apply live.
