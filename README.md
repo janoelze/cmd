@@ -33,6 +33,7 @@ Run Claude Code, Codex and your shells side by side, and see at a glance which a
 - **More than terminals.** Browser, file tree, text editor and Markdown windows sit next to your terminals. `open README.md` in the shell opens it in cmd.
 - **Magic windows.** Describe what you want to see ("show my VPN status", a JSON URL, "my open pull requests") and an agent builds a live widget for it, in your theme, that keeps itself up to date. [More below](#magic-windows).
 - **Notifications that lead somewhere.** An agent waiting, a bell, a long command finishing, an OSC 9/777/99 notification or `cmd notify`: the terminal is marked until you look at it, and counts toward the Dock badge.
+- **A complete terminal.** Find in scrollback, jump between prompts, copy a command's output, inline images (Sixel, iTerm2's protocol), programs copying over ssh (OSC 52), drag files in for their paths, a check before risky pastes, Option as Meta on either side, modern Unicode widths.
 - **Keyboard first.** Every action is in the menu bar and the command palette (⌘K), and every shortcut can be remapped.
 - **Scriptable.** The `cmd` CLI spawns, messages, waits on and stops agents, so an agent can run other agents.
 - **16 themes**, light and dark, following the system or not.
@@ -101,7 +102,7 @@ Every shortcut is a real menu-bar item. Remap any of them under Settings → Key
 
 | | |
 |---|---|
-| ⌘N (⌘T) | new terminal (in the current folder) |
+| ⌘N (⌘T) | new terminal, in the folder of the selected window (terminal, file browser, file) |
 | ⌥⌘N | new Claude session |
 | ⇧⌘M | new Magic window; in one, ⌘L changes it, ⌘R refreshes its data, ⌘. stops it while it is being made |
 | ⌘W | close the frontmost thing: the palette, then the terminal (asks if something is running), then the window |
@@ -113,6 +114,11 @@ Every shortcut is a real menu-bar item. Remap any of them under Settings → Key
 | ⌘, | settings |
 | ⌘C / ⌘V / ⌘A | copy / paste / select all, in the terminal or a text field |
 | ⌥⌘K | clear buffer |
+| ⌘F / ⌘G / ⇧⌘G | find in the terminal's scrollback (or the text window), next, previous |
+| ⌘↑ / ⌘↓ | terminal: jump to the previous / next prompt (needs shell integration) |
+| ⇧⌘A | copy the last command's output |
+| ⌘Home / ⌘End, ⌘PgUp / ⌘PgDn | terminal: scroll to the top / bottom, by a page |
+| ⌥-drag | select text in programs that use the mouse (Claude Code, vim) |
 | ⌘+ / ⌘− / ⌘0 | terminal text size (this session only) |
 | ⌥⌘1/2/3/4 | focus / grid / strip / canvas |
 | ⌘↩ | toggle focus: the selected window fills the pane; again returns to grid, strip or canvas |
