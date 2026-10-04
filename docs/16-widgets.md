@@ -1,6 +1,6 @@
 # Widgets and the Widget Library
 
-> Status (2026-10-05), branch `widget-library`: proposal, not built. It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
+> Status (2026-10-05), branch `widget-library`: phase 1 (widgets apart from windows, in the core) is built; the rest is a proposal. It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
 
 Magic widgets are windows today, in the code and to the people using them. "New Magic Widget" sits in File next to New Terminal, closing one throws it away (after 30 days in `widgets/closed/`), and nothing ships with cmd except the ability to make one. This proposal makes widgets their own thing for people, while the code keeps treating them almost like windows.
 
@@ -100,9 +100,18 @@ Three layers:
 
 1. **Widget type**: a `WindowType` with `role: "widget"` (default `"window"`), plus `description` and an optional `config` schema (same field shape as a manifest's `config`), exposed through `WindowTypeInfo`. Built-in widgets are their own types (`agents`, `diff`); every Magic widget shares the `magic` type. Plugins add widgets the same way later.
 2. **Widget definition**: what the library lists. A built-in is its type. A Magic widget is its folder (`$CMD_HOME/widgets/<widget id>/`), with an id of its own, kept until deleted, plus library metadata (title, description, last used, made at).
-3. **Widget instance**: a window. Its `MagicState` slims down to what this copy needs: `widgetId`, `config`, `kv`, `refresh`, `health`, `status`, `lastData`, the composed `html` (a cache, so it draws at once). What belongs to the widget moves into its folder: `revision`, `problems`, `steps`, `history`, `summary`.
+3. **Widget instance**: a window. Its `MagicState` has what this copy needs (`widgetId`, `config`, `kv`, `refresh`, `health`, `status`, `lastData`) plus what it draws from the widget (the composed `html`, `revision`, `problems`, `steps`, `history`, `summary`). The folder is where those live: `widget.json` (title, history, summary, made, last used; agents can't write it) and the revisions. The window's copy is a cache, so it draws at once, and the core updates every copy when the widget changes.
 
-Opening a widget from the library is `window.open({ kind, input })`, as for any window: `{ kind: "magic", input: { widgetId } }` or `{ kind: "agents" }`.
+Opening a widget from the library is `window.open({ kind, input })`, as for any window: `{ kind: "magic", input: { widgetId } }` or `{ kind: "agents" }`. For a Magic widget the core then fills the window from the folder (`MagicService.opened`).
+
+What phase 1 settled in the core (`magic/service.ts`):
+
+- A new widget gets a random id. A new request in a window whose widget is in the library makes another widget; it never overwrites one.
+- One window at a time changes a widget; another window asking meanwhile is refused ("being changed in another window").
+- A finished change, a restore and a hand edit reach every window showing the widget. The folder watcher is per widget and stays while any window shows it.
+- Secrets (`widget-secrets.json`) are per widget, so every copy, and a later one, has them. Config, `cmd.state`, refresh, health and notifications are per window.
+- Closing a window keeps its widget (last used is updated). A draft that never built is deleted with its last window.
+- `deleteWidget` refuses while a window shows the widget.
 
 ### Built-in widgets are native
 
@@ -125,13 +134,13 @@ The folder format reaches the library as **Examples**: adding one copies its fol
 
 ### Migration
 
-Folders are named after their window's id today, and `MagicState.widgetId` already exists (`prev.widgetId ?? id`). Migration fills `widgetId` where it is missing, moves the definition fields from window state into the folder's metadata, and moves `widgets/closed/*` into the library. v1 windows (a `source` in their state) get no library entry until their first change rebuilds them.
+Built in phase 1. Folders of existing windows are named after their window's id, and those windows already have `widgetId`, so they keep working as they are. A folder without `widget.json` is described from its revisions and manifest until something writes one. `widgets/closed/<id>-<time>` folders that were built move into the library at startup (under `<id>`); the rest are deleted, and so is `closed/`. Secrets were keyed by window id, which is the widget id of every existing widget. v1 windows (a `source` in their state) get no library entry until their first change rebuilds them.
 
 ## Plan
 
 One worktree per phase; each ends green.
 
-1. **Widgets apart from windows** (core only, no visible change): widget ids, definition fields in the folder, no `closed/`, recompose all copies on change, migration. Tests in `widgets.test.ts`. The risky step.
+1. **Widgets apart from windows** (core only, no visible change), built: widget ids, `widget.json`, no `closed/`, every copy updated on change, migration; `MagicService.library()`, `opened()`, `deleteWidget()`. Tests in `widgets.test.ts`.
 2. **Registry and protocol**: `role`/`description`/`config` on window types; `widget.*` methods and event; `cmd widget list/add`.
 3. **The library and the split**: the sheet, the Widgets menu, the sidebar's + and Widgets section, Remove from Desk and its toast, new labels in `shared/commands.ts`.
 4. **Built-ins**: Agent Activity, then Live Diff with `git.diff`.

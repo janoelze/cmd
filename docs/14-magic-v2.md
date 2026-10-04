@@ -65,7 +65,7 @@ Looking at the Magic widgets and logs on Jan's Mac (2026-10-04):
 | `static.json` | data that never changes (pasted JSON) |
 | `revisions/NNNN/` | each version: its files, `meta.json` (what was asked, checks passed, model), `shot.png` |
 
-The window's state keeps only what it needs to draw: `widgetId`, `revision`, the composed view, the last data, `health`, `config`, `kv` (`cmd.state`). Closing a window moves its folder to `widgets/closed/`, where it is kept for 30 days.
+The window's state keeps only what it needs to draw: `widgetId`, `revision`, the composed view, the last data, `health`, `config`, `kv` (`cmd.state`). Closing a window keeps its widget in the library ([16-widgets.md](16-widgets.md)); it used to move to `widgets/closed/` for 30 days.
 
 ### data.ts: typed, permissioned, sandboxed
 

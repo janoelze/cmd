@@ -340,7 +340,12 @@ export class Core {
     "window.open": (p) => {
       const input = p.input ?? {};
       const at = [input.cwd, input.path].find((v): v is string => typeof v === "string");
-      return this.#opened(this.windows.open(p.kind, input, this.#place(p, { path: at })));
+      // A Magic window for a widget in the library: only one that exists.
+      const widgetId = p.kind === "magic" && typeof input.widgetId === "string" ? input.widgetId : null;
+      if (widgetId && !this.magic.library().some((e) => e.id === widgetId)) throw new Error(`no such widget: ${widgetId}`);
+      const w = this.windows.open(p.kind, input, this.#place(p, { path: at }));
+      if (widgetId) this.magic.opened(w.id);
+      return this.#opened(this.windows.others().find((x) => x.id === w.id) ?? w);
     },
     "window.update": (p) => this.windows.update(p.id, p),
     "window.types": () => this.windowTypes.info(),

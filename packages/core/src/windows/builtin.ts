@@ -139,15 +139,18 @@ export const terminalType: WindowType<{ paneId: string }> = {
 };
 
 /**
- * Magic widgets (docs/12-magic-widgets.md): a request in, a widget or terminal
- * command out. Created empty or with a request; the MagicService fills the state.
+ * Magic widgets (docs/12-magic-widgets.md, docs/16-widgets.md): a request in, a
+ * widget or terminal command out. Created empty, with a request, or showing a
+ * widget from the library (`widgetId`); the MagicService fills the state.
  */
-export const magicType: WindowType<{ prompt: string; phase: string }> = {
+export const magicType: WindowType<{ prompt: string; phase: string; widgetId?: string }> = {
   kind: "magic",
   title: "Magic Widget",
   icon: "sparkles",
   create(input) {
-    return { state: { prompt: str(input.prompt) ?? "", phase: "empty" }, title: "Magic Widget" };
+    const widgetId = str(input.widgetId);
+    if (widgetId !== undefined && !/^[\w-]+$/.test(widgetId)) throw new Error(`bad widget id: ${widgetId}`);
+    return { state: { prompt: str(input.prompt) ?? "", phase: "empty", ...(widgetId ? { widgetId } : {}) }, title: "Magic Widget" };
   },
 };
 

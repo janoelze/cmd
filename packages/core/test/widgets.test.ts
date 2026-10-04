@@ -332,10 +332,10 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     }
   };
 
-  async function setup(backend: Backend) {
+  async function setup(backend: Backend, stateDir?: string) {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
-    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, magicBackend: () => backend, magicPreviewer: fakePreviewer, magicDeno: DENO });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, magicBackend: () => backend, magicPreviewer: fakePreviewer, magicDeno: DENO, stateDir });
     const events: { type: string; id?: string; data?: unknown; error?: string }[] = [];
     core.serve({ access: "local", send: (line) => {
       const m = JSON.parse(line) as { method?: string; params?: { type: string } };
@@ -354,7 +354,9 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(state().phase).toBe("working");
     await until(() => state().phase === "ready");
     expect(title()).toBe("Count");
-    expect(state()).toMatchObject({ kind: "widget", widgetId: id, revision: 1, hasData: true, refresh: 5, lastData: { data: { n: 3 } }, summary: "Shows a count.", health: { ok: true } });
+    expect(state().widgetId).toMatch(/^[\w-]+$/);
+    expect(state().widgetId).not.toBe(id);
+    expect(state()).toMatchObject({ kind: "widget", revision: 1, hasData: true, refresh: 5, lastData: { data: { n: 3 } }, summary: "Shows a count.", health: { ok: true } });
     expect(String(state().html)).toContain("cmd.onData");
     const info = core.handlers["magic.widget"]({ id }) as unknown as { revisions: { n: number; prompt: string }[]; files: string[] };
     expect(info.revisions).toEqual([expect.objectContaining({ n: 1, prompt: "count to three", ok: true })]);
@@ -467,6 +469,78 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(state().mediaDenied).toEqual(["https://a.example", "https://b.example"]);
     core.handlers["magic.media"]({ id, allow: true });
     expect(state()).toMatchObject({ mediaAllowed: ["https://a.example", "https://b.example"], mediaDenied: [] });
+    await core.close();
+  });
+
+  it("keeps a widget in the library when its window closes, but not a draft that never built", async () => {
+    const backend = scripted([{ calls: WIDGET_CALLS(), answer: "Shows a count." }, { calls: [], answer: "gave up" }]);
+    const { core, id, state } = await setup(backend);
+    core.handlers["magic.run"]({ id, prompt: "count to three" });
+    await until(() => state().phase === "ready");
+    const widgetId = String(state().widgetId);
+    expect(core.magic.library()).toEqual([expect.objectContaining({ id: widgetId, title: "Count", history: ["count to three"], summary: "Shows a count.", revision: 1, windows: [id] })]);
+    core.handlers["window.close"]({ id });
+    expect(core.magic.library()).toEqual([expect.objectContaining({ id: widgetId, windows: [] })]);
+    expect(fs.existsSync(core.magic.store.dir(widgetId))).toBe(true);
+
+    // A request that never built leaves nothing behind.
+    const draft = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
+    const draftState = () => core.windows.others().find((x) => x.id === draft.id)!.state as Record<string, unknown>;
+    core.handlers["magic.run"]({ id: draft.id, prompt: "something impossible" });
+    await until(() => draftState().phase === "error");
+    const draftDir = core.magic.store.dir(String(draftState().widgetId));
+    core.handlers["window.close"]({ id: draft.id });
+    expect(fs.existsSync(draftDir)).toBe(false);
+    expect(core.magic.library().map((e) => e.id)).toEqual([widgetId]);
+
+    core.magic.deleteWidget(widgetId);
+    expect(core.magic.library()).toEqual([]);
+    await core.close();
+  });
+
+  it("shows one widget in several windows: changes reach every copy, config and data stay per copy", async () => {
+    const backend = scripted([{ calls: WIDGET_CALLS(), answer: "v1" }, { calls: [write("view.html", '<div id="n" class="k-big"></div>')], answer: "v2" }]);
+    const { core, id, state, events } = await setup(backend);
+    core.handlers["magic.run"]({ id, prompt: "count" });
+    await until(() => state().phase === "ready");
+    const widgetId = String(state().widgetId);
+    expect(() => core.handlers["window.open"]({ kind: "magic", input: { widgetId: "nope" } })).toThrow(/no such widget/);
+    const copy = core.handlers["window.open"]({ kind: "magic", input: { widgetId } }) as unknown as { id: string };
+    const copyState = () => core.windows.others().find((x) => x.id === copy.id)!.state as Record<string, unknown>;
+    expect(copyState()).toMatchObject({ phase: "ready", widgetId, revision: 1, prompt: "count", history: ["count"], hasData: true });
+    expect(copyState().html).toBe(state().html);
+    expect(core.magic.library()[0]!.windows.sort()).toEqual([id, copy.id].sort());
+    expect(() => core.magic.deleteWidget(widgetId)).toThrow(/on the desk/);
+
+    core.handlers["magic.config"]({ id: copy.id, values: { start: 10 } });
+    await until(() => events.some((e) => e.type === "magic.data" && e.id === copy.id && (e.data as { n?: number })?.n === 13));
+    expect(state().config).toBeUndefined();
+
+    core.handlers["magic.run"]({ id, prompt: "bigger" });
+    expect(() => core.handlers["magic.run"]({ id: copy.id, prompt: "smaller" })).toThrow(/another window/);
+    await until(() => state().phase === "ready" && state().revision === 2 && copyState().revision === 2);
+    expect(String(copyState().html)).toContain("k-big");
+    expect(copyState()).toMatchObject({ history: ["count", "bigger"], config: { start: 10 } });
+
+    // Closing one copy keeps watching for the other.
+    core.handlers["window.close"]({ id });
+    fs.writeFileSync(path.join(core.magic.store.dir(widgetId), "view.html"), '<div id="n" class="k-huge">–</div>');
+    await until(() => copyState().revision === 3, 5000);
+    expect(String(copyState().html)).toContain("k-huge");
+    await core.close();
+  });
+
+  it("moves widgets of windows closed before the library into it", async () => {
+    const stateDir = tmp("cmd-library-");
+    const old = new WidgetStore(path.join(stateDir, "widgets", "closed"));
+    old.ensure("aaa-111");
+    old.write("aaa-111", "manifest.json", MANIFEST({ title: "Old" }));
+    old.snapshot("aaa-111", { prompt: "an old one", ok: true });
+    fs.renameSync(old.dir("aaa-111"), path.join(old.root, `aaa-111-${Date.now()}`));
+    fs.mkdirSync(path.join(old.root, "bbb-222-1700000000000")); // never built
+    const { core } = await setup(scripted([]), stateDir);
+    expect(core.magic.library()).toEqual([expect.objectContaining({ id: "aaa-111", title: "Old", history: ["an old one"] })]);
+    expect(fs.existsSync(old.root)).toBe(false);
     await core.close();
   });
 

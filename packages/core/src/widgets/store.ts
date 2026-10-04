@@ -2,7 +2,9 @@
 // manifest.json, data.ts, view.html, view.ts, fixtures/ and revisions/. The
 // working files are the current state; every build (and every hand edit cmd
 // notices) is kept as a revision: a copy of the files with what was asked, so
-// any version can be looked at and brought back.
+// any version can be looked at and brought back. A widget has an id of its
+// own and outlives the windows that show it (docs/16-widgets.md): widget.json
+// keeps what the library lists.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -30,6 +32,21 @@ export interface RevisionMeta {
   model?: string;
   /** Has a screenshot (revisions/<n>/shot.png). */
   shot?: boolean;
+}
+
+/**
+ * What the library knows about a widget (widget.json, beside its files; not a
+ * widget file, so agents can't write it). Windows show a widget; this outlives them.
+ */
+export interface WidgetInfo {
+  title: string;
+  /** The first request, then each change. */
+  history: string[];
+  /** The agent's closing words for the last build. */
+  summary?: string;
+  createdAt: number;
+  /** When a window last showed it (opened, closed, built). */
+  usedAt: number;
 }
 
 export interface Composed {
@@ -240,6 +257,44 @@ export class WidgetStore {
 
   delete(id: string): void {
     fs.rmSync(this.dir(id), { recursive: true, force: true });
+  }
+
+  // ── the library ────────────────────────────────────────
+
+  /** Widgets that were built at least once (have a revision), by id. */
+  ids(): string[] {
+    let names: string[];
+    try {
+      names = fs.readdirSync(this.root);
+    } catch {
+      return [];
+    }
+    return names.filter((n) => /^[\w-]+$/.test(n) && n !== "closed" && !!this.latest(n));
+  }
+
+  /** widget.json; folders from before it are described from their revisions and manifest. */
+  info(id: string): WidgetInfo | null {
+    const revs = this.revisions(id);
+    if (!revs.length) return null;
+    let saved: Partial<WidgetInfo> = {};
+    try {
+      saved = JSON.parse(fs.readFileSync(path.join(this.dir(id), "widget.json"), "utf8")) as Partial<WidgetInfo>;
+    } catch {}
+    const m = this.manifest(id);
+    return {
+      title: saved.title || (m.ok ? m.manifest.title : "") || "Widget",
+      history: saved.history?.length ? saved.history : [revs[0]!.prompt],
+      summary: saved.summary,
+      createdAt: saved.createdAt ?? revs[0]!.at,
+      usedAt: saved.usedAt ?? revs.at(-1)!.at,
+    };
+  }
+
+  setInfo(id: string, patch: Partial<WidgetInfo>): void {
+    const now = Date.now();
+    const prev = this.info(id) ?? { title: "Widget", history: [], createdAt: now, usedAt: now };
+    fs.mkdirSync(this.dir(id), { recursive: true });
+    fs.writeFileSync(path.join(this.dir(id), "widget.json"), JSON.stringify({ ...prev, ...patch }, null, 2) + "\n");
   }
 }
 

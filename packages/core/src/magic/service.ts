@@ -1,8 +1,10 @@
-// Magic widgets in the core (docs/14-magic-v2.md). Each window has a widget
-// folder ($CMD_HOME/widgets/<window id>): the agent builds it there
-// (buildWidget), every build and hand edit is kept as a revision, and the
-// window's state holds what it needs to draw (the composed view, the last
-// data, health). The core then runs the widget's data.ts on its interval,
+// Magic widgets in the core (docs/14-magic-v2.md, docs/16-widgets.md). A
+// widget is a folder ($CMD_HOME/widgets/<widget id>) with an id of its own:
+// the agent builds it there (buildWidget), every build and hand edit is kept
+// as a revision, and it stays in the library when its windows close. Windows
+// are copies of a widget: each has its own config, cmd.state and data runs,
+// and its state holds what it needs to draw (the composed view, the last
+// data, health); a change to the widget reaches every copy. The core then runs the widget's data.ts on its interval,
 // validated against its schema, and streams the data to the UI (magic.data);
 // failures keep the last good data on screen, are shown with their reason,
 // and wait as long as the server asks. The agent is never involved in a
@@ -10,6 +12,7 @@
 // until they are changed, which rebuilds them as widgets.
 
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { logger } from "@cmd/protocol/node";
@@ -19,6 +22,7 @@ import {
   type AppWindow,
   type CoreEvent,
   type MagicHealth,
+  type MagicLibraryEntry,
   type MagicModel,
   type MagicNotify,
   type MagicRuntime,
@@ -93,8 +97,6 @@ const PERSIST_DATA_MS = 60_000;
 const MODELS_TTL_MS = 10 * 60_000;
 /** The shortest interval data runs at. */
 const MIN_REFRESH_S = 2;
-/** Closed windows' widgets are kept this long (widgets/closed/). */
-const CLOSED_KEEP_MS = 30 * 24 * 3600_000;
 /** Failures in a row before magic.autoFix asks the agent. */
 const AUTO_FIX_AFTER = 3;
 
@@ -114,8 +116,13 @@ export class MagicService {
   #timers = new Map<WindowId, ReturnType<typeof setTimeout>>();
   #failures = new Map<WindowId, number>();
   #persistedAt = new Map<WindowId, number>();
-  #watchers = new Map<WindowId, fs.FSWatcher>();
-  #editTimers = new Map<WindowId, ReturnType<typeof setTimeout>>();
+  /** Per widget id: its folder's watcher, and the hand edit waiting to settle. */
+  #watchers = new Map<string, fs.FSWatcher>();
+  #editTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** The widget each Magic window shows (kept here: a closed window's state is gone by "removed"). */
+  #widgetOf = new Map<WindowId, string>();
+  /** Widgets being made or changed, and the window doing it. */
+  #building = new Map<string, WindowId>();
   /** Windows magic.autoFix already tried to fix (per revision). */
   #autoFixed = new Map<WindowId, number>();
   /** Refreshes that came due while no UI was connected: run on resume. */
@@ -130,16 +137,17 @@ export class MagicService {
     this.store = new WidgetStore(path.join(this.#stateDir, "widgets"));
     this.widgetSecrets = new WidgetSecrets(o.stateDir ? path.join(o.stateDir, "widget-secrets.json") : null);
     o.windows.on("removed", (id) => this.#removed(id));
-    this.#pruneClosed();
+    this.#migrateClosed();
     for (const w of o.windows.others()) {
       if (w.kind !== "magic") continue;
       const s = stateOf(w);
+      if (s.widgetId) this.#widgetOf.set(w.id, s.widgetId);
       // A run can't survive the core; say so instead of spinning forever.
       if (s.phase === "working") o.windows.update(w.id, { state: { phase: s.html || s.command ? "ready" : "error", error: "Interrupted: cmd restarted while this was being made." } });
       const now = stateOf(this.#window(w.id));
       if (now.phase === "ready") {
         this.#schedule(w.id, 0);
-        if (now.widgetId) this.#watch(w.id, now.widgetId);
+        if (now.widgetId) this.#watch(now.widgetId);
       }
     }
   }
@@ -148,6 +156,11 @@ export class MagicService {
     const w = this.#o.windows.others().find((x) => x.id === id);
     if (!w || w.kind !== "magic") throw new Error(`not a Magic widget: ${id}`);
     return w;
+  }
+
+  /** The Magic windows showing a widget. */
+  #copies(widgetId: string): AppWindow[] {
+    return this.#o.windows.others().filter((w) => w.kind === "magic" && stateOf(w).widgetId === widgetId);
   }
 
   #cwd(w: AppWindow): string {
@@ -174,7 +187,7 @@ export class MagicService {
       previewer: (await this.#o.previewer?.().catch(() => null)) ?? null,
       cwd: this.#cwd(w),
       config: s.config,
-      secrets: this.widgetSecrets.get(w.id),
+      secrets: this.widgetSecrets.get(widgetId),
       signal,
     };
   }
@@ -187,17 +200,26 @@ export class MagicService {
     if (!text) throw new Error("magic.run: empty request");
     const w = this.#window(id);
     const prev = stateOf(w);
+
+    let widgetId = prev.widgetId ?? randomUUID();
+    const hasWidget = !!this.store.latest(widgetId);
+    const legacy = !prev.widgetId && !!(prev.html || prev.command);
+    const refining = !!prev.prompt && (prev.phase === "ready" || prev.phase === "error") && (hasWidget || legacy);
+    // A new request never overwrites a widget in the library: it makes another.
+    if (!refining && hasWidget) widgetId = randomUUID();
+    const busy = this.#building.get(widgetId);
+    if (busy && busy !== id) throw new Error("This widget is being changed in another window.");
     this.#runs.get(id)?.abort();
     this.stop(id);
     const ac = new AbortController();
     this.#runs.set(id, ac);
-
-    const widgetId = prev.widgetId ?? id;
-    const hasWidget = this.store.exists(widgetId) && !!this.store.latest(widgetId);
-    const legacy = !prev.widgetId && !!(prev.html || prev.command);
-    const refining = !!prev.prompt && (prev.phase === "ready" || prev.phase === "error") && (hasWidget || legacy);
-    // A fresh request starts the folder over (its revisions stay, to go back to).
-    if (!refining) for (const f of this.store.exists(widgetId) || fs.existsSync(this.store.dir(widgetId)) ? this.store.files(widgetId) : []) this.store.remove(widgetId, f);
+    // A draft that never built starts over.
+    if (!refining) for (const f of fs.existsSync(this.store.dir(widgetId)) ? this.store.files(widgetId) : []) this.store.remove(widgetId, f);
+    this.#building.set(widgetId, id);
+    this.#widgetOf.set(id, widgetId);
+    const done = () => {
+      if (this.#building.get(widgetId) === id) this.#building.delete(widgetId);
+    };
     const original = refining ? prev.prompt : text;
     const history = refining ? [...(prev.history ?? [prev.prompt]), text] : [text];
     this.#o.windows.update(id, { title: refining ? w.title : "Magic Widget", state: { prompt: original, phase: "working", error: undefined, steps: [], history, widgetId } });
@@ -242,6 +264,7 @@ export class MagicService {
     try {
       backend = (this.#o.backend ?? ((x: Settings) => this.#backend(x)))(s);
     } catch (e) {
+      done();
       this.#fail(id, prev, (e as Error).message);
       return;
     }
@@ -277,6 +300,7 @@ export class MagicService {
       .then((r) => {
         if (this.#runs.get(id) !== ac) return; // superseded
         this.#runs.delete(id);
+        done();
         const v = r.verdict;
         log.info(`run ${id.slice(0, 8)} finished`, {
           ok: r.ok,
@@ -297,29 +321,32 @@ export class MagicService {
           return this.#fail(id, prev, v.problems[0]?.split("\n")[0] ?? "The widget couldn't be built.");
         }
         const rev = this.store.snapshot(widgetId, { prompt: text, ok: v.ok, problems: v.ok ? undefined : v.problems.slice(0, 10), model: r.model }, v.shot ? Buffer.from(v.shot, "base64") : undefined);
+        const summary = r.summary || undefined;
+        this.store.setInfo(widgetId, { title: v.manifest.title, history, summary, usedAt: Date.now(), ...(rev.n === 1 ? { createdAt: Date.now() } : {}) });
         const keepRefresh = refining && !!prev.refreshByUser;
+        const shared: Partial<MagicState> = { revision: rev.n, problems: v.ok ? undefined : v.problems.slice(0, 10), steps, summary, prompt: original, history };
         this.#apply(id, v.manifest, v.html, {
-          revision: rev.n,
+          ...shared,
           refresh: keepRefresh ? (prev.refresh ?? 0) : v.manifest.refresh,
           refreshByUser: keepRefresh || undefined,
           lastData: v.data !== undefined ? { data: v.data, at: Date.now() } : null,
           health: v.data !== undefined ? { ok: true, lastOk: Date.now(), failures: 0 } : undefined,
-          problems: v.ok ? undefined : v.problems.slice(0, 10),
-          steps,
-          summary: r.summary || undefined,
           answer: undefined,
           source: undefined,
         });
         send({ type: "done" });
         this.#failures.delete(id);
         this.#persistedAt.set(id, Date.now());
-        this.#watch(id, widgetId);
+        this.#watch(widgetId);
         const st = stateOf(this.#window(id));
         if (st.hasData && st.refresh) this.#schedule(id, st.refresh * 1000);
+        // The other windows showing this widget get the change too.
+        for (const c of this.#copies(widgetId)) if (c.id !== id) this.#reload(c.id, shared);
       })
       .catch((e: Error) => {
         if (this.#runs.get(id) !== ac) return;
         this.#runs.delete(id);
+        done();
         const last = this.store.latest(widgetId);
         if (last) this.store.checkout(widgetId, last.n);
         this.#fail(id, prev, ac.signal.aborted ? "Stopped." : e.message);
@@ -404,7 +431,7 @@ export class MagicService {
       files: this.store.files(wid),
       revisions: this.store.revisions(wid).map((r) => ({ n: r.n, at: r.at, prompt: r.prompt, ok: r.ok, problems: r.problems, model: r.model, shot: r.shot ? this.store.shotPath(wid, r.n) : undefined })),
       manifest: m.ok ? { title: m.manifest.title, description: m.manifest.description, refresh: m.manifest.refresh, permissions: m.manifest.permissions, config: m.manifest.config } : null,
-      secrets: this.widgetSecrets.status(id),
+      secrets: this.widgetSecrets.status(wid),
       edited: this.store.changedSinceLatest(wid),
     };
   }
@@ -413,12 +440,12 @@ export class MagicService {
   restore(id: WindowId, n: number): void {
     const s = stateOf(this.#window(id));
     if (!s.widgetId) throw new Error("this window has no widget");
-    if (this.#runs.has(id)) throw new Error("the widget is being made");
+    if (this.#building.has(s.widgetId)) throw new Error("the widget is being made");
     const meta = this.store.revisions(s.widgetId).find((r) => r.n === n);
     if (!meta) throw new Error(`no revision ${n}`);
     this.store.checkout(s.widgetId, n);
     const rev = this.store.snapshot(s.widgetId, { prompt: `Back to version ${n}: ${meta.prompt}`.slice(0, 300), ok: meta.ok, problems: meta.problems, model: meta.model });
-    this.#reload(id, { revision: rev.n, problems: meta.ok ? undefined : meta.problems });
+    for (const c of this.#copies(s.widgetId)) this.#reload(c.id, { revision: rev.n, problems: meta.ok ? undefined : meta.problems });
   }
 
   /** The working files changed (a restore, an edit outside cmd): show them and run the data. */
@@ -446,11 +473,13 @@ export class MagicService {
     this.#schedule(id, 0);
   }
 
+  /** A secret config value; kept per widget, so every copy (and a later one) has it. */
   setSecret(id: WindowId, key: string, value: string | null): void {
-    this.#window(id);
+    const s = stateOf(this.#window(id));
+    if (!s.widgetId) throw new Error("this window has no widget");
     if (!/^[A-Za-z_]\w*$/.test(key)) throw new Error(`bad key: ${key}`);
-    this.widgetSecrets.set(id, key, value);
-    this.#schedule(id, 0);
+    this.widgetSecrets.set(s.widgetId, key, value);
+    for (const c of this.#copies(s.widgetId)) this.#schedule(c.id, 0);
   }
 
   /** The widget's cmd.state.set. */
@@ -582,7 +611,7 @@ export class MagicService {
     if (!m.ok) error = `manifest.json: ${m.errors[0]}`;
     else if (!deno) error = "Deno isn't installed (the widget's Health tab installs it)";
     else {
-      const secrets = this.widgetSecrets.get(id);
+      const secrets = this.widgetSecrets.get(s.widgetId!);
       const r = await runData(this.store.dir(s.widgetId!), m.manifest, { ...deno, cwd: this.#cwd(w), config: { ...configValues(m.manifest, s.config), ...secrets } });
       ok = r.ok;
       data = r.data;
@@ -674,72 +703,131 @@ export class MagicService {
     if (this.#autoFixed.get(id) === s.revision) return;
     this.#autoFixed.set(id, s.revision ?? 0);
     log.info(`data ${id.slice(0, 8)} keeps failing; asking the agent to fix it`);
-    this.fix(id);
+    try {
+      this.fix(id);
+    } catch (e) {
+      log.warn(`auto fix of ${id.slice(0, 8)} didn't start: ${(e as Error).message}`);
+    }
   }
 
   // ── hand edits ─────────────────────────────────────────
 
   /** Watch a widget folder: files edited outside cmd (an editor, Claude Code) show up and become a revision. */
-  #watch(id: WindowId, widgetId: string): void {
-    if (this.#watchers.has(id) || this.#disposed) return;
+  #watch(widgetId: string): void {
+    if (this.#watchers.has(widgetId) || this.#disposed) return;
     try {
       const wt = fs.watch(this.store.dir(widgetId), { persistent: false }, (_ev, name) => {
         if (!name || !/^(manifest\.json|data\.ts|view\.html|view\.ts|static\.json)$/.test(String(name))) return;
-        clearTimeout(this.#editTimers.get(id));
-        this.#editTimers.set(id, setTimeout(() => this.#edited(id), 400));
+        clearTimeout(this.#editTimers.get(widgetId));
+        this.#editTimers.set(widgetId, setTimeout(() => this.#edited(widgetId), 400));
       });
-      wt.on("error", () => this.#watchers.delete(id));
-      this.#watchers.set(id, wt);
+      wt.on("error", () => this.#watchers.delete(widgetId));
+      this.#watchers.set(widgetId, wt);
     } catch {}
   }
 
-  #edited(id: WindowId): void {
-    if (this.#runs.has(id)) return; // the agent is writing
-    let s: MagicState;
-    try {
-      s = stateOf(this.#window(id));
-    } catch {
-      return;
-    }
-    if (!s.widgetId || !this.store.changedSinceLatest(s.widgetId)) return;
-    const c = this.store.compose(s.widgetId);
+  #unwatch(widgetId: string): void {
+    this.#watchers.get(widgetId)?.close();
+    this.#watchers.delete(widgetId);
+    clearTimeout(this.#editTimers.get(widgetId));
+    this.#editTimers.delete(widgetId);
+  }
+
+  #edited(widgetId: string): void {
+    if (this.#building.has(widgetId)) return; // the agent is writing
+    const copies = this.#copies(widgetId).filter((w) => stateOf(w).phase === "ready");
+    if (!copies.length || !this.store.changedSinceLatest(widgetId)) return;
+    const c = this.store.compose(widgetId);
     if (!c.manifest) {
-      this.#o.windows.update(id, { state: { error: `The widget's files have a problem: ${c.errors[0]}` } });
+      for (const w of copies) this.#o.windows.update(w.id, { state: { error: `The widget's files have a problem: ${c.errors[0]}` } });
       return;
     }
-    const rev = this.store.snapshot(s.widgetId, { prompt: "Edited by hand", ok: !c.errors.length, problems: c.errors.length ? c.errors : undefined });
-    log.info(`widget ${id.slice(0, 8)} edited by hand (revision ${rev.n})`);
-    this.#reload(id, { revision: rev.n, problems: undefined });
+    const rev = this.store.snapshot(widgetId, { prompt: "Edited by hand", ok: !c.errors.length, problems: c.errors.length ? c.errors : undefined });
+    this.store.setInfo(widgetId, { title: c.manifest.title });
+    log.info(`widget ${widgetId.slice(0, 8)} edited by hand (revision ${rev.n})`);
+    for (const w of copies) this.#reload(w.id, { revision: rev.n, problems: undefined });
+  }
+
+  // ── the library ────────────────────────────────────────
+
+  /** Every widget that was built, most recently used first, with the windows showing it. */
+  library(): MagicLibraryEntry[] {
+    const shown = new Map<string, WindowId[]>();
+    for (const [win, wid] of this.#widgetOf) shown.set(wid, [...(shown.get(wid) ?? []), win]);
+    return this.store
+      .ids()
+      .flatMap((id) => {
+        const info = this.store.info(id);
+        const last = this.store.latest(id);
+        if (!info || !last) return [];
+        const m = this.store.manifest(id);
+        return [{ id, ...info, description: m.ok ? m.manifest.description : undefined, revision: last.n, shot: last.shot ? this.store.shotPath(id, last.n) : undefined, windows: shown.get(id) ?? [] }];
+      })
+      .sort((a, b) => b.usedAt - a.usedAt);
+  }
+
+  /**
+   * A Magic window was opened for a widget already in the library
+   * (window.open { kind: "magic", input: { widgetId } }): show it and run its data.
+   */
+  opened(id: WindowId): void {
+    const s = stateOf(this.#window(id));
+    if (!s.widgetId || s.phase !== "empty") return;
+    const info = this.store.info(s.widgetId);
+    if (!info) return void this.#o.windows.update(id, { state: { widgetId: undefined } });
+    this.#widgetOf.set(id, s.widgetId);
+    this.store.setInfo(s.widgetId, { usedAt: Date.now() });
+    this.#o.windows.update(id, { state: { prompt: info.history[0] ?? "", history: info.history, summary: info.summary } });
+    this.#reload(id, { revision: this.store.latest(s.widgetId)?.n });
+    this.#watch(s.widgetId);
+  }
+
+  /** Delete a widget from the library: its folder, revisions and secrets. Not while a window shows it. */
+  deleteWidget(widgetId: string): void {
+    if (!this.store.info(widgetId)) throw new Error(`no such widget: ${widgetId}`);
+    if ([...this.#widgetOf.values()].includes(widgetId)) throw new Error("This widget is on the desk; remove it from there first.");
+    this.#unwatch(widgetId);
+    this.widgetSecrets.forget(widgetId);
+    this.store.delete(widgetId);
   }
 
   // ── closing ────────────────────────────────────────────
 
+  /** A window closed: its widget stays in the library, unless it never got built (a draft). */
   #removed(id: WindowId): void {
     this.cancel(id);
     this.stop(id);
-    this.#watchers.get(id)?.close();
-    this.#watchers.delete(id);
-    this.widgetSecrets.forget(id);
-    // The widget folder is kept a while (widgets/closed/), not deleted with the window.
-    const dir = path.join(this.store.root, id);
-    if (!fs.existsSync(dir)) return;
-    try {
-      const closed = path.join(this.store.root, "closed");
-      fs.mkdirSync(closed, { recursive: true });
-      fs.renameSync(dir, path.join(closed, `${id}-${Date.now()}`));
-    } catch (e) {
-      log.warn(`could not keep the widget of ${id.slice(0, 8)}: ${(e as Error).message}`);
-    }
+    const widgetId = this.#widgetOf.get(id);
+    this.#widgetOf.delete(id);
+    if (!widgetId) return;
+    if (this.#building.get(widgetId) === id) this.#building.delete(widgetId);
+    const shown = [...this.#widgetOf.values()].includes(widgetId);
+    if (!shown) this.#unwatch(widgetId);
+    if (this.store.latest(widgetId)) this.store.setInfo(widgetId, { usedAt: Date.now() });
+    else if (!shown) this.store.delete(widgetId);
   }
 
-  #pruneClosed(): void {
+  /** Before the library, closed windows' widgets went to widgets/closed/<id>-<time>; they belong in the library. */
+  #migrateClosed(): void {
     const closed = path.join(this.store.root, "closed");
+    let names: string[];
     try {
-      for (const name of fs.readdirSync(closed)) {
-        const at = Number(name.split("-").pop());
-        if (at && Date.now() - at > CLOSED_KEEP_MS) fs.rmSync(path.join(closed, name), { recursive: true, force: true });
+      names = fs.readdirSync(closed);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      const from = path.join(closed, name);
+      try {
+        const id = name.replace(/-\d+$/, "");
+        const to = [id, name].map((n) => path.join(this.store.root, n)).find((d) => /^[\w-]+$/.test(path.basename(d)) && !fs.existsSync(d));
+        if (to && fs.existsSync(path.join(from, "revisions"))) fs.renameSync(from, to);
+        else fs.rmSync(from, { recursive: true, force: true });
+      } catch (e) {
+        log.warn(`could not move ${name} into the library: ${(e as Error).message}`);
       }
-    } catch {}
+    }
+    fs.rmSync(closed, { recursive: true, force: true });
   }
 }
 

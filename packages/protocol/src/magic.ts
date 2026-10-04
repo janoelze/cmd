@@ -68,6 +68,23 @@ export interface MagicNotify {
   urgent?: boolean;
 }
 
+/** A widget in the library (docs/16-widgets.md): built at least once, kept until deleted. */
+export interface MagicLibraryEntry {
+  id: string;
+  title: string;
+  description?: string;
+  /** The first request, then each change. */
+  history: string[];
+  summary?: string;
+  createdAt: number;
+  usedAt: number;
+  /** The latest revision, and its screenshot (a file path) if it has one. */
+  revision: number;
+  shot?: string;
+  /** Windows showing it now. */
+  windows: string[];
+}
+
 /** A Magic widget's state (AppWindow.state of kind "magic"). */
 export interface MagicState {
   [key: string]: unknown;
@@ -75,7 +92,7 @@ export interface MagicState {
   prompt: string;
   phase: "empty" | "working" | "ready" | "error";
   kind?: "widget" | "terminal";
-  /** The widget folder ($CMD_HOME/widgets/<id>), v2 windows. */
+  /** The widget this window shows ($CMD_HOME/widgets/<id>), v2 windows. Its own id: widgets outlive windows, and several windows can show one. */
   widgetId?: string;
   /** The revision shown. */
   revision?: number;
