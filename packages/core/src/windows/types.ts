@@ -30,6 +30,13 @@ export interface WindowType<S extends Record<string, unknown> = Record<string, u
   title: string;
   /** SF Symbol name. */
   icon: string;
+  /**
+   * "window" (default): where you work; File menu, `open`, routing.
+   * "widget": shows something at a glance; offered in the Widget Library (docs/16-widgets.md).
+   */
+  role?: "window" | "widget";
+  /** One line for the Widget Library. */
+  description?: string;
   /** What `open <target>` (shell, file tree, palette) can route to this type. */
   opens?: OpenRule;
   /** Turn a matched open target into create input. */
@@ -58,7 +65,7 @@ export class WindowTypes {
 
   /** Serializable description for the UI, CLI and shell integration. */
   info(): WindowTypeInfo[] {
-    return this.all().map((t) => ({ kind: t.kind, title: t.title, icon: t.icon, opens: t.opens ?? {} }));
+    return this.all().map((t) => ({ kind: t.kind, title: t.title, icon: t.icon, opens: t.opens ?? {}, role: t.role ?? "window", ...(t.description ? { description: t.description } : {}) }));
   }
 
   /**

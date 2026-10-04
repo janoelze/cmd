@@ -91,6 +91,8 @@ export interface MagicServiceOptions {
   deno?: string | null;
   /** Whether any UI could show the data (default: always); refreshes wait while none can (see resume). */
   watched?: () => boolean;
+  /** The library changed: a widget made, changed, renamed, duplicated or deleted, or a window showing one opened or closed. */
+  libraryChanged?: () => void;
 }
 
 const PERSIST_DATA_MS = 60_000;
@@ -322,7 +324,8 @@ export class MagicService {
         }
         const rev = this.store.snapshot(widgetId, { prompt: text, ok: v.ok, problems: v.ok ? undefined : v.problems.slice(0, 10), model: r.model }, v.shot ? Buffer.from(v.shot, "base64") : undefined);
         const summary = r.summary || undefined;
-        this.store.setInfo(widgetId, { title: v.manifest.title, history, summary, usedAt: Date.now(), ...(rev.n === 1 ? { createdAt: Date.now() } : {}) });
+        this.store.setInfo(widgetId, { ...(this.store.info(widgetId)?.named ? {} : { title: v.manifest.title }), history, summary, usedAt: Date.now(), ...(rev.n === 1 ? { createdAt: Date.now() } : {}) });
+        this.#o.libraryChanged?.();
         const keepRefresh = refining && !!prev.refreshByUser;
         const shared: Partial<MagicState> = { revision: rev.n, problems: v.ok ? undefined : v.problems.slice(0, 10), steps, summary, prompt: original, history };
         this.#apply(id, v.manifest, v.html, {
@@ -357,8 +360,9 @@ export class MagicService {
   #apply(id: WindowId, m: WidgetManifest, html: string, extra: Partial<MagicState> = {}): void {
     const s = stateOf(this.#window(id));
     const widgetId = s.widgetId ?? id;
+    const info = this.store.info(widgetId);
     this.#o.windows.update(id, {
-      title: m.title,
+      title: info?.named ? info.title : m.title,
       state: {
         phase: "ready",
         kind: m.kind,
@@ -446,6 +450,7 @@ export class MagicService {
     this.store.checkout(s.widgetId, n);
     const rev = this.store.snapshot(s.widgetId, { prompt: `Back to version ${n}: ${meta.prompt}`.slice(0, 300), ok: meta.ok, problems: meta.problems, model: meta.model });
     for (const c of this.#copies(s.widgetId)) this.#reload(c.id, { revision: rev.n, problems: meta.ok ? undefined : meta.problems });
+    this.#o.libraryChanged?.();
   }
 
   /** The working files changed (a restore, an edit outside cmd): show them and run the data. */
@@ -743,9 +748,10 @@ export class MagicService {
       return;
     }
     const rev = this.store.snapshot(widgetId, { prompt: "Edited by hand", ok: !c.errors.length, problems: c.errors.length ? c.errors : undefined });
-    this.store.setInfo(widgetId, { title: c.manifest.title });
+    if (!this.store.info(widgetId)?.named) this.store.setInfo(widgetId, { title: c.manifest.title });
     log.info(`widget ${widgetId.slice(0, 8)} edited by hand (revision ${rev.n})`);
     for (const w of copies) this.#reload(w.id, { revision: rev.n, problems: undefined });
+    this.#o.libraryChanged?.();
   }
 
   // ── the library ────────────────────────────────────────
@@ -780,6 +786,30 @@ export class MagicService {
     this.#o.windows.update(id, { state: { prompt: info.history[0] ?? "", history: info.history, summary: info.summary } });
     this.#reload(id, { revision: this.store.latest(s.widgetId)?.n });
     this.#watch(s.widgetId);
+    this.#o.libraryChanged?.();
+  }
+
+  /** Name a widget; the name sticks across changes and hand edits. */
+  renameWidget(widgetId: string, title: string): void {
+    const t = title.replace(/\s+/g, " ").trim().slice(0, 120);
+    if (!t) throw new Error("a widget needs a name");
+    if (!this.store.info(widgetId)) throw new Error(`no such widget: ${widgetId}`);
+    this.store.setInfo(widgetId, { title: t, named: true });
+    for (const w of this.#copies(widgetId)) this.#o.windows.update(w.id, { title: t });
+    this.#o.libraryChanged?.();
+  }
+
+  /** A separate widget with the same files, revisions and secrets, to change on its own. Returns its id. */
+  duplicateWidget(widgetId: string): string {
+    const info = this.store.info(widgetId);
+    if (!info) throw new Error(`no such widget: ${widgetId}`);
+    const id = randomUUID();
+    fs.cpSync(this.store.dir(widgetId), this.store.dir(id), { recursive: true });
+    const now = Date.now();
+    this.store.setInfo(id, { title: `${info.title} copy`, named: true, createdAt: now, usedAt: now });
+    for (const [k, v] of Object.entries(this.widgetSecrets.get(widgetId))) this.widgetSecrets.set(id, k, v);
+    this.#o.libraryChanged?.();
+    return id;
   }
 
   /** Delete a widget from the library: its folder, revisions and secrets. Not while a window shows it. */
@@ -789,6 +819,7 @@ export class MagicService {
     this.#unwatch(widgetId);
     this.widgetSecrets.forget(widgetId);
     this.store.delete(widgetId);
+    this.#o.libraryChanged?.();
   }
 
   // ── closing ────────────────────────────────────────────
@@ -803,8 +834,10 @@ export class MagicService {
     if (this.#building.get(widgetId) === id) this.#building.delete(widgetId);
     const shown = [...this.#widgetOf.values()].includes(widgetId);
     if (!shown) this.#unwatch(widgetId);
-    if (this.store.latest(widgetId)) this.store.setInfo(widgetId, { usedAt: Date.now() });
-    else if (!shown) this.store.delete(widgetId);
+    if (this.store.latest(widgetId)) {
+      this.store.setInfo(widgetId, { usedAt: Date.now() });
+      this.#o.libraryChanged?.();
+    } else if (!shown) this.store.delete(widgetId);
   }
 
   /** Before the library, closed windows' widgets went to widgets/closed/<id>-<time>; they belong in the library. */

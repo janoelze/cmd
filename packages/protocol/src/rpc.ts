@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { MagicModel, MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
@@ -218,6 +218,17 @@ export interface Methods {
   /** The previewer's answer to a magic.previewRequest. */
   "magic.previewResult": { params: { reqId: string; shots?: MagicPreviewShot[]; error?: string }; result: null };
 
+  /** The Widget Library (docs/16-widgets.md): built-in widgets, then yours by last use. */
+  "widget.list": { params: {}; result: WidgetEntry[] };
+  /** Put a widget from the library on the desk (another window showing it, if one already does). */
+  "widget.add": { params: Placement & { ref: string }; result: AppWindow };
+  /** Name a widget made with Magic; the name sticks across changes. */
+  "widget.rename": { params: { ref: string; title: string }; result: null };
+  /** A copy of a widget made with Magic, to change on its own (files, revisions, secrets). */
+  "widget.duplicate": { params: { ref: string }; result: WidgetEntry };
+  /** Delete a widget made with Magic: its folder, revisions and secrets. Refused while a window shows it. */
+  "widget.delete": { params: { ref: string }; result: null };
+
   /** Directory listing for file windows (dirs first, then by name). */
   "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };
   /** Which of these paths exist, resolved against `cwd` (~ expanded): the absolute path, or null. For terminal links. */
@@ -346,6 +357,8 @@ export type CoreEvent =
   | { type: "magic.data"; id: WindowId; data: unknown; at: number; error?: string }
   /** To the previewer connection only: render these pages offscreen and answer with magic.previewResult. */
   | { type: "magic.previewRequest"; reqId: string; requests: MagicPreviewRequest[] }
+  /** The Widget Library changed (a widget made, changed, renamed, deleted, put on or taken off the desk). */
+  | { type: "widget.library"; entries: WidgetEntry[] }
   /** A watched file or folder changed on disk (see fs.watch). */
   | { type: "fs.changed"; path: string }
   /** Bring a window to the front (e.g. `open .` in a terminal). */

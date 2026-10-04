@@ -5,7 +5,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { Agent, AgentId, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
@@ -201,6 +201,7 @@ export class Core {
     this.windows.on("removed", (id) => {
       this.store.deleteUiStateOf(id);
       this.#broadcast({ type: "window.removed", id });
+      this.#libraryChanged();
     });
     this.secrets = new SecretsService(opts.secretsPath ?? null);
     this.secrets.on("updated", (status) => this.#broadcast({ type: "secrets.updated", status }));
@@ -215,6 +216,7 @@ export class Core {
       previewer: () => this.#previewer(),
       deno: opts.magicDeno,
       watched: () => this.#subscribers.size > 0,
+      libraryChanged: () => this.#libraryChanged(),
       cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root,
       workspaceFor: (w) => {
         const sp = this.spaces.get(w.spaceId);
@@ -337,16 +339,7 @@ export class Core {
     "settings.get": () => this.settings.snapshot(),
     "settings.set": (p) => this.settings.set(p.key, p.value),
     "settings.reset": (p) => this.settings.reset(p.key),
-    "window.open": (p) => {
-      const input = p.input ?? {};
-      const at = [input.cwd, input.path].find((v): v is string => typeof v === "string");
-      // A Magic window for a widget in the library: only one that exists.
-      const widgetId = p.kind === "magic" && typeof input.widgetId === "string" ? input.widgetId : null;
-      if (widgetId && !this.magic.library().some((e) => e.id === widgetId)) throw new Error(`no such widget: ${widgetId}`);
-      const w = this.windows.open(p.kind, input, this.#place(p, { path: at }));
-      if (widgetId) this.magic.opened(w.id);
-      return this.#opened(this.windows.others().find((x) => x.id === w.id) ?? w);
-    },
+    "window.open": (p) => this.#openWindow(p),
     "window.update": (p) => this.windows.update(p.id, p),
     "window.types": () => this.windowTypes.info(),
     "window.close": (p) => (this.windows.close(p.id), null),
@@ -356,6 +349,18 @@ export class Core {
       return null;
     },
     "window.list": () => this.windows.list(),
+    "widget.list": () => this.#widgets(),
+    "widget.add": (p) => {
+      const r = widgetRef(p.ref);
+      if (!r.widgetId && this.windowTypes.get(r.kind)?.role !== "widget") throw new Error(`not a widget: ${p.ref}`);
+      return this.#openWindow({ ...p, kind: r.kind, input: r.widgetId ? { widgetId: r.widgetId } : {} });
+    },
+    "widget.rename": (p) => (this.magic.renameWidget(magicRef(p.ref), p.title), null),
+    "widget.duplicate": (p) => {
+      const id = this.magic.duplicateWidget(magicRef(p.ref));
+      return this.#widgets().find((e) => e.ref === `magic:${id}`)!;
+    },
+    "widget.delete": (p) => (this.magic.deleteWidget(magicRef(p.ref)), null),
     "window.openTarget": (p) =>
       this.#opened(this.windows.openTarget(p.target, this.#place(p, { path: /^[a-z][\w+.-]+:/i.test(p.target) ? undefined : p.target }))),
     "window.move": (p) => this.#moveWindow(p.id, p.spaceId),
@@ -521,7 +526,53 @@ export class Core {
   /** Count a window someone opened (not restored ones) for usage stats. */
   #opened<W extends AppWindow | null>(w: W): W {
     if (w) this.usage.window(w.kind);
+    if (w && this.windowTypes.get(w.kind)?.role === "widget") this.#libraryChanged();
     return w;
+  }
+
+  #openWindow(p: Params<"window.open">): AppWindow {
+    const input = p.input ?? {};
+    const at = [input.cwd, input.path].find((v): v is string => typeof v === "string");
+    // A Magic window for a widget in the library: only one that exists.
+    const widgetId = p.kind === "magic" && typeof input.widgetId === "string" ? input.widgetId : null;
+    if (widgetId && !this.magic.library().some((e) => e.id === widgetId)) throw new Error(`no such widget: ${widgetId}`);
+    const w = this.windows.open(p.kind, input, this.#place(p, { path: at }));
+    if (widgetId) this.magic.opened(w.id);
+    return this.#opened(this.windows.others().find((x) => x.id === w.id) ?? w);
+  }
+
+  /** The Widget Library: built-in widget types, then widgets made with Magic by last use (docs/16-widgets.md). */
+  #widgets(): WidgetEntry[] {
+    const others = this.windows.others();
+    const builtin = this.windowTypes
+      .all()
+      .filter((t) => t.role === "widget" && t.kind !== "magic")
+      .map((t): WidgetEntry => ({ ref: `type:${t.kind}`, source: "builtin", kind: t.kind, title: t.title, description: t.description, icon: t.icon, windows: others.filter((w) => w.kind === t.kind).map((w) => w.id) }));
+    const magic = this.windowTypes.get("magic")!;
+    const yours = this.magic.library().map((e): WidgetEntry => ({
+      ref: `magic:${e.id}`,
+      source: "yours",
+      kind: "magic",
+      title: e.title,
+      description: e.description,
+      icon: magic.icon,
+      shot: e.shot,
+      createdAt: e.createdAt,
+      usedAt: e.usedAt,
+      windows: e.windows,
+    }));
+    return [...builtin, ...yours];
+  }
+
+  #libraryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Tell UIs the library changed; changes in a burst (a build, closing a Space) go out once. */
+  #libraryChanged(): void {
+    if (this.#libraryTimer || !this.#subscribers.size) return;
+    this.#libraryTimer = setTimeout(() => {
+      this.#libraryTimer = null;
+      this.#broadcast({ type: "widget.library", entries: this.#widgets() });
+    }, 50);
   }
 
   /**
@@ -811,6 +862,7 @@ export class Core {
   }
 
   async close(): Promise<void> {
+    if (this.#libraryTimer) clearTimeout(this.#libraryTimer);
     this.usage.close();
     await this.usage.flush();
     this.magic.dispose();
@@ -861,3 +913,16 @@ async function removeStaleSocket(sock: string): Promise<void> {
 }
 
 export type { Methods };
+
+/** A Widget Library ref: "magic:<widget id>" (made with Magic) or "type:<kind>" (a built-in widget). */
+function widgetRef(ref: string): { kind: string; widgetId?: string } {
+  const m = /^(magic|type):([\w-]+)$/.exec(ref);
+  if (!m) throw new Error(`not a widget: ${ref}`);
+  return m[1] === "magic" ? { kind: "magic", widgetId: m[2] } : { kind: m[2]! };
+}
+
+function magicRef(ref: string): string {
+  const r = widgetRef(ref);
+  if (!r.widgetId) throw new Error(`built-in widgets can't be renamed, duplicated or deleted: ${ref}`);
+  return r.widgetId;
+}

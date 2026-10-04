@@ -84,6 +84,11 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "magic.installRuntime": "never",
   "magic.previewer": "never",
   "magic.previewResult": "never",
+  "widget.list": "never", // file paths (screenshots)
+  "widget.add": "never",
+  "widget.rename": "never",
+  "widget.duplicate": "never",
+  "widget.delete": "never",
   "fs.list": "view",
   "fs.resolve": "never", // an existence oracle for any path; the web client resolves terminal links within Spaces later
   "fs.read": "view",
@@ -317,6 +322,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "remote.pairRequest":
     case "remote.pairEnded":
     case "remote.input":
+    case "widget.library":
     case "magic.previewRequest": // sent to the app's previewer only, never broadcast
       return false;
     default: {

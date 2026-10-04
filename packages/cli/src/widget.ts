@@ -2,11 +2,13 @@
 // Magic agent and the core run, for a widget folder anywhere: make one, check
 // it (types, a data run, renders), run its data, render it. So a widget can be
 // built by hand or by any coding agent (Claude Code, Codex) with cmd's rules.
+// `list` and `add` ask the running core about the Widget Library (docs/16-widgets.md).
 
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { cmdHome } from "@cmd/protocol/node";
+import { ENV, type WidgetEntry } from "@cmd/protocol";
+import { connect, defaultSocketPath } from "@cmd/protocol/node";
 import { PREVIEW_THEMES, PROMPT_DIR, RUNTIME_DIR, checkWidget, previewCases, previewPage, previewRender, runWidgetData, verifyWidget, writeDenoConfig } from "@cmd/core/magic";
 import { bold, dim, openFile, printVerdict, red, sandboxNote, widgetContext } from "./magic.ts";
 
@@ -18,7 +20,9 @@ usage: cmd widget new <dir>        a new widget folder (manifest.json, data.ts, 
                                    a data run (kept as fixtures/live.json), renders with every fixture
        cmd widget run [dir]        run data.ts once and print its data (validated against its schema)
        cmd widget preview [dir]    render it (dark, light, small) and save preview-*.png in the folder
-       cmd widget list             this cmd's Magic widgets
+       cmd widget list             the Widget Library: built-in widgets, then yours by last use
+       cmd widget add <widget>     put one on the desk (in this terminal's Space): a ref from list,
+                                   a widget id, or a title
 
   --config key=value   a config value for the run (repeatable)
   --cwd DIR            where run() starts by default (default: the current folder)
@@ -120,17 +124,34 @@ export async function widgetCommand(argv: string[]): Promise<number> {
   }
   const unsandboxed = !!o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
 
-  if (sub === "list") {
-    const root = path.join(cmdHome(), "widgets");
-    const names = fs.existsSync(root) ? fs.readdirSync(root).filter((n) => n !== "closed" && fs.existsSync(path.join(root, n, "manifest.json"))) : [];
-    for (const n of names) {
-      let title = "?";
-      try {
-        title = JSON.parse(fs.readFileSync(path.join(root, n, "manifest.json"), "utf8")).title ?? "?";
-      } catch {}
-      console.log(`${path.join(root, n)}  ${dim(title)}`);
+  if (sub === "list" || sub === "add") {
+    const conn = await connect().catch(() => null);
+    if (!conn) {
+      console.error(red(`no core running at ${defaultSocketPath()}`));
+      return 2;
     }
-    return 0;
+    try {
+      const entries = await conn.client.call("widget.list", {});
+      if (sub === "list") {
+        if (o.json) return console.log(JSON.stringify(entries, null, 2)), 0;
+        for (const e of entries) console.log(`${e.ref.padEnd(44)} ${e.title}${e.windows.length ? dim(`  on the desk${e.windows.length > 1 ? ` ×${e.windows.length}` : ""}`) : ""}`);
+        return 0;
+      }
+      if (!dirArg) {
+        console.error(red("usage: cmd widget add <widget>"));
+        return 1;
+      }
+      const e = findWidget(entries, dirArg);
+      if (!e) {
+        console.error(red(`no widget ${dirArg} (cmd widget list shows them)`));
+        return 1;
+      }
+      const w = await conn.client.call("widget.add", { ref: e.ref, callerPaneId: process.env[ENV.paneId] || undefined });
+      console.log(o.json ? JSON.stringify(w, null, 2) : w.id);
+      return 0;
+    } finally {
+      conn.close();
+    }
   }
 
   const dir = path.resolve(dirArg ?? ".");
@@ -232,4 +253,10 @@ export async function widgetCommand(argv: string[]): Promise<number> {
   console.error(red(`unknown: cmd widget ${sub}`));
   console.log(WIDGET_HELP);
   return 1;
+}
+
+/** A widget by its ref, its id or kind (the ref without "magic:"/"type:"), or its title (any case). */
+export function findWidget(entries: WidgetEntry[], q: string): WidgetEntry | undefined {
+  const lower = q.trim().toLowerCase();
+  return entries.find((e) => e.ref === q || e.ref.slice(e.ref.indexOf(":") + 1) === q) ?? entries.find((e) => e.title.toLowerCase() === lower);
 }

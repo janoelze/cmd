@@ -1,6 +1,6 @@
 # Widgets and the Widget Library
 
-> Status (2026-10-05), branch `widget-library`: phase 1 (widgets apart from windows, in the core) is built; the rest is a proposal. It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
+> Status (2026-10-05), branch `widget-library`: phases 1 and 2 (widgets apart from windows in the core, and the library's protocol and CLI) are built; the UI and built-in widgets are a proposal. It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
 
 Magic widgets are windows today, in the code and to the people using them. "New Magic Widget" sits in File next to New Terminal, closing one throws it away (after 30 days in `widgets/closed/`), and nothing ships with cmd except the ability to make one. This proposal makes widgets their own thing for people, while the code keeps treating them almost like windows.
 
@@ -127,10 +127,19 @@ The folder format reaches the library as **Examples**: adding one copies its fol
 
 ### Protocol
 
-- `WindowType.role`, `description`, `config`; the same in `WindowTypeInfo`.
-- `widget.list` → `LibraryEntry[]` (`{ ref, source: "builtin" | "yours" | "example", kind, title, description, icon, thumbnail?, lastUsed?, onDesk: WindowId[] }`), `widget.add { ref, spaceId }`, `widget.delete`, `widget.duplicate`, `widget.rename`; event `widget.library`.
-- `magic.*` methods keep addressing the window (instance). Those that change the definition (`magic.restore`, `magic.run` when changing) apply to the widget and recompose every window that shows it.
-- CLI: `cmd widget list`, `cmd widget add <ref>`.
+Built in phase 2:
+
+- `WindowType.role` (`"window"` by default, `"widget"`) and `description`, the same in `WindowTypeInfo`. `magic` is a widget type. A `config` schema for built-in widgets waits for the first one that needs it (phase 4).
+- Refs: `magic:<widget id>` for widgets made with Magic, `type:<kind>` for built-in widgets.
+- `widget.list` → `WidgetEntry[]` (`{ ref, source: "builtin" | "yours", kind, title, description?, icon, shot?, createdAt?, usedAt?, windows }`): built-in widget types (every type with role `widget` but `magic`, which is the ✦ card), then yours by last use. Examples come in phase 5.
+- `widget.add { ref, spaceId? | callerPaneId? }` → the new window. Refuses types that aren't widgets.
+- `widget.rename { ref, title }`: the name sticks (`named` in widget.json); changes and hand edits keep it instead of the manifest's title.
+- `widget.duplicate { ref }` → the new entry, titled "… copy": files, revisions and secrets copied.
+- `widget.delete { ref }`: refused while a window shows it.
+- Event `widget.library { entries }`, at most once per 50 ms burst, when a widget is made, changed, renamed, duplicated or deleted, or a window showing one opens or closes.
+- Remote sessions get none of these yet (screenshots are file paths).
+- `magic.*` methods keep addressing the window (instance). Those that change the widget (`magic.run` when changing, `magic.restore`) reach every window that shows it; `magic.secret` is per widget.
+- CLI: `cmd widget list [--json]`, `cmd widget add <widget>` (a ref, an id or kind, or a title), in the terminal's Space.
 
 ### Migration
 
@@ -141,7 +150,7 @@ Built in phase 1. Folders of existing windows are named after their window's id,
 One worktree per phase; each ends green.
 
 1. **Widgets apart from windows** (core only, no visible change), built: widget ids, `widget.json`, no `closed/`, every copy updated on change, migration; `MagicService.library()`, `opened()`, `deleteWidget()`. Tests in `widgets.test.ts`.
-2. **Registry and protocol**: `role`/`description`/`config` on window types; `widget.*` methods and event; `cmd widget list/add`.
+2. **Registry and protocol**, built: `role`/`description` on window types; `widget.*` methods and event; `cmd widget list/add`.
 3. **The library and the split**: the sheet, the Widgets menu, the sidebar's + and Widgets section, Remove from Desk and its toast, new labels in `shared/commands.ts`.
 4. **Built-ins**: Agent Activity, then Live Diff with `git.diff`.
 5. **Examples** from the prompt's examples; then the README, positioning and changelog.

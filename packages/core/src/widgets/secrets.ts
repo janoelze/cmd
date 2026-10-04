@@ -1,5 +1,5 @@
 // Widget secrets: values of config fields marked `secret` in manifest.json (an
-// API token a widget's data.ts needs). Kept per window in
+// API token a widget's data.ts needs). Kept per widget in
 // $CMD_HOME/widget-secrets.json (mode 0600), never in the widget folder, the
 // window state or anything sent to a client or the model. data.ts gets them in
 // its config; clients only see which are set.
@@ -22,28 +22,28 @@ export class WidgetSecrets {
     } catch {}
   }
 
-  get(windowId: string): Record<string, string> {
-    return { ...this.#values[windowId] };
+  get(widgetId: string): Record<string, string> {
+    return { ...this.#values[widgetId] };
   }
 
   /** Which keys are set (for the settings pane). */
-  status(windowId: string): Record<string, boolean> {
-    return Object.fromEntries(Object.keys(this.#values[windowId] ?? {}).map((k) => [k, true]));
+  status(widgetId: string): Record<string, boolean> {
+    return Object.fromEntries(Object.keys(this.#values[widgetId] ?? {}).map((k) => [k, true]));
   }
 
-  set(windowId: string, key: string, value: string | null): void {
-    const cur = { ...this.#values[windowId] };
+  set(widgetId: string, key: string, value: string | null): void {
+    const cur = { ...this.#values[widgetId] };
     const v = value?.trim();
     if (v) cur[key] = v;
     else delete cur[key];
-    this.#values = { ...this.#values, [windowId]: cur };
-    if (!Object.keys(cur).length) delete this.#values[windowId];
+    this.#values = { ...this.#values, [widgetId]: cur };
+    if (!Object.keys(cur).length) delete this.#values[widgetId];
     this.#save();
   }
 
-  forget(windowId: string): void {
-    if (!(windowId in this.#values)) return;
-    delete this.#values[windowId];
+  forget(widgetId: string): void {
+    if (!(widgetId in this.#values)) return;
+    delete this.#values[widgetId];
     this.#save();
   }
 

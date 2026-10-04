@@ -530,6 +530,50 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     await core.close();
   });
 
+  it("serves the Widget Library over RPC: list, add, rename, duplicate, delete, and a library event", async () => {
+    const backend = scripted([{ calls: WIDGET_CALLS(), answer: "v1" }, { calls: [write("manifest.json", MANIFEST({ title: "Counter" }))], answer: "v2" }]);
+    const { core, id, state, title, events } = await setup(backend);
+    const types = core.handlers["window.types"]({}) as unknown as { kind: string; role: string }[];
+    expect(types.find((t) => t.kind === "magic")!.role).toBe("widget");
+    expect(types.find((t) => t.kind === "browser")!.role).toBe("window");
+    expect(() => core.handlers["widget.add"]({ ref: "type:browser" })).toThrow(/not a widget/);
+
+    core.handlers["magic.run"]({ id, prompt: "count" });
+    await until(() => state().phase === "ready");
+    const list = () => core.handlers["widget.list"]({}) as unknown as { ref: string; title: string; source: string; windows: string[]; shot?: string }[];
+    const ref = `magic:${String(state().widgetId)}`;
+    expect(list()).toEqual([expect.objectContaining({ ref, source: "yours", kind: "magic", title: "Count", icon: "sparkles", windows: [id] })]);
+    await until(() => events.some((e) => e.type === "widget.library"));
+
+    // A name sticks across a change that retitles the manifest.
+    core.handlers["widget.rename"]({ ref, title: "  My   counter " });
+    expect(title()).toBe("My counter");
+    core.handlers["magic.run"]({ id, prompt: "call it Counter" });
+    await until(() => state().phase === "ready" && state().revision === 2);
+    expect(title()).toBe("My counter");
+    expect(list()[0]!.title).toBe("My counter");
+
+    // Another copy on the desk, and a duplicate to change on its own.
+    const copy = core.handlers["widget.add"]({ ref }) as unknown as { id: string; kind: string; title: string };
+    expect(copy).toMatchObject({ kind: "magic", title: "My counter" });
+    core.handlers["magic.secret"]({ id, key: "token", value: "s3cret" });
+    const dup = core.handlers["widget.duplicate"]({ ref }) as unknown as { ref: string; title: string; windows: string[] };
+    expect(dup).toMatchObject({ title: "My counter copy", windows: [] });
+    expect(dup.ref).not.toBe(ref);
+    expect(core.magic.widgetSecrets.get(dup.ref.slice("magic:".length))).toEqual({ token: "s3cret" });
+    expect(list().find((e) => e.ref === ref)!.windows.sort()).toEqual([id, copy.id].sort());
+
+    expect(() => core.handlers["widget.delete"]({ ref })).toThrow(/on the desk/);
+    expect(() => core.handlers["widget.delete"]({ ref: "type:magic" })).toThrow(/built-in/);
+    expect(() => core.handlers["widget.add"]({ ref: "magic:nope" })).toThrow(/no such widget/);
+    core.handlers["widget.delete"]({ ref: dup.ref });
+    expect(list().map((e) => e.ref)).toEqual([ref]);
+    events.length = 0;
+    core.handlers["window.close"]({ id: copy.id });
+    await until(() => events.some((e) => e.type === "widget.library" && (e as unknown as { entries: { windows: string[] }[] }).entries[0]!.windows.length === 1));
+    await core.close();
+  });
+
   it("moves widgets of windows closed before the library into it", async () => {
     const stateDir = tmp("cmd-library-");
     const old = new WidgetStore(path.join(stateDir, "widgets", "closed"));

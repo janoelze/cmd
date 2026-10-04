@@ -147,6 +147,8 @@ export const magicType: WindowType<{ prompt: string; phase: string; widgetId?: s
   kind: "magic",
   title: "Magic Widget",
   icon: "sparkles",
+  role: "widget",
+  description: "Describe what you want to see, and watch it being made.",
   create(input) {
     const widgetId = str(input.widgetId);
     if (widgetId !== undefined && !/^[\w-]+$/.test(widgetId)) throw new Error(`bad widget id: ${widgetId}`);

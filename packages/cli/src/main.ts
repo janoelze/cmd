@@ -42,6 +42,7 @@ usage: cmd <command> [options]
   resume <session-id> [--agent claude|codex|…] [--fork]
   magic <request…> [--help]          build a widget (or a terminal command) from a request
                                       (runs here, no core needed; see cmd magic --help)
+  widget list | add <widget>          the Widget Library; put a widget on the desk
   widget new|check|run|preview [dir]  make and check Magic widget folders (cmd widget --help)
   settings [get KEY | set KEY VALUE | reset KEY | path] [--json]
                                       list or change settings (applies live)
