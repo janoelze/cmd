@@ -4,6 +4,9 @@
 
 declare(strict_types=1);
 
+/** Where the site is served; social previews need absolute URLs. */
+const SITE_URL = 'https://endtime-instruments.org/cmd/';
+
 function h(string $s): string
 {
     return htmlspecialchars($s, ENT_QUOTES);
@@ -13,6 +16,7 @@ function page_start(string $title, string $description, string $current): void
 {
     $nav = ['' => 'cmd', 'usage/' => 'Usage'];
     $GLOBALS['site_root'] = str_repeat('../', substr_count($current, '/')); // relative, so it works under /cmd/ and locally
+    $url = SITE_URL . $current;
     ?><!doctype html>
 <html lang="en">
 <head>
@@ -20,6 +24,23 @@ function page_start(string $title, string $description, string $current): void
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= h($title) ?></title>
 <meta name="description" content="<?= h($description) ?>">
+<link rel="canonical" href="<?= h($url) ?>">
+<meta name="theme-color" content="#050506">
+<link rel="icon" type="image/png" sizes="64x64" href="<?= h($GLOBALS['site_root']) ?>assets/icon-64.png">
+<link rel="apple-touch-icon" href="<?= h($GLOBALS['site_root']) ?>assets/icon-180.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="cmd">
+<meta property="og:title" content="<?= h($title) ?>">
+<meta property="og:description" content="<?= h($description) ?>">
+<meta property="og:url" content="<?= h($url) ?>">
+<meta property="og:image" content="<?= h(SITE_URL) ?>assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The cmd app icon: a ⌘ on a dark rounded square">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="<?= h($title) ?>">
+<meta name="twitter:description" content="<?= h($description) ?>">
+<meta name="twitter:image" content="<?= h(SITE_URL) ?>assets/og.png">
 <style>
 :root {
   /* The app's Pastel Dark theme (packages/ui/src/themes/pastel-dark.ts), on a
