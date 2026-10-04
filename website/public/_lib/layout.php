@@ -71,27 +71,30 @@ h2 { font-size: var(--fs-h2); margin: 36px 0 12px; }
 p.lede { color: var(--ink-2); font-size: var(--fs-lede); margin: 0 0 18px; max-width: 60ch; }
 code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
 .muted { color: var(--ink-3); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
 .card.scroll { overflow-x: auto; }
 .note { margin-top: 24px; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.tile .value { line-height: 1.4; }
 .tile .label { color: var(--ink-2); font-size: var(--fs-sm); }
 .tile .value { font-size: var(--fs-h1); font-weight: 600; font-variant-numeric: tabular-nums; }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
-.bars { display: grid; grid-template-columns: minmax(70px, max-content) 1fr max-content; gap: 6px 10px; align-items: center; font-size: var(--fs-sm); }
-.bars .track { display: block; height: 10px; }
-.bars .fill { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 8px; }
+.grid2 h2 { margin-top: 28px; }
+.bars { display: grid; grid-template-columns: minmax(64px, max-content) 1fr max-content; gap: 2px 10px; align-items: center; font-size: var(--fs-sm); }
+.bars .track { display: block; height: 6px; }
+.bars .fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; min-width: 3px; }
 .bars .n { font-variant-numeric: tabular-nums; color: var(--ink-2); text-align: right; }
-.bars .k { font-family: var(--mono); }
-.daily { display: flex; align-items: flex-end; gap: 2px; height: 140px; }
+.bars .k, td.tag { font-family: var(--mono); font-size: 0.92em; }
+.daily { display: flex; align-items: flex-end; gap: 3px; height: 90px; }
 .daily .col { flex: 1; height: 100%; display: flex; align-items: flex-end; }
-.daily .col span { display: block; width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 1px; }
+.daily .col span { display: block; width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 1px; }
 .daily .col:hover span { background: var(--link); }
-.axis { display: flex; justify-content: space-between; color: var(--ink-3); font-size: var(--fs-xs); margin-top: 6px; }
+.axis { display: flex; justify-content: space-between; color: var(--ink-3); font-size: var(--fs-xs); margin-top: 4px; }
 table { width: 100%; border-collapse: collapse; font-size: var(--fs-base); }
-td, th { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td, th { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--ink-2); font-weight: 500; font-size: var(--fs-sm); }
 td.num { font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: 0; }
 .tag { font-family: var(--mono); }
 .pill { font-size: var(--fs-xs); color: var(--ink-2); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
@@ -114,7 +117,7 @@ td.num { font-variant-numeric: tabular-nums; }
   .features { grid-template-columns: 1fr 1fr; gap: 14px 16px; }
 }
 .button { display: inline-flex; align-items: center; background: var(--accent); color: var(--on-accent); text-decoration: none; padding: 9px 16px; border-radius: 8px; font-weight: 500; }
-.releases { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.releases { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .releases li { display: grid; grid-template-columns: 5.5em 1fr auto 4.5em auto; align-items: center; gap: 16px; padding: 8px 10px 8px 14px; font-size: var(--fs-base); }
 .releases li + li { border-top: 1px solid var(--line); }
 .releases li.latest { background: var(--surface); }
