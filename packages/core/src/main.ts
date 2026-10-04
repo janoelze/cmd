@@ -99,7 +99,10 @@ const shutdown = async () => {
   closing = true;
   log.info("shutting down");
   await core.close();
-  fs.rmSync(pidFile, { force: true });
+  // Restart Core starts the next core once our socket is gone, while we still close: keep its pid file.
+  try {
+    if (fs.readFileSync(pidFile, "utf8").trim() === String(process.pid)) fs.rmSync(pidFile, { force: true });
+  } catch {}
   process.exit(0);
 };
 process.on("SIGINT", shutdown);
