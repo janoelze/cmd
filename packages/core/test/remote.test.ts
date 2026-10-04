@@ -120,7 +120,20 @@ describe("remote access", () => {
     await client.call("window.follow", { ids: [pane.id] });
     await client.call("pane.write", { paneId: pane.id, data: "x" });
     expect(got.some((e) => e.type === "settings.updated")).toBe(false);
+    // The Mac sees who is in, what they watch, and where they type.
+    expect(core.remote.status().sessions).toMatchObject([{ deviceId, name: "Test Phone", scope: "control", watching: [pane.id] }]);
+    expect(events).toContainEqual({ type: "remote.input", deviceId, name: "Test Phone", paneId: pane.id });
     c.ws.close();
+    await expect.poll(() => core.remote.status().sessions).toEqual([]);
+  });
+
+  it("disconnects without unpairing", async () => {
+    const c = await connect(route, { hostKey, device });
+    await c.session;
+    await core.call("remote.disconnect", {});
+    await expect.poll(c.closed).toBe(true);
+    expect(core.remote.devices()).toHaveLength(1);
+    expect((await core.call("remote.log", {}))[0]).toMatchObject({ kind: "disconnected", detail: "all" });
   });
 
   it("refuses unknown devices", async () => {

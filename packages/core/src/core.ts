@@ -312,6 +312,8 @@ export class Core {
     "remote.pair": (p) => this.remote.pair(p.scope ?? "view"),
     "remote.approve": (p) => (this.remote.approve(p.requestId, p.allow, p.scope), null),
     "remote.devices": () => this.remote.devices(),
+    "remote.disconnect": (p) => (this.remote.disconnect(p.id), null),
+    "remote.log": (p) => this.remote.log(p.limit),
     "remote.revoke": (p) => (this.remote.revoke(p.id), null),
     "remote.setScope": (p) => this.remote.setScope(p.id, p.scope),
     // Connection-aware (the session's device, follows); handled in serve. These run for in-process callers.
@@ -526,6 +528,13 @@ export class Core {
 
   /** Per-connection bookkeeping for the connection-aware methods. */
   #afterCall(conn: Connection, method: Method, params: Record<string, unknown>, result: unknown): void {
+    if (conn.access !== "local") {
+      if (method === "pane.write") this.remote.input(conn, params.paneId as string);
+      else if (method === "agent.send") {
+        const paneId = this.agents.get(params.agentId as string)?.paneId;
+        if (paneId) this.remote.input(conn, paneId);
+      }
+    }
     // Remember per-connection watches so a closed UI doesn't leak them.
     const wp = typeof params.path === "string" ? params.path : null;
     if (method === "fs.watch" && wp && (result as { watching: boolean }).watching) {
@@ -536,6 +545,7 @@ export class Core {
       if (i >= 0) list.splice(i, 1);
     } else if (method === "window.follow") {
       this.#follows.set(conn, new Set(params.ids as string[]));
+      if (conn.access !== "local") this.remote.following(conn, params.ids as string[]);
     } else if (method === "events.subscribe") {
       const types = (params as Params<"events.subscribe">).types;
       const set = Array.isArray(types) ? new Set<string>(types) : null;

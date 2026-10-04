@@ -259,6 +259,20 @@ export interface RemoteDevice {
   connected: boolean;
 }
 
+/** A device connected right now (a device can have several, e.g. two tabs). */
+export interface RemoteSession {
+  id: string;
+  deviceId: string;
+  /** The device's name, for showing who is in. */
+  name: string;
+  scope: RemoteScope;
+  since: number;
+  /** As the relay reports it; informational only. */
+  ip: string;
+  /** The windows it is looking at (window.follow). */
+  watching: WindowId[];
+}
+
 export interface RemoteStatus {
   enabled: boolean;
   /** off: disabled; connecting: to the relay; online: devices can reach this Mac; error: see `error`. */
@@ -266,6 +280,18 @@ export interface RemoteStatus {
   error: string | null;
   relay: string;
   devices: RemoteDevice[];
+  sessions: RemoteSession[];
+}
+
+/** An entry of the remote access audit log (Settings → Remote Access → Recent activity, `cmd remote log`). */
+export interface RemoteLogEntry {
+  at: number;
+  /** enabled, disabled, pair-link, paired, pair-denied, session, session-end, denied, handshake-failed, revoked, scope, expired */
+  kind: string;
+  deviceId: string | null;
+  /** The device's name when it is still paired. */
+  device: string | null;
+  detail: string | null;
 }
 
 /** A browser asked to pair; the person on the Mac allows or denies it (remote.approve). */

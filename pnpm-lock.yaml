@@ -92,6 +92,9 @@ importers:
       style-mod:
         specifier: ^4.1.4
         version: 4.1.4
+      uqr:
+        specifier: ^0.1.3
+        version: 0.1.3
     devDependencies:
       '@types/react':
         specifier: ^19.0.0
@@ -139,6 +142,9 @@ importers:
       '@cmd/remote-crypto':
         specifier: workspace:*
         version: link:../remote-crypto
+      uqr:
+        specifier: ^0.1.3
+        version: 0.1.3
 
   packages/core:
     dependencies:
@@ -2367,6 +2373,9 @@ packages:
     hasBin: true
     peerDependencies:
       browserslist: '>= 4.21.0'
+
+  uqr@0.1.3:
+    resolution: {integrity: sha512-0rjE8iEJe4YmT9TOhwsZtqCMRLc5DXZUI2UEYUUg63ikBkqqE5EYWaI0etFe/5KUcmcYwLih2RND1kq+hrUJXA==}
 
   utf8-byte-length@1.0.5:
     resolution: {integrity: sha512-Xn0w3MtiQ6zoz2vFyUVruaCL53O/DwUvkEeOvj+uulMm0BkUGYWmBYVyElqZaSLhY6ZD0ulfU3aBra2aVT4xfA==}
@@ -4911,6 +4920,8 @@ snapshots:
       browserslist: 4.29.3
       escalade: 3.2.0
       picocolors: 1.1.1
+
+  uqr@0.1.3: {}
 
   utf8-byte-length@1.0.5: {}
 

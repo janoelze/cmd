@@ -27,7 +27,7 @@ export interface ChannelHost {
   /** A handshake failed (wrong key, wrong PSK, junk). */
   failed(reason: string): void;
   /** The session is up: serve it. */
-  serve(conn: Connection): Served;
+  serve(conn: Connection, session: HostChannel): Served;
   opened(session: HostChannel): void;
 }
 
@@ -36,6 +36,9 @@ export class HostChannel {
   readonly ip: string;
   deviceId: string | null = null;
   scope: RemoteScope | null = null;
+  since = 0;
+  /** Windows the device follows (window.follow). */
+  watching: string[] = [];
   #host: ChannelHost;
   #send: (b: Bytes) => void;
   #drop: () => void;
@@ -108,7 +111,8 @@ export class HostChannel {
     this.deviceId = deviceId;
     this.scope = scope;
     this.#state = "open";
-    this.#served = this.#host.serve(new RemoteConnection(t, scope, deviceId, (b) => this.#send(b), () => this.close()));
+    this.since = Date.now();
+    this.#served = this.#host.serve(new RemoteConnection(t, scope, deviceId, (b) => this.#send(b), () => this.close()), this);
     this.#host.opened(this);
   }
 

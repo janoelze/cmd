@@ -55,6 +55,94 @@ Sources: code.claude.com/docs/en/remote-control · github.com/slopus/happy (docs
 - The web client's code comes from a server, so its integrity is only as good as that server and the hash check.
 - The relay learns when you are active.
 
+## Experience
+
+Remote access is a security feature that people use on the go, often one-handed. It has to feel like linking WhatsApp to a laptop, and you should always be able to see who is in, as with the camera light on a Mac.
+
+### What the best do, and what we take
+
+| Product | What it gets right | What cmd takes |
+|---|---|---|
+| Signal / WhatsApp linked devices | One QR on the trusted device; a "Linked devices" list with last active and Unlink; WhatsApp Web's QR rotates while you look at it | The Mac is the primary device. The QR appears as soon as you turn the feature on and refreshes itself; Settings → Remote Access is a linked-devices list |
+| Bluetooth numeric comparison, Apple ID sign-in | Both screens show the same code; you approve on the device you already trust | Four words on both screens; approval only on the Mac, never on the phone |
+| macOS camera, microphone and screen-recording indicators | You can't be watched without a visible sign, and one click shows who | A title-bar indicator whenever a device is connected; one click shows who, what they're looking at, and Disconnect |
+| Google Docs presence | You see where others are in the document | Windows a phone is looking at carry a small badge; input from a phone is marked briefly |
+| iOS permission prompts ("Allow Once / Allow While Using / Don't Allow") | The safe choice and the useful choice are both one tap, with no default trap | The approval sheet has three buttons: **Allow View Only**, **Allow Control**, **Don't Allow** |
+| Tailscale | One on/off switch, an honest status line ("Connected", "Needs login") | One switch; plain states everywhere: Off, Connecting, Ready, Can't reach the relay, Mac offline |
+| Claude Code Remote Control, VS Code tunnels | Pair from the terminal with a QR; works headless | `cmd remote pair` draws the QR in the terminal and approves there, so it works over SSH or with the app closed |
+| GitHub / Linear inbox, Happy | On a phone you triage first, then dive in | The phone opens on **Now**: what needs you, what's working, what just finished; one tap opens the real window |
+| Google "Recent security activity" | You can check what happened after the fact | Recent activity under Settings → Remote Access, from the audit log |
+
+### Principles
+
+1. **One switch, one scan.** From "off" to using your terminals on a phone takes a toggle, a camera scan and one click on the Mac. No accounts, no install, no copying keys.
+2. **Approve where you're trusted.** Only the Mac lets a device in. The phone can't approve itself, and a QR without a click on the Mac is worthless.
+3. **Always know who is in.** While any device is connected, the Mac shows it, including what that device is looking at. There are no silent sessions.
+4. **Off is one click.** Every surface that shows remote state also offers Disconnect, and the indicator's popover offers "Turn Off Remote Access".
+5. **Triage first, then the real thing.** The phone's home answers "does anything need me?" in a glance; every row opens the same window the Mac shows.
+6. **Honest states.** Never a spinner without words. "Reconnecting…", "Your Mac is offline since 10:42 (asleep?)", "Waiting for you to approve on your Mac".
+7. **Same story in the CLI.** Everything the app shows and does, `cmd remote` shows and does, with `--json`.
+
+### Journeys
+
+**1. First pairing (about 20 seconds).**
+1. On the Mac: Settings → Remote Access, the palette ("Pair a Device…") or the menu (cmd → Remote Access…). When it's off, the page explains in three lines what it is and what Control means ("a shell on this Mac"), and has a single switch.
+2. Turn it on. The status goes Connecting → Ready and a **QR code appears at once**. It is a one-time link that refreshes every 4 minutes while the page is open; under it are "Copy Link" (to pair a desktop browser or iPad) and the words "Point your phone's camera at the code".
+3. On the phone, the camera opens the link. The page says "Pairing with your Mac", shows the four words in large type, a name field filled from the browser ("iPhone"), and "Approve on your Mac".
+4. On the Mac, a sheet: "Allow “iPhone” to use cmd?", the same four words, "Make sure your phone shows these words", and **Allow View Only · Allow Control · Don't Allow**. If the app isn't frontmost, a system notification brings it there. If the app is closed, the phone says "Open cmd on your Mac to approve", and `cmd remote pair` can approve in a terminal.
+5. The phone lands on **Now**, with a one-time banner: "Add to Home Screen to get notifications" (iOS needs it for push).
+
+**2. Everyday use.** Open the Home Screen app: it connects in one round trip and shows Now. A pill at the top names the Mac and its state ("MacBook Pro · Connected"). Rows are the agents and terminals across all Spaces; tap one to open its window.
+
+**3. Getting pinged.** "Claude needs input in api" arrives as a push. Tapping it opens that terminal with the key row ready. Later (Phase 2) Allow/Deny for permission requests works from the notification itself.
+
+**4. At the Mac while a phone is connected.**
+- The title bar shows a phone symbol in the accent colour. Its popover lists each connected device: name, View or Control, connected since, and what it's looking at ("watching api · zsh"), with Disconnect per device, Disconnect All, Turn Off Remote Access and Remote Access Settings.
+- A window a phone follows shows a small phone badge in its title bar ("Watched from iPhone").
+- Input typed from a phone into a terminal marks the window briefly ("typed from iPhone").
+- When a device connects while someone is using the Mac, a notification says so. When the Mac is idle (you're away and it's probably you), it stays quiet.
+
+**5. Lost phone.** Settings → Remote Access → the device → Unpair, or "Disconnect All" then unpair, or `cmd remote revoke iphone`. Its sessions close within one round trip. Recent activity shows when and from where it last connected.
+
+**6. From the terminal.** `cmd remote` is a status page: state, relay, the paired devices, who is connected and what they're watching. `cmd remote pair` draws the QR, waits, shows the words and asks "Allow? [v]iew only, [c]ontrol, [n]o". `cmd remote log` shows recent activity. `cmd remote off` is the kill switch.
+
+### The phone's home: Now
+
+Now answers "what is running and does anything need me?" from structured data only (hooks, pane state, attention, usage), the same data as the desktop sidebar, never from reading screens.
+
+| Section | Rows | Each row shows |
+|---|---|---|
+| Needs you | Agents waiting for input or permission, terminals with attention (bell, finished long command, OSC notification) | Space · window title · the question (`lastMessage`) or the reason · how long it's been waiting |
+| Working | Agents in a turn; terminals running a long foreground command | Space · title · current tool or command · elapsed time · CPU, if notable |
+| Done recently | Turns that finished in the last few hours, unseen first | Space · title · the last message, one line · when |
+| Everything else | Collapsed: idle shells and quiet windows, by Space | |
+
+- A "Next" button jumps to the oldest thing that needs you, like ⌃⌘J on the Mac.
+- Pull to refresh does a fresh bootstrap. There's no other refresh to think about.
+- The Space switcher and window tabs ("Shell and navigation") are one tap away. Now is the home, not a replacement.
+
+### States and copy
+
+| State | Phone | Mac |
+|---|---|---|
+| Off | (no link works) "Remote access is off on your Mac" | Settings: switch off, three-line explainer |
+| Connecting | "Connecting to MacBook Pro…" | "Connecting to the relay…" |
+| Ready, nobody connected | — | Settings: "Ready. Devices can connect." Title bar: nothing |
+| Connected | Pill: "MacBook Pro · Connected" | Title bar indicator; popover lists who and what |
+| Pairing, waiting for approval | "Approve on your Mac" with the words | Sheet + notification |
+| Relay unreachable | "Can't reach your Mac (relay unreachable). Retrying…" | "Can't reach the relay. Retrying in 30 s" with Retry Now |
+| Mac offline | "Your Mac is offline since 10:42. It may be asleep." | — |
+| Revoked / unknown device | "This browser isn't paired anymore. Pair again from your Mac." Forgets its keys | Activity: "Refused an unpaired browser" |
+| View-only device tries to type | Key row and compose bar hidden; a lock note: "View only. Your Mac can allow control." | — |
+
+### What this needs from the core
+
+- **Presence.** `RemoteStatus.sessions`: per connected session, its device, scope, since, IP and the windows it follows. This drives the indicator, the window badges and `cmd remote`.
+- **Remote input marker.** A `remote.input {deviceId, paneId}` event (throttled) when a phone writes to a pane.
+- **Activity.** `remote.log` (recent audit entries) for Settings and `cmd remote log`.
+- **Now.** Comes from `remote.bootstrap` plus the existing events; agents already carry state, `lastMessage` and timings, panes carry attention and usage.
+- **Rotating pairing link.** `remote.pair` already replaces the previous link; the Settings page asks again before it expires.
+
 ## Architecture
 
 ```
@@ -249,6 +337,7 @@ The phone has **its own layout, not a copy of the desktop's**: every window is a
   - One tab per window of the current Space, in `grid.order`, as a scrollable tab strip at the top.
   - Each tab shows the window's icon, its title and an attention dot, as in the sidebar.
   - Swipe the content sideways to go to the next or previous tab.
+- **Home is Now** (see "The phone's home: Now"): the triage view across Spaces. The tabs below are where its rows lead.
 - **Spaces:** a switcher above the tabs (`SpaceBar.tsx`'s data) with each Space's attention marker. ⌃⌘J ("next needing attention") becomes a button that jumps to the right Space and tab.
 - **Every window is full width with the same frame:** tab strip on top, content, and a bottom bar for that window type (keys and compose for terminals, actions for others).
   - Files, text, markdown and Magic widgets reflow to the width, so they need nothing special.

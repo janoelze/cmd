@@ -8,6 +8,7 @@
   "dependencies": {
     "@cmd/core": "workspace:*",
     "@cmd/protocol": "workspace:*",
-    "@cmd/remote-crypto": "workspace:*"
+    "@cmd/remote-crypto": "workspace:*",
+    "uqr": "^0.1.3"
   }
 }

@@ -4,7 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import readline from "node:readline/promises";
-import type { Agent, AgentState, Pane, RemoteDevice, RemotePairRequest, RemoteScope, Space } from "@cmd/protocol";
+import type { Agent, AgentState, AppWindow, Pane, RemoteDevice, RemotePairRequest, RemoteScope, RemoteStatus, Space } from "@cmd/protocol";
+import { renderUnicodeCompact } from "uqr";
 import { APPLIES_LABEL, currentKey, ENV, isSecretKey, SECRETS, type SecretDef, type SecretKey, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 import { magicCommand } from "./magic.ts";
@@ -44,10 +45,13 @@ usage: cmd <command> [options]
                                       list or change settings (applies live)
   settings secret KEY [--clear]       store an API key from stdin (pbpaste | cmd settings secret
                                       magic.anthropic.apiKey); never in settings.json
-  remote [status|on|off|devices]      remote access from a phone or browser (end-to-end encrypted)
-  remote pair [--scope view|control]  print a one-time pairing link, then approve the device here
-  remote revoke|scope <device> [view|control]
-                                      unpair a device, or change what it may do
+  remote [status|on|off]              remote access from a phone or browser (end-to-end encrypted):
+                                      who is connected and what they're watching
+  remote pair                         a one-time QR code; approve the device here
+  remote devices | log                paired devices | recent activity
+  remote disconnect [DEVICE]          close live sessions (devices stay paired)
+  remote revoke DEVICE | scope DEVICE view|control
+                                      unpair a device | change what it may do
 
 env: ${ENV.socket} (default ${defaultSocketPath()})`;
 
@@ -455,8 +459,6 @@ async function space(client: Connection["client"]): Promise<number> {
 
 async function remote(client: Connection["client"]): Promise<number> {
   const [sub = "status", ...rest] = pos;
-  const device = (d: RemoteDevice) =>
-    `${short(d.id)}  ${d.name.padEnd(24)} ${d.scope.padEnd(8)} ${d.connected ? "connected" : `last seen ${new Date(d.lastSeenAt).toLocaleString()}`}`;
   const scopeArg = (v: unknown): RemoteScope | undefined => (v === "view" || v === "control" ? v : undefined);
   const find = async (prefix: string | undefined) => {
     const ds = (await client.call("remote.devices", {})).filter((d) => prefix && (d.id.startsWith(prefix) || d.name.toLowerCase().startsWith(prefix.toLowerCase())));
@@ -467,16 +469,25 @@ async function remote(client: Connection["client"]): Promise<number> {
     case "status":
     case "on":
     case "off": {
+      const before = sub === "off" ? (await client.call("remote.status", {})).sessions.length : 0;
       const st = await client.call(sub === "on" ? "remote.enable" : sub === "off" ? "remote.disable" : "remote.status", {});
       if (opt.json) return out(st);
-      console.log(`remote access: ${st.state}${st.error ? ` (${st.error})` : ""}${st.relay ? `  relay ${st.relay}` : ""}`);
-      for (const d of st.devices) console.log(`  ${device(d)}`);
+      printRemote(st, await client.call("window.list", {}));
+      if (sub === "off" && before) console.log(`\nclosed ${before} session${before === 1 ? "" : "s"}`);
+      if (sub === "on" && st.state !== "error" && !st.devices.length) console.log("\nnext: cmd remote pair");
       return 0;
     }
     case "devices": {
       const ds = await client.call("remote.devices", {});
       if (opt.json) return out(ds);
-      for (const d of ds) console.log(device(d));
+      if (!ds.length) return out("no paired devices (cmd remote pair)");
+      for (const d of ds) console.log(remoteDevice(d));
+      return 0;
+    }
+    case "log": {
+      const log = await client.call("remote.log", { limit: Number(opt.limit ?? 30) });
+      if (opt.json) return out(log);
+      for (const e of log.reverse()) console.log(`${new Date(e.at).toLocaleString().padEnd(22)} ${e.kind.padEnd(16)} ${(e.device ?? (e.deviceId ? short(e.deviceId) : "")).padEnd(20)} ${e.detail ?? ""}`);
       return 0;
     }
     case "revoke": {
@@ -484,41 +495,82 @@ async function remote(client: Connection["client"]): Promise<number> {
       await client.call("remote.revoke", { id: d.id });
       return out(`unpaired ${d.name}`);
     }
+    case "disconnect": {
+      const d = rest[0] ? await find(rest[0]) : null;
+      await client.call("remote.disconnect", { id: d?.id });
+      return out(d ? `disconnected ${d.name} (still paired)` : "disconnected every device (still paired)");
+    }
     case "scope": {
       const scope = scopeArg(rest[1]);
       if (!scope) return fail("usage: cmd remote scope <device> view|control");
       const d = await client.call("remote.setScope", { id: (await find(rest[0])).id, scope });
-      return out(`${d.name}: ${d.scope}`);
+      return out(`${d.name}: ${d.scope === "view" ? "view only" : "control"}`);
     }
-    case "pair": {
-      // Approve here, so pairing works before (and without) the app's sheet.
-      const requests: RemotePairRequest[] = [];
-      let wake = () => {};
-      client.onEvent((e) => {
-        if (e.type === "remote.pairRequest") requests.push(e.request), wake();
-      });
-      await client.call("events.subscribe", { types: ["remote.pairRequest"] });
-      const { url, expiresAt } = await client.call("remote.pair", { scope: scopeArg(opt.scope) ?? "view" });
-      // TODO: print it as a QR code too.
-      console.log(`Open this on your phone within 5 minutes (it works once):\n\n  ${url}\n`);
-      while (Date.now() < expiresAt) {
-        const req = requests.shift();
-        if (!req) {
-          await new Promise<void>((r) => ((wake = r), setTimeout(r, 1000)));
-          continue;
-        }
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        const answer = (await rl.question(`"${req.name}" wants ${req.scope} access. Its screen should show: ${req.words.join(" ")}\nAllow? [v]iew, [c]ontrol, [n]o: `)).trim().toLowerCase();
-        rl.close();
-        const scope = answer.startsWith("c") ? "control" : answer.startsWith("v") ? "view" : null;
-        await client.call("remote.approve", { requestId: req.requestId, allow: !!scope, scope: scope ?? undefined });
-        return out(scope ? `paired ${req.name} (${scope})` : "denied");
-      }
-      return fail("the pairing link expired");
-    }
+    case "pair":
+      return remotePair(client, scopeArg(opt.scope) ?? "view");
     default:
       return fail(`unknown remote command: ${sub}\n\n${HELP}`);
   }
+}
+
+/** Show a one-time link as a QR code, then approve the device here (works with the app closed, or over SSH). */
+async function remotePair(client: Connection["client"], scope: RemoteScope): Promise<number> {
+  const requests: RemotePairRequest[] = [];
+  let wake = () => {};
+  client.onEvent((e) => {
+    if (e.type === "remote.pairRequest") requests.push(e.request), wake();
+  });
+  await client.call("events.subscribe", { types: ["remote.pairRequest"] });
+  const { url, expiresAt } = await client.call("remote.pair", { scope });
+  if (opt.json) console.log(JSON.stringify({ url, expiresAt }));
+  else {
+    if (process.stdout.isTTY) console.log(renderUnicodeCompact(url, { ecc: "L", border: 2 }));
+    console.log(`Scan with your phone's camera, or open:\n${url}\n\nWorks once, for 5 minutes. Waiting for a device… (Ctrl-C to cancel)`);
+  }
+  while (Date.now() < expiresAt) {
+    const req = requests.shift();
+    if (!req) {
+      await new Promise<void>((r) => ((wake = r), setTimeout(r, 1000)));
+      continue;
+    }
+    console.log(`\n“${req.name}” wants to use cmd on this Mac.\nCheck that its screen shows:  ${req.words.join(" ")}\n`);
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const answer = (await rl.question("Allow? [v]iew only, [c]ontrol (a shell on this Mac), [n]o: ")).trim().toLowerCase();
+    rl.close();
+    const chosen: RemoteScope | null = answer.startsWith("c") ? "control" : answer.startsWith("v") ? "view" : null;
+    await client.call("remote.approve", { requestId: req.requestId, allow: !!chosen, scope: chosen ?? undefined });
+    return out(chosen ? `paired ${req.name} (${chosen === "view" ? "view only" : "control"})` : "not allowed");
+  }
+  return fail("the pairing link expired (cmd remote pair for a new one)");
+}
+
+const REMOTE_STATE: Record<RemoteStatus["state"], string> = { off: "off", connecting: "connecting…", online: "ready", error: "can't connect" };
+
+function printRemote(st: RemoteStatus, windows: AppWindow[]): void {
+  const title = (id: string) => windows.find((w) => w.id === id)?.title ?? short(id);
+  console.log(`Remote access: ${REMOTE_STATE[st.state]}${st.error ? ` (${st.error})` : ""}${st.relay ? `  ·  relay ${st.relay}` : ""}`);
+  if (st.sessions.length) {
+    console.log("\nConnected now");
+    for (const s of st.sessions) {
+      const watching = s.watching.length ? `watching ${s.watching.map(title).join(", ")}` : "on its home screen";
+      console.log(`  ${s.name.padEnd(24)} ${(s.scope === "view" ? "view only" : "control").padEnd(10)} since ${new Date(s.since).toLocaleTimeString()}  ${watching}  (${s.ip})`);
+    }
+  }
+  console.log(st.devices.length ? "\nPaired devices" : "\nNo paired devices (cmd remote pair)");
+  for (const d of st.devices) console.log(`  ${remoteDevice(d)}`);
+}
+
+function remoteDevice(d: RemoteDevice): string {
+  const seen = d.connected ? "connected" : `last seen ${ago(d.lastSeenAt)}`;
+  return `${short(d.id)}  ${d.name.padEnd(24)} ${(d.scope === "view" ? "view only" : "control").padEnd(10)} ${seen}`;
+}
+
+function ago(t: number): string {
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86400)} days ago`;
 }
 
 /** A Space by id prefix, name or folder; none given: this terminal's. */

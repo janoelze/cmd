@@ -7,7 +7,7 @@
 
 import crypto from "node:crypto";
 import path from "node:path";
-import type { CoreEvent, RemoteDevice, RemotePairRequest, RemoteScope, RemoteStatus, Settings } from "@cmd/protocol";
+import type { CoreEvent, PaneId, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteSession, RemoteStatus, Settings } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { encodePairing, equal, fromBase64Url, randomBytes, toBase64Url, type Bytes, type KeyPair } from "@cmd/remote-crypto";
 import type { Connection, Served } from "../connection.ts";
@@ -43,6 +43,10 @@ export class RemoteService {
   #pairing: { psk: Bytes; scope: RemoteScope; expiresAt: number } | null = null;
   #requests = new Map<string, { request: RemotePairRequest; resolve: (scope: RemoteScope | null) => void }>();
   #failures: number[] = [];
+  /** Which session a served connection is. */
+  #sessions = new WeakMap<Connection, HostChannel>();
+  /** Last remote.input per device and pane (throttle). */
+  #inputAt = new Map<string, number>();
   #applying: Promise<void> = Promise.resolve();
   #closed = false;
   #unbind: () => void;
@@ -110,7 +114,46 @@ export class RemoteService {
       error: this.#link ? this.#link.error : noRelay ? "set a relay (remote.relay)" : null,
       relay: s["remote.relay"],
       devices: this.devices(),
+      sessions: this.sessions(),
     };
+  }
+
+  sessions(): RemoteSession[] {
+    const names = new Map(this.#o.store.remoteDevices().map((d) => [d.id, d.name]));
+    return [...this.#channels.values()]
+      .filter((c) => c.open && c.deviceId)
+      .map((c) => ({ id: String(c.channel), deviceId: c.deviceId!, name: names.get(c.deviceId!) ?? "Unknown", scope: c.scope!, since: c.since, ip: c.ip, watching: c.watching }));
+  }
+
+  /** Close live sessions, one device's or all, without unpairing. */
+  disconnect(deviceId?: string): void {
+    for (const c of [...this.#channels.values()]) if (!deviceId || c.deviceId === deviceId) c.close();
+    this.audit("disconnected", deviceId ?? null, deviceId ? null : "all");
+  }
+
+  log(limit = 100): RemoteLogEntry[] {
+    const names = new Map(this.#o.store.remoteDevices().map((d) => [d.id, d.name]));
+    return this.#o.store.remoteLog(Math.min(limit, 500)).map((e) => ({ ...e, device: e.deviceId ? (names.get(e.deviceId) ?? null) : null }));
+  }
+
+  /** A remote connection now follows these windows (window.follow). */
+  following(conn: Connection, ids: string[]): void {
+    const s = this.#sessions.get(conn);
+    if (!s) return;
+    s.watching = [...ids];
+    this.#changed();
+  }
+
+  /** A remote connection typed into a pane: tell the Mac, at most once a second per device and pane. */
+  input(conn: Connection, paneId: PaneId): void {
+    const s = this.#sessions.get(conn);
+    if (!s?.deviceId) return;
+    const key = `${s.deviceId}:${paneId}`;
+    const now = Date.now();
+    if (now - (this.#inputAt.get(key) ?? 0) < 1000) return;
+    this.#inputAt.set(key, now);
+    const name = this.#o.store.remoteDevices().find((d) => d.id === s.deviceId)?.name ?? "Unknown";
+    this.#o.broadcast({ type: "remote.input", deviceId: s.deviceId, name, paneId });
   }
 
   devices(): RemoteDevice[] {
@@ -252,7 +295,10 @@ export class RemoteService {
         this.#failures.push(Date.now());
         this.audit("handshake-failed", null, reason);
       },
-      serve: (conn) => this.#o.serve(conn),
+      serve: (conn, session) => {
+        this.#sessions.set(conn, session);
+        return this.#o.serve(conn);
+      },
       opened: (s) => {
         this.audit("session", s.deviceId, `${s.scope} from ${s.ip}`);
         this.#changed();

@@ -91,6 +91,8 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "remote.pair": "never",
   "remote.approve": "never",
   "remote.devices": "never",
+  "remote.disconnect": "never",
+  "remote.log": "never",
   "remote.revoke": "never",
   "remote.setScope": "never",
   "remote.bootstrap": "view",
@@ -289,6 +291,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "remote.updated":
     case "remote.pairRequest":
     case "remote.pairEnded":
+    case "remote.input":
       return false;
     default: {
       const never: never = e;

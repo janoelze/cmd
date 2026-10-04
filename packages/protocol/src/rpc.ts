@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, Pane, PaneId, ProcessStat, RemoteDevice, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { MagicModel, MagicProgress } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
@@ -234,6 +234,10 @@ export interface Methods {
   /** Answer a remote.pairRequest. */
   "remote.approve": { params: { requestId: string; allow: boolean; scope?: RemoteScope }; result: null };
   "remote.devices": { params: {}; result: RemoteDevice[] };
+  /** Close live sessions (one device's, or all) without unpairing; devices may reconnect. */
+  "remote.disconnect": { params: { id?: string }; result: null };
+  /** Recent activity, newest first. */
+  "remote.log": { params: { limit?: number }; result: RemoteLogEntry[] };
   /** Unpair a device and close its sessions. */
   "remote.revoke": { params: { id: string }; result: null };
   /** Change a device's scope; its sessions reconnect with it. */
@@ -299,6 +303,8 @@ export type CoreEvent =
   | { type: "remote.updated"; status: RemoteStatus }
   /** A browser wants to pair: ask the person on the Mac (remote.approve). */
   | { type: "remote.pairRequest"; request: RemotePairRequest }
+  /** A device typed into a terminal (throttled per device and pane), for a brief marker on the Mac. */
+  | { type: "remote.input"; deviceId: string; name: string; paneId: PaneId }
   /** Allowed, denied or expired: dismiss the request's sheet. */
   | { type: "remote.pairEnded"; requestId: string }
   /** A remote session dropped output for this pane (it fell behind): fetch a new snapshot. */
