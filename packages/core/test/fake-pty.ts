@@ -3,7 +3,7 @@ import type { Pty, PtyFactory, SpawnOptions } from "../src/panes.ts";
 export class FakePty implements Pty {
   static last: FakePty | null = null;
   pid = Math.floor(Math.random() * 90000) + 1000;
-  process = "zsh";
+  #process = "zsh";
   written: string[] = [];
   opts: SpawnOptions;
   #data: ((d: string) => void)[] = [];
@@ -12,6 +12,9 @@ export class FakePty implements Pty {
   constructor(opts: SpawnOptions) {
     this.opts = opts;
   }
+  get process() { return this.#process; }
+  /** A program starting or ending prints something (panes poll quiet terminals less often). */
+  set process(name: string) { this.#process = name; this.output(""); }
   write(d: string) { this.written.push(d); }
   resize() {}
   kill() { this.exit(0); }

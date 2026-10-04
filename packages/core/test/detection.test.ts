@@ -130,3 +130,19 @@ describe("tracker + status files", () => {
     expect(agents.list()).toEqual([]);
   });
 });
+
+describe("foreground polling", () => {
+  it("checks quiet terminals only now and then, and right after output", async () => {
+    const f = fakeFactory();
+    let asked = 0;
+    const panes = new PaneManager(f.factory, { socketPath: "/tmp/t.sock", pollMs: 0, inspector: async () => (asked++, null) });
+    panes.create();
+    await panes.pollForeground();
+    await panes.pollForeground();
+    expect(asked).toBe(1);
+    f.ptys[0]!.output("x");
+    await panes.pollForeground();
+    expect(asked).toBe(2);
+    panes.dispose();
+  });
+});

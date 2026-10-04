@@ -98,9 +98,15 @@ interface Live {
   dirty: boolean;
   /** Hash of the screen as last saved, to skip writing an identical one. */
   screenHash: string;
+  /** When the foreground process was last looked up, and whether output came since (see pollForeground). */
+  polledAt: number;
+  outputSincePoll: boolean;
   /** Clears a progress bar the program stopped updating (it may have crashed). */
   progressTimer: NodeJS.Timeout | null;
 }
+
+/** Panes without output since the last foreground check are checked this often. */
+const QUIET_POLL_MS = 5000;
 
 /** Shell counts as ready once its startup output has been quiet this long. */
 const READY_QUIET_MS = 250;
@@ -330,7 +336,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   }
 
   #attach(pane: Pane, term: Term, token: string): Live {
-    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, saved: "", dirty: true, screenHash: "", progressTimer: null };
+    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, saved: "", dirty: true, screenHash: "", polledAt: 0, outputSincePoll: true, progressTimer: null };
     this.#panes.set(pane.id, live);
     term.onData((data) => this.#onData(live, data));
     term.onExit((code) => this.#exited(live, code));
@@ -378,6 +384,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       live.pending.timer = setTimeout(() => this.#flushPending(live), READY_QUIET_MS);
     }
     live.dirty = true;
+    live.outputSincePoll = true;
     live.pane.lastActivityAt = Date.now();
     this.emit("output", live.pane.id, data);
     for (const ev of live.osc.feed(data)) {
@@ -423,7 +430,12 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     if (this.#polling) return;
     this.#polling = true;
     try {
-      await Promise.all([...this.#panes.values()].map((l) => this.#pollOne(l)));
+      // A program starting or ending prints something (the typed Enter's newline, the
+      // next prompt): quiet panes are only checked now and then.
+      const now = Date.now();
+      const due = [...this.#panes.values()].filter((l) => l.outputSincePoll || now - l.polledAt >= QUIET_POLL_MS);
+      for (const l of due) (l.polledAt = now), (l.outputSincePoll = false);
+      await Promise.all(due.map((l) => this.#pollOne(l)));
     } finally {
       this.#polling = false;
     }
