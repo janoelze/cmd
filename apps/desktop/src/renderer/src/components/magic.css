@@ -12,7 +12,6 @@
   font: 15px/1.45 var(--font-ui); color: var(--text); background: transparent; border: 0; outline: 0; resize: none;
   padding: 0; width: 100%;
 }
-.magic-input::placeholder { color: var(--text-dim); }
 .magic-examples { display: flex; flex-wrap: wrap; gap: 6px; }
 .magic-chip {
   font: 12px var(--font-ui); color: var(--text-dim); background: color-mix(in srgb, var(--ink) 6%, transparent);

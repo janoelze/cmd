@@ -33,6 +33,7 @@
   --input-focus-edge: color-mix(in srgb, var(--accent) 50%, var(--input-edge));
   --input-glow: color-mix(in srgb, var(--accent) 16%, transparent);
   --input-ring: inset 0 0 0 1px var(--input-focus-edge), 0 0 0 2px var(--input-glow);
+  --input-placeholder: var(--text-dim);
   /* Dividers between a window's panes (the Settings window's sidebar and bar). */
   --pane-edge: color-mix(in srgb, var(--scrim) 50%, transparent);
   /* Recessed areas: unassigned grid cells. */
@@ -43,6 +44,7 @@
 
   --radius: 6px;
   --sidebar-w: 280px;
+  --sidebar-pad: 10px; /* rows' inset from the sidebar edges (ui.sidebarPadding, set on .app / .sw) */
   --titlebar-h: 38px; /* traffic-light area at the top of the sidebar */
   --statusbar-h: 30px; /* sidebar footer and main status bar share this */
   /* Window spacing in grid and strip (set on .app from ui.gutter, ui.paddingX/Y). */
@@ -66,6 +68,9 @@
 .platform-other { --titlebar-h: 28px; } /* the sidebar's top row (+) still needs its height */
 
 * { box-sizing: border-box; }
+
+/* Every input's placeholder, so no field falls back to the browser's grey. */
+::placeholder { color: var(--input-placeholder); opacity: 1; }
 
 html, body, #root { height: 100%; margin: 0; }
 
@@ -226,7 +231,7 @@ kbd {
   align-items: center;
   justify-content: flex-end;
   height: var(--titlebar-h);
-  padding: 0 8px;
+  padding: 0 var(--sidebar-pad);
   -webkit-app-region: drag;
 }
 .sidebar-titlebar .icon-btn { -webkit-app-region: no-drag; }
@@ -236,7 +241,7 @@ kbd {
   position: relative;
   display: flex;
   align-items: center;
-  margin: 0 8px 6px;
+  margin: 0 var(--sidebar-pad) 6px;
 }
 .sb-search input {
   flex: 1;
@@ -251,7 +256,6 @@ kbd {
   outline: none;
   user-select: text;
 }
-.sb-search input::placeholder { color: var(--text-dim); }
 .sb-search input:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); background: var(--well); }
 .sb-search-icon { position: absolute; left: 9px; color: var(--text-dim); pointer-events: none; }
 .sb-search-clear {
@@ -302,7 +306,7 @@ kbd {
   align-items: center;
   gap: 6px;
   height: 24px;
-  margin: 0 8px;
+  margin: 0 var(--sidebar-pad);
   padding: 0 8px;
   border-radius: var(--radius);
   font: 600 10.5px var(--font-ui);
@@ -318,13 +322,13 @@ kbd {
 .sb-heading.collapsible:hover .twisty, .sb-heading[aria-expanded="false"] .twisty { opacity: 1; }
 .sb-heading.collapsible:hover { color: var(--text); }
 
-.sb-none { padding: 14px 18px; font-size: 12px; color: var(--text-dim); }
+.sb-none { padding: 14px calc(var(--sidebar-pad) + 10px); font-size: 12px; color: var(--text-dim); }
 
 .row {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 8px;
+  margin: 0 var(--sidebar-pad);
   padding: 0 8px;
   border-radius: var(--radius);
   cursor: default;
@@ -530,7 +534,6 @@ kbd {
   flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent;
   font: inherit; font-weight: 400; color: var(--text); cursor: text;
 }
-.tile-title-input::placeholder { color: var(--text-dim); }
 /* Kind · Place · Status. Narrow windows drop from the right: status first, the name last. */
 /* Info, not the name: always dim, selected or not. */
 .tile-meta { margin-left: auto; display: flex; min-width: 0; flex: 0 100 auto; overflow: hidden; color: var(--text-dim); }
@@ -816,6 +819,7 @@ kbd {
 .feedback-message:focus, .feedback-contact:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
 .feedback-foot { display: flex; align-items: center; gap: 8px; }
 .feedback-info { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-dim); }
+.feedback-info input { accent-color: var(--accent); }
 .feedback-error { flex: 1; min-width: 0; font-size: 11.5px; color: var(--state-needs); text-align: right; }
 .btn.primary:not(:disabled) { color: var(--on-accent); background: var(--accent); }
 .btn:disabled { opacity: 0.45; }

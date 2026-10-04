@@ -53,6 +53,19 @@ const appTheme = (fontFamily: string, fontSize: number, dark: boolean) =>
       ".cm-panels": { backgroundColor: "var(--bg)", color: "var(--text)" },
       ".cm-panels-bottom": { borderTop: "1px solid var(--separator)" },
       ".cm-panel input, .cm-panel button": { font: "12px var(--font-ui)" },
+      // Find/replace fields and buttons in the app's input style (styles.css --input-*).
+      ".cm-textfield": {
+        color: "var(--text)", backgroundColor: "var(--well)", border: "none", borderRadius: "5px",
+        padding: "2px 7px", boxShadow: "inset 0 0 0 1px var(--input-edge)", outline: "none",
+      },
+      ".cm-textfield:focus": { boxShadow: "var(--input-ring)" },
+      ".cm-button": {
+        color: "var(--text)", backgroundImage: "none", backgroundColor: "var(--input-bg)", border: "none",
+        borderRadius: "5px", padding: "2px 8px", boxShadow: "inset 0 0 0 1px var(--input-edge)",
+      },
+      ".cm-button:active": { backgroundImage: "none", backgroundColor: "var(--bg-selected)" },
+      ".cm-button:focus-visible": { outline: "none", boxShadow: "var(--input-ring)" },
+      ".cm-panel input[type=checkbox]": { accentColor: "var(--accent)" },
       ".cm-tooltip": { backgroundColor: "var(--bg-elevated)", border: "1px solid var(--separator)" },
       "&.cm-focused": { outline: "none" },
     },

@@ -548,6 +548,7 @@ export function App() {
         ["--sidebar-w" as string]: `${sidebarWidth ?? SIDEBAR_WIDTH.default}px`,
         ["--window-radius" as string]: `${cfg["ui.windowRadius"]}px`,
         ["--gutter" as string]: `${cfg["ui.gutter"]}px`,
+        ["--sidebar-pad" as string]: `${cfg["ui.sidebarPadding"]}px`,
         ["--pad-x" as string]: `${cfg["ui.paddingX"]}px`,
         ["--pad-y" as string]: `${cfg["ui.paddingY"]}px`,
         ["--window-desaturate" as string]: `${cfg["ui.unfocusedDesaturation"] / 100}`,

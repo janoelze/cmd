@@ -169,7 +169,7 @@ export function SettingsWindow() {
   }
 
   return (
-    <div className="sw">
+    <div className="sw" style={{ ["--sidebar-pad" as string]: `${snap.settings["ui.sidebarPadding"]}px` }}>
       <aside className="sidebar sw-side">
         <div className="sidebar-titlebar" />
         <div className="sb-search">

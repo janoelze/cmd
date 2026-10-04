@@ -129,6 +129,7 @@ export const SETTINGS_SCHEMA = {
   "ui.paddingX": { title: "Horizontal padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the left and right edges in grid and strip view." },
   "ui.paddingY": { title: "Vertical padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the top and bottom edges in grid and strip view." },
   "ui.gutter": { title: "Gap between windows", unit: "px", type: "number", default: 8, min: 0, max: 32, step: 1, description: "Space between windows in grid and strip view. The canvas places windows on its own dot grid." },
+  "ui.sidebarPadding": { title: "Sidebar padding", unit: "px", type: "number", default: 10, min: 0, max: 24, step: 1, description: "Space between the sidebar's rows and its edges, in the main and Settings windows." },
   "ui.windowRadius": { title: "Window corner radius", unit: "px", type: "number", default: 8, min: 0, max: 16, step: 1, description: "Corner radius of windows (0 = square). Focus mode always fills the pane edge to edge." },
 
   "canvas.minZoom": { title: "Minimum zoom", unit: "%", type: "number", default: 30, min: 10, max: 100, step: 5, description: "Canvas: how far you can zoom out. Windows stay live at every zoom." },
