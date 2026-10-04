@@ -58,7 +58,7 @@
   --window-edge: color-mix(in srgb, var(--ink) 9%, var(--bg-sidebar));
   --window-highlight: var(--accent);
   --window-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
-  --window-dim: 0.28; /* darkening of unfocused windows */
+  --window-dim: 1; /* theme factor on ui.unfocusedDim (darkening of unfocused windows) */
   /* Motion: window moves and title-bar slots share this curve. */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -735,13 +735,13 @@ kbd {
 
 /* Unfocused windows are dimmed by an overlay (not a filter, which would soften text).
    It covers the outline too, so the outline dims with the line under the title.
-   ui.unfocusedDim scales the theme's --window-dim (--window-dim-scale, set in App). */
+   Amount: ui.unfocusedDim (--window-dim-amount, set in App) times the theme's --window-dim. */
 .windows-track > .tile::after {
   content: "";
   position: absolute;
   inset: calc(-1 * var(--window-outline));
   background: var(--scrim);
-  opacity: min(1, calc(var(--window-dim) * var(--window-dim-scale, 1)));
+  opacity: min(1, calc(var(--window-dim) * var(--window-dim-amount, 0.1)));
   border-radius: var(--window-radius);
   pointer-events: none;
   transition: opacity 160ms ease;

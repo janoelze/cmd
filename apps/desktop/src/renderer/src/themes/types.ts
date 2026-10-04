@@ -78,7 +78,7 @@ export interface Theme {
   syntax?: Partial<SyntaxColors>;
   /**
    * Any other token in styles.css, by name without the leading dashes, e.g.
-   * { "window-dim": "0.1", "on-accent": "#000" }: overrides what styles.css
+   * { "window-dim": "0.5", "on-accent": "#000" }: overrides what styles.css
    * derives (and, for light themes, the light defaults in registry.ts).
    */
   vars?: Readonly<Record<string, string>>;

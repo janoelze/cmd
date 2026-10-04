@@ -56,7 +56,7 @@ const ink = (pct: number) => `color-mix(in srgb, var(--ink) ${pct}%, transparent
  */
 const LIGHT_VARS: Readonly<Record<string, string>> = {
   // Light windows need far less darkening to read as unfocused.
-  "window-dim": "0.07",
+  "window-dim": "0.25",
   "shadow": "rgb(0 0 0 / 0.18)",
   "field": "var(--well)",
   "recess": ink(3.5),
