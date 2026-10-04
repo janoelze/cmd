@@ -7,7 +7,7 @@ import { servePreviews } from "./preview.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, webContents, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
-import { spawn, spawnSync } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -544,8 +544,34 @@ ipcMain.on("record-shortcut", (e, on: boolean) => {
 // template images; the UI tints them via CSS masks.
 const SF_HELPER = path.join(repoRoot, "apps/desktop/native/build/sfsymbols");
 const symbolCache = new Map<string, SymbolImage>();
+/** Helper runs in flight, by symbol key: concurrent requests for the same symbols share one. */
+const symbolRuns = new Map<string, Promise<void>>();
 
-function renderSymbols(names: string[], size: number, weight: string, scale: number): Record<string, SymbolImage> {
+// Rendered symbols are kept on disk (per macOS release and helper build), so a
+// launch doesn't wait for the helper (about 0.5 s cold) before the first paint.
+const symbolStamp = (() => {
+  try {
+    return `${os.release()}-${fs.statSync(SF_HELPER).mtimeMs}`;
+  } catch {
+    return null;
+  }
+})();
+const symbolFile = path.join(app.getPath("userData"), "sf-symbols.json");
+try {
+  const saved = JSON.parse(fs.readFileSync(symbolFile, "utf8")) as { stamp: string; symbols: Record<string, SymbolImage> };
+  if (symbolStamp && saved.stamp === symbolStamp) for (const [k, v] of Object.entries(saved.symbols)) symbolCache.set(k, v);
+} catch {}
+let symbolSave: ReturnType<typeof setTimeout> | undefined;
+function saveSymbols(): void {
+  if (!symbolStamp) return;
+  clearTimeout(symbolSave);
+  symbolSave = setTimeout(() => {
+    const body = JSON.stringify({ stamp: symbolStamp, symbols: Object.fromEntries(symbolCache) });
+    void fs.promises.writeFile(symbolFile, body).catch(() => {});
+  }, 1000);
+}
+
+async function renderSymbols(names: string[], size: number, weight: string, scale: number): Promise<Record<string, SymbolImage>> {
   const key = (n: string) => `${n}@${size}@${weight}@${scale}`;
   const missing = names.filter((n) => !symbolCache.has(key(n)));
   // SF Symbols are macOS-only (and Apple-only by licence): Lucide icons elsewhere
@@ -554,17 +580,29 @@ function renderSymbols(names: string[], size: number, weight: string, scale: num
     for (const n of missing) symbolCache.set(key(n), lucideSymbol(n, size, weight));
     return Object.fromEntries(names.map((n) => [n, symbolCache.get(key(n)) ?? null]));
   }
-  if (missing.length && fs.existsSync(SF_HELPER)) {
-    const r = spawnSync(SF_HELPER, [String(size), weight, String(scale), ...missing], { encoding: "utf8", timeout: 5000 });
-    try {
-      const out = JSON.parse(r.stdout || "{}") as Record<string, { png: string; w: number; h: number }>;
-      for (const n of missing) {
-        const o = out[n];
-        symbolCache.set(key(n), o ? { url: `data:image/png;base64,${o.png}`, w: o.w, h: o.h } : null);
-      }
-    } catch {
-      // fall through to the fallback below
+  if (missing.length && symbolStamp) {
+    // Off the main thread: a synchronous spawn here held up every window's first paint.
+    const todo = missing.filter((n) => !symbolRuns.has(key(n)));
+    if (todo.length) {
+      const run = new Promise<void>((resolve) => {
+        execFile(SF_HELPER, [String(size), weight, String(scale), ...todo], { encoding: "utf8", timeout: 5000, maxBuffer: 64 << 20 }, (_err, stdout) => {
+          try {
+            const out = JSON.parse(stdout || "{}") as Record<string, { png: string; w: number; h: number }>;
+            for (const n of todo) {
+              const o = out[n];
+              symbolCache.set(key(n), o ? { url: `data:image/png;base64,${o.png}`, w: o.w, h: o.h } : null);
+            }
+            saveSymbols();
+          } catch {
+            // fall through to the fallback below
+          }
+          for (const n of todo) symbolRuns.delete(key(n));
+          resolve();
+        });
+      });
+      for (const n of todo) symbolRuns.set(key(n), run);
     }
+    await Promise.all(missing.map((n) => symbolRuns.get(key(n))));
   }
   for (const n of missing) {
     if (symbolCache.has(key(n))) continue;
