@@ -26,6 +26,30 @@ pnpm release <ver|patch|minor>  # bump, tag v<ver>, push; CI publishes the GitHu
 
 There is no build step for core/CLI/protocol: they run as `.ts` directly on Node ≥ 22.18 (type stripping). This means `tsconfig.base.json` enforces `erasableSyntaxOnly` (no enums, namespaces, parameter properties) and `verbatimModuleSyntax` (use `import type`), and relative imports must include the `.ts` extension.
 
+## Work style: one git worktree per task
+
+Several agents build cmd at once. Nobody edits the main checkout (`~/src/cmd`): it stays on a clean `master` and is only where branches are merged and releases cut. Each task gets its own branch in a sibling worktree:
+
+```sh
+git -C ~/src/cmd worktree add ~/src/cmd-<topic> -b <topic> master
+cd ~/src/cmd-<topic> && pnpm install   # node_modules and native helpers are per checkout; the pnpm store makes it quick
+export CMD_HOME=$PWD/.cmd-dev           # before any pnpm dev / core / cmd / e2e, see below
+git worktree list                       # what is in flight
+```
+
+- Started in the main checkout with a code change to make? Create a worktree and work there (absolute paths), unless the user says otherwise.
+- **Always set `CMD_HOME` in a worktree.** Without it every checkout's `pnpm dev` is the same dev instance (one socket, one SQLite), and each app restarts a core running another build, so worktrees kill each other's core. With it each worktree has its own core, PTY host, state, logs and settings (settings start at defaults, since `configDir()` follows `CMD_HOME`). `pnpm core:stop` then stops only yours. Never run `pnpm core:stop-all`: it stops every agent's cores.
+- Commit on your branch as you go. Before handing back: `git rebase master` (worktrees share refs, no fetch needed), then `pnpm typecheck && pnpm test`.
+- Append-only registries conflict most: `Methods` in `rpc.ts`, `Handlers` in `core.ts`, `SETTINGS_SCHEMA`, `settings/layout.ts`, `shared/commands.ts`. On rebase keep both sides' entries.
+- Merging, pushing and releasing happen only when the user asks, from the main checkout: `git merge --ff-only <topic>`, `pnpm release` there on `master`.
+- A merge isn't done until its worktree is gone. Right after merging, in the main checkout:
+  ```sh
+  CMD_HOME=~/src/cmd-<topic>/.cmd-dev pnpm core:stop --terminals   # its core and PTY host
+  git worktree remove ~/src/cmd-<topic>                            # deletes the dir, node_modules and .cmd-dev too
+  git branch -d <topic>
+  ```
+  `git worktree remove` refuses if the worktree has uncommitted or untracked changes: that's work the merge didn't include, so look before reaching for `--force`. `git worktree prune` clears entries whose dir was deleted by hand.
+
 ## Architecture
 
 ```
