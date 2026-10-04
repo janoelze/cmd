@@ -2,7 +2,7 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
-## 0.9.2 — 2026-10-05
+## 0.9.3 — 2026-10-05
 
 ### New
 
