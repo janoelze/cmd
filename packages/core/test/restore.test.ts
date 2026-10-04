@@ -18,6 +18,8 @@ let n = 0;
 function start(db: string): { core: Core; ptys: FakePty[] } {
   const f = fakeFactory();
   const core = new Core({ socketPath: path.join(dir, `c${n++}.sock`), dbPath: db, terminals: f.factory, pollMs: 0, home: dir });
+  // Panes default to $SHELL, which isn't zsh everywhere (CI runners use bash); the integration is zsh's.
+  core.settings.set("shell.program", "/bin/zsh");
   return { core, ptys: f.ptys };
 }
 
