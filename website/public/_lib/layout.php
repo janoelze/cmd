@@ -67,7 +67,8 @@ td.num { font-variant-numeric: tabular-nums; }
 .pill { font-size: 11px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
 .button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-.hero-shots { border-radius: 1.196% / 1.895%; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14); } /* the screenshots' own 18px window corners, at any size */
+.hero-shots { border-radius: 1.196% / 1.895%; } /* 18px window corners on the 1505×950 screenshots, at any size */
+.hero-shots::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; border: 1px solid rgb(255 255 255 / 0.16); pointer-events: none; } /* lightens the screenshot's own edge, whatever its colour */
 .hero-shots { position: relative; width: min(1400px, calc(100vw - 32px)); margin: 48px 0 48px 50%; transform: translateX(-50%); }
 .hero-shots img { display: block; width: 100%; height: auto; border-radius: inherit; opacity: 0; transition: opacity 0.9s ease; }
 .hero-shots img + img { position: absolute; inset: 0; }

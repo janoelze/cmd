@@ -34,6 +34,7 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <img src="assets/agents.png" width="1505" height="950" alt="The strip: a Claude Code session, a file browser and a shell, with six agents and recent sessions in the sidebar">
   <img src="assets/theme-warm.png" width="1505" height="950" alt="The canvas in a warm theme: a shader widget next to top">
   <img src="assets/widgets.png" width="1505" height="950" alt="A weather widget next to top in the strip">
+  <img src="assets/canvas.png" width="1505" height="950" alt="The canvas: a shader widget next to top">
   <img src="assets/canvas-pan.png" width="1505" height="950" alt="The canvas, panned across a log, a usage widget and a Claude Code session">
 </div>
 <script>
