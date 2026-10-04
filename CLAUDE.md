@@ -19,6 +19,7 @@ pnpm e2e                     # build, then Playwright drives the real app; scree
 pnpm core                    # run the core directly
 pnpm core:stop               # stop the core of $CMD_HOME, else the dev one; core:stop-all stops every non-release core
 pnpm cmd <args>              # run the CLI from source
+pnpm ui                      # the @cmd/ui gallery in a browser (every component, every theme); `pnpm --filter @cmd/ui shots` screenshots it
 pnpm release <ver|patch|minor>  # bump, tag v<ver>, push; CI publishes the GitHub release
 ```
 
@@ -70,6 +71,7 @@ packages/cli (`cmd`, hook entry point)              ──┼─ newline-delimit
   - `search/`: transcript full-text search in SQLite, indexed in a worker. Agents are `TranscriptSource`s registered in `builtin.ts` (`sources.ts` is the registry). Each source knows where its transcripts live (`locate`), how to find a folder from a path that hooks report (`rootFor`), how to recognise and parse its files, and how to resume a session. A root's `env` (e.g. `CLAUDE_CONFIG_DIR`) is stored with every session and prepended to the resume command. Folders learned from live agents are kept in the index.
   - `store.ts` (SQLite), `settings.ts` (watches `settings.json`, live-applies), `watch.ts` (fs watches per connection, `fs.changed` events), `resources.ts` (process-tree CPU/memory).
 - **App commands** (`apps/desktop/src/shared/commands.ts`): one list drives the macOS menu bar (main owns accelerators, so shortcuts beat the terminal), the command palette and context menus. The renderer implements `run`. Users remap via `keybindings.json` keyed by command id. Every shortcut must be a real menu item.
+- **UI kit** (`packages/ui`, `@cmd/ui`): the design tokens (`tokens.css`), the themes (`themes/`, applied with `applyTheme`; the desktop picks one from settings in `renderer/src/theme.ts`), tooltips, scrollbars and every control: Button/IconButton/ButtonGroup, Switch/Checkbox/RadioGroup/Segmented/Tabs/Select, TextField/SearchField/TextArea/NumberField/SecretField, FormSection/FormRow, Callout/EmptyState/CodeBlock/KeyValue, Badge/StatusDot/Kbd/Progress/Spinner, Menu/Popover/Dialog/toast. Variants are data attributes (`data-variant`, `data-size`, `data-tone`). Icons are SF Symbol names drawn through `<UIProvider icon={Symbol}>` (Lucide in the gallery).
 - **Renderer** is React with xterm.js (WebGL) for terminals and CodeMirror 6 for text windows; state in `renderer/src/store.ts`.
 
 ## Tests
@@ -80,4 +82,5 @@ packages/cli (`cmd`, hook entry point)              ──┼─ newline-delimit
 ## Conventions
 
 - Settings: add new keys to `SETTINGS_SCHEMA` in `packages/protocol/src/settings.ts` and place it in a page and section of the Settings window in `renderer/src/settings/layout.ts` (a test checks every key is placed once). The window (`renderer/src/settings/`, its own page `settings.html`) generates each row from the schema; `title`, `unit`, `placeholder`, `labels`, `code` and `control` are display hints. Settings must apply live: read them when acting, or, if a core consumer caches something derived from them, subscribe with `SettingsService.bind(keys, fn)`; the renderer gets `settings.updated`. Only when a change can't reach what is already running, set `applies` (`newTerminals`, `firstLaunch`) so the UI and CLI say so.
+- UI: build views from `@cmd/ui` components and tokens, not new controls or literal colours/sizes. A control the kit lacks goes into the kit (with a gallery specimen in `packages/ui/gallery/Gallery.tsx`), not into a view's CSS.
 - Comments at the top of each file explain its role; keep that pattern and the existing terse comment style.
