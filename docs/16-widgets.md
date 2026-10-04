@@ -1,6 +1,6 @@
 # Widgets and the Widget Library
 
-> Status (2026-10-05), branch `widget-library`: phases 1 and 2 (widgets apart from windows in the core, and the library's protocol and CLI) are built; the UI and built-in widgets are a proposal. It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
+> Status (2026-10-05), branch `widget-library`: phases 1–3 are built (widgets apart from windows in the core; the library's protocol and CLI; the library sheet, the Widgets menu and the sidebar's Widgets section). Built-in widgets and examples are a proposal. It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
 
 Magic widgets are windows today, in the code and to the people using them. "New Magic Widget" sits in File next to New Terminal, closing one throws it away (after 30 days in `widgets/closed/`), and nothing ships with cmd except the ability to make one. This proposal makes widgets their own thing for people, while the code keeps treating them almost like windows.
 
@@ -59,7 +59,7 @@ The library is ⇧⌘L, as Xcode's Library is: L for Library. ⌥⌘M looks natu
 
 
 - **File** holds windows only: Terminal, Claude, Codex, Browser, File Browser, Text.
-- A **Widgets** menu (between View and Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Edit, Change…, Refresh, Remove from Desk. The Magic View-menu items (`view.magicChange`, `view.magicRefresh`, `view.magicStop`) move here.
+- A **Widgets** menu (after Space, before Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Change Widget…, Refresh Widget, Stop Making Widget, Remove from Desk. The Magic View-menu items moved here; their ids (`file.newMagic`, `view.magic*`) stay, since keybindings.json uses them. Edit stays ⌘E in View (Toggle Preview / Edit), which already serves every window.
 - The sidebar's + menu has the same two groups, windows then widgets.
 - The sidebar lists widgets on the desk in their own **Widgets** section, after Windows.
 
@@ -71,18 +71,18 @@ A sheet, like the palette or Settings, with a grid of cards: thumbnail (the late
 - **Built-in**: Agent Activity, Live Diff, and more over time.
 - **Examples**: widgets made by others to add and change (from `magic/prompt/examples/`; later the store).
 
-Clicking a card adds the widget to the current Space and closes the sheet. A card's menu has Add, Edit, Duplicate, Rename, Show in Finder (yours) and Delete (yours).
+Clicking a card adds the widget to the current Space and closes the sheet; ⏎ in the search field adds the first match. A card's menu (right-click, or its … button) has Add to Desk, and for yours Rename…, Duplicate, Show in Finder and Delete…. Deleting a widget that is on the desk says its windows close too, closes them, then deletes (the core itself still refuses while a window shows it). The sheet asks the core for a fresh list when it opens; `widget.library` events keep it current. Built: `renderer/src/components/WidgetLibrary.tsx`.
 
 ### Making a widget
 
 As today: the widget appears on the desk right away, as a prompt; you describe it and watch it being built. Two additions:
 
 - Once it works for the first time it joins Your Widgets. A draft that was never built goes away when it is closed, so the library doesn't fill with attempts.
-- The first time a made widget is removed from the desk, a toast says where it went: "Removed from desk. It's in your Widget Library. Undo · Open Library".
+- The first time a made widget is removed from the desk, a toast says where it went: "Removed “…” from the desk. It's in your Widget Library." with Undo (a toast has one action). The flag is the `widgets.removedHint` UI state.
 
 ### Closing and deleting
 
-⌘W on a widget is Remove from Desk; the menu says so. Widgets you made are kept until you delete them; there is no automatic cleanup, since that would break "it's still in the library". Sorting by last use keeps the library tidy enough. `widgets/closed/` goes away: its folders join the library on migration.
+⌘W on a widget is Remove from Desk (the Widgets menu has it by name; File's item still reads Close Window, since menu labels are static). Widgets you made are kept until you delete them; there is no automatic cleanup, since that would break "it's still in the library". Sorting by last use keeps the library tidy enough. `widgets/closed/` goes away: its folders join the library on migration.
 
 ### Copies
 
@@ -151,7 +151,7 @@ One worktree per phase; each ends green.
 
 1. **Widgets apart from windows** (core only, no visible change), built: widget ids, `widget.json`, no `closed/`, every copy updated on change, migration; `MagicService.library()`, `opened()`, `deleteWidget()`. Tests in `widgets.test.ts`.
 2. **Registry and protocol**, built: `role`/`description` on window types; `widget.*` methods and event; `cmd widget list/add`.
-3. **The library and the split**: the sheet, the Widgets menu, the sidebar's + and Widgets section, Remove from Desk and its toast, new labels in `shared/commands.ts`.
+3. **The library and the split**, built: the sheet, the Widgets menu, the sidebar's + and Widgets section, Remove from Desk and its toast, new labels in `shared/commands.ts`.
 4. **Built-ins**: Agent Activity, then Live Diff with `git.diff`.
 5. **Examples** from the prompt's examples; then the README, positioning and changelog.
 

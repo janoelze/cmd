@@ -111,13 +111,18 @@ export function buildRows(s: State): SidebarRow[] {
 }
 
 /** Sidebar sections of the open rows, in display order. */
-export const SECTIONS = ["needs", "agents", "windows"] as const;
+export const SECTIONS = ["needs", "agents", "windows", "widgets"] as const;
 export type Section = (typeof SECTIONS)[number];
 
-/** Needs you: an agent (or one of its workers) waiting for input. Else agents, then plain windows. */
+/** A widget, not a window (docs/16-widgets.md): its type says so; Magic widgets also before the types load. */
+export function isWidget(w: AppWindow | null | undefined): boolean {
+  return !!w && (w.kind === "magic" || typeFor(w.kind)?.role === "widget");
+}
+
+/** Needs you: an agent (or one of its workers) waiting for input. Else agents, then windows, then widgets. */
 export function sectionOf(r: SidebarRow): Section {
   if (r.urgent && bucketOf(r.urgent) === "needs") return "needs";
-  return r.agent ? "agents" : "windows";
+  return r.agent ? "agents" : isWidget(r.win) ? "widgets" : "windows";
 }
 
 /** Waiting on you: an agent needing input, or a window's urgent attention marker (window outline). */

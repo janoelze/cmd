@@ -4,7 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import type { Agent, AgentId, AppNotification, AppWindow, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AppNotification, AppWindow, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -38,6 +38,8 @@ export interface State {
   pairRequests: RemotePairRequest[];
   /** Terminals a remote device just typed into: pane → device name (cleared after a moment). */
   remoteInput: Map<PaneId, string>;
+  /** The Widget Library (docs/16-widgets.md): built-in widgets, then yours by last use. */
+  library: WidgetEntry[];
 }
 
 let state: State = {
@@ -53,6 +55,7 @@ let state: State = {
   remote: null,
   pairRequests: [],
   remoteInput: new Map(),
+  library: [],
 };
 const inputTimers = new Map<PaneId, ReturnType<typeof setTimeout>>();
 const listeners = new Set<() => void>();
@@ -109,6 +112,11 @@ export function getState(): State {
 const pendingUi = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Update UI state now; write it to the core shortly after (debounced per key). */
+/** The Widget Library as the core just listed it. */
+export function setLibrary(library: WidgetEntry[]): void {
+  set({ library });
+}
+
 export function setUi(key: string, value: unknown): void {
   if (JSON.stringify(state.ui[key]) === JSON.stringify(value)) return;
   set({ ui: { ...state.ui, [key]: value } });
@@ -375,6 +383,9 @@ function handle(e: CoreEvent): void {
     case "fs.changed":
       for (const fn of fsListeners) fn(e.path);
       return;
+    case "widget.library":
+      set({ library: e.entries });
+      return;
     case "notification":
       for (const fn of notificationListeners) fn(e.notification);
       return;
@@ -456,6 +467,7 @@ cmd.onStatus(async (status) => {
   });
   checkSpace();
   void cmd.call("search.status", {}).then((search) => set({ search }), () => {});
+  void cmd.call("widget.list", {}).then((library) => set({ library }), () => {});
   // An older core has no remote access: leave it null.
   void cmd.call("remote.status", {}).then((remote) => set({ remote, pairRequests: remote.requests ?? [] }), () => {});
   // The windows show now; each terminal opens once its content is written (hold).

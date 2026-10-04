@@ -1,5 +1,5 @@
 // The sidebar: a search field over open windows and the transcript index, then
-// sections (Needs you, Agents, Windows, Recent past sessions), a footer with
+// sections (Needs you, Agents, Windows, Widgets, Recent past sessions), a footer with
 // the core's health, and a draggable right edge.
 
 import { Button, EmptyState, IconButton, SearchField } from "@cmd/ui";
@@ -41,7 +41,7 @@ interface Props {
   error?: string;
 }
 
-const TITLES: Record<Section, string> = { needs: "Needs you", agents: "Agents", windows: "Windows" };
+const TITLES: Record<Section, string> = { needs: "Needs you", agents: "Agents", windows: "Windows", widgets: "Widgets" };
 
 export function Sidebar(p: Props) {
   countRender("Sidebar");

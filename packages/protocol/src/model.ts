@@ -236,8 +236,12 @@ export interface WidgetEntry {
   description?: string;
   /** SF Symbol name. */
   icon: string;
+  /** What was first asked for; widgets made with Magic. */
+  request?: string;
   /** A screenshot (file path); widgets made with Magic. */
   shot?: string;
+  /** Its folder; widgets made with Magic. */
+  dir?: string;
   createdAt?: number;
   usedAt?: number;
   /** Windows showing it now. */

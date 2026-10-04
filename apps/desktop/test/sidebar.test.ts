@@ -36,6 +36,13 @@ describe("sidebar sections", () => {
     expect(rows.map(sectionOf)).toEqual(["needs", "agents", "windows", "windows"]);
   });
 
+  it("puts widgets in their own section, after windows", () => {
+    const t = state([pane("shell")], [], [win("w1", { updatedAt: 500 }), win("m1", { kind: "magic", updatedAt: 900 })]);
+    const rows = buildRows(t);
+    expect(rows.map((r) => r.key)).toEqual(["w1", "shell", "m1"]);
+    expect(rows.map(sectionOf)).toEqual(["windows", "windows", "widgets"]);
+  });
+
   it("puts a host into needs you when one of its workers waits", () => {
     const t = state([pane("host", { agentId: "h" })], [agent("h", { paneId: "host" }), agent("w", { parentId: "h", state: "needs_input" })]);
     expect(sectionOf(buildRows(t)[0]!)).toBe("needs");

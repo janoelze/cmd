@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Toaster } from "@cmd/ui";
 import type { PaneId, Space, SpaceId } from "@cmd/protocol";
 import type { WebviewTag } from "electron";
 import { bucketOf, needsAttention } from "@cmd/protocol";
@@ -26,7 +27,7 @@ import {
 } from "./actions.ts";
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
-import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, nextAfterClose, pushHistory, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
+import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, isWidget, nextAfterClose, pushHistory, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
 import { getState, onNotification, onWindowFocus, setUsageShown, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset, withWidth } from "./strip.ts";
@@ -38,6 +39,7 @@ import { toggleMarkdownEdit } from "./windows/markdown.tsx";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Feedback } from "./components/Feedback.tsx";
+import { WidgetLibrary } from "./components/WidgetLibrary.tsx";
 import { APP_VERSION, RELEASES, releasesSince, WhatsNew } from "./components/WhatsNew.tsx";
 import { compareVersions, type Release } from "../../shared/changelog.ts";
 import { PairSheet, useRemoteNotifications } from "./components/Remote.tsx";
@@ -117,6 +119,8 @@ export function App() {
   /** Palette open, with an optional initial query ("?" for session search). */
   const [palette, setPalette] = useState<false | string>(false);
   const [feedback, setFeedback] = useState(false);
+  /** The Widget Library sheet (docs/16-widgets.md). */
+  const [library, setLibrary] = useState(false);
   /** The releases the What's New sheet shows, when it's open. */
   const [whatsNew, setWhatsNew] = useState<Release[] | null>(null);
   /** Space pickers (open/switch, move a window, rename); see spaces.tsx. */
@@ -318,13 +322,18 @@ export function App() {
     "file.newBrowser": () => void newBrowser(),
     "file.newFiles": () => void newFiles(),
     "file.newText": () => void newText(),
-    "file.newMagic": () => void newMagic(),
+    "file.newMagic": () => (setLibrary(false), void newMagic()),
+    "widget.library": () => (setPalette(false), setLibrary((l) => !l)),
+    "widget.remove": () => {
+      if (selected && isWidget(s.windows.get(selected))) void closePane(selected);
+    },
     "view.magicChange": () => windowActions(selected)?.change?.(),
     "view.magicRefresh": () => windowActions(selected)?.refresh?.(),
     "view.magicStop": () => windowActions(selected)?.stop?.(),
     "file.close": () => {
       // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
       if (feedback) setFeedback(false);
+      else if (library) setLibrary(false);
       else if (whatsNew) setWhatsNew(null);
       else if (picker) setPicker(null);
       else if (palette !== false) setPalette(false);
@@ -426,6 +435,7 @@ export function App() {
 
   // Tell the menu bar what is checked/enabled (only when that changes: it's IPC and native menu work).
   const selectedIsPane = !!selected && s.panes.has(selected);
+  const selectedIsWidget = !!selected && isWidget(s.windows.get(selected));
   const hasSession = !!(currentAgent && sessionId(currentAgent));
   useEffect(() => {
     const hasPane = !!selected;
@@ -454,9 +464,10 @@ export function App() {
         "space.close": !!space && !space.home,
         "space.rename": !!space,
         "space.icon": !!space,
+        "widget.remove": selectedIsWidget,
       },
     });
-  }, [mode, sidebarOpen, selected, selectedIsPane, withPane.length, hasSession, attention > 0, openSpaces.length, !!space, !!space?.home]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, sidebarOpen, selected, selectedIsPane, selectedIsWidget, withPane.length, hasSession, attention > 0, openSpaces.length, !!space, !!space?.home]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── context menus ──────────────────────────────────────
 
@@ -523,10 +534,10 @@ export function App() {
   );
   const pickerProps = usePickers(picker, () => setPicker(null));
 
-  /** The sidebar's + button. */
+  /** The sidebar's + button: windows, then widgets (docs/16-widgets.md). */
   const newMenu = () =>
     void showContextMenu(
-      (["file.newTerminal", "file.newClaude", "file.newCodex", "-", "file.newBrowser", "file.newFiles", "file.newText", "file.newMagic"] as const).map((id) =>
+      (["file.newTerminal", "file.newClaude", "file.newCodex", "-", "file.newBrowser", "file.newFiles", "file.newText", "-", "widget.library", "file.newMagic"] as const).map((id) =>
         id === "-" ? id : { label: COMMANDS.find((c) => c.id === id)!.label, run: () => run(id) },
       ),
     );
@@ -684,6 +695,8 @@ export function App() {
       )}
       {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}
       {picker?.kind === "icon" && <SpaceIconPicker space={all.spaces.get(picker.space.id) ?? picker.space} onClose={() => setPicker(null)} />}
+      {library && <WidgetLibrary onClose={() => setLibrary(false)} />}
+      <Toaster />
       {feedback && <Feedback onClose={() => setFeedback(false)} />}
       {whatsNew && <WhatsNew releases={whatsNew} onClose={() => setWhatsNew(null)} onLink={(url) => (setWhatsNew(null), openLink(url))} />}
       {all.pairRequests[0] && <PairSheet key={all.pairRequests[0].requestId} request={all.pairRequests[0]} />}

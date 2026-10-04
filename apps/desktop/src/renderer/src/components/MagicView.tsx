@@ -214,7 +214,7 @@ function PromptPane({ focused, error, initial, onSubmit }: { focused: boolean; e
           ref={ref}
           className="magic-input"
           rows={2}
-          placeholder="What should this window show? A question, a URL, some JSON, a command…"
+          placeholder="What do you want to see? A question, a URL, some JSON, a command…"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}

@@ -1,9 +1,10 @@
 // UI-level actions shared by the sidebar and the command palette.
 
-import type { Agent, PaneId, SearchHit } from "@cmd/protocol";
+import type { Agent, AppWindow, PaneId, SearchHit } from "@cmd/protocol";
+import { toast } from "@cmd/ui";
 import { cmd } from "./bridge.ts";
-import { getState } from "./store.ts";
-import { under } from "./model.ts";
+import { getState, setUi } from "./store.ts";
+import { isWidget, under } from "./model.ts";
 import { windowStatus } from "./windowActions.ts";
 
 type Selector = (paneId: PaneId) => void;
@@ -108,6 +109,7 @@ export async function closePane(paneId: PaneId): Promise<void> {
       if (!ok) return;
     }
     await cmd.call("window.close", { id: paneId });
+    if (isWidget(win)) removedFromDesk(win);
     return;
   }
   const pane = s.panes.get(paneId);
@@ -124,6 +126,22 @@ export async function closePane(paneId: PaneId): Promise<void> {
     if (!ok) return;
   }
   await cmd.call("pane.kill", { paneId });
+}
+
+/**
+ * A widget made with Magic left the desk but stays in the library
+ * (docs/16-widgets.md): say so the first time, with a way back. Drafts that
+ * never built are gone with their window, so they say nothing.
+ */
+function removedFromDesk(win: AppWindow): void {
+  const widgetId = typeof win.state.widgetId === "string" ? win.state.widgetId : null;
+  if (!widgetId || !win.state.revision || getState().ui["widgets.removedHint"]) return;
+  setUi("widgets.removedHint", true);
+  toast(`Removed “${win.title}” from the desk. It's in your Widget Library.`, {
+    icon: "sparkles",
+    duration: 8000,
+    action: { label: "Undo", run: () => void cmd.call("widget.add", { ref: `magic:${widgetId}`, spaceId: win.spaceId }).then((w) => select(w.id), () => {}) },
+  });
 }
 
 /** Copies the command that resumes an agent's session; the core builds it (env, configured command). */
@@ -179,7 +197,7 @@ export async function openPath(target: string): Promise<void> {
   else cmd.openPath(t);
 }
 
-/** New Magic widget (docs/12-magic-widgets.md); with a request, it starts making it right away. */
+/** A new widget made with Magic (docs/12-magic-widgets.md); with a request, it starts making it right away. */
 export async function newMagic(prompt?: string): Promise<void> {
   const w = await cmd.call("window.open", { kind: "magic", input: {}, spaceId: here() });
   select(w.id);

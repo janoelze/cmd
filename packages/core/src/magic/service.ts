@@ -360,6 +360,7 @@ export class MagicService {
   #apply(id: WindowId, m: WidgetManifest, html: string, extra: Partial<MagicState> = {}): void {
     const s = stateOf(this.#window(id));
     const widgetId = s.widgetId ?? id;
+    if (s.widgetId) this.#widgetOf.set(id, s.widgetId);
     const info = this.store.info(widgetId);
     this.#o.windows.update(id, {
       title: info?.named ? info.title : m.title,
@@ -759,7 +760,10 @@ export class MagicService {
   /** Every widget that was built, most recently used first, with the windows showing it. */
   library(): MagicLibraryEntry[] {
     const shown = new Map<string, WindowId[]>();
-    for (const [win, wid] of this.#widgetOf) shown.set(wid, [...(shown.get(wid) ?? []), win]);
+    for (const w of this.#o.windows.others()) {
+      const wid = w.kind === "magic" ? stateOf(w).widgetId : undefined;
+      if (wid) shown.set(wid, [...(shown.get(wid) ?? []), w.id]);
+    }
     return this.store
       .ids()
       .flatMap((id) => {
@@ -815,7 +819,7 @@ export class MagicService {
   /** Delete a widget from the library: its folder, revisions and secrets. Not while a window shows it. */
   deleteWidget(widgetId: string): void {
     if (!this.store.info(widgetId)) throw new Error(`no such widget: ${widgetId}`);
-    if ([...this.#widgetOf.values()].includes(widgetId)) throw new Error("This widget is on the desk; remove it from there first.");
+    if (this.#copies(widgetId).length) throw new Error("This widget is on the desk; remove it from there first.");
     this.#unwatch(widgetId);
     this.widgetSecrets.forget(widgetId);
     this.store.delete(widgetId);

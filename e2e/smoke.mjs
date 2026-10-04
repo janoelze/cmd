@@ -763,6 +763,28 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(versions === 2 && tabs.join(",").startsWith("Changes,Settings,Files,Health") && fields.some((f) => f.includes("Start")) && !(await tile.locator(".magic-edit").count()), `⌘E shows a widget's edit view (versions, settings) and back (${versions}, ${tabs.join("/")})`);
     await call("window.close", { id: w.id });
 
+    // The Widget Library (docs/16-widgets.md): widgets have their own menu; a closed one stays in the library and comes back from it.
+    const menuLabels = await app.evaluate(({ Menu }) => Object.fromEntries(Menu.getApplicationMenu().items.map((m) => [m.label, m.submenu?.items.filter((i) => i.visible && i.type !== "separator").map((i) => i.label) ?? []])));
+    check(!menuLabels.File.some((l) => /widget/i.test(l)) && menuLabels.Widgets?.[0] === "Widget Library…" && menuLabels.Widgets.includes("New Widget with Magic…"), `File has windows only; widgets have their own menu (${menuLabels.Widgets?.join(", ")})`);
+    await menu("widget.library");
+    await win.waitForSelector(".widget-library .wl-card", { timeout: 5000 });
+    const cards = await win.locator(".widget-library .wl-name").allTextContents();
+    await win.screenshot({ path: path.join(shots, "widget-library.png") });
+    check(cards[0] === "Make one with Magic" && cards.includes("Counter"), `the Widget Library offers Magic first, then the closed widget (${cards.join(", ")})`);
+    await win.locator(".widget-library .wl-card", { hasText: "Counter" }).click();
+    let back = null;
+    for (let i = 0; i < 20 && !back; i++) {
+      await win.waitForTimeout(200);
+      back = (await call("window.list")).find((x) => x.kind === "magic" && x.title === "Counter" && x.state.phase === "ready");
+    }
+    const listed = (await call("widget.list")).find((e) => e.title === "Counter");
+    check(!!back && (await win.locator(".widget-library").count()) === 0 && listed?.windows.includes(back.id) && (await win.locator(".sb-widgets").count()) === 1, `a widget comes back from the library, on the desk and in the sidebar's Widgets (${listed?.windows.length})`);
+    await menu("widget.library");
+    await win.waitForSelector(".widget-library", { timeout: 5000 });
+    await menu("file.close");
+    check((await win.locator(".widget-library").count()) === 0, "⌘W closes the Widget Library first");
+    await call("window.close", { id: back.id });
+
     // Status and notifications from data.ts; actions from the view (after a click only).
     const b = await call("window.open", { kind: "magic", input: {} });
     const bdir = path.join(home, "widgets", b.id, "revisions", "0001");
