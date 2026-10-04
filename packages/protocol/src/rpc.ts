@@ -178,6 +178,8 @@ export interface Methods {
 
   /** Directory listing for file windows (dirs first, then by name). */
   "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };
+  /** Which of these paths exist, resolved against `cwd` (~ expanded): the absolute path, or null. For terminal links. */
+  "fs.resolve": { params: { paths: string[]; cwd: string }; result: (string | null)[] };
   /** Read a text file (first 5 MB). */
   "fs.read": {
     params: { path: string };

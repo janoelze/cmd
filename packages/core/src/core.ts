@@ -15,7 +15,7 @@ import { ResourceMonitor, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
 import { registerBuiltinSources } from "./search/builtin.ts";
 import { TranscriptSources } from "./search/sources.ts";
-import { listDir, parseOverrides, readText, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
+import { listDir, parseOverrides, readText, resolvePaths, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { gitStatus } from "./git.ts";
 import { createPath, duplicatePath, renamePath } from "./fileops.ts";
@@ -258,6 +258,7 @@ export class Core {
     "secrets.set": (p) => this.secrets.set(p.key, p.value),
     "fs.list": (p) => listDir(p.path),
     "fs.read": (p) => readText(p.path),
+    "fs.resolve": (p) => resolvePaths(p.paths, p.cwd),
     "fs.write": (p) => writeText(p.path, p.text, p.expectMtime),
     "fs.rename": (p) => renamePath(p.path, p.name),
     "fs.duplicate": (p) => duplicatePath(p.path),

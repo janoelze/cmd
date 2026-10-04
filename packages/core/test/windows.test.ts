@@ -9,6 +9,7 @@ import {
   normalizeUrl,
   parseOverrides,
   readText,
+  resolvePaths,
   registerBuiltins,
   shellOpenEnv,
   targetFor,
@@ -158,5 +159,14 @@ describe("window manager", () => {
     expect(fs.readFileSync(p, "utf8")).toBe("two");
     fs.utimesSync(p, new Date(), new Date(Date.now() + 5000));
     expect(() => writeText(p, "three", w.mtime)).toThrow(/changed on disk/);
+  });
+});
+
+describe("resolvePaths", () => {
+  it("returns absolute paths for those that exist, relative to cwd", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-resolve-"));
+    fs.mkdirSync(path.join(dir, "src"));
+    fs.writeFileSync(path.join(dir, "src", "a.ts"), "");
+    expect(resolvePaths(["src/a.ts", "src", "nope.ts", "/"], dir)).toEqual([path.join(dir, "src", "a.ts"), path.join(dir, "src"), null, "/"]);
   });
 });

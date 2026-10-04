@@ -161,6 +161,15 @@ export function listDir(dir: string): { path: string; parent: string | null; ent
   return { path: abs, parent: parent === abs ? null : parent, entries };
 }
 
+/** Paths that exist, made absolute against cwd; null for the rest (terminal links). */
+export function resolvePaths(paths: string[], cwd: string): (string | null)[] {
+  const base = path.resolve(expandHome(cwd));
+  return paths.map((p) => {
+    const abs = path.resolve(base, expandHome(p));
+    return fs.existsSync(abs) ? abs : null;
+  });
+}
+
 const READ_MAX = 5 * 1024 * 1024;
 
 /** Read a text file for a text window (first 5 MB). */

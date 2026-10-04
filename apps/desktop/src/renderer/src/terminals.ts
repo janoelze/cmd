@@ -5,13 +5,14 @@
 
 import { MAC_KEYMAP } from "../../shared/commands.ts";
 import { isAppShortcut } from "./keybindings.ts";
-import { Terminal, type ITheme } from "@xterm/xterm";
+import { Terminal, type IBufferCellPosition, type ILink, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { currentTheme, onThemeChange, terminalColors } from "./themes/registry.ts";
+import { findLinks } from "./links.ts";
 
 // ⌘ keys sent to the PTY as readline control characters: kill line, start, end.
 const CMD_KEYS: Record<string, string> = { Backspace: "\x15", ArrowLeft: "\x01", ArrowRight: "\x05" };
@@ -32,6 +33,94 @@ interface Host {
 const FIT_INTERVAL = 100;
 
 const theme = (): ITheme => terminalColors(currentTheme());
+
+// ⌘-click links (URLs, existing file paths). xterm asks the provider only for
+// the line under the mouse, when the mouse moves onto it, and caches the reply
+// for that line, so cost doesn't grow with output or scrollback: one regex pass
+// over a capped line, plus one batched existence check (cached) for path-like
+// tokens. Detection runs on hover either way; ⌘ only decides whether the link
+// is underlined and opens on click (plain clicks stay selection / the app's).
+const LINK_MAX_ROWS = 8; // wrapped rows joined on each side of the hovered one
+const LINK_MAX_CHARS = 2000;
+const RESOLVE_TTL = 5000;
+const resolved = new Map<string, { at: number; abs: Promise<string | null> }>();
+let hovered: ILink | null = null;
+let metaDown = false;
+const showLinks = (on: boolean): void => {
+  metaDown = on;
+  // xterm tracks these properties (not the object) on the link under the mouse.
+  if (hovered?.decorations) (hovered.decorations.underline = on), (hovered.decorations.pointerCursor = on);
+};
+window.addEventListener("keydown", (e) => e.key === "Meta" && showLinks(true), true);
+window.addEventListener("keyup", (e) => e.key === "Meta" && showLinks(false), true);
+window.addEventListener("blur", () => showLinks(false));
+
+/** Absolute paths of those that exist (relative to cwd), cached briefly; one RPC for the misses. */
+function resolvePaths(paths: string[], cwd: string): Promise<(string | null)[]> {
+  const now = Date.now();
+  if (resolved.size > 500) for (const [k, v] of resolved) if (now - v.at > RESOLVE_TTL) resolved.delete(k);
+  const miss = paths.filter((p) => !((resolved.get(`${cwd}\0${p}`)?.at ?? 0) > now - RESOLVE_TTL));
+  if (miss.length) {
+    const call = cmd.call("fs.resolve", { paths: miss, cwd }).catch(() => miss.map(() => null));
+    miss.forEach((p, i) => resolved.set(`${cwd}\0${p}`, { at: now, abs: call.then((r) => r[i] ?? null) }));
+  }
+  return Promise.all(paths.map((p) => resolved.get(`${cwd}\0${p}`)!.abs));
+}
+
+async function openTarget(kind: "url" | "path", target: string): Promise<void> {
+  const { openLink, openPath } = await import("./actions.ts");
+  if (kind === "url") openLink(target);
+  else void openPath(target);
+}
+
+function linkProvider(term: Terminal, paneId: PaneId) {
+  return {
+    provideLinks(y: number, done: (links: ILink[] | undefined) => void): void {
+      // The logical line around row y (1-based): wrapped rows joined, with each
+      // character's cell, so wide characters and wraps map back exactly.
+      const buf = term.buffer.active;
+      let top = y - 1;
+      while (top > y - 1 - LINK_MAX_ROWS && top > 0 && buf.getLine(top)?.isWrapped) top--;
+      let text = "";
+      const cells: IBufferCellPosition[] = [];
+      for (let row = top; row < y + LINK_MAX_ROWS && text.length < LINK_MAX_CHARS; row++) {
+        const line = buf.getLine(row);
+        if (!line || (row > top && !line.isWrapped)) break;
+        const cell = line.getCell(0);
+        for (let x = 0; x < line.length; x++) {
+          const c = line.getCell(x, cell);
+          const ch = c?.getChars() ?? "";
+          if (!c || c.getWidth() === 0) continue; // right half of a wide char
+          text += ch || " ";
+          for (let i = 0; i < (ch.length || 1); i++) cells.push({ x: x + 1, y: row + 1 });
+        }
+      }
+      const matches = findLinks(text.trimEnd());
+      if (!matches.length) return done(undefined);
+      const make = (start: number, end: number, open: () => void): ILink => ({
+        range: { start: cells[start]!, end: cells[end - 1]! },
+        text: text.slice(start, end),
+        decorations: { underline: metaDown, pointerCursor: metaDown },
+        activate: (e) => e.metaKey && open(),
+        hover(this: ILink) {
+          hovered = this;
+        },
+        leave(this: ILink) {
+          if (hovered === this) hovered = null;
+        },
+      });
+      const urls = matches.filter((m) => m.kind === "url").map((m) => make(m.start, m.end, () => void openTarget("url", m.target)));
+      const paths = matches.filter((m) => m.kind === "path");
+      if (!paths.length) return done(urls);
+      void import("./store.ts").then(async ({ getState }) => {
+        const cwd = getState().panes.get(paneId)?.cwd;
+        const abs = cwd ? await resolvePaths(paths.map((m) => m.target), cwd) : [];
+        const links = paths.flatMap((m, i) => (abs[i] ? [make(m.start, m.end, () => void openTarget("path", abs[i]!))] : []));
+        done([...urls, ...links].sort((a, b) => a.range.start.y - b.range.start.y || a.range.start.x - b.range.start.x));
+      });
+    },
+  };
+}
 
 // The WebGL addon loads only when the webgl renderer is used (not the default),
 // so it stays out of the startup bundle.
@@ -119,7 +208,18 @@ class Terminals {
       macOptionIsMeta: true,
       allowProposedApi: true,
       theme: theme(),
+      // OSC 8 hyperlinks (ls --hyperlink, Claude Code…): ⌘-click too, no confirm dialog.
+      linkHandler: {
+        allowNonHttpProtocols: true,
+        activate: (e, uri) => {
+          if (!e.metaKey) return;
+          if (/^https?:/i.test(uri)) void openTarget("url", uri);
+          else if (/^file:/i.test(uri)) void openTarget("path", decodeURIComponent(new URL(uri).pathname));
+          else cmd.openPath(uri);
+        },
+      },
     });
+    term.registerLinkProvider(linkProvider(term, paneId));
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.onData((data) => void cmd.call("pane.write", { paneId, data }));
