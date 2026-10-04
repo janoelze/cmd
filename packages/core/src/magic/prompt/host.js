@@ -27,7 +27,33 @@
     latest = d;
     has = true;
     for (const fn of listeners) call(fn, d);
+    fit();
   };
+
+  // Panes (kit.css .k-panes), fitted to the window's height like a terminal UI:
+  // while the page overflows, the longest pane loses its last row (down to
+  // MIN_ROWS), then the last pane goes, then the first pane's rows.
+  const MIN_ROWS = 3;
+  const fit = () => {
+    for (const el of document.querySelectorAll(".k-cut")) el.classList.remove("k-cut");
+    const panes = [...document.querySelectorAll(".k-pane")];
+    if (!panes.length) return;
+    const root = document.scrollingElement || document.documentElement;
+    const rows = (p) => [...p.querySelectorAll("tbody > tr, .k-list > li")].filter((r) => !r.classList.contains("k-cut"));
+    for (let guard = 0; guard < 1000 && root.scrollHeight > innerHeight + 1; guard++) {
+      const shown = panes.filter((p) => !p.classList.contains("k-cut")).map((p) => ({ p, rows: rows(p) }));
+      const longest = shown.reduce((a, b) => (b.rows.length > a.rows.length ? b : a));
+      if (longest.rows.length > MIN_ROWS) longest.rows.at(-1).classList.add("k-cut");
+      else if (shown.length > 1) shown.at(-1).p.classList.add("k-cut");
+      else if (longest.rows.length > 1) longest.rows.at(-1).classList.add("k-cut");
+      else break;
+    }
+  };
+  let fitting = 0;
+  window.addEventListener("resize", () => {
+    cancelAnimationFrame(fitting);
+    fitting = requestAnimationFrame(fit);
+  });
   const call = (fn, d) => {
     try {
       fn(d);
@@ -297,6 +323,7 @@
       setTokens(m.tokens);
       render(m.html);
       if ("data" in m && m.data !== undefined) receive(m.data);
+      else fit();
       // Painted with its data: the host shows the frame only now (two frames: after layout and paint).
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
@@ -316,5 +343,6 @@
   // Standalone pages inline their data in a script that runs after this one.
   document.addEventListener("DOMContentLoaded", () => {
     if ("__CMD_DATA__" in window) receive(window.__CMD_DATA__);
+    else fit();
   });
 })();

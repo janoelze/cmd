@@ -24,6 +24,13 @@ svg { display: block; }
 .k-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 .k-fill { height: 100%; }
 .k-center { display: flex; align-items: center; justify-content: center; text-align: center; }
+/* Sections, as panes in a terminal UI: one column, side by side from 720px.
+   host.js hides panes that don't fit the height and cuts their rows to fit. */
+.k-panes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px 24px; align-content: start; }
+@media (min-width: 720px) { .k-panes { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); } }
+.k-pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.k-panes > :not(.k-pane) { grid-column: 1 / -1; min-width: 0; } /* the status line spans every column */
+.k-cut { display: none !important; }
 
 .k-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 
@@ -34,12 +41,13 @@ svg { display: block; }
 .k-big { font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -.01em; }
 .k-huge { font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: -.02em; }
 .k-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+a.k-ellipsis, span.k-ellipsis { display: block; }
 
 .k-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .k-stat-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); }
-.k-stat-value { font: 600 22px/1.15 var(--mono); letter-spacing: -.02em; }
+.k-stat-value { font: 600 15px/1.3 var(--mono); }
 .k-stat-note { font-size: 11px; color: var(--text-dim); }
-.k-unit { font-size: .45em; font-weight: 500; color: var(--text-dim); margin-left: .25em; letter-spacing: 0; }
+.k-unit { font-size: min(.8em, max(12px, .45em)); font-weight: 500; color: var(--text-dim); margin-left: .25em; letter-spacing: 0; }
 .k-delta { font-size: 11px; font-variant-numeric: tabular-nums; }
 .k-up { color: var(--good); }
 .k-down { color: var(--bad); }
