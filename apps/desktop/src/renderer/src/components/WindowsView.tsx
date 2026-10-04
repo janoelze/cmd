@@ -20,6 +20,7 @@
 // Windows are never remounted or reordered in the DOM, so terminals keep
 // running and pointer capture is never lost.
 
+import { EmptyState } from "@cmd/ui";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
@@ -862,7 +863,7 @@ export function WindowsView(p: Props) {
  */
 const WindowContent = memo(function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
   const view = viewFor(win.kind);
-  if (!view) return <div className="file-error">No view registered for “{win.kind}” windows.</div>;
+  if (!view) return <EmptyState compact icon="exclamationmark.triangle.fill">No view registered for “{win.kind}” windows.</EmptyState>;
   return <view.View win={win} focused={focused} />;
 });
 

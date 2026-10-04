@@ -7,7 +7,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { Pane, ProcessStat, Space } from "@cmd/protocol";
 import type { AppProcess } from "../../../main/metrics.ts";
-import { Button } from "@cmd/ui";
+import { Button, EmptyState } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
 import { formatBytes } from "../model.ts";
 
@@ -155,7 +155,7 @@ export function TaskManager() {
           ))}
         </div>
         <div className="tm-body">
-          {!snap && <div className="tm-empty">{error ?? "Loading…"}</div>}
+          {!snap && <EmptyState compact>{error ?? "Loading…"}</EmptyState>}
           {sections.map((s) => (
             <Fragment key={s.title}>
               <div className="tm-section" role="row">

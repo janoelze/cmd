@@ -13,7 +13,7 @@ import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
-import { IconButton, SCROLLBAR_CSS } from "@cmd/ui";
+import { EmptyState, IconButton, SCROLLBAR_CSS } from "@cmd/ui";
 import { setWindowStatus } from "../windowActions.ts";
 import { handleEmbedMessage } from "../embed.ts";
 import { deviceById, type Device } from "../devices.ts";
@@ -177,11 +177,9 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
             style={device ? deviceStyle(device, room) : undefined}
           />
         ) : (
-          <div className="browser-blank" onMouseDown={(e) => (e.preventDefault(), input.current?.focus())}>
-            <Symbol name="globe" size={ICON.empty} />
-            <div className="browser-blank-title">New Tab</div>
-            <div>Type a web address, localhost:3000, or a file path</div>
-          </div>
+          <EmptyState className="browser-blank" icon="globe" title="New Tab" onMouseDown={(e) => (e.preventDefault(), input.current?.focus())}>
+            Type a web address, localhost:3000, or a file path
+          </EmptyState>
         )}
         {device && initial && <div className="device-caption">{caption(device, room)}</div>}
       </div>

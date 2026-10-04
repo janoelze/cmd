@@ -6,6 +6,7 @@
 // through the app's read-only cmd-file: protocol. Loaded lazily (see markdown.tsx):
 // marked, DOMPurify and the highlighters stay out of the startup bundle.
 
+import { EmptyState } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -159,7 +160,7 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
 
   return (
     <div className="markdown-scroll" ref={scroller} tabIndex={0} onClick={onClick}>
-      {error ? <div className="file-error">{error}</div> : <article className="markdown" ref={body} />}
+      {error ? <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState> : <article className="markdown" ref={body} />}
     </div>
   );
 }

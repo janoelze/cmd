@@ -592,6 +592,7 @@
 }
 .ui-callout[data-tone="neutral"] { background: var(--group-bg); box-shadow: inset 0 0 0 1px var(--group-edge); }
 .ui-callout[data-banner] { border-radius: 0; box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--tone) 35%, transparent); }
+.ui-callout[data-banner="bottom"] { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--tone) 35%, transparent); }
 .ui-callout-icon { flex: none; display: flex; height: 18px; align-items: center; color: var(--tone); }
 .ui-callout-text { flex: 1; min-width: 0; padding-top: 1px; }
 .ui-callout-title { font-weight: 600; }

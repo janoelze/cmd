@@ -11,7 +11,7 @@
 //  - Untitled: the text is kept in the window's state (`draft`), so it survives
 //    reloads and core restarts until it's saved.
 
-import { Button } from "@cmd/ui";
+import { Button, Callout, EmptyState } from "@cmd/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { basicSetup } from "codemirror";
 import { Compartment, EditorState, Text } from "@codemirror/state";
@@ -272,17 +272,25 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
   return (
     <div className="textwin">
       {conflict && (
-        <div className="textwin-banner">
-          <span>This file changed on disk.</span>
-          <Button onClick={() => void load()}>
-            Reload
-          </Button>
-          <Button onClick={() => void keepMine()}>
-            Keep mine
-          </Button>
-        </div>
+        <Callout
+          banner
+          compact
+          tone="warning"
+          actions={
+            <>
+              <Button size="sm" onClick={() => void load()}>
+                Reload
+              </Button>
+              <Button size="sm" onClick={() => void keepMine()}>
+                Keep Mine
+              </Button>
+            </>
+          }
+        >
+          This file changed on disk.
+        </Callout>
       )}
-      {error && <div className="file-error">{error}</div>}
+      {error && <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState>}
       <div className="textwin-editor" ref={host} />
     </div>
   );

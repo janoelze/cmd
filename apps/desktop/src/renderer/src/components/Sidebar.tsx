@@ -2,7 +2,7 @@
 // sections (Needs you, Agents, Windows, Recent past sessions), a footer with
 // the core's health, and a draggable right edge.
 
-import { Button, IconButton } from "@cmd/ui";
+import { Button, EmptyState, IconButton, SearchField } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PaneId, SearchHit, SearchStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -141,23 +141,7 @@ export function Sidebar(p: Props) {
         <div className="sidebar-titlebar">
           <IconButton icon="plus" label="New…" onClick={p.onNew} />
         </div>
-        <div className="sb-search">
-          <Symbol name="magnifyingglass" size={ICON.small} className="sb-search-icon" />
-          <input
-            ref={input}
-            value={query}
-            placeholder="Search sessions"
-            spellCheck={false}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={onKeyDown}
-          />
-          <IndexRing status={p.search} className={query ? "sb-search-ring with-clear" : "sb-search-ring"} />
-          {query && (
-            <button className="sb-search-clear" aria-label="Clear" data-tip="Clear Search" onClick={() => (setQuery(""), input.current?.focus())}>
-              <Symbol name="xmark.circle.fill" size={ICON.small} />
-            </button>
-          )}
-        </div>
+        <SearchField ref={input} className="sb-search" size="lg" value={query} placeholder="Search sessions" onChange={setQuery} onKeyDown={onKeyDown} status={<IndexRing status={p.search} />} />
 
         <div className="sidebar-scroll" ref={list} data-frozen={rows !== p.rows || undefined}>
           {searching ? (
@@ -178,7 +162,7 @@ export function Sidebar(p: Props) {
                   ))}
                 </section>
               )}
-              {results.length === 0 && <div className="sb-none">{query.trim().length < 2 ? "Keep typing to search past sessions" : "No matches"}</div>}
+              {results.length === 0 && <EmptyState compact>{query.trim().length < 2 ? "Keep typing to search past sessions" : "No matches"}</EmptyState>}
             </>
           ) : (
             <>
@@ -200,12 +184,15 @@ export function Sidebar(p: Props) {
                   ),
               )}
               {rows.length === 0 && (
-                <div className="empty">
-                  <p>Nothing open.</p>
-                  <Button onClick={p.onNewTerminal}>
-                    New Terminal <kbd>⌘T</kbd>
-                  </Button>
-                </div>
+                <EmptyState
+                  compact
+                  title="Nothing open"
+                  action={
+                    <Button onClick={p.onNewTerminal} data-tip-key="⌘T" data-tip="New Terminal">
+                      New Terminal
+                    </Button>
+                  }
+                />
               )}
               {recent.length > 0 && (
                 <section className="sb-section sb-recent">

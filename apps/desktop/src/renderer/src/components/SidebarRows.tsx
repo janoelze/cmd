@@ -1,6 +1,7 @@
 // Sidebar rows: open windows and agents (SessionRow), past sessions from the
 // transcript index (HistoryRow), and the section headings that group them.
 
+import { IconButton } from "@cmd/ui";
 import type { ReactNode } from "react";
 import type { PaneId, SearchHit } from "@cmd/protocol";
 import { usePersisted } from "../store.ts";
@@ -128,17 +129,18 @@ export function SessionRow(props: {
           <span className="row-hover">
             {shortcut && <span className="row-key">⌘{shortcut}</span>}
             {winId && (
-              <button
+              <IconButton
                 className="row-close"
-                aria-label="Close"
-                data-tip="Close"
+                size="sm"
+                icon="xmark"
+                iconSize={ICON.disclosure}
+                label="Close"
                 onClick={(e) => {
                   e.stopPropagation();
                   props.onClose(row);
                 }}
-              >
-                <Symbol name="xmark" size={ICON.disclosure} />
-              </button>
+              />
+              
             )}
           </span>
         </span>

@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Button, IconButton, TextField } from "@cmd/ui";
+import { Button, IconButton, TextField, Toast } from "@cmd/ui";
 import type { PaneId, Progress } from "@cmd/protocol";
 import { useStoreValue } from "../store.ts";
 import { terminals, type FindResults } from "../terminals.ts";
@@ -77,14 +77,9 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
       />
       {progress && <ProgressBar p={progress} />}
       {sizedBy && (
-        <div className="term-sized">
-          <span>
-            Sized for {sizedBy} · {cols}×{rows}
-          </span>
-          <Button onClick={() => void cmd.call("pane.reclaim", { paneId }).then(() => terminals.focus(paneId))}>
-            Take Back
-          </Button>
-        </div>
+        <Toast className="term-sized" icon="iphone" action={{ label: "Take Back", run: () => void cmd.call("pane.reclaim", { paneId }).then(() => terminals.focus(paneId)) }}>
+          Sized for {sizedBy} · {cols}×{rows}
+        </Toast>
       )}
       {finding && (
         <FindBar

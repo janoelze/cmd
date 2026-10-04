@@ -8,7 +8,7 @@
 // theme tokens, its data and its saved cmd.state. Data that stops coming shows
 // as "Stale" with the reason; problems a build left show in a line with Fix.
 
-import { Button, LinkButton } from "@cmd/ui";
+import { Button, Callout, LinkButton, Toast } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { requestedMedia, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -149,17 +149,27 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
       {asking && <MediaRequest origins={pending} onAnswer={(allow) => void cmd.call("magic.media", { id: win.id, allow })} />}
       {!building && (s.error || problems || broken) && (
         <div className="magic-error" data-tip={[s.error, ...(problems ?? []), broken ? s.health?.error : ""].filter(Boolean).join("\n")}>
-          <span className="magic-error-text">{s.error ?? (problems ? `${problems.length === 1 ? "A problem is" : `${problems.length} problems are`} left: ${problems[0]}` : `Data keeps failing: ${s.health?.error}`)}</span>
-          <LinkButton onClick={() => void cmd.call("magic.fix", { id: win.id })}>
-            Fix
-          </LinkButton>
-          <LinkButton onClick={() => setEditing(win.id, true)}>
-            Details
-          </LinkButton>
+          <Callout
+            banner="bottom"
+            compact
+            tone="danger"
+            actions={
+              <>
+                <LinkButton onClick={() => void cmd.call("magic.fix", { id: win.id })}>Fix</LinkButton>
+                <LinkButton onClick={() => setEditing(win.id, true)}>Details</LinkButton>
+              </>
+            }
+          >
+            {s.error ?? (problems ? `${problems.length === 1 ? "A problem is" : `${problems.length} problems are`} left: ${problems[0]}` : `Data keeps failing: ${s.health?.error}`)}
+          </Callout>
         </div>
       )}
       {working && <StopButton onStop={stop} />}
-      {hint && <div className="magic-hint-flash">Right-click to change it · ⌘E to edit</div>}
+      {hint && (
+        <div className="magic-hint-flash">
+          <Toast>Right-click to change it · ⌘E to edit</Toast>
+        </div>
+      )}
     </div>
   );
 }

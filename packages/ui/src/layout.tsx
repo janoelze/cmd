@@ -182,14 +182,14 @@ export function Callout({
   onDismiss?: () => void;
   /** An SF Symbol name, a node, or false for none; by default the tone's. */
   icon?: string | ReactNode | false;
-  /** Full width along a view's edge (no radius, a line under it), not a box. */
-  banner?: boolean;
+  /** Full width along a view's edge, not a box: the top (a line under it) or "bottom" (a line over it). */
+  banner?: boolean | "bottom";
   /** One small line (under a widget, in a narrow pane). */
   compact?: boolean;
   className?: string;
 }) {
   return (
-    <div className={cls("ui-callout", className)} data-tone={tone} data-banner={banner || undefined} data-compact={compact || undefined} role={tone === "danger" || tone === "warning" ? "alert" : "status"}>
+    <div className={cls("ui-callout", className)} data-tone={tone} data-banner={banner === "bottom" ? "bottom" : banner ? "top" : undefined} data-compact={compact || undefined} role={tone === "danger" || tone === "warning" ? "alert" : "status"}>
       {icon !== false && <span className="ui-callout-icon">{iconNode(icon ?? TONE_ICON[tone], ICON.row)}</span>}
       <div className="ui-callout-text">
         {title && <div className="ui-callout-title">{title}</div>}

@@ -27,7 +27,7 @@ import { Symbol } from "../components/Symbol.tsx";
 import { IndexRing } from "../components/IndexRing.tsx";
 import { acceleratorOf, usableShortcut, useKeybindings } from "../keybindings.ts";
 import { cmd } from "../bridge.ts";
-import { Button, Callout, EmptyState, FormRow, FormSection, IconButton, NumberField, ResetButton, SecretField, Segmented, Select, Switch, TextField } from "@cmd/ui";
+import { Button, Callout, EmptyState, FormRow, FormSection, IconButton, NumberField, ResetButton, SearchField, SecretField, Segmented, Select, Spinner, Switch, TextField, Toast } from "@cmd/ui";
 import { useSettings } from "./useSettings.ts";
 import { About } from "./About.tsx";
 import { Remote } from "./Remote.tsx";
@@ -192,22 +192,7 @@ export function SettingsWindow() {
     <div className="sw" style={{ ["--sidebar-pad" as string]: `${snap.settings["ui.sidebarPadding"]}px` }}>
       <aside className="sidebar sw-side">
         <div className="sidebar-titlebar" />
-        <div className="sb-search">
-          <Symbol name="magnifyingglass" size={11} className="sb-search-icon" />
-          <input
-            ref={input}
-            value={query}
-            placeholder="Search settings"
-            spellCheck={false}
-            onChange={(e) => (setQuery(e.target.value), setScrolled(false))}
-            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-          />
-          {query && (
-            <button className="sb-search-clear" aria-label="Clear" data-tip="Clear Search" onClick={() => (setQuery(""), input.current?.focus())}>
-              <Symbol name="xmark.circle.fill" size={11} />
-            </button>
-          )}
-        </div>
+        <SearchField ref={input} className="sb-search" size="lg" value={query} placeholder="Search settings" onChange={(v) => (setQuery(v), setScrolled(false))} />
         <nav className="sidebar-scroll sw-nav">
           {NAV.map((n) => (
             <button
@@ -244,7 +229,11 @@ export function SettingsWindow() {
             {body}
           </div>
         </div>
-        {!connected && <div className="sw-offline">Connecting to cmd…</div>}
+        {!connected && (
+          <div className="sw-offline">
+            <Toast icon={<Spinner size={11} />}>Connecting to cmd…</Toast>
+          </div>
+        )}
       </main>
     </div>
   );

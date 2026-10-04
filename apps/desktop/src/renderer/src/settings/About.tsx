@@ -7,7 +7,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { CoreInfo } from "@cmd/protocol";
 import type { AppInfo } from "../../../preload/index.ts";
 import { Badge, Button, Callout, FormRow, FormSection, Progress } from "@cmd/ui";
-import { Symbol } from "../components/Symbol.tsx";
 import { cmd } from "../bridge.ts";
 
 const POLL_MS = 2000;

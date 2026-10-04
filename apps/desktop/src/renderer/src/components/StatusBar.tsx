@@ -10,7 +10,7 @@ import { useStoreValue } from "../store.ts";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
 import { useFields } from "./TileTitle.tsx";
 import type { ViewMode } from "./MainView.tsx";
-import { ICON, Symbol } from "./Symbol.tsx";
+import { ICON } from "./Symbol.tsx";
 import { RemoteBadge, RemoteIndicator } from "./Remote.tsx";
 import { IconButton, Segmented, useTooltip } from "@cmd/ui";
 import { countRender } from "../perf.ts";

@@ -69,11 +69,7 @@
 .magic-hint { font: 11px var(--font-ui); color: var(--text-dim); }
 
 /* errors: a line under the widget, with Fix and Details */
-.magic-error {
-  display: flex; align-items: baseline; gap: 10px; font: 11px var(--font-ui); color: var(--text-dim); padding: 4px 12px;
-  border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
-}
-.magic-error-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.magic-error { flex: none; }
 .magic-link { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: default; white-space: nowrap; }
 .magic-link:hover { text-decoration: underline; }
 .magic-link:disabled { color: var(--text-dim); text-decoration: none; }
@@ -88,7 +84,7 @@
 .magic-media-title { font-weight: 600; overflow-wrap: anywhere; }
 .magic-media-text { color: var(--text-dim); line-height: 1.4; }
 .magic-media .magic-row { justify-content: flex-end; margin-top: 4px; }
-.magic-error-inline { font: 12px var(--font-ui); color: var(--state-needs); }
+.magic-error-inline { font: 12px var(--font-ui); color: var(--danger); }
 
 /* Stop, while building: a small round × at the bottom right, over the dot matrix */
 .magic-stop {
@@ -98,12 +94,8 @@
 .magic-stop:hover { color: var(--text); }
 
 /* Once, after the first widget: how to change it (there's no button for it) */
-.magic-hint-flash {
-  position: absolute; left: 50%; bottom: 10px; z-index: 4; transform: translateX(-50%); max-width: calc(100% - 24px);
-  padding: 2px 10px; font: 11px/18px var(--font-ui); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  background: var(--bg-elevated); border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 10px; pointer-events: none;
-  animation: magic-hint 4.5s ease-in-out forwards;
-}
+.magic-hint-flash { position: absolute; left: 0; right: 0; bottom: 10px; z-index: 4; display: flex; justify-content: center; padding: 0 12px; pointer-events: none; animation: magic-hint 4.5s ease-in-out forwards; }
+.magic-hint-flash .ui-toast { min-height: 24px; padding: 2px 10px; font-size: var(--text-sm); color: var(--text-dim); white-space: nowrap; }
 @keyframes magic-hint { 0% { opacity: 0; } 8%, 85% { opacity: 1; } 100% { opacity: 0; } }
 .magic-mark-small { color: var(--accent); font-size: 11px; }
 .magic-step, .magic-row, .magic-error { cursor: default; user-select: none; }

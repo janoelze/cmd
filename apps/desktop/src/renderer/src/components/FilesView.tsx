@@ -10,7 +10,7 @@
 // ⌘D duplicate · ⌘⌫ move to Trash · ⇧⌘N new folder. They are the list's own
 // (no menu items): nothing else in the app uses them, and ⌘⌫ must stay text editing's.
 
-import { IconButton } from "@cmd/ui";
+import { Callout, EmptyState, IconButton } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AppWindow, FileEntry, GitFile, GitFileState, GitStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -475,11 +475,11 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
           listMenu();
         }}
       >
-        {error && <div className="file-error">{error}</div>}
+        {error && <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState>}
         {opError && (
-          <div className="file-op-error" onClick={() => setOpError(null)}>
+          <Callout compact tone="danger" className="file-op-error" onDismiss={() => setOpError(null)}>
             {opError}
-          </div>
+          </Callout>
         )}
         {rows.map(({ entry: e, depth, label }) => {
           const dir = e.kind === "dir";
@@ -531,8 +531,8 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
           );
         })}
         {showChanges
-          ? rows.length === 0 && <div className="file-error">No changes</div>
-          : children.has(root) && rows.length === 0 && !error && <div className="file-error">Empty folder</div>}
+          ? rows.length === 0 && <EmptyState compact>No changes</EmptyState>
+          : children.has(root) && rows.length === 0 && !error && <EmptyState compact>Empty folder</EmptyState>}
       </div>
     </div>
   );

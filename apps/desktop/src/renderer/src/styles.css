@@ -155,44 +155,7 @@ kbd {
   -webkit-app-region: drag;
 }
 
-.sb-search {
-  flex: none;
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin: 0 var(--sidebar-pad) 6px;
-}
-.sb-search input {
-  flex: 1;
-  min-width: 0;
-  height: 26px;
-  padding: 0 24px 0 26px;
-  font: 12.5px var(--font-ui);
-  color: var(--text);
-  background: var(--input-bg);
-  border: 1px solid transparent;
-  border-radius: 7px;
-  outline: none;
-  user-select: text;
-}
-.sb-search input:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); background: var(--well); }
-.sb-search-icon { position: absolute; left: 9px; color: var(--text-dim); pointer-events: none; }
-.sb-search-clear {
-  position: absolute;
-  right: 5px;
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-dim);
-}
-.sb-search-clear:hover { color: var(--text); }
-.sb-search-ring { position: absolute; right: 6px; }
-.sb-search-ring.with-clear { right: 24px; }
-.sb-search:has(.sb-search-ring.with-clear) input { padding-right: 42px; }
+.sb-search.ui-field { flex: none; display: flex; width: auto; margin: 0 var(--sidebar-pad) 6px; }
 
 /* Indexing progress (IndexRing). */
 .index-ring { flex: none; display: block; }
@@ -241,7 +204,6 @@ kbd {
 .sb-heading.collapsible:hover .twisty, .sb-heading[aria-expanded="false"] .twisty { opacity: 1; }
 .sb-heading.collapsible:hover { color: var(--text); }
 
-.sb-none { padding: 14px calc(var(--sidebar-pad) + 10px); font-size: 12px; color: var(--text-dim); }
 
 .row {
   display: flex;
@@ -302,18 +264,6 @@ kbd {
 .row:hover .row-hover { display: flex; }
 .row:hover .row-end .chip { display: none; }
 .row-key { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.row-close {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--text-dim);
-}
-.row-close:hover { color: var(--text); background: var(--bg-selected); }
 
 .chip {
   --hue: 240;
@@ -420,8 +370,6 @@ kbd {
 .core-details-rows dd.core-details-sub { color: var(--text-dim); text-align: right; }
 .core-details-actions { display: flex; gap: 6px; margin-top: 12px; }
 
-.empty { text-align: center; padding: 24px 16px; color: var(--text-dim); }
-.empty p { margin: 0 0 10px; }
 
 /* ── main view ──────────────────────────────────────── */
 
@@ -870,20 +818,7 @@ kbd {
 .address:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
 .browser-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
 .webview { flex: 1; min-height: 0; background: #fff; }
-.browser-blank {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font: 12px var(--font-ui);
-  color: var(--text-dim);
-  background: var(--well);
-  cursor: text;
-}
-.browser-blank .sf { opacity: 0.6; margin-bottom: 4px; }
-.browser-blank-title { font: 600 15px var(--font-ui); color: var(--text); }
+.browser-blank.ui-empty { flex: 1; background: var(--well); cursor: text; }
 .browser-stage.device .webview { box-shadow: 0 0 0 1px var(--separator), 0 4px 18px rgba(0, 0, 0, 0.18); }
 .device-caption {
   position: absolute;
@@ -937,8 +872,7 @@ kbd {
 .file-icon.dir { color: var(--folder); }
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-size, .file-date { font-size: 0.85em; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
-.file-error { padding: 16px; color: var(--text-dim); font-size: 12px; }
-.file-op-error { margin: 2px 8px 4px; padding: 4px 8px; font: 12px var(--font-ui); color: var(--git-deleted); background: color-mix(in srgb, var(--git-deleted) 12%, transparent); border-radius: 5px; }
+.file-op-error.ui-callout { margin: 2px 8px 4px; }
 .file-rename {
   min-width: 0;
   height: calc(100% - 4px);
@@ -997,18 +931,6 @@ kbd {
 .textwin { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); }
 .textwin-editor { flex: 1; min-height: 0; overflow: hidden; }
 .textwin-editor .cm-editor { height: 100%; }
-.textwin-banner {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  font-size: 12px;
-  color: var(--text);
-  background: color-mix(in srgb, var(--state-needs) 14%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--state-needs) 35%, transparent);
-}
-.textwin-banner span { flex: 1; }
 /* Unsaved changes: always in the DOM, scales in and out. */
 .dirty-dot {
   flex: none;
@@ -1336,18 +1258,4 @@ kbd {
 .pair-expiry { flex: 1; text-align: left; color: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
 
 /* A phone sizes this terminal (TerminalView, docs/13): say so, and offer it back. */
-.term-sized {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 6px 5px 10px;
-  border-radius: 8px;
-  background: var(--bg-elevated);
-  box-shadow: 0 4px 14px var(--shadow);
-  font-size: 11.5px;
-  color: var(--text-dim);
-}
+.term-sized.ui-toast { position: absolute; right: 10px; bottom: 10px; z-index: 3; }
