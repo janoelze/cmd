@@ -419,6 +419,17 @@ function ChoicesPage() {
             ]}
           />
           <Segmented
+            size="sm"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "focus", icon: "rectangle", tip: "Focus" },
+              { value: "grid", icon: "square.grid.2x2", tip: "Grid" },
+              { value: "strip", icon: "rectangle.split.3x1", tip: "Strip" },
+              { value: "canvas", icon: "rectangle.3.group", tip: "Canvas" },
+            ]}
+          />
+          <Segmented
             value={view}
             onChange={setView}
             options={[
