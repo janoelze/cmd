@@ -83,9 +83,13 @@ export function aiBackend(o: AiBackendOptions): Backend {
         tools[spec.name] = tool({
           description: spec.description,
           inputSchema: jsonSchema(spec.schema as never),
-          execute: async (input: unknown) => {
-            const out = await r.exec(spec.name, (input ?? {}) as Record<string, unknown>);
-            return out.isError ? `Error: ${out.output}` : out.output;
+          execute: async (input: unknown) => r.exec(spec.name, (input ?? {}) as Record<string, unknown>),
+          // Text, plus the preview's screenshot so the model sees what it made.
+          toModelOutput: ({ output }: { output: ToolOutput }) => {
+            const text = output.isError ? `Error: ${output.output}` : output.output;
+            return output.image
+              ? { type: "content" as const, value: [{ type: "text" as const, text }, { type: "image-data" as const, data: output.image, mediaType: "image/png" }] }
+              : { type: "text" as const, value: text };
           },
         });
       }
@@ -99,7 +103,7 @@ export function aiBackend(o: AiBackendOptions): Backend {
         stopWhen: stepCountIs(r.maxSteps + 1),
         prepareStep: ({ stepNumber }) => (stepNumber >= r.maxSteps ? { activeTools: [] } : {}),
         abortSignal: r.signal,
-        maxOutputTokens: 16_000,
+        maxOutputTokens: 32_000,
         providerOptions: effortOptions(o),
       });
       let text = "";

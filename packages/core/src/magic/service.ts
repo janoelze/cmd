@@ -1,18 +1,46 @@
-// Magic windows in the core: runs the agent for a window (runMagic), streams
-// its progress to the UI (magic.stream), stores the result in the window's
-// state, and refreshes each widget's data source on its interval (magic.data).
-// The agent is never involved in a refresh.
+// Magic windows in the core (docs/14-magic-v2.md). Each window has a widget
+// folder ($CMD_HOME/widgets/<window id>): the agent builds it there
+// (buildWidget), every build and hand edit is kept as a revision, and the
+// window's state holds what it needs to draw (the composed view, the last
+// data, health). The core then runs the widget's data.ts on its interval,
+// validated against its schema, and streams the data to the UI (magic.data);
+// failures keep the last good data on screen, are shown with their reason,
+// and wait as long as the server asks. The agent is never involved in a
+// refresh. v1 windows (a source in their state) keep refreshing that source
+// until they are changed, which rebuilds them as widgets.
 
+import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import { logger } from "@cmd/protocol/node";
-import { MAGIC_PROVIDERS, requestedMedia, type AppWindow, type CoreEvent, type MagicModel, type MagicState, type MagicStep, type SecretKey, type Settings, type WindowId } from "@cmd/protocol";
+import {
+  MAGIC_PROVIDERS,
+  requestedMedia,
+  type AppWindow,
+  type CoreEvent,
+  type MagicHealth,
+  type MagicModel,
+  type MagicRuntime,
+  type MagicState,
+  type MagicStep,
+  type MagicWidgetInfo,
+  type SecretKey,
+  type Settings,
+  type WindowId,
+} from "@cmd/protocol";
 import { backendFor, isProvider, type Backend } from "./backends.ts";
 import { listModels } from "./models.ts";
 import { DEFAULT_DENY_PATHS } from "./policy.ts";
-import { runMagic, type MagicEvent } from "./run.ts";
+import { buildWidget, type BuildEvent } from "./build.ts";
 import type { Workspace } from "./prompt.ts";
 import { sandboxAvailable, type SandboxMode } from "./sandbox.ts";
-import { runSource, type SourceResult } from "./sources.ts";
+import { runSource } from "./sources.ts";
+import { WidgetStore } from "../widgets/store.ts";
+import { configValues, type WidgetManifest } from "../widgets/manifest.ts";
+import { denoVersion, describeDataError, findDeno, installDeno, runData, type DenoEnv } from "../widgets/deno.ts";
+import type { Previewer } from "../widgets/preview.ts";
+import { WidgetSecrets } from "../widgets/secrets.ts";
+import type { VerifyContext } from "../widgets/verify.ts";
 
 const log = logger("magic");
 
@@ -34,44 +62,68 @@ export interface MagicServiceOptions {
   /** Tests: the model list (default: the provider's /v1/models). */
   listModels?: typeof listModels;
   sandbox?: SandboxMode;
-  /** Where a window's agent and source commands run (its Space's root); default: home. */
+  /** Where a window's agent and data.ts run (its Space's root); default: home. */
   cwdFor?: (w: AppWindow) => string;
   /** The window's Space, unless it is Home: named in the request, so "this project" means its folder. */
   workspaceFor?: (w: AppWindow) => Workspace | null;
+  /** $CMD_HOME: widgets, Deno's cache and cmd's own Deno live here; null: a temp folder (tests). */
+  stateDir?: string | null;
+  /** Who renders previews (the app, else Playwright); null: none. */
+  previewer?: () => Promise<Previewer | null>;
+  /** Tests: the Deno to use (default: findDeno). */
+  deno?: string | null;
 }
 
 const PERSIST_DATA_MS = 60_000;
 const MODELS_TTL_MS = 10 * 60_000;
-const BODY_THROTTLE_MS = 80;
-/** The shortest interval a source runs at. */
+/** The shortest interval data runs at. */
 const MIN_REFRESH_S = 2;
+/** Closed windows' widgets are kept this long (widgets/closed/). */
+const CLOSED_KEEP_MS = 30 * 24 * 3600_000;
+/** Failures in a row before magic.autoFix asks the agent. */
+const AUTO_FIX_AFTER = 3;
 
 const stateOf = (w: AppWindow) => w.state as MagicState;
 
 function detailOf(tool: string, input: Record<string, unknown>): string {
-  const src = input.source as { url?: string; command?: string } | undefined;
-  const v = input.command ?? input.path ?? input.url ?? src?.command ?? src?.url ?? "";
+  const v = input.command ?? input.path ?? input.url ?? "";
   return String(v).replace(/\s+/g, " ").slice(0, 160) || tool;
 }
 
 export class MagicService {
   #o: MagicServiceOptions;
+  readonly store: WidgetStore;
+  readonly widgetSecrets: WidgetSecrets;
+  #stateDir: string;
   #runs = new Map<WindowId, AbortController>();
   #timers = new Map<WindowId, ReturnType<typeof setTimeout>>();
   #failures = new Map<WindowId, number>();
   #persistedAt = new Map<WindowId, number>();
+  #watchers = new Map<WindowId, fs.FSWatcher>();
+  #editTimers = new Map<WindowId, ReturnType<typeof setTimeout>>();
+  /** Windows magic.autoFix already tried to fix (per revision). */
+  #autoFixed = new Map<WindowId, number>();
   /** Model lists per provider and key, so the settings popup opens instantly. */
   #models = new Map<string, { at: number; list: Promise<MagicModel[]> }>();
+  #disposed = false;
 
   constructor(o: MagicServiceOptions) {
     this.#o = o;
-    o.windows.on("removed", (id) => this.stop(id));
+    this.#stateDir = o.stateDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "cmd-magic-"));
+    this.store = new WidgetStore(path.join(this.#stateDir, "widgets"));
+    this.widgetSecrets = new WidgetSecrets(o.stateDir ? path.join(o.stateDir, "widget-secrets.json") : null);
+    o.windows.on("removed", (id) => this.#removed(id));
+    this.#pruneClosed();
     for (const w of o.windows.others()) {
       if (w.kind !== "magic") continue;
       const s = stateOf(w);
       // A run can't survive the core; say so instead of spinning forever.
-      if (s.phase === "working") o.windows.update(w.id, { state: { phase: s.html ? "ready" : "error", error: "Interrupted: cmd restarted while this was being made." } });
-      else if (s.phase === "ready") this.#schedule(w.id, 0);
+      if (s.phase === "working") o.windows.update(w.id, { state: { phase: s.html || s.command ? "ready" : "error", error: "Interrupted: cmd restarted while this was being made." } });
+      const now = stateOf(this.#window(w.id));
+      if (now.phase === "ready") {
+        this.#schedule(w.id, 0);
+        if (now.widgetId) this.#watch(w.id, now.widgetId);
+      }
     }
   }
 
@@ -90,7 +142,29 @@ export class MagicService {
     return process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required";
   }
 
-  /** Make (or, for a window that already shows something, refine) the window from a request. */
+  #deno(): DenoEnv | null {
+    const deno = this.#o.deno !== undefined ? this.#o.deno : findDeno({ setting: this.#o.settings()["magic.deno"], stateDir: this.#o.stateDir ?? undefined });
+    if (!deno) return null;
+    return { deno, denoDir: path.join(this.#stateDir, "runtime", "deno-cache"), sandbox: this.#sandbox() };
+  }
+
+  async #verifyContext(w: AppWindow, widgetId: string, signal?: AbortSignal): Promise<VerifyContext> {
+    const s = stateOf(w);
+    return {
+      store: this.store,
+      id: widgetId,
+      deno: this.#deno(),
+      previewer: (await this.#o.previewer?.().catch(() => null)) ?? null,
+      cwd: this.#cwd(w),
+      config: s.config,
+      secrets: this.widgetSecrets.get(w.id),
+      signal,
+    };
+  }
+
+  // ── building ───────────────────────────────────────────
+
+  /** Make (or, for a window that already shows something, change) the window's widget from a request. */
   run(id: WindowId, prompt: string): void {
     const text = prompt.trim();
     if (!text) throw new Error("magic.run: empty request");
@@ -101,31 +175,24 @@ export class MagicService {
     const ac = new AbortController();
     this.#runs.set(id, ac);
 
-    const refining = !!(prev.prompt && (prev.answer || prev.html || prev.command) && (prev.phase === "ready" || prev.phase === "error"));
+    const widgetId = prev.widgetId ?? id;
+    const hasWidget = this.store.exists(widgetId) && !!this.store.latest(widgetId);
+    const legacy = !prev.widgetId && !!(prev.html || prev.command);
+    const refining = !!prev.prompt && (prev.phase === "ready" || prev.phase === "error") && (hasWidget || legacy);
+    // A fresh request starts the folder over (its revisions stay, to go back to).
+    if (!refining) for (const f of this.store.exists(widgetId) || fs.existsSync(this.store.dir(widgetId)) ? this.store.files(widgetId) : []) this.store.remove(widgetId, f);
     const original = refining ? prev.prompt : text;
-    const request = refining ? refineRequest(prev, text) : text;
-    // A fresh run (not a refinement) starts the history over.
     const history = refining ? [...(prev.history ?? [prev.prompt]), text] : [text];
-    this.#o.windows.update(id, { title: refining ? w.title : "Magic", state: { prompt: original, phase: "working", error: undefined, steps: [], history } });
+    this.#o.windows.update(id, { title: refining ? w.title : "Magic", state: { prompt: original, phase: "working", error: undefined, steps: [], history, widgetId } });
 
     const steps: MagicStep[] = [];
-    let lastBody = 0;
-    let pendingBody: string | null = null;
-    let bodyTimer: ReturnType<typeof setTimeout> | null = null;
     const send = (progress: Extract<CoreEvent, { type: "magic.stream" }>["progress"]) => this.#o.broadcast({ type: "magic.stream", id, progress });
-    const flushBody = () => {
-      bodyTimer = null;
-      if (pendingBody === null) return;
-      lastBody = Date.now();
-      send({ type: "body", html: pendingBody });
-      pendingBody = null;
-    };
-    const onEvent = (e: MagicEvent) => {
+    const onEvent = (e: BuildEvent) => {
       switch (e.type) {
         case "step-start": {
           const step: MagicStep = { id: e.id, tool: e.tool, why: e.why, detail: detailOf(e.tool, e.input) };
           steps.push(step);
-          log.debug(`run ${id.slice(0, 8)} ${e.tool}: ${e.why}`, step.detail ?? "");
+          log.debug(`run ${id.slice(0, 8)} ${e.tool}: ${e.why}`, step.detail);
           send({ type: "step", step });
           break;
         }
@@ -134,19 +201,17 @@ export class MagicService {
           if (!step) break;
           step.ms = e.ms;
           step.isError = e.isError;
-          log.debug(`run ${id.slice(0, 8)} ${step.tool} done`, { ms: e.ms, error: e.isError });
           step.output = e.output.slice(0, 4000);
+          log.debug(`run ${id.slice(0, 8)} ${step.tool} done`, { ms: e.ms, error: e.isError });
           send({ type: "step", step: { ...step } });
           break;
         }
-        case "header":
-          if (!refining) this.#o.windows.update(id, { title: e.header.title });
-          send({ type: "header", title: e.header.title, loading: e.header.loading, kind: e.header.kind, size: e.header.size });
+        case "title":
+          if (!refining) this.#o.windows.update(id, { title: e.title });
+          send({ type: "title", title: e.title });
           break;
-        case "body":
-          pendingBody = e.body;
-          if (Date.now() - lastBody >= BODY_THROTTLE_MS) flushBody();
-          else bodyTimer ??= setTimeout(flushBody, BODY_THROTTLE_MS);
+        case "verify":
+          send({ type: "verify" });
           break;
         case "repair":
           log.info(`run ${id.slice(0, 8)} repairing: ${e.reason.split("\n")[0]}`);
@@ -163,81 +228,93 @@ export class MagicService {
       this.#fail(id, prev, (e as Error).message);
       return;
     }
-    log.info(`run ${id.slice(0, 8)}${refining ? " (refine)" : ""}`, { provider: s["magic.provider"], model: s[MAGIC_PROVIDERS[s["magic.provider"]].modelSetting] || "default" });
-    void runMagic({
-      prompt: request,
-      backend,
-      cwd: this.#cwd(w),
-      workspace: this.#o.workspaceFor?.(w) ?? null,
-      explore: s["magic.explore"],
-      sandbox: this.#sandbox(),
-      deny: DEFAULT_DENY_PATHS,
-      noFast: refining,
-      signal: ac.signal,
-      onEvent,
-    })
+    log.info(`run ${id.slice(0, 8)}${refining ? " (change)" : ""}`, { provider: s["magic.provider"], model: s[MAGIC_PROVIDERS[s["magic.provider"]].modelSetting] || "default" });
+    void (async () => {
+      const ctx = await this.#verifyContext(this.#window(id), widgetId, ac.signal);
+      return buildWidget({
+        prompt: refining ? refineRequest(prev, text) : text,
+        backend,
+        widget: ctx,
+        workspace: this.#o.workspaceFor?.(w) ?? null,
+        explore: s["magic.explore"],
+        sandbox: this.#sandbox(),
+        deny: DEFAULT_DENY_PATHS,
+        noFast: refining,
+        signal: ac.signal,
+        onEvent,
+      });
+    })()
       .then((r) => {
-        if (bodyTimer) clearTimeout(bodyTimer);
         if (this.#runs.get(id) !== ac) return; // superseded
         this.#runs.delete(id);
-        const usable = r.ok || (r.header && (r.header.kind === "terminal" || r.body));
+        const v = r.verdict;
         log.info(`run ${id.slice(0, 8)} finished`, {
           ok: r.ok,
-          usable: !!usable,
+          usable: v.usable,
           route: r.route,
-          kind: r.header?.kind ?? null,
-          backend: r.backend,
+          kind: v.manifest?.kind ?? null,
           model: r.model,
           ms: r.timings.done,
-          firstStepMs: r.timings.firstStep ?? null,
-          headerMs: r.timings.header ?? null,
           steps: steps.length,
           repairs: r.repairs.length,
           tokens: { in: r.usage.input, out: r.usage.output, cacheRead: r.usage.cacheRead, cacheWrite: r.usage.cacheWrite },
-          costUSD: r.usage.costUSD ?? null,
-          ...(r.errors.length ? { errors: r.errors.length, firstError: r.errors[0]!.split("\n")[0] } : {}),
+          ...(v.problems.length ? { problems: v.problems.length, firstProblem: v.problems[0]!.split("\n")[0] } : {}),
         });
-        if (!usable) return this.#fail(id, prev, r.errors[0]?.split("\n")[0] ?? "The answer couldn't be used.");
-        if (r.route === "json") {
-          this.#o.windows.update(id, {
-            title: "JSON",
-            state: { phase: "ready", kind: "widget", html: JSON_VIEW, media: [], source: null, refresh: 0, size: "m", lastData: { data: r.data, at: Date.now() }, steps, answer: undefined },
-          });
-          send({ type: "done" });
-          return;
+        if (!v.usable || !v.manifest) {
+          // Back to the last version that worked, if there is one.
+          const last = this.store.latest(widgetId);
+          if (last) this.store.checkout(widgetId, last.n);
+          return this.#fail(id, prev, v.problems[0]?.split("\n")[0] ?? "The widget couldn't be built.");
         }
-        const h = r.header!;
-        // An interval the person chose survives refinements.
+        const rev = this.store.snapshot(widgetId, { prompt: text, ok: v.ok, problems: v.ok ? undefined : v.problems.slice(0, 10), model: r.model }, v.shot ? Buffer.from(v.shot, "base64") : undefined);
         const keepRefresh = refining && !!prev.refreshByUser;
-        const refresh = keepRefresh ? (prev.refresh ?? 0) : h.refresh;
-        this.#o.windows.update(id, {
-          title: h.title,
-          state: {
-            phase: "ready",
-            kind: h.kind,
-            html: r.body,
-            source: h.source,
-            refresh,
-            refreshByUser: keepRefresh || undefined,
-            size: h.size,
-            command: h.command,
-            media: h.media ?? [],
-            lastData: r.sample?.ok ? { data: r.sample.data, at: Date.now() } : null,
-            error: r.ok ? undefined : r.errors[0]?.split("\n")[0],
-            steps,
-            answer: r.answer || undefined,
-          },
+        this.#apply(id, v.manifest, v.html, {
+          revision: rev.n,
+          refresh: keepRefresh ? (prev.refresh ?? 0) : v.manifest.refresh,
+          refreshByUser: keepRefresh || undefined,
+          lastData: v.data !== undefined ? { data: v.data, at: Date.now() } : null,
+          health: v.data !== undefined ? { ok: true, lastOk: Date.now(), failures: 0 } : undefined,
+          problems: v.ok ? undefined : v.problems.slice(0, 10),
+          steps,
+          summary: r.summary || undefined,
+          answer: undefined,
+          source: undefined,
         });
         send({ type: "done" });
+        this.#failures.delete(id);
         this.#persistedAt.set(id, Date.now());
-        if (h.source && refresh) this.#schedule(id, refresh * 1000);
+        this.#watch(id, widgetId);
+        const st = stateOf(this.#window(id));
+        if (st.hasData && st.refresh) this.#schedule(id, st.refresh * 1000);
       })
       .catch((e: Error) => {
-        if (bodyTimer) clearTimeout(bodyTimer);
         if (this.#runs.get(id) !== ac) return;
         this.#runs.delete(id);
+        const last = this.store.latest(widgetId);
+        if (last) this.store.checkout(widgetId, last.n);
         this.#fail(id, prev, ac.signal.aborted ? "Stopped." : e.message);
       });
+  }
+
+  /** The window's state from a widget's manifest and composed view. */
+  #apply(id: WindowId, m: WidgetManifest, html: string, extra: Partial<MagicState> = {}): void {
+    const s = stateOf(this.#window(id));
+    const widgetId = s.widgetId ?? id;
+    this.#o.windows.update(id, {
+      title: m.title,
+      state: {
+        phase: "ready",
+        kind: m.kind,
+        html: m.kind === "widget" ? html : undefined,
+        command: m.command,
+        size: m.size,
+        refresh: s.refreshByUser && extra.refresh === undefined ? s.refresh : m.refresh,
+        hasData: m.kind === "widget" && this.store.read(widgetId, "data.ts") !== null,
+        media: m.media,
+        error: undefined,
+        ...extra,
+      },
+    });
   }
 
   #backend(s: Settings): Backend {
@@ -265,7 +342,7 @@ export class MagicService {
   #fail(id: WindowId, prev: MagicState, message: string): void {
     log.warn(`run ${id.slice(0, 8)} failed: ${message}`);
     this.#runs.delete(id);
-    // A failed refinement keeps the widget that worked.
+    // A failed change keeps the widget that worked.
     if (prev.phase === "ready" && (prev.html || prev.command)) {
       this.#o.windows.update(id, { state: { phase: "ready", error: message } });
       this.#schedule(id, 0);
@@ -276,6 +353,85 @@ export class MagicService {
       this.#o.windows.update(id, { state: { phase: prompt ? "error" : "empty", error: message } });
     }
     this.#o.broadcast({ type: "magic.stream", id, progress: { type: "error", message } });
+  }
+
+  /** Ask the agent to fix what is wrong: the data's last error, or what the checks left. */
+  fix(id: WindowId): void {
+    const s = stateOf(this.#window(id));
+    const what = [s.health && !s.health.ok && s.health.error ? `Its data fails: ${s.health.error}` : "", s.problems?.length ? `The checks found:\n- ${s.problems.join("\n- ")}` : "", s.error ? `Last error: ${s.error}` : ""].filter(Boolean);
+    this.run(id, what.length ? `Fix the widget. ${what.join("\n")}` : "Check that the widget still works and fix anything that doesn't.");
+  }
+
+  // ── the edit view ──────────────────────────────────────
+
+  widget(id: WindowId): MagicWidgetInfo | null {
+    const s = stateOf(this.#window(id));
+    if (!s.widgetId || !fs.existsSync(this.store.dir(s.widgetId))) return null;
+    const wid = s.widgetId;
+    const m = this.store.manifest(wid);
+    return {
+      dir: this.store.dir(wid),
+      files: this.store.files(wid),
+      revisions: this.store.revisions(wid).map((r) => ({ n: r.n, at: r.at, prompt: r.prompt, ok: r.ok, problems: r.problems, model: r.model, shot: r.shot ? this.store.shotPath(wid, r.n) : undefined })),
+      manifest: m.ok ? { title: m.manifest.title, description: m.manifest.description, refresh: m.manifest.refresh, permissions: m.manifest.permissions, config: m.manifest.config } : null,
+      secrets: this.widgetSecrets.status(id),
+      edited: this.store.changedSinceLatest(wid),
+    };
+  }
+
+  /** Bring back revision n (kept as a new revision). */
+  restore(id: WindowId, n: number): void {
+    const s = stateOf(this.#window(id));
+    if (!s.widgetId) throw new Error("this window has no widget");
+    if (this.#runs.has(id)) throw new Error("the widget is being made");
+    const meta = this.store.revisions(s.widgetId).find((r) => r.n === n);
+    if (!meta) throw new Error(`no revision ${n}`);
+    this.store.checkout(s.widgetId, n);
+    const rev = this.store.snapshot(s.widgetId, { prompt: `Back to version ${n}: ${meta.prompt}`.slice(0, 300), ok: meta.ok, problems: meta.problems, model: meta.model });
+    this.#reload(id, { revision: rev.n, problems: meta.ok ? undefined : meta.problems });
+  }
+
+  /** The working files changed (a restore, an edit outside cmd): show them and run the data. */
+  #reload(id: WindowId, extra: Partial<MagicState> = {}): void {
+    const s = stateOf(this.#window(id));
+    if (!s.widgetId) return;
+    const c = this.store.compose(s.widgetId);
+    if (!c.manifest) {
+      this.#o.windows.update(id, { state: { error: `The widget's files have a problem: ${c.errors[0]}` } });
+      return;
+    }
+    this.#apply(id, c.manifest, c.html, { ...extra, ...(c.errors.length ? { error: c.errors[0] } : {}) });
+    this.#schedule(id, 0);
+  }
+
+  /** The person's config values (null or "" resets a field to its default). */
+  setConfig(id: WindowId, values: Record<string, unknown>): void {
+    const s = stateOf(this.#window(id));
+    const next: Record<string, unknown> = { ...s.config };
+    for (const [k, v] of Object.entries(values)) {
+      if (v === null || v === "" || v === undefined) delete next[k];
+      else if (["string", "number", "boolean"].includes(typeof v)) next[k] = v;
+    }
+    this.#o.windows.update(id, { state: { config: next } });
+    this.#schedule(id, 0);
+  }
+
+  setSecret(id: WindowId, key: string, value: string | null): void {
+    this.#window(id);
+    if (!/^[A-Za-z_]\w*$/.test(key)) throw new Error(`bad key: ${key}`);
+    this.widgetSecrets.set(id, key, value);
+    this.#schedule(id, 0);
+  }
+
+  /** The widget's cmd.state.set. */
+  setState(id: WindowId, key: string, value: unknown): void {
+    const s = stateOf(this.#window(id));
+    if (typeof key !== "string" || !key || key.length > 200) throw new Error("bad key");
+    const kv = { ...s.kv };
+    if (value === null || value === undefined) delete kv[key];
+    else kv[key] = value;
+    if (JSON.stringify(kv).length > 256 * 1024) throw new Error("cmd.state is full (256 KB)");
+    this.#o.windows.update(id, { state: { kv } });
   }
 
   /** The person's answer to the widget's media request: allow or decline the origins it asks for. */
@@ -292,23 +448,40 @@ export class MagicService {
     });
   }
 
+  async runtime(): Promise<MagicRuntime> {
+    const env = this.#deno();
+    const p = await this.#o.previewer?.().catch(() => null);
+    return { deno: env?.deno ?? null, version: env ? denoVersion(env.deno) : null, sandbox: process.platform === "darwin" && sandboxAvailable(), previewer: p?.name ?? null };
+  }
+
+  async installRuntime(): Promise<MagicRuntime> {
+    if (!this.#o.stateDir) throw new Error("no state folder to install Deno into");
+    log.info("installing Deno");
+    await installDeno(this.#o.stateDir);
+    // Windows waiting for Deno can run now.
+    for (const w of this.#o.windows.others()) if (w.kind === "magic" && stateOf(w).phase === "ready") this.#schedule(w.id, 0);
+    return this.runtime();
+  }
+
   cancel(id: WindowId): void {
     this.#runs.get(id)?.abort();
   }
 
-  /** Run the source now (the refresh button), then continue on the interval. */
+  // ── refreshing ─────────────────────────────────────────
+
+  /** Run the data now (Refresh Now), then continue on the interval. */
   refresh(id: WindowId): void {
     this.#window(id);
     this.#schedule(id, 0);
   }
 
-  /** The person's interval for the source (Refresh Every); 0 runs it only on Refresh Now. */
+  /** The person's interval (Refresh Every); 0 runs the data only on Refresh Now. */
   setRefresh(id: WindowId, seconds: number): void {
     if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`magic.setRefresh: bad interval ${seconds}`);
     const refresh = seconds === 0 ? 0 : Math.max(MIN_REFRESH_S, Math.round(seconds));
     const s = stateOf(this.#window(id));
     this.#o.windows.update(id, { state: { refresh, refreshByUser: true } });
-    if (!s.source || s.phase !== "ready") return;
+    if (s.phase !== "ready" || !(s.source || s.hasData)) return;
     if (refresh) this.#schedule(id, refresh * 1000);
     else this.stop(id);
   }
@@ -319,13 +492,18 @@ export class MagicService {
   }
 
   dispose(): void {
+    this.#disposed = true;
     for (const ac of this.#runs.values()) ac.abort();
     for (const t of this.#timers.values()) clearTimeout(t);
+    for (const t of this.#editTimers.values()) clearTimeout(t);
+    for (const wt of this.#watchers.values()) wt.close();
     this.#runs.clear();
     this.#timers.clear();
+    this.#watchers.clear();
   }
 
   #schedule(id: WindowId, delay: number): void {
+    if (this.#disposed) return;
     this.stop(id);
     this.#timers.set(
       id,
@@ -341,62 +519,170 @@ export class MagicService {
       return this.stop(id);
     }
     const s = stateOf(w);
-    if (!s.source || s.phase !== "ready") return;
+    if (s.phase !== "ready" || this.#runs.has(id)) return;
+    if (s.widgetId) return this.#tickWidget(w, s);
+    if (s.source) return this.#tickLegacy(w, s);
+  }
+
+  async #tickWidget(w: AppWindow, s: MagicState): Promise<void> {
+    const id = w.id;
+    if (!s.hasData) return;
+    const m = this.store.manifest(s.widgetId!);
+    const deno = this.#deno();
     const t0 = Date.now();
-    const r: SourceResult = await runSource(s.source, { cwd: this.#cwd(w), deny: DEFAULT_DENY_PATHS, sandbox: this.#sandbox() });
-    if (r.ok) log.debug(`data ${id.slice(0, 8)} refreshed`, { ms: Date.now() - t0 });
-    else log.warn(`data ${id.slice(0, 8)} failed (${(this.#failures.get(id) ?? 0) + 1} in a row): ${(r.error ?? "failed").split("\n")[0]}`, { ms: Date.now() - t0 });
-    if (!this.#o.windows.others().some((x) => x.id === id)) return;
+    let ok = false;
+    let data: unknown;
+    let error = "";
+    let retryAfter: number | undefined;
+    let permission = false;
+    if (!m.ok) error = `manifest.json: ${m.errors[0]}`;
+    else if (!deno) error = "Deno isn't installed (Settings → Magic Windows)";
+    else {
+      const secrets = this.widgetSecrets.get(id);
+      const r = await runData(this.store.dir(s.widgetId!), m.manifest, { ...deno, cwd: this.#cwd(w), config: { ...configValues(m.manifest, s.config), ...secrets } });
+      ok = r.ok;
+      data = r.data;
+      retryAfter = r.retryAfter;
+      permission = !!r.permission;
+      if (!r.ok) error = describeDataError(r, Object.values(secrets));
+    }
+    if (!this.#o.windows.others().some((x) => x.id === id) || this.#runs.has(id)) return;
+    this.#afterRun(id, { ok, data, error, retryAfter, permission, ms: Date.now() - t0 });
+  }
+
+  async #tickLegacy(w: AppWindow, s: MagicState): Promise<void> {
+    const t0 = Date.now();
+    const r = await runSource(s.source!, { cwd: this.#cwd(w), deny: DEFAULT_DENY_PATHS, sandbox: this.#sandbox() });
+    if (!this.#o.windows.others().some((x) => x.id === w.id)) return;
+    this.#afterRun(w.id, { ok: r.ok, data: r.data, error: r.error ?? "failed", ms: Date.now() - t0 });
+  }
+
+  /** A data run finished: broadcast it, keep health, and decide when to run next. */
+  #afterRun(id: WindowId, r: { ok: boolean; data?: unknown; error?: string; retryAfter?: number; permission?: boolean; ms: number }): void {
+    const s = stateOf(this.#window(id));
     const at = Date.now();
+    const prevHealth = s.health;
     if (r.ok) {
+      log.debug(`data ${id.slice(0, 8)} refreshed`, { ms: r.ms });
       this.#failures.delete(id);
       this.#o.broadcast({ type: "magic.data", id, data: r.data, at });
-      if (at - (this.#persistedAt.get(id) ?? 0) >= PERSIST_DATA_MS) {
+      const recovered = prevHealth && !prevHealth.ok;
+      if (recovered || at - (this.#persistedAt.get(id) ?? 0) >= PERSIST_DATA_MS) {
         this.#persistedAt.set(id, at);
-        this.#o.windows.update(id, { state: { lastData: { data: r.data, at } } });
+        const health: MagicHealth = { ok: true, lastOk: at, failures: 0 };
+        this.#o.windows.update(id, { state: { lastData: { data: r.data, at }, health, ...(s.error?.startsWith("Interrupted") ? { error: undefined } : {}) } });
       }
     } else {
-      this.#failures.set(id, (this.#failures.get(id) ?? 0) + 1);
+      const failures = (this.#failures.get(id) ?? 0) + 1;
+      this.#failures.set(id, failures);
+      log.warn(`data ${id.slice(0, 8)} failed (${failures} in a row): ${(r.error ?? "failed").split("\n")[0]}`, { ms: r.ms });
       this.#o.broadcast({ type: "magic.data", id, data: null, at, error: r.error ?? "failed" });
     }
-    if (!s.refresh) return;
-    // Back off on failures, up to 10× the interval.
-    const factor = Math.min(10, 2 ** (this.#failures.get(id) ?? 0));
-    this.#schedule(id, Math.max(MIN_REFRESH_S, s.refresh) * 1000 * factor);
+    // Next run: the interval; after failures, back off (up to 10×), and never before the server allows.
+    const refresh = Math.max(MIN_REFRESH_S, s.refresh ?? 0);
+    const failures = this.#failures.get(id) ?? 0;
+    let delay = s.refresh ? refresh * 1000 * Math.min(10, 2 ** failures) : 0;
+    if (!r.ok && r.retryAfter) delay = Math.max(delay, (r.retryAfter + 1) * 1000);
+    if (!r.ok) {
+      const health: MagicHealth = { ok: false, lastOk: prevHealth?.lastOk ?? s.lastData?.at, error: r.error, errorAt: at, failures, retryAt: delay ? at + delay : undefined, permission: r.permission || undefined };
+      if (!prevHealth || prevHealth.ok || prevHealth.error !== health.error || failures === 1 || failures % 5 === 0) this.#o.windows.update(id, { state: { health } });
+      this.#maybeAutoFix(id, failures, r);
+    }
+    if (delay) this.#schedule(id, delay);
+  }
+
+  /** magic.autoFix: data that keeps failing for reasons other than a busy server gets one agent fix per revision. */
+  #maybeAutoFix(id: WindowId, failures: number, r: { retryAfter?: number; error?: string }): void {
+    if (!this.#o.settings()["magic.autoFix"] || failures < AUTO_FIX_AFTER || r.retryAfter) return;
+    if (/timed out|fetch failed|ENOTFOUND|ECONN|network|HTTP 5\d\d|HTTP 429|rate limit|Deno isn't installed/i.test(r.error ?? "")) return;
+    const s = stateOf(this.#window(id));
+    if (this.#autoFixed.get(id) === s.revision) return;
+    this.#autoFixed.set(id, s.revision ?? 0);
+    log.info(`data ${id.slice(0, 8)} keeps failing; asking the agent to fix it`);
+    this.fix(id);
+  }
+
+  // ── hand edits ─────────────────────────────────────────
+
+  /** Watch a widget folder: files edited outside cmd (an editor, Claude Code) show up and become a revision. */
+  #watch(id: WindowId, widgetId: string): void {
+    if (this.#watchers.has(id) || this.#disposed) return;
+    try {
+      const wt = fs.watch(this.store.dir(widgetId), { persistent: false }, (_ev, name) => {
+        if (!name || !/^(manifest\.json|data\.ts|view\.html|view\.ts|static\.json)$/.test(String(name))) return;
+        clearTimeout(this.#editTimers.get(id));
+        this.#editTimers.set(id, setTimeout(() => this.#edited(id), 400));
+      });
+      wt.on("error", () => this.#watchers.delete(id));
+      this.#watchers.set(id, wt);
+    } catch {}
+  }
+
+  #edited(id: WindowId): void {
+    if (this.#runs.has(id)) return; // the agent is writing
+    let s: MagicState;
+    try {
+      s = stateOf(this.#window(id));
+    } catch {
+      return;
+    }
+    if (!s.widgetId || !this.store.changedSinceLatest(s.widgetId)) return;
+    const c = this.store.compose(s.widgetId);
+    if (!c.manifest) {
+      this.#o.windows.update(id, { state: { error: `The widget's files have a problem: ${c.errors[0]}` } });
+      return;
+    }
+    const rev = this.store.snapshot(s.widgetId, { prompt: "Edited by hand", ok: !c.errors.length, problems: c.errors.length ? c.errors : undefined });
+    log.info(`widget ${id.slice(0, 8)} edited by hand (revision ${rev.n})`);
+    this.#reload(id, { revision: rev.n, problems: undefined });
+  }
+
+  // ── closing ────────────────────────────────────────────
+
+  #removed(id: WindowId): void {
+    this.cancel(id);
+    this.stop(id);
+    this.#watchers.get(id)?.close();
+    this.#watchers.delete(id);
+    this.widgetSecrets.forget(id);
+    // The widget folder is kept a while (widgets/closed/), not deleted with the window.
+    const dir = path.join(this.store.root, id);
+    if (!fs.existsSync(dir)) return;
+    try {
+      const closed = path.join(this.store.root, "closed");
+      fs.mkdirSync(closed, { recursive: true });
+      fs.renameSync(dir, path.join(closed, `${id}-${Date.now()}`));
+    } catch (e) {
+      log.warn(`could not keep the widget of ${id.slice(0, 8)}: ${(e as Error).message}`);
+    }
+  }
+
+  #pruneClosed(): void {
+    const closed = path.join(this.store.root, "closed");
+    try {
+      for (const name of fs.readdirSync(closed)) {
+        const at = Number(name.split("-").pop());
+        if (at && Date.now() - at > CLOSED_KEEP_MS) fs.rmSync(path.join(closed, name), { recursive: true, force: true });
+      }
+    } catch {}
   }
 }
 
 /**
- * A refinement's request: everything the person asked so far (the first request
- * and each change, in order, so details from any of them survive), the new
- * change, and what the window is now.
+ * A change's request: everything the person asked so far (the first request
+ * and each change, in order, so details from any of them survive) and the new
+ * change. The widget's current files go into the request separately. A v1
+ * window (no widget folder yet) brings its old view, to be rebuilt as a widget.
  */
 export function refineRequest(prev: MagicState, change: string): string {
   const asked = prev.history?.length ? prev.history : [prev.prompt];
   const earlier = asked.length === 1 ? `The window was made from this request:\n${asked[0]}` : `The window was made from these requests, in order (the first, then changes):\n${asked.map((r, i) => `${i + 1}. ${r}`).join("\n")}`;
-  const current = prev.answer
-    ? `Its current answer (header and view):\n${prev.answer}`
-    : prev.kind === "terminal" && prev.command
-      ? `It currently runs the terminal command: ${prev.command}`
+  const legacy = !prev.widgetId
+    ? prev.kind === "terminal" && prev.command
+      ? `It currently offers the terminal command: ${prev.command}`
       : prev.html
-        ? `Its current view:\n${prev.html}`
-        : "";
-  return [
-    earlier,
-    `Change it as asked, keeping what still fits and everything those requests asked for that the change doesn't override: ${change}`,
-    current,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+        ? `It was made before widgets had files of their own: rebuild it as a widget (manifest.json, data.ts, view.html, view.ts).${prev.source ? `\nIts data came from ${prev.source.type === "fetch" ? `GET ${prev.source.url}` : `the command: ${prev.source.command}`}` : ""}\nIts old view:\n${prev.html}`
+        : ""
+    : "";
+  return [earlier, `Change it as asked, keeping what still fits and everything those requests asked for that the change doesn't override: ${change}`, legacy].filter(Boolean).join("\n\n");
 }
-
-/** The no-model view of pasted JSON: a collapsible tree. */
-const JSON_VIEW = `<style>.t{font:12px/1.5 var(--mono)}.t details{padding-left:14px}.t summary{cursor:default;list-style:none;margin-left:-14px}.t summary::before{content:"▸ ";color:var(--text-dim)}.t details[open]>summary::before{content:"▾ "}.k{color:var(--c1)}.s{color:var(--c2)}.n{color:var(--c3)}.b{color:var(--c4)}</style>
-<div class="t" id="root"></div>
-<script>
-const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"})[c]);
-function node(k,v,open){const key=k===null?"":'<span class="k">'+esc(k)+'</span>: ';
-if(v&&typeof v==="object"){const arr=Array.isArray(v),n=arr?v.length:Object.keys(v).length;const d=document.createElement("details");if(open)d.open=true;d.innerHTML="<summary>"+key+'<span class="k-dim">'+(arr?"["+n+"]":"{"+n+"}")+"</span></summary>";for(const [ck,cv] of Object.entries(v))d.append(node(arr?Number(ck):ck,cv,false));return d;}
-const e=document.createElement("div");const cls=typeof v==="string"?"s":typeof v==="number"?"n":"b";e.innerHTML=key+'<span class="'+cls+'">'+esc(JSON.stringify(v))+"</span>";return e;}
-cmd.onData(d=>root.replaceChildren(node(null,d,true)));
-</script>`;

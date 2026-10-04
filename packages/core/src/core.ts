@@ -27,6 +27,8 @@ import { SpaceManager } from "./spaces/manager.ts";
 import { MagicService } from "./magic/service.ts";
 import { SecretsService } from "./secrets.ts";
 import type { Backend } from "./magic/backends.ts";
+import { playwrightPreviewer, type Previewer } from "./widgets/preview.ts";
+import type { MagicPreviewRequest, MagicPreviewShot } from "@cmd/protocol";
 import type { Connection, Served } from "./connection.ts";
 import { checkRemoteCall, RemoteDenied, remoteEventVisible, type PolicyContext } from "./remote/policy.ts";
 import { RemoteService } from "./remote/service.ts";
@@ -75,6 +77,10 @@ export interface CoreOptions {
   magicBackend?: (settings: Settings) => Backend;
   /** Where usage stats go (usage.ts); none: not counted (tests, development builds). */
   usageUrl?: string | null;
+  /** Tests: who renders widget previews (default: the app's previewer connection, else Playwright). */
+  magicPreviewer?: Previewer | null;
+  /** Tests: the Deno for widgets (default: found on this Mac). */
+  magicDeno?: string | null;
 }
 
 const NO_SEARCH = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
@@ -109,6 +115,11 @@ export class Core {
   #connWatches = new Map<Connection, string[]>();
   /** Windows each connection shows (window.follow); remote sessions get output only for these. */
   #follows = new Map<Connection, Set<string>>();
+  /** Connections that render widget previews (the app's main process), newest last. */
+  #previewers: Connection[] = [];
+  #previewSeq = 0;
+  #previewWaits = new Map<string, { resolve: (s: MagicPreviewShot[]) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  #playwright: Promise<Previewer | null> | null = null;
   #opts: CoreOptions;
   #search: SearchService | null = null;
   #closed = false;
@@ -164,7 +175,16 @@ export class Core {
     });
     this.secrets = new SecretsService(opts.secretsPath ?? null);
     this.secrets.on("updated", (status) => this.#broadcast({ type: "secrets.updated", status }));
-    this.magic = new MagicService({ windows: this.windows, settings, secret: (k) => this.secrets.get(k), broadcast: (e) => this.#broadcast(e), backend: opts.magicBackend, cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root,
+    this.magic = new MagicService({
+      windows: this.windows,
+      settings,
+      secret: (k) => this.secrets.get(k),
+      broadcast: (e) => this.#broadcast(e),
+      backend: opts.magicBackend,
+      stateDir: opts.stateDir ?? null,
+      previewer: () => this.#previewer(),
+      deno: opts.magicDeno,
+      cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root,
       workspaceFor: (w) => {
         const sp = this.spaces.get(w.spaceId);
         return sp && !sp.home ? { name: sp.name, root: sp.root } : null;
@@ -301,6 +321,25 @@ export class Core {
     "magic.setRefresh": (p) => (this.magic.setRefresh(p.id, p.seconds), null),
     "magic.media": (p) => (this.magic.media(p.id, p.allow), null),
     "magic.models": (p) => this.magic.models(p.provider, p.refresh),
+    "magic.widget": (p) => this.magic.widget(p.id),
+    "magic.restore": (p) => (this.magic.restore(p.id, p.revision), null),
+    "magic.config": (p) => (this.magic.setConfig(p.id, p.values ?? {}), null),
+    "magic.secret": (p) => (this.magic.setSecret(p.id, p.key, p.value), null),
+    "magic.state": (p) => (this.magic.setState(p.id, p.key, p.value), null),
+    "magic.fix": (p) => (this.magic.fix(p.id), null),
+    "magic.runtime": () => this.magic.runtime(),
+    "magic.installRuntime": () => this.magic.installRuntime(),
+    // Connection-aware (#afterCall): the caller becomes a previewer.
+    "magic.previewer": () => null,
+    "magic.previewResult": (p) => {
+      const wait = this.#previewWaits.get(p.reqId);
+      if (!wait) return null;
+      this.#previewWaits.delete(p.reqId);
+      clearTimeout(wait.timer);
+      if (p.error || !p.shots) wait.reject(new Error(p.error ?? "no shots"));
+      else wait.resolve(p.shots);
+      return null;
+    },
     "secrets.status": () => this.secrets.status(),
     "secrets.set": (p) => this.secrets.set(p.key, p.value),
     "fs.list": (p) => listDir(p.path),
@@ -530,6 +569,7 @@ export class Core {
     return {
       receive: (line) => void this.#receive(conn, line),
       closed: () => {
+        this.#previewers = this.#previewers.filter((c) => c !== conn);
         this.panes.releaseAll(conn);
         this.#subscribers.delete(conn);
         this.#follows.delete(conn);
@@ -600,6 +640,8 @@ export class Core {
     } else if (method === "window.follow") {
       this.#follows.set(conn, new Set(params.ids as string[]));
       if (conn.access !== "local") this.remote.following(conn, params.ids as string[]);
+    } else if (method === "magic.previewer" && conn.access === "local") {
+      this.#previewers = [...this.#previewers.filter((c) => c !== conn), conn];
     } else if (method === "events.subscribe") {
       const types = (params as Params<"events.subscribe">).types;
       const set = Array.isArray(types) ? new Set<string>(types) : null;
@@ -618,6 +660,28 @@ export class Core {
   /** What remote/policy.ts checks arguments against. */
   get #policy(): PolicyContext {
     return { panes: this.panes, agents: this.agents, spaces: this.spaces, windows: this.windows, home: this.#opts.home };
+  }
+
+  /** Widget previews: the app (offscreen Electron windows) when one is connected, else Playwright, else none. */
+  async #previewer(): Promise<Previewer | null> {
+    if (this.#opts.magicPreviewer !== undefined) return this.#opts.magicPreviewer;
+    const conn = this.#previewers.at(-1);
+    if (conn) {
+      return {
+        name: "app",
+        render: (requests: MagicPreviewRequest[]) =>
+          new Promise<MagicPreviewShot[]>((resolve, reject) => {
+            const reqId = String(++this.#previewSeq);
+            const timer = setTimeout(() => {
+              this.#previewWaits.delete(reqId);
+              reject(new Error("the preview took too long"));
+            }, 60_000);
+            this.#previewWaits.set(reqId, { resolve, reject, timer });
+            conn.send(JSON.stringify({ jsonrpc: "2.0", method: "event", params: { type: "magic.previewRequest", reqId, requests } satisfies CoreEvent }) + "\n");
+          }),
+      };
+    }
+    return (this.#playwright ??= playwrightPreviewer());
   }
 
   #broadcast(event: CoreEvent): void {

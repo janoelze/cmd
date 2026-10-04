@@ -3,7 +3,7 @@
 
 import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
-import type { MagicModel, MagicProgress } from "./magic.ts";
+import type { MagicModel, MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
 
 export interface CoreInfo {
@@ -187,6 +187,26 @@ export interface Methods {
   "magic.models": { params: { provider: string; refresh?: boolean }; result: MagicModel[] };
   /** Allow (or decline) the media origins the widget asks for (MagicState.media); the frame's CSP opens only allowed ones. */
   "magic.media": { params: { id: WindowId; allow: boolean }; result: null };
+  /** A Magic window's widget for the edit view: folder, files, revisions, manifest, which secrets are set. */
+  "magic.widget": { params: { id: WindowId }; result: MagicWidgetInfo | null };
+  /** Bring back a revision of the widget (as a new revision). */
+  "magic.restore": { params: { id: WindowId; revision: number }; result: null };
+  /** Set the widget's config values (its manifest's config fields; secrets go through magic.secret); the data runs again. */
+  "magic.config": { params: { id: WindowId; values: Record<string, unknown> }; result: null };
+  /** Store or clear a secret config field's value (kept by the core, only data.ts gets it). */
+  "magic.secret": { params: { id: WindowId; key: string; value: string | null }; result: null };
+  /** The widget's cmd.state.set (value null removes the key). */
+  "magic.state": { params: { id: WindowId; key: string; value: unknown }; result: null };
+  /** Ask the agent to fix what is wrong (the data's last error, the checks' problems). */
+  "magic.fix": { params: { id: WindowId }; result: null };
+  /** What widgets run on: Deno, the sandbox, the previewer. */
+  "magic.runtime": { params: {}; result: MagicRuntime };
+  /** Download Deno into cmd's state folder. */
+  "magic.installRuntime": { params: {}; result: MagicRuntime };
+  /** This connection renders widget previews (the app): it gets magic.previewRequest events. */
+  "magic.previewer": { params: {}; result: null };
+  /** The previewer's answer to a magic.previewRequest. */
+  "magic.previewResult": { params: { reqId: string; shots?: MagicPreviewShot[]; error?: string }; result: null };
 
   /** Directory listing for file windows (dirs first, then by name). */
   "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };
@@ -314,6 +334,8 @@ export type CoreEvent =
   | { type: "magic.stream"; id: WindowId; progress: MagicProgress }
   /** New data from a Magic widget's source (error: the source failed; the widget keeps its last data). */
   | { type: "magic.data"; id: WindowId; data: unknown; at: number; error?: string }
+  /** To the previewer connection only: render these pages offscreen and answer with magic.previewResult. */
+  | { type: "magic.previewRequest"; reqId: string; requests: MagicPreviewRequest[] }
   /** A watched file or folder changed on disk (see fs.watch). */
   | { type: "fs.changed"; path: string }
   /** Bring a window to the front (e.g. `open .` in a terminal). */

@@ -1,0 +1,9 @@
+{
+  "cmd": 2,
+  "kind": "widget",
+  "title": "Top processes",
+  "size": "m",
+  "refresh": 3,
+  "permissions": { "net": [], "run": ["ps"], "env": [], "read": [] },
+  "config": [{ "key": "count", "title": "Processes shown", "type": "number", "default": 8 }]
+}

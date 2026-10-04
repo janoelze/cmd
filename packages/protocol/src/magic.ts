@@ -36,6 +36,23 @@ export interface MagicStep {
   output?: string;
 }
 
+/** How a widget's data has been doing (MagicState.health). */
+export interface MagicHealth {
+  /** The last run succeeded. */
+  ok: boolean;
+  /** When data last came in. */
+  lastOk?: number;
+  /** The last failure, for people (no secrets). */
+  error?: string;
+  errorAt?: number;
+  /** Failures in a row. */
+  failures: number;
+  /** When the next run is due after failures (a server asked to wait, or backoff). */
+  retryAt?: number;
+  /** data.ts lacks a permission (manifest.json). */
+  permission?: boolean;
+}
+
 /** A Magic window's state (AppWindow.state of kind "magic"). */
 export interface MagicState {
   [key: string]: unknown;
@@ -43,22 +60,40 @@ export interface MagicState {
   prompt: string;
   phase: "empty" | "working" | "ready" | "error";
   kind?: "widget" | "terminal";
+  /** The widget folder ($CMD_HOME/widgets/<id>), v2 windows. */
+  widgetId?: string;
+  /** The revision shown. */
+  revision?: number;
+  /** The frame's body (view.html + view.ts). */
   html?: string;
+  /** v1 windows only: their data source. */
   source?: MagicSource | null;
+  /** v2: the widget has data.ts (the window refreshes and shows freshness). */
+  hasData?: boolean;
   refresh?: number;
   /** The person chose `refresh` (Refresh Every): refinements keep it. */
   refreshByUser?: boolean;
   size?: "s" | "m" | "l" | "wide";
   command?: string;
-  /** The last data the source produced, so the widget draws at once after a restart. */
+  /** The last data, so the widget draws at once after a restart. */
   lastData?: { data: unknown; at: number } | null;
+  health?: MagicHealth;
+  /** A problem with the window itself (the build failed). */
   error?: string;
+  /** Problems the last build's checks left (the widget still renders). */
+  problems?: string[];
   steps?: MagicStep[];
   /** Earlier requests of this window (the first request, then refinements). */
   history?: string[];
-  /** The model's last full answer: context for refinements. */
+  /** v1: the model's last full answer (context for refinements). */
   answer?: string;
-  /** Origins the view plays audio/video or shows images from (header.media). */
+  /** The agent's closing words for the last build. */
+  summary?: string;
+  /** Values for the manifest's config fields (secrets are kept elsewhere). */
+  config?: Record<string, unknown>;
+  /** The widget's cmd.state values. */
+  kv?: Record<string, unknown>;
+  /** Origins the view plays audio/video or shows images from (manifest media). */
   media?: string[];
   /** Media origins the person allowed for this window; the frame's CSP opens only these. */
   mediaAllowed?: string[];
@@ -66,11 +101,80 @@ export interface MagicState {
   mediaDenied?: string[];
 }
 
+/** A config field of a widget (its manifest), as the settings pane shows it. */
+export interface MagicConfigField {
+  key: string;
+  title: string;
+  type: "string" | "number" | "boolean" | "enum";
+  default?: string | number | boolean;
+  options?: string[];
+  secret?: boolean;
+  description?: string;
+}
+
+/** A widget's revision (magic.widget). */
+export interface MagicRevision {
+  n: number;
+  at: number;
+  prompt: string;
+  ok: boolean;
+  problems?: string[];
+  model?: string;
+  /** Path of its screenshot, if any. */
+  shot?: string;
+}
+
+/** Everything the edit view shows about a widget (magic.widget). */
+export interface MagicWidgetInfo {
+  dir: string;
+  files: string[];
+  revisions: MagicRevision[];
+  manifest: {
+    title: string;
+    description?: string;
+    refresh: number;
+    permissions: { net: string[]; run: string[]; env: string[]; read: string[] };
+    config: MagicConfigField[];
+  } | null;
+  /** Which secret config fields have a value. */
+  secrets: Record<string, boolean>;
+  /** The working files differ from the latest revision (edited by hand). */
+  edited: boolean;
+}
+
+/** One render the core asks the app to make offscreen and measure. */
+export interface MagicPreviewRequest {
+  page: string;
+  width: number;
+  height: number;
+  shot?: boolean;
+}
+
+export interface MagicPreviewShot {
+  errors: string[];
+  text: number;
+  nodes: number;
+  drawn: boolean;
+  scrollW: number;
+  scrollH: number;
+  png?: string;
+}
+
+/** What widgets' data.ts runs on (magic.runtime). */
+export interface MagicRuntime {
+  deno: string | null;
+  version: string | null;
+  /** sandbox-exec works here (else data.ts runs only with CMD_MAGIC_UNSANDBOXED=1). */
+  sandbox: boolean;
+  /** Who renders previews: "app", "playwright", or null. */
+  previewer: string | null;
+}
+
 /** Progress of a run, streamed as `magic.stream` events (not persisted). */
 export type MagicProgress =
   | { type: "step"; step: MagicStep }
-  | { type: "header"; title: string; loading: string[]; kind: "widget" | "terminal"; size: string }
-  | { type: "body"; html: string }
+  | { type: "title"; title: string }
+  | { type: "verify" }
   | { type: "repair"; reason: string }
   | { type: "done" }
   | { type: "error"; message: string };

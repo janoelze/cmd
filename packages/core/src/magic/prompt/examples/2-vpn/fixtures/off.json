@@ -1,0 +1,1 @@
+{ "connected": false, "tunnels": [], "services": [{ "name": "Home", "state": "Disconnected", "type": "WireGuard" }] }

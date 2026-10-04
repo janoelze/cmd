@@ -1,14 +1,13 @@
-// The Magic agent's tools (docs/12-magic-windows.md → Agent). Defined once,
-// independent of the model provider: the AI SDK backend wraps them in-process,
-// CLI backends (claude -p, codex exec) reach them over MCP through a relay.
-// All of them are read-only; `run` only runs what the policy calls read-only,
-// under the sandbox. Every input carries `why`, a short label for the trace.
+// The Magic agent's tools for looking around (docs/12-magic-windows.md → Agent):
+// all read-only; `run` only runs what the policy calls read-only, under the
+// sandbox. The tools that build the widget are in widget-tools.ts. Every input
+// carries `why`, a short label for the trace.
 
 import fs from "node:fs";
 import path from "node:path";
 import { classify, credentialsFor, expandPath, isDeniedPath, redact } from "./policy.ts";
 import { execCommand, type SandboxMode } from "./sandbox.ts";
-import { parseSource, preview, runSource, sourceKey, type SourceResult } from "./sources.ts";
+import { preview } from "./sources.ts";
 
 export interface ToolSpec {
   name: string;
@@ -25,13 +24,13 @@ export interface ToolContext {
   deny: string[];
   sandbox: SandboxMode;
   signal?: AbortSignal;
-  /** Sources tested in this run, by sourceKey. */
-  tested: Map<string, SourceResult>;
 }
 
 export interface ToolOutput {
   output: string;
   isError: boolean;
+  /** A screenshot (base64 PNG) for the model to look at. */
+  image?: string;
 }
 
 const why = { type: "string", description: "A few words for the user saying what this step does, e.g. \"Looking at network services\"." };
@@ -67,23 +66,6 @@ export const TOOL_SPECS: ToolSpec[] = [
     explores: false,
     description: "HTTP GET a URL and return the status, content type and body (shortened). Use it to look at an API's response shape.",
     schema: obj({ url: { type: "string" } }, ["url"]),
-  },
-  {
-    name: "test_source",
-    explores: false,
-    description:
-      "Run a widget data source exactly as cmd will on every refresh, and return a preview of its data (or the error). Call it with the exact source you will put in your answer's header before writing the view.",
-    schema: obj(
-      {
-        source: {
-          type: "object",
-          description: '{"type":"fetch","url":"https://…"} or {"type":"command","command":"…"} (a read-only command; JSON output is parsed).',
-          properties: { type: { type: "string", enum: ["fetch", "command"] }, url: { type: "string" }, command: { type: "string" }, cwd: { type: "string" } },
-          required: ["type"],
-        },
-      },
-      ["source"],
-    ),
   },
 ];
 
@@ -184,15 +166,6 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
       } catch (e) {
         return err((e as Error).message);
       }
-    }
-    case "test_source": {
-      const s = parseSource(input.source);
-      if (typeof s === "string") return err(s);
-      const r = await runSource(s, { cwd: ctx.cwd, deny: ctx.deny, sandbox: ctx.sandbox, signal: ctx.signal });
-      if (r.ok) ctx.tested.set(sourceKey(s), r);
-      if (!r.ok) return err(redact(`The source failed: ${r.error}`));
-      const kind = typeof r.data === "string" ? "text" : "JSON";
-      return { output: `OK in ${r.ms} ms, ${r.bytes} bytes of ${kind}. Your view's cmd.onData(fn) gets ${kind === "JSON" ? "this parsed value" : "this string"}:\n${redact(preview(r.data))}`, isError: false };
     }
   }
   return err(`unknown tool: ${name}`);

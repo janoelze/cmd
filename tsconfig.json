@@ -5,5 +5,7 @@
     "packages/*/test/**/*.ts",
     "apps/relay/src/**/*.ts",
     "apps/relay/test/**/*.ts"
-  ]
+  ],
+  // Example widgets are Deno code (deno check covers them: cmd widget check).
+  "exclude": ["packages/core/src/magic/prompt/examples/**"]
 }

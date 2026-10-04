@@ -1,0 +1,2 @@
+Request: show local git changes, hot spots against remote
+Notes: the workspace ~/src/shop is a git repository tracking origin/main. `git status --porcelain=v2 --branch` gives the branch and changed files, `git diff --numstat @{upstream}` the lines changed against the remote, `git log --name-only` which files change most. The repo was clean when run_data ran, so fixtures/busy.json has changes for the view to be tested with.

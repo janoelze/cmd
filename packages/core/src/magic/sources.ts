@@ -1,6 +1,6 @@
-// Data sources of Magic widgets: what the core runs (now, and on every refresh)
-// to get the data a widget renders. The agent's test_source tool runs a source
-// exactly as the refresh scheduler will, so a widget is written against real data.
+// Data sources of v1 Magic windows (an HTTP GET or a shell command in the
+// window's state), still refreshed for windows made before widgets had their
+// own data.ts (docs/14-magic-v2.md). preview() shortens data for the model.
 
 import { classify, credentialsFor } from "./policy.ts";
 import { execCommand, type SandboxMode } from "./sandbox.ts";

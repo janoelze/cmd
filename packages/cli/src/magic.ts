@@ -1,39 +1,37 @@
-// `cmd magic`: the Magic window prompt lab (docs/12-magic-windows.md). Runs the
-// Magic agent in this process (no core needed), prints its steps, and writes
-// the run to a folder: events, answer, data, metrics and a standalone
-// widget.html that opens in any browser. The system prompt is read from
-// packages/core/src/magic/prompt/ on every run, so edits apply immediately.
+// `cmd magic`: the Magic window prompt lab (docs/14-magic-v2.md). Builds a
+// widget from a request in this process (no core needed), printing the agent's
+// steps, into a widget folder you can open, check and change with `cmd widget`.
+// The system prompt is read from packages/core/src/magic/prompt/ on every run,
+// so edits apply immediately.
 
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { DEFAULT_SETTINGS, MAGIC_PROVIDERS, parseJsonc, resolveSettings, type Settings } from "@cmd/protocol";
 import { cmdHome, configDir } from "@cmd/protocol/node";
 import {
   backendFor,
+  buildWidget,
+  findDeno,
   isProvider,
+  playwrightPreviewer,
   readSecrets,
-  runMagic,
   sandboxAvailable,
-  SIZES,
-  widgetHtml,
-  widgetTokens,
+  WidgetStore,
   type Backend,
-  type MagicEvent,
-  type MagicResult,
-  type ThemeLike,
-  parseAnswer,
+  type BuildEvent,
+  type BuildResult,
+  type VerifyContext,
 } from "@cmd/core/magic";
-import { lintBody } from "@cmd/core/magic/lint";
 
-export const MAGIC_HELP = `cmd magic — turn a request into a live widget or a terminal command
+export const MAGIC_HELP = `cmd magic — build a live widget (or a terminal command) from a request
 
 usage: cmd magic <request…> [options]
-       cmd magic view <run dir…>     re-render saved runs (dark + light screenshots), no model
        cmd magic eval [case…]        run the eval cases against prompt variants (see --help)
+       cmd widget …                  check, run and preview a widget folder (cmd widget --help)
 
   --provider P      anthropic | openai (default: magic.provider in your settings)
   --model M         default: that provider's model in your settings
@@ -41,46 +39,22 @@ usage: cmd magic <request…> [options]
   --system FILE     use FILE instead of prompt/prompt.md (prompt variants)
   --no-explore      don't let the agent look around this Mac
   --no-fast         always use the agent (skip the JSON / command fast paths)
-  --max-steps N     tool calls before it must answer (default 12)
-  --theme ID        theme for widget.html (default: follows macOS appearance)
-  --out DIR         write the run here (default $CMD_HOME/magic/runs/<time>-<request>)
-  --open            open widget.html in the browser
-  --shot            screenshot the widget (dark + light) and check it renders
+  --max-steps N     tool calls in the first turn (default 40)
+  --out DIR         the widget folder (default $CMD_HOME/magic/runs/<time>-<request>/widget)
+  --open            open the preview screenshot
   --json            print events as NDJSON instead of the trace
-  --unsandboxed     run commands without sandbox-exec (only the policy guards them)
+  --unsandboxed     run commands without sandbox-exec (only the policy and Deno's permissions guard them)
 
 The API key is the one stored in Settings → Magic Windows (or with
 \`cmd settings secret KEY\`); nothing is read from the environment.
 
 env: CMD_MAGIC_UNSANDBOXED=1`;
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const THEMES_DIR = path.resolve(here, "../../../apps/desktop/src/renderer/src/themes");
-
-/** Every built-in theme, by id (the theme files are plain data). */
-export async function loadThemes(): Promise<Map<string, ThemeLike & { id: string }>> {
-  const out = new Map<string, ThemeLike & { id: string }>();
-  for (const f of fs.readdirSync(THEMES_DIR)) {
-    if (!f.endsWith(".ts") || ["builtin.ts", "registry.ts", "types.ts"].includes(f)) continue;
-    const mod = (await import(pathToFileURL(path.join(THEMES_DIR, f)).href)) as Record<string, unknown>;
-    for (const v of Object.values(mod)) {
-      const t = v as { id?: string; colors?: unknown; terminal?: unknown };
-      if (t && typeof t.id === "string" && t.colors && t.terminal) out.set(t.id, t as ThemeLike & { id: string });
-    }
-  }
-  return out;
-}
-
-function systemAppearance(): "dark" | "light" {
-  const r = spawnSync("defaults", ["read", "-g", "AppleInterfaceStyle"], { encoding: "utf8" });
-  return r.stdout?.trim() === "Dark" ? "dark" : "light";
-}
-
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "run";
-const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "").replace("T", "-");
+export const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "").replace("T", "-");
 
 /** The user's settings file as the core would read it (the prompt lab runs without a core). */
-function userSettings(): Settings {
+export function userSettings(): Settings {
   try {
     return resolveSettings(parseJsonc(fs.readFileSync(path.join(configDir(), "settings.json"), "utf8")) as Record<string, unknown>).settings;
   } catch {
@@ -98,26 +72,45 @@ export function pickBackend(o: { provider?: string; model?: string; effort?: str
   return backendFor({ provider, model: o.model ?? (p ? s[p.modelSetting] : ""), apiKey: p ? readSecrets(path.join(cmdHome(), "secrets.json"))[p.keySecret] : undefined, effort });
 }
 
+/** A widget folder (anywhere) as a store entry, with Deno and a previewer, the way the core checks widgets. */
+export async function widgetContext(dir: string, o: { unsandboxed?: boolean; config?: Record<string, unknown>; cwd?: string; preview?: boolean } = {}): Promise<VerifyContext> {
+  const abs = path.resolve(dir);
+  const unsandboxed = o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
+  const deno = findDeno({ setting: userSettings()["magic.deno"], stateDir: cmdHome() });
+  return {
+    store: new WidgetStore(path.dirname(abs)),
+    id: path.basename(abs),
+    deno: deno ? { deno, denoDir: path.join(cmdHome(), "runtime", "deno-cache"), sandbox: unsandboxed ? "off" : "required" } : null,
+    previewer: o.preview === false ? null : await playwrightPreviewer(),
+    cwd: o.cwd ?? process.cwd(),
+    config: o.config,
+  };
+}
+
+export function sandboxNote(unsandboxed: boolean): void {
+  if (!unsandboxed && !sandboxAvailable()) process.stderr.write(dim("  note: sandbox-exec is unavailable here (inside another sandbox?), so commands and data.ts won't run; use --unsandboxed to rely on the policy and Deno's permissions alone\n"));
+}
+
 // ── trace printing ──────────────────────────────────────
 
 const tty = process.stderr.isTTY;
 const c = (code: string) => (s: string) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
-const dim = c("2");
-const green = c("32");
-const red = c("31");
-const bold = c("1");
+export const dim = c("2");
+export const green = c("32");
+export const red = c("31");
+export const yellow = c("33");
+export const bold = c("1");
 const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 function describeInput(tool: string, input: Record<string, unknown>): string {
-  const v = input.command ?? input.path ?? input.url ?? input.question ?? (input.source as { url?: string; command?: string } | undefined)?.url ?? (input.source as { command?: string } | undefined)?.command;
+  const v = input.command ?? input.path ?? input.url ?? "";
   const s = typeof v === "string" ? v : "";
   return `${tool === "run" ? "" : tool + " "}${s}`.replace(/\s+/g, " ").slice(0, 70);
 }
 
-function printer(): (e: MagicEvent) => void {
+function printer(): (e: BuildEvent) => void {
   const starts = new Map<number, { why: string; detail: string }>();
-  let drew = false;
   return (e) => {
     switch (e.type) {
       case "route":
@@ -129,16 +122,15 @@ function printer(): (e: MagicEvent) => void {
       case "step-end": {
         const s = starts.get(e.id)!;
         const mark = e.isError ? red("✗") : green("✓");
-        const first = e.isError ? "  " + red(e.output.split("\n")[0]!.slice(0, 90)) : "";
+        const first = e.isError ? "  " + red(e.output.split("\n")[0]!.slice(0, 110)) : "";
         process.stderr.write(`  ${mark} ${s.why.padEnd(34).slice(0, 34)} ${dim(s.detail)} ${dim(secs(e.ms))}${first ? "\n   " + first : ""}\n`);
         break;
       }
-      case "header":
-        if (!drew) process.stderr.write(`  ${bold("▸")} ${e.header.title} ${dim(`(${e.header.kind}${e.header.kind === "widget" ? ` · ${e.header.size}` : ""}${e.header.source ? ` · ${e.header.source.type} every ${e.header.refresh}s` : ""})`)} ${dim("drawing…")}\n`);
-        drew = true;
+      case "title":
+        process.stderr.write(`  ${bold("▸")} ${e.title}\n`);
         break;
-      case "turn":
-        drew = false;
+      case "verify":
+        process.stderr.write(dim("  cmd checks the widget…\n"));
         break;
       case "repair":
         process.stderr.write(`  ${red("↻")} ${dim(e.reason.split("\n")[0]!.slice(0, 110))}\n`);
@@ -147,160 +139,18 @@ function printer(): (e: MagicEvent) => void {
   };
 }
 
-// ── writing a run ───────────────────────────────────────
-
-export interface RunFiles {
-  dir: string;
-  widget?: string;
-}
-
-export function writeRun(dir: string, r: MagicResult, request: unknown, events: MagicEvent[], theme: ThemeLike): RunFiles {
-  fs.mkdirSync(dir, { recursive: true });
-  const w = (f: string, s: string) => fs.writeFileSync(path.join(dir, f), s);
-  w("request.json", JSON.stringify(request, null, 2) + "\n");
-  w("events.ndjson", events.map((e) => JSON.stringify(e)).join("\n") + "\n");
-  w("answer.txt", r.answer);
-  w("trace.json", JSON.stringify(r.trace, null, 2) + "\n");
-  const data = r.route === "json" ? r.data : r.sample?.ok ? r.sample.data : undefined;
-  if (data !== undefined) w("data.json", JSON.stringify(data, null, 2) + "\n");
-  const lint = r.body ? lintBody(r.body) : null;
-  const metrics = {
-    ok: r.ok,
-    route: r.route,
-    kind: r.header?.kind ?? (r.route === "json" ? "json" : null),
-    title: r.header?.title ?? null,
-    size: r.header?.size ?? null,
-    source: r.header?.source ?? null,
-    refresh: r.header?.refresh ?? 0,
-    command: r.header?.command ?? null,
-    steps: r.trace.length,
-    explored: r.trace.some((s) => ["run", "read", "list"].includes(s.tool)),
-    tested: r.trace.some((s) => s.tool === "test_source" && !s.isError),
-    toolErrors: r.trace.filter((s) => s.isError).length,
-    repairs: r.repairs.length,
-    errors: r.errors,
-    timings: r.timings,
-    usage: r.usage,
-    model: r.model,
-    backend: r.backend,
-    lint,
-  };
-  w("metrics.json", JSON.stringify(metrics, null, 2) + "\n");
-  const files: RunFiles = { dir };
-  if (r.header?.kind === "widget" && r.body) {
-    files.widget = path.join(dir, "widget.html");
-    w("widget.html", widgetHtml({ title: r.header.title, body: r.body, tokens: widgetTokens(theme), data }));
-  }
-  return files;
-}
-
-// ── screenshots ─────────────────────────────────────────
-
-export interface RenderCheck {
-  errors: string[];
-  empty: boolean;
-  overflow: boolean;
-  shots: string[];
-  /** Rendered at SMALL as well (windows get resized, gridded, zoomed out). */
-  small?: { overflowX: boolean; overflowY: boolean; empty: boolean };
-}
-
-/** A small window, as in a dense grid or a zoomed-out canvas. */
-export const SMALL = [240, 150] as const;
-
-/**
- * Render a run's widget in headless Chromium at its size, once per theme:
- * <theme>.png next to widget.html, plus what went wrong (script errors, nothing
- * drawn, content larger than the window).
- */
-export async function shoot(dir: string, r: MagicResult, themes: (ThemeLike & { id: string })[]): Promise<RenderCheck | null> {
-  if (r.header?.kind !== "widget" || !r.body) return null;
-  const { chromium } = await import("playwright");
-  const [w, h] = SIZES[r.header.size];
-  const data = r.sample?.ok ? r.sample.data : undefined;
-  const browser = await chromium.launch();
-  const check: RenderCheck = { errors: [], empty: false, overflow: false, shots: [] };
-  try {
-    for (const theme of themes) {
-      const file = path.join(dir, `widget-${theme.id}.html`);
-      fs.writeFileSync(file, widgetHtml({ title: r.header.title, body: r.body, tokens: widgetTokens(theme), data }));
-      const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 2, colorScheme: theme.appearance });
-      const errors: string[] = [];
-      page.on("pageerror", (e) => errors.push(e.message));
-      page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-      await page.goto(pathToFileURL(file).href);
-      await page.waitForTimeout(600);
-      const state = await page.evaluate(() => ({
-        text: document.body.innerText.trim().length,
-        nodes: document.body.querySelectorAll("*").length,
-        scrollH: document.documentElement.scrollHeight,
-        scrollW: document.documentElement.scrollWidth,
-        errors: ((window as unknown as { __CMD_ERRORS__?: { message: string }[] }).__CMD_ERRORS__ ?? []).map((e) => e.message),
-      }));
-      const png = path.join(dir, `${theme.id}.png`);
-      await page.screenshot({ path: png });
-      check.shots.push(png);
-      for (const e of [...errors, ...state.errors]) if (!check.errors.includes(e)) check.errors.push(e);
-      check.empty ||= state.text === 0 && state.nodes < 3;
-      check.overflow ||= state.scrollH > h + 2 || state.scrollW > w + 2;
-      await page.close();
-      fs.rmSync(file);
-    }
-    // Once more, small (dark theme).
-    const file = path.join(dir, "widget-small.html");
-    fs.writeFileSync(file, widgetHtml({ title: r.header.title, body: r.body, tokens: widgetTokens(themes[0]!), data }));
-    const page = await browser.newPage({ viewport: { width: SMALL[0], height: SMALL[1] }, deviceScaleFactor: 2, colorScheme: themes[0]!.appearance });
-    await page.goto(pathToFileURL(file).href);
-    await page.waitForTimeout(600);
-    const st = await page.evaluate(() => ({
-      text: document.body.innerText.trim().length,
-      nodes: document.body.querySelectorAll("*").length,
-      w: document.documentElement.scrollWidth,
-      h: document.documentElement.scrollHeight,
-    }));
-    await page.screenshot({ path: path.join(dir, "small.png") });
-    check.shots.push(path.join(dir, "small.png"));
-    check.small = { overflowX: st.w > SMALL[0] + 2, overflowY: st.h > SMALL[1] + 2, empty: st.text === 0 && st.nodes < 3 };
-    await page.close();
-    fs.rmSync(file);
-  } finally {
-    await browser.close();
-  }
-  const m = JSON.parse(fs.readFileSync(path.join(dir, "metrics.json"), "utf8"));
-  m.render = { errors: check.errors, empty: check.empty, overflow: check.overflow, small: check.small };
-  fs.writeFileSync(path.join(dir, "metrics.json"), JSON.stringify(m, null, 2) + "\n");
-  return check;
-}
-
-/** `cmd magic view DIR…`: re-render saved runs (after editing kit.css or host.js), no model. */
-async function viewCommand(dirs: string[]): Promise<number> {
-  const themes = await loadThemes();
-  let failed = 0;
-  for (const d of dirs) {
-    const dir = path.resolve(d);
-    const answer = fs.readFileSync(path.join(dir, "answer.txt"), "utf8");
-    const parsed = parseAnswer(answer);
-    if (!parsed.ok) {
-      process.stderr.write(red(`✗ ${d}: ${parsed.error}\n`));
-      failed++;
-      continue;
-    }
-    const dataFile = path.join(dir, "data.json");
-    const data = fs.existsSync(dataFile) ? JSON.parse(fs.readFileSync(dataFile, "utf8")) : undefined;
-    const r = { header: parsed.header, body: parsed.body, sample: data === undefined ? null : { ok: true, data, ms: 0, bytes: 0 } } as unknown as MagicResult;
-    fs.writeFileSync(path.join(dir, "widget.html"), widgetHtml({ title: parsed.header.title, body: parsed.body, tokens: widgetTokens(themes.get(systemAppearance())!), data }));
-    const check = await shoot(dir, r, [themes.get("dark")!, themes.get("light")!]);
-    const bad = check ? [...check.errors, check.empty ? "draws nothing" : "", check.overflow ? "overflows" : "", check.small?.overflowX ? `overflows sideways at ${SMALL.join("×")}` : ""].filter(Boolean) : [];
-    process.stderr.write(`${bad.length ? red("✗") : green("✓")} ${parsed.header.title} ${dim(dir)}${bad.length ? "\n  " + red(bad.join("; ")) : ""}\n`);
-    if (bad.length) failed++;
-  }
-  return failed ? 1 : 0;
+/** The verdict as lines on stderr; returns whether it passed. */
+export function printVerdict(v: BuildResult["verdict"]): boolean {
+  if (v.ok) process.stderr.write(`  ${green("✓")} checks passed${v.warnings.length ? dim(` (${v.warnings.length} warning${v.warnings.length > 1 ? "s" : ""})`) : ""}\n`);
+  else process.stderr.write(`  ${v.usable ? yellow("!") : red("✗")} ${v.usable ? "renders, but" : "doesn't work:"}\n`);
+  for (const p of v.problems) process.stderr.write(red(`    ${p.split("\n")[0]!.slice(0, 200)}\n`));
+  for (const w of v.warnings) process.stderr.write(dim(`    ${w.split("\n")[0]!.slice(0, 200)}\n`));
+  return v.ok;
 }
 
 // ── command ─────────────────────────────────────────────
 
 export async function magicCommand(argv: string[]): Promise<number> {
-  if (argv[0] === "view") return viewCommand(argv.slice(1));
   if (argv[0] === "eval") return (await import("./magic-eval.ts")).evalCommand(argv.slice(1));
   const { values: o, positionals } = parseArgs({
     args: argv,
@@ -313,10 +163,8 @@ export async function magicCommand(argv: string[]): Promise<number> {
       "no-explore": { type: "boolean" },
       "no-fast": { type: "boolean" },
       "max-steps": { type: "string" },
-      theme: { type: "string" },
       out: { type: "string" },
       open: { type: "boolean" },
-      shot: { type: "boolean" },
       json: { type: "boolean" },
       unsandboxed: { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -327,14 +175,8 @@ export async function magicCommand(argv: string[]): Promise<number> {
     console.log(MAGIC_HELP);
     return prompt || o.help ? 0 : 1;
   }
-  const unsandboxed = o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
-  if (!unsandboxed && !sandboxAvailable()) {
-    process.stderr.write(dim("  note: sandbox-exec is unavailable here, so the agent can't run commands (use --unsandboxed to rely on the policy alone)\n"));
-  }
-  const themes = await loadThemes();
-  const theme = themes.get(o.theme ?? systemAppearance()) ?? themes.get("dark")!;
-  if (o.theme && !themes.has(o.theme)) process.stderr.write(dim(`  unknown theme ${o.theme}; using ${theme === themes.get("dark") ? "dark" : "?"} (have: ${[...themes.keys()].join(", ")})\n`));
-
+  const unsandboxed = !!o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
+  sandboxNote(unsandboxed);
   let backend: Backend;
   try {
     backend = pickBackend({ provider: o.provider, model: o.model, effort: o.effort });
@@ -342,28 +184,22 @@ export async function magicCommand(argv: string[]): Promise<number> {
     process.stderr.write(red(`  ✗ ${(e as Error).message}\n`));
     return 1;
   }
-  const events: MagicEvent[] = [];
-  const print = o.json ? (e: MagicEvent) => console.log(JSON.stringify(e)) : printer();
+  const dir = path.resolve(o.out ?? path.join(cmdHome(), "magic", "runs", `${stamp()}-${slug(prompt)}`, "widget"));
+  const ctx = await widgetContext(dir, { unsandboxed });
+  if (!ctx.deno) process.stderr.write(red("  ✗ Deno isn't installed: widgets' data.ts can't run (brew install deno)\n"));
+  if (!ctx.previewer) process.stderr.write(dim("  note: Playwright isn't available, so widgets aren't rendered\n"));
+
+  const events: BuildEvent[] = [];
+  const print = o.json ? (e: BuildEvent) => console.log(JSON.stringify(e)) : printer();
   const ac = new AbortController();
   process.once("SIGINT", () => ac.abort());
-
   if (!o.json) process.stderr.write(`${bold("✦")} ${prompt} ${dim(`· ${backend.name} ${backend.model}`)}\n`);
-  const request = {
-    prompt,
-    provider: backend.name,
-    model: backend.model,
-    effort: o.effort ?? null,
-    system: o.system ?? null,
-    explore: !o["no-explore"],
-    at: new Date().toISOString(),
-    cwd: process.cwd(),
-  };
-  let r: MagicResult;
+  let r: BuildResult;
   try {
-    r = await runMagic({
+    r = await buildWidget({
       prompt,
       backend,
-      cwd: process.cwd(),
+      widget: ctx,
       // Run from a project folder, it is the workspace, as a window's Space is in the app.
       workspace: process.cwd() !== os.homedir() ? { name: path.basename(process.cwd()), root: process.cwd() } : null,
       explore: !o["no-explore"],
@@ -381,28 +217,59 @@ export async function magicCommand(argv: string[]): Promise<number> {
     process.stderr.write(red(`  ✗ ${(e as Error).message}\n`));
     return 1;
   }
-  const dir = path.resolve(o.out ?? path.join(cmdHome(), "magic", "runs", `${stamp()}-${slug(prompt)}`));
-  const files = writeRun(dir, r, request, events, theme);
-  const render = o.shot ? await shoot(dir, r, [themes.get("dark")!, themes.get("light")!]) : null;
-
+  const runDir = path.dirname(dir);
+  writeRun(runDir, r, { prompt, provider: backend.name, model: backend.model, effort: o.effort ?? null, system: o.system ?? null, explore: !o["no-explore"], at: new Date().toISOString(), cwd: process.cwd() }, events);
   if (o.json) {
-    console.log(JSON.stringify({ type: "result", dir, widget: files.widget ?? null, ok: r.ok, header: r.header, timings: r.timings, usage: r.usage, render }));
+    console.log(JSON.stringify({ type: "result", dir, ok: r.ok, usable: r.verdict.usable, problems: r.verdict.problems, warnings: r.verdict.warnings, timings: r.timings, usage: r.usage }));
   } else {
     const u = r.usage;
-    const cost = u.costUSD ? ` · $${u.costUSD.toFixed(3)}` : "";
     const tokens = u.input || u.output ? ` · ${k(u.input + u.cacheRead + u.cacheWrite)} in (${k(u.cacheRead)} cached) / ${k(u.output)} out` : "";
-    const mark = r.ok ? green("✓") : red("✗");
-    process.stderr.write(`  ${mark} ${secs(r.timings.done)} · ${r.trace.length} steps${r.repairs.length ? ` · ${r.repairs.length} repair` : ""}${tokens}${cost}\n`);
-    for (const e of r.errors) process.stderr.write(red(`    ${e.split("\n")[0]}\n`));
-    if (render) {
-      const bad = [...render.errors.map((e) => `script error: ${e}`), render.empty ? "draws nothing" : "", render.overflow ? "overflows its window" : "", render.small?.overflowX ? "overflows sideways when small" : ""].filter(Boolean);
-      process.stderr.write(bad.length ? red(`  ✗ render: ${bad.join("; ")}\n`) : `  ${green("✓")} renders ${dim(render.shots.map((p) => path.basename(p)).join(", "))}\n`);
-    }
-    if (r.header?.kind === "terminal") console.log(r.header.command);
-    else if (files.widget) console.log(files.widget);
-    else console.log(dir);
+    process.stderr.write(`  ${secs(r.timings.done)} · ${r.trace.length} steps${r.repairs.length ? ` · ${r.repairs.length} repair` : ""}${tokens}\n`);
+    printVerdict(r.verdict);
+    if (r.summary) process.stderr.write(`  ${dim(r.summary)}\n`);
+    console.log(r.verdict.manifest?.kind === "terminal" ? r.verdict.manifest.command : dir);
   }
-  if (o.open && files.widget) spawn("open", [files.widget], { stdio: "ignore", detached: true }).unref();
+  const shot = path.join(runDir, "preview.png");
+  if (o.open && fs.existsSync(shot)) spawn("open", [shot], { stdio: "ignore", detached: true }).unref();
   return r.ok ? 0 : 1;
 }
 
+/** Next to the widget folder: what was asked, the events, the trace, metrics and the preview screenshot. */
+export function writeRun(dir: string, r: BuildResult, request: unknown, events: BuildEvent[]): void {
+  fs.mkdirSync(dir, { recursive: true });
+  const w = (f: string, s: string) => fs.writeFileSync(path.join(dir, f), s);
+  w("request.json", JSON.stringify(request, null, 2) + "\n");
+  w("events.ndjson", events.map((e) => JSON.stringify(e)).join("\n") + "\n");
+  w("trace.json", JSON.stringify(r.trace, null, 2) + "\n");
+  const v = r.verdict;
+  const metrics = {
+    ok: r.ok,
+    usable: v.usable,
+    route: r.route,
+    kind: v.manifest?.kind ?? null,
+    title: v.manifest?.title ?? null,
+    size: v.manifest?.size ?? null,
+    refresh: v.manifest?.refresh ?? 0,
+    permissions: v.manifest?.permissions ?? null,
+    command: v.manifest?.command ?? null,
+    steps: r.trace.length,
+    explored: r.trace.some((s) => ["run", "read", "list"].includes(s.tool)),
+    checksRun: { check: r.trace.some((s) => s.tool === "check"), run_data: r.trace.some((s) => s.tool === "run_data"), preview: r.trace.some((s) => s.tool === "preview") },
+    toolErrors: r.trace.filter((s) => s.isError).length,
+    repairs: r.repairs.length,
+    problems: v.problems,
+    warnings: v.warnings,
+    timings: r.timings,
+    usage: r.usage,
+    model: r.model,
+    backend: r.backend,
+    summary: r.summary,
+  };
+  w("metrics.json", JSON.stringify(metrics, null, 2) + "\n");
+  if (v.shot) fs.writeFileSync(path.join(dir, "preview.png"), Buffer.from(v.shot, "base64"));
+}
+
+export function openFile(p: string): void {
+  if (process.platform === "darwin") spawnSync("open", [p]);
+  else console.log(pathToFileURL(p).href);
+}

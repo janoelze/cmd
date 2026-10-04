@@ -1,0 +1,8 @@
+{
+  "cmd": 2,
+  "kind": "terminal",
+  "title": "System errors",
+  "size": "l",
+  "refresh": 0,
+  "command": "log stream --predicate 'messageType == error' --style compact"
+}

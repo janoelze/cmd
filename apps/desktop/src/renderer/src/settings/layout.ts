@@ -115,6 +115,7 @@ export const SETTINGS_PAGES: Page[] = [
         ],
       },
       { title: "While building", items: ["magic.explore", "magic.showSteps"] },
+      { title: "Running widgets", items: ["magic.autoFix", "magic.deno"] },
     ],
   },
 ];

@@ -310,6 +310,19 @@ export function credentialsFor(command: string): Credentials {
   return out;
 }
 
+/** The logins a set of programs may use (a widget's permissions.run). */
+export function credentialsForPrograms(programs: string[]): Credentials {
+  const out: Credentials = { env: [], paths: [], keychain: false };
+  for (const p of programs) {
+    const c = CREDENTIALED[path.basename(p)];
+    if (!c) continue;
+    out.env.push(...c.env);
+    out.paths.push(...c.paths);
+    out.keychain ||= !!c.keychain;
+  }
+  return out;
+}
+
 /** Token-shaped strings, replaced before any command output reaches the model. */
 const SECRET_PATTERNS = [
   /\b(gh[pousr]_[A-Za-z0-9]{30,})\b/g,

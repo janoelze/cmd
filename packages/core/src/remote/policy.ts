@@ -69,6 +69,16 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "magic.setRefresh": "never",
   "magic.models": "never",
   "magic.media": "never",
+  "magic.widget": "never", // file paths and config
+  "magic.restore": "never",
+  "magic.config": "never",
+  "magic.secret": "never",
+  "magic.state": "never",
+  "magic.fix": "never", // spends API keys; from the Mac only for now
+  "magic.runtime": "never",
+  "magic.installRuntime": "never",
+  "magic.previewer": "never",
+  "magic.previewResult": "never",
   "fs.list": "view",
   "fs.resolve": "never", // an existence oracle for any path; the web client resolves terminal links within Spaces later
   "fs.read": "view",
@@ -301,6 +311,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "remote.pairRequest":
     case "remote.pairEnded":
     case "remote.input":
+    case "magic.previewRequest": // sent to the app's previewer only, never broadcast
       return false;
     default: {
       const never: never = e;

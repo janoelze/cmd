@@ -25,6 +25,12 @@ export interface ExecOptions {
   signal?: AbortSignal;
   /** Logins the command's CLIs may use (credentialsFor): env kept, config and keychain reachable. */
   credentials?: Credentials;
+  /** More folders the command may write (e.g. Deno's cache). */
+  writable?: string[];
+  /** Text fed to stdin (default: none). */
+  stdin?: string;
+  /** Extra environment variables. */
+  env?: Record<string, string>;
 }
 
 export interface ExecResult {
@@ -75,7 +81,7 @@ const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
  * readable and writable (their caches live there) and, with keychain, the login
  * keychain and /usr/bin/security (how gh and glab fetch their tokens) too.
  */
-export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; credentials?: Credentials }): string {
+export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; credentials?: Credentials; writable?: string[] }): string {
   const home = o.home ?? os.homedir();
   const abs = (p: string) => real(path.resolve(expandPath(p, home)));
   const allowed = (o.credentials?.paths ?? []).map(abs);
@@ -84,7 +90,7 @@ export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; 
   const deny = o.deny
     .map(abs)
     .filter((d) => !allowed.some((a) => inside(d, a) || inside(a, d)) && !(keychain && inside(d, abs("~/Library/Keychains"))));
-  const writable = [real(o.tmp), ...allowed];
+  const writable = [real(o.tmp), ...allowed, ...(o.writable ?? []).map(abs)];
   const noExec = ["/usr/bin/sudo", "/usr/bin/su", "/usr/bin/osascript", "/usr/bin/open", ...(keychain ? [] : ["/usr/bin/security"])];
   return [
     "(version 1)",
@@ -111,6 +117,11 @@ export function cleanEnv(env: NodeJS.ProcessEnv = process.env, keep: string[] = 
 
 /** Run a shell command (sh -c) under the sandbox. Never throws for the command's own failure. */
 export function execCommand(command: string, o: ExecOptions = {}): Promise<ExecResult> {
+  return execArgv(["/bin/sh", "-c", command], o);
+}
+
+/** Run a program with arguments under the sandbox. Never throws for the program's own failure. */
+export function execArgv(cmdArgv: string[], o: ExecOptions = {}): Promise<ExecResult> {
   const mode = o.sandbox ?? "required";
   const sandboxed = mode === "required";
   const start = Date.now();
@@ -131,15 +142,19 @@ export function execCommand(command: string, o: ExecOptions = {}): Promise<ExecR
   const maxBytes = o.maxBytes ?? 64 * 1024;
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-magic-"));
   const argv = sandboxed
-    ? [SANDBOX_EXEC, "-p", sandboxProfile({ tmp, deny: o.deny ?? [], credentials: o.credentials }), "/bin/sh", "-c", command]
-    : ["/bin/sh", "-c", command];
+    ? [SANDBOX_EXEC, "-p", sandboxProfile({ tmp, deny: o.deny ?? [], credentials: o.credentials, writable: o.writable }), ...cmdArgv]
+    : cmdArgv;
   return new Promise((resolve) => {
     const child = spawn(argv[0]!, argv.slice(1), {
       cwd: o.cwd && fs.existsSync(o.cwd) ? o.cwd : os.homedir(),
-      env: { ...cleanEnv(process.env, o.credentials?.env), TMPDIR: tmp + "/" },
-      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...cleanEnv(process.env, o.credentials?.env), ...o.env, TMPDIR: tmp + "/" },
+      stdio: [o.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       detached: true, // own process group, so a timeout kills pipelines too
     });
+    if (o.stdin !== undefined) {
+      child.stdin!.on("error", () => {});
+      child.stdin!.end(o.stdin);
+    }
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     let outBytes = 0;
@@ -151,12 +166,12 @@ export function execCommand(command: string, o: ExecOptions = {}): Promise<ExecR
         process.kill(-child.pid!, "SIGKILL");
       } catch {}
     };
-    child.stdout.on("data", (b: Buffer) => {
+    child.stdout!.on("data", (b: Buffer) => {
       if (outBytes >= maxBytes) return void (truncated = true);
       out.push(b);
       outBytes += b.length;
     });
-    child.stderr.on("data", (b: Buffer) => {
+    child.stderr!.on("data", (b: Buffer) => {
       if (errBytes >= 16 * 1024) return;
       err.push(b);
       errBytes += b.length;

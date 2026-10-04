@@ -1,0 +1,9 @@
+{
+  "cmd": 2,
+  "kind": "widget",
+  "title": "shop · changes",
+  "size": "l",
+  "refresh": 30,
+  "permissions": { "net": [], "run": ["git"], "env": [], "read": [] },
+  "config": [{ "key": "repo", "title": "Repository folder", "type": "string", "default": "~/src/shop" }]
+}

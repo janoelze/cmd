@@ -1,0 +1,9 @@
+{
+  "cmd": 2,
+  "kind": "widget",
+  "title": "News · Berlin",
+  "size": "m",
+  "refresh": 600,
+  "permissions": { "net": ["news.google.com"], "run": [], "env": [], "read": [] },
+  "config": [{ "key": "query", "title": "Search", "type": "string", "default": "Berlin" }]
+}

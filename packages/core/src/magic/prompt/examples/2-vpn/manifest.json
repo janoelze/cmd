@@ -1,0 +1,8 @@
+{
+  "cmd": 2,
+  "kind": "widget",
+  "title": "VPN",
+  "size": "s",
+  "refresh": 10,
+  "permissions": { "net": [], "run": ["ifconfig", "netstat", "scutil"], "env": [], "read": [] }
+}

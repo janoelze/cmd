@@ -1,0 +1,16 @@
+<style>.k-table td{vertical-align:middle}.st{width:14px}.path{display:flex;min-width:0}.path .k-dim{flex:0 1 auto}.path b{font-weight:400;flex:none}.add{color:var(--good)}.del{color:var(--bad)}</style>
+<div class="k-panes">
+  <div class="k-row"><span class="k-dot" id="dot"></span><b class="k-mono" id="branch">–</b><span class="k-dim k-ellipsis" id="facts"></span></div>
+  <div class="k-pane">
+    <div class="k-title k-between">Uncommitted<span id="nChanges"></span></div>
+    <table class="k-table"><tbody id="changes"></tbody></table>
+  </div>
+  <div class="k-pane">
+    <div class="k-title k-between">Against remote<span id="nRemote"></span></div>
+    <table class="k-table"><tbody id="remote"></tbody></table>
+  </div>
+  <div class="k-pane">
+    <div class="k-title k-between">Hot spots<span>last 50 commits</span></div>
+    <table class="k-table"><tbody id="hot"></tbody></table>
+  </div>
+</div>

@@ -1,0 +1,9 @@
+{
+  "cmd": 2,
+  "kind": "widget",
+  "title": "CI · acme/shop",
+  "size": "m",
+  "refresh": 60,
+  "permissions": { "net": [], "run": ["gh"], "env": [], "read": [] },
+  "config": [{ "key": "repo", "title": "Repository (owner/name)", "type": "string", "default": "acme/shop" }]
+}

@@ -9,6 +9,7 @@ import { renderUnicodeCompact } from "uqr";
 import { APPLIES_LABEL, currentKey, ENV, isSecretKey, SECRETS, type SecretDef, type SecretKey, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 import { magicCommand } from "./magic.ts";
+import { widgetCommand } from "./widget.ts";
 
 const HELP = `cmd — terminal + agent workbench
 
@@ -39,8 +40,9 @@ usage: cmd <command> [options]
                                       --types lists window types
   search <query…> [--json] [--limit N]  search past agent sessions
   resume <session-id> [--agent claude|codex|…] [--fork]
-  magic <request…> [--help]          make a widget or terminal command from a request
+  magic <request…> [--help]          build a widget (or a terminal command) from a request
                                       (runs here, no core needed; see cmd magic --help)
+  widget new|check|run|preview [dir]  make and check Magic widget folders (cmd widget --help)
   settings [get KEY | set KEY VALUE | reset KEY | path] [--json]
                                       list or change settings (applies live)
   settings secret KEY [--clear]       store an API key from stdin (pbpaste | cmd settings secret
@@ -118,6 +120,7 @@ async function main(): Promise<number> {
   if (cmd === "hook") return hook(pos[0] ?? "claude");
   if (cmd === "hooks") return printHooks(pos[0] ?? "claude");
   if (cmd === "magic") return magicCommand(argv.slice(1));
+  if (cmd === "widget") return widgetCommand(argv.slice(1));
 
   const conn = await connect().catch(() => {
     console.error(`cmd: no core running at ${defaultSocketPath()} (start it with: pnpm core)`);
