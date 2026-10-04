@@ -200,7 +200,7 @@ export class MagicService {
     if (!refining) for (const f of this.store.exists(widgetId) || fs.existsSync(this.store.dir(widgetId)) ? this.store.files(widgetId) : []) this.store.remove(widgetId, f);
     const original = refining ? prev.prompt : text;
     const history = refining ? [...(prev.history ?? [prev.prompt]), text] : [text];
-    this.#o.windows.update(id, { title: refining ? w.title : "Magic", state: { prompt: original, phase: "working", error: undefined, steps: [], history, widgetId } });
+    this.#o.windows.update(id, { title: refining ? w.title : "Magic Widget", state: { prompt: original, phase: "working", error: undefined, steps: [], history, widgetId } });
 
     const steps: MagicStep[] = [];
     const send = (progress: Extract<CoreEvent, { type: "magic.stream" }>["progress"]) => this.#o.broadcast({ type: "magic.stream", id, progress });

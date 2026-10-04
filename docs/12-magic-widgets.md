@@ -1,13 +1,13 @@
-# Magic windows
+# Magic widgets
 
 > **Superseded in part by [14-magic-v2.md](14-magic-v2.md) (2026-10-04):** widgets are now folders with a typed Deno data.ts, a type-checked view, revisions and checks before they show. The output contract, data sources and data model below are v1.
 
 > Status (2026-10-03), branch `magic-windows`:
-> - **Built:** the prompt lab (`cmd magic`, `cmd magic view`, `cmd magic eval`); the AI SDK backend with Anthropic and OpenAI, keys and models set by the user (see Providers); Magic windows in the app (⇧⌘M, File → New Magic Window, the sidebar's +): the empty prompt, the live step trace, streaming, the widget frame, refresh scheduling in the core, the refine line (⌘L), Refresh Every (per window, kept across refinements), terminal answers, the magic.* settings.
+> - **Built:** the prompt lab (`cmd magic`, `cmd magic view`, `cmd magic eval`); the AI SDK backend with Anthropic and OpenAI, keys and models set by the user (see Providers); Magic widgets in the app (⇧⌘M, File → New Magic Widget, the sidebar's +): the empty prompt, the live step trace, streaming, the widget frame, refresh scheduling in the core, the refine line (⌘L), Refresh Every (per window, kept across refinements), terminal answers, the magic.* settings.
 > - **Not yet:** versions and "How this was made" as a panel, recipes, the palette fallback, paste and drop, attention from widgets, Edit code, pausing refreshes while hidden, Keychain keys (API keys come from ANTHROPIC_API_KEY / CMD_MAGIC_API_KEY).
 > - **Found while building:** `sandbox-exec` can't apply a profile inside another sandbox (Agent Safehouse), so there commands are refused unless `CMD_MAGIC_UNSANDBOXED=1`; the AI SDK is v7 (`instructions`, not `system`); an inline frame (`srcdoc`, blob or data URL) inherits the app's CSP, which forbids inline scripts, hence the `cmd-widget://` page; the agent asks nothing while it works (see Agent).
 
-A **Magic window** turns whatever you type or paste into a live window. "show me the weather", a JSON API URL, a `curl` command, a blob of JSON, "CPU per process as a bar chart, every 2s": the AI decides how to show it, either as a small HTML widget or as a terminal command. When the request is about this Mac ("show my VPN connection status", "disk usage of my projects"), a read-only agent looks around first to find out how to answer it. The result keeps updating and uses the app's theme. It should feel quick, show what it is doing while it works, and never ask how you want it shown.
+A **Magic widget** turns whatever you type or paste into a live window. "show me the weather", a JSON API URL, a `curl` command, a blob of JSON, "CPU per process as a bar chart, every 2s": the AI decides how to show it, either as a small HTML widget or as a terminal command. When the request is about this Mac ("show my VPN connection status", "disk usage of my projects"), a read-only agent looks around first to find out how to answer it. The result keeps updating and uses the app's theme. It should feel quick, show what it is doing while it works, and never ask how you want it shown.
 
 ## What other tools do (research summary)
 
@@ -33,7 +33,7 @@ Sources: research.google/blog/generative-ui-a-rich-custom-visual-interactive-use
 
 ## Behaviour
 
-1. **One input, no mode picker.** ⌘M (File → New Magic Window) opens a window whose body is a prompt field (see UI and UX). The palette, paste and drop, and `cmd magic "…"` lead to the same place. Paste, URL, JSON, a command and plain English all go into the same field.
+1. **One input, no mode picker.** ⌘M (File → New Magic Widget) opens a window whose body is a prompt field (see UI and UX). The palette, paste and drop, and `cmd magic "…"` lead to the same place. Paste, URL, JSON, a command and plain English all go into the same field.
 2. **Deterministic fast paths first (no LLM, 0 ms):**
    - pasted JSON → the built-in JSON view (tree + table), shown instantly;
    - a URL that returns JSON → fetched by the core and shown in the JSON view;
@@ -45,11 +45,11 @@ Sources: research.google/blog/generative-ui-a-rich-custom-visual-interactive-use
    - **terminal**: a command for a terminal window, e.g. `watch -n 2 'ps -Ao pcpu,comm -r | head'`, `btop`, `curl -s … | jq`. It is typed in, and only runs on ⏎ or when the command policy allows it (see Security).
 4. **It shows up immediately, and you watch it work.** The window opens at once. While the agent explores, its steps show as a live trace in the window ("Checking network services… `scutil --nc list`", "Reading ~/src/private-vpn/up.sh"), and each one can be expanded to show its output. Once the final answer starts, the title and loading line come from its header, and the HTML streams in and is morphed into the frame. Scripts run once the output is complete. The trace stays available as "How this was made".
 5. **Data refreshes without the AI.** The source the agent tested is stored with the window. The core runs it right away, then every `refresh` seconds, and calls the view's `render(data)` with each result. The agent is never involved again. Refreshing pauses while the window isn't visible and backs off on errors. The window's status shows "Updated 12s ago" or "Stale · scutil failed".
-6. **Refine by talking to it.** Every Magic window has a prompt line (⌘L focuses it): "bigger numbers", "add humidity", "make it a line chart". A small widget (about 3k tokens or less) is regenerated with its current code in context. A larger one gets search/replace edits, with full regeneration as the fallback. Every version is kept, and ⌘Z in the prompt line steps back.
+6. **Refine by talking to it.** Every Magic widget has a prompt line (⌘L focuses it): "bigger numbers", "add humidity", "make it a line chart". A small widget (about 3k tokens or less) is regenerated with its current code in context. A larger one gets search/replace edits, with full regeneration as the fallback. Every version is kept, and ⌘Z in the prompt line steps back.
 7. **Self-repair.** If the frame reports a script error, an empty render or overflow after running, the agent gets one more turn with the error and the data sample. It keeps its tools for that turn, so it can re-check the source. It is never silently retried more than once.
 8. **Themed by construction.** The model never sees colours, only token names. The frame gets the theme's tokens and is re-sent them when the theme changes, so widgets follow light and dark mode and theme switches live, like everything else.
 9. **Keep what works.** "Save as Recipe" stores the widget (intent, source, view, refresh, and parameters such as `{{city}}`). Recipes appear in the palette and are matched against new prompts before any model call: an exact or near match opens instantly and costs no tokens.
-10. **Magic windows are windows.** They live in a Space, show in the sidebar, survive core restarts (drawn instantly from their last data), and can be moved. Their sources stop when they close, and closed ones can be reopened with their history for 30 days (see Data model).
+10. **Magic widgets are windows.** They live in a Space, show in the sidebar, survive core restarts (drawn instantly from their last data), and can be moved. Their sources stop when they close, and closed ones can be reopened with their history for 30 days (see Data model).
 
 ## Agent
 
@@ -134,7 +134,7 @@ The **frame API** (`window.cmd` inside the frame, built over the bridge):
 
 Two providers, both through the Vercel AI SDK v7 (plain ESM, runs under type stripping): **Anthropic** (`@ai-sdk/anthropic`) and **OpenAI** (`@ai-sdk/openai`, the Responses API). The core runs the loop with `streamText`, tools and `stopWhen`; the tools always execute in the core, so the policy, sandbox and budget are the same for both. The system prompt is cached (`cache_control` on Anthropic, automatic on OpenAI). Effort is `low` where the model takes it (Anthropic's newer models, OpenAI's reasoning models).
 
-**Everything is the user's choice, nothing is discovered.** Settings (Settings → Magic Windows):
+**Everything is the user's choice, nothing is discovered.** Settings (Settings → Magic Widgets):
 - `magic.provider`: `anthropic` | `openai`;
 - `magic.anthropic.model`, `magic.openai.model`: one model per provider, so switching keeps each choice. The old `magic.model` carries over as `magic.anthropic.model`; `magic.baseUrl` is ignored.
 
@@ -213,14 +213,14 @@ Files rather than SQLite rows, because this is the same layout `cmd magic --out`
 
 **Lifecycle:**
 - **Restart:** the window draws `html` with `lastData` at once, marked stale; the scheduler then re-runs the source.
-- **Close** (or closing its Space): the window's row goes, as for every type. Its workbench moves to `$CMD_HOME/magic/closed/`, kept for 30 days. "Reopen Closed Magic Window" in the palette brings it back with its full history.
+- **Close** (or closing its Space): the window's row goes, as for every type. Its workbench moves to `$CMD_HOME/magic/closed/`, kept for 30 days. "Reopen Closed Magic Widget" in the palette brings it back with its full history.
 - **Save as Recipe** copies the current version to `$CMD_CONFIG_DIR/recipes/<name>.json`. Recipes are config, not state: kept forever, easy to sync or put in dotfiles, and shareable.
 - **Edit code** writes a new version. The text window edits `versions/<n>.json`'s HTML through a small adapter, so hand edits are versioned like prompts.
 - Ad-hoc `cmd magic` runs from the CLI aren't windows. They go to `$CMD_HOME/magic/runs/` until `cmd magic open RUN` turns one into a window.
 
 New methods for the on-demand part: `magic.versions { id }`, `magic.run { id, version }`, `magic.restore { id, version }`, `magic.reopen { closedId }`.
 
-A terminal kind stays a Magic window only while its command is offered. Once run, it becomes an ordinary terminal window: `window.update { kind }` already switches type in place.
+A terminal kind stays a Magic widget only while its command is offered. Once run, it becomes an ordinary terminal window: `window.update { kind }` already switches type in place.
 
 Methods:
 
@@ -318,13 +318,13 @@ The screenshots use the **same** `widget-host.html` and kit as the app. They are
 ## UI and UX
 
 **1. Starting.** The prompt *is* the window. What you asked for and what you get stay in one place, and nothing is modal.
-- **⌘M** (File → New Magic Window) puts a new window in the layout immediately, in the slot it will keep. Its body is one large prompt field.
+- **⌘M** (File → New Magic Widget) puts a new window in the layout immediately, in the slot it will keep. Its body is one large prompt field.
 - **The empty window suggests**:
   - your recipes;
   - two or three examples fitted to the Space (a repo root → "git activity this week");
   - a hint that URLs, JSON and commands work too.
 - **Palette fallback:** a palette query with no good match ends with **"✦ Make a window for '…'"**, so the feature is discoverable without a single new habit.
-- **Paste or drop** a URL or JSON onto the main view (nothing focused) or the canvas: it offers a Magic window.
+- **Paste or drop** a URL or JSON onto the main view (nothing focused) or the canvas: it offers a Magic widget.
 - **`cmd magic "…"`** from any terminal opens it in that terminal's Space.
 
 **2. While it works: the magic moment.**
@@ -362,7 +362,7 @@ The screenshots use the **same** `widget-host.html` and kit as the app. They are
 
 **5. Living with them.**
 - They are ordinary windows in the sidebar's Windows section, marked ✦.
-- **Widgets can ask for attention** (frame API `cmd.attention(text)`), which goes through the same notification path as a terminal's bell. "Tell me when the VPN drops" is just a refinement that adds the rule, so Magic windows become monitors that tap you on the shoulder.
+- **Widgets can ask for attention** (frame API `cmd.attention(text)`), which goes through the same notification path as a terminal's bell. "Tell me when the VPN drops" is just a refinement that adds the rule, so Magic widgets become monitors that tap you on the shoulder.
 - Recipes show in the palette as "✦ VPN status". Parameterised ones ask for their parameter inline. Per-Space recipes in `<root>/.cmd/recipes` come later.
 
 **6. Feel.** It follows the Platinum design language (docs/07):

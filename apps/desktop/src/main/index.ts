@@ -71,7 +71,7 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // cmd-file://local/?path=<abs path> — read-only access to local images/media for the app's own
 // pages (Markdown windows show relative images). Registered on the default
 // session only; browser windows use their own session and can't reach it.
-// cmd-widget://frame/ — the page every Magic widget runs in (docs/12-magic-windows.md):
+// cmd-widget://frame/ — the page every Magic widget runs in (docs/12-magic-widgets.md):
 // the kit and the `cmd` runtime, under a CSP header that allows only inline code
 // and no network. The renderer posts the widget, theme and data into it. Frames
 // are sandboxed (no allow-same-origin), so each is an opaque origin.

@@ -40,7 +40,7 @@ The scenarios:
 | Search, cold index | 13.6 s, 12.4 CPU s, **1.59 GB peak core memory, 481 MB kept afterwards** |
 | Search, warm start | 0.5 s, 75 MB |
 
-The headless idle number leaves out agents, Magic windows and file windows, which is where most idle cost comes from (see below).
+The headless idle number leaves out agents, Magic widgets and file windows, which is where most idle cost comes from (see below).
 
 ## Startup
 

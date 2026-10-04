@@ -80,7 +80,7 @@ behaviour without special cases:
     through the normal focus handling.
 - **Shortcuts** are menu commands (main owns accelerators), so they work
   whatever has the keyboard, embedded pages included. A window's own command
-  (⌘S saves, ⌘L changes a Magic window) reaches it through
+  (⌘S saves, ⌘L changes a Magic widget) reaches it through
   `registerWindowActions`.
 
 Pinch-zoom is not handed over: over the selected window it belongs to the page

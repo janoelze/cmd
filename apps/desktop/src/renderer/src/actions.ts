@@ -179,7 +179,7 @@ export async function openPath(target: string): Promise<void> {
   else cmd.openPath(t);
 }
 
-/** New Magic widget (docs/12-magic-windows.md); with a request, it starts making it right away. */
+/** New Magic widget (docs/12-magic-widgets.md); with a request, it starts making it right away. */
 export async function newMagic(prompt?: string): Promise<void> {
   const w = await cmd.call("window.open", { kind: "magic", input: {}, spaceId: here() });
   select(w.id);

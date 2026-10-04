@@ -174,7 +174,7 @@ export interface Methods {
   "window.list": { params: {}; result: AppWindow[] };
 
   /**
-   * Make a Magic widget's content from a request (docs/12-magic-windows.md), or
+   * Make a Magic widget's content from a request (docs/12-magic-widgets.md), or
    * refine what it shows. Returns at once; progress arrives as magic.stream
    * events and the result in the window's state.
    */

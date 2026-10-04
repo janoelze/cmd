@@ -203,7 +203,7 @@ const SCENES = {
     await menu("view.canvasFit");
     await win.waitForTimeout(800);
   },
-  // Magic windows: real widgets the agent made (magic-widgets.json: their HTML
+  // Magic widgets: real widgets the agent made (magic-widgets.json: their HTML
   // and the data their source returned), in a Space of their own so the other
   // scenes stay as they are, next to an empty one showing the prompt. No model
   // runs here, and nothing refreshes: windows made after the core started are

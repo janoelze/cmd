@@ -109,7 +109,9 @@ registerWindowView({
     const src = w.state.source as { type?: string; url?: string; command?: string } | null | undefined;
     const place = src?.type === "fetch" ? hostOf(src.url ?? "").replace(/^www\./, "") : src?.type === "command" ? (src.command ?? "").split(/\s+/)[0] : undefined;
     // No "magic" kind label: the sparkle icon says it, and title bars are short on room.
-    return { name: w.title !== "Magic" ? w.title : stateStr(w, "prompt") || "Magic", place, kind: null };
+    // "Magic" is the placeholder title of widgets made before the rename.
+    const placeholder = w.title === "Magic Widget" || w.title === "Magic";
+    return { name: placeholder ? stateStr(w, "prompt") || "Magic Widget" : w.title, place, kind: null };
   },
   // Change, Refresh and Stop have no buttons on the window (nothing covers a
   // widget): they are here, on right-click in the widget or its title bar, and

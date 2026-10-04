@@ -1,4 +1,4 @@
-// The Magic agent's tools for looking around (docs/12-magic-windows.md → Agent):
+// The Magic agent's tools for looking around (docs/12-magic-widgets.md → Agent):
 // all read-only; `run` only runs what the policy calls read-only, under the
 // sandbox. The tools that build the widget are in widget-tools.ts. Every input
 // carries `why`, a short label for the trace.

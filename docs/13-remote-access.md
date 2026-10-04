@@ -2,7 +2,7 @@
 
 > Status (2026-10-04): scaffolded. Built: `packages/remote-crypto` (Noise over WebCrypto, passing the cacophony test vectors), `apps/relay`, the core gateway (`packages/core/src/remote/`: relay link, sessions, pairing with approval, devices, audit log), the `Connection` abstraction and policy table, `remote.*` RPC methods and settings, `cmd remote`, and `pnpm remote:device` (a pretend phone for development). Since then: the app's Remote Access settings page, approval sheet and status bar indicator, and `apps/web`, the web client as a standalone app (pairing; Now with status lights, Space chips, Next, and starting terminals and Claude sessions; terminals that size the Mac's terminal to the phone while shown, pinned above the keyboard, with a sticky-ctrl key row, paste and a compose bar; a settings sheet; not yet the shared desktop views, files or Magic). Not yet: hosting the client, the PWA and push, fit-to-phone, the Keychain. The open questions at the end still need an answer before the client ships.
 
-**Goal.** Turn on "Remote access" in cmd, scan a QR code with a phone, and from then on open one URL in any browser (phone or desktop, no app install) to use your Spaces on the go: the same terminals, agents, files, text and Magic windows as on the desktop, in a phone-sized layout, with push notifications when an agent needs you.
+**Goal.** Turn on "Remote access" in cmd, scan a QR code with a phone, and from then on open one URL in any browser (phone or desktop, no app install) to use your Spaces on the go: the same terminals, agents, files, text and Magic widgets as on the desktop, in a phone-sized layout, with push notifications when an agent needs you.
 
 **Hard requirement: end-to-end encryption.** Everything between the Mac and the browser is encrypted with keys only those two hold. The relay in between, the host it runs on (Uberspace), the network and any CDN see only ciphertext, timing and sizes. A compromised relay can deny service; it can't read or type into a terminal.
 
@@ -328,7 +328,7 @@ The web client is **a third entry of the desktop renderer**, not a new app:
 | `sfSymbols` (`Symbol.tsx`) | Lucide icons (`lucide-static` is already a dependency) |
 | `notify`, `setBadge`, `bounce` | Web Push / in-app banner / no-op |
 | `onCommand`, `setMenuState`, `keybindings`, `recordShortcut` | A command sheet built from `shared/commands.ts` (same ids, no accelerators); hardware-keyboard shortcuts on iPad later |
-| `widgetFrame` | Static `widget-frame.html` (see "Magic windows") |
+| `widgetFrame` | Static `widget-frame.html` (see "Magic widgets") |
 | `appInfo`, `checkForUpdates`, `installUpdate`, `restartCore`, the Settings window | Not shown remotely |
 | `<webview>` (`BrowserView.tsx`) | The registry maps `browser` to a card view in the web build (title, URL, open here) |
 | `cmd-file://` images (markdown) | `fs.readBinary` → blob URLs |
@@ -388,9 +388,9 @@ The desktop views as they are, plus touch sizing (larger hit targets, tap instea
 | browser | card with title and URL, "Open here" | view |
 | plugin types (future) | their view, if it runs without Electron APIs; otherwise title + icon + "open on your Mac" | per type |
 
-### Magic windows
+### Magic widgets
 
-Magic windows travel well, because the parts that matter already live in the core or in plain HTML:
+Magic widgets travel well, because the parts that matter already live in the core or in plain HTML:
 - **Data:** data sources run in the core. `magic.data` events carry each refresh (`magic/service.ts:353`), and `lastData` is kept in the window state. The phone runs nothing and shows the same live data as the desktop.
 - **Widget and host page:**
   - The widget is HTML in the window state.
@@ -408,7 +408,7 @@ Magic windows travel well, because the parts that matter already live in the cor
 Limits:
 - **Media widgets** stay on the Mac in Phase 1. The desktop lets a widget load media only from origins allowed per window, through an unguessable `cmd-widget://frame/<token>`. A static host has no equivalent, and a sandboxed frame can navigate itself, so a URL parameter can't carry the allowance safely. Later option: a separate frame origin whose server issues single-use tokens.
 - **Creating and refining** (`magic.run`, `magic.cancel`) spends the person's API keys and runs the exploring agent on the Mac: **control** scope. `magic.refresh` is view scope (it re-runs an already approved, read-only source). `magic.media` and `magic.setRefresh` are never.
-- **Traffic:** a `magic.data` event measured ~225 KB, and refreshes run whether or not the window is visible (pausing while hidden isn't built yet, docs/12). Remote connections get `magic.data` only for Magic windows they follow (`pane.follow` generalised to `window.follow`), plus `lastData` once when the window opens.
+- **Traffic:** a `magic.data` event measured ~225 KB, and refreshes run whether or not the window is visible (pausing while hidden isn't built yet, docs/12). Remote connections get `magic.data` only for Magic widgets they follow (`pane.follow` generalised to `window.follow`), plus `lastData` once when the window opens.
   - Building "pause refreshes when no one is looking" in the core, counting remote followers, saves both CPU and phone data.
 
 ## Core gateway
@@ -449,7 +449,7 @@ Arguments are checked too, not just method names:
   - It must not hit `isDeniedPath(DEFAULT_DENY_PATHS)` (reused from `magic/policy.ts`: `~/.ssh`, keychains, browser profiles, `.env`).
   - It is resolved with `realpath`, so symlinks can't escape.
 - **`agent.send` / `pane.write` / `pane.fitOverride`:** the pane must exist and belong to an open Space. Writes are capped at 64 KiB; override sizes are clamped (20–300 cols, 5–200 rows).
-- **Events:** a separate allowlist covering `pane.output` for followed panes only, plus `pane.updated`, `agent.*`, `space.*`, `window.*` (with the state of hidden types stripped), `notification` and `fs.changed` for watched paths. `magic.data` only for followed Magic windows. **Never** `secrets.updated` or `settings.updated`.
+- **Events:** a separate allowlist covering `pane.output` for followed panes only, plus `pane.updated`, `agent.*`, `space.*`, `window.*` (with the state of hidden types stripped), `notification` and `fs.changed` for watched paths. `magic.data` only for followed Magic widgets. **Never** `secrets.updated` or `settings.updated`.
 
 The policy has to be fail-closed, so it gets heavy tests: every method × scope, path traversal, symlinks, and denied paths.
 
@@ -462,7 +462,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
    - `#broadcast` asks each connection's filter instead of the `types` set.
    - `call()` checks `REMOTE_ACCESS[method]` against `conn.access` before the handler runs. Local connections skip it, unchanged.
 2. **Output follow and coalescing.**
-   - New `window.follow { ids }` (terminals and Magic windows), per connection, so remote connections only get output for followed panes.
+   - New `window.follow { ids }` (terminals and Magic widgets), per connection, so remote connections only get output for followed panes.
    - A remote connection's writer merges `pane.output` per pane over 30 ms and caps its buffer at 1 MiB. On overflow it drops the queue and sends `pane.resync`, and the client re-fetches the snapshot.
    - The local socket keeps today's raw behaviour.
 3. **`remote.bootstrap`** replaces `events.subscribe` for remote connections. It returns a projection of the same data:
@@ -509,7 +509,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
 
 | Where | Change |
 |---|---|
-| `packages/protocol/src/rpc.ts` | New methods: `remote.status`, `remote.enable`, `remote.disable`, `remote.pair` (→ `{url, expiresAt}`), `remote.approve`, `remote.devices`, `remote.revoke`, `remote.setScope`, `remote.bootstrap`, `window.follow` (terminals and Magic windows), `pane.fitOverride`, `pane.reclaim`, `fs.readBinary`, `ui.presence`, `push.subscribe`, `agent.decide`. Events: `remote.updated`, `remote.pairRequest`, `pane.resync` |
+| `packages/protocol/src/rpc.ts` | New methods: `remote.status`, `remote.enable`, `remote.disable`, `remote.pair` (→ `{url, expiresAt}`), `remote.approve`, `remote.devices`, `remote.revoke`, `remote.setScope`, `remote.bootstrap`, `window.follow` (terminals and Magic widgets), `pane.fitOverride`, `pane.reclaim`, `fs.readBinary`, `ui.presence`, `push.subscribe`, `agent.decide`. Events: `remote.updated`, `remote.pairRequest`, `pane.resync` |
 | `packages/protocol/src/model.ts` | `RemoteDevice {id, name, scope, pairedAt, lastSeenAt, expiresAt, connected}`, `RemoteStatus`; `Pane.sizedBy` (which device holds the size, for the desktop's letterbox bar) |
 | `packages/protocol/src/settings.ts` | `remote.enabled` (false), `remote.relay` (URL), `remote.client` (URL), `remote.deviceExpiryDays` (30), `remote.keepAwake` (false), `remote.push` (true), `remote.pushDetails` (false), `remote.approvalWaitSeconds` (60) |
 | `packages/protocol/src/client.ts` | Unchanged; reused by the web client over the Noise channel |

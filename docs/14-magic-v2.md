@@ -1,12 +1,12 @@
-# Magic windows v2: widgets that keep working
+# Magic widgets v2: widgets that keep working
 
-> Status (2026-10-04), branch `magic-v2`: built as described here. Not yet: a widget library and store (see "Toward a store"), images sent to models that don't take them, and pausing refreshes while a window is hidden. [12-magic-windows.md](12-magic-windows.md) is the v1 design; this replaces its output contract, data sources and data model.
+> Status (2026-10-04), branch `magic-v2`: built as described here. Not yet: a widget library and store (see "Toward a store"), images sent to models that don't take them, and pausing refreshes while a window is hidden. [12-magic-widgets.md](12-magic-widgets.md) is the v1 design; this replaces its output contract, data sources and data model.
 
 v1 asked the model for one answer: a JSON header naming a data source (a URL or a shell command), then an HTML page that parsed whatever came back. It looked good in a demo and went stale in use. v2 makes a widget a small typed app that cmd builds, runs and checks like code.
 
 ## What went wrong in v1 (from real windows)
 
-Looking at the Magic windows and logs on Jan's Mac (2026-10-04):
+Looking at the Magic widgets and logs on Jan's Mac (2026-10-04):
 
 1. **Stale meant the source was failing, and the window didn't say why.**
    - "live listing of the ci jobs of cmd project" fetched `api.github.com` without logging in, although `gh` was installed and logged in. The prompt itself listed api.github.com among "public APIs without keys".

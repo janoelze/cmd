@@ -365,7 +365,7 @@ export const SETTINGS_SCHEMA = {
   "magic.explore": { title: "Look around this Mac", type: "boolean", default: true, description: "Let the Magic agent run read-only commands and read files to answer requests about this Mac. Private files (keys, keychains, browser profiles) stay off limits." },
   "magic.deno": { title: "Deno", code: true, type: "string", default: "", placeholder: "found automatically", description: "The Deno that runs widgets' data.ts. Empty: cmd's own copy, else the one on your PATH or in the usual places (Homebrew, ~/.deno)." },
   "magic.autoFix": { title: "Fix broken widgets automatically", type: "boolean", default: false, description: "When a widget's data keeps failing (not just a slow or busy server), let the Magic agent try to fix it once, as if you had pressed Fix." },
-  "magic.showSteps": { title: "Show commands while building", type: "boolean", default: false, description: "Show the commands, files and URLs the Magic agent looks at while it builds a window, with their output. Off: only what it is doing, in a few words." },
+  "magic.showSteps": { title: "Show commands while building", type: "boolean", default: false, description: "Show the commands, files and URLs the Magic agent looks at while it builds a widget, with their output. Off: only what it is doing, in a few words." },
 } as const satisfies Record<string, Def>;
 
 export type SettingKey = keyof typeof SETTINGS_SCHEMA;

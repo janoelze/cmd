@@ -182,11 +182,11 @@ const ARGS: { [M in Method]?: Check<M> } = {
     for (const id of p.ids) window(ctx, id);
   },
   "magic.run": (p, ctx) => {
-    magicWindow(ctx, p.id);
+    magicWidget(ctx, p.id);
     text(p.prompt);
   },
-  "magic.cancel": (p, ctx) => magicWindow(ctx, p.id),
-  "magic.refresh": (p, ctx) => magicWindow(ctx, p.id),
+  "magic.cancel": (p, ctx) => magicWidget(ctx, p.id),
+  "magic.refresh": (p, ctx) => magicWidget(ctx, p.id),
   "fs.list": (p, ctx) => allowedPath(ctx, p.path),
   "fs.read": (p, ctx) => allowedPath(ctx, p.path),
   "fs.watch": (p, ctx) => allowedPath(ctx, p.path),
@@ -247,7 +247,7 @@ function window(ctx: PolicyContext, id: unknown): void {
   openSpace(ctx, w.spaceId);
 }
 
-function magicWindow(ctx: PolicyContext, id: unknown): void {
+function magicWidget(ctx: PolicyContext, id: unknown): void {
   window(ctx, id);
   if (ctx.windows.list().find((x) => x.id === id)?.kind !== "magic") throw new RemoteDenied("not a Magic widget");
 }

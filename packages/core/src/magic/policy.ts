@@ -1,4 +1,4 @@
-// Command policy for Magic widgets (docs/12-magic-windows.md): is a shell
+// Command policy for Magic widgets (docs/12-magic-widgets.md): is a shell
 // command read-only? The agent's `run` tool and command data sources only run
 // commands classified "allow"; anything else is refused with the reason, so the
 // agent picks another. A compound command is split on | || && ; & and newlines,

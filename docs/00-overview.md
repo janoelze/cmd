@@ -23,8 +23,8 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 06 | [Plugins, routines, system](06-plugins-routines-system.md) | Plugin model, VPN/SSH/secrets, sudo, testing |
 | 07 | [UI vision](07-ui-vision.md) | Sidebar, view modes, command palette, "Platinum, but playful" design language |
 | 08 | [Host agents and sub-agents](08-host-agents.md) | How cmux does it (and what it lacks), agent-tree data model, host API, UI |
-| 12 | [Magic windows](12-magic-windows.md) | v1: a request in, a live widget out; research, agent, security |
-| 14 | [Magic windows v2](14-magic-v2.md) | Widgets as typed apps: Deno data.ts, checked views, previews, revisions, health, the edit view; toward a store |
+| 12 | [Magic widgets](12-magic-widgets.md) | v1: a request in, a live widget out; research, agent, security |
+| 14 | [Magic widgets v2](14-magic-v2.md) | Widgets as typed apps: Deno data.ts, checked views, previews, revisions, health, the edit view; toward a store |
 | 15 | [Positioning and voice](15-positioning.md) | The story, the category (a software workbench), pillars, voice, copy bank, naming, visual direction |
 
 ## Key findings

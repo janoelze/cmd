@@ -1,4 +1,4 @@
-// Magic widgets (docs/12-magic-windows.md): the window state the core stores,
+// Magic widgets (docs/12-magic-widgets.md): the window state the core stores,
 // the progress events it streams, and the widget token vocabulary shared by the
 // core (standalone pages, the prompt lab) and the renderer (live frames).
 
