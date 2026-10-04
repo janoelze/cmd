@@ -59,7 +59,6 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
 })();
 </script>
 
-<h2 class="section">Features</h2>
 <div class="features">
   <div><h3>Layouts</h3><p>Focus on one window, tile them in a grid, scroll through a strip, or place them on an infinite canvas with a minimap.</p></div>
   <div><h3>Agent detection</h3><p>Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes.</p></div>
