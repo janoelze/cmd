@@ -6,7 +6,8 @@
     "cmd": "./bin/cmd"
   },
   "dependencies": {
+    "@cmd/core": "workspace:*",
     "@cmd/protocol": "workspace:*",
-    "@cmd/core": "workspace:*"
+    "@cmd/remote-crypto": "workspace:*"
   }
 }

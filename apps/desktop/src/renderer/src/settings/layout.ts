@@ -89,6 +89,16 @@ export const SETTINGS_PAGES: Page[] = [
     ],
   },
   {
+    id: "remote",
+    title: "Remote Access",
+    icon: "iphone",
+    sections: [
+      { items: ["remote.enabled"] },
+      { title: "Connection", items: ["remote.relay", "remote.client"] },
+      { title: "Devices", items: ["remote.deviceExpiryDays"] },
+    ],
+  },
+  {
     id: "magic",
     title: "Magic Windows",
     icon: "wand.and.stars",

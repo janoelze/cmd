@@ -1,6 +1,6 @@
 # Remote access (mobile viewer)
 
-> Status (2026-10-04): concept. Nothing built. Decisions below are proposals; the open questions at the end need an answer before Phase 1.
+> Status (2026-10-04): scaffolded. Built: `packages/remote-crypto` (Noise over WebCrypto, passing the cacophony test vectors), `apps/relay`, the core gateway (`packages/core/src/remote/`: relay link, sessions, pairing with approval, devices, audit log), the `Connection` abstraction and policy table, `remote.*` RPC methods and settings, `cmd remote`, and `pnpm remote:device` (a pretend phone for development). Not yet: the web client, the app's approval sheet, Remote settings page and presence indicator, fit-to-phone, push, the Keychain. The open questions at the end still need an answer before the client ships.
 
 **Goal.** Turn on "Remote access" in cmd, scan a QR code with a phone, and from then on open one URL in any browser (phone or desktop, no app install) to use your Spaces on the go: the same terminals, agents, files, text and Magic windows as on the desktop, in a phone-sized layout, with push notifications when an agent needs you.
 
@@ -82,7 +82,8 @@ Sources: code.claude.com/docs/en/remote-control · github.com/slopus/happy (docs
 
 Use **Noise**, not a home-made handshake. It is specified, has test vectors, and gives mutual authentication plus forward secrecy in one round trip.
 
-- **Suite:** `Noise_IK_25519_AESGCM_SHA256` for sessions, `Noise_IKpsk2_25519_AESGCM_SHA256` for pairing.
+- **Suite:** `Noise_IK_25519_AESGCM_SHA256` for sessions, `Noise_IKpsk1_25519_AESGCM_SHA256` for pairing.
+  - **psk1, not psk2.** With psk2 the PSK is mixed in only at the end of message 2, so the host can't tell a right PSK from a wrong one until after it replies, which comes after the approval prompt: anyone who learns the route id could make the Mac ask. With psk1 the PSK is mixed in at the end of message 1, its payload doesn't decrypt without it, and the Mac asks only devices that hold the QR's PSK.
 - **Primitives:** X25519, AES-256-GCM, SHA-256 and HKDF. All of them exist in WebCrypto on both sides (`globalThis.crypto.subtle` in Node and browsers), so there is no crypto dependency.
 - **Non-extractable keys:** WebCrypto lets the browser keep the device's static key as a **non-extractable** `CryptoKey`. `deriveBits` works on it, but script can never read the bytes.
 - **Fallback:** if a target browser lacks WebCrypto X25519, use `@noble/curves` + `@noble/ciphers` (audited, no dependencies). This costs non-extractability.
@@ -97,8 +98,8 @@ Use **Noise**, not a home-made handshake. It is specified, has test vectors, and
 
 **Pairing (Phase 1):**
 1. On the Mac, Settings → Remote → "Pair a device" (or `cmd remote pair`) shows a QR code and a link:
-   `https://CLIENT/pair#v1.<relay host>.<route id>.<host pubkey>.<psk>`. Everything after `#` stays in the browser, so no server logs, proxies or analytics ever see it.
-2. The browser generates its device key and connects to `wss://RELAY/r/<route id>`. It sends Noise IKpsk2 message 1, which carries the device static key (encrypted) and a payload `{name: "Safari on iPhone", ua}`.
+   `https://CLIENT/pair#v1.<relay URL>.<route id>.<host pubkey>.<psk>`, every field base64url (the relay URL too, since it contains dots). Everything after `#` stays in the browser, so no server logs, proxies or analytics ever see it.
+2. The browser generates its device key and connects to `wss://RELAY/r/<route id>`. It sends Noise IKpsk1 message 1, which carries the device static key (encrypted) and a payload `{name: "Safari on iPhone", ua}`.
 3. The core checks the PSK and TTL and marks the PSK used. It then asks the person **on the Mac**: notification + sheet "Allow 'Safari on iPhone' to *view* / *control*? Fingerprint: four words".
    - The same four words show on the phone, so a QR that a second device grabbed is caught.
 4. When the person allows it, the core stores the device and finishes the handshake. The PWA stores `{relay, route id, host pubkey, device id}`, and the **normal URL is just `https://CLIENT/`**.
@@ -108,7 +109,7 @@ Use **Noise**, not a home-made handshake. It is specified, has test vectors, and
 - Each connection runs Noise IK. The device knows the host's static key, so a relay can't impersonate the host.
 - The host looks up the device key from message 1 in its paired list. An unknown key is dropped; three failures per minute per route back off.
 - Every reconnect is a fresh handshake: new ephemeral keys, forward secrecy, and one round trip.
-- Transport messages use Noise's 64-bit nonces, which also block replay. Rekey after 2^20 messages or 1 h.
+- Transport messages use Noise's 64-bit nonces, which also block replay. Each direction rekeys (Noise REKEY) every 2^20 messages; a time-based rekey (1 h) isn't built yet.
 
 **Framing inside the encrypted channel:**
 - The same newline-free JSON-RPC 2.0 messages the Unix socket uses, one per Noise transport message (≤ 64 KiB; larger results are chunked).
@@ -417,7 +418,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
 | `packages/protocol/src/model.ts` | `RemoteDevice {id, name, scope, pairedAt, lastSeenAt, expiresAt, connected}`, `RemoteStatus`; `Pane.sizedBy` (which device holds the size, for the desktop's letterbox bar) |
 | `packages/protocol/src/settings.ts` | `remote.enabled` (false), `remote.relay` (URL), `remote.client` (URL), `remote.deviceExpiryDays` (30), `remote.keepAwake` (false), `remote.push` (true), `remote.pushDetails` (false), `remote.approvalWaitSeconds` (60) |
 | `packages/protocol/src/client.ts` | Unchanged; reused by the web client over the Noise channel |
-| new `packages/remote-crypto` | Noise IK/IKpsk2 over WebCrypto, framing, fingerprint words. Shared by core and web client, browser-safe (no `node:` imports). Tested against the cacophony/snow Noise test vectors |
+| new `packages/remote-crypto` | Noise IK/IKpsk1 over WebCrypto, framing, fingerprint words. Shared by core and web client, browser-safe (no `node:` imports). Tested against the cacophony/snow Noise test vectors |
 | `packages/core/src/core.ts` | Connection abstraction (`#serve`, `#subscribers`, `#connWatches`, `#broadcast`); policy check in `call`; handlers for the new methods; constructs `RemoteService`; `close()` shuts it down |
 | new `packages/core/src/remote/` | `service.ts` (lifecycle, relay link, reconnect with backoff, settings binding via `SettingsService.bind(["remote.*"])`); `session.ts` (Noise per device, the `Connection` implementation, coalescing writer); `policy.ts` (`REMOTE_ACCESS`, argument checks, event filter); `devices.ts` (store); `keys.ts` (Keychain or file); `push.ts`; `audit.ts` |
 | `packages/core/src/store.ts` | Tables `remote_devices` and `remote_log` |

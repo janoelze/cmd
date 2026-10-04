@@ -4,8 +4,18 @@
 // the live agents).
 
 import { DatabaseSync } from "node:sqlite";
-import type { Agent, AgentId, AppWindow, PaneId, Space } from "@cmd/protocol";
+import type { Agent, AgentId, AppWindow, PaneId, RemoteScope, Space } from "@cmd/protocol";
 import type { PaneRecord } from "./panes.ts";
+
+export interface RemoteDeviceRecord {
+  id: string;
+  name: string;
+  scope: RemoteScope;
+  /** X25519, base64url. */
+  publicKey: string;
+  pairedAt: number;
+  lastSeenAt: number;
+}
 
 export class Store {
   #db: DatabaseSync;
@@ -45,6 +55,18 @@ export class Store {
         value TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS remote_devices (
+        id TEXT PRIMARY KEY,
+        public_key TEXT NOT NULL UNIQUE,
+        doc TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS remote_log (
+        at INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        device_id TEXT,
+        detail TEXT
+      );
+      CREATE INDEX IF NOT EXISTS remote_log_at ON remote_log(at);
     `);
   }
 
@@ -145,6 +167,32 @@ export class Store {
 
   saveScreen(id: PaneId, data: string): void {
     this.#db.prepare(`INSERT OR REPLACE INTO pane_screens (id, data, saved_at) VALUES (?, ?, ?)`).run(id, data, Date.now());
+  }
+
+  /** Paired remote devices (remote/service.ts); public keys are base64url. */
+  remoteDevices(): RemoteDeviceRecord[] {
+    const rows = this.#db.prepare(`SELECT doc FROM remote_devices`).all() as { doc: string }[];
+    return rows.map((r) => JSON.parse(r.doc) as RemoteDeviceRecord);
+  }
+
+  saveRemoteDevice(d: RemoteDeviceRecord): void {
+    this.#db.prepare(`INSERT OR REPLACE INTO remote_devices (id, public_key, doc) VALUES (?, ?, ?)`).run(d.id, d.publicKey, JSON.stringify(d));
+  }
+
+  deleteRemoteDevice(id: string): void {
+    this.#db.prepare(`DELETE FROM remote_devices WHERE id = ?`).run(id);
+  }
+
+  /** The remote access audit log: sessions, pairings, revocations, denied calls, failed handshakes. */
+  logRemote(kind: string, deviceId: string | null, detail: string | null, keepMs = 30 * 86400_000): void {
+    const now = Date.now();
+    this.#db.prepare(`INSERT INTO remote_log (at, kind, device_id, detail) VALUES (?, ?, ?, ?)`).run(now, kind, deviceId, detail);
+    this.#db.prepare(`DELETE FROM remote_log WHERE at < ?`).run(now - keepMs);
+  }
+
+  remoteLog(limit = 100): { at: number; kind: string; deviceId: string | null; detail: string | null }[] {
+    const rows = this.#db.prepare(`SELECT at, kind, device_id, detail FROM remote_log ORDER BY at DESC, rowid DESC LIMIT ?`).all(limit) as { at: number; kind: string; device_id: string | null; detail: string | null }[];
+    return rows.map((r) => ({ at: r.at, kind: r.kind, deviceId: r.device_id, detail: r.detail }));
   }
 
   close(): void {

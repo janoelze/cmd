@@ -136,6 +136,9 @@ importers:
       '@cmd/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@cmd/remote-crypto':
+        specifier: workspace:*
+        version: link:../remote-crypto
 
   packages/core:
     dependencies:
@@ -148,6 +151,9 @@ importers:
       '@cmd/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@cmd/remote-crypto':
+        specifier: workspace:*
+        version: link:../remote-crypto
       '@xterm/addon-serialize':
         specifier: ^0.14.0
         version: 0.14.0

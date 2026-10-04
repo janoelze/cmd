@@ -239,3 +239,42 @@ export interface GitStatus {
   /** More changes than were listed. */
   truncated: boolean;
 }
+
+/**
+ * Remote access (docs/13-remote-access.md). view: watch terminals, read files,
+ * see agents and Spaces. control: also type, write files, open and close windows.
+ */
+export type RemoteScope = "view" | "control";
+
+/** A browser paired with this Mac. */
+export interface RemoteDevice {
+  id: string;
+  /** What the browser called itself at pairing, e.g. "Safari on iPhone". */
+  name: string;
+  scope: RemoteScope;
+  pairedAt: number;
+  lastSeenAt: number;
+  /** Unpaired when unseen until then (remote.deviceExpiryDays). */
+  expiresAt: number;
+  connected: boolean;
+}
+
+export interface RemoteStatus {
+  enabled: boolean;
+  /** off: disabled; connecting: to the relay; online: devices can reach this Mac; error: see `error`. */
+  state: "off" | "connecting" | "online" | "error";
+  error: string | null;
+  relay: string;
+  devices: RemoteDevice[];
+}
+
+/** A browser asked to pair; the person on the Mac allows or denies it (remote.approve). */
+export interface RemotePairRequest {
+  requestId: string;
+  name: string;
+  /** Shown on the Mac and on the phone; they must match. */
+  words: string[];
+  /** Proposed by `remote.pair`; the person may change it when allowing. */
+  scope: RemoteScope;
+  expiresAt: number;
+}

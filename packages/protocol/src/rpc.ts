@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, Pane, PaneId, ProcessStat, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, Pane, PaneId, ProcessStat, RemoteDevice, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { MagicModel, MagicProgress } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
@@ -224,6 +224,32 @@ export interface Methods {
   /** null deletes the key. Values must be JSON, ≤ 64 KiB. */
   "ui.set": { params: { key: string; value: unknown }; result: null };
 
+  /** Remote access (docs/13-remote-access.md). The Mac manages it; a phone can only call what packages/core/src/remote/policy.ts allows. */
+  "remote.status": { params: {}; result: RemoteStatus };
+  /** Turn remote access on or off (the remote.enabled setting); off closes every session, paired devices stay. */
+  "remote.enable": { params: {}; result: RemoteStatus };
+  "remote.disable": { params: {}; result: RemoteStatus };
+  /** A one-time pairing link (show it as a QR code); valid for 5 minutes, replaces any earlier one. */
+  "remote.pair": { params: { scope?: RemoteScope }; result: { url: string; expiresAt: number } };
+  /** Answer a remote.pairRequest. */
+  "remote.approve": { params: { requestId: string; allow: boolean; scope?: RemoteScope }; result: null };
+  "remote.devices": { params: {}; result: RemoteDevice[] };
+  /** Unpair a device and close its sessions. */
+  "remote.revoke": { params: { id: string }; result: null };
+  /** Change a device's scope; its sessions reconnect with it. */
+  "remote.setScope": { params: { id: string; scope: RemoteScope }; result: RemoteDevice };
+  /**
+   * What a remote session starts from (instead of events.subscribe): a projection
+   * without settings, UI state or secrets. After it the session receives the
+   * events the policy lets through.
+   */
+  "remote.bootstrap": {
+    params: {};
+    result: { panes: Pane[]; agents: Agent[]; windows: AppWindow[]; spaces: Space[]; windowTypes: WindowTypeInfo[]; device: { id: string; scope: RemoteScope } | null };
+  };
+  /** The windows this connection shows (terminals, Magic): remote sessions get pane.output and magic.data only for these. */
+  "window.follow": { params: { ids: WindowId[] }; result: null };
+
   /** After this call the connection receives `event` notifications. */
   "events.subscribe": {
     /** types: receive only these events (e.g. the Settings window wants settings.updated); omitted = all. */
@@ -269,7 +295,14 @@ export type CoreEvent =
   | { type: "fs.changed"; path: string }
   /** Bring a window to the front (e.g. `open .` in a terminal). */
   | { type: "window.focus"; id: WindowId }
-  | { type: "notification"; notification: AppNotification };
+  | { type: "notification"; notification: AppNotification }
+  | { type: "remote.updated"; status: RemoteStatus }
+  /** A browser wants to pair: ask the person on the Mac (remote.approve). */
+  | { type: "remote.pairRequest"; request: RemotePairRequest }
+  /** Allowed, denied or expired: dismiss the request's sheet. */
+  | { type: "remote.pairEnded"; requestId: string }
+  /** A remote session dropped output for this pane (it fell behind): fetch a new snapshot. */
+  | { type: "pane.resync"; paneId: PaneId };
 
 export interface SearchHit {
   sessionId: string;

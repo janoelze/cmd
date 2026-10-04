@@ -3,7 +3,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import type { Agent, AgentState, Pane, Space } from "@cmd/protocol";
+import readline from "node:readline/promises";
+import type { Agent, AgentState, Pane, RemoteDevice, RemotePairRequest, RemoteScope, Space } from "@cmd/protocol";
 import { APPLIES_LABEL, currentKey, ENV, isSecretKey, SECRETS, type SecretDef, type SecretKey, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 import { magicCommand } from "./magic.ts";
@@ -43,10 +44,14 @@ usage: cmd <command> [options]
                                       list or change settings (applies live)
   settings secret KEY [--clear]       store an API key from stdin (pbpaste | cmd settings secret
                                       magic.anthropic.apiKey); never in settings.json
+  remote [status|on|off|devices]      remote access from a phone or browser (end-to-end encrypted)
+  remote pair [--scope view|control]  print a one-time pairing link, then approve the device here
+  remote revoke|scope <device> [view|control]
+                                      unpair a device, or change what it may do
 
 env: ${ENV.socket} (default ${defaultSocketPath()})`;
 
-const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "open", "search", "resume", "settings", "space", "help"]);
+const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "open", "search", "resume", "settings", "space", "remote", "help"]);
 
 /**
  * `cmd .`, `cmd ~/src/x`, `cmd ../y`: a folder to open as a Space. A command name
@@ -95,6 +100,7 @@ const { values: opt, positionals: pos } = parseArgs({
     "new-window": { type: "boolean", short: "n" },
     "git-root": { type: "boolean" },
     clear: { type: "boolean" },
+    scope: { type: "string" },
   },
 });
 
@@ -225,6 +231,8 @@ async function run({ client, closed }: Connection): Promise<number> {
     }
     case "space":
       return space(client);
+    case "remote":
+      return remote(client);
     case "search": {
       const text = pos.join(" ");
       if (!text) {
@@ -442,6 +450,74 @@ async function space(client: Connection["client"]): Promise<number> {
     }
     default:
       return fail(`unknown space command: ${sub}\n\n${HELP}`);
+  }
+}
+
+async function remote(client: Connection["client"]): Promise<number> {
+  const [sub = "status", ...rest] = pos;
+  const device = (d: RemoteDevice) =>
+    `${short(d.id)}  ${d.name.padEnd(24)} ${d.scope.padEnd(8)} ${d.connected ? "connected" : `last seen ${new Date(d.lastSeenAt).toLocaleString()}`}`;
+  const scopeArg = (v: unknown): RemoteScope | undefined => (v === "view" || v === "control" ? v : undefined);
+  const find = async (prefix: string | undefined) => {
+    const ds = (await client.call("remote.devices", {})).filter((d) => prefix && (d.id.startsWith(prefix) || d.name.toLowerCase().startsWith(prefix.toLowerCase())));
+    if (ds.length !== 1) throw new Error(ds.length ? `ambiguous device: ${prefix}` : `no such device: ${prefix ?? "(none given)"}`);
+    return ds[0]!;
+  };
+  switch (sub) {
+    case "status":
+    case "on":
+    case "off": {
+      const st = await client.call(sub === "on" ? "remote.enable" : sub === "off" ? "remote.disable" : "remote.status", {});
+      if (opt.json) return out(st);
+      console.log(`remote access: ${st.state}${st.error ? ` (${st.error})` : ""}${st.relay ? `  relay ${st.relay}` : ""}`);
+      for (const d of st.devices) console.log(`  ${device(d)}`);
+      return 0;
+    }
+    case "devices": {
+      const ds = await client.call("remote.devices", {});
+      if (opt.json) return out(ds);
+      for (const d of ds) console.log(device(d));
+      return 0;
+    }
+    case "revoke": {
+      const d = await find(rest[0]);
+      await client.call("remote.revoke", { id: d.id });
+      return out(`unpaired ${d.name}`);
+    }
+    case "scope": {
+      const scope = scopeArg(rest[1]);
+      if (!scope) return fail("usage: cmd remote scope <device> view|control");
+      const d = await client.call("remote.setScope", { id: (await find(rest[0])).id, scope });
+      return out(`${d.name}: ${d.scope}`);
+    }
+    case "pair": {
+      // Approve here, so pairing works before (and without) the app's sheet.
+      const requests: RemotePairRequest[] = [];
+      let wake = () => {};
+      client.onEvent((e) => {
+        if (e.type === "remote.pairRequest") requests.push(e.request), wake();
+      });
+      await client.call("events.subscribe", { types: ["remote.pairRequest"] });
+      const { url, expiresAt } = await client.call("remote.pair", { scope: scopeArg(opt.scope) ?? "view" });
+      // TODO: print it as a QR code too.
+      console.log(`Open this on your phone within 5 minutes (it works once):\n\n  ${url}\n`);
+      while (Date.now() < expiresAt) {
+        const req = requests.shift();
+        if (!req) {
+          await new Promise<void>((r) => ((wake = r), setTimeout(r, 1000)));
+          continue;
+        }
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const answer = (await rl.question(`"${req.name}" wants ${req.scope} access. Its screen should show: ${req.words.join(" ")}\nAllow? [v]iew, [c]ontrol, [n]o: `)).trim().toLowerCase();
+        rl.close();
+        const scope = answer.startsWith("c") ? "control" : answer.startsWith("v") ? "view" : null;
+        await client.call("remote.approve", { requestId: req.requestId, allow: !!scope, scope: scope ?? undefined });
+        return out(scope ? `paired ${req.name} (${scope})` : "denied");
+      }
+      return fail("the pairing link expired");
+    }
+    default:
+      return fail(`unknown remote command: ${sub}\n\n${HELP}`);
   }
 }
 

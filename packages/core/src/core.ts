@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import type { AgentId, AppWindow, CoreEvent, Method, Methods, Params, Placement, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
+import type { AgentId, AppWindow, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
 import { ipcPath, logger, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
@@ -25,6 +25,9 @@ import { SpaceManager } from "./spaces/manager.ts";
 import { MagicService } from "./magic/service.ts";
 import { SecretsService } from "./secrets.ts";
 import type { Backend } from "./magic/backends.ts";
+import type { Connection, Served } from "./connection.ts";
+import { checkRemoteCall, RemoteDenied, remoteEventVisible, type PolicyContext } from "./remote/policy.ts";
+import { RemoteService } from "./remote/service.ts";
 
 export const VERSION = "0.0.1";
 
@@ -88,12 +91,15 @@ export class Core {
   readonly spaces: SpaceManager;
   readonly magic: MagicService;
   readonly secrets: SecretsService;
+  readonly remote: RemoteService;
   #server: net.Server | null = null;
-  /** Subscribed connections and the event types they want (null = all). */
-  #subscribers = new Map<net.Socket, Set<string> | null>();
+  /** Subscribed connections and which events each wants. */
+  #subscribers = new Map<Connection, (e: CoreEvent) => boolean>();
   readonly watches = new WatchService();
   /** fs.watch subscriptions per connection, released when it closes. */
-  #connWatches = new Map<net.Socket, string[]>();
+  #connWatches = new Map<Connection, string[]>();
+  /** Windows each connection shows (window.follow); remote sessions get output only for these. */
+  #follows = new Map<Connection, Set<string>>();
   #opts: CoreOptions;
   #search: SearchService | null = null;
   #closed = false;
@@ -172,6 +178,13 @@ export class Core {
       if (agent.native.transcriptPath) this.#search?.learn(agent.kind, agent.native.transcriptPath);
     });
     this.agents.on("removed", (agentId) => this.#broadcast({ type: "agent.removed", agentId }));
+    this.remote = new RemoteService({
+      store: this.store,
+      settings: this.settings,
+      stateDir: opts.stateDir ?? null,
+      serve: (conn) => this.serve(conn),
+      broadcast: (e) => this.#broadcast(e),
+    });
   }
 
   readonly handlers: Handlers = {
@@ -293,6 +306,24 @@ export class Core {
       this.store.setUiState(p.key, p.value);
       return null;
     },
+    "remote.status": () => this.remote.status(),
+    "remote.enable": async () => (this.settings.set("remote.enabled", true), await this.remote.ready(), this.remote.status()),
+    "remote.disable": async () => (this.settings.set("remote.enabled", false), await this.remote.ready(), this.remote.status()),
+    "remote.pair": (p) => this.remote.pair(p.scope ?? "view"),
+    "remote.approve": (p) => (this.remote.approve(p.requestId, p.allow, p.scope), null),
+    "remote.devices": () => this.remote.devices(),
+    "remote.revoke": (p) => (this.remote.revoke(p.id), null),
+    "remote.setScope": (p) => this.remote.setScope(p.id, p.scope),
+    // Connection-aware (the session's device, follows); handled in serve. These run for in-process callers.
+    "remote.bootstrap": () => ({
+      panes: this.panes.list(),
+      agents: this.agents.list(),
+      windows: this.windows.others(),
+      spaces: this.spaces.list(),
+      windowTypes: this.windowTypes.info(),
+      device: null,
+    }),
+    "window.follow": () => null,
     "events.subscribe": () => ({
       panes: this.panes.list(),
       agents: this.agents.list(),
@@ -403,7 +434,7 @@ export class Core {
       log.error(`could not start a new PTY host: ${(err as Error).message}`);
       return;
     }
-    for (const s of this.#subscribers.keys()) s.destroy();
+    for (const s of this.#subscribers.keys()) s.close();
   }
 
   async call<M extends Method>(method: M, params: Params<M>): Promise<Result<M>> {
@@ -421,7 +452,7 @@ export class Core {
       fs.mkdirSync(path.dirname(sock), { recursive: true });
       await removeStaleSocket(sock);
     }
-    this.#server = net.createServer((conn) => this.#serve(conn));
+    this.#server = net.createServer((sock) => this.#serveSocket(sock));
     await new Promise<void>((resolve, reject) => {
       this.#server!.once("error", reject);
       this.#server!.listen(sock, () => resolve());
@@ -430,65 +461,111 @@ export class Core {
     this.settings.watch();
   }
 
-  #serve(conn: net.Socket): void {
-    conn.setEncoding("utf8");
-    conn.on("error", () => {});
+  /** A Unix socket client: local access. */
+  #serveSocket(sock: net.Socket): void {
+    sock.setEncoding("utf8");
+    sock.on("error", () => {});
     rpcLog.debug("connection opened");
-    conn.on("close", () => {
-      rpcLog.debug("connection closed");
-      this.#subscribers.delete(conn);
-      for (const p of this.#connWatches.get(conn) ?? []) this.watches.unwatch(p);
-      this.#connWatches.delete(conn);
+    const served = this.serve({
+      access: "local",
+      send: (line) => void (sock.writable && sock.write(line)),
+      close: () => sock.destroy(),
     });
-    conn.on(
-      "data",
-      lineSplitter(async (line) => {
-        if (!line.trim()) return;
-        let req: { id: number; method: Method; params?: unknown };
-        try {
-          req = JSON.parse(line);
-        } catch {
-          return;
-        }
-        try {
-          const result = await this.call(req.method, (req.params ?? {}) as never);
-          // Remember per-connection watches so a closed UI doesn't leak them.
-          const wp = (req.params as { path?: string } | undefined)?.path;
-          if (req.method === "fs.watch" && wp && (result as { watching: boolean }).watching) {
-            this.#connWatches.set(conn, [...(this.#connWatches.get(conn) ?? []), wp]);
-          } else if (req.method === "fs.unwatch" && wp) {
-            const list = this.#connWatches.get(conn) ?? [];
-            const i = list.indexOf(wp);
-            if (i >= 0) list.splice(i, 1);
-          }
-          if (req.method === "events.subscribe") {
-            const types = (req.params as Params<"events.subscribe"> | undefined)?.types;
-            this.#subscribers.set(conn, Array.isArray(types) ? new Set(types) : null);
-          }
-          send(conn, { jsonrpc: "2.0", id: req.id, result: result ?? null });
-        } catch (err) {
-          // Handlers throw plain Errors for expected failures (a closed pane, a bad
-          // path); a TypeError and the like is a bug in the core: report it.
-          if (err instanceof TypeError || err instanceof ReferenceError || err instanceof RangeError) {
-            rpcLog.error(`${req.method} threw`, err);
-            recordCrash({ process: "core", kind: `rpc ${req.method}`, message: `${err.name}: ${err.message}`, stack: err.stack ?? null, context: { build: this.#opts.build ?? "" } });
-          } else rpcLog.warn(`${req.method} failed: ${(err as Error).message}`);
-          send(conn, { jsonrpc: "2.0", id: req.id, error: { code: -32000, message: (err as Error).message } });
-        }
-      }),
-    );
+    sock.on("close", () => {
+      rpcLog.debug("connection closed");
+      served.closed();
+    });
+    sock.on("data", lineSplitter((line) => served.receive(line)));
+  }
+
+  /** JSON-RPC over any connection; a remote one is held to remote/policy.ts. */
+  serve(conn: Connection): Served {
+    return {
+      receive: (line) => void this.#receive(conn, line),
+      closed: () => {
+        this.#subscribers.delete(conn);
+        this.#follows.delete(conn);
+        for (const p of this.#connWatches.get(conn) ?? []) this.watches.unwatch(p);
+        this.#connWatches.delete(conn);
+      },
+    };
+  }
+
+  async #receive(conn: Connection, line: string): Promise<void> {
+    if (!line.trim()) return;
+    let req: { id: number; method: Method; params?: unknown };
+    try {
+      req = JSON.parse(line);
+    } catch {
+      return;
+    }
+    if (typeof req !== "object" || req === null) return;
+    const reply = (msg: object) => conn.send(JSON.stringify({ jsonrpc: "2.0", id: req.id, ...msg }) + "\n");
+    try {
+      const params = (req.params ?? {}) as never;
+      if (conn.access !== "local") checkRemoteCall(req.method, params, conn.access, this.#policy);
+      const result = await this.call(req.method, params);
+      this.#afterCall(conn, req.method, params, result);
+      reply({ result: result ?? null });
+      return;
+    } catch (err) {
+      if (err instanceof RemoteDenied) {
+        this.remote.audit("denied", conn.deviceId ?? null, `${String(req.method)}: ${err.message}`);
+        reply({ error: { code: -32001, message: err.message } });
+        return;
+      }
+      // Handlers throw plain Errors for expected failures (a closed pane, a bad
+      // path); a TypeError and the like is a bug in the core: report it.
+      if (err instanceof TypeError || err instanceof ReferenceError || err instanceof RangeError) {
+        rpcLog.error(`${req.method} threw`, err);
+        recordCrash({ process: "core", kind: `rpc ${req.method}`, message: `${err.name}: ${err.message}`, stack: err.stack ?? null, context: { build: this.#opts.build ?? "" } });
+      } else rpcLog.warn(`${req.method} failed: ${(err as Error).message}`);
+      reply({ error: { code: -32000, message: (err as Error).message } });
+    }
+  }
+
+  /** Per-connection bookkeeping for the connection-aware methods. */
+  #afterCall(conn: Connection, method: Method, params: Record<string, unknown>, result: unknown): void {
+    // Remember per-connection watches so a closed UI doesn't leak them.
+    const wp = typeof params.path === "string" ? params.path : null;
+    if (method === "fs.watch" && wp && (result as { watching: boolean }).watching) {
+      this.#connWatches.set(conn, [...(this.#connWatches.get(conn) ?? []), wp]);
+    } else if (method === "fs.unwatch" && wp) {
+      const list = this.#connWatches.get(conn) ?? [];
+      const i = list.indexOf(wp);
+      if (i >= 0) list.splice(i, 1);
+    } else if (method === "window.follow") {
+      this.#follows.set(conn, new Set(params.ids as string[]));
+    } else if (method === "events.subscribe") {
+      const types = (params as Params<"events.subscribe">).types;
+      const set = Array.isArray(types) ? new Set<string>(types) : null;
+      this.#subscribers.set(conn, set ? (e) => set.has(e.type) : () => true);
+    } else if (method === "remote.bootstrap") {
+      if (conn.deviceId) (result as Result<"remote.bootstrap">).device = { id: conn.deviceId, scope: conn.access as RemoteScope };
+      this.#subscribers.set(conn, (e) => remoteEventVisible(e, this.#follows.get(conn) ?? EMPTY, this.#connWatches.get(conn) ?? []));
+    }
+  }
+
+  /** What remote/policy.ts checks arguments against. */
+  get #policy(): PolicyContext {
+    return { panes: this.panes, agents: this.agents, spaces: this.spaces, windows: this.windows, home: this.#opts.home };
   }
 
   #broadcast(event: CoreEvent): void {
     if (this.#subscribers.size === 0) return;
     const line = JSON.stringify({ jsonrpc: "2.0", method: "event", params: event }) + "\n";
-    for (const [s, types] of this.#subscribers) if (s.writable && (!types || types.has(event.type))) s.write(line);
+    for (const [c, wants] of this.#subscribers) {
+      if (!wants(event)) continue;
+      if (c.event) c.event(event, line);
+      else c.send(line);
+    }
   }
 
   async close(): Promise<void> {
     this.magic.dispose();
+    this.remote.close();
     await this.panes.shutdown();
-    for (const s of this.#subscribers.keys()) s.destroy();
+    for (const s of this.#subscribers.keys()) s.close();
     await new Promise<void>((r) => (this.#server ? this.#server.close(() => r()) : r()));
     try {
       if (ipcPath(this.#opts.socketPath) === this.#opts.socketPath) fs.unlinkSync(this.#opts.socketPath);
@@ -504,9 +581,7 @@ export class Core {
   }
 }
 
-function send(conn: net.Socket, msg: unknown): void {
-  if (conn.writable) conn.write(JSON.stringify(msg) + "\n");
-}
+const EMPTY: ReadonlySet<string> = new Set();
 
 /** Refuse to start if another core is alive on this socket; remove it if stale. */
 async function removeStaleSocket(sock: string): Promise<void> {

@@ -8,7 +8,9 @@ Research and design notes live in [`docs/`](docs/00-overview.md), starting with 
 packages/protocol   shared types: data model, JSON-RPC API, settings schema, sidebar ordering
 packages/core       the core process: PTYs (node-pty), agent tree, hooks, SQLite, settings, Unix socket
 packages/cli        `cmd` — the same API from any shell, hook entry point, host-agent commands
+packages/remote-crypto  Noise handshakes and framing for remote access, shared by the core and the web client
 apps/desktop        Electron UI (React + xterm.js), a client of the core
+apps/relay          the remote-access relay: forwards encrypted bytes between a Mac and its devices
 e2e/                Playwright smoke test driving the real app
 scripts/            postinstall, packaging, releases, icons, README screenshots
 ```
@@ -114,6 +116,23 @@ One path for every source (`packages/core/src/notifications.ts`): agents needing
 
 The schema is `packages/protocol/src/settings.ts`, with flat dotted keys. User values go in `~/.config/cmd/settings.json`, or in `$CMD_HOME` in dev. The core watches the file, so edits apply live, including to running shells (`open` rules) and search (the indexer restarts). The exceptions are tagged in the UI and CLI: `shell.program`, `shell.login` and `shell.integration` affect new terminals only, and `ui.defaultView` only the first launch.
 
+## Remote access
+
+Design: [docs/13-remote-access.md](docs/13-remote-access.md). The core connects out to a relay (`apps/relay`) and serves each paired device's Noise session like a socket client (`packages/core/src/remote/`), held to the policy table in `remote/policy.ts`: every RPC method needs an entry there, so adding a method means deciding whether a phone may call it. Try it locally without the web client:
+
+```sh
+pnpm relay                                       # ws://127.0.0.1:8787
+pnpm cmd settings set remote.relay ws://127.0.0.1:8787
+pnpm cmd settings set remote.client https://client.test   # any URL until the web client exists
+pnpm cmd remote on
+pnpm cmd remote pair                             # prints the link, then asks you to approve
+pnpm remote:device pair '<link>'                 # a pretend phone, in another terminal
+pnpm remote:device call pane.list                # through the relay, end-to-end encrypted
+pnpm remote:device watch                         # bootstrap, follow terminals, print events
+```
+
+The host key and route live in `$CMD_HOME/remote/host.json`, paired devices and the audit log in SQLite (`remote_devices`, `remote_log`), the pretend phone's identity in `$CMD_HOME/remote-device.json`.
+
 ## Status
 
 **Done**
@@ -125,6 +144,9 @@ The schema is `packages/protocol/src/settings.ts`, with flat dotted keys. User v
 - Settings and SQLite persistence
 - UI: sidebar grouped by attention with search and recent sessions, focus, grid, strip and canvas views, browser, file, text and Markdown windows, palette, settings window, themes, notifications, Dock badge
 - Packaging, CI and GitHub releases
+
+**In progress**
+- Remote access (docs/13): crypto, relay, core gateway, policy and `cmd remote` are in; next are the web client, the approval sheet and Remote settings page in the app, and fit-to-phone
 
 **Next**
 - Plugin host (routines and monitors in the core)

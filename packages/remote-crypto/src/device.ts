@@ -36,15 +36,17 @@ export interface DeviceSession {
 }
 
 /**
- * Starts the handshake and returns a feed for the socket's incoming messages
- * plus the session, which resolves once the host replies (pairing: after the
- * person on the Mac allowed it).
+ * Starts the handshake and returns feeds for the socket's incoming messages and
+ * its closing, plus the session, which resolves once the host replies (pairing:
+ * after the person on the Mac allowed it) and rejects if the socket closes first.
  */
-export function openDeviceSession(o: DeviceSessionOptions): { receive: (msg: Bytes) => void; session: Promise<DeviceSession> } {
+export function openDeviceSession(o: DeviceSessionOptions): { receive: (msg: Bytes) => void; closed: () => void; session: Promise<DeviceSession> } {
   let receive: (msg: Bytes) => void = () => {};
+  let closed: () => void = () => {};
   const session = (async () => {
     const hs = await Handshake.create({ pattern: o.psk ? "IKpsk1" : "IK", initiator: true, s: o.device, rs: o.hostKey, psk: o.psk, prologue: PROLOGUE });
     const reply = new Promise<Bytes>((resolve, reject) => {
+      closed = () => reject(new Error("the host closed the channel"));
       receive = (msg) => {
         try {
           const f = unframe(msg);
@@ -62,7 +64,7 @@ export function openDeviceSession(o: DeviceSessionOptions): { receive: (msg: Byt
     const t = await hs.transport();
     return established(o.socket, t, host, (fn) => (receive = fn));
   })();
-  return { receive: (msg) => receive(msg), session };
+  return { receive: (msg) => receive(msg), closed: () => closed(), session };
 }
 
 function established(socket: ByteSocket, t: Transport, host: Record<string, unknown>, setReceive: (fn: (msg: Bytes) => void) => void): DeviceSession {

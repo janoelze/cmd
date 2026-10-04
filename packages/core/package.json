@@ -11,6 +11,7 @@
     "@ai-sdk/anthropic": "^4.0.71",
     "@ai-sdk/openai": "^4.0.83",
     "@cmd/protocol": "workspace:*",
+    "@cmd/remote-crypto": "workspace:*",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/addon-unicode11": "^0.9.0",
     "@xterm/headless": "^6.0.0",

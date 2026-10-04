@@ -11,6 +11,8 @@
     "core:stop": "node scripts/stop-core.mjs",
     "core:stop-all": "node scripts/stop-core.mjs --all",
     "cmd": "node --no-warnings packages/cli/src/main.ts",
+    "relay": "node --no-warnings apps/relay/src/main.ts",
+    "remote:device": "node --no-warnings packages/cli/src/remote-device.ts",
     "dev": "pnpm --filter @cmd/desktop dev",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit && pnpm --filter @cmd/desktop typecheck",
