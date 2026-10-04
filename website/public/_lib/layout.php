@@ -34,7 +34,7 @@ function page_start(string $title, string $description, string $current): void
   --sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: var(--fs-base)/1.55 var(--sans); }
+body { margin: 0; background: var(--bg); color: var(--ink); font: var(--fs-base)/1.7 var(--sans); }
 main, header { max-width: 880px; margin: 0 auto; padding: 0 16px; }
 main { padding-bottom: 8px; }
 footer { display: flex; justify-content: center; padding: 48px 16px 40px; }
@@ -45,7 +45,7 @@ header a { color: var(--ink-2); text-decoration: none; font-weight: 500; }
 header a.current, header a:hover { color: var(--ink); }
 header a.brand { font-family: var(--mono); font-weight: 700; color: var(--ink); }
 a { color: var(--link); }
-h1 { font-size: var(--fs-h1); line-height: 1.2; margin: 24px 0 6px; }
+h1 { font-size: var(--fs-h1); line-height: 1.3; margin: 24px 0 6px; }
 h2 { font-size: var(--fs-h2); margin: 36px 0 12px; }
 p.lede { color: var(--ink-2); font-size: var(--fs-lede); margin: 0 0 18px; max-width: 60ch; }
 code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
@@ -81,9 +81,9 @@ td.num { font-variant-numeric: tabular-nums; }
 .hero-shots img { display: block; width: 100%; height: auto; border-radius: inherit; opacity: 0; transition: opacity 0.9s ease; }
 .hero-shots::after { content: ""; z-index: 1; border-radius: inherit; border: 1px solid rgb(255 255 255 / 0.16); pointer-events: none; } /* lightens the screenshot's own edge, whatever its colour */
 .hero-shots img.on { opacity: 1; }
-.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 28px; margin-bottom: 8px; }
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px 28px; margin-bottom: 8px; }
 .features h3 { font-size: var(--fs-base); font-weight: 500; margin: 0 0 2px; }
-.features p { font-size: var(--fs-sm); line-height: 1.45; color: var(--ink-2); margin: 0; }
+.features p { font-size: var(--fs-sm); color: var(--ink-2); margin: 0; }
 @media (max-width: 640px) {
   h1 { margin-top: 18px; }
   .features { grid-template-columns: 1fr 1fr; gap: 14px 16px; }
