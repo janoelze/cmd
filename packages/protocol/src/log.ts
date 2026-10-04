@@ -207,6 +207,37 @@ export function crashContext(extra: Record<string, string> = {}): Record<string,
   };
 }
 
+// Usage stats (core/usage.ts) count crashes too, whether or not reports are
+// sent: recordCrash appends a line per crash to this file, and the core takes
+// the lines with its next batch (a core that died is counted by the next one).
+const usageCountsPath = () => path.join(crashDir(), "usage-counts");
+/** Report kinds where the process died or a window went blank; the rest are internal errors. */
+const FATAL_KINDS: ReadonlySet<string> = new Set(["uncaughtException", "exit", "render-process-gone", "child-process-gone", "minidump"]);
+
+/** Count a crash or error for usage stats. Synchronous, for crash handlers. */
+export function countForUsage(name: string): void {
+  try {
+    fs.mkdirSync(crashDir(), { recursive: true });
+    fs.appendFileSync(usageCountsPath(), `${name}\n`);
+  } catch {}
+}
+
+/** The counts recorded since the last call, removed from the file. */
+export function takeUsageCounts(): Record<string, number> {
+  const claimed = `${usageCountsPath()}.${process.pid}`;
+  const out: Record<string, number> = {};
+  try {
+    fs.renameSync(usageCountsPath(), claimed);
+  } catch {
+    return out;
+  }
+  try {
+    for (const name of fs.readFileSync(claimed, "utf8").split("\n")) if (name) out[name] = (out[name] ?? 0) + 1;
+  } catch {}
+  fs.rmSync(claimed, { force: true });
+  return out;
+}
+
 /** Write a crash report for main/crash.ts to send. Synchronous: the process may be about to exit. */
 export function recordCrash(r: Omit<CrashReport, "id" | "time" | "log" | "context"> & { context?: Record<string, string>; log?: string[] }): string | null {
   const report: CrashReport = {
@@ -220,6 +251,7 @@ export function recordCrash(r: Omit<CrashReport, "id" | "time" | "log" | "contex
     fs.mkdirSync(crashDir(), { recursive: true });
     const file = path.join(crashDir(), `${report.time.replace(/[:.]/g, "-")}-${report.process}-${report.id.slice(0, 8)}.json`);
     fs.writeFileSync(file, JSON.stringify(report, null, 2));
+    countForUsage(FATAL_KINDS.has(report.kind) ? `crash.${report.process}` : "error");
     return file;
   } catch {
     return null;

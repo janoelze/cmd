@@ -349,7 +349,7 @@ export const SETTINGS_SCHEMA = {
     title: "Send anonymous usage stats",
     type: "boolean",
     default: true,
-    description: "Once a minute, count app launches, windows opened by type and agents started by kind, and send those counts with the app version, macOS version, processor type and this Mac's random id (the one crash reports use). Never commands, paths, titles or anything you type, and no location. The totals are public at endtime-instruments.org/cmd/usage.",
+    description: "Once a minute, count app launches, windows opened by type, agents started by kind and crashes, and send those counts with the app version, macOS version, processor type and this Mac's random id (the one crash reports use). Never commands, paths, titles or anything you type, and no location. The totals are public at endtime-instruments.org/cmd/usage.",
   },
   "magic.explore": { title: "Look around this Mac", type: "boolean", default: true, description: "Let the Magic agent run read-only commands and read files to answer requests about this Mac. Private files (keys, keychains, browser profiles) stay off limits." },
   "magic.showSteps": { title: "Show commands while building", type: "boolean", default: false, description: "Show the commands, files and URLs the Magic agent looks at while it builds a window, with their output. Off: only what it is doing, in a few words." },

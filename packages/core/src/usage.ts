@@ -1,15 +1,17 @@
 // Anonymous usage stats: counters of a few events (app launches, windows opened
-// by type, agents started by kind), sent once a minute with the app version,
+// by type, agents started by kind, crashes and internal errors by process;
+// crashes are recorded by every process, see countForUsage), sent once a minute with the app version,
 // macOS version, processor type and the install's random machineId (the one
 // crash reports use). Only names from the fixed lists below are counted, never
 // paths, commands, titles or anything typed; the totals are public at
 // endtime-instruments.org/cmd/usage (website/). Batches without events are
 // skipped, except one a day so an idle install still counts as active. Release
 // builds send; development builds only when $CMD_USAGE_URL is set. The
-// `diagnostics.usageStats` setting turns it off.
+// `diagnostics.usageStats` setting turns it off. The server can slow senders
+// down (429 or 503 with Retry-After) or stop them (410, until the core restarts).
 
 import os from "node:os";
-import { logger } from "@cmd/protocol/node";
+import { logger, takeUsageCounts } from "@cmd/protocol/node";
 
 export const USAGE_URL = "https://endtime-instruments.org/cmd/usage/ingest.php";
 
@@ -17,6 +19,9 @@ const WINDOW_KINDS: ReadonlySet<string> = new Set(["terminal", "browser", "files
 const AGENT_KINDS: ReadonlySet<string> = new Set(["claude", "codex", "gemini", "opencode", "qwen", "copilot"]);
 const INTERVAL_MS = 60_000;
 const TIMEOUT_MS = 5_000;
+const BACKOFF_MS = 10 * 60_000;
+/** Crash counts from other processes (crash.<process>, error), checked before they're sent on. */
+const CRASH_NAME = /^(crash\.[a-z]+|error)$/;
 
 const log = logger("usage");
 
@@ -31,6 +36,8 @@ export interface UsageOptions {
   now?: () => number;
   /** 0: no timer, flush() is called by hand (tests). */
   intervalMs?: number;
+  /** Crash counts recorded since the last call (default: takeUsageCounts). */
+  crashes?: () => Record<string, number>;
 }
 
 export interface UsageBatch {
@@ -48,6 +55,10 @@ export class UsageStats {
   /** UTC day of the last batch sent. */
   #sentDay: string | null = null;
   #sending = false;
+  /** Retry-After from the server. */
+  #pausedUntil = 0;
+  /** 410 from the server: no more batches from this core. */
+  #stopped = false;
   #timer: NodeJS.Timeout | undefined;
 
   constructor(o: UsageOptions) {
@@ -74,12 +85,16 @@ export class UsageStats {
   /** Send what was counted; true when a batch went out. */
   async flush(): Promise<boolean> {
     const { url } = this.#o;
-    if (!url || this.#sending) return false;
+    if (!url || this.#sending || this.#stopped) return false;
+    const crashes = (this.#o.crashes ?? takeUsageCounts)();
     if (!this.#o.enabled()) {
       this.#counts.clear();
       return false;
     }
-    const day = new Date((this.#o.now ?? Date.now)()).toISOString().slice(0, 10);
+    for (const [k, n] of Object.entries(crashes)) if (CRASH_NAME.test(k)) this.#counts.set(k, (this.#counts.get(k) ?? 0) + n);
+    const now = (this.#o.now ?? Date.now)();
+    if (now < this.#pausedUntil) return false;
+    const day = new Date(now).toISOString().slice(0, 10);
     if (!this.#counts.size && this.#sentDay === day) return false;
     const id = this.#o.id();
     if (!id) return false;
@@ -94,6 +109,21 @@ export class UsageStats {
         body: JSON.stringify(batch),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
+      if (res.status === 410) {
+        log.info("the usage stats server asked to stop");
+        this.#stopped = true;
+        this.#counts.clear();
+        return false;
+      }
+      if (res.status === 429 || res.status === 503) {
+        const after = Number(res.headers.get("retry-after"));
+        this.#pausedUntil = now + (Number.isFinite(after) && after > 0 ? after * 1000 : BACKOFF_MS);
+        throw new Error(`HTTP ${res.status}, again in ${Math.round((this.#pausedUntil - now) / 1000)} s`);
+      }
+      if (res.status >= 400 && res.status < 500) {
+        log.warn(`batch rejected: HTTP ${res.status}`); // retrying won't help: drop it
+        return false;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       this.#sentDay = day;
       return true;

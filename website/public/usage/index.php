@@ -21,7 +21,7 @@ $maxDaily = max($s['daily']) ?: 1;
 page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 ?>
 <h1>Usage</h1>
-<p class="lede">cmd counts a few things and sends the counts here once a minute: app launches, windows opened by type and agents started by kind, with the app version, macOS version, processor type and a random id per install. Never commands, paths, titles, anything typed or where you are. Turn it off in Settings → About.</p>
+<p class="lede">cmd counts a few things and sends the counts here once a minute: app launches, windows opened by type, agents started by kind and crashes by process, with the app version, macOS version, processor type and a random id per install. Never commands, paths, titles, anything typed or where you are. Turn it off in Settings → About.</p>
 
 <div class="tiles">
   <div class="card tile"><div class="label">Active today</div><div class="value"><?= number_format($s['activeToday']) ?></div></div>
@@ -46,8 +46,31 @@ page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
   <div><h2>Versions, installs active in 7 days</h2><div class="card"><?php bars($s['versions']) ?></div></div>
   <div><h2>macOS, installs active in 30 days</h2><div class="card"><?php bars($macos) ?></div></div>
   <div><h2>Processor</h2><div class="card"><?php bars($s['arch']) ?></div></div>
+  <div><h2>Crashes by process, 30 days</h2><div class="card"><?php bars($s['crashes'], 'None.') ?></div></div>
 </div>
 
-<p class="muted" style="margin-top:24px">Days are UTC. <?= number_format($s['installs']) ?> installs seen in total. <a href="?format=json">JSON</a></p>
+<h2>Release health, 30 days</h2>
+<div class="card" style="overflow-x:auto">
+<?php if (!$s['health']): ?>
+  <p class="muted">Nothing yet.</p>
+<?php else: ?>
+  <table>
+    <tr><th>Version</th><th>Installs</th><th>Launches</th><th>Crashes</th><th>Per 100 launches</th><th>Installs with a crash</th><th>Internal errors</th></tr>
+<?php foreach ($s['health'] as $r): ?>
+    <tr>
+      <td class="tag"><?= h($r['version']) ?></td>
+      <td class="num"><?= number_format($r['installs']) ?></td>
+      <td class="num"><?= number_format($r['launches']) ?></td>
+      <td class="num"><?= number_format($r['crashes']) ?></td>
+      <td class="num"><?= $r['launches'] ? number_format($r['crashes'] / $r['launches'] * 100, 1) : '–' ?></td>
+      <td class="num"><?= $r['installs'] ? round($r['crashedInstalls'] / $r['installs'] * 100) . '%' : '–' ?></td>
+      <td class="num"><?= number_format($r['errors']) ?></td>
+    </tr>
+<?php endforeach ?>
+  </table>
+<?php endif ?>
+</div>
+
+<p class="muted" style="margin-top:24px">Crashes are when a process died or a window went blank; internal errors are ones cmd caught and kept running. A crash is counted with the version that reports it, usually the one that crashed. Days are UTC. <?= number_format($s['installs']) ?> installs seen in total. <a href="?format=json">JSON</a></p>
 <?php
 page_end();

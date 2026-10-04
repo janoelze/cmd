@@ -17,7 +17,7 @@
 import { app, crashReporter } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import { connect, crashContext, crashDir, logger, machineId, recordCrash, type CrashProcess, type CrashReport } from "@cmd/protocol/node";
+import { connect, countForUsage, crashContext, crashDir, logger, machineId, recordCrash, type CrashProcess, type CrashReport } from "@cmd/protocol/node";
 import { payload, scrub, signature } from "./crash-format.ts";
 
 declare const __CRASH_WEBHOOK__: string;
@@ -84,6 +84,7 @@ export function startCrashReporting(o: { devBuild: boolean; context: () => Recor
   try {
     crashedSince = fs.statSync(marker).mtimeMs;
     log.warn("the previous session didn't quit cleanly");
+    if (dumpsSince(crashedSince).length) countForUsage("crash.native"); // usage stats: main itself crashed
   } catch {}
   try {
     fs.writeFileSync(marker, String(process.pid));
@@ -254,8 +255,11 @@ function pruneSent(): void {
 
 /** Minidumps the previous app wrote before it died, not yet sent. */
 function newDumps(state: SentState): string[] {
+  return crashedSince === null ? [] : dumpsSince(crashedSince).filter((p) => !state.dumps.includes(path.basename(p)));
+}
+
+function dumpsSince(since: number): string[] {
   const out: string[] = [];
-  if (crashedSince === null) return out;
   const walk = (d: string) => {
     let entries: fs.Dirent[];
     try {
@@ -266,7 +270,7 @@ function newDumps(state: SentState): string[] {
     for (const e of entries) {
       const p = path.join(d, e.name);
       if (e.isDirectory()) walk(p);
-      else if (e.name.endsWith(".dmp") && !state.dumps.includes(e.name) && fs.statSync(p).mtimeMs >= crashedSince!) out.push(p);
+      else if (e.name.endsWith(".dmp") && fs.statSync(p).mtimeMs >= since) out.push(p);
     }
   };
   walk(dumpsDir());

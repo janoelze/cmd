@@ -58,7 +58,7 @@ p.lede { color: var(--ink-2); font-size: 17px; margin: 0 0 24px; max-width: 60ch
 .daily .col:hover span { background: var(--ink); }
 .axis { display: flex; justify-content: space-between; color: var(--ink-3); font-size: 12px; margin-top: 6px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-td, th { text-align: left; padding: 8px 0; border-bottom: 1px solid var(--line); }
+td, th { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--ink-2); font-weight: 500; font-size: 13px; }
 td.num { font-variant-numeric: tabular-nums; }
 .tag { font-family: var(--mono); }
@@ -88,19 +88,24 @@ function page_end(): void
 <?php
 }
 
-/** Labelled horizontal bars, largest first. */
+/**
+ * Labelled horizontal bars, largest first. Rows are numbers, or
+ * ['count' => n, 'share' => 0..1] to say what share of installs did it too.
+ */
 function bars(array $rows, string $empty = 'Nothing yet.'): void
 {
     if (!$rows) {
         echo '<p class="muted">' . h($empty) . '</p>';
         return;
     }
-    arsort($rows);
-    $max = max($rows) ?: 1;
+    $n = fn($r) => is_array($r) ? $r['count'] : $r;
+    uasort($rows, fn($a, $b) => $n($b) <=> $n($a));
+    $max = max(array_map($n, $rows)) ?: 1;
     echo '<div class="bars">';
-    foreach ($rows as $k => $n) {
-        $w = round($n / $max * 100, 1);
-        echo '<span class="k">' . h((string) $k) . '</span><span class="track"><span class="fill" style="width:' . $w . '%" title="' . h("$k: $n") . '"></span></span><span class="n">' . number_format($n) . '</span>';
+    foreach ($rows as $k => $r) {
+        $w = round($n($r) / $max * 100, 1);
+        $label = number_format($n($r)) . (is_array($r) ? ' <span class="muted">· ' . round($r['share'] * 100) . '% of installs</span>' : '');
+        echo '<span class="k">' . h((string) $k) . '</span><span class="track"><span class="fill" style="width:' . $w . '%" title="' . h("$k: " . $n($r)) . '"></span></span><span class="n">' . $label . '</span>';
     }
     echo '</div>';
 }

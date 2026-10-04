@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { LogFile, crashDir, formatLine, logDir, machineId, machineIdPath, recordCrash, type CrashReport } from "@cmd/protocol/node";
+import { LogFile, crashDir, formatLine, logDir, machineId, machineIdPath, recordCrash, takeUsageCounts, type CrashReport } from "@cmd/protocol/node";
 
 const env = { ...process.env };
 afterEach(() => {
@@ -57,6 +57,16 @@ describe("recordCrash", () => {
     const r: CrashReport = JSON.parse(fs.readFileSync(file!, "utf8"));
     expect(r).toMatchObject({ process: "core", kind: "uncaughtException", message: "TypeError: x", log: ["line"] });
     expect(r.context).toMatchObject({ version: "1.2.3", channel: "dev", machine: machineId() });
+  });
+
+  it("counts crashes and errors for usage stats until they're taken", () => {
+    process.env.CMD_LOG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-log-"));
+    recordCrash({ process: "core", kind: "uncaughtException", message: "x", stack: null });
+    recordCrash({ process: "renderer", kind: "render-process-gone", message: "x", stack: null });
+    recordCrash({ process: "core", kind: "rpc pane.read", message: "x", stack: null });
+    recordCrash({ process: "main", kind: "unhandledRejection", message: "x", stack: null });
+    expect(takeUsageCounts()).toEqual({ "crash.core": 1, "crash.renderer": 1, error: 2 });
+    expect(takeUsageCounts()).toEqual({});
   });
 });
 
