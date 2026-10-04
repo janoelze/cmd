@@ -30,9 +30,13 @@ export class ResourceMonitor {
   #prev = new Map<number, { cpu: number; at: number }>();
   #busy = false;
 
-  constructor(panes: PaneManager, sample: TreeSampler, intervalMs = 2000) {
+  #watched: () => boolean;
+
+  /** watched: whether any UI could show the samples (the status bar, the Task Manager); none are taken while not. */
+  constructor(panes: PaneManager, sample: TreeSampler, intervalMs = 2000, watched: () => boolean = () => true) {
     this.#panes = panes;
     this.#sample = sample;
+    this.#watched = watched;
     if (intervalMs > 0) {
       this.#timer = setInterval(() => void this.tick(), intervalMs);
       this.#timer.unref();
@@ -40,7 +44,7 @@ export class ResourceMonitor {
   }
 
   async tick(now = Date.now()): Promise<void> {
-    if (this.#busy) return;
+    if (this.#busy || !this.#watched()) return;
     this.#busy = true;
     try {
       const panes = this.#panes.list().filter((p) => p.exitCode === null && p.pid > 0);

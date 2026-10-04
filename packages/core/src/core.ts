@@ -158,7 +158,7 @@ export class Core {
     this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null, sources: this.transcripts });
     this.notifications = new NotificationCenter(this.panes, this.agents, settings);
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
-    this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler) : null;
+    this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler, 2000, () => this.#subscribers.size > 0) : null;
     this.processes = opts.procSampler ? new ProcessSampler(opts.procSampler) : null;
     this.spaces = new SpaceManager(this.store, opts.home);
     this.spaces.on("updated", (space) => this.#broadcast({ type: "space.updated", space }));
@@ -184,6 +184,7 @@ export class Core {
       stateDir: opts.stateDir ?? null,
       previewer: () => this.#previewer(),
       deno: opts.magicDeno,
+      watched: () => this.#subscribers.size > 0,
       cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root,
       workspaceFor: (w) => {
         const sp = this.spaces.get(w.spaceId);
@@ -646,9 +647,11 @@ export class Core {
       const types = (params as Params<"events.subscribe">).types;
       const set = Array.isArray(types) ? new Set<string>(types) : null;
       this.#subscribers.set(conn, set ? (e) => set.has(e.type) : () => true);
+      this.magic.resume();
     } else if (method === "remote.bootstrap") {
       if (conn.deviceId) (result as Result<"remote.bootstrap">).device = { id: conn.deviceId, scope: conn.access as RemoteScope };
       this.#subscribers.set(conn, (e) => remoteEventVisible(e, this.#follows.get(conn) ?? EMPTY, this.#connWatches.get(conn) ?? []));
+      this.magic.resume();
     }
   }
 

@@ -27,6 +27,19 @@ describe("ResourceMonitor", () => {
     expect(panes.get(pane.id)!.usage!.cpu).toBe(25);
   });
 
+  it("doesn't sample while no UI is connected", async () => {
+    const panes = new PaneManager(fakeFactory().factory, { socketPath: "/tmp/t.sock", pollMs: 0 });
+    panes.create();
+    let calls = 0;
+    let watched = false;
+    const mon = new ResourceMonitor(panes, async () => (calls++, []), 0, () => watched);
+    await mon.tick(1000);
+    expect(calls).toBe(0);
+    watched = true;
+    await mon.tick(2000);
+    expect(calls).toBe(1);
+  });
+
   it("only broadcasts noticeable changes", () => {
     const u = { memory: 100e6, cpu: 5, processes: 2, top: [], sampledAt: 0 };
     expect(usageChanged(null, u)).toBe(true);

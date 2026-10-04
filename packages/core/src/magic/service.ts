@@ -72,6 +72,8 @@ export interface MagicServiceOptions {
   previewer?: () => Promise<Previewer | null>;
   /** Tests: the Deno to use (default: findDeno). */
   deno?: string | null;
+  /** Whether any UI could show the data (default: always); refreshes wait while none can (see resume). */
+  watched?: () => boolean;
 }
 
 const PERSIST_DATA_MS = 60_000;
@@ -103,6 +105,8 @@ export class MagicService {
   #editTimers = new Map<WindowId, ReturnType<typeof setTimeout>>();
   /** Windows magic.autoFix already tried to fix (per revision). */
   #autoFixed = new Map<WindowId, number>();
+  /** Refreshes that came due while no UI was connected: run on resume. */
+  #parked = new Set<WindowId>();
   /** Model lists per provider and key, so the settings popup opens instantly. */
   #models = new Map<string, { at: number; list: Promise<MagicModel[]> }>();
   #disposed = false;
@@ -502,6 +506,7 @@ export class MagicService {
   stop(id: WindowId): void {
     clearTimeout(this.#timers.get(id));
     this.#timers.delete(id);
+    this.#parked.delete(id);
   }
 
   dispose(): void {
@@ -520,8 +525,19 @@ export class MagicService {
     this.stop(id);
     this.#timers.set(
       id,
-      setTimeout(() => void this.#tick(id), delay),
+      setTimeout(() => {
+        // Nobody to show it to: no data run every few seconds while the app is closed.
+        if (this.#o.watched && !this.#o.watched()) return void (this.#timers.delete(id), this.#parked.add(id));
+        void this.#tick(id);
+      }, delay),
     );
+  }
+
+  /** A UI connected: refresh what came due meanwhile, now. */
+  resume(): void {
+    const ids = [...this.#parked];
+    this.#parked.clear();
+    for (const id of ids) this.#schedule(id, 0);
   }
 
   async #tick(id: WindowId): Promise<void> {
