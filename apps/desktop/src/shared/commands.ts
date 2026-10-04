@@ -42,6 +42,13 @@ export const COMMANDS = spec([
   { id: "edit.copy", label: "Copy", keys: ["Cmd+C"] },
   { id: "edit.selectAll", label: "Select All", keys: ["Cmd+A"] },
   { id: "edit.clear", label: "Clear Buffer", keys: ["Alt+Cmd+K"] },
+  { id: "edit.find", label: "Find…", keys: ["Cmd+F"] },
+  { id: "edit.findNext", label: "Find Next", keys: ["Cmd+G"] },
+  { id: "edit.findPrev", label: "Find Previous", keys: ["Shift+Cmd+G"] },
+  { id: "edit.copyLastOutput", label: "Copy Last Command Output", keys: ["Shift+Cmd+A"] },
+  // ⌘↑ / ⌘↓ in a terminal (its own keys, so text windows keep theirs: terminals.ts).
+  { id: "terminal.prevPrompt", label: "Jump to Previous Prompt" },
+  { id: "terminal.nextPrompt", label: "Jump to Next Prompt" },
 
   { id: "view.palette", label: "Command Palette…", keys: ["Cmd+K"] },
   { id: "view.search", label: "Search Sessions…", keys: ["Shift+Cmd+F"] },

@@ -1,6 +1,6 @@
 // Bridges the renderer to the core socket. Reconnects if the core restarts.
 
-import { contextBridge, ipcRenderer } from "electron";
+import { clipboard, contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CoreEvent, Method, Params, Result } from "@cmd/protocol";
 import { connect, type Connection } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
@@ -175,6 +175,10 @@ const api = {
   confirm: (o: { message: string; detail?: string; confirm: string }): Promise<boolean> => ipcRenderer.invoke("confirm", o),
   /** The URL of a Magic widget frame whose CSP allows media from these origins (cmd-widget://, main process). */
   widgetFrame: (media: string[]): Promise<string> => ipcRenderer.invoke("widget-frame", media),
+  /** Put text on the clipboard, also while the app isn't focused (navigator.clipboard needs focus): OSC 52 from a background terminal. */
+  writeClipboard: (text: string) => clipboard.writeText(text),
+  /** The path of a file dropped from Finder ("" for one that isn't on disk). */
+  pathForFile: (f: File): string => webUtils.getPathForFile(f),
   /** Native context menu; resolves with the chosen item id or null. */
   contextMenu: (items: ContextItem[]): Promise<string | null> => ipcRenderer.invoke("context-menu", items),
 };

@@ -275,6 +275,11 @@ export function App() {
 
   // ── commands ───────────────────────────────────────────
   // One handler per command id; the menu bar, palette and context menus all call these.
+  const findIn = (r: "open" | "next" | "prev") => {
+    if (!selected || editingText()) return;
+    if (s.panes.has(selected)) terminals.requestFind(selected, r);
+    else windowActions(selected)?.find?.(r);
+  };
   const handlers: Record<CommandId, () => void> = {
     "app.settings": () => cmd.openSettings(),
     "app.checkUpdates": () => cmd.checkForUpdates(),
@@ -309,6 +314,13 @@ export function App() {
       else terminals.selectAll(selected);
     },
     "edit.clear": () => selected && terminals.clear(selected),
+    // Find in the terminal's scrollback, or in a text window (CodeMirror's panel).
+    "edit.find": () => findIn("open"),
+    "edit.findNext": () => findIn("next"),
+    "edit.findPrev": () => findIn("prev"),
+    "edit.copyLastOutput": () => selected && s.panes.has(selected) && terminals.copyLastOutput(selected),
+    "terminal.prevPrompt": () => selected && terminals.jumpToPrompt(selected, -1),
+    "terminal.nextPrompt": () => selected && terminals.jumpToPrompt(selected, 1),
     "view.palette": () => setPalette((p) => (p === false ? "" : false)),
     "view.search": () => (setSidebarOpen(true), setSidebarRequest({ kind: "search", at: Date.now() })),
     "view.focus": () => setMode("focus"),
@@ -373,6 +385,7 @@ export function App() {
   useEffect(() => onWindowFocus((id) => (document.hasFocus() || spaceOfWindow(id) === getState().spaceId) && select(id)), [select]);
 
   // Tell the menu bar what is checked/enabled.
+  const selectedIsPane = !!selected && s.panes.has(selected);
   useEffect(() => {
     const hasPane = !!selected;
     cmd.setMenuState({
@@ -385,6 +398,9 @@ export function App() {
       },
       enabled: {
         "edit.clear": hasPane,
+        "edit.copyLastOutput": selectedIsPane,
+        "terminal.prevPrompt": selectedIsPane,
+        "terminal.nextPrompt": selectedIsPane,
         "session.next": withPane.length > 1,
         "session.prev": withPane.length > 1,
         "session.copyResume": !!(currentAgent && sessionId(currentAgent)),
@@ -399,7 +415,7 @@ export function App() {
         "space.icon": !!space,
       },
     });
-  }, [mode, sidebarOpen, selected, withPane.length, currentAgent, attention, openSpaces.length, space]);
+  }, [mode, sidebarOpen, selected, selectedIsPane, withPane.length, currentAgent, attention, openSpaces.length, space]);
 
   // ── context menus ──────────────────────────────────────
 
@@ -489,6 +505,8 @@ export function App() {
       { label: "Copy", run: () => terminals.copy(paneId), enabled: terminals.hasSelection(paneId) },
       { label: "Paste", run: () => void navigator.clipboard.readText().then((t) => terminals.paste(paneId, t)) },
       { label: "Select All", run: () => terminals.selectAll(paneId) },
+      { label: "Copy Last Command Output", run: () => terminals.copyLastOutput(paneId) },
+      { label: "Find…", run: () => terminals.requestFind(paneId, "open") },
       "-",
       { label: "Clear Buffer", run: () => terminals.clear(paneId) },
       {

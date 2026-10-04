@@ -13,6 +13,8 @@ type Actions = {
   change?: () => void;
   refresh?: () => void;
   stop?: () => void;
+  /** ⌘F / ⌘G / ⇧⌘G. */
+  find?: (r: "open" | "next" | "prev") => void;
 };
 const registry = new Map<string, Actions>();
 

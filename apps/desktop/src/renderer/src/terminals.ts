@@ -1,25 +1,42 @@
 // One xterm.js instance per pane, kept alive while the pane exists so switching
 // views never loses state. Views borrow the instance's element.
 // WebGL contexts are pooled (browsers keep ~16); others use the DOM renderer.
-// See docs/02-terminal-foundations.md.
+// Also what xterm.js leaves to the app: find (⌘F), prompt marks (OSC 133:
+// ⌘↑/⌘↓, copy last output), OSC 52 copy, images, drag-and-drop, paste
+// protection, Option as Meta per side, and the queries it doesn't answer
+// (XTVERSION, color scheme). See docs/02-terminal-foundations.md.
 
 import { MAC_KEYMAP } from "../../shared/commands.ts";
 import { isAppShortcut } from "./keybindings.ts";
-import { Terminal, type IBufferCellPosition, type ILink, type ITheme } from "@xterm/xterm";
+import { Terminal, type IBufferCellPosition, type IDisposable, type ILink, type IMarker, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon, type ISearchOptions } from "@xterm/addon-search";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+import type { ImageAddon } from "@xterm/addon-image";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { currentTheme, onThemeChange, terminalColors } from "./themes/registry.ts";
 import { findLinks } from "./links.ts";
+import { pasteRisk, preview, shellWord } from "./paste.ts";
 
 // ⌘ keys sent to the PTY as readline control characters: kill line, start, end.
 const CMD_KEYS: Record<string, string> = { Backspace: "\x15", ArrowLeft: "\x01", ArrowRight: "\x05" };
 
 interface Host {
+  paneId: PaneId;
   term: Terminal;
   fit: FitAddon;
+  search: SearchAddon;
+  images: ImageAddon | null;
+  /** Shell integration marks (OSC 133): where prompts start, and each command's output. */
+  prompts: IMarker[];
+  outputs: { start: IMarker; end: IMarker | null }[];
+  /** The last ⌘↑/⌘↓ target, while the view is still where that jump left it. */
+  jump: { line: number; viewportY: number } | null;
+  /** Mode 2031: the program wants to hear when the color scheme changes. */
+  schemeUpdates: boolean;
   el: HTMLDivElement;
   opened: boolean;
   webgl: WebglAddon | null;
@@ -33,6 +50,43 @@ interface Host {
 const FIT_INTERVAL = 100;
 
 const theme = (): ITheme => terminalColors(currentTheme());
+
+/** Marks kept per terminal; older ones go (and with scrollback, xterm disposes them). */
+const MAX_MARKS = 1000;
+
+/** The app's version, for XTVERSION (programs that check what terminal they're in). */
+let version = "";
+void cmd.appInfo().then((i) => (version = i.version), () => {});
+
+/** Which Option key is down, for terminal.optionAsMeta = left / right. */
+let optionSide: "left" | "right" | null = null;
+window.addEventListener("keydown", (e) => e.key === "Alt" && (optionSide = e.code === "AltRight" ? "right" : "left"), true);
+window.addEventListener("keyup", (e) => e.key === "Alt" && (optionSide = null), true);
+window.addEventListener("blur", () => (optionSide = null));
+
+/** #RRGGBB for search highlights (they don't take other formats). */
+const hex = (c: string | undefined, fallback: string): string => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : fallback);
+function searchOptions(o: { caseSensitive: boolean; regex: boolean }): ISearchOptions {
+  const t = theme();
+  const match = hex(t.yellow, "#c0a030");
+  return {
+    ...o,
+    decorations: {
+      matchBackground: hex(t.selectionBackground, "#44475a"),
+      matchBorder: match,
+      matchOverviewRuler: match,
+      activeMatchBackground: match,
+      activeMatchColorOverviewRuler: hex(t.brightYellow, match),
+    },
+  };
+}
+
+export interface FindResults {
+  /** 0-based, -1 when there are too many to count or none. */
+  index: number;
+  count: number;
+}
+type FindRequest = "open" | "next" | "prev";
 
 // ⌘-click links (URLs, existing file paths). xterm asks the provider only for
 // the line under the mouse, when the mouse moves onto it, and caches the reply
@@ -176,6 +230,7 @@ class Terminals {
       } else if (s["terminal.renderer"] === "webgl" && !h.webgl && h.opened) {
         this.#ensureWebgl(h);
       }
+      if (s["terminal.images"] !== !!h.images) this.#setImages(h, s["terminal.images"]);
       if (fontChanged || s["font.code"] !== prev["font.code"] || s["font.codeSize"] !== prev["font.codeSize"]) {
         h.webgl?.clearTextureAtlas();
       }
@@ -196,6 +251,9 @@ class Terminals {
       fontSize: Math.max(6, s["font.codeSize"] + this.#zoom),
       lineHeight: s["terminal.lineHeight"],
       cursorBlink: s["terminal.cursorBlink"],
+      cursorStyle: s["terminal.cursorStyle"],
+      minimumContrastRatio: s["terminal.minimumContrast"],
+      macOptionIsMeta: s["terminal.optionAsMeta"] === "both",
       scrollback: s["terminal.scrollback"],
     };
   }
@@ -205,8 +263,11 @@ class Terminals {
     if (h) return h;
     const term = new Terminal({
       ...this.#options(),
-      macOptionIsMeta: true,
       allowProposedApi: true,
+      // ⌥-drag selects in programs that use the mouse (Claude Code, vim, htop).
+      macOptionClickForcesSelection: true,
+      // Size reports some programs use to fit images and layouts (CSI 14/16/18 t).
+      windowOptions: { getWinSizePixels: true, getCellSizePixels: true, getWinSizeChars: true },
       theme: theme(),
       // OSC 8 hyperlinks (ls --hyperlink, Claude Code…): ⌘-click too, no confirm dialog.
       linkHandler: {
@@ -222,6 +283,33 @@ class Terminals {
     term.registerLinkProvider(linkProvider(term, paneId));
     const fit = new FitAddon();
     term.loadAddon(fit);
+    const search = new SearchAddon();
+    term.loadAddon(search);
+    search.onDidChangeResults((r) => this.#findListeners.get(paneId)?.results({ index: r.resultIndex, count: r.resultCount }));
+    // Emoji and CJK as two cells, as programs measure them (the PTY host's terminal matches: terminals/local.ts).
+    term.loadAddon(new Unicode11Addon());
+    term.unicode.activeVersion = "11";
+    const el = document.createElement("div");
+    h = {
+      paneId,
+      term,
+      fit,
+      search,
+      images: null,
+      prompts: [],
+      outputs: [],
+      jump: null,
+      schemeUpdates: false,
+      el,
+      opened: false,
+      webgl: null,
+      lastUsed: Date.now(),
+      fittedAt: 0,
+      fitTimer: null,
+    };
+    const host = h;
+    if (this.#settings["terminal.images"]) this.#setImages(h, true);
+    this.#protocol(host);
     term.onData((data) => void cmd.call("pane.write", { paneId, data }));
     term.onResize(({ cols, rows }) => void cmd.call("pane.resize", { paneId, cols, rows }));
     // App shortcuts are menu key equivalents (main process); keep them out of the PTY:
@@ -229,26 +317,40 @@ class Terminals {
     // Except the line-editing keys macOS terminals translate (⌘⌫ ⌘← ⌘→, as Ghostty does).
     // ⇧↩ sends ESC CR, which agents (Claude Code, Codex) read as a newline in their input
     // and zsh inserts as one; xterm.js would send a plain CR, the same as ↩.
+    // Option as Meta for one side only: decided per key, from which Option is down.
+    // ⌘↑ ⌘↓ jump between prompts, ⌘Home ⌘End ⌘PgUp ⌘PgDn scroll (Terminal.app, Ghostty).
     term.attachCustomKeyEventHandler((e) => {
       if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (e.type === "keydown") void cmd.call("pane.write", { paneId, data: "\x1b\r" });
         return false;
       }
       if (!MAC_KEYMAP) return !isAppShortcut(e);
+      if (e.altKey && !e.metaKey) {
+        const mode = this.#settings["terminal.optionAsMeta"];
+        const meta = mode === "both" || (mode !== "off" && mode === optionSide);
+        if (term.options.macOptionIsMeta !== meta) term.options.macOptionIsMeta = meta;
+      }
       if (!e.metaKey) return true;
-      const seq = !e.ctrlKey && !e.altKey && !e.shiftKey ? CMD_KEYS[e.key] : undefined;
-      if (seq && e.type === "keydown") void cmd.call("pane.write", { paneId, data: seq });
+      if (e.type === "keydown" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        const seq = CMD_KEYS[e.key];
+        if (seq) void cmd.call("pane.write", { paneId, data: seq });
+        else if (e.key === "ArrowUp") this.jumpToPrompt(paneId, -1);
+        else if (e.key === "ArrowDown") this.jumpToPrompt(paneId, 1);
+        else if (e.key === "Home") term.scrollToTop();
+        else if (e.key === "End") term.scrollToBottom();
+        else if (e.key === "PageUp") term.scrollPages(-1);
+        else if (e.key === "PageDown") term.scrollPages(1);
+      }
       return false;
     });
-    const el = document.createElement("div");
     el.className = "xterm-host";
+    this.#dom(host);
     // Mark terminals that have scrollback, so the scrollbar only shows when there's
     // something to scroll to (full-screen apps like Claude Code draw in place: none).
     const scrollable = () => el.classList.toggle("scrollable", term.buffer.active.baseY > 0);
     term.onWriteParsed(scrollable);
     term.buffer.onBufferChange(scrollable);
     term.onResize(scrollable);
-    h = { term, fit, el, opened: false, webgl: null, lastUsed: Date.now(), fittedAt: 0, fitTimer: null };
     this.#hosts.set(paneId, h);
     return h;
   }
@@ -315,9 +417,102 @@ class Terminals {
     this.#hosts.get(paneId)?.term.clear();
   }
 
-  /** Paste with bracketed-paste handling. */
-  paste(paneId: PaneId, text: string): void {
-    this.#hosts.get(paneId)?.term.paste(text);
+  /** Paste with bracketed-paste handling, asking first when it's risky (terminal.pasteProtection). */
+  async paste(paneId: PaneId, text: string): Promise<void> {
+    const t = this.#hosts.get(paneId)?.term;
+    if (!t || !text) return;
+    const risk = this.#settings["terminal.pasteProtection"] ? pasteRisk(text, t.modes.bracketedPasteMode) : null;
+    if (risk && !(await cmd.confirm({ message: "Paste this text?", detail: `${risk}\n\n${preview(text)}`, confirm: "Paste" }))) return;
+    t.paste(text);
+    t.focus();
+  }
+
+  /**
+   * Scroll so the previous (-1) or next (1) prompt is at the top. Starts from
+   * the prompt being typed at when at the bottom, else from the last jump while
+   * the view stays there, else from the top of the view.
+   */
+  jumpToPrompt(paneId: PaneId, dir: -1 | 1): void {
+    const h = this.#hosts.get(paneId);
+    if (!h) return;
+    const t = h.term;
+    const buf = t.buffer.active;
+    if (buf.type !== "normal") return;
+    h.prompts = h.prompts.filter((m) => !m.isDisposed);
+    const lines = h.prompts.map((m) => m.line);
+    const from =
+      h.jump && h.jump.viewportY === buf.viewportY ? h.jump.line : buf.viewportY === buf.baseY && dir < 0 ? (lines.at(-1) ?? buf.viewportY) : buf.viewportY;
+    const i = dir < 0 ? lines.findLastIndex((l) => l < from) : lines.findIndex((l) => l > from);
+    if (i < 0) {
+      if (dir > 0) t.scrollToBottom();
+      h.jump = null;
+      return;
+    }
+    t.scrollToLine(lines[i]!);
+    h.jump = { line: lines[i]!, viewportY: buf.viewportY };
+    this.#flash(h, h.prompts[i]!);
+  }
+
+  /** Select and copy the output of the last finished command (needs shell integration); false if there's none. */
+  copyLastOutput(paneId: PaneId): boolean {
+    const h = this.#hosts.get(paneId);
+    if (!h || h.term.buffer.active.type !== "normal") return false;
+    const buf = h.term.buffer.active;
+    const o = h.outputs.findLast((o) => o.end && !o.end.isDisposed && !o.start.isDisposed);
+    if (!o) return false;
+    let end = o.end!.line - 1;
+    while (end >= o.start.line && !buf.getLine(end)?.translateToString(true).trim()) end--;
+    if (end < o.start.line) return false;
+    h.term.selectLines(o.start.line, end);
+    if (o.start.line < buf.viewportY || o.start.line >= buf.viewportY + h.term.rows) h.term.scrollToLine(o.start.line);
+    cmd.writeClipboard(h.term.getSelection());
+    return true;
+  }
+
+  // ── find (⌘F): the view shows the bar, these drive xterm's search addon ──
+  #findListeners = new Map<PaneId, { request: (r: FindRequest) => void; results: (r: FindResults) => void }>();
+
+  /** The view of this terminal handles find requests and shows results. */
+  onFind(paneId: PaneId, l: { request: (r: FindRequest) => void; results: (r: FindResults) => void }): () => void {
+    this.#findListeners.set(paneId, l);
+    return () => this.#findListeners.get(paneId) === l && this.#findListeners.delete(paneId);
+  }
+
+  /** ⌘F / ⌘G / ⇧⌘G for this terminal; false if no view of it is showing. */
+  requestFind(paneId: PaneId, r: FindRequest): boolean {
+    const l = this.#findListeners.get(paneId);
+    l?.request(r);
+    return !!l;
+  }
+
+  find(paneId: PaneId, query: string, dir: 1 | -1, o: { caseSensitive: boolean; regex: boolean; incremental?: boolean }): void {
+    const h = this.#hosts.get(paneId);
+    if (!h) return;
+    if (!query) {
+      h.search.clearDecorations();
+      h.term.clearSelection();
+      this.#findListeners.get(paneId)?.results({ index: -1, count: 0 });
+      return;
+    }
+    try {
+      const opts = { ...searchOptions(o), incremental: o.incremental };
+      if (dir > 0) h.search.findNext(query, opts);
+      else h.search.findPrevious(query, opts);
+    } catch {
+      // An incomplete regex while typing.
+      this.#findListeners.get(paneId)?.results({ index: -1, count: 0 });
+    }
+  }
+
+  endFind(paneId: PaneId): void {
+    const h = this.#hosts.get(paneId);
+    h?.search.clearDecorations();
+  }
+
+  /** The selection if it's on one line (to search for), else "". */
+  selectionText(paneId: PaneId): string {
+    const sel = this.#hosts.get(paneId)?.term.getSelection() ?? "";
+    return sel.includes("\n") ? "" : sel;
   }
 
   hasSelection(paneId: PaneId): boolean {
@@ -337,7 +532,12 @@ class Terminals {
   }
 
   reset(paneId: PaneId): void {
-    this.get(paneId).term.reset();
+    const h = this.get(paneId);
+    h.term.reset();
+    for (const m of [...h.prompts, ...h.outputs.flatMap((o) => [o.start, o.end])]) m?.dispose();
+    h.prompts = [];
+    h.outputs = [];
+    h.jump = null;
   }
 
   dispose(paneId: PaneId): void {
@@ -385,9 +585,147 @@ class Terminals {
   }
 
   applyTheme(): void {
-    for (const h of this.#hosts.values()) h.term.options.theme = theme();
+    for (const h of this.#hosts.values()) {
+      h.term.options.theme = theme();
+      if (h.schemeUpdates) this.#reply(h, schemeReport());
+    }
+  }
+
+  #reply(h: Host, data: string): void {
+    void cmd.call("pane.write", { paneId: h.paneId, data });
+  }
+
+  /**
+   * Sequences xterm.js leaves to the embedder. Handlers that return false let
+   * xterm handle the sequence too.
+   */
+  #protocol(h: Host): void {
+    const p = h.term.parser;
+    // OSC 133 shell integration: A prompt start, C command output starts, D it ended.
+    p.registerOscHandler(133, (data) => {
+      const kind = data[0];
+      if (kind === "A") {
+        const m = h.term.registerMarker(0);
+        if (m) h.prompts.push(m);
+        if (h.prompts.length > MAX_MARKS) h.prompts.shift()!.dispose();
+      } else if (kind === "C") {
+        const m = h.term.registerMarker(0);
+        if (m) h.outputs.push({ start: m, end: null });
+        if (h.outputs.length > MAX_MARKS) {
+          const o = h.outputs.shift()!;
+          o.start.dispose(), o.end?.dispose();
+        }
+      } else if (kind === "D") {
+        const o = h.outputs.at(-1);
+        if (o && !o.end) o.end = h.term.registerMarker(0) ?? null;
+      }
+      return false;
+    });
+    // OSC 52: a program copies (base64). Queries (reading the clipboard) get no answer.
+    p.registerOscHandler(52, (data) => {
+      const semi = data.indexOf(";");
+      const payload = semi < 0 ? "" : data.slice(semi + 1);
+      if (!this.#settings["terminal.clipboardWrite"] || payload === "?" || payload.length > 8 << 20) return true;
+      try {
+        const bytes = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0));
+        cmd.writeClipboard(new TextDecoder().decode(bytes));
+      } catch {}
+      return true;
+    });
+    // XTVERSION (CSI > q): name and version, the way programs tell terminals apart.
+    p.registerCsiHandler({ prefix: ">", final: "q" }, (params) => {
+      if (!params[0]) this.#reply(h, `\x1bP>|cmd ${version}\x1b\\`);
+      return true;
+    });
+    // Color scheme: CSI ? 996 n asks dark or light; mode 2031 subscribes to changes (Neovim, Helix).
+    p.registerCsiHandler({ prefix: "?", final: "n" }, (params) => {
+      if (params[0] !== 996) return false;
+      this.#reply(h, schemeReport());
+      return true;
+    });
+    const mode2031 = (on: boolean) => (params: (number | number[])[]) => {
+      if (params.includes(2031)) h.schemeUpdates = on;
+      return false;
+    };
+    p.registerCsiHandler({ prefix: "?", final: "h" }, mode2031(true));
+    p.registerCsiHandler({ prefix: "?", final: "l" }, mode2031(false));
+    p.registerCsiHandler({ prefix: "?", intermediates: "$", final: "p" }, (params) => {
+      if (params[0] !== 2031) return false;
+      this.#reply(h, `\x1b[?2031;${h.schemeUpdates ? 1 : 2}$y`);
+      return true;
+    });
+  }
+
+  /** Mouse and drag-and-drop on the terminal's element. */
+  #dom(h: Host): void {
+    const { el, term, paneId } = h;
+    // Copy on select: when the mouse lets go (not on every step of a drag).
+    el.addEventListener("mouseup", () => {
+      if (this.#settings["terminal.copyOnSelect"] && term.hasSelection()) setTimeout(() => cmd.writeClipboard(term.getSelection()));
+    });
+    // ⌘V and Edit › Paste reach xterm as a paste event: check it first.
+    el.addEventListener(
+      "paste",
+      (e) => {
+        const text = e.clipboardData?.getData("text/plain") ?? "";
+        if (!this.#settings["terminal.pasteProtection"] || !pasteRisk(text, term.modes.bracketedPasteMode)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        void this.paste(paneId, text);
+      },
+      true,
+    );
+    // Files dropped from Finder (or the file browser) type their paths, quoted; text types itself.
+    el.addEventListener("dragover", (e) => {
+      const types = e.dataTransfer?.types ?? [];
+      if (!types.includes("Files") && !types.includes("text/plain")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer!.dropEffect = "copy";
+    });
+    el.addEventListener("drop", (e) => {
+      const dt = e.dataTransfer;
+      if (!dt) return;
+      const paths = [...dt.files].map((f) => cmd.pathForFile(f)).filter(Boolean);
+      const text = paths.length ? paths.map(shellWord).join(" ") + " " : dt.getData("text/plain");
+      if (!text) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void this.paste(paneId, text);
+    });
+  }
+
+  #setImages(h: Host, on: boolean): void {
+    if (!on) {
+      h.images?.dispose();
+      h.images = null;
+      return;
+    }
+    imageAddon ??= import("@xterm/addon-image").then((m) => m.ImageAddon);
+    void imageAddon.then((Image) => {
+      if (h.images || !this.#settings["terminal.images"] || this.#hosts.get(h.paneId) !== h) return;
+      h.images = new Image({ sixelSupport: true, iipSupport: true, storageLimit: 64 });
+      h.term.loadAddon(h.images);
+    });
+  }
+
+  /** Briefly highlight the line a jump landed on. */
+  #flash(h: Host, marker: IMarker): void {
+    const d = h.term.registerDecoration({ marker, width: h.term.cols, layer: "top" });
+    if (!d) return;
+    let sub: IDisposable | null = d.onRender((e) => {
+      e.classList.add("prompt-flash");
+      sub?.dispose();
+      sub = null;
+    });
+    setTimeout(() => d.dispose(), 700);
   }
 }
+
+/** CSI ? 997 ; 1|2 n: the color scheme is dark (1) or light (2). */
+const schemeReport = () => `\x1b[?997;${currentTheme().appearance === "light" ? 2 : 1}n`;
+
+let imageAddon: Promise<typeof ImageAddon> | null = null;
 
 export const terminals = new Terminals();
 onThemeChange(() => terminals.applyTheme());

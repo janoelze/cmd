@@ -16,6 +16,7 @@ import { basicSetup } from "codemirror";
 import { Compartment, EditorState, Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
+import { findNext, findPrevious, openSearchPanel } from "@codemirror/search";
 import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import type { AppWindow } from "@cmd/protocol";
@@ -241,7 +242,16 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
   };
 
   useEffect(
-    () => registerWindowActions(win.id, { save, openExternally: file ? () => cmd.openPath(file) : undefined }),
+    () =>
+      registerWindowActions(win.id, {
+        save,
+        openExternally: file ? () => cmd.openPath(file) : undefined,
+        // The menu bar owns ⌘F ⌘G ⇧⌘G, so CodeMirror's own bindings for them don't fire.
+        find: (r) => {
+          const v = view.current;
+          if (v) (r === "open" ? openSearchPanel : r === "next" ? findNext : findPrevious)(v);
+        },
+      }),
     [win.id, save, file],
   );
 

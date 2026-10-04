@@ -50,7 +50,11 @@ export const SETTINGS_PAGES: Page[] = [
     title: "Terminal",
     icon: "terminal",
     sections: [
-      { title: "Display", items: ["terminal.cursorBlink", "terminal.lineHeight", "terminal.scrollback", "terminal.renderer", "terminal.webglPool"] },
+      {
+        title: "Display",
+        items: ["terminal.cursorStyle", "terminal.cursorBlink", "terminal.lineHeight", "terminal.minimumContrast", "terminal.images", "terminal.scrollback", "terminal.renderer", "terminal.webglPool"],
+      },
+      { title: "Keyboard and clipboard", items: ["terminal.optionAsMeta", "terminal.copyOnSelect", "terminal.pasteProtection", "terminal.clipboardWrite"] },
       { title: "Shell", items: ["shell.program", "shell.login", "shell.integration"] },
       { title: "After a restart", items: ["restore.terminals", "restore.scrollback", "restore.resumeAgents"] },
     ],

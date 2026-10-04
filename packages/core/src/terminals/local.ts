@@ -4,6 +4,7 @@
 import { randomUUID } from "node:crypto";
 import headless from "@xterm/headless";
 import { SerializeAddon } from "@xterm/addon-serialize";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import type { Pty, PtyFactory } from "./pty.ts";
 import type { Snapshot, Term, TermBackend, TermSpawn } from "./types.ts";
 
@@ -29,6 +30,9 @@ export class LocalTerm implements Term {
     this.#pty = pty;
     this.#vt = new headless.Terminal({ cols: o.cols, rows: o.rows, scrollback: o.scrollback, allowProposedApi: true });
     this.#vt.loadAddon(this.#serializer);
+    // Character widths as the UI's terminals use them (emoji, CJK: two cells), so screens match.
+    this.#vt.loadAddon(new Unicode11Addon());
+    this.#vt.unicode.activeVersion = "11";
     if (o.replay) this.#vt.write(o.replay);
     pty.onData((d) => {
       this.#vt.write(d);
