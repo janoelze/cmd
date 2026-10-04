@@ -70,3 +70,25 @@ describe("stripAnsi", () => {
     expect(stripAnsi("\x1b]0;t\x07\x1b[1;32mok\x1b[0m\r\nnext")).toBe("ok\nnext");
   });
 });
+
+describe("device attribute queries", () => {
+  const queries = (...chunks: string[]) => {
+    const s = new OscScanner();
+    return chunks.flatMap((c) => s.feed(c)).filter((e) => e.type === "query").map((e) => (e.type === "query" ? e.query : ""));
+  };
+
+  it("finds primary and secondary queries, also split across chunks", () => {
+    expect(queries("\x1b[c", "x\x1b[0c", "\x1b[>c\x1b[>0c")).toEqual(["da1", "da1", "da2", "da2"]);
+    expect(queries("\x1b", "[", ">", "0", "c")).toEqual(["da2"]);
+  });
+
+  it("ignores other CSI sequences and queries inside strings", () => {
+    expect(queries("\x1b[1;31mred\x1b[0m\x1b[=c\x1b[?1c\x1b[2J")).toEqual([]);
+    expect(queries("\x1b]0;\x1b[c\x07", "\x1bPtmux;\x1b[c\x1b\\")).toEqual([]);
+  });
+
+  it("still sees bells and OSC after CSI", () => {
+    const s = new OscScanner();
+    expect(s.feed("\x1b[1m\x07\x1b]2;t\x07").map((e) => e.type)).toEqual(["bell", "title"]);
+  });
+});

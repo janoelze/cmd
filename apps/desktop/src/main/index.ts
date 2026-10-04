@@ -3,7 +3,7 @@
 
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, webContents, type WebContents } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, webContents, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
@@ -465,6 +465,7 @@ ipcMain.handle("choose-save-path", async (e, defaultPath: string) => {
 ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("edit-native", (e, op: string, guestId?: number) => editNative(e.sender, op, guestId));
 // URLs (https:, mailto:) go to their default app; anything else is a file path.
+ipcMain.on("clipboard-write", (_e, text: unknown) => typeof text === "string" && clipboard.writeText(text));
 ipcMain.on("open-path", (_e, p: string) => void (/^[a-z][\w+.-]+:/i.test(p) ? shell.openExternal(p) : shell.openPath(p)));
 ipcMain.on("settings-window", () => void openSettings());
 ipcMain.on("check-updates", () => checkForUpdates());

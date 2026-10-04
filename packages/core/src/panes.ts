@@ -13,7 +13,7 @@ import { logger } from "@cmd/protocol/node";
 import type { Attention, Pane, PaneId, PaneUsage, Settings, SpaceId } from "@cmd/protocol";
 import { usageChanged } from "./resources.ts";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
-import { OscScanner, type OscEvent } from "./osc.ts";
+import { DEVICE_REPLIES, OscScanner, type OscEvent } from "./osc.ts";
 import { classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
 import { STATUS_ENV } from "./agents/statusfiles.ts";
 import type { Store } from "./store.ts";
@@ -385,6 +385,10 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       if (ev.type === "prompt" && (ev.mark === "D" || ev.mark === "A") && live.command !== null) {
         live.command = null;
         this.#persist(live);
+      }
+      if (ev.type === "query") {
+        live.term.write(DEVICE_REPLIES[ev.query]);
+        continue;
       }
       if (ev.type === "request") {
         // Only the pane's own shell knows the token; printed text can't forge requests.

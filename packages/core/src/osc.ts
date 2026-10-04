@@ -1,6 +1,8 @@
-// Incremental scanner for OSC sequences in PTY output, and for bells (BEL
-// outside any escape string). Sequences may be split across chunks, so state is
-// carried between calls; kitty's OSC 99 notifications may also span sequences.
+// Incremental scanner for OSC sequences in PTY output, for bells (BEL outside
+// any escape string) and for device attribute queries (CSI c, CSI > c), which
+// the core answers so programs that wait for them (fish, Neovim) start without
+// a window showing the terminal. Sequences may be split across chunks, so state
+// is carried between calls; kitty's OSC 99 notifications may also span sequences.
 
 export type OscEvent =
   | { type: "title"; title: string } // OSC 0 / 2
@@ -8,6 +10,7 @@ export type OscEvent =
   | { type: "notify"; title: string; body: string } // OSC 9 / OSC 777;notify / OSC 99
   | { type: "prompt"; mark: string; exitCode?: number } // OSC 133 shell integration (A/B/C/D;exit)
   | { type: "bell" } // BEL outside escape strings
+  | { type: "query"; query: "da1" | "da2" } // CSI c / CSI > c
   | { type: "request"; token: string; action: string; arg: string }; // OSC 777;cmd;<token>;<action>;<arg>
 
 const ESC = "\x1b";
@@ -16,6 +19,8 @@ const MAX_OSC = 8192;
 
 export class OscScanner {
   #inOsc = false;
+  /** Inside a CSI sequence (ESC [): its parameter and intermediate bytes so far. */
+  #csi: string | null = null;
   /** Inside a DCS/APC/PM/SOS string (ESC P, _, ^, X … ST): BELs there aren't bells. */
   #inString = false;
   #pendingEsc = false;
@@ -35,9 +40,26 @@ export class OscScanner {
         if (ch === ESC) this.#pendingEsc = true;
         continue;
       }
+      if (this.#csi !== null) {
+        const c = ch.charCodeAt(0);
+        if (c >= 0x40 && c <= 0x7e) {
+          const ev = ch === "c" ? deviceQuery(this.#csi) : null;
+          if (ev) out.push(ev);
+          this.#csi = null;
+        } else if (ch === ESC) {
+          this.#csi = null;
+          this.#pendingEsc = true;
+        } else if (c >= 0x20 && this.#csi.length < 32) this.#csi += ch;
+        else if (c >= 0x20) this.#csi = null;
+        continue;
+      }
       if (!this.#inOsc) {
         if (this.#pendingEsc) {
           this.#pendingEsc = false;
+          if (ch === "[") {
+            this.#csi = "";
+            continue;
+          }
           if (ch === "]") {
             this.#inOsc = true;
             this.#buf = "";
@@ -112,6 +134,19 @@ export class OscScanner {
     return n.title || n.body ? { type: "notify", title: n.title, body: n.body } : null;
   }
 }
+
+/** CSI c / CSI 0 c: primary device attributes; CSI > c / CSI > 0 c: secondary. */
+function deviceQuery(params: string): OscEvent | null {
+  if (params === "" || params === "0") return { type: "query", query: "da1" };
+  if (params === ">" || params === ">0") return { type: "query", query: "da2" };
+  return null;
+}
+
+/**
+ * The replies, the same as the UI's terminal would give: VT220 with Sixel (4),
+ * selective erase (9) and ANSI color (22); xterm.js's secondary attributes.
+ */
+export const DEVICE_REPLIES = { da1: "\x1b[?62;4;9;22c", da2: "\x1b[>0;276;0c" } as const;
 
 export function parseOsc(body: string): OscEvent | null {
   const semi = body.indexOf(";");

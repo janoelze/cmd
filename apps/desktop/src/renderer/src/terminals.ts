@@ -37,6 +37,10 @@ interface Host {
   jump: { line: number; viewportY: number } | null;
   /** Mode 2031: the program wants to hear when the color scheme changes. */
   schemeUpdates: boolean;
+  /** The last search's options: the addon caches by query alone, so a change has to reset it. */
+  findOptions: string;
+  /** Keeps xterm from answering device attribute queries (see #quietDA). */
+  quietDA: IDisposable | null;
   el: HTMLDivElement;
   opened: boolean;
   webgl: WebglAddon | null;
@@ -300,6 +304,8 @@ class Terminals {
       outputs: [],
       jump: null,
       schemeUpdates: false,
+      quietDA: null,
+      findOptions: "",
       el,
       opened: false,
       webgl: null,
@@ -494,6 +500,8 @@ class Terminals {
       this.#findListeners.get(paneId)?.results({ index: -1, count: 0 });
       return;
     }
+    const key = `${o.caseSensitive} ${o.regex}`;
+    if (key !== h.findOptions) h.search.clearDecorations(), (h.findOptions = key);
     try {
       const opts = { ...searchOptions(o), incremental: o.incremental };
       if (dir > 0) h.search.findNext(query, opts);
@@ -601,6 +609,7 @@ class Terminals {
    */
   #protocol(h: Host): void {
     const p = h.term.parser;
+    this.#quietDA(h);
     // OSC 133 shell integration: A prompt start, C command output starts, D it ended.
     p.registerOscHandler(133, (data) => {
       const kind = data[0];
@@ -706,7 +715,22 @@ class Terminals {
       if (h.images || !this.#settings["terminal.images"] || this.#hosts.get(h.paneId) !== h) return;
       h.images = new Image({ sixelSupport: true, iipSupport: true, storageLimit: 64 });
       h.term.loadAddon(h.images);
+      this.#quietDA(h); // the addon answers DA1 itself; ours must come after it
     });
+  }
+
+  /**
+   * The core answers device attribute queries (CSI c, CSI > c: core/osc.ts), also
+   * while no window shows the terminal; xterm answering too would send two replies.
+   * The newest handler runs first, so this is registered again after other addons.
+   */
+  #quietDA(h: Host): void {
+    h.quietDA?.dispose();
+    const p = h.term.parser;
+    const plain = (params: (number | number[])[]) => !params[0];
+    const a = p.registerCsiHandler({ final: "c" }, plain);
+    const b = p.registerCsiHandler({ prefix: ">", final: "c" }, plain);
+    h.quietDA = { dispose: () => (a.dispose(), b.dispose()) };
   }
 
   /** Briefly highlight the line a jump landed on. */
