@@ -5,7 +5,7 @@
 <h1 align="center">cmd</h1>
 
 <p align="center">
-  A workbench for building software with AI, on macOS.
+  A macOS app for running terminals and coding agents side by side.
 </p>
 
 <p align="center">
@@ -22,19 +22,15 @@
   <img alt="cmd in the grid layout: agents grouped by what needs you in the sidebar, three Claude sessions, htop, an editor and a browser window" src="docs/screenshots/hero-light.png">
 </picture>
 
-Terminals, coding agents, a browser, an editor and widgets you make by asking, side by side on one desk. Nothing gets lost, nothing dies, and the agent that needs you is always on top.
-
-Terminals are where we'll work with agents for years to come, and they still feel like 1995: a window and a row of tabs. Flipping through hundreds of them to find the agent that's waiting, the log you were tailing or the server you started yesterday doesn't scale. cmd is a desk instead. It isn't an IDE and it doesn't bring its own agent: you keep your editor and Claude Code or Codex, and cmd gives them a place to live.
-
-It's made for the serious, normal work, not for running 600 agents overnight.
+cmd runs terminals and coding agents side by side, with web and file browsers, an editor, and widgets an agent builds live when you ask. It isn't an IDE and has no agent of its own: you bring Claude Code, Codex or whichever agent you use.
 
 ## What it does
 
-**One desk for everything you're working on.** Terminals, agents, browser, editor, Markdown and widgets are all windows on the same desk. Focus on one, tile them in a grid, scroll through a strip inspired by [PaperWM](https://github.com/paperwm/PaperWM), or lay them out on an infinite canvas with a minimap. ⌘K finds any window, command or past session, and `open README.md` in a shell opens it on the desk.
+**Layouts.** Terminals, agents, browser, editor, Markdown and widgets are all windows. Focus on one, tile them in a grid, scroll through a strip inspired by [PaperWM](https://github.com/paperwm/PaperWM), or lay them out on an infinite canvas with a minimap. ⌘K finds any window, command or past session, and `open README.md` in a shell opens it in cmd.
 
-**Agents live in terminals, and cmd knows them.** Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes, with no setup. The sidebar puts the agents waiting for you first, then the ones working, then the ones done, and ⌃⌘J jumps to the next one that needs you. Terminals live in a background process, so quitting, reloading or updating the app never kills them. Every past session (Claude Code, Codex, Qwen Code, Copilot CLI) is searchable, typos and all, and Return resumes it.
+**Agents.** Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes, with no setup. The sidebar puts the agents waiting for you first, then the ones working, then the ones done, and ⌃⌘J jumps to the next one that needs you. Terminals live in a background process, so quitting, reloading or updating the app doesn't end them. Every past session (Claude Code, Codex, Qwen Code, Copilot CLI) is searchable, typos and all, and Return resumes it.
 
-**Magic widgets: ask for a window, throw it away tomorrow.** Type what you want to see ("my open merge requests", "the last CI runs", a JSON URL) and an agent builds a small live widget for it, in your theme. It refreshes on its own without calling the model. When you don't need it any more, close it. [More below](#magic-widgets).
+**Magic widgets.** Type what you want to see ("my open merge requests", "the last CI runs", a JSON URL) and an agent builds a small live widget for it, in your theme. It refreshes on its own without calling the model. When you don't need it any more, close it. [More below](#magic-widgets).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/canvas-dark.png">

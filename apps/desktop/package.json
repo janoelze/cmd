@@ -2,7 +2,7 @@
   "name": "@cmd/desktop",
   "productName": "cmd",
   "version": "0.8.2",
-  "description": "A workbench for building software with AI",
+  "description": "Terminals and coding agents, side by side",
   "author": "Jan Oelze",
   "homepage": "https://github.com/janoelze/cmd",
   "repository": {

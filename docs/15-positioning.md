@@ -58,30 +58,23 @@ The product is calm, so the copy is calm.
 
 Avoid: *supercharge, unleash, revolutionary, 10x, autonomous, agentic, AI-powered, seamless, next-generation, swarm, army of agents, vibe*.
 
-Prefer: *desk, workbench, side by side, waiting for you, keeps running, ask for, throw away, daily*.
+Prefer: *side by side, window, waiting for input, keeps running, ask for, live*.
 
 ## Copy bank
 
-**Tagline (lead):** A workbench for building software with AI.
+Plain and descriptive: say what cmd is and does, not what it will do for you. (2026-10-04: an earlier, more pitch-like set, "a workbench for building software with AI… nothing gets lost, nothing dies", was dropped as too salesy.)
 
-**Alternatives:**
-- Your desk for software work. Agents included.
-- Everything you're working on, on one desk.
-- The daily driver for working with coding agents.
+**Line:** A macOS app for running terminals and coding agents side by side.
 
-**Subhead (one sentence):** Terminals, agents, a browser, an editor and widgets you make by asking, side by side on one desk, where nothing gets lost and the agent that needs you is always on top.
+**Lede (website, README):** A macOS app for running terminals and coding agents side by side, with web and file browsers, an editor, and widgets an agent builds live when you ask.
 
-**Anti-hype line** (use it once, near the top): Made for the serious, normal work, not for running 600 agents overnight.
+**What it isn't:** It isn't an IDE and has no agent of its own: you bring Claude Code, Codex or whichever agent you use.
 
-**Short pitch (≈50 words):**
-> cmd is a workbench for building software with AI on macOS. Your terminals, agents, browser and editor sit side by side on one desk, in a grid, a strip or on a canvas. It knows which agent is waiting for you, keeps every terminal running, and builds small live widgets when you ask.
+**Short descriptions** (package.json, About box, GitHub repo):
+- GitHub: "A macOS app for running terminals and coding agents side by side, with web and file browsers, an editor and Magic widgets."
+- package.json / About: "Terminals and coding agents, side by side"
 
-**Medium pitch (the story, ≈100 words):**
-> Terminals are where we'll work with agents for years to come, and they still feel like 1995: a window and a row of tabs. cmd is a desk instead. Claude Code, Codex, your shells, a browser and an editor sit side by side, and the agent waiting for you is always on top. Terminals survive quits and updates, and every past session is searchable. Need to see your CI runs today? Ask, and an agent builds a live widget for it. Close it tomorrow. Made for the serious, normal work, not for running 600 agents overnight.
-
-**One-line descriptions** (package.json, About box, GitHub repo, App Store-style):
-- GitHub: "A workbench for building software with AI, on macOS: terminals, agents, browser, editor and magic widgets on one desk."
-- package.json / About: "A workbench for building software with AI"
+Below the lede, list features as plain title + one sentence (the website's Features grid), not as benefits.
 
 ## How we talk about competitors
 
