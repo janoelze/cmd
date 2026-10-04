@@ -30,7 +30,6 @@ import { useStoreValue } from "../store.ts";
 import {
   arrange,
   bounds,
-  DOT,
   frame as frameWith,
   lerpCamera,
   MIN_H,
@@ -704,29 +703,6 @@ export function WindowsView(p: Props) {
   // of every window, and changing it each frame would restyle them all.
   const zVar = { "--z": cam.zoom } as React.CSSProperties;
   const z = cam.zoom;
-  // Canvas background: a dot grid drawn in the track, in world px, so it shares the
-  // windows' transform exactly. Drawn on screen instead, its tiles (DOT × zoom, a
-  // fraction of a pixel) get rounded and drift off the window edges with distance.
-  // It covers just the visible area, aligned to the grid; zoomed far out, every
-  // fourth dot. Dots stay about 1px on screen whatever the zoom.
-  let dotGrid: React.CSSProperties | undefined;
-  if (canvas && vp.w) {
-    const step = z < 0.35 ? DOT * 4 : DOT;
-    const left = Math.floor(cam.x / step) * step - step;
-    const top = Math.floor(cam.y / step) * step - step;
-    const r = 1.1 / z;
-    dotGrid = {
-      left,
-      top,
-      width: Math.ceil((cam.x + vp.w / z - left) / step) * step + step,
-      height: Math.ceil((cam.y + vp.h / z - top) / step) * step + step,
-      // Each dot sits in the middle of its tile; shift by half a tile onto the grid line.
-      backgroundImage: `radial-gradient(circle, color-mix(in srgb, var(--ink) 10%, transparent) ${r}px, transparent ${r + 0.6 / z}px)`,
-      backgroundSize: `${step}px ${step}px`,
-      backgroundPosition: `${-step / 2}px ${-step / 2}px`,
-    };
-  }
-
   return (
     <main
       ref={rootRef}
@@ -745,7 +721,6 @@ export function WindowsView(p: Props) {
               : { transform: `translateX(${-offset}px)` }
         }
       >
-        {dotGrid && <div className="canvas-dots" style={dotGrid} />}
         {/* Slots: unassigned cells always show as inactive placeholders; while
             dragging, every slot shows as a ghost outline. */}
         {lay.slots.map((s, i) =>
