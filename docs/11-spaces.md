@@ -66,7 +66,7 @@ A Space's identity is its root, so matching has to treat every spelling of a fol
 ### UI
 
 ```
-┌ ● ● ●  [◆ cmd ▾]  · api •  · home     ─────────────  [Focus|Grid|Strip|Canvas] ┐
+┌ ● ● ●  [◆ cmd ② ▾]                    ─────────────  [Focus|Grid|Strip|Canvas] ┐
 │ NEEDS YOU         │        main view: this Space's windows only                 │
 │ ● fix auth flow   │                                                             │
 │ ◐ index rewrite   │                                                             │
@@ -74,8 +74,9 @@ A Space's identity is its root, so matching has to treat every spelling of a fol
 ```
 
 - **Space switcher** centered at the bottom of the sidebar (like Arc), or under the traffic lights when the sidebar is hidden (`components/SpaceBar.tsx`):
-  - The shown Space appears as its name on a hue chip; clicking it opens the picker.
-  - Other open Spaces are hue dots, ringed in the state colour when something in them needs you or finished unseen. Right-click for Rename, Show in Finder, Open in New Window, Close. Reordering is not built yet.
+  - A full-width button with the shown Space's dot and name; a count in the state colour when other Spaces need you or finished unseen.
+  - Clicking it drops down a menu of the open Spaces in switcher order (dot, name, folder, ⌃1–9), each ringed in the state colour when something in it needs you or finished unseen, then "Open Space…" (⌘O). Arrow keys and type-ahead move, ⏎ shows, ⌘⏎ (or ⌘-click) opens in a new window. Right-click a Space (or the button) for Rename, Show in Finder, Open in New Window, Close. Reordering is not built yet.
+  - A menu rather than a dot per Space, so it stays usable with many Spaces.
 - **⌘O: Space picker** (fuzzy):
   - Lists open Spaces, then recent (closed) Spaces, then cwds from recent transcripts and a typed path; "Browse…" opens the native folder dialog.
   - ⏎ shows the Space in this window; ⌘⏎ opens it in a new app window.

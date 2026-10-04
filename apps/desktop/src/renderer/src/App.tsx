@@ -455,7 +455,7 @@ export function App() {
       spaces={openSpaces}
       current={all.spaceId}
       attention={waiting}
-      onShow={(id) => showSpace(id)}
+      onShow={(id, opts) => showSpace(id, opts)}
       onMenu={spaceMenu}
       onPicker={() => setPicker({ kind: "space" })}
     />
