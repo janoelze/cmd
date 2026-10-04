@@ -765,10 +765,9 @@ kbd {
 
 /* ── What's New (components/WhatsNew.tsx) ───────────── */
 
-.whats-new-list { max-height: min(60vh, 560px); overflow-y: auto; margin: -4px -4px 0; padding: 0 4px; }
+.whats-new-list { max-height: min(60vh, 560px); overflow-y: auto; padding: 0 16px; }
 .whats-new-release { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 0; }
 .whats-new-release + .whats-new-release { border-top: 1px solid var(--separator); }
-.whats-new-release:first-child { padding-top: 4px; }
 .whats-new-release header { display: flex; align-items: baseline; gap: 8px; }
 .whats-new-release h3 { margin: 0; font-size: var(--text-lg); font-weight: 600; color: var(--text); }
 .whats-new-release time { font-size: var(--text-sm); color: var(--text-dim); }

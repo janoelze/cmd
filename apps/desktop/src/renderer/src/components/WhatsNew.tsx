@@ -52,6 +52,8 @@ export function WhatsNew({ releases, onClose, onLink }: { releases: Release[]; o
       title="What's New"
       width={560}
       className="whats-new"
+      divided
+      padded={false}
       actions={
         <>
           <span className="whats-new-version">You're on cmd {APP_VERSION}</span>

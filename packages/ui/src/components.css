@@ -750,6 +750,9 @@
 .ui-dialog-head + .ui-dialog-body[data-padded] { padding-top: 10px; }
 .ui-dialog:not(:has(.ui-dialog-head)) .ui-dialog-body[data-padded] { padding-top: 14px; }
 .ui-dialog-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 0 16px 14px; }
+.ui-dialog[data-divided] .ui-dialog-head { padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--separator); }
+.ui-dialog[data-divided] .ui-dialog-head + .ui-dialog-body[data-padded] { padding-top: 14px; }
+.ui-dialog[data-divided] .ui-dialog-foot { padding: 10px 16px; border-top: 1px solid var(--separator); }
 
 .ui-toaster {
   position: fixed;

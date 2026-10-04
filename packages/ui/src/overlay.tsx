@@ -299,6 +299,7 @@ export function Dialog({
   className,
   padded = true,
   scrim = true,
+  divided,
 }: {
   open: boolean;
   onClose: () => void;
@@ -316,6 +317,8 @@ export function Dialog({
   padded?: boolean;
   /** False: no dimming behind it (a quick picker); outside clicks still close it. */
   scrim?: boolean;
+  /** Lines under the title and above the actions, like the palette's: for content that scrolls between them. */
+  divided?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -343,7 +346,7 @@ export function Dialog({
         }
       }}
     >
-      <div ref={ref} className={cls("ui-dialog", className)} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : undefined)} tabIndex={-1} style={{ width }}>
+      <div ref={ref} className={cls("ui-dialog", className)} data-divided={divided || undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : undefined)} tabIndex={-1} style={{ width }}>
         {title && (
           <div className="ui-dialog-head">
             <div className="ui-dialog-title">{title}</div>

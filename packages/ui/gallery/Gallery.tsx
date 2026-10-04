@@ -783,6 +783,7 @@ function OverlaysPage() {
   const [pop, setPop] = useState(false);
   const [dialog, setDialog] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [divided, setDivided] = useState(false);
   const [space, setSpace] = useState("work");
   const [msg, setMsg] = useState("");
   return (
@@ -835,13 +836,32 @@ function OverlaysPage() {
           </Popover>
         </Row>
       </Spec>
-      <Spec title="Dialog and ConfirmDialog" code="<Dialog title actions> · <ConfirmDialog danger>">
+      <Spec title="Dialog and ConfirmDialog" code="<Dialog title actions divided?> · <ConfirmDialog danger>">
         <Row>
           <Button onClick={() => setDialog(true)}>Send Feedback…</Button>
           <Button variant="danger" onClick={() => setConfirm(true)}>
             Delete Space…
           </Button>
+          <Button onClick={() => setDivided(true)}>What's New</Button>
         </Row>
+        <Dialog
+          open={divided}
+          onClose={() => setDivided(false)}
+          title="What's New"
+          width={480}
+          divided
+          actions={
+            <Button variant="primary" onClick={() => setDivided(false)}>
+              Done
+            </Button>
+          }
+        >
+          {Array.from({ length: 12 }, (_, i) => (
+            <p key={i} style={{ margin: "0 0 10px" }}>
+              Release notes that scroll between the title and the actions, line {i + 1}.
+            </p>
+          ))}
+        </Dialog>
         <Dialog
           open={dialog}
           onClose={() => setDialog(false)}
