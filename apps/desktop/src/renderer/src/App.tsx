@@ -37,6 +37,7 @@ import { toggleMarkdownEdit } from "./windows/markdown.tsx";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Feedback } from "./components/Feedback.tsx";
+import { PairSheet, useRemoteNotifications } from "./components/Remote.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
 import { Sidebar, SIDEBAR_WIDTH, type SidebarRequest } from "./components/Sidebar.tsx";
 import { SpaceBar } from "./components/SpaceBar.tsx";
@@ -78,6 +79,7 @@ export function App() {
   const all = useStore();
   /** What this app window shows: its Space's terminals, agents and windows. */
   const s = useMemo(() => inSpace(all), [all]);
+  useRemoteNotifications();
   const space = all.spaces.get(all.spaceId);
   const keys = useKeybindings();
   const cfg = s.settings.settings;
@@ -295,6 +297,9 @@ export function App() {
   const handlers: Record<CommandId, () => void> = {
     "app.settings": () => cmd.openSettings(),
     "app.checkUpdates": () => cmd.checkForUpdates(),
+    "app.remoteAccess": () => cmd.openSettings("remote"),
+    "app.pairDevice": () => cmd.openSettings("remote/pair"),
+    "app.disconnectRemote": () => void cmd.call("remote.disconnect", {}).catch(() => {}),
     "file.newTerminal": () => void newTerminal(),
     "file.newClaude": () => void newAgent("claude"),
     "file.newCodex": () => void newAgent("codex"),
@@ -657,6 +662,7 @@ export function App() {
       {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}
       {picker?.kind === "icon" && <SpaceIconPicker space={all.spaces.get(picker.space.id) ?? picker.space} onClose={() => setPicker(null)} />}
       {feedback && <Feedback onClose={() => setFeedback(false)} />}
+      {all.pairRequests[0] && <PairSheet key={all.pairRequests[0].requestId} request={all.pairRequests[0]} />}
     </div>
   );
 }

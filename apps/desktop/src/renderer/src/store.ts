@@ -4,7 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import type { Agent, AgentId, AppNotification, AppWindow, CoreEvent, Pane, PaneId, SearchStatus, SettingsSnapshot, Space, SpaceId, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AppNotification, AppWindow, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WindowId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -30,6 +30,12 @@ export interface State {
   spaces: Map<SpaceId, Space>;
   /** The Space this app window shows; main decides (see main/spaces.ts). */
   spaceId: SpaceId;
+  /** Remote access (docs/13-remote-access.md): who is connected and what they watch. */
+  remote: RemoteStatus | null;
+  /** Devices waiting for the person at this Mac to allow them. */
+  pairRequests: RemotePairRequest[];
+  /** Terminals a remote device just typed into: pane → device name (cleared after a moment). */
+  remoteInput: Map<PaneId, string>;
 }
 
 let state: State = {
@@ -42,7 +48,11 @@ let state: State = {
   search: null,
   spaces: new Map(),
   spaceId: new URLSearchParams(location.search).get("space") || HOME_SPACE_ID,
+  remote: null,
+  pairRequests: [],
+  remoteInput: new Map(),
 };
+const inputTimers = new Map<PaneId, ReturnType<typeof setTimeout>>();
 const listeners = new Set<() => void>();
 const focusListeners = new Set<(id: WindowId) => void>();
 const fsListeners = new Set<(path: string) => void>();
@@ -348,6 +358,28 @@ function handle(e: CoreEvent): void {
       set({ agents });
       return;
     }
+    case "remote.updated":
+      set({ remote: e.status });
+      return;
+    case "remote.pairRequest":
+      set({ pairRequests: [...state.pairRequests.filter((r) => r.requestId !== e.request.requestId), e.request] });
+      return;
+    case "remote.pairEnded":
+      set({ pairRequests: state.pairRequests.filter((r) => r.requestId !== e.requestId) });
+      return;
+    case "remote.input": {
+      clearTimeout(inputTimers.get(e.paneId));
+      set({ remoteInput: new Map(state.remoteInput).set(e.paneId, e.name) });
+      inputTimers.set(
+        e.paneId,
+        setTimeout(() => {
+          const remoteInput = new Map(state.remoteInput);
+          remoteInput.delete(e.paneId);
+          set({ remoteInput });
+        }, 4000),
+      );
+      return;
+    }
   }
 }
 
@@ -386,6 +418,8 @@ cmd.onStatus(async (status) => {
   });
   checkSpace();
   void cmd.call("search.status", {}).then((search) => set({ search }), () => {});
+  // An older core has no remote access: leave it null.
+  void cmd.call("remote.status", {}).then((remote) => set({ remote, pairRequests: remote.requests ?? [] }), () => {});
   // The windows show now; each terminal opens once its content is written (hold).
   await Promise.allSettled(
     snap.panes.map(async (p) => {

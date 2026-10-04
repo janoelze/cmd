@@ -115,6 +115,7 @@ export class RemoteService {
       relay: s["remote.relay"],
       devices: this.devices(),
       sessions: this.sessions(),
+      requests: [...this.#requests.values()].map((r) => r.request),
     };
   }
 
@@ -315,6 +316,7 @@ export class RemoteService {
         signal.removeEventListener("abort", abort);
         if (!this.#requests.delete(request.requestId)) return;
         this.#o.broadcast({ type: "remote.pairEnded", requestId: request.requestId });
+        this.#changed();
         if (!answer) this.audit("pair-denied", null, name);
         resolve(answer);
       };
@@ -324,6 +326,7 @@ export class RemoteService {
       this.#requests.set(request.requestId, { request, resolve: done });
       // TODO: also a system notification, so it works with the app in the background.
       this.#o.broadcast({ type: "remote.pairRequest", request });
+      this.#changed();
     });
   }
 }

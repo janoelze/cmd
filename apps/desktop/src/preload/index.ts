@@ -101,8 +101,14 @@ const api = {
   setAppearance: (a: Appearance) => ipcRenderer.send("appearance", a),
   focusWindow: () => ipcRenderer.send("focus"),
   openPath: (p: string) => ipcRenderer.send("open-path", p),
-  /** The Settings window (opens it, or brings it to the front). */
-  openSettings: () => ipcRenderer.send("settings-window"),
+  /** The Settings window (opens it, or brings it to the front), optionally at a page (e.g. "remote"). */
+  openSettings: (page?: string) => ipcRenderer.send("settings-window", page),
+  /** Settings window: main asks to show a page. */
+  onSettingsPage(fn: (page: string) => void): () => void {
+    const h = (_e: unknown, page: string) => fn(page);
+    ipcRenderer.on("settings-page", h);
+    return () => ipcRenderer.off("settings-page", h);
+  },
   checkForUpdates: () => ipcRenderer.send("check-updates"),
   /** Task Manager: Electron's processes (CPU% since the previous call), and showing a terminal in its Space's window. */
   appMetrics: (): Promise<AppProcess[]> => ipcRenderer.invoke("app-metrics"),

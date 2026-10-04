@@ -20,6 +20,7 @@
     "build": "pnpm --filter @cmd/desktop build",
     "icons": "node scripts/make-icons.mjs",
     "e2e": "pnpm build && node e2e/smoke.mjs",
+    "e2e:remote": "pnpm build && node --no-warnings e2e/remote.mjs",
     "dist": "pnpm build && node scripts/stage-runtime.mjs && pnpm --filter @cmd/desktop dist",
     "release": "node scripts/release.mjs",
     "shots": "pnpm build && node scripts/readme-shots/screenshots.mjs"

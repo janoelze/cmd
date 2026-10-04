@@ -281,6 +281,8 @@ export interface RemoteStatus {
   relay: string;
   devices: RemoteDevice[];
   sessions: RemoteSession[];
+  /** Pairing requests waiting for an answer (an app that opens later still asks). */
+  requests: RemotePairRequest[];
 }
 
 /** An entry of the remote access audit log (Settings → Remote Access → Recent activity, `cmd remote log`). */

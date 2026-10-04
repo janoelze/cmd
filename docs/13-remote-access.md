@@ -65,7 +65,7 @@ Remote access is a security feature that people use on the go, often one-handed.
 |---|---|---|
 | Signal / WhatsApp linked devices | One QR on the trusted device; a "Linked devices" list with last active and Unlink; WhatsApp Web's QR rotates while you look at it | The Mac is the primary device. The QR appears as soon as you turn the feature on and refreshes itself; Settings → Remote Access is a linked-devices list |
 | Bluetooth numeric comparison, Apple ID sign-in | Both screens show the same code; you approve on the device you already trust | Four words on both screens; approval only on the Mac, never on the phone |
-| macOS camera, microphone and screen-recording indicators | You can't be watched without a visible sign, and one click shows who | A title-bar indicator whenever a device is connected; one click shows who, what they're looking at, and Disconnect |
+| macOS camera, microphone and screen-recording indicators | You can't be watched without a visible sign, and one click shows who | A status bar icon whenever remote access is on, lit while a device is connected; one click shows who, what they're looking at, and Disconnect |
 | Google Docs presence | You see where others are in the document | Windows a phone is looking at carry a small badge; input from a phone is marked briefly |
 | iOS permission prompts ("Allow Once / Allow While Using / Don't Allow") | The safe choice and the useful choice are both one tap, with no default trap | The approval sheet has three buttons: **Allow View Only**, **Allow Control**, **Don't Allow** |
 | Tailscale | One on/off switch, an honest status line ("Connected", "Needs login") | One switch; plain states everywhere: Off, Connecting, Ready, Can't reach the relay, Mac offline |
@@ -97,7 +97,7 @@ Remote access is a security feature that people use on the go, often one-handed.
 **3. Getting pinged.** "Claude needs input in api" arrives as a push. Tapping it opens that terminal with the key row ready. Later (Phase 2) Allow/Deny for permission requests works from the notification itself.
 
 **4. At the Mac while a phone is connected.**
-- The title bar shows a phone symbol in the accent colour. Its popover lists each connected device: name, View or Control, connected since, and what it's looking at ("watching api · zsh"), with Disconnect per device, Disconnect All, Turn Off Remote Access and Remote Access Settings.
+- The status bar (bottom right, next to Settings) has a phone icon whenever remote access is on. Its colour is the state: dim when ready, accent while a device is connected, pulsing while one waits for approval, warning when the relay can't be reached. Its popover lists each connected device: name, View or Control, connected since, and what it's looking at ("watching api · zsh"), with Disconnect per device, Disconnect All, Turn Off, Pair a Device… and Settings….
 - A window a phone follows shows a small phone badge in its title bar ("Watched from iPhone").
 - Input typed from a phone into a terminal marks the window briefly ("typed from iPhone").
 - When a device connects while someone is using the Mac, a notification says so. When the Mac is idle (you're away and it's probably you), it stays quiet.
@@ -127,9 +127,9 @@ Now answers "what is running and does anything need me?" from structured data on
 |---|---|---|
 | Off | (no link works) "Remote access is off on your Mac" | Settings: switch off, three-line explainer |
 | Connecting | "Connecting to MacBook Pro…" | "Connecting to the relay…" |
-| Ready, nobody connected | — | Settings: "Ready. Devices can connect." Title bar: nothing |
-| Connected | Pill: "MacBook Pro · Connected" | Title bar indicator; popover lists who and what |
-| Pairing, waiting for approval | "Approve on your Mac" with the words | Sheet + notification |
+| Ready, nobody connected | — | Settings: "Ready. Paired devices can connect." Status bar: dim phone icon |
+| Connected | Pill: "MacBook Pro · Connected" | Status bar icon lit; popover lists who and what |
+| Pairing, waiting for approval | "Approve on your Mac" with the words | Sheet (and inline in Settings) + notification; status bar icon pulses |
 | Relay unreachable | "Can't reach your Mac (relay unreachable). Retrying…" | "Can't reach the relay. Retrying in 30 s" with Retry Now |
 | Mac offline | "Your Mac is offline since 10:42. It may be asleep." | — |
 | Revoked / unknown device | "This browser isn't paired anymore. Pair again from your Mac." Forgets its keys | Activity: "Refused an unpaired browser" |
@@ -137,7 +137,7 @@ Now answers "what is running and does anything need me?" from structured data on
 
 ### What this needs from the core
 
-- **Presence.** `RemoteStatus.sessions`: per connected session, its device, scope, since, IP and the windows it follows. This drives the indicator, the window badges and `cmd remote`.
+- **Presence.** `RemoteStatus.sessions`: per connected session, its device, scope, since, IP and the windows it follows; `RemoteStatus.requests`: pairings waiting for an answer. This drives the indicator, the window badges and `cmd remote`.
 - **Remote input marker.** A `remote.input {deviceId, paneId}` event (throttled) when a phone writes to a pane.
 - **Activity.** `remote.log` (recent audit entries) for Settings and `cmd remote log`.
 - **Now.** Comes from `remote.bootstrap` plus the existing events; agents already carry state, `lastMessage` and timings, panes carry attention and usage.
@@ -471,7 +471,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
    - The desktop renderer (`terminals.ts:126`) keeps sending its fit as before. When `pane.updated` reports an override, it renders xterm at the pane's actual `cols`/`rows`, letterboxed, until the override ends.
 5. **Presence.**
    - `remote.updated` events say who is connected, with which scope, since when, and from which IP (as the relay reports it, informational only).
-   - The title bar shows a phone indicator whenever a device is connected; it is the visible "on" signal.
+   - The status bar shows a phone icon while remote access is on, lit whenever a device is connected; it is the visible "on" signal.
    - Every session start and end, pairing, revoke, denied call and failed handshake is written to the log scope `remote` and kept in `remote_log` (SQLite) for 30 days.
 6. **Sleep.** With `remote.keepAwake` on, the core runs `caffeinate -i -w <core pid>` while remote access is enabled. This stops idle sleep, not lid-close sleep, and the UI says so.
 
@@ -520,7 +520,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
 | `packages/cli/src/main.ts` | `cmd remote status \| on \| off \| pair [--scope view\|control] \| devices \| revoke <id>`. `pair` prints the QR code in the terminal |
 | `apps/desktop/src/shared/commands.ts` | "Remote Access…" (opens Settings → Remote), "Pair a Device…", "Disconnect Remote Devices". Each is a menu item, palette entry and keybinding target |
 | `apps/desktop/src/renderer/src/settings/layout.ts` + a custom `Remote.tsx` page (like `About.tsx`) | Enable toggle, relay and client URLs, QR + fingerprint, approval sheet, device list with scope, last seen and revoke, push settings |
-| `apps/desktop/src/renderer/src/App.tsx` | Presence indicator in the title bar; pairing-approval sheet on `remote.pairRequest` (also a system notification, so it works when the app is in the background) |
+| `apps/desktop/src/renderer/src/App.tsx`, `components/StatusBar.tsx` | Presence indicator in the status bar; pairing-approval sheet on `remote.pairRequest` (also a system notification, so it works when the app is in the background) |
 | `apps/desktop/src/main/index.ts` | `ui.presence` reports (focus, idle via `powerMonitor.getSystemIdleTime`); later `window.capture` for browser screenshots |
 | `apps/desktop/src/preload/index.ts` | `CmdBridge` stays the contract; add `subscribe()` so the store doesn't call `events.subscribe` directly |
 | `apps/desktop/src/renderer/src/bridge.ts` + new `web-bridge.ts` | Pick the preload bridge or the web bridge (Noise channel + web versions of the Electron-only members; see the table in "Reusing the desktop renderer") |

@@ -2,11 +2,12 @@
 // (docs/10-window-titles.md): Mark · Name · Dirty ……… Kind | Place | Status.
 // Each field is a Slot, so state changes animate instead of popping.
 
-import { fieldsOf, type SidebarRow, type WindowFields } from "../model.ts";
+import { fieldsOf, windowIdOf, type SidebarRow, type WindowFields } from "../model.ts";
 import { typeFor } from "../windows/registry.ts";
 import { useEffect, useRef, useState } from "react";
 import { editTitle, useTitleEdit, useWindowStatus, type TitleEdit } from "../windowActions.ts";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
+import { RemoteBadge } from "./Remote.tsx";
 
 /** SF Symbol for a window kind (from the core's window type registry). */
 export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "macwindow";
@@ -47,6 +48,7 @@ export function TileTitle({
           </>
         )}
       </span>
+      <RemoteBadge id={windowIdOf(row)} />
       <span className="tile-meta">
         <Slot className="slot-kind" value={f.kind ? { text: f.kind } : undefined} />
         {/* A divider only after a field that's there. */}

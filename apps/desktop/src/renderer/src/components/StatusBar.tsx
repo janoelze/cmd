@@ -5,12 +5,13 @@
 import type { Pane } from "@cmd/protocol";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
-import { usageLabel, usageTooltip, type SidebarRow } from "../model.ts";
+import { usageLabel, usageTooltip, windowIdOf, type SidebarRow } from "../model.ts";
 import { useStoreValue } from "../store.ts";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
 import { useFields } from "./TileTitle.tsx";
 import type { ViewMode } from "./MainView.tsx";
 import { ICON, Symbol } from "./Symbol.tsx";
+import { RemoteBadge, RemoteIndicator } from "./Remote.tsx";
 
 const ICONS: Record<ViewMode | "palette" | "settings" | "feedback", string> = {
   focus: "rectangle",
@@ -57,6 +58,7 @@ export function StatusBar({ mode, row, pane, run }: Props) {
             <Slot className="statusbar-proc" value={f.kind ? { text: f.kind } : undefined} />
             <Slot className="statusbar-path" value={f.place ? { text: f.place } : undefined} clipStart divider={!!f.kind} />
             <Slot className="statusbar-detail" value={f.status} divider={!!(f.kind || f.place)} />
+            <RemoteBadge id={row ? windowIdOf(row) : null} />
           </>
         )}
         <Slot
@@ -71,6 +73,7 @@ export function StatusBar({ mode, row, pane, run }: Props) {
         {btn("view.strip", ICONS.strip, "Strip", mode === "strip")}
         {btn("view.canvas", ICONS.canvas, "Canvas", mode === "canvas")}
         <span className="statusbar-sep" />
+        <RemoteIndicator />
         {btn("help.feedback", ICONS.feedback, "Send Feedback")}
         {btn("view.palette", ICONS.palette, "Command Palette")}
         {btn("app.settings", ICONS.settings, "Settings")}

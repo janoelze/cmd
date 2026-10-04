@@ -202,6 +202,7 @@ export async function startRelay(o: RelayOptions = {}): Promise<Relay> {
     close: async () => {
       clearInterval(ping);
       for (const ws of wss.clients) ws.terminate();
+      server.closeAllConnections();
       await new Promise<void>((r) => server.close(() => r()));
     },
   };

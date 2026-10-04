@@ -45,6 +45,8 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
       ...i("app.checkUpdates"),
       sep,
       ...i("app.settings"),
+      ...i("app.remoteAccess"),
+      ...i("app.pairDevice"),
       sep,
       { role: "services" },
       sep,
@@ -77,7 +79,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("file.closeWindow"),
         sep,
         ...i("file.openSettingsFile"),
-        ...(mac ? [] : [sep, ...i("app.settings"), sep, { role: "quit" as const }]),
+        ...(mac ? [] : [sep, ...i("app.settings"), ...i("app.remoteAccess"), ...i("app.pairDevice"), sep, { role: "quit" as const }]),
       ],
     },
     {
@@ -192,7 +194,7 @@ export function applyMenuState(state: MenuState): void {
 
 /** Sends a command to the focused window, creating one if needed. */
 interface UtilityWindows {
-  openSettings: () => void;
+  openSettings: (page?: string) => void;
   openTaskManager: () => void;
   checkForUpdates: () => void;
   /** Settings or the Task Manager. */
@@ -207,6 +209,8 @@ export function commandSender(createWindow: () => BrowserWindow, s: UtilityWindo
   return (id) => {
     if (id === "app.settings") return s.openSettings();
     if (id === "app.taskManager") return s.openTaskManager();
+    if (id === "app.remoteAccess") return s.openSettings("remote");
+    if (id === "app.pairDevice") return s.openSettings("remote/pair");
     if (id === "app.checkUpdates") return s.checkForUpdates();
     const focused = BrowserWindow.getFocusedWindow();
     if (s.isUtility(focused)) {

@@ -394,3 +394,17 @@ body.settings-window { background: var(--bg); }
 .sw-model { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .sw-model > span { min-width: 0; display: flex; }
 .sw-model .sw-popup select { max-width: 240px; }
+
+/* ── Remote Access (Remote.tsx) ─────────────────────── */
+
+.rm-card { padding: 16px; }
+.rm-wait { color: var(--text-dim); }
+.rm-pair { display: flex; gap: 20px; align-items: center; }
+.rm-qr { flex: none; width: 168px; height: 168px; padding: 6px; border-radius: 10px; background: white; }
+.rm-qr svg { display: block; width: 100%; height: 100%; }
+.rm-steps { flex: 1; min-width: 0; }
+.rm-steps ol { margin: 0 0 12px; padding-left: 18px; line-height: 1.7; }
+.rm-pair-foot { display: flex; gap: 8px; margin-bottom: 8px; }
+.rm-dim { color: var(--text-dim); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.rm-actions { display: flex; justify-content: flex-end; padding: 8px 12px; }
+.rm-card .pair-prompt { padding: 4px 0 0; }

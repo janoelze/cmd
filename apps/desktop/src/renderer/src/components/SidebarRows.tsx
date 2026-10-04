@@ -9,6 +9,7 @@ import { DirtyDot, Mark, Slot } from "./Slot.tsx";
 import { Highlighted } from "./Palette.tsx";
 import { useFields } from "./TileTitle.tsx";
 import { ago, project, projectHue, shortPath, windowIdOf, type SidebarRow } from "../model.ts";
+import { RemoteBadge } from "./Remote.tsx";
 
 /** "2h ago" → "2h": the column is narrow. */
 export const shortAgo = (ts: number, now: number) => ago(ts, now).replace(/ ago$/, "");
@@ -116,6 +117,7 @@ export function SessionRow(props: {
           )}
         </div>
         <span className="row-end">
+          <RemoteBadge id={winId} compact />
           {proj && proj !== "~" && (
             <span className="chip" style={{ ["--hue" as string]: projectHue(proj) }}>
               {proj}

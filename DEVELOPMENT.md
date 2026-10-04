@@ -131,6 +131,8 @@ pnpm remote:device call pane.list                # through the relay, end-to-end
 pnpm remote:device watch                         # bootstrap, follow terminals, print events
 ```
 
+`pnpm e2e:remote` walks the whole journey through the built app (pair from Settings, approve, the status bar indicator and its popover, the watched window's badge) with a local relay and a pretend phone; screenshots land in `.cmd-dev/shots/remote-*.png`.
+
 The host key and route live in `$CMD_HOME/remote/host.json`, paired devices and the audit log in SQLite (`remote_devices`, `remote_log`), the pretend phone's identity in `$CMD_HOME/remote-device.json`.
 
 ## Status
@@ -146,7 +148,7 @@ The host key and route live in `$CMD_HOME/remote/host.json`, paired devices and 
 - Packaging, CI and GitHub releases
 
 **In progress**
-- Remote access (docs/13): crypto, relay, core gateway, policy and `cmd remote` are in; next are the web client, the approval sheet and Remote settings page in the app, and fit-to-phone
+- Remote access (docs/13): crypto, relay, core gateway, policy, `cmd remote`, and in the app the Remote Access settings page, the approval sheet and the status bar indicator are in; next are the web client (Now, tabs, terminals on a phone) and fit-to-phone
 
 **Next**
 - Plugin host (routines and monitors in the core)

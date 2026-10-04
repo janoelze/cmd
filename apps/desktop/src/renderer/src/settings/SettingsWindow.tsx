@@ -30,6 +30,7 @@ import { cmd } from "../bridge.ts";
 import { NumberField, Popup, SecretField, Segmented, Switch, TextField } from "./controls.tsx";
 import { useSettings } from "./useSettings.ts";
 import { About } from "./About.tsx";
+import { Remote } from "./Remote.tsx";
 import { allThemes } from "../themes/registry.ts";
 import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page as SettingsPage } from "./layout.ts";
 
@@ -41,7 +42,11 @@ const APPLIES_NOTE = { newTerminals: "Applies to new terminals.", firstLaunch: "
 const COMMAND_GROUPS: Record<string, string> = { app: "App", file: "File", edit: "Edit", view: "View", session: "Sessions", space: "Spaces", help: "Help" };
 
 const PAGE_KEY = "settings.page";
+/** Opened at a page (main's openSettings): "remote", or "remote/pair" to show a pairing code. */
+const askedPage = new URLSearchParams(location.search).get("page");
 function initialPage(): string {
+  const asked = askedPage?.split("/")[0];
+  if (asked && NAV.some((n) => n.id === asked)) return asked;
   try {
     const p = localStorage.getItem(PAGE_KEY);
     if (p && NAV.some((n) => n.id === p)) return p;
@@ -79,8 +84,21 @@ export interface RowContext {
 }
 
 export function SettingsWindow() {
-  const { snapshot: snap, connected, search, secrets } = useSettings();
+  const { snapshot: snap, connected, search, secrets, remote } = useSettings();
   const [page, setPage] = useState(initialPage);
+  /** Bumped by "Pair a Device…": the Remote page shows a pairing code. */
+  const [pairAsk, setPairAsk] = useState(askedPage === "remote/pair" ? 1 : 0);
+  useEffect(
+    () =>
+      cmd.onSettingsPage((p) => {
+        const [id, sub] = p.split("/");
+        if (!NAV.some((n) => n.id === id)) return;
+        setQuery("");
+        setPage(id!);
+        if (sub === "pair") setPairAsk((n) => n + 1);
+      }),
+    [],
+  );
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -140,6 +158,8 @@ export function SettingsWindow() {
     );
   } else if (page === "keyboard") {
     body = <Shortcuts />;
+  } else if (page === "remote") {
+    body = <Remote key={pairAsk} status={remote} enabled={snap.settings["remote.enabled"]} pair={pairAsk > 0} row={(k) => <ItemRow k={k} ctx={ctx} />} />;
   } else if (page === "about") {
     body = <About updates={<ItemRow k="updates.mode" ctx={ctx} />} crashReports={<ItemRow k="diagnostics.crashReports" ctx={ctx} />} />;
   } else {

@@ -360,11 +360,13 @@ const isSettings = (w: BrowserWindow | null | undefined) => !!w && w === utility
 /** Settings or the Task Manager: not an app window. */
 const isUtility = (w: BrowserWindow | null | undefined) => !!w && [...utility.values()].includes(w);
 
-function openUtility(page: UtilityPage, o: { title: string; width: number; height: number; minWidth: number; minHeight: number }): BrowserWindow {
+/** at: a page inside the window to show (Settings: "remote", "remote/pair"). */
+function openUtility(page: UtilityPage, o: { title: string; width: number; height: number; minWidth: number; minHeight: number }, at?: string): BrowserWindow {
   const open = utility.get(page);
   if (open && !open.isDestroyed()) {
     open.show();
     open.focus();
+    if (at) open.webContents.send("settings-page", at);
     return open;
   }
   const win = new BrowserWindow({
@@ -382,12 +384,13 @@ function openUtility(page: UtilityPage, o: { title: string; width: number; heigh
   utility.set(page, win);
   win.on("closed", () => utility.get(page) === win && utility.delete(page));
   win.once("ready-to-show", () => win.show());
-  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/${page}.html`);
-  else win.loadFile(path.join(here, `../renderer/${page}.html`));
+  const search = at ? `?page=${encodeURIComponent(at)}` : "";
+  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/${page}.html${search}`);
+  else win.loadFile(path.join(here, `../renderer/${page}.html`), { search });
   return win;
 }
 
-const openSettings = () => openUtility("settings", { title: "Settings", width: 860, height: 620, minWidth: 700, minHeight: 440 });
+const openSettings = (at?: string) => openUtility("settings", { title: "Settings", width: 860, height: 620, minWidth: 700, minHeight: 440 }, at);
 const openTaskManager = () => openUtility("tasks", { title: "Task Manager", width: 720, height: 520, minWidth: 520, minHeight: 300 });
 
 /** App windows, not Settings or the Task Manager. */
@@ -468,7 +471,7 @@ ipcMain.on("edit-native", (e, op: string, guestId?: number) => editNative(e.send
 // URLs (https:, mailto:) go to their default app; anything else is a file path.
 ipcMain.on("clipboard-write", (_e, text: unknown) => typeof text === "string" && clipboard.writeText(text));
 ipcMain.on("open-path", (_e, p: string) => void (/^[a-z][\w+.-]+:/i.test(p) ? shell.openExternal(p) : shell.openPath(p)));
-ipcMain.on("settings-window", () => void openSettings());
+ipcMain.on("settings-window", (_e, page?: string) => void openSettings(typeof page === "string" ? page : undefined));
 ipcMain.on("check-updates", () => checkForUpdates());
 // The Task Manager: Electron's own processes, and showing a terminal in the app window of its Space.
 ipcMain.handle("app-metrics", () => appMetrics());
