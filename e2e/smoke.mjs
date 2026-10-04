@@ -340,6 +340,24 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(copied.includes("Hello from a cmd browser window"), `Select All and Copy work in a browser page (${JSON.stringify(copied)})`);
   }
 
+  // Device Size (window menu): the page gets the device's viewport and, for phones, its user agent.
+  {
+    const page = (js) => win.evaluate((js) => document.querySelector(".tile.kind-browser webview").executeJavaScript(js), js);
+    const until = async (js, want) => {
+      let got;
+      for (let i = 0; i < 40; i++) if (((got = await page(js).catch(() => null)), got === want)) break; else await win.waitForTimeout(150);
+      return got;
+    };
+    await win.evaluate((id) => window.cmd.call("window.update", { id, state: { device: "iphone-16" } }), browserWin.id);
+    const w = await until("innerWidth", 393);
+    const ua = await until("/iPhone/.test(navigator.userAgent)", true);
+    check(w === 393 && ua === true, `a device size sets the page's viewport and user agent (${w}, ${ua})`);
+    await win.screenshot({ path: path.join(shots, "browser-device.png") });
+    await win.evaluate((id) => window.cmd.call("window.update", { id, state: { device: null } }), browserWin.id);
+    const back = await until("/iPhone/.test(navigator.userAgent)", false);
+    check(back === false && (await page("innerWidth")) !== 393, "Fit Window restores the window's size and the app's user agent");
+  }
+
   fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
   fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# hi");
   fs.writeFileSync(path.join(home, "files-fixture", "sub-folder", "inner.txt"), "inside");

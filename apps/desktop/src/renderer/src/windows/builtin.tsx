@@ -7,10 +7,27 @@ import { copy } from "../actions.ts";
 import { hostOf, shortPath } from "../model.ts";
 import { windowActions } from "../windowActions.ts";
 import { BrowserView } from "../components/BrowserView.tsx";
+import { DEVICES } from "../devices.ts";
 import { FilesView } from "../components/FilesView.tsx";
 import { MagicView } from "../components/MagicView.tsx";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
+
+/** Right-click → Device Size: show the page at a phone's, tablet's or desktop's size. */
+function deviceMenu(w: AppWindow): MenuEntry {
+  const current = stateStr(w, "device");
+  const pick = (device: string | null) => () => void cmd.call("window.update", { id: w.id, state: { device } }).catch(() => {});
+  return {
+    label: "Device Size",
+    submenu: [
+      { label: "Fit Window", checked: !current, run: pick(null) },
+      ...DEVICES.flatMap((group): MenuEntry[] => [
+        "-",
+        ...group.map((d) => ({ label: `${d.name}  ${d.width}×${d.height}`, checked: current === d.id, run: pick(d.id) })),
+      ]),
+    ],
+  };
+}
 
 const parentOf = (p: string) => shortPath(p.split("/").slice(0, -1).join("/") || "/");
 
@@ -24,12 +41,16 @@ registerWindowView({
   },
   menu: (w) => {
     const url = stateStr(w, "url");
-    return url
-      ? [
-          { label: "Open in Default Browser", run: () => cmd.openPath(url) },
-          { label: "Copy URL", run: () => copy(url) },
-        ]
-      : [];
+    return [
+      deviceMenu(w),
+      ...(url
+        ? [
+            "-" as const,
+            { label: "Open in Default Browser", run: () => cmd.openPath(url) },
+            { label: "Copy URL", run: () => copy(url) },
+          ]
+        : []),
+    ];
   },
 });
 

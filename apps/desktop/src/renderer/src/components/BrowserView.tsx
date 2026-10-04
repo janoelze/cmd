@@ -2,9 +2,11 @@
 // <webview>. A webview is composited into the page, so it moves with the window
 // layer's transforms and sheets (palette, settings) can draw over it — a native
 // WebContentsView would always sit on top. Navigation and titles are reported to
-// the core (window.update), so the window survives restarts.
+// the core (window.update), so the window survives restarts. A device size
+// (devices.ts, chosen from the window's menu) pins the page to that viewport,
+// scaled down to fit and centred in the window.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -12,6 +14,11 @@ import { ICON, Symbol } from "./Symbol.tsx";
 import { SCROLLBAR_CSS } from "../scrollbars.ts";
 import { setWindowStatus } from "../windowActions.ts";
 import { handleEmbedMessage } from "../embed.ts";
+import { deviceById, type Device } from "../devices.ts";
+
+/** Room around an emulated device: sides and bottom, and the top (its caption). */
+const PAD = 16;
+const CAPTION = 28;
 
 export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const url = typeof win.state.url === "string" ? win.state.url : null;
@@ -23,6 +30,35 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   const input = useRef<HTMLInputElement>(null);
   // The URL the webview was created with; later navigation happens inside it.
   const [initial] = useState(url ?? "about:blank");
+  const device = deviceById(typeof win.state.device === "string" ? win.state.device : undefined);
+  const [initialAgent] = useState(device?.userAgent);
+  const stage = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState({ w: 0, h: 0 });
+
+  useLayoutEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const measure = () => setRoom({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // A device's own user agent (phones), else the app's; the page reloads so the site sees it.
+  const agent = device?.userAgent;
+  useEffect(() => {
+    const wv = ref.current;
+    if (!wv) return;
+    const want = agent ?? navigator.userAgent;
+    try {
+      if (wv.getUserAgent() === want) return;
+      wv.setUserAgent(want);
+      wv.reload();
+    } catch {
+      // not attached yet; the initial useragent attribute covers it
+    }
+  }, [agent]);
 
   useEffect(() => {
     const wv = ref.current;
@@ -133,7 +169,41 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
           <Symbol name="safari" size={ICON.toolbar} />
         </button>
       </div>
-      <webview ref={ref as never} className="webview" data-embed src={initial} partition="persist:cmd-browser" />
+      <div ref={stage} className={device ? "browser-stage device" : "browser-stage"}>
+        <webview
+          ref={ref as never}
+          className="webview"
+          data-embed
+          src={initial}
+          partition="persist:cmd-browser"
+          {...(initialAgent ? { useragent: initialAgent } : {})}
+          style={device ? deviceStyle(device, room) : undefined}
+        />
+        {device && <div className="device-caption">{caption(device, room)}</div>}
+      </div>
     </div>
   );
+}
+
+const scaleFor = (d: Device, room: { w: number; h: number }) =>
+  Math.min(1, Math.max(0.1, (room.w - 2 * PAD) / d.width), Math.max(0.1, (room.h - CAPTION - PAD) / d.height));
+
+/** The page at the device's size, scaled to fit and centred below the caption. */
+function deviceStyle(d: Device, room: { w: number; h: number }): CSSProperties {
+  const s = scaleFor(d, room);
+  return {
+    position: "absolute",
+    left: Math.max(PAD, (room.w - d.width * s) / 2),
+    top: CAPTION,
+    width: d.width,
+    height: d.height,
+    flex: "none",
+    transform: `scale(${s})`,
+    transformOrigin: "0 0",
+  };
+}
+
+function caption(d: Device, room: { w: number; h: number }): string {
+  const pct = Math.round(scaleFor(d, room) * 100);
+  return `${d.name} · ${d.width}×${d.height}${pct < 100 ? ` · ${pct}%` : ""}`;
 }

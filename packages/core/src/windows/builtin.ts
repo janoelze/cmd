@@ -19,7 +19,8 @@ export function normalizeUrl(input: string): string {
   throw new Error(`not a URL: ${input}`);
 }
 
-export const browserType: WindowType<{ url: string }> = {
+/** `device`: the emulated device size the page is shown at (an id from the renderer's devices.ts), else the window's size. */
+export const browserType: WindowType<{ url: string; device?: string }> = {
   kind: "browser",
   title: "Browser",
   icon: "globe",
@@ -33,7 +34,13 @@ export const browserType: WindowType<{ url: string }> = {
     return { state: { url }, title: url === "about:blank" ? "New Tab" : url };
   },
   update(state, patch) {
-    return str(patch.url) !== undefined ? { state: { ...state, url: normalizeUrl(str(patch.url)!) } } : { state };
+    const next = { ...state };
+    if (str(patch.url) !== undefined) next.url = normalizeUrl(str(patch.url)!);
+    if ("device" in patch) {
+      if (str(patch.device)) next.device = str(patch.device);
+      else delete next.device; // null or "": back to the window's size
+    }
+    return { state: next };
   },
 };
 

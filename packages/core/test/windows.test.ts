@@ -120,6 +120,14 @@ describe("window manager", () => {
     expect(again.others().map((w) => w.id)).toEqual([b.id]);
   });
 
+  it("keeps a browser window's device size until it is cleared", () => {
+    const { wins } = make(builtins(), {}, path.join(dir, "device.sqlite"));
+    const b = wins.open("browser", { url: "example.com" }, space);
+    expect(wins.update(b.id, { state: { device: "iphone-16" } }).state).toEqual({ url: "https://example.com", device: "iphone-16" });
+    expect(wins.update(b.id, { state: { url: "localhost:3000" } }).state).toMatchObject({ device: "iphone-16" });
+    expect(wins.update(b.id, { state: { device: null } }).state).toEqual({ url: "http://localhost:3000" });
+  });
+
   it("switches a window's type in place (Markdown ⇄ text), keeping its id", () => {
     const { wins } = make(builtins(), {}, path.join(dir, "switch.sqlite"));
     const md = file("readme.md", "# Title");

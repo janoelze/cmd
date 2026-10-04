@@ -922,7 +922,23 @@ kbd {
   user-select: text;
 }
 .address:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
+.browser-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
 .webview { flex: 1; min-height: 0; background: #fff; }
+.browser-stage.device .webview { box-shadow: 0 0 0 1px var(--separator), 0 4px 18px rgba(0, 0, 0, 0.18); }
+.device-caption {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  line-height: 28px;
+  text-align: center;
+  font: 11px var(--font-ui);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* While dragging or resizing windows, embedded pages ([data-embed], embed.ts) must not swallow pointer events. */
 .main.windows.dragging [data-embed], .main.windows.resizing [data-embed], .main.windows.held [data-embed] { pointer-events: none; }
 
