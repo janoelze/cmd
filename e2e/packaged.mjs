@@ -38,7 +38,7 @@ const until = async (fn, ms, what) => {
   }
 };
 
-const app = await electron.launch({ executablePath: exe, env: { ...process.env, CMD_HOME: home } });
+const app = await electron.launch({ executablePath: exe, env: { ...process.env, CMD_HOME: home, CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1" } });
 try {
   const win = await app.firstWindow();
   await win.waitForSelector(".sidebar-status", { timeout: 30_000 });

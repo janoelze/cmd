@@ -3,6 +3,7 @@
 
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
+import "./background.ts";
 import { servePreviews } from "./preview.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, webContents, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";

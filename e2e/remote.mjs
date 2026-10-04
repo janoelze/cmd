@@ -30,7 +30,7 @@ fs.writeFileSync(
 );
 
 const require = createRequire(path.join(root, "apps/desktop/package.json"));
-const app = await electron.launch({ executablePath: require("electron"), args: [path.join(root, "apps/desktop")], env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1" } });
+const app = await electron.launch({ executablePath: require("electron"), args: [path.join(root, "apps/desktop")], env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1" } });
 const win = await app.firstWindow();
 win.on("pageerror", (e) => console.log("pageerror:", e.message));
 win.on("crash", () => console.log("main window crashed"));

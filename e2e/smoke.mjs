@@ -43,7 +43,7 @@ const launch = async () => {
   const app = await electron.launch({
     executablePath: require("electron"),
     args: [path.join(root, "apps/desktop")],
-    env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts },
+    env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts },
   });
   const win = await app.firstWindow();
   win.on("pageerror", (e) => console.log("pageerror:", e.message));
@@ -811,10 +811,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await row("Show resource usage").locator(".sw-switch").click();
   await waitFor(() => saved()["ui.showResources"] === false, "a switch saves to settings.json");
   await row("Window corner radius").locator(".nf button[aria-label=Increase]").click();
-  await waitFor(() => saved()["ui.windowRadius"] === 9, "+ steps a number field and saves");
+  await waitFor(() => saved()["ui.windowRadius"] === 12, "+ steps a number field and saves");
   const radius = () => win.evaluate(() => document.querySelector(".app")?.style.getPropertyValue("--window-radius"));
-  for (let i = 0; i < 40 && (await radius()) !== "9px"; i++) await win.waitForTimeout(50);
-  check((await radius()) === "9px", "the app window applies it live");
+  for (let i = 0; i < 40 && (await radius()) !== "12px"; i++) await win.waitForTimeout(50);
+  check((await radius()) === "12px", "the app window applies it live");
   await row("Window corner radius").locator(".sw-reset").click();
   await sw.screenshot({ path: path.join(shots, "5-settings-interface.png") });
   await row("Show resource usage").locator(".sw-reset").click();
@@ -854,7 +854,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await page("Terminal");
   await row("Line height").locator(".nf input").focus();
   await row("Line height").locator(".nf input").press("ArrowUp");
-  await waitFor(() => saved()["terminal.lineHeight"] === 1.2, "↑ steps a number field by its step");
+  await waitFor(() => Math.abs(saved()["terminal.lineHeight"] - 1.15) < 1e-9, "↑ steps a number field by its step");
   await sw.locator(".sw-page-foot .sw-button").click();
   await waitFor(() => !("terminal.lineHeight" in saved()) && !("terminal.renderer" in saved()), "Restore Defaults resets the page");
 
