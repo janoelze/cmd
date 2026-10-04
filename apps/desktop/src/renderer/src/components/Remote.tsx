@@ -4,7 +4,7 @@
 // is in, with what access, watching which windows; disconnect in one click),
 // and the notifications that go with them.
 
-import { Badge, Button, IconButton, Popover, useTooltip } from "@cmd/ui";
+import { Badge, Button, Dialog, IconButton, Popover, useTooltip } from "@cmd/ui";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { RemotePairRequest, RemoteStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -32,11 +32,10 @@ export function useWatchers(windowId: string | null): string[] {
 /** The approval prompt over the main window (Settings shows it inline). */
 export function PairSheet({ request }: { request: RemotePairRequest }) {
   return (
-    <div className="palette-backdrop pair-backdrop">
-      <div className="palette pair-sheet">
-        <PairPrompt request={request} />
-      </div>
-    </div>
+    // Answered only by its buttons (Esc is Don't Allow, in PairPrompt).
+    <Dialog open onClose={() => {}} dismissable={false} padded={false} width={460} position="center" className="pair-sheet" label="Allow a device">
+      <PairPrompt request={request} />
+    </Dialog>
   );
 }
 

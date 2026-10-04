@@ -313,8 +313,11 @@ export function Dialog({
     if (!open) return;
     const before = document.activeElement as HTMLElement | null;
     const el = ref.current;
-    const first = el?.querySelector<HTMLElement>("[autofocus], input, textarea, select, button:not([data-variant='ghost'])");
-    (first ?? el)?.focus();
+    // Unless its content already took focus (its own effects run first).
+    if (!el?.contains(document.activeElement)) {
+      const first = el?.querySelector<HTMLElement>("[autofocus], input, textarea, select, button:not([data-variant='ghost'])");
+      (first ?? el)?.focus();
+    }
     return () => before?.focus?.();
   }, [open]);
   if (!open) return null;

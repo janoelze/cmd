@@ -2,6 +2,7 @@
 // in it needs you or finished unseen) and the picker that sets it: a filterable
 // grid of symbols, or any SF Symbol name typed in full.
 
+import { Dialog, EmptyState, LinkButton } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ICON_NAME, spaceIcon, type Space } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -73,8 +74,7 @@ export function SpaceIconPicker(p: { space: Space; onClose: () => void }) {
   };
   const onKeyDown = (e: React.KeyboardEvent) => {
     const move = (d: number) => (e.preventDefault(), setActive((a) => Math.max(0, Math.min(shown.length - 1, a + d))));
-    if (e.key === "Escape") p.onClose();
-    else if (e.key === "ArrowRight") move(1);
+    if (e.key === "ArrowRight") move(1);
     else if (e.key === "ArrowLeft") move(-1);
     else if (e.key === "ArrowDown") move(COLS);
     else if (e.key === "ArrowUp") move(-COLS);
@@ -82,45 +82,41 @@ export function SpaceIconPicker(p: { space: Space; onClose: () => void }) {
   };
 
   return (
-    <div className="palette-backdrop" onMouseDown={p.onClose}>
-      <div className="palette icon-picker" onMouseDown={(e) => e.stopPropagation()}>
-        <input
-          autoFocus
-          className="palette-input"
-          placeholder={`Icon for ${p.space.name}: search, or type an SF Symbol name`}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
-        <div className="icon-grid" ref={grid} role="listbox" aria-label="Icons">
-          {shown.map((name, i) => (
-            <button
-              key={name}
-              data-i={i}
-              role="option"
-              aria-selected={name === current}
-              aria-label={name}
-              className={`icon-cell ${i === active ? "active" : ""} ${name === current ? "current" : ""}`}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => set(name)}
-            >
-              <Symbol name={name} size={16} />
-            </button>
-          ))}
-          {!shown.length && <div className="palette-empty">No icon matches. Type a full SF Symbol name, like “leaf.fill”.</div>}
-        </div>
-        <footer className="palette-foot">
-          <span className="icon-picker-name">{shown[active] ?? ""}</span>
-          <span>
-            <kbd>↵</kbd> set
-          </span>
-          {p.space.icon !== null && (
-            <button className="icon-picker-reset" onClick={() => set(null)}>
-              Use the default
-            </button>
-          )}
-        </footer>
+    <Dialog open onClose={p.onClose} padded={false} scrim={false} width={460} className="icon-picker" label="Space icon">
+      <input
+        autoFocus
+        className="palette-input"
+        placeholder={`Icon for ${p.space.name}: search, or type an SF Symbol name`}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={onKeyDown}
+      />
+      <div className="icon-grid" ref={grid} role="listbox" aria-label="Icons">
+        {shown.map((name, i) => (
+          <button
+            key={name}
+            data-i={i}
+            role="option"
+            aria-selected={name === current}
+            aria-label={name}
+            className={`icon-cell ${i === active ? "active" : ""} ${name === current ? "current" : ""}`}
+            onMouseEnter={() => setActive(i)}
+            onClick={() => set(name)}
+          >
+            <Symbol name={name} size={16} />
+          </button>
+        ))}
+        {!shown.length && <EmptyState compact>No icon matches. Type a full SF Symbol name, like “leaf.fill”.</EmptyState>}
       </div>
-    </div>
+      <footer className="palette-foot">
+        <span className="icon-picker-name">{shown[active] ?? ""}</span>
+        <span>
+          <kbd>↵</kbd> set
+        </span>
+        {p.space.icon !== null && (
+          <LinkButton onClick={() => set(null)}>Use the default</LinkButton>
+        )}
+      </footer>
+    </Dialog>
   );
 }

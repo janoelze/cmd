@@ -829,12 +829,9 @@ kbd {
 
 /* ── feedback sheet (components/Feedback.tsx) ───────── */
 
-.palette.feedback { padding: 14px 16px; gap: 10px; }
-.feedback-head { display: flex; align-items: center; justify-content: space-between; }
-.feedback-title { font: 600 13px var(--font-ui); color: var(--text); }
-.feedback-foot { display: flex; align-items: center; gap: 8px; }
-.feedback-info { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-dim); }
-.feedback-error { flex: 1; min-width: 0; font-size: 11.5px; color: var(--state-needs); text-align: right; }
+.feedback-form { display: flex; flex-direction: column; gap: 10px; }
+.feedback-info { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-dim); }
+.feedback-error { min-width: 0; font-size: 11.5px; color: var(--danger); text-align: right; }
 .feedback-sent { padding: 24px 0; text-align: center; color: var(--text); }
 
 /* ── browser and file windows ───────────────────────── */
@@ -1272,7 +1269,6 @@ kbd {
 .space-item[data-active] .space-icon::after { box-shadow: 0 0 0 1.5px var(--accent); }
 .space-item-open .ui-menu-icon { color: var(--text-dim); }
 /* SpaceIconPicker: the palette's frame around a grid of symbols. */
-.icon-picker { width: min(460px, calc(100vw - 32px)); }
 .icon-grid {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
@@ -1282,7 +1278,7 @@ kbd {
   overflow-x: hidden;
   overflow-y: auto;
 }
-.icon-grid .palette-empty { grid-column: 1 / -1; padding: 12px 6px; }
+.icon-grid .ui-empty { grid-column: 1 / -1; }
 .icon-cell {
   display: grid;
   place-items: center;
@@ -1298,7 +1294,6 @@ kbd {
 .icon-cell.current { background: var(--bg-selected); color: var(--text); }
 .icon-cell.active { background: var(--accent); color: var(--on-accent); }
 .icon-picker-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
-.icon-picker-reset { border: 0; padding: 0; background: none; font: inherit; color: var(--link); cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .space-trigger, .space-menu { transition: none; animation: none; }
 }
@@ -1330,8 +1325,6 @@ kbd {
 .row-end .remote-badge { margin: 0 4px 0 0; }
 @keyframes remote-typed { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
 
-.pair-backdrop { background: color-mix(in srgb, var(--scrim) 35%, transparent); z-index: 30; }
-.pair-sheet { width: min(460px, calc(100vw - 32px)); }
 .pair-prompt { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 22px 16px; text-align: center; outline: none; }
 .pair-icon { color: var(--accent); margin-bottom: 4px; }
 .pair-title { font: 600 15px var(--font-ui); color: var(--text); }

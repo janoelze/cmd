@@ -2,7 +2,7 @@
 // a kind, a message and an optional way to answer, sent by main to the
 // feedback webhook (main/feedback.ts) with the version and platform if wanted.
 
-import { Button, Checkbox, Segmented, TextArea, TextField } from "@cmd/ui";
+import { Button, Checkbox, Dialog, Segmented, TextArea, TextField } from "@cmd/ui";
 import { useEffect, useRef, useState } from "react";
 import { cmd } from "../bridge.ts";
 
@@ -53,58 +53,47 @@ export function Feedback({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const sent = state === "sent";
   return (
-    <div className="palette-backdrop" onMouseDown={onClose}>
-      <form
-        className="palette feedback"
-        onMouseDown={(e) => e.stopPropagation()}
-        onSubmit={(e) => (e.preventDefault(), void send())}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onClose();
-          else if (e.key === "Enter" && e.metaKey) (e.preventDefault(), void send());
-        }}
-      >
-        {state === "sent" ? (
-          <div className="feedback-sent">Thanks! Your feedback is on its way.</div>
-        ) : (
+    <Dialog
+      open
+      onClose={onClose}
+      title="Send Feedback"
+      width={600}
+      className="feedback"
+      actions={
+        !sent && (
           <>
-            <div className="feedback-head">
-              <span className="feedback-title">Send Feedback</span>
-              <Segmented size="sm" label="Kind" value={kind} options={KINDS.map((k) => ({ value: k.id, label: k.label }))} onChange={setKind} />
-            </div>
-            <TextArea
-              ref={text}
-              value={message}
-              placeholder={KINDS.find((k) => k.id === kind)!.placeholder}
-              onChange={setMessage}
-              maxLength={4000}
-              rows={7}
-            />
-            <TextField
-              fill
-              size="lg"
-              value={contact}
-              placeholder="Email or Discord name, if you'd like an answer (optional)"
-              onChange={setContact}
-              maxLength={200}
-            />
-            <div className="feedback-foot">
-              <span className="feedback-info" data-tip="App version, build, macOS version and architecture. Home folders are replaced by ~.">
-                <Checkbox checked={includeInfo} onChange={setIncludeInfo}>
-                  Include app version and system info
-                </Checkbox>
-              </span>
-              <span className="feedback-error">{unavailable ?? error}</span>
-              <Button onClick={onClose}>
-                Cancel
-              </Button>
-              <Button variant="primary" type="submit" disabled={!canSend} data-tip="Send" data-tip-key="⌘↵">
-                {state === "sending" ? "Sending…" : "Send"}
-              </Button>
-            </div>
+            <span className="feedback-info" data-tip="App version, build, macOS version and architecture. Home folders are replaced by ~.">
+              <Checkbox checked={includeInfo} onChange={setIncludeInfo}>
+                Include app version and system info
+              </Checkbox>
+            </span>
+            <span className="feedback-error">{unavailable ?? error}</span>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button variant="primary" disabled={!canSend} busy={state === "sending"} data-tip="Send" data-tip-key="⌘↵" onClick={() => void send()}>
+              {state === "sending" ? "Sending…" : "Send"}
+            </Button>
           </>
-        )}
-      </form>
-    </div>
+        )
+      }
+    >
+      {sent ? (
+        <div className="feedback-sent">Thanks! Your feedback is on its way.</div>
+      ) : (
+        <div className="feedback-form" onKeyDown={(e) => e.key === "Enter" && e.metaKey && (e.preventDefault(), void send())}>
+          <Segmented fill label="Kind" value={kind} options={KINDS.map((k) => ({ value: k.id, label: k.label }))} onChange={setKind} />
+          <TextArea ref={text} value={message} placeholder={KINDS.find((k) => k.id === kind)!.placeholder} onChange={setMessage} maxLength={4000} rows={7} />
+          <TextField
+            fill
+            size="lg"
+            value={contact}
+            placeholder="Email or Discord name, if you'd like an answer (optional)"
+            onChange={setContact}
+            maxLength={200}
+          />
+        </div>
+      )}
+    </Dialog>
   );
 }
