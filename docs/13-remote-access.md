@@ -269,12 +269,18 @@ Traffic, measured on the live core here (2026-10-04, 3 panes, one Claude working
 - **Bandwidth is not the constraint.** The 1.5 GB memory cap and the uptime of a shared host are.
 - The core must filter. Forwarding the raw stream would be about 100 MB/h per device for no benefit.
 
-**Deployment:**
-- A `/cmd-relay` (or subdomain) http backend plus a supervisord service, following the existing node-service pattern: `HOST=0.0.0.0`, Node from `/opt/nodejs22`.
-- Because the relay keeps no state, moving it later (Fly.io or a bigger VPS) only means changing `remote.relay`.
+**Deployment (decided, live since 2026-10-04):**
+- The hosted relay is `wss://relay.endtime-instruments.org`: a domain backend (`relay.endtime-instruments.org/` → `http:4010`) and the supervisord service `cmd-relay`, running one esbuild bundle (`apps/relay/dist/relay.mjs`) on `/opt/nodejs22`, with `RELAY_ORIGINS=https://cmd.endtime-instruments.org` and routes kept in `~/cmd-relay-data/routes.json`.
+- The hosted web client is `https://cmd.endtime-instruments.org`: Apache serves `apps/web`'s build from `/var/www/virtual/janoelze/cmd.endtime-instruments.org/`, with the CSP and headers in its `.htaccess`.
+- Both are the app's defaults (`remote.relay`, `remote.client`), so turning remote access on needs no configuration.
+- `scripts/deploy-remote.sh` deploys both, idempotently; CI runs it on master when `apps/relay`, `apps/web`, the protocol or `remote-crypto` change (`.github/workflows/remote.yml`, deploy key in the `UBERSPACE_SSH_KEY` secret, pinned host key). `E2E_HOSTED=1 pnpm e2e:web` checks the deployed pair from a local core.
+- Because the relay keeps almost no state, moving it later (Fly.io or a bigger VPS) only means changing `remote.relay` and pairing again.
+- **Self-hosting for more privacy:** `pnpm --filter @cmd/relay build`, then run `node relay.mjs` anywhere with `HOST`, `PORT`, `RELAY_ORIGINS` (the client's origin, e.g. `https://cmd.endtime-instruments.org`), `RELAY_STATE` and, behind a proxy, `RELAY_TRUST_PROXY=1`, and set `remote.relay` to its `wss://` URL. The client can stay the hosted one, or be `apps/web`'s build on any static host (then point `remote.client` at it).
 - Open the relay to other users only after rate limits and abuse handling exist. A shared host is fine for you and early testers.
 
 ## Web client
+
+> **Current trade-off (2026-10-04):** the client and the relay run on the same Uberspace host, on different origins (`cmd.` and `relay.endtime-instruments.org`). Browser isolation between them holds, but a compromise of that one host could serve malicious client JS to people using the hosted client. Moving the client to a separate static host (as below) restores the defence; until then, the client hash check and pinned service worker (Phase 2) matter more.
 
 **Origin separation is the core defence for the client.** The client is served from **a different origin than the relay**: a static build on GitHub Pages or a custom domain, published by CI from a tagged release. Then a compromised Uberspace (relay) can't serve malicious JS, and a compromised static host can't read traffic without also serving JS that targets you.
 
@@ -570,8 +576,8 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
 
 ## Open questions
 
-1. **Client origin:** GitHub Pages under the repo, or a custom domain (needed for a stable PWA identity; changing the origin later loses installs and push subscriptions)? A custom domain on a separate host from the relay is preferred.
-2. **Relay origin:** a subdomain on Uberspace (e.g. `relay.<domain>`) or a path under endtime-instruments.org?
+1. **Client origin, decided:** `https://cmd.endtime-instruments.org`, a stable custom domain (PWA installs and push subscriptions survive moving the files). Open: move it off the relay's host (see the trade-off under "Web client").
+2. **Relay origin, decided:** `wss://relay.endtime-instruments.org` on Uberspace.
 3. **Fit to phone, decided:** opt-in per tab, temporary, released on tab change, disconnect or desktop input. Open: should it remember the choice per pane (re-fit when you return to that tab), or always start off?
 4. **New terminals and agents from the phone:** `pane.create` / `agent.spawn` as control scope? It is no more power than typing into an existing terminal, so the proposal is yes.
 5. **Pairing without the Mac in reach:** never (the current proposal), or an emergency path?

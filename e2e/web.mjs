@@ -3,7 +3,8 @@
 // a throwaway CMD_HOME; the Mac's approval comes over the core's socket, as
 // `cmd remote pair` does. Pairs, opens a terminal from Now, types from the key
 // row and the compose bar, checks the text reached the PTY, then has the Mac
-// unpair it. Screenshots in .cmd-dev/shots/web-*.png. `pnpm e2e:web`.
+// unpair it. Screenshots in .cmd-dev/shots/web-*.png. `pnpm e2e:web`;
+// E2E_HOSTED=1 runs it against the deployed relay and client instead.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -37,11 +38,13 @@ const until = async (fn, msg, ms = 10_000) => {
   check(false, msg);
 };
 
-const relay = await startRelay({ log: () => {} });
-const web = await createServer({ root: path.join(root, "apps/web"), configFile: path.join(root, "apps/web/vite.config.ts"), server: { port: 0 }, logLevel: "error" });
-await web.listen();
-const client = web.resolvedUrls.local[0].replace(/\/$/, "");
-fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "remote.enabled": true, "remote.relay": relay.url, "remote.client": client }));
+// E2E_HOSTED=1: the deployed relay and client, with the core on its default settings.
+const hosted = !!process.env.E2E_HOSTED;
+const relay = hosted ? null : await startRelay({ log: () => {} });
+const web = hosted ? null : await createServer({ root: path.join(root, "apps/web"), configFile: path.join(root, "apps/web/vite.config.ts"), server: { port: 0 }, logLevel: "error" });
+await web?.listen();
+const client = hosted ? "https://cmd.endtime-instruments.org" : web.resolvedUrls.local[0].replace(/\/$/, "");
+fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify(hosted ? { "remote.enabled": true } : { "remote.enabled": true, "remote.relay": relay.url, "remote.client": client }));
 const core = spawn(process.execPath, ["--no-warnings", path.join(root, "packages/core/src/main.ts"), "--instance=dev"], { env: { ...process.env, CMD_HOME: home }, stdio: "ignore", detached: true });
 core.unref();
 
@@ -111,8 +114,8 @@ try {
 } finally {
   mac?.close();
   await browser.close();
-  await web.close();
+  await web?.close();
   await stopCore(home, { terminals: true });
-  await relay.close();
+  await relay?.close();
 }
 process.exit(process.exitCode ?? 0);

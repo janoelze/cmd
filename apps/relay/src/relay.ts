@@ -14,8 +14,8 @@ import { decodeRelayFrame, encodeRelayFrame, RELAY_LIMITS, RelayClose, RelayFram
 export interface RelayOptions {
   port?: number;
   host?: string;
-  /** Device links must come from this Origin (the web client's), when set. Defence in depth, not auth. */
-  origin?: string | null;
+  /** Device links must come from one of these Origins (the web client's), when set. Defence in depth, not auth. */
+  origins?: string[] | null;
   /** Use X-Forwarded-For for rate limits (behind the Uberspace frontend). */
   trustProxy?: boolean;
   /** JSON file that keeps route registrations across restarts; null: memory only. */
@@ -71,8 +71,10 @@ export async function startRelay(o: RelayOptions = {}): Promise<Relay> {
     return recent.length > limits.connectsPerIpPerMinute;
   };
 
-  const server = http.createServer((_req, res) => {
-    res.writeHead(404, { "content-type": "text/plain" }).end("cmd relay\n");
+  // Plain text only: a health check for deploys, and nothing else.
+  const server = http.createServer((req, res) => {
+    if (req.url === "/health") res.writeHead(200, { "content-type": "text/plain" }).end(`ok ${routes.size} routes, ${wss.clients.size} connections\n`);
+    else res.writeHead(404, { "content-type": "text/plain" }).end("cmd relay\n");
   });
   const wss = new WebSocketServer({ noServer: true, maxPayload: limits.frameBytes + 5 });
   const lastSeen = new WeakMap<WebSocket, number>();
@@ -90,7 +92,7 @@ export async function startRelay(o: RelayOptions = {}): Promise<Relay> {
       return;
     }
     const m = /^\/r\/([A-Za-z0-9_-]{22})$/.exec(url.pathname);
-    if (!m || (o.origin && req.headers.origin !== o.origin) || rateLimited(ip)) {
+    if (!m || (o.origins?.length && !o.origins.includes(String(req.headers.origin))) || rateLimited(ip)) {
       socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n", () => socket.destroy());
       return;
     }

@@ -101,7 +101,7 @@ describe("relay", () => {
   });
 
   it("checks the Origin of device links", async () => {
-    await start({ origin: "https://client.example" });
+    await start({ origins: ["https://client.example"] });
     const h = await host();
     expect(await refused(`${relay.url}/r/${h.route}`)).toBe(1006);
     expect(h.frames()).toEqual([]);

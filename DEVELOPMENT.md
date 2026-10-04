@@ -134,6 +134,8 @@ pnpm remote:device watch                         # bootstrap, follow terminals, 
 
 The phone side is `apps/web`, a prototype web client (pair, Now, a terminal with a key row and compose bar). `pnpm web` serves it on http://localhost:5180; set `remote.client` to that and open the pairing link in a desktop browser. A phone needs the page over HTTPS (WebCrypto only runs in a secure context) and a relay it can reach, e.g. both behind `tailscale serve`. `pnpm e2e:web` runs it in an emulated iPhone against a real core and relay.
 
+The hosted relay (`wss://relay.endtime-instruments.org`) and web client (`https://cmd.endtime-instruments.org`) are the defaults; CI deploys both from master with `scripts/deploy-remote.sh` (docs/13, "Deployment", also for running your own relay).
+
 `pnpm e2e:remote` walks the whole journey through the built app (pair from Settings, approve, the status bar indicator and its popover, the watched window's badge) with a local relay and a pretend phone; screenshots land in `.cmd-dev/shots/remote-*.png`.
 
 The host key and route live in `$CMD_HOME/remote/host.json`, paired devices and the audit log in SQLite (`remote_devices`, `remote_log`), the pretend phone's identity in `$CMD_HOME/remote-device.json`.

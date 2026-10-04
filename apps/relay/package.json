@@ -3,13 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --no-warnings src/main.ts"
+    "start": "node --no-warnings src/main.ts",
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/relay.mjs --external:bufferutil --external:utf-8-validate \"--banner:js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\""
   },
   "dependencies": {
     "@cmd/protocol": "workspace:*",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.12"
+    "@types/ws": "^8.5.12",
+    "esbuild": "^0.28.2"
   }
 }

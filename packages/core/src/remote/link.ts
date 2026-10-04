@@ -73,7 +73,8 @@ export class RelayLink extends EventEmitter<{
     this.#setState("connecting", this.error);
     let ws: WebSocket;
     try {
-      ws = new WebSocket(new URL("/h", this.#o.relay));
+      // Relative, so a relay under a path (wss://host/relay) keeps it.
+      ws = new WebSocket(new URL("h", this.#o.relay.replace(/\/*$/, "/")));
     } catch (err) {
       this.#setState("error", `bad relay URL: ${(err as Error).message}`);
       return;

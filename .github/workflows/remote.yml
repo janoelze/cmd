@@ -1,0 +1,53 @@
+# Deploys the hosted remote-access relay and web client (scripts/deploy-remote.sh)
+# when they change on master, after their tests pass. Needs the secret
+# UBERSPACE_SSH_KEY: a deploy key that may log in to the Uberspace host.
+name: remote
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - apps/relay/**
+      - apps/web/**
+      - packages/protocol/src/**
+      - packages/remote-crypto/**
+      - scripts/deploy-remote.sh
+      - .github/workflows/remote.yml
+  workflow_dispatch:
+
+concurrency:
+  group: remote-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # No postinstall: the relay and the client need neither the native helpers nor Electron.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - run: pnpm vitest run apps/relay packages/remote-crypto
+
+      - run: pnpm --filter @cmd/web typecheck
+
+      - name: SSH
+        env:
+          KEY: ${{ secrets.UBERSPACE_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Pinned: the host key, not whatever answers.
+          echo "aquila.uberspace.de ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOOdDXepVcufKsQDWFOnPKRZsYCW2HQ9sd9vi8P6n3uz" > ~/.ssh/known_hosts
+
+      - run: scripts/deploy-remote.sh
