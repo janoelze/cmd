@@ -67,6 +67,17 @@ describe("status files (port of AgentStatusStore)", () => {
     ];
     expect(deriveStatus(evs)).toMatchObject({ state: "working", activity: null });
   });
+
+  it("ignores a subagent's tool calls", () => {
+    const evs: Parameters<typeof deriveStatus>[0] = [
+      { name: "UserPromptSubmit", agent: "claude", date: 1, payload: { prompt: "release" } },
+      { name: "Stop", agent: "claude", date: 2, payload: {} },
+      { name: "PreToolUse", agent: "claude", date: 3, payload: { agent_id: "a1", tool_name: "Bash", tool_input: { command: "true" } } },
+    ];
+    expect(deriveStatus(evs)).toMatchObject({ state: "done", activity: null });
+    evs[1] = { name: "PreToolUse", agent: "claude", date: 2, payload: { tool_name: "Read", tool_input: { file_path: "/x/a.ts" } } };
+    expect(deriveStatus(evs)).toMatchObject({ state: "working", activity: "Reading a.ts" });
+  });
 });
 
 describe("tracker + status files", () => {

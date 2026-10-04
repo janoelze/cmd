@@ -47,6 +47,9 @@ interface Ev {
 const str = (v: unknown) => (typeof v === "string" && v ? v : null);
 const firstLine = (s: string) => (s.split(/\r?\n/)[0] ?? s).trim();
 
+/** Events applyHook ignores when they come from a subagent. */
+const SUBAGENT_EVENTS = new Set(["PreToolUse", "PostToolUse", "PostToolUseFailure", "PreCompact", "PostCompact"]);
+
 function stateOf(e: Ev): AgentState | null {
   switch (e.name) {
     case "SessionStart":
@@ -106,6 +109,10 @@ export function deriveStatus(events: Ev[], notBefore = 0): HookStatus | null {
   // A terminal can run several sessions in a row (/clear, resume). Only the newest counts.
   const current = str(evs.at(-1)?.payload.session_id);
   if (current) evs = evs.filter((e) => (str(e.payload.session_id) ?? current) === current);
+  // Tool calls from inside a Claude subagent (they carry agent_id) describe the child,
+  // not the agent in the pane, as in applyHook: a background subagent must not turn a
+  // finished agent back to working.
+  evs = evs.filter((e) => !(str(e.payload.agent_id) && SUBAGENT_EVENTS.has(e.name)));
   const latest = evs.findLast((e) => stateOf(e) !== null);
   if (!latest) return null;
 
