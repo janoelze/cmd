@@ -50,6 +50,11 @@ export interface Pane {
   attention: Attention | null;
   /** No system notifications from this terminal (its attention marker still shows). */
   muted: boolean;
+  /**
+   * A remote device sized this terminal to its screen (its name), for as long as
+   * it shows it; the desktop then draws it at that size. null: the desktop's size.
+   */
+  sizedBy: string | null;
   /** A progress bar the program in it reports (OSC 9;4); null when there is none. */
   progress: Progress | null;
 }

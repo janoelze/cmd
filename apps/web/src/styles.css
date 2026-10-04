@@ -21,7 +21,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; }
+html, body, #root { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
 body { background: var(--bg); color: var(--text); font: 15px/1.4 var(--font); -webkit-text-size-adjust: 100%; }
 button { font: inherit; color: inherit; }
 
@@ -32,7 +32,8 @@ button { font: inherit; color: inherit; }
 .words span { padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); font-weight: 600; font-size: 18px; }
 .btn { border: 0; border-radius: 8px; padding: 10px 16px; background: var(--bg-elevated); }
 
-.app { height: 100%; display: flex; flex-direction: column; }
+/* Pinned to the visible area (main.tsx): the page itself never scrolls. */
+.app { position: fixed; left: 0; right: 0; top: var(--app-top, 0); height: var(--app-h, 100%); display: flex; flex-direction: column; }
 .bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; border-bottom: 1px solid var(--separator); }
 .bar .title { font-weight: 700; font-size: 20px; }
 .back { border: 0; background: none; color: var(--accent); font-size: 17px; padding: 4px 0; }
@@ -51,9 +52,12 @@ button { font: inherit; color: inherit; }
 .row-sub { color: var(--text-dim); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .term-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #151515; }
-.term-title { padding: 6px 12px; font-size: 12px; color: var(--text-dim); background: var(--bg); }
-.term-scroll { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
-.term { width: 100%; }
+.term-title { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; font-size: 12px; color: var(--text-dim); background: var(--bg); }
+.term-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fit { flex: none; border: 0; border-radius: 99px; padding: 3px 9px; font-size: 12px; color: var(--accent); background: var(--bg-elevated); }
+/* Fills the rest; only the terminal's own scrollback scrolls. */
+.term { flex: 1; min-height: 0; overflow: hidden; padding: 2px 0 0 4px; }
+.term .xterm { height: 100%; }
 .term-input { flex: none; background: var(--bg); border-top: 1px solid var(--separator); padding-bottom: env(safe-area-inset-bottom); }
 .keys { display: flex; gap: 6px; padding: 8px; overflow-x: auto; }
 .keys button { flex: none; min-width: 42px; padding: 8px 10px; border: 0; border-radius: 6px; background: var(--bg-elevated); font: 14px ui-monospace, Menlo, monospace; }
@@ -62,3 +66,4 @@ button { font: inherit; color: inherit; }
 .compose button { border: 0; border-radius: 8px; padding: 0 14px; background: var(--accent); color: white; font-weight: 600; }
 .compose button:disabled { opacity: 0.4; }
 .viewonly { padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px); font-size: 13px; color: var(--text-dim); background: var(--bg); }
+.term, .term .xterm-viewport { background: #151515 !important; }

@@ -151,6 +151,8 @@ export interface CreatePaneOptions {
 }
 
 export class PaneManager extends EventEmitter<PaneEvents> {
+  /** Remote devices sizing a pane to their screen, and the desktop's size to go back to. */
+  #overrides = new Map<PaneId, { owner: object; desktop: { cols: number; rows: number } }>();
   #backend: TermBackend;
   #panes = new Map<PaneId, Live>();
   #socketPath: string;
@@ -282,6 +284,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       usage: null,
       attention: opts.restored?.attention ?? null,
       muted: opts.restored?.muted ?? false,
+      sizedBy: null,
       progress: null,
     };
     const live = this.#attach(pane, term, token);
@@ -314,6 +317,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       usage: null,
       attention: rec?.attention ?? null,
       muted: rec?.muted ?? false,
+      sizedBy: null,
       progress: null,
     };
     const live = this.#attach(pane, term, rec?.token ?? "");
@@ -520,13 +524,57 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.#must(id).term.write(data);
   }
 
+  /** The desktop's size. While a device holds an override it is kept for when that ends. */
   resize(id: PaneId, cols: number, rows: number): void {
     const l = this.#must(id);
     if (cols < 2 || rows < 2) return;
+    const o = this.#overrides.get(id);
+    if (o) {
+      o.desktop = { cols, rows };
+      return this.#persist(l);
+    }
+    this.#setSize(l, cols, rows);
+    this.#persist(l);
+  }
+
+  /**
+   * A remote device shows this terminal and sizes it to its screen (docs/13,
+   * "Terminals on a phone"): one override per pane, the latest owner wins. The
+   * desktop's own size comes back on release (the device leaves, locks or
+   * disconnects, or someone types at the Mac).
+   */
+  override(id: PaneId, owner: object, label: string, cols: number, rows: number): void {
+    const l = this.#must(id);
+    const o = this.#overrides.get(id);
+    this.#overrides.set(id, { owner, desktop: o?.desktop ?? { cols: l.pane.cols, rows: l.pane.rows } });
+    const changed = l.pane.sizedBy !== label || l.pane.cols !== cols || l.pane.rows !== rows;
+    l.pane.sizedBy = label;
+    this.#setSize(l, cols, rows);
+    if (changed) this.#changed(l);
+  }
+
+  /** End the override (only `owner`'s, if given): back to the desktop's size. */
+  release(id: PaneId, owner?: object): void {
+    const o = this.#overrides.get(id);
+    const l = this.#panes.get(id);
+    if (!o || (owner && o.owner !== owner)) return;
+    this.#overrides.delete(id);
+    if (!l) return;
+    l.pane.sizedBy = null;
+    this.#setSize(l, o.desktop.cols, o.desktop.rows);
+    this.#changed(l);
+  }
+
+  /** Every override this owner holds (its connection closed). */
+  releaseAll(owner: object): void {
+    for (const [id, o] of this.#overrides) if (o.owner === owner) this.release(id, owner);
+  }
+
+  #setSize(l: Live, cols: number, rows: number): void {
+    if (l.pane.cols === cols && l.pane.rows === rows) return;
     l.pane.cols = cols;
     l.pane.rows = rows;
     l.term.resize(cols, rows);
-    this.#persist(l);
   }
 
   /** Clear stuck terminal state (modes a crashed program left on). */
@@ -548,6 +596,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.emit("updated", { ...pane });
     this.#panes.delete(pane.id);
     this.discard(pane.id);
+    this.#overrides.delete(pane.id);
     this.emit("removed", pane.id);
   }
 
@@ -599,14 +648,16 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   /** The pane as the store keeps it. */
   #record(l: Live): PaneRecord {
     const p = l.pane;
+    // While a device sizes it, the desktop's size is the one worth keeping.
+    const size = this.#overrides.get(p.id)?.desktop ?? p;
     return {
       id: p.id,
       spaceId: p.spaceId,
       title: p.title,
       cwd: p.cwd,
       shell: p.shell,
-      cols: p.cols,
-      rows: p.rows,
+      cols: size.cols,
+      rows: size.rows,
       createdAt: p.createdAt,
       muted: p.muted,
       attention: p.attention,

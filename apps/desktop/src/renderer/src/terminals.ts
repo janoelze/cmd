@@ -187,6 +187,8 @@ let webglLoading: Promise<void> | null = null;
 
 class Terminals {
   #hosts = new Map<PaneId, Host>();
+  /** Terminals a remote device sizes to its screen (see setOverride). */
+  #overrides = new Map<PaneId, { cols: number; rows: number }>();
   /** Terminals whose snapshot is still loading (see hold). */
   #held = new Map<PaneId, { ready: Promise<void>; release: () => void }>();
 
@@ -317,7 +319,8 @@ class Terminals {
     if (this.#settings["terminal.images"]) this.#setImages(h, true);
     this.#protocol(host);
     term.onData((data) => void cmd.call("pane.write", { paneId, data }));
-    term.onResize(({ cols, rows }) => void cmd.call("pane.resize", { paneId, cols, rows }));
+    // The desktop's size; not while a device sizes the terminal (that's the device's size).
+    term.onResize(({ cols, rows }) => !this.#overrides.has(paneId) && void cmd.call("pane.resize", { paneId, cols, rows }));
     // App shortcuts are menu key equivalents (main process); keep them out of the PTY:
     // ⌘-anything on macOS, the bound Ctrl combinations elsewhere (Ctrl+Shift+K…).
     // Except the line-editing keys macOS terminals translate (⌘⌫ ⌘← ⌘→, as Ghostty does).
@@ -383,9 +386,25 @@ class Terminals {
     if (!h?.opened || !h.el.isConnected) return;
     if (h.fitTimer) clearTimeout(h.fitTimer), (h.fitTimer = null);
     h.fittedAt = performance.now();
+    const o = this.#overrides.get(paneId);
     try {
-      h.fit.fit();
+      if (o) h.term.resize(o.cols, o.rows);
+      else h.fit.fit();
     } catch {}
+  }
+
+  /**
+   * A remote device sizes this terminal (Pane.sizedBy): draw it at that size,
+   * top-left in its window, and don't send this window's size. null: fit again,
+   * which hands the core the desktop's size back.
+   */
+  setOverride(paneId: PaneId, size: { cols: number; rows: number } | null): void {
+    const was = this.#overrides.get(paneId);
+    if (size && was && was.cols === size.cols && was.rows === size.rows) return;
+    if (!size && !was) return;
+    if (size) this.#overrides.set(paneId, size);
+    else this.#overrides.delete(paneId);
+    this.fit(paneId);
   }
 
   /**

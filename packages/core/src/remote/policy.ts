@@ -25,7 +25,9 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "pane.create": "control", // no more power than typing into an existing terminal
   "pane.list": "view",
   "pane.write": "control",
-  "pane.resize": "never", // the desktop owns sizes; phones will use pane.fitOverride
+  "pane.resize": "never", // the desktop owns sizes; phones use pane.fitOverride
+  "pane.fitOverride": "control", // temporary; ends when the phone leaves, disconnects, or the Mac types
+  "pane.reclaim": "never",
   "pane.kill": "control",
   "pane.setMuted": "control",
   "pane.clearAttention": "view",
@@ -123,6 +125,12 @@ const ARGS: { [M in Method]?: Check<M> } = {
     text(p.data);
   },
   "pane.kill": (p, ctx) => pane(ctx, p.paneId),
+  "pane.fitOverride": (p, ctx) => {
+    pane(ctx, p.paneId);
+    if ("release" in p) return;
+    const ok = (v: unknown, lo: number, hi: number) => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi;
+    if (!ok(p.cols, 20, 300) || !ok(p.rows, 5, 200)) throw new RemoteDenied("size out of range");
+  },
   "pane.setMuted": (p, ctx) => pane(ctx, p.paneId),
   "pane.clearAttention": (p, ctx) => pane(ctx, p.paneId),
   "pane.snapshot": (p, ctx) => pane(ctx, p.paneId),

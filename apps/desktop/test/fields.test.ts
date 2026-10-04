@@ -13,7 +13,7 @@ registerWindowView({ kind: "text", View: () => null, describe: () => ({ place: "
 registerWindowView({ kind: "browser", View: () => null, describe: (w) => ({ name: w.title, place: "github.com" }) });
 
 const pane = (p: Partial<Pane> = {}): Pane =>
-  ({ id: "p1", title: "", cwd: "/Users/someone/src/cmd", foreground: "zsh", agentId: null, usage: null, attention: null, muted: false, ...p }) as Pane;
+  ({ id: "p1", title: "", cwd: "/Users/someone/src/cmd", foreground: "zsh", agentId: null, usage: null, attention: null, muted: false, sizedBy: null, ...p }) as Pane;
 const row = (r: Partial<SidebarRow>): SidebarRow => ({ key: "k", pane: null, win: null, agent: null, children: [], urgent: null, ...r });
 const win = (w: Partial<AppWindow>): AppWindow => ({ id: "w1", kind: "text", title: "README.md", createdAt: 0, updatedAt: 0, state: {}, ...w });
 

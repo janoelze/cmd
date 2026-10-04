@@ -136,6 +136,32 @@ describe("remote access", () => {
     expect((await core.call("remote.log", {}))[0]).toMatchObject({ kind: "disconnected", detail: "all" });
   });
 
+  it("sizes a terminal to the phone until the Mac takes it back", async () => {
+    const c = await connect(route, { hostKey, device });
+    const client = rpc(await c.session);
+    const pane = await core.call("pane.create", { cols: 120, rows: 40 });
+    const size = () => core.panes.get(pane.id)!;
+    await client.call("pane.fitOverride", { paneId: pane.id, cols: 48, rows: 30 });
+    expect(size()).toMatchObject({ cols: 48, rows: 30, sizedBy: "Test Phone" });
+    // The desktop keeps fitting its window: remembered, not applied.
+    await core.call("pane.resize", { paneId: pane.id, cols: 130, rows: 42 });
+    expect(size()).toMatchObject({ cols: 48, rows: 30 });
+    // A terminal's own reports (focus, cursor position) aren't someone typing at the Mac.
+    const local = core.serve({ access: "local", send: () => {}, close: () => {} });
+    local.receive(JSON.stringify({ id: 1, method: "pane.write", params: { paneId: pane.id, data: "\x1b[I" } }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(size().sizedBy).toBe("Test Phone");
+    local.receive(JSON.stringify({ id: 2, method: "pane.write", params: { paneId: pane.id, data: "l" } }));
+    await expect.poll(() => size()).toMatchObject({ cols: 130, rows: 42, sizedBy: null });
+    // Out of range, or from a view-only device: refused.
+    await expect(client.call("pane.fitOverride", { paneId: pane.id, cols: 5, rows: 30 })).rejects.toThrow(/range/);
+    // Disconnecting gives it back too.
+    await client.call("pane.fitOverride", { paneId: pane.id, cols: 50, rows: 20 });
+    expect(size().sizedBy).toBe("Test Phone");
+    c.ws.close();
+    await expect.poll(() => size()).toMatchObject({ cols: 130, rows: 42, sizedBy: null });
+  });
+
   it("refuses unknown devices", async () => {
     const c = await connect(route, { hostKey, device: await generateKeyPair() });
     await expect.poll(c.closed).toBe(true);

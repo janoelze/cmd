@@ -221,6 +221,9 @@ export class Core {
     "pane.list": () => this.panes.list(),
     "pane.write": (p) => (this.panes.write(p.paneId, p.data), null),
     "pane.resize": (p) => (this.panes.resize(p.paneId, p.cols, p.rows), null),
+    // Connection-aware (the override belongs to the caller); handled in serve. In-process: owned by the core.
+    "pane.fitOverride": (p) => (this.#fitOverride(this, "this Mac", p), null),
+    "pane.reclaim": (p) => (this.panes.release(p.paneId), null),
     "pane.kill": (p) => (this.panes.kill(p.paneId), null),
     "pane.setMuted": (p) => (this.notifications.setMuted(p.paneId, p.muted), null),
     "pane.clearAttention": (p) => (this.notifications.clearAttention(p.paneId), null),
@@ -485,6 +488,7 @@ export class Core {
     return {
       receive: (line) => void this.#receive(conn, line),
       closed: () => {
+        this.panes.releaseAll(conn);
         this.#subscribers.delete(conn);
         this.#follows.delete(conn);
         for (const p of this.#connWatches.get(conn) ?? []) this.watches.unwatch(p);
@@ -506,7 +510,10 @@ export class Core {
     try {
       const params = (req.params ?? {}) as never;
       if (conn.access !== "local") checkRemoteCall(req.method, params, conn.access, this.#policy);
-      const result = await this.call(req.method, params);
+      const result =
+        req.method === "pane.fitOverride"
+          ? (this.#fitOverride(conn, conn.access === "local" ? "this Mac" : this.remote.nameOf(conn), params), null)
+          : await this.call(req.method, params);
       this.#afterCall(conn, req.method, params, result);
       reply({ result: result ?? null });
       return;
@@ -528,6 +535,11 @@ export class Core {
 
   /** Per-connection bookkeeping for the connection-aware methods. */
   #afterCall(conn: Connection, method: Method, params: Record<string, unknown>, result: unknown): void {
+    // Typing at the Mac takes a terminal back from a device sizing it (not the
+    // reports a terminal sends by itself: focus in/out, device attributes, cursor position).
+    if (conn.access === "local" && method === "pane.write" && !/^(\x1b\[[\d;?>]*[IOcRn])+$/.test(params.data as string)) {
+      this.panes.release(params.paneId as string);
+    }
     if (conn.access !== "local") {
       if (method === "pane.write") this.remote.input(conn, params.paneId as string);
       else if (method === "agent.send") {
@@ -554,6 +566,11 @@ export class Core {
       if (conn.deviceId) (result as Result<"remote.bootstrap">).device = { id: conn.deviceId, scope: conn.access as RemoteScope };
       this.#subscribers.set(conn, (e) => remoteEventVisible(e, this.#follows.get(conn) ?? EMPTY, this.#connWatches.get(conn) ?? []));
     }
+  }
+
+  #fitOverride(owner: object, label: string, p: Params<"pane.fitOverride">): void {
+    if ("release" in p) this.panes.release(p.paneId, owner);
+    else this.panes.override(p.paneId, owner, label, p.cols, p.rows);
   }
 
   /** What remote/policy.ts checks arguments against. */

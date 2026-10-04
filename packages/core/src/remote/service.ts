@@ -137,6 +137,12 @@ export class RemoteService {
     return this.#o.store.remoteLog(Math.min(limit, 500)).map((e) => ({ ...e, device: e.deviceId ? (names.get(e.deviceId) ?? null) : null }));
   }
 
+  /** The device behind a remote connection, by name. */
+  nameOf(conn: Connection): string {
+    const id = this.#sessions.get(conn)?.deviceId;
+    return this.#o.store.remoteDevices().find((d) => d.id === id)?.name ?? "a device";
+  }
+
   /** A remote connection now follows these windows (window.follow). */
   following(conn: Connection, ids: string[]): void {
     const s = this.#sessions.get(conn);

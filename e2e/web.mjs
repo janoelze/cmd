@@ -2,8 +2,8 @@
 // (apps/web, Vite dev server) in an emulated iPhone, a local relay and a core on
 // a throwaway CMD_HOME; the Mac's approval comes over the core's socket, as
 // `cmd remote pair` does. Pairs, opens a terminal from Now, types from the key
-// row and the compose bar, checks the text reached the PTY, then has the Mac
-// unpair it. Screenshots in .cmd-dev/shots/web-*.png. `pnpm e2e:web`;
+// row and the compose bar, checks the text reached the PTY and that the Mac's
+// terminal is sized for the phone while it shows it, then has the Mac unpair it. Screenshots in .cmd-dev/shots/web-*.png. `pnpm e2e:web`;
 // E2E_HOSTED=1 runs it against the deployed relay and client instead.
 
 import fs from "node:fs";
@@ -89,12 +89,26 @@ try {
   await page.locator(".row").first().click();
   await page.locator(".term .xterm-rows").waitFor();
   await until(async () => (await call("remote.status")).sessions[0]?.watching.includes(pane.id), "opening it follows it on the Mac");
+  // Control: the Mac's terminal takes the phone's size; the page itself doesn't scroll.
+  await until(async () => /iPhone/.test((await call("pane.list")).find((p) => p.id === pane.id).sizedBy ?? ""), "the Mac's terminal is sized for the phone");
+  const fitted = (await call("pane.list")).find((p) => p.id === pane.id);
+  check(fitted.cols < 70 && fitted.rows > 10, `it fits the phone (${fitted.cols}×${fitted.rows})`);
+  check(await page.evaluate(() => document.scrollingElement.scrollHeight <= innerHeight + 1), "the page doesn't scroll, only the terminal");
+  // Less room (the keyboard opening): fewer rows.
+  const vp = page.viewportSize();
+  await page.setViewportSize({ width: vp.width, height: vp.height - 300 });
+  await until(async () => (await call("pane.list")).find((p) => p.id === pane.id).rows < fitted.rows, "a smaller viewport (keyboard) refits the rows");
+  await page.setViewportSize(vp);
   await page.locator(".compose input").fill("echo phone-was-here");
   await page.locator(".compose button").click();
   await until(async () => (await call("pane.read", { paneId: pane.id })).text.includes("phone-was-here\n"), "the compose bar types into the terminal");
   await until(async () => (await page.locator(".term").innerText()).includes("phone-was-here"), "the output comes back to the phone");
   await page.getByRole("button", { name: "^C" }).click();
   await shot("3-terminal");
+
+  // Back to Now: the Mac gets its size back.
+  await page.getByRole("button", { name: "‹ Now" }).click();
+  await until(async () => (await call("pane.list")).find((p) => p.id === pane.id).sizedBy === null, "leaving the terminal gives the Mac its size back");
 
   // The phone comes back after a reload: it remembers the Mac, no pairing.
   await page.reload();

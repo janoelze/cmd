@@ -2,6 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaneId, Progress } from "@cmd/protocol";
 import { useStoreValue } from "../store.ts";
 import { terminals, type FindResults } from "../terminals.ts";
+import { cmd } from "../bridge.ts";
 
 // Memoized: the canvas re-renders every window on each camera frame; the content
 // only needs to when its own props change.
@@ -12,6 +13,9 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
   focusedRef.current = focused;
   const [finding, setFinding] = useState(false);
   const progress = useStoreValue((s) => s.panes.get(paneId)?.progress ?? null);
+  const sizedBy = useStoreValue((s) => s.panes.get(paneId)?.sizedBy ?? null);
+  const cols = useStoreValue((s) => s.panes.get(paneId)?.cols ?? 0);
+  const rows = useStoreValue((s) => s.panes.get(paneId)?.rows ?? 0);
   const findRef = useRef<FindHandle | null>(null);
 
   // At startup a terminal is attached once its snapshot is written (terminals.hold);
@@ -41,6 +45,9 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
     if (focused) terminals.focus(paneId);
   }, [focused, paneId]);
 
+  // A phone sizes this terminal while it shows it (docs/13); typing here or Take Back ends that.
+  useEffect(() => terminals.setOverride(paneId, sizedBy ? { cols, rows } : null), [paneId, sizedBy, cols, rows]);
+
   useEffect(
     () =>
       terminals.onFind(paneId, {
@@ -66,6 +73,16 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
         }}
       />
       {progress && <ProgressBar p={progress} />}
+      {sizedBy && (
+        <div className="term-sized">
+          <span>
+            Sized for {sizedBy} · {cols}×{rows}
+          </span>
+          <button className="btn" onClick={() => void cmd.call("pane.reclaim", { paneId }).then(() => terminals.focus(paneId))}>
+            Take Back
+          </button>
+        </div>
+      )}
       {finding && (
         <FindBar
           paneId={paneId}

@@ -62,6 +62,13 @@ export interface Methods {
   "pane.list": { params: {}; result: Pane[] };
   "pane.write": { params: { paneId: PaneId; data: string }; result: null };
   "pane.resize": { params: { paneId: PaneId; cols: number; rows: number }; result: null };
+  /**
+   * A remote device sizes the terminal it shows to its screen, until it releases
+   * it, leaves or disconnects, or someone types at the Mac (Pane.sizedBy).
+   */
+  "pane.fitOverride": { params: { paneId: PaneId; cols: number; rows: number } | { paneId: PaneId; release: true }; result: null };
+  /** The Mac takes a terminal back from the device sizing it. */
+  "pane.reclaim": { params: { paneId: PaneId }; result: null };
   "pane.kill": { params: { paneId: PaneId }; result: null };
   /** Notifications (packages/core/src/notifications.ts). */
   "pane.setMuted": { params: { paneId: PaneId; muted: boolean }; result: null };

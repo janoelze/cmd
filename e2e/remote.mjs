@@ -129,6 +129,15 @@ try {
   await win.waitForSelector(".sidebar .row .remote-badge");
   check(true, "its sidebar row shows it's watched");
   await shot(win, "4-connected");
+  // The phone sizes the terminal to its screen: the Mac says so and can take it back.
+  await client.call("pane.fitOverride", { paneId: pane.id, cols: 48, rows: 30 });
+  await win.waitForSelector(".term-sized");
+  check((await win.locator(".term-sized").innerText()).includes("iPhone"), "the Mac shows the phone sizes the terminal");
+  await shot(win, "4b-sized");
+  await win.getByRole("button", { name: "Take Back" }).click();
+  await win.waitForSelector(".term-sized", { state: "detached" });
+  const back = (await win.evaluate(() => window.cmd.call("pane.list", {}))).find((p) => p.id === pane.id);
+  check(back.sizedBy === null && back.cols > 48, `Take Back gives the Mac its size (${back.cols}×${back.rows})`);
   await win.locator(".remote-indicator").click();
   await win.waitForSelector(".remote-popover");
   const pop = await win.locator(".remote-popover").innerText();
