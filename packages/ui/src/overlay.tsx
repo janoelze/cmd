@@ -87,9 +87,18 @@ export function Popover({
   const [pos, setPos] = useState<CSSProperties>({ visibility: "hidden" });
   useDismiss(open, onClose, [ref, anchor]);
   useLayoutEffect(() => {
-    if (!open || !anchor.current || !ref.current) return;
-    const p = placePopover(anchor.current.getBoundingClientRect(), ref.current.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, placement, align);
-    setPos({ top: p.top, left: p.left, transformOrigin: p.side === "below" ? "top" : "bottom" });
+    const el = ref.current;
+    if (!open || !anchor.current || !el) return;
+    const place = () => {
+      if (!anchor.current) return;
+      const p = placePopover(anchor.current.getBoundingClientRect(), el.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, placement, align);
+      setPos({ top: p.top, left: p.left, transformOrigin: p.side === "below" ? "top" : "bottom" });
+    };
+    place();
+    // Again when its content changes size: one above its anchor would otherwise come loose when it shrinks.
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [open, placement, align, anchor]);
   if (!open) return null;
   return createPortal(
