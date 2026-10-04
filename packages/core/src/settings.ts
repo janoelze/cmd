@@ -68,6 +68,8 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
     this.#watcher.unref();
     // FSEvents can miss changes (e.g. right after the watch starts); poll as a backstop.
     fs.watchFile(this.path, { interval: 1000, persistent: false }, () => this.reload());
+    // The poll's baseline stat is async: a write that lands before it is never seen as a change.
+    setTimeout(() => this.reload(), 1000).unref();
   }
 
   reload(): void {
