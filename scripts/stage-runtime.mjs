@@ -15,16 +15,27 @@ const modules = path.join(core, "node_modules");
 fs.rmSync(out, { recursive: true, force: true });
 const copy = (from, to) => fs.cpSync(path.join(root, from), path.join(out, to), { recursive: true, dereference: true });
 for (const p of ["package.json", "src", "shell"]) copy(`packages/core/${p}`, `packages/core/${p}`);
-for (const p of ["package.json", "src"]) copy(`packages/protocol/${p}`, `packages/protocol/${p}`);
-// @cmd/protocol: a small JavaScript package that re-exports the protocol's
-// TypeScript from outside node_modules (Node won't strip types from .ts files
-// under node_modules). Plain files, so it survives packaging on every platform,
-// unlike a symlink (Windows).
-const shim = path.join(modules, "@cmd/protocol");
-fs.mkdirSync(shim, { recursive: true });
-fs.writeFileSync(path.join(shim, "package.json"), JSON.stringify({ name: "@cmd/protocol", private: true, type: "module", exports: { ".": "./index.js", "./node": "./node.js" } }, null, 2) + "\n");
-fs.writeFileSync(path.join(shim, "index.js"), 'export * from "../../../../protocol/src/index.ts";\n');
-fs.writeFileSync(path.join(shim, "node.js"), 'export * from "../../../../protocol/src/node.ts";\n');
+// Workspace packages the core imports (@cmd/protocol, @cmd/remote-crypto): their
+// TypeScript is copied next to the core, and node_modules gets a small JavaScript
+// package per entry point that re-exports it from there (Node won't strip types
+// from .ts files under node_modules). Plain files, so they survive packaging on
+// every platform, unlike a symlink (Windows).
+function stageWorkspacePackage(name) {
+  const dir = `packages/${name.slice("@cmd/".length)}`;
+  for (const p of ["package.json", "src"]) copy(`${dir}/${p}`, `${dir}/${p}`);
+  const entries = JSON.parse(fs.readFileSync(path.join(root, dir, "package.json"), "utf8")).exports;
+  const shim = path.join(modules, name);
+  fs.mkdirSync(shim, { recursive: true });
+  const exports = {};
+  for (const [key, target] of Object.entries(entries)) {
+    const file = `${key === "." ? "index" : key.slice(2)}.js`;
+    exports[key] = `./${file}`;
+    fs.writeFileSync(path.join(shim, file), `export * from "../../../../${path.basename(dir)}/${target.replace(/^\.\//, "")}";\n`);
+  }
+  fs.writeFileSync(path.join(shim, "package.json"), JSON.stringify({ name, private: true, type: "module", exports }, null, 2) + "\n");
+}
+const corePkg = JSON.parse(fs.readFileSync(path.join(root, "packages/core/package.json"), "utf8"));
+for (const name of Object.keys(corePkg.dependencies)) if (name.startsWith("@cmd/")) stageWorkspacePackage(name);
 
 // The native helper (macOS; gitignored, built by postinstall). Without it the
 // core falls back to process names (no CPU/memory sampling): the Windows case.
