@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { PaneId } from "@cmd/protocol";
+import type { PaneId, Progress } from "@cmd/protocol";
+import { useStoreValue } from "../store.ts";
 import { terminals, type FindResults } from "../terminals.ts";
 
 // Memoized: the canvas re-renders every window on each camera frame; the content
@@ -10,6 +11,7 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
   const [finding, setFinding] = useState(false);
+  const progress = useStoreValue((s) => s.panes.get(paneId)?.progress ?? null);
   const findRef = useRef<FindHandle | null>(null);
 
   // At startup a terminal is attached once its snapshot is written (terminals.hold);
@@ -63,6 +65,7 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
           p.onMenu(paneId);
         }}
       />
+      {progress && <ProgressBar p={progress} />}
       {finding && (
         <FindBar
           paneId={paneId}
@@ -77,6 +80,15 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
     </div>
   );
 });
+
+/** What the program reports with OSC 9;4, along the terminal's top edge. */
+function ProgressBar({ p }: { p: Progress }) {
+  return (
+    <div className={`term-progress ${p.state}`} role="progressbar" aria-valuenow={p.state === "indeterminate" ? undefined : p.value}>
+      <div style={p.state === "indeterminate" ? undefined : { width: `${p.value}%` }} />
+    </div>
+  );
+}
 
 interface FindHandle {
   focus: (seed: string) => void;

@@ -538,6 +538,14 @@ kbd {
 }
 .find-bar button:hover { background: var(--bg-hover); color: var(--text); }
 .find-bar button.on { background: var(--bg-selected); color: var(--text); }
+/* OSC 9;4 progress, along the terminal's top edge. */
+.term-progress { position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 4; pointer-events: none; overflow: hidden; }
+.term-progress > div { height: 100%; background: var(--accent); transition: width 200ms var(--ease); }
+.term-progress.error > div { background: var(--git-deleted); }
+.term-progress.paused > div { background: var(--git-modified); }
+.term-progress.indeterminate > div { width: 30%; animation: term-progress 1.2s ease-in-out infinite; }
+@keyframes term-progress { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+@media (prefers-reduced-motion: reduce) { .term-progress.indeterminate > div { animation: none; width: 100%; opacity: 0.5; } }
 /* The prompt a jump (⌘↑ / ⌘↓) landed on. */
 .prompt-flash { background: color-mix(in srgb, var(--accent) 30%, transparent); animation: prompt-flash 700ms ease-out forwards; pointer-events: none; }
 @keyframes prompt-flash { to { background: transparent; } }

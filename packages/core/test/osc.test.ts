@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OscScanner, stripAnsi } from "../src/osc.ts";
+import { OscScanner, parseOsc, stripAnsi } from "../src/osc.ts";
 
 describe("OscScanner", () => {
   it("parses titles terminated by BEL and ST", () => {
@@ -18,10 +18,11 @@ describe("OscScanner", () => {
     expect(s.feed("\\")).toEqual([{ type: "cwd", cwd: "/Users/me/my dir" }]);
   });
 
-  it("parses OSC 9 and 777 notifications, ignores OSC 9;4 progress", () => {
+  it("parses OSC 9 and 777 notifications, and OSC 9;4 progress apart from them", () => {
     const s = new OscScanner();
     expect(s.feed("\x1b]9;Claude needs you\x07\x1b]9;4;1;50\x07\x1b]777;notify;Codex;Turn done\x07")).toEqual([
       { type: "notify", title: "", body: "Claude needs you" },
+      { type: "progress", progress: { state: "normal", value: 50 } },
       { type: "notify", title: "Codex", body: "Turn done" },
     ]);
   });
@@ -90,5 +91,25 @@ describe("device attribute queries", () => {
   it("still sees bells and OSC after CSI", () => {
     const s = new OscScanner();
     expect(s.feed("\x1b[1m\x07\x1b]2;t\x07").map((e) => e.type)).toEqual(["bell", "title"]);
+  });
+});
+
+describe("OSC 9;4 progress", () => {
+  const progress = (body: string) => {
+    const ev = parseOsc(body);
+    return ev?.type === "progress" ? ev.progress : "none";
+  };
+  it("parses states and clamps values", () => {
+    expect(progress("9;4;1;42")).toEqual({ state: "normal", value: 42 });
+    expect(progress("9;4;1;250")).toEqual({ state: "normal", value: 100 });
+    expect(progress("9;4;2")).toEqual({ state: "error", value: -1 });
+    expect(progress("9;4;3")).toEqual({ state: "indeterminate", value: -1 });
+    expect(progress("9;4;4;10")).toEqual({ state: "paused", value: 10 });
+    expect(progress("9;4;0")).toBeNull();
+    expect(progress("9;4")).toBeNull();
+    expect(progress("9;4;7;1")).toBe("none");
+  });
+  it("leaves other OSC 9 as notifications", () => {
+    expect(parseOsc("9;build done")).toEqual({ type: "notify", title: "", body: "build done" });
   });
 });

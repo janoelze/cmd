@@ -50,6 +50,14 @@ export interface Pane {
   attention: Attention | null;
   /** No system notifications from this terminal (its attention marker still shows). */
   muted: boolean;
+  /** A progress bar the program in it reports (OSC 9;4); null when there is none. */
+  progress: Progress | null;
+}
+
+/** OSC 9;4 progress: a value (0–100) unless indeterminate; error and paused bars are coloured. */
+export interface Progress {
+  state: "normal" | "error" | "indeterminate" | "paused";
+  value: number;
 }
 
 /** Why a terminal wants you; see packages/core/src/notifications.ts. */

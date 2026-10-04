@@ -10,7 +10,7 @@ import path from "node:path";
 import os from "node:os";
 import { EventEmitter } from "node:events";
 import { logger } from "@cmd/protocol/node";
-import type { Attention, Pane, PaneId, PaneUsage, Settings, SpaceId } from "@cmd/protocol";
+import type { Attention, Pane, PaneId, PaneUsage, Progress, Settings, SpaceId } from "@cmd/protocol";
 import { usageChanged } from "./resources.ts";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
 import { DEVICE_REPLIES, OscScanner, type OscEvent } from "./osc.ts";
@@ -78,6 +78,8 @@ export const shellName = (shell: string) => path.basename(shell.replace(/\\/g, "
 const SNAPSHOT_SCROLLBACK = 5000;
 /** How often changed screens are saved for restoring after a restart. */
 const SCREEN_SAVE_MS = 10_000;
+/** A progress bar not updated for this long goes away (as in Ghostty and Windows Terminal). */
+const PROGRESS_STALE_MS = 15_000;
 
 interface Live {
   pane: Pane;
@@ -94,6 +96,8 @@ interface Live {
   saved: string;
   /** Output since the screen was last saved. */
   dirty: boolean;
+  /** Clears a progress bar the program stopped updating (it may have crashed). */
+  progressTimer: NodeJS.Timeout | null;
 }
 
 /** zsh integration (shell/zsh): .zshenv restores the user's ZDOTDIR, then adds hooks. */
@@ -280,6 +284,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       usage: null,
       attention: opts.restored?.attention ?? null,
       muted: opts.restored?.muted ?? false,
+      progress: null,
     };
     const live = this.#attach(pane, term, token);
     log.info(`pane ${id.slice(0, 8)} ${opts.restored ? "restored" : "started"}`, { shell: shellName(shell), pid: term.pid, command: opts.command ? opts.command.split(" ")[0] : null });
@@ -311,6 +316,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       usage: null,
       attention: rec?.attention ?? null,
       muted: rec?.muted ?? false,
+      progress: null,
     };
     const live = this.#attach(pane, term, rec?.token ?? "");
     live.command = rec?.command ?? null;
@@ -320,7 +326,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   }
 
   #attach(pane: Pane, term: Term, token: string): Live {
-    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, saved: "", dirty: true };
+    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, saved: "", dirty: true, progressTimer: null };
     this.#panes.set(pane.id, live);
     term.onData((data) => this.#onData(live, data));
     term.onExit((code) => this.#exited(live, code));
@@ -386,6 +392,12 @@ export class PaneManager extends EventEmitter<PaneEvents> {
         live.command = null;
         this.#persist(live);
       }
+      if (ev.type === "progress") {
+        this.#setProgress(live, ev.progress);
+        continue;
+      }
+      // Back at the prompt: a bar left behind is stale.
+      if (ev.type === "prompt" && ev.mark === "A" && live.pane.progress) this.#setProgress(live, null);
       if (ev.type === "query") {
         live.term.write(DEVICE_REPLIES[ev.query]);
         continue;
@@ -480,6 +492,17 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.#changed(l);
   }
 
+  #setProgress(live: Live, p: Progress | null): void {
+    if (live.progressTimer) clearTimeout(live.progressTimer), (live.progressTimer = null);
+    // No value given: keep the last one (an error or pause keeps the bar where it was).
+    const next = p && { ...p, value: p.value >= 0 ? p.value : (live.pane.progress?.value ?? 0) };
+    if (next) live.progressTimer = setTimeout(() => this.#setProgress(live, null), PROGRESS_STALE_MS);
+    const cur = live.pane.progress;
+    if (cur?.state === next?.state && cur?.value === next?.value) return;
+    live.pane.progress = next;
+    this.#changed(live);
+  }
+
   /** The attention marker (see notifications.ts); null clears it. */
   setAttention(id: PaneId, attention: Attention | null): void {
     const l = this.#panes.get(id);
@@ -521,6 +544,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     const { pane } = live;
     if (this.#panes.get(pane.id) !== live) return; // already handled, or shutting down
     this.#clearPending(live);
+    if (live.progressTimer) clearTimeout(live.progressTimer);
     pane.exitCode = exitCode;
     log.info(`pane ${pane.id.slice(0, 8)} exited`, { exitCode, agent: pane.agentId ? pane.agentId.slice(0, 8) : null, aliveMs: Date.now() - pane.createdAt });
     this.emit("updated", { ...pane });

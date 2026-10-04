@@ -398,6 +398,7 @@ const appWindows = () => BrowserWindow.getAllWindows().filter((w) => !isUtility(
 const winOf = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => BrowserWindow.fromWebContents(e.sender);
 
 ipcMain.on("badge", (_e, count: number) => app.dock?.setBadge(count > 0 ? String(count) : ""));
+ipcMain.on("progress", (e, value: number) => BrowserWindow.fromWebContents(e.sender)?.setProgressBar(typeof value === "number" ? value : -1));
 ipcMain.on("bounce", () => app.dock?.bounce("informational"));
 
 // System notifications (the UI decides when; see packages/core/src/notifications.ts).

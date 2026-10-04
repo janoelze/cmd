@@ -223,6 +223,16 @@ export function App() {
   );
   useEffect(() => cmd.setBadge(cfg["notifications.dockBadge"] ? attention : 0), [attention, cfg]);
 
+  // The Dock icon's progress bar: the average of the terminals reporting one (OSC 9;4).
+  const progress = useMemo(() => {
+    const bars = [...all.panes.values()].flatMap((p) => (p.progress ? [p.progress] : []));
+    if (!bars.length) return -1;
+    if (bars.every((b) => b.state === "indeterminate")) return 2; // >1: indeterminate
+    const valued = bars.filter((b) => b.state !== "indeterminate");
+    return valued.reduce((n, b) => n + b.value, 0) / valued.length / 100;
+  }, [all.panes]);
+  useEffect(() => cmd.setProgress(progress), [progress]);
+
   // Notifications: the core decides what's worth telling (packages/core/src/notifications.ts);
   // here, whether and how to show it, since only the UI knows focus and selection.
   useEffect(() => {

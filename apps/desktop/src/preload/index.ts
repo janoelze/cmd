@@ -85,6 +85,8 @@ const api = {
     return () => statusListeners.delete(fn);
   },
   setBadge: (count: number) => ipcRenderer.send("badge", count),
+  /** The Dock icon's progress bar: 0–1, >1 indeterminate, <0 none. */
+  setProgress: (value: number) => ipcRenderer.send("progress", value),
   bounce: () => ipcRenderer.send("bounce"),
   /** A system notification; a newer one with the same tag replaces it (see main/index.ts). */
   notify: (o: { tag: string; title: string; body: string; sound: string | null; paneId: string | null }) =>

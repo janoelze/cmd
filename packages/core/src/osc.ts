@@ -4,6 +4,8 @@
 // a window showing the terminal. Sequences may be split across chunks, so state
 // is carried between calls; kitty's OSC 99 notifications may also span sequences.
 
+import type { Progress } from "@cmd/protocol";
+
 export type OscEvent =
   | { type: "title"; title: string } // OSC 0 / 2
   | { type: "cwd"; cwd: string } // OSC 7 file://host/path
@@ -11,6 +13,7 @@ export type OscEvent =
   | { type: "prompt"; mark: string; exitCode?: number } // OSC 133 shell integration (A/B/C/D;exit)
   | { type: "bell" } // BEL outside escape strings
   | { type: "query"; query: "da1" | "da2" } // CSI c / CSI > c
+  | { type: "progress"; progress: Progress | null } // OSC 9;4;state;value (ConEmu, Windows Terminal, Ghostty)
   | { type: "request"; token: string; action: string; arg: string }; // OSC 777;cmd;<token>;<action>;<arg>
 
 const ESC = "\x1b";
@@ -148,6 +151,18 @@ function deviceQuery(params: string): OscEvent | null {
  */
 export const DEVICE_REPLIES = { da1: "\x1b[?62;4;9;22c", da2: "\x1b[>0;276;0c" } as const;
 
+/** `state;value` of OSC 9;4: 0 removes the bar, 1 sets it, 2 error, 3 indeterminate, 4 paused. */
+function parseProgress(args: string): OscEvent | null {
+  const [st, pr = ""] = args.split(";");
+  const state = ({ "0": null, "1": "normal", "2": "error", "3": "indeterminate", "4": "paused" } as const)[st || "0"];
+  if (state === undefined) return null;
+  if (state === null) return { type: "progress", progress: null };
+  const n = Number.parseInt(pr, 10);
+  // -1: no value given (error and paused keep the one they had).
+  const value = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : -1;
+  return { type: "progress", progress: { state, value } };
+}
+
 export function parseOsc(body: string): OscEvent | null {
   const semi = body.indexOf(";");
   const code = semi < 0 ? body : body.slice(0, semi);
@@ -167,7 +182,7 @@ export function parseOsc(body: string): OscEvent | null {
     }
     case "9":
       // OSC 9;4 is ConEmu progress, not a notification
-      if (/^4;/.test(rest)) return null;
+      if (/^4(;|$)/.test(rest)) return parseProgress(rest.slice(2));
       return { type: "notify", title: "", body: rest };
     case "777": {
       const [kind, title = "", ...bodyParts] = rest.split(";");
