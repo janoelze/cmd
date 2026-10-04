@@ -32,14 +32,14 @@ function page_start(string $title, string $description, string $current): void
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
 main, header, footer { max-width: 880px; margin: 0 auto; padding: 0 16px; }
-header { display: flex; gap: 20px; align-items: baseline; padding-top: 28px; padding-bottom: 8px; }
+header { display: flex; gap: 18px; align-items: baseline; padding-top: 20px; padding-bottom: 4px; font-size: 14px; }
 header a { color: var(--ink-2); text-decoration: none; font-weight: 500; }
 header a.current, header a:hover { color: var(--ink); }
 header a.brand { font-family: var(--mono); font-weight: 700; color: var(--ink); }
 a { color: var(--accent); }
-h1 { font-size: 30px; line-height: 1.2; margin: 32px 0 8px; letter-spacing: -0.01em; }
-h2 { font-size: 15px; margin: 36px 0 12px; }
-p.lede { color: var(--ink-2); font-size: 17px; margin: 0 0 24px; max-width: 60ch; }
+h1 { font-size: 28px; line-height: 1.2; margin: 24px 0 6px; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 28px 0 10px; }
+p.lede { color: var(--ink-2); font-size: 16px; margin: 0 0 18px; max-width: 60ch; }
 code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
 .muted { color: var(--ink-3); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
@@ -58,7 +58,7 @@ code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
 .daily .col:hover span { background: var(--ink); }
 .axis { display: flex; justify-content: space-between; color: var(--ink-3); font-size: 12px; margin-top: 6px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-td, th { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td, th { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--ink-2); font-weight: 500; font-size: 13px; }
 td.num { font-variant-numeric: tabular-nums; }
 .tag { font-family: var(--mono); }
@@ -66,16 +66,21 @@ td.num { font-variant-numeric: tabular-nums; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
 .button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
 .hero-shots { border-radius: 1.196% / 1.895%; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14); } /* the screenshots' own 18px window corners, at any size */
-.hero-shots { position: relative; width: min(1400px, calc(100vw - 32px)); margin: 32px 0 40px 50%; transform: translateX(-50%); }
+.hero-shots { position: relative; width: min(1400px, calc(100vw - 32px)); margin: 24px 0 8px 50%; transform: translateX(-50%); }
 .hero-shots img { display: block; width: 100%; height: auto; border-radius: inherit; opacity: 0; transition: opacity 0.9s ease; }
 .hero-shots img + img { position: absolute; inset: 0; }
 .hero-shots img.on { opacity: 1; }
-h2.section { font-size: 22px; margin: 64px 0 20px; }
-.features { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 24px 32px; margin-bottom: 24px; }
-.features h3 { font-size: 15px; margin: 0 0 4px; }
-.features p { font-size: 14px; color: var(--ink-2); margin: 0; }
+h2.section { font-size: 18px; margin: 40px 0 14px; }
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 28px; margin-bottom: 8px; }
+.features h3 { font-size: 14px; margin: 0 0 2px; }
+.features p { font-size: 13px; line-height: 1.45; color: var(--ink-2); margin: 0; }
+@media (max-width: 640px) {
+  h1 { font-size: 24px; margin-top: 18px; }
+  p.lede { font-size: 15px; }
+  .features { grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+}
 .button { display: inline-block; background: var(--ink); color: var(--bg); text-decoration: none; padding: 9px 16px; border-radius: 8px; font-weight: 500; }
-footer { color: var(--ink-3); font-size: 13px; padding-top: 48px; padding-bottom: 32px; }
+footer { color: var(--ink-3); font-size: 13px; padding-top: 32px; padding-bottom: 24px; }
 </style>
 </head>
 <body>
