@@ -2,6 +2,7 @@
 # Pushing a tag `v*` additionally signs + notarizes the macOS app (when the
 # secrets below exist) and publishes one GitHub release: the .dmg and .zip, and
 # the update metadata (latest-mac.yml, blockmaps) installed apps update from.
+# A tag without a CHANGELOG.md section fails; that section is the release's notes.
 # The Windows job is disabled for now (`if: false`); re-enable it and add it to
 # the release's `needs` to ship Windows builds again.
 #
@@ -48,6 +49,11 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # Before the long build: a release needs its CHANGELOG.md section (What's New shows it).
+      - name: Changelog
+        if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+        run: node scripts/changelog.mjs check "${GITHUB_REF_NAME#v}"
 
       - run: pnpm typecheck
 
@@ -233,6 +239,12 @@ jobs:
     needs: [mac]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
       - uses: actions/download-artifact@v4
         with:
           pattern: cmd-*
@@ -244,7 +256,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la dist
+          # The notes are the release's CHANGELOG.md section; prereleases have none.
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            notes=(--generate-notes --prerelease)
+          else
+            node scripts/changelog.mjs notes "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/notes.md"
+            notes=(--notes-file "$RUNNER_TEMP/notes.md")
+          fi
           # latest-mac.yml, latest.yml and the blockmaps are what installed apps update from (src/main/updater.ts).
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
-            --title "$GITHUB_REF_NAME" --generate-notes \
-            $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)
+            --title "$GITHUB_REF_NAME" "${notes[@]}"

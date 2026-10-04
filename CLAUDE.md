@@ -20,7 +20,7 @@ pnpm core                    # run the core directly
 pnpm core:stop               # stop the core of $CMD_HOME, else the dev one; core:stop-all stops every non-release core
 pnpm cmd <args>              # run the CLI from source
 pnpm ui                      # the @cmd/ui gallery in a browser (every component, every theme); `pnpm --filter @cmd/ui shots` screenshots it
-pnpm release <ver|patch|minor>  # bump, tag v<ver>, push; CI publishes the GitHub release
+pnpm release <ver|patch|minor>  # needs the version's CHANGELOG.md section (changelog skill); bump, tag v<ver>, push; CI publishes the GitHub release
 ```
 
 `pnpm dev` and `pnpm dist` builds are "cmd dev" (red icon) with their own core and state in `~/Library/Application Support/cmd-dev`, separate from the installed app, even when started from its terminals (instances: `packages/protocol/src/instance.ts`). For a throwaway state dir set `export CMD_HOME=$PWD/.cmd-dev` (socket, SQLite, settings.json, core.pid and `logs/` go there). In the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.

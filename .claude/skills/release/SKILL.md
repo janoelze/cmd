@@ -26,6 +26,16 @@ DEVELOPMENT.md ("Packaging and releases") has the background. This skill is the 
    their edits changing the source hash mid-run, not a bug.
 3. Pick the version: `patch` for fixes and small features, `minor` for bigger ones. Versions are
    never reused, even when a release was broken.
+4. **Write the changelog. Load the `changelog` skill and follow it.** Users read this section in
+   What's New right after they update, and it becomes the GitHub release notes. Write it from
+   `git log <last tag>..HEAD` in that skill's format and voice: what a user notices, in plain
+   words, with no internals and no commit-message phrasing. Show the user the section, commit it
+   (`Changelog for vX.Y.Z`), and check it:
+   ```sh
+   node scripts/changelog.mjs check X.Y.Z
+   ```
+   You can't skip this. `pnpm release` refuses a version without a clean section, CI's tag build
+   fails on it before notarizing, and `pnpm test` lints the whole file. Prereleases are exempt.
 
 ## 2. Tag
 
@@ -33,8 +43,9 @@ DEVELOPMENT.md ("Packaging and releases") has the background. This skill is the 
 pnpm release patch        # or minor | major | 0.3.0
 ```
 
-`scripts/release.mjs` bumps `apps/desktop/package.json`, commits `Release vX.Y.Z`, tags it and
-pushes the branch and tag together.
+`scripts/release.mjs` checks the version's `CHANGELOG.md` section, bumps
+`apps/desktop/package.json`, commits `Release vX.Y.Z`, tags it and pushes the branch and tag
+together. It refuses to run if the section is missing or doesn't pass the lint.
 
 **Prereleases**, for testing CI, signing or packaging changes without shipping to users: tag
 directly. CI takes the version from the tag, so no bump commit is needed:
@@ -73,7 +84,8 @@ spctl -a -t open --context context:primary-signature -vv cmd-*.dmg
 ```
 
 **Without `latest-mac.yml` and `latest.yml`, installed apps can't update.** Check that both are
-there and that their `version` matches.
+there and that their `version` matches. The release body should be the changelog section
+(`gh release view vX.Y.Z --json body -q .body`).
 
 ## Rules
 
@@ -92,6 +104,7 @@ there and that their `version` matches.
 
 | Symptom | Cause / fix |
 |---|---|
+| `CHANGELOG.md has no section for X.Y.Z` (release.mjs or CI's Changelog step) | Write the section with the changelog skill and commit it. If CI failed on a pushed tag, the tag stays: release the next patch with the section. |
 | `SecKeychainUnlock: passphrase not correct` | electron-builder's own CSC_LINK keychain. CI imports the cert into its own keychain instead; keep it that way. |
 | `::error::Certificate set but no APPLE_API_*` | Notarization secrets missing. Gatekeeper blocks unnotarized Developer ID apps, so CI refuses. |
 | Notarization `Invalid` | `xcrun notarytool log <submission id> --key … --key-id … --issuer …` lists the unsigned or untimestamped binaries. |

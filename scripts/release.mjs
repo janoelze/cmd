@@ -1,6 +1,7 @@
 // Cuts a release: bumps apps/desktop's version, commits, tags `v<version>` and
 // pushes. CI (.github/workflows/build.yml) builds the tag and publishes the
 // GitHub release with the .dmg and .zip; a version with a `-` is a prerelease.
+// Refuses a release whose CHANGELOG.md section is missing or fails the lint.
 //   node scripts/release.mjs 0.2.0
 //   node scripts/release.mjs patch|minor|major
 import fs from "node:fs";
@@ -29,6 +30,14 @@ const tag = `v${version}`;
 
 if (git("status", "--porcelain")) fail("working tree is not clean; commit or stash first");
 if (git("tag", "--list", tag)) fail(`tag ${tag} already exists`);
+// Users see this section in What's New, so a release without one doesn't ship (CI checks again).
+if (!version.includes("-")) {
+  try {
+    execFileSync(process.execPath, [new URL("./changelog.mjs", import.meta.url).pathname, "check", version], { stdio: "inherit" });
+  } catch {
+    fail(`not releasing ${tag}: fix CHANGELOG.md first`);
+  }
+}
 const branch = git("rev-parse", "--abbrev-ref", "HEAD");
 
 if (pkg.version !== version) {
