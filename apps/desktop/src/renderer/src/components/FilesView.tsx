@@ -115,10 +115,13 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     const files = ["index", "HEAD", "logs/HEAD"].map((f) => `${gitDir}/${f}`);
     for (const f of files) void cmd.call("fs.watch", { path: f }).catch(() => {});
     const off = onFsChanged((p) => files.includes(p) && refreshGit());
-    const poll = setInterval(() => !document.hidden && refreshGit(), GIT_POLL_MS);
+    // Two git processes per poll: not while another app is in front; catch up when cmd is again.
+    const poll = setInterval(() => document.hasFocus() && refreshGit(), GIT_POLL_MS);
+    window.addEventListener("focus", refreshGit);
     return () => {
       off();
       clearInterval(poll);
+      window.removeEventListener("focus", refreshGit);
       for (const f of files) void cmd.call("fs.unwatch", { path: f }).catch(() => {});
     };
   }, [gitDir, refreshGit]);
