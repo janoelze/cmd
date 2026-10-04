@@ -97,6 +97,22 @@ describe("tracker + status files", () => {
     });
   });
 
+  it("doesn't re-emit status that hasn't changed (the 2 s backstop re-reads it)", async () => {
+    const pane = panes.create();
+    ptys[0]!.process = "claude";
+    await panes.pollForeground();
+    writeEvent(pane.id, "UserPromptSubmit", { session_id: "abc", prompt: "write docs", transcript_path: "/t.jsonl" }, Date.now());
+    agents.applyStatus(pane.id);
+    let updates = 0;
+    agents.on("updated", () => updates++);
+    agents.applyStatus(pane.id);
+    agents.applyStatus(pane.id);
+    expect(updates).toBe(0);
+    writeEvent(pane.id, "Stop", { session_id: "abc" }, Date.now() + 10);
+    agents.applyStatus(pane.id);
+    expect(updates).toBe(1);
+  });
+
   it("picks up changes through the file watcher", async () => {
     const pane = panes.create();
     ptys[0]!.process = "claude";

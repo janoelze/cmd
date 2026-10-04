@@ -438,8 +438,13 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   }
 
   #update(agent: Agent, change: StateChange, fields: Partial<Agent> = {}): void {
-    let dirty = Object.keys(fields).length > 0;
-    Object.assign(agent, fields);
+    // The status backstop re-applies unchanged status every 2 s: only real changes are saved and broadcast.
+    let dirty = false;
+    for (const [k, v] of Object.entries(fields) as [keyof Agent, unknown][]) {
+      if (agent[k] === v) continue;
+      (agent as unknown as Record<string, unknown>)[k] = v;
+      dirty = true;
+    }
     if (change.state && change.state !== agent.state) {
       log.debug(`agent ${agent.id.slice(0, 8)} ${agent.state} → ${change.state}`);
       agent.state = change.state;
@@ -450,11 +455,11 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       agent.detail = change.detail;
       dirty = true;
     }
-    if (change.lastMessage !== undefined) {
+    if (change.lastMessage !== undefined && change.lastMessage !== agent.lastMessage) {
       agent.lastMessage = change.lastMessage;
       dirty = true;
     }
-    if (change.native) {
+    if (change.native && Object.entries(change.native).some(([k, v]) => agent.native[k as keyof Agent["native"]] !== v)) {
       agent.native = { ...agent.native, ...change.native };
       dirty = true;
     }
