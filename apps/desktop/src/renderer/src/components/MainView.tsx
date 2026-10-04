@@ -50,12 +50,7 @@ export function MainView({
   if (withPane.length === 0) {
     return (
       <main className="main empty-main">
-        <div className="hello">
-          <div className="hello-title">cmd</div>
-          <p>
-            <kbd>⌘T</kbd> new terminal · <kbd>⌘K</kbd> commands
-          </p>
-        </div>
+        <div className="hello" aria-label="hack the planet" />
       </main>
     );
   }
