@@ -50,7 +50,7 @@ page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 </div>
 
 <h2>Release health, 30 days</h2>
-<div class="card" style="overflow-x:auto">
+<div class="card scroll">
 <?php if (!$s['health']): ?>
   <p class="muted">Nothing yet.</p>
 <?php else: ?>
@@ -71,6 +71,6 @@ page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 <?php endif ?>
 </div>
 
-<p class="muted" style="margin-top:24px">Crashes are when a process died or a window went blank; internal errors are ones cmd caught and kept running. A crash is counted with the version that reports it, usually the one that crashed. Days are UTC. <?= number_format($s['installs']) ?> installs seen in total. <a href="?format=json">JSON</a></p>
+<p class="muted note">Crashes are when a process died or a window went blank; internal errors are ones cmd caught and kept running. A crash is counted with the version that reports it, usually the one that crashed. Days are UTC. <?= number_format($s['installs']) ?> installs seen in total. <a href="?format=json">JSON</a></p>
 <?php
 page_end();
