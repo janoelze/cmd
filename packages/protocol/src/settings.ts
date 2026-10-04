@@ -191,6 +191,7 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: "Show memory and CPU of the selected window's processes in the status bar.",
   },
+  "ui.unfocusedDim": { title: "Dim other windows", unit: "%", type: "number", default: 100, min: 0, max: 200, step: 25, description: "Darken windows other than the selected one, relative to the theme's own amount: 0 = off, 100 = the theme's default." },
   "ui.unfocusedDesaturation": { title: "Desaturate other windows", unit: "%", type: "number", default: 0, min: 0, max: 100, step: 10, description: "Drain the colour from windows other than the selected one: 0 = off, 100 = grayscale." },
   "ui.paddingX": { title: "Horizontal padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the left and right edges in grid and strip view." },
   "ui.paddingY": { title: "Vertical padding", unit: "px", type: "number", default: 8, min: 0, max: 48, step: 1, description: "Space between the windows and the top and bottom edges in grid and strip view." },

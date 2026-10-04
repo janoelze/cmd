@@ -40,7 +40,7 @@ export const SETTINGS_PAGES: Page[] = [
     icon: "macwindow",
     sections: [
       { title: "Layout", items: ["ui.defaultView", "ui.gutter", "ui.paddingX", "ui.paddingY", "ui.windowRadius"] },
-      { title: "Focus", items: ["ui.unfocusedDesaturation", "ui.showResources"] },
+      { title: "Focus", items: ["ui.unfocusedDim", "ui.unfocusedDesaturation", "ui.showResources"] },
       { title: "Canvas", items: ["canvas.minimap", "canvas.minZoom", "canvas.maxZoom"] },
       { title: "File windows", items: ["files.git"] },
     ],

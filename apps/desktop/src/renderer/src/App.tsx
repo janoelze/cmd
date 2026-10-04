@@ -598,6 +598,7 @@ export function App() {
         ["--sidebar-pad" as string]: `${cfg["ui.sidebarPadding"]}px`,
         ["--pad-x" as string]: `${cfg["ui.paddingX"]}px`,
         ["--pad-y" as string]: `${cfg["ui.paddingY"]}px`,
+        ["--window-dim-scale" as string]: `${cfg["ui.unfocusedDim"] / 100}`,
         ["--window-desaturate" as string]: `${cfg["ui.unfocusedDesaturation"] / 100}`,
       }}
     >
