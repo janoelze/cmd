@@ -57,6 +57,8 @@ export interface TermBackend {
   info?(): { pid: number; startedAt: number; root: string };
   /** Called if the terminals die with the backend (the PTY host crashed); not after dispose(). */
   onLost?(fn: () => void): void;
+  /** Called if another core took the PTY host over: its terminals live on there, this core has none left. */
+  onReplaced?(fn: () => void): void;
   /** Stop using the backend: a local one kills its terminals, the PTY host keeps them. */
   dispose(): void;
 }

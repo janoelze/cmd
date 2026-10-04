@@ -22,7 +22,8 @@ export class Store {
   #stmts = new Map<string, StatementSync>();
 
   constructor(file: string) {
-    this.#db = new DatabaseSync(file);
+    // Wait out a short lock (another process on the file) rather than throw.
+    this.#db = new DatabaseSync(file, { timeout: 2000 });
     this.#db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;

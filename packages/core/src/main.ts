@@ -74,6 +74,9 @@ const core = new Core({
   shellRulesFile: path.join(home, "shell-open.zsh"),
   terminals,
   reconnectTerminals: host,
+  // Only a core whose socket nobody reaches gets replaced (a second core starts
+  // only when the first doesn't answer): it has nothing left to serve.
+  onReplaced: () => process.kill(process.pid, "SIGTERM"),
   inspector: procinfo.available ? (pid) => procinfo.query(pid) : null,
   sampler: procinfo.available ? (pids) => procinfo.trees(pids) : null,
   procSampler: procinfo.available ? (pids) => procinfo.procs(pids) : null,
@@ -103,7 +106,7 @@ const shutdown = async () => {
   closing = true;
   log.info("shutting down");
   await core.close();
-  // Restart Core starts the next core once our socket is gone, while we still close: keep its pid file.
+  // A core started while we still close (the app waits for our exit, others may not) owns the pid file now: keep it.
   try {
     if (fs.readFileSync(pidFile, "utf8").trim() === String(process.pid)) fs.rmSync(pidFile, { force: true });
   } catch {}

@@ -7,7 +7,9 @@
 // restore.ts). Entry point: host-main.ts.
 //
 // Newline-delimited JSON. Core → host: { id?, m, p } (no id: no reply). Host →
-// core: { id, r } or { id, e }, and events { ev: "data", t, d } / { ev: "exit", t, c }.
+// core: { id, r } or { id, e }, and events { ev: "data", t, d } / { ev: "exit", t, c },
+// { ev: "bye" } (the host stops) and { ev: "replaced" } (another core took over;
+// cores that predate it ignore it, so it needed no HOST_PROTOCOL bump).
 
 import fs from "node:fs";
 import net from "node:net";
@@ -110,7 +112,9 @@ export class PtyHost {
     if (m === "hello") {
       if (this.#owner && this.#owner !== conn) {
         log.info("a new core took over");
-        this.#owner.destroy();
+        // The previous core hears why, so it doesn't take the terminals back.
+        send(this.#owner, { ev: "replaced" });
+        this.#owner.end();
       }
       this.#owner = conn;
       clearTimeout(this.#idle);

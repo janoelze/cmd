@@ -51,6 +51,8 @@ export interface CoreOptions {
   terminals: TermBackend | PtyFactory;
   /** A new backend when the PTY host died (its terminals are then resurrected); none: they are lost. */
   reconnectTerminals?: () => Promise<TermBackend>;
+  /** Another core took the PTY host over (this one was cut off from its clients, see main.ts): stop. */
+  onReplaced?: () => void;
   pollMs?: number;
   /** Foreground-process lookup (ProcInfo); null falls back to process names. */
   inspector?: Inspector | null;
@@ -108,6 +110,8 @@ export class Core {
   #countedAgents = new Set<AgentId>();
   #startedAt = Date.now();
   #server: net.Server | null = null;
+  /** Inode of the socket file this core created: on close, it removes that file only, not a successor's. */
+  #sockIno: number | null = null;
   /** Subscribed connections and which events each wants. */
   #subscribers = new Map<Connection, (e: CoreEvent) => boolean>();
   readonly watches = new WatchService();
@@ -503,6 +507,7 @@ export class Core {
   #watchBackend(): void {
     const backend = this.panes.backend;
     backend.onLost?.(() => void this.#backendLost(backend));
+    backend.onReplaced?.(() => this.panes.backend === backend && !this.#closed && this.#opts.onReplaced?.());
   }
 
   /**
@@ -551,7 +556,10 @@ export class Core {
       this.#server!.once("error", reject);
       this.#server!.listen(sock, () => resolve());
     });
-    if (isFile) fs.chmodSync(sock, 0o600);
+    if (isFile) {
+      fs.chmodSync(sock, 0o600);
+      this.#sockIno = fs.statSync(sock).ino;
+    }
     this.settings.watch();
   }
 
@@ -712,8 +720,10 @@ export class Core {
     await this.panes.shutdown();
     for (const s of this.#subscribers.keys()) s.close();
     await new Promise<void>((r) => (this.#server ? this.#server.close(() => r()) : r()));
+    // The next core may already listen on this path (Restart Core starts it once
+    // ours stops accepting, while connections still drain): leave its socket be.
     try {
-      if (ipcPath(this.#opts.socketPath) === this.#opts.socketPath) fs.unlinkSync(this.#opts.socketPath);
+      if (this.#sockIno !== null && fs.statSync(this.#opts.socketPath).ino === this.#sockIno) fs.unlinkSync(this.#opts.socketPath);
     } catch {}
     this.#closed = true;
     this.resources?.close();

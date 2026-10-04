@@ -79,6 +79,9 @@ export class RemoteBackend implements TermBackend {
   #disposed = false;
   /** The host said it is stopping on purpose (not a crash). */
   #bye = false;
+  /** The host said another core took it over. */
+  #replaced = false;
+  #onReplaced: (() => void)[] = [];
 
   private constructor(sock: net.Socket, hello: HostHello) {
     this.#sock = sock;
@@ -149,6 +152,10 @@ export class RemoteBackend implements TermBackend {
     this.#lost.push(fn);
   }
 
+  onReplaced(fn: () => void): void {
+    this.#onReplaced.push(fn);
+  }
+
   request(m: string, p: Record<string, unknown>): Promise<unknown> {
     const id = this.#nextId++;
     return new Promise((resolve, reject) => {
@@ -167,6 +174,8 @@ export class RemoteBackend implements TermBackend {
     const msg = JSON.parse(line) as { id?: number; r?: unknown; e?: string; ev?: string; t?: string; d?: string; c?: number | null };
     if (msg.ev === "bye") {
       this.#bye = true;
+    } else if (msg.ev === "replaced") {
+      this.#replaced = true;
     } else if (msg.ev === "data") {
       const t = this.#terms.get(msg.t!);
       if (t) for (const fn of t.data) fn(msg.d!);
@@ -188,6 +197,11 @@ export class RemoteBackend implements TermBackend {
     if (this.#disposed) return;
     this.#disposed = true;
     const n = this.#terms.size;
+    if (this.#replaced) {
+      log.warn(`another core took the PTY host (pid ${this.pid}) and its ${n} terminals over`);
+      for (const fn of this.#onReplaced) fn();
+      return;
+    }
     if (this.#bye) log.warn(`the PTY host (pid ${this.pid}) was stopped, with ${n} terminals`);
     else {
       log.error(`lost the PTY host (pid ${this.pid}) and its ${n} terminals`);

@@ -225,9 +225,34 @@ async function countLaunch(): Promise<void> {
   }
 }
 
+/**
+ * Stop a core and wait until it has exited, not only stopped answering: until
+ * then it still has the database open and the PTY host, and a core started
+ * next to it would fight it over both. One that won't exit is killed.
+ */
 async function stopCore(pid: number): Promise<void> {
+  const alive = () => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const exited = async (ms: number) => {
+    for (const until = Date.now() + ms; Date.now() < until; ) {
+      if (!alive()) return true;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return !alive();
+  };
   process.kill(pid, "SIGTERM");
-  for (let i = 0; i < 50 && (await canConnect()); i++) await new Promise((r) => setTimeout(r, 100));
+  if (await exited(10_000)) return;
+  log.warn(`core ${pid} did not exit in 10 s: killing it`);
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {}
+  await exited(2000);
 }
 
 /** Settings → About, the sidebar's core status, Restart Core: stop the core and start one from this app's code (it takes the terminals over). */

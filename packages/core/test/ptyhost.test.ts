@@ -138,12 +138,41 @@ describe("PTY host", () => {
     const a = await RemoteBackend.connect(sock);
     const t = a.spawn({ id: "p1", shell: "zsh", args: [], cwd: dir, cols: 80, rows: 24, env: {}, scrollback: 100 });
     await t.ready;
-    const lost: string[] = [];
-    a.onLost(() => lost.push("a"));
+    const heard: string[] = [];
+    a.onLost(() => heard.push("lost"));
+    a.onReplaced(() => heard.push("replaced"));
     const b = await RemoteBackend.connect(sock);
     expect(b.attached().map((x) => x.id)).toEqual(["p1"]);
-    await until(() => lost.length === 1, "takeover");
+    await until(() => heard.length === 1, "takeover");
+    expect(heard).toEqual(["replaced"]); // not a crash
     ptys[0]!.output("x");
     b.dispose();
+  });
+
+  it("a core that lost the host to another stops instead of taking it back", async () => {
+    const { ptys, sock } = await startHost();
+    const db = path.join(dir, "d.sqlite");
+    let reconnects = 0;
+    let replaced = 0;
+    const a = new Core({
+      socketPath: path.join(dir, `core${n++}.sock`),
+      dbPath: db,
+      terminals: await RemoteBackend.connect(sock),
+      reconnectTerminals: () => (reconnects++, RemoteBackend.connect(sock)),
+      onReplaced: () => replaced++,
+      pollMs: 0,
+      home: dir,
+    });
+    a.restore();
+    const pane = a.panes.create({ cwd: dir });
+    await until(() => a.panes.get(pane.id)!.pid > 0, "pid");
+    await a.panes.saveScreens();
+    const b = await startCore(db, sock);
+    await until(() => replaced === 1, "replaced");
+    expect(reconnects).toBe(0);
+    expect(b.panes.get(pane.id)?.pid).toBe(ptys[0]!.pid);
+    expect(ptys[0]!.written).toEqual([]);
+    await a.close();
+    await b.close();
   });
 });

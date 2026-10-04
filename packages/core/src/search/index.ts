@@ -76,7 +76,7 @@ export function transcriptFiles(roots: TranscriptRoot[]): TranscriptFile[] {
 
 export function openIndex(file: string): DatabaseSync {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const db = new DatabaseSync(file);
+  const db = new DatabaseSync(file, { timeout: 2000 });
   db.exec(`PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;
     CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
     CREATE TABLE IF NOT EXISTS learned_roots(dir TEXT PRIMARY KEY, root TEXT);`);

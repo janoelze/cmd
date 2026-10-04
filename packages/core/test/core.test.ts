@@ -7,6 +7,7 @@ import { connect, type Connection } from "@cmd/protocol/node";
 import { Core } from "../src/core.ts";
 import { nodePtyFactory } from "../src/panes.ts";
 import { ProcInfo } from "../src/agents/procinfo.ts";
+import { fakeFactory } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
 
 const procinfo = new ProcInfo();
@@ -173,4 +174,25 @@ describe("zsh shell integration", () => {
     await conn.client.call("pane.kill", { paneId: pane.id });
     await conn.client.call("settings.reset", { key: "shell.program" });
   }, 25_000); // a first zsh start on a fresh CI machine is slow
+});
+
+describe("restart", () => {
+  it("a closing core leaves the socket of the core that replaced it", async () => {
+    const sock = path.join(dir, "restart.sock");
+    const a = new Core({ socketPath: sock, dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
+    await a.listen();
+    // A client that lingers keeps a's server closing after it stopped accepting.
+    const lingering = await connect(sock);
+    const closing = a.close();
+    await until(async () => !(await connect(sock).then((c) => (c.close(), true)).catch(() => false)));
+    const b = new Core({ socketPath: sock, dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
+    await b.listen();
+    lingering.close();
+    await closing;
+    const c = await connect(sock);
+    expect(await c.client.call("core.hello", {})).toMatchObject({ pid: process.pid });
+    c.close();
+    await b.close();
+    expect(fs.existsSync(sock)).toBe(false);
+  });
 });
