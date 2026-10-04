@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { requestedMedia, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { copy, openPath } from "../actions.ts";
+import { copy, openLink } from "../actions.ts";
 import { resetMagic, useMagicLive, type MagicLive } from "../magic.ts";
 import { useStoreValue } from "../store.ts";
 import { useTheme } from "../themes/registry.ts";
@@ -302,7 +302,7 @@ function Frame({ win, src, html, data, onPainted }: { win: AppWindow; src: strin
       if (m.type === "ready") setReady(true);
       else if (m.type === "rendered") sent.current !== null && markPainted(sent.current);
       else if (handleEmbedMessage(ref.current!, m)) return;
-      else if (m.type === "open-url" && typeof m.url === "string" && /^https?:\/\//i.test(m.url)) void openPath(m.url);
+      else if (m.type === "open-url" && typeof m.url === "string" && /^https?:\/\//i.test(m.url)) openLink(m.url);
       else if (m.type === "error") console.warn(`magic ${win.id}:`, m.message);
     };
     window.addEventListener("message", onMessage);

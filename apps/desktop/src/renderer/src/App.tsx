@@ -15,6 +15,7 @@ import {
   newFiles,
   newText,
   openableTarget,
+  openLink,
   openPath,
   openSession,
   copyResumeCommand,
@@ -353,7 +354,7 @@ export function App() {
   const run = useCallback((id: string) => handlersRef.current[id as CommandId]?.(), []);
 
   useEffect(() => cmd.onCommand(run), [run]);
-  useEffect(() => cmd.onOpenUrl((url) => void newBrowser(url)), []);
+  useEffect(() => cmd.onOpenUrl(openLink), []);
   // `open` in a terminal: follow it, unless it came from another Space while this window is in the background.
   useEffect(() => onWindowFocus((id) => (document.hasFocus() || spaceOfWindow(id) === getState().spaceId) && select(id)), [select]);
 

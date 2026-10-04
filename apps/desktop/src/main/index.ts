@@ -443,7 +443,8 @@ ipcMain.handle("choose-save-path", async (e, defaultPath: string) => {
   return r.canceled ? null : (r.filePath ?? null);
 });
 ipcMain.on("close-window", (e) => winOf(e)?.close());
-ipcMain.on("open-path", (_e, p: string) => void shell.openPath(p));
+// URLs (https:, mailto:) go to their default app; anything else is a file path.
+ipcMain.on("open-path", (_e, p: string) => void (/^[a-z][\w+.-]+:/i.test(p) ? shell.openExternal(p) : shell.openPath(p)));
 ipcMain.on("settings-window", () => void openSettings());
 ipcMain.on("check-updates", () => checkForUpdates());
 ipcMain.on("install-update", () => void updater().then((u) => u.installUpdate()));

@@ -59,6 +59,7 @@ export const SETTINGS_PAGES: Page[] = [
     sections: [
       { title: "The open command", items: ["shell.openFolders", "shell.openFiles", "shell.openUrls"] },
       { title: "File types", items: ["open.handlers"] },
+      { title: "Links", items: ["open.links"] },
     ],
   },
   {

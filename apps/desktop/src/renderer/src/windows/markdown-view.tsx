@@ -14,7 +14,7 @@ import { languages } from "@codemirror/language-data";
 import { highlightCode } from "@lezer/highlight";
 import { StyleModule } from "style-mod";
 import { cmd } from "../bridge.ts";
-import { openPath, selectPane } from "../actions.ts";
+import { openLink, openPath, selectPane } from "../actions.ts";
 import { syntax } from "../editor/syntax.ts";
 import { onFsChanged } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
@@ -131,7 +131,7 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
     if (href.startsWith("#")) {
       body.current?.querySelector(`#${CSS.escape(decodeURIComponent(href.slice(1)))}`)?.scrollIntoView({ block: "start" });
     } else if (/^https?:/i.test(href)) {
-      void openPath(href); // cmd browser window
+      openLink(href); // cmd browser window or default browser (open.links)
     } else if (/^[a-z][\w+.-]*:/i.test(href)) {
       cmd.openPath(href); // mailto:, other apps
     } else {

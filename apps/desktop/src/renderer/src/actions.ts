@@ -126,6 +126,12 @@ export async function newBrowser(url?: string): Promise<void> {
   select(w.id);
 }
 
+/** A clicked http(s) link: a cmd browser window or the default browser, per `open.links`. */
+export function openLink(url: string): void {
+  if (getState().settings.settings["open.links"] === "browser") cmd.openPath(url);
+  else void newBrowser(url);
+}
+
 /**
  * Open a path or URL in the window type that handles it (core registry); bare
  * domains get https://; anything no type handles goes to the default app.

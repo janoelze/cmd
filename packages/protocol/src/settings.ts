@@ -109,6 +109,13 @@ export const SETTINGS_SCHEMA = {
     default: "",
     description: "Which window type opens which file extension, overriding the defaults, e.g. \"md: browser, log: text\".",
   },
+  "open.links": {
+    title: "Open links in", labels: { cmd: "cmd browser window", browser: "Default browser" },
+    type: "enum",
+    default: "cmd",
+    options: ["cmd", "browser"],
+    description: "Where http(s) links you click go: in Magic widgets, Markdown, and pages that open a new window from a browser window.",
+  },
   "shell.openUrls": { title: "Open URLs in cmd", type: "boolean", default: false, description: "With shell integration, `open <http(s) URL>` opens a cmd browser window." },
 
   "ui.defaultView": { title: "Default view", labels: { focus: "Focus", grid: "Grid", strip: "Strip", canvas: "Canvas" }, type: "enum", default: "focus", applies: "firstLaunch", options: ["focus", "grid", "strip", "canvas"], description: "View mode on first launch; after that the last used mode is remembered." },

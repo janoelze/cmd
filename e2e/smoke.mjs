@@ -514,6 +514,30 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const stored = (await call("window.list")).find((x) => x.id === radio.id).state.mediaAllowed;
   check(asked && before === "blocked" && after === "loaded" && !(await radioTile.locator(".magic-media").count()) && stored?.[0] === "https://radio.invalid", `a widget's media origins are asked for and then allowed by the frame's CSP (${asked}, ${before} → ${after})`);
   await call("window.close", { id: themed.id });
+
+  // Links in a widget: a cmd browser window by default; the default browser with open.links = "browser".
+  const linked = await call("window.open", { kind: "magic", input: {} });
+  const linkHtml = '<a id="l" href="https://link.invalid/a" target="_blank" style="display:block;padding:40px">link</a>';
+  await call("window.update", { id: linked.id, title: "Links", state: { prompt: "links", phase: "ready", kind: "widget", html: linkHtml, source: null, refresh: 0, size: "s", lastData: null } });
+  await win.waitForTimeout(1500);
+  const link = win.frameLocator(`.tile[data-pane="${linked.id}"] iframe.magic-frame`).locator("#l");
+  const linkWindows = async () => (await call("window.list")).filter((x) => x.kind === "browser" && JSON.stringify(x.state).includes("link.invalid"));
+  await link.click({ timeout: 5000 });
+  await win.waitForTimeout(1000);
+  const inCmd = await linkWindows();
+  await app.evaluate(({ shell }) => {
+    globalThis.__openExternal ??= shell.openExternal;
+    shell.openExternal = async (u) => void (globalThis.__opened = u);
+  });
+  await call("settings.set", { key: "open.links", value: "browser" });
+  await win.waitForTimeout(300);
+  await link.click({ timeout: 5000 });
+  await win.waitForTimeout(1000);
+  const external = await app.evaluate(() => globalThis.__opened);
+  check(inCmd.length === 1 && (await linkWindows()).length === 1 && external === "https://link.invalid/a", `a widget link opens a cmd browser window, or the default browser per open.links (${inCmd.length}, ${external})`);
+  await app.evaluate(({ shell }) => (shell.openExternal = globalThis.__openExternal));
+  await call("settings.reset", { key: "open.links" });
+  for (const w of [linked, ...inCmd]) await call("window.close", { id: w.id });
   await win.waitForTimeout(600);
 
   const selected = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
