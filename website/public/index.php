@@ -38,8 +38,9 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <img src="assets/canvas-pan.png" width="1505" height="950" alt="The canvas, panned across a log, a usage widget and a Claude Code session">
 </div>
 <script>
-// Shuffle the hero screenshots, then crossfade through them; reduced motion
-// shows one at random. Without script the first one shows.
+// Shuffle the hero screenshots, fade the gallery in once the first has loaded,
+// then crossfade through them; reduced motion shows one at random. Without
+// script the first one shows.
 (() => {
   const box = document.querySelector(".hero-shots");
   const shots = [...box.children];
@@ -49,14 +50,26 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   }
   for (const s of shots) { s.classList.remove("on"); box.append(s); }
   shots[0].classList.add("on");
-  if (shots.length < 2 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  let i = 0;
-  setInterval(() => {
-    if (document.hidden) return;
-    shots[i].classList.remove("on");
-    i = (i + 1) % shots.length;
-    shots[i].classList.add("on");
-  }, 3500);
+  // Hidden until the first screenshot has loaded, then faded in; the
+  // crossfade starts from there.
+  const cycle = shots.length > 1 && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let shown = false;
+  const reveal = () => {
+    if (shown) return;
+    shown = true;
+    box.classList.remove("loading");
+    if (!cycle) return;
+    let i = 0;
+    setInterval(() => {
+      if (document.hidden) return;
+      shots[i].classList.remove("on");
+      i = (i + 1) % shots.length;
+      shots[i].classList.add("on");
+    }, 3500);
+  };
+  box.classList.add("loading");
+  shots[0].decode().then(reveal, reveal);
+  setTimeout(reveal, 3000);
 })();
 </script>
 

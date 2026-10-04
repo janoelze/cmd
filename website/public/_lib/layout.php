@@ -102,6 +102,9 @@ td.num { font-variant-numeric: tabular-nums; }
 .hero-shots img { display: block; width: 100%; height: auto; border-radius: inherit; opacity: 0; transition: opacity 0.9s ease; }
 .hero-shots::after { content: ""; z-index: 1; border-radius: inherit; border: 1px solid rgb(255 255 255 / 0.16); pointer-events: none; } /* lightens the screenshot's own edge, whatever its colour */
 .hero-shots img.on { opacity: 1; }
+.hero-shots { transition: opacity 1.2s ease, translate 1.2s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.hero-shots.loading { opacity: 0; translate: 0 12px; }
+@media (prefers-reduced-motion: reduce) { .hero-shots.loading { translate: none; } }
 .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px 28px; margin-bottom: 8px; }
 .features h3 { font-size: var(--fs-base); font-weight: 500; margin: 0 0 2px; }
 .features p { font-size: var(--fs-sm); color: var(--ink-2); margin: 0; }
