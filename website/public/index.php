@@ -59,8 +59,6 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
 })();
 </script>
 
-<p>It isn't an IDE and has no agent of its own: you bring Claude Code, Codex or whichever agent you use, and cmd runs them next to everything else you have open.</p>
-
 <h2 class="section">Features</h2>
 <div class="features">
   <div><h3>Layouts</h3><p>Focus on one window, tile them in a grid, scroll through a strip, or place them on an infinite canvas with a minimap.</p></div>
@@ -77,6 +75,7 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <div><h3>CLI</h3><p><code>cmd</code> spawns, messages, waits on and stops agents, so an agent can run other agents.</p></div>
   <div><h3>A complete terminal</h3><p>Find in scrollback, jump between prompts, inline images, OSC 52 copy over ssh, a check before risky pastes.</p></div>
   <div><h3>Themes</h3><p>16 themes, light and dark, following the system or not.</p></div>
+  <div><h3>Remote access</h3><p>Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted. In preview.</p></div>
   <div><h3>Updates</h3><p>Signed and notarized. Updates install when you quit, and terminals keep running.</p></div>
 </div>
 

@@ -22,7 +22,7 @@
   <img alt="cmd in the grid layout: agents grouped by what needs you in the sidebar, three Claude sessions, htop, an editor and a browser window" src="docs/screenshots/hero-light.png">
 </picture>
 
-cmd runs terminals and coding agents side by side, with web and file browsers, an editor, and widgets an agent builds live when you ask. It isn't an IDE and has no agent of its own: you bring Claude Code, Codex or whichever agent you use.
+cmd runs terminals and coding agents side by side, with web and file browsers, an editor, and widgets an agent builds live when you ask.
 
 ## What it does
 
@@ -50,6 +50,7 @@ cmd runs terminals and coding agents side by side, with web and file browsers, a
 - **Scriptable.** The `cmd` CLI spawns, messages, waits on and stops agents, so an agent can run other agents.
 - **Device sizes.** Right-click a browser window for Device Size to see a page at a phone, tablet or desktop size.
 - **16 themes**, light and dark, following the system or not.
+- **Remote access (preview).** Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted through a relay that only sees ciphertext.
 
 ## Magic widgets
 

@@ -68,8 +68,6 @@ Plain and descriptive: say what cmd is and does, not what it will do for you. (2
 
 **Lede (website, README):** A macOS app for running terminals and coding agents side by side, with web and file browsers, an editor, and widgets an agent builds live when you ask.
 
-**What it isn't:** It isn't an IDE and has no agent of its own: you bring Claude Code, Codex or whichever agent you use.
-
 **Short descriptions** (package.json, About box, GitHub repo):
 - GitHub: "A macOS app for running terminals and coding agents side by side, with web and file browsers, an editor and Magic widgets."
 - package.json / About: "Terminals and coding agents, side by side"
