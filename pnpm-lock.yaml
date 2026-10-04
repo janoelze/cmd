@@ -153,6 +153,8 @@ importers:
 
   packages/protocol: {}
 
+  packages/remote-crypto: {}
+
 packages:
 
   '@ai-sdk/anthropic@4.0.71':
