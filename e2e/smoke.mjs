@@ -1093,6 +1093,10 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   check((await win.locator(".strip-dots > button").count()) === n && (await win.locator(".strip-dots > button.current").count()) === 1
     && (await win.locator(".strip-dots > button").last().getAttribute("class")) === "current",
     "the strip shows a pagination dot per window, the last one current at the end");
+  await menu("session.prev");
+  await win.waitForTimeout(500);
+  check((await win.locator(".strip-dots > button").nth(n - 2).getAttribute("class")) === "current",
+    "⌥⌘← from the last window moves the current dot, even when nothing scrolls");
   await win.locator(".strip-dots > button").first().click();
   await win.waitForTimeout(700);
   check(Math.abs(await trackX()) < 1 && (await win.locator(".strip-dots > button").first().getAttribute("class")) === "current",

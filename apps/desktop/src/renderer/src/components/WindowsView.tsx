@@ -858,6 +858,7 @@ export function WindowsView(p: Props) {
           slots={stripDots.map((d) => d.slot)}
           total={lay.contentWidth}
           viewport={vp.w}
+          selected={stripDots.findIndex((d) => d.id === selected)}
           onGo={(i) => {
             const { id, slot } = stripDots[i]!;
             if (id === selected) animateTo(revealOffset(offsetRef.current, slot, vp.w, padX, lay.contentWidth));
@@ -942,7 +943,9 @@ function Minimap(p: {
 
 /**
  * Strip pagination: a dot per window, the current one wider and lighter. The
- * current window is the one under a point that moves from the view's left edge
+ * current window is the selected one while at least half of it is in view (⌥⌘←
+ * often moves to a window that is already visible, so nothing scrolls).
+ * Otherwise it is the one under a point that moves from the view's left edge
  * (scrolled to the start) to its right edge (scrolled to the end), so every
  * window gets its turn. Click a dot to bring that window into view.
  */
@@ -951,6 +954,7 @@ function StripDots(p: {
   slots: Slot[];
   total: number;
   viewport: number;
+  selected: number;
   onGo: (index: number) => void;
 }) {
   // The dots follow the scroller directly, not through a render per frame.
@@ -962,9 +966,11 @@ function StripDots(p: {
     if (!sc || !shown) return;
     let cur = -1;
     const place = () => {
+      const sel = p.slots[p.selected];
       const max = p.total - p.viewport;
+      const seen = sel ? Math.min(sel.x + sel.w, sc.scrollLeft + p.viewport) - Math.max(sel.x, sc.scrollLeft) : 0;
       const at = sc.scrollLeft + (max > 0 ? Math.min(1, Math.max(0, sc.scrollLeft / max)) : 0) * p.viewport;
-      let i = p.slots.findIndex((s) => at < s.x + s.w);
+      let i = sel && seen >= Math.min(sel.w, p.viewport) / 2 ? p.selected : p.slots.findIndex((s) => at < s.x + s.w);
       if (i < 0) i = p.slots.length - 1;
       if (i === cur) return;
       dots.current?.children[cur]?.classList.remove("current");
@@ -975,7 +981,7 @@ function StripDots(p: {
     sc.addEventListener("scroll", place, { passive: true });
     return () => sc.removeEventListener("scroll", place);
     // Not on every render: reading scrollLeft after each commit forced a layout.
-  }, [shown, p.total, p.viewport, edges, p.scroller]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown, p.total, p.viewport, edges, p.selected, p.scroller]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!shown) return null;
   return (
     <div className="strip-dots" ref={dots} onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
