@@ -80,6 +80,11 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
     this.#emit({ source: "cli", paneId: pane.id, title: title || label(pane), body, alert: !pane.muted, urgent: true });
   }
 
+  /** Something cmd did by itself that the user should know about (not urgent, no terminal). */
+  info(title: string, body: string): void {
+    this.#emit({ source: "cli", paneId: null, title, body, alert: true, urgent: false });
+  }
+
   /** A widget's notification (MagicService keeps the window's attention marker). */
   widget(n: { windowId: WindowId; title: string; body: string; urgent: boolean; muted: boolean }): void {
     if (!this.#settings()["notifications.widgets"]) return;

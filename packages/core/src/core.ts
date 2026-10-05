@@ -20,7 +20,7 @@ import type { TermBackend } from "./terminals/types.ts";
 import { ProcessSampler, ResourceMonitor, type ProcSampler, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
 import { registerBuiltinSources } from "./search/builtin.ts";
-import { locateContext, TranscriptSources } from "./search/sources.ts";
+import { locateContext, TranscriptSources, type LocateContext } from "./search/sources.ts";
 import { listDir, parseOverrides, readText, resolvePaths, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { gitDiff, gitStatus } from "./git.ts";
@@ -94,11 +94,21 @@ export interface CoreOptions {
   usageKey?: string | null;
   /** Tests: who renders widget previews (default: the app's previewer connection, else Playwright). */
   magicPreviewer?: Previewer | null;
+  /**
+   * Install cmd's hook into agent configs that lack one (agents.hooks.auto). Only
+   * the installed app does (main.ts): a development build's script lives in a checkout.
+   */
+  autoHooks?: boolean;
+  /** Where agent homes are looked for (default: locateContext(), the user's home). */
+  homesContext?: () => LocateContext;
   /** Tests: the Deno for widgets (default: found on this Mac). */
   magicDeno?: string | null;
 }
 
 const NO_SEARCH = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
+
+/** ui_state key: agent configs the user removed cmd's hook from. */
+const DECLINED_KEY = "core.hooks.declined";
 
 /** A comma-separated setting as a list. */
 const splitList = (v: string) => v.split(",").map((d) => d.trim()).filter(Boolean);
@@ -213,7 +223,7 @@ export class Core {
       activity,
       git: !!opts.stateDir,
     });
-    this.homes = new AgentHomes(this.store.db, locateContext, () => splitList(this.settings.settings["agents.homes"]));
+    this.homes = new AgentHomes(this.store.db, opts.homesContext ?? locateContext, () => splitList(this.settings.settings["agents.homes"]));
     this.agents.on("activity", (event) => this.#broadcast({ type: "agent.activity", event }));
     this.agents.on("home", (agent, dir) => this.#newHome(this.homes.learn(agent, dir, "hook")));
     this.agents.on("transcript", (agent, file) => {
@@ -225,7 +235,9 @@ export class Core {
       setImmediate(() => this.#discoverHomes());
       this.#homesTimer = setInterval(() => this.#discoverHomes(), 6 * 3600_000);
       this.#homesTimer.unref();
-      this.settings.bind(["agents.homes"], () => this.#discoverHomes());
+      // (bind also runs once now: these wait for the startup discovery instead)
+      this.settings.bind(["agents.homes"], () => this.#homesDiscovered && this.#discoverHomes());
+      this.settings.bind(["agents.hooks.auto"], () => this.#homesDiscovered && this.#autoHooks());
     }
     this.notifications = new NotificationCenter(this.panes, this.agents, settings);
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
@@ -380,10 +392,13 @@ export class Core {
     "hooks.install": (p) => {
       const t = this.#hookTarget(p.file);
       installHooks(t.agent, t.file, this.#hooks!.script);
+      this.#setDeclined(t.file, false);
       return this.#hookTargets();
     },
     "hooks.remove": (p) => {
-      removeHooks(this.#hookTarget(p.file).file);
+      const t = this.#hookTarget(p.file);
+      removeHooks(t.file);
+      this.#setDeclined(t.file, true);
       return this.#hookTargets();
     },
     identify: (p) => {
@@ -522,8 +537,12 @@ export class Core {
   #hookTargets(): HookTarget[] {
     if (!this.#hooks) return [];
     const script = this.#hooks.script;
-    if (!this.#homesDiscovered) this.#discoverHomes();
-    return hookTargets(this.homes.all()).map((t) => ({ ...t, state: hookState(t.agent, t.file, script) }));
+    if (!this.#homesDiscovered) {
+      this.#homesDiscovered = true;
+      for (const h of this.homes.discover()) this.#search?.learnHome(h.agent, h.dir);
+    }
+    const declined = this.#declined();
+    return hookTargets(this.homes.all()).map((t) => ({ ...t, state: hookState(t.agent, t.file, script), ...(declined.has(t.file) ? { declined: true } : {}) }));
   }
 
   /** Only the agent configs hooks.status lists can be written. */
@@ -537,30 +556,53 @@ export class Core {
     if (this.#closed) return;
     this.#homesDiscovered = true;
     try {
-      for (const h of this.homes.discover()) this.#newHome(h);
+      for (const h of this.homes.discover()) this.#search?.learnHome(h.agent, h.dir);
     } catch (err) {
       log.error(`looking for agent homes: ${(err as Error).message}`);
     }
+    this.#autoHooks();
   }
 
-  /**
-   * A home cmd didn't know: its transcripts are indexed, and it gets cmd's hook if
-   * the user installed it into another home of the same agent (same consent).
-   */
+  /** A home cmd didn't know: its transcripts are indexed, and it may get the hook. */
   #newHome(h: AgentHome | null): void {
     if (!h) return;
     this.#search?.learnHome(h.agent, h.dir);
-    if (!this.#hooks || h.via.includes("hook")) return;
-    const targets = this.#hookTargets();
-    const mine = targets.find((t) => t.agent === h.agent && path.dirname(t.file) === h.dir);
-    if (!mine || mine.state === "installed") return;
-    if (!targets.some((t) => t.agent === h.agent && t.state === "installed")) return;
-    try {
-      installHooks(h.agent, mine.file, this.#hooks.script);
-      log.info(`installed cmd's hook into ${mine.file} (another ${h.agent} home has it)`);
-    } catch (err) {
-      log.error(`could not install cmd's hook into ${mine.file}: ${(err as Error).message}`);
+    if (this.#homesDiscovered) this.#autoHooks();
+  }
+
+  /** Configs the user took cmd's hook out of (hooks.remove): automatic installs leave them alone. */
+  #declined(): Set<string> {
+    const v = this.store.uiState()[DECLINED_KEY];
+    return new Set(Array.isArray(v) ? (v as string[]) : []);
+  }
+
+  #setDeclined(file: string, on: boolean): void {
+    const d = this.#declined();
+    if (on) d.add(file);
+    else d.delete(file);
+    this.store.setUiState(DECLINED_KEY, d.size ? [...d] : null);
+  }
+
+  /**
+   * Out of the box: cmd's hook in every agent config without one, an old one
+   * (the fork's, `cmd hook`) or a broken one (its script gone). Never over
+   * another live cmd's hook, never into a file the user removed it from, never
+   * from a development build (opts.autoHooks).
+   */
+  #autoHooks(): void {
+    if (!this.#opts.autoHooks || !this.#hooks || this.#closed || !this.settings.settings["agents.hooks.auto"]) return;
+    const added: string[] = [];
+    for (const t of this.#hookTargets()) {
+      if (t.declined || (t.state !== "missing" && t.state !== "legacy" && t.state !== "stale")) continue;
+      try {
+        installHooks(t.agent, t.file, this.#hooks.script);
+        log.info(`installed cmd's hook into ${t.file} (was ${t.state})`);
+        added.push(`${t.title} (${t.file.replace(os.homedir(), "~")})`);
+      } catch (err) {
+        log.error(`could not install cmd's hook into ${t.file}: ${(err as Error).message}`);
+      }
     }
+    if (added.length) this.notifications.info("cmd set up your agents", `Added cmd's hook to ${added.join(", ")}, so their state shows in cmd. Settings → Agents → Hooks to change it.`);
   }
 
   #restartSearch(): void {

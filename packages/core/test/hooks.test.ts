@@ -131,7 +131,15 @@ describe("installing into agent configs", () => {
     expect(cfg.hooks.PreToolUse.at(-1)).toMatchObject({ matcher: "*", hooks: [{ type: "command", timeout: 10 }] });
     expect(Object.keys(cfg.hooks)).toContain("SessionStart");
     expect(hookState("claude", file, script)).toBe("installed");
-    expect(hookState("claude", file, "/elsewhere/hooks/cmd-hook")).toBe("elsewhere");
+    // Seen from another cmd: a broken hook (this script doesn't exist here)…
+    expect(hookState("claude", file, "/elsewhere/hooks/cmd-hook")).toBe("stale");
+    // …and a live one while its script is there.
+    const live = path.join(dir, "live cmd", "hooks", "cmd-hook");
+    fs.mkdirSync(path.dirname(live), { recursive: true });
+    fs.writeFileSync(live, "#!/bin/sh\n");
+    const other = path.join(dir, "claude", "other.json");
+    installHooks("claude", other, live);
+    expect(hookState("claude", other, "/elsewhere/hooks/cmd-hook")).toBe("elsewhere");
 
     installHooks("claude", file, script); // again: no duplicates
     expect(commands(read(file)).Stop).toEqual(["say done", ours]);
@@ -184,4 +192,86 @@ it("reads Gemini's events as the ones Claude and Codex share", () => {
   fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, "BeforeTool.json"), JSON.stringify({ agent: "gemini", ts: 1, event: { hook_event_name: "BeforeTool", tool_name: "run_shell_command" } }));
   expect(readStatus(id, 0, path.join(dir, "gem"))).toMatchObject({ state: "working", agent: "gemini" });
+});
+
+describe.skipIf(process.platform === "win32")("setting agents up out of the box", () => {
+  /** A home with: Claude (the user's own hooks and settings), a profile with a dead dev build's hook, a profile with another live cmd's hook, Codex without hooks, and a profile whose config isn't valid JSON. */
+  function makeHome(root: string) {
+    const home = path.join(root, "home");
+    const mk = (...p: string[]) => fs.mkdirSync(path.join(home, ...p), { recursive: true });
+    const put = (rel: string, v: unknown) => fs.writeFileSync(path.join(home, rel), typeof v === "string" ? v : JSON.stringify(v, null, 2));
+    mk(".claude", "projects");
+    put(".claude/settings.json", { model: "opus", hooks: { Stop: [{ hooks: [{ type: "command", command: "say done" }] }] } });
+    mk(".claude-profiles", "old", "projects");
+    put(".claude-profiles/old/.claude.json", "{}");
+    put(".claude-profiles/old/settings.json", { hooks: { Stop: [{ hooks: [{ type: "command", command: "'/gone/worktree/.cmd-dev/hooks/cmd-hook' claude" }] }] } });
+    const otherScript = path.join(root, "other-cmd", "hooks", "cmd-hook");
+    fs.mkdirSync(path.dirname(otherScript), { recursive: true });
+    fs.writeFileSync(otherScript, "#!/bin/sh\n");
+    mk(".claude-profiles", "live", "projects");
+    put(".claude-profiles/live/.claude.json", "{}");
+    put(".claude-profiles/live/settings.json", { hooks: { Stop: [{ hooks: [{ type: "command", command: `'${otherScript}' claude` }] }] } });
+    mk(".claude-profiles", "broken", "projects");
+    put(".claude-profiles/broken/.claude.json", "{}");
+    put(".claude-profiles/broken/settings.json", "{ oops");
+    mk(".codex", "sessions");
+    return home;
+  }
+
+  async function start(root: string, autoHooks: boolean) {
+    const home = makeHome(root);
+    const core = new Core({ socketPath: path.join(root, "core.sock"), dbPath: path.join(root, "cmd.sqlite"), terminals: fakeFactory().factory, pollMs: 0, statusRoot: path.join(root, "status"), stateDir: path.join(root, "state"), autoHooks, homesContext: () => ({ home, env: {} }) });
+    const notes: string[] = [];
+    core.notifications.on("notification", (n) => notes.push(n.body));
+    await new Promise((r) => setImmediate(r)); // discovery runs right after startup
+    return { core, home, notes, script: hookFiles(path.join(root, "state")).script };
+  }
+
+  it("installs where there's no cmd hook or a broken one, keeps everything else, and says so", async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-autohooks-")));
+    const { core, home, notes, script } = await start(root, true);
+    try {
+      const cfg = read(path.join(home, ".claude/settings.json"));
+      expect(cfg.model).toBe("opus");
+      expect(cfg.hooks.Stop.map((g: { hooks: { command: string }[] }) => g.hooks[0]!.command)).toEqual(["say done", `'${script}' claude`]);
+      // A copy of the user's file as it was, once.
+      expect(read(path.join(home, ".claude/settings.json.cmd-backup")).hooks.Stop).toHaveLength(1);
+      // The dead dev build's hook is replaced; another live cmd's is not; a file that isn't JSON is left alone.
+      expect(JSON.stringify(read(path.join(home, ".claude-profiles/old/settings.json")))).not.toContain("/gone/worktree");
+      expect(JSON.stringify(read(path.join(home, ".claude-profiles/live/settings.json")))).toContain("other-cmd");
+      expect(fs.readFileSync(path.join(home, ".claude-profiles/broken/settings.json"), "utf8")).toBe("{ oops");
+      expect(fs.existsSync(path.join(home, ".claude-profiles/broken/settings.json.cmd-backup"))).toBe(false);
+      expect(read(path.join(home, ".codex/hooks.json")).hooks.Stop).toBeDefined();
+      const states = Object.fromEntries((await core.call("hooks.status", {})).map((t) => [path.relative(home, t.file), t.state]));
+      expect(states).toMatchObject({ ".claude/settings.json": "installed", ".claude-profiles/old/settings.json": "installed", ".claude-profiles/live/settings.json": "elsewhere", ".claude-profiles/broken/settings.json": "missing", ".codex/hooks.json": "installed" });
+      expect(notes.join("\n")).toMatch(/Added cmd's hook to Claude Code \(.*\.claude\/settings\.json\)/);
+
+      // Removed by the user: stays out, even on a rescan; Install brings it back.
+      const file = path.join(home, ".claude/settings.json");
+      await core.call("hooks.remove", { file });
+      await core.call("agents.homes", { rescan: true });
+      expect(read(file).hooks.Stop.map((g: { hooks: { command: string }[] }) => g.hooks[0]!.command)).toEqual(["say done"]);
+      expect((await core.call("hooks.status", {})).find((t) => t.file === file)).toMatchObject({ state: "missing", declined: true });
+      await core.call("hooks.install", { file });
+      expect((await core.call("hooks.status", {})).find((t) => t.file === file)).toMatchObject({ state: "installed" });
+      expect((await core.call("hooks.status", {})).find((t) => t.file === file)!.declined).toBeUndefined();
+    } finally {
+      await core.close();
+      rmTemp(root);
+    }
+  });
+
+  it("changes nothing unless told to (development builds, tests)", async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-autohooks-")));
+    const { core, home, notes } = await start(root, false);
+    try {
+      expect(read(path.join(home, ".claude/settings.json")).hooks.Stop).toHaveLength(1);
+      expect(fs.existsSync(path.join(home, ".codex/hooks.json"))).toBe(false);
+      expect(fs.readdirSync(path.join(home, ".claude"))).not.toContain("settings.json.cmd-backup");
+      expect(notes).toEqual([]);
+    } finally {
+      await core.close();
+      rmTemp(root);
+    }
+  });
 });

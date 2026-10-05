@@ -91,6 +91,8 @@ const core = new Core({
   build,
   stateDir: home,
   // Release builds started by the app; anything else only when asked to. "off": never (CI, e2e).
+  // The installed app sets agents up by itself; development builds don't (their hook would point into a checkout).
+  autoHooks: instanceName() === "release" && !!process.env.CMD_APP_VERSION && !process.env.CMD_TRANSCRIPTS_HOME,
   usageUrl: process.env.CMD_USAGE_URL === "off" ? null : process.env.CMD_USAGE_URL || (instanceName() === "release" && process.env.CMD_APP_VERSION ? USAGE_URL : null),
   usageKey,
 });

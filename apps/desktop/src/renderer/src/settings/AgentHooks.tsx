@@ -12,6 +12,7 @@ const STATE: Record<HookTarget["state"], { text: string; tone: "accent" | "warni
   missing: { text: "Not installed.", tone: "dim" },
   legacy: { text: "Has an older hook (ghostty-agents or `cmd hook`). Install replaces it.", tone: "warning" },
   elsewhere: { text: "Has the hook of another cmd (e.g. a development build). Install points it here.", tone: "warning" },
+  stale: { text: "Has a cmd hook whose script is gone. Install replaces it.", tone: "warning" },
 };
 
 const tilde = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
@@ -41,7 +42,7 @@ export function AgentHooks() {
             key={t.file}
             title={t.title}
             description={tilde(t.file)}
-            note={codex ? "Installed. Codex runs it once you approve it: run /hooks in Codex." : s.text}
+            note={codex ? "Installed. Codex runs it once you approve it: run /hooks in Codex." : t.declined && t.state === "missing" ? "Not installed. You removed it, so cmd won't add it by itself." : s.text}
             noteTone={codex ? "accent" : s.tone}
           >
             {t.state === "installed" ? (

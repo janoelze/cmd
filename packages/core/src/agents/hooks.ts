@@ -166,6 +166,9 @@ function read(file: string): Config {
 const commands = (cfg: Config) =>
   Object.values(cfg.hooks ?? {}).flatMap((groups) => (Array.isArray(groups) ? groups : []).flatMap((g) => (g?.hooks ?? []).map((h) => String(h?.command ?? ""))));
 
+/** The script a cmd hook command runs (`'<script>' <kind>`). */
+const scriptOf = (command: string): string | null => command.match(/^'((?:[^']|'\\'')*)'\s+\w+\s*$/)?.[1]?.replaceAll("'\\''", "'") ?? command.match(/^(\S+)\s+\w+\s*$/)?.[1] ?? null;
+
 export function hookState(agent: AgentKind, file: string, script: string): HookTarget["state"] {
   let cmds: string[];
   try {
@@ -174,8 +177,15 @@ export function hookState(agent: AgentKind, file: string, script: string): HookT
     return "missing";
   }
   if (cmds.includes(`${shq(script)} ${agent}`)) return "installed";
-  if (cmds.some(ours)) return "elsewhere";
+  const others = cmds.filter(ours);
+  if (others.length) return others.every((c) => !fs.existsSync(scriptOf(c) ?? "")) ? "stale" : "elsewhere";
   return cmds.some(legacy) ? "legacy" : "missing";
+}
+
+/** The first time cmd changes an agent's config, a copy of it as it was goes next to it. */
+function backupOnce(target: string): void {
+  const backup = `${target}.cmd-backup`;
+  if (fs.existsSync(target) && !fs.existsSync(backup)) fs.copyFileSync(target, backup);
 }
 
 /** Drops cmd's and the fork's hooks from `cfg`, keeping everything else. */
@@ -199,6 +209,7 @@ function write(file: string, cfg: Config): void {
     target = fs.realpathSync(file);
   } catch {}
   fs.mkdirSync(path.dirname(target), { recursive: true });
+  backupOnce(target);
   const tmp = `${target}.cmd-${process.pid}`;
   fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2) + "\n");
   fs.renameSync(tmp, target);

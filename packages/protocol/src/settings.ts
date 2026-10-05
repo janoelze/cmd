@@ -323,6 +323,12 @@ export const SETTINGS_SCHEMA = {
     default: false,
     description: "When an agent starts in a repository where other agents are working (in any of its worktrees), tell it who they are, where and on what, and that it can message them with `cmd send`. Told again when agents come or go. Needs cmd's hook in the agent (Hooks, above).",
   },
+  "agents.hooks.auto": {
+    title: "Install the hook automatically",
+    type: "boolean",
+    default: true,
+    description: "Put cmd's hook into every Claude Code, Codex and Gemini CLI config cmd finds, so their state shows without setting anything up. Only where there's no cmd hook yet (or an old or broken one); a file you remove the hook from is left alone. The first time cmd changes a file it keeps a copy next to it (.cmd-backup).",
+  },
   "agents.homes": {
     title: "More agent folders", placeholder: "~/dotfiles/claude", code: true,
     type: "string",

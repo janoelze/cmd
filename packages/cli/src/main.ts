@@ -159,8 +159,8 @@ async function run({ client, closed }: Connection): Promise<number> {
         return fail(`unknown: hooks ${sub}`);
       }
       if (opt.json) return out(targets);
-      const label = { installed: "installed", missing: "not installed", legacy: "old hook (ghostty-agents or cmd hook)", elsewhere: "another cmd's hook" };
-      for (const t of targets) console.log(`${t.title.padEnd(12)} ${label[t.state].padEnd(14)} ${t.file}`);
+      const label = { installed: "installed", missing: "not installed", legacy: "old hook (ghostty-agents or cmd hook)", elsewhere: "another cmd's hook", stale: "broken cmd hook (script gone)" };
+      for (const t of targets) console.log(`${t.title.padEnd(12)} ${label[t.state].padEnd(14)} ${t.file}${t.declined ? "  (removed by you: not added automatically)" : ""}`);
       if (targets.some((t) => t.agent === "codex" && t.state === "installed")) console.log("\nCodex runs a new hook only once you approve it: run /hooks in Codex.");
       return 0;
     }
