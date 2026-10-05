@@ -477,7 +477,7 @@ describe("tracker: spooled events", () => {
       { at: FIXTURE_EPOCH + 101_000, agent: "claude", name: "Stop", payload: { hook_event_name: "Stop", session_id: a.native.claudeSessionId, last_assistant_message: "Did it again." } },
     ]);
     agents.applyStatus(pane.id);
-    expect(sent.at(-1)).toMatchObject({ title: "repo · done", body: "Did it again. 1 s." });
+    expect(sent.at(-1)).toMatchObject({ title: "repo · done", body: "Did it again." });
     expect(agents.get(a.id)!.turn).toMatchObject({ index: 1, prompt: "and again" });
   });
 

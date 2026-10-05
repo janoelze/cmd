@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Agent, AgentTurn } from "@cmd/protocol";
-import { agentNotice, cleanAiBody, gist, noticeContext, plain, shortDuration, subjectOf } from "../src/agents/notice.ts";
+import { agentNotice, cleanAiBody, gist, noticeContext, plain, subjectOf } from "../src/agents/notice.ts";
 import { newTurn } from "../src/agents/activity/reduce.ts";
 
 const agent = (o: Partial<Agent> = {}, turn: Partial<AgentTurn> = {}): Agent => ({
@@ -23,7 +23,7 @@ describe("agent notifications", () => {
       startedAt: 0, endedAt: 7 * 60_000,
     }), "done");
     expect(n.title).toBe("cmd-agent-activity · done");
-    expect(n.body).toBe("Session summaries are built and committed on the summary branch in… 4 files changed, 7 min.");
+    expect(n.body).toBe("Session summaries are built and committed on the summary branch in… 4 files changed.");
   });
 
   it("done with work left running says so in the title", () => {
@@ -60,7 +60,7 @@ describe("agent notifications", () => {
     const n = agentNotice(agent({ cwd: "/x/a-very-long-project-folder-name-for-testing-limits" }, { final: "word ".repeat(80), startedAt: 0, endedAt: 1000 }), "done");
     expect(n.title).toBe("a-very-long-project-folder… · done");
     expect(n.body.length).toBeLessThanOrEqual(140);
-    expect(n.body).toMatch(/… 1 s\.$/);
+    expect(n.body).toMatch(/…$/);
   });
 });
 
@@ -76,10 +76,6 @@ describe("text helpers", () => {
     expect(gist("The add() bug is fixed and the tests pass. Details follow.")).toBe("The add() bug is fixed and the tests pass.");
     expect(gist("Version 1.2.3 is out and tagged.")).toBe("Version 1.2.3 is out and tagged.");
   });
-
-  it("formats durations short", () => {
-    expect([40_000, 7 * 60_000, 65 * 60_000, 120 * 60_000].map(shortDuration)).toEqual(["40 s", "7 min", "1 h 5 min", "2 h"]);
-  });
 });
 
 describe("AI wording", () => {
@@ -92,7 +88,7 @@ describe("AI wording", () => {
 
   it("gives the model the turn's facts, not its process", () => {
     const c = noticeContext(agent({}, { prompt: "fix it", final: "Fixed.", files: [{ path: "/r/calc.py", change: "M", via: ["git"] }], commands: ["npm test"], startedAt: 0, endedAt: 60_000 }), "done");
-    expect(c).toMatchObject({ state: "done", prompt: "fix it", finalMessage: "Fixed.", filesChanged: ["calc.py"], took: "1 min" });
+    expect(c).toMatchObject({ state: "done", prompt: "fix it", finalMessage: "Fixed.", filesChanged: ["calc.py"] });
     expect(c).not.toHaveProperty("recentCommands");
     const needs = noticeContext(agent({ state: "needs_input" }, { ask: { message: "Allow Bash?", tool: "Bash", input: "rm x" } }), "needs");
     expect(needs).toMatchObject({ state: "needs", asking: { input: "rm x" } });

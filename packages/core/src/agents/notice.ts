@@ -1,6 +1,6 @@
 // What an agent's notification says (the copywriting skill, "Notifications"):
 // the title is subject · state, the body the agent's own words, shortened, then
-// the facts cmd checked ("4 files changed, 7 min."). Built from the agent and its
+// the facts cmd checked ("4 files changed."). Built from the agent and its
 // current turn (docs/18-agent-activity.md); pure apart from finding the project.
 
 import path from "node:path";
@@ -66,22 +66,10 @@ export function gist(md: string, max = BODY_MAX): string {
 
 const FILLER = /^(sure|yes|no|ok(ay)?|done|great|got it|right|partly|perfect|absolutely|good (idea|question|catch|point)|makes sense|understood|will do)[.!,:]?$/i;
 
-/** 40 s, 7 min, 1 h 5 min. */
-export function shortDuration(ms: number): string {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s} s`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m} min`;
-  return `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`;
-}
-
-/** What cmd checked about a finished turn: "4 files changed, 7 min." */
+/** What cmd checked about a finished turn: "4 files changed." */
 function facts(t: AgentTurn | null | undefined): string {
-  if (!t) return "";
-  const parts: string[] = [];
-  if (t.files.length) parts.push(`${t.files.length} file${t.files.length === 1 ? "" : "s"} changed`);
-  if (t.endedAt) parts.push(shortDuration(t.endedAt - t.startedAt));
-  return parts.length ? `${parts.join(", ")}.` : "";
+  if (!t?.files.length) return "";
+  return `${t.files.length} file${t.files.length === 1 ? "" : "s"} changed.`;
 }
 
 const quote = (s: string) => `“${s}”`;
@@ -152,7 +140,6 @@ export function noticeContext(a: Agent, kind: NoticeKind): Record<string, unknow
     error: kind === "stopped" ? clip(t?.error ?? a.detail, 300) : undefined,
     filesChanged: t?.files.length ? t.files.slice(0, 15).map((f) => path.basename(f.path)) : undefined,
     moreFiles: t && t.files.length > 15 ? t.files.length - 15 : undefined,
-    took: t?.endedAt ? shortDuration(t.endedAt - t.startedAt) : undefined,
     stillRunning: t?.background.length ? t.background : undefined,
     agentNote: t?.notes.length ? clip(t.notes.at(-1), 300) : undefined,
   };

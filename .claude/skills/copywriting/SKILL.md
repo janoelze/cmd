@@ -53,7 +53,7 @@ People turn notifications off when they cry wolf, so:
 - **Honest urgency.** "Needs you" is urgent (sound). Done and stopped inform. Things cmd did by itself are quiet.
 - **Title: subject · state.** The subject is the agent's name if it has one, else its project (the repository's folder name). The state is one of: done, needs you, stopped, and for done with work left running, "done, 1 task still running".
 - **Body: snappy, one line, the result.** Read in a second: at most ~70 characters, fragments welcome. "Fixed add(); tests pass." "Summaries are on the summary branch." Never a retelling of steps, never the agent's paragraph pasted in, no filler ("Sure.", "Done.").
-- **Written with AI out of the box** when a provider is set up (`notifications.ai`): the fast tier gets the turn's facts (prompt, final message, question, files, error) and writes the body; the title stays cmd's own. Without a provider: the agent's first clause, cut short, then the facts cmd checked ("4 files changed, 7 min.").
+- **Written with AI out of the box** when a provider is set up (`notifications.ai`): the fast tier gets the turn's facts (prompt, final message, question, files, error) and writes the body; the title stays cmd's own. Without a provider: the agent's first clause, cut short, then the facts cmd checked ("4 files changed.").
 - **Needs you says what it asks:** Allow “rm NOTES.md”? Allow editing “calc.py”? Otherwise the agent's own question.
 - **Stopped says why,** in the agent's words: "You've hit your weekly limit · resets Oct 7 at 3am".
 - No app name, no "Notification:", no sensitive data beyond what's already on screen.
