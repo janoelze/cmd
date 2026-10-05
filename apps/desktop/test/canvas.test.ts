@@ -5,6 +5,8 @@ import {
   DEFAULT_H,
   DEFAULT_W,
   DOT,
+  FIT_MIN_ZOOM,
+  fitLimits,
   frame,
   GAP,
   lerpCamera,
@@ -109,5 +111,20 @@ describe("framing", () => {
   it("snaps to the dot grid and enforces a minimum size", () => {
     expect(sized({ x: 13, y: 3, w: 100, h: 1001 })).toEqual({ x: 24, y: 0, w: MIN_W, h: 1008 });
     for (const v of [DEFAULT_W, DEFAULT_H, MIN_W, MIN_H, GAP]) expect(v % DOT).toBe(0);
+  });
+});
+
+describe("fitting past the minimum zoom", () => {
+  const lim = { min: 0.3, max: 1.5 };
+  it("Fit may go below canvas.minZoom, down to FIT_MIN_ZOOM", () => {
+    const wide = { x: 0, y: 0, w: 6000, h: 400 };
+    expect(frame(wide, { w: 800, h: 600 }, 1, lim).zoom).toBe(0.3);
+    expect(frame(wide, { w: 800, h: 600 }, 1, fitLimits(lim)).zoom).toBeCloseTo((800 - 2 * 48) / 6000);
+    expect(frame({ ...wide, w: 600000 }, { w: 800, h: 600 }, 1, fitLimits(lim)).zoom).toBe(FIT_MIN_ZOOM);
+  });
+  it("zooming from below the minimum never jumps back to it", () => {
+    const cam = { x: 0, y: 0, zoom: 0.15 };
+    expect(zoomAt(cam, 0.5, 0, 0, lim).zoom).toBe(0.15);
+    expect(zoomAt(cam, 1.2, 0, 0, lim).zoom).toBeCloseTo(0.18);
   });
 });

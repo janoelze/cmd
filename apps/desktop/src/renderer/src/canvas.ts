@@ -24,6 +24,13 @@ export function zoomLimits(s: Pick<Settings, "canvas.minZoom" | "canvas.maxZoom"
   return { min, max: Math.max(min, s["canvas.maxZoom"] / 100) };
 }
 export const DEFAULT_LIMITS = zoomLimits(DEFAULT_SETTINGS);
+/**
+ * How far Fit may zoom out to show every window, past canvas.minZoom (the
+ * setting's own lowest value). Wheel and pinch stay within the limits.
+ */
+export const FIT_MIN_ZOOM = 0.1;
+/** Limits for Fit: as far out as it takes, down to FIT_MIN_ZOOM. */
+export const fitLimits = (lim: ZoomLimits): ZoomLimits => ({ min: Math.min(lim.min, FIT_MIN_ZOOM), max: lim.max });
 /** The background's dot spacing: window edges, sizes and gaps all land on it. */
 export const DOT = 24;
 export const DEFAULT_W = 30 * DOT;
@@ -46,9 +53,12 @@ export function toWorld(cam: Camera, sx: number, sy: number): { x: number; y: nu
   return { x: cam.x + sx / cam.zoom, y: cam.y + sy / cam.zoom };
 }
 
-/** Zoom by a factor, keeping the world point under screen (sx, sy) fixed. */
+/**
+ * Zoom by a factor, keeping the world point under screen (sx, sy) fixed. Below
+ * the minimum (after Fit) it doesn't jump back: it only zooms in from there.
+ */
 export function zoomAt(cam: Camera, factor: number, sx: number, sy: number, lim = DEFAULT_LIMITS): Camera {
-  const zoom = clampZoom(cam.zoom * factor, lim);
+  const zoom = clampZoom(cam.zoom * factor, { min: Math.min(lim.min, cam.zoom), max: lim.max });
   const p = toWorld(cam, sx, sy);
   return { x: p.x - sx / zoom, y: p.y - sy / zoom, zoom };
 }

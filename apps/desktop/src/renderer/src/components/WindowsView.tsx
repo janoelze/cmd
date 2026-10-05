@@ -31,6 +31,7 @@ import { useStoreValue } from "../store.ts";
 import {
   arrange,
   bounds,
+  fitLimits,
   frame as frameWith,
   lerpCamera,
   MIN_H,
@@ -208,7 +209,7 @@ export function WindowsView(p: Props) {
   const shown = (vp: { w: number; h: number }) => ({ w: Math.max(1, vp.w - insetRef.current.left - insetRef.current.right), h: vp.h });
   const toShown = (c: Camera): Camera => ({ ...c, x: c.x + insetRef.current.left / c.zoom });
   const fromShown = (c: Camera): Camera => ({ ...c, x: c.x - insetRef.current.left / c.zoom });
-  const frame = (r: Rect, vp: { w: number; h: number }, maxZoom: number) => fromShown(frameWith(r, shown(vp), maxZoom, limRef.current));
+  const frame = (r: Rect, vp: { w: number; h: number }, maxZoom: number, lim = limRef.current) => fromShown(frameWith(r, shown(vp), maxZoom, lim));
   const reveal = (c: Camera, r: Rect, vp: { w: number; h: number }) => {
     const from = toShown(c);
     const to = revealWith(from, r, shown(vp), limRef.current);
@@ -258,9 +259,13 @@ export function WindowsView(p: Props) {
   const live = useRef({ lay, ids, settled, vp, selected, mode, preview, drag });
   live.current = { lay, ids, settled, vp, selected, mode, preview, drag };
 
-  // Windows placed for the first time are stored, so they stay put.
+  // Windows placed for the first time are stored, so they stay put. The first
+  // time on the canvas, the camera frames them all (not the default camera's corner).
   useEffect(() => {
-    if (arranged?.changed) p.onCanvasRects({ ...p.canvasRects, ...Object.fromEntries(arranged.rects) });
+    if (!arranged?.changed) return;
+    const first = Object.keys(p.canvasRects).length === 0;
+    p.onCanvasRects({ ...p.canvasRects, ...Object.fromEntries(arranged.rects) });
+    if (first && vp.w) fitAll();
   });
   const saveRect = (id: PaneId, r: Rect) => {
     const all = live.current.lay.rects;
@@ -296,7 +301,8 @@ export function WindowsView(p: Props) {
   }, [request, mode, vp.w]);
   const fitAll = () => {
     const b = bounds([...live.current.lay.rects.values()]);
-    if (b) animateCam(frame(b, live.current.vp, 1));
+    // As far out as it takes to show everything, past the minimum zoom if need be.
+    if (b) animateCam(frame(b, live.current.vp, 1, fitLimits(limRef.current)));
   };
 
   // Mode switches glide the track too (scroll offset ⇄ camera).
