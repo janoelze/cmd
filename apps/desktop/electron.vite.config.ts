@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "electron-vite";
@@ -23,18 +24,29 @@ function xtermScaledCoords(): Plugin {
   };
 }
 
+// The usage stats key of this version (core/usage.ts): from $CMD_USAGE_SECRET (a CI
+// secret, tagged releases only), which the server holds too and derives the same key from.
+function usageKey(): string {
+  const secret = process.env.CMD_USAGE_SECRET;
+  if (!secret) return "";
+  const { version } = JSON.parse(readFileSync(resolve(import.meta.dirname, "package.json"), "utf8")) as { version: string };
+  return createHmac("sha256", secret).update(`cmd-usage:${version}`).digest("hex");
+}
+
 // @cmd/protocol and @cmd/ui ship TypeScript source, so they must be bundled, not externalized.
 const bundleWorkspace = { externalizeDeps: { exclude: ["@cmd/protocol"] } };
 
 export default defineConfig({
   // The packaged app ships no node_modules for main: Lucide's icons (@cmd/ui/lucide) and
   // electron-updater are bundled too.
-  // The crash report and feedback webhooks (main/crash.ts, main/feedback.ts) come
-  // from the environment at build time (CI secrets), so they aren't in the repository.
+  // The crash report and feedback webhooks (main/crash.ts, main/feedback.ts) and the
+  // usage stats key come from the environment at build time (CI secrets), so they
+  // aren't in the repository.
   main: {
     define: {
       __CRASH_WEBHOOK__: JSON.stringify(process.env.CMD_CRASH_WEBHOOK ?? ""),
       __FEEDBACK_WEBHOOK__: JSON.stringify(process.env.CMD_FEEDBACK_WEBHOOK ?? ""),
+      __USAGE_KEY__: JSON.stringify(usageKey()),
     },
     build: { externalizeDeps: { exclude: ["@cmd/protocol", "@cmd/ui", "lucide-static", "electron-updater"] } },
   },

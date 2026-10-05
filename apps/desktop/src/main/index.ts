@@ -44,6 +44,9 @@ const checkForUpdates = () => void startUpdater().then(() => updater()).then((u)
  * relocates either instance.
  */
 const devBuild = !app.isPackaged || app.getName() === "cmd dev";
+/** Signs usage stats batches (core/usage.ts); baked in at build time, release builds only. */
+declare const __USAGE_KEY__: string;
+const USAGE_KEY = typeof __USAGE_KEY__ === "string" && !devBuild ? __USAGE_KEY__ : "";
 if (devBuild) app.setName("cmd dev");
 enterInstance(devBuild ? "dev" : "release");
 
@@ -310,6 +313,7 @@ function spawnCore(): void {
   const fd = fs.openSync(out, "a");
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
+  if (USAGE_KEY) env.CMD_USAGE_KEY = USAGE_KEY;
   let node = "node";
   if (app.isPackaged) (node = process.execPath), (env.ELECTRON_RUN_AS_NODE = "1");
   // --instance also tells cores apart in `ps` (scripts/stop-core.mjs --all).

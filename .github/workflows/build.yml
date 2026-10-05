@@ -12,6 +12,10 @@
 # posts to (apps/desktop/src/main/feedback.ts). Without it the form can't send.
 # CMD_USAGE_URL=off: apps launched here (e2e) send no usage stats; each run would
 # count as a new install.
+# CMD_USAGE_SECRET: what release builds derive their usage stats signing key from
+# (apps/desktop/electron.vite.config.ts); the website has the same one in
+# ~/cmd-website-data/usage-secret. Without it releases send unsigned batches,
+# which the server rejects.
 #
 # Signing secrets (all optional; without them the app is ad-hoc signed, see DEVELOPMENT.md):
 #   MAC_CERT_P12_BASE64   Developer ID Application certificate (.p12), base64
@@ -68,6 +72,7 @@ jobs:
         env:
           CMD_CRASH_WEBHOOK: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.CMD_CRASH_WEBHOOK || '' }}
           CMD_FEEDBACK_WEBHOOK: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.CMD_FEEDBACK_WEBHOOK || '' }}
+          CMD_USAGE_SECRET: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.CMD_USAGE_SECRET || '' }}
         run: |
           pnpm build
           node scripts/stage-runtime.mjs

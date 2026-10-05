@@ -10,7 +10,12 @@
 // does when it is "off" (CI and e2e, whose fresh CMD_HOMEs look like new installs). The
 // `diagnostics.usageStats` setting turns it off. The server can slow senders
 // down (429 or 503 with Retry-After) or stop them (410, until the core restarts).
+// Release builds sign each batch with a key of their version (baked into the
+// app, see electron.vite.config.ts) so the server can turn away batches that
+// didn't come from a release; it can't prove more than that, since the key is
+// in the app.
 
+import { createHmac } from "node:crypto";
 import os from "node:os";
 import { logger, takeUsageCounts } from "@cmd/protocol/node";
 
@@ -29,6 +34,8 @@ const log = logger("usage");
 export interface UsageOptions {
   /** Where batches go; null: nothing is counted or sent. */
   url: string | null;
+  /** The version's key: batches carry an HMAC of their body in x-cmd-signature. Null: unsigned. */
+  key?: string | null;
   enabled: () => boolean;
   /** The install's random id (machineId); null: can't send. */
   id: () => string | null;
@@ -102,12 +109,15 @@ export class UsageStats {
     const counts = Object.fromEntries(this.#counts);
     this.#counts.clear();
     const batch: UsageBatch = { v: 1, id, version: this.#o.version, os: macosVersion(), arch: process.arch, counts };
+    const body = JSON.stringify(batch);
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (this.#o.key) headers["x-cmd-signature"] = createHmac("sha256", this.#o.key).update(body).digest("hex");
     this.#sending = true;
     try {
       const res = await (this.#o.fetch ?? fetch)(url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(batch),
+        headers,
+        body,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       if (res.status === 410) {

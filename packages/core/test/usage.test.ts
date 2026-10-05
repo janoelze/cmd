@@ -1,14 +1,17 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { macosVersion, UsageStats, type UsageBatch } from "../src/usage.ts";
 
-function setup(o: { enabled?: boolean; fail?: boolean; url?: string | null } = {}) {
+function setup(o: { enabled?: boolean; fail?: boolean; url?: string | null; key?: string } = {}) {
   const sent: UsageBatch[] = [];
+  const raw: { body: string; signature: string | null }[] = [];
   let now = Date.parse("2026-10-04T12:00:00Z");
   let fail = o.fail ?? false;
   let answer: Response | null = null;
   let crashes: Record<string, number> = {};
   const usage = new UsageStats({
     url: o.url === undefined ? "https://example.test/ingest" : o.url,
+    key: o.key ?? null,
     enabled: () => o.enabled ?? true,
     id: () => "install-id",
     version: "1.2.3",
@@ -19,12 +22,14 @@ function setup(o: { enabled?: boolean; fail?: boolean; url?: string | null } = {
       if (answer) return answer;
       if (fail) return new Response("", { status: 500 });
       sent.push(JSON.parse(String(init.body)));
+      raw.push({ body: String(init.body), signature: (init.headers as Record<string, string>)["x-cmd-signature"] ?? null });
       return new Response(null, { status: 204 });
     }) as typeof fetch,
   });
   return {
     usage,
     sent,
+    raw,
     advance: (ms: number) => (now += ms),
     setFail: (f: boolean) => (fail = f),
     answer: (r: Response | null) => (answer = r),
@@ -46,6 +51,17 @@ describe("usage stats", () => {
     expect(sent[0]).toMatchObject({ v: 1, id: "install-id", version: "1.2.3", arch: process.arch });
     expect(sent[0]!.counts).toEqual({ "app.launch": 1, "window.terminal": 2, "window.other": 1, "agent.claude": 1, "agent.other": 1 });
     expect(Object.keys(sent[0]!).sort()).toEqual(["arch", "counts", "id", "os", "v", "version"]);
+  });
+
+  it("signs the body with the version's key, when it has one", async () => {
+    const signed = setup({ key: "k" });
+    signed.usage.launch();
+    expect(await signed.usage.flush()).toBe(true);
+    const [{ body, signature }] = signed.raw as [{ body: string; signature: string | null }];
+    expect(signature).toBe(createHmac("sha256", "k").update(body).digest("hex"));
+    const unsigned = setup();
+    expect(await unsigned.usage.flush()).toBe(true);
+    expect(unsigned.raw[0]!.signature).toBeNull();
   });
 
   it("skips empty batches except the first of a day", async () => {

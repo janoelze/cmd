@@ -88,6 +88,8 @@ export interface CoreOptions {
   aiListModels?: (provider: AiProvider, apiKey: string) => Promise<AiModel[]>;
   /** Where usage stats go (usage.ts); none: not counted (tests, development builds). */
   usageUrl?: string | null;
+  /** Signs usage batches (the app's, per version); none: sent unsigned, which the server takes from old versions only. */
+  usageKey?: string | null;
   /** Tests: who renders widget previews (default: the app's previewer connection, else Playwright). */
   magicPreviewer?: Previewer | null;
   /** Tests: the Deno for widgets (default: found on this Mac). */
@@ -244,6 +246,7 @@ export class Core {
     });
     this.usage = new UsageStats({
       url: opts.usageUrl ?? null,
+      key: opts.usageKey ?? null,
       enabled: () => this.settings.settings["diagnostics.usageStats"],
       id: machineId,
       version: process.env.CMD_APP_VERSION ?? "source",

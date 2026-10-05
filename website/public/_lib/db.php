@@ -7,6 +7,13 @@
 // page can say what share of installs used something, and crash rates per
 // version. No raw batches and no IPs are kept; install ids are stored hashed.
 // Only totals are ever shown.
+//
+// Against spam, since anyone can post here: release builds sign batches with a
+// key of their version (verify_signature), each sender (an IP, as a hash with
+// a salt that changes every day) gets a few installs a day and a few batches a
+// minute (rate_limit), and one install can add only so much to a counter in a
+// day (daily_cap). None of this proves a batch came from cmd, whose key is in
+// the app; it keeps one sender from skewing the totals much.
 
 declare(strict_types=1);
 
@@ -14,6 +21,13 @@ const WINDOW_KINDS = ['terminal', 'browser', 'files', 'text', 'markdown', 'magic
 const AGENT_KINDS = ['claude', 'codex', 'gemini', 'opencode', 'qwen', 'copilot', 'other'];
 /** CrashProcess in packages/protocol/src/log.ts. */
 const CRASH_PROCESSES = ['core', 'ptyhost', 'main', 'renderer', 'gpu', 'utility', 'native'];
+/** Versions from before signing (≤ this) may send unsigned until UNSIGNED_UNTIL (UTC day). */
+const LAST_UNSIGNED = '0.10.1';
+const UNSIGNED_UNTIL = '2026-10-19';
+/** Installs one sender may report in a day (one person, a household, an office behind one IP). */
+const IDS_PER_SENDER_PER_DAY = 10;
+/** Batches one sender may send in a minute (an app sends one). */
+const BATCHES_PER_SENDER_PER_MINUTE = 20;
 
 function data_dir(): string
 {
@@ -36,6 +50,10 @@ function db(): PDO
         day TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, n INTEGER NOT NULL,
         PRIMARY KEY (day, id, name))');
     $pdo->exec('CREATE INDEX IF NOT EXISTS counts_name ON counts (name, day)');
+    // Rate limiting, today's rows only (rate_limit).
+    $pdo->exec('CREATE TABLE IF NOT EXISTS rate_salt (day TEXT PRIMARY KEY, salt TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE IF NOT EXISTS rate_ids (day TEXT NOT NULL, sender TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (day, sender, id))');
+    $pdo->exec('CREATE TABLE IF NOT EXISTS rate_batches (minute INTEGER NOT NULL, sender TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (minute, sender))');
     return $pdo;
 }
 
@@ -66,6 +84,82 @@ function parse_batch(mixed $b): ?array
     return ['id' => substr(hash('sha256', strtolower($id)), 0, 24), 'version' => $version, 'os' => $os, 'arch' => $arch, 'counts' => $counts];
 }
 
+/** The secret release keys are derived from (`usage-secret` in the data dir); null: signatures aren't checked (local testing). */
+function usage_secret(): ?string
+{
+    $f = data_dir() . '/usage-secret';
+    $s = is_file($f) ? trim((string) file_get_contents($f)) : '';
+    return $s === '' ? null : $s;
+}
+
+/**
+ * Whether a batch may be recorded: signed with the key of the version it claims
+ * (as electron.vite.config.ts derives it), or unsigned from a version before
+ * signing, for a while.
+ */
+function verify_signature(string $body, mixed $version, ?string $signature, string $day): bool
+{
+    $secret = usage_secret();
+    if ($secret === null) return true;
+    if (!is_string($version)) return false;
+    if ($signature === null || $signature === '') {
+        return $day <= UNSIGNED_UNTIL && !str_contains($version, '-') && preg_match('/^\d+\.\d+\.\d+$/', $version)
+            && version_compare($version, LAST_UNSIGNED, '<=');
+    }
+    $key = hash_hmac('sha256', "cmd-usage:$version", $secret);
+    return hash_equals(hash_hmac('sha256', $body, $key), strtolower($signature));
+}
+
+/** The sender as a hash of its IPv4 address or IPv6 /64, with a salt of the day: the same sender today, unrecognisable tomorrow. */
+function sender_hash(string $ip, string $day): string
+{
+    $pdo = db();
+    $pdo->prepare('INSERT OR IGNORE INTO rate_salt (day, salt) VALUES (?, ?)')->execute([$day, bin2hex(random_bytes(16))]);
+    $st = $pdo->prepare('SELECT salt FROM rate_salt WHERE day = ?');
+    $st->execute([$day]);
+    $bin = @inet_pton($ip);
+    $net = $bin === false ? $ip : (strlen($bin) === 16 ? substr($bin, 0, 8) : $bin);
+    return substr(hash_hmac('sha256', $net, (string) $st->fetchColumn()), 0, 24);
+}
+
+/** Null when the sender may send this batch, else seconds to wait (Retry-After). Forgets everything from before today. */
+function rate_limit(string $ip, string $id, int $now): ?int
+{
+    $pdo = db();
+    $day = gmdate('Y-m-d', $now);
+    $minute = intdiv($now, 60);
+    $pdo->prepare('DELETE FROM rate_salt WHERE day < ?')->execute([$day]);
+    $pdo->prepare('DELETE FROM rate_ids WHERE day < ?')->execute([$day]);
+    $pdo->prepare('DELETE FROM rate_batches WHERE minute < ?')->execute([$minute]);
+    $sender = sender_hash($ip, $day);
+
+    $pdo->prepare('INSERT INTO rate_batches (minute, sender, n) VALUES (?, ?, 1) ON CONFLICT (minute, sender) DO UPDATE SET n = n + 1')->execute([$minute, $sender]);
+    $st = $pdo->prepare('SELECT n FROM rate_batches WHERE minute = ? AND sender = ?');
+    $st->execute([$minute, $sender]);
+    if ((int) $st->fetchColumn() > BATCHES_PER_SENDER_PER_MINUTE) return 60;
+
+    $st = $pdo->prepare('SELECT 1 FROM rate_ids WHERE day = ? AND sender = ? AND id = ?');
+    $st->execute([$day, $sender, $id]);
+    if ($st->fetchColumn()) return null;
+    $st = $pdo->prepare('SELECT COUNT(*) FROM rate_ids WHERE day = ? AND sender = ?');
+    $st->execute([$day, $sender]);
+    if ((int) $st->fetchColumn() >= IDS_PER_SENDER_PER_DAY) return 86400 - $now % 86400; // until the next UTC day
+    $pdo->prepare('INSERT INTO rate_ids (day, sender, id) VALUES (?, ?, ?)')->execute([$day, $sender, $id]);
+    return null;
+}
+
+/** The most one install can add to a counter in a day, so one sender can't skew a total much. */
+function daily_cap(string $name): int
+{
+    return match (true) {
+        $name === 'app.launch' => 50,
+        $name === 'error' => 200,
+        str_starts_with($name, 'crash.') => 50,
+        str_starts_with($name, 'agent.') => 300,
+        default => 500, // windows
+    };
+}
+
 function record_batch(array $b, string $day): void
 {
     $pdo = db();
@@ -75,8 +169,11 @@ function record_batch(array $b, string $day): void
             ON CONFLICT (day, id) DO UPDATE SET version = excluded.version, os = excluded.os, arch = excluded.arch')
             ->execute([$day, $b['id'], $b['version'], $b['os'], $b['arch']]);
         $add = $pdo->prepare('INSERT INTO counts (day, id, name, n) VALUES (?, ?, ?, ?)
-            ON CONFLICT (day, id, name) DO UPDATE SET n = n + excluded.n');
-        foreach ($b['counts'] as $name => $n) $add->execute([$day, $b['id'], $name, $n]);
+            ON CONFLICT (day, id, name) DO UPDATE SET n = MIN(n + excluded.n, CAST(? AS INTEGER))');
+        foreach ($b['counts'] as $name => $n) {
+            $cap = daily_cap($name);
+            $add->execute([$day, $b['id'], $name, min($n, $cap), $cap]);
+        }
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();

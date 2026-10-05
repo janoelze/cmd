@@ -20,6 +20,9 @@ import type { TermBackend } from "./terminals/types.ts";
 // The packaged app runs the core as `Electron` with ELECTRON_RUN_AS_NODE; don't
 // pass that on to shells, or every Electron app started from a pane runs as Node.
 delete process.env.ELECTRON_RUN_AS_NODE;
+// The app's usage stats key: for this core only, not its shells.
+const usageKey = process.env.CMD_USAGE_KEY || null;
+delete process.env.CMD_USAGE_KEY;
 
 // Started from a pane, the core must not take over that pane's core socket or
 // hand its agent ids on to its own shells.
@@ -89,6 +92,7 @@ const core = new Core({
   stateDir: home,
   // Release builds started by the app; anything else only when asked to. "off": never (CI, e2e).
   usageUrl: process.env.CMD_USAGE_URL === "off" ? null : process.env.CMD_USAGE_URL || (instanceName() === "release" && process.env.CMD_APP_VERSION ? USAGE_URL : null),
+  usageKey,
 });
 
 core.restore();

@@ -1,7 +1,12 @@
 <?php
 // POST endpoint for the app's usage batches (packages/core/src/usage.ts). Takes
-// JSON, keeps only known counter names (lib/db.php) and answers 204. The
-// sender's IP isn't read or stored.
+// JSON, keeps only known counter names (_lib/db.php) and answers 204. The
+// sender's IP is only used as a hash with a daily salt, for rate limits, and
+// forgotten the next day.
+//
+// Answers: 400 not a batch, 401 not signed with its version's key (the app
+// drops it), 429 with Retry-After for a sender over its limits (the app waits
+// and keeps its counts).
 //
 // Switches, as files in the data dir: `pause` (its content: seconds, default
 // 3600) answers 429 with Retry-After, so apps wait that long; `stop` answers
@@ -25,14 +30,28 @@ if (is_file(data_dir() . '/pause')) {
     header('Retry-After: ' . ($seconds > 0 ? $seconds : 3600));
     exit;
 }
-$body = file_get_contents('php://input', false, null, 0, 8192);
-$batch = parse_batch(json_decode($body ?: '', true));
+$body = (string) file_get_contents('php://input', false, null, 0, 8192);
+$raw = json_decode($body, true);
+$batch = parse_batch($raw);
 if (!$batch) {
     http_response_code(400);
     exit;
 }
+$now = time();
+$day = gmdate('Y-m-d', $now);
+if (!verify_signature($body, $raw['version'] ?? null, $_SERVER['HTTP_X_CMD_SIGNATURE'] ?? null, $day)) {
+    http_response_code(401);
+    exit;
+}
 try {
-    record_batch($batch, gmdate('Y-m-d'));
+    // REMOTE_ADDR: Uberspace's proxy sets it to the client; X-Forwarded-For is the client's to fake.
+    $wait = rate_limit($_SERVER['REMOTE_ADDR'] ?? '', $batch['id'], $now);
+    if ($wait !== null) {
+        http_response_code(429);
+        header("Retry-After: $wait");
+        exit;
+    }
+    record_batch($batch, $day);
 } catch (Throwable $e) {
     error_log('cmd usage: ' . $e->getMessage());
     http_response_code(503);
