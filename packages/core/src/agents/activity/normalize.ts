@@ -139,7 +139,8 @@ function textOf(kind: ActivityKind, p: Payload): string | undefined {
     case "ask":
       return str(p.message) ?? (str(p.tool_name) ? `Allow ${str(p.tool_name)}?` : undefined);
     case "fail":
-      return str(p.error) ?? str(p.error_details) ?? str(p.message);
+      // Claude: error is a code ("rate_limit"), last_assistant_message what the user saw.
+      return str(p.last_assistant_message) ?? str(p.error_details) ?? str(p.message) ?? str(p.error);
     case "subagent.start":
       return str(p.agent_type);
     default:

@@ -319,6 +319,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (r.lastPrompt) fields.lastPrompt = r.lastPrompt;
     if (r.cause && change.state) fields.stateCause = r.cause;
     if (red.model && red.model !== agent.model) fields.model = red.model;
+    // A turn that ended with this event, when another one began with it, is saved too.
+    if (r.closed && r.closed !== r.turn) this.activity.saveTurn(r.closed, ev.id);
     if (r.turn) {
       this.activity.saveTurn(r.turn, ev.id);
       fields.turn = structuredClone(r.turn);

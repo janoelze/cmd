@@ -121,3 +121,18 @@ From [18-agent-activity.md](18-agent-activity.md), to confirm or close with real
 - Codex interactive sessions (approvals, Esc) and Gemini aren't recorded at all yet.
 - Attribution with several agents in one repository is per folder.
 - The spool grows without bound while the core is down.
+
+## Findings
+
+### 2026-10-05, first look (6.5 hours, cmd 0.11.0)
+
+490 events, 8 sessions, 29 turns, all Claude Code 2.1.289 (no Codex yet). No anomalies, no inferred interrupts.
+
+- **Prompts typed while an agent works are common and steer the same turn.** 13 of 29 turns stayed `working`: in most, the next UserPromptSubmit arrived seconds after a tool call, sometimes with one still running, and the agent went on and finished with one Stop. The 0.11.0 rule ended the turn as `interrupted` there. Fixed in `TURN_FORMAT` 2: a prompt during an open turn is a follow-up (`AgentTurn.followUps`); only a new session, the quiet rule or Claude's idle prompt end an unanswered turn. An Esc followed by a new prompt within 30 s now merges into one turn too; whether that matters is for the full review.
+- **A turn ended by the event that started the next one wasn't saved in its final state** (the database kept it as `working`). Fixed.
+- **Claude runs helper agents after a Stop without a SubagentStart** (`agent_type` empty), about 2 s later, on most turns. Their text is a suggested next prompt or a recap of the session. They were ignored; now they're kept as `AgentTurn.notes` and don't count as subagents. A recap Claude writes anyway is a free summary for notifications.
+- **A failed request's text** is what the user saw ("You've hit your weekly limit · resets …"), the code is in `error` ("rate_limit"). Turns now show the message.
+- **SessionStart has no config dir** for sessions in the default `~/.claude` (no variable set): expected; coverage counts it as missing.
+- Fixtures cut from these sessions, text replaced: `claude-2.1.289/interactive-followups`, `helper-note`, `rate-limit`.
+
+Turns recorded by 0.11.0 keep `format: 1`; their raw events re-derive under format 2.

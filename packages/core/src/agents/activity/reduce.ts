@@ -12,6 +12,8 @@ export const QUIET_MS = 30_000;
 /** The same while a tool call is in flight (long commands can be silent). */
 export const QUIET_TOOL_MS = 5 * 60_000;
 const MAX_COMMANDS = 10;
+const MAX_FOLLOWUPS = 10;
+const MAX_TEXT = 2000;
 
 export interface Reduction {
   change: StateChange;
@@ -50,6 +52,8 @@ export function newTurn(agentId: AgentId, index: number, at: number, ev?: Activi
     endedAt: null,
     prompt: null,
     auto: false,
+    followUps: [],
+    notes: [],
     background: [],
     outcome: "working",
     ask: null,
@@ -76,6 +80,8 @@ export class ActivityReducer {
   #next: number;
   /** Tool calls started and not ended: id (or name) → start time, and → tool name. */
   #open = new Map<string, number>();
+  /** Subagents announced by subagent.start and not stopped yet. */
+  #subagents = new Set<string>();
   #openNames = new Map<string, string>();
 
   /** The agent and who derives: kept with every turn. The agent's version can arrive later (setVersion). */
@@ -121,7 +127,17 @@ export class ActivityReducer {
         if (!this.open) this.#state(r, { state: "idle", detail: null }, cause);
         break;
       case "prompt": {
-        if (this.open) this.#close(r, ev.at, "interrupted", "a new prompt before the turn ended");
+        // Typed while the agent works: it steers the same turn (Claude takes it in mid-turn and goes on).
+        if (this.open) {
+          const t = this.turn!;
+          if (ev.text) t.followUps = [...t.followUps, ev.text.length > MAX_TEXT ? ev.text.slice(0, MAX_TEXT - 1) + "…" : ev.text].slice(-MAX_FOLLOWUPS);
+          if (t.outcome === "waiting") t.outcome = "working";
+          t.events++;
+          r.turn = t;
+          this.#state(r, { state: "working", detail: null }, cause);
+          if (ev.text && !ev.auto) r.lastPrompt = line1(ev.text);
+          break;
+        }
         const t = this.#openTurn(r, ev);
         t.prompt = ev.text ?? null;
         t.auto = !!ev.auto;
@@ -200,6 +216,7 @@ export class ActivityReducer {
         if (this.open) this.#state(r, { state: "working" }, cause);
         break;
       case "subagent.start":
+        if (ev.subagent) this.#subagents.add(ev.subagent);
         if (this.open) {
           this.turn!.subagents++;
           r.turn = this.turn!;
@@ -207,7 +224,18 @@ export class ActivityReducer {
         if (ev.subagent) r.change.subagent = { op: "start", id: ev.subagent, type: ev.text };
         break;
       case "subagent.stop":
-        if (ev.subagent) r.change.subagent = { op: "stop", id: ev.subagent, lastMessage: ev.text };
+        // One that never started is a helper of the agent's own (Claude's next-prompt suggestions, recaps): a note on the turn, not a child.
+        if (ev.subagent && !this.#subagents.has(ev.subagent)) {
+          if (ev.text && this.turn) {
+            this.turn.notes = [...this.turn.notes, ev.text.length > MAX_TEXT ? ev.text.slice(0, MAX_TEXT - 1) + "…" : ev.text].slice(-MAX_FOLLOWUPS);
+            r.turn = this.turn;
+          }
+          break;
+        }
+        if (ev.subagent) {
+          this.#subagents.delete(ev.subagent);
+          r.change.subagent = { op: "stop", id: ev.subagent, lastMessage: ev.text };
+        }
         break;
       case "session.end":
         if (this.open) this.#close(r, ev.at, "interrupted", "session ended before the turn did");

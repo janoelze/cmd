@@ -95,6 +95,51 @@ describe("normalize (Claude Code 2.1.289, recorded)", () => {
   });
 });
 
+describe("real interactive use (Claude Code 2.1.289, cut from the author's sessions, text replaced)", () => {
+  it("keeps prompts typed while the agent works in the same turn", () => {
+    const { red, out } = replay(fixture("claude-2.1.289/interactive-followups.jsonl"));
+    const closed = out.filter((o) => o.r.closed).map((o) => o.r.closed!);
+    // Six prompts, two Stops: two turns, each with its follow-up, both done.
+    expect(closed.map((t) => [t.index, t.outcome, t.followUps.length])).toEqual([
+      [0, "done", 1],
+      [1, "done", 1],
+    ]);
+    expect(red.turn!.inferred).toEqual([]);
+  });
+
+  it("keeps what Claude's helpers write after a Stop as notes, not subagents", () => {
+    const { red, out } = replay(fixture("claude-2.1.289/helper-note.jsonl"));
+    expect(out.some((o) => o.r.change.subagent)).toBe(false);
+    const first = out.find((o) => o.r.closed)!.r.closed!;
+    expect(first.notes).toHaveLength(1);
+    expect(first.subagents).toBe(0);
+    expect(red.turn!.index).toBe(1); // the next prompt came after the Stop: a new turn
+  });
+
+  it("shows what the user saw when a request fails, not the error code", () => {
+    const { red } = replay(fixture("claude-2.1.289/rate-limit.jsonl"));
+    expect(red.turn).toMatchObject({ outcome: "failed" });
+    expect(red.turn!.error).toMatch(/^<message/); // last_assistant_message (replaced), not "rate_limit"
+  });
+});
+
+describe("tracker: turns that end as another begins", () => {
+  it("saves the ended turn in its final state", () => {
+    const f = fakeFactory();
+    const panes = new PaneManager(f.factory, { socketPath: "/tmp/t.sock", pollMs: 0 });
+    const activity = new ActivityLog();
+    const agents = new AgentTracker(panes, { activity });
+    const pane = panes.create();
+    const a = agents.ingestHook(pane.id, "claude", "UserPromptSubmit", { session_id: "s1", prompt: "one" })!;
+    // One event ends a turn and starts the next: a prompt in a new session (no SessionStart seen in between).
+    agents.ingestHook(pane.id, "claude", "UserPromptSubmit", { session_id: "s2", prompt: "two" });
+    expect(activity.turns(a.id).map((t) => [t.index, t.outcome])).toEqual([
+      [0, "interrupted"],
+      [1, "working"],
+    ]);
+  });
+});
+
 describe("normalize and reduce (Codex 0.144.5, recorded)", () => {
   it("reads its patch (in tool_input.command) as file edits, not a shell command", () => {
     const evs = fixture("codex-0.144.5/edit-and-bash.jsonl").map((r, i) => normalize(r, i));
@@ -197,13 +242,16 @@ describe("reduce", () => {
     expect(red.tick(10 * 60_000, 0)).toBeNull();
   });
 
-  it("closes an open turn as interrupted when a new prompt or session arrives", () => {
+  it("takes a prompt sent while the agent works as a follow-up in the same turn; a new session ends it", () => {
     const red = new ActivityReducer("a1");
     red.apply(ev("prompt", 0, { text: "one" }));
+    red.apply(ev("ask", 5, { text: "Allow?" }));
     const r = red.apply(ev("prompt", 10, { text: "two" }));
-    expect(r.closed).toMatchObject({ index: 0, outcome: "interrupted", inferred: ["a new prompt before the turn ended"] });
+    expect(r.closed).toBeUndefined();
+    expect(r.lastPrompt).toBe("two");
+    expect(red.turn).toMatchObject({ index: 0, outcome: "working", prompt: "one", followUps: ["two"] });
     const r2 = red.apply(ev("session.start", 20, { sessionId: "s2" }));
-    expect(r2.closed).toMatchObject({ index: 1, outcome: "interrupted" });
+    expect(r2.closed).toMatchObject({ index: 0, outcome: "interrupted", inferred: ["new session before the turn ended"] });
     expect(red.sessionId).toBe("s2");
   });
 

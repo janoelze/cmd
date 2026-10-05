@@ -14,7 +14,7 @@ import type { AgentId, AgentKind, PaneId } from "./model.ts";
  * - EXPORT_FORMAT: `cmd agents export` files (ActivityExportHeader.version).
  */
 export const ACTIVITY_SCHEMA = 1;
-export const TURN_FORMAT = 1;
+export const TURN_FORMAT = 2;
 export const HOOK_FORMAT = 2;
 export const EXPORT_FORMAT = 1;
 
@@ -142,6 +142,16 @@ export interface AgentTurn {
   prompt: string | null;
   /** The prompt came from the agent itself (a background task finished), not the user. */
   auto: boolean;
+  /**
+   * Prompts sent while it ran (format 2): typing while an agent works steers the
+   * same turn, it doesn't end it.
+   */
+  followUps: string[];
+  /**
+   * What the agent's own helpers wrote after it (format 2): Claude runs unannounced
+   * helper agents after a Stop that suggest a next prompt or recap the session.
+   */
+  notes: string[];
   /** At its end, work still running in the background (a later auto turn picks it up). */
   background: string[];
   outcome: TurnOutcome;
