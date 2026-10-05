@@ -75,6 +75,8 @@ export const COMMANDS = spec([
   { id: "window.dockLeft", label: "Move to Left Sidebar" },
   { id: "window.dockRight", label: "Move to Right Sidebar" },
   { id: "window.undock", label: "Move to Workspace" },
+  // A fixed size for consistent screenshots (marketing site).
+  { id: "window.screenshotSize", label: "Resize to 1500 × 900" },
   { id: "view.zoomIn", label: "Bigger", keys: ["Cmd+Plus", "Cmd+="] },
   { id: "view.zoomOut", label: "Smaller", keys: ["Cmd+-"] },
   { id: "view.zoomReset", label: "Actual Size", keys: ["Cmd+0"] },

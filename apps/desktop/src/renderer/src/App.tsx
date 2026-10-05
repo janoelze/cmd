@@ -425,6 +425,7 @@ export function App() {
     "window.dockLeft": () => selected && setDocks((d) => dock(d, selected, "left")),
     "window.dockRight": () => selected && setDocks((d) => dock(d, selected, "right")),
     "window.undock": () => selected && setDocks((d) => undock(d, selected)),
+    "window.screenshotSize": () => cmd.setWindowSize(1500, 900),
     // A window that zooms its own content (a PDF) takes ⌘+ ⌘− ⌘0 while selected.
     "view.zoomIn": () => (windowActions(selected)?.zoom ? windowActions(selected)!.zoom!(1) : setZoom((z) => Math.min(24, z + 1))),
     "view.zoomOut": () => (windowActions(selected)?.zoom ? windowActions(selected)!.zoom!(-1) : setZoom((z) => Math.max(-6, z - 1))),

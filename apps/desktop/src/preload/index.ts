@@ -123,6 +123,8 @@ const api = {
   /** Settings → Updates & About. */
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke("app-info"),
   restartCore: (): Promise<void> => ipcRenderer.invoke("restart-core"),
+  /** Resize this window's content area (Window → Resize to 1500 × 900). */
+  setWindowSize: (width: number, height: number) => ipcRenderer.send("set-window-size", width, height),
   revealPath: (p: string) => ipcRenderer.send("reveal-path", p),
   /** Move a file or folder to the Trash (Finder's Put Back works). */
   trashPath: (p: string): Promise<void> => ipcRenderer.invoke("trash-path", p),
