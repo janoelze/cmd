@@ -62,8 +62,9 @@ export class ActivityReducer {
   /** Events up to this id are already in `turn` (it was saved with them; see ActivityLog.lastTurn). */
   replayedTo = 0;
   #next: number;
-  /** Tool calls started and not ended: id (or name) → start time. */
+  /** Tool calls started and not ended: id (or name) → start time, and → tool name. */
   #open = new Map<string, number>();
+  #openNames = new Map<string, string>();
 
   constructor(agentId: AgentId, nextIndex = 0) {
     this.agentId = agentId;
@@ -115,6 +116,7 @@ export class ActivityReducer {
         if (t.outcome === "waiting") t.outcome = "working";
         if (ev.tool) {
           this.#open.set(ev.tool.id ?? ev.tool.name, ev.at);
+          this.#openNames.set(ev.tool.id ?? ev.tool.name, ev.tool.name);
           const row = t.tools.find((x) => x.name === ev.tool!.name);
           if (row) row.count++;
           else t.tools.push({ name: ev.tool.name, count: 1, failed: 0 });
@@ -131,7 +133,9 @@ export class ActivityReducer {
         if (t.outcome === "waiting") t.outcome = "working";
         if (ev.tool) {
           const key = ev.tool.id ?? ev.tool.name;
-          if (!this.#open.delete(key)) this.#open.delete(ev.tool.name);
+          const k = this.#open.has(key) ? key : ev.tool.name;
+          this.#open.delete(k);
+          this.#openNames.delete(k);
           let row = t.tools.find((x) => x.name === ev.tool!.name);
           if (!row) t.tools.push((row = { name: ev.tool.name, count: 1, failed: 0 }));
           if (ev.tool.ok === false) row.failed++;
@@ -205,6 +209,7 @@ export class ActivityReducer {
     if (now - since < quiet) return null;
     const r: Reduction = { change: {} };
     this.#open.clear();
+    this.#openNames.clear();
     this.#close(r, since, "interrupted", `quiet for ${Math.round(quiet / 1000)} s with no answer`);
     this.#state(r, { state: "idle", detail: null }, `inferred: quiet for ${Math.round(quiet / 1000)} s`);
     return r;
@@ -212,6 +217,7 @@ export class ActivityReducer {
 
   #openTurn(r: Reduction, ev: ActivityEvent): AgentTurn {
     this.#open.clear();
+    this.#openNames.clear();
     this.turn = newTurn(this.agentId, this.#next++, ev.at, ev);
     if (!this.turn.sessionId) this.turn.sessionId = this.sessionId;
     r.opened = this.turn;
@@ -234,7 +240,16 @@ export class ActivityReducer {
     t.endedAt = at;
     t.outcome = outcome;
     if (inferred) t.inferred.push(inferred);
+    // Calls that never reported back by the turn's end didn't complete (denied, or failed without saying: Codex's apply_patch).
+    if (this.#open.size && outcome !== "interrupted") {
+      for (const name of this.#openNames.values()) {
+        const row = t.tools.find((x) => x.name === name);
+        if (row) row.failed++;
+      }
+      t.inferred.push(`${this.#open.size} tool call${this.#open.size > 1 ? "s" : ""} never finished`);
+    }
     this.#open.clear();
+    this.#openNames.clear();
     r.closed = t;
     r.turn = t;
   }

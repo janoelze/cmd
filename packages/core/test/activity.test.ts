@@ -93,6 +93,45 @@ describe("normalize (Claude Code 2.1.289, recorded)", () => {
   });
 });
 
+describe("normalize and reduce (Codex 0.144.5, recorded)", () => {
+  it("reads its patch (in tool_input.command) as file edits, not a shell command", () => {
+    const evs = fixture("codex-0.144.5/edit-and-bash.jsonl").map((r, i) => normalize(r, i));
+    expect(evs.map((e) => e.kind)).toEqual(["session.start", "prompt", "tool.start", "tool.end", "tool.start", "tool.end", "tool.start", "tool.end", "stop"]);
+    const patch = evs.find((e) => e.kind === "tool.end" && e.tool?.name === "apply_patch")!;
+    expect(patch.tool).toMatchObject({ label: "Editing calc.py", paths: ["/work/repo/calc.py"], ok: true });
+    expect(patch.tool!.command).toBeUndefined();
+    expect(patch.tool!.writes).toBeUndefined();
+    expect(evs.filter((e) => e.kind === "tool.start" && e.tool?.name === "Bash").map((e) => e.tool!.writes)).toEqual([undefined, "redirect"]);
+    expect(evs[0]).toMatchObject({ agent: "codex", home: "/Users/me/.codex-alt", sessionId: expect.any(String) });
+    expect(new Set(evs.slice(1).map((e) => e.turnId)).size).toBe(1);
+  });
+
+  it("turns a session into one turn like Claude's", () => {
+    const { red, states } = replay(fixture("codex-0.144.5/edit-and-bash.jsonl"));
+    expect(states.at(-1)).toBe("done");
+    expect(red.turn).toMatchObject({ outcome: "done", inferred: [], shellWrites: 1, files: [{ path: "/work/repo/calc.py", via: ["tool"] }], final: expect.stringMatching(/verified the result is `5`/) });
+    expect(red.turn!.tools).toEqual([
+      { name: "Bash", count: 2, failed: 0 },
+      { name: "apply_patch", count: 1, failed: 0 },
+    ]);
+  });
+
+  it("counts a call that never reported back as failed (a failed patch sends no PostToolUse)", () => {
+    const { red } = replay(fixture("codex-0.144.5/failing-tools.jsonl"));
+    // The shell command exited 3, but Codex's PostToolUse only carries its output: not detectable.
+    expect(red.turn!.tools).toEqual([
+      { name: "Bash", count: 1, failed: 0 },
+      { name: "apply_patch", count: 1, failed: 1 },
+    ]);
+    expect(red.turn).toMatchObject({ outcome: "done", inferred: ["1 tool call never finished"], files: [] });
+  });
+
+  it("reads a failed patch's exit code when Codex does report it", () => {
+    const ev = normalize({ at: 1, agent: "codex", name: "PostToolUse", payload: { hook_event_name: "PostToolUse", tool_name: "apply_patch", tool_input: { command: "*** Begin Patch\n*** Update File: a.py\n*** End Patch" }, tool_response: "Exit code: 1\nOutput:\nfailed" } });
+    expect(ev.tool).toMatchObject({ ok: false, paths: ["a.py"] });
+  });
+});
+
 describe("reduce", () => {
   it("turns a session into state and one turn, from what the agent said", () => {
     const { red, states, out } = replay(fixture("claude-2.1.289/edit-and-bash.jsonl"));
@@ -112,7 +151,8 @@ describe("reduce", () => {
   it("records what a waiting agent asked for", () => {
     const { red, states } = replay(fixture("claude-2.1.289/permission-denied.jsonl"));
     expect(states).toEqual(["idle", "working", "working", "needs_input", "done"]);
-    expect(red.turn).toMatchObject({ outcome: "done", ask: { message: "Allow Bash?", tool: "Bash", input: "rm NOTES.md" } });
+    expect(red.turn).toMatchObject({ outcome: "done", ask: { message: "Allow Bash?", tool: "Bash", input: "rm NOTES.md" }, inferred: ["1 tool call never finished"] });
+    expect(red.turn!.tools).toEqual([{ name: "Bash", count: 1, failed: 1 }]); // denied
   });
 
   it("keeps a subagent's calls out of its parent's state and follows the turn its result starts", () => {
@@ -303,6 +343,8 @@ describe("git snapshots", () => {
     await new Promise((r) => setTimeout(r, 20));
     execFileSync("sed", ["-i", "", "s/a/A/", path.join(dir, "a.txt")]); // an edit through the shell
     fs.writeFileSync(path.join(dir, "new.txt"), "n\n");
+    fs.mkdirSync(path.join(dir, "__pycache__"));
+    fs.writeFileSync(path.join(dir, "__pycache__", "a.pyc"), "");
     fs.appendFileSync(path.join(dir, "dirty.txt"), "and again\n");
     fs.writeFileSync(path.join(dir, "b.txt"), "B\n");
     git("commit", "-qam", "during the turn"); // commits b.txt (and a.txt, dirty.txt)

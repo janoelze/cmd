@@ -1,6 +1,6 @@
 # Agent activity data
 
-> Status (2026-10-05): the data layer is built (branch `agent-activity`): spooled hook events, the activity log, normalising, state and turns, files changed per turn, agent homes, automatic hook installs, `cmd agents`. Not yet: the UI using turns (sidebar, Agent Activity widget, notifications beyond the final message), recorded Codex and Gemini fixtures, transcript tails for agents without hooks. Comes before the AI features in [17-ai.md](17-ai.md) ("First features on top"), which need this data to be worth anything.
+> Status (2026-10-05): the data layer is built (branch `agent-activity`): spooled hook events, the activity log, normalising, state and turns, files changed per turn, agent homes, automatic hook installs, `cmd agents`. Not yet: the UI using turns (sidebar, Agent Activity widget, notifications beyond the final message), recorded Gemini fixtures, transcript tails for agents without hooks. Comes before the AI features in [17-ai.md](17-ai.md) ("First features on top"), which need this data to be worth anything.
 
 cmd knew *that* an agent was working or finished, not *what* happened: its picture of an agent was the current state plus one line, rebuilt from whichever hook files were on disk, and the "done" notification's body was always empty. This is the layer that captures what agents do reliably — complete, ordered, attributable to a source, surviving restarts, the same shape for every agent — and the agent state derived from it. Features are listed at the end.
 
@@ -49,6 +49,15 @@ From the recorded sessions (Claude Code 2.1.289):
 - `PermissionRequest` has no `message`: the ask is the tool and its input ("Allow Bash?" + `rm NOTES.md`).
 - In `-p` runs a permission request is denied without a PostToolUse: an open tool call ends with the turn.
 
+From the recorded sessions (Codex 0.144.5, `codex exec`):
+
+- The same payload keys as Claude (`session_id`, `turn_id` on every event of a turn, `transcript_path`, `cwd`, `model`, `permission_mode`); its shell tool is called `Bash` too.
+- `apply_patch` puts the patch in `tool_input.command`. Patches are recognised by their body (`*** Begin Patch`) wherever they are, so they're read as file edits, not as a shell command.
+- `tool_response` is text. A shell call's is only its output: a command that exits 3 looks like one that succeeded. A failed patch sends no PostToolUse at all.
+- No `SessionEnd` from `codex exec`, no `duration_ms`.
+
+A tool call that hasn't reported back when its turn ends counts as failed (`inferred: "1 tool call never finished"`): Codex's failed patches, Claude's denied permissions.
+
 ## State and turns
 
 `reduce.ts` is a pure state machine per agent, fed events in order. What the agent says decides the state; every change records its cause (`Agent.stateCause`: "hook Stop", "inferred: quiet for 30 s"). Rules where it says nothing:
@@ -74,7 +83,7 @@ A survey of 484 recorded sessions on this Mac (454 Claude across 75 projects, 30
 So, per turn:
 
 1. **Git snapshots** at the turn's start and end (`git status` with each listed file's size and mtime, plus HEAD; read-only, no optional locks): a file counts if it's new to the list, changed on disk, left the list, or touched by a commit made during the turn. Sees every mechanism inside a repository.
-2. **A folder watch** (FSEvents, recursive) for the turn when the folder isn't a repository, leaving out `.git`, `node_modules`, build output; not for home or `/`.
+2. **A folder watch** (FSEvents, recursive) for the turn when the folder isn't a repository, leaving out `.git`, `node_modules`, build output; not for home or `/`. Untracked generated folders (`__pycache__`, an unignored `node_modules`) are left out of git's list too.
 3. **Tool paths** from Edit/Write/MultiEdit/NotebookEdit/`apply_patch`, failed calls left out: exact, and say the agent's own tools wrote them.
 4. **Shell writes are labelled, not parsed** (`ActivityTool.writes`: script, sed -i, redirect, tee, file command, git, formatter, download, install; shell syntax matched outside quotes).
 
@@ -106,10 +115,10 @@ The first time cmd writes an agent's config it keeps a copy next to it (`.cmd-ba
 
 ## Verifying
 
-- **Recorded sessions.** `test/fixtures/agents/claude-2.1.289/` holds three real sessions recorded through the new hook (`claude -p --settings <hooks>` in a scratch repository): edits through Edit and Bash, a denied permission, a background subagent. Tests replay them through normalize, reduce and the tracker (including a restart mid-session). `cmd agents record <agent> <file>` writes a fixture from the log, with the home and work dir rewritten; `test/fixtures/agents/record.ts` does the same from a spool folder. A new agent version is a new folder.
+- **Recorded sessions.** `test/fixtures/agents/claude-2.1.289/` holds three real sessions recorded through the new hook (`claude -p --settings <hooks> --setting-sources project` in a scratch repository): edits through Edit and Bash, a denied permission, a background subagent. `codex-0.144.5/` holds two (`codex exec --dangerously-bypass-hook-trust` with a scratch `CODEX_HOME` holding only the hook and a link to the login): a patch and shell edits, a failing command and patch. Tests replay them through normalize, reduce and the tracker (including a restart mid-session). `cmd agents record <agent> <file>` writes a fixture from the log, with the home and work dir rewritten; `test/fixtures/agents/record.ts` does the same from a spool folder. A new agent version is a new folder.
 - **`cmd agents events <agent> [--raw] [--follow]`**: every event as mapped, with causes and anomalies. First thing to look at when the sidebar says something wrong.
 - **`cmd agents coverage`**: what each agent's events actually carried (kinds, share of events with each field, unmapped event names, anomalies). Drift after an agent update shows here.
-- End to end: a real Claude session in a pane of a development core became one turn with both files it changed through a Python one-liner and `echo >>` (found by git), its final message and one shell write.
+- End to end: real Claude and Codex sessions in panes of a development core each became one turn with the files they changed through a Python one-liner or `echo >>` (found by git), the patched file (tool and git), the final message and the shell write.
 
 ## What this enables (separate work)
 
@@ -121,7 +130,8 @@ The first time cmd writes an agent's config it keeps a copy next to it (`.cmd-ba
 
 ## Open
 
-- **Codex and Gemini recordings.** Their adapters are tables built from documentation and Claude's shapes; record real sessions (`cmd agents record`) and add fixture folders.
+- **Gemini recordings.** Its adapter is a table built from documentation; record real sessions (`cmd agents record`) and add a fixture folder. Codex in an interactive session (permission requests, interrupts) isn't recorded yet either.
+- **Codex shell failures** are invisible in its hooks (no exit code); its transcript has them.
 - **Interrupt timing** in interactive sessions: 30 s quiet is a guess; check against recorded Esc-interrupts.
 - **Agents without hooks** (aider, amp, …): process + OSC + git only. A transcript tail (`TranscriptSource.tail`) or screen text could add prompts and answers.
 - **Spool growth** while the core is down for long: bounded only by how much agents do meanwhile.

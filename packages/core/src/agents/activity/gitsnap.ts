@@ -8,6 +8,7 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { IGNORE } from "./fswatch.ts";
 
 export interface GitSnapshot {
   top: string;
@@ -48,7 +49,10 @@ export async function snapshot(cwd: string): Promise<GitSnapshot | null> {
         break;
       }
       const xy = entry.slice(0, 2);
-      const abs = path.join(top, entry.slice(3).replace(/\/$/, ""));
+      const rel = entry.slice(3).replace(/\/$/, "");
+      // Untracked generated folders (__pycache__, node_modules without a .gitignore) aren't changes.
+      if (xy === "??" && IGNORE.test(rel)) continue;
+      const abs = path.join(top, rel);
       const change = xy === "??" ? "A" : (xy.trim()[0] ?? "M");
       files.set(abs, { change, stamp: stamp(abs) });
     }

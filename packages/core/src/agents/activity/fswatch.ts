@@ -8,7 +8,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const IGNORE = /(^|\/)(\.git|\.hg|node_modules|dist|build|out|target|\.next|\.cache|__pycache__|\.venv|venv|\.DS_Store)(\/|$)/;
+/** Generated and dependency folders: not what a turn "changed" (gitsnap.ts uses it too). */
+export const IGNORE = /(^|\/)(\.git|\.hg|node_modules|dist|build|out|target|\.next|\.cache|__pycache__|\.venv|venv|\.DS_Store)(\/|$)/;
 const MAX = 2000;
 
 export interface TurnWatch {

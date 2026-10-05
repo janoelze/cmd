@@ -79,6 +79,9 @@ export function shellWrites(command: string): string | undefined {
   return SHELL_WRITES.find(([re, , on]) => re.test(on === "unquoted" ? unquoted : command))?.[1];
 }
 
+/** A patch body (Codex's apply_patch: in tool_input.command since 0.144, input or patch before). */
+const PATCH = /^\*\*\* Begin Patch/m;
+
 /** Paths in an apply_patch body (Codex). */
 function patchPaths(patch: string): string[] {
   const out: string[] = [];
@@ -94,7 +97,14 @@ function toolOf(p: Payload, end: boolean, failed: boolean): ActivityTool | undef
   const tool: ActivityTool = { name, label: describeTool(name, input) };
   const id = str(p.tool_use_id) ?? str(p.call_id);
   if (id) tool.id = id;
-  const command = str(input.command) ?? str(input.cmd) ?? (Array.isArray(input.command) ? input.command.filter((c) => typeof c === "string").join(" ") : undefined);
+  // A patch is recognised by its body, wherever the agent puts it.
+  const patch = [input.patch, input.input, input.command, p.tool_input].map(str).find((v) => v && PATCH.test(v));
+  if (patch) {
+    const paths = [...new Set(patchPaths(patch))];
+    if (paths.length) tool.paths = paths;
+    tool.label = paths.length === 1 ? `Editing ${paths[0]!.split("/").pop()}` : paths.length ? `Editing ${paths.length} files` : "Editing files";
+  }
+  const command = patch ? undefined : (str(input.command) ?? str(input.cmd) ?? (Array.isArray(input.command) ? input.command.filter((c) => typeof c === "string").join(" ") : undefined));
   if (command) {
     tool.command = cap(line1(command), 200);
     const w = shellWrites(command);
@@ -102,13 +112,14 @@ function toolOf(p: Payload, end: boolean, failed: boolean): ActivityTool | undef
   }
   if (writes(name)) {
     const paths = [str(input.file_path), str(input.notebook_path), str(input.path), str(input.absolute_path)].filter((x): x is string => !!x);
-    const patch = str(input.patch) ?? str(input.input) ?? (typeof p.tool_input === "string" ? p.tool_input : undefined);
-    if (patch) paths.push(...patchPaths(patch));
-    if (paths.length) tool.paths = [...new Set(paths)];
+    if (paths.length) tool.paths = [...new Set([...(tool.paths ?? []), ...paths])];
   }
   if (end) {
     const r = obj(p.tool_response);
-    tool.ok = !(failed || r?.is_error === true || r?.success === false || (r && str(r.error) !== undefined) || r?.interrupted === true);
+    // Codex answers with text; apply_patch's starts with its exit code. Its shell calls don't say (a failed patch sends no PostToolUse at all).
+    const text = str(p.tool_response);
+    const exit = text ? Number(text.match(/^Exit code: (\d+)/)?.[1] ?? 0) : 0;
+    tool.ok = !(failed || exit !== 0 || r?.is_error === true || r?.success === false || (r && str(r.error) !== undefined) || r?.interrupted === true);
     const ms = typeof p.duration_ms === "number" ? p.duration_ms : undefined;
     if (ms !== undefined) tool.durationMs = ms;
   }
