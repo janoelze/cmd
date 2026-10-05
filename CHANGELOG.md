@@ -2,6 +2,16 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.14.3 — 2026-10-06
+
+### Improved
+
+- Settings descriptions are one short line each, with an info button on the few that need more.
+
+### Fixed
+
+- Number fields in Settings show their whole value next to the unit, like 10000 lines.
+
 ## 0.14.2 — 2026-10-06
 
 ### New
