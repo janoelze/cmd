@@ -1214,6 +1214,20 @@ await win.waitForTimeout(800);
   await menu("view.rightSidebar");
   await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
   await win.waitForTimeout(200);
+  // Canvas: one canvas under the sidebars; fitting keeps the windows between them.
+  await menu("view.canvas");
+  await win.waitForTimeout(400);
+  const stage = await win.locator(".main.windows").boundingBox();
+  const vw = await win.evaluate(() => window.innerWidth);
+  await menu("view.canvasFit");
+  await win.waitForTimeout(500);
+  const leftEdge = (await win.locator(".dock-left").boundingBox()).width;
+  const rightEdge = (await win.locator(".dock-right").boundingBox()).x;
+  const tiles = await win.locator(".windows-track > .tile").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => [r.left, r.right]));
+  check(stage.x === 0 && Math.abs(stage.width - vw) < 1 && tiles.every(([l, r]) => l >= leftEdge - 1 && r <= rightEdge + 1),
+    `the canvas spans the window under the sidebars, and Fit keeps windows between them (${stage.width} / ${vw})`);
+  await menu("view.grid");
+  await win.waitForTimeout(300);
   await menu("window.undock");
   await win.waitForSelector(`.windows-track > .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
   check((await win.locator(".dock-right").count()) === 0 && (await win.locator(".dock-left .navigator").count()) === 1, "Move to Workspace brings it back; the Navigator stays on the left");

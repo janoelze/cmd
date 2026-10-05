@@ -109,7 +109,7 @@ New in `layouts.ts`, also pure and tested: `dockRects(docks, vp, spacing, topBar
 
 - Workspace navigation (⌥⌘← / ⌥⌘→, ⌘[ / ⌘], ⌃⌘1–9) covers the workspace only. A sidebar is selected by clicking it, or later with a shortcut of its own (open question).
 - Focus mode: sidebars stay visible, and the one workspace window fills the space between them.
-- Canvas: the canvas ends at the sidebars. It doesn't run underneath them (open question).
+- Canvas: the canvas runs under the sidebars, which float over it; framing, revealing and the minimap use the area between them (decided 2026-10-05).
 
 ### Rendering: never remount a window
 
@@ -184,7 +184,6 @@ Merge the `windows` worktree first if it lands soon: it has uncommitted changes 
 - **Name.** "Navigator" (Xcode's left pane) or something plainer: "Sessions", "Overview"? This is a copywriting decision. Users will mostly just call it "the sidebar".
 - **One window per side, or a stack?** Proposed: one, for now. A vertical stack (Navigator above Live Diff) is the obvious next ask, and `Docks` can grow `ids: WindowId[]` without a migration headache.
 - **Should the Navigator list sidebars?** Proposed: no, they are always in view. But a hidden side's window would then be listed nowhere. List hidden ones?
-- **Canvas under sidebars?** Overlaying would feel more "floating on the canvas" but hides windows behind sidebars. Proposed: no.
 - **What goes on the top bar's right side**, and whether anything moves up from the footer: to try once the top bar exists.
 - **Keyboard focus for sidebars:** ⌃⌘← / ⌃⌘→ to focus the left or right sidebar?
 
@@ -197,3 +196,6 @@ Merge the `windows` worktree first if it lands soon: it has uncommitted changes 
 - **The Space switch slide** (store.ts `slideSidebar`) runs on the left sidebar's window body while it holds a Navigator: each Space has its own Navigator window, so the old list element no longer survives the switch.
 - **File browsers** drop their size and date columns below 420 px (a container query), so they work as a sidebar.
 - `view.sidebar` is Show Left Sidebar (⌃⌘S); `view.rightSidebar`, `window.dockLeft`, `window.dockRight` and `window.undock` are new, in the View and Window menus. An empty left side shown again gets a new Navigator.
+- **Canvas runs under the sidebars**: in canvas mode the workspace spans all three columns and the sidebars float over it (`.stage.canvas`). `WindowsView` gets the sidebars' widths as `insets` and works out Fit, Zoom to Window, reveal-on-select and the minimap for the area between them.
+- **Strip page dots are in the footer's centre** (portalled into `.statusbar-centre`), so strip windows are as tall as the sidebars and the other modes' windows.
+- **A sidebar's resize handle** covers its window's edge and the whole gap beside it.

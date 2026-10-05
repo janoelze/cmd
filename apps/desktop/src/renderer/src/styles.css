@@ -94,6 +94,9 @@ kbd {
 /* All in row 1: auto-placement would move an item whose column comes before the last one's to a new row. */
 .stage > * { grid-row: 1; }
 .stage > .main { grid-column: 2; }
+/* Canvas: one canvas under everything; the sidebars float over it. */
+.stage.canvas > .main { grid-column: 1 / -1; }
+.stage.canvas > .dock { z-index: 1; }
 .dock {
   position: relative;
   display: flex;
@@ -110,19 +113,20 @@ kbd {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 7px;
+  /* The window's edge and the whole gap beside it, so the edge itself can be grabbed. */
+  width: calc(var(--pad-x) + 4px);
   cursor: col-resize;
   touch-action: none;
   z-index: 6;
 }
-.dock-left .dock-resize { right: calc(-4px - var(--pad-x) / 2); }
-.dock-right .dock-resize { left: calc(-4px - var(--pad-x) / 2); }
+.dock-left .dock-resize { right: calc(-1 * var(--pad-x)); }
+.dock-right .dock-resize { left: calc(-1 * var(--pad-x)); }
 .dock-resize::after {
   content: "";
   position: absolute;
   top: var(--pad-y);
   bottom: var(--pad-y);
-  left: 3px;
+  left: calc(50% - 0.5px);
   width: 1px;
   background: transparent;
   transition: background 120ms 80ms;

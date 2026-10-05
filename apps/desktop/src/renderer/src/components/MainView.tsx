@@ -24,6 +24,8 @@ interface Props {
   camera: Camera;
   onCamera: (cam: Camera) => void;
   onDeselect: () => void;
+  /** Canvas: px the sidebars cover (WindowsView). */
+  insets: { left: number; right: number };
 }
 
 export function MainView({
@@ -42,6 +44,7 @@ export function MainView({
   camera,
   onCamera,
   onDeselect,
+  insets,
 }: Props) {
   countRender("MainView");
   // Every row that has a window: terminals and browser/file windows.
@@ -72,6 +75,7 @@ export function MainView({
       camera={camera}
       onCamera={onCamera}
       onDeselect={onDeselect}
+      insets={insets}
     />
   );
 }

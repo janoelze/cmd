@@ -732,7 +732,8 @@ export function App() {
     >
       <TopBar spaceBar={spaceBar} onNew={newMenu} />
       <NavigatorContext.Provider value={navigatorData}>
-        <div className="stage">
+        {/* Canvas: the canvas runs under the sidebars (docs/21-sidebars.md). */}
+        <div className={`stage${mode === "canvas" ? " canvas" : ""}`}>
           {SIDES.map((side) => {
             const row = docks[side].hidden ? undefined : allFlat.find((r) => windowIdOf(r) === docks[side].id);
             return row ? (
@@ -767,6 +768,7 @@ export function App() {
             onCamera={setCamera}
             onDeselect={deselect}
             onStripWidth={setStripWidth}
+            insets={widths}
           />
         </div>
       </NavigatorContext.Provider>

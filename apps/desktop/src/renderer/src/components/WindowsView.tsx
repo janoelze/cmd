@@ -102,6 +102,11 @@ interface Props {
   onCamera: (cam: Camera) => void;
   /** Canvas: a click on the background selects nothing. */
   onDeselect: () => void;
+  /**
+   * Canvas: px the sidebars cover at the left and right edges. The canvas runs
+   * under them; framing, revealing and the minimap use the area between.
+   */
+  insets: { left: number; right: number };
 }
 
 interface Drag {
@@ -196,8 +201,19 @@ export function WindowsView(p: Props) {
   const limRef = useRef(lim);
   limRef.current = lim;
   const zoomAt = (c: Camera, f: number, sx: number, sy: number) => zoomAtWith(c, f, sx, sy, limRef.current);
-  const frame = (r: Rect, vp: { w: number; h: number }, maxZoom: number) => frameWith(r, vp, maxZoom, limRef.current);
-  const reveal = (c: Camera, r: Rect, vp: { w: number; h: number }) => revealWith(c, r, vp, limRef.current);
+  // The canvas spans the sidebars too (docs/21-sidebars.md): cameras are worked out for
+  // the visible area between them, then moved back to the whole view's origin.
+  const insetRef = useRef(p.insets);
+  insetRef.current = mode === "canvas" ? p.insets : { left: 0, right: 0 };
+  const shown = (vp: { w: number; h: number }) => ({ w: Math.max(1, vp.w - insetRef.current.left - insetRef.current.right), h: vp.h });
+  const toShown = (c: Camera): Camera => ({ ...c, x: c.x + insetRef.current.left / c.zoom });
+  const fromShown = (c: Camera): Camera => ({ ...c, x: c.x - insetRef.current.left / c.zoom });
+  const frame = (r: Rect, vp: { w: number; h: number }, maxZoom: number) => fromShown(frameWith(r, shown(vp), maxZoom, limRef.current));
+  const reveal = (c: Camera, r: Rect, vp: { w: number; h: number }) => {
+    const from = toShown(c);
+    const to = revealWith(from, r, shown(vp), limRef.current);
+    return to === from ? c : fromShown(to);
+  };
   // Local state while it moves (no store round trip per frame); persisted when it pauses.
   const [cam, setCamState] = useState<Camera>(p.camera);
   const camRef = useRef(cam);
@@ -873,10 +889,11 @@ export function WindowsView(p: Props) {
       {canvas && cfg["canvas.minimap"] && vp.w > 0 && (
         <Minimap
           rects={lay.rects}
-          cam={cam}
-          vp={vp}
+          cam={toShown(cam)}
+          vp={shown(vp)}
+          right={insetRef.current.right}
           selected={selected}
-          onCenter={(x, y) => (stopCam(), setCam({ ...camRef.current, x: x - vp.w / 2 / z, y: y - vp.h / 2 / z }))}
+          onCenter={(x, y) => (stopCam(), setCam(fromShown({ ...camRef.current, x: x - shown(vp).w / 2 / z, y: y - vp.h / 2 / z })))}
         />
       )}
     </main>
@@ -899,6 +916,8 @@ function Minimap(p: {
   rects: Map<string, Rect>;
   cam: Camera;
   vp: { w: number; h: number };
+  /** px a right sidebar covers: the map sits left of it. */
+  right: number;
   selected: PaneId | null;
   onCenter: (x: number, y: number) => void;
 }) {
@@ -918,6 +937,7 @@ function Minimap(p: {
   return (
     <svg
       className="minimap"
+      style={p.right ? { right: p.right + 10 } : undefined}
       width={W}
       height={H}
       onPointerDown={(e) => {
