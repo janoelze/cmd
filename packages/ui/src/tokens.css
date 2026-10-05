@@ -82,7 +82,7 @@
   /* Text fields' edge: stronger than a button's, since the well is darker than the surface
      around it. Opaque (mixed over the field's own fill, which every theme sets as a solid
      colour), so where two edges meet, as in a joined SecretField, they don't add up darker. */
-  --field-edge: color-mix(in srgb, var(--ink) 18%, var(--field-bg));
+  --field-edge: color-mix(in srgb, var(--ink) 24%, var(--field-bg));
   --switch-off: color-mix(in srgb, var(--ink) 16%, transparent);
   --knob: #fff;
   /* Heights: every control in a row shares one, so they line up. */
