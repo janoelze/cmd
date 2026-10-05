@@ -142,13 +142,18 @@
 .ui-button-row[data-align="end"] { justify-content: flex-end; }
 .ui-button-row[data-align="between"] { justify-content: space-between; }
 /* Joined: one control. Inner corners square, one hairline between. */
-.ui-button-joined { display: inline-flex; border-radius: var(--radius); box-shadow: inset 0 0 0 1px var(--control-edge); }
+/* One outline drawn over the buttons (their translucent fill would tint it), and dividers
+   that stop 1px short of it: the edges are translucent (a button sits on any surface, so
+   they can't be premixed like a field's), and overlapping would draw darker dots. */
+.ui-button-joined { position: relative; display: inline-flex; border-radius: var(--radius); }
+.ui-button-joined::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--control-edge); pointer-events: none; }
 .ui-button-joined > .ui-button,
 .ui-button-joined > .ui-icon-button { border-radius: 0; box-shadow: none; }
 .ui-button-joined > .ui-icon-button[data-variant="default"] { box-shadow: none; }
 .ui-button-joined > :first-child { border-radius: var(--radius) 0 0 var(--radius); }
 .ui-button-joined > :last-child { border-radius: 0 var(--radius) var(--radius) 0; }
-.ui-button-joined > * + * { box-shadow: inset 1px 0 0 var(--control-edge) !important; }
+.ui-button-joined > * + * { position: relative; }
+.ui-button-joined > * + *::before { content: ""; position: absolute; left: 0; top: 1px; bottom: 1px; width: 1px; background: var(--control-edge); pointer-events: none; }
 .ui-button-joined > :focus-visible { position: relative; z-index: 1; box-shadow: var(--input-ring) !important; }
 
 /* ── switch, checkbox, radio ── */
@@ -217,7 +222,7 @@
   height: var(--h);
   padding: 2px;
   gap: 2px;
-  border-radius: calc(var(--radius) + 1px);
+  border-radius: var(--radius); /* as fields and buttons, so a form's controls share their corners */
   background: var(--control-bg);
   box-shadow: inset 0 0 0 1px var(--control-edge);
 }
@@ -236,7 +241,7 @@
   white-space: nowrap;
   background: none;
   border: 0;
-  border-radius: calc(var(--radius) - 1px);
+  border-radius: calc(var(--radius) - 2px); /* concentric inside the track's 2px padding */
   transition: color var(--dur-fast), background-color var(--dur-fast);
 }
 .ui-seg button:has(> .sf:only-child) { padding: 0 8px; }
@@ -358,7 +363,7 @@
 .ui-field-icon, .ui-field-end { flex: none; display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); }
 .ui-field-icon { margin-left: -2px; }
 .ui-field-end { margin-right: -4px; font-size: var(--text-sm); }
-.ui-search { border-radius: calc(var(--radius) + 1px); background: var(--input-bg); box-shadow: none; }
+.ui-search { border-radius: var(--radius); background: var(--input-bg); box-shadow: none; }
 .ui-search:focus-within { background: var(--field-bg); }
 .ui-clear {
   display: grid;
@@ -433,7 +438,7 @@
 .ui-secret[data-size="lg"] { --h: var(--control-h-lg); }
 .ui-secret[data-fill] { width: 100%; }
 /* Opaque edges here too (over --field-edge, itself opaque), so the outline and the dividers meet evenly. */
-.ui-secret:focus-within { --secret-edge: color-mix(in srgb, var(--accent) 50%, var(--field-edge)); box-shadow: 0 0 0 3px var(--input-glow); }
+.ui-secret:focus-within { --secret-edge: var(--input-focus-edge); box-shadow: 0 0 0 3px var(--input-glow); }
 .ui-secret:has(.ui-field[data-invalid]) { --secret-edge: color-mix(in srgb, var(--danger) 70%, var(--field-bg)); }
 .ui-secret:has(.ui-field[data-invalid]):focus-within { --secret-edge: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); }
 .ui-secret > .ui-field { flex: 0 1 auto; min-width: 0; background: transparent; box-shadow: none !important; }

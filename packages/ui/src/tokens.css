@@ -66,7 +66,7 @@
      takes some accent and a soft halo surrounds it, rather than a hard accent line. */
   --input-bg: color-mix(in srgb, var(--ink) 5%, transparent);
   --input-edge: color-mix(in srgb, var(--ink) 10%, transparent);
-  --input-focus-edge: color-mix(in srgb, var(--accent) 50%, var(--input-edge));
+  --input-focus-edge: color-mix(in srgb, var(--accent) 50%, var(--field-edge)); /* opaque, like the field edge it replaces */
   --input-glow: color-mix(in srgb, var(--accent) 20%, transparent);
   --input-ring: inset 0 0 0 1px var(--input-focus-edge), 0 0 0 3px var(--input-glow);
   --input-placeholder: var(--text-dim);
