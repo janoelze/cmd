@@ -248,7 +248,7 @@ export function parseYouTube(input: string): YouTubeRef | null {
 
 /**
  * A YouTube player filling the window. Created empty (the view asks for a link)
- * or with `input`. `fill`: the video covers the window, cropped, instead of being letterboxed.
+ * or with `input`. The video covers the window, cropped (the default), or with `fill: false` is letterboxed.
  */
 export const youtubeType: WindowType<YouTubeRef & { fill?: boolean }> = {
   kind: "youtube",
@@ -258,7 +258,7 @@ export const youtubeType: WindowType<YouTubeRef & { fill?: boolean }> = {
   description: "Paste a YouTube link, video id or embed code and watch it here.",
   create(input) {
     const raw = str(input.input);
-    const fill = input.fill === true ? { fill: true } : {};
+    const fill = input.fill === false ? { fill: false } : {};
     if (!raw) return { state: fill, title: "YouTube" };
     const ref = parseYouTube(raw);
     if (!ref) throw new Error(`not a YouTube link: ${raw}`);
@@ -266,7 +266,7 @@ export const youtubeType: WindowType<YouTubeRef & { fill?: boolean }> = {
   },
   update(state, patch) {
     const fill = typeof patch.fill === "boolean" ? patch.fill : state.fill;
-    const keep = fill ? { fill: true } : {};
+    const keep = fill === false ? { fill: false } : {};
     if (patch.input === null) return { state: keep, title: "YouTube" };
     const raw = str(patch.input);
     if (raw === undefined) return { state: { video: state.video, list: state.list, start: state.start, ...keep } };

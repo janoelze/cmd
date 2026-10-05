@@ -180,7 +180,7 @@ registerWindowView({
     return url
       ? [
           { label: "Change Video…", run: () => void cmd.call("window.update", { id: w.id, title: "YouTube", state: { input: null } }).catch(() => {}) },
-          { label: "Fill Window", checked: w.state.fill === true, run: () => void cmd.call("window.update", { id: w.id, state: { fill: w.state.fill !== true } }).catch(() => {}) },
+          { label: "Fill Window", checked: w.state.fill !== false, run: () => void cmd.call("window.update", { id: w.id, state: { fill: w.state.fill === false } }).catch(() => {}) },
           "-" as const,
           { label: "Open on YouTube", run: () => cmd.openPath(url) },
           { label: "Copy Link", run: () => copy(url) },

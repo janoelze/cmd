@@ -54,7 +54,7 @@ export function watchUrl(r: Ref): string | undefined {
 export function YouTubeView({ win, focused }: WindowViewProps) {
   const r = refOf(win.state);
   const src = r.video || r.list ? embedUrl(r) : null;
-  return src ? <Player key={src} id={win.id} src={src} fill={win.state.fill === true} /> : <Ask id={win.id} focused={focused} />;
+  return src ? <Player key={src} id={win.id} src={src} fill={win.state.fill !== false} /> : <Ask id={win.id} focused={focused} />;
 }
 
 function Player({ id, src, fill }: { id: string; src: string; fill: boolean }) {

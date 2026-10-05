@@ -212,12 +212,12 @@ describe("youtube widget", () => {
     expect(youtubeType.update!(state, { input: "https://youtu.be/aaaaaaaaaaa?t=3" }).state).toEqual({ video: "aaaaaaaaaaa", start: 3 });
     expect(youtubeType.update!(state, { input: null }).state).toEqual({});
     expect(youtubeType.update!(state, {}).state).toEqual(state);
-    // Fill sticks across another video and Change Video.
-    const filled = youtubeType.update!(state, { fill: true }).state;
-    expect(filled).toEqual({ video: "dQw4w9WgXcQ", fill: true });
-    expect(youtubeType.update!(filled, { input: "aaaaaaaaaaa" }).state).toEqual({ video: "aaaaaaaaaaa", fill: true });
-    expect(youtubeType.update!(filled, { input: null }).state).toEqual({ fill: true });
-    expect(youtubeType.update!(filled, { fill: false }).state).toEqual({ video: "dQw4w9WgXcQ" });
+    // Fill is the default; letterboxing sticks across another video and Change Video.
+    const boxed = youtubeType.update!(state, { fill: false }).state;
+    expect(boxed).toEqual({ video: "dQw4w9WgXcQ", fill: false });
+    expect(youtubeType.update!(boxed, { input: "aaaaaaaaaaa" }).state).toEqual({ video: "aaaaaaaaaaa", fill: false });
+    expect(youtubeType.update!(boxed, { input: null }).state).toEqual({ fill: false });
+    expect(youtubeType.update!(boxed, { fill: true }).state).toEqual({ video: "dQw4w9WgXcQ" });
     expect(() => youtubeType.update!(state, { input: "nope" })).toThrow(/not a YouTube link/);
   });
 });
