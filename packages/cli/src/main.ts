@@ -114,6 +114,8 @@ const { values: opt, positionals: pos } = parseArgs({
     follow: { type: "boolean", short: "f" },
     days: { type: "string" },
     rescan: { type: "boolean" },
+    anonymize: { type: "boolean" },
+    out: { type: "string" },
   },
 });
 

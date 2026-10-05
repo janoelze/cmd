@@ -3,8 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, type ActivityEvent } from "@cmd/protocol";
-import { FIXTURE_EPOCH, readFixture, toFixture } from "../src/agents/activity/fixture.ts";
+import { ACTIVITY_SCHEMA, DEFAULT_SETTINGS, EXPORT_FORMAT, HOOK_FORMAT, TURN_FORMAT, type ActivityEvent } from "@cmd/protocol";
+import { FIXTURE_EPOCH, fixtureMeta, readFixture, toFixture } from "../src/agents/activity/fixture.ts";
+import { agentVersion } from "../src/agents/procinfo.ts";
+import { Core } from "../src/core.ts";
 import { changedBetween, snapshot } from "../src/agents/activity/gitsnap.ts";
 import { ActivityLog } from "../src/agents/activity/log.ts";
 import { normalize, shellWrites, type RawEvent } from "../src/agents/activity/normalize.ts";
@@ -441,5 +443,94 @@ describe("fixtures", () => {
     expect(back.map((r) => r.at - FIXTURE_EPOCH)).toEqual([0, 250]);
     expect(back[0]!.payload).toEqual({ cwd: "/work/repo", last_assistant_message: "edited /work/repo/a.ts" });
     expect(back[1]!.env).toEqual({ CLAUDE_CONFIG_DIR: "/Users/me/.claude" });
+  });
+});
+
+describe("versions and provenance", () => {
+  it("adds missing columns to an older database and reads its rows as schema 1", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(":memory:");
+    // The shape development builds of 2026-10-05 created.
+    db.exec(`CREATE TABLE agent_events (id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL NOT NULL, pane_id TEXT, agent_id TEXT, agent TEXT, source TEXT NOT NULL, name TEXT NOT NULL, doc TEXT NOT NULL, env TEXT);
+             CREATE TABLE agent_turns (agent_id TEXT NOT NULL, idx INTEGER NOT NULL, started_at REAL NOT NULL, doc TEXT NOT NULL, PRIMARY KEY (agent_id, idx));`);
+    db.prepare(`INSERT INTO agent_events (at, pane_id, agent_id, agent, source, name, doc) VALUES (1, 'p', 'a', 'claude', 'hook', 'Stop', '{"hook_event_name":"Stop","last_assistant_message":"old"}')`).run();
+    const log = new ActivityLog(db, { recordedBy: "0.11.0" });
+    expect(log.schemaVersion()).toBe(ACTIVITY_SCHEMA);
+    const [old] = log.events({ agentId: "a" });
+    expect(old).toMatchObject({ kind: "stop", text: "old", recorded: { schema: 1, cmd: null, hook: null } });
+    const ev = log.insert({ at: 2, agent: "claude", name: "Stop", payload: { hook_event_name: "Stop", session_id: "s" }, hook: HOOK_FORMAT }, "p", "a", "2.1.289");
+    expect(ev).toMatchObject({ agentVersion: "2.1.289", recorded: { schema: ACTIVITY_SCHEMA, cmd: "0.11.0", hook: HOOK_FORMAT } });
+    expect(log.events({ agentId: "a" }).at(-1)).toMatchObject({ agentVersion: "2.1.289", recorded: { cmd: "0.11.0", hook: HOOK_FORMAT } });
+    // Opening it again changes nothing.
+    expect(() => new ActivityLog(db)).not.toThrow();
+  });
+
+  it("gives every turn its format, its agent and who derived it", () => {
+    const red = new ActivityReducer("a1", 0, { agentKind: "claude", agentVersion: "2.1.289", derivedBy: "0.11.0" });
+    for (const [i, raw] of fixture("claude-2.1.289/edit-and-bash.jsonl").entries()) red.apply(normalize(raw, i));
+    expect(red.turn).toMatchObject({ format: TURN_FORMAT, derivedBy: "0.11.0", agentKind: "claude", agentVersion: "2.1.289", model: null }); // claude -p sends no model (interactive sessions do)
+    const codex = new ActivityReducer("a2", 0, { agentKind: "codex" });
+    for (const [i, raw] of fixture("codex-0.144.5/edit-and-bash.jsonl").entries()) codex.apply(normalize(raw, i));
+    expect(codex.turn).toMatchObject({ agentKind: "codex", agentVersion: null, model: "gpt-5.6-sol" });
+  });
+
+  it("reads fixture headers and skips them when replaying", () => {
+    const text = fs.readFileSync(path.join(FIX, "codex-0.144.5/failing-tools.jsonl"), "utf8");
+    expect(fixtureMeta(text)).toMatchObject({ fixture: 1, agent: "codex", agentVersion: "0.144.5", hook: 2 });
+    expect(readFixture(text)[0]!.name).toBe("SessionStart");
+    const written = toFixture([{ at: 0, agent: "claude", name: "Stop", payload: {}, hook: 2 }], {}, { agent: "claude", agentVersion: "9.9.9", recordedBy: "0.11.0", hook: 2 });
+    expect(fixtureMeta(written)).toMatchObject({ agentVersion: "9.9.9" });
+    expect(readFixture(written)).toEqual([{ at: FIXTURE_EPOCH, agent: "claude", name: "Stop", payload: {}, hook: 2 }]);
+  });
+
+  it("reads the hook record format from spool files", () => {
+    const log = path.join(dir, "p2", "log");
+    fs.mkdirSync(log, { recursive: true });
+    fs.writeFileSync(path.join(log, "1.1.Stop.json"), JSON.stringify({ v: 3, agent: "claude", event: { hook_event_name: "Stop" } }));
+    fs.writeFileSync(path.join(log, "1.2.Stop.json"), JSON.stringify({ agent: "claude", event: { hook_event_name: "Stop" } }));
+    expect(drainSpool(dir, "p2").events.map((e) => e.hook).sort()).toEqual([2, 3]);
+  });
+
+  it("finds an agent's version in its executable's path or its package.json", () => {
+    const v = path.join(dir, "share", "claude", "versions", "2.3.4");
+    fs.mkdirSync(path.join(dir, "bin"), { recursive: true });
+    fs.mkdirSync(path.dirname(v), { recursive: true });
+    fs.writeFileSync(v, "");
+    fs.symlinkSync(v, path.join(dir, "bin", "claude"));
+    expect(agentVersion({ path: "/bin/bash", argv: ["bash", "/x/safehouse", path.join(dir, "bin", "claude")] }, "claude")).toBe("2.3.4");
+    const pkg = path.join(dir, "lib", "node_modules", "@openai", "codex");
+    fs.mkdirSync(path.join(pkg, "bin"), { recursive: true });
+    fs.writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ name: "@openai/codex", version: "0.150.0" }));
+    fs.writeFileSync(path.join(pkg, "bin", "codex.js"), "");
+    expect(agentVersion({ path: "/usr/local/bin/node", argv: ["node", path.join(pkg, "bin", "codex.js")] }, "codex")).toBe("0.150.0");
+    expect(agentVersion({ path: "/usr/bin/vim", argv: ["vim"] }, "claude")).toBeNull();
+  });
+});
+
+describe("export", () => {
+  it("pages through everything with a versioned header, home folders anonymized on request", async () => {
+    const core = new Core({ socketPath: path.join(dir, "c.sock"), dbPath: null, terminals: fakeFactory().factory, pollMs: 0, build: "abcdef1234567890" });
+    try {
+      const pane = core.panes.create();
+      for (const raw of fixture("claude-2.1.289/edit-and-bash.jsonl").slice(0, -1)) core.agents.ingestHook(pane.id, "claude", raw.name, { ...raw.payload, cwd: path.join(os.homedir(), "src", "x") });
+      const first = await core.call("agents.export", { limit: 4, anonymize: true });
+      expect(first.header).toMatchObject({ format: "cmd-agent-activity", version: EXPORT_FORMAT, schema: ACTIVITY_SCHEMA, turnFormat: TURN_FORMAT, cmd: "source+abcdef12", anonymized: true });
+      expect(first.turns).toHaveLength(1);
+      expect(first.turns[0]).toMatchObject({ format: TURN_FORMAT, derivedBy: "source+abcdef12", agentKind: "claude" });
+      expect(first.events).toHaveLength(4);
+      expect(JSON.stringify(first)).not.toContain(os.homedir());
+      expect(first.events[0]!.cwd).toBe("~/src/x");
+      expect(first.events[0]!.raw).toBeDefined();
+      let all = first.events.length;
+      for (let next = first.next; next !== null; ) {
+        const page = await core.call("agents.export", { limit: 4, afterId: next });
+        expect(page.turns).toEqual([]);
+        all += page.events.length;
+        next = page.next;
+      }
+      expect(all).toBe(11);
+    } finally {
+      await core.close();
+    }
   });
 });

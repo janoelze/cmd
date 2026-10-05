@@ -4,7 +4,7 @@
 // no Stop) a named rule does, and the turn records which (`inferred`).
 
 import path from "node:path";
-import type { ActivityEvent, AgentId, AgentTurn } from "@cmd/protocol";
+import { TURN_FORMAT, type ActivityEvent, type AgentId, type AgentKind, type AgentTurn } from "@cmd/protocol";
 import type { StateChange } from "../state.ts";
 
 /** No events and no terminal output for this long ends a turn whose agent went quiet. */
@@ -28,9 +28,21 @@ export interface Reduction {
 
 const line1 = (s: string) => (s.split(/\r?\n/).find((l) => l.trim()) ?? s).trim();
 
-export function newTurn(agentId: AgentId, index: number, at: number, ev?: ActivityEvent): AgentTurn {
+/** What a turn carries about its agent and who derived it (it outlives the agent). */
+export interface TurnContext {
+  agentKind: AgentKind;
+  agentVersion?: string | null;
+  derivedBy?: string | null;
+}
+
+export function newTurn(agentId: AgentId, index: number, at: number, ev?: ActivityEvent, ctx: TurnContext = { agentKind: ev?.agent ?? "unknown" }): AgentTurn {
   return {
+    format: TURN_FORMAT,
+    derivedBy: ctx.derivedBy ?? null,
     agentId,
+    agentKind: ctx.agentKind,
+    agentVersion: ctx.agentVersion ?? ev?.agentVersion ?? null,
+    model: ev?.model ?? null,
     index,
     sessionId: ev?.sessionId ?? null,
     turnId: ev?.turnId ?? null,
@@ -66,9 +78,15 @@ export class ActivityReducer {
   #open = new Map<string, number>();
   #openNames = new Map<string, string>();
 
-  constructor(agentId: AgentId, nextIndex = 0) {
+  /** The agent and who derives: kept with every turn. The agent's version can arrive later (setVersion). */
+  readonly ctx: TurnContext;
+  /** The model the agent last said it uses. */
+  model: string | null = null;
+
+  constructor(agentId: AgentId, nextIndex = 0, ctx: TurnContext = { agentKind: "unknown" }) {
     this.agentId = agentId;
     this.#next = nextIndex;
+    this.ctx = { ...ctx };
   }
 
   get open(): boolean {
@@ -78,6 +96,8 @@ export class ActivityReducer {
   apply(ev: ActivityEvent): Reduction {
     const r: Reduction = { change: {} };
     this.lastEventAt = Math.max(this.lastEventAt, ev.at);
+    if (ev.model) this.model = ev.model;
+    if (ev.agentVersion && !this.ctx.agentVersion) this.ctx.agentVersion = ev.agentVersion;
     if (ev.sessionId && ev.transcriptPath) r.change.native = { transcriptPath: ev.transcriptPath };
     if (ev.cwd) r.change.cwd = ev.cwd;
     const cause = `hook ${ev.name}`;
@@ -218,8 +238,9 @@ export class ActivityReducer {
   #openTurn(r: Reduction, ev: ActivityEvent): AgentTurn {
     this.#open.clear();
     this.#openNames.clear();
-    this.turn = newTurn(this.agentId, this.#next++, ev.at, ev);
+    this.turn = newTurn(this.agentId, this.#next++, ev.at, ev, this.ctx);
     if (!this.turn.sessionId) this.turn.sessionId = this.sessionId;
+    if (!this.turn.model) this.turn.model = this.model;
     r.opened = this.turn;
     r.turn = this.turn;
     return this.turn;

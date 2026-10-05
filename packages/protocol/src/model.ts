@@ -175,6 +175,10 @@ export interface Agent {
   turn?: AgentTurn | null;
   /** What set the current state: "hook Stop", "inferred: …". */
   stateCause?: string | null;
+  /** The agent's own version (from its executable), when known. */
+  version?: string | null;
+  /** The model it said it uses. */
+  model?: string | null;
 }
 
 /** An agent config file cmd's hook can be installed into (Settings → Agents → Hooks). */

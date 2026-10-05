@@ -60,6 +60,46 @@ export function classify(info: Pick<ForegroundInfo, "path" | "argv">): Classific
   return { kind: "other", name: first || basename(info.path) };
 }
 
+const VERSION = /(?:^|[/@_-])v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)(?=$|[/_-])/;
+const versions = new Map<string, string | null>();
+
+function onPath(name: string): string | null {
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    const p = path.join(dir, name);
+    if (dir && fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+/**
+ * An agent's version from its executable, best effort and the same for every
+ * agent: a version in the real path (Claude's …/versions/2.1.289, Homebrew's
+ * Caskroom/codex/0.144.5/…), else the nearest package.json (npm installs).
+ */
+export function agentVersion(info: Pick<ForegroundInfo, "path" | "argv">, agent: string): string | null {
+  const mine = (s: string) => s.split("/").some((c) => c === agent || c.startsWith(`${agent}-`) || c.startsWith(`${agent}.`) || c === `@${agent}`);
+  for (const c of [info.path, ...info.argv].filter((s): s is string => !!s && mine(s))) {
+    const found = c.includes("/") ? c : onPath(c);
+    if (!found) continue;
+    let real = found;
+    try {
+      real = fs.realpathSync(found);
+    } catch {}
+    if (versions.has(real)) return versions.get(real)!;
+    let v = real.match(VERSION)?.[1] ?? null;
+    for (let d = path.dirname(real), i = 0; !v && i < 6 && d !== path.dirname(d); d = path.dirname(d), i++) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(d, "package.json"), "utf8")) as { version?: unknown };
+        if (typeof pkg.version === "string") v = pkg.version;
+        break;
+      } catch {}
+    }
+    versions.set(real, v);
+    if (v) return v;
+  }
+  return null;
+}
+
 /** Name shown for a pane's foreground process. */
 export function displayName(c: Classification, info: Pick<ForegroundInfo, "path" | "argv">): string {
   if (c.kind === "agent") return c.agent;

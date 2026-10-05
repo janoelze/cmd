@@ -17,6 +17,8 @@ export interface RawEvent {
   payload: Payload;
   /** Variables from the agent's environment the hook passed on. */
   env?: Record<string, string>;
+  /** The hook script's record format (HOOK_FORMAT); none: sent over the socket. */
+  hook?: number;
 }
 
 const KINDS: Record<string, ActivityKind> = {
@@ -167,6 +169,8 @@ export function normalize(r: RawEvent, id = 0): ActivityEvent {
     const tool = toolOf(p, kind === "tool.end", hookEventName(r.agent, name) === "PostToolUseFailure");
     if (tool) ev.tool = tool;
   }
+  const model = str(p.model);
+  if (model) ev.model = model;
   const cwd = str(p.cwd);
   if (cwd) ev.cwd = cwd;
   const tp = str(p.transcript_path);

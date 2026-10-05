@@ -1,5 +1,6 @@
 export type * from "./model.ts";
 export type * from "./activity.ts";
+export { ACTIVITY_SCHEMA, EXPORT_FORMAT, HOOK_FORMAT, TURN_FORMAT } from "./activity.ts";
 export * from "./rpc.ts";
 export * from "./attention.ts";
 export * from "./space.ts";

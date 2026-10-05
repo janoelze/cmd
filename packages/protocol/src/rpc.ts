@@ -6,7 +6,7 @@ import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
 import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
-import type { ActivityEvent, AgentCoverage, AgentHome, AgentTurn } from "./activity.ts";
+import type { ActivityEvent, ActivityExportHeader, AgentCoverage, AgentHome, AgentTurn } from "./activity.ts";
 
 export interface CoreInfo {
   pid: number;
@@ -119,6 +119,15 @@ export interface Methods {
   "agent.events": { params: { agentId?: AgentId; paneId?: PaneId; afterId?: number; limit?: number; raw?: boolean }; result: ActivityEvent[] };
   /** An agent's turns, oldest first (kept after the agent is gone). */
   "agent.turns": { params: { agentId: AgentId; limit?: number }; result: AgentTurn[] };
+  /**
+   * Everything recorded over the last `days` (default 14), in pages: the header and
+   * turns come with the first page (no afterId), events in id order; next: the
+   * afterId of the next page, null at the end. anonymize: home folders become "~".
+   */
+  "agents.export": {
+    params: { days?: number; anonymize?: boolean; afterId?: number; limit?: number };
+    result: { header: ActivityExportHeader; turns: AgentTurn[]; events: ActivityEvent[]; next: number | null };
+  };
   /** What each agent's events actually carried over the last `days` (default 7). */
   "agents.coverage": { params: { days?: number }; result: AgentCoverage[] };
   /** Where agents keep their config (discovered); rescan: look again first. */

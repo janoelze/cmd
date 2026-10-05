@@ -27,7 +27,7 @@ export function drainSpool(root: string, paneId: PaneId): { events: RawEvent[]; 
     const file = path.join(dir, name);
     try {
       const ns = fs.statSync(file, { bigint: true }).mtimeNs;
-      const root = JSON.parse(fs.readFileSync(file, "utf8")) as { agent?: unknown; ts?: unknown; env?: unknown; event?: unknown };
+      const root = JSON.parse(fs.readFileSync(file, "utf8")) as { v?: unknown; agent?: unknown; ts?: unknown; env?: unknown; event?: unknown };
       const payload = root.event;
       if (payload && typeof payload === "object" && !Array.isArray(payload)) {
         const p = payload as Record<string, unknown>;
@@ -38,6 +38,8 @@ export function drainSpool(root: string, paneId: PaneId): { events: RawEvent[]; 
             agent: typeof root.agent === "string" && root.agent ? root.agent : null,
             name: typeof p.hook_event_name === "string" ? p.hook_event_name : (name.split(".")[2] ?? "unknown"),
             payload: p,
+            // Spool files exist since format 2, which didn't write its number yet.
+            hook: typeof root.v === "number" ? root.v : 2,
             ...(env && Object.keys(env).length ? { env } : {}),
           },
           ns,

@@ -113,6 +113,28 @@ The installed app (`autoHooks`, set in `main.ts` for the release instance only) 
 
 The first time cmd writes an agent's config it keeps a copy next to it (`.cmd-backup`); writes go through symlinks (dotfile repos) and keep everything else in the file. A quiet notification says what was set up. `agents.hooks.auto` turns it off. Codex still asks the user to approve a new hook (`/hooks` in Codex).
 
+## Formats and versions
+
+Data recorded now has to stay readable when cmd, the agents and these formats change, so everything says what wrote it (`protocol/src/activity.ts`):
+
+| Version | Covers | Where it's kept |
+|---|---|---|
+| `ACTIVITY_SCHEMA` (1) | the stored event envelope | `agent_events.schema`, `ActivityEvent.recorded.schema`; the database's in `schema_versions` |
+| `HOOK_FORMAT` (2) | the record cmd's hook writes (`{v, agent, ts, env, event}`) | `agent_events.hook`; spool files without `v` are 2 |
+| `TURN_FORMAT` (1) | `AgentTurn` and the rules that derive it | `AgentTurn.format` |
+| `EXPORT_FORMAT` (1) | `cmd agents export` files | the header line's `version` |
+| fixture format (1) | recorded test sessions | the fixture's header line |
+
+Every event also records **which cmd** recorded it (`recorded.cmd`: the app's version, or `source+<build>` from a checkout) and **the agent's version** (`agentVersion`, from its executable: a version in its real path such as Claude's `…/versions/2.1.289` or Homebrew's `Caskroom/codex/0.144.5`, else the nearest `package.json`). Turns carry `derivedBy`, `agentKind`, `agentVersion` and `model`, since they outlive their agent. (Claude's `-p` sessions send no model; interactive ones do.)
+
+Rules:
+
+- **Raw is the truth.** Payloads are stored as the agent sent them (long strings cut); normalised events are derived when read, turns when events arrive. Turns can be rebuilt from events by a newer cmd.
+- **Additive changes need no version bump.** A new optional field, a new event kind, a new column. Tables only grow: a newer cmd adds missing columns to an older database when it opens it (`COLUMNS` in `log.ts`) and records its schema version; rows from before a column existed read as that column's unknown (schema 1, cmd null).
+- **Incompatible changes raise the version** of what changed, and readers branch on it.
+
+`cmd agents export [--days N] [--anonymize] [--out FILE]` writes everything recorded as JSONL: a header (`{format: "cmd-agent-activity", version, schema, turnFormat, exportedAt, cmd, since, anonymized}`), then `{type: "turn", …}` and `{type: "event", …, raw}` lines. `--anonymize` rewrites the home folder to `~`. That's the file to collect real-world data with.
+
 ## Verifying
 
 - **Recorded sessions.** `test/fixtures/agents/claude-2.1.289/` holds three real sessions recorded through the new hook (`claude -p --settings <hooks> --setting-sources project` in a scratch repository): edits through Edit and Bash, a denied permission, a background subagent. `codex-0.144.5/` holds two (`codex exec --dangerously-bypass-hook-trust` with a scratch `CODEX_HOME` holding only the hook and a link to the login): a patch and shell edits, a failing command and patch. Tests replay them through normalize, reduce and the tracker (including a restart mid-session). `cmd agents record <agent> <file>` writes a fixture from the log, with the home and work dir rewritten; `test/fixtures/agents/record.ts` does the same from a spool folder. A new agent version is a new folder.

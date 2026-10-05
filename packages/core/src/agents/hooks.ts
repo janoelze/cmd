@@ -13,7 +13,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { AgentHome, AgentKind, HookTarget } from "@cmd/protocol";
+import { HOOK_FORMAT, type AgentHome, type AgentKind, type HookTarget } from "@cmd/protocol";
 import { shq } from "../shell.ts";
 
 export interface HookFiles {
@@ -71,7 +71,7 @@ addenv GEMINI_CLI_HOME "$GEMINI_CLI_HOME"
 mkdir -p "$dir/log" 2>/dev/null || quiet
 ts=$(date +%s)
 tmp="$dir/.$event.$$"
-printf '{"agent":"%s","ts":%s,"env":{%s},"event":%s}\\n' "$kind" "$ts" "$env" "$payload" >"$tmp" 2>/dev/null || quiet
+printf '{"v":${HOOK_FORMAT},"agent":"%s","ts":%s,"env":{%s},"event":%s}\\n' "$kind" "$ts" "$env" "$payload" >"$tmp" 2>/dev/null || quiet
 ln "$tmp" "$dir/log/$ts.$$.$event.json" 2>/dev/null
 mv -f "$tmp" "$dir/$event.json" 2>/dev/null
 

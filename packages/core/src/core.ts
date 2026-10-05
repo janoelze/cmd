@@ -5,11 +5,12 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
-import { lineSplitter } from "@cmd/protocol";
+import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
+import { EXPORT_FORMAT, lineSplitter, TURN_FORMAT } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
 import { ActivityLog } from "./agents/activity/log.ts";
+import { rewrite } from "./agents/activity/fixture.ts";
 import { AgentHomes } from "./agents/homes.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./agents/hooks.ts";
 import { hookEventName } from "./agents/state.ts";
@@ -210,7 +211,8 @@ export class Core {
         log.error(`could not write shell rules: ${(err as Error).message}`);
       }
     });
-    const activity = new ActivityLog(this.store.db);
+    // Every event says which cmd recorded it: the app's version, or the checkout's build.
+    const activity = new ActivityLog(this.store.db, { recordedBy: process.env.CMD_APP_VERSION || (opts.build ? `source+${opts.build.slice(0, 8)}` : null) });
     activity.prune();
     this.#pruneTimer = setInterval(() => activity.prune(), 6 * 3600_000);
     this.#pruneTimer.unref();
@@ -378,6 +380,18 @@ export class Core {
     "agent.events": (p) => this.agents.activity.events(p),
     "agent.turns": (p) => this.agents.activity.turns(p.agentId, p.limit),
     "agents.coverage": (p) => this.agents.activity.coverage(p.days),
+    "agents.export": (p) => {
+      const log = this.agents.activity;
+      const since = Date.now() - (p.days ?? 14) * 86400_000;
+      const limit = Math.min(p.limit ?? 2000, 10_000);
+      const events = log.events({ since, afterId: p.afterId, limit: limit + 1, raw: true, oldest: true });
+      const more = events.length > limit;
+      const page = more ? events.slice(0, limit) : events;
+      const turns = p.afterId ? [] : log.turnsSince(since);
+      const header: ActivityExportHeader = { format: "cmd-agent-activity", version: EXPORT_FORMAT, schema: log.schemaVersion(), turnFormat: TURN_FORMAT, exportedAt: Date.now(), cmd: log.recordedBy, since, anonymized: !!p.anonymize };
+      const anon = <T,>(v: T): T => (p.anonymize ? (rewrite(v, [[os.homedir(), "~"]]) as T) : v);
+      return { header, turns: anon(turns), events: anon(page), next: more ? page.at(-1)!.id : null };
+    },
     "agents.homes": (p) => {
       if (p.rescan || !this.#homesDiscovered) this.#discoverHomes();
       return this.homes.all();

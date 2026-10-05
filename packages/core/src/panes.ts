@@ -14,7 +14,7 @@ import type { Attention, Pane, PaneId, PaneUsage, Progress, Settings, SpaceId } 
 import { usageChanged } from "./resources.ts";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
 import { DEVICE_REPLIES, OscScanner, type OscEvent } from "./osc.ts";
-import { classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
+import { agentVersion, classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
 import { STATUS_ENV } from "./agents/statusfiles.ts";
 import type { Store } from "./store.ts";
 import { integrate, shellName } from "./shells.ts";
@@ -34,6 +34,8 @@ export interface Foreground {
   startedAt: number;
   name: string;
   class: Classification;
+  /** An agent's own version, when its executable says (agentVersion). */
+  version?: string | null;
 }
 
 /** Looks up a terminal's foreground process from its shell pid (see ProcInfo). */
@@ -469,6 +471,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     if (!this.#panes.has(live.pane.id)) return; // closed while we were asking
     const c = classify(info);
     const fg: Foreground = { pid: info.pid, startedAt: info.startedAt, name: displayName(c, info), class: c };
+    if (c.kind === "agent") fg.version = agentVersion(info, c.agent);
     const prev = live.fg;
     const same = prev && prev.pid === fg.pid && prev.name === fg.name && prev.class.kind === fg.class.kind;
     if (same) return;

@@ -48,6 +48,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "agent.turns": "never",
   "agents.coverage": "never",
   "agents.homes": "never",
+  "agents.export": "never",
   "hook.ingest": "never",
   "hooks.status": "never",
   "hooks.install": "never",

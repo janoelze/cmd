@@ -165,12 +165,18 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #onForeground(paneId: PaneId, fg: Foreground): void {
     const current = this.#byPane(paneId);
     if (fg.class.kind === "agent") {
-      if (current) {
-        this.#started.add(current.id);
-        if (current.state === "starting") this.#update(current, { state: "idle" });
-      } else {
-        const a = this.#create({ kind: fg.class.agent, paneId, source: "detected" });
+      let a = current;
+      if (a) {
         this.#started.add(a.id);
+        if (a.state === "starting") this.#update(a, { state: "idle" });
+      } else {
+        a = this.#create({ kind: fg.class.agent, paneId, source: "detected" });
+        this.#started.add(a.id);
+      }
+      if (fg.version && a.version !== fg.version) {
+        this.#update(a, {}, { version: fg.version });
+        const red = this.#reducers.get(a.id);
+        if (red) red.ctx.agentVersion = fg.version;
       }
       this.applyStatus(paneId);
       return;
@@ -246,7 +252,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const agent = this.#byPane(paneId);
     for (const b of bad) this.emit("activity", this.activity.note("anomaly", `unreadable hook event file ${b}`, Date.now(), paneId, agent?.id ?? null, agent?.kind ?? null));
     return events.map((raw) => {
-      const ev = this.activity.insert(raw, paneId, agent?.id ?? null);
+      const ev = this.activity.insert(raw, paneId, agent?.id ?? null, agent?.version ?? null);
       this.emit("activity", ev);
       return { raw, ev };
     });
@@ -265,7 +271,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (!red) {
       const fg = this.#panes.foreground(paneId);
       const notBefore = fg?.startedAt ? fg.startedAt - 500 : agent.createdAt - 5000;
-      const claimed = this.activity.claim(paneId, agent.id, notBefore);
+      const claimed = this.activity.claim(paneId, agent.id, notBefore, agent.version ?? null);
       if (!claimed.length) return false;
       red = this.#reducerFor(agent);
       events = claimed.filter((e) => e.id > red!.replayedTo);
@@ -284,7 +290,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   /** A reducer for an agent, resumed from its last saved turn (a core restart) and the events after it. */
   #reducerFor(agent: Agent): ActivityReducer {
     const saved = this.activity.lastTurn(agent.id);
-    const red = new ActivityReducer(agent.id, saved ? saved.turn.index + 1 : 0);
+    const red = new ActivityReducer(agent.id, saved ? saved.turn.index + 1 : 0, { agentKind: agent.kind, agentVersion: agent.version ?? null, derivedBy: this.activity.recordedBy });
     if (saved) {
       red.turn = saved.turn;
       red.sessionId = saved.turn.sessionId;
@@ -312,6 +318,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const fields: Partial<Agent> = {};
     if (r.lastPrompt) fields.lastPrompt = r.lastPrompt;
     if (r.cause && change.state) fields.stateCause = r.cause;
+    if (red.model && red.model !== agent.model) fields.model = red.model;
     if (r.turn) {
       this.activity.saveTurn(r.turn, ev.id);
       fields.turn = structuredClone(r.turn);
@@ -404,7 +411,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       agent = this.#create({ kind, paneId, source: "detected" });
     }
     this.#started.add(agent.id);
-    const ev = this.activity.insert({ at: Date.now(), agent: kind, name: event, payload }, paneId, agent.id);
+    const ev = this.activity.insert({ at: Date.now(), agent: kind, name: event, payload }, paneId, agent.id, agent.version ?? null);
     this.emit("activity", ev);
     this.#ingest(paneId, [{ raw: { at: ev.at, agent: kind, name: event, payload }, ev }], agent);
     return this.#agents.has(agent.id) ? this.get(agent.id) : null;

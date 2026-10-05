@@ -4,6 +4,20 @@
 
 import type { AgentId, AgentKind, PaneId } from "./model.ts";
 
+/**
+ * Versions of the formats here. Raise one when its shape changes incompatibly;
+ * adding an optional field doesn't need it. Data keeps the version it was written
+ * with, so readers can tell old from new.
+ * - ACTIVITY_SCHEMA: the stored event envelope (ActivityEvent.recorded.schema).
+ * - TURN_FORMAT: AgentTurn and the rules that derive it (AgentTurn.format).
+ * - HOOK_FORMAT: the record cmd's hook script writes (ActivityEvent.recorded.hook).
+ * - EXPORT_FORMAT: `cmd agents export` files (ActivityExportHeader.version).
+ */
+export const ACTIVITY_SCHEMA = 1;
+export const TURN_FORMAT = 1;
+export const HOOK_FORMAT = 2;
+export const EXPORT_FORMAT = 1;
+
 export type ActivityKind =
   | "session.start"
   | "session.end"
@@ -78,6 +92,18 @@ export interface ActivityEvent {
   transcriptPath?: string;
   /** The agent's config dir, from its environment ($CLAUDE_CONFIG_DIR, …), when set. */
   home?: string;
+  /** The model the agent said it uses (SessionStart, prompts). */
+  model?: string;
+  /** The agent's own version (from its executable), when known. */
+  agentVersion?: string;
+  /** Who recorded it, in which formats. */
+  recorded?: {
+    schema: number;
+    /** cmd's version ("0.11.0"), or "source+<build>" from a checkout; null: older than this field. */
+    cmd: string | null;
+    /** The hook script's record format; null: sent over the socket (`cmd hook`) or noted by the core. */
+    hook: number | null;
+  };
   /** The payload as received; long strings are cut. Only with `raw: true`. */
   raw?: Record<string, unknown>;
 }
@@ -97,7 +123,15 @@ export interface TurnFile {
 
 /** One prompt and everything up to the agent's answer (or failure, or interruption). */
 export interface AgentTurn {
+  /** TURN_FORMAT it was derived with. */
+  format: number;
+  /** The cmd that derived it (see ActivityEvent.recorded.cmd). */
+  derivedBy: string | null;
   agentId: AgentId;
+  /** Kept with the turn: it outlives the agent. */
+  agentKind: AgentKind;
+  agentVersion: string | null;
+  model: string | null;
   /** 0, 1, … per agent. */
   index: number;
   sessionId: string | null;
@@ -154,4 +188,18 @@ export interface AgentCoverage {
   unmapped: string[];
   anomalies: number;
   lastAt: number | null;
+}
+
+/** First line of a `cmd agents export` file; then one JSON object per line, `{type: "event", …ActivityEvent}` or `{type: "turn", …AgentTurn}`. */
+export interface ActivityExportHeader {
+  format: "cmd-agent-activity";
+  version: number;
+  schema: number;
+  turnFormat: number;
+  exportedAt: number;
+  cmd: string | null;
+  /** Events and turns since this time (ms). */
+  since: number;
+  /** Home folders rewritten to "~". */
+  anonymized: boolean;
 }

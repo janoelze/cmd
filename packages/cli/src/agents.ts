@@ -16,7 +16,9 @@ export const AGENTS_HELP = `  agents events <agent|pane> [--raw] [--follow] [--l
   agents turns <agent> [--json]       its turns: prompt, outcome, tools, files, final message
   agents coverage [--days N] [--json] what each agent's events actually carried
   agents homes [--rescan] [--json]    where agents keep their config (found by cmd)
-  agents record <agent> <out.jsonl>   its events as a test fixture (paths rewritten)`;
+  agents record <agent> <out.jsonl>   its events as a test fixture (paths rewritten)
+  agents export [--days N] [--anonymize] [--out FILE]
+                                      everything recorded, as versioned JSONL (default: stdout)`;
 
 const time = (t: number) => new Date(t).toTimeString().slice(0, 8);
 const one = (s: string, n = 90) => {
@@ -106,6 +108,31 @@ export async function agentsCommand(client: Client, closed: Promise<void>, pos: 
       for (const h of homes) console.log(`${h.agent.padEnd(7)} ${h.dir}  (${h.via.join(", ")})${h.env ? `  ${Object.entries(h.env).map(([k, v]) => `${k}=${v}`).join(" ")}` : ""}`);
       return 0;
     }
+    case "export": {
+      const days = typeof opt.days === "string" ? Number(opt.days) : undefined;
+      const out = typeof opt.out === "string" ? fs.createWriteStream(opt.out) : process.stdout;
+      const write = (v: unknown) => new Promise<void>((r) => (out.write(JSON.stringify(v) + "\n") ? r() : out.once("drain", () => r())));
+      let afterId: number | undefined;
+      let events = 0;
+      let turns = 0;
+      for (;;) {
+        const page = await client.call("agents.export", { days, anonymize: !!opt.anonymize, afterId });
+        if (afterId === undefined) {
+          await write(page.header);
+          for (const t of page.turns) await write({ type: "turn", ...t });
+          turns = page.turns.length;
+        }
+        for (const e of page.events) await write({ type: "event", ...e });
+        events += page.events.length;
+        if (page.next === null) break;
+        afterId = page.next;
+      }
+      if (out !== process.stdout) {
+        await new Promise((r) => (out as fs.WriteStream).end(r));
+        console.error(`${events} events, ${turns} turns → ${opt.out}`);
+      }
+      return 0;
+    }
     case "record": {
       if (!ref || !file) throw new Error("usage: cmd agents record <agent> <out.jsonl>");
       const t = await target(client, ref);
@@ -113,7 +140,9 @@ export async function agentsCommand(client: Client, closed: Promise<void>, pos: 
       const raws = rawFromLog(evs);
       if (!raws.length) throw new Error("no events recorded for it");
       const cwd = evs.find((e) => e.cwd)?.cwd;
-      fs.writeFileSync(file, toFixture(raws, { ...(cwd ? { [cwd]: "/work/repo" } : {}), [os.homedir()]: "/Users/me" }));
+      const first = evs.find((e) => e.source === "hook");
+      const meta = { agent: first?.agent ?? null, agentVersion: evs.find((e) => e.agentVersion)?.agentVersion ?? null, recordedBy: first?.recorded?.cmd ?? null, hook: first?.recorded?.hook ?? null };
+      fs.writeFileSync(file, toFixture(raws, { ...(cwd ? { [cwd]: "/work/repo" } : {}), [os.homedir()]: "/Users/me" }, meta));
       console.log(`${raws.length} events → ${file}${cwd ? ` (${cwd} → /work/repo)` : ""}`);
       return 0;
     }
