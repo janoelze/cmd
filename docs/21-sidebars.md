@@ -1,0 +1,170 @@
+# Sidebars are windows
+
+> Status (2026-10-05): proposal, nothing built. Branch `sidebars`. Builds on [16-widgets.md](16-widgets.md) (widgets are windows underneath), [11-spaces.md](11-spaces.md) (per-Space layout in `Space.view`) and [10-window-titles.md](10-window-titles.md) (one title bar for every window).
+
+Some people want cmd to feel more like an IDE, with a file tree down the left. We could build a file-tree sidebar. Then someone wants the CI runs on the right, then a notes panel, and every one would be a special case. Instead, we embrace the window concept all the way: **any window can become a sidebar.**
+
+Right-click a window's title bar → **Make Sidebar** → **Left** or **Right**. The window leaves the desk and docks to that edge of the app window. It keeps its full height, you can drag its width, and it floats a little apart from the edge, like the sidebars in recent macOS. It is still the same window: same title bar, same menu, same state. Return it to the desk and it goes back into the layout.
+
+Sidebars belong to a Space. One project might keep a file browser on the left and a CI widget on the right, while another keeps only the default left sidebar.
+
+Today's sidebar becomes a built-in widget, the **Navigator** (working name), docked left by default in every Space. With windows no longer running all the way to the top of the app window, there is room for a real **top bar**: a drag handle, the Space switcher on the left, and view switchers and actions on the right. The background turns into one continuous canvas that every window, docked or not, sits on.
+
+## What people see
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ● ● ●   ◆ cmd ▾   +                 (drag)                  ▢ ⊞ ▥ ⧉   ⌘  ⚙ │  top bar
+│ ╭───────────╮  ╭──────────────╮ ╭──────────────╮  ╭────────────────────────╮ │
+│ │ Navigator │  │ zsh · ~/src  │ │ claude       │  │ CI runs                │ │
+│ │ ───────── │  │              │ │              │  │ ───────                │ │
+│ │ Needs you │  │              │ │              │  │ ✓ build #412           │ │
+│ │ Agents    │  │     desk     │ │              │  │ ✗ e2e   #411           │ │
+│ │ Windows   │  │  (strip/grid │ │              │  │                        │ │
+│ │ Widgets   │  │   /canvas)   │ │              │  │                        │ │
+│ │ Recent    │  │              │ │              │  │                        │ │
+│ ╰───────────╯  ╰──────────────╯ ╰──────────────╯  ╰────────────────────────╯ │
+└──────────────────────────────────────────────────────────────────────────────┘
+   left sidebar          the desk: every other window          right sidebar
+```
+
+- **The backdrop** (`--bg`) fills the whole app window. Nothing is attached to the edges anymore: the sidebars, the desk's windows and the top bar sit on it, inset by the gutter.
+- **The top bar** (about 44 px; `--titlebar-h` today is 38) spans the full width and is the app window's drag region:
+  - left: the traffic lights, then the **Space switcher** (moved from the bottom of the sidebar) and **+** (New…, the sidebar's + today);
+  - right: the **view modes** (moved from the status bar), Palette and Settings, and the core's health as a small light (moved from the sidebar footer; it opens the same details);
+  - centre: empty drag space. In Focus mode, which has no title bars, it shows the selected window's title fields, so the status bar's job there moves up here.
+- **Sidebars** look like windows because they are windows: the same `TileTitle`, frame, radius and shadow. Each side holds one window. A sidebar's inner edge resizes it, and a double-click resets it. A sidebar keeps its width when you switch view modes.
+- **The desk** is everything else. Every layout (focus, grid, strip, canvas) gets the space between the sidebars as its viewport.
+
+### Making and unmaking sidebars
+
+| Where | What |
+|---|---|
+| Title bar menu of a desk window | **Make Sidebar ▸ Left / Right**. If that side already holds a window, that window goes back to the desk. |
+| Title bar menu of a sidebar | **Move to Right Sidebar** (or Left), **Move to Desk** |
+| Window menu | The same items, for the selected window (every shortcut needs a real menu item) |
+| View menu | **Show Left Sidebar** (⌃⌘S, the `view.sidebar` command today) and **Show Right Sidebar**: these hide and show a side, they don't close its window |
+| ⌘W on a sidebar | Closes the window, the same as everywhere else. The side becomes empty. |
+
+Later: drag a title bar to the left or right edge of the app window, and a drop zone shows where it will dock (phase 5).
+
+All labels go through the copywriting skill before they ship.
+
+### The Navigator
+
+The Navigator is today's `Sidebar.tsx` turned into a window view: search (⇧⌘F), Needs you, Agents, Windows, Widgets, Recent. The Space switcher, + and the core's health move into the top bar, so it keeps only what is about the Space's windows.
+
+- It is a built-in widget (`role: "widget"`), so it is in the Widget Library. Close it and you can put it back from there.
+- Every new Space starts with a Navigator docked left. Existing Spaces get one the first time they are shown, which is the migration (see Data).
+- It doesn't list itself. It doesn't list other sidebars either, since they are always in view. Open question below.
+- Since it is just a window, people can dock it on the right, or put it on the desk next to their terminals.
+
+## Under the hood
+
+### Data: a Space's sidebars are layout
+
+Sidebars are per-Space layout, like strip widths and the canvas camera, so they live in `Space.view` through `useSpaceView`:
+
+```ts
+// Space.view["docks"]
+interface Docks {
+  left:  { id: WindowId | null; width: number | null; hidden: boolean };
+  right: { id: WindowId | null; width: number | null; hidden: boolean };
+}
+```
+
+- **No protocol or core storage change.** `Space.view` is already opaque, per key and debounced (`store.ts` → `space.update { view }`). A window's `spaceId` already ties it to the Space.
+- `width: null` means the window type's default. `hidden` is the View-menu toggle. It replaces the global `sidebar.open` / `sidebar.width` UI state, which becomes the migration source.
+- A side whose window has closed or moved to another Space counts as empty. The renderer drops the stale id the next time it writes, the same way `arrangeTiles` drops closed panes.
+- **Default and migration.** When a Space is shown and has no `docks` key, the renderer creates a Navigator (`window.open { kind: "navigator" }`) and docks it left, carrying over `sidebar.open`/`sidebar.width`. A Space is only ever shown in one app window at a time (11-spaces.md, rule 4), so two app windows can't race to create two Navigators.
+
+Why not a field in the window's state: that state belongs to the window's type, and docking is something the Space's layout decides, like grid order. It would also make "Move to Space" carry a dock along into a Space that has no room for it.
+
+### Core
+
+- A new window type `navigator` in `packages/core/src/windows/builtin.ts`: `role: "widget"`, an empty state, titled "Navigator". It is registered like `agents` and `diff`.
+- Nothing else. The Navigator's data is the renderer store it already reads (`buildRows`, `search.*`).
+
+### Layouts
+
+`layouts.ts` stays pure. `WindowsView` computes the desk viewport as the app window minus the top bar and minus each visible sidebar (its width plus a gutter) and hands that to the layout. Docked ids leave the ids the layout sees. They are filtered out before `arrangeTiles`, so grid order and strip widths are kept for when a window returns to the desk.
+
+New in `layouts.ts`, also pure and tested: `dockRects(docks, vp, spacing, topBar)` → the rect for each sidebar, in screen coordinates.
+
+- Desk navigation (⌥⌘← / ⌥⌘→, ⌘[ / ⌘], ⌃⌘1–9) covers the desk only. A sidebar is selected by clicking it, or later with a shortcut of its own (open question).
+- Focus mode: sidebars stay visible, and the one desk window fills the space between them.
+- Canvas: the canvas ends at the sidebars. It doesn't run underneath them (open question).
+
+### Rendering: never remount a window
+
+This is the technical risk. `WindowsView` keeps every window mounted in a stable DOM order inside `.windows-track`. The canvas camera transforms that track and the strip is a native scroller, so a sidebar can't live inside it. A sidebar has to be outside the track, and moving a window there means **reparenting its DOM**:
+
+- **Terminals** are fine: `terminals.ts` already lends the xterm element to whichever view attaches it.
+- **Webviews** (Browser, Magic widgets) **reload when moved** in the DOM. A browser would lose its scroll position and form state, and a Magic widget would redraw.
+
+Plan: **window hosts.** Generalise what `terminals.ts` does to every window. Each window's content (`WindowContent`/`TerminalView`) renders once, through a portal, into a host element that belongs to the window. Wherever the window is shown (a tile in the track, or a sidebar), there is an empty slot that adopts the host with `Element.moveBefore()`. That is Chromium's state-preserving move (Chrome 133+; Electron 44 ships Chromium 142), and it keeps iframes, and so webviews, alive. Focus, selection and pointer capture survive too.
+
+**Phase 0 is a spike to prove this works:** a webview playing a video moves between two parents with `moveBefore` and doesn't reload. If it doesn't hold for `<webview>` (a guest view, not a plain iframe), the fallback is to accept a reload when a webview docks or undocks. It's a rare, deliberate action, and both types already restore from state (the browser its URL, Magic from the core). We'd still keep the hosts for terminals.
+
+Docked tiles reuse the tile markup (`tile-body`, `TileTitle`, `tile-frame`). Their title bar drags to undock (phase 5); until then, dragging it does nothing.
+
+### Window types and sidebars
+
+`registerWindowView` gets optional hints:
+
+```ts
+dock?: { width?: number; minWidth?: number; maxWidth?: number }  // defaults 280 / 200 / 480 (SIDEBAR_WIDTH today)
+```
+
+Views also get `placement: "desk" | "dock"` (context, not a prop on every view), so a view can adapt. Files could drop its toolbar labels, and the Navigator only ever renders docked-style rows. Every type can be docked, terminals included: an agent's terminal on the right is a reasonable thing to want.
+
+### The app shell
+
+`App.tsx`'s grid changes from "sidebar column + main + status row" to:
+
+```
+.app            grid: top bar row / content row
+  .topbar       drag region; Space switcher, +, view modes, actions, core light
+  .stage        position: relative; the backdrop
+    WindowsView (desk + sidebar layer)
+```
+
+- `SpaceBar` moves into `.topbar` and drops down below it, not above (`placement`).
+- `StatusBar` goes away. View modes and actions move to the top bar, and Focus mode's title fields move to its centre. The selected window's usage (memory, CPU) moves into its title bar's tooltip, or stays in the top bar (open question).
+- `drag-strip` and `.app.no-sidebar` go away: the top bar is always there.
+- **Windows (the OS):** `titleBarOverlay` draws the window controls top right, so the top bar reserves their width (`env(titlebar-area-width)`), and the right-hand actions sit to their left. On macOS the traffic lights stay at `trafficLightPosition`, vertically centred in the taller bar (y adjusted in `main/index.ts`).
+
+### Settings
+
+- `ui.sidebarRecent` and `ui.sidebarPadding` stay, describing the Navigator. Their wording changes, and so does their place in `settings/layout.ts` if a Navigator section makes sense.
+- No new settings at first. Sidebar insets follow `ui.gutter`, and their look follows the window settings (radius, outline, shadow), because they are windows.
+
+## Plan
+
+One worktree per phase; each ends green (`pnpm typecheck && pnpm test`, e2e updated).
+
+0. **Spike: window hosts.** `moveBefore` with a `<webview>` and an xterm host in Electron 44, plus a throwaway page and a note here with the result. It decides whether docking a webview reloads it.
+1. **The top bar.** Add `.topbar`, move the Space switcher, + and view modes into it, fold the status bar in, and centre the traffic lights. The old sidebar stays where it is, under the top bar. This change is visible but low-risk. e2e: the sidebar-footer/status-bar alignment check is replaced by one for the top bar.
+2. **Window hosts.** Portal plus host plus `moveBefore` (or the fallback) in `WindowsView`, with no visible change. This is where remount bugs would show up, so it gets its own phase.
+3. **Sidebars.** `Space.view.docks`, the desk viewport, `dockRects`, the sidebar layer, the resize edge, and the menus and commands (`window.dockLeft`, `window.dockRight`, `window.undock`, `view.sidebar` → left, `view.rightSidebar`). Rows are filtered out of desk navigation. Tests: `dockRects` and the desk viewport in `layouts.test.ts`; stale ids dropped.
+4. **The Navigator.** The `navigator` core type, `Sidebar.tsx` → `components/Navigator.tsx` registered as a view, the default dock and migration, and removing the old shell slot. e2e: the sidebar search and Widgets checks run against the Navigator window.
+5. **Polish.** Drag a title bar to an edge to dock and away from it to undock, dock/undock animations (the tile glides between its rects), `placement`-aware Files, README and CHANGELOG (changelog skill).
+
+Merge the `windows` worktree first if it lands soon: it has uncommitted changes to `App.tsx`, `model.ts`, `styles.css` and `windows/builtin.tsx`, the same files phases 1–4 touch. The append-only registries (`shared/commands.ts`, `settings/layout.ts`, core `builtin.ts`) will conflict as usual. Keep both sides.
+
+## Risks
+
+- **Webview reloads** on dock and undock: phase 0 decides, and the fallback is acceptable.
+- **Narrow app windows.** Two sidebars at 280 px leave little desk. Today's rule (`innerWidth - 320`) becomes: the desk keeps at least 320 px, and sidebars shrink to their `minWidth`, then the right one hides (and its toggle says so).
+- **Shortcut habits.** ⌃⌘1–9 and ⌘[ / ⌘] today follow the sidebar's order. They keep following the Navigator's order, which is the same list.
+- **An empty Space** shows the Navigator next to an empty desk, not the full-window "hello". The hello moves into the desk area.
+- **Pointer events during resize.** The existing `.sidebar-resizing` rule (no pointer events on xterm and embeds) moves to the sidebar edge.
+
+## Open questions
+
+- **Name.** "Navigator" (Xcode's left pane) or something plainer: "Sessions", "Overview"? This is a copywriting decision. Users will mostly just call it "the sidebar".
+- **One window per side, or a stack?** Proposed: one, for now. A vertical stack (Navigator above Live Diff) is the obvious next ask, and `Docks` can grow `ids: WindowId[]` without a migration headache.
+- **Should the Navigator list sidebars?** Proposed: no, they are always in view. But a hidden side's window would then be listed nowhere. List hidden ones?
+- **Canvas under sidebars?** Overlaying would feel more "floating on the canvas" but hides windows behind sidebars. Proposed: no.
+- **The status bar's usage numbers:** in the title bar tooltip, or a slot in the top bar's centre?
+- **Keyboard focus for sidebars:** ⌃⌘← / ⌃⌘→ to focus the left or right sidebar?
