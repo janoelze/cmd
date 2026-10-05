@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PaneId, SearchHit, SearchStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { openSession } from "../actions.ts";
-import { usePersisted } from "../store.ts";
+import { usePersisted, useStoreValue } from "../store.ts";
 import { terminals } from "../terminals.ts";
 import { filterRows, flatten, sectionOf, SECTIONS, type Section, type SidebarRow } from "../model.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
@@ -216,17 +216,19 @@ export function Sidebar(p: Props) {
 
 /** The newest past sessions that aren't open; refreshed when the index or the open agents change. */
 function useRecent(live: string[], status: SearchStatus | null): SearchHit[] {
+  const limit = useStoreValue((s) => s.settings.settings["ui.sidebarRecent"]);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const liveKey = live.join("\n");
   const indexKey = status ? `${status.sessions}|${status.files}|${status.indexing}` : "";
   useEffect(() => {
+    if (limit <= 0) return setHits([]);
     let stale = false;
-    cmd.call("search.recent", { limit: 5, exclude: live }).then(
+    cmd.call("search.recent", { limit, exclude: live }).then(
       (h) => !stale && setHits(h),
       () => !stale && setHits([]), // search off, or an older core
     );
     return () => void (stale = true);
-  }, [liveKey, indexKey]);
+  }, [liveKey, indexKey, limit]);
   return hits;
 }
 
