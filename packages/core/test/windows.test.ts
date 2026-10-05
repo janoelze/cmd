@@ -8,6 +8,7 @@ import { Store } from "../src/store.ts";
 import {
   listDir,
   normalizeUrl,
+  parseYouTube,
   parseOverrides,
   readText,
   resolvePaths,
@@ -17,6 +18,7 @@ import {
   WindowManager,
   WindowTypes,
   writeText,
+  youtubeType,
   type WindowType,
 } from "../src/windows/index.ts";
 import { SpaceManager } from "../src/spaces/manager.ts";
@@ -182,5 +184,40 @@ describe("resolvePaths", () => {
     fs.mkdirSync(path.join(dir, "src"));
     fs.writeFileSync(path.join(dir, "src", "a.ts"), "");
     expect(resolvePaths(["src/a.ts", "src", "nope.ts", "/"], dir)).toEqual([path.join(dir, "src", "a.ts"), path.join(dir, "src"), null, "/"]);
+  });
+});
+
+describe("youtube widget", () => {
+  it("reads ids, links and embed codes", () => {
+    const id = "dQw4w9WgXcQ";
+    expect(parseYouTube(id)).toEqual({ video: id });
+    expect(parseYouTube(` https://www.youtube.com/watch?v=${id}&t=1m30s `)).toEqual({ video: id, start: 90 });
+    expect(parseYouTube(`youtube.com/watch?v=${id}&list=PLabc_-1`)).toEqual({ video: id, list: "PLabc_-1" });
+    expect(parseYouTube(`https://youtu.be/${id}?t=42`)).toEqual({ video: id, start: 42 });
+    expect(parseYouTube(`https://m.youtube.com/shorts/${id}`)).toEqual({ video: id });
+    expect(parseYouTube(`https://music.youtube.com/watch?v=${id}`)).toEqual({ video: id });
+    expect(parseYouTube(`https://www.youtube.com/live/${id}?si=x`)).toEqual({ video: id });
+    expect(parseYouTube("https://www.youtube.com/playlist?list=PLabc")).toEqual({ list: "PLabc" });
+    expect(
+      parseYouTube(`<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${id}?si=a&amp;start=5" title="YouTube video player" allowfullscreen></iframe>`),
+    ).toEqual({ video: id, start: 5 });
+    expect(parseYouTube(`<iframe src="https://www.youtube.com/embed/videoseries?list=PLabc"></iframe>`)).toEqual({ list: "PLabc" });
+    for (const bad of ["", "hello", "https://vimeo.com/123", "https://www.youtube.com/@channel", "https://youtube.com/watch?v=short"]) expect(parseYouTube(bad)).toBeNull();
+  });
+
+  it("starts empty, takes a link, and refuses what isn't one", () => {
+    expect(youtubeType.create({}).state).toEqual({});
+    const { state } = youtubeType.create({ input: "https://youtu.be/dQw4w9WgXcQ" });
+    expect(state).toEqual({ video: "dQw4w9WgXcQ" });
+    expect(youtubeType.update!(state, { input: "https://youtu.be/aaaaaaaaaaa?t=3" }).state).toEqual({ video: "aaaaaaaaaaa", start: 3 });
+    expect(youtubeType.update!(state, { input: null }).state).toEqual({});
+    expect(youtubeType.update!(state, {}).state).toEqual(state);
+    // Fill sticks across another video and Change Video.
+    const filled = youtubeType.update!(state, { fill: true }).state;
+    expect(filled).toEqual({ video: "dQw4w9WgXcQ", fill: true });
+    expect(youtubeType.update!(filled, { input: "aaaaaaaaaaa" }).state).toEqual({ video: "aaaaaaaaaaa", fill: true });
+    expect(youtubeType.update!(filled, { input: null }).state).toEqual({ fill: true });
+    expect(youtubeType.update!(filled, { fill: false }).state).toEqual({ video: "dQw4w9WgXcQ" });
+    expect(() => youtubeType.update!(state, { input: "nope" })).toThrow(/not a YouTube link/);
   });
 });

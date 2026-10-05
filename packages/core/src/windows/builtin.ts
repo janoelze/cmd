@@ -195,6 +195,87 @@ export const diffType: WindowType<{ path: string }> = {
   },
 };
 
+/** A YouTube video and/or playlist, and where to start (seconds). */
+export type YouTubeRef = {
+  video?: string;
+  list?: string;
+  start?: number;
+};
+
+const VIDEO_ID = /^[\w-]{11}$/;
+
+/** "90", "90s", "1m30s", "1h2m3s" → seconds. */
+function seconds(t: string | null): number | undefined {
+  if (!t) return undefined;
+  if (/^\d+$/.test(t)) return Number(t) || undefined;
+  const m = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+  if (!m) return undefined;
+  return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) || undefined;
+}
+
+/** A video id, a youtube.com / youtu.be / youtube-nocookie.com link, or an <iframe> embed code; null if none of those. */
+export function parseYouTube(input: string): YouTubeRef | null {
+  let t = input.trim();
+  const src = t.match(/<iframe[^>]*\ssrc\s*=\s*["']([^"']+)["']/i);
+  if (src) t = src[1]!.replace(/&amp;/g, "&");
+  if (VIDEO_ID.test(t)) return { video: t };
+  if (t.startsWith("//")) t = `https:${t}`;
+  else if (!/^https?:/i.test(t)) t = `https://${t}`;
+  let u: URL;
+  try {
+    u = new URL(t);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.toLowerCase().replace(/^(www|m|music)\./, "");
+  const parts = u.pathname.split("/").filter(Boolean);
+  let video: string | undefined;
+  if (host === "youtu.be") video = parts[0];
+  else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    if (parts[0] === "watch") video = u.searchParams.get("v") ?? undefined;
+    else if (["embed", "shorts", "live", "v", "e"].includes(parts[0] ?? "")) video = parts[1];
+    else if (parts[0] !== "playlist") return null;
+  } else return null;
+  if (video === "videoseries") video = undefined;
+  const ref: YouTubeRef = {};
+  if (video && VIDEO_ID.test(video)) ref.video = video;
+  const list = u.searchParams.get("list");
+  if (list && /^[\w-]+$/.test(list)) ref.list = list;
+  const start = seconds(u.searchParams.get("t") ?? u.searchParams.get("start"));
+  if (start && ref.video) ref.start = start;
+  return ref.video || ref.list ? ref : null;
+}
+
+/**
+ * A YouTube player filling the window. Created empty (the view asks for a link)
+ * or with `input`. `fill`: the video covers the window, cropped, instead of being letterboxed.
+ */
+export const youtubeType: WindowType<YouTubeRef & { fill?: boolean }> = {
+  kind: "youtube",
+  title: "YouTube",
+  icon: "play.rectangle",
+  role: "widget",
+  description: "Paste a YouTube link, video id or embed code and watch it here.",
+  create(input) {
+    const raw = str(input.input);
+    const fill = input.fill === true ? { fill: true } : {};
+    if (!raw) return { state: fill, title: "YouTube" };
+    const ref = parseYouTube(raw);
+    if (!ref) throw new Error(`not a YouTube link: ${raw}`);
+    return { state: { ...ref, ...fill }, title: "YouTube" };
+  },
+  update(state, patch) {
+    const fill = typeof patch.fill === "boolean" ? patch.fill : state.fill;
+    const keep = fill ? { fill: true } : {};
+    if (patch.input === null) return { state: keep, title: "YouTube" };
+    const raw = str(patch.input);
+    if (raw === undefined) return { state: { video: state.video, list: state.list, start: state.start, ...keep } };
+    const ref = parseYouTube(raw);
+    if (!ref) throw new Error(`not a YouTube link: ${raw}`);
+    return { state: { ...ref, ...keep }, title: "YouTube" };
+  },
+};
+
 export function registerBuiltins(types: WindowTypes): void {
   types.register(terminalType);
   types.register(browserType);
@@ -204,4 +285,5 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(magicType);
   types.register(agentsType);
   types.register(diffType);
+  types.register(youtubeType);
 }

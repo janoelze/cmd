@@ -12,6 +12,7 @@ import { FilesView } from "../components/FilesView.tsx";
 import { MagicView, setEditing } from "../components/MagicView.tsx";
 import { AgentActivity } from "../components/AgentActivity.tsx";
 import { LiveDiff } from "../components/LiveDiff.tsx";
+import { watchUrl, YouTubeView } from "../components/YouTubeView.tsx";
 import { intervalLabel, refreshChoices } from "../magic.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
@@ -167,4 +168,22 @@ registerWindowView({
     },
     { label: "Show in Finder", run: () => cmd.revealPath(stateStr(w, "path") ?? "") },
   ],
+});
+
+registerWindowView({
+  kind: "youtube",
+  View: YouTubeView,
+  describe: () => ({ kind: null }),
+  menu: (w) => {
+    const url = watchUrl({ video: stateStr(w, "video"), list: stateStr(w, "list"), start: typeof w.state.start === "number" ? w.state.start : undefined });
+    return url
+      ? [
+          { label: "Change Video…", run: () => void cmd.call("window.update", { id: w.id, title: "YouTube", state: { input: null } }).catch(() => {}) },
+          { label: "Fill Window", checked: w.state.fill === true, run: () => void cmd.call("window.update", { id: w.id, state: { fill: w.state.fill !== true } }).catch(() => {}) },
+          "-" as const,
+          { label: "Open on YouTube", run: () => cmd.openPath(url) },
+          { label: "Copy Link", run: () => copy(url) },
+        ]
+      : [];
+  },
 });
