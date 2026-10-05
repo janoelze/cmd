@@ -22,6 +22,9 @@ import { deviceById, type Device } from "../devices.ts";
 const PAD = 16;
 const CAPTION = 28;
 
+/** `allowpopups` as a string: React drops a bare `true` on <webview> (Electron's types say boolean). */
+export const POPUPS = "true" as unknown as boolean;
+
 const isBlank = (u: string | null | undefined): u is null | undefined | "" | "about:blank" =>
   !u || u === "about:blank";
 
@@ -173,6 +176,8 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
             data-embed
             src={initial.src}
             partition="persist:cmd-browser"
+            // Lets pages open windows (target=_blank, window.open): main turns them into browser windows.
+            allowpopups={POPUPS}
             {...(initial.agent ? { useragent: initial.agent } : {})}
             style={device ? deviceStyle(device, room) : undefined}
           />

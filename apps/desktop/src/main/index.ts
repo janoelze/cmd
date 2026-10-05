@@ -48,6 +48,9 @@ const devBuild = !app.isPackaged || app.getName() === "cmd dev";
 declare const __USAGE_KEY__: string;
 const USAGE_KEY = typeof __USAGE_KEY__ === "string" && !devBuild ? __USAGE_KEY__ : "";
 if (devBuild) app.setName("cmd dev");
+// Pages see plain Chrome: Electron's UA names the app and Electron, which
+// Google's sign-in refuses ("this browser may not be secure") and other sites flag as a bot.
+app.userAgentFallback = app.userAgentFallback.replace(/\s(?:Electron|cmd[\w-]*)\/\S+/g, "");
 enterInstance(devBuild ? "dev" : "release");
 
 // Logs: main.log, renderer.log and (from the core) core.log in logDir(), see
