@@ -39,6 +39,20 @@ cmd agents export --anonymize --out ~/src/agent-activity-export.jsonl
 
 The same data is in the app's SQLite file for ad-hoc queries: `~/Library/Application Support/cmd/cmd.sqlite`, tables `agent_events` (raw payload in `doc`, provenance in `schema`, `cmd`, `hook`, `agent_version`), `agent_turns` (`doc` is an `AgentTurn`), `agent_homes`, `schema_versions`. Open it read-only (`sqlite3 -readonly`); the core writes to it.
 
+## The lab loop
+
+The fastest way to find out how an agent really behaves, and to turn that into rules and fixtures, found on 2026-10-05: drive the agents yourself in panes of a development core and watch what cmd makes of it, step by step. One iteration takes minutes and a few cents of model calls.
+
+1. **A development core from the worktree** that has the change: `export CMD_HOME=$PWD/.cmd-dev && pnpm core`. The agents' hooks (whichever cmd installed them) spool into the shared status folder; each core takes only its own panes' events, so this core records with the code under test, real clock included (quiet rules, question rules), and the installed app is untouched.
+2. **A throwaway repository** with something to fix, a file to delete and a slow command: `calc.py` with two wrong functions, `NOTES.md`, `slow.py` printing a line a second for 90 s.
+3. **Launch scripts** per agent that start it in the mode under test: Claude with `--permission-mode default` (so it asks) and the `CLAUDE_CODE_*` variables of the session that drives it unset; Codex with `-a untrusted` (it asks for everything) and `--dangerously-bypass-hook-trust`; Gemini without `--yolo`. If the driving session can't write the agents' config folders (a sandbox), give Codex and Gemini scratch homes (`CODEX_HOME`, `GEMINI_CLI_HOME`) holding a link to the login, their settings and cmd's hook (`installHooks`), with the repository already trusted.
+4. **Drive and watch** with `scripts/agent-lab.mjs`: `open` a pane with the launch script, `type` prompts, `keys` for answers (`1`, `\r`, `\e`), `wait` for the screen, and after every step `state`: the agent's state, its cause and the current turn as cmd sees them. Each scenario is a few lines: ask for a command, wait for the dialog, approve or deny or Esc, poll `state` every couple of seconds until it settles. `cmd agents events <pane>` shows the raw stream.
+5. **Compare** what's on the screen with what cmd says. Every mismatch is a finding: a missing event, a field in an unexpected place, a rule that fires wrong or not at all. Write it into Findings below.
+6. **Fix** in `normalize.ts` / `reduce.ts`, with a unit test (the timing rules need synthetic timelines: terminal output times aren't in the log). Restart the core (`pnpm core:stop && pnpm core`; terminals survive) and run the scenario again.
+7. **Keep the session as a fixture**: `node packages/core/test/fixtures/agents/cut.ts .cmd-dev/cmd.sqlite <pane> <agent> <out.jsonl> <scenario>` (add `--scrub` for anything from real work), into `test/fixtures/agents/<agent>-<version>/`, with a test that pins what it showed.
+
+The same loop works for a person instead of the script: open the pane, do the steps by hand, ask the session to read `state` and the events afterwards. The script is faster and repeatable; a person finds the cases nobody scripted (a prompt typed into the wrong window, two agents racing in one repository, an agent asking in prose instead of a dialog).
+
 ## 2. The export file
 
 JSONL ([18-agent-activity.md](18-agent-activity.md), "Formats and versions"):
@@ -160,3 +174,14 @@ Recorded headless through cmd's hook with scratch config folders: Gemini CLI 0.6
 - Fixtures: `gemini-0.62.0/interactive-permissions`, `codex-0.144.5/interactive-followup` (scripted prompts, throwaway repository).
 - **Codex with `-a untrusted` sends PermissionRequest** (tool and input, no message: "Allow Bash?" + the command). A denial or an Esc on the dialog sends nothing, so the agent stayed "needs input" for good. Rule: a waiting turn whose terminal changed after the question (the dialog went away) and then stayed quiet for 30 s ends `interrupted` ("declined: the screen changed after the question, then nothing"); a dialog still on screen produces no output, so it keeps waiting. Fixture `codex-0.144.5/interactive-permission`.
 - With peer briefings on, Codex knew Gemini was working in the same repository and asked to message it (`cmd send`) before deleting a file both were touching.
+
+### 2026-10-05, the lab loop (Claude 2.1.289 and Codex 0.144.5 driven in a development core)
+
+- **No agent sends anything for an answered or dismissed question.** An approval shows only when the call ends (PostToolUse), a denial or an Esc never. So a waiting agent stayed "needs input" while its approved command ran, and forever after a denial. Two rules on the terminal: still busy more than 3 s after the question (the command's output, the agent's working timer, which Claude and Codex draw even for a silent `sleep`) → **answered**, working again; changed after the question, then quiet 30 s → **dismissed**, the turn ends `interrupted` ("declined: …"). A dialog still on screen draws nothing, so it keeps waiting. Seen live: approved `sleep 25` working within 4 s; denials cleared after 27–31 s.
+- A denial faster than 0.5 s after the question (a script, not a person) looks like the dialog drawing and isn't caught; kept that way, since mistaking a waiting agent for an idle one is worse.
+- **Claude's reminder** ("Claude needs your permission", a few seconds after an unanswered dialog) replaced the specific question; now it doesn't.
+- **Claude denies in prose too**: asked to delete a file it may ask "should I?" in its answer (a Stop) instead of opening a dialog; only its helper's suggested reply ("yes, delete it", a turn note) hints at it.
+- **Claude moves long commands to the background** by itself (Stop with `background_tasks`, then an auto turn when the shell finishes): matches the recorded fixture.
+- **Esc while generating**: no event; the quiet rule ended the turn 31 s later. Agents animate while tools run, so the quiet window with a tool in flight is down from 5 min to 60 s.
+- **/clear** = SessionEnd + SessionStart with the process alive (agent kept, new session); **/exit** = SessionEnd, process gone (agent removed).
+- Fixtures: `claude-2.1.289/lab-permissions-interrupts`, `codex-0.144.5/lab-approvals`. Gemini wasn't driven yet.

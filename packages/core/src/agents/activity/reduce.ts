@@ -9,8 +9,10 @@ import type { StateChange } from "../state.ts";
 
 /** No events and no terminal output for this long ends a turn whose agent went quiet. */
 export const QUIET_MS = 30_000;
-/** The same while a tool call is in flight (long commands can be silent). */
-export const QUIET_TOOL_MS = 5 * 60_000;
+/** Output this long after a question means it was answered (a denial redraws once, then goes quiet). */
+export const ANSWERED_MS = 3000;
+/** The same while a tool call is in flight: agents animate a timer while their tools run, so their screens stay busy (seen live in Claude and Codex). */
+export const QUIET_TOOL_MS = 60_000;
 const MAX_COMMANDS = 10;
 /**
  * Tools that run a subagent in the foreground without marking its calls (Gemini's
@@ -193,6 +195,8 @@ export class ActivityReducer {
       }
       case "ask": {
         const t = this.#ensureTurn(r, ev);
+        // A reminder about the question already up (Claude's "needs your permission" a few seconds later) doesn't replace it.
+        if (t.outcome === "waiting" && t.ask?.tool && !ev.tool) break;
         const message = ev.text ?? "Needs input";
         t.ask = { message, ...(ev.tool ? { tool: ev.tool.name } : {}), ...(ev.tool?.command || ev.tool?.paths?.[0] ? { input: ev.tool.command ?? ev.tool.paths![0] } : {}) };
         t.outcome = "waiting";
@@ -266,6 +270,15 @@ export class ActivityReducer {
     // A question dismissed without an answer event (Codex and Gemini send none for Esc or a denial):
     // the terminal changed after the question, then nothing for a while. A dialog that waits stays still.
     if (this.turn!.outcome === "waiting") {
+      // Still busy well after the question (the approved command's output, the agent's working timer):
+      // it was answered. Agents send nothing for an approval until the call ends.
+      if (outputAt > this.#askAt + ANSWERED_MS && now - outputAt < 2500) {
+        const r: Reduction = { change: {} };
+        this.turn!.outcome = "working";
+        r.turn = this.turn!;
+        this.#state(r, { state: "working", detail: this.turn!.ask?.input ?? null }, "inferred: question answered");
+        return r;
+      }
       if (outputAt <= this.#askAt + 500 || now - Math.max(this.lastEventAt, outputAt) < QUIET_MS) return null;
       const r: Reduction = { change: {} };
       this.#close(r, outputAt, "interrupted", "declined: the screen changed after the question, then nothing");

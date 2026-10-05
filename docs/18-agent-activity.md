@@ -63,8 +63,8 @@ A tool call that hasn't reported back when its turn ends counts as failed (`infe
 `reduce.ts` is a pure state machine per agent, fed events in order. What the agent says decides the state; every change records its cause (`Agent.stateCause`: "hook Stop", "inferred: quiet for 30 s"). Rules where it says nothing:
 
 - **New session** (resume, `/clear`): an open turn ends `interrupted`. A SessionStart in the same session (Claude's after compaction) keeps the turn going.
-- **New prompt** while a turn is open: the open one ends `interrupted`.
-- **Interrupt** (Claude sends no Stop on Esc): a working turn with no events and no terminal output for 30 s (5 min while a tool call is in flight) ends `interrupted`, state idle, noted as an `interrupt` event. An agent that turns out to be still going (a late tool call or Stop) reopens the same turn. Claude's `idle_prompt` notification with a turn open ends it the same way.
+- **Interrupt** (no agent sends anything on Esc): a working turn with no events and no terminal output for 30 s (60 s while a tool call is in flight; agents animate a timer while tools run) ends `interrupted`, state idle, noted as an `interrupt` event. An agent that turns out to be still going (a late tool call or Stop) reopens the same turn. Claude's `idle_prompt` notification with a turn open ends it the same way.
+- **Questions** (no agent sends anything when a question is answered or dismissed): a waiting turn whose terminal is still busy more than 3 s after the question was **answered** (back to working); one whose terminal changed after the question and then stayed quiet for 30 s was **dismissed** (ends `interrupted`, "declined"). A prompt while a turn waits means its question was dismissed too; a prompt while it works is a follow-up in the same turn. A reminder about the question already up doesn't replace it.
 - **SessionEnd** exits the agent only if its process is gone.
 - **Mismatches** become `anomaly` events: a spool file that isn't an event, a hook event of another agent kind than the pane's agent.
 

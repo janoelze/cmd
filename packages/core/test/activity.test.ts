@@ -249,6 +249,31 @@ describe("interactive sessions in a cmd pane (installed app 0.11.0)", () => {
   });
 });
 
+describe("lab sessions (driven in a development core's panes, scripted prompts)", () => {
+  it("Claude: approvals, a reminder, background shells, an auto turn, a follow-up, /clear", () => {
+    const evs = fixture("claude-2.1.289/lab-permissions-interrupts.jsonl").map((r, i) => normalize(r, i));
+    // A PermissionRequest, then Claude's own reminder a few seconds later when it isn't answered.
+    const asks = evs.filter((e) => e.kind === "ask");
+    expect(asks.some((e) => e.name === "Notification" && e.text === "Claude needs your permission")).toBe(true);
+    expect(evs.some((e) => e.kind === "stop" && e.background?.length)).toBe(true);
+    expect(evs.some((e) => e.kind === "prompt" && e.auto)).toBe(true);
+    const { out } = replay(fixture("claude-2.1.289/lab-permissions-interrupts.jsonl"));
+    const turns = out.filter((o) => o.r.closed).map((o) => o.r.closed!);
+    expect(turns.some((t) => t.outcome === "done" && t.followUps.length === 1 && t.files.some((f) => f.path.endsWith("tests.py")))).toBe(true);
+    expect(turns.find((t) => t.ask?.input === "python3 slow.py")!.ask!.tool).toBe("Bash");
+  });
+
+  it("Codex: every approval is a PermissionRequest; nothing comes for an approval or a denial", () => {
+    const evs = fixture("codex-0.144.5/lab-approvals.jsonl").map((r, i) => normalize(r, i));
+    const asks = evs.filter((e) => e.kind === "ask");
+    expect(asks.length).toBeGreaterThanOrEqual(5);
+    expect(asks.every((e) => e.name === "PermissionRequest" && e.tool)).toBe(true);
+    expect(asks.map((e) => e.tool!.name)).toContain("apply_patch");
+    // Every question is followed by its tool's end, or by nothing (denied, interrupted): no answer event exists.
+    expect(evs.some((e) => e.name.toLowerCase().includes("permission") && e.kind !== "ask")).toBe(false);
+  });
+});
+
 describe("Codex resume, recorded", () => {
   it("keeps one session across exec resume, a turn each", () => {
     const evs = fixture("codex-0.144.5/two-turns-resume.jsonl").map((r, i) => normalize(r, i));
@@ -325,10 +350,29 @@ describe("reduce", () => {
     // The dialog sits there: no output after it, however long.
     expect(red.tick(10 * 60_000, 1000)).toBeNull();
     // The user pressed Esc: the agent redrew (output after the question), then went quiet.
+    expect(red.tick(16_000, 1200)).toBeNull();
     expect(red.tick(20_000, 15_000)).toBeNull();
     const r = red.tick(15_000 + QUIET_MS, 15_000)!;
     expect(r.change.state).toBe("idle");
     expect(red.turn).toMatchObject({ outcome: "interrupted", inferred: [expect.stringMatching(/^declined: the screen changed/)] });
+  });
+
+  it("takes a question as answered when the terminal stays busy after it (agents send nothing for an approval)", () => {
+    const red = new ActivityReducer("a1");
+    red.apply(ev("prompt", 0));
+    red.apply(ev("tool.start", 500, { tool: { name: "Bash", id: "t", label: "python3 slow.py", command: "python3 slow.py" } }));
+    red.apply(ev("ask", 1000, { text: "Allow Bash?", tool: { name: "Bash", label: "python3 slow.py", command: "python3 slow.py" } }));
+    // A redraw right after the question proves nothing.
+    expect(red.tick(3000, 2000)).toBeNull();
+    // Output still coming 3 s and more after it: the command runs.
+    const r = red.tick(6000, 5500)!;
+    expect(r.change).toMatchObject({ state: "working", detail: "python3 slow.py" });
+    expect(r.cause).toBe("inferred: question answered");
+    expect(red.turn).toMatchObject({ outcome: "working", inferred: [] });
+    // The reminder that follows a question doesn't replace it.
+    red.apply(ev("ask", 7000, { text: "Allow Bash?", tool: { name: "Bash", label: "x", command: "rm x" } }));
+    red.apply(ev("ask", 9000, { text: "Claude needs your permission" }));
+    expect(red.turn!.ask).toMatchObject({ tool: "Bash", input: "rm x" });
   });
 
   it("takes a prompt sent while the agent works as a follow-up in the same turn; a new session ends it", () => {
