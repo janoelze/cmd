@@ -87,8 +87,8 @@ const core = new Core({
   legacyStatusRoot: legacyStatusRoot(),
   build,
   stateDir: home,
-  // Release builds started by the app; anything else only when asked to.
-  usageUrl: process.env.CMD_USAGE_URL || (instanceName() === "release" && process.env.CMD_APP_VERSION ? USAGE_URL : null),
+  // Release builds started by the app; anything else only when asked to. "off": never (CI, e2e).
+  usageUrl: process.env.CMD_USAGE_URL === "off" ? null : process.env.CMD_USAGE_URL || (instanceName() === "release" && process.env.CMD_APP_VERSION ? USAGE_URL : null),
 });
 
 core.restore();

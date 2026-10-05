@@ -6,7 +6,8 @@
 // paths, commands, titles or anything typed; the totals are public at
 // endtime-instruments.org/cmd/usage (website/). Batches without events are
 // skipped, except one a day so an idle install still counts as active. Release
-// builds send; development builds only when $CMD_USAGE_URL is set. The
+// builds send; development builds only when $CMD_USAGE_URL is set, and nothing
+// does when it is "off" (CI and e2e, whose fresh CMD_HOMEs look like new installs). The
 // `diagnostics.usageStats` setting turns it off. The server can slow senders
 // down (429 or 503 with Retry-After) or stop them (410, until the core restarts).
 

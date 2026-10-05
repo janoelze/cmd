@@ -99,7 +99,7 @@ function summary(int $days = 30): array
     $scalar = fn(string $sql, array $p = []) => (int) ($q($sql, $p)[0]['n'] ?? 0);
 
     $daily = [];
-    for ($t = strtotime($from); ($d = gmdate('Y-m-d', $t)) <= $today; $t += 86400) $daily[$d] = 0;
+    for ($t = strtotime("$from UTC"); ($d = gmdate('Y-m-d', $t)) <= $today; $t += 86400) $daily[$d] = 0;
     foreach ($q('SELECT day, COUNT(*) AS n FROM installs WHERE day >= ? GROUP BY day', [$from]) as $r) $daily[$r['day']] = (int) $r['n'];
 
     $pairs = fn(array $rows) => array_column(array_map(fn($r) => [$r['k'], (int) $r['n']], $rows), 1, 0);

@@ -44,7 +44,7 @@ const launch = async () => {
   const app = await electron.launch({
     executablePath: require("electron"),
     args: [path.join(root, "apps/desktop")],
-    env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts },
+    env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts },
   });
   const win = await app.firstWindow();
   win.on("pageerror", (e) => console.log("pageerror:", e.message));
