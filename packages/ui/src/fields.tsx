@@ -256,6 +256,8 @@ export function NumberField({
  * Change and Remove; otherwise (or while changing) a password field that saves
  * on Enter or Save. An onSave that returns a promise is waited for (a key being
  * checked): the field stays as typed if it rejects, so it can be corrected.
+ * live: no Save button; it saves as soon as a key is pasted, or after a pause in
+ * typing (a key the app checks, so half a key is only ever rejected).
  */
 export function SecretField({
   set,
@@ -265,6 +267,7 @@ export function SecretField({
   width = 190,
   fill,
   autoFocus,
+  live,
 }: {
   set: boolean;
   /** The last characters ("…abcd"), shown masked. */
@@ -276,15 +279,20 @@ export function SecretField({
   /** As wide as its container (a stacked row). */
   fill?: boolean;
   autoFocus?: boolean;
+  live?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pasted = useRef(false);
   useEffect(() => {
     if (editing) ref.current?.focus();
   }, [editing]);
-  const done = () => (setEditing(false), setDraft(""));
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const done = () => (setEditing(false), setDraft(""), setFailed(false));
   if (set && !editing) {
     return (
       <span className="ui-secret" data-fill={fill || undefined}>
@@ -294,16 +302,26 @@ export function SecretField({
       </span>
     );
   }
-  const save = () => {
-    const v = draft.trim();
+  const save = (value = draft) => {
+    clearTimeout(timer.current);
+    const v = value.trim();
     if (!v || busy) return;
     const r = onSave(v);
     if (!(r instanceof Promise)) return done();
     setBusy(true);
     r.then(
       () => (setBusy(false), done()),
-      () => (setBusy(false), setEditing(true), requestAnimationFrame(() => ref.current?.select())),
+      () => (setBusy(false), setFailed(true), setEditing(true), requestAnimationFrame(() => ref.current?.select())),
     );
+  };
+  const change = (v: string) => {
+    setDraft(v);
+    setFailed(false);
+    if (!live) return;
+    clearTimeout(timer.current);
+    const now = pasted.current;
+    pasted.current = false;
+    if (v.trim()) timer.current = setTimeout(() => save(v), now ? 0 : 900);
   };
   return (
     <span className="ui-secret" data-fill={fill || undefined}>
@@ -317,17 +335,22 @@ export function SecretField({
         fill={fill}
         value={draft}
         placeholder={placeholder}
-        disabled={busy}
-        onChange={setDraft}
+        readOnly={busy}
+        invalid={failed}
+        end={busy && live ? <Spinner size={11} label="Checking" /> : undefined}
+        onChange={change}
+        onPaste={() => (pasted.current = true)}
         onKeyDown={(e) => {
           if (e.key === "Enter") save();
-          else if (e.key === "Escape") done();
+          else if (e.key === "Escape") (clearTimeout(timer.current), done());
         }}
         onBlur={() => !draft.trim() && !busy && done()}
       />
-      <Button variant="primary" disabled={!draft.trim() || busy} onMouseDown={(e) => e.preventDefault()} onClick={save}>
-        {busy ? <Spinner size={11} label="Checking" /> : "Save"}
-      </Button>
+      {!live && (
+        <Button variant="primary" disabled={!draft.trim() || busy} onMouseDown={(e) => e.preventDefault()} onClick={() => save()}>
+          {busy ? <Spinner size={11} label="Checking" /> : "Save"}
+        </Button>
+      )}
     </span>
   );
 }

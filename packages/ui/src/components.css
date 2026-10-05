@@ -594,9 +594,11 @@
 .ui-row[data-compact] { min-height: 34px; padding-top: 6px; padding-bottom: 6px; }
 .ui-row[data-stacked] { flex-direction: column; align-items: stretch; gap: 8px; }
 .ui-row[data-stacked] .ui-row-control { max-width: none; justify-content: flex-start; }
+.ui-row[data-stacked] > .ui-row-note { margin-top: -2px; }
 .ui-row-text { flex: 1 1 auto; min-width: 0; }
 .ui-row-title { display: flex; align-items: center; gap: 6px; line-height: 18px; color: var(--text); }
 .ui-row-name { min-width: 0; }
+.ui-row-title-aside { margin-left: auto; font-size: var(--text-sm); }
 .ui-row-desc { margin-top: 2px; font-size: var(--text-sm); line-height: 1.4; color: var(--text-dim); text-wrap: pretty; }
 .ui-row-desc code, .ui-check-desc code { padding: 0 3px; font: calc(var(--text-xs)) var(--font-mono); border-radius: var(--radius-xs); background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .ui-row-note { margin-top: 4px; font-size: var(--text-sm); line-height: 1.4; color: var(--tone); }

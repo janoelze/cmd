@@ -40,6 +40,7 @@ export function FormRow({
   children,
   compact,
   stacked,
+  titleAside,
 }: {
   title: ReactNode;
   description?: ReactNode;
@@ -55,22 +56,28 @@ export function FormRow({
   compact?: boolean;
   /** The control under the text, full width (a long text, a list). */
   stacked?: boolean;
+  /** At the end of the title's line: a link that helps fill the row in ("Get a key"). */
+  titleAside?: ReactNode;
 }) {
+  const rowNote = note && (
+    <div className="ui-row-note" data-tone={noteTone}>
+      {note}
+    </div>
+  );
   return (
     <div className="ui-row" data-compact={compact || undefined} data-stacked={stacked || undefined}>
       <div className="ui-row-text">
         <div className="ui-row-title" data-tip={tip}>
           <span className="ui-row-name">{title}</span>
           {accessory}
+          {titleAside ? <span className="ui-row-title-aside">{titleAside}</span> : null}
         </div>
         {description && <div className="ui-row-desc">{description}</div>}
-        {note && (
-          <div className="ui-row-note" data-tone={noteTone}>
-            {note}
-          </div>
-        )}
+        {!stacked && rowNote}
       </div>
       {children != null && <div className="ui-row-control">{children}</div>}
+      {/* Stacked, the note is about the control above it (a key that was rejected). */}
+      {stacked && rowNote}
     </div>
   );
 }

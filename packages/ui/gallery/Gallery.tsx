@@ -584,6 +584,7 @@ function FieldsPage() {
         <Row>
           <SecretField set={secret} hint="…f3a9" placeholder="sk-ant-…" onSave={(v) => setSecret(v != null)} />
           <SecretField set={false} placeholder="Any key but “bad”" onSave={(v) => new Promise((ok, fail) => setTimeout(() => (v === "bad" ? fail(new Error("refused")) : ok(null)), 800))} />
+          <SecretField set={false} live placeholder="Live: paste any key but “bad”" onSave={(v) => new Promise((ok, fail) => setTimeout(() => (v === "bad" ? fail(new Error("refused")) : ok(null)), 800))} />
         </Row>
       </Spec>
     </>

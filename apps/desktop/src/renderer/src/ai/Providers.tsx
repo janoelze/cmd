@@ -1,6 +1,6 @@
 // AI provider rows (docs/17-ai.md), the same in onboarding and Settings → AI:
-// one row per provider with its key, checked with the provider when saved
-// (ai.connect), and a line saying what that key gets you or what is wrong.
+// one row per provider with its key, checked with the provider as soon as it is
+// pasted (ai.connect), and a line saying what that key gets you or what is wrong.
 // With keys for both, a row to choose which one features use.
 
 import { useState } from "react";
@@ -17,7 +17,7 @@ function statusNote(st: AiProviderStatus | undefined): { text: string; tone: "ac
   return { text: st.models ? `Ready · ${st.models.smart.name} and ${st.models.fast.name}` : "Ready", tone: "accent" };
 }
 
-/** A provider's key: Save checks it with the provider first, so a mistyped key never gets stored. */
+/** A provider's key: checked with the provider as it is entered, so a mistyped key never gets stored. */
 /** stacked: the field under the name, full width (onboarding's narrower sheet). */
 export function AiKeyRow({ provider, autoFocus, stacked }: { provider: AiProvider; autoFocus?: boolean; stacked?: boolean }) {
   const ai = useAiStatus();
@@ -37,12 +37,12 @@ export function AiKeyRow({ provider, autoFocus, stacked }: { provider: AiProvide
     <FormRow
       title={def.title}
       tip={def.keySecret}
-      description={(!st?.key.set || st.state === "rejected") && <LinkButton onClick={() => cmd.openPath(def.keyUrl)}>Get a key</LinkButton>}
+      titleAside={(!st?.key.set || st.state === "rejected") && <LinkButton onClick={() => cmd.openPath(def.keyUrl)}>Get a key</LinkButton>}
       note={note?.text}
       noteTone={note?.tone}
       stacked={stacked}
     >
-      <SecretField set={!!st?.key.set} hint={st?.key.hint} placeholder="Paste an API key" autoFocus={autoFocus} fill={stacked} onSave={connect} />
+      <SecretField set={!!st?.key.set} hint={st?.key.hint} placeholder="Paste an API key" autoFocus={autoFocus} fill={stacked} live onSave={connect} />
     </FormRow>
   );
 }
