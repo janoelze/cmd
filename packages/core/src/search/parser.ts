@@ -47,6 +47,16 @@ const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const cap = (s: string) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
 
+/**
+ * The conversation in order, for readers that need it (session summaries):
+ * the parsers append to it when given one. The index doesn't use it.
+ */
+export interface ConversationEntry {
+  role: "user" | "assistant" | "tool";
+  text: string;
+  at?: number;
+}
+
 export function isEmpty(d: SessionDocument): boolean {
   return d.prompts.length === 0 && d.responses.length === 0;
 }
@@ -160,7 +170,7 @@ export function cleanClaudePrompt(text: string): string {
   return r.trim();
 }
 
-export function parseClaude(text: TranscriptText, path: string): SessionDocument | null {
+export function parseClaude(text: TranscriptText, path: string, out?: ConversationEntry[]): SessionDocument | null {
   const doc: SessionDocument = {
     id: (path.split(/[\\/]/).pop() ?? "").replace(/\.jsonl$/, ""),
     agent: "claude",
@@ -193,20 +203,21 @@ export function parseClaude(text: TranscriptText, path: string): SessionDocument
     if (!isObj(message)) return;
     const role = str(message.role) ?? type;
     const content = message.content;
+    const at = parseDate(o.timestamp);
     if (role === "user") {
       // Tool results come back as user messages; only text blocks are prompts.
       const t = textOf(content);
       const cleaned = t ? cleanClaudePrompt(t) : "";
-      if (cleaned) doc.prompts.push(cap(cleaned));
+      if (cleaned) doc.prompts.push(cap(cleaned)), out?.push({ role: "user", text: cleaned, at });
     } else if (role === "assistant") {
-      if (typeof content === "string" && content) doc.responses.push(cap(content));
+      if (typeof content === "string" && content) doc.responses.push(cap(content)), out?.push({ role: "assistant", text: content, at });
       if (Array.isArray(content)) {
         for (const b of content) {
           if (!isObj(b)) continue;
-          if (b.type === "text" && typeof b.text === "string" && b.text) doc.responses.push(cap(b.text));
+          if (b.type === "text" && typeof b.text === "string" && b.text) doc.responses.push(cap(b.text)), out?.push({ role: "assistant", text: b.text, at });
           else if (b.type === "tool_use" || b.type === "server_tool_use") {
             const t = describeToolInput(b.input);
-            if (t) doc.tools.push(cap(t));
+            if (t) doc.tools.push(cap(t)), out?.push({ role: "tool", text: `${str(b.name) ?? "tool"}: ${t}`, at });
           }
         }
       }
@@ -218,12 +229,14 @@ export function parseClaude(text: TranscriptText, path: string): SessionDocument
   return isEmpty(doc) ? null : doc;
 }
 
-export function parseCodex(text: TranscriptText, path: string): SessionDocument | null {
+export function parseCodex(text: TranscriptText, path: string, out?: ConversationEntry[]): SessionDocument | null {
   const doc: SessionDocument = { id: "", agent: "codex", path, prompts: [], responses: [], tools: [] };
   // Codex logs user text twice (as an event and as a model input item that also
   // carries environment context); prefer the events, fall back to the items.
   const itemPrompts: string[] = [];
   const itemResponses: string[] = [];
+  // In file order; prompts and replies from the events, else (as above) from the items.
+  const order: (ConversationEntry & { from: "event" | "item" })[] | null = out ? [] : null;
 
   forEachObject(text, (o) => {
     const payload = isObj(o.payload) ? o.payload : o;
@@ -231,6 +244,7 @@ export function parseCodex(text: TranscriptText, path: string): SessionDocument 
     readCommonMetadata(payload, doc);
     const outer = str(o.type);
     const inner = str(payload.type);
+    const at = parseDate(o.timestamp);
     if (outer === "session_meta") {
       const id = str(payload.id);
       if (id) doc.id = id;
@@ -241,20 +255,20 @@ export function parseCodex(text: TranscriptText, path: string): SessionDocument 
     switch (inner) {
       case "user_message": {
         const m = str(payload.message);
-        if (m) doc.prompts.push(cap(m));
+        if (m) doc.prompts.push(cap(m)), order?.push({ role: "user", text: m, at, from: "event" });
         break;
       }
       case "agent_message": {
         const m = str(payload.message);
-        if (m) doc.responses.push(cap(m));
+        if (m) doc.responses.push(cap(m)), order?.push({ role: "assistant", text: m, at, from: "event" });
         break;
       }
       case "message": {
         const t = textOf(payload.content);
         if (!t) break;
         if (payload.role === "user") {
-          if (!t.startsWith("<")) itemPrompts.push(cap(t));
-        } else if (payload.role === "assistant") itemResponses.push(cap(t));
+          if (!t.startsWith("<")) itemPrompts.push(cap(t)), order?.push({ role: "user", text: t, at, from: "item" });
+        } else if (payload.role === "assistant") itemResponses.push(cap(t)), order?.push({ role: "assistant", text: t, at, from: "item" });
         break;
       }
       case "function_call":
@@ -267,12 +281,16 @@ export function parseCodex(text: TranscriptText, path: string): SessionDocument 
           } catch {}
         }
         const t = describeToolInput(input);
-        if (t) doc.tools.push(cap(t));
+        if (t) doc.tools.push(cap(t)), order?.push({ role: "tool", text: `${str(payload.name) ?? "shell"}: ${t}`, at, from: "event" });
         break;
       }
     }
   });
 
+  if (out && order) {
+    const fromEvents = new Set(order.filter((e) => e.from === "event").map((e) => e.role));
+    for (const { from, ...e } of order) if ((from === "event") === fromEvents.has(e.role)) out.push(e);
+  }
   if (doc.prompts.length === 0) doc.prompts = itemPrompts;
   if (doc.responses.length === 0) doc.responses = itemResponses;
   if (!doc.id) {

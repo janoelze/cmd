@@ -116,6 +116,7 @@ const { values: opt, positionals: pos } = parseArgs({
     rescan: { type: "boolean" },
     anonymize: { type: "boolean" },
     out: { type: "string" },
+    open: { type: "boolean" },
   },
 });
 

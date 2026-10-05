@@ -28,7 +28,7 @@ import {
   type Settings,
 } from "@cmd/protocol";
 import type { SecretsService } from "../secrets.ts";
-import { aiBackend, completeObject, completeText, type AiBackendOptions, type Backend, type CompleteRequest, type CompleteResult, type Usage } from "./backends.ts";
+import { aiBackend, completeObject, completeText, type AiBackendOptions, type Backend, type CompleteRequest, type CompleteResult, type ObjectRequest, type Usage } from "./backends.ts";
 import { FALLBACK_MODELS, KeyRejected, listModels, pickModel } from "./models.ts";
 
 const log = logger("ai");
@@ -343,8 +343,8 @@ export class AiService extends EventEmitter<{ updated: [AiStatus] }> {
     return this.#call(o, b, () => completeText(b, o));
   }
 
-  /** One answer as an object matching `schema` (JSON schema). */
-  object<T>(o: CallOptions & CompleteRequest & { schema: Record<string, unknown> }): Promise<CompleteResult<T>> {
+  /** One answer as an object matching `schema` (JSON schema); streamed with `onPartial`. */
+  object<T>(o: CallOptions & ObjectRequest<T>): Promise<CompleteResult<T>> {
     const b = this.#choose(o);
     return this.#call(o, b, () => completeObject<T>(b, o));
   }

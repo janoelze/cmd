@@ -120,6 +120,12 @@ export interface Methods {
   /** An agent's turns, oldest first (kept after the agent is gone). */
   "agent.turns": { params: { agentId: AgentId; limit?: number }; result: AgentTurn[] };
   /**
+   * Summarise the agent's current session into a Markdown file (docs/20-session-summaries.md).
+   * Returns once the file exists and (unless open: false) a window shows it; the answer
+   * streams into the file after that. wait: return when it's written, with its Markdown.
+   */
+  "agent.summarize": { params: { agentId: AgentId; open?: boolean; wait?: boolean }; result: { path: string; windowId: WindowId | null; markdown: string | null } };
+  /**
    * Everything recorded over the last `days` (default 14), in pages: the header and
    * turns come with the first page (no afterId), events in id order; next: the
    * afterId of the next page, null at the end. anonymize: home folders become "~".

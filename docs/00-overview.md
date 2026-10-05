@@ -30,6 +30,7 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 17 | [AI providers and onboarding](17-ai.md) | One AI service for every feature: providers, tiers, models that pick themselves; the first-launch wizard |
 | 18 | [Agent activity data](18-agent-activity.md) | What agents do, captured reliably: spooled hook events, one vocabulary across agents, state with causes, turns and the files they changed, discovered agent homes, hooks out of the box |
 | 19 | [Reviewing real agent activity data](19-agent-activity-review.md) | Handoff: collect a few days of real sessions, export them, check state, interrupts, turns and files against them, turn findings into fixes and fixtures |
+| 20 | [Session summaries](20-session-summaries.md) | Right-click an agent's title: what the session did, streamed into an editable Markdown file, pruned to fit, shaped to the kind of session, with a team update and a ticket version to copy |
 
 ## Key findings
 1. **Nothing has to be invented for agent awareness.** Every tool in this space combines three things:

@@ -2,11 +2,13 @@
 // the text editor. The view itself (markdown-view.tsx) loads on first use.
 
 import { cmd } from "../bridge.ts";
-import { copy, selectPane } from "../actions.ts";
+import { copy, copySummaryPart, selectPane } from "../actions.ts";
 import { shortPath } from "../model.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 
 const dirOf = (p: string) => p.split("/").slice(0, -1).join("/") || "/";
+/** Where the core keeps session summaries ($CMD_HOME/summaries, else the temp folder's cmd-summaries). */
+const SUMMARY_FILE = /\/(cmd-)?summaries\/[^/]+\.md$/;
 
 /** ⌘E: Markdown ⇄ text editor, same window (id, slot and size kept). */
 export function toggleMarkdownEdit(win: { id: string; kind: string; state: Record<string, unknown> }): boolean {
@@ -30,6 +32,13 @@ registerWindowView({
     const p = stateStr(w, "path");
     return [
       { label: "Edit (⌘E)", run: () => toggleMarkdownEdit(w) },
+      // Session summaries (docs/20-session-summaries.md): the parts to paste elsewhere.
+      ...(p && SUMMARY_FILE.test(p)
+        ? [
+            { label: "Copy Team Update", run: () => void copySummaryPart(p, "team") },
+            { label: "Copy for Ticket", run: () => void copySummaryPart(p, "ticket") },
+          ]
+        : []),
       ...(p
         ? [
             { label: "Open with Default App", run: () => cmd.openPath(p) },

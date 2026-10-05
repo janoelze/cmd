@@ -162,10 +162,16 @@ export async function completeText(o: AiBackendOptions, r: CompleteRequest): Pro
   return { value: res.text, usage: usageOf(res.totalUsage), model: o.model };
 }
 
+export interface ObjectRequest<T> extends CompleteRequest {
+  schema: Record<string, unknown>;
+  /** Streams: called with the object as it fills (fields missing or cut short, never checked). */
+  onPartial?: (partial: Partial<T>) => void;
+}
+
 /** One answer as an object matching `schema` (a JSON schema; checked by the SDK). */
-export async function completeObject<T>(o: AiBackendOptions, r: CompleteRequest & { schema: Record<string, unknown> }): Promise<CompleteResult<T>> {
-  const { generateText, jsonSchema, Output } = await import("ai");
-  const res = await generateText({
+export async function completeObject<T>(o: AiBackendOptions, r: ObjectRequest<T>): Promise<CompleteResult<T>> {
+  const { generateText, streamText, jsonSchema, Output } = await import("ai");
+  const call = {
     model: await languageModel(o),
     instructions: r.system,
     prompt: r.prompt,
@@ -173,6 +179,15 @@ export async function completeObject<T>(o: AiBackendOptions, r: CompleteRequest 
     maxOutputTokens: r.maxOutputTokens ?? 4000,
     providerOptions: effortOptions(o),
     output: Output.object({ schema: jsonSchema<T>(r.schema as never) }),
-  });
-  return { value: res.output as T, usage: usageOf(res.totalUsage), model: o.model };
+  };
+  if (!r.onPartial) {
+    const res = await generateText(call);
+    return { value: res.output as T, usage: usageOf(res.totalUsage), model: o.model };
+  }
+  // A failed stream only ends the partials; the error is kept and thrown after them.
+  let failed: unknown = null;
+  const res = streamText({ ...call, onError: ({ error }) => void (failed ??= error) });
+  for await (const partial of res.partialOutputStream) r.onPartial(partial as Partial<T>);
+  if (failed) throw failed instanceof Error ? failed : new Error(String(failed));
+  return { value: (await res.output) as T, usage: usageOf(await res.totalUsage), model: o.model };
 }

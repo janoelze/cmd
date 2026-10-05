@@ -143,6 +143,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         }),
         ...i("session.copyResume"),
         ...i("session.copyId"),
+        ...i("session.summarize"),
         ...i("session.reveal"),
       ],
     },

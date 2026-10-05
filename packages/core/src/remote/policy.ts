@@ -46,6 +46,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   // Raw events and turns carry prompts, commands and paths: local only for now.
   "agent.events": "never",
   "agent.turns": "never",
+  "agent.summarize": "never",
   "agents.coverage": "never",
   "agents.homes": "never",
   "agents.export": "never",

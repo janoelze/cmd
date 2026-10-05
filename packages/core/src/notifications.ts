@@ -1,7 +1,7 @@
 // Notifications: one path for every source. Agents (needs input, finished a
 // turn), terminal bells, notifications programs ask for (OSC 9/777/99), long
 // commands finishing (OSC 133 from the shell integration), `cmd notify` and
-// widgets (data.ts notify(), via MagicService).
+// widgets (data.ts notify(), via MagicService), session summaries when written.
 //
 // The core decides what is worth telling, from the notifications.* settings and
 // the terminal's mute; it sets the terminal's attention marker and emits an
@@ -182,6 +182,11 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
         return;
       }
     }
+  }
+
+  /** News about a window cmd made for you (a session summary is written); clicking it shows the window. */
+  window(windowId: WindowId, source: "summary", title: string, body: string): void {
+    this.#emit({ source, paneId: null, windowId, title, body, alert: true, urgent: false });
   }
 
   #mark(pane: Pane, a: Omit<Attention, "at">): void {

@@ -87,7 +87,7 @@ export interface Attention {
  */
 export interface AppNotification {
   id: string;
-  source: "agent-input" | "agent-done" | "bell" | "terminal" | "command" | "cli" | "widget";
+  source: "agent-input" | "agent-done" | "bell" | "terminal" | "command" | "cli" | "widget" | "summary";
   /** The terminal it came from, if any (clicking the notification selects it). */
   paneId: PaneId | null;
   /** The window it came from, when not a terminal (a widget). */

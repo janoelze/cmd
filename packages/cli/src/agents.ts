@@ -1,7 +1,7 @@
 // `cmd agents …`: what the core recorded about agents (docs/18-agent-activity.md).
 // The debugging view of agent state: every event with what it was mapped to,
-// turns, coverage per agent, where agents keep their config, and recording a
-// session as a test fixture.
+// turns, coverage per agent, where agents keep their config, recording a
+// session as a test fixture, and summarising a session (docs/20-session-summaries.md).
 
 import fs from "node:fs";
 import os from "node:os";
@@ -14,6 +14,7 @@ type Client = Connection["client"];
 export const AGENTS_HELP = `  agents events <agent|pane> [--raw] [--follow] [--limit N] [--json]
                                       what cmd recorded about an agent, as mapped (--raw: payloads)
   agents turns <agent> [--json]       its turns: prompt, outcome, tools, files, final message
+  agents summary <agent> [--open]     summarise its session with AI: prints the Markdown (--open: in a window too)
   agents coverage [--days N] [--json] what each agent's events actually carried
   agents homes [--rescan] [--json]    where agents keep their config (found by cmd)
   agents record <agent> <out.jsonl>   its events as a test fixture (paths rewritten)
@@ -77,6 +78,16 @@ export async function agentsCommand(client: Client, closed: Promise<void>, pos: 
       });
       await client.call("events.subscribe", {});
       await closed;
+      return 0;
+    }
+    case "summary": {
+      if (!ref) throw new Error("usage: cmd agents summary <agent>");
+      const { agentId } = await target(client, ref);
+      if (!agentId) throw new Error(`no agent: ${ref}`);
+      const r = await client.call("agent.summarize", { agentId, open: !!opt.open, wait: true });
+      if (json) return console.log(JSON.stringify(r, null, 2)), 0;
+      console.log(r.markdown ?? "");
+      console.error(r.path);
       return 0;
     }
     case "turns": {

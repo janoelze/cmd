@@ -24,7 +24,9 @@ import {
   openSession,
   copyResumeCommand,
   sessionId,
+  summarizeSession,
 } from "./actions.ts";
+import { aiStatus, useAiStatus } from "./ai/status.ts";
 import { showContextMenu } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, isWidget, nextAfterClose, pushHistory, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
@@ -403,6 +405,7 @@ export function App() {
       if (id) select(id);
     },
     "session.copyResume": () => currentAgent && void copyResumeCommand(currentAgent),
+    "session.summarize": () => currentAgent && void summarizeSession(currentAgent),
     "session.copyId": () => {
       const id = currentAgent && sessionId(currentAgent);
       if (id) copy(id);
@@ -449,6 +452,7 @@ export function App() {
   const selectedIsPane = !!selected && s.panes.has(selected);
   const selectedIsWidget = !!selected && isWidget(s.windows.get(selected));
   const hasSession = !!(currentAgent && sessionId(currentAgent));
+  const aiReady = !!useAiStatus()?.ready;
   useEffect(() => {
     const hasPane = !!selected;
     cmd.setMenuState({
@@ -468,6 +472,8 @@ export function App() {
         "session.prev": withPane.length > 1,
         "session.copyResume": hasSession,
         "session.copyId": hasSession,
+        // Live: ai.updated re-renders when a key is added or stops working.
+        "session.summarize": hasSession && aiReady,
         "session.reveal": hasPane,
         "session.nextAttention": attention > 0,
         "space.next": openSpaces.length > 1,
@@ -479,7 +485,7 @@ export function App() {
         "widget.remove": selectedIsWidget,
       },
     });
-  }, [mode, sidebarOpen, selected, selectedIsPane, selectedIsWidget, withPane.length, hasSession, attention > 0, openSpaces.length, !!space, !!space?.home]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, sidebarOpen, selected, selectedIsPane, selectedIsWidget, withPane.length, hasSession, aiReady, attention > 0, openSpaces.length, !!space, !!space?.home]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── context menus ──────────────────────────────────────
 
@@ -506,6 +512,8 @@ export function App() {
         ? [
             { label: "Copy Resume Command", run: () => void copyResumeCommand(a), enabled: !!id },
             { label: "Copy Session ID", run: () => id && copy(id), enabled: !!id },
+            // Only with an AI provider set up; read when the menu opens, so a key added since counts.
+            ...(aiStatus()?.ready ? [{ label: "Summarize Session", run: () => void summarizeSession(a), enabled: !!id }] : []),
             ...(a.native.transcriptPath ? [{ label: "Reveal Transcript", run: () => cmd.openPath(a.native.transcriptPath!) }] : []),
             "-" as const,
           ]

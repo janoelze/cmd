@@ -38,6 +38,7 @@ import type { MagicPreviewRequest, MagicPreviewShot } from "@cmd/protocol";
 import type { Connection, Served } from "./connection.ts";
 import { checkRemoteCall, RemoteDenied, remoteEventVisible, type PolicyContext } from "./remote/policy.ts";
 import { RemoteService } from "./remote/service.ts";
+import { SummaryService } from "./summaries/service.ts";
 import { UsageStats } from "./usage.ts";
 
 export const VERSION = "0.0.1";
@@ -132,6 +133,7 @@ export class Core {
   readonly magic: MagicService;
   readonly secrets: SecretsService;
   readonly ai: AiService;
+  readonly summaries: SummaryService;
   readonly remote: RemoteService;
   readonly usage: UsageStats;
   /** Agents already counted for usage stats. */
@@ -265,6 +267,25 @@ export class Core {
     this.ai.on("updated", (status) => this.#broadcast({ type: "ai.updated", status }));
     this.settings.bind(["ai.provider", "ai.anthropic.model", "ai.anthropic.fastModel", "ai.openai.model", "ai.openai.fastModel"], () => this.ai.settingsChanged());
     if (opts.stateDir) this.ai.start();
+    this.summaries = new SummaryService({
+      ai: {
+        object: (o) => this.ai.object(o),
+        modelName: () => {
+          const p = this.ai.provider();
+          return p ? (this.ai.status().providers[p].models?.fast.name ?? null) : null;
+        },
+      },
+      agent: (id) => this.agents.get(id),
+      turns: (id) => this.agents.activity.turns(id, 500),
+      agentTitle: (kind) => this.transcripts.get(kind)?.title ?? kind,
+      dir: opts.stateDir ? path.join(opts.stateDir, "summaries") : null,
+      show: (file, spaceId) => {
+        const open = this.windows.others().find((w) => (w.kind === "markdown" || w.kind === "text") && w.state.path === file);
+        if (open) return this.#broadcast({ type: "window.focus", id: open.id }), open.id;
+        return this.#opened(this.windows.open("markdown", { path: file }, this.spaces.mustOpen(spaceId))).id;
+      },
+      notify: (id, title, body) => this.notifications.window(id, "summary", title, body),
+    });
     this.magic = new MagicService({
       windows: this.windows,
       settings,
@@ -379,6 +400,10 @@ export class Core {
     "agent.markSeen": (p) => (this.agents.markSeen(p.agentId), null),
     "agent.events": (p) => this.agents.activity.events(p),
     "agent.turns": (p) => this.agents.activity.turns(p.agentId, p.limit),
+    "agent.summarize": async (p) => {
+      const s = await this.summaries.start(p.agentId, { open: p.open });
+      return { path: s.path, windowId: s.windowId, markdown: p.wait ? await s.done : null };
+    },
     "agents.coverage": (p) => this.agents.activity.coverage(p.days),
     "agents.export": (p) => {
       const log = this.agents.activity;

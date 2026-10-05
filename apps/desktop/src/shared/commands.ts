@@ -79,6 +79,7 @@ export const COMMANDS = spec([
   { id: "session.nextAttention", label: "Next Needing Attention", keys: ["Ctrl+Cmd+J"] },
   { id: "session.copyResume", label: "Copy Resume Command" },
   { id: "session.copyId", label: "Copy Session ID" },
+  { id: "session.summarize", label: "Summarize Session" },
   { id: "session.reveal", label: "Show Folder in Finder", keys: ["Alt+Cmd+R"] },
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
     id: `session.select${n}`,

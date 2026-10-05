@@ -1,6 +1,6 @@
 // UI-level actions shared by the sidebar and the command palette.
 
-import type { Agent, AppWindow, PaneId, SearchHit } from "@cmd/protocol";
+import { isSummary, summaryPart, type Agent, type AppWindow, type PaneId, type SearchHit } from "@cmd/protocol";
 import { toast } from "@cmd/ui";
 import { cmd } from "./bridge.ts";
 import { getState, setUi } from "./store.ts";
@@ -152,6 +152,29 @@ export async function copyResumeCommand(a: Agent): Promise<void> {
 
 export function sessionId(a: Agent): string | null {
   return a.native.claudeSessionId ?? a.native.codexThreadId ?? null;
+}
+
+/**
+ * Summarise the agent's session into a Markdown window (docs/20-session-summaries.md).
+ * The window opens with what cmd recorded and fills in as the answer streams.
+ */
+export async function summarizeSession(a: Agent): Promise<void> {
+  try {
+    const r = await cmd.call("agent.summarize", { agentId: a.id });
+    if (r.windowId) select(r.windowId);
+  } catch (e) {
+    const msg = (e as Error).message;
+    toast(msg, { tone: "danger", ...(/AI provider/.test(msg) ? { action: { label: "Set Up AI…", run: () => cmd.openSettings("ai") } } : {}) });
+  }
+}
+
+/** Copy a part of a session summary file (the team message, or the rest for a ticket). */
+export async function copySummaryPart(path: string, part: "team" | "ticket"): Promise<void> {
+  const { text } = await cmd.call("fs.read", { path });
+  const out = isSummary(text) ? summaryPart(text, part) : null;
+  if (!out) return void toast(part === "team" ? "This summary has no team update yet." : "This file isn't a session summary.", { tone: "warning" });
+  copy(out);
+  toast(part === "team" ? "Team update copied" : "Summary copied for a ticket", { tone: "success" });
 }
 
 export function copy(text: string): void {
