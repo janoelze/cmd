@@ -1,4 +1,4 @@
-// The onboarding steps, in order (docs/16-ai.md, "Onboarding"). A new install
+// The onboarding steps, in order (docs/17-ai.md, "Onboarding"). A new install
 // sees every step; after an update, only steps marked `existingUsers` that this
 // Mac hasn't seen (main/onboarding.ts). A step whose work is already done (a
 // key carried over from Magic widgets) is left out. Adding a step later (a

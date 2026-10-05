@@ -1,4 +1,4 @@
-// The core's AI status (docs/16-ai.md) in any window: which providers have a
+// The core's AI status (docs/17-ai.md) in any window: which providers have a
 // key, whether it works, what each tier uses. Asked for on every connect and
 // kept current by ai.updated (a window must subscribe to it; the app window
 // gets every event, the Settings window asks for it).

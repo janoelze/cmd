@@ -135,7 +135,7 @@ export interface Methods {
   /** Store a secret, or remove it with null. */
   "secrets.set": { params: { key: string; value: string | null }; result: SecretsStatus };
 
-  /** AI providers (docs/16-ai.md): which have keys, whether they work, what each tier resolves to. */
+  /** AI providers (docs/17-ai.md): which have keys, whether they work, what each tier resolves to. */
   "ai.status": { params: {}; result: AiStatus };
   /**
    * Check a provider's key and store it. A key the provider refuses is not

@@ -1,4 +1,4 @@
-// AI providers (docs/16-ai.md): one place every feature gets a model from. The
+// AI providers (docs/17-ai.md): one place every feature gets a model from. The
 // user brings a key for at least one provider (onboarding or Settings → AI);
 // features ask the core's AiService for a tier, never a model, and each tier
 // resolves to the newest model of a family the key can use unless pinned.

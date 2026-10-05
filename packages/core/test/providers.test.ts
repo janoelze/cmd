@@ -1,4 +1,4 @@
-// AI providers (docs/16-ai.md): API keys kept out of settings (secrets.ts), the
+// AI providers (docs/17-ai.md): API keys kept out of settings (secrets.ts), the
 // model lists (ai/models.ts), the AiService (keys, tiers, calls), and the old
 // Magic settings and secrets.
 

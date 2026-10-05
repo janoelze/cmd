@@ -1,4 +1,4 @@
-// AiService (docs/16-ai.md): the one way any part of the core uses a model.
+// AiService (docs/17-ai.md): the one way any part of the core uses a model.
 // It knows which providers have keys (secrets) and whether they work, resolves
 // a tier to a model (pinned in settings, else the newest of the tier's family
 // the key can use, else a known fallback), and runs calls: an agent loop

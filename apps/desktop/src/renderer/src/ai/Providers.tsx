@@ -1,4 +1,4 @@
-// AI provider rows (docs/16-ai.md), the same in onboarding and Settings → AI:
+// AI provider rows (docs/17-ai.md), the same in onboarding and Settings → AI:
 // one row per provider with its key, checked with the provider when saved
 // (ai.connect), and a line saying what that key gets you or what is wrong.
 // With keys for both, a row to choose which one features use.
