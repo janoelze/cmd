@@ -12,6 +12,12 @@ export const QUIET_MS = 30_000;
 /** The same while a tool call is in flight (long commands can be silent). */
 export const QUIET_TOOL_MS = 5 * 60_000;
 const MAX_COMMANDS = 10;
+/**
+ * Tools that run a subagent in the foreground without marking its calls (Gemini's
+ * invoke_agent): calls while one is open are the subagent's. Claude marks its
+ * subagents' calls (agent_id) and may run other tools beside its Agent tool.
+ */
+const LAUNCHERS = new Set(["invoke_agent"]);
 const MAX_FOLLOWUPS = 10;
 const MAX_TEXT = 2000;
 
@@ -147,7 +153,7 @@ export class ActivityReducer {
         break;
       }
       case "tool.start": {
-        if (ev.subagent) break; // a subagent's call: the child's activity, not this agent's
+        if (ev.subagent || this.#nested(ev)) break; // a subagent's call: the child's activity, not this agent's
         const t = this.#ensureTurn(r, ev);
         if (t.outcome === "waiting") t.outcome = "working";
         if (ev.tool) {
@@ -164,7 +170,7 @@ export class ActivityReducer {
         break;
       }
       case "tool.end": {
-        if (ev.subagent) break;
+        if (ev.subagent || this.#nested(ev)) break;
         const t = this.#ensureTurn(r, ev);
         if (t.outcome === "waiting") t.outcome = "working";
         if (ev.tool) {
@@ -261,6 +267,13 @@ export class ActivityReducer {
     this.#close(r, since, "interrupted", `quiet for ${Math.round(quiet / 1000)} s with no answer`);
     this.#state(r, { state: "idle", detail: null }, `inferred: quiet for ${Math.round(quiet / 1000)} s`);
     return r;
+  }
+
+  /** Inside a foreground subagent's launcher call, and not the launcher itself. */
+  #nested(ev: ActivityEvent): boolean {
+    if (!ev.tool || LAUNCHERS.has(ev.tool.name)) return false;
+    for (const name of this.#openNames.values()) if (LAUNCHERS.has(name)) return true;
+    return false;
   }
 
   #openTurn(r: Reduction, ev: ActivityEvent): AgentTurn {

@@ -48,6 +48,8 @@ const line1 = (s: string) => (s.split(/\r?\n/).find((l) => l.trim()) ?? s).trim(
 const cap = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
 export function kindOf(agent: string | null, name: string, p: Payload): ActivityKind {
+  // Gemini fires PreCompress (trigger: auto) before every model call, compressing or not: not a compaction.
+  if (agent === "gemini" && name === "PreCompress" && str(p.trigger) === "auto") return "other";
   const n = hookEventName(agent, name);
   if (n === "Notification") return str(p.notification_type) === "idle_prompt" ? "idle" : "ask";
   return KINDS[n] ?? "other";
@@ -121,7 +123,8 @@ function toolOf(p: Payload, end: boolean, failed: boolean): ActivityTool | undef
     // Codex answers with text; apply_patch's starts with its exit code. Its shell calls don't say (a failed patch sends no PostToolUse at all).
     const text = str(p.tool_response);
     const exit = text ? Number(text.match(/^Exit code: (\d+)/)?.[1] ?? 0) : 0;
-    tool.ok = !(failed || exit !== 0 || r?.is_error === true || r?.success === false || (r && str(r.error) !== undefined) || r?.interrupted === true);
+    // Claude: is_error / interrupted; Gemini: an error object; others: success false or an error string.
+    tool.ok = !(failed || exit !== 0 || r?.is_error === true || r?.success === false || (r && r.error !== undefined && r.error !== null && r.error !== false && r.error !== "") || r?.interrupted === true);
     const ms = typeof p.duration_ms === "number" ? p.duration_ms : undefined;
     if (ms !== undefined) tool.durationMs = ms;
   }
@@ -135,7 +138,7 @@ function textOf(kind: ActivityKind, p: Payload): string | undefined {
       return str(p.prompt);
     case "stop":
     case "subagent.stop":
-      return str(p.last_assistant_message) ?? str(p.prompt_response);
+      return (str(p.last_assistant_message) ?? str(p.prompt_response))?.trim();
     case "ask":
       return str(p.message) ?? (str(p.tool_name) ? `Allow ${str(p.tool_name)}?` : undefined);
     case "fail":

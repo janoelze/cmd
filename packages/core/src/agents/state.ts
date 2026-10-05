@@ -40,25 +40,39 @@ export function describeTool(tool?: string, input?: Payload): string | null {
   switch (tool) {
     case "Bash":
     case "shell":
-    case "exec_command": {
+    case "exec_command":
+    case "run_shell_command": {
       const d = str(i.description) ?? str(i.command) ?? (Array.isArray(i.command) ? i.command.join(" ") : undefined);
       return d ? line1(d) : tool;
     }
     case "Edit":
     case "MultiEdit":
+    case "replace":
+    case "edit":
       return file() ? `Editing ${file()}` : "Editing";
     case "apply_patch":
       return "Editing files";
     case "Write":
+    case "write_file":
       return file() ? `Writing ${file()}` : "Writing";
     case "Read":
+    case "read_file":
       return file() ? `Reading ${file()}` : "Reading";
+    case "read_many_files":
+      return "Reading files";
+    case "list_directory":
+    case "LS":
+      return file("dir_path") ?? file("path") ? `Listing ${file("dir_path") ?? file("path")}` : "Listing";
     case "NotebookEdit":
       return file("notebook_path") ? `Editing ${file("notebook_path")}` : "Editing notebook";
     case "Grep":
     case "Glob":
+    case "glob":
+    case "grep_search":
+    case "search_file_content":
       return str(i.pattern) ? `Searching ${str(i.pattern)}` : "Searching";
-    case "WebFetch": {
+    case "WebFetch":
+    case "web_fetch": {
       let host: string | null = null;
       try {
         host = str(i.url) ? new URL(str(i.url)!).host : null;
@@ -66,10 +80,17 @@ export function describeTool(tool?: string, input?: Payload): string | null {
       return host ? `Fetching ${host}` : "Fetching";
     }
     case "WebSearch":
+    case "google_web_search":
       return str(i.query) ? `Searching the web: ${str(i.query)}` : "Searching the web";
     case "Task":
     case "Agent":
       return str(i.description) ? `Subagent: ${str(i.description)}` : "Subagent";
+    case "invoke_agent":
+      return str(i.agent_name) ? `Subagent: ${str(i.agent_name)}` : "Subagent";
+    case "update_topic":
+      return str(i.strategic_intent) ? `Planning: ${line1(str(i.strategic_intent)!)}` : "Planning";
+    case "complete_task":
+      return "Finishing up";
     case "TodoWrite":
       return "Updating todos";
     default:

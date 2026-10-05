@@ -136,3 +136,15 @@ From [18-agent-activity.md](18-agent-activity.md), to confirm or close with real
 - Fixtures cut from these sessions, text replaced: `claude-2.1.289/interactive-followups`, `helper-note`, `rate-limit`.
 
 Turns recorded by 0.11.0 keep `format: 1`; their raw events re-derive under format 2.
+
+### 2026-10-05, Gemini and more Codex (recorded sessions)
+
+Recorded headless through cmd's hook with scratch config folders: Gemini CLI 0.62.0 (`gemini -p --skip-trust`) and Codex 0.144.5 (`codex exec`, `exec resume`).
+
+- **Gemini** sends the same keys as Claude where it has them, its own event names (mapped) and its own tool names: `read_file`, `replace`, `write_file`, `run_shell_command`, `list_directory`, `invoke_agent`, `update_topic` (its plan, shown as "Planning: …"), `complete_task`. Labels added. Its final message is `AfterAgent.prompt_response` (with leading whitespace, now trimmed). No tool-call ids, no model. Its config folder arrives as `GEMINI_CLI_HOME`.
+- **Gemini's PreCompress (`trigger: auto`) fires before every model call**, whether or not it compresses: kept raw as `other`, not counted as a compaction.
+- **Gemini's subagents** run inside an `invoke_agent` tool call and their calls arrive as ordinary BeforeTool/AfterTool events, unmarked. Calls while `invoke_agent` is open are now the subagent's, not the parent's (Claude marks its subagents' calls itself, so the rule is Gemini's only).
+- **A failed Gemini tool** carries an `error` object in `tool_response`; it counted as a success. Fixed.
+- Headless Gemini without `--yolo` doesn't offer the shell tool at all: no event, nothing to record.
+- **Codex `exec resume`** sends a second SessionStart (`source: "resume"`) with the same session id: one session, a turn per exec. Non-interactive Codex never asks for permission (no PermissionRequest); its sandbox refusing a command looks like any other output. Interactive Codex approvals still need recording in a real pane.
+- Fixtures: `gemini-0.62.0/edit-and-shell`, `gemini-0.62.0/subagent-and-failure`, `codex-0.144.5/two-turns-resume`.

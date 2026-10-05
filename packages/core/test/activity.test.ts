@@ -179,6 +179,49 @@ describe("normalize and reduce (Codex 0.144.5, recorded)", () => {
   });
 });
 
+describe("Gemini CLI 0.62.0, recorded", () => {
+  it("maps its events and tool names, without counting its per-call compression checks", () => {
+    const evs = fixture("gemini-0.62.0/edit-and-shell.jsonl").map((r, i) => normalize(r, i));
+    expect(evs.filter((e) => e.kind === "compact")).toEqual([]);
+    expect(evs.filter((e) => e.name === "PreCompress").every((e) => e.kind === "other")).toBe(true);
+    expect(evs[0]).toMatchObject({ kind: "session.start", agent: "gemini", home: "/Users/me/gemini-home" });
+    const edit = evs.find((e) => e.kind === "tool.end" && e.tool?.name === "replace")!;
+    expect(edit.tool).toMatchObject({ label: "Editing calc.py", paths: ["calc.py"], ok: true });
+    expect(evs.filter((e) => e.kind === "tool.start" && e.tool?.name === "run_shell_command").map((e) => [e.tool!.label, e.tool!.writes])).toEqual([
+      ["Append 'fixed add' to NOTES.md", "redirect"],
+      ["Run calc.add(2,3) to verify the fix", undefined],
+    ]);
+    expect(evs.find((e) => e.name === "update_topic" || e.tool?.name === "update_topic")!.tool!.label).toMatch(/^Planning: /);
+    const stop = evs.find((e) => e.kind === "stop")!;
+    expect(stop.text).toMatch(/^I have updated `calc.py`/); // prompt_response, trimmed
+  });
+
+  it("turns a session into one turn, files resolved against its folder", () => {
+    const { red } = replay(fixture("gemini-0.62.0/edit-and-shell.jsonl"));
+    expect(red.turn).toMatchObject({ outcome: "done", shellWrites: 1, files: [{ path: "/work/repo/calc.py", via: ["tool"] }] });
+  });
+
+  it("keeps a subagent's calls (inside invoke_agent) out of the parent's, and sees a failed call", () => {
+    const { red } = replay(fixture("gemini-0.62.0/subagent-and-failure.jsonl"));
+    const tools = Object.fromEntries(red.turn!.tools.map((t) => [t.name, [t.count, t.failed]]));
+    expect(tools).toEqual({ update_topic: [2, 0], invoke_agent: [1, 0], read_file: [1, 1] });
+    expect(red.turn).toMatchObject({ outcome: "done", inferred: [] });
+  });
+});
+
+describe("Codex resume, recorded", () => {
+  it("keeps one session across exec resume, a turn each", () => {
+    const evs = fixture("codex-0.144.5/two-turns-resume.jsonl").map((r, i) => normalize(r, i));
+    expect(new Set(evs.map((e) => e.sessionId)).size).toBe(1);
+    const { out, red } = replay(fixture("codex-0.144.5/two-turns-resume.jsonl"));
+    expect(out.filter((o) => o.r.closed).map((o) => [o.r.closed!.index, o.r.closed!.outcome])).toEqual([
+      [0, "done"],
+      [1, "done"],
+    ]);
+    expect(red.turn!.inferred).toEqual([]);
+  });
+});
+
 describe("reduce", () => {
   it("turns a session into state and one turn, from what the agent said", () => {
     const { red, states, out } = replay(fixture("claude-2.1.289/edit-and-bash.jsonl"));
