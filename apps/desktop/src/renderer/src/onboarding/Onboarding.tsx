@@ -72,6 +72,7 @@ export function Onboarding({ ids, onClose }: { ids: readonly string[]; onClose: 
       width={480}
       height={600}
       position="center"
+      divided
       className="onboarding"
       label={step.title}
       aside={steps.length > 1 && <PageDots count={steps.length} current={at} label={`Step ${at + 1} of ${steps.length}`} />}
