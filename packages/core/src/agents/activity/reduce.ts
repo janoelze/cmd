@@ -133,11 +133,13 @@ export class ActivityReducer {
         if (!this.open) this.#state(r, { state: "idle", detail: null }, cause);
         break;
       case "prompt": {
+        // While it waited for an answer: the question was dismissed (a permission dialog takes all input
+        // until answered; Gemini sends nothing when it's declined), so that turn is over.
+        if (this.open && this.turn!.outcome === "waiting") this.#close(r, ev.at, "interrupted", "declined: a new prompt while it waited for an answer");
         // Typed while the agent works: it steers the same turn (Claude takes it in mid-turn and goes on).
         if (this.open) {
           const t = this.turn!;
           if (ev.text) t.followUps = [...t.followUps, ev.text.length > MAX_TEXT ? ev.text.slice(0, MAX_TEXT - 1) + "…" : ev.text].slice(-MAX_FOLLOWUPS);
-          if (t.outcome === "waiting") t.outcome = "working";
           t.events++;
           r.turn = t;
           this.#state(r, { state: "working", detail: null }, cause);

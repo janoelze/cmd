@@ -131,6 +131,19 @@ function toolOf(p: Payload, end: boolean, failed: boolean): ActivityTool | undef
   return tool;
 }
 
+/** What a permission notification without tool fields asks about (Gemini: ToolPermission with details {type, title, command | filePath}). */
+function askedTool(p: Payload): ActivityTool | undefined {
+  const d = obj(p.details);
+  if (!d) return undefined;
+  const command = str(d.command);
+  const file = str(d.filePath) ?? str(d.fileName);
+  if (!command && !file) return undefined;
+  const tool: ActivityTool = { name: str(d.rootCommand) ?? str(d.type) ?? "tool", label: str(d.title) ?? null };
+  if (command) tool.command = cap(line1(command), 200);
+  if (file) tool.paths = [file];
+  return tool;
+}
+
 /** The text an event carries, by kind. */
 function textOf(kind: ActivityKind, p: Payload): string | undefined {
   switch (kind) {
@@ -170,7 +183,7 @@ export function normalize(r: RawEvent, id = 0): ActivityEvent {
     if (running.length) ev.background = running.map((t) => str(t!.description) ?? str(t!.type) ?? "task");
   }
   if (kind === "tool.start" || kind === "tool.end" || kind === "ask") {
-    const tool = toolOf(p, kind === "tool.end", hookEventName(r.agent, name) === "PostToolUseFailure");
+    const tool = toolOf(p, kind === "tool.end", hookEventName(r.agent, name) === "PostToolUseFailure") ?? (kind === "ask" ? askedTool(p) : undefined);
     if (tool) ev.tool = tool;
   }
   const model = str(p.model);

@@ -209,6 +209,37 @@ describe("Gemini CLI 0.62.0, recorded", () => {
   });
 });
 
+describe("interactive sessions in a cmd pane (installed app 0.11.0)", () => {
+  it("Gemini: its permission prompts say what they ask about, and the session ends waiting on one", () => {
+    const evs = fixture("gemini-0.62.0/interactive-permissions.jsonl").map((r, i) => normalize(r, i));
+    expect(evs[0]!.recorded).toBeUndefined(); // fixtures carry raw events; provenance is in the header
+    const asks = evs.filter((e) => e.kind === "ask");
+    expect(asks.map((e) => [e.tool?.label, e.tool?.command ?? e.tool?.paths?.[0]])).toEqual([
+      ["Confirm Shell Command", "cmd ls"],
+      ["Confirm Edit: calc.py", "/work/repo/calc.py"],
+      ["Confirm Shell Command", "rm NOTES.md"],
+      ["Confirm Edit: calc.py", "/work/repo/calc.py"],
+    ]);
+    const { red, out } = replay(fixture("gemini-0.62.0/interactive-permissions.jsonl"));
+    expect(red.turn).toMatchObject({ outcome: "waiting", ask: { message: "Tool Confirm Edit: calc.py requires editing", tool: "edit", input: "/work/repo/calc.py" } });
+    expect(out.at(-1)!.r.change.state).toBe("needs_input");
+    // "continue", typed while it worked, stayed in the first turn; the declined edit ended it.
+    expect(out.filter((o) => o.r.closed).map((o) => [o.r.closed!.index, o.r.closed!.outcome, o.r.closed!.followUps, o.r.closed!.inferred])).toEqual([
+      [0, "interrupted", ["continue"], ["declined: a new prompt while it waited for an answer"]],
+    ]);
+    expect(red.turn!.index).toBe(1);
+  });
+
+  it("Codex: a prompt typed mid-turn is a follow-up; two turns, both done", () => {
+    const { out, red } = replay(fixture("codex-0.144.5/interactive-followup.jsonl"));
+    expect(out.filter((o) => o.r.closed).map((o) => [o.r.closed!.index, o.r.closed!.outcome, o.r.closed!.followUps])).toEqual([
+      [0, "done", ["comtinue"]],
+      [1, "done", []],
+    ]);
+    expect(red.turn!.tools.find((t) => t.name === "Bash")).toMatchObject({ count: 1 });
+  });
+});
+
 describe("Codex resume, recorded", () => {
   it("keeps one session across exec resume, a turn each", () => {
     const evs = fixture("codex-0.144.5/two-turns-resume.jsonl").map((r, i) => normalize(r, i));
@@ -288,7 +319,7 @@ describe("reduce", () => {
   it("takes a prompt sent while the agent works as a follow-up in the same turn; a new session ends it", () => {
     const red = new ActivityReducer("a1");
     red.apply(ev("prompt", 0, { text: "one" }));
-    red.apply(ev("ask", 5, { text: "Allow?" }));
+    red.apply(ev("tool.start", 5, { tool: { name: "Read", id: "t", label: "Reading x" } }));
     const r = red.apply(ev("prompt", 10, { text: "two" }));
     expect(r.closed).toBeUndefined();
     expect(r.lastPrompt).toBe("two");
@@ -296,6 +327,15 @@ describe("reduce", () => {
     const r2 = red.apply(ev("session.start", 20, { sessionId: "s2" }));
     expect(r2.closed).toMatchObject({ index: 0, outcome: "interrupted", inferred: ["new session before the turn ended"] });
     expect(red.sessionId).toBe("s2");
+  });
+
+  it("ends a turn whose question was dismissed: a prompt while it waits for an answer", () => {
+    const red = new ActivityReducer("a1");
+    red.apply(ev("prompt", 0, { text: "one" }));
+    red.apply(ev("ask", 5, { text: "Allow?" }));
+    const r = red.apply(ev("prompt", 10, { text: "two" }));
+    expect(r.closed).toMatchObject({ index: 0, outcome: "interrupted", inferred: ["declined: a new prompt while it waited for an answer"] });
+    expect(red.turn).toMatchObject({ index: 1, prompt: "two", followUps: [] });
   });
 
   it("keeps a turn going across a compaction in the same session", () => {

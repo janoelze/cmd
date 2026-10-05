@@ -148,3 +148,13 @@ Recorded headless through cmd's hook with scratch config folders: Gemini CLI 0.6
 - Headless Gemini without `--yolo` doesn't offer the shell tool at all: no event, nothing to record.
 - **Codex `exec resume`** sends a second SessionStart (`source: "resume"`) with the same session id: one session, a turn per exec. Non-interactive Codex never asks for permission (no PermissionRequest); its sandbox refusing a command looks like any other output. Interactive Codex approvals still need recording in a real pane.
 - Fixtures: `gemini-0.62.0/edit-and-shell`, `gemini-0.62.0/subagent-and-failure`, `codex-0.144.5/two-turns-resume`.
+
+### 2026-10-05, interactive Codex and Gemini in a cmd pane (installed 0.11.0)
+
+- Provenance works in the field: every event carries `cmd 0.11.0` and the agent's version (Codex 0.144.5, Gemini 0.62.0, from their executables).
+- **Gemini's permission prompts** are `Notification` with `notification_type: "ToolPermission"` and `details: {type: "exec" | "edit", title, command | filePath}`. They map to `ask`; the ask now carries the command or file from `details` ("Confirm Shell Command: rm NOTES.md").
+- **Gemini sends no AfterAgent when a turn ends by a declined permission** (Esc on the dialog). The next prompt arrives while cmd still thinks it waits. Rule: a prompt while a turn **waits for an answer** ends it (`interrupted`, inferred "declined: …"); a prompt while it **works** is a follow-up. A permission dialog takes all input in Claude, Codex and Gemini, so a prompt during one means it was dismissed.
+- **Codex in a trusted git repository asks for nothing** with its default policy: edits and commands inside the repo (`rm` included) just run. Approvals need `-a untrusted` or a read-only sandbox.
+- **Esc sends nothing** in Codex or Gemini: only the quiet rule can end such a turn.
+- Codex and Gemini edited the same repository at the same time: per-folder attribution (git) can't tell them apart; tool paths can.
+- Fixtures: `gemini-0.62.0/interactive-permissions`, `codex-0.144.5/interactive-followup` (scripted prompts, throwaway repository).
