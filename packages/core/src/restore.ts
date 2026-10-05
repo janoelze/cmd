@@ -13,6 +13,9 @@
 //  - a record from this instance that isn't running exited while the core was
 //    away: dropped.
 // Pane ids stay the same, so the layouts and selections in Space.view still fit.
+//
+// Records come from other cmd versions, so each pane and agent is restored on its
+// own: one that fails is logged and left out, and the rest still come back.
 
 import fs from "node:fs";
 import type { Agent, PaneId, Settings } from "@cmd/protocol";
@@ -59,10 +62,15 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
   for (const term of backend.attached()) {
     const rec = records.get(term.id) ?? null;
     records.delete(term.id);
-    // Its Space went away meanwhile (closed elsewhere, forgotten): it goes Home.
-    panes.adopt(term, rec && { ...rec, spaceId: openSpace(rec.spaceId)?.id ?? spaces.home().id });
-    back.set(term.id, true);
-    count(rec ? "reattached" : "reattached without a record", term.id);
+    try {
+      // Its Space went away meanwhile (closed elsewhere, forgotten): it goes Home.
+      panes.adopt(term, rec && { ...rec, spaceId: openSpace(rec.spaceId)?.id ?? spaces.home().id });
+      back.set(term.id, true);
+      count(rec ? "reattached" : "reattached without a record", term.id);
+    } catch (err) {
+      count("failed", term.id);
+      log.error(`could not reattach pane ${term.id.slice(0, 8)}`, err);
+    }
   }
 
   const hosted = new Map<PaneId, Agent>();
@@ -127,8 +135,15 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
       store.deleteAgent(a.id);
       continue;
     }
-    agents.restore(a, live !== false);
-    alive.add(a.id);
+    try {
+      agents.restore(a, live !== false);
+      alive.add(a.id);
+    } catch (err) {
+      // Its pane stays; the agent is detected again from its process.
+      count("agent failed", a.id, { kind: a.kind });
+      log.error(`could not restore agent ${a.id.slice(0, 8)}`, err);
+      store.deleteAgent(a.id);
+    }
   }
   tally.agents = alive.size;
   if (Object.keys(tally).length > 1 || alive.size) log.info("restored the last session", { backend: backend.info ? `PTY host ${backend.info().pid}` : "in the core", ...tally });

@@ -3,7 +3,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import headless from "@xterm/headless";
 import { Core } from "../src/core.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
@@ -221,5 +222,60 @@ describe("each terminal's own shell history", () => {
     expect(f.ptys[1]!.opts.env.CMD_PANE_HISTFILE).toBeUndefined();
     expect(f.ptys[1]!.opts.env.CMD_PANE_TOKEN).toBeTruthy();
     await core.close();
+  });
+});
+
+describe("records another cmd version saved", () => {
+  /** Rows written straight into the database, as an older or broken cmd might have left them. */
+  function tamper(db: string, sql: string[]): void {
+    const d = new DatabaseSync(db);
+    for (const q of sql) d.exec(q);
+    d.close();
+  }
+
+  it("skips rows it can't read and fills in fields older ones lack", async () => {
+    const db = path.join(dir, "old.sqlite");
+    const a = start(db);
+    const pane = a.core.panes.create({ cwd: dir });
+    await a.core.close();
+    const old = JSON.stringify({ id: "old-agent", kind: "claude", paneId: pane.id, turn: { agentId: "old-agent", index: 0, prompt: "hi" } });
+    tamper(db, [
+      `INSERT INTO agents (id, parent_id, root_id, doc, updated_at) VALUES ('broken', NULL, 'broken', 'not json', 0)`,
+      `INSERT INTO agents (id, parent_id, root_id, doc, updated_at) VALUES ('old-agent', NULL, 'old-agent', '${old}', 1)`,
+      `INSERT INTO panes (id, doc) VALUES ('no-id', '{"cwd": "/"}')`,
+      `INSERT INTO windows (id, doc) VALUES ('w', '[1, 2]')`,
+      `INSERT INTO spaces (id, root, doc) VALUES ('s', '/nowhere', '{')`,
+      `INSERT INTO ui_state (key, value, updated_at) VALUES ('k', 'nope', 0)`,
+    ]);
+
+    const b = start(db);
+    expect(b.core.store.agents()).toMatchObject([{ id: "old-agent", rootId: "old-agent", native: {}, turn: { notes: [], followUps: [], files: [] } }]);
+    expect(() => b.core.restore()).not.toThrow();
+    expect(b.core.panes.list().map((p) => p.id)).toEqual([pane.id]);
+    expect(b.core.store.uiState()).not.toHaveProperty("k");
+    await b.core.close();
+  });
+
+  it("restores the rest when one agent fails", async () => {
+    const db = path.join(dir, "fail.sqlite");
+    const transcript = path.join(dir, "session.jsonl");
+    fs.writeFileSync(transcript, "{}\n");
+    const a = start(db);
+    const one = a.core.panes.create({ cwd: dir });
+    const two = a.core.panes.create({ cwd: dir });
+    a.core.agents.ingestHook(one.id, "claude", "SessionStart", { session_id: "s-1", transcript_path: transcript, cwd: dir });
+    const kept = a.core.agents.ingestHook(two.id, "claude", "SessionStart", { session_id: "s-2", transcript_path: transcript, cwd: dir })!;
+    await a.core.close();
+
+    const b = start(db);
+    const restore = b.core.agents.restore.bind(b.core.agents);
+    vi.spyOn(b.core.agents, "restore").mockImplementation((stored, live) => {
+      if (stored.id !== kept.id) throw new TypeError("this.turn.notes is not iterable");
+      return restore(stored, live);
+    });
+    expect(() => b.core.restore()).not.toThrow();
+    expect(b.core.panes.list().map((p) => p.id).sort()).toEqual([one.id, two.id].sort());
+    expect(b.core.agents.list().map((x) => x.id)).toEqual([kept.id]);
+    await b.core.close();
   });
 });

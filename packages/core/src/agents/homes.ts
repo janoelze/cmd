@@ -12,6 +12,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { AgentHome, AgentKind } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { LocateContext } from "../search/sources.ts";
+import { decodeDoc, decodeHome } from "../stored.ts";
 
 const log = logger("homes");
 
@@ -87,7 +88,8 @@ export class AgentHomes {
     this.#extra = extra;
     db?.exec(`CREATE TABLE IF NOT EXISTS agent_homes (dir TEXT PRIMARY KEY, doc TEXT NOT NULL)`);
     for (const r of (db?.prepare(`SELECT doc FROM agent_homes`).all() ?? []) as { doc: string }[]) {
-      const h = JSON.parse(r.doc) as AgentHome;
+      const h = decodeDoc("agent home", r.doc, decodeHome);
+      if (!h) continue;
       if (real(h.dir)) this.#homes.set(h.dir, h);
       else db?.prepare(`DELETE FROM agent_homes WHERE dir = ?`).run(h.dir); // gone
     }

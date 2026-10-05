@@ -366,6 +366,36 @@ async function ensureCore(): Promise<void> {
   throw new Error(`core did not start; see ${coreLog()}`);
 }
 
+/**
+ * The core didn't start: offer a way out instead of a dead end. Updating doesn't
+ * need the core, so a release with the fix may already be downloaded.
+ */
+async function coreFailed(coreUp: () => void): Promise<void> {
+  await startUpdater();
+  const u = await updater();
+  const ready = u.updateStatus().ready;
+  const buttons = ready ? ["Restart to Update", "Try Again", "Show Log", "Close"] : ["Try Again", "Check for Updates", "Show Log", "Close"];
+  const { response } = await dialog.showMessageBox({
+    type: "warning",
+    message: "cmd couldn't start",
+    detail: ready ? `cmd ${ready} is downloaded and may fix this. Terminals keep running.` : "Terminals keep running. Try again, or check for an update with a fix.",
+    buttons,
+    defaultId: 0,
+    cancelId: 3,
+  });
+  switch (buttons[response]) {
+    case "Restart to Update":
+      return u.installUpdate();
+    case "Try Again":
+      return void restartCore().then(coreUp, (err: Error) => (log.error("the core did not start", err), void coreFailed(coreUp)));
+    case "Check for Updates":
+      return checkForUpdates();
+    case "Show Log":
+      shell.showItemInFolder(coreLog());
+      return coreFailed(coreUp);
+  }
+}
+
 // ── window ──────────────────────────────────────────────
 
 /** An app window showing a Space (see spaces.ts, which decides which). */
@@ -847,10 +877,8 @@ app.whenReady().then(async () => {
   // Decoding and setting it takes ~80 ms on this thread: not while the first window starts (dev builds only).
   if (devIcon) setTimeout(() => app.dock?.setIcon(devIcon), 1000);
   else if (!devBuild) setTimeout(() => startDockIcon(dockIcons, savedAppearance().dockIcon ?? null), 1000);
-  ensureCore().then(
-    () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows), servePreviews(socketPath), void countLaunch()),
-    (err: Error) => (log.error("the core did not start", err), dialog.showErrorBox("cmd: the core did not start", err.message)),
-  );
+  const coreUp = () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows), servePreviews(socketPath), void countLaunch());
+  ensureCore().then(coreUp, (err: Error) => (log.error("the core did not start", err), void coreFailed(coreUp)));
   followCrashReports(socketPath);
   // Its bundle (about 570 KB) is parsed on this thread; its first check is 30 s away anyway.
   setTimeout(() => void startUpdater(), 5000);

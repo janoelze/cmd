@@ -10,6 +10,7 @@ import type { AgentKind } from "@cmd/protocol";
 import { PARSER_VERSION, isEmpty, type SessionDocument, type TranscriptText } from "./parser.ts";
 import { identifierParts, SearchQuery, Vocabulary } from "./query.ts";
 import type { TranscriptRoot, TranscriptSources } from "./sources.ts";
+import { decodeRoot, decodeRows } from "../stored.ts";
 
 export interface SearchHit {
   sessionId: string;
@@ -119,7 +120,7 @@ function createTables(db: DatabaseSync): void {
 /** Transcript folders learned from live agents (see TranscriptSources.learn). */
 export function learnedRoots(db: DatabaseSync): TranscriptRoot[] {
   const rows = db.prepare(`SELECT root FROM learned_roots`).all() as { root: string }[];
-  return rows.map((r) => JSON.parse(r.root) as TranscriptRoot);
+  return decodeRows("transcript folder", rows.map((r) => r.root), decodeRoot);
 }
 
 export function saveLearnedRoot(db: DatabaseSync, root: TranscriptRoot): void {

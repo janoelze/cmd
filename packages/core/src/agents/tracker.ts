@@ -281,7 +281,14 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
         this.emit("activity", this.activity.note("anomaly", `${ev.agent} hook event in a pane whose agent is ${agent.kind}`, ev.at, paneId, agent.id, agent.kind));
       }
       this.#hooked.add(agent.id);
-      this.#applyReduction(agent, red, red.apply(ev), ev, live.has(ev.id));
+      try {
+        this.#applyReduction(agent, red, red.apply(ev), ev, live.has(ev.id));
+      } catch (err) {
+        // One event the reducer can't take (or a turn saved by another version) costs this agent its turn, not the core.
+        log.error(`agent ${agent.id.slice(0, 8)}: could not apply ${ev.kind} event ${ev.id}`, err);
+        this.#reducers.delete(agent.id);
+        break;
+      }
       if (!this.#agents.has(agent.id)) break; // exited
     }
     return true;

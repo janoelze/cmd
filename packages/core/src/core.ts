@@ -788,7 +788,12 @@ export class Core {
    * and again when the PTY host died.
    */
   restore(): void {
-    restoreSession({ panes: this.panes, agents: this.agents, spaces: this.spaces, store: this.store, settings: () => this.settings.settings });
+    try {
+      restoreSession({ panes: this.panes, agents: this.agents, spaces: this.spaces, store: this.store, settings: () => this.settings.settings });
+    } catch (err) {
+      // A core without its last session still starts (and can update itself).
+      log.error("could not restore the last session", err);
+    }
     this.#watchBackend();
   }
 

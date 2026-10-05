@@ -6,6 +6,7 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { Agent, AgentId, AppWindow, PaneId, RemoteScope, Space } from "@cmd/protocol";
 import type { PaneRecord } from "./panes.ts";
+import { decodeAgent, decodeDoc, decodePane, decodeRemoteDevice, decodeRows, decodeSpace, decodeWindow } from "./stored.ts";
 
 export interface RemoteDeviceRecord {
   id: string;
@@ -100,7 +101,7 @@ export class Store {
   /** Non-terminal windows (browser, files). */
   windows(): AppWindow[] {
     const rows = this.#stmt(`SELECT doc FROM windows`).all() as { doc: string }[];
-    return rows.map((r) => JSON.parse(r.doc) as AppWindow);
+    return decodeRows("window", rows.map((r) => r.doc), decodeWindow);
   }
 
   saveWindow(w: AppWindow): void {
@@ -113,7 +114,7 @@ export class Store {
 
   spaces(): Space[] {
     const rows = this.#stmt(`SELECT doc FROM spaces`).all() as { doc: string }[];
-    return rows.map((r) => JSON.parse(r.doc) as Space);
+    return decodeRows("Space", rows.map((r) => r.doc), decodeSpace);
   }
 
   saveSpace(s: Space): void {
@@ -127,7 +128,10 @@ export class Store {
   /** UI state (view mode, selection, collapsed rows, …) as JSON values. */
   uiState(): Record<string, unknown> {
     const rows = this.#stmt(`SELECT key, value FROM ui_state`).all() as { key: string; value: string }[];
-    return Object.fromEntries(rows.map((r) => [r.key, JSON.parse(r.value)]));
+    return Object.fromEntries(rows.flatMap((r) => {
+      const v = decodeDoc(`UI state value (${r.key})`, r.value, (x) => x);
+      return v === null ? [] : [[r.key, v]];
+    }));
   }
 
   /** undefined/null deletes the key. */
@@ -146,7 +150,7 @@ export class Store {
   /** Live agents; a row goes when its agent does. */
   agents(): Agent[] {
     const rows = this.#stmt(`SELECT doc FROM agents ORDER BY updated_at`).all() as { doc: string }[];
-    return rows.map((r) => JSON.parse(r.doc) as Agent);
+    return decodeRows("agent", rows.map((r) => r.doc), decodeAgent);
   }
 
   /** UI state of one window: keys ending in ".<window id>" (e.g. files.expanded.<id>). */
@@ -171,7 +175,7 @@ export class Store {
   /** Terminals that were open: running in the PTY host, or to resurrect. */
   panes(): PaneRecord[] {
     const rows = this.#stmt(`SELECT doc FROM panes`).all() as { doc: string }[];
-    return rows.map((r) => JSON.parse(r.doc) as PaneRecord);
+    return decodeRows("pane record", rows.map((r) => r.doc), decodePane);
   }
 
   savePane(p: PaneRecord): void {
@@ -197,7 +201,7 @@ export class Store {
   /** Paired remote devices (remote/service.ts); public keys are base64url. */
   remoteDevices(): RemoteDeviceRecord[] {
     const rows = this.#stmt(`SELECT doc FROM remote_devices`).all() as { doc: string }[];
-    return rows.map((r) => JSON.parse(r.doc) as RemoteDeviceRecord);
+    return decodeRows("paired device", rows.map((r) => r.doc), decodeRemoteDevice);
   }
 
   saveRemoteDevice(d: RemoteDeviceRecord): void {
