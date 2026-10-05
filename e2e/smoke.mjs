@@ -123,7 +123,7 @@ await win.waitForSelector(".statusbar .core-status");
   await win.locator(".onboarding button", { hasText: "Get Started" }).click();
   await win.waitForSelector(".onboarding .ui-sheet-header-title:has-text('Connect an AI provider')");
   await win.screenshot({ path: path.join(shots, "0-onboarding-ai.png") });
-  const titles = await win.locator(".onboarding .ui-row-title").allTextContents();
+  const titles = await win.locator(".onboarding .ui-row-name").allTextContents();
   check(titles.includes("Anthropic") && titles.includes("OpenAI") && (await win.locator(".onboarding button", { hasText: "Done" }).isDisabled()), "the AI step lists the providers, and Done waits for a key");
   await win.locator(".onboarding button", { hasText: "Set Up Later" }).click();
   await win.waitForSelector(".onboarding", { state: "detached" });
@@ -949,7 +949,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   // does, so the run needs no network. Stored outside settings.json, shown as a hint.
   await sw.locator(".sw-nav-item", { has: sw.getByText("AI & Agents", { exact: true }) }).click();
   await sw.waitForSelector(".ui-row-title:has-text('Anthropic')");
-  const rowTitles = () => sw.locator(".ui-row-title").allTextContents();
+  const rowTitles = () => sw.locator(".ui-row-name").allTextContents();
   let titles = await rowTitles();
   check(titles.includes("Anthropic") && titles.includes("OpenAI") && !titles.includes("Model"), `AI lists the providers, and no models before a key (${titles.join(", ")})`);
   const rpc = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
@@ -995,7 +995,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await waitFor(() => saved()["ui.showResources"] === false, "a switch saves to settings.json");
   await row("Window corner radius").locator(".ui-number button[aria-label=Increase]").click();
   await waitFor(() => saved()["ui.windowRadius"] === 12, "+ steps a number field and saves");
-  const radius = () => win.evaluate(() => document.querySelector(".app")?.style.getPropertyValue("--window-radius"));
+  const radius = () => win.evaluate(() => document.documentElement.style.getPropertyValue("--window-radius"));
   for (let i = 0; i < 40 && (await radius()) !== "12px"; i++) await win.waitForTimeout(50);
   check((await radius()) === "12px", "the app window applies it live");
   await row("Window corner radius").locator(".ui-reset").click();
@@ -1042,7 +1042,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await waitFor(() => !("terminal.lineHeight" in saved()) && !("terminal.renderer" in saved()), "Restore Defaults resets the page");
 
   await sw.locator(".sb-search input").fill("zoom");
-  const found = await sw.locator(".ui-row-title").allTextContents();
+  const found = await sw.locator(".ui-row-name").allTextContents();
   check(["Minimum zoom", "Maximum zoom"].every((t) => found.some((f) => f.startsWith(t))), `search finds settings across pages (${found.join(", ")})`);
   await sw.locator(".sb-search input").fill("");
 

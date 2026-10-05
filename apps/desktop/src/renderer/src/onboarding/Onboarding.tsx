@@ -82,7 +82,12 @@ export function Onboarding({ ids, onClose }: { ids: readonly string[]; onClose: 
               Back
             </Button>
           )}
-          {!ready && <Button onClick={next}>Set Up Later</Button>}
+          {/* cmd works better set up: not doing it is the quiet choice. */}
+          {!ready && (
+            <Button variant="ghost" onClick={next}>
+              Set Up Later
+            </Button>
+          )}
           <Button variant="primary" disabled={!ready} onClick={next}>
             {step.primary ?? (last ? "Done" : "Continue")}
           </Button>
