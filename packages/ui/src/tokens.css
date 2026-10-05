@@ -25,7 +25,7 @@
   --text-base: 13px;
   --text-lg: 15px;
   --text-xl: 17px;
-  --text-display: 22px;
+  --text-display: 20px;
 
   /* ── surfaces and lines (derived from --ink and --scrim) ── */
   --bg-hover: color-mix(in srgb, var(--ink) 6%, transparent);
