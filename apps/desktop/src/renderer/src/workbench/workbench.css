@@ -1,0 +1,6 @@
+/* The Workbench (Workbench.tsx): a toolbar under the traffic lights, above any
+   dialog's scrim so it stays usable, and the stage on the app's backdrop. */
+.wb { display: flex; flex-direction: column; height: 100vh; background: var(--bg); }
+.wb-bar { position: relative; z-index: 100; flex: none; height: 44px; padding: 0 10px 0 84px; -webkit-app-region: drag; background: var(--bg-raised, var(--bg)); }
+.wb-bar > * { -webkit-app-region: no-drag; }
+.wb-stage { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px; }

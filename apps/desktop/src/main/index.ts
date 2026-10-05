@@ -445,7 +445,7 @@ const spaces = new SpaceWindows(createWindow);
 // drawn like the main window's. And one Task Manager (Window menu): what cmd's
 // processes use. Each has its own page and bundle (renderer/<page>.html).
 
-type UtilityPage = "settings" | "tasks";
+type UtilityPage = "settings" | "tasks" | "workbench";
 const utility = new Map<UtilityPage, BrowserWindow>();
 const isSettings = (w: BrowserWindow | null | undefined) => !!w && w === utility.get("settings");
 /** Settings or the Task Manager: not an app window. */
@@ -475,7 +475,7 @@ function openUtility(page: UtilityPage, o: { title: string; width: number; heigh
   utility.set(page, win);
   win.on("closed", () => utility.get(page) === win && utility.delete(page));
   win.once("ready-to-show", () => win.show());
-  const search = at ? `?page=${encodeURIComponent(at)}` : "";
+  const search = at ? `?${page === "workbench" ? "story" : "page"}=${encodeURIComponent(at)}` : "";
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/${page}.html${search}`);
   else win.loadFile(path.join(here, `../renderer/${page}.html`), { search });
   return win;
@@ -483,6 +483,9 @@ function openUtility(page: UtilityPage, o: { title: string; width: number; heigh
 
 const openSettings = (at?: string) => openUtility("settings", { title: "Settings", width: 860, height: 620, minWidth: 700, minHeight: 440 }, at);
 const openTaskManager = () => openUtility("tasks", { title: "Task Manager", width: 720, height: 520, minWidth: 520, minHeight: 300 });
+/** Dev only: `pnpm workbench [story]` (scripts/workbench.mjs) sets CMD_WORKBENCH and gets this window instead of the app's. */
+const workbench = process.env.ELECTRON_RENDERER_URL ? process.env.CMD_WORKBENCH : undefined;
+const openWorkbench = () => openUtility("workbench", { title: "Workbench", width: 1100, height: 760, minWidth: 600, minHeight: 400 }, workbench || undefined);
 
 /** App windows, not Settings or the Task Manager. */
 const appWindows = () => BrowserWindow.getAllWindows().filter((w) => !isUtility(w));
@@ -608,7 +611,7 @@ ipcMain.on("renderer-error", (e, r: { kind: string; message: string; stack: stri
   if (rendererErrors.has(key)) return;
   rendererErrors.add(key);
   const from = BrowserWindow.fromWebContents(e.sender);
-  const page = isSettings(from) ? "settings" : isUtility(from) ? "tasks" : "app";
+  const page = isSettings(from) ? "settings" : from && from === utility.get("workbench") ? "workbench" : isUtility(from) ? "tasks" : "app";
   recordCrash("renderer", r.kind, r.message, r.stack, { page });
 });
 /** Settings → Updates & About: the app's side of the diagnostics (core.info is the core's). */
@@ -887,7 +890,8 @@ app.whenReady().then(async () => {
   });
   // First: the window loads its bundle while the menu is built and the core is
   // checked or started; the preload connects as soon as the socket answers.
-  spaces.restore();
+  if (workbench !== undefined) openWorkbench();
+  else spaces.restore();
   // Decoding and setting it takes ~80 ms on this thread: not while the first window starts (dev builds only).
   if (devIcon) setTimeout(() => app.dock?.setIcon(devIcon), 1000);
   else if (!devBuild) setTimeout(() => startDockIcon(dockIcons, savedAppearance().dockIcon ?? null), 1000);

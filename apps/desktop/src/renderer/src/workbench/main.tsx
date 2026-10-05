@@ -1,0 +1,26 @@
+// Entry point of the Workbench (workbench.html, dev builds only): one component
+// at a time from a *.story.tsx file, in the real app's styles, icons, preload
+// and core. `pnpm workbench` opens it (scripts/workbench.mjs).
+import { createRoot } from "react-dom/client";
+import { Symbol } from "../components/Symbol.tsx";
+import "@cmd/ui/ui.css";
+import "../styles.css";
+import "./workbench.css";
+import { installErrorReporting } from "../errors.ts";
+import { installScrollbars, installTooltips, Toaster, UIProvider } from "@cmd/ui";
+import "@cmd/ui/themes/builtin";
+import { bootTheme } from "@cmd/ui/themes";
+import { Workbench } from "./Workbench.tsx";
+
+installErrorReporting();
+bootTheme();
+installScrollbars();
+installTooltips();
+
+document.documentElement.classList.add(navigator.platform.startsWith("Mac") ? "platform-mac" : "platform-other");
+createRoot(document.getElementById("root")!).render(
+  <UIProvider icon={Symbol}>
+    <Workbench />
+    <Toaster />
+  </UIProvider>,
+);
