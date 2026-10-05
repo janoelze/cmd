@@ -93,6 +93,8 @@ export function Symbol({
   return (
     <span
       className={`sf ${className}`}
+      data-symbol={name}
+      data-pt={size}
       aria-hidden
       style={{
         width: w,

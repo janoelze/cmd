@@ -83,8 +83,9 @@ kbd {
 .topbar-lead { display: flex; align-items: center; min-width: 0; -webkit-app-region: no-drag; }
 /* Pushed to the right end; the rest of the bar stays a drag region. */
 .topbar-trail { display: flex; align-items: center; gap: 8px; margin-left: auto; -webkit-app-region: no-drag; }
-/* The view-mode symbols' ink sits 0.5px below their box's centre (measured); level with New's. */
-.topbar .ui-seg .sf { position: relative; top: -0.5px; }
+/* On Retina the view-mode symbols' ink sits one device pixel below centre (measured);
+   half a point is one device pixel there, so they stay crisp. At 1x they're centred. */
+@media (min-resolution: 2dppx) { .topbar .ui-seg .sf { position: relative; top: -0.5px; } }
 
 /* ── stage: sidebars and the workspace ──────────────── */
 
