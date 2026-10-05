@@ -898,6 +898,12 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-dialog[data-divided] .ui-dialog-head { padding: 12px 14px 12px var(--dialog-pad); border-bottom: 1px solid var(--separator); }
 .ui-dialog[data-divided] .ui-dialog-head + .ui-dialog-body[data-padded] { padding-top: var(--dialog-pad); }
 .ui-dialog[data-divided] .ui-dialog-foot { padding: 12px var(--dialog-pad); border-top: 1px solid var(--separator); }
+/* The toolbar row: fixed under the title, the body scrolling under it. */
+.ui-dialog-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 14px var(--dialog-pad) 0; }
+.ui-dialog-bar > .ui-field { flex: 1; min-width: 0; }
+.ui-dialog[data-divided] .ui-dialog-bar { padding-bottom: 14px; border-bottom: 1px solid var(--separator); }
+/* With a toolbar, the title and the toolbar are one header: the line goes under the toolbar. */
+.ui-dialog[data-divided]:has(> .ui-dialog-bar) > .ui-dialog-head { padding-bottom: 0; border-bottom: 0; }
 .ui-dialog-aside { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--text-dim); }
 
 /* SheetHeader: a sheet's greeting. The step's content sits at the bottom, by the actions. */

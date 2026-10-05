@@ -5,7 +5,7 @@
 // an avatar: a built-in widget's icon, else the widget's initial, in a colour
 // of its own from its name (as projects' chips in the sidebar).
 
-import { Button, Dialog, EmptyState, IconButton, SearchField, TextField, iconNode } from "@cmd/ui";
+import { Button, Callout, Dialog, EmptyState, IconButton, SearchField, SectionHeading, TextField, iconNode } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WidgetEntry } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -104,8 +104,16 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <Dialog open onClose={onClose} title="Widget Library" width={720} className="widget-library" divided padded={false}>
-      <div className="wl-search">
+    <Dialog
+      open
+      onClose={onClose}
+      title="Widget Library"
+      width={720}
+      height={640}
+      position="center"
+      className="widget-library"
+      divided
+      toolbar={
         <SearchField
           fill
           ref={input}
@@ -118,26 +126,32 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
             if (k.key === "Enter" && shown[0]) void add(yours[0] ?? shown[0]);
           }}
         />
-        <Button variant="primary" size="lg" icon="sparkles" onClick={make}>
+      }
+      aside="Right-click a widget to rename, duplicate or delete it"
+      actions={
+        <Button variant="primary" icon="sparkles" onClick={make}>
           New Widget
         </Button>
-      </div>
-      <div className="wl-body">
-        {error && <div className="wl-error">{error}</div>}
-        {(yours.length > 0 || !query) && (
-          <section className="wl-section">
-            <div className="wl-heading">Your Widgets</div>
-            {yours.length > 0 ? <div className="wl-grid">{yours.map(card)}</div> : <EmptyState compact>Widgets you make with Magic are kept here.</EmptyState>}
-          </section>
-        )}
-        {builtin.length > 0 && (
-          <section className="wl-section">
-            <div className="wl-heading">Built-in</div>
-            <div className="wl-grid">{builtin.map(card)}</div>
-          </section>
-        )}
-        {query && !shown.length && <EmptyState compact>Nothing matches “{query}”. New Widget makes one.</EmptyState>}
-      </div>
+      }
+    >
+      {error && (
+        <Callout tone="danger" onDismiss={() => setError(null)}>
+          {error}
+        </Callout>
+      )}
+      {(yours.length > 0 || !query) && (
+        <section className="wl-section">
+          <SectionHeading>Your Widgets</SectionHeading>
+          {yours.length > 0 ? <div className="wl-grid">{yours.map(card)}</div> : <EmptyState compact>Widgets you make with Magic are kept here.</EmptyState>}
+        </section>
+      )}
+      {builtin.length > 0 && (
+        <section className="wl-section">
+          <SectionHeading>Built-in</SectionHeading>
+          <div className="wl-grid">{builtin.map(card)}</div>
+        </section>
+      )}
+      {query && !shown.length && <EmptyState compact>Nothing matches “{query}”. New Widget makes one.</EmptyState>}
       {renaming && <RenameDialog entry={renaming} onDone={() => setRenaming(null)} onError={fail} />}
     </Dialog>
   );

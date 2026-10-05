@@ -302,6 +302,7 @@ export function Dialog({
   divided,
   aside,
   height,
+  toolbar,
 }: {
   open: boolean;
   onClose: () => void;
@@ -313,6 +314,8 @@ export function Dialog({
   width?: number;
   /** Fixed, for steps that shouldn't make the sheet jump; else it fits the content. */
   height?: number;
+  /** A row under the title that stays while the body scrolls: a search field (the Widget Library's). */
+  toolbar?: ReactNode;
   /** False while something runs that shouldn't be abandoned. */
   dismissable?: boolean;
   /** Top (like the palette, near where you were looking) or centred. */
@@ -359,6 +362,7 @@ export function Dialog({
             {dismissable && <IconButton icon="xmark" size="sm" label="Close" onClick={onClose} />}
           </div>
         )}
+        {toolbar && <div className="ui-dialog-bar">{toolbar}</div>}
         <div className="ui-dialog-body" data-padded={padded || undefined}>
           {children}
         </div>
