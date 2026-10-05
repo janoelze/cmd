@@ -96,5 +96,14 @@ function DockResize({ side, max, onWidth }: { side: Side; max: number; onWidth: 
     handle.addEventListener("pointerup", end);
     handle.addEventListener("pointercancel", end);
   };
-  return <div className="dock-resize" onPointerDown={onPointerDown} onDoubleClick={() => onWidth(null)} data-tip="Drag to resize · double-click to reset" />;
+  // The window's inner edge: the right one for the left sidebar, and the other way round.
+  return (
+    <div
+      className="resize-edge dock-resize"
+      data-edge={side === "left" ? "right" : "left"}
+      onPointerDown={onPointerDown}
+      onDoubleClick={() => onWidth(null)}
+      data-tip="Drag to resize · double-click to reset"
+    />
+  );
 }

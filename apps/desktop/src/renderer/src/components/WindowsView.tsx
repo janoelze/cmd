@@ -140,7 +140,8 @@ export function WindowsView(p: Props) {
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [preview, setPreview] = useState<PaneId[] | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [resizing, setResizing] = useState<{ id: PaneId; w: number } | null>(null);
+  /** Strip: the window being resized, its width so far, and which edge is held. */
+  const [resizing, setResizing] = useState<{ id: PaneId; w: number; edge: "left" | "right" } | null>(null);
   const [sizing, setSizing] = useState<{ id: PaneId; rect: Rect; axes: "x" | "y" | "xy" } | null>(null); // canvas edge/corner resize
   // Space around (ui.paddingX/Y) and between (ui.gutter) windows in grid and strip;
   // the canvas uses its dot grid.
@@ -506,7 +507,9 @@ export function WindowsView(p: Props) {
   const selSlot = selIdx >= 0 ? stripSlots[selIdx] : undefined;
   const revealedFor = useRef({ w: 0, mode, selected });
   useEffect(() => {
-    if (mode !== "strip" || !selSlot || !vp.w || drag) return;
+    // Not while a window is being resized: its width changes every frame, and its left
+    // edge scrolls the strip itself.
+    if (mode !== "strip" || !selSlot || !vp.w || drag || resizing) return;
     const was = revealedFor.current;
     revealedFor.current = { w: vp.w, mode, selected };
     if (skipReveal.current) return void (skipReveal.current = false);
@@ -720,7 +723,12 @@ export function WindowsView(p: Props) {
   };
 
   // ── resizing (strip) ───────────────────────────────────
-  const startResize = (e: React.PointerEvent, id: PaneId, startW: number) => {
+  // Both edges of every window. Each gap is split down the middle and each half
+  // belongs to the window whose edge it touches, so grabbing a window's edge always
+  // resizes that window. The left edge grows the window leftwards: its right edge
+  // stays put and the strip scrolls by the change (at the very start it can't, so
+  // the window grows rightwards).
+  const startResize = (e: React.PointerEvent, id: PaneId, startW: number, edge: "left" | "right") => {
     if (e.button !== 0) return;
     e.preventDefault();
     hold();
@@ -728,10 +736,14 @@ export function WindowsView(p: Props) {
     const handle = e.currentTarget as HTMLElement;
     handle.setPointerCapture(e.pointerId);
     const startX = e.clientX;
+    const startOffset = offsetRef.current;
     let w = startW;
+    setResizing({ id, w, edge });
     const move = (ev: PointerEvent) => {
-      w = clampWidth(startW + ev.clientX - startX, live.current.stripW, padRef.current);
-      setResizing({ id, w });
+      const dx = ev.clientX - startX;
+      w = clampWidth(startW + (edge === "right" ? dx : -dx), live.current.stripW, padRef.current);
+      flushSync(() => setResizing({ id, w, edge }));
+      if (edge === "left") setOffset(startOffset + (w - startW));
     };
     const up = () => {
       handle.removeEventListener("pointermove", move);
@@ -894,14 +906,25 @@ export function WindowsView(p: Props) {
               {/* Outline rings, glow, shadow and dimming: a leaf, so the canvas zoom can be
                   set on it (screen-constant widths) without restyling the window's content. */}
               <div className="tile-frame" style={canvas ? zVar : undefined} />
-              {lay.resizable && (
-                <div
-                  className="strip-resize"
-                  data-tip="Drag to resize · double-click to cycle widths"
-                  onPointerDown={(e) => startResize(e, id, rect.w)}
-                  onDoubleClick={() => p.onWidth(id, nextPreset(p.widths[id] ?? DEFAULT_FRACTION))}
-                />
-              )}
+              {lay.resizable &&
+                (["left", "right"] as const).map((edge) => {
+                  // Half the space beside this edge: the window's gutter, or the strip's padding at its ends.
+                  const i = ids.indexOf(id);
+                  const space = (edge === "left" ? i === 0 : i === ids.length - 1) ? padX : gap;
+                  return (
+                    <div
+                      key={edge}
+                      className={`resize-edge strip-resize ${resizing?.id === id && resizing.edge === edge ? "active" : ""}`}
+                      data-edge={edge}
+                      style={{ "--space": `${space}px` } as React.CSSProperties}
+                      data-tip="Drag to resize · double-click to cycle widths"
+                      onPointerDown={(e) => startResize(e, id, rect.w, edge)}
+                      // Resizing doesn't select (that would scroll the strip to reveal it).
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onDoubleClick={() => p.onWidth(id, nextPreset(p.widths[id] ?? DEFAULT_FRACTION))}
+                    />
+                  );
+                })}
               {canvas &&
                 (["x", "y", "xy"] as const).map((axes) => (
                   <div

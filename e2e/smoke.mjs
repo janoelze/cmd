@@ -1187,7 +1187,7 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   await win.evaluate((id) => window.__cmdSelect(id), await first.getAttribute("data-pane"));
   await win.waitForTimeout(500);
   const fb = await first.boundingBox();
-  const handle = await first.locator(".strip-resize").boundingBox();
+  const handle = await first.locator('.strip-resize[data-edge="right"]').boundingBox();
   await win.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
   await win.mouse.down();
   await win.mouse.move(pane.x + pane.width - 2, handle.y + handle.height / 2, { steps: 8 });
@@ -1199,6 +1199,22 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   await win.waitForTimeout(400);
   const fb3 = await first.boundingBox();
   check(fb3.width < fb2.width, `⌃⌘R cycles width presets (${Math.round(fb2.width)} → ${Math.round(fb3.width)})`);
+  // Every window has a left edge too: it grows the window leftwards (its right edge stays, the strip scrolls).
+  {
+    const second = (await visualTiles())[1];
+    await win.evaluate((id) => window.__cmdSelect(id), await second.getAttribute("data-pane"));
+    await win.waitForTimeout(600);
+    const b = await second.boundingBox();
+    const h = await second.locator('.strip-resize[data-edge="left"]').boundingBox();
+    await win.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+    await win.mouse.down();
+    await win.mouse.move(h.x + h.width / 2 - 50, h.y + h.height / 2, { steps: 6 });
+    await win.mouse.up();
+    await win.waitForTimeout(400);
+    const b2 = await second.boundingBox();
+    check(Math.abs(b2.x + b2.width - (b.x + b.width)) <= 1 && b2.width >= b.width + 45,
+      `a window's left edge resizes it leftwards, its right edge staying put (${Math.round(b.width)} → ${Math.round(b2.width)})`);
+  }
   // drag a window along the strip: the others make room (insert-style)
   {
     await win.evaluate((id) => window.__cmdSelect(id), await (await visualTiles())[0].getAttribute("data-pane"));
