@@ -8,13 +8,13 @@ Right-click a window's title bar → **Make Sidebar** → **Left** or **Right**.
 
 Sidebars belong to a Space. One project might keep a file browser on the left and a CI widget on the right, while another keeps only the default left sidebar.
 
-Today's sidebar becomes a built-in widget, the **Navigator** (working name), docked left by default in every Space. With windows no longer running all the way to the top of the app window, there is room for a real **top bar**: a drag handle, the Space switcher on the left, and view switchers and actions on the right. The background turns into one continuous canvas that every window, docked or not, sits on.
+Today's sidebar becomes a built-in widget, the **Navigator** (working name), docked left by default in every Space. With windows no longer running all the way to the top of the app window, there is room for a real **top bar**: a drag handle with the Space switcher on the left, and room on the right for view switchers and actions later. The bottom row stays as it is: the core's health bottom left, the status bar beside it. The background turns into one continuous canvas that every window, docked or not, sits on.
 
 ## What people see
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ● ● ●   ◆ cmd ▾   +                 (drag)                  ▢ ⊞ ▥ ⧉   ⌘  ⚙ │  top bar
+│ ● ● ●   ◆ cmd ▾   +                 (drag)                                   │  top bar
 │ ╭───────────╮  ╭──────────────╮ ╭──────────────╮  ╭────────────────────────╮ │
 │ │ Navigator │  │ zsh · ~/src  │ │ claude       │  │ CI runs                │ │
 │ │ ───────── │  │              │ │              │  │ ───────                │ │
@@ -24,15 +24,16 @@ Today's sidebar becomes a built-in widget, the **Navigator** (working name), doc
 │ │ Widgets   │  │   /canvas)   │ │              │  │                        │ │
 │ │ Recent    │  │              │ │              │  │                        │ │
 │ ╰───────────╯  ╰──────────────╯ ╰──────────────╯  ╰────────────────────────╯ │
+│ ● core          412 MB · 3%                               ▢ ⊞ ▥ ⧉   ⌘  ⚙  │  bottom row, as today
 └──────────────────────────────────────────────────────────────────────────────┘
    left sidebar          the desk: every other window          right sidebar
 ```
 
-- **The backdrop** (`--bg`) fills the whole app window. Nothing is attached to the edges anymore: the sidebars, the desk's windows and the top bar sit on it, inset by the gutter.
+- **The backdrop** (`--bg`) fills the space between the top bar and the bottom row. The sidebars and the desk's windows sit on it, inset by the gutter.
 - **The top bar** (about 44 px; `--titlebar-h` today is 38) spans the full width and is the app window's drag region:
   - left: the traffic lights, then the **Space switcher** (moved from the bottom of the sidebar) and **+** (New…, the sidebar's + today);
-  - right: the **view modes** (moved from the status bar), Palette and Settings, and the core's health as a small light (moved from the sidebar footer; it opens the same details);
-  - centre: empty drag space. In Focus mode, which has no title bars, it shows the selected window's title fields, so the status bar's job there moves up here.
+  - the rest is drag space for now. The right side is where view switchers and actions could go later; that's an experiment for after this lands.
+- **The bottom row stays as it is.** The core's health (`CoreStatus`) keeps its place bottom left, where the sidebar footer is today, and the status bar (the selected window's usage, view modes, Palette, Settings) keeps the rest of the row. The only change is that the left cell no longer belongs to the sidebar: it is its own cell, so it stays put when the left side is hidden, empty, or holds another window.
 - **Sidebars** look like windows because they are windows: the same `TileTitle`, frame, radius and shadow. Each side holds one window. A sidebar's inner edge resizes it, and a double-click resets it. A sidebar keeps its width when you switch view modes.
 - **The desk** is everything else. Every layout (focus, grid, strip, canvas) gets the space between the sidebars as its viewport.
 
@@ -52,7 +53,7 @@ All labels go through the copywriting skill before they ship.
 
 ### The Navigator
 
-The Navigator is today's `Sidebar.tsx` turned into a window view: search (⇧⌘F), Needs you, Agents, Windows, Widgets, Recent. The Space switcher, + and the core's health move into the top bar, so it keeps only what is about the Space's windows.
+The Navigator is today's `Sidebar.tsx` turned into a window view: search (⇧⌘F), Needs you, Agents, Windows, Widgets, Recent. The Space switcher and + move into the top bar and the core's health into its own bottom-left cell, so it keeps only what is about the Space's windows.
 
 - It is a built-in widget (`role: "widget"`), so it is in the Widget Library. Close it and you can put it back from there.
 - Every new Space starts with a Navigator docked left. Existing Spaces get one the first time they are shown, which is the migration (see Data).
@@ -87,7 +88,7 @@ Why not a field in the window's state: that state belongs to the window's type, 
 
 ### Layouts
 
-`layouts.ts` stays pure. `WindowsView` computes the desk viewport as the app window minus the top bar and minus each visible sidebar (its width plus a gutter) and hands that to the layout. Docked ids leave the ids the layout sees. They are filtered out before `arrangeTiles`, so grid order and strip widths are kept for when a window returns to the desk.
+`layouts.ts` stays pure. `WindowsView` computes the desk viewport as the app window minus the top bar and the bottom row, and minus each visible sidebar (its width plus a gutter) and hands that to the layout. Docked ids leave the ids the layout sees. They are filtered out before `arrangeTiles`, so grid order and strip widths are kept for when a window returns to the desk.
 
 New in `layouts.ts`, also pure and tested: `dockRects(docks, vp, spacing, topBar)` → the rect for each sidebar, in screen coordinates.
 
@@ -120,17 +121,18 @@ Views also get `placement: "desk" | "dock"` (context, not a prop on every view),
 
 ### The app shell
 
-`App.tsx`'s grid changes from "sidebar column + main + status row" to:
+`App.tsx`'s grid changes from "sidebar column spanning both rows + main + status row" to:
 
 ```
-.app            grid: top bar row / content row
-  .topbar       drag region; Space switcher, +, view modes, actions, core light
+.app            grid: top bar / content / bottom row
+  .topbar       drag region; Space switcher, + (right side free for later)
   .stage        position: relative; the backdrop
     WindowsView (desk + sidebar layer)
+  .bottom       CoreStatus (bottom left, as today) · StatusBar (unchanged)
 ```
 
 - `SpaceBar` moves into `.topbar` and drops down below it, not above (`placement`).
-- `StatusBar` goes away. View modes and actions move to the top bar, and Focus mode's title fields move to its centre. The selected window's usage (memory, CPU) moves into its title bar's tooltip, or stays in the top bar (open question).
+- `StatusBar` stays as it is. `CoreStatus` keeps its bottom-left cell, now always at the width it has today (`--sidebar-w`'s default) rather than tracking the sidebar, so the two still share one row and one height. Whether the cell should follow the left sidebar's width instead is easy to try later.
 - `drag-strip` and `.app.no-sidebar` go away: the top bar is always there.
 - **Windows (the OS):** `titleBarOverlay` draws the window controls top right, so the top bar reserves their width (`env(titlebar-area-width)`), and the right-hand actions sit to their left. On macOS the traffic lights stay at `trafficLightPosition`, vertically centred in the taller bar (y adjusted in `main/index.ts`).
 
@@ -144,7 +146,7 @@ Views also get `placement: "desk" | "dock"` (context, not a prop on every view),
 One worktree per phase; each ends green (`pnpm typecheck && pnpm test`, e2e updated).
 
 0. **Spike: window hosts.** `moveBefore` with a `<webview>` and an xterm host in Electron 44, plus a throwaway page and a note here with the result. It decides whether docking a webview reloads it.
-1. **The top bar.** Add `.topbar`, move the Space switcher, + and view modes into it, fold the status bar in, and centre the traffic lights. The old sidebar stays where it is, under the top bar. This change is visible but low-risk. e2e: the sidebar-footer/status-bar alignment check is replaced by one for the top bar.
+1. **The top bar.** Add `.topbar`, move the Space switcher and + into it, and centre the traffic lights. Give `CoreStatus` its own bottom-left cell. The old sidebar stays where it is, between the two bars. This change is visible but low-risk. e2e: the footer/status-bar alignment check stays and points at the new cell.
 2. **Window hosts.** Portal plus host plus `moveBefore` (or the fallback) in `WindowsView`, with no visible change. This is where remount bugs would show up, so it gets its own phase.
 3. **Sidebars.** `Space.view.docks`, the desk viewport, `dockRects`, the sidebar layer, the resize edge, and the menus and commands (`window.dockLeft`, `window.dockRight`, `window.undock`, `view.sidebar` → left, `view.rightSidebar`). Rows are filtered out of desk navigation. Tests: `dockRects` and the desk viewport in `layouts.test.ts`; stale ids dropped.
 4. **The Navigator.** The `navigator` core type, `Sidebar.tsx` → `components/Navigator.tsx` registered as a view, the default dock and migration, and removing the old shell slot. e2e: the sidebar search and Widgets checks run against the Navigator window.
@@ -166,5 +168,5 @@ Merge the `windows` worktree first if it lands soon: it has uncommitted changes 
 - **One window per side, or a stack?** Proposed: one, for now. A vertical stack (Navigator above Live Diff) is the obvious next ask, and `Docks` can grow `ids: WindowId[]` without a migration headache.
 - **Should the Navigator list sidebars?** Proposed: no, they are always in view. But a hidden side's window would then be listed nowhere. List hidden ones?
 - **Canvas under sidebars?** Overlaying would feel more "floating on the canvas" but hides windows behind sidebars. Proposed: no.
-- **The status bar's usage numbers:** in the title bar tooltip, or a slot in the top bar's centre?
+- **What goes on the top bar's right side**, and whether anything moves up from the bottom row: to try once the top bar exists.
 - **Keyboard focus for sidebars:** ⌃⌘← / ⌃⌘→ to focus the left or right sidebar?
