@@ -29,6 +29,7 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 16 | [Widgets](16-widgets.md) | Widgets apart from windows: the Widget Library, Magic as how you make one, built-in widgets, how they stay windows underneath |
 | 17 | [AI providers and onboarding](17-ai.md) | One AI service for every feature: providers, tiers, models that pick themselves; the first-launch wizard |
 | 18 | [Agent activity data](18-agent-activity.md) | What agents do, captured reliably: spooled hook events, one vocabulary across agents, state with causes, turns and the files they changed, discovered agent homes, hooks out of the box |
+| 19 | [Reviewing real agent activity data](19-agent-activity-review.md) | Handoff: collect a few days of real sessions, export them, check state, interrupts, turns and files against them, turn findings into fixes and fixtures |
 
 ## Key findings
 1. **Nothing has to be invented for agent awareness.** Every tool in this space combines three things:

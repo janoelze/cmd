@@ -152,6 +152,8 @@ Rules:
 
 ## Open
 
+The first review of real data is planned in [19-agent-activity-review.md](19-agent-activity-review.md).
+
 - **Gemini recordings.** Its adapter is a table built from documentation; record real sessions (`cmd agents record`) and add a fixture folder. Codex in an interactive session (permission requests, interrupts) isn't recorded yet either.
 - **Codex shell failures** are invisible in its hooks (no exit code); its transcript has them.
 - **Interrupt timing** in interactive sessions: 30 s quiet is a guess; check against recorded Esc-interrupts.
