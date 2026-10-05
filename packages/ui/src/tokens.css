@@ -67,16 +67,17 @@
   --input-bg: color-mix(in srgb, var(--ink) 5%, transparent);
   --input-edge: color-mix(in srgb, var(--ink) 10%, transparent);
   --input-focus-edge: color-mix(in srgb, var(--accent) 50%, var(--input-edge));
-  --input-glow: color-mix(in srgb, var(--accent) 16%, transparent);
-  --input-ring: inset 0 0 0 1px var(--input-focus-edge), 0 0 0 2px var(--input-glow);
+  --input-glow: color-mix(in srgb, var(--accent) 20%, transparent);
+  --input-ring: inset 0 0 0 1px var(--input-focus-edge), 0 0 0 3px var(--input-glow);
   --input-placeholder: var(--text-dim);
   /* Buttons, popups, segmented controls share a fill; text fields sit in the well. */
   --control-bg: var(--input-bg);
   --control-edge: var(--input-edge);
   --control-hover: color-mix(in srgb, var(--ink) 10%, transparent);
   --control-active: color-mix(in srgb, var(--ink) 14%, transparent);
-  --control-thumb: color-mix(in srgb, var(--ink) 14%, var(--bg)); /* the chosen segment */
-  --control-thumb-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  /* The chosen segment: a lift over the track, so it shows on any surface (a window, a dialog). */
+  --control-thumb: color-mix(in srgb, var(--ink) 16%, transparent);
+  --control-thumb-shadow: 0 1px 2px rgb(0 0 0 / 0.22), inset 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent);
   --field-bg: var(--well);
   /* Text fields' edge: stronger than a button's, since the well is darker than the surface around it. */
   --field-edge: color-mix(in srgb, var(--ink) 18%, transparent);
