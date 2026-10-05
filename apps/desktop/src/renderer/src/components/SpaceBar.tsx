@@ -69,7 +69,7 @@ export function SpaceBar(p: Props) {
             {others.length}
           </Badge>
         )}
-        <Symbol name="chevron.up.chevron.down" size={ICON.disclosure} />
+        <Symbol name="chevron.down" size={ICON.disclosure} />
       </button>
       <Menu
         anchor={button}
@@ -77,7 +77,6 @@ export function SpaceBar(p: Props) {
         onClose={() => setOpen(false)}
         label="Spaces"
         className="space-menu"
-        matchWidth
         placement="below"
         items={[...items, null, { label: "Open Space…", icon: "plus", shortcut: "⌘O", className: "space-item space-item-open", onSelect: p.onPicker }]}
       />
