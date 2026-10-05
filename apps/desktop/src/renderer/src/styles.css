@@ -63,6 +63,23 @@ kbd {
   grid-template-rows: var(--topbar-h) minmax(0, 1fr) auto;
   height: 100%;
   background: var(--bg);
+  position: relative;
+  isolation: isolate;
+  /* Backdrop grain: how strong (0 = none) and how coarse (the tile's px). */
+  --grain: 0.05;
+  --grain-size: 160px;
+}
+/* Grain over the backdrop, under everything else: fractal noise from an SVG tile
+   as a mask over the theme's ink, so it lightens dark themes and darkens light ones. */
+.app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--ink);
+  opacity: var(--grain);
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>") 0 0 / var(--grain-size) repeat;
 }
 
 /* ── top bar ────────────────────────────────────────── */
@@ -94,6 +111,8 @@ kbd {
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
+  /* Sidebars' shadows stop at the stage, like the workspace's: not over the top bar or footer. */
+  overflow: clip;
 }
 /* All in row 1: auto-placement would move an item whose column comes before the last one's to a new row. */
 .stage > * { grid-row: 1; }
@@ -378,7 +397,7 @@ kbd {
 .main {
   min-width: 0;
   min-height: 0;
-  background: var(--bg);
+  /* Transparent in every mode: the backdrop (.app, and its grain) shows through. */
 }
 .main.focus { display: flex; }
 .term-well {
@@ -488,12 +507,31 @@ kbd {
   --drop: 0 0 transparent;
   box-shadow: inset 0 0 0 var(--edge-w) var(--window-edge), var(--drop);
 }
-/* ui.windowShadow: each step larger, further down and darker (a contact shadow plus,
-   from medium on, a soft ambient one), as if the window floats higher. */
-.app.shadow-subtle .tile-frame { --drop: 0 2px 6px color-mix(in srgb, var(--shadow) 60%, transparent); }
-.app.shadow-medium .tile-frame { --drop: 0 1px 3px color-mix(in srgb, var(--shadow) 50%, transparent), 0 4px 14px color-mix(in srgb, var(--shadow) 70%, transparent); }
-.app.shadow-strong .tile-frame { --drop: 0 2px 4px color-mix(in srgb, var(--shadow) 60%, transparent), 0 8px 28px var(--shadow); }
-.app.shadow-deep .tile-frame { --drop: 0 3px 6px color-mix(in srgb, var(--shadow) 70%, transparent), 0 16px 48px var(--shadow), 0 28px 80px color-mix(in srgb, var(--shadow) 60%, transparent); }
+/* ui.windowShadow: one elevation shadow, --e high (0 = none). Five layers, each twice
+   as far down and as blurred as the last, so the light falls off softly instead of
+   as one grey blob; the far ones pulled in at the sides, so they pool below the
+   window. Their colour is the theme's --shadow with some of the backdrop's hue,
+   which reads cleaner than black on coloured themes. A window being dragged floats
+   higher (--lift). */
+.tile-frame {
+  --e: 0;
+  --lift: 0;
+  --sh: color-mix(in oklab, var(--shadow) 85%, var(--bg));
+}
+.app.shadow-subtle .tile-frame { --e: 0.5; }
+.app.shadow-medium .tile-frame { --e: 1; }
+.app.shadow-strong .tile-frame { --e: 2; }
+.app.shadow-deep .tile-frame { --e: 3.5; }
+.app:not(.shadow-none) .tile-frame {
+  --elev: calc(var(--e) + var(--lift));
+  --drop:
+    0 calc(0.5px * var(--elev)) calc(1px * var(--elev)) color-mix(in srgb, var(--sh) 36%, transparent),
+    0 calc(1px * var(--elev)) calc(2px * var(--elev)) color-mix(in srgb, var(--sh) 30%, transparent),
+    0 calc(2px * var(--elev)) calc(4px * var(--elev)) color-mix(in srgb, var(--sh) 24%, transparent),
+    0 calc(4px * var(--elev)) calc(8px * var(--elev)) calc(-1px * var(--elev)) color-mix(in srgb, var(--sh) 20%, transparent),
+    0 calc(8px * var(--elev)) calc(16px * var(--elev)) calc(-2px * var(--elev)) color-mix(in srgb, var(--sh) 16%, transparent);
+}
+.windows-track > .tile.lifted > .tile-frame { --lift: 1.5; }
 .tile.sel > .tile-frame, .tile.needs > .tile-frame { box-shadow: var(--ring), var(--drop); }
 
 /* ui.focusTitleBar: the selected window's title bar takes some of its outline colour. */
@@ -1109,7 +1147,6 @@ kbd {
 .markdown tr:nth-child(2n) td { background: color-mix(in srgb, var(--ink) 2%, transparent); }
 
 /* Canvas: windows on a pan/zoom plane (see WindowsView, canvas.ts). */
-.main.windows.mode-canvas { background: var(--bg); }
 .mode-canvas .windows-track { transform-origin: 0 0; }
 .main.windows.switching .windows-track { transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .mode-canvas .windows-track > .tile.sel { z-index: 5; }
