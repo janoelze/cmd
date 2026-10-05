@@ -2,6 +2,28 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.13.0 — 2026-10-05
+
+Dock any window as a sidebar, and watch YouTube in a widget.
+
+### New
+
+- **Sidebars.** Dock any window to the left or right of a Space: right-click its title bar and choose Make Sidebar.
+- **File browser as a sidebar.** Docked, it shows a compact folder tree. Bookmark folders and files to get back to them.
+- **YouTube widget.** Paste a link and the video plays in its own window.
+
+### Improved
+
+- A top bar holds the Space switcher, the view modes and New.
+- Resize a strip window from either edge, with a grip that shows where you are.
+- Sign-in pop-ups such as Google's work in browser windows.
+- Focus mode keeps the window's title bar and frame.
+- Fit on the canvas shows every window, even with both sidebars open.
+
+### Fixed
+
+- The file browser asks before moving files to the Trash.
+
 ## 0.12.0 — 2026-10-05
 
 Agent notifications say what happened, and a session can be summarized in a click.
