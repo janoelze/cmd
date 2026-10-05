@@ -1,6 +1,6 @@
 // The footer: one bar across the app window's bottom (docs/21-sidebars.md). The
 // core's health on the left, then the selected window's usage (all its title
-// fields in focus mode); view modes and the app's actions on the right.
+// fields in focus mode); the app's actions on the right. View modes are in the top bar.
 
 import type { Pane } from "@cmd/protocol";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
@@ -13,17 +13,11 @@ import type { ViewMode } from "./MainView.tsx";
 import { ICON } from "./Symbol.tsx";
 import { RemoteBadge, RemoteIndicator } from "./Remote.tsx";
 import { CoreStatus } from "./CoreStatus.tsx";
-import { IconButton, Segmented, useTooltip } from "@cmd/ui";
+import { IconButton, useTooltip } from "@cmd/ui";
 import { useSyncExternalStore } from "react";
 import { countRender } from "../perf.ts";
 
-const MODE_LABEL: Record<ViewMode, string> = { focus: "Focus", grid: "Grid", strip: "Strip", canvas: "Canvas" };
-
-const ICONS: Record<ViewMode | "palette" | "settings" | "feedback" | "whatsNew", string> = {
-  focus: "rectangle",
-  grid: "square.grid.2x2",
-  strip: "rectangle.split.3x1",
-  canvas: "rectangle.3.group",
+const ICONS: Record<"palette" | "settings" | "feedback" | "whatsNew", string> = {
   palette: "command",
   settings: "gearshape",
   feedback: "bubble.left",
@@ -66,7 +60,6 @@ export function StatusBar({ mode, row, pane, run, connected, error }: Props) {
   const usageTip = useTooltip(() => usage && <UsageTip usage={usage} />);
   const key = (id: CommandId) => prettyAccelerator(keys.bindings[id]?.[0]);
   const btn = (id: CommandId, icon: string, label: string) => <IconButton key={id} icon={icon} label={label} shortcut={key(id)} iconSize={ICON.bar} onClick={() => run(id)} />;
-  const modes = (["focus", "grid", "strip", "canvas"] as const).map((m) => ({ value: m, icon: ICONS[m], tip: MODE_LABEL[m], shortcut: key(`view.${m}`) }));
 
   return (
     <footer className="statusbar">
@@ -94,8 +87,6 @@ export function StatusBar({ mode, row, pane, run, connected, error }: Props) {
       </div>
       <div className="statusbar-centre" ref={setCentre} />
       <div className="statusbar-actions">
-        <Segmented size="sm" label="View" value={mode} options={modes} onChange={(m) => run(`view.${m}`)} />
-        <span className="statusbar-sep" />
         <RemoteIndicator />
         {btn("help.whatsNew", ICONS.whatsNew, "What's New")}
         {btn("help.feedback", ICONS.feedback, "Send Feedback")}

@@ -115,6 +115,11 @@
 .ui-icon-button:disabled { opacity: 0.35; }
 .ui-icon-button[data-variant="default"] { --h: var(--control-h); min-width: var(--h); padding: 0; border-radius: var(--radius); color: var(--text-dim); background: var(--control-bg); box-shadow: inset 0 0 0 1px var(--control-edge); }
 .ui-icon-button[data-variant="default"]:hover:not(:disabled) { background: var(--control-hover); }
+/* Small and filled (bars): one segment of a small Segmented, the same height, corners,
+   fill, hairline and padding, so the two sit side by side as a set (the top bar's + beside
+   its view modes). */
+.ui-icon-button[data-variant="default"][data-size="sm"] { --h: var(--control-h-sm); min-width: calc(var(--h) + 8px); padding: 0 6px; border-radius: var(--radius-sm); }
+.ui-icon-button[data-variant="default"][data-size="sm"]:hover:not(:disabled) { color: var(--text); }
 
 .ui-link {
   display: inline;

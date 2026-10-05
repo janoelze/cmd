@@ -334,6 +334,20 @@ function ButtonsPage() {
           <IconButton variant="default" icon="ellipsis" label="More" />
           <IconButton variant="default" icon="doc.on.doc" label="Copy" />
         </Row>
+        <Row label="default, sm (bars)">
+          <Segmented
+            size="sm"
+            label="View"
+            value="grid"
+            onChange={() => {}}
+            options={[
+              { value: "focus", icon: "rectangle", tip: "Focus" },
+              { value: "grid", icon: "square.grid.2x2", tip: "Grid" },
+              { value: "strip", icon: "rectangle.split.3x1", tip: "Strip" },
+            ]}
+          />
+          <IconButton variant="default" size="sm" icon="plus" label="New…" />
+        </Row>
       </Spec>
       <Spec title="ButtonGroup" code="<ButtonGroup joined | align>" note="Joined: one control (Back | Forward, − | +). Spaced: a row of actions with the standard gap; align end for a footer.">
         <Row label="joined">

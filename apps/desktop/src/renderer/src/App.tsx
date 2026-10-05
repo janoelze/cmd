@@ -730,7 +730,7 @@ export function App() {
         ["--focus-glow" as string]: `${cfg["ui.focusGlow"] / 50}`,
       }}
     >
-      <TopBar spaceBar={spaceBar} onNew={newMenu} />
+      <TopBar spaceBar={spaceBar} mode={mode} run={run} onNew={newMenu} />
       <NavigatorContext.Provider value={navigatorData}>
         {/* Canvas: the canvas runs under the sidebars (docs/21-sidebars.md). */}
         <div className={`stage${mode === "canvas" ? " canvas" : ""}`}>
