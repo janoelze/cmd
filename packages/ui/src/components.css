@@ -862,7 +862,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-feature { display: flex; align-items: flex-start; gap: 16px; }
 .ui-feature-icon { flex: none; display: flex; justify-content: center; width: 30px; padding-top: 2px; color: var(--accent); }
 .ui-feature-title { font: 600 var(--text-base) / 1.35 var(--font-ui); color: var(--text); }
-.ui-feature-desc { margin-top: 2px; font-size: var(--text-md); line-height: 1.45; color: var(--text-dim); text-wrap: pretty; }
+.ui-feature-desc { max-width: 36ch; margin-top: 2px; font-size: var(--text-md); line-height: 1.45; color: var(--text-dim); text-wrap: pretty; }
 
 /* Prose: running text, styled by element. */
 .ui-prose { font-size: var(--text-base); line-height: 1.5; color: var(--text); }
