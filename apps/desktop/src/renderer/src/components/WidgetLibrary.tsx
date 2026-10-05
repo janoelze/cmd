@@ -1,7 +1,8 @@
-// The Widget Library (docs/16-widgets.md): a sheet of cards, yours (the ✦ card
-// to make one with Magic, then by last use) and built-in. A click puts a widget
-// on the desk of this Space; the search field only searches. Each card's menu
-// adds, renames, duplicates, shows the folder and deletes.
+// The Widget Library (docs/16-widgets.md): a sheet of cards, yours (by last
+// use), built-in ones and examples, with New Widget with Magic beside the
+// search field. A click puts a widget on the desk of this Space (an example:
+// your copy of it); the search field only searches. Each card's menu adds, and
+// for yours renames, duplicates, shows the folder and deletes.
 
 import { Badge, Button, Dialog, EmptyState, IconButton, SearchField, TextField, iconNode } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -37,6 +38,7 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
   const shown = useMemo(() => library.filter((e) => matches(e, query)), [library, query]);
   const yours = shown.filter((e) => e.source === "yours");
   const builtin = shown.filter((e) => e.source === "builtin");
+  const examples = shown.filter((e) => e.source === "example");
   const here = (e: WidgetEntry) => e.windows.some((id) => windows.get(id)?.spaceId === spaceId);
 
   const fail = (err: unknown) => setError((err as Error).message);
@@ -71,7 +73,7 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
   };
   const menu = (e: WidgetEntry) =>
     void showContextMenu(
-      e.source === "builtin"
+      e.source !== "yours"
         ? [{ label: "Add to Desk", run: () => void add(e) }]
         : [
             { label: "Add to Desk", run: () => void add(e) },
@@ -103,6 +105,7 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
     <Dialog open onClose={onClose} title="Widget Library" width={720} className="widget-library" divided padded={false}>
       <div className="wl-search">
         <SearchField
+          fill
           ref={input}
           size="lg"
           value={query}
@@ -113,35 +116,31 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
             if (k.key === "Enter" && shown[0]) void add(yours[0] ?? shown[0]);
           }}
         />
+        <Button variant="primary" size="lg" icon="sparkles" onClick={make}>
+          New Widget with Magic
+        </Button>
       </div>
       <div className="wl-body">
         {error && <div className="wl-error">{error}</div>}
-        <section className="wl-section">
-          <div className="wl-heading">Your Widgets</div>
-          <div className="wl-grid">
-            {!query && (
-              <div className="wl-card wl-magic" role="button" tabIndex={0} onClick={make} onKeyDown={(k) => k.key === "Enter" && make()}>
-                <div className="wl-thumb">
-                  <span className="wl-magic-mark">✦</span>
-                </div>
-                <div className="wl-meta">
-                  <div className="wl-title">
-                    <span className="wl-name">Make one with Magic</span>
-                  </div>
-                  <div className="wl-desc">Describe what you want to see, and watch it being made.</div>
-                </div>
-              </div>
-            )}
-            {yours.map(card)}
-          </div>
-          {query && !yours.length && <EmptyState compact>None of your widgets match.</EmptyState>}
-        </section>
+        {(yours.length > 0 || !query) && (
+          <section className="wl-section">
+            <div className="wl-heading">Your Widgets</div>
+            {yours.length > 0 ? <div className="wl-grid">{yours.map(card)}</div> : <EmptyState compact>Widgets you make with Magic, or add from the examples, are kept here.</EmptyState>}
+          </section>
+        )}
         {builtin.length > 0 && (
           <section className="wl-section">
             <div className="wl-heading">Built-in</div>
             <div className="wl-grid">{builtin.map(card)}</div>
           </section>
         )}
+        {examples.length > 0 && (
+          <section className="wl-section">
+            <div className="wl-heading">Examples</div>
+            <div className="wl-grid">{examples.map(card)}</div>
+          </section>
+        )}
+        {query && !shown.length && <EmptyState compact>Nothing matches “{query}”. New Widget with Magic makes one.</EmptyState>}
       </div>
       {renaming && <RenameDialog entry={renaming} onDone={() => setRenaming(null)} onError={fail} />}
     </Dialog>

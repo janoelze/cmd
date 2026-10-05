@@ -584,6 +584,28 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     await core.close();
   });
 
+  it("offers examples that work anywhere, and adds each as one copy of your own", async () => {
+    const { core } = await setup(scripted([]));
+    type Entry = { ref: string; source: string; title: string; request?: string; windows: string[] };
+    const all = () => core.handlers["widget.list"]({}) as unknown as Entry[];
+    const examples = all().filter((e) => e.source === "example");
+    expect(examples.map((e) => e.ref)).toEqual(["example:1-weather", "example:2-vpn", "example:3-processes", "example:4-timer", "example:8-news", "example:9-radio"]);
+    expect(examples[3]).toMatchObject({ title: "Pomodoro", request: "pomodoro timer", windows: [] });
+
+    const w = core.handlers["widget.add"]({ ref: "example:4-timer" }) as unknown as { id: string; state: { widgetId: string; phase: string } };
+    expect(w.state).toMatchObject({ phase: "ready" });
+    const mine = all().find((e) => e.source === "yours")!;
+    expect(mine).toMatchObject({ ref: `magic:${w.state.widgetId}`, title: "Pomodoro", windows: [w.id] });
+    expect(all().find((e) => e.ref === "example:4-timer")!.windows).toEqual([w.id]);
+
+    // Again: the same copy, in another window; no second widget.
+    const again = core.handlers["widget.add"]({ ref: "example:4-timer" }) as unknown as { id: string; state: { widgetId: string } };
+    expect(again.state.widgetId).toBe(w.state.widgetId);
+    expect(all().filter((e) => e.source === "yours")).toHaveLength(1);
+    expect(() => core.handlers["widget.delete"]({ ref: "example:4-timer" })).toThrow(/examples/);
+    await core.close();
+  });
+
   it("moves widgets of windows closed before the library into it", async () => {
     const stateDir = tmp("cmd-library-");
     const old = new WidgetStore(path.join(stateDir, "widgets", "closed"));

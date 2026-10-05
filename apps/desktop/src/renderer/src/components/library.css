@@ -1,6 +1,8 @@
 /* The Widget Library sheet (WidgetLibrary.tsx). */
 
-.widget-library .wl-search { padding: 10px 14px; border-bottom: 1px solid var(--separator); }
+.widget-library .wl-search { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--separator); }
+.widget-library .wl-search .ui-field { flex: 1; min-width: 0; }
+.widget-library .wl-search .ui-button { flex: none; }
 .widget-library .wl-body { max-height: min(560px, 70vh); overflow: auto; padding: 4px 14px 16px; }
 .wl-section { margin-top: 12px; }
 .wl-heading { font: 600 var(--text-xs) var(--font-ui); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin: 0 2px 8px; }
@@ -20,8 +22,3 @@
 .wl-desc { font: var(--text-xs) var(--font-ui); color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .wl-more { position: absolute; top: 6px; right: 6px; opacity: 0; }
 .wl-card:hover .wl-more, .wl-more:focus-visible { opacity: 1; }
-
-/* The ✦ card: making one is the delightful part. */
-.wl-magic .wl-thumb { background: color-mix(in srgb, var(--accent) 10%, var(--well)); }
-.wl-magic-mark { font-size: 34px; line-height: 1; color: var(--accent); }
-.wl-magic:hover .wl-magic-mark { transform: scale(1.08) rotate(8deg); transition: transform var(--dur) var(--ease); }

@@ -771,7 +771,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.waitForSelector(".widget-library .wl-card", { timeout: 5000 });
     const cards = await win.locator(".widget-library .wl-name").allTextContents();
     await win.screenshot({ path: path.join(shots, "widget-library.png") });
-    check(cards[0] === "Make one with Magic" && cards.includes("Counter"), `the Widget Library offers Magic first, then the closed widget (${cards.join(", ")})`);
+    const magicButton = await win.locator(".widget-library .wl-search button", { hasText: "New Widget with Magic" }).count();
+    check(magicButton === 1 && cards[0] === "Counter" && cards.includes("Agent Activity") && cards.includes("Pomodoro"), `the Widget Library has Magic beside its search, then the closed widget, built-ins and examples (${cards.join(", ")})`);
     await win.locator(".widget-library .wl-card", { hasText: "Counter" }).click();
     let back = null;
     for (let i = 0; i < 20 && !back; i++) {
