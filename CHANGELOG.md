@@ -2,6 +2,12 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.13.2 — 2026-10-05
+
+### Fixed
+
+- The app starts again when agents from before 0.13 were open, instead of saying "the core did not start".
+
 ## 0.13.1 — 2026-10-05
 
 Publishes 0.13.0, whose build stopped before it was released.
