@@ -66,7 +66,7 @@ const menu = (id) =>
 
 let ws;
 try {
-  await win.waitForSelector(".sidebar-status");
+  await win.waitForSelector(".statusbar .core-status");
   await until(() => win.evaluate(() => window.cmd.call("remote.status", {}).then((s) => s.state === "online")), "the core reaches the relay");
   await win.waitForSelector(".statusbar .remote-indicator.idle");
   check(true, "the status bar shows remote access is ready");

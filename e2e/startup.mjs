@@ -39,7 +39,7 @@ async function launch() {
     env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_TRANSCRIPTS_HOME: path.join(home, "transcripts-home") },
   });
   const win = await app.firstWindow();
-  await win.waitForSelector(".sidebar-status");
+  await win.waitForSelector(".statusbar .core-status");
   return { app, win, t0 };
 }
 

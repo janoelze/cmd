@@ -41,7 +41,7 @@ const until = async (fn, ms, what) => {
 const app = await electron.launch({ executablePath: exe, env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1" } });
 try {
   const win = await app.firstWindow();
-  await win.waitForSelector(".sidebar-status", { timeout: 30_000 });
+  await win.waitForSelector(".statusbar .core-status", { timeout: 30_000 });
   check(true, `the packaged app opens its window (${path.relative(root, exe)})`);
   const hello = await until(() => win.evaluate(() => window.cmd.call("core.hello", {})), 30_000, "the core");
   check(!!hello.version, `its bundled core starts and answers (${hello.version}, pid ${hello.pid})`);

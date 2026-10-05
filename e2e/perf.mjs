@@ -42,7 +42,7 @@ const app = await electron.launch({
 });
 const win = await app.firstWindow();
 win.on("pageerror", (e) => console.log("pageerror:", e.message));
-await win.waitForSelector(".sidebar-status");
+await win.waitForSelector(".statusbar .core-status");
 await win.setViewportSize?.({ width: 1440, height: 900 }).catch(() => {});
 const cdp = await win.context().newCDPSession(win);
 await cdp.send("Performance.enable");
