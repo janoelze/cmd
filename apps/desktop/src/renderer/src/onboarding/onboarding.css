@@ -12,9 +12,7 @@
 .ob-body .ui-form-section { margin: 0; }
 
 .ob-foot { display: flex; align-items: center; gap: 8px; padding-top: var(--ob-pad); }
-.ob-progress { display: flex; gap: 6px; margin-right: auto; }
-.ob-dot { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--separator); transition: width var(--dur) var(--ease), background var(--dur) var(--ease); }
-.ob-dot[data-on] { width: 16px; background: var(--text-dim); }
+.ob-progress { display: flex; margin-right: auto; }
 .ob-foot > :only-child, .ob-foot > [data-variant="primary"]:first-child { margin-left: auto; }
 
 @keyframes ob-in { from { opacity: 0; transform: translateY(4px); } }

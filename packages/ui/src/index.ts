@@ -12,6 +12,6 @@ export { ClearButton, NumberField, SearchField, SecretField, TextArea, TextField
 export { ICON, Icon, UIProvider, iconNode, type IconProps, type IconWeight } from "./icon.tsx";
 export { Callout, Card, CodeBlock, EmptyState, FormRow, FormSection, Group, KeyValue, ResetButton, SectionHeading, Separator, Spacer, Toolbar } from "./layout.tsx";
 export { ConfirmDialog, Dialog, Menu, Popover, Toast, Toaster, dismissToast, placePopover, toast, type MenuItemProps, type ToastOptions } from "./overlay.tsx";
-export { Badge, Kbd, Progress, ProgressRing, Spinner, StatusDot, type DotState, type Tone } from "./status.tsx";
+export { Badge, Kbd, PageDots, Progress, ProgressRing, Spinner, StatusDot, type DotState, type Tone } from "./status.tsx";
 export { installScrollbars, SCROLLBAR_CSS } from "./scrollbars.ts";
 export { installTooltips, placeTip, useTooltip, type TipSide } from "./tooltips.tsx";

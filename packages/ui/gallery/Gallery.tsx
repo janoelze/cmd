@@ -25,6 +25,7 @@ import {
   Menu,
   NumberField,
   Popover,
+  PageDots,
   Progress,
   ProgressRing,
   RadioGroup,
@@ -115,6 +116,23 @@ export function Gallery() {
         </div>
       </main>
     </div>
+  );
+}
+
+function PageDotsDemo() {
+  const [at, setAt] = useState(1);
+  return (
+    <>
+      <Row label="buttons">
+        <PageDots count={5} current={at} onSelect={setAt} />
+      </Row>
+      <Row label="sm">
+        <PageDots count={8} current={at} onSelect={setAt} size="sm" />
+      </Row>
+      <Row label="static">
+        <PageDots count={3} current={at % 3} />
+      </Row>
+    </>
   );
 }
 
@@ -607,6 +625,9 @@ function StatusPage() {
           <Kbd keys="⌘⇧P" />
           <Kbd keys="⌘E" plain />
         </Row>
+      </Spec>
+      <Spec title="PageDots" code="<PageDots count current onSelect?>" note="Pagination: a dot per page, the current one a wider, lighter pill. With onSelect the dots are buttons.">
+        <PageDotsDemo />
       </Spec>
       <Spec title="Progress, Spinner, ProgressRing">
         <Row label="bar">

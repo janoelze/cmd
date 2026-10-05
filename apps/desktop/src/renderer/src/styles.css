@@ -725,26 +725,7 @@ kbd {
   max-width: calc(100% - 2 * var(--pad-x));
   display: flex;
   align-items: center;
-  gap: 5px;
 }
-.strip-dots > button {
-  flex: none;
-  padding: 4px 2px; /* a hit area larger than the dot */
-  margin: -4px -2px;
-  border: 0;
-  background: none;
-}
-.strip-dots > button::before {
-  content: "";
-  display: block;
-  width: 5px;
-  height: 5px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--ink) 18%, transparent);
-  transition: width 180ms ease, background-color 180ms;
-}
-.strip-dots > button:hover::before { background: color-mix(in srgb, var(--ink) 34%, transparent); }
-.strip-dots > button.current::before { width: 14px; background: color-mix(in srgb, var(--ink) 55%, transparent); }
 
 /* Session search results in the palette */
 .palette.searching { width: min(760px, calc(100vw - 32px)); }

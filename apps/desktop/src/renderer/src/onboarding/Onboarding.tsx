@@ -5,7 +5,7 @@
 // "ai"). Whatever it showed counts as seen when it closes, done or skipped.
 
 import { useState, useSyncExternalStore } from "react";
-import { Button, Dialog } from "@cmd/ui";
+import { Button, Dialog, PageDots } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
 import { aiStatus, useAiStatus } from "../ai/status.ts";
 import { STEPS, stepById, type OnboardingStep } from "./steps.tsx";
@@ -77,10 +77,8 @@ export function Onboarding({ ids, onClose }: { ids: readonly string[]; onClose: 
         </div>
         <div className="ob-foot">
           {steps.length > 1 && (
-            <span className="ob-progress" aria-label={`Step ${at + 1} of ${steps.length}`}>
-              {steps.map((s, i) => (
-                <span key={s.id} className="ob-dot" data-on={i === at || undefined} />
-              ))}
+            <span className="ob-progress">
+              <PageDots count={steps.length} current={at} label={`Step ${at + 1} of ${steps.length}`} />
             </span>
           )}
           {at > 0 && (

@@ -1,6 +1,6 @@
 // Showing state: StatusDot (the agent states and good/bad lights), Badge (a
 // count or a short tag), Kbd (a key or shortcut), Progress (a bar), Spinner,
-// and ProgressRing (a small determinate ring).
+// ProgressRing (a small determinate ring) and PageDots (pagination).
 
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 
@@ -109,5 +109,24 @@ export function ProgressRing({ value, size = 14, label }: { value: number; size?
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />
     </svg>
+  );
+}
+
+/**
+ * Pagination: a dot per page, the current one a wider, lighter pill. With
+ * onSelect the dots are buttons (out of the tab order: views that page have
+ * their own keys); without, they only show where you are.
+ */
+export function PageDots({ count, current, onSelect, size = "md", label }: { count: number; current: number; onSelect?: (index: number) => void; size?: "sm" | "md"; label?: string }) {
+  return (
+    <span className="ui-pagedots" data-size={size} role={onSelect ? "group" : "img"} aria-label={label ?? `${current + 1} of ${count}`}>
+      {Array.from({ length: count }, (_, i) =>
+        onSelect ? (
+          <button key={i} type="button" tabIndex={-1} aria-label={`${i + 1}`} aria-current={i === current || undefined} data-current={i === current || undefined} onClick={() => onSelect(i)} />
+        ) : (
+          <i key={i} data-current={i === current || undefined} />
+        ),
+      )}
+    </span>
   );
 }

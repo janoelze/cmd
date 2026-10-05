@@ -527,6 +527,24 @@
 .ui-progress[data-indeterminate] > span { width: 35%; animation: ui-progress 1.2s var(--ease) infinite; }
 @keyframes ui-progress { from { left: -35%; } to { left: 100%; } }
 
+/* PageDots: a dot per page, the current one a wider, lighter pill. Buttons get
+   a hit area larger than the dot. */
+.ui-pagedots { --size: 6px; --on: 16px; display: inline-flex; align-items: center; gap: var(--size); }
+.ui-pagedots[data-size="sm"] { --size: 5px; --on: 14px; }
+.ui-pagedots > * { flex: none; display: block; padding: 0; border: 0; background: none; }
+.ui-pagedots > button { padding: 4px 2px; margin: -4px -2px; }
+.ui-pagedots > *::before {
+  content: "";
+  display: block;
+  width: var(--size);
+  height: var(--size);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  transition: width var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.ui-pagedots > button:hover::before { background: color-mix(in srgb, var(--ink) 34%, transparent); }
+.ui-pagedots > [data-current]::before { width: var(--on); background: color-mix(in srgb, var(--ink) 55%, transparent); }
+
 .ui-spinner {
   flex: none;
   display: inline-block;

@@ -20,7 +20,7 @@
 // Windows are never remounted or reordered in the DOM, so terminals keep
 // running and pointer capture is never lost.
 
-import { EmptyState } from "@cmd/ui";
+import { EmptyState, PageDots } from "@cmd/ui";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
@@ -957,25 +957,20 @@ function StripDots(p: {
   selected: number;
   onGo: (index: number) => void;
 }) {
-  // The dots follow the scroller directly, not through a render per frame.
-  const dots = useRef<HTMLDivElement>(null);
+  // Rendered only when the current dot changes, not on every scroll frame.
+  const [cur, setCur] = useState(-1);
   const shown = !!p.viewport && p.total > p.viewport + 0.5;
   const edges = p.slots.map((s) => s.x + s.w).join();
   useLayoutEffect(() => {
     const sc = p.scroller.current;
     if (!sc || !shown) return;
-    let cur = -1;
     const place = () => {
       const sel = p.slots[p.selected];
       const max = p.total - p.viewport;
       const seen = sel ? Math.min(sel.x + sel.w, sc.scrollLeft + p.viewport) - Math.max(sel.x, sc.scrollLeft) : 0;
       const at = sc.scrollLeft + (max > 0 ? Math.min(1, Math.max(0, sc.scrollLeft / max)) : 0) * p.viewport;
-      let i = sel && seen >= Math.min(sel.w, p.viewport) / 2 ? p.selected : p.slots.findIndex((s) => at < s.x + s.w);
-      if (i < 0) i = p.slots.length - 1;
-      if (i === cur) return;
-      dots.current?.children[cur]?.classList.remove("current");
-      dots.current?.children[i]?.classList.add("current");
-      cur = i;
+      const i = sel && seen >= Math.min(sel.w, p.viewport) / 2 ? p.selected : p.slots.findIndex((s) => at < s.x + s.w);
+      setCur(i < 0 ? p.slots.length - 1 : i);
     };
     place();
     sc.addEventListener("scroll", place, { passive: true });
@@ -984,10 +979,8 @@ function StripDots(p: {
   }, [shown, p.total, p.viewport, edges, p.selected, p.scroller]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!shown) return null;
   return (
-    <div className="strip-dots" ref={dots} onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-      {p.slots.map((_, i) => (
-        <button key={i} tabIndex={-1} aria-label={`Window ${i + 1}`} onClick={() => p.onGo(i)} />
-      ))}
+    <div className="strip-dots" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+      <PageDots count={p.slots.length} current={cur} onSelect={p.onGo} size="sm" label="Windows" />
     </div>
   );
 }

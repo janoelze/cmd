@@ -1090,16 +1090,16 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   // pagination: a dot per window, in strip order; a dot brings its window into view
   await win.locator(".windows-scroller").evaluate((e) => (e.scrollLeft = e.scrollWidth));
   await win.waitForTimeout(300);
-  check((await win.locator(".strip-dots > button").count()) === n && (await win.locator(".strip-dots > button.current").count()) === 1
-    && (await win.locator(".strip-dots > button").last().getAttribute("class")) === "current",
+  check((await win.locator(".strip-dots button").count()) === n && (await win.locator(".strip-dots button[data-current]").count()) === 1
+    && (await win.locator(".strip-dots button").last().getAttribute("data-current")) === "true",
     "the strip shows a pagination dot per window, the last one current at the end");
   await menu("session.prev");
   await win.waitForTimeout(500);
-  check((await win.locator(".strip-dots > button").nth(n - 2).getAttribute("class")) === "current",
+  check((await win.locator(".strip-dots button").nth(n - 2).getAttribute("data-current")) === "true",
     "⌥⌘← from the last window moves the current dot, even when nothing scrolls");
-  await win.locator(".strip-dots > button").first().click();
+  await win.locator(".strip-dots button").first().click();
   await win.waitForTimeout(700);
-  check(Math.abs(await trackX()) < 1 && (await win.locator(".strip-dots > button").first().getAttribute("class")) === "current",
+  check(Math.abs(await trackX()) < 1 && (await win.locator(".strip-dots button").first().getAttribute("data-current")) === "true",
     "clicking the first dot scrolls the strip to its start");
 
   // ⌘↩ into focus and back: the strip returns to exactly where it was
