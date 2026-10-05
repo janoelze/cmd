@@ -158,3 +158,5 @@ Recorded headless through cmd's hook with scratch config folders: Gemini CLI 0.6
 - **Esc sends nothing** in Codex or Gemini: only the quiet rule can end such a turn.
 - Codex and Gemini edited the same repository at the same time: per-folder attribution (git) can't tell them apart; tool paths can.
 - Fixtures: `gemini-0.62.0/interactive-permissions`, `codex-0.144.5/interactive-followup` (scripted prompts, throwaway repository).
+- **Codex with `-a untrusted` sends PermissionRequest** (tool and input, no message: "Allow Bash?" + the command). A denial or an Esc on the dialog sends nothing, so the agent stayed "needs input" for good. Rule: a waiting turn whose terminal changed after the question (the dialog went away) and then stayed quiet for 30 s ends `interrupted` ("declined: the screen changed after the question, then nothing"); a dialog still on screen produces no output, so it keeps waiting. Fixture `codex-0.144.5/interactive-permission`.
+- With peer briefings on, Codex knew Gemini was working in the same repository and asked to message it (`cmd send`) before deleting a file both were touching.

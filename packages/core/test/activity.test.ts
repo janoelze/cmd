@@ -230,6 +230,15 @@ describe("interactive sessions in a cmd pane (installed app 0.11.0)", () => {
     expect(red.turn!.index).toBe(1);
   });
 
+  it("Codex: a real permission request (no message: the tool and its command)", () => {
+    const evs = fixture("codex-0.144.5/interactive-permission.jsonl").map((r, i) => normalize(r, i));
+    const ask = evs.find((e) => e.kind === "ask")!;
+    expect(ask).toMatchObject({ name: "PermissionRequest", text: "Allow Bash?", tool: { name: "Bash", command: expect.stringMatching(/^cmd send /) } });
+    const { red } = replay(fixture("codex-0.144.5/interactive-permission.jsonl"));
+    // The first prompt was interrupted with Esc before any tool ran (no event); the second arrived while it "worked".
+    expect(red.turn).toMatchObject({ index: 0, outcome: "waiting", followUps: ["Delete NOTES.md"], ask: { tool: "Bash" } });
+  });
+
   it("Codex: a prompt typed mid-turn is a follow-up; two turns, both done", () => {
     const { out, red } = replay(fixture("codex-0.144.5/interactive-followup.jsonl"));
     expect(out.filter((o) => o.r.closed).map((o) => [o.r.closed!.index, o.r.closed!.outcome, o.r.closed!.followUps])).toEqual([
@@ -307,13 +316,19 @@ describe("reduce", () => {
     expect(red.turn).toMatchObject({ index: 0, outcome: "done", final: "done after all", inferred: [] });
   });
 
-  it("waits longer while a tool runs, and never infers while the agent waits for the user", () => {
+  it("waits longer while a tool runs; a question that's still up keeps waiting, a dismissed one ends the turn", () => {
     const red = new ActivityReducer("a1");
     red.apply(ev("prompt", 0));
     red.apply(ev("tool.start", 0, { tool: { name: "Bash", id: "t", label: "npm test" } }));
     expect(red.tick(QUIET_MS + 1, 0)).toBeNull();
-    red.apply(ev("ask", 1, { text: "Allow?" }));
-    expect(red.tick(10 * 60_000, 0)).toBeNull();
+    red.apply(ev("ask", 1000, { text: "Allow?" }));
+    // The dialog sits there: no output after it, however long.
+    expect(red.tick(10 * 60_000, 1000)).toBeNull();
+    // The user pressed Esc: the agent redrew (output after the question), then went quiet.
+    expect(red.tick(20_000, 15_000)).toBeNull();
+    const r = red.tick(15_000 + QUIET_MS, 15_000)!;
+    expect(r.change.state).toBe("idle");
+    expect(red.turn).toMatchObject({ outcome: "interrupted", inferred: [expect.stringMatching(/^declined: the screen changed/)] });
   });
 
   it("takes a prompt sent while the agent works as a follow-up in the same turn; a new session ends it", () => {

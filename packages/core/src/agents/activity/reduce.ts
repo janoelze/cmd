@@ -86,6 +86,8 @@ export class ActivityReducer {
   #next: number;
   /** Tool calls started and not ended: id (or name) → start time, and → tool name. */
   #open = new Map<string, number>();
+  /** When the open turn's last question was asked. */
+  #askAt = 0;
   /** Subagents announced by subagent.start and not stopped yet. */
   #subagents = new Set<string>();
   #openNames = new Map<string, string>();
@@ -194,6 +196,7 @@ export class ActivityReducer {
         const message = ev.text ?? "Needs input";
         t.ask = { message, ...(ev.tool ? { tool: ev.tool.name } : {}), ...(ev.tool?.command || ev.tool?.paths?.[0] ? { input: ev.tool.command ?? ev.tool.paths![0] } : {}) };
         t.outcome = "waiting";
+        this.#askAt = ev.at;
         r.turn = t;
         this.#state(r, { state: "needs_input", detail: line1(message) }, cause);
         break;
@@ -259,7 +262,17 @@ export class ActivityReducer {
    * the terminal's last output.
    */
   tick(now: number, outputAt: number): Reduction | null {
-    if (!this.open || this.turn!.outcome !== "working") return null;
+    if (!this.open) return null;
+    // A question dismissed without an answer event (Codex and Gemini send none for Esc or a denial):
+    // the terminal changed after the question, then nothing for a while. A dialog that waits stays still.
+    if (this.turn!.outcome === "waiting") {
+      if (outputAt <= this.#askAt + 500 || now - Math.max(this.lastEventAt, outputAt) < QUIET_MS) return null;
+      const r: Reduction = { change: {} };
+      this.#close(r, outputAt, "interrupted", "declined: the screen changed after the question, then nothing");
+      this.#state(r, { state: "idle", detail: null }, "inferred: question dismissed");
+      return r;
+    }
+    if (this.turn!.outcome !== "working") return null;
     const quiet = this.#open.size ? QUIET_TOOL_MS : QUIET_MS;
     const since = Math.max(this.lastEventAt, outputAt);
     if (now - since < quiet) return null;
