@@ -655,6 +655,20 @@ describe("versions and provenance", () => {
     expect(() => new ActivityLog(db)).not.toThrow();
   });
 
+  it("reads format 1 turns, which have no followUps or notes, and resumes from them", () => {
+    const log = new ActivityLog();
+    const red = new ActivityReducer("a1", 0, { agentKind: "claude" });
+    for (const [i, raw] of fixture("claude-2.1.289/edit-and-bash.jsonl").entries()) red.apply(normalize(raw, i));
+    const { followUps: _f, notes: _n, ...v1 } = { ...red.turn!, format: 1 };
+    log.saveTurn(v1 as typeof red.turn & {}, 1);
+    const saved = log.lastTurn("a1")!.turn;
+    expect(saved).toMatchObject({ followUps: [], notes: [] });
+    const resumed = new ActivityReducer("a1", saved.index + 1, { agentKind: "claude" });
+    resumed.turn = saved;
+    expect(() => resumed.apply({ ...normalize({ at: 9, agent: "claude", name: "SubagentStop", payload: { hook_event_name: "SubagentStop", agent_id: "helper", last_assistant_message: "next: ship it" } }, 99) })).not.toThrow();
+    expect(resumed.turn!.notes).toEqual(["next: ship it"]);
+  });
+
   it("gives every turn its format, its agent and who derived it", () => {
     const red = new ActivityReducer("a1", 0, { agentKind: "claude", agentVersion: "2.1.289", derivedBy: "0.11.0" });
     for (const [i, raw] of fixture("claude-2.1.289/edit-and-bash.jsonl").entries()) red.apply(normalize(raw, i));

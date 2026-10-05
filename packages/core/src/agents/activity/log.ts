@@ -15,6 +15,13 @@ import { capPayload, normalize, type RawEvent } from "./normalize.ts";
 /** Events and turns older than this are dropped. */
 const KEEP_MS = 14 * 86400_000;
 
+/** A saved turn, with the lists that older turn formats lack filled in (format 1 has no followUps or notes). */
+function readTurn(doc: string): AgentTurn {
+  const t = JSON.parse(doc) as AgentTurn;
+  for (const k of ["followUps", "notes", "background", "tools", "commands", "files", "inferred"] as const) if (!Array.isArray(t[k])) (t as unknown as Record<string, unknown[]>)[k] = [];
+  return t;
+}
+
 interface Row {
   id: number;
   at: number;
@@ -154,18 +161,18 @@ export class ActivityLog {
 
   lastTurn(agentId: AgentId): { turn: AgentTurn; lastEvent: number } | null {
     const r = this.#stmt(`SELECT doc, last_event FROM agent_turns WHERE agent_id = ? ORDER BY idx DESC LIMIT 1`).get(agentId) as { doc: string; last_event: number } | undefined;
-    return r ? { turn: JSON.parse(r.doc) as AgentTurn, lastEvent: r.last_event } : null;
+    return r ? { turn: readTurn(r.doc), lastEvent: r.last_event } : null;
   }
 
   turns(agentId: AgentId, limit = 50): AgentTurn[] {
     const rows = this.#stmt(`SELECT doc FROM (SELECT doc, idx FROM agent_turns WHERE agent_id = ? ORDER BY idx DESC LIMIT ?) ORDER BY idx`).all(agentId, limit) as { doc: string }[];
-    return rows.map((r) => JSON.parse(r.doc) as AgentTurn);
+    return rows.map((r) => readTurn(r.doc));
   }
 
   /** Every agent's turns that started since `since`, oldest first (exports). */
   turnsSince(since: number, limit = 100_000): AgentTurn[] {
     const rows = this.#stmt(`SELECT doc FROM agent_turns WHERE started_at >= ? ORDER BY started_at LIMIT ?`).all(since, limit) as { doc: string }[];
-    return rows.map((r) => JSON.parse(r.doc) as AgentTurn);
+    return rows.map((r) => readTurn(r.doc));
   }
 
   /** What each agent's events carried over the last `days`: kinds, fields present, unmapped names. */
