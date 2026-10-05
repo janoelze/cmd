@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install
 
 Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications. cmd updates itself in the background and installs the update when you quit; your terminals keep running. Settings → Updates switches to notify-only or off.
 
-**Agent state.** cmd recognises a running agent by its process alone. To also see what it's doing (working, waiting for input, done), install cmd's hook in Settings → Agents → Hooks (or `cmd hooks install`). It goes into Claude Code (every config folder cmd finds), Codex and Gemini CLI. Codex runs a new hook only after you approve it once with `/hooks`.
+**Agent state.** cmd recognises a running agent by its process alone. To also see what it's doing (working, waiting for input, done, what it changed), cmd puts its hook into Claude Code (every config folder it finds, profiles included), Codex and Gemini CLI by itself, keeping a copy of each file it changes; Settings → Agents → Hooks shows where, and turns that off. Codex runs a new hook only after you approve it once with `/hooks`.
 
 ## Features
 
@@ -109,6 +109,7 @@ cmd notify "deploy finished"         # marks this terminal inside cmd
 cmd events                           # NDJSON event stream
 cmd settings                         # list; `set KEY VALUE`, `reset KEY`, `path`
 cmd hooks                            # agent configs and whether cmd's hook is in them; `install`, `remove`
+cmd agents turns <agent>             # what an agent did, turn by turn (also: events, coverage, homes)
 cmd magic "how full is my disk"      # build a Magic widget without the app
 cmd widget list                      # the Widget Library; `cmd widget add <widget>` puts one on the desk
 ```

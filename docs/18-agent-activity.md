@@ -1,170 +1,128 @@
 # Agent activity data
 
-> Status (2026-10-05): plan, nothing built. Builds on [05-agent-integration.md](05-agent-integration.md) (hooks, status files) and comes before the AI features sketched in [17-ai.md](17-ai.md) ("First features on top"), which need this data to be worth anything.
+> Status (2026-10-05): the data layer is built (branch `agent-activity`): spooled hook events, the activity log, normalising, state and turns, files changed per turn, agent homes, automatic hook installs, `cmd agents`. Not yet: the UI using turns (sidebar, Agent Activity widget, notifications beyond the final message), recorded Codex and Gemini fixtures, transcript tails for agents without hooks. Comes before the AI features in [17-ai.md](17-ai.md) ("First features on top"), which need this data to be worth anything.
 
-cmd knows *that* an agent is working or finished, not *what* happened. Its picture of an agent is the current state plus one line of text, rebuilt from whichever hook files happen to be on disk. Before building smarter notifications, an activity widget or summaries, the core has to capture what agents do reliably: complete, ordered, attributable to a source, surviving restarts, and the same shape for every agent. This doc is about that data and the agent state derived from it. Features come later and are only listed at the end.
+cmd knew *that* an agent was working or finished, not *what* happened: its picture of an agent was the current state plus one line, rebuilt from whichever hook files were on disk, and the "done" notification's body was always empty. This is the layer that captures what agents do reliably — complete, ordered, attributable to a source, surviving restarts, the same shape for every agent — and the agent state derived from it. Features are listed at the end.
 
 Principles:
 
-1. **Keep raw, derive the rest.** Every signal is recorded as received. Turns, state and summaries are derived from it and can be re-derived when the derivation improves.
-2. **Stable interfaces over internal formats.** Hook payloads are a documented API; git and the filesystem are the truth about what changed; transcript formats are internal and change without notice. Rank sources by that.
+1. **Keep raw, derive the rest.** Every signal is stored as received. State, turns and summaries are derived and can be re-derived when the derivation improves.
+2. **Stable interfaces over internal formats.** Hook payloads are a documented API; git and the filesystem are the truth about what changed; transcript formats are internal and change without notice.
 3. **Unknown is a value.** A missing field means less detail, never a wrong state. A changed payload key loses one field, not the agent.
-4. **Every fact has a source.** Each field records where it came from (hook, git, process, screen, transcript), so consumers know how far to trust it and bugs can be traced.
-5. **Agent-specific knowledge is data.** Event names, payload keys, tool verbs, config homes: tables per agent, tested against recorded payloads. A new agent or version is a table entry and a fixture folder.
+4. **Every fact has a source.** State changes record their cause, turns the rules that shaped them, files how they were found.
+5. **Agent-specific knowledge is data**: event names, tool names, home specs. Tested against sessions recorded from the real agents.
 
-## What exists (2026-10-05)
+## Pieces
 
-| Piece | Where | Quality problem |
-|---|---|---|
-| Hook files | `agents/hooks.ts` (script), `agents/statusfiles.ts` | Each event's raw payload goes to `$TMPDIR/cmd-agents/<pane>/<Event>.json`, **overwritten** per event name. Only the latest of each kind survives; the order between kinds is guessed from file mtimes. SessionEnd deletes the folder. |
-| Deriving state | `statusfiles.ts` `deriveStatus`, `stateOf` | Reads a handful of keys. **Drops** `Stop.last_assistant_message`, `StopFailure.error`, `PostToolUse.tool_response`/`duration_ms`, Subagent events. |
-| Two ingest paths | files → `tracker.applyStatus`; RPC `hook.ingest` → `state.ts` `applyHook` | Different semantics. `applyHook` reads the final message, errors and subagents, but the installed script only calls it for SessionStart/UserPromptSubmit when peer briefings are on. Result: `Agent.lastMessage` is never set, and "X is done" notifications have an **empty body**. |
-| Agent model | `protocol/src/model.ts` `Agent` | Current `state`, `stateSince`, `detail`, `lastMessage`, `lastPrompt`. No history, no turns, no counts, no provenance. |
-| Process | `agents/procinfo.ts`, `native/procinfo.c`, `panes.ts` `pollForeground` | Solid: agent kind from argv/path, polled every 0.5–5 s. Reads argv, not env. |
-| Terminal | `osc.ts`, `panes.ts` | OSC notify, 133 prompt marks, 9;4 progress, title, output timestamps (`lastActivityAt`), screen via `panes.read`. Used only as a fallback for agents without hooks. |
-| Transcripts | `search/` | Built for full-text search: a session flattens to `prompts[]`, `responses[]`, `tools[]` with no turns, order or timestamps; reparsed whole, at most every 30 s. Not usable for live state. |
-| Agent homes | `search/builtin.ts` `locate`, `agents/hooks.ts` `hookTargets`, `learned_roots` in the search worker | Three separate lists. `~/.claude-profiles/*` only works because it's hard-coded. A home cmd doesn't know gets no hooks, so it never reports a path, so it's never learned. |
+| Piece | Where |
+|---|---|
+| Hook script: status files + spool + the agent's config dir | `core/src/agents/hooks.ts` |
+| Spool reader | `agents/activity/spool.ts` |
+| Event log and turns in SQLite (`agent_events`, `agent_turns`) | `agents/activity/log.ts` |
+| Raw payload → `ActivityEvent` | `agents/activity/normalize.ts` |
+| Events → state and turns | `agents/activity/reduce.ts` |
+| Files changed: git snapshots, folder watch | `agents/activity/gitsnap.ts`, `fswatch.ts` |
+| Wiring (ingest, replay, restart, snapshots) | `agents/tracker.ts` |
+| Agent homes | `agents/homes.ts` |
+| Fixtures | `agents/activity/fixture.ts`, `test/fixtures/agents/` |
+| Types | `protocol/src/activity.ts` (`ActivityEvent`, `AgentTurn`, `AgentHome`, `AgentCoverage`); `Agent.turn`, `Agent.stateCause` |
+| RPC | `agent.events`, `agent.turns`, `agents.coverage`, `agents.homes`; event `agent.activity` (local only: remote policy says never) |
+| CLI | `cmd agents events|turns|coverage|homes|record` |
 
-## Sources
+## Capture
 
-Ranked by how stable and how truthful they are:
+**The hook spools every event.** cmd's hook script (rewritten by the core at every start, so installed configs pick up changes without reinstalling) still writes `<status root>/<pane>/<Event>.json` (the latest of each, for older cores and the fork's readers) and now also hard-links the same file into `<pane>/log/<ts>.<pid>.<Event>.json`. Linking after writing makes every spool file complete when it appears; unique names mean none is overwritten. The record carries the agent's config dir from its environment (`$CLAUDE_CONFIG_DIR`, `$CODEX_HOME`, `$GEMINI_CLI_HOME`, JSON-escaped in sh). SessionEnd no longer deletes the pane's folder (`/clear` fires SessionEnd while the process lives on); the core cleans up when the pane goes.
 
-| # | Source | Gives | Coverage |
-|---|---|---|---|
-| 1 | **Hook events** | prompts, tools with inputs and results, permission asks, final message, errors, subagents, session ids, transcript path | Claude, Codex, Gemini (as installed) |
-| 2 | **Git / filesystem in the agent's cwd** | what actually changed in a turn, whatever the agent claims and however it edited (tools, Bash, scripts) | any agent in a repo |
-| 3 | **Process** | agent present, kind, pid, start time, CPU/memory, config env (see "Agent homes") | every agent |
-| 4 | **Terminal** | output activity, OSC notify/progress, title, prompt marks | every agent, varies |
-| 5 | **Screen text** | what the user sees; last resort for asks in agents without hooks | every agent, unstructured |
-| 6 | **Transcript** | the full conversation; recovery after restarts, agents with transcripts but no hooks | per-format parsers, fragile |
+**The core takes the spool into SQLite.** On every change (FSEvents, 30 ms debounce) and every 2 s as a backstop, the tracker drains a pane's spool in write-time order (mtime, ns) into `agent_events`, raw, with long strings cut (4 KB) and long arrays shortened. Events that arrive before the agent is detected (SessionStart usually beats the process poll) are stored unclaimed and taken by the agent when it appears. Capture doesn't depend on the core running: a core that's down reads the spool when it's back. Events and turns are kept 14 days.
 
-Hooks are the backbone; 2–4 confirm and fill in; 5–6 are fallbacks. No single source is required: hooks missing → process + terminal + git still give presence, activity and changed files.
-
-## Capture: an event log
-
-**On disk, written by the hook.** The hook script appends every payload as one line to `<pane>/events.jsonl`, with a timestamp and a per-pane sequence number, before anything else. The per-event files stay for older cores and the fork. Appends of one line are atomic for small payloads; the script caps big fields (`tool_response`, `tool_input.content`) at a few KB with a marker, so lines stay small and secrets in tool output don't pile up. SessionEnd no longer deletes the folder; the core removes it after it has ingested the log.
-
-This makes capture independent of the core: a core that's down, restarting or slow loses nothing, it reads on from its last offset.
-
-**In the core, kept raw.** The core tails each pane's log by byte offset (persisted, so a restart resumes), and stores every event raw in SQLite:
-
-```
-agent_events(id, pane_id, agent_id, session_id, seq, ts, source, kind, raw_json)
-```
-
-`source` is `hook`, `process`, `terminal`, `git`, `screen`, `transcript`; the non-hook sources write events into the same table (process appeared/left, OSC notify, git snapshot), so there's one ordered stream per agent. Bounded per agent (last N sessions, rotated by size); raw payloads are local only.
+`hook.ingest` (the socket path) is now only for peer briefings (`spooled: true`: the core reads the spool first) and the old `cmd hook` (its event goes into the same log). Both paths reduce the same way.
 
 ## Normalising
 
-An adapter per agent maps raw events to one vocabulary. The adapter is a table (event names, which key holds what) plus `describeTool`, which exists:
+`normalize.ts` maps a raw payload to one vocabulary: `session.start/end`, `prompt`, `tool.start/end`, `ask`, `idle`, `stop`, `fail`, `compact`, `subagent.start/stop`, `other`; the core adds `interrupt` and `anomaly`. Gemini's event names map onto Claude's (`hookEventName`). Fields: session and turn ids (Claude `prompt_id`, Codex `turn_id`), the subagent an event came from (`agent_id`), text by kind (prompt, final message, question, error), the tool (name, id, label from `describeTool`, written paths, command, ok, duration), cwd, transcript path, config dir. Normalising happens when events are read, so fixing an adapter fixes history.
 
-| Kind | Claude / Codex | Gemini | Fields |
-|---|---|---|---|
-| `session` | SessionStart, SessionEnd | same | session id, source (startup, resume, clear, compact), transcript path, model |
-| `prompt` | UserPromptSubmit | BeforeAgent | text |
-| `tool.start` | PreToolUse | BeforeTool | tool, verb + target, paths, command, tool use id |
-| `tool.end` | PostToolUse, PostToolUseFailure | AfterTool | tool use id, ok, duration, result excerpt |
-| `ask` | PermissionRequest, Notification (not idle) | Notification | message, pending tool + input |
-| `idle` | Notification `idle_prompt` | | |
-| `stop` | Stop | AfterAgent | final message |
-| `fail` | StopFailure | | error |
-| `compact` | PreCompact | PreCompress | |
-| `subagent` | SubagentStart / SubagentStop | | agent id, type, final message |
+From the recorded sessions (Claude Code 2.1.289):
 
-Unknown events and tools pass through as `other` with their raw name. Normalising runs on read from the raw table, so fixing an adapter fixes history.
+- Claude's subagent tool is now `Agent` (was `Task`); its subagents' tool calls carry `agent_id` and are kept out of the parent's state.
+- `Stop` carries `background_tasks`: an agent can say it's done while a subagent it started keeps running. Kept as `ActivityEvent.background` / `AgentTurn.background`.
+- When such a task finishes, Claude submits a prompt itself (`<task-notification>…`), starting a new turn. Kept as `auto` (and not shown as the user's last prompt).
+- `PermissionRequest` has no `message`: the ask is the tool and its input ("Allow Bash?" + `rm NOTES.md`).
+- In `-p` runs a permission request is denied without a PostToolUse: an open tool call ends with the turn.
 
-## Agent state
+## State and turns
 
-State today is "the last stateful hook event wins". With an ordered stream it becomes a small state machine with explicit reconciliation, tested in isolation:
+`reduce.ts` is a pure state machine per agent, fed events in order. What the agent says decides the state; every change records its cause (`Agent.stateCause`: "hook Stop", "inferred: quiet for 30 s"). Rules where it says nothing:
 
-- **Ordering.** By `seq` within a pane, `ts` across sources. No mtimes.
-- **Sessions.** A new `session_id` (resume, `/clear`, compact) closes the open turn and starts a new session; the agent keeps its id.
-- **Interrupts.** Claude sends no Stop when the user presses Esc. An open turn followed by a `prompt` closes as `interrupted`; an open turn with no events, no tool in flight, no output and a prompt mark or idle screen for a while is `interrupted` too, marked as inferred.
-- **Asks.** `ask` → `needs_input`; the next `tool.end`, `prompt` or `stop` answers it. A permission denied shows up as a failed `tool.end`.
-- **Exits.** Process gone without SessionEnd → turn `interrupted`, agent `exited`. Hooks without a process (stale files) are ignored, as today.
-- **Cross-checks.** `working` with no events and no output for minutes, `done` while CPU and output are busy, files in git but no tool touched them: recorded as anomalies (counted, logged, visible in the debug view), not silently fixed.
+- **New session** (resume, `/clear`): an open turn ends `interrupted`. A SessionStart in the same session (Claude's after compaction) keeps the turn going.
+- **New prompt** while a turn is open: the open one ends `interrupted`.
+- **Interrupt** (Claude sends no Stop on Esc): a working turn with no events and no terminal output for 30 s (5 min while a tool call is in flight) ends `interrupted`, state idle, noted as an `interrupt` event. An agent that turns out to be still going (a late tool call or Stop) reopens the same turn. Claude's `idle_prompt` notification with a turn open ends it the same way.
+- **SessionEnd** exits the agent only if its process is gone.
+- **Mismatches** become `anomaly` events: a spool file that isn't an event, a hook event of another agent kind than the pane's agent.
 
-Every state change records its cause (`event id`, or `inferred: <rule>`), so a wrong state can be traced to the event or rule that produced it.
+A **turn** runs from a prompt to stop, failure or interruption. It has the prompt (and whether the agent sent it itself), outcome (`working`, `waiting`, `done`, `failed`, `interrupted`), the ask while waiting, the final message, the error, tools by name with failures, the last commands, how many shell commands looked like writes, files changed, subagents, background work left running, and `inferred` (rules that decided something). Saved on every change with the id of the last event in it, so a restarted core resumes the reducer from the last turn and replays only later events. The current turn is `Agent.turn`, so every client gets it through `agent.updated`.
 
-## Turns
+The "done" notification's body is the agent's final message again (it was always empty: the file path never read `last_assistant_message`).
 
-A turn runs from `prompt` to `stop`, `fail` or `interrupted`; an `ask` pauses it. Derived from the stream, stored for querying:
+## Files changed
 
-```ts
-interface AgentTurn {
-  agentId: string; sessionId: string | null; index: number;
-  startedAt: number; endedAt: number | null;
-  prompt: string | null;
-  outcome: "working" | "waiting" | "done" | "failed" | "interrupted";
-  ask: { message: string; tool?: string; input?: string } | null;
-  final: string | null;                 // the agent's own last message
-  tools: { verb: string; count: number; failed: number }[];
-  commands: string[];                   // last few, capped
-  files: { path: string; change: "A" | "M" | "D"; via: "git" | "tool" }[];
-  diff: { files: number; added: number; removed: number } | null;
-  subagents: number;
-  sources: string[];                    // which sources contributed
-}
-```
+A survey of 484 recorded sessions on this Mac (454 Claude across 75 projects, 30 Codex) measured how agents change files:
 
-**Git snapshots** at turn start and end in the agent's cwd: `git status --porcelain` and `git diff --stat` with `--no-optional-locks`, a timeout, skipped outside a work tree, at most one in flight per repo. Several agents in one repo make attribution approximate; the turn records files that changed *during* it, and `via` says whether a tool of this agent touched them.
+- Claude: 54% of file changes go through Edit/Write, **46% through the shell**: inline Python/Node scripts (`python3 - <<EOF … open(p,'w')`, 18% of all changes), heredocs and redirects (13%), `sed -i`, file commands, downloads, git. Codex: 71% `apply_patch`, most of the rest builds.
+- Paths can be read reliably from only a third of shell writes, and 79% of read-only shell commands contain path-like tokens: parsing commands for paths is mostly noise. Paths named in an agent's messages are weak too (29% of changed files are ever mentioned).
+- 80% of Claude's structured edits land in the session's git repository; about 13% in a folder that isn't one.
 
-`agent_turns` in SQLite; the current turn on `Agent.turn` (so it reaches every client through `agent.updated`); `agent.turns { agentId, limit }` and `agent.events { agentId, since }` RPCs.
+So, per turn:
+
+1. **Git snapshots** at the turn's start and end (`git status` with each listed file's size and mtime, plus HEAD; read-only, no optional locks): a file counts if it's new to the list, changed on disk, left the list, or touched by a commit made during the turn. Sees every mechanism inside a repository.
+2. **A folder watch** (FSEvents, recursive) for the turn when the folder isn't a repository, leaving out `.git`, `node_modules`, build output; not for home or `/`.
+3. **Tool paths** from Edit/Write/MultiEdit/NotebookEdit/`apply_patch`, failed calls left out: exact, and say the agent's own tools wrote them.
+4. **Shell writes are labelled, not parsed** (`ActivityTool.writes`: script, sed -i, redirect, tee, file command, git, formatter, download, install; shell syntax matched outside quotes).
+
+Each file says how it was found (`via: git | fs | tool`). Both 1 and 2 see every writer in the folder, so with several agents in one repository attribution is approximate; `tool` says which writes were the agent's own. Together 1 and 3 cover nearly every change inside a repository.
 
 ## Agent homes
 
-Where an agent keeps its config decides where hooks are installed, which transcripts are indexed, and what env a resume needs. Users keep them in odd places: a profile per account (`~/.claude-profiles/work` through `CLAUDE_CONFIG_DIR` in a shell function), dotfile repos, `CODEX_HOME`. The core is launched from the Dock and rarely has the user's shell variables, so `process.env` doesn't help. Discovery must break the loop "unknown home → no hooks → no paths reported → never learned", without the user configuring anything.
+Where an agent keeps its config decides where hooks go, which transcripts are indexed and what env a resume needs. `AgentHomes` is one registry (SQLite `agent_homes`) for all three, replacing the hard-coded `~/.claude-profiles`. Homes are found by:
 
-### Sources, best first
+1. **Defaults and the core's env** (`~/.claude`, `$XDG_CONFIG_HOME/claude`, `~/.codex`, `~/.gemini`, `$CLAUDE_CONFIG_DIR`, …).
+2. **A bounded scan**: every folder in `~`, and one level into those named like claude, codex, gemini, agent, profile or `.config`, for the shape of a home (Claude: `projects/` plus `.claude.json`, `settings.json` or `history.jsonl`; Codex: `sessions/` or `archived_sessions/`). A project's `.claude/` folder doesn't match. Takes ~20 ms.
+3. **What running agents report**: the config dir the hook passes on, and the home a transcript lives in.
+4. **`agents.homes`**, for the rest.
 
-1. **The running agent's environment.** When procinfo classifies a foreground process as an agent, it also reads the agent's environment: `KERN_PROCARGS2`, which `native/procinfo.c` already calls for argv, returns the environment right after argv, readable for the user's own processes. The helper returns only the variables the agent's spec names (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GEMINI_CLI_HOME`, `QWEN_HOME`, `XDG_CONFIG_HOME`, `HOME`), never the whole block. This is the truth for that agent right now and works through any wrapper (shell function, safehouse, direct exec), because the variable is inherited.
-2. **Hook-reported paths.** `transcript_path` → `rootFor` → the home.
-3. **Fingerprint scan**, at startup and daily: a bounded walk (depth 2 under `~`, plus `$XDG_CONFIG_HOME`) for dirs that look like a home. Claude: `projects/` plus one of `settings.json`, `.claude.json`, `history.jsonl`. Codex: `sessions/` or `config.toml` plus `auth.json`. Names like `.claude*`, `*claude*`, `.codex*` first; skip `Library`, `node_modules`, repos, mounts. `stat`s only.
-4. **The login shell's environment**, captured once (`$SHELL -lic env`, 2 s timeout) for exported variables the Dock-launched core lacks. Doesn't see variables set inside functions; 1 does.
-5. **A setting** (`agents.homes`) for the rest, shown next to what was discovered.
+Reading a running agent's environment directly (`KERN_PROCARGS2`, which the native helper already uses for argv) was tried: on this macOS it returns no environment at all, even for one's own child processes. The hook, which runs inside the agent's environment, is the reliable way to learn it.
 
-### One registry
+New homes get their transcripts indexed (`TranscriptSource.rootsIn`, the search worker's `home` message) and, out of the box, cmd's hook.
 
-`AgentHomes` in the core replaces the three lists: `{ agent, dir, via, env, firstSeen, lastSeen }` in the core's SQLite (`learned_roots` moves out of the search worker). Search roots, hook targets and resume env all come from it. Specs are data:
+## Hooks out of the box
 
-```ts
-{ agent: "claude", env: ["CLAUDE_CONFIG_DIR"], defaults: ["~/.claude", "$XDG_CONFIG_HOME/claude"],
-  fingerprint: { all: ["projects"], any: ["settings.json", ".claude.json", "history.jsonl"] },
-  hooksFile: "settings.json" }
-```
+The installed app (`autoHooks`, set in `main.ts` for the release instance only) puts cmd's hook into every home's config that has **no cmd hook, an old one** (the fork's, `cmd hook`) **or a broken one** (a cmd hook whose script is gone: a deleted worktree's development build). At startup, every few hours, when homes change and when the setting is turned on. It never:
 
-An agent running from a home without hooks is a **coverage gap** the core can see (process says agent, no events arrive). It is recorded per home and shown in Settings → Agents, with an Install action or automatic install (open question).
+- replaces another live cmd's hook (`elsewhere`, e.g. a development build's),
+- touches a file the user removed the hook from (`hooks.remove` remembers it; Install forgets it),
+- writes a file that isn't valid JSON,
+- runs from a development build or tests (their script lives in a checkout or a temp dir).
 
-## Verifying quality
+The first time cmd writes an agent's config it keeps a copy next to it (`.cmd-backup`); writes go through symlinks (dotfile repos) and keep everything else in the file. A quiet notification says what was set up. `agents.hooks.auto` turns it off. Codex still asks the user to approve a new hook (`/hooks` in Codex).
 
-- **Fixtures from real sessions.** `cmd agents record` copies a pane's `events.jsonl` into `packages/core/test/fixtures/agents/<agent>/<version>/`. Tests replay them through adapter, state machine and turn builder and compare with an expected turn list. A new agent version adds a folder; a payload change shows up as a failing fixture, not in production.
-- **Coverage per agent**, computed from data, not claimed: which kinds each agent's events produced recently, which fields were present. `cmd agents coverage` and a row per agent in Settings → Agents ("Codex: no `ask` text, no final message").
-- **A debug view.** `cmd agents events <agent>` prints raw and normalised events, state changes with causes, and anomalies. The first thing to look at when the sidebar says something wrong.
-- **Anomaly counts** in the core log and `cmd agents coverage`, so drift after an agent update is noticed.
+## Verifying
 
-## What this enables (later, separate work)
+- **Recorded sessions.** `test/fixtures/agents/claude-2.1.289/` holds three real sessions recorded through the new hook (`claude -p --settings <hooks>` in a scratch repository): edits through Edit and Bash, a denied permission, a background subagent. Tests replay them through normalize, reduce and the tracker (including a restart mid-session). `cmd agents record <agent> <file>` writes a fixture from the log, with the home and work dir rewritten; `test/fixtures/agents/record.ts` does the same from a spool folder. A new agent version is a new folder.
+- **`cmd agents events <agent> [--raw] [--follow]`**: every event as mapped, with causes and anomalies. First thing to look at when the sidebar says something wrong.
+- **`cmd agents coverage`**: what each agent's events actually carried (kinds, share of events with each field, unmapped event names, anomalies). Drift after an agent update shows here.
+- End to end: a real Claude session in a pane of a development core became one turn with both files it changed through a Python one-liner and `echo >>` (found by git), its final message and one shell write.
 
-- **Notifications** with the agent's final message or its question, then AI phrasing.
-- **Agent Activity widget** as an overview: per agent the current turn, what it wants, files changed, recent turns.
+## What this enables (separate work)
+
+- **Notifications** with the agent's question or final message, background work left running, then AI phrasing ([17-ai.md](17-ai.md): a fast-tier call over the turn record, not the transcript).
+- **Agent Activity widget** as an overview: per agent the current turn, what it wants, files changed, recent turns (`agent.turns`).
 - **Sidebar and tooltips** from turn facts.
-- **Summaries** ([17-ai.md](17-ai.md) `agents.turn`/`agents.digest`): a fast-tier call over the turn record (a few hundred tokens), never the transcript; outcome from state, words from the model; once per turn, opt-in.
-- **Remote "Now"** from structured fields.
+- **Remote "Now"** from structured fields (once the policy allows `agent.turns`).
 - **Magic widgets** through a future `cmd.agents()`.
 
-## Order of work
+## Open
 
-1. **Read what's already on disk.** `deriveStatus` reads `last_assistant_message`, `error` and the ask fallback like `applyHook`; one ingest semantics for files and RPC. Fixes the empty "done" body.
-2. **Agent homes.** procinfo reports the spec's env vars; `AgentHomes` registry; search, hooks and resume use it; coverage gaps in Settings → Agents.
-3. **Event log.** Hook script appends `events.jsonl` with seq and caps; core tails by offset into `agent_events`; non-hook sources write there too. Bump the hook script version so installs refresh.
-4. **Adapters and state machine** on the stream, with causes and anomalies; `agent.events`, `cmd agents events`.
-5. **Turns and git snapshots**; `agent_turns`, `Agent.turn`, `agent.turns`.
-6. **Fixtures and coverage**: `cmd agents record`, recorded sessions for Claude, Codex, Gemini, `cmd agents coverage`.
-7. Then features.
-
-## Open questions
-
-- **Hooks for discovered homes.** When a home without hooks shows up and hooks are installed elsewhere: install automatically and say so, or ask? Recommended: automatically, with a toast and Undo.
-- **Reading process environments.** Only named variables leave the helper, but it sees the whole block. Acceptable for a local helper that already reads argv?
-- **Retention.** How many sessions of raw events to keep per agent, and whether tool results are kept at all beyond an excerpt.
-- **Git snapshots in very large repos.** Timeout and skip, or a setting?
-- **Interrupt inference.** How long idle before an open turn counts as interrupted; per agent, or one rule plus prompt marks?
+- **Codex and Gemini recordings.** Their adapters are tables built from documentation and Claude's shapes; record real sessions (`cmd agents record`) and add fixture folders.
+- **Interrupt timing** in interactive sessions: 30 s quiet is a guess; check against recorded Esc-interrupts.
+- **Agents without hooks** (aider, amp, …): process + OSC + git only. A transcript tail (`TranscriptSource.tail`) or screen text could add prompts and answers.
+- **Spool growth** while the core is down for long: bounded only by how much agents do meanwhile.
+- **Attribution** with several agents in one repository: tool paths are exact, git and the folder watch are per folder.
