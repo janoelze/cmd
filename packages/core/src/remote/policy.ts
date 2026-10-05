@@ -43,6 +43,11 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "agent.wait": "never",
   "agent.kill": "control",
   "agent.markSeen": "view",
+  // Raw events and turns carry prompts, commands and paths: local only for now.
+  "agent.events": "never",
+  "agent.turns": "never",
+  "agents.coverage": "never",
+  "agents.homes": "never",
   "hook.ingest": "never",
   "hooks.status": "never",
   "hooks.install": "never",
@@ -320,6 +325,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "notification":
     case "pane.resync":
       return true;
+    case "agent.activity":
     case "settings.updated":
     case "secrets.updated":
     case "ai.updated":

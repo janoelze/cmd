@@ -267,7 +267,7 @@ describe("transcript sources", () => {
   const mk = (...p: string[]) => fs.mkdirSync(path.join(home, ...p), { recursive: true });
   afterAll(() => rmTemp(home));
 
-  it("finds every Claude config dir and Codex home; non-default ones carry the env to resume", () => {
+  it("finds the default Claude config dirs and Codex homes; non-default ones carry the env to resume", () => {
     mk(".claude", "projects");
     mk(".claude-profiles", "work", "projects");
     mk(".claude-profiles", "empty"); // no projects: skipped
@@ -285,7 +285,6 @@ describe("transcript sources", () => {
     expect(roots).toEqual([
       { agent: "claude", dir: path.join(real(".claude"), "projects"), depth: 2, env: null },
       { agent: "claude", dir: path.join(real("elsewhere", "claude"), "projects"), depth: 2, env: { CLAUDE_CONFIG_DIR: real("elsewhere", "claude") } },
-      { agent: "claude", dir: path.join(real(".claude-profiles", "work"), "projects"), depth: 2, env: { CLAUDE_CONFIG_DIR: real(".claude-profiles", "work") } },
       { agent: "codex", dir: path.join(real(".codex"), "sessions"), env: null },
       { agent: "codex", dir: path.join(real(".codex"), "archived_sessions"), env: null },
       { agent: "codex", dir: path.join(real("alt-codex"), "sessions"), env: { CODEX_HOME: real("alt-codex") } },
@@ -294,6 +293,12 @@ describe("transcript sources", () => {
       { agent: "copilot", dir: path.join(real(".copilot"), "session-state"), depth: 2, fileName: "events.jsonl", env: null },
       { agent: null, dir: path.join(home, "archive"), depth: 2, env: null },
     ]);
+    // Other homes (profiles) come from discovery (agents/homes.ts): their roots, unless already known.
+    expect(sources.homeRoots("claude", path.join(home, ".claude-profiles", "work"), roots, { home, env })).toEqual([
+      { agent: "claude", dir: path.join(real(".claude-profiles", "work"), "projects"), depth: 2, env: { CLAUDE_CONFIG_DIR: real(".claude-profiles", "work") } },
+    ]);
+    expect(sources.homeRoots("claude", path.join(home, ".claude-profiles", "empty"), roots, { home, env })).toEqual([]);
+    expect(sources.homeRoots("codex", path.join(home, ".codex"), roots, { home, env })).toEqual([]);
   });
 
   it("learns the folder of a transcript a live agent reports, unless a known root covers it", () => {

@@ -16,7 +16,7 @@ export interface WorkerInit {
 }
 
 /** Core → worker. */
-export type WorkerRequest = { type: "learn"; agent: AgentKind; path: string } | { type: "reindex" };
+export type WorkerRequest = { type: "learn"; agent: AgentKind; path: string } | { type: "home"; agent: AgentKind; dir: string } | { type: "reindex" };
 
 export type WorkerMessage =
   | { type: "progress"; done: number; total: number }
@@ -84,11 +84,15 @@ parentPort!.on("message", (m: WorkerRequest) => {
     pass();
     return;
   }
-  const root = sources.learn(m.agent, m.path, roots, locateContext());
-  if (!root || !isDir(root.dir)) return;
-  roots.push(root);
-  saveLearnedRoot(db, root);
-  watch(root);
-  post({ type: "learned", root });
-  schedule(0);
+  const found = m.type === "home" ? sources.homeRoots(m.agent, m.dir, roots, locateContext()) : [sources.learn(m.agent, m.path, roots, locateContext())];
+  let added = false;
+  for (const root of found) {
+    if (!root || !isDir(root.dir)) continue;
+    roots.push(root);
+    saveLearnedRoot(db, root);
+    watch(root);
+    post({ type: "learned", root });
+    added = true;
+  }
+  if (added) schedule(0);
 });

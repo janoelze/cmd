@@ -49,6 +49,11 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
     this.#worker?.postMessage({ type: "learn", agent, path: transcriptPath } satisfies WorkerRequest);
   }
 
+  /** An agent home the core discovered (agents/homes.ts): its transcripts are indexed too. */
+  learnHome(agent: AgentKind, dir: string): void {
+    this.#worker?.postMessage({ type: "home", agent, dir } satisfies WorkerRequest);
+  }
+
   /** Rebuilds the index from scratch (e.g. after a parser fix); folders learned from agents are kept. */
   reindex(): void {
     this.#worker?.postMessage({ type: "reindex" } satisfies WorkerRequest);

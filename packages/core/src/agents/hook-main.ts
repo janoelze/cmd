@@ -4,11 +4,12 @@
 // shape Claude, Codex and Gemini read. Only node:net, so it starts fast. Never
 // fails the agent: always exits 0, within 2 s.
 //
-// Usage: node hook-main.ts <kind> <event> <pane id>, the hook payload on stdin.
+// Usage: node hook-main.ts <kind> <event> <pane id> [spooled], the hook payload on
+// stdin. spooled: the script has put the event in the pane's spool already.
 
 import net from "node:net";
 
-const [kind = "", event = "", paneId = ""] = process.argv.slice(2);
+const [kind = "", event = "", paneId = "", spooled = ""] = process.argv.slice(2);
 
 function done(context: unknown): never {
   if (typeof context === "string" && context) {
@@ -44,4 +45,4 @@ sock.on("data", (d: string) => {
     } catch {}
   }
 });
-sock.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "hook.ingest", params: { paneId, agent: kind, event, payload } }) + "\n");
+sock.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "hook.ingest", params: { paneId, agent: kind, event, payload, spooled: spooled === "spooled" } }) + "\n");

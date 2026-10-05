@@ -1,13 +1,16 @@
 // Agent tree. Combines foreground-process detection, hooks and OSC notifications
 // into one state per agent, and implements the host API (spawn/send/wait/kill).
-// See docs/05-agent-integration.md and docs/08-host-agents.md.
+// Hook events are taken from the hook's spool into the activity log and reduced
+// to state and turns (activity/); the per-event status files are the fallback
+// for hooks that don't spool (the fork's). See docs/05-agent-integration.md,
+// docs/08-host-agents.md and docs/18-agent-activity.md.
 
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import type { Agent, AgentId, AgentKind, AgentState, Methods, PaneId, Settings, SpaceId } from "@cmd/protocol";
+import type { ActivityEvent, Agent, AgentId, AgentKind, AgentState, AgentTurn, Methods, PaneId, Settings, SpaceId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { Foreground, PaneManager } from "../panes.ts";
@@ -16,8 +19,13 @@ import { shq } from "../shell.ts";
 import { registerBuiltinSources } from "../search/builtin.ts";
 import { locateContext, TranscriptSources } from "../search/sources.ts";
 import { briefing, checkoutOf } from "./peers.ts";
-import { applyHook, nativeSession, type StateChange } from "./state.ts";
+import { nativeSession, type StateChange } from "./state.ts";
 import { readStatus, removeStatus, StatusWatcher, type HookStatus } from "./statusfiles.ts";
+import { changedBetween, snapshot, type GitSnapshot } from "./activity/gitsnap.ts";
+import { ActivityLog } from "./activity/log.ts";
+import type { RawEvent } from "./activity/normalize.ts";
+import { ActivityReducer, addFile, type Reduction } from "./activity/reduce.ts";
+import { drainSpool } from "./activity/spool.ts";
 
 const log = logger("agents");
 
@@ -32,6 +40,10 @@ export interface TrackerOptions {
   startTimeoutMs?: number;
   /** How to resume past sessions per agent (default: the built-ins). */
   sources?: TranscriptSources;
+  /** Where events and turns are kept (default: in memory). */
+  activity?: ActivityLog;
+  /** Snapshot the work tree with git at each turn's start and end (files changed). */
+  git?: boolean;
 }
 
 export interface TrackerEvents {
@@ -39,6 +51,12 @@ export interface TrackerEvents {
   /** Brought back from the store (restore()), just before its "updated": its state is old news. */
   restored: [agent: Agent];
   removed: [agentId: AgentId];
+  /** An event was recorded (activity log). */
+  activity: [event: ActivityEvent];
+  /** A hook said where the agent keeps its config ($CLAUDE_CONFIG_DIR, …). */
+  home: [agent: AgentKind, dir: string];
+  /** A session's transcript, at its start (its folder tells the home when the env didn't). */
+  transcript: [agent: AgentKind, path: string];
 }
 
 type SpawnParams = Methods["agent.spawn"]["params"];
@@ -60,6 +78,12 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #sources: TranscriptSources;
   #watchers: StatusWatcher[] = [];
   #backstop: NodeJS.Timeout | undefined;
+  readonly activity: ActivityLog;
+  /** Per agent whose events arrive through the spool: state and turns. */
+  #reducers = new Map<AgentId, ActivityReducer>();
+  #git: boolean;
+  /** "Before" snapshots of open turns, by agent id + turn index. */
+  #snaps = new Map<string, Promise<GitSnapshot | null>>();
 
   constructor(panes: PaneManager, o: TrackerOptions = {}) {
     super();
@@ -70,6 +94,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     this.#statusRoots = this.#statusRoot ? [this.#statusRoot, ...(o.legacyStatusRoot ? [o.legacyStatusRoot] : [])] : [];
     this.#startTimeoutMs = o.startTimeoutMs ?? 15_000;
     this.#sources = o.sources ?? registerBuiltinSources(new TranscriptSources());
+    this.activity = o.activity ?? new ActivityLog();
+    this.#git = o.git ?? false;
     if (this.#statusRoot) {
       for (const root of this.#statusRoots) {
         const w = new StatusWatcher(root);
@@ -78,13 +104,12 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
         this.#watchers.push(w);
       }
       // FSEvents can drop events; re-read agent panes periodically as a backstop.
-      this.#backstop = setInterval(() => {
-        for (const a of this.#agents.values()) if (a.paneId) this.applyStatus(a.paneId);
-      }, 2000);
+      this.#backstop = setInterval(() => this.tick(), 2000);
       this.#backstop.unref();
     }
     panes.on("foreground", (paneId, fg) => this.#onForeground(paneId, fg));
     panes.on("removed", (paneId) => {
+      if (this.#statusRoot) this.#ingest(paneId, this.#drain(paneId), this.#byPane(paneId) ?? null);
       this.#onPaneRemoved(paneId);
       for (const root of this.#statusRoots) removeStatus(paneId, root);
     });
@@ -158,9 +183,45 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (!current && fg.class.kind === "other") this.applyStatus(paneId);
   }
 
-  /** Re-derive a pane's agent state from its hook status files. */
+  /**
+   * Takes a pane's new hook events (spool) into the log and its agent's state.
+   * Panes whose hook doesn't spool (the fork's) fall back to the status files.
+   */
   applyStatus(paneId: PaneId): void {
     if (!this.#statusRoot || !this.#panes.get(paneId)) return;
+    const fresh = this.#drain(paneId);
+    const fg = this.#panes.foreground(paneId);
+    let agent = this.#byPane(paneId);
+    if (!agent && fresh.length && fg?.class.kind === "other") {
+      // An unknown process that reports through hooks is an agent too.
+      const kind = fresh.find((e) => e.raw.agent)?.raw.agent;
+      if (kind) {
+        agent = this.#create({ kind, paneId, source: "detected" });
+        this.#started.add(agent.id);
+      }
+    }
+    if (agent && (this.#ingest(paneId, fresh, agent) || this.#reducers.has(agent.id))) return;
+    if (!agent) this.#ingest(paneId, fresh, null);
+    this.#applyStatusFiles(paneId);
+  }
+
+  /** Every 2 s: spooled events FSEvents didn't report, and agents that went quiet mid-turn. */
+  tick(now = Date.now()): void {
+    for (const a of [...this.#agents.values()]) {
+      if (!a.paneId) continue;
+      this.applyStatus(a.paneId);
+      const red = this.#reducers.get(a.id);
+      const pane = this.#panes.get(a.paneId);
+      const r = red && pane ? red.tick(now, pane.lastActivityAt) : null;
+      if (!r) continue;
+      const ev = this.activity.note("interrupt", red!.turn?.inferred.at(-1) ?? "interrupted", now, a.paneId, a.id, a.kind);
+      this.emit("activity", ev);
+      this.#applyReduction(a, red!, r, ev, false);
+    }
+  }
+
+  /** The fallback: state from the newest status file of each event (statusfiles.ts). */
+  #applyStatusFiles(paneId: PaneId): void {
     const fg = this.#panes.foreground(paneId);
     // Ignore status written before the current agent process started.
     const notBefore = fg?.startedAt ? fg.startedAt - 500 : 0;
@@ -175,6 +236,113 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     }
     this.#hooked.add(agent.id);
     this.#update(agent, statusChange(agent.kind, status), { lastPrompt: status.lastPrompt ?? agent.lastPrompt });
+  }
+
+  /** A pane's spooled events, stored; unclaimed (no agent) until an agent takes them. */
+  #drain(paneId: PaneId): { raw: RawEvent; ev: ActivityEvent }[] {
+    if (!this.#statusRoot) return [];
+    const { events, bad } = drainSpool(this.#statusRoot, paneId);
+    const agent = this.#byPane(paneId);
+    for (const b of bad) this.emit("activity", this.activity.note("anomaly", `unreadable hook event file ${b}`, Date.now(), paneId, agent?.id ?? null, agent?.kind ?? null));
+    return events.map((raw) => {
+      const ev = this.activity.insert(raw, paneId, agent?.id ?? null);
+      this.emit("activity", ev);
+      return { raw, ev };
+    });
+  }
+
+  /**
+   * Reduces new events into the agent's state; the first time, also the pane's
+   * earlier unclaimed ones (hooks often fire before the process is detected).
+   * Returns whether the agent's state now comes from events.
+   */
+  #ingest(paneId: PaneId, fresh: { raw: RawEvent; ev: ActivityEvent }[], agent: Agent | null): boolean {
+    if (!agent) return false;
+    let red = this.#reducers.get(agent.id);
+    let events = fresh.map((f) => f.ev);
+    const live = new Set(events.map((e) => e.id));
+    if (!red) {
+      const fg = this.#panes.foreground(paneId);
+      const notBefore = fg?.startedAt ? fg.startedAt - 500 : agent.createdAt - 5000;
+      const claimed = this.activity.claim(paneId, agent.id, notBefore);
+      if (!claimed.length) return false;
+      red = this.#reducerFor(agent);
+      events = claimed.filter((e) => e.id > red!.replayedTo);
+    }
+    for (const ev of events) {
+      if (ev.agent && ev.agent !== agent.kind && ev.source === "hook") {
+        this.emit("activity", this.activity.note("anomaly", `${ev.agent} hook event in a pane whose agent is ${agent.kind}`, ev.at, paneId, agent.id, agent.kind));
+      }
+      this.#hooked.add(agent.id);
+      this.#applyReduction(agent, red, red.apply(ev), ev, live.has(ev.id));
+      if (!this.#agents.has(agent.id)) break; // exited
+    }
+    return true;
+  }
+
+  /** A reducer for an agent, resumed from its last saved turn (a core restart) and the events after it. */
+  #reducerFor(agent: Agent): ActivityReducer {
+    const saved = this.activity.lastTurn(agent.id);
+    const red = new ActivityReducer(agent.id, saved ? saved.turn.index + 1 : 0);
+    if (saved) {
+      red.turn = saved.turn;
+      red.sessionId = saved.turn.sessionId;
+      red.lastEventAt = saved.turn.endedAt ?? saved.turn.startedAt;
+      red.replayedTo = saved.lastEvent;
+    }
+    this.#reducers.set(agent.id, red);
+    return red;
+  }
+
+  #applyReduction(agent: Agent, red: ActivityReducer, r: Reduction, ev: ActivityEvent, live: boolean): void {
+    const change: StateChange = { ...r.change };
+    if (ev.sessionId) change.native = { ...nativeSession(agent.kind, ev.sessionId), ...change.native };
+    // Replayed events (claimed late, or after a restart) don't start subagents or snapshots again.
+    if (change.subagent && live) this.#subagent(agent, agent.kind, change.subagent);
+    delete change.subagent;
+    if (r.exited) {
+      // SessionEnd: the agent is gone unless its process is still there (/clear starts a new session).
+      const fg = agent.paneId ? this.#panes.foreground(agent.paneId) : null;
+      if (fg?.class.kind !== "agent") {
+        this.#exit(agent);
+        return;
+      }
+    }
+    const fields: Partial<Agent> = {};
+    if (r.lastPrompt) fields.lastPrompt = r.lastPrompt;
+    if (r.cause && change.state) fields.stateCause = r.cause;
+    if (r.turn) {
+      this.activity.saveTurn(r.turn, ev.id);
+      fields.turn = structuredClone(r.turn);
+    }
+    if (ev.home && ev.agent) this.emit("home", ev.agent, ev.home);
+    else if (ev.kind === "session.start" && ev.transcriptPath && ev.agent) this.emit("transcript", ev.agent, ev.transcriptPath);
+    this.#update(agent, change, fields);
+    if (live && this.#git) {
+      if (r.opened) this.#snapStart(agent, r.opened);
+      if (r.closed) void this.#snapEnd(agent, red, r.closed);
+    }
+  }
+
+  #snapStart(agent: Agent, t: AgentTurn): void {
+    const cwd = agent.cwd;
+    if (cwd) this.#snaps.set(`${agent.id}:${t.index}`, snapshot(cwd));
+  }
+
+  /** The files the work tree changed in during a turn, added to it once git answers. */
+  async #snapEnd(agent: Agent, red: ActivityReducer, t: AgentTurn): Promise<void> {
+    const key = `${agent.id}:${t.index}`;
+    const before = await this.#snaps.get(key);
+    this.#snaps.delete(key);
+    if (!before) return;
+    const after = await snapshot(before.top);
+    if (!after) return;
+    const changed = await changedBetween(before, after);
+    if (!changed.size) return;
+    for (const [p, c] of changed) addFile(t, p, c, "git");
+    this.activity.saveTurn(t);
+    const a = this.#agents.get(agent.id);
+    if (a && red.turn === t) this.#update(a, {}, { turn: structuredClone(t) });
   }
 
   #onPaneRemoved(paneId: PaneId): void {
@@ -201,25 +369,29 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
 
   // ── hooks ──────────────────────────────────────────────────
 
-  ingestHook(paneId: PaneId, kind: AgentKind, event: string, payload: Record<string, unknown>): Agent | null {
+  /**
+   * An event sent over the socket (hook.ingest). `spooled`: cmd's hook already
+   * put it in the spool, so the spool is read instead (peer briefings ask before
+   * answering). Otherwise (the old `cmd hook`) it goes into the log here.
+   */
+  ingestHook(paneId: PaneId, kind: AgentKind, event: string, payload: Record<string, unknown>, spooled = false): Agent | null {
     const pane = this.#panes.get(paneId);
     if (!pane) return null;
+    if (spooled && this.#statusRoot) {
+      this.applyStatus(paneId);
+      const a = this.#byPane(paneId);
+      if (a || event === "SessionEnd") return a ? this.get(a.id) : null;
+    }
     let agent = this.#byPane(paneId);
     if (!agent) {
       if (event === "SessionEnd") return null;
       agent = this.#create({ kind, paneId, source: "detected" });
     }
-    this.#hooked.add(agent.id);
     this.#started.add(agent.id);
-    const change = applyHook(kind, event, payload);
-    if (change.subagent) this.#subagent(agent, kind, change.subagent);
-    if (change.state === "exited") {
-      this.#exit(agent);
-      return null;
-    }
-    const prompt = event === "UserPromptSubmit" && typeof payload.prompt === "string" ? payload.prompt.trim().split(/\r?\n/)[0] : undefined;
-    this.#update(agent, change, prompt ? { lastPrompt: prompt } : {});
-    return this.get(agent.id);
+    const ev = this.activity.insert({ at: Date.now(), agent: kind, name: event, payload }, paneId, agent.id);
+    this.emit("activity", ev);
+    this.#ingest(paneId, [{ raw: { at: ev.at, agent: kind, name: event, payload }, ev }], agent);
+    return this.#agents.has(agent.id) ? this.get(agent.id) : null;
   }
 
   #subagent(parent: Agent, kind: AgentKind, s: NonNullable<StateChange["subagent"]>): void {
@@ -420,6 +592,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   /** Drop every agent without a trace (no events, rows kept): their terminals are about to be restored (see PaneManager.replaceBackend). */
   forget(): void {
     this.#agents.clear();
+    this.#reducers.clear();
     this.#hooked.clear();
     this.#started.clear();
   }
@@ -514,6 +687,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   }
 
   #remove(id: AgentId): void {
+    this.#reducers.delete(id);
     if (!this.#agents.delete(id)) return;
     this.#store?.deleteAgent(id);
     this.#hooked.delete(id);

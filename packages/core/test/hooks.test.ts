@@ -8,8 +8,8 @@ import { connect, type Connection } from "@cmd/protocol/node";
 import { Core } from "../src/core.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks } from "../src/agents/hooks.ts";
 import { readStatus, statusRoot } from "../src/agents/statusfiles.ts";
-import { registerBuiltinSources } from "../src/search/builtin.ts";
-import { TranscriptSources } from "../src/search/sources.ts";
+import { drainSpool } from "../src/agents/activity/spool.ts";
+import { AgentHomes } from "../src/agents/homes.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
 
@@ -47,6 +47,8 @@ describe.skipIf(process.platform === "win32")("cmd's agent hook", () => {
   });
 
   afterAll(async () => {
+    // The script writes where the agent's real hook would ($TMPDIR, not the core's statusRoot).
+    for (const p of core?.panes.list() ?? []) fs.rmSync(path.join(statusRoot(), p.id), { recursive: true, force: true });
     conn?.close();
     await core?.close();
     rmTemp(dir);
@@ -60,16 +62,23 @@ describe.skipIf(process.platform === "win32")("cmd's agent hook", () => {
     expect(ptys.at(-1)!.opts.env.PATH?.split(path.delimiter)[0]).toBe(files.bin);
   });
 
-  it("stores events as status files, silently, and forgets them at SessionEnd", () => {
+  it("stores events as status files and spools every one, silently", () => {
     const id = randomUUID();
-    const env = { CMD_PANE_ID: id };
-    expect(hook("claude", { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" } }, env)).toEqual({ code: 0, out: "" });
-    expect(readStatus(id, 0, statusRoot())).toMatchObject({ state: "working", agent: "claude" });
-    expect(hook("gemini", { hook_event_name: "BeforeAgent", prompt: "hi" }, env)).toEqual({ code: 0, out: "{}\n" });
-    expect(hook("claude", { hook_event_name: "SessionEnd" }, env).code).toBe(0);
-    expect(fs.existsSync(path.join(statusRoot(), id))).toBe(false);
-    // Outside cmd: nothing.
-    expect(hook("claude", { hook_event_name: "Stop" })).toEqual({ code: 0, out: "" });
+    const env = { CMD_PANE_ID: id, CLAUDE_CONFIG_DIR: '/Users/x/my "profile"' };
+    try {
+      expect(hook("claude", { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" } }, env)).toEqual({ code: 0, out: "" });
+      expect(readStatus(id, 0, statusRoot())).toMatchObject({ state: "working", agent: "claude" });
+      expect(hook("gemini", { hook_event_name: "BeforeAgent", prompt: "hi" }, env)).toEqual({ code: 0, out: "{}\n" });
+      expect(hook("claude", { hook_event_name: "SessionEnd" }, env).code).toBe(0);
+      const { events } = drainSpool(statusRoot(), id);
+      expect(events.map((e) => e.name)).toEqual(["PreToolUse", "BeforeAgent", "SessionEnd"]);
+      expect(events[0]).toMatchObject({ agent: "claude", env: { CLAUDE_CONFIG_DIR: '/Users/x/my "profile"' }, payload: { tool_name: "Bash" } });
+      expect(fs.readdirSync(path.join(statusRoot(), id, "log"))).toEqual([]);
+      // Outside cmd: nothing.
+      expect(hook("claude", { hook_event_name: "Stop" })).toEqual({ code: 0, out: "" });
+    } finally {
+      fs.rmSync(path.join(statusRoot(), id), { recursive: true, force: true });
+    }
   });
 
   it("asks the core for a peer briefing while agents.peers is on", async () => {
@@ -156,7 +165,10 @@ describe("installing into agent configs", () => {
   it("finds the configs of the agents installed here, one per Claude profile", () => {
     const home = path.join(dir, "home");
     for (const d of [".claude", ".claude-profiles/work/projects", ".codex", ".gemini"]) fs.mkdirSync(path.join(home, d), { recursive: true });
-    const targets = hookTargets(registerBuiltinSources(new TranscriptSources()), { home, env: {} });
+    fs.writeFileSync(path.join(home, ".claude-profiles/work/.claude.json"), "{}");
+    const homes = new AgentHomes(null, () => ({ home, env: {} }));
+    homes.discover();
+    const targets = hookTargets(homes.all());
     expect(targets.map((t) => [t.agent, path.relative(home, t.file)])).toEqual([
       ["claude", ".claude/settings.json"],
       ["claude", ".claude-profiles/work/settings.json"],

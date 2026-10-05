@@ -7,14 +7,6 @@ import { shq } from "../shell.ts";
 import { parseClaude, parseCodex, parseCopilot, parseQwen, type Obj } from "./parser.ts";
 import { realDir, type LocateContext, type TranscriptRoot, type TranscriptSource, type TranscriptSources } from "./sources.ts";
 
-const list = (d: string) => {
-  try {
-    return fs.readdirSync(d);
-  } catch {
-    return [];
-  }
-};
-
 /** Env var pointing the agent at a config dir, unless it is the default one. */
 function envFor(name: string, dir: string, defaultDir: string): Record<string, string> | null {
   return dir === (realDir(defaultDir) ?? defaultDir) ? null : { [name]: dir };
@@ -24,8 +16,8 @@ const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !
 
 /**
  * Claude Code: <config>/projects/<project>/<session>.jsonl, where config is
- * ~/.claude, $CLAUDE_CONFIG_DIR, a ~/.claude-profiles/* profile, or the XDG dir
- * a few mid-2025 versions used.
+ * ~/.claude, $CLAUDE_CONFIG_DIR, the XDG dir a few mid-2025 versions used, or any
+ * other home the core discovered (profiles; rootsIn, agents/homes.ts).
  * Deeper files (<session>/subagents/…) are subagent logs. Sessions outside the
  * default dir need CLAUDE_CONFIG_DIR to resume.
  */
@@ -34,18 +26,12 @@ export const claudeSource: TranscriptSource = {
   title: "Claude Code",
   locate(ctx) {
     const xdg = ctx.env.XDG_CONFIG_HOME ?? path.join(ctx.home, ".config");
-    const candidates = [
-      path.join(ctx.home, ".claude"),
-      ctx.env.CLAUDE_CONFIG_DIR,
-      ...list(path.join(ctx.home, ".claude-profiles")).map((p) => path.join(ctx.home, ".claude-profiles", p)),
-      path.join(xdg, "claude"),
-    ];
-    const roots: TranscriptRoot[] = [];
-    for (const c of candidates) {
-      const config = c && realDir(c);
-      if (config && realDir(path.join(config, "projects"))) roots.push(claudeRoot(config, ctx));
-    }
-    return roots;
+    const candidates = [path.join(ctx.home, ".claude"), ctx.env.CLAUDE_CONFIG_DIR, path.join(xdg, "claude")];
+    return candidates.flatMap((c) => (c ? (this.rootsIn?.(c, ctx) ?? []) : []));
+  },
+  rootsIn(home, ctx) {
+    const config = realDir(home);
+    return config && realDir(path.join(config, "projects")) ? [claudeRoot(config, ctx)] : [];
   },
   rootFor(file, ctx) {
     const projects = path.dirname(path.dirname(file));
@@ -74,13 +60,11 @@ export const codexSource: TranscriptSource = {
   title: "Codex",
   locate(ctx) {
     const homes = [path.join(ctx.home, ".codex"), ctx.env.CODEX_HOME];
-    const roots: TranscriptRoot[] = [];
-    for (const h of homes) {
-      const home = h && realDir(h);
-      if (!home) continue;
-      for (const sub of CODEX_DIRS) if (realDir(path.join(home, sub))) roots.push(codexRoot(home, sub, ctx));
-    }
-    return roots;
+    return homes.flatMap((h) => (h ? (this.rootsIn?.(h, ctx) ?? []) : []));
+  },
+  rootsIn(h, ctx) {
+    const home = realDir(h);
+    return home ? CODEX_DIRS.filter((sub) => realDir(path.join(home, sub))).map((sub) => codexRoot(home, sub, ctx)) : [];
   },
   rootFor(file, ctx) {
     // Walk up to the nearest sessions folder.

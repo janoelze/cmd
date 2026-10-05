@@ -5,10 +5,12 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { Agent, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
+import type { Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
+import { ActivityLog } from "./agents/activity/log.ts";
+import { AgentHomes } from "./agents/homes.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./agents/hooks.ts";
 import { hookEventName } from "./agents/state.ts";
 import { NotificationCenter } from "./notifications.ts";
@@ -98,6 +100,9 @@ export interface CoreOptions {
 
 const NO_SEARCH = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
 
+/** A comma-separated setting as a list. */
+const splitList = (v: string) => v.split(",").map((d) => d.trim()).filter(Boolean);
+
 type Handlers = { [M in Method]: (params: Params<M>) => Result<M> | Promise<Result<M>> };
 
 export class Core {
@@ -123,6 +128,11 @@ export class Core {
   #startedAt = Date.now();
   /** cmd's agent hook files, when this core writes them (a state dir and status files). */
   #hooks: HookFiles | null = null;
+  /** Where agents keep their config (agents/homes.ts). */
+  readonly homes: AgentHomes;
+  #homesDiscovered = false;
+  #homesTimer: NodeJS.Timeout | undefined;
+  #pruneTimer: NodeJS.Timeout | undefined;
   /** Listening servers: one, plus one per time the socket file was put back (the old ones keep their clients). */
   #servers: net.Server[] = [];
   /** Open socket connections, cut on close so a lingering client can't hold it up. */
@@ -190,7 +200,33 @@ export class Core {
         log.error(`could not write shell rules: ${(err as Error).message}`);
       }
     });
-    this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null, legacyStatusRoot: opts.legacyStatusRoot ?? null, sources: this.transcripts });
+    const activity = new ActivityLog(this.store.db);
+    activity.prune();
+    this.#pruneTimer = setInterval(() => activity.prune(), 6 * 3600_000);
+    this.#pruneTimer.unref();
+    this.agents = new AgentTracker(this.panes, {
+      store: this.store,
+      settings,
+      statusRoot: opts.statusRoot ?? null,
+      legacyStatusRoot: opts.legacyStatusRoot ?? null,
+      sources: this.transcripts,
+      activity,
+      git: !!opts.stateDir,
+    });
+    this.homes = new AgentHomes(this.store.db, locateContext, () => splitList(this.settings.settings["agents.homes"]));
+    this.agents.on("activity", (event) => this.#broadcast({ type: "agent.activity", event }));
+    this.agents.on("home", (agent, dir) => this.#newHome(this.homes.learn(agent, dir, "hook")));
+    this.agents.on("transcript", (agent, file) => {
+      const dir = this.homes.homeOfTranscript(agent, file);
+      if (dir) this.#newHome(this.homes.learn(agent, dir, "transcript"));
+    });
+    // Real cores look for agent homes now, again every few hours and when agents.homes changes.
+    if (opts.stateDir && opts.statusRoot) {
+      setImmediate(() => this.#discoverHomes());
+      this.#homesTimer = setInterval(() => this.#discoverHomes(), 6 * 3600_000);
+      this.#homesTimer.unref();
+      this.settings.bind(["agents.homes"], () => this.#discoverHomes());
+    }
     this.notifications = new NotificationCenter(this.panes, this.agents, settings);
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler, 2000, () => this.#subscribers.size > 0) : null;
@@ -327,9 +363,16 @@ export class Core {
     "agent.wait": (p) => this.agents.wait(p.agentIds, p.until, p.mode, p.timeoutMs),
     "agent.kill": (p) => ({ killed: this.agents.kill(p.agentId, p.tree) }),
     "agent.markSeen": (p) => (this.agents.markSeen(p.agentId), null),
+    "agent.events": (p) => this.agents.activity.events(p),
+    "agent.turns": (p) => this.agents.activity.turns(p.agentId, p.limit),
+    "agents.coverage": (p) => this.agents.activity.coverage(p.days),
+    "agents.homes": (p) => {
+      if (p.rescan || !this.#homesDiscovered) this.#discoverHomes();
+      return this.homes.all();
+    },
     "hook.ingest": (p) => {
       const event = hookEventName(p.agent, p.event);
-      const agentId = this.agents.ingestHook(p.paneId, p.agent, event, p.payload)?.id ?? null;
+      const agentId = this.agents.ingestHook(p.paneId, p.agent, event, p.payload, p.spooled)?.id ?? null;
       const context = agentId ? this.agents.peerBriefing(agentId, event) : null;
       return context ? { agentId, context } : { agentId };
     },
@@ -479,7 +522,8 @@ export class Core {
   #hookTargets(): HookTarget[] {
     if (!this.#hooks) return [];
     const script = this.#hooks.script;
-    return hookTargets(this.transcripts, locateContext()).map((t) => ({ ...t, state: hookState(t.agent, t.file, script) }));
+    if (!this.#homesDiscovered) this.#discoverHomes();
+    return hookTargets(this.homes.all()).map((t) => ({ ...t, state: hookState(t.agent, t.file, script) }));
   }
 
   /** Only the agent configs hooks.status lists can be written. */
@@ -487,6 +531,36 @@ export class Core {
     const t = this.#hookTargets().find((x) => x.file === file);
     if (!t) throw new Error(`not an agent config cmd installs hooks into: ${file}`);
     return t;
+  }
+
+  #discoverHomes(): void {
+    if (this.#closed) return;
+    this.#homesDiscovered = true;
+    try {
+      for (const h of this.homes.discover()) this.#newHome(h);
+    } catch (err) {
+      log.error(`looking for agent homes: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * A home cmd didn't know: its transcripts are indexed, and it gets cmd's hook if
+   * the user installed it into another home of the same agent (same consent).
+   */
+  #newHome(h: AgentHome | null): void {
+    if (!h) return;
+    this.#search?.learnHome(h.agent, h.dir);
+    if (!this.#hooks || h.via.includes("hook")) return;
+    const targets = this.#hookTargets();
+    const mine = targets.find((t) => t.agent === h.agent && path.dirname(t.file) === h.dir);
+    if (!mine || mine.state === "installed") return;
+    if (!targets.some((t) => t.agent === h.agent && t.state === "installed")) return;
+    try {
+      installHooks(h.agent, mine.file, this.#hooks.script);
+      log.info(`installed cmd's hook into ${mine.file} (another ${h.agent} home has it)`);
+    } catch (err) {
+      log.error(`could not install cmd's hook into ${mine.file}: ${(err as Error).message}`);
+    }
   }
 
   #restartSearch(): void {
@@ -498,6 +572,7 @@ export class Core {
       if (gen !== this.#searchGen || this.#closed) return; // a newer restart replaces this one
       const next = this.#opts.search!(this.settings.settings, this.transcripts);
       this.#search = next;
+      for (const h of this.homes.all()) next?.learnHome(h.agent, h.dir);
       next?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
       this.#broadcast({ type: "search.status", status: next?.status() ?? NO_SEARCH });
     });
@@ -879,6 +954,9 @@ export class Core {
 
   async close(): Promise<void> {
     if (this.#libraryTimer) clearTimeout(this.#libraryTimer);
+    clearInterval(this.#pruneTimer);
+    clearInterval(this.#homesTimer);
+    this.agents.close();
     this.usage.close();
     this.ai.dispose();
     await this.usage.flush();

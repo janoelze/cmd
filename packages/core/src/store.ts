@@ -73,6 +73,11 @@ export class Store {
     `);
   }
 
+  /** For services that keep their own tables in the same file (activity log, agent homes). */
+  get db(): DatabaseSync {
+    return this.#db;
+  }
+
   /** Prepared once, reused: most writes are small and frequent. */
   #stmt(sql: string): StatementSync {
     let st = this.#stmts.get(sql);

@@ -6,6 +6,7 @@ import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
 import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
+import type { ActivityEvent, AgentCoverage, AgentHome, AgentTurn } from "./activity.ts";
 
 export interface CoreInfo {
   pid: number;
@@ -114,9 +115,18 @@ export interface Methods {
   "agent.kill": { params: { agentId: AgentId; tree?: boolean }; result: { killed: AgentId[] } };
   "agent.markSeen": { params: { agentId: AgentId }; result: null };
 
-  /** Called by `cmd hook` from inside agent hooks. */
+  /** Every event recorded about an agent (or a pane), oldest first; raw: with the payload as received. */
+  "agent.events": { params: { agentId?: AgentId; paneId?: PaneId; afterId?: number; limit?: number; raw?: boolean }; result: ActivityEvent[] };
+  /** An agent's turns, oldest first (kept after the agent is gone). */
+  "agent.turns": { params: { agentId: AgentId; limit?: number }; result: AgentTurn[] };
+  /** What each agent's events actually carried over the last `days` (default 7). */
+  "agents.coverage": { params: { days?: number }; result: AgentCoverage[] };
+  /** Where agents keep their config (discovered); rescan: look again first. */
+  "agents.homes": { params: { rescan?: boolean }; result: AgentHome[] };
+
+  /** Called from inside agent hooks: by cmd's hook (spooled: the event is in the spool already) and the old `cmd hook`. */
   "hook.ingest": {
-    params: { paneId: PaneId; agent: AgentKind; event: string; payload: Record<string, unknown> };
+    params: { paneId: PaneId; agent: AgentKind; event: string; payload: Record<string, unknown>; spooled?: boolean };
     /** context: text for the hook to hand the agent (peer briefings, `agents.peers`). */
     result: { agentId: AgentId | null; context?: string };
   };
@@ -354,6 +364,8 @@ export type CoreEvent =
   | { type: "pane.removed"; paneId: PaneId }
   | { type: "agent.updated"; agent: Agent }
   | { type: "agent.removed"; agentId: AgentId }
+  /** Something was recorded about an agent (activity log): one per hook event. */
+  | { type: "agent.activity"; event: ActivityEvent }
   | { type: "settings.updated"; snapshot: SettingsSnapshot }
   | { type: "secrets.updated"; status: SecretsStatus }
   | { type: "ai.updated"; status: AiStatus }

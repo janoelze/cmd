@@ -4,15 +4,17 @@
 // (Settings → Agents → Hooks, `cmd hooks install`), replacing the ghostty-agents
 // fork's hook and `cmd hook` entries.
 //
-// The script stores every event as a status file (statusfiles.ts): plain sh, fast
-// enough for every tool call. Only SessionStart and prompts, and only while peer
-// briefings are on (a flag file next to it), go through hook-main.ts to the core.
+// The script stores every event as a status file (statusfiles.ts) and links it
+// into the pane's spool (activity/spool.ts), where none is overwritten: plain sh,
+// fast enough for every tool call. It adds the agent's config dir from its
+// environment ($CLAUDE_CONFIG_DIR, …), the one place that knows which profile a
+// session runs in. Only SessionStart and prompts, and only while peer briefings
+// are on (a flag file next to it), go through hook-main.ts to the core.
 
 import fs from "node:fs";
 import path from "node:path";
-import type { AgentKind, HookTarget } from "@cmd/protocol";
+import type { AgentHome, AgentKind, HookTarget } from "@cmd/protocol";
 import { shq } from "../shell.ts";
-import type { LocateContext, TranscriptSources } from "../search/sources.ts";
 
 export interface HookFiles {
   /** The hook script agents run: `<script> <kind>`. */
@@ -39,8 +41,9 @@ function hookScript(f: HookFiles): string {
   return `#!/bin/sh
 # cmd's agent hook (written by cmd at startup: packages/core/src/agents/hooks.ts).
 # Usage: cmd-hook <claude|codex|gemini>, the hook payload on stdin. Stores the
-# event as $TMPDIR/cmd-agents/<pane id>/<event>.json for cmd's sidebar. Never
-# fails or blocks the agent; outside cmd it does nothing.
+# event as $TMPDIR/cmd-agents/<pane id>/<event>.json (the latest of each) and
+# links it into log/ (every one, until cmd has read it). Never fails or blocks
+# the agent; outside cmd it does nothing.
 
 kind=$1
 payload=$(cat)
@@ -53,19 +56,29 @@ dir="\${base%/}/cmd-agents/$id"
 event=$(printf '%s\\n' "$payload" | sed -n 's/.*"hook_event_name"[[:space:]]*:[[:space:]]*"\\([A-Za-z]*\\)".*/\\1/p' | head -n 1)
 [ -n "$event" ] || quiet
 
-if [ "$event" = SessionEnd ]; then
-  rm -rf "$dir"
-  quiet
-fi
-mkdir -p "$dir" 2>/dev/null || quiet
+# The agent's config dirs, when set: they say which profile the session runs in.
+env=
+addenv() {
+  [ -n "$2" ] || return 0
+  v=$2
+  case "$v" in *[\\\\\\"]*) v=$(printf '%s' "$v" | sed -e 's/[\\\\"]/\\\\&/g') ;; esac
+  env="$env\${env:+,}\\"$1\\":\\"$v\\""
+}
+addenv CLAUDE_CONFIG_DIR "$CLAUDE_CONFIG_DIR"
+addenv CODEX_HOME "$CODEX_HOME"
+addenv GEMINI_CLI_HOME "$GEMINI_CLI_HOME"
+
+mkdir -p "$dir/log" 2>/dev/null || quiet
+ts=$(date +%s)
 tmp="$dir/.$event.$$"
-printf '{"agent":"%s","ts":%s,"event":%s}\\n' "$kind" "$(date +%s)" "$payload" >"$tmp" 2>/dev/null &&
-  mv -f "$tmp" "$dir/$event.json" 2>/dev/null
+printf '{"agent":"%s","ts":%s,"env":{%s},"event":%s}\\n' "$kind" "$ts" "$env" "$payload" >"$tmp" 2>/dev/null || quiet
+ln "$tmp" "$dir/log/$ts.$$.$event.json" 2>/dev/null
+mv -f "$tmp" "$dir/$event.json" 2>/dev/null
 
 # Peer briefings: the core says who else works in this repository.
 case "$event" in SessionStart | UserPromptSubmit | BeforeAgent)
   if [ -e ${shq(f.flag)} ] && [ -n "$CMD_SOCKET" ]; then
-    printf '%s' "$payload" | ${node("packages/core/src/agents/hook-main.ts")} "$kind" "$event" "$id"
+    printf '%s' "$payload" | ${node("packages/core/src/agents/hook-main.ts")} "$kind" "$event" "$id" spooled
     exit 0
   fi ;;
 esac
@@ -123,26 +136,9 @@ const SPECS: Record<string, Spec> = {
   },
 };
 
-const isDir = (p: string | undefined): p is string => !!p && fs.statSync(p, { throwIfNoEntry: false })?.isDirectory() === true;
-
-/** The config files of the agents installed here: every Claude config dir cmd knows, Codex's and Gemini's. */
-export function hookTargets(sources: TranscriptSources, ctx: LocateContext): { agent: AgentKind; title: string; file: string }[] {
-  const claude = [path.join(ctx.home, ".claude"), ctx.env.CLAUDE_CONFIG_DIR, ...sources.locate(ctx).filter((r) => r.agent === "claude").map((r) => path.dirname(r.dir))];
-  const dirs: [AgentKind, string | undefined][] = [
-    ...claude.map((d): [AgentKind, string | undefined] => ["claude", d]),
-    ["codex", ctx.env.CODEX_HOME || path.join(ctx.home, ".codex")],
-    ["gemini", path.join(ctx.env.GEMINI_CLI_HOME || ctx.home, ".gemini")],
-  ];
-  const seen = new Set<string>();
-  const out: { agent: AgentKind; title: string; file: string }[] = [];
-  for (const [agent, dir] of dirs) {
-    if (!isDir(dir)) continue;
-    const real = fs.realpathSync(dir);
-    if (seen.has(real)) continue;
-    seen.add(real);
-    out.push({ agent, title: SPECS[agent]!.title, file: path.join(dir, agent === "codex" ? "hooks.json" : "settings.json") });
-  }
-  return out;
+/** The config file of every agent home cmd knows (homes.ts) whose agent takes hooks. */
+export function hookTargets(homes: AgentHome[]): { agent: AgentKind; title: string; file: string }[] {
+  return homes.filter((h) => SPECS[h.agent]).map((h) => ({ agent: h.agent, title: SPECS[h.agent]!.title, file: path.join(h.dir, h.agent === "codex" ? "hooks.json" : "settings.json") }));
 }
 
 type Handler = { command?: unknown };

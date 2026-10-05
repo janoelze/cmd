@@ -323,6 +323,12 @@ export const SETTINGS_SCHEMA = {
     default: false,
     description: "When an agent starts in a repository where other agents are working (in any of its worktrees), tell it who they are, where and on what, and that it can message them with `cmd send`. Told again when agents come or go. Needs cmd's hook in the agent (Hooks, above).",
   },
+  "agents.homes": {
+    title: "More agent folders", placeholder: "~/dotfiles/claude", code: true,
+    type: "string",
+    default: "",
+    description: "Config folders of Claude Code, Codex or Gemini CLI that cmd doesn't find by itself, comma-separated. cmd looks in the usual places, in folders under your home that look like one (profiles such as ~/.claude-profiles/work), and wherever a running agent says it keeps its config.",
+  },
   "agents.copilot.command": { title: "Copilot CLI command", code: true, type: "string", default: "copilot", description: "Command used to resume GitHub Copilot CLI sessions." },
 
   "ai.provider": {

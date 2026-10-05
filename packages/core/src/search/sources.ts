@@ -47,6 +47,8 @@ export interface TranscriptSource {
    * finds locations locate() doesn't know about, like an unusual config dir.
    */
   rootFor?(transcriptPath: string, ctx: LocateContext): TranscriptRoot | null;
+  /** The roots in one of the agent's homes (agents/homes.ts: a config dir found by discovery). */
+  rootsIn?(home: string, ctx: LocateContext): TranscriptRoot[];
   /** Whether a transcript is this agent's, from its first JSON lines (for mixed folders). */
   sniff(head: Obj[]): boolean;
   parse(text: TranscriptText, path: string): SessionDocument | null;
@@ -104,6 +106,11 @@ export class TranscriptSources {
     const source = this.get(agent);
     const root = source?.rootFor?.(transcriptPath, ctx) ?? null;
     return root && covers(root, transcriptPath) ? root : null;
+  }
+
+  /** The roots in an agent home that no known root covers yet. */
+  homeRoots(agent: AgentKind, home: string, known: TranscriptRoot[], ctx: LocateContext): TranscriptRoot[] {
+    return (this.get(agent)?.rootsIn?.(home, ctx) ?? []).filter((r) => !known.some((k) => k.dir === r.dir || covers(k, r.dir)));
   }
 
   /** Parses a transcript; in a mixed folder the agent is sniffed, else every source is tried. */

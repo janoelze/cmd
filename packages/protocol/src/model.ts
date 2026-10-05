@@ -1,5 +1,7 @@
 // Domain model shared by core, CLI and UI. See docs/08-host-agents.md.
 
+import type { AgentTurn } from "./activity.ts";
+
 export type PaneId = string;
 export type AgentId = string;
 /** Window id. A terminal window's id is its pane id. */
@@ -169,6 +171,10 @@ export interface Agent {
   /** Last time the user looked at this agent; drives "done, unseen". */
   seenAt: number | null;
   createdAt: number;
+  /** The current or last turn, from the agent's events (activity.ts). */
+  turn?: AgentTurn | null;
+  /** What set the current state: "hook Stop", "inferred: …". */
+  stateCause?: string | null;
 }
 
 /** An agent config file cmd's hook can be installed into (Settings → Agents → Hooks). */
