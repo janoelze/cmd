@@ -2,6 +2,26 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.12.0 — 2026-10-05
+
+Agent notifications say what happened, and a session can be summarized in a click.
+
+### New
+
+- **Smarter agent notifications.** A notification says in one line what an agent did or wants. Turn it off in Settings → Notifications.
+- **Session summaries.** Right-click an agent's title and choose Summarize Session to see what you asked for, what was done and what changed.
+
+### Improved
+
+- You get a notification when an agent stops on an error, such as a usage limit.
+- Typing to an agent while it works keeps what it did in one turn.
+- Tooltips appear at their new place instead of sliding across the window.
+
+### Fixed
+
+- Agents no longer stay marked as needing you after you answer or dismiss their question.
+- The strip's dots follow the selected window when it's already in view.
+
 ## 0.11.1 — 2026-10-05
 
 ### Improved
