@@ -2,6 +2,10 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.10.1 — 2026-10-05
+
+The public usage stats no longer count cmd's own test builds as installs.
+
 ## 0.10.0 — 2026-10-05
 
 Set up AI once for all of cmd, and keep your widgets in a library.
