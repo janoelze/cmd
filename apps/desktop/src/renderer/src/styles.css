@@ -463,29 +463,30 @@ kbd {
 .tile.needs { --ring-color: var(--state-needs); border-color: var(--ring-color); }
 .tile.sel.needs { --ring-color: var(--window-highlight); }
 
-/* The frame (.tile-frame, over the window's outline) draws everything outside the
-   border as box-shadows: the outline's extra width, the emphasised ring and glow,
-   the drop shadow. Rings add width outside the border rather than thickening it,
-   so selecting a window never moves its content. On the canvas the frame gets the
-   zoom (--z) and widths are divided by it: the track is scaled, and a 1px outline
-   would vanish at 30%. The border itself stays put, so zooming never resizes a
-   terminal. */
+/* The frame (.tile-frame, over the window's outline) draws the outline and the
+   emphasised ring and glow as inset box-shadows, from the window's outer edge
+   inward over the content's edge: selecting a window never moves its content, and
+   nothing but the drop shadow reaches past the window (into a sidebar's gap, say).
+   On the canvas the frame gets the zoom (--z) and widths are divided by it: the
+   track is scaled, and a 1px outline would vanish at 30%. The border itself stays
+   put, so zooming never resizes a terminal. */
 .tile-frame {
   position: absolute;
   inset: calc(-1 * var(--window-outline));
   border-radius: var(--window-radius);
   pointer-events: none;
   z-index: 3;
-  /* Outline: what the border lacks on screen when zoomed out. */
-  --edge-w: max(0px, calc(var(--window-outline) / var(--z, 1) - var(--window-outline)));
-  /* Emphasised: up to ui.focusOutline on screen, then a 1px halo and a blur (ui.focusGlow). */
-  --ring-w: max(0px, calc(var(--focus-outline) / var(--z, 1) - var(--window-outline)));
+  /* Outline: the border, widened inward to its width on screen when zoomed out. */
+  --edge-w: max(var(--window-outline), calc(var(--window-outline) / var(--z, 1)));
+  /* Emphasised, inward from the outer edge: the border and up to ui.focusOutline on
+     screen, then a 1px halo and a blur (ui.focusGlow). */
+  --ring-w: max(var(--window-outline), calc(var(--focus-outline) / var(--z, 1)));
   --ring:
-    0 0 0 var(--ring-w) var(--ring-color),
-    0 0 0 calc(var(--ring-w) + 1px / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(55% * var(--focus-glow))), transparent),
-    0 0 calc(14px * var(--focus-glow) / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(35% * var(--focus-glow))), transparent);
+    inset 0 0 0 var(--ring-w) var(--ring-color),
+    inset 0 0 0 calc(var(--ring-w) + 1px / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(55% * var(--focus-glow))), transparent),
+    inset 0 0 calc(14px * var(--focus-glow) / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(35% * var(--focus-glow))), transparent);
   --drop: 0 0 transparent;
-  box-shadow: 0 0 0 var(--edge-w) var(--window-edge), var(--drop);
+  box-shadow: inset 0 0 0 var(--edge-w) var(--window-edge), var(--drop);
 }
 /* ui.windowShadow: each step larger, further down and darker (a contact shadow plus,
    from medium on, a soft ambient one), as if the window floats higher. */
@@ -647,16 +648,15 @@ kbd {
 .windows-track > .tile.hidden-tile { visibility: hidden; pointer-events: none; }
 
 /* Unfocused windows are dimmed by an overlay (not a filter, which would soften text).
-   It covers the outline too (and its extra width on the canvas), so the outline dims
-   with the line under the title. Amount: ui.unfocusedDim (--window-dim-amount, set
+   It covers the outline too, so the outline dims with the line under the title. Amount: ui.unfocusedDim (--window-dim-amount, set
    in App) times the theme's --window-dim. A window that needs you isn't dimmed. */
 .windows-track > .tile > .tile-frame::after {
   content: "";
   position: absolute;
-  inset: calc(-1 * var(--edge-w));
+  inset: 0;
   background: var(--scrim);
   opacity: min(1, calc(var(--window-dim) * var(--window-dim-amount, 0.1)));
-  border-radius: calc(var(--window-radius) + var(--edge-w));
+  border-radius: inherit;
   transition: opacity 160ms ease;
 }
 .windows-track > .tile.sel > .tile-frame::after,
