@@ -3,7 +3,8 @@
 // youtubeType). The player is YouTube's embed page in a <webview>, not an
 // iframe: the app's CSP allows no web frames, and YouTube refuses embeds that
 // send no Referer (error 153), which a webview can set (httpreferrer). Its
-// Sign in (YouTube's "not a bot" check) opens a browser window, same session.
+// Sign in (YouTube's "not a bot" check) opens a browser window, same session;
+// the player reloads once YouTube's sign-in cookie is set (main: SIGN_IN_COOKIES).
 
 import { useEffect, useRef, useState } from "react";
 import type { WebviewTag } from "electron";
@@ -82,10 +83,13 @@ function Player({ id, src, fill }: { id: string; src: string; fill: boolean }) {
       if (e.channel === "cmd-embed") handleEmbedMessage(wv as unknown as HTMLElement, e.args[0]);
     };
     const ready = () => setLoads((n) => n + 1);
+    // Signed in (in a browser window or a pop-up): the "not a bot" wall goes away on a reload.
+    const offSignedIn = cmd.onSignedIn((site) => site === "youtube.com" && wv.reload());
     wv.addEventListener("page-title-updated", titled as never);
     wv.addEventListener("ipc-message", reported as never);
     wv.addEventListener("dom-ready", ready);
     return () => {
+      offSignedIn();
       wv.removeEventListener("dom-ready", ready);
       wv.removeEventListener("page-title-updated", titled as never);
       wv.removeEventListener("ipc-message", reported as never);

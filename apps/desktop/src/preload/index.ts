@@ -157,6 +157,12 @@ const api = {
     ipcRenderer.on("open-url", h);
     return () => ipcRenderer.off("open-url", h);
   },
+  /** A site signed in, in the browser windows' session (main: SIGN_IN_COOKIES). */
+  onSignedIn(fn: (site: string) => void): () => void {
+    const h = (_e: unknown, site: string) => fn(site);
+    ipcRenderer.on("signed-in", h);
+    return () => ipcRenderer.off("signed-in", h);
+  },
   keybindings: (): Promise<KeybindingsSnapshot> => ipcRenderer.invoke("keybindings"),
   /** Bind shortcuts to a command in keybindings.json; null restores its defaults. */
   setKeybinding: (id: string, keys: string[] | null): Promise<void> => ipcRenderer.invoke("set-keybinding", id, keys),
