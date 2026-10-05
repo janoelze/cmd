@@ -854,7 +854,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-sheet-header-icon { display: flex; margin-bottom: 18px; color: var(--accent); }
 .ui-sheet-header-title { margin: 0; font: 600 var(--text-display) / 1.2 var(--font-ui); letter-spacing: -0.01em; color: var(--text); text-wrap: balance; }
 .ui-sheet-header-subtitle { margin: 0; font-size: var(--text-lg); line-height: 1.4; color: var(--text-dim); text-wrap: pretty; }
-.ui-dialog-body[data-padded]:has(> .ui-sheet-header:first-child) { padding-top: 28px; gap: 24px; }
+.ui-dialog-body[data-padded]:has(> .ui-sheet-header:first-child) { gap: 24px; }
 .ui-dialog-body[data-padded] > .ui-sheet-header:first-child + * { margin-top: auto; }
 
 /* FeatureList: a welcome's features, no box. */
