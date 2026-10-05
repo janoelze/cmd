@@ -10,6 +10,7 @@
 import { forwardRef, useEffect, useRef, useState, type InputHTMLAttributes, type KeyboardEvent, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { ICON, Icon, iconNode } from "./icon.tsx";
 import { Button, type Size } from "./button.tsx";
+import { Spinner } from "./status.tsx";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -253,7 +254,8 @@ export function NumberField({
 /**
  * A secret (an API key, a token): never shown. Set, it reads "••••abcd" with
  * Change and Remove; otherwise (or while changing) a password field that saves
- * on Enter or Save.
+ * on Enter or Save. An onSave that returns a promise is waited for (a key being
+ * checked): the field stays as typed if it rejects, so it can be corrected.
  */
 export function SecretField({
   set,
@@ -261,17 +263,23 @@ export function SecretField({
   placeholder,
   onSave,
   width = 190,
+  fill,
+  autoFocus,
 }: {
   set: boolean;
   /** The last characters ("…abcd"), shown masked. */
   hint?: string;
   placeholder?: string;
   /** null removes it. */
-  onSave: (v: string | null) => void;
+  onSave: (v: string | null) => void | Promise<unknown>;
   width?: number;
+  /** As wide as its container (a stacked row). */
+  fill?: boolean;
+  autoFocus?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (editing) ref.current?.focus();
@@ -279,7 +287,7 @@ export function SecretField({
   const done = () => (setEditing(false), setDraft(""));
   if (set && !editing) {
     return (
-      <span className="ui-secret">
+      <span className="ui-secret" data-fill={fill || undefined}>
         <span className="ui-secret-set">{hint ? hint.replace(/^…/, "••••") : "Set"}</span>
         <Button onClick={() => setEditing(true)}>Change…</Button>
         <Button onClick={() => onSave(null)}>Remove</Button>
@@ -287,28 +295,38 @@ export function SecretField({
     );
   }
   const save = () => {
-    if (draft.trim()) onSave(draft.trim());
-    done();
+    const v = draft.trim();
+    if (!v || busy) return;
+    const r = onSave(v);
+    if (!(r instanceof Promise)) return done();
+    setBusy(true);
+    r.then(
+      () => (setBusy(false), done()),
+      () => (setBusy(false), setEditing(true), requestAnimationFrame(() => ref.current?.select())),
+    );
   };
   return (
-    <span className="ui-secret">
+    <span className="ui-secret" data-fill={fill || undefined}>
       <TextField
         ref={ref}
         code
         type="password"
         autoComplete="off"
+        autoFocus={autoFocus}
         width={width}
+        fill={fill}
         value={draft}
         placeholder={placeholder}
+        disabled={busy}
         onChange={setDraft}
         onKeyDown={(e) => {
           if (e.key === "Enter") save();
           else if (e.key === "Escape") done();
         }}
-        onBlur={() => !draft.trim() && done()}
+        onBlur={() => !draft.trim() && !busy && done()}
       />
-      <Button variant="primary" disabled={!draft.trim()} onMouseDown={(e) => e.preventDefault()} onClick={save}>
-        Save
+      <Button variant="primary" disabled={!draft.trim() || busy} onMouseDown={(e) => e.preventDefault()} onClick={save}>
+        {busy ? <Spinner size={11} label="Checking" /> : "Save"}
       </Button>
     </span>
   );

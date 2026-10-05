@@ -63,7 +63,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 
 Press ⇧⌘M and type what you want to see: "my open merge requests", "the last CI runs", a JSON URL, a command. An agent looks around with read-only commands, writes a small widget, checks that it works, and shows it in your theme. The widget refreshes on its own without calling the model. Change it by asking (⌘L), edit its versions, settings and files (⌘E), or take it off the desk when you're done: it stays in your Widget Library (⇧⌘L), ready to put back in any Space.
 
-**Setup.** Magic widgets use your own Anthropic or OpenAI API key: Settings → Magic Widgets. Keys are stored outside `settings.json` and readable only by you. Widgets' data runs on [Deno](https://deno.com); cmd uses yours or downloads its own.
+**Setup.** Magic widgets use your own Anthropic or OpenAI API key, asked for on first launch and kept in Settings → AI. cmd picks the newest models your key can use. Keys are stored outside `settings.json` and readable only by you. Widgets' data runs on [Deno](https://deno.com); cmd uses yours or downloads its own.
 
 **Safety.** The agent can only read. Its commands pass a read-only policy, and widgets run in a sandbox with only the hosts and programs they declare. Your keys, keychains, browser profiles and `.env` files are off limits, and tokens never reach the model.
 

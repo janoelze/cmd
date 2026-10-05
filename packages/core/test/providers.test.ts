@@ -214,7 +214,7 @@ describe("the AI service", () => {
     lists["sk-oa"] = new KeyRejected("The key was not accepted.");
     await expect(ai.models("openai", true)).rejects.toBeInstanceOf(KeyRejected);
     const st = ai.status();
-    expect(st.providers.openai).toMatchObject({ state: "rejected", error: expect.stringMatching(/revoked/) });
+    expect(st.providers.openai).toMatchObject({ state: "rejected", error: expect.stringMatching(/no longer accepts/) });
     expect(st.provider).toBe("anthropic");
   });
 

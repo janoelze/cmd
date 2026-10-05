@@ -22,6 +22,8 @@ import { handleEmbedMessage } from "../embed.ts";
 import { DotMatrix } from "./DotMatrix.tsx";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { MagicEditor } from "./MagicEditor.tsx";
+import { useAiStatus } from "../ai/status.ts";
+import { showSetup, useSetup } from "../onboarding/Onboarding.tsx";
 import "./magic.css";
 
 const EXAMPLES = ["show my VPN connection status", "weather in Lisbon this week", "how full is my disk", "my open pull requests on GitHub", "a 25 minute focus timer"];
@@ -193,13 +195,27 @@ function useNow(every: number): number {
 
 // ── empty: the request ──────────────────────────────────
 
+/** The core's error for a run without a provider (ai/service.ts AiNotConfigured): the setup callout says it better. */
+const NO_PROVIDER = /^No AI provider is set up/;
+
 function PromptPane({ focused, error, initial, onSubmit }: { focused: boolean; error?: string; initial: string; onSubmit: (p: string) => void }) {
   const [text, setText] = useState(initial);
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (focused) ref.current?.focus();
   }, [focused]);
-  const submit = () => text.trim() && onSubmit(text.trim());
+  // Without a provider, asking opens the AI step; the request runs once it's done.
+  const ai = useAiStatus();
+  const setup = useSetup();
+  const needsAi = !!ai && !ai.ready;
+  const [pending, setPending] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pending || setup) return;
+    setPending(null);
+    if (ai?.ready) onSubmit(pending);
+  }, [pending, setup, ai?.ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ask = (p: string) => (needsAi ? (showSetup(["ai"]), setPending(p)) : onSubmit(p));
+  const submit = () => text.trim() && ask(text.trim());
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -220,10 +236,24 @@ function PromptPane({ focused, error, initial, onSubmit }: { focused: boolean; e
           onKeyDown={onKey}
           spellCheck={false}
         />
-        {error && <div className="magic-error-inline">{error}</div>}
+        {error && !NO_PROVIDER.test(error) && <div className="magic-error-inline">{error}</div>}
+        {needsAi && (
+          <Callout
+            compact
+            tone="accent"
+            icon="sparkles"
+            actions={
+              <Button size="sm" onClick={() => showSetup(["ai"])}>
+                Set Up AI…
+              </Button>
+            }
+          >
+            An AI model builds widgets. Connect Anthropic or OpenAI first.
+          </Callout>
+        )}
         <div className="magic-examples">
           {EXAMPLES.map((x) => (
-            <button key={x} className="magic-chip" onClick={() => onSubmit(x)}>
+            <button key={x} className="magic-chip" onClick={() => ask(x)}>
               {x}
             </button>
           ))}

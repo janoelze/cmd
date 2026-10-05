@@ -25,6 +25,7 @@ import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
 import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } from "./feedback.ts";
 import { claimWhatsNew } from "./whats-new.ts";
+import { claimOnboarding, recordOnboarding } from "./onboarding.ts";
 import { ensureKeybindingsFile, loadKeybindings, resetKeybindings, watchKeybindings, writeKeybinding, type KeybindingsSnapshot } from "./keybindings.ts";
 
 // Loaded after launch: the updater isn't needed to show the first window.
@@ -110,7 +111,7 @@ if (!process.env.CMD_HOME && !devBuild && !fs.existsSync(uiData) && fs.existsSyn
     fs.renameSync(legacyUiData, uiData);
   } catch {}
 }
-// Before Electron creates it: an existing dir means an existing user (whats-new.ts).
+// Before Electron creates it: an existing dir means an existing user (whats-new.ts, onboarding.ts).
 const hadUiData = fs.existsSync(uiData);
 app.setPath("userData", uiData);
 
@@ -578,6 +579,8 @@ ipcMain.handle("app-info", async () => ({
 }));
 ipcMain.handle("feedback-status", () => feedbackStatus(devBuild));
 ipcMain.handle("whats-new", () => claimWhatsNew(uiData, app.getVersion(), hadUiData, devBuild));
+ipcMain.handle("onboarding", () => claimOnboarding(uiData, hadUiData));
+ipcMain.on("onboarding-seen", (_e, ids: unknown) => Array.isArray(ids) && recordOnboarding(uiData, ids.filter((x): x is string => typeof x === "string")));
 ipcMain.handle("send-feedback", (_e, r: FeedbackRequest) => sendFeedback(r, crashContext()));
 ipcMain.on("open-settings", (_e, p: string) => {
   if (!fs.existsSync(p)) {

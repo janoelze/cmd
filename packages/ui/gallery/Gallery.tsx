@@ -537,9 +537,10 @@ function FieldsPage() {
           <NumberField value={3} disabled onChange={() => {}} />
         </Row>
       </Spec>
-      <Spec title="SecretField" code="<SecretField set hint onSave>" note="Never shows the secret: set, it shows its last characters with Change and Remove.">
+      <Spec title="SecretField" code="<SecretField set hint onSave>" note="Never shows the secret: set, it shows its last characters with Change and Remove. An onSave that returns a promise is waited for (a key being checked); a rejected one keeps what was typed.">
         <Row>
           <SecretField set={secret} hint="…f3a9" placeholder="sk-ant-…" onSave={(v) => setSecret(v != null)} />
+          <SecretField set={false} placeholder="Any key but “bad”" onSave={(v) => new Promise((ok, fail) => setTimeout(() => (v === "bad" ? fail(new Error("refused")) : ok(null)), 800))} />
         </Row>
       </Spec>
     </>

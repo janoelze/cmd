@@ -219,7 +219,7 @@ export class AiService extends EventEmitter<{ updated: [AiStatus] }> {
       this.#remember(provider, k, list);
       log.info(`${provider} key added`, { models: list.length });
     } catch (e) {
-      if (e instanceof KeyRejected) throw new Error(`${AI_PROVIDERS[provider].title} didn't accept this key. Check that you copied all of it.`);
+      if (e instanceof KeyRejected) throw new Error(`${AI_PROVIDERS[provider].title} didn't accept this key.`);
       log.warn(`could not check the ${provider} key, storing it unchecked: ${(e as Error).message}`);
       this.#seen[provider] = hashKey(k);
       this.#state[provider] = { state: "unchecked", error: `Couldn't reach ${AI_PROVIDERS[provider].title} to check the key.` };
@@ -277,7 +277,7 @@ export class AiService extends EventEmitter<{ updated: [AiStatus] }> {
   #reject(p: AiProvider): void {
     if (this.#state[p]?.state === "rejected") return;
     log.warn(`${p} refused the stored key`);
-    this.#state[p] = { state: "rejected", error: `${AI_PROVIDERS[p].title} didn't accept the key. It may have been revoked; add a new one.` };
+    this.#state[p] = { state: "rejected", error: `${AI_PROVIDERS[p].title} no longer accepts this key.` };
     delete this.#cache[p];
     this.#writeCache();
     this.#emit();

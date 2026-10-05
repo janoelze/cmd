@@ -10,6 +10,7 @@ import type { UpdateStatus } from "../main/updater.ts";
 import type { CrashStatus } from "../main/crash.ts";
 import type { FeedbackRequest, FeedbackStatus } from "../main/feedback.ts";
 import type { WhatsNewClaim } from "../main/whats-new.ts";
+import type { OnboardingClaim } from "../main/onboarding.ts";
 import type { AppProcess } from "../main/metrics.ts";
 
 export interface AppInfo {
@@ -135,6 +136,10 @@ const api = {
   sendFeedback: (r: FeedbackRequest): Promise<void> => ipcRenderer.invoke("send-feedback", r),
   /** After an update, the first app window gets the version to show What's New since (main/whats-new.ts). */
   whatsNew: (): Promise<WhatsNewClaim> => ipcRenderer.invoke("whats-new"),
+  /** The first app window after a launch gets the onboarding steps already shown (main/onboarding.ts). */
+  onboarding: (): Promise<OnboardingClaim | null> => ipcRenderer.invoke("onboarding"),
+  /** Onboarding steps shown (done or skipped): not shown again at launch. */
+  onboardingSeen: (ids: string[]) => ipcRenderer.send("onboarding-seen", ids),
   closeWindow: () => ipcRenderer.send("close-window"),
   /** Copy / Select All natively in the focused frame, or in a browser window's page by its WebContents id (main/index.ts). */
   editNative: (op: "copy" | "selectAll", guestId?: number) => ipcRenderer.send("edit-native", op, guestId),

@@ -7,13 +7,16 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  MAGIC_PROVIDERS,
+  AI_PROVIDER_IDS,
+  AI_PROVIDERS,
+  AUTO_MODEL,
   SECRETS,
   SETTINGS_SCHEMA,
   isSecretKey,
   settingTitle,
-  type MagicModel,
-  type MagicProvider,
+  type AiModel,
+  type AiProvider,
+  type AiTier,
   type SecretDef,
   type SecretKey,
   type SecretsStatus,
@@ -29,6 +32,8 @@ import { acceleratorOf, usableShortcut, useKeybindings } from "../keybindings.ts
 import { cmd } from "../bridge.ts";
 import { Button, Callout, EmptyState, FormRow, FormSection, IconButton, NumberField, ResetButton, SearchField, SecretField, Segmented, Select, Spinner, Switch, TextField, Toast } from "@cmd/ui";
 import { useSettings } from "./useSettings.ts";
+import { AiKeyRow, AiProviderChoice } from "../ai/Providers.tsx";
+import { useAiStatus } from "../ai/status.ts";
 import { About } from "./About.tsx";
 import { Remote } from "./Remote.tsx";
 import { AgentHooks } from "./AgentHooks.tsx";
@@ -170,7 +175,8 @@ export function SettingsWindow() {
     body = (
       <>
         {p.sections.map((s, i) => {
-          const items = s.items.filter((it: Item) => itemShown(it, snap.settings));
+          const items = s.items.filter((it: Item) => itemShown(it, snap.settings, secrets));
+          if (!items.length) return null;
           const section = (
             <FormSection key={s.title ?? i} title={s.title}>
               {items.map((it) => (
@@ -243,7 +249,13 @@ export function SettingsWindow() {
   );
 }
 
+/** A provider's key row (checked with the provider), by its secret. */
+const aiKeyOf = (k: ItemKey): AiProvider | undefined => AI_PROVIDER_IDS.find((p) => AI_PROVIDERS[p].keySecret === k);
+
 function ItemRow({ k, ctx }: { k: ItemKey; ctx: RowContext }) {
+  const aiKey = aiKeyOf(k);
+  if (aiKey) return <AiKeyRow provider={aiKey} />;
+  if (k === "ai.provider") return <AiProviderChoice />;
   if (isSecretKey(k)) {
     const def: SecretDef = SECRETS[k];
     const status = ctx.secrets?.[k];
@@ -276,8 +288,8 @@ function SettingRow({ k, ctx }: { k: SettingKey; ctx: RowContext }) {
   const def: SettingDef = SETTINGS_SCHEMA[k];
   const value = ctx.snap.settings[k];
   const onChange = (v: unknown) => ctx.save(k, v);
-  if (def.type === "string" && def.control === "model" && def.provider)
-    return <ModelRow k={k} provider={def.provider} value={value as string} ctx={ctx} />;
+  if (def.type === "string" && def.control === "model" && def.provider && def.tier)
+    return <ModelRow k={k} provider={def.provider} tier={def.tier} value={value as string} ctx={ctx} />;
 
   let control: ReactNode;
   if (def.type === "boolean") control = <Switch checked={value as boolean} onChange={onChange} label={settingTitle(k)} />;
@@ -304,38 +316,43 @@ function SettingRow({ k, ctx }: { k: SettingKey; ctx: RowContext }) {
 }
 
 /**
- * A model popup: the models the provider offers to the user's key
- * (magic.models), newest first, listed again when the key changes. A value the
- * list doesn't have stays selectable, marked, so a stale choice is visible
- * rather than silently replaced. What it's waiting for goes under the description.
+ * A model popup: Auto first (naming what it picks now), then the models the
+ * provider offers to the user's key (ai.models), newest first, listed again
+ * when the key changes. A value the list doesn't have stays selectable,
+ * marked, so a stale choice is visible rather than silently replaced.
  */
-function ModelRow(p: { k: SettingKey; provider: MagicProvider; value: string; ctx: RowContext }) {
-  const key = p.ctx.secrets?.[MAGIC_PROVIDERS[p.provider].keySecret];
-  const s = useModels(p.provider, key?.set, key?.hint);
+function ModelRow(p: { k: SettingKey; provider: AiProvider; tier: AiTier; value: string; ctx: RowContext }) {
+  const ai = useAiStatus();
+  const st = ai?.providers[p.provider];
+  const s = useModels(p.provider, st?.key.set, st?.key.hint);
   const list = s.models ?? [];
-  const options = list.map((m) => m.id);
-  const labels: Record<string, string> = Object.fromEntries(list.map((m) => [m.id, m.name]));
-  if (!options.includes(p.value)) {
-    options.unshift(p.value);
-    labels[p.value] = s.models ? `${p.value} (not available to this key)` : p.value;
+  const value = p.value.trim() || AUTO_MODEL;
+  const current = st?.models?.[p.tier];
+  const options = [AUTO_MODEL, ...list.map((m) => m.id)];
+  const labels: Record<string, string> = {
+    [AUTO_MODEL]: current?.auto ? `Auto (${current.name})` : "Auto (newest)",
+    ...Object.fromEntries(list.map((m) => [m.id, m.name])),
+  };
+  if (!options.includes(value)) {
+    options.splice(1, 0, value);
+    labels[value] = s.models ? `${value} (not available to this key)` : (current?.name ?? value);
   }
-  const note = !key?.set ? "Add the API key above to choose a model." : s.loading && !s.models ? "Loading models…" : s.error;
+  // A refused key says so on its own row.
+  const note = st?.state === "rejected" ? null : s.loading && !s.models ? "Loading models…" : s.error;
   return (
     <FormRow {...settingText(p.k, p.ctx)} note={note && <span className="sw-model-note">{note}</span>} noteTone={!!s.error ? "danger" : "accent"}>
       <span className="sw-model">
-        <span data-tip={p.value}>
-          <Select value={p.value} options={options} labels={labels} disabled={!s.models} onChange={(v) => p.ctx.save(p.k, v)} />
+        <span data-tip={current?.id}>
+          <Select value={value} options={options} labels={labels} onChange={(v) => p.ctx.save(p.k, v)} />
         </span>
-        {key?.set && (
-          <IconButton variant="default" icon="arrow.clockwise" iconSize={10} label="List the Models Again" disabled={s.loading} onClick={() => s.load(true)} />
-        )}
+        <IconButton variant="default" icon="arrow.clockwise" iconSize={10} label="List the Models Again" disabled={s.loading} onClick={() => s.load(true)} />
       </span>
     </FormRow>
   );
 }
 
-function useModels(provider: MagicProvider, keySet: boolean | undefined, keyHint: string | undefined) {
-  const [models, setModels] = useState<MagicModel[] | null>(null);
+function useModels(provider: AiProvider, keySet: boolean | undefined, keyHint: string | undefined) {
+  const [models, setModels] = useState<AiModel[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const seq = useRef(0);
@@ -344,7 +361,7 @@ function useModels(provider: MagicProvider, keySet: boolean | undefined, keyHint
     setError(null);
     if (!keySet) return (setModels(null), setLoading(false));
     setLoading(true);
-    cmd.call("magic.models", { provider, refresh }).then(
+    cmd.call("ai.models", { provider, refresh }).then(
       (list) => n === seq.current && (setModels(list), setLoading(false)),
       (e: Error) => n === seq.current && (setModels(null), setError(e.message), setLoading(false)),
     );

@@ -408,6 +408,8 @@
 .ui-stepper button:disabled { opacity: 0.3; }
 
 .ui-secret { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.ui-secret[data-fill] { width: 100%; }
+.ui-secret[data-fill] .ui-secret-set { flex: 1; }
 .ui-secret-set { margin-right: 4px; font: var(--text-md) var(--font-mono); letter-spacing: 0.04em; color: var(--text-dim); }
 
 /* ── status ── */

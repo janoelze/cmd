@@ -116,6 +116,24 @@ const visualTiles = async () => {
 };
 
 await win.waitForSelector(".sidebar-status");
+// First launch: the onboarding sheet, Welcome then the AI step; without a key only "Set Up Later" moves on.
+{
+  await win.waitForSelector(".onboarding");
+  check((await win.locator(".onboarding .ob-title").textContent()) === "Welcome to cmd", "a new install opens onboarding at Welcome");
+  await win.locator(".onboarding button", { hasText: "Get Started" }).click();
+  await win.waitForSelector(".onboarding .ob-title:has-text('Connect an AI provider')");
+  await win.screenshot({ path: path.join(shots, "0-onboarding-ai.png") });
+  const titles = await win.locator(".onboarding .ui-row-title").allTextContents();
+  check(titles.includes("Anthropic") && titles.includes("OpenAI") && (await win.locator(".onboarding button", { hasText: "Done" }).isDisabled()), "the AI step lists the providers, and Done waits for a key");
+  await win.locator(".onboarding button", { hasText: "Set Up Later" }).click();
+  await win.waitForSelector(".onboarding", { state: "detached" });
+  let seen = "";
+  for (let i = 0; i < 20 && seen !== "welcome,ai"; i++) {
+    await win.waitForTimeout(50);
+    seen = fs.existsSync(path.join(home, "ui", "onboarding.json")) ? JSON.parse(fs.readFileSync(path.join(home, "ui", "onboarding.json"), "utf8")).seen.join() : "";
+  }
+  check(seen === "welcome,ai", `the steps shown are recorded, so they don't open again (${seen})`);
+}
 await win.screenshot({ path: path.join(shots, "1-empty.png") });
 {
   // The sidebar footer and the main status bar share one bottom row: same top, same height,
@@ -873,34 +891,28 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
   await sw.waitForSelector(".sw-nav-item");
   const pages = await sw.locator(".sw-nav-label").allTextContents();
-  check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "Agents", "Magic Widgets", "Keyboard Shortcuts", "About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
+  check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "Agents", "AI", "Magic Widgets", "Keyboard Shortcuts", "About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
 
-  // Magic Widgets: the chosen provider's API key above its model; keys are stored outside settings.json.
-  await sw.locator(".sw-nav-item", { hasText: "Magic Widgets" }).click();
-  await sw.waitForTimeout(300);
+  // AI: a row per provider, models only once it has a key. Keys typed here are
+  // checked with the provider first; this one goes in as `cmd settings secret`
+  // does, so the run needs no network. Stored outside settings.json, shown as a hint.
+  await sw.locator(".sw-nav-item", { has: sw.getByText("AI", { exact: true }) }).click();
+  await sw.waitForSelector(".ui-row-title:has-text('Anthropic')");
   const rowTitles = () => sw.locator(".ui-row-title").allTextContents();
   let titles = await rowTitles();
-  const notes = await sw.locator(".sw-model-note").allTextContents();
-  check(
-    titles.indexOf("Anthropic API key") === titles.indexOf("Anthropic model") - 1 && !titles.includes("OpenAI API key") && notes.length === 1 && notes[0].includes("Add the API key"),
-    "Magic Widgets shows the chosen provider's API key above its model, and the model waits for the key",
-  );
-  await sw.locator(".ui-row", { hasText: "Provider" }).locator(".ui-seg button", { hasText: "OpenAI" }).click();
-  await sw.waitForSelector(".ui-row:has-text('OpenAI API key')");
-  titles = await rowTitles();
-  check(titles.includes("OpenAI model") && !titles.includes("Anthropic API key"), "switching the provider shows its key and model instead");
-  await sw.locator(".ui-row", { hasText: "OpenAI API key" }).locator("input[type=password]").fill("sk-e2e-not-a-real-key-1234");
-  await sw.keyboard.press("Enter");
-  await sw.waitForTimeout(400);
+  check(titles.includes("Anthropic") && titles.includes("OpenAI") && !titles.includes("Model"), `AI lists the providers, and no models before a key (${titles.join(", ")})`);
   const rpc = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
-  const keyStatus = (await rpc("secrets.status", {}))["magic.openai.apiKey"];
+  await rpc("secrets.set", { key: "ai.openai.apiKey", value: "sk-e2e-not-a-real-key-1234" });
+  await sw.waitForSelector(".ui-secret-set");
+  titles = await rowTitles();
+  const keyStatus = (await rpc("secrets.status", {}))["ai.openai.apiKey"];
   const settingsFile = fs.readFileSync(path.join(home, "settings.json"), "utf8");
   check(
-    keyStatus.set && keyStatus.hint === "…1234" && (await sw.locator(".ui-secret-set").count()) === 1 && !settingsFile.includes("sk-e2e") && fs.existsSync(path.join(home, "secrets.json")),
-    "an API key typed in Settings is stored outside settings.json and shown only as a hint",
+    keyStatus.set && keyStatus.hint === "…1234" && (await sw.locator(".ui-secret-set").textContent()) === "••••1234" && !settingsFile.includes("sk-e2e") && fs.existsSync(path.join(home, "secrets.json")),
+    "an API key is stored outside settings.json and shown only as a hint",
   );
-  await rpc("secrets.set", { key: "magic.openai.apiKey", value: null });
-  await rpc("settings.reset", { key: "magic.provider" });
+  check(titles.includes("Model") && titles.includes("Fast model"), "a key brings its provider's models");
+  await rpc("secrets.set", { key: "ai.openai.apiKey", value: null });
   await sw.screenshot({ path: path.join(shots, "5-settings-terminal.png") });
   const page = (name) => sw.locator(".sw-nav-item", { has: sw.getByText(name, { exact: true }) }).click();
   const row = (title) => sw.locator(".ui-row", { has: sw.locator(".ui-row-title", { hasText: title }) });

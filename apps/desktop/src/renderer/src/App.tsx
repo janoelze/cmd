@@ -41,6 +41,7 @@ import { requestCanvas } from "./components/WindowsView.tsx";
 import { Feedback } from "./components/Feedback.tsx";
 import { WidgetLibrary } from "./components/WidgetLibrary.tsx";
 import { APP_VERSION, RELEASES, releasesSince, WhatsNew } from "./components/WhatsNew.tsx";
+import { closeSetup, Onboarding, showSetup, stepsAtLaunch, useSetup } from "./onboarding/Onboarding.tsx";
 import { compareVersions, type Release } from "../../shared/changelog.ts";
 import { PairSheet, useRemoteNotifications } from "./components/Remote.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
@@ -123,6 +124,13 @@ export function App() {
   const [library, setLibrary] = useState(false);
   /** The releases the What's New sheet shows, when it's open. */
   const [whatsNew, setWhatsNew] = useState<Release[] | null>(null);
+  const setup = useSetup();
+  /** What's New waits for onboarding to close. */
+  const whatsNewLater = useRef<Release[] | null>(null);
+  const endSetup = () => {
+    closeSetup();
+    if (whatsNewLater.current) setWhatsNew(whatsNewLater.current), (whatsNewLater.current = null);
+  };
   /** Space pickers (open/switch, move a window, rename); see spaces.tsx. */
   const [picker, setPicker] = useState<Picker | null>(null);
 
@@ -311,6 +319,7 @@ export function App() {
   };
   const handlers: Record<CommandId, () => void> = {
     "app.settings": () => cmd.openSettings(),
+    "app.setup": () => (setPalette(false), showSetup()),
     "app.checkUpdates": () => cmd.checkForUpdates(),
     "app.restartCore": () => void restartCore(),
     "app.remoteAccess": () => cmd.openSettings("remote"),
@@ -333,6 +342,7 @@ export function App() {
     "file.close": () => {
       // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
       if (feedback) setFeedback(false);
+      else if (setup) endSetup();
       else if (library) setLibrary(false);
       else if (whatsNew) setWhatsNew(null);
       else if (picker) setPicker(null);
@@ -423,11 +433,13 @@ export function App() {
 
   useEffect(() => cmd.onCommand(run), [run]);
   useEffect(() => cmd.onOpenUrl(openLink), []);
-  // After an update, once, in the first window: what changed since the version the app last ran as.
+  // Once, in the first window after a launch: onboarding steps this Mac hasn't
+  // seen, then (after an update) what changed since the version it last ran as.
   useEffect(() => {
-    void cmd.whatsNew().then((claim) => {
+    void Promise.all([cmd.onboarding().then(stepsAtLaunch), cmd.whatsNew()]).then(([steps, claim]) => {
       const since = claim && releasesSince(claim.after);
-      if (since?.length) setWhatsNew(since);
+      if (steps.length) (whatsNewLater.current = since?.length ? since : null), showSetup(steps);
+      else if (since?.length) setWhatsNew(since);
     });
   }, []);
   // `open` in a terminal: follow it, unless it came from another Space while this window is in the background.
@@ -698,6 +710,7 @@ export function App() {
       {library && <WidgetLibrary onClose={() => setLibrary(false)} />}
       <Toaster />
       {feedback && <Feedback onClose={() => setFeedback(false)} />}
+      {setup && <Onboarding key={setup.join()} ids={setup} onClose={endSetup} />}
       {whatsNew && <WhatsNew releases={whatsNew} onClose={() => setWhatsNew(null)} onLink={(url) => (setWhatsNew(null), openLink(url))} />}
       {all.pairRequests[0] && <PairSheet key={all.pairRequests[0].requestId} request={all.pairRequests[0]} />}
     </div>

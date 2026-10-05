@@ -29,7 +29,7 @@ cmd.onStatus(async (status) => {
   connected = status === "connected";
   if (connected) {
     try {
-      snapshot = (await cmd.call("events.subscribe", { types: ["settings.updated", "search.status", "secrets.updated", "remote.updated"] })).settings;
+      snapshot = (await cmd.call("events.subscribe", { types: ["settings.updated", "search.status", "secrets.updated", "remote.updated", "ai.updated"] })).settings;
       applyThemeSettings(snapshot.settings);
       search = await cmd.call("search.status", {});
       secrets = await cmd.call("secrets.status", {});

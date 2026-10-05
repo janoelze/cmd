@@ -4,11 +4,11 @@
 // once (test/settings-layout.test.ts); one that isn't still gets a row, under
 // "Other" on the last settings page.
 
-import { SECRETS, SETTINGS_SCHEMA, type SecretKey, type SettingKey, type Settings } from "@cmd/protocol";
+import { SECRETS, SETTINGS_SCHEMA, type AiProvider, type SecretKey, type SecretsStatus, type SettingKey, type Settings } from "@cmd/protocol";
 
 export type ItemKey = SettingKey | SecretKey;
-/** A row; `when` hides it unless it matters for the current settings. */
-export type Item = ItemKey | { key: ItemKey; when: (s: Settings) => boolean };
+/** A row; `when` hides it unless it matters for the current settings and keys. */
+export type Item = ItemKey | { key: ItemKey; when: (s: Settings, secrets: SecretsStatus | null) => boolean };
 export interface Section {
   title?: string;
   items: Item[];
@@ -21,7 +21,9 @@ export interface Page {
   sections: Section[];
 }
 
-const provider = (p: Settings["magic.provider"]) => (s: Settings) => s["magic.provider"] === p;
+/** A provider's model rows matter once it has a key; the choice between providers once both do. */
+const hasKey = (p: AiProvider) => (_: Settings, k: SecretsStatus | null) => !!k?.[`ai.${p}.apiKey`].set;
+const bothKeys = (s: Settings, k: SecretsStatus | null) => hasKey("anthropic")(s, k) && hasKey("openai")(s, k);
 
 export const SETTINGS_PAGES: Page[] = [
   {
@@ -101,20 +103,32 @@ export const SETTINGS_PAGES: Page[] = [
     ],
   },
   {
+    id: "ai",
+    title: "AI",
+    icon: "brain",
+    sections: [
+      { title: "Providers", items: ["ai.anthropic.apiKey", "ai.openai.apiKey", { key: "ai.provider", when: bothKeys }] },
+      {
+        title: "Anthropic models",
+        items: [
+          { key: "ai.anthropic.model", when: hasKey("anthropic") },
+          { key: "ai.anthropic.fastModel", when: hasKey("anthropic") },
+        ],
+      },
+      {
+        title: "OpenAI models",
+        items: [
+          { key: "ai.openai.model", when: hasKey("openai") },
+          { key: "ai.openai.fastModel", when: hasKey("openai") },
+        ],
+      },
+    ],
+  },
+  {
     id: "magic",
     title: "Magic Widgets",
     icon: "wand.and.stars",
     sections: [
-      {
-        title: "Model",
-        items: [
-          "magic.provider",
-          { key: "magic.anthropic.apiKey", when: provider("anthropic") },
-          { key: "magic.anthropic.model", when: provider("anthropic") },
-          { key: "magic.openai.apiKey", when: provider("openai") },
-          { key: "magic.openai.model", when: provider("openai") },
-        ],
-      },
       { title: "While building", items: ["magic.explore", "magic.showSteps"] },
       { title: "Running widgets", items: ["magic.autoFix", "magic.deno"] },
     ],
@@ -125,7 +139,7 @@ export const SETTINGS_PAGES: Page[] = [
 export const PLACED_ELSEWHERE: readonly ItemKey[] = ["updates.mode", "diagnostics.crashReports", "diagnostics.usageStats"];
 
 export const itemKey = (it: Item): ItemKey => (typeof it === "string" ? it : it.key);
-export const itemShown = (it: Item, s: Settings) => typeof it === "string" || it.when(s);
+export const itemShown = (it: Item, s: Settings, secrets: SecretsStatus | null) => typeof it === "string" || it.when(s, secrets);
 
 /** Keys no page places: listed under "Other" so every setting stays reachable. */
 export function unplacedKeys(): ItemKey[] {

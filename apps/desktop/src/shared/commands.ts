@@ -20,6 +20,7 @@ const spec = <const T extends CommandSpec[]>(xs: T) => xs;
 
 export const COMMANDS = spec([
   { id: "app.settings", label: "Settings…", keys: ["Cmd+,"] },
+  { id: "app.setup", label: "Set Up cmd…" },
   { id: "app.checkUpdates", label: "Check for Updates…" },
   { id: "app.taskManager", label: "Task Manager" },
   { id: "app.restartCore", label: "Restart Core" },

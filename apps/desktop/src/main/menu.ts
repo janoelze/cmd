@@ -45,6 +45,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
       ...i("app.checkUpdates"),
       sep,
       ...i("app.settings"),
+      ...i("app.setup"),
       ...i("app.remoteAccess"),
       ...i("app.pairDevice"),
       sep,
@@ -78,7 +79,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("file.closeWindow"),
         sep,
         ...i("file.openSettingsFile"),
-        ...(mac ? [] : [sep, ...i("app.settings"), ...i("app.remoteAccess"), ...i("app.pairDevice"), sep, { role: "quit" as const }]),
+        ...(mac ? [] : [sep, ...i("app.settings"), ...i("app.setup"), ...i("app.remoteAccess"), ...i("app.pairDevice"), sep, { role: "quit" as const }]),
       ],
     },
     {
