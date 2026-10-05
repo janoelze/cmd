@@ -28,6 +28,7 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 15 | [Positioning and voice](15-positioning.md) | The story, the category (a software workbench), pillars, voice, copy bank, naming, visual direction |
 | 16 | [Widgets](16-widgets.md) | Widgets apart from windows: the Widget Library, Magic as how you make one, built-in widgets, how they stay windows underneath |
 | 17 | [AI providers and onboarding](17-ai.md) | One AI service for every feature: providers, tiers, models that pick themselves; the first-launch wizard |
+| 18 | [Agent activity data](18-agent-activity.md) | Capturing what agents do reliably: an event log per pane, one vocabulary across agents, state with causes, turns, discovered agent homes |
 
 ## Key findings
 1. **Nothing has to be invented for agent awareness.** Every tool in this space combines three things:
