@@ -48,7 +48,7 @@ Everything else (themes, the CLI, find in scrollback, inline images, notificatio
 
 ## Voice
 
-The product is calm, so the copy is calm.
+The product is calm, so the copy is calm. For text inside the app (notifications, toasts, tooltips, menus, settings, errors), the `copywriting` skill (`.claude/skills/copywriting/SKILL.md`) turns this voice into rules per surface: friendly and compact.
 
 - **Plain and concrete.** Say what happens: "the agent that is waiting is on top", not "intelligent attention management".
 - **First-hand.** Written by someone who uses it all day. Examples come from real work: CI runs, a deploy, a flaky test.
