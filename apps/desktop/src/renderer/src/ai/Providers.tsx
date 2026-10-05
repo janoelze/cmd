@@ -48,7 +48,7 @@ export function AiKeyRow({ provider, autoFocus, stacked }: { provider: AiProvide
       noteTone={note?.tone}
       stacked={stacked}
     >
-      <SecretField set={!!st?.key.set} hint={st?.key.hint} placeholder="Paste an API key" autoFocus={autoFocus} fill={stacked} live onSave={connect} />
+      <SecretField set={!!st?.key.set} hint={st?.key.hint} placeholder="Paste an API key" autoFocus={autoFocus} fill={stacked} size={stacked ? "lg" : undefined} live onSave={connect} />
     </FormRow>
   );
 }

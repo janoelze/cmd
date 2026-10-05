@@ -268,6 +268,7 @@ export function SecretField({
   fill,
   autoFocus,
   live,
+  size,
 }: {
   set: boolean;
   /** The last characters ("…abcd"), shown masked. */
@@ -280,6 +281,7 @@ export function SecretField({
   fill?: boolean;
   autoFocus?: boolean;
   live?: boolean;
+  size?: Size;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -328,6 +330,7 @@ export function SecretField({
       <TextField
         ref={ref}
         code
+        size={size}
         type="password"
         autoComplete="off"
         autoFocus={autoFocus}
