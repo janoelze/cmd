@@ -2,6 +2,23 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.14.2 — 2026-10-06
+
+### New
+
+- **Resize windows from the keyboard.** ⌥⌘+ and ⌥⌘− make the selected window wider or narrower.
+
+### Improved
+
+- API keys are checked as soon as you paste them, with Get a Key right beside the provider.
+- Onboarding, Feedback, What's New and the Widget Library have a cleaner look that matches your window settings.
+- Text fields are roomier, with clearer edges.
+- Agent notifications no longer end with how long the turn took.
+
+### Fixed
+
+- The space switcher says "Connecting…" while cmd starts, instead of showing an empty menu.
+
 ## 0.14.1 — 2026-10-05
 
 ### New
