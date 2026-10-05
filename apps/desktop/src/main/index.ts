@@ -588,13 +588,13 @@ ipcMain.on("task-manager", () => openTaskManager());
 ipcMain.on("show-pane", (_e, spaceId: string, paneId: string) => spaces.show(spaceId, { select: paneId }, appWindows()[0] ?? null));
 ipcMain.on("install-update", () => void updater().then((u) => u.installUpdate()));
 ipcMain.handle("restart-core", () => restartCore());
-// Window → Resize to 1500 × 900: an exact content size, out of full screen, centred on its display.
+// Window → Resize to 1500 × 900: the whole window at that size, out of full screen, centred on its display.
 ipcMain.on("set-window-size", (e, width: number, height: number) => {
   const win = winOf(e);
   if (!win) return;
   if (win.isFullScreen()) win.setFullScreen(false);
   if (win.isMaximized()) win.unmaximize();
-  win.setContentSize(width, height);
+  win.setSize(width, height);
   win.center();
 });
 // The preload connects where main decided (dev builds use their own core).
