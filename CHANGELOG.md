@@ -2,6 +2,16 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.13.3 — 2026-10-05
+
+### Improved
+
+- When cmd can't start, it offers to try again, check for updates, or show the log.
+
+### Fixed
+
+- Terminals and agents saved by an older version can no longer stop cmd from starting.
+
 ## 0.13.2 — 2026-10-05
 
 ### Fixed
