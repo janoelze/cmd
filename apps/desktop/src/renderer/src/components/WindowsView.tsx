@@ -190,7 +190,7 @@ export function WindowsView(p: Props) {
         ? underSidebars(stripLayout(ids, pxWidths, { w: stripW, h: vp.h }, spacing), under)
         : arranged
           ? canvasLayout(arranged.rects)
-          : focusLayout(ids, shownRef.current, vp);
+          : focusLayout(ids, shownRef.current, vp, spacing);
   // In the strip's own coordinates (without the left sidebar's shift), like its offsets.
   const stripSlots: Slot[] = ids.map((id) => ({ x: lay.rects.get(id)!.x - shift, w: lay.rects.get(id)!.w }));
   const stripTotal = lay.contentWidth - (mode === "strip" ? under.left + under.right : 0);

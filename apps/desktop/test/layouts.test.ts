@@ -60,10 +60,11 @@ describe("strip layout", () => {
 
 describe("focus layout", () => {
   it("shows only the selected window, full size, without chrome; others keep their size", () => {
-    const l = focusLayout(["a", "b"], "b", vp);
+    const l = focusLayout(["a", "b"], "b", vp, even);
     expect(l.hidden).toEqual(new Set(["a"]));
-    expect(l.rects.get("a")).toEqual({ x: 0, y: 0, w: 1000, h: 600 });
-    expect(l.chrome).toBe(false);
+    // Maximized, but still a window: the usual margins and its title bar.
+    expect(l.rects.get("a")).toEqual({ x: 8, y: 8, w: 984, h: 584 });
+    expect(l.chrome).toBe(true);
     expect(l.dropIndex(1, 1)).toBe(-1);
   });
 });

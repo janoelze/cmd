@@ -1,17 +1,15 @@
 // The footer: one bar across the app window's bottom (docs/21-sidebars.md). The
-// core's health on the left, then the selected window's usage (all its title
-// fields in focus mode); the app's actions on the right. View modes are in the top bar.
+// core's health on the left, then the selected window's usage; the app's actions
+// on the right. View modes are in the top bar.
 
 import type { Pane } from "@cmd/protocol";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
-import { formatBytes, usageLabel, windowIdOf, type SidebarRow } from "../model.ts";
+import { formatBytes, usageLabel } from "../model.ts";
 import { useStoreValue } from "../store.ts";
-import { DirtyDot, Mark, Slot } from "./Slot.tsx";
-import { useFields } from "./TileTitle.tsx";
-import type { ViewMode } from "./MainView.tsx";
+import { Slot } from "./Slot.tsx";
 import { ICON } from "./Symbol.tsx";
-import { RemoteBadge, RemoteIndicator } from "./Remote.tsx";
+import { RemoteIndicator } from "./Remote.tsx";
 import { CoreStatus } from "./CoreStatus.tsx";
 import { IconButton, useTooltip } from "@cmd/ui";
 import { useSyncExternalStore } from "react";
@@ -42,8 +40,6 @@ export function useFooterCentre(): HTMLElement | null {
 }
 
 interface Props {
-  mode: ViewMode;
-  row: SidebarRow | undefined;
   pane: Pane | undefined;
   run: (id: CommandId) => void;
   /** The core's connection, for its health at the left end. */
@@ -51,11 +47,10 @@ interface Props {
   error?: string;
 }
 
-export function StatusBar({ mode, row, pane, run, connected, error }: Props) {
+export function StatusBar({ pane, run, connected, error }: Props) {
   countRender("StatusBar");
   const keys = useKeybindings();
   const showUsage = useStoreValue((s) => s.settings.settings["ui.showResources"]);
-  const f = useFields(row);
   const usage = pane?.usage ?? null;
   const usageTip = useTooltip(() => usage && <UsageTip usage={usage} />);
   const key = (id: CommandId) => prettyAccelerator(keys.bindings[id]?.[0]);
@@ -66,21 +61,9 @@ export function StatusBar({ mode, row, pane, run, connected, error }: Props) {
       <div className="statusbar-core">
         <CoreStatus connected={connected} error={error} />
       </div>
-      {/* The title bar and sidebar already show the window's fields; the status bar adds
-          what they don't: the processes' memory and CPU. Focus mode has no title bar,
-          so there the status bar stands in for it. */}
+      {/* The title bar and the Navigator already show the window's fields (focus mode
+          too); the footer adds what they don't: the processes' memory and CPU. */}
       <div className="statusbar-session">
-        {mode === "focus" && f && (
-          <>
-            <Mark light={f.light} icon={f.icon} />
-            <Slot className="statusbar-name" value={{ text: f.name }} fade />
-            <DirtyDot on={!!f.dirty} />
-            <Slot className="statusbar-proc" value={f.kind ? { text: f.kind } : undefined} />
-            <Slot className="statusbar-path" value={f.place ? { text: f.place } : undefined} clipStart divider={!!f.kind} />
-            <Slot className="statusbar-detail" value={f.status} divider={!!(f.kind || f.place)} />
-            <RemoteBadge id={row ? windowIdOf(row) : null} />
-          </>
-        )}
         <span ref={showUsage && usage ? usageTip : undefined} className="statusbar-usage-tip">
           <Slot className="statusbar-usage" value={showUsage && usage ? { text: usageLabel(usage) ?? "", key: "usage" } : undefined} />
         </span>

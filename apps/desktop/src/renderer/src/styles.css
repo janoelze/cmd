@@ -512,13 +512,10 @@ kbd {
 .app.shadow-subtle .tile-frame { --drop: 0 2px 6px color-mix(in srgb, var(--shadow) 60%, transparent); }
 .app.shadow-strong .tile-frame { --drop: 0 8px 28px var(--shadow); }
 .tile.sel > .tile-frame, .tile.needs > .tile-frame { box-shadow: var(--ring), var(--drop); }
-.mode-focus .windows-track > .tile > .tile-frame { box-shadow: none; }
 
 /* ui.focusTitleBar: the selected window's title bar takes some of its outline colour. */
 .app.title-tint-subtle .tile.sel .tile-title { background: color-mix(in srgb, var(--ring-color) 8%, var(--bg-sidebar)); }
 .app.title-tint-strong .tile.sel .tile-title { background: color-mix(in srgb, var(--ring-color) 18%, var(--bg-sidebar)); }
-.app.title-tint-subtle .mode-focus .tile.sel .tile-title,
-.app.title-tint-strong .mode-focus .tile.sel .tile-title { background: var(--bg-sidebar); }
 .tile .term-well { padding-top: 6px; }
 .tile-title {
   flex: none;
@@ -706,10 +703,6 @@ kbd {
 .main.windows.dragging .xterm, .main.windows.resizing .xterm { pointer-events: none; }
 .main.windows.dragging, .main.windows.resizing { user-select: none; }
 .main.windows.resizing, .main.windows.resizing * { cursor: col-resize !important; }
-
-/* Focus mode: one window, edge to edge, no chrome. */
-.mode-focus .windows-track > .tile { border: 0; --window-radius: 0px; }
-.mode-focus .windows-track > .tile .term-well { padding-top: 8px; }
 
 /* Ghost slots while dragging: where windows can go. */
 .ghost-slot {

@@ -109,15 +109,16 @@ export function canvasLayout(rects: Map<string, Rect>): Layout {
   };
 }
 
-export function focusLayout(ids: string[], selected: string | null, vp: Viewport): Layout {
+/** Focus: one window, maximized but still a window (its margins, title bar and outline). */
+export function focusLayout(ids: string[], selected: string | null, vp: Viewport, sp: Spacing): Layout {
   const shown = ids.includes(selected ?? "") ? selected! : ids[0];
-  const full = { x: 0, y: 0, w: vp.w, h: vp.h };
+  const full = { x: sp.x, y: sp.y, w: Math.max(0, vp.w - 2 * sp.x), h: Math.max(0, vp.h - 2 * sp.y) };
   return {
     rects: new Map(ids.map((id) => [id, full])),
     hidden: new Set(ids.filter((id) => id !== shown)),
     dropIndex: () => -1,
     slots: [],
-    chrome: false,
+    chrome: true,
     resizable: false,
     contentWidth: 0,
   };

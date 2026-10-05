@@ -772,7 +772,7 @@ export function App() {
           />
         </div>
       </NavigatorContext.Provider>
-      <StatusBar mode={mode} row={currentRow} pane={current} run={run} connected={s.connected} error={s.error} />
+      <StatusBar pane={current} run={run} connected={s.connected} error={s.error} />
       {palette !== false && (
         <Palette
           items={paletteItems}
