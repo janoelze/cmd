@@ -227,9 +227,9 @@ export interface WindowTypeInfo {
 
 /** A widget in the Widget Library (docs/16-widgets.md): a built-in widget type, or one made with Magic. */
 export interface WidgetEntry {
-  /** "magic:<widget id>" for your widgets, "type:<kind>" for built-in ones, "example:<name>" for examples. */
+  /** "magic:<widget id>" for widgets made with Magic, "type:<kind>" for built-in widgets. */
   ref: string;
-  source: "builtin" | "yours" | "example";
+  source: "builtin" | "yours";
   /** The window kind that shows it. */
   kind: WindowKind;
   title: string;

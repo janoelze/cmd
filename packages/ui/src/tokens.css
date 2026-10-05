@@ -41,6 +41,8 @@
   --recess-edge: color-mix(in srgb, var(--scrim) 35%, transparent);
   --chip-fg: 70% 78%;
   --chip-bg: 30% 22% / 0.8;
+  /* Avatars (the Widget Library's cards): saturation and lightness of a full-colour tile, with hsl(var(--hue) …). */
+  --avatar: 58% 52%;
   /* Grouped lists (a Settings section): a faint fill and hairline. */
   --group-bg: color-mix(in srgb, var(--ink) 3.5%, transparent);
   --group-edge: color-mix(in srgb, var(--ink) 6%, transparent);

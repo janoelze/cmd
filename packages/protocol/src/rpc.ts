@@ -220,7 +220,7 @@ export interface Methods {
 
   /** The Widget Library (docs/16-widgets.md): built-in widgets, then yours by last use. */
   "widget.list": { params: {}; result: WidgetEntry[] };
-  /** Put a widget from the library on the desk (another window showing it, if one already does); an example is copied to your widgets first, once. */
+  /** Put a widget from the library on the desk (another window showing it, if one already does). */
   "widget.add": { params: Placement & { ref: string }; result: AppWindow };
   /** Name a widget made with Magic; the name sticks across changes. */
   "widget.rename": { params: { ref: string; title: string }; result: null };

@@ -63,6 +63,7 @@ const LIGHT_VARS: Readonly<Record<string, string>> = {
   "pane-edge": ink(10),
   "chip-fg": "55% 38%",
   "chip-bg": "60% 92%",
+  "avatar": "62% 56%",
   // The chosen segment is raised and white, as in macOS.
   "control-thumb": "var(--bg-elevated)",
   "control-thumb-shadow": "0 1px 2px rgb(0 0 0 / 0.14), 0 0 0 0.5px rgb(0 0 0 / 0.06)",

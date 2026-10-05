@@ -1,6 +1,6 @@
 # Widgets and the Widget Library
 
-> Status (2026-10-05), branch `widget-library`: built, phases 1–5: widgets apart from windows in the core; the library's protocol and CLI; the library sheet, the Widgets menu and the sidebar's Widgets section; Agent Activity and Live Diff; examples. Next: a store (see 14-magic-v2.md). It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
+> Status (2026-10-05), branch `widget-library`: built: widgets apart from windows in the core; the library's protocol and CLI; the library sheet, the Widgets menu and the sidebar's Widgets section; Agent Activity and Live Diff. Examples in the library were built and dropped (phase 5). Next: a store (see 14-magic-v2.md). It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
 
 Magic widgets are windows today, in the code and to the people using them. "New Magic Widget" sits in File next to New Terminal, closing one throws it away (after 30 days in `widgets/closed/`), and nothing ships with cmd except the ability to make one. This proposal makes widgets their own thing for people, while the code keeps treating them almost like windows.
 
@@ -38,7 +38,7 @@ Magic is the brand of making, so it appears wherever a widget is being made or w
 - the ✦ on **New Widget with Magic…** (⇧⌘M, the shortcut New Magic Widget has today), in the menu, the palette and the sidebar's +;
 - the library's own button, **✦ New Widget with Magic**, beside its search field (first a card in the grid; a button keeps making apart from finding);
 - the making window itself: the prompt field, the live steps, the view drawing itself in. It is unchanged; it already feels right;
-- a small ✦ on cards and title bars of widgets you made ("Made with Magic"), so built-in and examples read as "from cmd" and yours read as yours;
+- "Made with Magic" under the name of widgets you made in the library (a ✦ on their avatar was tried and dropped: it read as noise); their title bars keep the sparkle icon of the Magic type;
 - Edit Widget (⌘E) and Change (⌘L), which are Magic again: asking for a change.
 
 ### Entry points
@@ -65,13 +65,13 @@ The library is ⇧⌘L, as Xcode's Library is: L for Library. ⌥⌘M looks natu
 
 ### The library
 
-A sheet, like the palette or Settings, with a grid of cards: thumbnail (the latest revision's `shot.png`; built-ins ship one), title, one line of description.
+A sheet, like the palette or Settings, with a grid of tall cards, three to a row: an avatar top left (a built-in widget's icon, else the widget's initial, in a colour of its own from its name, like projects' chips in the sidebar), the name and where it comes from beside it ("Made with Magic" or "Built-in"), open space, and the description or what was asked for at the bottom. Screenshots (the latest revision's `shot.png`) are still listed (`WidgetEntry.shot`) but not shown: a hover preview could use them.
 
-- **Your Widgets**: by last use, with a mark on those already on this desk. New Widget with Magic is a button beside the search field, not a card among them.
+- **Your Widgets**: by last use. (A "Here" badge on widgets already on this desk was tried and dropped: unclear.) New Widget with Magic is a button beside the search field, not a card among them.
 - **Built-in**: Agent Activity, Live Diff, and more over time.
-- **Examples**: finished widgets to add and change: the Magic prompt's examples that work anywhere (weather, VPN, processes, Pomodoro, news, radio; not the terminal answer, nor the two tied to the prompt's sample project). Adding one copies it into Your Widgets (`widget.json` remembers `from: "example:<name>"`); adding it again shows that copy. Later the store. Built: `widgets/examples.ts`, refs `example:<name>`.
+- No **Examples** section. It was built (the Magic prompt's examples as widgets to add and change) and dropped: examples already live as the chips under the prompt when making a widget, and the library is for widgets you have.
 
-Clicking a card adds the widget to the current Space and closes the sheet; ⏎ in the search field adds the first match. A card's menu (right-click, or its … button) has Add to Desk, and for yours Rename…, Duplicate, Show in Finder and Delete…. Deleting a widget that is on the desk says its windows close too, closes them, then deletes (the core itself still refuses while a window shows it). The sheet asks the core for a fresh list when it opens; `widget.library` events keep it current. Built: `renderer/src/components/WidgetLibrary.tsx`.
+Clicking a card adds the widget to the current Space and closes the sheet; ⏎ in the search field adds the first match. A card's menu (right-click, or its … button) has Add to Space, and for yours Rename…, Duplicate, Show in Finder and Delete…. Deleting a widget that is on the desk says its windows close too, closes them, then deletes (the core itself still refuses while a window shows it). The sheet asks the core for a fresh list when it opens; `widget.library` events keep it current. Built: `renderer/src/components/WidgetLibrary.tsx`.
 
 ### Making a widget
 
@@ -117,7 +117,7 @@ What phase 1 settled in the core (`magic/service.ts`):
 
 Built-ins are React views from `@cmd/ui`, registered like the other window types, not widget folders. They need data the core pushes as it changes (`agent.updated`, `fs.changed`, `git.status`), and a folder widget's data.ts is a Deno process on a timer in a sandbox with no way to reach the core. Native views also look first-party, which built-ins should.
 
-The folder format reaches the library as **Examples**: adding one copies its folder into your widgets, where it is yours to change.
+The folder format reaches the library through the store, later (14-magic-v2.md, "Toward a store").
 
 ### First built-ins
 
@@ -134,7 +134,7 @@ Built in phase 2:
 
 - `WindowType.role` (`"window"` by default, `"widget"`) and `description`, the same in `WindowTypeInfo`. `magic`, `agents` and `diff` are widget types.
 - Refs: `magic:<widget id>` for widgets made with Magic, `type:<kind>` for built-in widgets.
-- `widget.list` → `WidgetEntry[]` (`{ ref, source: "builtin" | "yours", kind, title, description?, icon, shot?, createdAt?, usedAt?, windows }`): built-in widget types (every type with role `widget` but `magic`, which is the ✦ card), then yours by last use. Examples come in phase 5.
+- `widget.list` → `WidgetEntry[]` (`{ ref, source: "builtin" | "yours", kind, title, description?, icon, shot?, createdAt?, usedAt?, windows }`): built-in widget types (every type with role `widget` but `magic`, which is the New Widget with Magic button), then yours by last use.
 - `widget.add { ref, spaceId? | callerPaneId? }` → the new window. Refuses types that aren't widgets.
 - `widget.rename { ref, title }`: the name sticks (`named` in widget.json); changes and hand edits keep it instead of the manifest's title.
 - `widget.duplicate { ref }` → the new entry, titled "… copy": files, revisions and secrets copied.
@@ -156,7 +156,7 @@ One worktree per phase; each ends green.
 2. **Registry and protocol**, built: `role`/`description` on window types; `widget.*` methods and event; `cmd widget list/add`.
 3. **The library and the split**, built: the sheet, the Widgets menu, the sidebar's + and Widgets section, Remove from Desk and its toast, new labels in `shared/commands.ts`.
 4. **Built-ins**, built: Agent Activity, then Live Diff with `git.diff`.
-5. **Examples**, built, from the prompt's examples; the README and positioning. The changelog is written at release time (the changelog skill); a draft is below.
+5. **Examples**: built, then dropped (see The library). The changelog is written at release time (the changelog skill); a draft is below.
 
 ## Release notes (draft)
 
@@ -165,7 +165,7 @@ For whoever cuts the release with these changes in it; it passes `lintChangelog`
 ```markdown
 ### New
 
-- **Widget Library.** ⇧⌘L shows your widgets, the built-in ones and examples to start from. A widget you take off the desk stays there, ready to put back in any Space.
+- **Widget Library.** ⇧⌘L shows your widgets and the built-in ones. A widget you take off the desk stays there, ready to put back in any Space.
 - **Agent Activity.** A built-in widget with every agent at a glance: who waits for you, who is working and what just finished.
 - **Live Diff.** A built-in widget with the uncommitted changes in a project, updated as you work.
 

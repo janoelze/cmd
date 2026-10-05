@@ -352,7 +352,6 @@ export class Core {
     "widget.list": () => this.#widgets(),
     "widget.add": (p) => {
       const r = widgetRef(p.ref);
-      if (r.example) return this.#openWindow({ ...p, kind: "magic", input: { widgetId: this.magic.fromExample(r.example) } });
       if (!r.widgetId && this.windowTypes.get(r.kind)?.role !== "widget") throw new Error(`not a widget: ${p.ref}`);
       return this.#openWindow({ ...p, kind: r.kind, input: r.widgetId ? { widgetId: r.widgetId } : {} });
     },
@@ -565,18 +564,7 @@ export class Core {
       usedAt: e.usedAt,
       windows: e.windows,
     }));
-    const shown = new Map(yours.map((e) => [e.ref, e.windows]));
-    const examples = this.magic.examples().map((e): WidgetEntry => ({
-      ref: `example:${e.name}`,
-      source: "example",
-      kind: "magic",
-      title: e.title,
-      icon: magic.icon,
-      request: e.request,
-      // Its copy's windows: on the desk once added.
-      windows: e.widgetId ? (shown.get(`magic:${e.widgetId}`) ?? []) : [],
-    }));
-    return [...builtin, ...yours, ...examples];
+    return [...builtin, ...yours];
   }
 
   #libraryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -929,15 +917,15 @@ async function removeStaleSocket(sock: string): Promise<void> {
 
 export type { Methods };
 
-/** A Widget Library ref: "magic:<widget id>" (yours), "type:<kind>" (a built-in widget) or "example:<name>". */
-function widgetRef(ref: string): { kind: string; widgetId?: string; example?: string } {
-  const m = /^(magic|type|example):([\w-]+)$/.exec(ref);
+/** A Widget Library ref: "magic:<widget id>" (made with Magic) or "type:<kind>" (a built-in widget). */
+function widgetRef(ref: string): { kind: string; widgetId?: string } {
+  const m = /^(magic|type):([\w-]+)$/.exec(ref);
   if (!m) throw new Error(`not a widget: ${ref}`);
-  return m[1] === "magic" ? { kind: "magic", widgetId: m[2] } : m[1] === "example" ? { kind: "magic", example: m[2] } : { kind: m[2]! };
+  return m[1] === "magic" ? { kind: "magic", widgetId: m[2] } : { kind: m[2]! };
 }
 
 function magicRef(ref: string): string {
   const r = widgetRef(ref);
-  if (!r.widgetId) throw new Error(`built-in widgets and examples can't be renamed, duplicated or deleted (add an example to get your own copy): ${ref}`);
+  if (!r.widgetId) throw new Error(`built-in widgets can't be renamed, duplicated or deleted: ${ref}`);
   return r.widgetId;
 }

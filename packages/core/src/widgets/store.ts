@@ -42,8 +42,6 @@ export interface WidgetInfo {
   title: string;
   /** The person named it (widget.rename): changes keep the name instead of taking the manifest's title. */
   named?: boolean;
-  /** Where it came from, if not made with Magic here: "example:<name>". */
-  from?: string;
   /** The first request, then each change. */
   history: string[];
   /** The agent's closing words for the last build. */
@@ -288,7 +286,6 @@ export class WidgetStore {
     return {
       title: saved.title || (m.ok ? m.manifest.title : "") || "Widget",
       ...(saved.named ? { named: true } : {}),
-      ...(saved.from ? { from: saved.from } : {}),
       history: saved.history?.length ? saved.history : [revs[0]!.prompt],
       summary: saved.summary,
       createdAt: saved.createdAt ?? revs[0]!.at,

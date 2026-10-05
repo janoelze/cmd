@@ -42,7 +42,6 @@ import type { Workspace } from "./prompt.ts";
 import { sandboxAvailable, type SandboxMode } from "./sandbox.ts";
 import { runSource } from "./sources.ts";
 import { WidgetStore } from "../widgets/store.ts";
-import { copyExample, listExamples, type WidgetExample } from "../widgets/examples.ts";
 import { configValues, type WidgetManifest } from "../widgets/manifest.ts";
 import { denoVersion, describeDataError, findDeno, installDeno, runData, type DenoEnv } from "../widgets/deno.ts";
 import type { Previewer } from "../widgets/preview.ts";
@@ -792,26 +791,6 @@ export class MagicService {
     this.#reload(id, { revision: this.store.latest(s.widgetId)?.n });
     this.#watch(s.widgetId);
     this.#o.libraryChanged?.();
-  }
-
-  /** The examples the library offers, with the widget each was copied to (if it was). */
-  examples(): (WidgetExample & { widgetId?: string })[] {
-    const copies = new Map(this.store.ids().flatMap((id) => {
-      const from = this.store.info(id)?.from;
-      return from?.startsWith("example:") ? [[from.slice(8), id] as const] : [];
-    }));
-    return listExamples().map((e) => ({ ...e, widgetId: copies.get(e.name) }));
-  }
-
-  /** The widget an example was copied to; copied now if it wasn't (or that copy was deleted). */
-  fromExample(name: string): string {
-    const e = this.examples().find((x) => x.name === name);
-    if (!e) throw new Error(`no such example: ${name}`);
-    if (e.widgetId) return e.widgetId;
-    const id = randomUUID();
-    copyExample(this.store, name, id);
-    this.#o.libraryChanged?.();
-    return id;
   }
 
   /** Name a widget; the name sticks across changes and hand edits. */
