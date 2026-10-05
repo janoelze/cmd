@@ -872,6 +872,7 @@ function OverlaysPage() {
   const [confirm, setConfirm] = useState(false);
   const [divided, setDivided] = useState(false);
   const [welcome, setWelcome] = useState(false);
+  const [library, setLibraryOpen] = useState(false);
   const [space, setSpace] = useState("work");
   const [msg, setMsg] = useState("");
   return (
@@ -926,7 +927,7 @@ function OverlaysPage() {
       </Spec>
       <Spec
         title="Dialog and ConfirmDialog"
-        code="<Dialog title actions aside height divided?> · <ConfirmDialog danger>"
+        code="<Dialog title toolbar actions aside height divided?> · <ConfirmDialog danger>"
         note="Sheets share one shape: centred, the kit's title row (or a SheetHeader when it greets), the body's controls 12px apart, and a footer with the aside (status, a checkbox, PageDots) across from the actions."
       >
         <Row>
@@ -936,6 +937,7 @@ function OverlaysPage() {
           </Button>
           <Button onClick={() => setDivided(true)}>What's New</Button>
           <Button onClick={() => setWelcome(true)}>Welcome</Button>
+          <Button onClick={() => setLibraryOpen(true)}>Widget Library</Button>
         </Row>
         <Dialog
           open={divided}
@@ -970,6 +972,29 @@ function OverlaysPage() {
               </Fragment>
             ))}
           </Prose>
+        </Dialog>
+        <Dialog
+          open={library}
+          onClose={() => setLibraryOpen(false)}
+          title="Widget Library"
+          width={560}
+          height={420}
+          position="center"
+          divided
+          toolbar={<SearchField fill size="lg" value="" placeholder="Search widgets" onChange={() => {}} />}
+          aside="Right-click a widget to rename, duplicate or delete it"
+          actions={
+            <Button variant="primary" icon="sparkles" onClick={() => setLibraryOpen(false)}>
+              New Widget
+            </Button>
+          }
+        >
+          <SectionHeading>Built-in</SectionHeading>
+          {Array.from({ length: 10 }, (_, i) => (
+            <p key={i} style={{ margin: 0 }}>
+              The body scrolls under the toolbar, line {i + 1}.
+            </p>
+          ))}
         </Dialog>
         <Dialog
           open={welcome}
