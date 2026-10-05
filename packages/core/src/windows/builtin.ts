@@ -30,7 +30,7 @@ export const browserType: WindowType<{ url: string; device?: string }> = {
   icon: "globe",
   opens: {
     schemes: ["http", "https", "file"],
-    extensions: ["html", "htm", "xhtml", "svg", "png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "ico", "pdf"],
+    extensions: ["html", "htm", "xhtml", "svg", "png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "ico"],
   },
   fromTarget: (t) => ({ url: t.type === "url" ? t.url : pathToFileURL(t.path).href }),
   create(input) {
@@ -122,6 +122,50 @@ export const markdownType: WindowType<{ path: string }> = {
     if (p === undefined) return { state };
     const file = path.resolve(expandHome(p));
     return { state: { ...state, path: file }, title: path.basename(file) };
+  },
+};
+
+/** How a PDF is zoomed: to the window's width, its whole page, its real size, or a factor (1 = 100%). */
+export type PdfScale = "page-width" | "page-fit" | "auto" | number;
+const pdfScale = (v: unknown): PdfScale | undefined =>
+  v === "page-width" || v === "page-fit" || v === "auto" ? v : typeof v === "number" && v >= 0.1 && v <= 10 ? v : undefined;
+
+/**
+ * A PDF (pdf.js in the renderer, components/PdfView.tsx), reloaded when the file
+ * changes. `page` (1-based) and `scale` are where you were; `sidebar` shows
+ * pages or the outline; `dark` inverts the pages for dark themes.
+ */
+export interface PdfState extends Record<string, unknown> {
+  path: string;
+  page?: number;
+  scale?: PdfScale;
+  sidebar?: "pages" | "outline" | null;
+  dark?: boolean;
+}
+
+export const pdfType: WindowType<PdfState> = {
+  kind: "pdf",
+  title: "PDF",
+  icon: "doc.richtext",
+  // Before the browser, which used to show PDFs.
+  opens: { extensions: ["pdf"], priority: 10 },
+  fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
+  create(input) {
+    const file = path.resolve(expandHome(str(input.path) ?? ""));
+    if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
+    const page = typeof input.page === "number" && input.page >= 1 ? Math.floor(input.page) : undefined;
+    return { state: { path: file, ...(page ? { page } : {}) }, title: path.basename(file) };
+  },
+  update(state, patch) {
+    const next: PdfState = { ...state };
+    const p = str(patch.path);
+    if (p !== undefined) next.path = path.resolve(expandHome(p));
+    if (typeof patch.page === "number" && patch.page >= 1) next.page = Math.floor(patch.page);
+    const scale = pdfScale(patch.scale);
+    if (scale !== undefined) next.scale = scale;
+    if (patch.sidebar === "pages" || patch.sidebar === "outline" || patch.sidebar === null) next.sidebar = patch.sidebar;
+    if (typeof patch.dark === "boolean") next.dark = patch.dark;
+    return { state: next, title: path.basename(next.path) };
   },
 };
 
@@ -379,6 +423,7 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(filesType);
   types.register(textType);
   types.register(markdownType);
+  types.register(pdfType);
   types.register(magicType);
   types.register(agentsType);
   types.register(diffType);

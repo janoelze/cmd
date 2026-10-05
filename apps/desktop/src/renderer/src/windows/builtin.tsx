@@ -80,6 +80,27 @@ registerWindowView({
 });
 
 registerWindowView({
+  kind: "pdf",
+  // pdf.js loads on first use, not at startup.
+  View: lazyView(() => import("../components/PdfView.tsx").then((m) => m.PdfView)),
+  describe: (w) => ({ place: stateStr(w, "path") ? parentOf(stateStr(w, "path")!) : undefined }),
+  menu: (w) => {
+    const p = stateStr(w, "path");
+    return [
+      { label: "Dark Pages", checked: w.state.dark === true, run: () => void cmd.call("window.update", { id: w.id, state: { dark: w.state.dark !== true } }).catch(() => {}) },
+      "-" as const,
+      ...(p
+        ? [
+            { label: "Open with Default App", run: () => cmd.openPath(p) },
+            { label: "Show in Finder", run: () => cmd.revealPath(p) },
+            { label: "Copy Path", run: () => copy(p) },
+          ]
+        : []),
+    ];
+  },
+});
+
+registerWindowView({
   kind: "text",
   // CodeMirror loads on first use, not at startup.
   View: lazyView(() => import("../components/TextView.tsx").then((m) => m.TextView)),

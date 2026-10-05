@@ -425,9 +425,10 @@ export function App() {
     "window.dockLeft": () => selected && setDocks((d) => dock(d, selected, "left")),
     "window.dockRight": () => selected && setDocks((d) => dock(d, selected, "right")),
     "window.undock": () => selected && setDocks((d) => undock(d, selected)),
-    "view.zoomIn": () => setZoom((z) => Math.min(24, z + 1)),
-    "view.zoomOut": () => setZoom((z) => Math.max(-6, z - 1)),
-    "view.zoomReset": () => setZoom(0),
+    // A window that zooms its own content (a PDF) takes ⌘+ ⌘− ⌘0 while selected.
+    "view.zoomIn": () => (windowActions(selected)?.zoom ? windowActions(selected)!.zoom!(1) : setZoom((z) => Math.min(24, z + 1))),
+    "view.zoomOut": () => (windowActions(selected)?.zoom ? windowActions(selected)!.zoom!(-1) : setZoom((z) => Math.max(-6, z - 1))),
+    "view.zoomReset": () => (windowActions(selected)?.zoom ? windowActions(selected)!.zoom!(0) : setZoom(0)),
     "session.next": () => step(1),
     "session.prev": () => step(-1),
     "session.nextAttention": () => {

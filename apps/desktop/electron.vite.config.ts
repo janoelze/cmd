@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { createReadStream, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { defineConfig } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
@@ -20,6 +20,32 @@ function xtermScaledCoords(): Plugin {
         XTERM_COORDS,
         "return[(t.clientX-i.left)/(e.offsetWidth?i.width/e.offsetWidth:1)-n,(t.clientY-i.top)/(e.offsetHeight?i.height/e.offsetHeight:1)-o]}",
       );
+    },
+  };
+}
+
+// pdf.js loads what it needs for some PDFs on demand (components/PdfView.tsx): character
+// maps for CJK text, the standard 14 fonts, wasm image decoders (JPEG 2000, JBIG2) and
+// colour profiles. Served at /pdfjs/<dir>/ in dev, copied to out/renderer/pdfjs/ in builds.
+const PDFJS_DIRS = ["cmaps", "standard_fonts", "wasm", "iccs"];
+function pdfjsAssets(): Plugin {
+  const root = resolve(import.meta.dirname, "node_modules/pdfjs-dist");
+  return {
+    name: "pdfjs-assets",
+    configureServer(server) {
+      server.middlewares.use("/pdfjs/", (req, res, next) => {
+        const rel = decodeURIComponent((req.url ?? "").split("?")[0]!).replace(/^\/+/, "");
+        const [dir] = rel.split("/");
+        const file = join(root, rel);
+        if (!PDFJS_DIRS.includes(dir!) || !file.startsWith(root) || !statSync(file, { throwIfNoEntry: false })?.isFile()) return next();
+        if (file.endsWith(".wasm")) res.setHeader("Content-Type", "application/wasm");
+        createReadStream(file).pipe(res);
+      });
+    },
+    generateBundle() {
+      for (const dir of PDFJS_DIRS)
+        for (const name of readdirSync(join(root, dir)))
+          this.emitFile({ type: "asset", fileName: `pdfjs/${dir}/${name}`, source: readFileSync(join(root, dir, name)) });
     },
   };
 }
@@ -66,7 +92,7 @@ export default defineConfig({
   // The app's version for What's New (CI's release tags have bumped package.json).
   renderer: {
     define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(resolve(import.meta.dirname, "package.json"), "utf8")).version) },
-    plugins: [react(), xtermScaledCoords()],
+    plugins: [react(), xtermScaledCoords(), pdfjsAssets()],
     optimizeDeps: { exclude: ["@xterm/xterm"] },
     build: {
       minify: true,

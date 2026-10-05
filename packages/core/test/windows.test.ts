@@ -49,15 +49,30 @@ describe("window type registry", () => {
     return t ? (types.resolve(t, overrides)?.kind ?? null) : null;
   };
 
-  it("routes folders, web/images/pdf, text and URLs to the built-in types", () => {
+  it("routes folders, web/images, PDFs, text and URLs to the built-in types", () => {
     expect(kindFor(dir)).toBe("files");
     expect(kindFor(file("page.html", "<p>hi</p>"))).toBe("browser");
     expect(kindFor(file("shot.PNG", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0])))).toBe("browser");
     expect(kindFor(file("notes.md", "# hi"))).toBe("markdown");
+    expect(kindFor(file("paper.PDF", "%PDF-1.7\n"))).toBe("pdf");
     expect(kindFor(file("notes.txt", "hi"))).toBe("text");
     expect(kindFor(file("Makefile", "all:\n\techo"))).toBe("text");
     expect(kindFor(file("README", "plain text, no extension"))).toBe("text");
     expect(kindFor("https://example.com")).toBe("browser");
+  });
+
+  it("keeps a PDF window's place: page, zoom, sidebar, dark pages", () => {
+    const pdf = types.get("pdf")!;
+    const f = file("doc.pdf", "%PDF-1.7\n");
+    const { state, title } = pdf.create({ path: f, page: 3 });
+    expect(title).toBe("doc.pdf");
+    expect(state).toEqual({ path: f, page: 3 });
+    const next = pdf.update!(state, { page: 7.6, scale: "page-width", sidebar: "outline", dark: true }).state;
+    expect(next).toEqual({ path: f, page: 7, scale: "page-width", sidebar: "outline", dark: true });
+    // Nonsense is ignored, not stored.
+    expect(pdf.update!(next, { page: 0, scale: 99, sidebar: "thumbs", dark: "yes" }).state).toEqual(next);
+    expect(pdf.update!(next, { scale: 1.5, sidebar: null }).state).toMatchObject({ scale: 1.5, sidebar: null });
+    expect(() => pdf.create({ path: path.join(dir, "missing.pdf") })).toThrow();
   });
 
   it("leaves binaries, unknown schemes and missing paths alone", () => {

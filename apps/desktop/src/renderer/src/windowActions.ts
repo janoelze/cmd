@@ -17,6 +17,8 @@ type Actions = {
   toggleEdit?: () => void;
   /** ⌘F / ⌘G / ⇧⌘G. */
   find?: (r: "open" | "next" | "prev") => void;
+  /** ⌘+ / ⌘− / ⌘0 zoom the window's content (a PDF) instead of the app's text. */
+  zoom?: (d: 1 | -1 | 0) => void;
 };
 const registry = new Map<string, Actions>();
 

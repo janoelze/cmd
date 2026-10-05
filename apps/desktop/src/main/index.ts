@@ -77,7 +77,7 @@ if (process.env.CMD_NO_SANDBOX) app.commandLine.appendSwitch("no-sandbox");
 if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scale-factor", process.env.CMD_FORCE_SCALE);
 
 // cmd-file://local/?path=<abs path> — read-only access to local images/media for the app's own
-// pages (Markdown windows show relative images). Registered on the default
+// pages (Markdown windows show relative images) and PDFs (the PDF window fetches them). Registered on the default
 // session only; browser windows use their own session and can't reach it.
 // cmd-widget://frame/ — the page every Magic widget runs in (docs/12-magic-widgets.md):
 // the kit and the `cmd` runtime, under a CSP header that allows only inline code
@@ -88,10 +88,11 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // come from the renderer's "widget-frame" call and can't be guessed, so a widget
 // can't navigate itself to a page with a looser CSP.
 protocol.registerSchemesAsPrivileged([
-  { scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true } },
+  // corsEnabled: the app's page (file://) fetches PDFs from it.
+  { scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
   { scheme: "cmd-widget", privileges: { standard: true, secure: true } },
 ]);
-const CMD_FILE_TYPES = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico|mp4|webm|mov|mp3|m4a|wav)$/i;
+const CMD_FILE_TYPES = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico|mp4|webm|mov|mp3|m4a|wav|pdf)$/i;
 
 const here = import.meta.dirname; // apps/desktop/out/main
 // Packaged builds ship the core's source tree in Resources/runtime (see
@@ -869,7 +870,11 @@ app.whenReady().then(async () => {
   protocol.handle("cmd-file", (req) => {
     const file = new URL(req.url).searchParams.get("path") ?? "";
     if (!path.isAbsolute(file) || !CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });
-    return electronNet.fetch(pathToFileURL(file).href);
+    return electronNet.fetch(pathToFileURL(file).href).then((res) => {
+      const headers = new Headers(res.headers);
+      headers.set("Access-Control-Allow-Origin", "*");
+      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+    });
   });
   // First: the window loads its bundle while the menu is built and the core is
   // checked or started; the preload connects as soon as the socket answers.
