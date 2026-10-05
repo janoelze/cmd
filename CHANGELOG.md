@@ -2,6 +2,12 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.11.1 — 2026-10-05
+
+### Improved
+
+- The strip shows a dot for each window in place of its scrollbar; click a dot to bring that window into view.
+
 ## 0.11.0 — 2026-10-05
 
 Your agents connect to cmd by themselves, and cmd keeps a record of what they did.
