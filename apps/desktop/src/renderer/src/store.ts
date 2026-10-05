@@ -256,7 +256,11 @@ function slideSidebar(from: SpaceId, to: SpaceId, update: () => void): void {
   const a = state.spaces.get(from);
   const b = state.spaces.get(to);
   const searching = !!document.querySelector<HTMLInputElement>(".sb-search input")?.value;
-  if (!el?.startViewTransition || !a || !b || searching || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
+  // Only Navigator to Navigator: if the new Space's left side is empty or holds another
+  // window (a new Space before its first Navigator), the element goes away mid-slide.
+  const leftId = (b?.view?.docks as { left?: { id?: unknown; hidden?: unknown } } | undefined)?.left;
+  const navNext = typeof leftId?.id === "string" && !leftId.hidden && state.windows.get(leftId.id)?.kind === "navigator";
+  if (!el?.startViewTransition || !a || !b || !navNext || searching || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
   el.startViewTransition({ update: () => flushSync(update), types: [b.order > a.order ? "space-next" : "space-prev"] });
 }
 

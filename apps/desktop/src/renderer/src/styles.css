@@ -508,9 +508,12 @@ kbd {
   --drop: 0 0 transparent;
   box-shadow: 0 0 0 var(--edge-w) var(--window-edge), var(--drop);
 }
-/* ui.windowShadow */
+/* ui.windowShadow: each step larger, further down and darker (a contact shadow plus,
+   from medium on, a soft ambient one), as if the window floats higher. */
 .app.shadow-subtle .tile-frame { --drop: 0 2px 6px color-mix(in srgb, var(--shadow) 60%, transparent); }
-.app.shadow-strong .tile-frame { --drop: 0 8px 28px var(--shadow); }
+.app.shadow-medium .tile-frame { --drop: 0 1px 3px color-mix(in srgb, var(--shadow) 50%, transparent), 0 4px 14px color-mix(in srgb, var(--shadow) 70%, transparent); }
+.app.shadow-strong .tile-frame { --drop: 0 2px 4px color-mix(in srgb, var(--shadow) 60%, transparent), 0 8px 28px var(--shadow); }
+.app.shadow-deep .tile-frame { --drop: 0 3px 6px color-mix(in srgb, var(--shadow) 70%, transparent), 0 16px 48px var(--shadow), 0 28px 80px color-mix(in srgb, var(--shadow) 60%, transparent); }
 .tile.sel > .tile-frame, .tile.needs > .tile-frame { box-shadow: var(--ring), var(--drop); }
 
 /* ui.focusTitleBar: the selected window's title bar takes some of its outline colour. */

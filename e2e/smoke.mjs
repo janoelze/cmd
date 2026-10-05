@@ -457,6 +457,29 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${path.basename(fp)}, ${sn})`);
   } else macOnly("⌘↓/⌘↑ in the file tree");
 
+  // Bookmarks: right-click → Add to Bookmarks; the toolbar's bookmark button lists them.
+  {
+    await app.evaluate(({ Menu }) => {
+      globalThis.__bmPopup = Menu.prototype.popup;
+      Menu.prototype.popup = function (o) {
+        globalThis.__lastMenu = this.items.map((i) => i.label).filter(Boolean);
+        this.items.find((i) => i.label === globalThis.__pick)?.click();
+        o?.callback?.();
+      };
+      globalThis.__pick = "Add to Bookmarks";
+    });
+    await win.locator(".tile.kind-files .file-row", { hasText: "sub-folder" }).click({ button: "right" });
+    let saved = null;
+    for (let i = 0; i < 30 && !saved?.length; i++) (await win.waitForTimeout(100), (saved = (await win.evaluate(() => window.cmd.call("ui.get", {})))["files.bookmarks"]));
+    await app.evaluate(() => (globalThis.__pick = null));
+    await win.locator('.tile.kind-files [data-tip="Bookmarks"]').click();
+    await win.waitForTimeout(200);
+    const listed = await app.evaluate(() => globalThis.__lastMenu);
+    await app.evaluate(({ Menu }) => (Menu.prototype.popup = globalThis.__bmPopup));
+    check(!!saved?.[0]?.path.endsWith("sub-folder") && saved[0].dir && listed.some((l) => l.startsWith("sub-folder —")),
+      `a folder bookmarked from its menu is kept and listed by the bookmark button (${listed.slice(0, 3).join(", ")})`);
+  }
+
   // Files open in the window that suits them: notes.txt → text window; edit and ⌘S.
   await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).dblclick();
   await win.waitForSelector(".tile.kind-text .cm-content");

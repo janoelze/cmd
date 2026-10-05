@@ -14,14 +14,18 @@
 // a folder header instead (its name opens the folders above; the branch toggles
 // changes only; New File, New Folder, Collapse All and More on hover), denser rows
 // with indent guides.
+//
+// Bookmarks: folders and files you keep coming back to, shared by every file browser
+// (UI state). Right-click to add one; the bookmark button (or, as a sidebar, the
+// folder's name) lists them: a folder becomes the root, a file opens.
 
 import { Callout, EmptyState, IconButton } from "@cmd/ui";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AppWindow, FileEntry, GitFile, GitFileState, GitStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { copy, newTerminalIn, selectPane } from "../actions.ts";
-import { showContextMenu } from "../context.ts";
-import { formatBytes } from "../model.ts";
+import { copy, newTerminalIn, openPath, selectPane } from "../actions.ts";
+import { showContextMenu, type MenuEntry } from "../context.ts";
+import { formatBytes, shortPath } from "../model.ts";
 import { onFsChanged, usePersisted, useStoreValue } from "../store.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { PlacementContext } from "../windows/registry.ts";
@@ -66,6 +70,12 @@ const GIT_RANK: Record<GitFileState, number> = { ignored: 0, added: 1, untracked
 /** How often git state is re-read while the app is in front (changes deep in collapsed folders aren't watched). */
 const GIT_POLL_MS = 5000;
 
+/** A bookmarked folder or file. */
+interface Bookmark {
+  path: string;
+  dir: boolean;
+}
+
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 const parentOf = (p: string) => p.slice(0, p.lastIndexOf("/")) || "/";
 const relTo = (base: string, p: string) => (p === base ? "." : p.startsWith(base + "/") ? p.slice(base.length + 1) : p);
@@ -89,6 +99,22 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   const [opError, setOpError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const docked = useContext(PlacementContext) === "sidebar";
+  const [bookmarks, setBookmarks] = usePersisted<Bookmark[]>("files.bookmarks", []);
+  const isBookmarked = (p: string) => bookmarks.some((b) => b.path === p);
+  const toggleBookmark = (path: string, dir: boolean) =>
+    setBookmarks((bs) => (bs.some((b) => b.path === path) ? bs.filter((b) => b.path !== path) : [...bs, { path, dir }]));
+  /** Menu entries for the bookmarks, then adding or removing this folder. */
+  const bookmarkEntries = (): MenuEntry[] => [
+    ...(bookmarks.length
+      ? bookmarks.map((b) => ({
+          label: `${b.path.split("/").pop() || "/"} — ${shortPath(parentOf(b.path))}`,
+          checked: b.path === root,
+          run: () => (b.dir ? setRoot(b.path) : void openPath(b.path)),
+        }))
+      : [{ label: "No Bookmarks", enabled: false, run: () => {} }]),
+    "-",
+    { label: isBookmarked(root) ? "Remove This Folder from Bookmarks" : "Bookmark This Folder", run: () => toggleBookmark(root, true) },
+  ];
   const headLabel = useRef<HTMLSpanElement>(null);
   useWholePixelWidth(headLabel); // the chevron and branch after it stay crisp
   const cameFrom = useRef<string | null>(null);
@@ -410,6 +436,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
             { label: "Open with Default App", run: () => cmd.openPath(e.path) },
           ]),
       { label: "Show in Finder", run: () => cmd.revealPath(e.path) },
+      { label: isBookmarked(e.path) ? "Remove from Bookmarks" : "Add to Bookmarks", run: () => toggleBookmark(e.path, e.kind === "dir") },
       "-",
       { label: "Rename… (F2)", run: () => setRenaming(e.path) },
       { label: "Duplicate (⌘D)", run: () => void duplicate(e) },
@@ -450,6 +477,8 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   // The header's folder name: the folders above, nearest first (what the crumbs and ⌘↑ do).
   const folderMenu = () =>
     void showContextMenu([
+      { label: "Bookmarks", submenu: bookmarkEntries() },
+      "-",
       ...crumbs
         .slice(0, -1)
         .reverse()
@@ -507,6 +536,11 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
             {changes.length > 0 && <span className="git-count">{changes.length}{git.truncated ? "+" : ""}</span>}
           </button>
         )}
+        <IconButton
+          icon={isBookmarked(root) ? "bookmark.fill" : "bookmark"}
+          label="Bookmarks"
+          onClick={() => void showContextMenu(bookmarkEntries())}
+        />
         <IconButton
           icon={showHidden ? "eye" : "eye.slash"}
           label={showHidden ? "Hide Hidden Files" : "Show Hidden Files"}
