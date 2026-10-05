@@ -13,7 +13,7 @@
 
 import os from "node:os";
 import { spawnSync } from "node:child_process";
-import type { Backend, Usage } from "./backends.ts";
+import type { Backend, Usage } from "../ai/backends.ts";
 import { DEFAULT_DENY_PATHS } from "./policy.ts";
 import { buildRequest, buildSystem, type Workspace } from "./prompt.ts";
 import { commandsSupported, type SandboxMode } from "./sandbox.ts";

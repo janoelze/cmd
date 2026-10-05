@@ -23,7 +23,7 @@ import {
   type Previewer,
   type VerifyContext,
 } from "../src/magic/index.ts";
-import type { BackendRun } from "../src/magic/backends.ts";
+import type { BackendRun } from "../src/ai/backends.ts";
 
 const DENO = findDeno();
 const sandbox = sandboxAvailable() ? ("required" as const) : ("off" as const);

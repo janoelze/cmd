@@ -6,7 +6,7 @@ import { parseArgs } from "node:util";
 import readline from "node:readline/promises";
 import type { Agent, AgentState, AppWindow, Pane, RemoteDevice, RemotePairRequest, RemoteScope, RemoteStatus, Space } from "@cmd/protocol";
 import { renderUnicodeCompact } from "uqr";
-import { APPLIES_LABEL, currentKey, ENV, isSecretKey, SECRETS, type SecretDef, type SecretKey, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
+import { APPLIES_LABEL, currentKey, currentSecretKey, ENV, isSecretKey, SECRETS, type SecretDef, type SecretKey, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 import { magicCommand } from "./magic.ts";
 import { widgetCommand } from "./widget.ts";
@@ -47,7 +47,7 @@ usage: cmd <command> [options]
   settings [get KEY | set KEY VALUE | reset KEY | path] [--json]
                                       list or change settings (applies live)
   settings secret KEY [--clear]       store an API key from stdin (pbpaste | cmd settings secret
-                                      magic.anthropic.apiKey); never in settings.json
+                                      ai.anthropic.apiKey); never in settings.json
   remote [status|on|off]              remote access from a phone or browser (end-to-end encrypted):
                                       who is connected and what they're watching
   remote pair                         a one-time QR code; approve the device here
@@ -299,16 +299,17 @@ async function run({ client, closed }: Connection): Promise<number> {
       }
       if (sub === "secret") {
         // From stdin, so the key stays out of argv and shell history: pbpaste | cmd settings secret KEY
-        if (!key || !isSecretKey(key)) return fail(`usage: cmd settings secret KEY [--clear]   (KEY: ${Object.keys(SECRETS).join(", ")})`);
+        const secret = key && currentSecretKey(key);
+        if (!secret || !isSecretKey(secret)) return fail(`usage: cmd settings secret KEY [--clear]   (KEY: ${Object.keys(SECRETS).join(", ")})`);
         if (opt.clear) {
-          await client.call("secrets.set", { key, value: null });
+          await client.call("secrets.set", { key: secret, value: null });
           return 0;
         }
-        if (process.stdin.isTTY) return fail(`pipe the value in, e.g.: pbpaste | cmd settings secret ${key}`);
+        if (process.stdin.isTTY) return fail(`pipe the value in, e.g.: pbpaste | cmd settings secret ${secret}`);
         let value = "";
         for await (const chunk of process.stdin) value += chunk;
         if (!value.trim()) return fail("no value on stdin (use --clear to remove it)");
-        await client.call("secrets.set", { key, value: value.trim() });
+        await client.call("secrets.set", { key: secret, value: value.trim() });
         return 0;
       }
       if (sub === "reset") {

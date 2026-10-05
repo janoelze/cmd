@@ -10,15 +10,14 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { DEFAULT_SETTINGS, MAGIC_PROVIDERS, parseJsonc, resolveSettings, type Settings } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, isAiProvider, parseJsonc, resolveSettings, type Settings } from "@cmd/protocol";
 import { cmdHome, configDir } from "@cmd/protocol/node";
 import {
-  backendFor,
+  AiService,
   buildWidget,
   findDeno,
-  isProvider,
   playwrightPreviewer,
-  readSecrets,
+  SecretsService,
   sandboxAvailable,
   WidgetStore,
   type Backend,
@@ -33,8 +32,8 @@ usage: cmd magic <request…> [options]
        cmd magic eval [case…]        run the eval cases against prompt variants (see --help)
        cmd widget …                  check, run and preview a widget folder (cmd widget --help)
 
-  --provider P      anthropic | openai (default: magic.provider in your settings)
-  --model M         default: that provider's model in your settings
+  --provider P      anthropic | openai (default: ai.provider in your settings)
+  --model M         default: that provider's model (ai.<provider>.model; auto picks the newest)
   --effort E        low | medium | high, for models that take it (default low)
   --system FILE     use FILE instead of prompt/prompt.md (prompt variants)
   --no-explore      don't let the agent look around this Mac
@@ -45,7 +44,7 @@ usage: cmd magic <request…> [options]
   --json            print events as NDJSON instead of the trace
   --unsandboxed     run commands without sandbox-exec (only the policy and Deno's permissions guard them)
 
-The API key is the one stored in Settings → Magic Widgets (or with
+The API key is the one stored in Settings → AI (or with
 \`cmd settings secret KEY\`); nothing is read from the environment.
 
 env: CMD_MAGIC_UNSANDBOXED=1`;
@@ -65,11 +64,12 @@ export function userSettings(): Settings {
 /** The provider, model and stored key the app would use; --provider and --model override the first two. */
 export function pickBackend(o: { provider?: string; model?: string; effort?: string }): Backend {
   const s = userSettings();
-  const provider = o.provider ?? s["magic.provider"];
-  const p = isProvider(provider) ? MAGIC_PROVIDERS[provider] : undefined;
+  if (o.provider && !isAiProvider(o.provider)) throw new Error(`--provider: expected anthropic or openai`);
   const effort = o.effort === "low" || o.effort === "medium" || o.effort === "high" ? o.effort : undefined;
   if (o.effort && !effort) throw new Error(`--effort: expected low, medium or high`);
-  return backendFor({ provider, model: o.model ?? (p ? s[p.modelSetting] : ""), apiKey: p ? readSecrets(path.join(cmdHome(), "secrets.json"))[p.keySecret] : undefined, effort });
+  // The core's model lists (ai-models.json) resolve Auto the way the app does.
+  const ai = new AiService({ settings: () => s, secrets: new SecretsService(path.join(cmdHome(), "secrets.json")), stateDir: cmdHome() });
+  return ai.backend({ tier: "smart", purpose: "magic.lab", provider: o.provider as never, model: o.model, effort });
 }
 
 /** A widget folder (anywhere) as a store entry, with Deno and a previewer, the way the core checks widgets. */

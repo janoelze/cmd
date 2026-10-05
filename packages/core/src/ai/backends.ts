@@ -1,15 +1,15 @@
-// Model backends for the Magic agent: the Vercel AI SDK, with the provider and
-// model the user chose (magic.provider, magic.<provider>.model) and the API key
-// they stored (secrets). Nothing is discovered: no environment variables, no
-// CLI logins. The loop runs here; the tools always execute in-process through
-// `exec` (see tools.ts), so the policy, the sandbox and the budget are the same
-// for every provider.
+// Model calls through the Vercel AI SDK, for a provider, model and key the
+// AiService chose (service.ts): an agent loop (Backend.run, Magic), one text
+// completion, or one object matching a JSON schema. Nothing is discovered: no
+// environment variables, no CLI logins. In an agent loop the tools execute
+// in-process through `exec` (magic/tools.ts), so the policy, the sandbox and
+// the budget are the same for every provider.
 
-// The AI SDK is imported when a run starts, not with the core: a problem with
-// it (or with a provider package) can break Magic widgets, never the core.
-import type { LanguageModel, ModelMessage, ToolSet } from "ai";
-import { MAGIC_PROVIDERS, type MagicProvider } from "@cmd/protocol";
-import type { ToolOutput, ToolSpec } from "./tools.ts";
+// The AI SDK is imported when a call starts, not with the core: a problem with
+// it (or with a provider package) can break AI features, never the core.
+import type { LanguageModel, LanguageModelUsage, ModelMessage, ToolSet } from "ai";
+import type { AiProvider } from "@cmd/protocol";
+import type { ToolOutput, ToolSpec } from "../magic/tools.ts";
 
 export interface Usage {
   input: number;
@@ -48,10 +48,10 @@ export interface Backend {
 // ── AI SDK ───────────────────────────────────────────────
 
 export interface AiBackendOptions {
-  provider: MagicProvider;
+  provider: AiProvider;
   model: string;
   apiKey: string;
-  /** How hard the model thinks: low keeps Magic fast. Sent only to models that take it. */
+  /** How hard the model thinks: low keeps calls fast. Sent only to models that take it. */
   effort?: "low" | "medium" | "high";
 }
 
@@ -118,40 +118,61 @@ export function aiBackend(o: AiBackendOptions): Backend {
           throw part.error instanceof Error ? part.error : new Error(String(part.error));
         }
       }
-      const u = await result.totalUsage;
-      const details = (u as { inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number } }).inputTokenDetails;
-      return {
-        text,
-        model: o.model,
-        usage: {
-          input: u.inputTokens ?? 0,
-          output: u.outputTokens ?? 0,
-          cacheRead: details?.cacheReadTokens ?? (u as { cachedInputTokens?: number }).cachedInputTokens ?? 0,
-          cacheWrite: details?.cacheWriteTokens ?? 0,
-        },
-      };
+      return { text, model: o.model, usage: usageOf(await result.totalUsage) };
     },
   };
 }
 
-// ── choosing one ─────────────────────────────────────────
+function usageOf(u: LanguageModelUsage): Usage {
+  const details = (u as { inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number } }).inputTokenDetails;
+  return {
+    input: u.inputTokens ?? 0,
+    output: u.outputTokens ?? 0,
+    cacheRead: details?.cacheReadTokens ?? (u as { cachedInputTokens?: number }).cachedInputTokens ?? 0,
+    cacheWrite: details?.cacheWriteTokens ?? 0,
+  };
+}
 
-export interface BackendChoice {
-  provider: string;
+// ── one-shot calls ───────────────────────────────────────
+
+export interface CompleteRequest {
+  system?: string;
+  prompt: string;
+  signal?: AbortSignal;
+  maxOutputTokens?: number;
+}
+
+export interface CompleteResult<T> {
+  value: T;
+  usage: Usage;
   model: string;
-  /** The provider's stored key (secrets); undefined when the user hasn't set one. */
-  apiKey: string | undefined;
-  effort?: AiBackendOptions["effort"];
 }
 
-export function isProvider(p: string): p is MagicProvider {
-  return Object.hasOwn(MAGIC_PROVIDERS, p);
+/** One answer as text. */
+export async function completeText(o: AiBackendOptions, r: CompleteRequest): Promise<CompleteResult<string>> {
+  const { generateText } = await import("ai");
+  const res = await generateText({
+    model: await languageModel(o),
+    instructions: r.system,
+    prompt: r.prompt,
+    abortSignal: r.signal,
+    maxOutputTokens: r.maxOutputTokens ?? 4000,
+    providerOptions: effortOptions(o),
+  });
+  return { value: res.text, usage: usageOf(res.totalUsage), model: o.model };
 }
 
-export function backendFor(c: BackendChoice): Backend {
-  if (!isProvider(c.provider)) throw new Error(`Unknown provider "${c.provider}": choose Anthropic or OpenAI in Settings → Magic Widgets.`);
-  const title = MAGIC_PROVIDERS[c.provider].title;
-  if (!c.apiKey) throw new Error(`No ${title} API key: add one in Settings → Magic Widgets.`);
-  if (!c.model.trim()) throw new Error(`No ${title} model: choose one in Settings → Magic Widgets.`);
-  return aiBackend({ provider: c.provider, model: c.model.trim(), apiKey: c.apiKey, effort: c.effort });
+/** One answer as an object matching `schema` (a JSON schema; checked by the SDK). */
+export async function completeObject<T>(o: AiBackendOptions, r: CompleteRequest & { schema: Record<string, unknown> }): Promise<CompleteResult<T>> {
+  const { generateText, jsonSchema, Output } = await import("ai");
+  const res = await generateText({
+    model: await languageModel(o),
+    instructions: r.system,
+    prompt: r.prompt,
+    abortSignal: r.signal,
+    maxOutputTokens: r.maxOutputTokens ?? 4000,
+    providerOptions: effortOptions(o),
+    output: Output.object({ schema: jsonSchema<T>(r.schema as never) }),
+  });
+  return { value: res.output as T, usage: usageOf(res.totalUsage), model: o.model };
 }

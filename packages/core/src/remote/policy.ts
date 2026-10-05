@@ -53,6 +53,9 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "settings.reset": "never",
   "secrets.status": "never",
   "secrets.set": "never",
+  "ai.status": "never",
+  "ai.connect": "never",
+  "ai.models": "never",
   "window.open": "control",
   "window.update": "control",
   "window.types": "view",
@@ -71,7 +74,6 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "magic.cancel": "control",
   "magic.refresh": "view", // re-runs an already approved, read-only source
   "magic.setRefresh": "never",
-  "magic.models": "never",
   "magic.media": "never",
   "magic.widget": "never", // file paths and config
   "magic.restore": "never",
@@ -320,6 +322,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
       return true;
     case "settings.updated":
     case "secrets.updated":
+    case "ai.updated":
     case "search.status":
     case "space.show":
     case "window.focus":

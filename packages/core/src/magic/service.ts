@@ -17,25 +17,22 @@ import os from "node:os";
 import path from "node:path";
 import { logger } from "@cmd/protocol/node";
 import {
-  MAGIC_PROVIDERS,
   requestedMedia,
   type AppWindow,
   type CoreEvent,
   type MagicHealth,
   type MagicLibraryEntry,
-  type MagicModel,
   type MagicNotify,
   type MagicRuntime,
   type MagicState,
   type MagicStatus,
   type MagicStep,
   type MagicWidgetInfo,
-  type SecretKey,
   type Settings,
   type WindowId,
 } from "@cmd/protocol";
-import { backendFor, isProvider, type Backend } from "./backends.ts";
-import { listModels } from "./models.ts";
+import type { Backend } from "../ai/backends.ts";
+import type { AiService } from "../ai/service.ts";
 import { DEFAULT_DENY_PATHS } from "./policy.ts";
 import { buildWidget, type BuildEvent } from "./build.ts";
 import type { Workspace } from "./prompt.ts";
@@ -71,13 +68,11 @@ export interface MagicServiceOptions {
   settings: () => Settings;
   /** Show a widget's notification (data.ts notify()). */
   notify?: (n: WidgetNotification) => void;
-  /** The user's stored API keys (SecretsService). */
-  secret: (key: SecretKey) => string | undefined;
+  /** Models: the agent runs on the smart tier of the provider in use. */
+  ai: AiService;
   broadcast: (e: CoreEvent) => void;
-  /** Tests inject a fake; default: the provider and model in the magic.* settings, with the provider's stored key. */
+  /** Tests inject a fake; default: the AI service's smart tier. */
   backend?: (s: Settings) => Backend;
-  /** Tests: the model list (default: the provider's /v1/models). */
-  listModels?: typeof listModels;
   sandbox?: SandboxMode;
   /** Where a window's agent and data.ts run (its Space's root); default: home. */
   cwdFor?: (w: AppWindow) => string;
@@ -96,7 +91,6 @@ export interface MagicServiceOptions {
 }
 
 const PERSIST_DATA_MS = 60_000;
-const MODELS_TTL_MS = 10 * 60_000;
 /** The shortest interval data runs at. */
 const MIN_REFRESH_S = 2;
 /** Failures in a row before magic.autoFix asks the agent. */
@@ -129,8 +123,6 @@ export class MagicService {
   #autoFixed = new Map<WindowId, number>();
   /** Refreshes that came due while no UI was connected: run on resume. */
   #parked = new Set<WindowId>();
-  /** Model lists per provider and key, so the settings popup opens instantly. */
-  #models = new Map<string, { at: number; list: Promise<MagicModel[]> }>();
   #disposed = false;
 
   constructor(o: MagicServiceOptions) {
@@ -264,13 +256,13 @@ export class MagicService {
     const s = this.#o.settings();
     let backend: Backend;
     try {
-      backend = (this.#o.backend ?? ((x: Settings) => this.#backend(x)))(s);
+      backend = this.#o.backend?.(s) ?? this.#o.ai.backend({ tier: "smart", purpose: "magic" });
     } catch (e) {
       done();
       this.#fail(id, prev, (e as Error).message);
       return;
     }
-    log.info(`run ${id.slice(0, 8)}${refining ? " (change)" : ""}`, { provider: s["magic.provider"], model: s[MAGIC_PROVIDERS[s["magic.provider"]].modelSetting] || "default" });
+    log.info(`run ${id.slice(0, 8)}${refining ? " (change)" : ""}`, { provider: backend.name, model: backend.model });
     void (async () => {
       // The first widget on a Mac without Deno: get cmd's own copy before building.
       if (!this.#deno() && this.#o.stateDir && this.#o.deno === undefined) {
@@ -377,28 +369,6 @@ export class MagicService {
         ...extra,
       },
     });
-  }
-
-  #backend(s: Settings): Backend {
-    const p = MAGIC_PROVIDERS[s["magic.provider"]];
-    return backendFor({ provider: s["magic.provider"], model: s[p.modelSetting], apiKey: this.#o.secret(p.keySecret) });
-  }
-
-  /** The models `provider` offers to the user's stored key, newest first; cached for a while (refresh: ask again). */
-  async models(provider: string, refresh = false): Promise<MagicModel[]> {
-    if (!isProvider(provider)) throw new Error(`unknown provider "${provider}"`);
-    const key = this.#o.secret(MAGIC_PROVIDERS[provider].keySecret);
-    if (!key) throw new Error(`No ${MAGIC_PROVIDERS[provider].title} API key`);
-    const cacheKey = `${provider} ${key}`;
-    const hit = this.#models.get(cacheKey);
-    if (hit && !refresh && Date.now() - hit.at < MODELS_TTL_MS) return hit.list;
-    const list = (this.#o.listModels ?? listModels)(provider, key);
-    this.#models.set(cacheKey, { at: Date.now(), list });
-    list.catch((e: Error) => {
-      log.warn(`listing ${provider} models failed: ${e.message}`);
-      if (this.#models.get(cacheKey)?.list === list) this.#models.delete(cacheKey); // errors aren't cached
-    });
-    return list;
   }
 
   #fail(id: WindowId, prev: MagicState, message: string): void {

@@ -3,7 +3,8 @@
 
 import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
-import type { MagicModel, MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
+import type { AiModel, AiStatus } from "./ai.ts";
+import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
 
 export interface CoreInfo {
@@ -134,6 +135,17 @@ export interface Methods {
   /** Store a secret, or remove it with null. */
   "secrets.set": { params: { key: string; value: string | null }; result: SecretsStatus };
 
+  /** AI providers (docs/16-ai.md): which have keys, whether they work, what each tier resolves to. */
+  "ai.status": { params: {}; result: AiStatus };
+  /**
+   * Check a provider's key and store it. A key the provider refuses is not
+   * stored (the error says why); one that can't be checked now (offline) is
+   * stored unchecked. null removes the key.
+   */
+  "ai.connect": { params: { provider: string; key: string | null }; result: AiStatus };
+  /** The models a provider offers to the user's stored key, newest first (fails without a key); refresh: ask again. */
+  "ai.models": { params: { provider: string; refresh?: boolean }; result: AiModel[] };
+
   /**
    * Open a window of a registered type. `input` is the type's create input:
    * terminal { cwd?, command? }, browser { url? }, files { path? }, text { path }.
@@ -191,8 +203,6 @@ export interface Methods {
   "magic.refresh": { params: { id: WindowId }; result: null };
   /** Set how often the widget's data source runs, in seconds (0 = only on Refresh Now); kept across refinements. */
   "magic.setRefresh": { params: { id: WindowId; seconds: number }; result: null };
-  /** The models a provider offers to the user's stored API key, newest first (fails without a key). */
-  "magic.models": { params: { provider: string; refresh?: boolean }; result: MagicModel[] };
   /** Allow (or decline) the media origins the widget asks for (MagicState.media); the frame's CSP opens only allowed ones. */
   "magic.media": { params: { id: WindowId; allow: boolean }; result: null };
   /** A Magic widget, for the edit view: folder, files, revisions, manifest, which secrets are set. */
@@ -346,6 +356,7 @@ export type CoreEvent =
   | { type: "agent.removed"; agentId: AgentId }
   | { type: "settings.updated"; snapshot: SettingsSnapshot }
   | { type: "secrets.updated"; status: SecretsStatus }
+  | { type: "ai.updated"; status: AiStatus }
   | { type: "search.status"; status: SearchStatus }
   | { type: "window.updated"; window: AppWindow }
   | { type: "window.removed"; id: WindowId }

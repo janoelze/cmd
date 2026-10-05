@@ -27,11 +27,12 @@ type Def = Common &
         /**
          * font: previews itself in that font. theme: a popup of the UI's registered
          * themes of `appearance`. model: a popup of `provider`'s models that the
-         * user's API key can use (magic.models).
+         * user's API key can use (ai.models), with Auto first, for `tier`.
          */
         control?: "font" | "theme" | "model";
         appearance?: "dark" | "light";
         provider?: "anthropic" | "openai";
+        tier?: "smart" | "fast";
       }
     | { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string }
     | { type: "boolean"; default: boolean }
@@ -324,29 +325,49 @@ export const SETTINGS_SCHEMA = {
   },
   "agents.copilot.command": { title: "Copilot CLI command", code: true, type: "string", default: "copilot", description: "Command used to resume GitHub Copilot CLI sessions." },
 
-  "magic.provider": {
-    title: "Provider",
+  "ai.provider": {
+    title: "Use",
     type: "enum",
     default: "anthropic",
     options: ["anthropic", "openai"],
     labels: { anthropic: "Anthropic", openai: "OpenAI" },
-    description: "Who makes Magic widgets. Each provider uses its own API key and model, set below.",
+    description: "The provider AI features use when you've added keys for both. With one key, that provider is used.",
   },
-  "magic.anthropic.model": {
-    title: "Anthropic model",
+  "ai.anthropic.model": {
+    title: "Model",
     type: "string",
     control: "model",
     provider: "anthropic",
-    default: "claude-opus-5-5",
-    description: "The model Magic widgets use with Anthropic. The list shows the models your API key can use.",
+    tier: "smart",
+    default: "auto",
+    description: "For work that needs the best model: building Magic widgets. Auto uses the newest Claude Opus your key can use.",
   },
-  "magic.openai.model": {
-    title: "OpenAI model",
+  "ai.anthropic.fastModel": {
+    title: "Fast model",
+    type: "string",
+    control: "model",
+    provider: "anthropic",
+    tier: "fast",
+    default: "auto",
+    description: "For short tasks that should be quick and cheap, like summaries. Auto uses the newest Claude Haiku your key can use.",
+  },
+  "ai.openai.model": {
+    title: "Model",
     type: "string",
     control: "model",
     provider: "openai",
-    default: "gpt-5.5",
-    description: "The model Magic widgets use with OpenAI. The list shows the chat models your API key can use.",
+    tier: "smart",
+    default: "auto",
+    description: "For work that needs the best model: building Magic widgets. Auto uses the newest GPT your key can use.",
+  },
+  "ai.openai.fastModel": {
+    title: "Fast model",
+    type: "string",
+    control: "model",
+    provider: "openai",
+    tier: "fast",
+    default: "auto",
+    description: "For short tasks that should be quick and cheap, like summaries. Auto uses the newest GPT mini your key can use.",
   },
   "updates.mode": {
     title: "Updates",
@@ -380,7 +401,10 @@ export type SettingKey = keyof typeof SETTINGS_SCHEMA;
 export const RENAMED_SETTINGS: Readonly<Record<string, SettingKey>> = {
   "terminal.fontFamily": "font.code",
   "terminal.fontSize": "font.codeSize",
-  "magic.model": "magic.anthropic.model",
+  "magic.model": "ai.anthropic.model",
+  "magic.provider": "ai.provider",
+  "magic.anthropic.model": "ai.anthropic.model",
+  "magic.openai.model": "ai.openai.model",
 };
 
 /** The current name of a key (renamed keys map to their new name). */

@@ -1,5 +1,6 @@
-// Magic widgets' providers: API keys kept out of settings (secrets.ts), the
-// model lists (magic/models.ts), choosing a backend, and the old settings.
+// AI providers (docs/16-ai.md): API keys kept out of settings (secrets.ts), the
+// model lists (ai/models.ts), the AiService (keys, tiers, calls), and the old
+// Magic settings and secrets.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -7,7 +8,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveSettings } from "@cmd/protocol";
 import { SecretsService, readSecrets } from "../src/secrets.ts";
-import { backendFor, isOpenAIChatModel, listModels } from "../src/magic/index.ts";
+import { AiService, isOpenAIChatModel, KeyRejected, listModels, pickModel } from "../src/magic/index.ts";
+import type { AiModel, Settings } from "@cmd/protocol";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "cmd-secrets-"));
 
@@ -17,30 +19,41 @@ describe("secrets", () => {
     const s = new SecretsService(file);
     const events: unknown[] = [];
     s.on("updated", (st) => events.push(st));
-    const st = s.set("magic.anthropic.apiKey", "  sk-ant-abcdefgh1234  ");
-    expect(st["magic.anthropic.apiKey"]).toEqual({ set: true, hint: "…1234" });
-    expect(st["magic.openai.apiKey"]).toEqual({ set: false });
+    const st = s.set("ai.anthropic.apiKey", "  sk-ant-abcdefgh1234  ");
+    expect(st["ai.anthropic.apiKey"]).toEqual({ set: true, hint: "…1234" });
+    expect(st["ai.openai.apiKey"]).toEqual({ set: false });
     expect(JSON.stringify(st)).not.toContain("abcdefgh");
-    expect(s.get("magic.anthropic.apiKey")).toBe("sk-ant-abcdefgh1234");
+    expect(s.get("ai.anthropic.apiKey")).toBe("sk-ant-abcdefgh1234");
     if (process.platform !== "win32") expect(fs.statSync(file).mode & 0o777).toBe(0o600);
-    expect(readSecrets(file)).toEqual({ "magic.anthropic.apiKey": "sk-ant-abcdefgh1234" });
-    expect(new SecretsService(file).get("magic.anthropic.apiKey")).toBe("sk-ant-abcdefgh1234");
+    expect(readSecrets(file)).toEqual({ "ai.anthropic.apiKey": "sk-ant-abcdefgh1234" });
+    expect(new SecretsService(file).get("ai.anthropic.apiKey")).toBe("sk-ant-abcdefgh1234");
     expect(events).toHaveLength(1);
   });
 
   it("removes keys and refuses unknown ones", () => {
     const s = new SecretsService(null);
-    s.set("magic.openai.apiKey", "sk-proj-0123456789");
-    expect(s.set("magic.openai.apiKey", null)["magic.openai.apiKey"].set).toBe(false);
-    expect(s.get("magic.openai.apiKey")).toBeUndefined();
+    s.set("ai.openai.apiKey", "sk-proj-0123456789");
+    expect(s.set("ai.openai.apiKey", null)["ai.openai.apiKey"].set).toBe(false);
+    expect(s.get("ai.openai.apiKey")).toBeUndefined();
     expect(() => s.set("magic.other", "x")).toThrow(/unknown secret/);
+  });
+
+  it("move from their old Magic names, in the file too", () => {
+    const file = path.join(tmp(), "secrets.json");
+    fs.writeFileSync(file, JSON.stringify({ "magic.anthropic.apiKey": "sk-ant-old", "magic.openai.apiKey": "sk-old", "ai.openai.apiKey": "sk-new" }));
+    const s = new SecretsService(file);
+    expect(s.get("ai.anthropic.apiKey")).toBe("sk-ant-old");
+    expect(s.get("ai.openai.apiKey")).toBe("sk-new"); // the new name wins
+    expect(JSON.parse(fs.readFileSync(file, "utf8"))).toEqual({ "ai.anthropic.apiKey": "sk-ant-old", "ai.openai.apiKey": "sk-new" });
+    expect(s.set("magic.anthropic.apiKey", "sk-ant-via-old-name")["ai.anthropic.apiKey"].set).toBe(true);
+    expect(s.get("ai.anthropic.apiKey")).toBe("sk-ant-via-old-name");
   });
 
   it("are served by the core without ever being sent", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
     const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
-    core.handlers["secrets.set"]({ key: "magic.anthropic.apiKey", value: "sk-ant-secretsecret" });
+    core.handlers["secrets.set"]({ key: "ai.anthropic.apiKey", value: "sk-ant-secretsecret" });
     const status = core.handlers["secrets.status"]({}) as unknown;
     expect(JSON.stringify(status)).not.toContain("secretsecret");
     expect(JSON.stringify(core.settings.snapshot())).not.toContain("secretsecret");
@@ -89,26 +102,133 @@ describe("model lists", () => {
 
   it("says so when the key is refused", async () => {
     const fetch = (async () => json({ error: { message: "invalid x-api-key" } }, 401)) as unknown as typeof globalThis.fetch;
-    await expect(listModels("anthropic", "bad", { fetch })).rejects.toThrow(/not accepted/);
+    await expect(listModels("anthropic", "bad", { fetch })).rejects.toBeInstanceOf(KeyRejected);
   });
 
   it("are listed by the core with the stored key, and need one", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
     const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
-    await expect(core.handlers["magic.models"]({ provider: "openai" })).rejects.toThrow(/No OpenAI API key/);
-    await expect(core.handlers["magic.models"]({ provider: "gemini" })).rejects.toThrow(/unknown provider/);
+    await expect(core.handlers["ai.models"]({ provider: "openai" })).rejects.toThrow(/No OpenAI API key/);
+    await expect(core.handlers["ai.models"]({ provider: "gemini" })).rejects.toThrow(/unknown provider/);
     await core.close();
   });
 });
 
-describe("choosing a backend", () => {
-  it("uses the chosen provider and model, and needs the provider's key", () => {
-    expect(backendFor({ provider: "openai", model: "gpt-5.5", apiKey: "sk-x" })).toMatchObject({ name: "openai", model: "gpt-5.5" });
-    expect(backendFor({ provider: "anthropic", model: " claude-opus-5-5 ", apiKey: "sk-ant-x" })).toMatchObject({ name: "anthropic", model: "claude-opus-5-5" });
-    expect(() => backendFor({ provider: "anthropic", model: "claude-opus-5-5", apiKey: undefined })).toThrow(/No Anthropic API key/);
-    expect(() => backendFor({ provider: "openai", model: "", apiKey: "sk-x" })).toThrow(/No OpenAI model/);
-    expect(() => backendFor({ provider: "claude-cli", model: "x", apiKey: "k" })).toThrow(/Unknown provider/);
+const ANTHROPIC: AiModel[] = [
+  { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5", created: 500 },
+  { id: "claude-opus-5-6", name: "Claude Opus 5.6", created: 400 },
+  { id: "claude-opus-5-5", name: "Claude Opus 5.5", created: 300 },
+  { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", created: 200 },
+];
+const OPENAI: AiModel[] = [
+  { id: "gpt-6-mini", name: "gpt-6-mini", created: 700 },
+  { id: "gpt-6-pro", name: "gpt-6-pro", created: 650 },
+  { id: "gpt-6", name: "gpt-6", created: 600 },
+  { id: "gpt-5.5", name: "gpt-5.5", created: 500 },
+  { id: "gpt-5-mini", name: "gpt-5-mini", created: 100 },
+];
+
+describe("picking models", () => {
+  it("takes the newest model of the tier's family", () => {
+    expect(pickModel("anthropic", "smart", ANTHROPIC)?.id).toBe("claude-opus-5-6");
+    expect(pickModel("anthropic", "fast", ANTHROPIC)?.id).toBe("claude-haiku-4-5-20251001");
+    expect(pickModel("openai", "smart", OPENAI)?.id).toBe("gpt-6");
+    expect(pickModel("openai", "fast", OPENAI)?.id).toBe("gpt-6-mini");
+    expect(pickModel("anthropic", "smart", [{ id: "claude-sonnet-5-5", name: "" }])).toBeUndefined();
+  });
+});
+
+/** An AiService over in-memory secrets, with fake model lists per key. */
+function service(o: { settings?: Partial<Settings>; lists?: Record<string, AiModel[] | Error>; stateDir?: string | null; secrets?: SecretsService } = {}) {
+  const secrets = o.secrets ?? new SecretsService(null);
+  const settings = { ...resolveSettings({}).settings, ...o.settings } as Settings;
+  const calls: string[] = [];
+  const ai = new AiService({
+    settings: () => settings,
+    secrets,
+    stateDir: o.stateDir ?? null,
+    listModels: async (provider, key) => {
+      calls.push(`${provider} ${key}`);
+      const r = o.lists?.[key];
+      if (r instanceof Error) throw r;
+      if (r) return r;
+      throw new KeyRejected("The key was not accepted.");
+    },
+  });
+  return { ai, secrets, settings, calls };
+}
+
+describe("the AI service", () => {
+  it("is not ready without a key, and says how to fix it", () => {
+    const { ai } = service();
+    expect(ai.status()).toMatchObject({ ready: false, provider: null, providers: { anthropic: { state: "none" }, openai: { state: "none" } } });
+    expect(() => ai.backend({ tier: "smart", purpose: "test" })).toThrow(/Settings → AI/);
+  });
+
+  it("checks a key before storing it, and resolves tiers from what the key can use", async () => {
+    const { ai, secrets } = service({ lists: { "sk-ant-good": ANTHROPIC } });
+    const events: unknown[] = [];
+    ai.on("updated", (s) => events.push(s));
+    await expect(ai.connect("anthropic", "sk-ant-bad")).rejects.toThrow(/didn't accept this key/);
+    expect(secrets.get("ai.anthropic.apiKey")).toBeUndefined();
+    const st = await ai.connect("anthropic", " sk-ant-good ");
+    expect(secrets.get("ai.anthropic.apiKey")).toBe("sk-ant-good");
+    expect(st).toMatchObject({ ready: true, provider: "anthropic" });
+    expect(st.providers.anthropic).toMatchObject({
+      state: "ok",
+      models: { smart: { id: "claude-opus-5-6", name: "Claude Opus 5.6", auto: true }, fast: { id: "claude-haiku-4-5-20251001", auto: true } },
+    });
+    expect(events.length).toBeGreaterThan(0);
+    expect(ai.backend({ tier: "smart", purpose: "test" })).toMatchObject({ name: "anthropic", model: "claude-opus-5-6" });
+    expect(ai.backend({ tier: "fast", purpose: "test" }).model).toBe("claude-haiku-4-5-20251001");
+    await ai.connect("anthropic", null);
+    expect(ai.status().ready).toBe(false);
+  });
+
+  it("stores a key it can't check now, unchecked, and uses the fallback models", async () => {
+    const { ai, secrets } = service({ lists: { "sk-offline": new Error("fetch failed") } });
+    const st = await ai.connect("openai", "sk-offline");
+    expect(secrets.get("ai.openai.apiKey")).toBe("sk-offline");
+    expect(st.providers.openai).toMatchObject({ state: "unchecked", error: expect.stringMatching(/Couldn't reach OpenAI/) });
+    expect(st.ready).toBe(true);
+    expect(st.providers.openai.models?.smart).toEqual({ id: "gpt-5.5", name: "gpt-5.5", auto: true });
+  });
+
+  it("keeps a pinned model, and uses ai.provider only while its key works", async () => {
+    const { ai } = service({ settings: { "ai.provider": "openai", "ai.anthropic.model": "claude-opus-5-5" }, lists: { "sk-ant": ANTHROPIC, "sk-oa": OPENAI } });
+    await ai.connect("anthropic", "sk-ant");
+    expect(ai.status().provider).toBe("anthropic"); // openai has no key
+    expect(ai.model("anthropic", "smart")).toEqual({ id: "claude-opus-5-5", name: "Claude Opus 5.5", auto: false });
+    await ai.connect("openai", "sk-oa");
+    expect(ai.status().provider).toBe("openai");
+    expect(ai.backend({ tier: "smart", purpose: "test" }).model).toBe("gpt-6");
+    expect(ai.backend({ tier: "smart", purpose: "test", provider: "anthropic", model: "claude-x" })).toMatchObject({ name: "anthropic", model: "claude-x" });
+  });
+
+  it("notices a key the provider stops accepting, and falls back to another provider", async () => {
+    const lists: Record<string, AiModel[] | Error> = { "sk-oa": OPENAI, "sk-ant": ANTHROPIC };
+    const { ai } = service({ settings: { "ai.provider": "openai" }, lists });
+    await ai.connect("openai", "sk-oa");
+    await ai.connect("anthropic", "sk-ant");
+    lists["sk-oa"] = new KeyRejected("The key was not accepted.");
+    await expect(ai.models("openai", true)).rejects.toBeInstanceOf(KeyRejected);
+    const st = ai.status();
+    expect(st.providers.openai).toMatchObject({ state: "rejected", error: expect.stringMatching(/revoked/) });
+    expect(st.provider).toBe("anthropic");
+  });
+
+  it("remembers model lists across restarts, per key", async () => {
+    const dir = tmp();
+    const secrets = new SecretsService(path.join(dir, "secrets.json"));
+    const first = service({ stateDir: dir, secrets, lists: { "sk-ant": ANTHROPIC } });
+    await first.ai.connect("anthropic", "sk-ant");
+    const again = service({ stateDir: dir, secrets: new SecretsService(path.join(dir, "secrets.json")) });
+    expect(again.ai.status().providers.anthropic).toMatchObject({ state: "ok", models: { smart: { id: "claude-opus-5-6" } } });
+    expect(again.calls).toEqual([]);
+    // Another key: unchecked until the provider says otherwise.
+    again.secrets.set("ai.anthropic.apiKey", "sk-ant-other");
+    expect(again.ai.status().providers.anthropic.state).toBe("unchecked");
   });
 
   it("a Magic widget without a key says where to add one", async () => {
@@ -119,14 +239,17 @@ describe("choosing a backend", () => {
     core.handlers["magic.run"]({ id: w.id, prompt: "a pomodoro timer" });
     const state = core.windows.others().find((x) => x.id === w.id)!.state as { phase: string; error?: string };
     expect(state.phase).toBe("error");
-    expect(state.error).toMatch(/No Anthropic API key: add one in Settings → Magic Widgets/);
+    expect(state.error).toMatch(/No AI provider is set up\. Add an API key in Settings → AI/);
     await core.close();
   });
 
-  it("carries an old magic.model over and ignores magic.baseUrl", () => {
-    const r = resolveSettings({ "magic.model": "claude-haiku-4-5", "magic.baseUrl": "http://localhost:11434/v1" });
+  it("carries the old Magic settings over and ignores magic.baseUrl", () => {
+    const r = resolveSettings({ "magic.model": "claude-haiku-4-5", "magic.baseUrl": "http://localhost:11434/v1", "magic.provider": "openai", "magic.openai.model": "gpt-5.5" });
     expect(r.errors).toEqual([]);
-    expect(r.settings["magic.anthropic.model"]).toBe("claude-haiku-4-5");
+    expect(r.settings["ai.anthropic.model"]).toBe("claude-haiku-4-5");
+    expect(r.settings["ai.provider"]).toBe("openai");
+    expect(r.settings["ai.openai.model"]).toBe("gpt-5.5");
+    expect(resolveSettings({}).settings["ai.openai.fastModel"]).toBe("auto");
   });
 });
 

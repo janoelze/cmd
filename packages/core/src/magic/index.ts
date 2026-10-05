@@ -1,6 +1,5 @@
 export { buildWidget, fastRoute, type BuildOptions, type BuildResult, type BuildEvent, type TraceStep } from "./build.ts";
-export { aiBackend, backendFor, isProvider, type Backend, type BackendChoice, type Usage } from "./backends.ts";
-export { listModels, isOpenAIChatModel } from "./models.ts";
+export * from "../ai/index.ts";
 export { MagicService, refineRequest } from "./service.ts";
 export { classify, credentialsFor, credentialsForPrograms, DEFAULT_DENY_PATHS, isDeniedPath, redact } from "./policy.ts";
 export { execArgv, execCommand, sandboxAvailable, sandboxProfile, type SandboxMode } from "./sandbox.ts";
@@ -9,5 +8,5 @@ export { TOOL_SPECS, toolsFor, runTool } from "./tools.ts";
 export { WIDGET_TOOL_SPECS, runWidgetTool } from "./widget-tools.ts";
 export { buildSystem, buildRequest, PROMPT_DIR, type Workspace } from "./prompt.ts";
 export { widgetHtml, widgetTokens, SIZES, type ThemeLike } from "./host.ts";
-export { readSecrets } from "../secrets.ts";
+export { readSecrets, SecretsService } from "../secrets.ts";
 export * from "../widgets/index.ts";

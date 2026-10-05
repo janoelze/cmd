@@ -5,7 +5,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { Agent, AgentId, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
@@ -28,7 +28,8 @@ import { SettingsService } from "./settings.ts";
 import { SpaceManager } from "./spaces/manager.ts";
 import { MagicService } from "./magic/service.ts";
 import { SecretsService } from "./secrets.ts";
-import type { Backend } from "./magic/backends.ts";
+import type { Backend } from "./ai/backends.ts";
+import { AiService } from "./ai/service.ts";
 import { playwrightPreviewer, type Previewer } from "./widgets/preview.ts";
 import type { MagicPreviewRequest, MagicPreviewShot } from "@cmd/protocol";
 import type { Connection, Served } from "./connection.ts";
@@ -83,6 +84,8 @@ export interface CoreOptions {
   home?: string;
   /** Tests: the model backend for Magic widgets (default: from the magic.* settings). */
   magicBackend?: (settings: Settings) => Backend;
+  /** Tests: a provider's model list (default: its /v1/models). */
+  aiListModels?: (provider: AiProvider, apiKey: string) => Promise<AiModel[]>;
   /** Where usage stats go (usage.ts); none: not counted (tests, development builds). */
   usageUrl?: string | null;
   /** Tests: who renders widget previews (default: the app's previewer connection, else Playwright). */
@@ -110,6 +113,7 @@ export class Core {
   readonly spaces: SpaceManager;
   readonly magic: MagicService;
   readonly secrets: SecretsService;
+  readonly ai: AiService;
   readonly remote: RemoteService;
   readonly usage: UsageStats;
   /** Agents already counted for usage stats. */
@@ -205,10 +209,14 @@ export class Core {
     });
     this.secrets = new SecretsService(opts.secretsPath ?? null);
     this.secrets.on("updated", (status) => this.#broadcast({ type: "secrets.updated", status }));
+    this.ai = new AiService({ settings, secrets: this.secrets, stateDir: opts.stateDir ?? null, listModels: opts.aiListModels });
+    this.ai.on("updated", (status) => this.#broadcast({ type: "ai.updated", status }));
+    this.settings.bind(["ai.provider", "ai.anthropic.model", "ai.anthropic.fastModel", "ai.openai.model", "ai.openai.fastModel"], () => this.ai.settingsChanged());
+    if (opts.stateDir) this.ai.start();
     this.magic = new MagicService({
       windows: this.windows,
       settings,
-      secret: (k) => this.secrets.get(k),
+      ai: this.ai,
       broadcast: (e) => this.#broadcast(e),
       notify: (n) => this.notifications.widget(n),
       backend: opts.magicBackend,
@@ -379,7 +387,6 @@ export class Core {
     "magic.refresh": (p) => (this.magic.refresh(p.id), null),
     "magic.setRefresh": (p) => (this.magic.setRefresh(p.id, p.seconds), null),
     "magic.media": (p) => (this.magic.media(p.id, p.allow), null),
-    "magic.models": (p) => this.magic.models(p.provider, p.refresh),
     "magic.widget": (p) => this.magic.widget(p.id),
     "magic.restore": (p) => (this.magic.restore(p.id, p.revision), null),
     "magic.config": (p) => (this.magic.setConfig(p.id, p.values ?? {}), null),
@@ -402,6 +409,9 @@ export class Core {
     },
     "secrets.status": () => this.secrets.status(),
     "secrets.set": (p) => this.secrets.set(p.key, p.value),
+    "ai.status": () => this.ai.status(),
+    "ai.connect": (p) => this.ai.connect(p.provider, p.key),
+    "ai.models": (p) => this.ai.models(p.provider, p.refresh),
     "fs.list": (p) => listDir(p.path),
     "fs.read": (p) => readText(p.path),
     "fs.resolve": (p) => resolvePaths(p.paths, p.cwd),
@@ -867,6 +877,7 @@ export class Core {
   async close(): Promise<void> {
     if (this.#libraryTimer) clearTimeout(this.#libraryTimer);
     this.usage.close();
+    this.ai.dispose();
     await this.usage.flush();
     this.magic.dispose();
     this.remote.close();

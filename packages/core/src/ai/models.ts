@@ -1,16 +1,47 @@
-// The models a provider offers to the user's API key, for the model setting's
-// popup. Both providers list exactly what the key can use at GET /v1/models:
+// The models a provider offers to the user's API key: for the model popups,
+// for checking a key, and for picking each tier's model (pickModel). Both
+// providers list exactly what the key can use at GET /v1/models:
 // - Anthropic: id, display_name, created_at; paginated (limit ≤ 1000, has_more,
 //   last_id → after_id). Every model there is a chat model.
 // - OpenAI: id, created, owned_by; one page, everything the key can call,
 //   including embeddings, audio and image models, so only chat models are kept.
 
-import type { MagicModel, MagicProvider } from "@cmd/protocol";
+import type { AiModel, AiProvider, AiTier } from "@cmd/protocol";
 
 type Fetch = typeof fetch;
 
+/** The provider refused the key (HTTP 401): it is wrong or revoked, not just unreachable. */
+export class KeyRejected extends Error {}
+
 /**
- * OpenAI ids worth offering for the Magic agent: chat models (text in and out,
+ * The families a tier picks from, best first: the newest model of the first
+ * family the key has. A new version of a family (Opus 5.5 → 5.6, GPT-5.5 → 6)
+ * needs no change here; a new family name does.
+ */
+export const TIER_FAMILIES: Record<AiProvider, Record<AiTier, RegExp[]>> = {
+  anthropic: { smart: [/^claude-opus-\d/], fast: [/^claude-haiku-\d/] },
+  // Aliases only (isOpenAIChatModel drops snapshots); not -mini/-nano/-pro for smart.
+  openai: { smart: [/^gpt-\d+(\.\d+)?$/], fast: [/^gpt-\d+(\.\d+)?-mini$/] },
+};
+
+/** When the key's models can't be listed (offline, never checked): a model each tier is known to have. */
+export const FALLBACK_MODELS: Record<AiProvider, Record<AiTier, string>> = {
+  anthropic: { smart: "claude-opus-5-5", fast: "claude-haiku-4-5" },
+  openai: { smart: "gpt-5.5", fast: "gpt-5-mini" },
+};
+
+/** The model `tier` uses from a key's list: the newest of its first family present, or undefined. */
+export function pickModel(provider: AiProvider, tier: AiTier, list: readonly AiModel[]): AiModel | undefined {
+  for (const family of TIER_FAMILIES[provider][tier]) {
+    const found = list.filter((m) => family.test(m.id));
+    // Lists come newest first; release times, where given, decide.
+    if (found.length) return found.reduce((best, m) => ((m.created ?? 0) > (best.created ?? 0) ? m : best));
+  }
+  return undefined;
+}
+
+/**
+ * OpenAI ids worth offering for AI features: chat models (text in and out,
  * tool calls), by their alias only. Dated snapshots (gpt-5.5-2026-04-23,
  * gpt-3.5-turbo-0125) duplicate an alias; a pinned one can still be set in
  * settings.json. GPT-3.5 and the original GPT-4 are left out as too weak.
@@ -22,7 +53,7 @@ export function isOpenAIChatModel(id: string): boolean {
   return !/(audio|realtime|live|transcribe|tts|image|embedding|search|moderation|instruct|computer-use|dall-e|whisper)/.test(id);
 }
 
-export async function listModels(provider: MagicProvider, apiKey: string, o: { fetch?: Fetch; signal?: AbortSignal } = {}): Promise<MagicModel[]> {
+export async function listModels(provider: AiProvider, apiKey: string, o: { fetch?: Fetch; signal?: AbortSignal } = {}): Promise<AiModel[]> {
   const f = o.fetch ?? fetch;
   const signal = o.signal ?? AbortSignal.timeout(15_000);
   const get = async (url: string, headers: Record<string, string>) => {
@@ -36,13 +67,14 @@ export async function listModels(provider: MagicProvider, apiKey: string, o: { f
           return undefined;
         }
       })();
-      throw new Error(res.status === 401 ? "The API key was not accepted." : `${provider}: HTTP ${res.status}${msg ? `: ${msg}` : ""}`);
+      if (res.status === 401) throw new KeyRejected("The key was not accepted.");
+      throw new Error(`${provider}: HTTP ${res.status}${msg ? `: ${msg}` : ""}`);
     }
     return res.json() as Promise<Record<string, unknown>>;
   };
 
   if (provider === "anthropic") {
-    const out: MagicModel[] = [];
+    const out: AiModel[] = [];
     let after: string | undefined;
     for (let page = 0; page < 10; page++) {
       const url = `https://api.anthropic.com/v1/models?limit=1000${after ? `&after_id=${encodeURIComponent(after)}` : ""}`;

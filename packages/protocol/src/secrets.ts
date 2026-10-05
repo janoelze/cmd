@@ -10,15 +10,15 @@ export interface SecretDef {
 }
 
 export const SECRETS = {
-  "magic.anthropic.apiKey": {
+  "ai.anthropic.apiKey": {
     title: "Anthropic API key",
     placeholder: "sk-ant-…",
-    description: "Used when the provider is Anthropic. Create one at console.anthropic.com → API Keys.",
+    description: "For Claude models. Create one at console.anthropic.com → API Keys.",
   },
-  "magic.openai.apiKey": {
+  "ai.openai.apiKey": {
     title: "OpenAI API key",
     placeholder: "sk-…",
-    description: "Used when the provider is OpenAI. Create one at platform.openai.com → API keys.",
+    description: "For GPT models. Create one at platform.openai.com → API keys.",
   },
 } as const satisfies Record<string, SecretDef>;
 
@@ -30,3 +30,12 @@ export type SecretsStatus = Record<SecretKey, { set: boolean; hint?: string }>;
 export function isSecretKey(key: string): key is SecretKey {
   return Object.hasOwn(SECRETS, key);
 }
+
+/** Keys that were renamed (old → new): old secrets files and `cmd settings secret` keep working. */
+export const RENAMED_SECRETS: Readonly<Record<string, SecretKey>> = {
+  "magic.anthropic.apiKey": "ai.anthropic.apiKey",
+  "magic.openai.apiKey": "ai.openai.apiKey",
+};
+
+/** The current name of a secret (renamed ones map to their new name). */
+export const currentSecretKey = (key: string): string => RENAMED_SECRETS[key] ?? key;
