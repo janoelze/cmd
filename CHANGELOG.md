@@ -2,6 +2,24 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.11.0 — 2026-10-05
+
+Your agents connect to cmd by themselves, and cmd keeps a record of what they did.
+
+### New
+
+- **Agents connect by themselves.** cmd adds its hook to Claude Code, Codex and Gemini CLI, profiles included, and keeps a copy of each file it changes.
+- **Agent history.** `cmd agents turns` shows what an agent did, turn by turn: the prompt, the files it changed and its last answer.
+
+### Improved
+
+- Agents you interrupt no longer stay marked as working.
+- Transcript search finds Claude Code profiles kept anywhere in your home folder.
+
+### Fixed
+
+- Notifications that an agent is done show its final message again.
+
 ## 0.10.2 — 2026-10-05
 
 The public usage stats are better protected against made-up numbers.
