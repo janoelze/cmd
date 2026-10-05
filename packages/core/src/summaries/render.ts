@@ -1,11 +1,11 @@
 // A session summary as Markdown (docs/20-session-summaries.md). The model
-// writes a title, a body shaped to the kind of session, and a team message
-// (SUMMARY_SCHEMA); the facts (when, how long, files changed) are rendered
+// writes a title and a body shaped to the kind of session (SUMMARY_SCHEMA);
+// the facts (when, how long, files changed) are rendered
 // from what cmd recorded, so they can't be made up. Rendered again from every
 // partial answer while it streams.
 //
-// The app copies parts of it by their headings (protocol summaryPart), so the
-// marker and headings live in @cmd/protocol.
+// The app copies it without the marker and footer (protocol summaryText), so
+// the marker lives in @cmd/protocol.
 
 import { SUMMARY_MARKER, SUMMARY_SECTIONS } from "@cmd/protocol";
 
@@ -26,18 +26,16 @@ export interface SummaryFacts {
 export interface SummaryText {
   title: string;
   body: string;
-  teamUpdate: string;
 }
 
 // Every key required and no others: OpenAI's strict schemas allow nothing optional.
 export const SUMMARY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["title", "body", "teamUpdate"],
+  required: ["title", "body"],
   properties: {
     title: { type: "string", description: "What the session was about or achieved, at most 70 characters, no trailing period." },
     body: { type: "string", description: "The summary in Markdown, shaped to the session as the instructions describe." },
-    teamUpdate: { type: "string", description: "The team chat message, as the instructions describe." },
   },
 } as const;
 
@@ -56,10 +54,15 @@ function when(start: number | null, end: number | null): string | null {
   return `${day(start)}, ${hm(start)}–${hm(end)} (${dur})`;
 }
 
+/** Sections the model wrote only to say there's nothing ("## Next steps" + "None."). */
+const EMPTY_SECTION = /^#{1,6} [^\n]+\n+(none|n\/a|nothing( (left|else|further))?|—|-)\.?\s*(?=\n#{1,6} |$)/gim;
+
 /** The body's headings under the title (## and below), and never one the app looks for. */
 function demote(md: string): string {
   let fence = false;
   return md
+    .replace(EMPTY_SECTION, "")
+    .trimEnd()
     .split("\n")
     .map((l) => {
       if (/^\s*(```|~~~)/.test(l)) fence = !fence;
@@ -88,7 +91,6 @@ export function renderSummary(facts: SummaryFacts, text: Partial<SummaryText>, s
   const meta = [facts.agent, facts.project, facts.branch && `\`${facts.branch}\``, when(facts.startedAt, facts.endedAt), plural(facts.prompts, "prompt")].filter(Boolean).join(" · ");
   const files = facts.files.slice(0, MAX_FILES).map((f) => `- \`${f.path}\`${f.change && f.change !== "M" ? ` (${f.change === "?" ? "new" : f.change === "A" ? "added" : f.change === "D" ? "deleted" : f.change === "R" ? "renamed" : f.change})` : ""}`);
   if (facts.files.length > MAX_FILES) files.push(`- … and ${facts.files.length - MAX_FILES} more`);
-  const team = text.teamUpdate?.trim();
   return [
     SUMMARY_MARKER,
     `# ${text.title?.trim() || `Session in ${facts.project}`}`,
@@ -99,7 +101,6 @@ export function renderSummary(facts: SummaryFacts, text: Partial<SummaryText>, s
     ...(state.pending ? [`*${state.pending}*`, ""] : []),
     ...(text.body?.trim() ? [demote(text.body.trim()), ""] : []),
     ...section(`${SUMMARY_SECTIONS.files} (${facts.files.length})`, facts.files.length ? files : []),
-    ...section(SUMMARY_SECTIONS.team, team ? [team] : []),
     ...(state.footer ? ["---", "", `<sub>${state.footer}</sub>`, ""] : []),
   ].join("\n");
 }

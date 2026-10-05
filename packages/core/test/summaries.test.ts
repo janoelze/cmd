@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { summaryPart, isSummary, type Agent, type AgentTurn } from "@cmd/protocol";
+import { summaryText, isSummary, type Agent, type AgentTurn } from "@cmd/protocol";
 import { parseClaude, parseCodex, type ConversationEntry } from "../src/search/parser.ts";
 import { cut, prune, redact, shrinkBlocks } from "../src/summaries/prune.ts";
 import { renderSummary, SUMMARY_SCHEMA, type SummaryFacts, type SummaryText } from "../src/summaries/render.ts";
@@ -166,8 +166,7 @@ const facts: SummaryFacts = {
 
 const answer: SummaryText = {
   title: "Session summaries",
-  body: "Added summaries.\n\n# Why a file\n\n- Stream into a file, not a widget\n\n---\n\n## Team update ideas\n\nmore",
-  teamUpdate: "I added session summaries.\n- Right-click a title",
+  body: "Added summaries.\n\n# Why a file\n\n- Stream into a file, not a widget\n\n---\n\n## Files changed by hand\n\nmore",
 };
 
 describe("render", () => {
@@ -179,7 +178,6 @@ describe("render", () => {
     expect(md).toContain("(42 min)");
     expect(md).toContain("`src/b.ts` (new)");
     expect(md).not.toContain("abc1234"); // commits are for the model only
-    expect(md).not.toContain("## Team update");
     expect(renderSummary(facts, { title: "Sess", body: "Half a sent" })).toContain("Half a sent\n");
   });
 
@@ -192,23 +190,28 @@ describe("render", () => {
   it("keeps the body's headings under the title and away from the app's", () => {
     const md = renderSummary(facts, answer);
     expect(md).toContain("\n## Why a file\n");
-    expect(md).toContain("## Team update ideas (summary)");
+    expect(md).toContain("## Files changed by hand (summary)");
     expect(md.match(/^# /gm)).toHaveLength(1);
   });
 
-  it("copies the team update and the ticket part, as edited", () => {
+  it("leaves out sections the model wrote only to say there's nothing", () => {
+    const md = renderSummary(facts, { body: "## The ask\nA test.\n\n## What changed\nNothing changed.\n\n## Next steps\nNone.\n" });
+    expect(md).toContain("## What changed\nNothing changed.");
+    expect(md).not.toContain("## Next steps");
+    expect(renderSummary(facts, { body: "## Next steps\n\nN/A\n\n## Notes\nkept" })).toMatch(/## Notes\nkept/);
+    expect(renderSummary(facts, { body: "## Next steps\n\nN/A\n\n## Notes\nkept" })).not.toContain("N/A");
+  });
+
+  it("copies the summary as edited, without marker, progress line or footer", () => {
     const md = renderSummary(facts, answer, { footer: "Written by Haiku" });
-    expect(summaryPart(md, "team")).toBe("I added session summaries.\n- Right-click a title");
-    const ticket = summaryPart(md, "ticket")!;
-    expect(ticket.startsWith("# Session summaries")).toBe(true);
+    const text = summaryText(md)!;
+    expect(text.startsWith("# Session summaries")).toBe(true);
     // The body's own rule isn't taken for the footer.
-    expect(ticket).toContain("more");
-    expect(ticket).toContain("## Files changed (2)");
-    expect(ticket).not.toMatch(/\n## Team update\n|Written by|cmd:session-summary/);
-    const edited = md.replace("I added session summaries.", "We shipped summaries.");
-    expect(summaryPart(edited, "team")).toMatch(/^We shipped summaries\./);
-    expect(summaryPart(renderSummary(facts, {}, { pending: "Writing…" }), "team")).toBeNull();
-    expect(summaryPart(renderSummary(facts, { body: "a\n\n---\n\nb" }), "ticket")).toContain("b");
+    expect(text).toContain("more");
+    expect(text).toContain("## Files changed (2)");
+    expect(text).not.toMatch(/Written by|cmd:session-summary/);
+    expect(summaryText(md.replace("Added summaries.", "We shipped summaries."))).toContain("We shipped summaries.");
+    expect(summaryText(renderSummary(facts, {}, { pending: "Writing…" }))).not.toContain("Writing…");
   });
 });
 

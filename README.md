@@ -45,7 +45,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 - **Remote access (beta).** Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted.
 - **Terminals keep running.** A background process owns them, so quitting, reloading or updating the app doesn't end them.
 - **Session search.** Full-text search over Claude Code, Codex, Qwen Code and Copilot CLI transcripts. Return resumes a session.
-- **Session summaries.** Right-click an agent's title bar and choose Summarize Session: a Markdown window fills in with what the session did, ready to edit, with a team update and a ticket version to copy. Needs an AI provider (Settings → AI).
+- **Session summaries.** Right-click an agent's title bar and choose Summarize Session: a Markdown window fills in with what the session did, ready to edit and paste into a message or ticket. Needs an AI provider (Settings → AI).
 - **Widgets.** Agent Activity and a Live Diff of your uncommitted changes come built in; with Magic, describe anything else and an agent builds a live widget for it. They live in the Widget Library (⇧⌘L). [More below](#magic-widgets).
 - **Web browser** next to your terminals, with phone, tablet and desktop sizes.
 - **Files and editor.** A file browser, a text editor and Markdown windows. `open README.md` in a shell opens it in cmd.

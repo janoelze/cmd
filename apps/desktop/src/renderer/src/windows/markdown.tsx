@@ -2,7 +2,7 @@
 // the text editor. The view itself (markdown-view.tsx) loads on first use.
 
 import { cmd } from "../bridge.ts";
-import { copy, copySummaryPart, selectPane } from "../actions.ts";
+import { copy, copySummary, selectPane } from "../actions.ts";
 import { shortPath } from "../model.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 
@@ -32,13 +32,8 @@ registerWindowView({
     const p = stateStr(w, "path");
     return [
       { label: "Edit (⌘E)", run: () => toggleMarkdownEdit(w) },
-      // Session summaries (docs/20-session-summaries.md): the parts to paste elsewhere.
-      ...(p && SUMMARY_FILE.test(p)
-        ? [
-            { label: "Copy Team Update", run: () => void copySummaryPart(p, "team") },
-            { label: "Copy for Ticket", run: () => void copySummaryPart(p, "ticket") },
-          ]
-        : []),
+      // Session summaries (docs/20-session-summaries.md): to paste elsewhere.
+      ...(p && SUMMARY_FILE.test(p) ? [{ label: "Copy Summary", run: () => void copySummary(p) }] : []),
       ...(p
         ? [
             { label: "Open with Default App", run: () => cmd.openPath(p) },

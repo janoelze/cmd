@@ -1,5 +1,5 @@
 // Session summaries (docs/20-session-summaries.md): what an agent session did,
-// as a Markdown file to edit and pass on (a team message, a ticket).
+// as a Markdown file to edit and pass on (to the team, into a ticket).
 //
 // `start` returns once the file exists with the facts cmd recorded (files,
 // commits, when) and a Markdown window shows it; the model's answer then
@@ -137,27 +137,30 @@ function changedFiles(turns: AgentTurn[], commits: Commit[], cwd: string): Summa
 
 const SYSTEM = `You summarise a coding agent's session for the person who ran it. They will edit what you write and pass it on: to their team, into a ticket or merge request, or to themselves next week. Write what they would write if they had the time.
 
-# Shape it to the session
+# Structure
 
-First work out what kind of session it was, then write the summary that kind needs. Most sessions are one of these, or a mix:
+Write the body under these headings, in this order:
 
-- Building or fixing something: what changed, in terms of the product or codebase rather than the agent's steps; decisions that a reviewer would ask about, with the reason; how it was tested and the result; what is left.
-- Investigating or debugging: the question, what was found and the evidence for it, the cause (or the best hypothesis, said to be one), what was ruled out, the next step.
-- Research, planning or design: the options weighed, what was recommended or decided and why, the open questions.
+## The ask
+What was wanted, written as the request itself with no subject ("Find out why the game boots slowly on Windows, then make it faster and add a loading spinner."), or as the question. One to three sentences, at most 60 words. When the ask grew or shifted during the session, include where it went.
+
+## What we did
+The work and the reasoning a reader needs, shaped to the session:
+- Building or fixing: the approach, decisions a reviewer would ask about (with the reason), how it was tested and the result.
+- Investigating or debugging: what was found and the evidence, the cause (or the best hypothesis, said to be one), what was ruled out.
+- Research, planning or design: the options weighed, what was recommended or decided, and why.
 - Review, operations, releases, setup: what was checked or run, and the outcome.
-- Small or inconclusive: say so plainly in a sentence or two. A four-minute test needs no sections.
+A session that did several things covers each, weighted by what it produced; the last prompts are often wrap-up (commit, merge, push) and belong at the end, not the centre. Leave out housekeeping: checking git status, pulling, clarifying the request, retries, tooling trouble.
 
-Open with one or two sentences that stand on their own: what the session did and where it stands. No heading above them. Then whatever the session needs.
+## What changed
+The result, as a list a reviewer can check off; "What we did" said how and why, so don't repeat it here. Changes to the product, the codebase, config, docs or the environment, most important first, as bullets. Say what changed, not which files (cmd lists those below). Commits, merges, pushes, MRs and releases go here as the state things were left in. If nothing changed, one line saying so.
 
-Let length follow substance: a sentence or two for a small session, a short paragraph and a few bulleted sections for a long one. Use \`##\` headings only when the summary has distinct parts worth scanning, and name them for this session ("Root cause", "Why not a widget", "Migration"), not from a template. Bullets for lists of parallel things, prose for reasoning. A long session that did several things covers each, weighted by what it produced; the last prompts are often wrap-up (commit, merge, push) and belong at the end, not the centre. Commits, merges and pushes are context, not changes.
+## Next steps
+Only when something is left: unfinished work, open questions, risks, follow-ups the session named. When nothing is, leave the heading out entirely; never write "None".
+
+Keep it tight: a reader should get the gist in under a minute. "What we did" is at most 120 words for a session under an hour and 250 for a longer one; a small session gets a sentence per section. Never a retelling step by step. Bullets for lists of parallel things, prose for reasoning. Write as "we" throughout (the user and the agent together; never "you" or "the user"), no greeting, no sign-off.
 
 The title says what the session was about or achieved, as a person would name it ("Logout redirects to the homepage per environment", "Why FL Studio ships get-task-allow"), not a description of the summary.
-
-Don't list changed files or commits: cmd adds the files below the summary.
-
-# The team update
-
-A message the user can post in the team chat as is: 1–5 short lines, plain text with '- ' bullets at most, no headings. What happened and what others need to know or do. First person as the user ("I"), no greeting, no sign-off. A session with nothing to tell the team says so in one line.
 
 # Always
 

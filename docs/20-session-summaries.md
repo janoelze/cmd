@@ -10,7 +10,7 @@ Right-click an agent's title bar (or the sidebar row, or Session → Summarize S
 2. **The window opens at once,** in the agent's Space, with what cmd knows without a model: title line, agent, project, branch, when, prompts, files changed, and "Summarizing 12 prompts with gpt-5.4-mini…".
 3. **The answer streams into the file.** `ai.object` with `onPartial` streams the structured answer; every partial is rendered to Markdown and written (at most every 200 ms). The Markdown window already re-renders a watched file in place, keeping the scroll, so no new UI was needed: a summary is a file, editable with ⌘E, readable by agents and the CLI.
 4. **When it's written,** a notification ("Summary ready") with the summary window as its `windowId`. The UI's usual rule shows it only if you looked away (`notifications.when`), and clicking it brings the window forward. A failure is written into the file and notified the same way.
-5. **Copy Team Update / Copy for Ticket** in the Markdown window's menu copy a part of the file, found by its headings (`summaryPart` in `protocol/src/summary.ts`), so they copy what you edited.
+5. **Copy Summary** in the Markdown window's menu copies the file as edited, without its marker and footer (`summaryText` in `protocol/src/summary.ts`).
 
 Why not a toast: macOS notifications can't be updated, and a toast saying "generating" is noise when the window itself shows progress. Why not a widget: the file plus the existing Markdown window give live rendering, editing and CLI access; a widget would add a window type, stored summaries and an event for the same result. A widget can come later as another view over the same core service.
 
@@ -39,13 +39,24 @@ Secrets are masked before anything is sent (`redact`: private keys, Anthropic/Op
 
 ## The answer
 
-The model writes three fields (`SUMMARY_SCHEMA`; every key required, as OpenAI's strict schemas demand): a `title`, a Markdown `body`, and a `teamUpdate`. The system prompt describes what each kind of session needs (building or fixing, investigating, research and planning, review and operations, small or inconclusive) instead of fixed sections, so a four-minute test gets two sentences and an investigation gets "Root cause" and "Still caveated". The body's headings are kept under the title and away from the ones the app looks for.
+The model writes two fields (`SUMMARY_SCHEMA`; every key required, as OpenAI's strict schemas demand): a `title` and a Markdown `body` under four headings:
+
+- **The ask**: the request itself, without a subject ("Find out why the game boots slowly on Windows, then make it faster"), including where it went when it grew.
+- **What we did**: the approach and reasoning, shaped to the kind of session (building or fixing: decisions and testing; investigating: findings, evidence, cause; planning: options and decision; operations: what ran and the outcome). At most 120 words for a session under an hour, 250 otherwise; no housekeeping.
+- **What changed**: the result as a list, not repeating "What we did"; commits, pushes and MRs as the state things were left in; one line if nothing changed.
+- **Next steps**: only when something is left. A section that only says "None" is dropped when rendered.
+
+Files changed are listed by code below the body; the model is told not to list them.
 
 What testing changed:
 
 - **Recency.** Small models summarise the end of a long session. The user's prompts, in order, go *after* the transcript ("each one that led to work belongs in the summary"); before that, a 3-prompt session about boot performance came back as "set the default volume to 70%", its last prompt.
-- **Fixed fields** (changes with a reason, decisions, verification, follow-ups) made every session look the same and padded reasons ("— to ship the feature"). Free-form guidance flexes better.
+- **Fixed fields** (changes with a reason, decisions, verification, follow-ups) padded reasons ("— to ship the feature") and made every session look the same; a free-form body with no structure flexed but read differently every time. Four fixed headings with guidance per kind of session inside them do both.
+- **Concrete limits** (60 words for the ask, 120/250 for what we did) work where "keep it tight" didn't; the fast model still runs over them now and then.
+- **Voice.** "We" throughout reads naturally except for the ask, which is phrased as the request.
+- **Tier.** gpt-5.4-mini (fast, 3–8 s) against gpt-5.5 (smart, 5–9 s) on the same sessions: the smart tier is more precise and names better next steps, but is longer; the fast tier is good enough to edit and pass on.
 - Sessions resumed on another day show both days, not a 94-hour duration.
+- A separate team chat message and a commit list were tried and dropped: the first repeated the body, the second included others' commits. Commit subjects still go to the model.
 
 ## Pieces
 
@@ -54,11 +65,11 @@ What testing changed:
 | Service: inputs, file, window, streaming, notification | `core/src/summaries/service.ts` |
 | Pruning and redaction | `core/src/summaries/prune.ts` |
 | Schema and Markdown | `core/src/summaries/render.ts` |
-| Marker, section names, `summaryPart` | `protocol/src/summary.ts` |
+| Marker, section names, `summaryText` | `protocol/src/summary.ts` |
 | Streaming objects | `ai/backends.ts` `completeObject` (`onPartial` → `streamText`) |
 | RPC | `agent.summarize { agentId, open?, wait? }` → `{ path, windowId, markdown }` (remote: never) |
 | CLI | `cmd agents summary <agent> [--open]` |
-| UI | title bar and sidebar menu (`App.tsx`), `session.summarize`, `summarizeSession` and `copySummaryPart` (`actions.ts`), Markdown window menu |
+| UI | title bar and sidebar menu (`App.tsx`), `session.summarize`, `summarizeSession` and `copySummary` (`actions.ts`), Markdown window menu |
 | Files | `$CMD_HOME/summaries/<project>-<date>-<session>.md` (else the temp folder's `cmd-summaries`); asking again overwrites |
 
 One summary per agent at a time: asking again while one is written shows that one.

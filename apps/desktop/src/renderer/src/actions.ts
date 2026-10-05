@@ -1,6 +1,6 @@
 // UI-level actions shared by the sidebar and the command palette.
 
-import { isSummary, summaryPart, type Agent, type AppWindow, type PaneId, type SearchHit } from "@cmd/protocol";
+import { isSummary, summaryText, type Agent, type AppWindow, type PaneId, type SearchHit } from "@cmd/protocol";
 import { toast } from "@cmd/ui";
 import { cmd } from "./bridge.ts";
 import { getState, setUi } from "./store.ts";
@@ -168,13 +168,13 @@ export async function summarizeSession(a: Agent): Promise<void> {
   }
 }
 
-/** Copy a part of a session summary file (the team message, or the rest for a ticket). */
-export async function copySummaryPart(path: string, part: "team" | "ticket"): Promise<void> {
+/** Copy a session summary file as edited, without its marker and footer. */
+export async function copySummary(path: string): Promise<void> {
   const { text } = await cmd.call("fs.read", { path });
-  const out = isSummary(text) ? summaryPart(text, part) : null;
-  if (!out) return void toast(part === "team" ? "This summary has no team update yet." : "This file isn't a session summary.", { tone: "warning" });
+  const out = isSummary(text) ? summaryText(text) : null;
+  if (!out) return void toast("This file isn't a session summary.", { tone: "warning" });
   copy(out);
-  toast(part === "team" ? "Team update copied" : "Summary copied for a ticket", { tone: "success" });
+  toast("Summary copied", { tone: "success" });
 }
 
 export function copy(text: string): void {
