@@ -67,8 +67,11 @@ export function FormRow({
   return (
     <div className="ui-row" data-compact={compact || undefined} data-stacked={stacked || undefined}>
       <div className="ui-row-text">
-        <div className="ui-row-title" data-tip={tip}>
-          <span className="ui-row-name">{title}</span>
+        <div className="ui-row-title">
+          {/* The tip on the name only: an accessory or a title aside has its own. */}
+          <span className="ui-row-name" data-tip={tip}>
+            {title}
+          </span>
           {accessory}
           {titleAside ? <span className="ui-row-title-aside">{titleAside}</span> : null}
         </div>

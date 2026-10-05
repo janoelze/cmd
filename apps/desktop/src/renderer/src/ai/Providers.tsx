@@ -37,7 +37,13 @@ export function AiKeyRow({ provider, autoFocus, stacked }: { provider: AiProvide
     <FormRow
       title={def.title}
       tip={def.keySecret}
-      titleAside={(!st?.key.set || st.state === "rejected") && <LinkButton onClick={() => cmd.openPath(def.keyUrl)}>Get a key</LinkButton>}
+      titleAside={
+        (!st?.key.set || st.state === "rejected") && (
+          <LinkButton data-tip={`Create one at ${new URL(def.keyUrl).host}`} onClick={() => cmd.openPath(def.keyUrl)}>
+            Get a key
+          </LinkButton>
+        )
+      }
       note={note?.text}
       noteTone={note?.tone}
       stacked={stacked}

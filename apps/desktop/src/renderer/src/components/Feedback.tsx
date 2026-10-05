@@ -83,6 +83,7 @@ export function Feedback({
       title="Send Feedback"
       width={480}
       position="center"
+      divided
       aside={
         <span data-tip="App version, build, macOS version and architecture. Home folders are replaced by ~.">
           <Checkbox checked={includeInfo} onChange={setIncludeInfo}>

@@ -836,29 +836,26 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
   outline: none;
   animation: ui-pop-in var(--dur) var(--ease);
 }
-.ui-dialog-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 0 16px; }
+/* One inset for the title row, the body and the footer, so every sheet lines up the same way. */
+.ui-dialog { --dialog-pad: 20px; }
+.ui-dialog-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 0 var(--dialog-pad); }
 .ui-dialog-title { flex: 1; min-width: 0; font: 600 var(--text-base) var(--font-ui); }
 .ui-dialog-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; line-height: 1.45; }
-.ui-dialog-body[data-padded] { padding: 10px 16px 14px; }
-.ui-dialog-head + .ui-dialog-body[data-padded] { padding-top: 10px; }
-.ui-dialog:not(:has(.ui-dialog-head)) .ui-dialog-body[data-padded] { padding-top: 14px; }
-.ui-dialog-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 0 16px 14px; }
-.ui-dialog[data-divided] .ui-dialog-head { padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--separator); }
-.ui-dialog[data-divided] .ui-dialog-head + .ui-dialog-body[data-padded] { padding-top: 14px; }
-.ui-dialog[data-divided] .ui-dialog-foot { padding: 10px 16px; border-top: 1px solid var(--separator); }
-.ui-dialog-body[data-padded] { gap: 12px; }
+.ui-dialog-body[data-padded] { gap: 12px; padding: 12px var(--dialog-pad) var(--dialog-pad); }
+.ui-dialog:not(:has(.ui-dialog-head)) .ui-dialog-body[data-padded] { padding-top: var(--dialog-pad); }
+.ui-dialog-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 0 var(--dialog-pad) var(--dialog-pad); }
+.ui-dialog[data-divided] .ui-dialog-head { padding: 12px 14px 12px var(--dialog-pad); border-bottom: 1px solid var(--separator); }
+.ui-dialog[data-divided] .ui-dialog-head + .ui-dialog-body[data-padded] { padding-top: var(--dialog-pad); }
+.ui-dialog[data-divided] .ui-dialog-foot { padding: 12px var(--dialog-pad); border-top: 1px solid var(--separator); }
 .ui-dialog-aside { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--text-dim); }
 
-/* SheetHeader: a sheet's greeting. A sheet that starts with one gets more air all round. */
+/* SheetHeader: a sheet's greeting. The step's content sits at the bottom, by the actions. */
 .ui-sheet-header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .ui-sheet-header-icon { display: flex; margin-bottom: 18px; color: var(--accent); }
 .ui-sheet-header-title { margin: 0; font: 600 var(--text-display) / 1.2 var(--font-ui); letter-spacing: -0.01em; color: var(--text); text-wrap: balance; }
 .ui-sheet-header-subtitle { margin: 0; font-size: var(--text-md); line-height: 1.45; color: var(--text-dim); text-wrap: pretty; }
-.ui-dialog-body[data-padded]:has(> .ui-sheet-header:first-child) { padding: 36px 36px 28px; gap: 28px; }
-.ui-dialog:has(.ui-sheet-header) .ui-dialog-foot { padding: 0 36px 28px; }
-/* Under the greeting, the step's content sits at the bottom, by the actions. */
+.ui-dialog-body[data-padded]:has(> .ui-sheet-header:first-child) { padding-top: 28px; gap: 24px; }
 .ui-dialog-body[data-padded] > .ui-sheet-header:first-child + * { margin-top: auto; }
-.ui-dialog[data-divided]:has(.ui-sheet-header) .ui-dialog-foot { padding: 14px 36px; }
 
 /* FeatureList: a welcome's features, no box. */
 .ui-features { display: flex; flex-direction: column; gap: 20px; margin: 0; padding: 0; list-style: none; }
