@@ -49,7 +49,7 @@ export const SETTINGS_SCHEMA = {
     control: "font",
     type: "string",
     default: '"Monaspace Neon", "SF Mono", Menlo, monospace',
-    description: "Font family list for terminals, the text editor, file browsers and code in Markdown. Use installed fonts; they render with native smoothing.",
+    description: "Font family list for terminals, the text editor and code in Markdown. Use installed fonts; they render with native smoothing.",
   },
   "font.codeSize": { title: "Code font size", unit: "px", type: "number", default: 14, min: 8, max: 32, description: "Size of the code font. ⌘+ and ⌘− zoom terminals on top of it." },
   "font.text": {

@@ -25,8 +25,11 @@ export function TileTitle({
   onContextMenu,
   onDoubleClick,
   title,
+  bare,
 }: {
   row: SidebarRow;
+  /** A sidebar's title bar: the name and status, no kind or place (docs/21-sidebars.md). */
+  bare?: boolean;
   onPointerDown?: (e: React.PointerEvent) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   onDoubleClick?: (e: React.MouseEvent) => void;
@@ -52,15 +55,15 @@ export function TileTitle({
       </span>
       <RemoteBadge id={windowIdOf(row)} />
       <span className="tile-meta">
-        <Slot className="slot-kind" value={f.kind ? { text: f.kind } : undefined} />
+        <Slot className="slot-kind" value={f.kind && !bare ? { text: f.kind } : undefined} />
         {/* A divider only after a field that's there. */}
-        <Slot className="slot-place" value={f.place ? { text: f.place } : undefined} clipStart divider={!!f.kind} />
+        <Slot className="slot-place" value={f.place && !bare ? { text: f.place } : undefined} clipStart divider={!!f.kind && !bare} />
         <span
           className="tile-status"
           onPointerDown={action ? (e) => e.stopPropagation() : undefined}
           onClick={action ? (e) => (e.stopPropagation(), action.run()) : undefined}
         >
-          <Slot className={`slot-status${action ? " actionable" : ""}`} value={f.status} divider={!!(f.kind || f.place)} title={action?.title} />
+          <Slot className={`slot-status${action ? " actionable" : ""}`} value={f.status} divider={!bare && !!(f.kind || f.place)} title={action?.title} />
         </span>
       </span>
     </div>

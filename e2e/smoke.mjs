@@ -975,7 +975,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       return el ? [sel, getComputedStyle(el).fontFamily, getComputedStyle(el).fontSize] : null;
     }),
   );
-  check(fonts[0] && /Monaspace/.test(fonts[0][1]) && fonts[0][2] === `${16 * 0.9}px`, `file browser rows use the code font (${fonts[0]})`);
+  check(fonts[0] && !/Monaspace/.test(fonts[0][1]) && fonts[0][2] === "13px", `file browser rows use the UI font, like the Navigator (${fonts[0]})`);
   check(fonts[1] && /system-ui|-apple-system/.test(fonts[1][1]), `Markdown prose uses the text font (${fonts[1]})`);
   check(!fonts[2] || /Monaspace/.test(fonts[2][1]), `Markdown code uses the code font (${fonts[2]})`);
   await row("Code font size").locator(".ui-reset").click();

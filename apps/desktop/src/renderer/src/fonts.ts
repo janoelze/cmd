@@ -1,5 +1,5 @@
 // The font settings as CSS tokens on :root, so every window type's styles can use
-// them: --font-code / --font-code-size (terminals, editor, file browsers, code in
+// them: --font-code / --font-code-size (terminals, editor, code in
 // Markdown) and --font-text / --font-text-size (Markdown prose). xterm.js and
 // CodeMirror take the same values directly (terminals.ts, TextView.tsx).
 

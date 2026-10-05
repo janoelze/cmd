@@ -5,7 +5,7 @@
 
 :root {
   /* Content fonts, from the font.* settings (fonts.ts): code (terminals, editor,
-     file browsers, Markdown code) and text (Markdown prose). */
+     Markdown code) and text (Markdown prose). File browsers use the UI font. */
   --font-code: var(--font-mono);
   --font-code-size: 14px;
   --font-text: var(--font-ui);
@@ -875,40 +875,111 @@ kbd {
 .file-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; outline: none; }
 .file-row {
   --depth: 0;
+  position: relative;
   display: grid;
-  grid-template-columns: 12px 16px minmax(0, 1fr) 12px 72px 110px;
+  /* Twisty, icon (as wide as the widest file icon's box), name, git letter, size, date.
+     Even column widths and an even row height keep every icon on whole pixels. */
+  grid-template-columns: 12px 18px minmax(0, 1fr) 12px 72px 110px;
   align-items: center;
+  justify-items: center;
   gap: 6px;
-  height: max(24px, calc(var(--font-code-size) * 1.7));
+  height: 24px;
   padding: 0 12px 0 calc(8px + var(--depth) * 16px);
-  font: calc(var(--font-code-size) * 0.9) var(--font-code);
+  /* The Navigator's type: the UI font, whole-pixel line height. */
+  font: 13px/18px var(--font-ui);
   cursor: default;
 }
 .file-row:hover { background: var(--bg-hover); }
-.file-row.sel { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.file-row.sel { background: var(--bg-selected); }
 .file-row.hidden-file { opacity: 0.55; }
 .file-icon { color: var(--text-dim); }
 .file-icon.dir { color: var(--folder); }
-.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-name { justify-self: stretch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row .git-mark, .file-size, .file-date { justify-self: end; }
 /* Narrow (a sidebar, a thin strip window): names only, no size or date column. */
 .files { container-type: inline-size; }
 @container (max-width: 420px) {
-  .file-row { grid-template-columns: 12px 16px minmax(0, 1fr) 12px; }
+  .file-row { grid-template-columns: 12px 18px minmax(0, 1fr) 12px; }
   .file-size, .file-date { display: none; }
 }
 .file-size, .file-date { font-size: 0.85em; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
 .file-op-error.ui-callout { margin: 2px 8px 4px; }
+
+/* As a sidebar (FilesView, docs/21-sidebars.md): an explorer. The folder header
+   replaces the toolbar; its actions show on hover (or while the list has focus). */
+.files-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 0 6px 0 4px;
+  box-shadow: inset 0 -1px 0 var(--separator);
+}
+.files-head-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 6px;
+  font: 600 11px var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+.files-head-name:hover { color: var(--text); background: var(--bg-hover); }
+.files-head-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-head-branch {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 5px;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+.files-head-branch:hover { color: var(--text); background: var(--bg-hover); }
+.files-head-branch.on { color: var(--text); background: var(--bg-selected); }
+.files-head-actions { flex: none; display: flex; align-items: center; gap: 0; margin-left: auto; opacity: 0; transition: opacity var(--dur-fast); }
+.files:hover .files-head-actions, .files:focus-within .files-head-actions { opacity: 1; }
+/* Rows like the Navigator's (inset, rounded, the same hover and selection), denser,
+   and a guide per level at each ancestor's twisty. */
+.files.in-sidebar .file-list { padding: 4px 0; }
+.files.in-sidebar .file-row { height: 22px; margin: 0 6px; padding-left: calc(4px + var(--depth) * 12px); padding-right: 6px; gap: 5px; border-radius: var(--radius-sm); }
+.files.in-sidebar .file-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: calc(var(--depth) * 12px);
+  background: repeating-linear-gradient(to right, transparent 0 6px, var(--guide) 6px 7px, transparent 7px 12px);
+  pointer-events: none;
+}
+.files.in-sidebar .file-list { --guide: color-mix(in srgb, var(--ink) 9%, transparent); }
+.files.in-sidebar .file-list:hover { --guide: color-mix(in srgb, var(--ink) 16%, transparent); }
+/* Renaming in place, like Finder and editors' explorers: the field takes the name's
+   place and runs to the row's end, its text exactly where the name's was (the margin
+   cancels its padding and border), a hairline focus edge rather than a glowing box. */
 .file-rename {
+  justify-self: stretch;
   min-width: 0;
   height: calc(100% - 4px);
-  padding: 0 4px;
-  margin-left: -5px;
+  margin: 0 0 0 -4px;
+  padding: 0 3px;
   font: inherit;
   color: var(--text);
   background: var(--well);
   border: 1px solid var(--input-focus-edge);
-  border-radius: 4px;
-  box-shadow: 0 0 0 2px var(--input-glow);
+  border-radius: 3px;
   outline: none;
   user-select: text;
 }

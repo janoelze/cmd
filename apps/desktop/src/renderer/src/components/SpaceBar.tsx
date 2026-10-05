@@ -5,7 +5,8 @@
 // for the other Spaces, so a background Space that wants you shows without
 // opening the menu.
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useWholePixelWidth } from "../pixels.ts";
 import { Badge, Menu, type MenuItemProps } from "@cmd/ui";
 import type { Space, SpaceId } from "@cmd/protocol";
 import { shortPath } from "../model.ts";
@@ -28,14 +29,7 @@ export function SpaceBar(p: Props) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const name = useRef<HTMLSpanElement>(null);
-  // The name's width rounded up to a whole pixel, so the badge and chevron after it
-  // land on whole pixels (a fractional x renders them soft).
-  useLayoutEffect(() => {
-    const el = name.current;
-    if (!el) return;
-    el.style.width = "";
-    el.style.width = `${Math.ceil(el.getBoundingClientRect().width)}px`;
-  });
+  useWholePixelWidth(name); // the badge and chevron after it stay crisp
   const shown = p.spaces.find((sp) => sp.id === p.current);
   // The strongest mark among the other Spaces, and how many have one.
   const others = p.spaces.filter((sp) => sp.id !== p.current && p.attention.has(sp.id));

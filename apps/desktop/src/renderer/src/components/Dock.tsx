@@ -46,7 +46,7 @@ export function Dock(p: Props) {
         onContextMenu={(e) => e.target instanceof Element && e.target.closest("[data-embed]") && menu(e)}
       >
         <div className="tile-body">
-          <TileTitle row={r} onContextMenu={menu} />
+          <TileTitle row={r} onContextMenu={menu} bare />
           <PlacementContext.Provider value="sidebar">
             {r.pane ? (
               <TerminalView paneId={id} focused={p.selected} onMenu={p.onTerminalMenu} />
