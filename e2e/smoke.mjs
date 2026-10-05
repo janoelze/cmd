@@ -771,7 +771,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.waitForSelector(".widget-library .wl-card", { timeout: 5000 });
     const cards = await win.locator(".widget-library .wl-name").allTextContents();
     await win.screenshot({ path: path.join(shots, "widget-library.png") });
-    const magicButton = await win.locator(".widget-library .wl-search button", { hasText: "New Widget with Magic" }).count();
+    const magicButton = await win.locator(".widget-library .wl-search button", { hasText: "New Widget" }).count();
     check(magicButton === 1 && cards[0] === "Counter" && cards.includes("Agent Activity") && cards.includes("Live Diff"), `the Widget Library has Magic beside its search, then the closed widget and the built-ins (${cards.join(", ")})`);
     await win.locator(".widget-library .wl-card", { hasText: "Counter" }).click();
     let back = null;

@@ -36,7 +36,7 @@ Every entry point, label and menu follows from these three sentences.
 Magic is the brand of making, so it appears wherever a widget is being made or was made, and nowhere else:
 
 - the ✦ on **New Widget with Magic…** (⇧⌘M, the shortcut New Magic Widget has today), in the menu, the palette and the sidebar's +;
-- the library's own button, **✦ New Widget with Magic**, beside its search field (first a card in the grid; a button keeps making apart from finding);
+- the library's own button, **✦ New Widget** (the sparkle icon says Magic), beside its search field (first a card in the grid; a button keeps making apart from finding);
 - the making window itself: the prompt field, the live steps, the view drawing itself in. It is unchanged; it already feels right;
 - "Made with Magic" under the name of widgets you made in the library (a ✦ on their avatar was tried and dropped: it read as noise); their title bars keep the sparkle icon of the Magic type;
 - Edit Widget (⌘E) and Change (⌘L), which are Magic again: asking for a change.
@@ -48,7 +48,7 @@ Each action has one place and does one thing.
 | Intent | How |
 |---|---|
 | "What's available?" | **Widget Library…** (⇧⌘L): a gallery. Its search field only searches. |
-| "Make a new one" | **New Widget with Magic…** (⇧⌘M), or the ✦ card in the library |
+| "Make a new one" | **New Widget with Magic…** (⇧⌘M), or ✦ New Widget in the library |
 | "Change this one" | **Edit Widget** (⌘E), **Change…** (⌘L) |
 | "Take it off my desk" | ⌘W: **Remove from Desk** |
 | "Get rid of it" | **Delete Widget**, only in the library or the widget's edit view, with a confirmation |
@@ -67,7 +67,7 @@ The library is ⇧⌘L, as Xcode's Library is: L for Library. ⌥⌘M looks natu
 
 A sheet, like the palette or Settings, with a grid of tall cards, three to a row: an avatar top left (a built-in widget's icon, else the widget's initial, in a colour of its own from its name, like projects' chips in the sidebar), the name and where it comes from beside it ("Made with Magic" or "Built-in"), open space, and the description or what was asked for at the bottom. Screenshots (the latest revision's `shot.png`) are still listed (`WidgetEntry.shot`) but not shown: a hover preview could use them.
 
-- **Your Widgets**: by last use. (A "Here" badge on widgets already on this desk was tried and dropped: unclear.) New Widget with Magic is a button beside the search field, not a card among them.
+- **Your Widgets**: by last use. (A "Here" badge on widgets already on this desk was tried and dropped: unclear.) ✦ New Widget is a button beside the search field, not a card among them.
 - **Built-in**: Agent Activity, Live Diff, and more over time.
 - No **Examples** section. It was built (the Magic prompt's examples as widgets to add and change) and dropped: examples already live as the chips under the prompt when making a widget, and the library is for widgets you have.
 
@@ -134,7 +134,7 @@ Built in phase 2:
 
 - `WindowType.role` (`"window"` by default, `"widget"`) and `description`, the same in `WindowTypeInfo`. `magic`, `agents` and `diff` are widget types.
 - Refs: `magic:<widget id>` for widgets made with Magic, `type:<kind>` for built-in widgets.
-- `widget.list` → `WidgetEntry[]` (`{ ref, source: "builtin" | "yours", kind, title, description?, icon, shot?, createdAt?, usedAt?, windows }`): built-in widget types (every type with role `widget` but `magic`, which is the New Widget with Magic button), then yours by last use.
+- `widget.list` → `WidgetEntry[]` (`{ ref, source: "builtin" | "yours", kind, title, description?, icon, shot?, createdAt?, usedAt?, windows }`): built-in widget types (every type with role `widget` but `magic`, which is the New Widget button), then yours by last use.
 - `widget.add { ref, spaceId? | callerPaneId? }` → the new window. Refuses types that aren't widgets.
 - `widget.rename { ref, title }`: the name sticks (`named` in widget.json); changes and hand edits keep it instead of the manifest's title.
 - `widget.duplicate { ref }` → the new entry, titled "… copy": files, revisions and secrets copied.

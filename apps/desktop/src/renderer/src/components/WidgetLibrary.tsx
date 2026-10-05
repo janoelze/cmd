@@ -1,5 +1,5 @@
 // The Widget Library (docs/16-widgets.md): a sheet of cards, yours (by last
-// use) and built-in ones, with New Widget with Magic beside the search field.
+// use) and built-in ones, with a New Widget button (Magic) beside the search field.
 // A click puts a widget on the desk of this Space; the search field only searches. Each card's menu adds, and
 // for yours renames, duplicates, shows the folder and deletes. Each card has
 // an avatar: a built-in widget's icon, else the widget's initial, in a colour
@@ -119,7 +119,7 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
           }}
         />
         <Button variant="primary" size="lg" icon="sparkles" onClick={make}>
-          New Widget with Magic
+          New Widget
         </Button>
       </div>
       <div className="wl-body">
@@ -136,7 +136,7 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
             <div className="wl-grid">{builtin.map(card)}</div>
           </section>
         )}
-        {query && !shown.length && <EmptyState compact>Nothing matches “{query}”. New Widget with Magic makes one.</EmptyState>}
+        {query && !shown.length && <EmptyState compact>Nothing matches “{query}”. New Widget makes one.</EmptyState>}
       </div>
       {renaming && <RenameDialog entry={renaming} onDone={() => setRenaming(null)} onError={fail} />}
     </Dialog>
