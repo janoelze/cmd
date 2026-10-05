@@ -140,7 +140,7 @@ export interface ListRowProps {
 export function ListRow(p: ListRowProps) {
   return (
     <div
-      className={cls("ui-row", p.detail != null ? "tall" : "short", p.selected && "sel", p.active && "active", p.className)}
+      className={cls("ui-list-row", p.detail != null ? "tall" : "short", p.selected && "sel", p.active && "active", p.className)}
       data-tone={p.tone}
       data-tip={p.tip}
       style={p.depth ? ({ "--depth": p.depth } as CSSProperties) : undefined}
@@ -156,17 +156,17 @@ export function ListRow(p: ListRowProps) {
     >
       {p.lead}
       {p.icon !== undefined && <ListMark icon={p.icon} light={p.light} />}
-      <div className="ui-row-text">
-        <div className="ui-row-title">
-          <span className={cls("ui-row-name", p.mono && "mono")}>{p.title}</span>
-          {p.detail == null && p.place != null && <span className="ui-row-place">{p.place}</span>}
+      <div className="ui-list-row-text">
+        <div className="ui-list-row-title">
+          <span className={cls("ui-list-row-name", p.mono && "mono")}>{p.title}</span>
+          {p.detail == null && p.place != null && <span className="ui-list-row-place">{p.place}</span>}
         </div>
-        {p.detail != null && <div className="ui-row-detail">{p.detail}</div>}
+        {p.detail != null && <div className="ui-list-row-detail">{p.detail}</div>}
       </div>
       {(p.end || p.hover) && (
-        <span className="ui-row-end">
+        <span className="ui-list-row-end">
           {p.end}
-          {p.hover && <span className="ui-row-hover" onClick={(e) => e.stopPropagation()}>{p.hover}</span>}
+          {p.hover && <span className="ui-list-row-hover" onClick={(e) => e.stopPropagation()}>{p.hover}</span>}
         </span>
       )}
     </div>
