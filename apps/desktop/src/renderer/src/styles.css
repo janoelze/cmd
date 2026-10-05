@@ -1185,7 +1185,7 @@ kbd {
 }
 .space-trigger:hover, .space-trigger.open { background: var(--bg-selected); }
 .space-trigger:focus-visible { outline: none; border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
-.space-trigger .space-name { flex: 0 1 auto; }
+.space-trigger .space-name { flex: 0 1 auto; position: relative; top: -0.5px; } /* capitals centred on the icon and chevron (measured) */
 .space-menu { min-width: 260px; }
 .space-trigger > .sf { flex: none; color: var(--text-dim); }
 .space-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

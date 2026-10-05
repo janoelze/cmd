@@ -5,7 +5,7 @@
 // for the other Spaces, so a background Space that wants you shows without
 // opening the menu.
 
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Badge, Menu, type MenuItemProps } from "@cmd/ui";
 import type { Space, SpaceId } from "@cmd/protocol";
 import { shortPath } from "../model.ts";
@@ -27,6 +27,15 @@ interface Props {
 export function SpaceBar(p: Props) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
+  const name = useRef<HTMLSpanElement>(null);
+  // The name's width rounded up to a whole pixel, so the badge and chevron after it
+  // land on whole pixels (a fractional x renders them soft).
+  useLayoutEffect(() => {
+    const el = name.current;
+    if (!el) return;
+    el.style.width = "";
+    el.style.width = `${Math.ceil(el.getBoundingClientRect().width)}px`;
+  });
   const shown = p.spaces.find((sp) => sp.id === p.current);
   // The strongest mark among the other Spaces, and how many have one.
   const others = p.spaces.filter((sp) => sp.id !== p.current && p.attention.has(sp.id));
@@ -63,7 +72,7 @@ export function SpaceBar(p: Props) {
         }}
       >
         {shown && <SpaceIcon space={shown} />}
-        <span className="space-name">{shown?.name ?? "—"}</span>
+        <span ref={name} className="space-name">{shown?.name ?? "—"}</span>
         {mark && (
           <Badge size="sm" solid tone={mark === "needs" ? "warning" : "success"} tip={`${others.length} other Space${others.length === 1 ? "" : "s"} ${mark === "needs" ? "need you" : "finished"}`}>
             {others.length}
