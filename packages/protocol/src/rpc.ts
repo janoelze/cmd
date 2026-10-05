@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, CommandRun, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
 import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
@@ -82,6 +82,12 @@ export interface Methods {
   "window.clearAttention": { params: { id: WindowId }; result: null };
   /** `cmd notify`: from a terminal (paneId) or from anywhere. */
   "notify.send": { params: { paneId?: PaneId | null; title?: string; body: string }; result: null };
+  /** The notifications sent since the core started, newest first (the Notifications widget). */
+  "notify.list": { params: {}; result: AppNotification[] };
+  /** Forget them (event notifications.cleared). */
+  "notify.clear": { params: {}; result: null };
+  /** Commands terminals ran (OSC 133), newest first; running ones included. */
+  "command.list": { params: { spaceId?: SpaceId }; result: CommandRun[] };
   /** Terminal state, for re-attaching a view after a UI reload; replay it into a terminal of `cols` x `rows`. */
   "pane.snapshot": { params: { paneId: PaneId }; result: { data: string; cols: number; rows: number } };
   /** Clear stuck terminal state (modes a crashed program left on). */
@@ -404,6 +410,9 @@ export type CoreEvent =
   /** Bring a window to the front (e.g. `open .` in a terminal). */
   | { type: "window.focus"; id: WindowId }
   | { type: "notification"; notification: AppNotification }
+  | { type: "notifications.cleared" }
+  /** A command started or ended (CommandRun.endedAt). */
+  | { type: "command.updated"; run: CommandRun }
   | { type: "remote.updated"; status: RemoteStatus }
   /** A browser wants to pair: ask the person on the Mac (remote.approve). */
   | { type: "remote.pairRequest"; request: RemotePairRequest }

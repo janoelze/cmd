@@ -14,6 +14,11 @@ import { AgentActivity } from "../components/AgentActivity.tsx";
 import { LiveDiff } from "../components/LiveDiff.tsx";
 import { watchUrl, YouTubeView } from "../components/YouTubeView.tsx";
 import { NavigatorView } from "../components/Navigator.tsx";
+import { CommandsView } from "../components/CommandsView.tsx";
+import { NotificationsView } from "../components/NotificationsView.tsx";
+import { ResourcesView } from "../components/ResourcesView.tsx";
+import { TimerView } from "../components/TimerView.tsx";
+import { scopeMenu, scopeOf, setWidgetState } from "../widgets.ts";
 import { intervalLabel, refreshChoices } from "../magic.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
@@ -193,4 +198,46 @@ registerWindowView({
   kind: "navigator",
   View: NavigatorView,
   describe: () => ({ kind: null }),
+});
+
+// List widgets: the title bar's menu (titleMenu) switches their scope and has their
+// options; the same entries are on right-click. Their summary is the title bar's status.
+const scopeLabel = (w: AppWindow) => (scopeOf(w.state.scope) === "all" ? "All Spaces" : "This Space");
+const scoped = (extra: (w: AppWindow) => MenuEntry[]) => (w: AppWindow) => [...scopeMenu(w.id, scopeOf(w.state.scope)), "-" as const, ...extra(w)];
+const commandsMenu = scoped((w) => [{ label: "Failed Only", checked: w.state.failedOnly === true, run: () => setWidgetState(w.id, { failedOnly: w.state.failedOnly !== true }) }]);
+const notificationsMenu = scoped(() => [{ label: "Clear Notifications", run: () => void cmd.call("notify.clear", {}).catch(() => {}) }]);
+const resourcesMenu = scoped(() => [{ label: "Open Task Manager", run: () => cmd.openTaskManager() }]);
+
+registerWindowView({
+  kind: "commands",
+  View: CommandsView,
+  describe: () => ({ kind: null }),
+  titleMenu: (w) => ({ label: scopeLabel(w), entries: commandsMenu(w) }),
+  menu: commandsMenu,
+});
+
+registerWindowView({
+  kind: "notifications",
+  View: NotificationsView,
+  describe: () => ({ kind: null }),
+  titleMenu: (w) => ({ label: scopeLabel(w), entries: notificationsMenu(w) }),
+  menu: notificationsMenu,
+});
+
+registerWindowView({
+  kind: "resources",
+  View: ResourcesView,
+  describe: () => ({ kind: null }),
+  titleMenu: (w) => ({ label: scopeLabel(w), entries: resourcesMenu(w) }),
+  menu: resourcesMenu,
+});
+
+registerWindowView({
+  kind: "timer",
+  View: TimerView,
+  describe: () => ({ kind: null }),
+  menu: (w) => [
+    { label: w.state.endsAt ? "Pause" : "Start", run: () => setWidgetState(w.id, { action: w.state.endsAt ? "pause" : "start" }) },
+    { label: "Reset", run: () => setWidgetState(w.id, { action: "reset" }) },
+  ],
 });

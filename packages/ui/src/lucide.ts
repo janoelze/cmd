@@ -58,6 +58,9 @@ import {
   Sparkles,
   SquareArrowOutUpRight,
   SquareTerminal,
+  Gauge,
+  RotateCcw,
+  Timer,
   Trash2,
   TriangleAlert,
   Type,
@@ -70,6 +73,7 @@ import {
 /** SF Symbol name → Lucide SVG. Unknown names render nothing, as on macOS. */
 const LUCIDE: Record<string, string> = {
   "arrow.clockwise": RotateCw,
+  "arrow.counterclockwise": RotateCcw,
   "arrow.up.forward.app": SquareArrowOutUpRight,
   "arrow.uturn.backward": Undo2,
   bell: Bell,
@@ -99,6 +103,7 @@ const LUCIDE: Record<string, string> = {
   "eye.slash": EyeOff,
   folder: Folder,
   "folder.fill": Folder,
+  "gauge.with.dots.needle.33percent": Gauge,
   gearshape: Settings,
   globe: Globe,
   house: House,
@@ -126,6 +131,7 @@ const LUCIDE: Record<string, string> = {
   "square.grid.3x3": Grid3x3,
   terminal: SquareTerminal,
   textformat: Type,
+  timer: Timer,
   trash: Trash2,
   "wand.and.stars": WandSparkles,
   xmark: X,

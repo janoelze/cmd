@@ -1293,7 +1293,7 @@ await win.waitForTimeout(800);
 
 // ── remembered UI state across an app restart (the core keeps running) ──
 await menu("view.grid");
-await win.click(".sb-windows .sb-heading"); // collapse a Navigator section
+await win.click(".sb-windows .ui-list-heading"); // collapse a Navigator section
 await menu("view.zoomIn");
 await menu("view.zoomIn");
 {
@@ -1326,7 +1326,7 @@ check((await win.locator(".main.mode-grid").count()) === 1, "view mode restored 
   const reset = (await win.locator(".dock-left").boundingBox()).width;
   check(Math.abs(reset - 280) <= 1, `double-clicking the edge resets the width (${reset})`);
 }
-check((await win.locator('.sb-windows .sb-heading[aria-expanded="false"]').count()) === 1, "collapsed sidebar section restored");
+check((await win.locator('.sb-windows .ui-list-heading[aria-expanded="false"]').count()) === 1, "collapsed sidebar section restored");
 const ui = await win.evaluate(() => window.cmd.call("ui.get", {}));
 check(ui["terminal.zoom"] === 2, "terminal zoom restored (+2)");
 const restored = (await homeView())["selection.pane"];

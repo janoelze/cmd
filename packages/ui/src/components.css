@@ -691,9 +691,74 @@
 .ui-empty[data-compact] { padding: 16px 12px; gap: 3px; }
 .ui-empty-icon { margin-bottom: 4px; opacity: 0.6; }
 .ui-empty-title { font: 600 var(--text-lg) var(--font-ui); color: var(--text); }
-.ui-empty[data-compact] .ui-empty-title { font-size: var(--text-base); }
+.ui-empty[data-compact] .ui-empty-title { font-size: 12px; }
 .ui-empty-text { max-width: 360px; font-size: var(--text-md); line-height: 1.45; text-wrap: pretty; }
+/* Compact (sidebars, widgets): a short, narrow block that reads at a glance. */
+.ui-empty[data-compact] .ui-empty-text { max-width: 240px; font-size: var(--text-sm); }
 .ui-empty-action { margin-top: 8px; }
+
+/* ── lists: panels, sections, rows (list.tsx) ──
+   The Navigator's and the file browser's sidebar look. --list-inset is the rows'
+   inset from the panel's edges (the Navigator sets it from ui.sidebarPadding). */
+.ui-panel { --list-inset: 6px; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); color: var(--text); font: var(--text-md) var(--font-ui); }
+.ui-panel-head { flex: none; display: flex; align-items: center; gap: 2px; height: 28px; padding: 0 6px 0 4px; box-shadow: inset 0 -1px 0 var(--separator); }
+.ui-panel-title { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px; font: 600 11px var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); }
+button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
+.ui-panel-title-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-panel-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.ui-panel-summary[data-tone="needs"] { color: var(--state-needs); font-weight: 600; }
+.ui-panel-summary[data-tone="danger"] { color: var(--danger); font-weight: 600; }
+.ui-panel-actions { flex: none; display: flex; align-items: center; margin-left: auto; opacity: 0; transition: opacity var(--dur-fast); }
+.ui-panel:hover .ui-panel-actions, .ui-panel:focus-within .ui-panel-actions { opacity: 1; }
+.ui-panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 8px; display: flex; flex-direction: column; }
+.ui-panel-body > * { flex: none; }
+/* Nothing to list: the empty state takes the room left and centres in it. */
+.ui-panel-body > .ui-empty { flex: 1; min-height: max-content; }
+
+.ui-list-section + .ui-list-section { margin-top: 6px; }
+.ui-list-heading { display: flex; align-items: center; gap: 6px; height: 24px; margin: 0 var(--list-inset, 6px); padding: 0 8px; border-radius: var(--radius); font: 600 10.5px var(--font-ui); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.ui-list-count { font-weight: 500; letter-spacing: 0; opacity: 0.75; font-variant-numeric: tabular-nums; }
+.ui-list-heading[data-tone="needs"] { color: var(--state-needs); }
+.ui-list-heading[data-tone="danger"] { color: var(--danger); }
+.ui-list-heading[data-tone] .ui-list-count { opacity: 1; }
+.ui-list-heading .ui-twisty { margin-left: auto; opacity: 0; transition: opacity 120ms, transform 120ms; }
+.ui-list-heading.collapsible:hover .ui-twisty, .ui-list-heading[aria-expanded="false"] .ui-twisty { opacity: 1; }
+.ui-list-heading.collapsible:hover { color: var(--text); }
+
+.ui-row { --depth: 0; display: flex; align-items: center; gap: 6px; margin: 0 var(--list-inset, 6px); padding: 0 8px 0 calc(8px + var(--depth) * 14px); border-radius: var(--radius); cursor: default; }
+.ui-row.short { height: 28px; }
+.ui-row.tall { min-height: 38px; padding-top: 3px; padding-bottom: 3px; }
+.ui-row:hover { background: var(--bg-hover); }
+.ui-row.sel { background: var(--bg-selected); }
+.ui-row.active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent); }
+.ui-row-text { flex: 1; min-width: 0; }
+.ui-row-title { display: flex; align-items: center; line-height: 18px; font-weight: 500; white-space: nowrap; overflow: hidden; }
+.ui-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ui-row-name.mono { font: 500 12px var(--font-mono); }
+.ui-row-place { flex: 0 100 auto; min-width: 0; margin-left: 7px; overflow: hidden; text-overflow: ellipsis; font-weight: 400; font-size: 11.5px; color: var(--text-dim); }
+.ui-row-detail { font-size: 11.5px; line-height: 16px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-row[data-tone="needs"] .ui-row-detail { color: var(--state-needs); }
+.ui-row[data-tone="danger"] .ui-row-detail { color: var(--danger); }
+.ui-row-end { flex: none; display: flex; align-items: center; gap: 6px; }
+.ui-row-hover { display: none; align-items: center; gap: 2px; }
+.ui-row:hover .ui-row-hover { display: flex; }
+.ui-row:hover .ui-row-end > .ui-chip { display: none; }
+.ui-list-value { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; text-align: right; }
+.ui-list-value[data-strong] { color: var(--text); font-weight: 500; }
+
+/* 16px box so icon canvases and the 8px light centre on whole pixels; they cross-fade. */
+.ui-mark { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; }
+.ui-mark > * { grid-area: 1 / 1; display: inline-grid; place-items: center; transition: opacity 140ms ease, transform 140ms var(--ease); }
+.ui-mark-icon { color: var(--icon); }
+.ui-mark-light { opacity: 0; transform: scale(0.6); }
+.ui-mark.has-light .ui-mark-light { opacity: 1; transform: none; }
+.ui-mark.has-light .ui-mark-icon { opacity: 0; transform: scale(0.6); }
+@media (prefers-reduced-motion: reduce) { .ui-mark > * { transform: none !important; } }
+
+.ui-twisty { flex: none; display: grid; place-items: center; width: 12px; height: 12px; padding: 0; border: 0; background: none; color: var(--text-dim); transition: transform var(--dur-fast) var(--ease); }
+.ui-twisty.open { transform: rotate(90deg); }
+
+.ui-chip { --hue: 240; flex: none; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 10.5px var(--font-ui); padding: 1px 6px; border-radius: 4px; color: hsl(var(--hue) var(--chip-fg)); background: hsl(var(--hue) var(--chip-bg)); }
 
 /* ── floating: popover, menu, dialog, toast ── */
 

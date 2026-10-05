@@ -16,6 +16,8 @@ import { cleanAiBody, NOTICE_SYSTEM, noticeContext, type NoticeKind } from "./ag
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./agents/hooks.ts";
 import { hookEventName } from "./agents/state.ts";
 import { NotificationCenter } from "./notifications.ts";
+import { CommandLog } from "./commands.ts";
+import { TimerAlarms } from "./timers.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { restoreSession } from "./restore.ts";
 import type { TermBackend } from "./terminals/types.ts";
@@ -122,6 +124,8 @@ export class Core {
   readonly panes: PaneManager;
   readonly agents: AgentTracker;
   readonly notifications: NotificationCenter;
+  readonly commands: CommandLog;
+  readonly timers: TimerAlarms;
   readonly store: Store;
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
@@ -246,6 +250,9 @@ export class Core {
     }
     this.notifications = new NotificationCenter(this.panes, this.agents, settings, (a, kind, signal) => this.#writeNotice(a, kind, signal));
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
+    this.notifications.on("cleared", () => this.#broadcast({ type: "notifications.cleared" }));
+    this.commands = new CommandLog(this.panes);
+    this.commands.on("updated", (run) => this.#broadcast({ type: "command.updated", run }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler, 2000, () => this.#subscribers.size > 0) : null;
     this.processes = opts.procSampler ? new ProcessSampler(opts.procSampler) : null;
     this.spaces = new SpaceManager(this.store, opts.home);
@@ -257,6 +264,7 @@ export class Core {
       if (this.spaces.get(w.spaceId)?.closedAt !== null) this.windows.move(w.id, this.spaces.home().id);
     }
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
+    this.timers = new TimerAlarms(this.windows, (w, title, body) => this.notifications.window(w.id, "timer", title, body));
     this.windows.on("removed", (id) => {
       this.store.deleteUiStateOf(id);
       this.#broadcast({ type: "window.removed", id });
@@ -386,6 +394,9 @@ export class Core {
     "pane.setMuted": (p) => (this.notifications.setMuted(p.paneId, p.muted), null),
     "pane.clearAttention": (p) => (this.notifications.clearAttention(p.paneId), null),
     "notify.send": (p) => (this.notifications.send(p.paneId ?? null, p.title, p.body), null),
+    "notify.list": () => this.notifications.list(),
+    "notify.clear": () => (this.notifications.clear(), null),
+    "command.list": (p) => this.commands.list(p.spaceId),
     "pane.snapshot": (p) => this.panes.snapshot(p.paneId),
     "pane.read": async (p) => ({ text: await this.panes.read(p.paneId, p.lines) }),
     "pane.reset": async (p) => (await this.panes.resetState(p.paneId), null),
@@ -1071,6 +1082,7 @@ export class Core {
     } catch {}
     this.#closed = true;
     this.resources?.close();
+    this.timers.close();
     await this.#searchSwap;
     await this.#search?.close();
     this.watches.close();

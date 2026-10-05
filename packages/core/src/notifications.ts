@@ -7,7 +7,8 @@
 // the terminal's mute; it sets the terminal's attention marker and emits an
 // AppNotification. The UI decides whether to show it, since it knows focus and
 // selection (notifications.when), and how (sound, Dock bounce, visual bell).
-// Looking at the terminal clears its marker (pane.clearAttention).
+// Looking at the terminal clears its marker (pane.clearAttention). The newest
+// MAX_LOG are kept in memory for the Notifications widget (notify.list).
 
 import { EventEmitter } from "node:events";
 import os from "node:os";
@@ -48,12 +49,17 @@ export function formatDuration(ms: number): string {
 const tildify = (p: string) => (p.startsWith(os.homedir()) ? `~${p.slice(os.homedir().length)}` : p);
 const cleanTitle = (t: string) => t.replace(/^[\s✳✻✽✶✢·•*◐◑◒◓⠀-⣿]+/u, "").trim();
 
-export class NotificationCenter extends EventEmitter<{ notification: [AppNotification] }> {
+/** How many notifications notify.list keeps. */
+export const MAX_LOG = 200;
+
+export class NotificationCenter extends EventEmitter<{ notification: [AppNotification]; cleared: [] }> {
   #panes: PaneManager;
   #settings: () => Settings;
   #agentStates = new Map<string, Agent["state"]>();
   #lastBell = new Map<PaneId, number>();
   #running = new Map<PaneId, Running>();
+  /** Oldest first. */
+  #log: AppNotification[] = [];
 
   #writer: NoticeWriter | null;
 
@@ -99,6 +105,16 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
   widget(n: { windowId: WindowId; title: string; body: string; urgent: boolean; muted: boolean }): void {
     if (!this.#settings()["notifications.widgets"]) return;
     this.#emit({ source: "widget", paneId: null, windowId: n.windowId, title: n.title, body: n.body, alert: !n.muted, urgent: n.urgent });
+  }
+
+  /** Sent since the core started, newest first. */
+  list(): AppNotification[] {
+    return [...this.#log].reverse();
+  }
+
+  clear(): void {
+    this.#log = [];
+    this.emit("cleared");
   }
 
   clearAttention(paneId: PaneId): void {
@@ -208,16 +224,19 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
   }
 
   /** News about a window cmd made for you (a session summary is written); clicking it shows the window. */
-  window(windowId: WindowId, source: "summary", title: string, body: string): void {
-    this.#emit({ source, paneId: null, windowId, title, body, alert: true, urgent: false });
+  window(windowId: WindowId, source: "summary" | "timer", title: string, body: string): void {
+    this.#emit({ source, paneId: null, windowId, title, body, alert: true, urgent: source === "timer" });
   }
 
   #mark(pane: Pane, a: Omit<Attention, "at">): void {
     this.#panes.setAttention(pane.id, { ...a, at: Date.now() });
   }
 
-  #emit(n: Omit<AppNotification, "id">): void {
-    this.emit("notification", { id: randomUUID(), ...n });
+  #emit(n: Omit<AppNotification, "id" | "at">): void {
+    const full: AppNotification = { id: randomUUID(), ...n, at: Date.now() };
+    this.#log.push(full);
+    if (this.#log.length > MAX_LOG) this.#log.splice(0, this.#log.length - MAX_LOG);
+    this.emit("notification", full);
   }
 }
 

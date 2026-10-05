@@ -1,0 +1,133 @@
+// Commands, a built-in widget (docs/16-widgets.md): every command the terminals
+// of this Space (or all of them) ran, from the shell integration (CommandRun,
+// core/commands.ts). Running ones first, then the rest, newest first; a failed
+// one says its exit status. A click goes to its terminal; Run Again types it there.
+
+import { Chip, EmptyState, IconButton, ListRow, ListSection, ListValue, Panel, PanelBody } from "@cmd/ui";
+import { useEffect, useMemo, useState } from "react";
+import type { CommandRun } from "@cmd/protocol";
+import { cmd } from "../bridge.ts";
+import { copy, newTerminalIn } from "../actions.ts";
+import { showContextMenu } from "../context.ts";
+import { project, projectHue } from "../model.ts";
+import { onCommand, useStore } from "../store.ts";
+import { durationText, goTo, scopeOf, useWidgetStatus } from "../widgets.ts";
+import type { WindowViewProps } from "../windows/registry.ts";
+import { shortAgo } from "./SidebarRows.tsx";
+
+/** Exit statuses that mean someone stopped it (⌃C, kill): not a failure. */
+const STOPPED = new Set([130, 137, 143]);
+const failed = (r: CommandRun) => r.exitCode !== null && r.exitCode !== 0 && !STOPPED.has(r.exitCode);
+
+/** The log, kept current from command.updated. */
+function useCommands(): CommandRun[] {
+  const [runs, setRuns] = useState<CommandRun[]>([]);
+  useEffect(() => {
+    let stale = false;
+    const off = onCommand((run) =>
+      setRuns((rs) => {
+        const i = rs.findIndex((r) => r.id === run.id);
+        return i < 0 ? [run, ...rs] : rs.map((r, j) => (j === i ? run : r));
+      }),
+    );
+    cmd.call("command.list", {}).then(
+      (list) => !stale && setRuns((rs) => [...rs.filter((r) => !list.some((x) => x.id === r.id)), ...list].sort((a, b) => b.startedAt - a.startedAt)),
+      () => {}, // an older core
+    );
+    return () => ((stale = true), off());
+  }, []);
+  return runs;
+}
+
+export function CommandsView({ win }: WindowViewProps) {
+  const s = useStore();
+  const all = useCommands();
+  const scope = scopeOf(win.state.scope);
+  const failedOnly = win.state.failedOnly === true;
+  const [now, setNow] = useState(Date.now());
+  const anyRunning = all.some((r) => r.endedAt === null);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), anyRunning ? 1000 : 15_000);
+    return () => clearInterval(t);
+  }, [anyRunning]);
+
+  const runs = useMemo(() => all.filter((r) => (scope === "all" || r.spaceId === win.spaceId) && (!failedOnly || r.endedAt === null || failed(r))), [all, scope, failedOnly, win.spaceId]);
+  const running = runs.filter((r) => r.endedAt === null);
+  const done = runs.filter((r) => r.endedAt !== null);
+  const failures = done.filter(failed).length;
+  useWidgetStatus(win.id, failures > 0 ? `${failures} failed` : running.length > 0 ? `${running.length} running` : null);
+
+  /** Typed into its terminal, if that is still open and back at the prompt. */
+  const canRerun = (r: CommandRun) => {
+    const pane = s.panes.get(r.paneId);
+    return !!r.command && !!pane && pane.exitCode === null && !all.some((x) => x.paneId === r.paneId && x.endedAt === null);
+  };
+  const rerun = (r: CommandRun) => {
+    if (!canRerun(r)) return;
+    void cmd.call("pane.write", { paneId: r.paneId, data: `${r.command}\r` }).catch(() => {});
+    goTo(r.paneId, r.spaceId);
+  };
+  const rowMenu = (r: CommandRun) =>
+    void showContextMenu([
+      { label: "Show Terminal", enabled: s.panes.has(r.paneId), run: () => goTo(r.paneId, r.spaceId) },
+      { label: "Run Again", enabled: canRerun(r), run: () => rerun(r) },
+      "-",
+      { label: "Copy Command", enabled: !!r.command, run: () => copy(r.command ?? "") },
+      { label: "New Terminal Here", run: () => void newTerminalIn(r.cwd) },
+    ]);
+
+  const row = (r: CommandRun) => {
+    const bad = failed(r);
+    const took = durationText((r.endedAt ?? now) - r.startedAt);
+    const state =
+      r.endedAt === null ? `Running · ${took}`
+      : bad ? `Failed · exit ${r.exitCode} · ${took}`
+      : r.exitCode !== null && STOPPED.has(r.exitCode) ? `Stopped · ${took}`
+      : took;
+    const proj = project(r.cwd);
+    const space = scope === "all" ? s.spaces.get(r.spaceId)?.name : undefined;
+    return (
+      <ListRow
+        key={r.id}
+        icon="terminal"
+        light={r.endedAt === null ? "working" : bad ? "danger" : undefined}
+        title={r.command ?? "Command"}
+        mono
+        detail={[state, space].filter(Boolean).join(" · ")}
+        tone={bad ? "danger" : undefined}
+        tip={r.cwd}
+        end={
+          <>
+            {proj && proj !== "~" && <Chip hue={projectHue(proj)}>{proj}</Chip>}
+            {r.endedAt !== null && <ListValue>{shortAgo(r.endedAt, now)}</ListValue>}
+          </>
+        }
+        hover={<IconButton size="sm" icon="arrow.clockwise" label="Run Again" disabled={!canRerun(r)} onClick={() => rerun(r)} />}
+        onClick={() => goTo(r.paneId, r.spaceId)}
+        onContextMenu={() => rowMenu(r)}
+      />
+    );
+  };
+
+  return (
+    <Panel>
+      <PanelBody>
+        {running.length > 0 && (
+          <ListSection title="Running" count={running.length}>
+            {running.map(row)}
+          </ListSection>
+        )}
+        {done.length > 0 && (
+          <ListSection title={failedOnly ? "Failed" : "Finished"} count={done.length}>
+            {done.map(row)}
+          </ListSection>
+        )}
+        {runs.length === 0 && (
+          <EmptyState compact icon="terminal" title={failedOnly ? "Nothing failed" : "No commands yet"}>
+            {failedOnly ? "Commands that fail show up here." : scope === "all" ? "Commands you run in terminals show up here." : "Commands you run in this Space's terminals show up here."}
+          </EmptyState>
+        )}
+      </PanelBody>
+    </Panel>
+  );
+}

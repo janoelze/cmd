@@ -4,7 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import type { Agent, AgentId, AppNotification, AppWindow, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -67,6 +67,20 @@ const notificationListeners = new Set<(n: AppNotification) => void>();
 export function onNotification(fn: (n: AppNotification) => void): () => void {
   notificationListeners.add(fn);
   return () => notificationListeners.delete(fn);
+}
+
+/** Commands terminals run (core/commands.ts), for the Commands widget. */
+const commandListeners = new Set<(run: CommandRun) => void>();
+export function onCommand(fn: (run: CommandRun) => void): () => void {
+  commandListeners.add(fn);
+  return () => commandListeners.delete(fn);
+}
+
+/** The notification log was cleared (notify.clear). */
+const clearedListeners = new Set<() => void>();
+export function onNotificationsCleared(fn: () => void): () => void {
+  clearedListeners.add(fn);
+  return () => clearedListeners.delete(fn);
 }
 
 /** A watched file or folder changed on disk (see fs.watch). */
@@ -394,6 +408,12 @@ function handle(e: CoreEvent): void {
       return;
     case "notification":
       for (const fn of notificationListeners) fn(e.notification);
+      return;
+    case "notifications.cleared":
+      for (const fn of clearedListeners) fn();
+      return;
+    case "command.updated":
+      for (const fn of commandListeners) fn(e.run);
       return;
     case "window.focus":
       for (const fn of focusListeners) fn(e.id);

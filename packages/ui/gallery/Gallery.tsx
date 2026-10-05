@@ -10,6 +10,7 @@ import {
   ButtonGroup,
   Callout,
   Card,
+  Chip,
   Checkbox,
   CodeBlock,
   ConfirmDialog,
@@ -22,10 +23,17 @@ import {
   Kbd,
   KeyValue,
   LinkButton,
+  ListRow,
+  ListSection,
+  ListValue,
   Menu,
   NumberField,
   Popover,
   PageDots,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelSummary,
   Progress,
   ProgressRing,
   RadioGroup,
@@ -770,6 +778,9 @@ function ContentPage() {
           Each change you ask for is kept here, so you can go back.
         </EmptyState>
       </Spec>
+      <Spec title="Panel, ListSection, ListRow, Chip" code="<Panel> <PanelHeader title onTitleClick actions> <ListSection title count> <ListRow icon light title detail tone end hover>" note="Lists like the Navigator's and the file browser's sidebar. The header's title opens a menu and its actions show on hover; a row's light takes the icon's place, and its end gives way to its hover actions.">
+        <ListSpecimen />
+      </Spec>
       <Spec title="CodeBlock" code="<CodeBlock tone maxHeight>">
         <CodeBlock>{`$ deno check data.ts\nCheck file:///widgets/weather/data.ts\nOK`}</CodeBlock>
         <CodeBlock tone="danger">{`error: Uncaught (in promise) TypeError: fetch failed\n    at data.ts:12:15`}</CodeBlock>
@@ -1076,5 +1087,28 @@ function PatternsPage() {
         </div>
       </div>
     </>
+  );
+}
+
+function ListSpecimen() {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ height: 300, display: "flex", borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--separator)" }}>
+      <Panel>
+        <PanelHeader title="Commands" onTitleClick={() => {}} actions={<IconButton size="sm" icon="trash" label="Clear" />}>
+          <PanelSummary tone="danger">1 failed</PanelSummary>
+        </PanelHeader>
+        <PanelBody>
+          <ListSection title="Running" count={1}>
+            <ListRow icon="terminal" light="working" mono title="pnpm dev" detail="Running · 4 min" end={<Chip hue={200}>cmd</Chip>} />
+          </ListSection>
+          <ListSection title="Finished" count={3} open={open} onToggle={() => setOpen((o) => !o)}>
+            <ListRow icon="terminal" light="danger" mono title="pnpm test" detail="Failed · exit 1 · 12 s" tone="danger" end={<><Chip hue={200}>cmd</Chip><ListValue>2m</ListValue></>} hover={<IconButton size="sm" icon="arrow.clockwise" label="Run Again" />} />
+            <ListRow icon="terminal" mono title="git status" detail="0.2 s" selected end={<ListValue>5m</ListValue>} />
+            <ListRow icon="bell" title="One line, with a place" place="~/src/cmd" end={<ListValue strong>84%</ListValue>} />
+          </ListSection>
+        </PanelBody>
+      </Panel>
+    </div>
   );
 }

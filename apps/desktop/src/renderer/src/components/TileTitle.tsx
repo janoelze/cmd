@@ -3,7 +3,9 @@
 // Each field is a Slot, so state changes animate instead of popping.
 
 import { fieldsOf, windowIdOf, type SidebarRow, type WindowFields } from "../model.ts";
-import { typeFor } from "../windows/registry.ts";
+import { typeFor, viewFor } from "../windows/registry.ts";
+import { showContextMenu } from "../context.ts";
+import { ICON, Symbol } from "./Symbol.tsx";
 import { useEffect, useRef, useState } from "react";
 import { editTitle, useTitleEdit, useWindowStatus, type TitleEdit } from "../windowActions.ts";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
@@ -40,6 +42,7 @@ export function TileTitle({
   // A status can be a button ("Updated 12s ago" refreshes); presses on it don't start a drag.
   const action = useWindowStatus(row.win?.id ?? null)?.action;
   const edit = useTitleEdit(row.win?.id ?? null);
+  const menu = row.win && !bare ? viewFor(row.win.kind)?.titleMenu?.(row.win) : undefined;
   return (
     <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} data-tip={title}>
       <Mark light={f.light} icon={f.icon} />
@@ -66,6 +69,17 @@ export function TileTitle({
           <Slot className={`slot-status${action ? " actionable" : ""}`} value={f.status} divider={!bare && !!(f.kind || f.place)} title={action?.title} />
         </span>
       </span>
+      {menu && (
+        <button
+          className="tile-menu"
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onClick={(e) => (e.stopPropagation(), void showContextMenu(menu.entries))}
+        >
+          {menu.label}
+          <Symbol name="chevron.down" size={ICON.disclosure} />
+        </button>
+      )}
     </div>
   );
 }

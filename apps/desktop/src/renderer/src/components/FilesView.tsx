@@ -19,7 +19,7 @@
 // (UI state). Right-click to add one; the bookmark button (or, as a sidebar, the
 // folder's name) lists them: a folder becomes the root, a file opens.
 
-import { Callout, EmptyState, IconButton } from "@cmd/ui";
+import { Callout, EmptyState, IconButton, PanelHeader } from "@cmd/ui";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AppWindow, FileEntry, GitFile, GitFileState, GitStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -506,24 +506,26 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   return (
     <div className={`files${docked ? " in-sidebar" : ""}`}>
       {docked ? (
-        <div className="files-head">
-          <button className="files-head-name" onClick={folderMenu} data-tip={root}>
-            <span ref={headLabel} className="files-head-label">{crumbs.at(-1)?.name || root}</span>
-            <Symbol name="chevron.down" size={ICON.disclosure} />
-          </button>
+        <PanelHeader
+          title={<span ref={headLabel}>{crumbs.at(-1)?.name || root}</span>}
+          onTitleClick={folderMenu}
+          titleTip={root}
+          actions={
+            <>
+              <IconButton size="sm" icon="doc.badge.plus" label="New File" onClick={() => void create("file", root)} />
+              <IconButton size="sm" icon="folder.badge.plus" label="New Folder" shortcut="⇧⌘N" onClick={() => void create("dir", root)} />
+              <IconButton size="sm" icon="rectangle.compress.vertical" label="Collapse All" disabled={!anyOpen} onClick={collapseAll} />
+              <IconButton size="sm" icon="ellipsis" label="More" onClick={moreMenu} />
+            </>
+          }
+        >
           {git && (
             <button className={`files-head-branch ${showChanges ? "on" : ""}`} onClick={() => setChangesOnly((c) => !c)} data-tip={branchTitle}>
               <Symbol name="arrow.triangle.branch" size={ICON.small} />
               {changes.length > 0 && <span className="git-count">{changes.length}{git.truncated ? "+" : ""}</span>}
             </button>
           )}
-          <div className="files-head-actions">
-            <IconButton size="sm" icon="doc.badge.plus" label="New File" onClick={() => void create("file", root)} />
-            <IconButton size="sm" icon="folder.badge.plus" label="New Folder" shortcut="⇧⌘N" onClick={() => void create("dir", root)} />
-            <IconButton size="sm" icon="rectangle.compress.vertical" label="Collapse All" disabled={!anyOpen} onClick={collapseAll} />
-            <IconButton size="sm" icon="ellipsis" label="More" onClick={moreMenu} />
-          </div>
-        </div>
+        </PanelHeader>
       ) : (
       <div className="window-toolbar">
         <IconButton icon="chevron.up" label="Enclosing Folder" shortcut="⌘↑" disabled={!rootParent} onClick={rootUp} />

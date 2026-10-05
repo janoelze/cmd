@@ -174,6 +174,87 @@ export const agentsType: WindowType<{ scope: "space" | "all" }> = {
   },
 };
 
+type Scope = "space" | "all";
+const scopeOf = (v: unknown, fallback: Scope = "space"): Scope => (v === "all" || v === "space" ? v : fallback);
+
+/** A built-in widget showing its Space's things or every Space's, plus on/off `flags` (e.g. Failed Only). */
+function scopedWidget(kind: string, title: string, icon: string, description: string, flags: string[] = []): WindowType<{ scope: Scope } & Record<string, unknown>> {
+  return {
+    kind,
+    title,
+    icon,
+    role: "widget",
+    description,
+    create(input) {
+      return { state: { scope: scopeOf(input.scope) }, title };
+    },
+    update(state, patch) {
+      const next: { scope: Scope } & Record<string, unknown> = { ...state, scope: scopeOf(patch.scope, state.scope) };
+      for (const f of flags) if (typeof patch[f] === "boolean") next[f] = patch[f];
+      return { state: next };
+    },
+  };
+}
+
+export const commandsType = scopedWidget("commands", "Commands", "terminal", "Every command your terminals ran: how long it took and whether it worked.", ["failedOnly"]);
+export const notificationsType = scopedWidget("notifications", "Notifications", "bell", "The notifications cmd sent, including the ones you missed.");
+export const resourcesType = scopedWidget("resources", "Resources", "gauge.with.dots.needle.33percent", "What each terminal uses: CPU and memory of everything running in it.");
+
+/** Seconds. 0 h 0 m 1 s to 24 h. */
+const clampDuration = (n: unknown, fallback: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(86_400, Math.max(1, Math.round(n))) : fallback);
+
+/** "25 min", "1 h 30 min", "45 s". */
+export function durationLabel(s: number): string {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return [h ? `${h} h` : "", m ? `${m} min` : "", sec && !h ? `${sec} s` : ""].filter(Boolean).join(" ") || "0 s";
+}
+
+/**
+ * A countdown. `duration` (s) is what it counts from; running, `endsAt` is when
+ * it ends; paused, `left` (s) is what is left; `rang` is when it last ended. The
+ * core rings it (timers.ts), so it ends on time in any Space, app open or not.
+ */
+export interface TimerState extends Record<string, unknown> {
+  duration: number;
+  endsAt: number | null;
+  left: number | null;
+  rang: number | null;
+}
+
+const timerTitle = (s: TimerState) => `Timer · ${durationLabel(s.duration)}`;
+
+export const timerType: WindowType<TimerState> = {
+  kind: "timer",
+  title: "Timer",
+  icon: "timer",
+  role: "widget",
+  description: "A countdown that tells you when it's done.",
+  create(input) {
+    const state: TimerState = { duration: clampDuration(input.duration, 25 * 60), endsAt: null, left: null, rang: null };
+    return { state, title: timerTitle(state) };
+  },
+  /** Patches: { duration } sets it and stops; { action: "start" | "pause" | "reset" | "ring" }. */
+  update(state, patch, now = Date.now()) {
+    let s: TimerState = { ...state };
+    if (patch.duration !== undefined) s = { duration: clampDuration(patch.duration, s.duration), endsAt: null, left: null, rang: null };
+    switch (patch.action) {
+      case "start":
+        if (s.endsAt === null) s = { ...s, endsAt: now + (s.left ?? s.duration) * 1000, left: null, rang: null };
+        break;
+      case "pause":
+        if (s.endsAt !== null) s = { ...s, left: Math.max(1, Math.ceil((s.endsAt - now) / 1000)), endsAt: null };
+        break;
+      case "reset":
+        s = { ...s, endsAt: null, left: null, rang: null };
+        break;
+      case "ring":
+        if (s.endsAt !== null && s.endsAt <= now + 1000) s = { ...s, endsAt: null, left: null, rang: now };
+        break;
+    }
+    return { state: s, title: timerTitle(s) };
+  },
+};
+
 /** What changed in a repository, under a folder (default: the Space's root), as it changes. */
 export const diffType: WindowType<{ path: string }> = {
   kind: "diff",
@@ -303,4 +384,8 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(diffType);
   types.register(youtubeType);
   types.register(navigatorType);
+  types.register(commandsType);
+  types.register(notificationsType);
+  types.register(resourcesType);
+  types.register(timerType);
 }

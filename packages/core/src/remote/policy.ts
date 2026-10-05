@@ -34,6 +34,9 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "pane.clearAttention": "view",
   "window.clearAttention": "view",
   "notify.send": "never",
+  "notify.list": "never", // bodies quote agents, commands and paths: local only for now
+  "notify.clear": "never",
+  "command.list": "never", // command lines can hold tokens
   "pane.snapshot": "view",
   "pane.reset": "control",
   "pane.read": "view",
@@ -327,6 +330,8 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "notification":
     case "pane.resync":
       return true;
+    case "notifications.cleared":
+    case "command.updated":
     case "agent.activity":
     case "settings.updated":
     case "secrets.updated":

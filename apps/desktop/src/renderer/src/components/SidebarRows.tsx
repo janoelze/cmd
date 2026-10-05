@@ -1,7 +1,7 @@
 // Sidebar rows: open windows and agents (SessionRow), past sessions from the
 // transcript index (HistoryRow), and the section headings that group them.
 
-import { IconButton } from "@cmd/ui";
+import { IconButton, ListHeading } from "@cmd/ui";
 import type { ReactNode } from "react";
 import type { PaneId, SearchHit } from "@cmd/protocol";
 import { usePersisted } from "../store.ts";
@@ -16,6 +16,7 @@ import { countRender } from "../perf.ts";
 /** "2h ago" → "2h": the column is narrow. */
 export const shortAgo = (ts: number, now: number) => ago(ts, now).replace(/ ago$/, "");
 
+/** The Navigator's section headings: the kit's ListHeading. */
 export function SectionHeading(p: {
   title: string;
   count?: number;
@@ -24,23 +25,7 @@ export function SectionHeading(p: {
   onToggle?: () => void;
   tone?: "needs";
 }) {
-  const collapsible = p.onToggle !== undefined;
-  return (
-    <div
-      className={`sb-heading ${collapsible ? "collapsible" : ""} ${p.tone ? `tone-${p.tone}` : ""}`}
-      onClick={p.onToggle}
-      role={collapsible ? "button" : undefined}
-      aria-expanded={collapsible ? p.open : undefined}
-    >
-      <span className="sb-heading-title">{p.title}</span>
-      {p.count !== undefined && <span className="sb-count">{p.count}</span>}
-      {collapsible && (
-        <span className={`twisty ${p.open ? "open" : ""}`}>
-          <Symbol name="chevron.right" size={ICON.disclosure} />
-        </span>
-      )}
-    </div>
-  );
+  return <ListHeading {...p} />;
 }
 
 export function SessionRow(props: {

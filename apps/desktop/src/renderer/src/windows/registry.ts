@@ -27,6 +27,11 @@ export interface WindowView {
   menu?(win: AppWindow): MenuEntry[];
   /** The window's own main actions: first in that menu, above Show, Move and Close. */
   actions?(win: AppWindow): MenuEntry[];
+  /**
+   * A menu button at the right end of the title bar, labelled with the current
+   * choice ("This Space ▾"): a widget's scope and options. Not shown on sidebars.
+   */
+  titleMenu?(win: AppWindow): { label: string; entries: MenuEntry[] };
 }
 
 /**

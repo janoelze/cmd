@@ -87,7 +87,7 @@ export interface Attention {
  */
 export interface AppNotification {
   id: string;
-  source: "agent-input" | "agent-done" | "bell" | "terminal" | "command" | "cli" | "widget" | "summary";
+  source: "agent-input" | "agent-done" | "bell" | "terminal" | "command" | "cli" | "widget" | "summary" | "timer";
   /** The terminal it came from, if any (clicking the notification selects it). */
   paneId: PaneId | null;
   /** The window it came from, when not a terminal (a widget). */
@@ -98,6 +98,26 @@ export interface AppNotification {
   alert: boolean;
   /** Needs you (plays the sound, may bounce the Dock) rather than merely informs. */
   urgent: boolean;
+  /** When it was sent. */
+  at: number;
+}
+
+/**
+ * A command a terminal's shell ran, from the shell integration's OSC 133 marks
+ * (C: it starts, D: it ended with an exit status). The Commands widget's rows.
+ */
+export interface CommandRun {
+  id: string;
+  paneId: PaneId;
+  spaceId: SpaceId;
+  /** The command line; null if the shell didn't report one (bash without a preexec hook). */
+  command: string | null;
+  cwd: string;
+  startedAt: number;
+  /** null while it runs. */
+  endedAt: number | null;
+  /** null while it runs, or when the shell didn't say. */
+  exitCode: number | null;
 }
 
 export interface PaneUsage {

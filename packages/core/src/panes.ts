@@ -127,6 +127,8 @@ export interface PaneEvents {
   foreground: [paneId: PaneId, fg: Foreground];
   /** A verified request from the pane's shell integration (e.g. `open .`). */
   request: [paneId: PaneId, action: string, arg: string];
+  /** The shell is about to run this command line (its integration's exec request). */
+  exec: [paneId: PaneId, command: string];
 }
 
 export interface PaneManagerOptions {
@@ -432,6 +434,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
         if (ev.action === "exec") {
           live.command = ev.arg.trim().slice(0, 4096) || null;
           this.#persist(live);
+          if (live.command) this.emit("exec", live.pane.id, live.command);
         } else this.emit("request", live.pane.id, ev.action, ev.arg);
         continue;
       }
