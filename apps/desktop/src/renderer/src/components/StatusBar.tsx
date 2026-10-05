@@ -1,6 +1,6 @@
-// Bottom bar of the main pane: the selected window's usage on the left (all its
-// title fields in focus mode), view modes and actions on the right. Shares its
-// row (and height) with the sidebar's footer.
+// The footer: one bar across the app window's bottom (docs/21-sidebars.md). The
+// core's health on the left, then the selected window's usage (all its title
+// fields in focus mode); view modes and the app's actions on the right.
 
 import type { Pane } from "@cmd/protocol";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
@@ -12,6 +12,7 @@ import { useFields } from "./TileTitle.tsx";
 import type { ViewMode } from "./MainView.tsx";
 import { ICON } from "./Symbol.tsx";
 import { RemoteBadge, RemoteIndicator } from "./Remote.tsx";
+import { CoreStatus } from "./CoreStatus.tsx";
 import { IconButton, Segmented, useTooltip } from "@cmd/ui";
 import { countRender } from "../perf.ts";
 
@@ -33,9 +34,12 @@ interface Props {
   row: SidebarRow | undefined;
   pane: Pane | undefined;
   run: (id: CommandId) => void;
+  /** The core's connection, for its health at the left end. */
+  connected: boolean;
+  error?: string;
 }
 
-export function StatusBar({ mode, row, pane, run }: Props) {
+export function StatusBar({ mode, row, pane, run, connected, error }: Props) {
   countRender("StatusBar");
   const keys = useKeybindings();
   const showUsage = useStoreValue((s) => s.settings.settings["ui.showResources"]);
@@ -48,6 +52,9 @@ export function StatusBar({ mode, row, pane, run }: Props) {
 
   return (
     <footer className="statusbar">
+      <div className="statusbar-core">
+        <CoreStatus connected={connected} error={error} />
+      </div>
       {/* The title bar and sidebar already show the window's fields; the status bar adds
           what they don't: the processes' memory and CPU. Focus mode has no title bar,
           so there the status bar stands in for it. */}

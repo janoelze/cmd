@@ -26,7 +26,7 @@ Prefer: *waiting for you, needs you, done, stopped, couldn't, keeps running, sid
 - **Title Case** for menu items, buttons, window titles and section titles, as macOS does: "Pair a Device…", "Restart Core", "Check for Updates…". An ellipsis (…) means more input follows before anything happens.
 - **Sentence case** for everything else: notification bodies, toasts, tooltips, descriptions, errors, empty states.
 - **Periods only on full sentences.** "Summary copied" (fragment, none). "This file isn't a session summary." (sentence, period). In one string, all fragments or all sentences.
-- **Names as the app shows them:** windows, Spaces, the desk, agents, sessions, Magic widgets, the command palette, the Widget Library. Menu paths as `Settings → Agents`. Shortcuts as the menu shows them: ⌘T, ⇧⌘L, ⌥⌘N.
+- **Names as the app shows them:** windows, Spaces, the workspace, sidebars, agents, sessions, Magic widgets, the command palette, the Widget Library. Menu paths as `Settings → Agents`. Shortcuts as the menu shows them: ⌘T, ⇧⌘L, ⌥⌘N.
 - **Numbers as digits:** "3 terminals", "4 files changed", "7 min".
 - **Code and paths** in backticks where Markdown renders (docs, CLI help, settings descriptions); in plain-text surfaces (system notifications, tooltips), in typographic quotes: Allow “rm NOTES.md”?
 - **Times and durations short:** 40 s, 7 min, 1 h 5 min; dates as the system formats them.

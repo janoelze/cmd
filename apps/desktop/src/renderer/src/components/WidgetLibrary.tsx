@@ -1,6 +1,6 @@
 // The Widget Library (docs/16-widgets.md): a sheet of cards, yours (by last
 // use) and built-in ones, with a New Widget button (Magic) beside the search field.
-// A click puts a widget on the desk of this Space; the search field only searches. Each card's menu adds, and
+// A click puts a widget on the workspace of this Space; the search field only searches. Each card's menu adds, and
 // for yours renames, duplicates, shows the folder and deletes. Each card has
 // an avatar: a built-in widget's icon, else the widget's initial, in a colour
 // of its own from its name (as projects' chips in the sidebar).
@@ -65,7 +65,7 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
     });
     if (!ok) return;
     try {
-      // The core keeps widgets that are on the desk: take them off first.
+      // The core keeps widgets that are on a workspace: take them off first.
       for (const id of e.windows) await cmd.call("window.close", { id });
       await cmd.call("widget.delete", { ref: e.ref });
     } catch (err) {

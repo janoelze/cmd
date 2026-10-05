@@ -27,10 +27,10 @@ import {
   summarizeSession,
 } from "./actions.ts";
 import { aiStatus, useAiStatus } from "./ai/status.ts";
-import { showContextMenu } from "./context.ts";
+import { showContextMenu, type MenuEntry } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, isWidget, nextAfterClose, pushHistory, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
-import { getState, onNotification, onWindowFocus, setUsageShown, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
+import { getSpaceView, getState, onNotification, onWindowFocus, setSpaceView, setUsageShown, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DEFAULT_FRACTION, nextPreset, withWidth } from "./strip.ts";
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
@@ -47,7 +47,10 @@ import { closeSetup, Onboarding, showSetup, stepsAtLaunch, useSetup } from "./on
 import { compareVersions, type Release } from "../../shared/changelog.ts";
 import { PairSheet, useRemoteNotifications } from "./components/Remote.tsx";
 import { Palette, type PaletteItem } from "./components/Palette.tsx";
-import { Sidebar, SIDEBAR_WIDTH, type SidebarRequest } from "./components/Sidebar.tsx";
+import { NavigatorContext, type NavigatorData, type SidebarRequest } from "./components/Navigator.tsx";
+import { Dock } from "./components/Dock.tsx";
+import { TopBar } from "./components/TopBar.tsx";
+import { dock, dockedIds, dockWidths, DOCK_WIDTH, liveDocks, MIN_WORKSPACE, readDocks, sideOf, SIDES, undock, type Docks, type Side } from "./docks.ts";
 import { SpaceBar } from "./components/SpaceBar.tsx";
 import { SpaceIconPicker } from "./components/SpaceIcon.tsx";
 import { closeSpace, showSpace, usePickers, type Picker } from "./spaces.tsx";
@@ -103,9 +106,9 @@ export function App() {
   useEffect(() => {
     if (mode !== "focus" && mode !== layoutMode) setLayoutMode(mode);
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [sidebarOpen, setSidebarOpen] = usePersisted("sidebar.open", true);
-  // null: the default width (double-click the sidebar's edge).
-  const [sidebarWidth, setSidebarWidth] = usePersisted<number | null>("sidebar.width", null);
+  // The sidebar before sidebars were windows: carried over into each Space's first Navigator.
+  const [sidebarOpen] = usePersisted("sidebar.open", true);
+  const [sidebarWidth] = usePersisted<number | null>("sidebar.width", null);
   const [sidebarRequest, setSidebarRequest] = useState<SidebarRequest | null>(null);
   const [zoom, setZoom] = usePersisted("terminal.zoom", 0);
   const [recent, setRecent] = usePersisted<string[]>("palette.recent", []);
@@ -149,8 +152,25 @@ export function App() {
 
   useEffect(() => terminals.setZoom(zoom), [zoom]);
 
-  const rows = useMemo(() => buildRows(s), [s]);
+  // Sidebars (docs/21-sidebars.md): docked windows, per Space. Unset until the
+  // Space's first Navigator is made (below); sides whose window is gone are empty.
+  const [storedDocks, setStoredDocks] = useSpaceView<Docks | null>("docks", null);
+  const docks = useMemo(
+    () => liveDocks(readDocks(storedDocks), (id) => s.panes.has(id) || s.windows.has(id)),
+    [storedDocks, s.panes, s.windows],
+  );
+  const docked = useMemo(() => dockedIds(docks), [docks]);
+  /** Change this Space's sidebars (from what's live, so stale ids drop out). */
+  const setDocks = (f: (d: Docks) => Docks) => setStoredDocks(f(docks));
+  useFirstNavigator(all.spaceId, !!space && s.connected, storedDocks === null, { hidden: !sidebarOpen, width: sidebarWidth });
+  const winWidth = useWindowWidth();
+  const widths = dockWidths(docks, winWidth);
+
+  // Every row of the Space (the Navigator's, Dock badge…), and the workspace's: without sidebars.
+  const allRows = useMemo(() => buildRows(s), [s]);
+  const rows = useMemo(() => allRows.filter((r) => !docked.has(windowIdOf(r) ?? "")), [allRows, docked]);
   const flat = useMemo(() => flatten(rows), [rows]);
+  const allFlat = useMemo(() => flatten(allRows), [allRows]);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
@@ -292,7 +312,7 @@ export function App() {
   const withPane = useMemo(() => flat.filter((r) => r.pane || r.win), [flat]);
   /** The selected terminal, if the selected window is one. */
   const current = selected ? s.panes.get(selected) : undefined;
-  const currentRow = flat.find((r) => windowIdOf(r) === selected);
+  const currentRow = allFlat.find((r) => windowIdOf(r) === selected);
   const currentAgent = currentRow?.agent ?? null;
 
   // ⌥⌘← / ⌥⌘→ follow what you see: grid/strip order, else the sidebar.
@@ -373,7 +393,15 @@ export function App() {
     "terminal.prevPrompt": () => selected && terminals.jumpToPrompt(selected, -1),
     "terminal.nextPrompt": () => selected && terminals.jumpToPrompt(selected, 1),
     "view.palette": () => setPalette((p) => (p === false ? "" : false)),
-    "view.search": () => (setSidebarOpen(true), setSidebarRequest({ kind: "search", at: Date.now() })),
+    "view.search": () => {
+      // The Navigator's search: show its side, select it on the workspace, or make one on the left.
+      const nav = [...s.windows.values()].find((w) => w.kind === "navigator");
+      const side = sideOf(docks, nav?.id);
+      if (side) setDocks((d) => ({ ...d, [side]: { ...d[side], hidden: false } }));
+      else if (nav) select(nav.id);
+      else void openNavigator(all.spaceId, "left");
+      setSidebarRequest({ kind: "search", at: Date.now() });
+    },
     "view.focus": () => setMode("focus"),
     "view.grid": () => setMode("grid"),
     "view.strip": () => setMode("strip"),
@@ -392,7 +420,11 @@ export function App() {
       if (mode !== "strip") setMode("strip");
       setStripWidth(selected, nextPreset(stripWidths[selected] ?? DEFAULT_FRACTION));
     },
-    "view.sidebar": () => setSidebarOpen((o) => !o),
+    "view.sidebar": () => toggleSide("left"),
+    "view.rightSidebar": () => toggleSide("right"),
+    "window.dockLeft": () => selected && setDocks((d) => dock(d, selected, "left")),
+    "window.dockRight": () => selected && setDocks((d) => dock(d, selected, "right")),
+    "window.undock": () => selected && setDocks((d) => undock(d, selected)),
     "view.zoomIn": () => setZoom((z) => Math.min(24, z + 1)),
     "view.zoomOut": () => setZoom((z) => Math.max(-6, z - 1)),
     "view.zoomReset": () => setZoom(0),
@@ -400,7 +432,7 @@ export function App() {
     "session.prev": () => step(-1),
     "session.nextAttention": () => {
       // This Space first, then the others (select switches Space).
-      const target = flat.find(wantsYou) ?? flatten(buildRows(all)).find(wantsYou);
+      const target = allFlat.find(wantsYou) ?? flatten(buildRows(all)).find(wantsYou);
       const id = target && windowIdOf(target);
       if (id) select(id);
     },
@@ -430,6 +462,11 @@ export function App() {
     "help.feedback": () => (setPalette(false), setFeedback(true)),
     "help.whatsNew": () => (setPalette(false), setWhatsNew(RELEASES.filter((r) => compareVersions(r.version, APP_VERSION) <= 0))),
   };
+  /** View → Show Left/Right Sidebar: hide or show a side; an empty left side gets a Navigator. */
+  function toggleSide(side: Side) {
+    if (docks[side].id) setDocks((d) => ({ ...d, [side]: { ...d[side], hidden: !d[side].hidden } }));
+    else if (side === "left") void openNavigator(all.spaceId, "left");
+  }
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
   const run = useCallback((id: string) => handlersRef.current[id as CommandId]?.(), []);
@@ -451,6 +488,7 @@ export function App() {
   // Tell the menu bar what is checked/enabled (only when that changes: it's IPC and native menu work).
   const selectedIsPane = !!selected && s.panes.has(selected);
   const selectedIsWidget = !!selected && isWidget(s.windows.get(selected));
+  const selectedSide = sideOf(docks, selected);
   const hasSession = !!(currentAgent && sessionId(currentAgent));
   const aiReady = !!useAiStatus()?.ready;
   useEffect(() => {
@@ -461,7 +499,8 @@ export function App() {
         "view.grid": mode === "grid",
         "view.strip": mode === "strip",
         "view.canvas": mode === "canvas",
-        "view.sidebar": sidebarOpen,
+        "view.sidebar": !!docks.left.id && !docks.left.hidden,
+        "view.rightSidebar": !!docks.right.id && !docks.right.hidden,
       },
       enabled: {
         "edit.clear": hasPane,
@@ -483,9 +522,13 @@ export function App() {
         "space.rename": !!space,
         "space.icon": !!space,
         "widget.remove": selectedIsWidget,
+        "view.rightSidebar": !!docks.right.id,
+        "window.dockLeft": hasPane && selectedSide !== "left",
+        "window.dockRight": hasPane && selectedSide !== "right",
+        "window.undock": !!selectedSide,
       },
     });
-  }, [mode, sidebarOpen, selected, selectedIsPane, selectedIsWidget, withPane.length, hasSession, aiReady, attention > 0, openSpaces.length, !!space, !!space?.home]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, docks, selectedSide, selected, selectedIsPane, selectedIsWidget, withPane.length, hasSession, aiReady, attention > 0, openSpaces.length, !!space, !!space?.home]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── context menus ──────────────────────────────────────
 
@@ -501,6 +544,7 @@ export function App() {
         ? [
             { label: "Show", run: () => select(windowIdOf(r)!) },
             ...(r.pane ? [muteEntry(r.pane.id)] : []),
+            ...sidebarEntries(windowIdOf(r)!),
             { label: "Move to Space…", run: () => setPicker({ kind: "move", windowId: windowIdOf(r)! }), enabled: openSpaces.length > 1 },
             { label: r.pane ? "Close Terminal" : "Close Window", run: () => void closePane(windowIdOf(r)!) },
             "-" as const,
@@ -526,6 +570,24 @@ export function App() {
           ]
         : []),
     ]);
+  };
+
+  /** Make Sidebar ▸ Left / Right on the workspace; on a sidebar, the other side or back (docs/21-sidebars.md). */
+  const sidebarEntries = (id: string): MenuEntry[] => {
+    const side = sideOf(docks, id);
+    if (!side) {
+      return [
+        {
+          label: "Make Sidebar",
+          submenu: SIDES.map((sd) => ({ label: sd === "left" ? "Left" : "Right", run: () => setDocks((d) => dock(d, id, sd)) })),
+        },
+      ];
+    }
+    const other: Side = side === "left" ? "right" : "left";
+    return [
+      { label: other === "left" ? "Move to Left Sidebar" : "Move to Right Sidebar", run: () => setDocks((d) => dock(d, id, other)) },
+      { label: "Move to Workspace", run: () => setDocks((d) => undock(d, id)) },
+    ];
   };
 
   /** Right-click on a Space in the switcher. */
@@ -638,11 +700,23 @@ export function App() {
     }),
   ];
 
+  // Every Navigator window shows this (components/Navigator.tsx).
+  const navigatorData: NavigatorData = {
+    rows,
+    selected,
+    onSelect: selectRow,
+    onRowMenu: rowMenu,
+    onClose: (r) => windowIdOf(r) && void closePane(windowIdOf(r)!),
+    onNewTerminal: () => void newTerminal(),
+    request: sidebarRequest,
+    search: s.search,
+  };
+
   return (
     <div
-      className={`app ${sidebarOpen ? "" : "no-sidebar"} ${cfg["ui.unfocusedDesaturation"] > 0 ? "desaturate" : ""} focus-${cfg["ui.focusColor"]} title-tint-${cfg["ui.focusTitleBar"]} shadow-${cfg["ui.windowShadow"]}`}
+      className={`app ${cfg["ui.unfocusedDesaturation"] > 0 ? "desaturate" : ""} focus-${cfg["ui.focusColor"]} title-tint-${cfg["ui.focusTitleBar"]} shadow-${cfg["ui.windowShadow"]}`}
       style={{
-        ["--sidebar-w" as string]: `${sidebarWidth ?? SIDEBAR_WIDTH.default}px`,
+        ["--dock-left-w" as string]: `${widths.left || DOCK_WIDTH.default}px`,
         ["--window-radius" as string]: `${cfg["ui.windowRadius"]}px`,
         ["--gutter" as string]: `${cfg["ui.gutter"]}px`,
         ["--sidebar-pad" as string]: `${cfg["ui.sidebarPadding"]}px`,
@@ -656,42 +730,47 @@ export function App() {
         ["--focus-glow" as string]: `${cfg["ui.focusGlow"] / 50}`,
       }}
     >
-      {!sidebarOpen && <div className="drag-strip">{spaceBar}</div>}
-      {sidebarOpen && (
-        <Sidebar
-          spaceBar={spaceBar}
-          rows={rows}
-          selected={selected}
-          onSelect={selectRow}
-          onRowMenu={rowMenu}
-          onClose={(r) => windowIdOf(r) && void closePane(windowIdOf(r)!)}
-          onNew={newMenu}
-          onNewTerminal={() => void newTerminal()}
-          onWidth={setSidebarWidth}
-          request={sidebarRequest}
-          search={s.search}
-          connected={s.connected}
-          error={s.error}
-        />
-      )}
-      <MainView
-        mode={mode}
-        rows={flat}
-        selected={selected}
-        onSelect={select}
-        onTerminalMenu={terminalMenu}
-        onTitleMenu={rowMenu}
-        gridOrder={gridOrder}
-        onGridReorder={setGridOrder}
-        stripWidths={stripWidths}
-        canvasRects={canvasRects}
-        onCanvasRects={setCanvasRects}
-        camera={camera}
-        onCamera={setCamera}
-        onDeselect={deselect}
-        onStripWidth={setStripWidth}
-      />
-      <StatusBar mode={mode} row={currentRow} pane={current} run={run} />
+      <TopBar spaceBar={spaceBar} onNew={newMenu} />
+      <NavigatorContext.Provider value={navigatorData}>
+        <div className="stage">
+          {SIDES.map((side) => {
+            const row = docks[side].hidden ? undefined : allFlat.find((r) => windowIdOf(r) === docks[side].id);
+            return row ? (
+              <Dock
+                key={side}
+                side={side}
+                row={row}
+                width={widths[side]}
+                maxWidth={Math.max(DOCK_WIDTH.min, Math.min(DOCK_WIDTH.max, winWidth - MIN_WORKSPACE - widths[side === "left" ? "right" : "left"]))}
+                selected={selected === docks[side].id}
+                attention={attention > 0}
+                onSelect={select}
+                onTitleMenu={rowMenu}
+                onTerminalMenu={terminalMenu}
+                onWidth={(px) => setDocks((d) => ({ ...d, [side]: { ...d[side], width: px } }))}
+              />
+            ) : null;
+          })}
+          <MainView
+            mode={mode}
+            rows={flat}
+            selected={selected}
+            onSelect={select}
+            onTerminalMenu={terminalMenu}
+            onTitleMenu={rowMenu}
+            gridOrder={gridOrder}
+            onGridReorder={setGridOrder}
+            stripWidths={stripWidths}
+            canvasRects={canvasRects}
+            onCanvasRects={setCanvasRects}
+            camera={camera}
+            onCamera={setCamera}
+            onDeselect={deselect}
+            onStripWidth={setStripWidth}
+          />
+        </div>
+      </NavigatorContext.Provider>
+      <StatusBar mode={mode} row={currentRow} pane={current} run={run} connected={s.connected} error={s.error} />
       {palette !== false && (
         <Palette
           items={paletteItems}
@@ -723,4 +802,42 @@ export function App() {
       {all.pairRequests[0] && <PairSheet key={all.pairRequests[0].requestId} request={all.pairRequests[0]} />}
     </div>
   );
+}
+
+/** A Navigator docked to `side` of a Space (docs/21-sidebars.md); `carry` is the side's earlier width and visibility. */
+async function openNavigator(spaceId: SpaceId, side: Side, carry?: { hidden: boolean; width: number | null }): Promise<void> {
+  const w = await cmd.call("window.open", { kind: "navigator", spaceId });
+  const d = readDocks(getSpaceView(spaceId, "docks", null));
+  const next = dock(d, w.id, side);
+  setSpaceView(spaceId, "docks", carry ? { ...next, [side]: { ...next[side], ...carry } } : next);
+}
+
+/** Spaces being given their first Navigator, so a re-render doesn't make two. */
+const making = new Set<SpaceId>();
+
+/**
+ * Every Space starts with a Navigator docked left, which is also the migration
+ * from the old sidebar (its width and whether it was shown carry over). Once
+ * a Space has sidebars (even none), it's left alone.
+ */
+function useFirstNavigator(spaceId: SpaceId, ready: boolean, unset: boolean, carry: { hidden: boolean; width: number | null }): void {
+  useEffect(() => {
+    if (!ready || !unset || making.has(spaceId)) return;
+    making.add(spaceId);
+    openNavigator(spaceId, "left", carry).catch(() => {
+      // An older core without the Navigator type: no sidebars rather than asking again.
+      setSpaceView(spaceId, "docks", {});
+    });
+  }, [spaceId, ready, unset]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** The app window's width, for fitting the sidebars. */
+function useWindowWidth(): number {
+  const [w, setW] = useState(window.innerWidth);
+  useEffect(() => {
+    const on = () => setW(window.innerWidth);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return w;
 }

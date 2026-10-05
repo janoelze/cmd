@@ -11,10 +11,11 @@
   --font-text: var(--font-ui);
   --font-text-size: 14px;
 
-  --sidebar-w: 280px;
+  --sidebar-w: 280px; /* the Settings window's sidebar */
   --sidebar-pad: 14px; /* rows' inset from the sidebar edges (ui.sidebarPadding, set on .app / .sw) */
-  --titlebar-h: 38px; /* traffic-light area at the top of the sidebar */
-  --statusbar-h: 30px; /* sidebar footer and main status bar share this */
+  --titlebar-h: 38px; /* traffic-light area at the top of the Settings window's sidebar */
+  --topbar-h: 32px; /* the app window's top bar; on macOS set from shared/chrome.ts TOPBAR_HEIGHT */
+  --statusbar-h: 30px; /* the footer */
   /* Window spacing in grid and strip (set on .app from ui.gutter, ui.paddingX/Y). */
   --gutter: 8px; /* between windows */
   --pad-x: 8px; /* to the left and right edges */
@@ -36,7 +37,7 @@
   --window-dim: 1; /* theme factor on ui.unfocusedDim (darkening of unfocused windows) */
 }
 /* Outside macOS the window has its own frame: no traffic-light area to keep free. */
-.platform-other { --titlebar-h: 28px; } /* the sidebar's top row (+) still needs its height */
+.platform-other { --titlebar-h: 28px; --topbar-h: 30px; }
 
 html, body, #root { height: 100%; margin: 0; }
 
@@ -55,41 +56,87 @@ kbd {
 
 /* ── layout ─────────────────────────────────────────── */
 
-/* Two columns, two rows. The sidebar spans both rows; the main pane and its
-   status bar share the bottom row height with the sidebar footer. */
+/* Three rows (docs/21-sidebars.md): the top bar, the stage, the footer. The stage
+   is one backdrop that the sidebars and the workspace's windows sit on. */
 .app {
   display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  /* The bottom row sizes to its content (icons, fonts); the sidebar footer and the
-     main status bar share it, so they always have the same height. */
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr) auto;
   height: 100%;
+  background: var(--bg);
 }
-.app.no-sidebar { grid-template-columns: minmax(0, 1fr); }
-.app.no-sidebar .main, .app.no-sidebar .statusbar { grid-column: 1; }
-.app.no-sidebar .main { padding-top: var(--titlebar-h); }
 
-/* With the sidebar hidden, a strip under the traffic lights keeps the window draggable. */
-.drag-strip {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--titlebar-h);
+/* ── top bar ────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 var(--pad-x);
+  /* Like the footer: its background, and the separator on the side facing the stage
+     (an inset shadow: no layout space, so content centres exactly). */
+  background: var(--bg-sidebar);
+  box-shadow: inset 0 -1px 0 var(--separator);
   -webkit-app-region: drag;
-  z-index: 5;
 }
+/* Room for the traffic lights (main/index.ts trafficLightPosition). */
+.platform-mac .topbar { padding-left: 80px; }
+.topbar-lead { display: flex; align-items: center; gap: 4px; min-width: 0; -webkit-app-region: no-drag; }
+.topbar .spacebar { flex: none; width: 200px; }
+
+/* ── stage: sidebars and the workspace ──────────────── */
+
+.stage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+}
+/* All in row 1: auto-placement would move an item whose column comes before the last one's to a new row. */
+.stage > * { grid-row: 1; }
+.stage > .main { grid-column: 2; }
+.dock {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  /* Inset like the workspace's windows; the workspace's own padding makes the gap between. */
+  padding: var(--pad-y) 0 var(--pad-y) var(--pad-x);
+}
+.dock-left { grid-column: 1; }
+.dock-right { grid-column: 3; padding: var(--pad-y) var(--pad-x) var(--pad-y) 0; }
+.dock > .tile { position: relative; flex: 1; min-width: 0; }
+/* The inner edge resizes; it sits in the gap beside the window. */
+.dock-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 6;
+}
+.dock-left .dock-resize { right: calc(-4px - var(--pad-x) / 2); }
+.dock-right .dock-resize { left: calc(-4px - var(--pad-x) / 2); }
+.dock-resize::after {
+  content: "";
+  position: absolute;
+  top: var(--pad-y);
+  bottom: var(--pad-y);
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background 120ms 80ms;
+}
+.dock-resize:hover::after, .app.sidebar-resizing .dock-resize::after { background: var(--accent); }
 
 /* ── status bar (main pane) ─────────────────────────── */
 
 .statusbar {
-  grid-column: 2;
-  grid-row: 2;
   display: flex;
   align-items: center;
   gap: 12px;
   min-height: var(--statusbar-h);
-  padding: 3px 6px 3px 12px;
+  padding: 3px 6px 3px 16px;
   background: var(--bg-sidebar);
   /* separator as an inset shadow: no layout space, so content centres exactly */
   box-shadow: inset 0 1px 0 var(--separator);
@@ -98,6 +145,8 @@ kbd {
   -webkit-app-region: drag;
 }
 .statusbar button { -webkit-app-region: no-drag; }
+/* The core's health: as wide as the left sidebar, so it sits under it, as the old sidebar footer did. */
+.statusbar-core { flex: none; display: flex; width: calc(var(--dock-left-w) - 16px + var(--pad-x)); min-width: 0; }
 .statusbar-session { flex: 1; min-width: 0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
 /* Spacing lives inside the slots, so an empty slot takes no space. */
 .statusbar-session .slot-v { --gap: 8px; }
@@ -136,6 +185,16 @@ kbd {
   -webkit-app-region: drag;
 }
 
+/* The Navigator (components/Navigator.tsx): the old sidebar's content, in a window. */
+.navigator {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 8px;
+  background: var(--bg-sidebar);
+}
+
 .sb-search.ui-field { flex: none; display: flex; width: auto; margin: 0 var(--sidebar-pad) 6px; }
 
 /* Indexing progress (IndexRing). */
@@ -144,20 +203,20 @@ kbd {
 .index-ring-fill { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
 
 .sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 10px; }
-/* Switching Spaces (store.ts slideSidebar): the list is the scope of a View
-   Transition, captured as its `root`; the old list leaves toward one side while
-   the new one comes in from the other. Transforms and opacity only (compositor). */
-.sidebar-scroll::view-transition-group(root) { overflow: clip; animation: none; }
-.sidebar-scroll::view-transition-old(root),
-.sidebar-scroll::view-transition-new(root) {
+/* Switching Spaces (store.ts slideSidebar): the left sidebar's Navigator is the scope
+   of a View Transition, captured as its `root`; the old one leaves toward one side
+   while the new one comes in from the other. Transforms and opacity only (compositor). */
+.dock-left > .tile.kind-navigator > .tile-body::view-transition-group(root) { overflow: clip; animation: none; }
+.dock-left > .tile.kind-navigator > .tile-body::view-transition-old(root),
+.dock-left > .tile.kind-navigator > .tile-body::view-transition-new(root) {
   animation-duration: 300ms;
   animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
   animation-fill-mode: both;
 }
-.sidebar-scroll:active-view-transition-type(space-next)::view-transition-old(root) { animation-name: sb-out-left; }
-.sidebar-scroll:active-view-transition-type(space-next)::view-transition-new(root) { animation-name: sb-in-right; }
-.sidebar-scroll:active-view-transition-type(space-prev)::view-transition-old(root) { animation-name: sb-out-right; }
-.sidebar-scroll:active-view-transition-type(space-prev)::view-transition-new(root) { animation-name: sb-in-left; }
+.dock-left > .tile.kind-navigator > .tile-body:active-view-transition-type(space-next)::view-transition-old(root) { animation-name: sb-out-left; }
+.dock-left > .tile.kind-navigator > .tile-body:active-view-transition-type(space-next)::view-transition-new(root) { animation-name: sb-in-right; }
+.dock-left > .tile.kind-navigator > .tile-body:active-view-transition-type(space-prev)::view-transition-old(root) { animation-name: sb-out-right; }
+.dock-left > .tile.kind-navigator > .tile-body:active-view-transition-type(space-prev)::view-transition-new(root) { animation-name: sb-in-left; }
 @keyframes sb-out-left { to { transform: translateX(-100%); opacity: 0.4; } }
 @keyframes sb-out-right { to { transform: translateX(100%); opacity: 0.4; } }
 @keyframes sb-in-right { from { transform: translateX(100%); opacity: 0.4; } }
@@ -273,48 +332,10 @@ kbd {
 .twisty.open { transform: rotate(90deg); }
 
 /* The right edge: drag to resize. A hairline lights up on hover. */
-.sidebar-resize {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: -4px;
-  width: 7px;
-  cursor: col-resize;
-  touch-action: none;
-  z-index: 6;
-}
-.sidebar-resize::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 3px;
-  width: 1px;
-  background: transparent;
-  transition: background 120ms 80ms;
-}
-.sidebar-resize:hover::after, .app.sidebar-resizing .sidebar-resize::after { background: var(--accent); }
 .app.sidebar-resizing, .app.sidebar-resizing * { cursor: col-resize !important; user-select: none; }
 .app.sidebar-resizing .xterm, .app.sidebar-resizing [data-embed] { pointer-events: none; }
 .app.sidebar-resizing .windows-track > .tile { transition: none; }
 
-.sidebar-status {
-  grid-row: 2;
-  grid-column: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: var(--statusbar-h);
-  padding: 3px 16px;
-  font-size: 11.5px;
-  color: var(--text-dim);
-  background: var(--bg-sidebar);
-  /* separator as an inset shadow: no layout space, so content centres exactly */
-  box-shadow: inset 0 1px 0 var(--separator);
-  border-right: 1px solid var(--separator);
-  -webkit-app-region: drag;
-}
-.sidebar-status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The core's health (components/CoreStatus.tsx): the footer line is a button opening the details above it. */
 .core-status { position: relative; flex: 1; min-width: 0; display: flex; margin: 0 -8px; }
@@ -355,8 +376,6 @@ kbd {
 /* ── main view ──────────────────────────────────────── */
 
 .main {
-  grid-column: 2;
-  grid-row: 1;
   min-width: 0;
   min-height: 0;
   background: var(--bg);
@@ -861,6 +880,12 @@ kbd {
 .file-icon { color: var(--text-dim); }
 .file-icon.dir { color: var(--folder); }
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Narrow (a sidebar, a thin strip window): names only, no size or date column. */
+.files { container-type: inline-size; }
+@container (max-width: 420px) {
+  .file-row { grid-template-columns: 12px 16px minmax(0, 1fr) 12px; }
+  .file-size, .file-date { display: none; }
+}
 .file-size, .file-date { font-size: 0.85em; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
 .file-op-error.ui-callout { margin: 2px 8px 4px; }
 .file-rename {
@@ -1117,13 +1142,8 @@ kbd {
   .mark > * { transform: none !important; }
 }
 
-/* ── Space switcher (bottom of the sidebar; under the traffic lights when it's hidden) ── */
+/* ── Space switcher (the top bar) ── */
 
-.sb-spaces {
-  flex: none;
-  display: flex;
-  padding: 8px var(--sidebar-pad) var(--sidebar-pad);
-}
 .spacebar {
   flex: 1;
   min-width: 0;
@@ -1131,7 +1151,6 @@ kbd {
   align-items: center;
   -webkit-app-region: no-drag;
 }
-.drag-strip .spacebar { position: absolute; left: 80px; top: 0; height: 100%; width: 220px; flex: none; }
 /* The button: full width, like the search field above. */
 .space-trigger {
   flex: 1;
@@ -1149,7 +1168,6 @@ kbd {
   text-align: left;
   transition: background-color 150ms ease;
 }
-.drag-strip .space-trigger { height: 22px; }
 .space-trigger:hover, .space-trigger.open { background: var(--bg-selected); }
 .space-trigger:focus-visible { outline: none; border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
 .space-trigger .space-name { flex: 1; }

@@ -16,6 +16,7 @@ import path from "node:path";
 import { SETTINGS_TEMPLATE, SYSTEM_SOUNDS, mediaOrigin, widgetCsp } from "@cmd/protocol";
 import { cmdHome, connect, coreSocketPath, enterInstance, initLog, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
+import { SETTINGS_TITLEBAR_HEIGHT, TOPBAR_HEIGHT, trafficLights } from "../shared/chrome.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { lucideSymbol, type SymbolImage } from "@cmd/ui/lucide";
 import { appMetrics } from "./metrics.ts";
@@ -377,9 +378,9 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     title: app.getName(),
     icon: devIcon, // Windows/Linux; macOS uses the Dock icon
     show: false,
-    // macOS: content under an inset title bar, traffic lights over the sidebar.
+    // macOS: content under an inset title bar, traffic lights centred in the top bar.
     // Elsewhere: the platform's own frame, window controls and menu bar.
-    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 14, y: 12 } } : {}),
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: trafficLights(TOPBAR_HEIGHT) } : {}),
     backgroundColor: savedAppearance().background,
     acceptFirstMouse: true, // a click on a window in the background also lands (selects, focuses a terminal)
     webPreferences: {
@@ -431,7 +432,7 @@ function openUtility(page: UtilityPage, o: { title: string; width: number; heigh
   const win = new BrowserWindow({
     ...o,
     show: false,
-    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 14, y: 12 } } : {}),
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: trafficLights(SETTINGS_TITLEBAR_HEIGHT) } : {}),
     backgroundColor: savedAppearance().background,
     fullscreenable: false,
     webPreferences: {

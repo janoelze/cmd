@@ -137,7 +137,7 @@ function removedFromDesk(win: AppWindow): void {
   const widgetId = typeof win.state.widgetId === "string" ? win.state.widgetId : null;
   if (!widgetId || !win.state.revision || getState().ui["widgets.removedHint"]) return;
   setUi("widgets.removedHint", true);
-  toast(`Removed “${win.title}” from the desk. It's in your Widget Library.`, {
+  toast(`Removed “${win.title}” from the workspace. It's in your Widget Library.`, {
     icon: "sparkles",
     duration: 8000,
     action: { label: "Undo", run: () => void cmd.call("widget.add", { ref: `magic:${widgetId}`, spaceId: win.spaceId }).then((w) => select(w.id), () => {}) },

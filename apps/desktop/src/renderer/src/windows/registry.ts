@@ -2,7 +2,7 @@
 // UI. The core half (what it opens, its state) lives in packages/core/src/windows.
 // Built-ins register in ./builtin.tsx; plugin window types will register the same way.
 
-import { createElement, lazy, Suspense, type ComponentType } from "react";
+import { createContext, createElement, lazy, Suspense, type ComponentType } from "react";
 import type { AppWindow, WindowTypeInfo } from "@cmd/protocol";
 import type { MenuEntry } from "../context.ts";
 
@@ -28,6 +28,12 @@ export interface WindowView {
   /** The window's own main actions: first in that menu, above Show, Move and Close. */
   actions?(win: AppWindow): MenuEntry[];
 }
+
+/**
+ * Where a window is shown: in the workspace's layout, or docked as a sidebar
+ * (docs/21-sidebars.md). Views can read it to adapt (useContext).
+ */
+export const PlacementContext = createContext<"workspace" | "sidebar">("workspace");
 
 const views = new Map<string, WindowView>();
 

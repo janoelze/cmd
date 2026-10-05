@@ -276,6 +276,22 @@ export const youtubeType: WindowType<YouTubeRef & { fill?: boolean }> = {
   },
 };
 
+/**
+ * The Navigator (docs/21-sidebars.md): what the app's sidebar used to be, as a
+ * widget. Search, then the Space's agents, windows and widgets and recent
+ * sessions; docked left in every Space by default. Its data is the renderer's.
+ */
+export const navigatorType: WindowType<Record<string, never>> = {
+  kind: "navigator",
+  title: "Navigator",
+  icon: "sidebar.left",
+  role: "widget",
+  description: "Search, and everything open in this Space: agents, windows, widgets and recent sessions.",
+  create() {
+    return { state: {}, title: "Navigator" };
+  },
+};
+
 export function registerBuiltins(types: WindowTypes): void {
   types.register(terminalType);
   types.register(browserType);
@@ -286,4 +302,5 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(agentsType);
   types.register(diffType);
   types.register(youtubeType);
+  types.register(navigatorType);
 }

@@ -1,22 +1,21 @@
-// The sidebar: a search field over open windows and the transcript index, then
-// sections (Needs you, Agents, Windows, Widgets, Recent past sessions), a footer with
-// the core's health, and a draggable right edge.
+// The Navigator (docs/21-sidebars.md): what the app's sidebar used to be, now a
+// built-in widget, docked left in every Space by default. A search field over
+// open windows and the transcript index, then sections (Needs you, Agents,
+// Windows, Widgets, Recent past sessions). It reads App's rows and callbacks
+// through NavigatorContext, so every Navigator window shows the same.
 
-import { Button, EmptyState, IconButton, SearchField } from "@cmd/ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, EmptyState, SearchField } from "@cmd/ui";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { PaneId, SearchHit, SearchStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { openSession } from "../actions.ts";
 import { usePersisted, useStoreValue } from "../store.ts";
 import { terminals } from "../terminals.ts";
 import { filterRows, flatten, sectionOf, SECTIONS, type Section, type SidebarRow } from "../model.ts";
-import { ICON, Symbol } from "./Symbol.tsx";
 import { HistoryRow, SectionHeading, SessionRow } from "./SidebarRows.tsx";
 import { IndexRing } from "./IndexRing.tsx";
-import { CoreStatus } from "./CoreStatus.tsx";
 import { countRender } from "../perf.ts";
-
-export const SIDEBAR_WIDTH = { default: 280, min: 200, max: 480 } as const;
+import type { WindowViewProps } from "../windows/registry.ts";
 
 /** A request from a command: focus the search field. */
 export interface SidebarRequest {
@@ -24,28 +23,33 @@ export interface SidebarRequest {
   at: number;
 }
 
-interface Props {
-  /** The Space switcher, centered at the bottom. */
-  spaceBar: React.ReactNode;
+/** What the Navigator shows and does, from App. */
+export interface NavigatorData {
+  /** The Space's rows, sidebars left out (they are always in view). */
   rows: SidebarRow[];
   selected: PaneId | null;
   onSelect: (row: SidebarRow) => void;
   onRowMenu: (row: SidebarRow) => void;
   onClose: (row: SidebarRow) => void;
-  onNew: () => void;
   onNewTerminal: () => void;
-  onWidth: (px: number | null) => void;
   request: SidebarRequest | null;
   search: SearchStatus | null;
-  connected: boolean;
-  error?: string;
+}
+
+export const NavigatorContext = createContext<NavigatorData | null>(null);
+
+/** The window view (windows/builtin.tsx). */
+export function NavigatorView({ win }: WindowViewProps) {
+  const data = useContext(NavigatorContext);
+  return data ? <Navigator {...data} key={win.id} /> : null;
 }
 
 const TITLES: Record<Section, string> = { needs: "Needs you", agents: "Agents", windows: "Windows", widgets: "Widgets" };
 
-export function Sidebar(p: Props) {
-  countRender("Sidebar");
-  const rows = useFrozenOrder(p.rows);
+function Navigator(p: NavigatorData) {
+  countRender("Navigator");
+  const list = useRef<HTMLDivElement>(null);
+  const rows = useFrozenOrder(p.rows, list);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -58,7 +62,6 @@ export function Sidebar(p: Props) {
 
   const [query, setQuery] = useState("");
   const input = useRef<HTMLInputElement>(null);
-  const list = useRef<HTMLDivElement>(null);
   const searching = query.trim().length > 0;
 
   // ⇧⌘F reaches a sidebar that may have just opened.
@@ -136,81 +139,70 @@ export function Sidebar(p: Props) {
   const rowProps = { now, selected: p.selected, onSelect: p.onSelect, onMenu: p.onRowMenu, onClose: p.onClose, shortcutOf };
 
   return (
-    <>
-      <aside className="sidebar">
-        <div className="sidebar-titlebar">
-          <IconButton icon="plus" label="New…" onClick={p.onNew} />
-        </div>
-        <SearchField ref={input} className="sb-search" size="lg" value={query} placeholder="Search sessions" onChange={setQuery} onKeyDown={onKeyDown} status={<IndexRing status={p.search} />} />
+    <div className="navigator">
+      <SearchField ref={input} className="sb-search" size="lg" value={query} placeholder="Search sessions" onChange={setQuery} onKeyDown={onKeyDown} status={<IndexRing status={p.search} />} />
 
-        <div className="sidebar-scroll" ref={list} data-frozen={rows !== p.rows || undefined}>
-          {searching ? (
-            <>
-              {matches.length > 0 && (
-                <section className="sb-section">
-                  <SectionHeading title="Open" count={matches.length} />
-                  {matches.map((r, i) => (
-                    <SessionRow key={r.key} row={r} depth={0} flat active={active === i} {...rowProps} />
-                  ))}
-                </section>
-              )}
-              {hits.length > 0 && (
-                <section className="sb-section">
-                  <SectionHeading title="History" count={hits.length} />
-                  {hits.map((h, i) => (
-                    <HistoryRow key={`${h.agent}-${h.sessionId}`} hit={h} now={now} rich active={active === matches.length + i} onOpen={(x) => pick({ type: "hit", hit: x })} />
-                  ))}
-                </section>
-              )}
-              {results.length === 0 && <EmptyState compact>{query.trim().length < 2 ? "Keep typing to search past sessions" : "No matches"}</EmptyState>}
-            </>
-          ) : (
-            <>
-              {groups.map(
-                (g) =>
-                  g.rows.length > 0 && (
-                    <section key={g.id} className={`sb-section sb-${g.id}`}>
-                      <SectionHeading
-                        title={TITLES[g.id]}
-                        count={g.rows.length}
-                        tone={g.id === "needs" ? "needs" : undefined}
-                        // Needs you can't be hidden.
-                        open={g.id === "needs" ? undefined : isOpen(g.id)}
-                        onToggle={g.id === "needs" ? undefined : () => toggle(g.id)}
-                      />
-                      {(g.id === "needs" || isOpen(g.id)) &&
-                        g.rows.map((r) => <SessionRow key={r.key} row={r} depth={0} gutter={g.rows.some((x) => x.children.length > 0)} {...rowProps} />)}
-                    </section>
-                  ),
-              )}
-              {rows.length === 0 && (
-                <EmptyState
-                  compact
-                  title="Nothing open"
-                  action={
-                    <Button onClick={p.onNewTerminal} data-tip-key="⌘T" data-tip="New Terminal">
-                      New Terminal
-                    </Button>
-                  }
-                />
-              )}
-              {recent.length > 0 && (
-                <section className="sb-section sb-recent">
-                  <SectionHeading title="Recent" open={isOpen("recent")} onToggle={() => toggle("recent")} />
-                  {isOpen("recent") && recent.map((h) => <HistoryRow key={`${h.agent}-${h.sessionId}`} hit={h} now={now} onOpen={(x) => void openSession(x)} />)}
-                </section>
-              )}
-            </>
-          )}
-        </div>
-        <div className="sb-spaces">{p.spaceBar}</div>
-        <ResizeHandle onWidth={p.onWidth} />
-      </aside>
-      {/* In the app's bottom row, beside the main status bar: both share one height. */}
-      <footer className="sidebar-status">
-        <CoreStatus connected={p.connected} error={p.error} />
-      </footer>
-    </>
+      <div className="sidebar-scroll" ref={list} data-frozen={rows !== p.rows || undefined}>
+        {searching ? (
+          <>
+            {matches.length > 0 && (
+              <section className="sb-section">
+                <SectionHeading title="Open" count={matches.length} />
+                {matches.map((r, i) => (
+                  <SessionRow key={r.key} row={r} depth={0} flat active={active === i} {...rowProps} />
+                ))}
+              </section>
+            )}
+            {hits.length > 0 && (
+              <section className="sb-section">
+                <SectionHeading title="History" count={hits.length} />
+                {hits.map((h, i) => (
+                  <HistoryRow key={`${h.agent}-${h.sessionId}`} hit={h} now={now} rich active={active === matches.length + i} onOpen={(x) => pick({ type: "hit", hit: x })} />
+                ))}
+              </section>
+            )}
+            {results.length === 0 && <EmptyState compact>{query.trim().length < 2 ? "Keep typing to search past sessions" : "No matches"}</EmptyState>}
+          </>
+        ) : (
+          <>
+            {groups.map(
+              (g) =>
+                g.rows.length > 0 && (
+                  <section key={g.id} className={`sb-section sb-${g.id}`}>
+                    <SectionHeading
+                      title={TITLES[g.id]}
+                      count={g.rows.length}
+                      tone={g.id === "needs" ? "needs" : undefined}
+                      // Needs you can't be hidden.
+                      open={g.id === "needs" ? undefined : isOpen(g.id)}
+                      onToggle={g.id === "needs" ? undefined : () => toggle(g.id)}
+                    />
+                    {(g.id === "needs" || isOpen(g.id)) &&
+                      g.rows.map((r) => <SessionRow key={r.key} row={r} depth={0} gutter={g.rows.some((x) => x.children.length > 0)} {...rowProps} />)}
+                  </section>
+                ),
+            )}
+            {rows.length === 0 && (
+              <EmptyState
+                compact
+                title="Nothing open"
+                action={
+                  <Button onClick={p.onNewTerminal} data-tip-key="⌘T" data-tip="New Terminal">
+                    New Terminal
+                  </Button>
+                }
+              />
+            )}
+            {recent.length > 0 && (
+              <section className="sb-section sb-recent">
+                <SectionHeading title="Recent" open={isOpen("recent")} onToggle={() => toggle("recent")} />
+                {isOpen("recent") && recent.map((h) => <HistoryRow key={`${h.agent}-${h.sessionId}`} hit={h} now={now} onOpen={(x) => void openSession(x)} />)}
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -254,43 +246,10 @@ function useHistorySearch(query: string): SearchHit[] {
 }
 
 /**
- * The right edge: drag to resize, double-click for the default width. While
- * dragging only the CSS variable changes; the width is stored on release.
- */
-function ResizeHandle({ onWidth }: { onWidth: (px: number | null) => void }) {
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    const handle = e.currentTarget;
-    const app = handle.closest<HTMLElement>(".app");
-    if (!app) return;
-    handle.setPointerCapture(e.pointerId);
-    app.classList.add("sidebar-resizing");
-    let width: number | null = null;
-    const move = (ev: PointerEvent) => {
-      const max = Math.max(SIDEBAR_WIDTH.min, Math.min(SIDEBAR_WIDTH.max, window.innerWidth - 320));
-      width = Math.round(Math.max(SIDEBAR_WIDTH.min, Math.min(max, ev.clientX)));
-      app.style.setProperty("--sidebar-w", `${width}px`);
-    };
-    const end = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", end);
-      handle.removeEventListener("pointercancel", end);
-      app.classList.remove("sidebar-resizing");
-      if (width !== null) onWidth(width);
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", end);
-    handle.addEventListener("pointercancel", end);
-  };
-  return <div className="sidebar-resize" onPointerDown={onPointerDown} onDoubleClick={() => onWidth(null)} data-tip="Drag to resize · double-click to reset" />;
-}
-
-/**
  * Keeps the row order stable while the pointer is over the list, so rows never
  * jump under the cursor. New rows are appended; the order catches up on leave.
  */
-function useFrozenOrder(rows: SidebarRow[]): SidebarRow[] {
+function useFrozenOrder(rows: SidebarRow[], list: React.RefObject<HTMLDivElement | null>): SidebarRow[] {
   const hovering = useRef(false);
   const frozen = useRef<string[] | null>(null);
   const [, force] = useState(0);
@@ -299,7 +258,7 @@ function useFrozenOrder(rows: SidebarRow[]): SidebarRow[] {
 
   // Bound once (it re-queried the DOM and re-bound both listeners on every render).
   useEffect(() => {
-    const el = document.querySelector(".sidebar-scroll");
+    const el = list.current;
     if (!el) return;
     const enter = () => {
       hovering.current = true;

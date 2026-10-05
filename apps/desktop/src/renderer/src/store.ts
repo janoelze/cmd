@@ -244,13 +244,15 @@ cmd.onShowSpace(({ spaceId, select }) => {
 });
 
 /**
- * Switching Spaces slides the sidebar's list toward the new Space's side of the
- * switcher, as in Arc: an element-scoped View Transition, so only the list is
+ * Switching Spaces slides the Navigator toward the new Space's side of the
+ * switcher, as in Arc: an element-scoped View Transition, so only it is
  * captured (terminals and webviews stay live) and the slide runs on the
  * compositor while the main view re-lays out. `update` must commit synchronously.
+ * Each Space has its own Navigator window, so the transition runs on the left
+ * sidebar's window body, which React keeps while the window inside changes.
  */
 function slideSidebar(from: SpaceId, to: SpaceId, update: () => void): void {
-  const el = document.querySelector<HTMLElement & { startViewTransition?: Document["startViewTransition"] }>(".sidebar-scroll");
+  const el = document.querySelector<HTMLElement & { startViewTransition?: Document["startViewTransition"] }>(".dock-left > .tile.kind-navigator > .tile-body");
   const a = state.spaces.get(from);
   const b = state.spaces.get(to);
   const searching = !!document.querySelector<HTMLInputElement>(".sb-search input")?.value;

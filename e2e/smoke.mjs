@@ -115,7 +115,7 @@ const visualTiles = async () => {
   return ids.map((id) => win.locator(`.tile[data-pane="${id}"]`));
 };
 
-await win.waitForSelector(".sidebar-status");
+await win.waitForSelector(".statusbar .core-status");
 // First launch: the onboarding sheet, Welcome then the AI step; without a key only "Set Up Later" moves on.
 {
   await win.waitForSelector(".onboarding");
@@ -136,14 +136,21 @@ await win.waitForSelector(".sidebar-status");
 }
 await win.screenshot({ path: path.join(shots, "1-empty.png") });
 {
-  // The sidebar footer and the main status bar share one bottom row: same top, same height,
-  // and tall enough for their tallest icon button.
-  const left = await win.locator(".sidebar-status").boundingBox();
+  // One footer across the window (docs/21-sidebars.md): the core's health at its left end,
+  // tall enough for its tallest icon button.
   const right = await win.locator(".statusbar").boundingBox();
+  const vw = await win.evaluate(() => window.innerWidth);
+  const core = await win.locator(".statusbar .core-status").boundingBox();
   const btn = await win.locator(".statusbar :is(.ui-icon-button, .ui-seg button)").first().boundingBox();
-  check(Math.abs(left.y - right.y) < 0.5 && Math.abs(left.height - right.height) < 0.5 && right.height >= btn.height,
-    `bottom bars line up and fit their icons (${left.height} / ${right.height}, button ${btn.height})`);
-  check(right.height === 30, `bottom bars keep their 30 px height (${right.height})`);
+  check(right.x === 0 && Math.abs(right.width - vw) < 0.5 && core.x < 40 && right.height >= btn.height,
+    `the footer spans the window with the core's health on the left (${right.width} / ${vw}, core at ${core.x})`);
+  check(right.height === 30, `the footer keeps its 30 px height (${right.height})`);
+  // Every Space starts with the Navigator docked left, under the top bar.
+  await win.waitForSelector(".dock-left .tile.kind-navigator .navigator");
+  const nav = await win.locator(".dock-left").boundingBox();
+  const top = await win.locator(".topbar").boundingBox();
+  check(nav.x === 0 && nav.y >= top.y + top.height - 0.5 && (await win.locator(".topbar .space-trigger").count()) === 1,
+    `the Navigator is the left sidebar, the Space switcher in the top bar (${nav.x}, ${nav.y})`);
   // Icons sit on whole pixels, exactly centred in their buttons.
   const offsets = await win.locator(".statusbar :is(.ui-icon-button, .ui-seg button)").evaluateAll((btns) =>
     btns.map((b) => {
@@ -207,7 +214,7 @@ void before;
 
 await menu("view.grid");
 await win.waitForTimeout(400);
-check((await win.locator(".tile").count()) === 2, "grid shows both terminals");
+check((await win.locator(".windows-track > .tile").count()) === 2, "grid shows both terminals");
 if (process.platform !== "win32") {
   await win.waitForSelector(".statusbar-usage .slot-v", { timeout: 8000 });
   const usageText = await win.locator(".statusbar-usage .slot-v").first().textContent();
@@ -215,7 +222,7 @@ if (process.platform !== "win32") {
 } else console.log("skip - status bar memory (needs a Windows procinfo helper)");
 // Notifications: a bell in the other terminal marks it until you look at it.
 {
-  const other = await win.evaluate(() => document.querySelector(".tile:not(.sel)")?.getAttribute("data-pane"));
+  const other = await win.evaluate(() => document.querySelector(".windows-track > .tile:not(.sel)")?.getAttribute("data-pane"));
   // A bell from the shell: PowerShell on Windows, a POSIX shell elsewhere.
   const bell = process.platform === "win32" ? 'Write-Host -NoNewline "`a"\r' : "printf '\\a'\r";
   await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [other, bell]);
@@ -315,7 +322,9 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
 // Sidebar search (⇧⌘F): filters open windows and searches past sessions; Esc leaves.
 {
   await menu("view.search");
-  check(await win.evaluate(() => document.activeElement?.closest(".sb-search") !== null), "⇧⌘F focuses the sidebar search");
+  const searchFocused = await win.waitForFunction(() => document.activeElement?.closest(".sb-search") !== null, null, { timeout: 2000 }).then(() => true, () => false);
+  if (!searchFocused) console.log("focus is on", await win.evaluate(() => document.activeElement?.outerHTML.slice(0, 200)));
+  check(searchFocused, "⇧⌘F focuses the Navigator's search");
   await win.keyboard.type("wiregaurd");
   await win.waitForSelector(".sidebar-scroll .row.history", { timeout: 15000 });
   const label = await win.locator(".sidebar-scroll .row.history .row-name").first().textContent();
@@ -798,7 +807,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       back = (await call("window.list")).find((x) => x.kind === "magic" && x.title === "Counter" && x.state.phase === "ready");
     }
     const listed = (await call("widget.list")).find((e) => e.title === "Counter");
-    check(!!back && (await win.locator(".widget-library").count()) === 0 && listed?.windows.includes(back.id) && (await win.locator(".sb-widgets").count()) === 1, `a widget comes back from the library, on the desk and in the sidebar's Widgets (${listed?.windows.length})`);
+    check(!!back && (await win.locator(".widget-library").count()) === 0 && listed?.windows.includes(back.id) && (await win.locator(".sb-widgets").count()) === 1, `a widget comes back from the library, on the workspace and in the Navigator's Widgets (${listed?.windows.length})`);
     await menu("widget.library");
     await win.waitForSelector(".widget-library", { timeout: 5000 });
     await menu("file.close");
@@ -1187,14 +1196,37 @@ step("typing the re-attach marker");
 await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [markerPane, markerCmd]);
 await win.waitForTimeout(800);
 
+// Sidebars (docs/21-sidebars.md): any window docks to a side and comes back to the workspace.
+{
+  await win.evaluate((id) => window.__cmdSelect(id), markerPane);
+  await win.waitForTimeout(200);
+  const inWorkspace = () => win.locator(`.windows-track > .tile[data-pane="${markerPane}"]`).count();
+  await menu("window.dockRight");
+  await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
+  // The Space's layout is saved debounced.
+  let storedRight = null;
+  for (let i = 0; i < 20 && storedRight !== markerPane; i++) (await win.waitForTimeout(100), (storedRight = (await homeView()).docks?.right?.id));
+  check((await inWorkspace()) === 0 && storedRight === markerPane, "Move to Right Sidebar docks the window, out of the workspace");
+  await win.screenshot({ path: path.join(shots, "9-sidebars.png") });
+  await menu("view.rightSidebar");
+  await win.waitForTimeout(300);
+  check((await win.locator(".dock-right").count()) === 0 && (await inWorkspace()) === 0, "Show Right Sidebar hides the side; the window stays docked");
+  await menu("view.rightSidebar");
+  await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
+  await win.waitForTimeout(200);
+  await menu("window.undock");
+  await win.waitForSelector(`.windows-track > .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
+  check((await win.locator(".dock-right").count()) === 0 && (await win.locator(".dock-left .navigator").count()) === 1, "Move to Workspace brings it back; the Navigator stays on the left");
+}
+
 // ── remembered UI state across an app restart (the core keeps running) ──
 await menu("view.grid");
-await win.click(".sb-windows .sb-heading"); // collapse a sidebar section
+await win.click(".sb-windows .sb-heading"); // collapse a Navigator section
 await menu("view.zoomIn");
 await menu("view.zoomIn");
 {
-  // Drag the sidebar's edge; the width is UI state.
-  const edge = await win.locator(".sidebar-resize").boundingBox();
+  // Drag the left sidebar's inner edge; the width is the Space's layout.
+  const edge = await win.locator(".dock-left .dock-resize").boundingBox();
   await win.mouse.move(edge.x + edge.width / 2, 300);
   await win.mouse.down();
   await win.mouse.move(300, 300, { steps: 4 });
@@ -1209,15 +1241,17 @@ await closeApp();
 step("relaunching the app");
 
 ({ app, win } = await launch());
-await win.waitForSelector(".sidebar-status");
+await win.waitForSelector(".statusbar .core-status");
+await win.waitForSelector(".dock-left .navigator");
 await win.waitForTimeout(800);
 check((await win.locator(".main.mode-grid").count()) === 1, "view mode restored (grid)");
 {
-  const w = (await win.locator(".sidebar").boundingBox()).width;
-  check(Math.abs(w - 340) <= 1, `dragged sidebar width restored (${w})`);
-  await win.locator(".sidebar-resize").dblclick();
+  const stored = (await homeView()).docks?.left?.width;
+  const w = (await win.locator(".dock-left").boundingBox()).width;
+  check(stored > 300 && Math.abs(w - stored) <= 1, `dragged sidebar width restored (${w} / ${stored})`);
+  await win.locator(".dock-left .dock-resize").dblclick();
   await win.waitForTimeout(100);
-  const reset = (await win.locator(".sidebar").boundingBox()).width;
+  const reset = (await win.locator(".dock-left").boundingBox()).width;
   check(Math.abs(reset - 280) <= 1, `double-clicking the edge resets the width (${reset})`);
 }
 check((await win.locator('.sb-windows .sb-heading[aria-expanded="false"]').count()) === 1, "collapsed sidebar section restored");

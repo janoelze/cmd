@@ -117,6 +117,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("view.toggleEdit"),
         sep,
         ...i("view.sidebar"),
+        ...i("view.rightSidebar"),
         sep,
         ...i("view.palette"),
         ...i("view.search"),
@@ -181,7 +182,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
     },
     {
       role: "windowMenu",
-      submenu: [{ role: "minimize" }, { role: "zoom" }, sep, ...i("app.taskManager"), ...i("app.restartCore"), ...(mac ? [sep, { role: "front" as const }] : [])],
+      submenu: [{ role: "minimize" }, { role: "zoom" }, sep, ...i("window.dockLeft"), ...i("window.dockRight"), ...i("window.undock"), sep, ...i("app.taskManager"), ...i("app.restartCore"), ...(mac ? [sep, { role: "front" as const }] : [])],
     },
     { role: "help", submenu: [...i("help.docs"), ...i("help.whatsNew"), ...i("help.feedback"), ...(mac ? [] : [sep, ...i("app.checkUpdates")])] },
   ];

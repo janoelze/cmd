@@ -149,6 +149,9 @@ export function WindowsView(p: Props) {
     p.rows.map((r) => ({ id: idOf(r), createdAt: createdOf(r) })),
   ).map((x) => x.id);
   const ids = preview ?? settled;
+  // The workspace's own selection: a selected sidebar (docs/21-sidebars.md) leaves focus mode on the window it showed.
+  const shownRef = useRef<PaneId | null>(null);
+  if (selected && ids.includes(selected)) shownRef.current = selected;
   const pxWidths = ids.map((id) =>
     resizing?.id === id ? resizing.w : widthFor(p.widths[id] ?? DEFAULT_FRACTION, vp.w || 1000, padX),
   );
@@ -164,7 +167,7 @@ export function WindowsView(p: Props) {
         ? stripLayout(ids, pxWidths, vp, spacing)
         : arranged
           ? canvasLayout(arranged.rects)
-          : focusLayout(ids, selected, vp);
+          : focusLayout(ids, shownRef.current, vp);
   const stripSlots: Slot[] = ids.map((id) => ({ x: lay.rects.get(id)!.x, w: lay.rects.get(id)!.w }));
   // The DOM keeps a stable order; the dots go in the strip's.
   const stripDots = ids.map((id, i) => ({ id, slot: stripSlots[i]! })).sort((a, b) => a.slot.x - b.slot.x);
@@ -884,7 +887,7 @@ export function WindowsView(p: Props) {
  * so moving the canvas camera (a re-render per frame) doesn't re-render file lists,
  * editors and pages; only a changed window or focus does.
  */
-const WindowContent = memo(function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
+export const WindowContent = memo(function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
   const view = viewFor(win.kind);
   if (!view) return <EmptyState compact icon="exclamationmark.triangle.fill">No view registered for “{win.kind}” windows.</EmptyState>;
   return <view.View win={win} focused={focused} />;

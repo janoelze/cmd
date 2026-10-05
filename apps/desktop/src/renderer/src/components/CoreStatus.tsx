@@ -1,4 +1,4 @@
-// The sidebar footer: the core's connection and health in one line (status
+// Left end of the footer: the core's connection and health in one line (status
 // light, memory, CPU). Clicking it opens the details (uptime, response time,
 // the core and PTY host processes) with Restart Core and the Task Manager.
 

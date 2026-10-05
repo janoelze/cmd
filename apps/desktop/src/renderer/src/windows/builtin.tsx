@@ -13,6 +13,7 @@ import { MagicView, setEditing } from "../components/MagicView.tsx";
 import { AgentActivity } from "../components/AgentActivity.tsx";
 import { LiveDiff } from "../components/LiveDiff.tsx";
 import { watchUrl, YouTubeView } from "../components/YouTubeView.tsx";
+import { NavigatorView } from "../components/Navigator.tsx";
 import { intervalLabel, refreshChoices } from "../magic.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
@@ -186,4 +187,10 @@ registerWindowView({
         ]
       : [];
   },
+});
+
+registerWindowView({
+  kind: "navigator",
+  View: NavigatorView,
+  describe: () => ({ kind: null }),
 });

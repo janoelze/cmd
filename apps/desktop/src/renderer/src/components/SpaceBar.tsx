@@ -1,4 +1,4 @@
-// The Space switcher at the bottom of the sidebar (docs/11-spaces.md): a button
+// The Space switcher in the top bar (docs/11-spaces.md, 21-sidebars.md): a button
 // with the shown Space's icon and name that drops down a menu of the open Spaces
 // in switcher order (⌃1–9), each with its folder and its icon marked when
 // something in it needs you or finished unseen. The button carries the same mark
@@ -78,7 +78,7 @@ export function SpaceBar(p: Props) {
         label="Spaces"
         className="space-menu"
         matchWidth
-        placement="above"
+        placement="below"
         items={[...items, null, { label: "Open Space…", icon: "plus", shortcut: "⌘O", className: "space-item space-item-open", onSelect: p.onPicker }]}
       />
     </div>

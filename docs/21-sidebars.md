@@ -1,6 +1,6 @@
 # Sidebars are windows
 
-> Status (2026-10-05): proposal, nothing built. Branch `sidebars`. Builds on [16-widgets.md](16-widgets.md) (widgets are windows underneath), [11-spaces.md](11-spaces.md) (per-Space layout in `Space.view`) and [10-window-titles.md](10-window-titles.md) (one title bar for every window).
+> Status (2026-10-05): built on branch `sidebars`: the top bar and footer, sidebars per Space (Make Sidebar ▸ Left / Right, Move to Workspace, Show Left/Right Sidebar), the Navigator widget docked left in every Space, "desk" renamed to "workspace". Not built: phase 5 (drag to dock, dock animations). Where the build differs from the plan below, see "As built" at the end. Builds on [16-widgets.md](16-widgets.md) (widgets are windows underneath), [11-spaces.md](11-spaces.md) (per-Space layout in `Space.view`) and [10-window-titles.md](10-window-titles.md) (one title bar for every window).
 
 Some people want cmd to feel more like an IDE, with a file tree down the left. We could build a file-tree sidebar. Then someone wants the CI runs on the right, then a notes panel, and every one would be a special case. Instead, we embrace the window concept all the way: **any window can become a sidebar.**
 
@@ -187,3 +187,13 @@ Merge the `windows` worktree first if it lands soon: it has uncommitted changes 
 - **Canvas under sidebars?** Overlaying would feel more "floating on the canvas" but hides windows behind sidebars. Proposed: no.
 - **What goes on the top bar's right side**, and whether anything moves up from the footer: to try once the top bar exists.
 - **Keyboard focus for sidebars:** ⌃⌘← / ⌃⌘→ to focus the left or right sidebar?
+
+## As built
+
+- **Phase 0 result: `moveBefore` doesn't keep a `<webview>` alive.** In Electron 44 (Chromium 152) a moved webview reloads with `moveBefore` as with `appendChild`: Electron reattaches the guest. So phase 2 (window hosts) was dropped. Docking or undocking a browser window or Magic widget reloads it once, from its state; terminals reattach their xterm as they always did. Sidebars render in their own component (`components/Dock.tsx`), beside `WindowsView`, not inside it.
+- **The top bar is 32 px**, not 44: its height is `TOPBAR_HEIGHT` in `shared/chrome.ts`, and main centres the traffic lights from it (`trafficLights()`), so the two can't drift. It has the footer's background and a separator on its bottom edge.
+- **Sidebars are a grid column each** of `.stage` (`left | workspace | right`), so the workspace's view modes get the space between them without any change to `layouts.ts`. `dockWidths()` in `docks.ts` keeps 320 px for the workspace, narrowing the right side first.
+- **Focus mode** keeps showing the window it showed when a sidebar is selected (`WindowsView` remembers the last selected workspace window).
+- **The Space switch slide** (store.ts `slideSidebar`) runs on the left sidebar's window body while it holds a Navigator: each Space has its own Navigator window, so the old list element no longer survives the switch.
+- **File browsers** drop their size and date columns below 420 px (a container query), so they work as a sidebar.
+- `view.sidebar` is Show Left Sidebar (⌃⌘S); `view.rightSidebar`, `window.dockLeft`, `window.dockRight` and `window.undock` are new, in the View and Window menus. An empty left side shown again gets a new Navigator.
