@@ -14,6 +14,7 @@ import { ICON } from "./Symbol.tsx";
 import { RemoteBadge, RemoteIndicator } from "./Remote.tsx";
 import { CoreStatus } from "./CoreStatus.tsx";
 import { IconButton, Segmented, useTooltip } from "@cmd/ui";
+import { useSyncExternalStore } from "react";
 import { countRender } from "../perf.ts";
 
 const MODE_LABEL: Record<ViewMode, string> = { focus: "Focus", grid: "Grid", strip: "Strip", canvas: "Canvas" };
@@ -28,6 +29,23 @@ const ICONS: Record<ViewMode | "palette" | "settings" | "feedback" | "whatsNew",
   feedback: "bubble.left",
   whatsNew: "sparkles",
 };
+
+// The footer's centre: where the strip view puts its page dots (WindowsView), so its
+// windows end where the sidebars and the other modes' windows do.
+let centre: HTMLElement | null = null;
+const centreListeners = new Set<() => void>();
+const setCentre = (el: HTMLElement | null) => {
+  if (el === centre) return;
+  centre = el;
+  for (const fn of centreListeners) fn();
+};
+/** The footer's centre element, for a portal; null until the footer mounts. */
+export function useFooterCentre(): HTMLElement | null {
+  return useSyncExternalStore(
+    (fn) => (centreListeners.add(fn), () => void centreListeners.delete(fn)),
+    () => centre,
+  );
+}
 
 interface Props {
   mode: ViewMode;
@@ -74,6 +92,7 @@ export function StatusBar({ mode, row, pane, run, connected, error }: Props) {
           <Slot className="statusbar-usage" value={showUsage && usage ? { text: usageLabel(usage) ?? "", key: "usage" } : undefined} />
         </span>
       </div>
+      <div className="statusbar-centre" ref={setCentre} />
       <div className="statusbar-actions">
         <Segmented size="sm" label="View" value={mode} options={modes} onChange={(m) => run(`view.${m}`)} />
         <span className="statusbar-sep" />

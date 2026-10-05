@@ -145,6 +145,19 @@ kbd {
   -webkit-app-region: drag;
 }
 .statusbar button { -webkit-app-region: no-drag; }
+/* Centred in the whole footer, whatever is on either side; holds the strip's page dots. */
+.statusbar { position: relative; }
+.statusbar-centre {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  max-width: 40%;
+}
+.statusbar-centre:empty { display: none; }
 /* The core's health: as wide as the left sidebar, so it sits under it, as the old sidebar footer did. */
 .statusbar-core { flex: none; display: flex; width: calc(var(--dock-left-w) - 16px + var(--pad-x)); min-width: 0; }
 .statusbar-session { flex: 1; min-width: 0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
@@ -733,17 +746,13 @@ kbd {
 }
 .tile:hover .strip-resize::after, .main.windows.resizing .strip-resize::after { background: color-mix(in srgb, var(--ink) 25%, transparent); }
 
-/* Strip pagination: a dot per window, the current one a wider, lighter pill. */
+/* Strip pagination: a dot per window, the current one a wider, lighter pill. In the
+   footer's centre (.statusbar-centre), so strip windows end where the sidebars do. */
 .strip-dots {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  /* Centred in the space under the windows (layouts.ts, stripBottom, STRIP_BAR). */
-  bottom: calc((max(var(--pad-y) + 6px, 10px) - 6px) / 2);
-  height: 6px;
-  max-width: calc(100% - 2 * var(--pad-x));
   display: flex;
   align-items: center;
+  height: 100%;
+  -webkit-app-region: no-drag;
 }
 
 /* Session search results in the palette */

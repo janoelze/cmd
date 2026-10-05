@@ -22,7 +22,7 @@
 
 import { EmptyState, PageDots } from "@cmd/ui";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
 import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type Spacing, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, moveInOrder, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
@@ -54,6 +54,7 @@ import {
 } from "../strip.ts";
 import { TerminalView } from "./TerminalView.tsx";
 import { TileTitle } from "./TileTitle.tsx";
+import { useFooterCentre } from "./StatusBar.tsx";
 import { SlotMotion } from "./Slot.tsx";
 import { countRender } from "../perf.ts";
 
@@ -962,6 +963,8 @@ function StripDots(p: {
 }) {
   // Rendered only when the current dot changes, not on every scroll frame.
   const [cur, setCur] = useState(-1);
+  // In the footer's centre (StatusBar), not under the windows.
+  const footer = useFooterCentre();
   const shown = !!p.viewport && p.total > p.viewport + 0.5;
   const edges = p.slots.map((s) => s.x + s.w).join();
   useLayoutEffect(() => {
@@ -980,10 +983,11 @@ function StripDots(p: {
     return () => sc.removeEventListener("scroll", place);
     // Not on every render: reading scrollLeft after each commit forced a layout.
   }, [shown, p.total, p.viewport, edges, p.selected, p.scroller]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!shown) return null;
-  return (
+  if (!shown || !footer) return null;
+  return createPortal(
     <div className="strip-dots" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
       <PageDots count={p.slots.length} current={cur} onSelect={p.onGo} size="sm" label="Windows" />
-    </div>
+    </div>,
+    footer,
   );
 }

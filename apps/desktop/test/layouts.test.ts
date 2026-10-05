@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusLayout, gridLayout, STRIP_BAR, stripLayout } from "../src/renderer/src/layouts.ts";
+import { focusLayout, gridLayout, stripLayout } from "../src/renderer/src/layouts.ts";
 
 const vp = { w: 1000, h: 600 };
 const even = { x: 8, y: 8, gap: 8 };
@@ -32,7 +32,7 @@ describe("strip layout", () => {
   const l = stripLayout(["a", "b"], [400, 700], vp, even);
 
   it("stacks windows horizontally at full height", () => {
-    expect(l.rects.get("a")).toEqual({ x: 8, y: 8, w: 400, h: 600 - 16 - STRIP_BAR });
+    expect(l.rects.get("a")).toEqual({ x: 8, y: 8, w: 400, h: 600 - 16 });
     expect(l.rects.get("b")!.x).toBe(416);
     expect(l.contentWidth).toBe(1124);
     expect(l.resizable).toBe(true);
@@ -47,14 +47,14 @@ describe("strip layout", () => {
 
   it("pads the edges and spaces the windows independently", () => {
     const s = stripLayout(["a", "b"], [400, 700], vp, { x: 20, y: 10, gap: 4 });
-    expect(s.rects.get("a")).toEqual({ x: 20, y: 10, w: 400, h: 600 - 10 - (10 + STRIP_BAR) });
+    expect(s.rects.get("a")).toEqual({ x: 20, y: 10, w: 400, h: 600 - 20 });
     expect(s.rects.get("b")!.x).toBe(424);
     expect(s.contentWidth).toBe(20 + 400 + 4 + 700 + 20);
   });
 
-  it("keeps room for the scrollbar with no padding", () => {
+  it("fills the height with no padding: the page dots are in the footer", () => {
     const s = stripLayout(["a"], [400], vp, { x: 0, y: 0, gap: 0 });
-    expect(s.rects.get("a")!.h).toBe(600 - STRIP_BAR - 4);
+    expect(s.rects.get("a")!.h).toBe(600);
   });
 });
 

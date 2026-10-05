@@ -71,14 +71,10 @@ export function gridLayout(ids: string[], vp: Viewport, sp: Spacing): Layout {
   };
 }
 
-/** Height of the strip's scrollbar, which sits in the bottom padding. */
-export const STRIP_BAR = 6;
-/** Space under the windows: the bottom padding plus the bar, and room for the bar with little (or no) padding. */
-export const stripBottom = (padY: number) => Math.max(padY + STRIP_BAR, STRIP_BAR + 4);
-
 export function stripLayout(ids: string[], widths: number[], vp: Viewport, sp: Spacing): Layout {
   const { slots, total } = stripSlots(widths, sp.x, sp.gap);
-  const h = vp.h - sp.y - stripBottom(sp.y);
+  // Same padding top and bottom as the other modes: the page dots are in the footer (StatusBar).
+  const h = vp.h - 2 * sp.y;
   const rects = new Map(ids.map((id, i) => [id, { x: slots[i]!.x, y: sp.y, w: slots[i]!.w, h }]));
   return {
     rects,
