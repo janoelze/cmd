@@ -16,6 +16,8 @@ Agent notifications say what happened, and a session can be summarized in a clic
 - You get a notification when an agent stops on an error, such as a usage limit.
 - Typing to an agent while it works keeps what it did in one turn.
 - Tooltips appear at their new place instead of sliding across the window.
+- Settings has one AI & Agents page, and About is now Updates & About.
+- Choose how many past sessions the sidebar lists under Recent, in Settings → Appearance.
 
 ### Fixed
 
