@@ -9,6 +9,7 @@
 // the window is yours to size and move, so its size and display vary. They are
 // always 2x: the window is emulated at 2x for the shot (SF Symbols re-render), then restored.
 //   pnpm workbench matrix <story> [--themes a,b,c]   every variant × themes, into .cmd-dev/shots/wb
+//   pnpm workbench eval '<js>'                    run JS in the window (await works), print the result
 //   pnpm workbench stop                           quit it, its core and PTY host
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -44,7 +45,7 @@ const freePort = () =>
     });
   });
 
-const commands = { goto, shot, matrix, stop };
+const commands = { goto, shot, matrix, eval: evaluate, stop };
 await (commands[args[0]] ?? start)(
   ...(commands[args[0]] ? args.slice(1) : args),
 );
@@ -234,6 +235,17 @@ async function matrix(story) {
     ),
     before,
   );
+  await browser.close();
+}
+
+/** An expression or statements; the result is printed as JSON. */
+async function evaluate(code) {
+  const { browser, page } = await connect();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  const result = await page.evaluate(`(async () => { ${/\breturn\b|;/.test(code) ? code : `return (${code})`} })()`);
+  console.log(JSON.stringify(result, null, 2) ?? "undefined");
+  if (errors.length) console.error(errors.join("\n"));
   await browser.close();
 }
 

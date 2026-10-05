@@ -20,6 +20,7 @@ pnpm core                    # run the core directly
 pnpm core:stop               # stop the core of $CMD_HOME, else the dev one; core:stop-all stops every non-release core
 pnpm cmd <args>              # run the CLI from source
 pnpm ui                      # the @cmd/ui gallery in a browser (every component, every theme); `pnpm --filter @cmd/ui shots` screenshots it
+pnpm workbench <story>       # one component from a *.story.tsx in the real app, to iterate on with the user (prototype skill)
 pnpm release <ver|patch|minor>  # needs the version's CHANGELOG.md section (changelog skill); bump, tag v<ver>, push; CI publishes the GitHub release
 ```
 
