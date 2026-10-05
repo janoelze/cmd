@@ -2,6 +2,29 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.10.0 — 2026-10-05
+
+Set up AI once for all of cmd, and keep your widgets in a library.
+
+### New
+
+- **AI setup.** cmd asks for an Anthropic or OpenAI API key when you first open it. Change it any time in Settings → AI.
+- **Widget Library.** ⇧⌘L shows your widgets and the built-in ones. A widget you take off the desk stays there, ready to put back in any Space.
+- **Agent Activity.** A built-in widget with every agent at a glance: who waits for you, who is working and what just finished.
+- **Live Diff.** A built-in widget with the uncommitted changes in a project, updated as you work.
+- **Peer briefings (beta).** With `agents.peers` on, each agent learns which other agents work in its repository and can message them.
+
+### Improved
+
+- Magic widgets use the newest model your key can use, unless you pick one in Settings → AI.
+- Settings → Agents → Hooks connects Claude Code, Codex and Gemini CLI to cmd.
+- Widgets have their own menu and their own section in the sidebar, apart from your windows.
+- New Magic Widget is now New Widget with Magic, still on ⇧⌘M.
+
+### Fixed
+
+- An agent no longer shows as working again after it finishes while its subagents run in the background.
+
 ## 0.9.3 — 2026-10-05
 
 ### New
