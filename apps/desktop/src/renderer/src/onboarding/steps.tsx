@@ -49,7 +49,7 @@ const welcome: OnboardingStep = {
 const ai: OnboardingStep = {
   id: "ai",
   title: "Connect an AI provider",
-  subtitle: "Magic widgets and notification summaries use it. Your keys stay on this Mac.",
+  subtitle: "Your keys stay on this Mac.",
   existingUsers: true,
   done: (c) => !!c.ai?.ready,
   ready: (c) => !!c.ai?.ready,
