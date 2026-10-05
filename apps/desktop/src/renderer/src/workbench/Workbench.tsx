@@ -53,6 +53,8 @@ function useWorkbenchTheme(theme: string) {
       cmd.setAppearance({ source: t.appearance, background: t.colors.bg, dockIcon: null });
     } else if (settings) applyThemeSettings(settings);
     if (settings) applyLookSettings(settings);
+    // Read by scripts/workbench.mjs: a shot waits until the theme it asked for is on.
+    document.body.dataset.theme = t ? t.id : FOLLOW;
   }, [theme, settings]);
 }
 

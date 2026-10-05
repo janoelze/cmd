@@ -251,13 +251,25 @@ export function NumberField({
   );
 }
 
+/** What the app knows about a stored secret, shown attached to the field: a key the provider accepted, refused, or hasn't checked. */
+export interface SecretStatus {
+  tone: "success" | "warning" | "danger";
+  label: string;
+  /** SF Symbol name; by default the tone's. */
+  icon?: string;
+  tip?: string;
+}
+const STATUS_ICON = { success: "checkmark.circle.fill", warning: "exclamationmark.circle.fill", danger: "xmark.circle.fill" } as const;
+
 /**
- * A secret (an API key, a token): never shown. Set, it reads "••••abcd" with
- * Change and Remove; otherwise (or while changing) a password field that saves
- * on Enter or Save. An onSave that returns a promise is waited for (a key being
- * checked): the field stays as typed if it rejects, so it can be corrected.
- * live: no Save button; it saves as soon as a key is pasted, or after a pause in
- * typing (a key the app checks, so half a key is only ever rejected).
+ * A secret (an API key, a token): never shown. The field stays where it is in
+ * every state, and what happens to the secret is attached to its right: Save
+ * (or nothing when live), Checking while an onSave promise runs, and once
+ * stored the masked secret ("••••abcd") with its status and Remove. Clicking a
+ * stored secret starts replacing it. A rejected promise clears the field and
+ * says Rejected until the next key.
+ * live: no Save; it saves as soon as a key is pasted, or after a pause in typing
+ * (a key the app checks, so half a key is only ever rejected).
  */
 export function SecretField({
   set,
@@ -269,6 +281,7 @@ export function SecretField({
   autoFocus,
   live,
   size,
+  status,
 }: {
   set: boolean;
   /** The last characters ("…abcd"), shown masked. */
@@ -282,6 +295,8 @@ export function SecretField({
   autoFocus?: boolean;
   live?: boolean;
   size?: Size;
+  /** The stored secret's status (a key the provider accepted). */
+  status?: SecretStatus;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -295,15 +310,7 @@ export function SecretField({
   }, [editing]);
   useEffect(() => () => clearTimeout(timer.current), []);
   const done = () => (setEditing(false), setDraft(""), setFailed(false));
-  if (set && !editing) {
-    return (
-      <span className="ui-secret" data-fill={fill || undefined}>
-        <span className="ui-secret-set">{hint ? hint.replace(/^…/, "••••") : "Set"}</span>
-        <Button onClick={() => setEditing(true)}>Change…</Button>
-        <Button onClick={() => onSave(null)}>Remove</Button>
-      </span>
-    );
-  }
+  const stored = set && !editing && !busy;
   const save = (value = draft) => {
     clearTimeout(timer.current);
     const v = value.trim();
@@ -313,46 +320,70 @@ export function SecretField({
     setBusy(true);
     r.then(
       () => (setBusy(false), done()),
-      () => (setBusy(false), setFailed(true), setEditing(true), requestAnimationFrame(() => ref.current?.select())),
+      // Cleared, not selected: keys are pasted, so the next paste goes in clean.
+      () => (setBusy(false), setFailed(true), setEditing(true), setDraft(""), requestAnimationFrame(() => ref.current?.focus())),
     );
   };
   const change = (v: string) => {
     setDraft(v);
-    setFailed(false);
+    if (v) setFailed(false);
     if (!live) return;
     clearTimeout(timer.current);
     const now = pasted.current;
     pasted.current = false;
     if (v.trim()) timer.current = setTimeout(() => save(v), now ? 0 : 900);
   };
+  const shown = failed ? { tone: "danger" as const, label: "Rejected" } : stored ? status : undefined;
   return (
-    <span className="ui-secret" data-fill={fill || undefined}>
-      <TextField
-        ref={ref}
-        code
-        size={size}
-        type="password"
-        autoComplete="off"
-        autoFocus={autoFocus}
-        width={width}
-        fill={fill}
-        value={draft}
-        placeholder={placeholder}
-        readOnly={busy}
-        invalid={failed}
-        end={busy && live ? <Spinner size={11} label="Checking" /> : undefined}
-        onChange={change}
-        onPaste={() => (pasted.current = true)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") save();
-          else if (e.key === "Escape") (clearTimeout(timer.current), done());
-        }}
-        onBlur={() => !draft.trim() && !busy && done()}
-      />
-      {!live && (
-        <Button variant="primary" disabled={!draft.trim() || busy} onMouseDown={(e) => e.preventDefault()} onClick={() => save()}>
-          {busy ? <Spinner size={11} label="Checking" /> : "Save"}
-        </Button>
+    <span className="ui-secret" data-fill={fill || undefined} data-size={size}>
+      {stored ? (
+        <button type="button" className="ui-field ui-secret-stored" data-size={size} data-code style={fill ? undefined : { width }} data-tip="Replace" onClick={() => setEditing(true)}>
+          {hint ? hint.replace(/^…/, "••••") : "••••••••"}
+        </button>
+      ) : (
+        <TextField
+          ref={ref}
+          code
+          size={size}
+          type="password"
+          autoComplete="off"
+          autoFocus={autoFocus}
+          width={width}
+          fill={fill}
+          value={draft}
+          placeholder={placeholder}
+          readOnly={busy}
+          invalid={failed}
+          onChange={change}
+          onPaste={() => (pasted.current = true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            else if (e.key === "Escape") (clearTimeout(timer.current), done());
+          }}
+          onBlur={() => !draft.trim() && !busy && done()}
+        />
+      )}
+      {busy ? (
+        <span className="ui-secret-part" data-tone="neutral">
+          <Spinner size={11} /> Checking
+        </span>
+      ) : (
+        shown && (
+          <span className="ui-secret-part" data-tone={shown.tone} data-tip={shown.tip}>
+            <Icon name={shown.icon ?? STATUS_ICON[shown.tone]} size={ICON.row} />
+            {shown.label}
+          </span>
+        )
+      )}
+      {stored && (
+        <button type="button" className="ui-secret-part ui-secret-remove" aria-label="Remove" data-tip="Remove" onClick={() => onSave(null)}>
+          <Icon name="xmark" size={ICON.control} weight="bold" />
+        </button>
+      )}
+      {!stored && !busy && !live && (
+        <button type="button" className="ui-secret-part ui-secret-save" disabled={!draft.trim()} onMouseDown={(e) => e.preventDefault()} onClick={() => save()}>
+          Save
+        </button>
       )}
     </span>
   );

@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { AI_PROVIDER_IDS, AI_PROVIDERS, type AiProvider, type AiProviderStatus, type AiStatus } from "@cmd/protocol";
-import { FormRow, LinkButton, Segmented, SecretField } from "@cmd/ui";
+import { FormRow, LinkButton, Segmented, SecretField, type SecretStatus } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
 import { useAiStatus } from "./status.ts";
 
@@ -15,6 +15,14 @@ function statusNote(st: AiProviderStatus | undefined): { text: string; tone: "ac
   if (st.state === "rejected") return { text: st.error ?? "The provider didn't accept this key.", tone: "danger" };
   if (st.state === "unchecked") return { text: st.error ?? "Not checked yet.", tone: "warning" };
   return { text: st.models ? `Ready · ${st.models.smart.name} and ${st.models.fast.name}` : "Ready", tone: "accent" };
+}
+
+/** What the provider said about the stored key, attached to the field. */
+function keyStatus(st: AiProviderStatus | undefined): SecretStatus | undefined {
+  if (!st?.key.set) return undefined;
+  if (st.state === "ok") return { tone: "success", label: "Accepted" };
+  if (st.state === "rejected") return { tone: "danger", label: "Rejected", tip: st.error };
+  return { tone: "warning", label: "Not checked", tip: st.error };
 }
 
 /** A provider's key: checked with the provider as it is entered, so a mistyped key never gets stored. */
@@ -48,7 +56,7 @@ export function AiKeyRow({ provider, autoFocus, stacked }: { provider: AiProvide
       noteTone={note?.tone}
       stacked={stacked}
     >
-      <SecretField set={!!st?.key.set} hint={st?.key.hint} placeholder="Paste an API key" autoFocus={autoFocus} fill={stacked} size={stacked ? "lg" : undefined} live onSave={connect} />
+      <SecretField set={!!st?.key.set} hint={st?.key.hint} placeholder="Paste an API key" autoFocus={autoFocus} fill={stacked} size={stacked ? "lg" : undefined} live status={keyStatus(st)} onSave={connect} />
     </FormRow>
   );
 }

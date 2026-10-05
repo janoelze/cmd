@@ -954,12 +954,12 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(titles.includes("Anthropic") && titles.includes("OpenAI") && !titles.includes("Model"), `AI lists the providers, and no models before a key (${titles.join(", ")})`);
   const rpc = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   await rpc("secrets.set", { key: "ai.openai.apiKey", value: "sk-e2e-not-a-real-key-1234" });
-  await sw.waitForSelector(".ui-secret-set");
+  await sw.waitForSelector(".ui-secret-stored");
   titles = await rowTitles();
   const keyStatus = (await rpc("secrets.status", {}))["ai.openai.apiKey"];
   const settingsFile = fs.readFileSync(path.join(home, "settings.json"), "utf8");
   check(
-    keyStatus.set && keyStatus.hint === "…1234" && (await sw.locator(".ui-secret-set").textContent()) === "••••1234" && !settingsFile.includes("sk-e2e") && fs.existsSync(path.join(home, "secrets.json")),
+    keyStatus.set && keyStatus.hint === "…1234" && (await sw.locator(".ui-secret-stored").textContent()) === "••••1234" && !settingsFile.includes("sk-e2e") && fs.existsSync(path.join(home, "secrets.json")),
     "an API key is stored outside settings.json and shown only as a hint",
   );
   check(titles.includes("Model") && titles.includes("Fast model"), "a key brings its provider's models");

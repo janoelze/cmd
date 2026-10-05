@@ -8,7 +8,7 @@
 
 export { Button, ButtonGroup, IconButton, LinkButton, type ButtonProps, type ButtonVariant, type IconButtonProps, type Size } from "./button.tsx";
 export { Checkbox, RadioGroup, Segmented, Select, Switch, TabPanel, Tabs, type Option, type TabItem } from "./choice.tsx";
-export { ClearButton, NumberField, SearchField, SecretField, TextArea, TextField, type TextAreaProps, type TextFieldProps } from "./fields.tsx";
+export { ClearButton, NumberField, SearchField, SecretField, TextArea, TextField, type SecretStatus, type TextAreaProps, type TextFieldProps } from "./fields.tsx";
 export { Chip, ListHeading, ListMark, ListRow, ListSection, ListValue, Panel, PanelBody, PanelHeader, PanelSummary, Twisty, type ListRowProps } from "./list.tsx";
 export { ICON, Icon, UIProvider, iconNode, type IconProps, type IconWeight } from "./icon.tsx";
 export { Callout, Card, CodeBlock, EmptyState, FeatureList, FormRow, FormSection, Group, KeyValue, Prose, ResetButton, SectionHeading, Separator, SheetHeader, Spacer, Toolbar } from "./layout.tsx";

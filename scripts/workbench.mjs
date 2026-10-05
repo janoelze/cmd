@@ -125,6 +125,7 @@ async function show(page, { story, variant, theme }) {
     want,
     { timeout: 10000 },
   );
+  if (theme) await page.waitForFunction((t) => document.body.dataset.theme === t, theme, { timeout: 10000 });
   await page.waitForTimeout(400); // fonts, SF Symbols, entry animations
   return page.evaluate(() => document.body.dataset.ready);
 }
