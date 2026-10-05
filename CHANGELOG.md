@@ -2,6 +2,12 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.14.1 — 2026-10-05
+
+### New
+
+- **Resize to 1500 × 900.** A command in the palette and the Window menu that sets the window to that size, for consistent screenshots.
+
 ## 0.14.0 — 2026-10-05
 
 Read PDFs in cmd, and four new built-in widgets.
