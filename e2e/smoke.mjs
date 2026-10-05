@@ -1087,14 +1087,16 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   await win.waitForTimeout(700);
   check(Math.abs(-(await trackX()) - (before - 37)) < 1, "horizontal scroll moves freely and stays put");
 
-  // scrollbar: dragging the thumb scrolls the strip
-  const thumb = await win.locator(".strip-thumb").boundingBox();
-  const o0 = -(await trackX());
-  await win.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
-  await win.mouse.down();
-  await win.mouse.move(thumb.x + thumb.width / 2 - 40, thumb.y + thumb.height / 2, { steps: 4 });
-  await win.mouse.up();
-  check(-(await trackX()) < o0 - 1, "dragging the scrollbar thumb scrolls the strip");
+  // pagination: a dot per window, in strip order; a dot brings its window into view
+  await win.locator(".windows-scroller").evaluate((e) => (e.scrollLeft = e.scrollWidth));
+  await win.waitForTimeout(300);
+  check((await win.locator(".strip-dots > button").count()) === n && (await win.locator(".strip-dots > button.current").count()) === 1
+    && (await win.locator(".strip-dots > button").last().getAttribute("class")) === "current",
+    "the strip shows a pagination dot per window, the last one current at the end");
+  await win.locator(".strip-dots > button").first().click();
+  await win.waitForTimeout(700);
+  check(Math.abs(await trackX()) < 1 && (await win.locator(".strip-dots > button").first().getAttribute("class")) === "current",
+    "clicking the first dot scrolls the strip to its start");
 
   // ⌘↩ into focus and back: the strip returns to exactly where it was
   await win.waitForTimeout(300);

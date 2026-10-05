@@ -7,7 +7,7 @@
 //  - drag a window by its title bar: it follows the pointer, the others make
 //    room live (insert-style), ghost outlines show where it can go,
 //  - strip: free horizontal scrolling, reveal-on-select, resize by the right
-//    edge, auto-scroll while dragging near an edge, scrollbar. The strip is a
+//    edge, auto-scroll while dragging near an edge, pagination dots. The strip is a
 //    native scroller (.windows-scroller), not a transform: Chromium scrolls it
 //    on the compositor, with macOS momentum and the bounce at the ends, and
 //    hands it the sideways scroll that embedded pages (their own process) and
@@ -166,6 +166,8 @@ export function WindowsView(p: Props) {
           ? canvasLayout(arranged.rects)
           : focusLayout(ids, selected, vp);
   const stripSlots: Slot[] = ids.map((id) => ({ x: lay.rects.get(id)!.x, w: lay.rects.get(id)!.w }));
+  // The DOM keeps a stable order; the dots go in the strip's.
+  const stripDots = ids.map((id, i) => ({ id, slot: stripSlots[i]! })).sort((a, b) => a.slot.x - b.slot.x);
 
   // ── strip scrolling ────────────────────────────────────
   // The scroller's scrollLeft is the truth; offsetRef follows it at once, the
@@ -851,12 +853,16 @@ export function WindowsView(p: Props) {
       </div>
       </div>
       {mode === "strip" && (
-        <StripScrollbar
+        <StripDots
           scroller={scrollerRef}
+          slots={stripDots.map((d) => d.slot)}
           total={lay.contentWidth}
           viewport={vp.w}
-          onScroll={(o) => (stopScroll(), setOffset(o))}
-          onPage={(o) => animateTo(o)}
+          onGo={(i) => {
+            const { id, slot } = stripDots[i]!;
+            if (id === selected) animateTo(revealOffset(offsetRef.current, slot, vp.w, padX, lay.contentWidth));
+            else onSelect(id);
+          }}
         />
       )}
       {canvas && cfg["canvas.minimap"] && vp.w > 0 && (
@@ -934,61 +940,48 @@ function Minimap(p: {
   );
 }
 
-/** Strip scrollbar: drag the thumb, or click the track to page towards the click. */
-function StripScrollbar(p: {
+/**
+ * Strip pagination: a dot per window, the current one wider and lighter. The
+ * current window is the one under a point that moves from the view's left edge
+ * (scrolled to the start) to its right edge (scrolled to the end), so every
+ * window gets its turn. Click a dot to bring that window into view.
+ */
+function StripDots(p: {
   scroller: React.RefObject<HTMLDivElement | null>;
+  slots: Slot[];
   total: number;
   viewport: number;
-  onScroll: (offset: number) => void;
-  onPage: (offset: number) => void;
+  onGo: (index: number) => void;
 }) {
-  // The thumb follows the scroller directly, not through a render per frame.
-  const thumb = useRef<HTMLDivElement>(null);
+  // The dots follow the scroller directly, not through a render per frame.
+  const dots = useRef<HTMLDivElement>(null);
   const shown = !!p.viewport && p.total > p.viewport + 0.5;
-  const pct = (v: number) => `${(v / p.total) * 100}%`;
+  const edges = p.slots.map((s) => s.x + s.w).join();
   useLayoutEffect(() => {
     const sc = p.scroller.current;
     if (!sc || !shown) return;
-    const place = () => thumb.current && (thumb.current.style.left = pct(sc.scrollLeft));
+    let cur = -1;
+    const place = () => {
+      const max = p.total - p.viewport;
+      const at = sc.scrollLeft + (max > 0 ? Math.min(1, Math.max(0, sc.scrollLeft / max)) : 0) * p.viewport;
+      let i = p.slots.findIndex((s) => at < s.x + s.w);
+      if (i < 0) i = p.slots.length - 1;
+      if (i === cur) return;
+      dots.current?.children[cur]?.classList.remove("current");
+      dots.current?.children[i]?.classList.add("current");
+      cur = i;
+    };
     place();
     sc.addEventListener("scroll", place, { passive: true });
     return () => sc.removeEventListener("scroll", place);
     // Not on every render: reading scrollLeft after each commit forced a layout.
-  }, [shown, p.total, p.scroller]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown, p.total, p.viewport, edges, p.scroller]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!shown) return null;
-  const offset = () => p.scroller.current?.scrollLeft ?? 0;
   return (
-    <div
-      className="strip-scrollbar"
-      onPointerDown={(e) => {
-        if (e.button !== 0) return;
-        e.stopPropagation();
-        const track = e.currentTarget.getBoundingClientRect();
-        const perPx = p.total / track.width; // content px per track px
-        const thumb = (e.target as Element).closest(".strip-thumb");
-        if (!thumb) {
-          const at = (e.clientX - track.left) * perPx;
-          return p.onPage(at < offset() ? offset() - p.viewport : offset() + p.viewport);
-        }
-        const el = e.currentTarget;
-        el.setPointerCapture(e.pointerId);
-        el.classList.add("dragging");
-        const x0 = e.clientX;
-        const o0 = offset();
-        const move = (ev: PointerEvent) => p.onScroll(o0 + (ev.clientX - x0) * perPx);
-        const up = () => {
-          el.classList.remove("dragging");
-          el.removeEventListener("pointermove", move);
-          el.removeEventListener("pointerup", up);
-          el.removeEventListener("pointercancel", up);
-        };
-        el.addEventListener("pointermove", move);
-        el.addEventListener("pointerup", up);
-        el.addEventListener("pointercancel", up);
-      }}
-      onDoubleClick={(e) => e.stopPropagation()}
-    >
-      <div className="strip-thumb" ref={thumb} style={{ width: pct(p.viewport) }} />
+    <div className="strip-dots" ref={dots} onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+      {p.slots.map((_, i) => (
+        <button key={i} tabIndex={-1} aria-label={`Window ${i + 1}`} onClick={() => p.onGo(i)} />
+      ))}
     </div>
   );
 }
