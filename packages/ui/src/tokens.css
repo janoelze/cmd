@@ -78,6 +78,8 @@
   --control-thumb: color-mix(in srgb, var(--ink) 14%, var(--bg)); /* the chosen segment */
   --control-thumb-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
   --field-bg: var(--well);
+  /* Text fields' edge: stronger than a button's, since the well is darker than the surface around it. */
+  --field-edge: color-mix(in srgb, var(--ink) 18%, transparent);
   --switch-off: color-mix(in srgb, var(--ink) 16%, transparent);
   --knob: #fff;
   /* Heights: every control in a row shares one, so they line up. */
