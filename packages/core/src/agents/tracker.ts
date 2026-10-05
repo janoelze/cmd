@@ -21,6 +21,7 @@ import { locateContext, TranscriptSources } from "../search/sources.ts";
 import { briefing, checkoutOf } from "./peers.ts";
 import { nativeSession, type StateChange } from "./state.ts";
 import { readStatus, removeStatus, StatusWatcher, type HookStatus } from "./statusfiles.ts";
+import { watchTurn, type TurnWatch } from "./activity/fswatch.ts";
 import { changedBetween, snapshot, type GitSnapshot } from "./activity/gitsnap.ts";
 import { ActivityLog } from "./activity/log.ts";
 import type { RawEvent } from "./activity/normalize.ts";
@@ -82,8 +83,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   /** Per agent whose events arrive through the spool: state and turns. */
   #reducers = new Map<AgentId, ActivityReducer>();
   #git: boolean;
-  /** "Before" snapshots of open turns, by agent id + turn index. */
-  #snaps = new Map<string, Promise<GitSnapshot | null>>();
+  /** "Before" snapshots of open turns (or a folder watch outside git), by agent id + turn index. */
+  #snaps = new Map<string, { git: Promise<GitSnapshot | null>; watch: TurnWatch | null }>();
 
   constructor(panes: PaneManager, o: TrackerOptions = {}) {
     super();
@@ -326,20 +327,35 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
 
   #snapStart(agent: Agent, t: AgentTurn): void {
     const cwd = agent.cwd;
-    if (cwd) this.#snaps.set(`${agent.id}:${t.index}`, snapshot(cwd));
+    if (!cwd) return;
+    const entry: { git: Promise<GitSnapshot | null>; watch: TurnWatch | null } = { git: snapshot(cwd), watch: null };
+    // Not a repository: watch the folder instead, unless the turn is over already.
+    void entry.git.then((s) => {
+      if (!s && this.#snaps.get(`${agent.id}:${t.index}`) === entry && t.endedAt === null) entry.watch = watchTurn(cwd);
+    });
+    this.#snaps.set(`${agent.id}:${t.index}`, entry);
   }
 
-  /** The files the work tree changed in during a turn, added to it once git answers. */
+  /** The files that changed during a turn (git, or the folder watch), added to it once known. */
   async #snapEnd(agent: Agent, red: ActivityReducer, t: AgentTurn): Promise<void> {
     const key = `${agent.id}:${t.index}`;
-    const before = await this.#snaps.get(key);
+    const entry = this.#snaps.get(key);
     this.#snaps.delete(key);
-    if (!before) return;
-    const after = await snapshot(before.top);
-    if (!after) return;
-    const changed = await changedBetween(before, after);
+    if (!entry) return;
+    const before = await entry.git;
+    let changed: Map<string, string>;
+    let via: "git" | "fs";
+    if (before) {
+      const after = await snapshot(before.top);
+      if (!after) return;
+      changed = await changedBetween(before, after);
+      via = "git";
+    } else if (entry.watch) {
+      changed = entry.watch.stop();
+      via = "fs";
+    } else return;
     if (!changed.size) return;
-    for (const [p, c] of changed) addFile(t, p, c, "git");
+    for (const [p, c] of changed) addFile(t, p, c, via);
     this.activity.saveTurn(t);
     const a = this.#agents.get(agent.id);
     if (a && red.turn === t) this.#update(a, {}, { turn: structuredClone(t) });
@@ -688,6 +704,11 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
 
   #remove(id: AgentId): void {
     this.#reducers.delete(id);
+    for (const [key, snap] of this.#snaps) {
+      if (!key.startsWith(`${id}:`)) continue;
+      snap.watch?.stop();
+      this.#snaps.delete(key);
+    }
     if (!this.#agents.delete(id)) return;
     this.#store?.deleteAgent(id);
     this.#hooked.delete(id);

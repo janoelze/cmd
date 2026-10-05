@@ -34,6 +34,9 @@ const KINDS: Record<string, ActivityKind> = {
   SubagentStop: "subagent.stop",
 };
 
+/** Prompts an agent submits itself (Claude: a background task reporting back). */
+const AUTO_PROMPT = /^\s*<(task-notification|local-command-stdout|command-name)>/;
+
 /** Which env variable names an agent's config dir (the hook passes these on). */
 export const HOME_ENV: Record<string, string> = { claude: "CLAUDE_CONFIG_DIR", codex: "CODEX_HOME", gemini: "GEMINI_CLI_HOME" };
 
@@ -52,6 +55,30 @@ export function kindOf(agent: string | null, name: string, p: Payload): Activity
 const WRITERS = new Set(["Edit", "MultiEdit", "Write", "NotebookEdit", "apply_patch", "write_file", "replace", "edit_file", "create_file"]);
 const writes = (tool: string) => WRITERS.has(tool) || /(^|[_\W])(edit|write|patch|create|delete|rename|move)/i.test(tool);
 
+/**
+ * Shell commands that write files, by the shapes agents use most (from recorded
+ * sessions: inline Python/Node scripts, heredocs and redirects, sed -i, file
+ * commands, git, formatters, downloads). A label, not a list of paths.
+ */
+// The shell's own syntax (redirects, pipes, command words) is matched with quoted
+// strings removed (`unquoted`): `grep 'a > b'` writes nothing.
+const SHELL_WRITES: [RegExp, string, ("unquoted" | "raw")?][] = [
+  [/\b(python3?|node|ruby|deno|bun|perl)\b[\s\S]*(open\([^)]*['"][wa]b?['"]|write_text|write_bytes|writeFileSync|appendFileSync|\.write\(|fs\.write)/, "script", "raw"],
+  [/\bsed\s+(-[a-zA-Z]*i|--in-place)|\bperl\s+-[a-zA-Z]*i/, "sed -i"],
+  [/(^|[^0-9<>&=-])>{1,2}\s*(?!\/dev\/null|&)[^\s|&;<>]/, "redirect", "unquoted"],
+  [/\|\s*tee\b/, "tee", "unquoted"],
+  [/(^|[;&|(]\s*|&&\s*)(rm|mv|cp|mkdir|touch|ln|rmdir|chmod)\s/, "file command", "unquoted"],
+  [/\bgit\s+(checkout|switch|restore|apply|stash|reset|merge|rebase|mv|rm|pull|cherry-pick|revert|am)\b/, "git"],
+  [/\b(prettier|eslint|biome|black|ruff|gofmt|rustfmt|cargo\s+fmt|swiftformat)\b[^|;]*(--write|--fix|\s-w\b|\bformat\b)/, "formatter"],
+  [/\b(curl|wget)\b[^|;]*\s(-o|-O|--output)\b/, "download"],
+  [/\b(npm|pnpm|yarn|bun)\s+(install|i|add|remove)\b|\bpip3?\s+install\b/, "install"],
+];
+
+export function shellWrites(command: string): string | undefined {
+  const unquoted = command.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''");
+  return SHELL_WRITES.find(([re, , on]) => re.test(on === "unquoted" ? unquoted : command))?.[1];
+}
+
 /** Paths in an apply_patch body (Codex). */
 function patchPaths(patch: string): string[] {
   const out: string[] = [];
@@ -68,7 +95,11 @@ function toolOf(p: Payload, end: boolean, failed: boolean): ActivityTool | undef
   const id = str(p.tool_use_id) ?? str(p.call_id);
   if (id) tool.id = id;
   const command = str(input.command) ?? str(input.cmd) ?? (Array.isArray(input.command) ? input.command.filter((c) => typeof c === "string").join(" ") : undefined);
-  if (command) tool.command = cap(line1(command), 200);
+  if (command) {
+    tool.command = cap(line1(command), 200);
+    const w = shellWrites(command);
+    if (w) tool.writes = w;
+  }
   if (writes(name)) {
     const paths = [str(input.file_path), str(input.notebook_path), str(input.path), str(input.absolute_path)].filter((x): x is string => !!x);
     const patch = str(input.patch) ?? str(input.input) ?? (typeof p.tool_input === "string" ? p.tool_input : undefined);
@@ -116,6 +147,11 @@ export function normalize(r: RawEvent, id = 0): ActivityEvent {
   if (sub) ev.subagent = sub;
   const text = textOf(kind, p);
   if (text) ev.text = text;
+  if (kind === "prompt" && text && AUTO_PROMPT.test(text)) ev.auto = true;
+  if (kind === "stop" && !sub && Array.isArray(p.background_tasks)) {
+    const running = p.background_tasks.map(obj).filter((t) => t && (t.status === undefined || t.status === "running"));
+    if (running.length) ev.background = running.map((t) => str(t!.description) ?? str(t!.type) ?? "task");
+  }
   if (kind === "tool.start" || kind === "tool.end" || kind === "ask") {
     const tool = toolOf(p, kind === "tool.end", hookEventName(r.agent, name) === "PostToolUseFailure");
     if (tool) ev.tool = tool;

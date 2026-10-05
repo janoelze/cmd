@@ -84,8 +84,10 @@ export class ActivityLog {
   events(q: { agentId?: AgentId; paneId?: PaneId; afterId?: number; limit?: number; raw?: boolean }): ActivityEvent[] {
     const where: string[] = [];
     const args: (string | number)[] = [];
-    if (q.agentId) where.push("agent_id = ?"), args.push(q.agentId);
-    if (q.paneId) where.push("pane_id = ?"), args.push(q.paneId);
+    // Full ids, or prefixes (the CLI's short ids for agents that are gone).
+    const id = (col: string, v: string) => (v.length >= 36 ? (where.push(`${col} = ?`), args.push(v)) : (where.push(`substr(${col}, 1, ?) = ?`), args.push(v.length, v)));
+    if (q.agentId) id("agent_id", q.agentId);
+    if (q.paneId) id("pane_id", q.paneId);
     if (q.afterId) where.push("id > ?"), args.push(q.afterId);
     const limit = q.limit ?? 5000;
     const sql = `SELECT * FROM (SELECT * FROM agent_events ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY id DESC LIMIT ?) ORDER BY id`;

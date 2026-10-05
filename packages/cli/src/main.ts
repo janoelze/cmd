@@ -10,6 +10,7 @@ import { APPLIES_LABEL, currentKey, currentSecretKey, ENV, isSecretKey, SECRETS,
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 import { magicCommand } from "./magic.ts";
 import { widgetCommand } from "./widget.ts";
+import { AGENTS_HELP, agentsCommand } from "./agents.ts";
 
 const HELP = `cmd — terminal + agent workbench
 
@@ -36,6 +37,7 @@ usage: cmd <command> [options]
   events [--output]                   stream core events as NDJSON
   hooks [--json]                      agent configs (Claude Code, Codex, Gemini) and whether cmd's hook is in them
   hooks install|remove [AGENT|FILE]   add cmd's hook to them (all by default), or take it out
+${AGENTS_HELP}
   open <path|url> [--kind K] [--types] open in a cmd window (folder, text, browser, …);
                                       --types lists window types
   search <query…> [--json] [--limit N]  search past agent sessions
@@ -58,7 +60,7 @@ usage: cmd <command> [options]
 
 env: ${ENV.socket} (default ${defaultSocketPath()})`;
 
-const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "open", "search", "resume", "settings", "space", "remote", "help"]);
+const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "open", "search", "resume", "settings", "space", "remote", "help"]);
 
 /**
  * `cmd .`, `cmd ~/src/x`, `cmd ../y`: a folder to open as a Space. A command name
@@ -108,6 +110,10 @@ const { values: opt, positionals: pos } = parseArgs({
     "git-root": { type: "boolean" },
     clear: { type: "boolean" },
     scope: { type: "string" },
+    raw: { type: "boolean" },
+    follow: { type: "boolean", short: "f" },
+    days: { type: "string" },
+    rescan: { type: "boolean" },
   },
 });
 
@@ -158,6 +164,8 @@ async function run({ client, closed }: Connection): Promise<number> {
       if (targets.some((t) => t.agent === "codex" && t.state === "installed")) console.log("\nCodex runs a new hook only once you approve it: run /hooks in Codex.");
       return 0;
     }
+    case "agents":
+      return agentsCommand(client, closed, pos, opt);
     case "identify": {
       const paneId = process.env[ENV.paneId];
       if (!paneId) return fail("not inside a cmd pane");

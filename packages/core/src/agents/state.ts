@@ -1,5 +1,6 @@
-// Hook event → agent state. Ported from ghostty-agents AgentStatusStore,
-// extended for Codex hooks (same event names). See docs/05-agent-integration.md.
+// Shared pieces of reading hook events: the state change the tracker applies,
+// event names across agents, and short descriptions of tool calls. Events become
+// state in activity/reduce.ts. See docs/05-agent-integration.md.
 
 import type { AgentKind, AgentState } from "@cmd/protocol";
 
@@ -27,76 +28,6 @@ const GEMINI_EVENTS: Record<string, string> = { BeforeAgent: "UserPromptSubmit",
 
 /** The Claude/Codex name of an agent's hook event. */
 export const hookEventName = (kind: string | null, event: string): string => (kind === "gemini" && GEMINI_EVENTS[event]) || event;
-
-export function applyHook(kind: AgentKind, event: string, p: Payload): StateChange {
-  const change: StateChange = {};
-  const sessionId = str(p.session_id);
-  if (sessionId) {
-    change.native = nativeSession(kind, sessionId);
-    const tp = str(p.transcript_path);
-    if (tp) change.native.transcriptPath = tp;
-  }
-  const cwd = str(p.cwd);
-  if (cwd) change.cwd = cwd;
-
-  // Events fired from inside a Claude subagent carry agent_id; they describe the child.
-  const subId = str(p.agent_id);
-
-  switch (event) {
-    case "SessionStart":
-      change.state = "idle";
-      change.detail = null;
-      break;
-    case "UserPromptSubmit":
-      change.state = "working";
-      change.detail = null;
-      break;
-    case "PreToolUse":
-      if (subId) break;
-      change.state = "working";
-      change.detail = describeTool(str(p.tool_name), p.tool_input as Payload | undefined);
-      break;
-    case "PostToolUse":
-    case "PostToolUseFailure":
-    case "PreCompact":
-    case "PostCompact":
-      if (subId) break;
-      change.state = "working";
-      break;
-    case "PermissionRequest":
-      change.state = "needs_input";
-      change.detail = str(p.message) ?? `Allow ${str(p.tool_name) ?? "tool"}?`;
-      break;
-    case "Notification": {
-      const type = str(p.notification_type);
-      if (type === "idle_prompt") break; // reminder that it is waiting; Stop already said done
-      change.state = "needs_input";
-      change.detail = str(p.message) ?? "Needs input";
-      break;
-    }
-    case "Stop":
-      change.state = "done";
-      change.detail = null;
-      if (str(p.last_assistant_message)) change.lastMessage = str(p.last_assistant_message);
-      break;
-    case "StopFailure":
-      change.state = "failed";
-      change.detail = str(p.error) ?? "Request failed";
-      break;
-    case "SessionEnd":
-      change.state = "exited";
-      change.detail = null;
-      break;
-    case "SubagentStart":
-      if (subId) change.subagent = { op: "start", id: subId, type: str(p.agent_type) };
-      break;
-    case "SubagentStop":
-      if (subId)
-        change.subagent = { op: "stop", id: subId, lastMessage: str(p.last_assistant_message) };
-      break;
-  }
-  return change;
-}
 
 const base = (p: unknown): string | null => (typeof p === "string" && p ? (p.split(/[\\/]/).pop() ?? p) : null);
 const line1 = (s: string) => (s.split(/\r?\n/)[0] ?? s).trim();

@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./magic": "./src/magic/index.ts",
-    "./magic/lint": "./src/magic/lint.ts"
+    "./magic/lint": "./src/magic/lint.ts",
+    "./activity/fixture": "./src/agents/activity/fixture.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.71",

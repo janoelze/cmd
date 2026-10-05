@@ -37,12 +37,15 @@ export function newTurn(agentId: AgentId, index: number, at: number, ev?: Activi
     startedAt: at,
     endedAt: null,
     prompt: null,
+    auto: false,
+    background: [],
     outcome: "working",
     ask: null,
     final: null,
     error: null,
     tools: [],
     commands: [],
+    shellWrites: 0,
     files: [],
     subagents: 0,
     events: 0,
@@ -100,9 +103,10 @@ export class ActivityReducer {
         if (this.open) this.#close(r, ev.at, "interrupted", "a new prompt before the turn ended");
         const t = this.#openTurn(r, ev);
         t.prompt = ev.text ?? null;
+        t.auto = !!ev.auto;
         t.events = 1;
         this.#state(r, { state: "working", detail: null }, cause);
-        if (ev.text) r.lastPrompt = line1(ev.text);
+        if (ev.text && !ev.auto) r.lastPrompt = line1(ev.text);
         break;
       }
       case "tool.start": {
@@ -115,6 +119,7 @@ export class ActivityReducer {
           if (row) row.count++;
           else t.tools.push({ name: ev.tool.name, count: 1, failed: 0 });
           if (ev.tool.command) t.commands = [...t.commands, ev.tool.command].slice(-MAX_COMMANDS);
+          if (ev.tool.writes) t.shellWrites++;
         }
         r.turn = t;
         this.#state(r, { state: "working", detail: ev.tool?.label ?? null }, cause);
@@ -155,6 +160,7 @@ export class ActivityReducer {
       case "stop": {
         const t = this.#ensureTurn(r, ev);
         t.final = ev.text ?? t.final;
+        t.background = ev.background ?? [];
         this.#close(r, ev.at, "done");
         this.#state(r, { state: "done", detail: null, ...(ev.text ? { lastMessage: ev.text } : {}) }, cause);
         break;
@@ -242,11 +248,11 @@ export class ActivityReducer {
 /** Events that show a turn was still going (not a new prompt or session). */
 const reopens = (ev: ActivityEvent) => ev.kind === "tool.start" || ev.kind === "tool.end" || ev.kind === "ask" || ev.kind === "stop" || ev.kind === "fail" || ev.kind === "compact";
 
-export function addFile(t: AgentTurn, path: string, change: string, via: "git" | "tool"): void {
+export function addFile(t: AgentTurn, path: string, change: string, via: "git" | "fs" | "tool"): void {
   const f = t.files.find((x) => x.path === path);
   if (!f) t.files.push({ path, change, via: [via] });
   else {
     if (!f.via.includes(via)) f.via.push(via);
-    if (via === "git") f.change = change;
+    if (via !== "tool") f.change = change;
   }
 }

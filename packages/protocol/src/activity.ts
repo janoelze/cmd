@@ -37,6 +37,12 @@ export interface ActivityTool {
   paths?: string[];
   /** Shell command, first line. */
   command?: string;
+  /**
+   * The shell command looks like it writes files, and how ("sed -i", "script",
+   * "redirect", …). Which files is git's or the folder watch's to say: paths in
+   * commands are too unreliable to list.
+   */
+  writes?: string;
   /** tool.end: false when the call failed or was denied. */
   ok?: boolean;
   durationMs?: number;
@@ -63,6 +69,10 @@ export interface ActivityEvent {
   subagent?: string;
   /** Prompt, final message, question, error or anomaly, by kind. */
   text?: string;
+  /** prompt: sent by the agent itself, not typed (a finished background task reporting back). */
+  auto?: boolean;
+  /** stop: work the agent left running in the background (subagents, shells), by description. */
+  background?: string[];
   tool?: ActivityTool;
   cwd?: string;
   transcriptPath?: string;
@@ -78,8 +88,11 @@ export interface TurnFile {
   path: string;
   /** git's letter (A, M, D, R, ?) or "M" for a file a tool wrote outside a repository. */
   change: string;
-  /** git: the work tree changed during the turn; tool: one of the agent's calls wrote it. */
-  via: ("git" | "tool")[];
+  /**
+   * git: the work tree changed during the turn; fs: the folder (not a repository)
+   * changed during it; tool: one of the agent's file tools wrote it.
+   */
+  via: ("git" | "fs" | "tool")[];
 }
 
 /** One prompt and everything up to the agent's answer (or failure, or interruption). */
@@ -93,6 +106,10 @@ export interface AgentTurn {
   endedAt: number | null;
   /** null: the turn began before cmd saw it (e.g. the core started mid-turn). */
   prompt: string | null;
+  /** The prompt came from the agent itself (a background task finished), not the user. */
+  auto: boolean;
+  /** At its end, work still running in the background (a later auto turn picks it up). */
+  background: string[];
   outcome: TurnOutcome;
   /** What the agent wants from the user, while waiting (the last ask of the turn otherwise). */
   ask: { message: string; tool?: string; input?: string } | null;
@@ -102,6 +119,8 @@ export interface AgentTurn {
   tools: { name: string; count: number; failed: number }[];
   /** Last few shell commands, first lines. */
   commands: string[];
+  /** Shell commands that looked like they write files (ActivityTool.writes). */
+  shellWrites: number;
   files: TurnFile[];
   subagents: number;
   /** Events that make up the turn. */
