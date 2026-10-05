@@ -479,6 +479,25 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(!!saved?.[0]?.path.endsWith("sub-folder") && saved[0].dir && listed.some((l) => l.startsWith("sub-folder —")),
       `a folder bookmarked from its menu is kept and listed by the bookmark button (${listed.slice(0, 3).join(", ")})`);
   }
+  // Move to Trash asks first (the sheet is stubbed to answer Cancel): nothing moves.
+  {
+    await app.evaluate(({ dialog, Menu }) => {
+      dialog.__orig ??= dialog.showMessageBox;
+      dialog.__trashAsked = null;
+      dialog.showMessageBox = async (_w, o) => ((dialog.__trashAsked = (o ?? _w).message), { response: 1 });
+      globalThis.__bmPopup = Menu.prototype.popup;
+      Menu.prototype.popup = function (o) {
+        this.items.find((i) => i.label === "Move to Trash (⌘⌫)")?.click();
+        o?.callback?.();
+      };
+    });
+    await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).click({ button: "right" });
+    await win.waitForTimeout(400);
+    const askedTrash = await app.evaluate(({ dialog }) => dialog.__trashAsked);
+    await app.evaluate(({ dialog, Menu }) => ((dialog.showMessageBox = dialog.__orig), (Menu.prototype.popup = globalThis.__bmPopup)));
+    check(askedTrash === "Move “notes.txt” to the Trash?" && (await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).count()) === 1,
+      `Move to Trash asks first, and Cancel keeps the file (${askedTrash})`);
+  }
 
   // Files open in the window that suits them: notes.txt → text window; edit and ⌘S.
   await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).dblclick();

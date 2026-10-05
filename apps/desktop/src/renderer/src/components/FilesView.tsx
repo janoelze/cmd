@@ -365,6 +365,13 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     setSel(made);
   };
   const trash = async (e: FileEntry) => {
+    // Recoverable, but easy to do by accident (⌘⌫ in the list): ask first.
+    const ok = await cmd.confirm({
+      message: `Move “${e.name}” to the Trash?`,
+      detail: e.kind === "dir" ? "The folder and everything in it go to the Trash. You can put them back from there." : "You can put it back from the Trash.",
+      confirm: "Move to Trash",
+    });
+    if (!ok) return;
     const i = rows.findIndex((r) => r.entry.path === e.path);
     const next = rows.slice(i + 1).find((r) => !r.entry.path.startsWith(e.path + "/")) ?? rows[i - 1];
     if (e.kind === "dir") setOpen(e.path, false);
