@@ -719,27 +719,54 @@ kbd {
   touch-action: none;
   z-index: 6;
 }
-.strip-resize[data-edge="right"] { left: calc(100% - var(--edge-in)); }
-.strip-resize[data-edge="left"] { right: calc(100% - var(--edge-in)); }
-/* The line, on the window's edge (inset by its corners), and the grip on it. */
+/* A window's children are placed inside its border: add the outline, so the handle is
+   measured from the window's outer edge (sidebars' handles are their sidebar's children,
+   whose edge is the window's outer edge already). */
+.strip-resize[data-edge="right"] { left: calc(100% + var(--window-outline) - var(--edge-in)); }
+.strip-resize[data-edge="left"] { right: calc(100% + var(--window-outline) - var(--edge-in)); }
+/* The edge line (faint, inset by the window's corners) and, centred on it, a small
+   handle: a box in the title bar's colour with two grip lines, like a split view's.
+   Both are centred on the window's outer edge (2px into the handle): the line straddles
+   it, over the outline's pixel and the one outside, and the 10px box sits evenly across
+   it. All on whole pixels: the grip lines sit 2px apart, the box's top rounds down. */
 .resize-edge::before, .resize-edge::after {
   content: "";
   position: absolute;
-  background: var(--accent);
   opacity: 0;
   transition: opacity 120ms ease;
   pointer-events: none;
 }
-.resize-edge::before { top: var(--window-radius); bottom: var(--window-radius); width: 2px; border-radius: 1px; }
-.resize-edge::after { top: 50%; height: 28px; margin-top: -14px; width: 4px; border-radius: 2px; }
-.resize-edge[data-edge="right"]::before { left: 0; }
-.resize-edge[data-edge="right"]::after { left: -1px; }
-.resize-edge[data-edge="left"]::before { right: 0; }
-.resize-edge[data-edge="left"]::after { right: -1px; }
+.resize-edge::before {
+  top: var(--window-radius);
+  bottom: var(--window-radius);
+  width: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.resize-edge::after {
+  --grip: color-mix(in srgb, var(--ink) 45%, transparent);
+  top: calc(round(down, 50%, 1px) - 15px);
+  width: 10px;
+  height: 30px;
+  box-sizing: border-box;
+  border: 1px solid var(--window-edge);
+  border-radius: 5px;
+  background:
+    linear-gradient(var(--grip), var(--grip)) 2px 50% / 1px 12px no-repeat,
+    linear-gradient(var(--grip), var(--grip)) 5px 50% / 1px 12px no-repeat,
+    var(--bg-sidebar);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--shadow) 60%, transparent);
+}
+.resize-edge[data-edge="right"]::before { left: 1px; }
+.resize-edge[data-edge="right"]::after { left: -3px; }
+.resize-edge[data-edge="left"]::before { right: 1px; }
+.resize-edge[data-edge="left"]::after { right: -3px; }
 .resize-edge:hover::before, .resize-edge:hover::after { opacity: 1; transition-delay: 90ms; }
-.resize-edge:hover::before { opacity: 0.55; }
+/* Held: the handle takes the accent. */
 .resize-edge.active::before, .resize-edge.active::after,
 .app.sidebar-resizing .dock-resize:active::before, .app.sidebar-resizing .dock-resize:active::after { opacity: 1; transition-delay: 0ms; }
+.resize-edge.active::after, .app.sidebar-resizing .dock-resize:active::after { --grip: var(--accent); border-color: var(--accent); }
+.resize-edge.active::before, .app.sidebar-resizing .dock-resize:active::before { background: var(--accent); }
 /* While dragging, the whole app shows the resize cursor and nothing else reacts. */
 .main.windows.resizing, .main.windows.resizing *, .app.sidebar-resizing, .app.sidebar-resizing * { cursor: col-resize !important; }
 
