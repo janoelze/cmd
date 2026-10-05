@@ -544,6 +544,8 @@ kbd {
    instead (Slot.tsx sets .sliver; short values like "~" aren't squeezed). */
 .slot.sliver .slot-v, .slot.sliver .slot-divider { visibility: hidden; }
 .tile-title { cursor: grab; touch-action: none; }
+/* Sidebars don't drag (Dock.tsx): no grab hand. */
+.dock .tile-title { cursor: default; }
 .empty-main { display: grid; place-items: center; }
 /* Monochrome logo drawn as a mask so it takes the theme's colour. */
 .hello {
