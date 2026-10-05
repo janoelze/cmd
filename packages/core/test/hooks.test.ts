@@ -244,7 +244,7 @@ describe.skipIf(process.platform === "win32")("setting agents up out of the box"
       expect(read(path.join(home, ".codex/hooks.json")).hooks.Stop).toBeDefined();
       const states = Object.fromEntries((await core.call("hooks.status", {})).map((t) => [path.relative(home, t.file), t.state]));
       expect(states).toMatchObject({ ".claude/settings.json": "installed", ".claude-profiles/old/settings.json": "installed", ".claude-profiles/live/settings.json": "elsewhere", ".claude-profiles/broken/settings.json": "missing", ".codex/hooks.json": "installed" });
-      expect(notes.join("\n")).toMatch(/Added cmd's hook to Claude Code \(.*\.claude\/settings\.json\)/);
+      expect(notes.join("\n")).toMatch(/^(Its|Their) state shows in cmd now\. Change it in Settings → Agents\.$/m);
 
       // Removed by the user: stays out, even on a rescan; Install brings it back.
       const file = path.join(home, ".claude/settings.json");

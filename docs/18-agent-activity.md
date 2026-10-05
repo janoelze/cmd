@@ -144,7 +144,7 @@ Rules:
 
 ## What this enables (separate work)
 
-- **Notifications** with the agent's question or final message, background work left running, then AI phrasing ([17-ai.md](17-ai.md): a fast-tier call over the turn record, not the transcript).
+- **Notifications** (built, 2026-10-05: `agents/notice.ts`, worded by the copywriting skill): subject · state, the agent's own first sentence, the files and time cmd checked, what a waiting agent asks, why it stopped, background work left running. Next: AI phrasing ([17-ai.md](17-ai.md): a fast-tier call over the turn record, not the transcript).
 - **Agent Activity widget** as an overview: per agent the current turn, what it wants, files changed, recent turns (`agent.turns`).
 - **Sidebar and tooltips** from turn facts.
 - **Remote "Now"** from structured fields (once the policy allows `agent.turns`).

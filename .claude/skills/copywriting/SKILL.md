@@ -35,7 +35,7 @@ Prefer: *waiting for you, needs you, done, stopped, couldn't, keeps running, sid
 
 | Surface | Shape | Length |
 |---|---|---|
-| **Notification** | Title: what (project or agent) · state. Body: the one thing worth knowing. | title ≤ 40, body ≤ 140 characters |
+| **Notification** | Title: what (project or agent) · state. Body: the one thing worth knowing. | subject ≤ 28 characters (cut), body ≤ 140 |
 | **Toast** | The result of something the person just did. An error toast carries an action that fixes it, or isn't a toast. | one short sentence |
 | **Tooltip** | Name the control, then its shortcut. Explain only when the name isn't enough. | ≤ 60 characters |
 | **Menu item, button** | Verb first, what happens. "Close Space", not "OK". | 1–4 words |

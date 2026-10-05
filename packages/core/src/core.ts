@@ -636,12 +636,15 @@ export class Core {
       try {
         installHooks(t.agent, t.file, this.#hooks.script);
         log.info(`installed cmd's hook into ${t.file} (was ${t.state})`);
-        added.push(`${t.title} (${t.file.replace(os.homedir(), "~")})`);
+        if (!added.includes(t.title)) added.push(t.title);
       } catch (err) {
         log.error(`could not install cmd's hook into ${t.file}: ${(err as Error).message}`);
       }
     }
-    if (added.length) this.notifications.info("cmd set up your agents", `Added cmd's hook to ${added.join(", ")}, so their state shows in cmd. Settings → Agents → Hooks to change it.`);
+    if (added.length) {
+      const names = added.length > 1 ? `${added.slice(0, -1).join(", ")} and ${added.at(-1)}` : added[0]!;
+      this.notifications.info(`${names} set up`, `${added.length > 1 ? "Their" : "Its"} state shows in cmd now. Change it in Settings → Agents.`);
+    }
   }
 
   #restartSearch(): void {

@@ -16,6 +16,7 @@ import type { Agent, AppNotification, Attention, Pane, PaneId, Settings, WindowI
 import type { OscEvent } from "./osc.ts";
 import type { PaneManager } from "./panes.ts";
 import type { AgentTracker } from "./agents/tracker.ts";
+import { agentNotice } from "./agents/notice.ts";
 
 /** Bells closer together than this in one terminal count as one (a held key, a noisy script). */
 const BELL_EVERY_MS = 2000;
@@ -101,25 +102,25 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
 
   // ── sources ─────────────────────────────────────────────
 
+  /**
+   * An agent that needs you, finished, or stopped on an error (the copywriting
+   * skill: subject · state, then the agent's own words and what cmd checked;
+   * agents/notice.ts). Done only after work (a Stop), so inferred endings and
+   * answered questions stay quiet.
+   */
   #onAgent(a: Agent): void {
     const prev = this.#agentStates.get(a.id);
     this.#agentStates.set(a.id, a.state);
     const needy = a.state === "needs_input" && prev !== "needs_input";
-    const finished = a.state === "done" && prev === "working";
-    if (!needy && !finished) return;
+    const finished = a.state === "done" && (prev === "working" || prev === "needs_input");
+    const stopped = a.state === "failed" && prev !== "failed";
+    if (!needy && !finished && !stopped) return;
     const cfg = this.#settings();
-    if ((needy && !cfg["notifications.needsInput"]) || (finished && !cfg["notifications.done"])) return;
+    if ((needy && !cfg["notifications.needsInput"]) || (!needy && !cfg["notifications.done"])) return;
     const pane = a.paneId ? this.#panes.get(a.paneId) : null;
-    const name = a.name ?? a.spawn.prompt ?? a.kind;
+    const { title, body } = agentNotice(a, needy ? "needs" : finished ? "done" : "stopped");
     // The agent's light is its marker; no attention marker on the pane.
-    this.#emit({
-      source: needy ? "agent-input" : "agent-done",
-      paneId: a.paneId,
-      title: needy ? `${name} needs you` : `${name} is done`,
-      body: needy ? (a.detail ?? "") : (a.lastMessage ?? "").slice(0, 200),
-      alert: !pane?.muted,
-      urgent: needy,
-    });
+    this.#emit({ source: needy ? "agent-input" : "agent-done", paneId: a.paneId, title, body, alert: !pane?.muted, urgent: needy });
   }
 
   #onOsc(id: PaneId, ev: OscEvent): void {

@@ -74,7 +74,7 @@ describe("notifications from programs", () => {
     ptys[0]!.output("\x1b]9;Claude needs you\x07");
     expect(sent.filter((n) => n.source === "terminal")).toHaveLength(0);
     // The tracker turns it into the agent's state, which notifies once.
-    expect(sent).toMatchObject([{ source: "agent-input", title: "claude needs you", body: "Claude needs you", urgent: true }]);
+    expect(sent).toMatchObject([{ source: "agent-input", title: expect.stringMatching(/ · needs you$/), body: "Claude needs you", urgent: true }]);
 
     panes.create();
     cfg = { ...cfg, "notifications.terminalSequences": false };
