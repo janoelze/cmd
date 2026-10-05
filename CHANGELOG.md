@@ -2,6 +2,20 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.14.0 — 2026-10-05
+
+Read PDFs in cmd, and four new built-in widgets.
+
+### New
+
+- **PDF viewer.** PDFs open in their own window, with search, page thumbnails, the outline and zoom. It stays on your page when the file changes.
+- **Built-in widgets.** Commands lists what your terminals ran, Notifications keeps what cmd sent, Resources shows CPU and memory, and Timer counts down.
+
+### Improved
+
+- The backdrop behind your windows has a light grain, and windows cast softer, deeper shadows.
+- Window outlines and focus rings no longer spill into the gap beside a sidebar.
+
 ## 0.13.3 — 2026-10-05
 
 ### Improved
