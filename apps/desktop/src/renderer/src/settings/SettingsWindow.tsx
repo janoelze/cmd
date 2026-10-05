@@ -1,8 +1,8 @@
 // The Settings window: the pages and sections of layout.ts in a sidebar like the
 // main window's, each section one list of rows generated from SETTINGS_SCHEMA:
-// the title and description on the left, a control chosen from the key's type
-// and display hints on the right. The key itself (what `cmd settings set`
-// takes) is the title's tooltip. Secrets (API keys, SECRETS) are rows too but
+// the title, a one-line description and an info button for the details on the
+// left, a control chosen from the key's type and display hints on the right.
+// The key itself (what `cmd settings set` takes) is the title's tooltip. Secrets (API keys, SECRETS) are rows too but
 // are stored by the core outside settings.json.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -67,7 +67,7 @@ const textOf = (k: ItemKey): string[] => {
     return [d.title, d.description, k];
   }
   const d: SettingDef = SETTINGS_SCHEMA[k];
-  return [settingTitle(k), d.description, k];
+  return [settingTitle(k), d.description, d.details ?? "", k];
 };
 const matches = (k: ItemKey, q: string) => textOf(k).some((t) => t.toLowerCase().includes(q));
 const shortcutMatches = (c: CommandSpec, q: string) => [c.label, c.id].some((t) => t.toLowerCase().includes(q));
@@ -227,7 +227,7 @@ export function SettingsWindow() {
       </aside>
       <main className="sw-main">
         <header className={`sw-bar${scrolled ? " scrolled" : ""}`}>
-          <h1>{q ? "Search Results" : nav.title}</h1>
+          <h1 className="sw-page">{q ? "Search Results" : nav.title}</h1>
         </header>
         {/* keyed by page: each page starts at the top */}
         <div className="sw-scroll" key={q ? "search" : page} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
@@ -261,7 +261,7 @@ function ItemRow({ k, ctx }: { k: ItemKey; ctx: RowContext }) {
     const def: SecretDef = SECRETS[k];
     const status = ctx.secrets?.[k];
     return (
-      <FormRow title={def.title} tip={k} description={`${def.description} Kept outside settings.json, readable only by you.`}>
+      <FormRow title={def.title} tip={k} description={def.description}>
         <SecretField set={!!status?.set} hint={status?.hint} placeholder={def.placeholder} onSave={(v) => ctx.saveSecret(k, v)} />
       </FormRow>
     );
@@ -269,7 +269,7 @@ function ItemRow({ k, ctx }: { k: ItemKey; ctx: RowContext }) {
   return <SettingRow k={k} ctx={ctx} />;
 }
 
-/** The left side of a setting's row: title (key as tooltip, reset when changed) and description. */
+/** The left side of a setting's row: title (key as tooltip, reset when changed), description and details. */
 function settingText(k: SettingKey, ctx: RowContext) {
   const def: SettingDef = SETTINGS_SCHEMA[k];
   return {
@@ -282,6 +282,7 @@ function settingText(k: SettingKey, ctx: RowContext) {
         {def.applies && <span className="sw-applies"> {APPLIES_NOTE[def.applies]}</span>}
       </>
     ),
+    info: def.details && prose(def.details),
   };
 }
 

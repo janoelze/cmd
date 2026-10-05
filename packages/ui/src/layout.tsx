@@ -5,6 +5,7 @@
 import type { MouseEvent, ReactNode } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { IconButton } from "./button.tsx";
+import { useTooltip } from "./tooltips.tsx";
 import type { Tone } from "./status.tsx";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
@@ -41,9 +42,13 @@ export function FormRow({
   compact,
   stacked,
   titleAside,
+  info,
 }: {
   title: ReactNode;
+  /** One short line: what the setting does. The rest goes in `info`. */
   description?: ReactNode;
+  /** More about it (caveats, examples), in a card from an info button after the title. */
+  info?: ReactNode;
   /** Under the description: what just happened, or what's wrong. */
   note?: ReactNode;
   noteTone?: "accent" | "danger" | "warning" | "dim";
@@ -72,6 +77,7 @@ export function FormRow({
           <span className="ui-row-name" data-tip={tip}>
             {title}
           </span>
+          {info ? <InfoButton>{info}</InfoButton> : null}
           {accessory}
           {titleAside ? <span className="ui-row-title-aside">{titleAside}</span> : null}
         </div>
@@ -82,6 +88,16 @@ export function FormRow({
       {/* Stacked, the note is about the control above it (a key that was rejected). */}
       {stacked && rowNote}
     </div>
+  );
+}
+
+/** An info button whose card (a rich tooltip, on hover or focus) says more than fits a row. */
+export function InfoButton({ children }: { children: ReactNode }) {
+  const tip = useTooltip<HTMLButtonElement>(() => <div className="ui-info-card">{children}</div>);
+  return (
+    <button ref={tip} type="button" className="ui-info-button" aria-label="More Info">
+      {iconNode("info.circle", 12)}
+    </button>
   );
 }
 

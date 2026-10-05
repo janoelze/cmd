@@ -192,7 +192,7 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode; usageSta
               <FormRow title="Uptime" description={`Started ${new Date(core.startedAt).toLocaleString()}`}>
                 <Value>{duration(Date.now() - core.startedAt)}</Value>
               </FormRow>
-              <FormRow title="Memory" description={`${mb(core.heapBytes)} JavaScript heap; terminals' own processes not included.`}>
+              <FormRow title="Memory" description={`${mb(core.heapBytes)} JavaScript heap`}>
                 <Value>{mb(core.rssBytes)}</Value>
               </FormRow>
               <FormRow title="CPU time">

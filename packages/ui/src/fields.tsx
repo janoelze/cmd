@@ -217,6 +217,8 @@ export function NumberField({
     return draft.trim() && Number.isFinite(n) ? n : value;
   };
   const bump = (d: number, big = false) => set(current() + d * step * (big ? 10 : 1));
+  // Wide enough for the longest value it takes, beside its unit.
+  const chars = Math.max(2, ...[min, max, value].filter((v) => v !== undefined).map((v) => fmt(v).length));
   return (
     <span className="ui-number" data-disabled={disabled || undefined}>
       <span className="ui-field" data-size="md" style={width ? { width } : undefined}>
@@ -225,6 +227,7 @@ export function NumberField({
           spellCheck={false}
           aria-label={label}
           disabled={disabled}
+          style={{ width: `${chars + 0.5}ch` }}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}

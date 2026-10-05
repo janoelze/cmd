@@ -39,7 +39,7 @@ Prefer: *waiting for you, needs you, done, stopped, couldn't, keeps running, sid
 | **Toast** | The result of something the person just did. An error toast carries an action that fixes it, or isn't a toast. | one short sentence |
 | **Tooltip** | Name the control, then its shortcut. Explain only when the name isn't enough. | ≤ 60 characters |
 | **Menu item, button** | Verb first, what happens. "Close Space", not "OK". | 1–4 words |
-| **Setting** | Title: what it controls. Description: what changes, and anything surprising. | description ≤ 2 sentences |
+| **Setting** | Title: what it controls. Description: what changes, at a glance. Details (`details`, behind the info button) only when something would surprise: what's sent where, which files change, a format to follow. Most settings have none. | description one line, ≤ 60 characters |
 | **Error** | What happened, then what to do. | ≤ 2 sentences |
 | **Empty state** | What goes here, and how to get some. | 1–2 sentences |
 | **Confirmation** | Title asks or states the consequence; buttons answer it. | title ≤ 1 sentence |

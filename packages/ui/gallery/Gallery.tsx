@@ -688,10 +688,10 @@ function FormsPage() {
       <h1>Forms</h1>
       <p className="g-lede">
         The Settings window's layout as components: a <code>FormSection</code> is a heading and a group box; each <code>FormRow</code> puts its text on the left
-        and its control in a right-hand column that lines up down the page.
+        and its control in a right-hand column that lines up down the page. The description is one line; <code>info</code> puts the rest behind an info button.
       </p>
       <FormSection title="General">
-        <FormRow title="Notifications" description="When an agent finishes or needs you and the window isn't in front." tip="notify.enabled">
+        <FormRow title="Notifications" description="When an agent finishes or needs you." info="Only while its window isn't in front. Attention markers show either way." tip="notify.enabled">
           <Switch checked={s.notify} onChange={(v) => set("notify", v)} label="Notifications" />
         </FormRow>
         <FormRow title="Appearance" accessory={s.appearance !== "auto" && <ResetButton onClick={() => set("appearance", "auto")} />}>

@@ -57,7 +57,7 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
       <FormSection>
         <FormRow
           title="Remote access"
-          description="Use your terminals and agents from your phone or any browser, end-to-end encrypted."
+          description="Use your terminals and agents from your phone, end-to-end encrypted."
           note={enabled ? (status?.error && status.state === "error" ? `Can't reach the relay: ${status.error}` : STATE_LINE[status?.state ?? "connecting"]) : undefined}
           noteTone={status?.state === "error" ? "danger" : "accent"}
         >

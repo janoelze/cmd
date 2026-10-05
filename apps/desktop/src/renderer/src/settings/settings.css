@@ -77,13 +77,16 @@ body.settings-window { background: var(--bg); }
   height: calc(var(--titlebar-h) + 14px);
   display: flex;
   align-items: flex-end;
-  padding: 0 28px 10px;
+  /* The page's geometry (padding, gutters, width), so the title lines up with the sections. */
+  padding: 0 20px 10px;
+  overflow: hidden;
+  scrollbar-gutter: stable both-edges;
   box-shadow: 0 1px 0 transparent;
   transition: box-shadow 0.15s;
   -webkit-app-region: drag;
 }
 .sw-bar.scrolled { box-shadow: 0 1px 0 var(--separator); }
-.sw-bar h1 { margin: 0; font: 600 17px var(--font-ui); letter-spacing: -0.01em; }
+.sw-bar h1 { width: 100%; margin: 0 auto; padding: 0 2px; font: 600 17px var(--font-ui); letter-spacing: -0.01em; }
 .sw-scroll { flex: 1; overflow-y: auto; scrollbar-gutter: stable both-edges; padding: 6px 20px 28px; }
 .sw-page { max-width: 680px; margin: 0 auto; }
 .sw-applies { color: color-mix(in srgb, var(--text-dim) 75%, transparent); font-style: italic; }

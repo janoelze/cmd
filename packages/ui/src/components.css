@@ -400,7 +400,7 @@
 
 /* Number: the value and its unit in one box, a stepper beside it. */
 .ui-number { flex: none; display: inline-flex; align-items: center; gap: 4px; }
-.ui-number .ui-field { width: 84px; }
+.ui-number .ui-field { width: auto; min-width: 84px; }
 .ui-number input { font-variant-numeric: tabular-nums; text-align: right; }
 .ui-number[data-disabled] { opacity: var(--disabled-opacity); }
 .ui-unit { padding-left: 2px; margin-right: 0; }
@@ -656,6 +656,24 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 .ui-row-note { margin-top: 4px; font-size: var(--text-sm); line-height: 1.4; color: var(--tone); }
 /* The control column: wide enough for a text field, never more than half the row. */
 .ui-row-control { flex: 0 1 auto; max-width: 50%; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+/* The info button after a row's title, and the card it opens (a rich tooltip). */
+.ui-info-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0 -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: color-mix(in srgb, var(--text-dim) 70%, transparent);
+  background: none;
+}
+.ui-info-button:hover, .ui-info-button:focus-visible { color: var(--text); }
+.ui-info-button:focus-visible { outline: none; box-shadow: var(--input-ring); }
+.ui-info-card { max-width: 300px; line-height: 1.45; text-wrap: pretty; }
+.ui-info-card code { padding: 0 3px; font: calc(var(--text-xs)) var(--font-mono); border-radius: var(--radius-xs); background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .ui-reset.ui-icon-button { --h: 16px; color: var(--accent); border-radius: var(--radius-sm); }
 .ui-reset.ui-icon-button:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
 

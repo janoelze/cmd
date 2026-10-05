@@ -70,7 +70,7 @@ export function AiProviderChoice() {
   const usable = usableProviders(ai);
   if (usable.length < 2 || !ai?.provider) return null;
   return (
-    <FormRow title="Use" tip="ai.provider" description="You've added keys for both. AI features use this one, and the other if this one stops working.">
+    <FormRow title="Use" tip="ai.provider" description="AI features use this one.">
       <Segmented
         value={ai.provider}
         options={usable}
