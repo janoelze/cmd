@@ -6,7 +6,7 @@
 
 import type { ReactNode } from "react";
 import type { AiStatus } from "@cmd/protocol";
-import { FormSection } from "@cmd/ui";
+import { FeatureList, FormSection } from "@cmd/ui";
 import { AiKeyRow, AiProviderChoice } from "../ai/Providers.tsx";
 
 export interface StepContext {
@@ -34,12 +34,22 @@ const welcome: OnboardingStep = {
   title: "Welcome to cmd",
   subtitle: "Terminals and coding agents, side by side.",
   primary: "Get Started",
+  body: () => (
+    <FeatureList
+      items={[
+        { icon: "rectangle.3.group", title: "One desk", description: "Terminals, agents, a browser and an editor as windows, in a grid, a strip or on a canvas." },
+        { icon: "terminal", title: "Agents in your terminals", description: "Claude Code and Codex show up in any terminal. The one that needs you is on top." },
+        { icon: "wand.and.stars", title: "Magic widgets", description: "Ask for a window, like your open merge requests, and an agent builds it." },
+        { icon: "command", title: "Everything on ⌘K", description: "Windows, sessions and commands, one keystroke away." },
+      ]}
+    />
+  ),
 };
 
 const ai: OnboardingStep = {
   id: "ai",
   title: "Connect an AI provider",
-  subtitle: "Required for smart features in cmd. Your keys stay on your PC.",
+  subtitle: "Magic widgets and notification summaries use it. Your keys stay on this Mac.",
   existingUsers: true,
   done: (c) => !!c.ai?.ready,
   ready: (c) => !!c.ai?.ready,

@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 import { DEFAULT_SETTINGS, type RemoteStatus, type SearchStatus, type SecretsStatus, type SettingsSnapshot } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { applyThemeSettings } from "../theme.ts";
+import { applyLookSettings } from "../look.ts";
 
 let snapshot: SettingsSnapshot = { settings: DEFAULT_SETTINGS, overrides: [], errors: [], path: "" };
 let search: SearchStatus | null = null;
@@ -22,6 +23,7 @@ cmd.onEvent((e) => {
   else if (e.type === "settings.updated") {
     snapshot = e.snapshot;
     applyThemeSettings(snapshot.settings);
+    applyLookSettings(snapshot.settings);
   } else return;
   emit();
 });
@@ -31,6 +33,7 @@ cmd.onStatus(async (status) => {
     try {
       snapshot = (await cmd.call("events.subscribe", { types: ["settings.updated", "search.status", "secrets.updated", "remote.updated", "ai.updated"] })).settings;
       applyThemeSettings(snapshot.settings);
+      applyLookSettings(snapshot.settings);
       search = await cmd.call("search.status", {});
       secrets = await cmd.call("secrets.status", {});
       remote = await cmd.call("remote.status", {}).catch(() => null);

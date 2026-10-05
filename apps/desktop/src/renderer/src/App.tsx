@@ -724,20 +724,15 @@ export function App() {
 
   return (
     <div
-      className={`app ${cfg["ui.unfocusedDesaturation"] > 0 ? "desaturate" : ""} focus-${cfg["ui.focusColor"]} title-tint-${cfg["ui.focusTitleBar"]} shadow-${cfg["ui.windowShadow"]}`}
+      className={`app ${cfg["ui.unfocusedDesaturation"] > 0 ? "desaturate" : ""} title-tint-${cfg["ui.focusTitleBar"]}`}
       style={{
         ["--dock-left-w" as string]: `${widths.left || DOCK_WIDTH.default}px`,
-        ["--window-radius" as string]: `${cfg["ui.windowRadius"]}px`,
         ["--gutter" as string]: `${cfg["ui.gutter"]}px`,
         ["--sidebar-pad" as string]: `${cfg["ui.sidebarPadding"]}px`,
         ["--pad-x" as string]: `${cfg["ui.paddingX"]}px`,
         ["--pad-y" as string]: `${cfg["ui.paddingY"]}px`,
         ["--window-dim-amount" as string]: `${cfg["ui.unfocusedDim"] / 100}`,
         ["--window-desaturate" as string]: `${cfg["ui.unfocusedDesaturation"] / 100}`,
-        ["--window-outline" as string]: `${cfg["ui.windowOutline"]}px`,
-        ["--window-edge-mix" as string]: `${cfg["ui.windowOutlineContrast"]}%`,
-        ["--focus-outline" as string]: `${cfg["ui.focusOutline"]}px`,
-        ["--focus-glow" as string]: `${cfg["ui.focusGlow"] / 50}`,
       }}
     >
       <TopBar spaceBar={spaceBar} mode={mode} run={run} onNew={newMenu} />

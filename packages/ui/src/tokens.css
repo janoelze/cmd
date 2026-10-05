@@ -16,7 +16,8 @@
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --font-mono: "SF Mono", Menlo, monospace;
   /* The scale. Controls use --text-md; body copy --text-base; descriptions and
-     status lines --text-sm; badges and section headings --text-xs. */
+     status lines --text-sm; badges and section headings --text-xs; a sheet's
+     greeting (SheetHeader) --text-display, once per screen. */
   --text-2xs: 10px;
   --text-xs: 10.5px;
   --text-sm: 11.5px;
@@ -24,6 +25,7 @@
   --text-base: 13px;
   --text-lg: 15px;
   --text-xl: 17px;
+  --text-display: 22px;
 
   /* ── surfaces and lines (derived from --ink and --scrim) ── */
   --bg-hover: color-mix(in srgb, var(--ink) 6%, transparent);
@@ -91,6 +93,12 @@
   --radius-md: 8px; /* cards, callouts */
   --radius-lg: 10px; /* menus, popovers */
   --radius-xl: 12px; /* dialogs, the palette */
+  /* Sheets (Dialog): their corners, outline and shadow. An app can map these to
+     its own windows' look (cmd: the ui.window* settings, in styles.css). */
+  --sheet-radius: var(--radius-xl);
+  --sheet-edge: var(--popover-edge);
+  --sheet-edge-width: 1px;
+  --sheet-shadow: 0 20px 60px var(--shadow);
   --radius-pill: 999px;
 
   /* ── motion ── */

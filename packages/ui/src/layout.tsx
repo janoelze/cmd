@@ -75,6 +75,43 @@ export function FormRow({
   );
 }
 
+/** The top of a sheet that greets or explains (onboarding, a welcome): an icon, a large title and a line under it. */
+export function SheetHeader({ icon, title, subtitle }: { icon?: string | ReactNode; title: ReactNode; subtitle?: ReactNode }) {
+  return (
+    <header className="ui-sheet-header">
+      {icon && <span className="ui-sheet-header-icon">{iconNode(icon, 40)}</span>}
+      <h1 className="ui-sheet-header-title">{title}</h1>
+      {subtitle && <p className="ui-sheet-header-subtitle">{subtitle}</p>}
+    </header>
+  );
+}
+
+/** What something offers, one feature a line: a large icon, a title and a line under it (a welcome sheet). */
+export function FeatureList({ items }: { items: readonly { icon: string | ReactNode; title: ReactNode; description?: ReactNode }[] }) {
+  return (
+    <ul className="ui-features">
+      {items.map((f, i) => (
+        <li key={i} className="ui-feature">
+          <span className="ui-feature-icon">{iconNode(f.icon, ICON.feature)}</span>
+          <div>
+            <div className="ui-feature-title">{f.title}</div>
+            {f.description && <div className="ui-feature-desc">{f.description}</div>}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Running text: paragraphs, headings (h2, h3 with a dim <small>), lists, links,
+ * `code`, <hr>. For Markdown-ish content (release notes, a help page), styled by
+ * the elements, so the content needs no classes.
+ */
+export function Prose({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cls("ui-prose", className)}>{children}</div>;
+}
+
 /** A group box of rows without a section (or with your own heading). */
 export function Group({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cls("ui-group", className)}>{children}</div>;

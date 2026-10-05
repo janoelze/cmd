@@ -33,6 +33,8 @@ export const ICON = {
   disclosure: 8,
   /** inside controls: popup chevrons, steppers, field icons */
   control: 9,
+  /** a feature's mark (FeatureList) */
+  feature: 22,
   /** the mark of an empty view (a blank browser window) */
   empty: 28,
 } as const;

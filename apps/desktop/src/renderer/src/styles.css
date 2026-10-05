@@ -21,19 +21,35 @@
   --pad-x: 8px; /* to the left and right edges */
   --pad-y: 8px; /* to the top and bottom edges */
   /* Windows: rounded corners and crisp whole-pixel outlines, the selected one in the
-     accent with a soft glow. Set on .app from settings: --window-radius
+     accent with a soft glow. Set on :root from settings (look.ts): --window-radius
      (ui.windowRadius), --window-outline (ui.windowOutline), --window-edge-mix
-     (ui.windowOutlineContrast), --focus-outline (ui.focusOutline), --focus-glow
-     (ui.focusGlow, 1 = the default halo). What's built from them is declared on
-     .tile, where those values resolve. */
+     (ui.windowOutlineContrast), --window-elevation (ui.windowShadow),
+     --focus-outline (ui.focusOutline), --focus-glow (ui.focusGlow, 1 = the
+     default halo). What's built from them is declared on .tile, where those
+     values resolve. */
   --window-radius: 8px;
   --window-outline: 1px;
+  --window-elevation: 0.5;
   --focus-outline: 1px;
   --focus-glow: 1;
   /* Window outline and the line under the title bar: one opaque colour (the
      separator over the title bar), so both look the same over any background. */
   --window-edge: color-mix(in srgb, var(--ink) var(--window-edge-mix, 9%), var(--bg-sidebar));
   --window-highlight: var(--accent);
+  /* Sheets (the kit's Dialog) look like windows: their corners, outline and the
+     same shadow, higher (4× the windows' elevation, at most 6). On :root, so
+     dialogs portalled out of .app get them too. */
+  --sheet-radius: var(--window-radius);
+  --sheet-edge-width: var(--window-outline);
+  --sheet-edge: var(--window-edge);
+  --sheet-elev: min(6, calc(var(--window-elevation) * 4));
+  --sheet-sh: color-mix(in oklab, var(--shadow) 85%, var(--bg));
+  --sheet-shadow:
+    0 calc(0.5px * var(--sheet-elev)) calc(1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 36%, transparent),
+    0 calc(1px * var(--sheet-elev)) calc(2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 30%, transparent),
+    0 calc(2px * var(--sheet-elev)) calc(4px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 24%, transparent),
+    0 calc(4px * var(--sheet-elev)) calc(8px * var(--sheet-elev)) calc(-1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 20%, transparent),
+    0 calc(8px * var(--sheet-elev)) calc(16px * var(--sheet-elev)) calc(-2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 16%, transparent);
   --window-dim: 1; /* theme factor on ui.unfocusedDim (darkening of unfocused windows) */
 }
 /* Outside macOS the window has its own frame: no traffic-light area to keep free. */
@@ -459,7 +475,7 @@ kbd {
   border-radius: var(--window-radius-inner);
 }
 /* ui.focusColor neutral: the theme's text colour instead of the accent (minimap too). */
-.app.focus-neutral { --window-highlight: color-mix(in srgb, var(--ink) 70%, var(--bg-sidebar)); }
+:root[data-focus-color="neutral"] { --window-highlight: color-mix(in srgb, var(--ink) 70%, var(--bg-sidebar)); }
 .tile.sel { border-color: var(--ring-color); }
 .tile.needs { --ring-color: var(--state-needs); border-color: var(--ring-color); }
 .tile.sel.needs { --ring-color: var(--window-highlight); }
@@ -496,16 +512,9 @@ kbd {
    which reads cleaner than black on coloured themes. A window being dragged floats
    higher (--lift). */
 .tile-frame {
-  --e: 0;
   --lift: 0;
   --sh: color-mix(in oklab, var(--shadow) 85%, var(--bg));
-}
-.app.shadow-subtle .tile-frame { --e: 0.5; }
-.app.shadow-medium .tile-frame { --e: 1; }
-.app.shadow-strong .tile-frame { --e: 2; }
-.app.shadow-deep .tile-frame { --e: 3.5; }
-.app:not(.shadow-none) .tile-frame {
-  --elev: calc(var(--e) + var(--lift));
+  --elev: calc(var(--window-elevation) + var(--lift));
   --drop:
     0 calc(0.5px * var(--elev)) calc(1px * var(--elev)) color-mix(in srgb, var(--sh) 36%, transparent),
     0 calc(1px * var(--elev)) calc(2px * var(--elev)) color-mix(in srgb, var(--sh) 30%, transparent),
@@ -823,31 +832,6 @@ kbd {
 .palette-list li.on .palette-meta, .palette-list li.on .palette-snippet { color: color-mix(in srgb, var(--on-accent) 80%, transparent); }
 .palette-list li.on .palette-snippet mark { background: color-mix(in srgb, var(--on-accent) 30%, transparent); color: var(--on-accent); }
 .palette-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
-
-/* ── feedback sheet (components/Feedback.tsx) ───────── */
-
-.feedback-form { display: flex; flex-direction: column; gap: 10px; }
-.feedback-info { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-dim); }
-.feedback-error { min-width: 0; font-size: 11.5px; color: var(--danger); text-align: right; }
-.feedback-sent { padding: 24px 0; text-align: center; color: var(--text); }
-
-/* ── What's New (components/WhatsNew.tsx) ───────────── */
-
-.whats-new-list { max-height: min(60vh, 560px); overflow-y: auto; padding: 0 16px; }
-.whats-new-release { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 0; }
-.whats-new-release + .whats-new-release { border-top: 1px solid var(--separator); }
-.whats-new-release header { display: flex; align-items: baseline; gap: 8px; }
-.whats-new-release h3 { margin: 0; font-size: var(--text-lg); font-weight: 600; color: var(--text); }
-.whats-new-release time { font-size: var(--text-sm); color: var(--text-dim); }
-.whats-new-summary { margin: 0; font-size: var(--text-base); color: var(--text); }
-.whats-new-release ul { margin: 0 0 4px; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; align-self: stretch; }
-.whats-new-release li { font-size: var(--text-base); line-height: 1.45; color: var(--text); }
-.whats-new-release li::marker { color: var(--text-dim); }
-.whats-new-release code { font-family: var(--font-mono); font-size: 0.92em; padding: 0 3px; border-radius: 3px; background: var(--code-bg); }
-.whats-new-release a { color: var(--link); text-decoration: none; }
-.whats-new-release a:hover { text-decoration: underline; }
-.whats-new-empty { padding: 24px 0; text-align: center; color: var(--text-dim); }
-.whats-new-version { margin-right: auto; font-size: var(--text-sm); color: var(--text-dim); }
 
 /* ── browser and file windows ───────────────────────── */
 

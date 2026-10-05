@@ -119,9 +119,9 @@ await win.waitForSelector(".statusbar .core-status");
 // First launch: the onboarding sheet, Welcome then the AI step; without a key only "Set Up Later" moves on.
 {
   await win.waitForSelector(".onboarding");
-  check((await win.locator(".onboarding .ob-title").textContent()) === "Welcome to cmd", "a new install opens onboarding at Welcome");
+  check((await win.locator(".onboarding .ui-sheet-header-title").textContent()) === "Welcome to cmd", "a new install opens onboarding at Welcome");
   await win.locator(".onboarding button", { hasText: "Get Started" }).click();
-  await win.waitForSelector(".onboarding .ob-title:has-text('Connect an AI provider')");
+  await win.waitForSelector(".onboarding .ui-sheet-header-title:has-text('Connect an AI provider')");
   await win.screenshot({ path: path.join(shots, "0-onboarding-ai.png") });
   const titles = await win.locator(".onboarding .ui-row-title").allTextContents();
   check(titles.includes("Anthropic") && titles.includes("OpenAI") && (await win.locator(".onboarding button", { hasText: "Done" }).isDisabled()), "the AI step lists the providers, and Done waits for a key");

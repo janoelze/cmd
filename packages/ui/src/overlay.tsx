@@ -300,13 +300,19 @@ export function Dialog({
   padded = true,
   scrim = true,
   divided,
+  aside,
+  height,
 }: {
   open: boolean;
   onClose: () => void;
   title?: ReactNode;
   children: ReactNode;
   actions?: ReactNode;
+  /** The footer's start, across from the actions: a status line, a checkbox, PageDots. */
+  aside?: ReactNode;
   width?: number;
+  /** Fixed, for steps that shouldn't make the sheet jump; else it fits the content. */
+  height?: number;
   /** False while something runs that shouldn't be abandoned. */
   dismissable?: boolean;
   /** Top (like the palette, near where you were looking) or centred. */
@@ -346,7 +352,7 @@ export function Dialog({
         }
       }}
     >
-      <div ref={ref} className={cls("ui-dialog", className)} data-divided={divided || undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : undefined)} tabIndex={-1} style={{ width }}>
+      <div ref={ref} className={cls("ui-dialog", className)} data-divided={divided || undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : undefined)} tabIndex={-1} style={{ width, height }}>
         {title && (
           <div className="ui-dialog-head">
             <div className="ui-dialog-title">{title}</div>
@@ -356,7 +362,12 @@ export function Dialog({
         <div className="ui-dialog-body" data-padded={padded || undefined}>
           {children}
         </div>
-        {actions && <div className="ui-dialog-foot">{actions}</div>}
+        {(actions || aside) && (
+          <div className="ui-dialog-foot">
+            {aside && <div className="ui-dialog-aside">{aside}</div>}
+            {actions}
+          </div>
+        )}
       </div>
     </div>,
     document.body,

@@ -9,6 +9,7 @@ import { allThemes, applyTheme, themeFor } from "@cmd/ui/themes";
 import type { SettingsSnapshot } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { applyThemeSettings } from "../theme.ts";
+import { applyLookSettings } from "../look.ts";
 
 type Variants = Record<string, ComponentType>;
 const files = import.meta.glob<Variants>("../**/*.story.tsx");
@@ -51,6 +52,7 @@ function useWorkbenchTheme(theme: string) {
       applyTheme(t);
       cmd.setAppearance({ source: t.appearance, background: t.colors.bg, dockIcon: null });
     } else if (settings) applyThemeSettings(settings);
+    if (settings) applyLookSettings(settings);
   }, [theme, settings]);
 }
 
@@ -58,6 +60,8 @@ export function Workbench() {
   const [storyId, setStory] = useParam("story", STORIES[0]?.id ?? "");
   const [variant, setVariant] = useParam("variant", "");
   const [theme, setTheme] = useParam("theme", FOLLOW);
+  // Bumped by scripts to remount the variant fresh (whatever was clicked in it).
+  const [mount] = useParam("mount", "0");
   const [variants, setVariants] = useState<Variants | null>(null);
   useWorkbenchTheme(theme);
 
@@ -84,8 +88,8 @@ export function Workbench() {
         <Spacer />
         <Select label="Theme" value={theme} options={[{ value: FOLLOW, label: "Theme from Settings" }, ...allThemes().map((t) => ({ value: t.id, label: t.title }))]} onChange={setTheme} />
       </Toolbar>
-      {/* key: a new variant starts with fresh state. */}
-      <main className="wb-stage">{View && <View key={`${storyId}/${name}`} />}</main>
+      {/* key: a new variant (or mount) starts with fresh state. */}
+      <main className="wb-stage">{View && <View key={`${storyId}/${name}/${mount}`} />}</main>
     </div>
   );
 }

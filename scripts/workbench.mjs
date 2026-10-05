@@ -109,6 +109,7 @@ async function show(page, { story, variant, theme }) {
       if (story) (q.set("story", story), variant || q.delete("variant"));
       if (variant) q.set("variant", variant);
       if (theme) q.set("theme", theme);
+    q.set("mount", String(Date.now())); // fresh state, whatever was clicked before
       history.replaceState(null, "", `?${q}`);
       dispatchEvent(new Event("workbench:url"));
       return q.get("story");

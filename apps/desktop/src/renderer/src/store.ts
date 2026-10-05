@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
 import { applyFonts } from "./fonts.ts";
+import { applyLookSettings } from "./look.ts";
 import { applyThemeSettings } from "./theme.ts";
 import { setWindowTypes } from "./windows/registry.ts";
 import { handleMagicEvent } from "./magic.ts";
@@ -425,6 +426,7 @@ function handle(e: CoreEvent): void {
       terminals.configure(e.snapshot.settings);
       applyFonts(e.snapshot.settings);
       applyThemeSettings(e.snapshot.settings);
+      applyLookSettings(e.snapshot.settings);
       set({ settings: e.snapshot });
       return;
     case "agent.removed": {
@@ -480,6 +482,7 @@ cmd.onStatus(async (status) => {
   terminals.configure(snap.settings.settings);
   applyFonts(snap.settings.settings);
   applyThemeSettings(snap.settings.settings);
+  applyLookSettings(snap.settings.settings);
   setWindowTypes(snap.windowTypes ?? []);
   set({
     connected: true,

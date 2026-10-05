@@ -8,5 +8,6 @@ const iconFor = (id: string) => ICONS[`../../../../build/themes/${id}.png`] ?? I
 
 export function AppIcon({ size = 96 }: { size?: number }) {
   const theme = useTheme();
-  return <img className="ob-app-icon" src={iconFor(theme.id)} width={size} height={size} alt="" draggable={false} />;
+  // The image has a transparent margin (1/14 of its size): pull it back so the tile lines up with text.
+  return <img src={iconFor(theme.id)} width={size} height={size} alt="" draggable={false} style={{ display: "block", margin: -size / 14 }} />;
 }

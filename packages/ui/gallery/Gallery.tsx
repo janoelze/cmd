@@ -16,6 +16,7 @@ import {
   ConfirmDialog,
   Dialog,
   EmptyState,
+  FeatureList,
   FormRow,
   FormSection,
   Icon,
@@ -31,6 +32,7 @@ import {
   Popover,
   PageDots,
   Panel,
+  Prose,
   PanelBody,
   PanelHeader,
   PanelSummary,
@@ -44,6 +46,7 @@ import {
   Segmented,
   Select,
   Separator,
+  SheetHeader,
   Spacer,
   Spinner,
   StatusDot,
@@ -781,6 +784,42 @@ function ContentPage() {
       <Spec title="Panel, ListSection, ListRow, Chip" code="<Panel> <PanelHeader title onTitleClick actions> <ListSection title count> <ListRow icon light title detail tone end hover>" note="Lists like the Navigator's and the file browser's sidebar. The header's title opens a menu and its actions show on hover; a row's light takes the icon's place, and its end gives way to its hover actions.">
         <ListSpecimen />
       </Spec>
+      <Spec
+        title="SheetHeader, FeatureList, Prose"
+        code="<SheetHeader icon title subtitle> · <FeatureList items> · <Prose>"
+        note="A sheet's greeting, at --text-display once per screen; what something offers, one feature a line; and running text styled by its elements (h2, h3 with <small>, lists, code, links, hr), for release notes and help."
+      >
+        <Card>
+          <SheetHeader icon="sparkles" title="Connect an AI provider" subtitle="Magic widgets and notification summaries use it." />
+        </Card>
+        <Card>
+          <FeatureList
+            items={[
+              { icon: "rectangle.3.group", title: "One desk", description: "Terminals, agents, a browser and an editor as windows." },
+              { icon: "terminal", title: "Agents in your terminals", description: "The one that needs you is on top." },
+            ]}
+          />
+        </Card>
+        <Card>
+          <Prose>
+            <h3>
+              0.14.0 <small>5 October 2026</small>
+            </h3>
+            <p>Read PDFs in cmd, and four new built-in widgets.</p>
+            <Badge size="sm" tone="success">
+              Improved
+            </Badge>
+            <ul>
+              <li>
+                <strong>Built-in widgets.</strong> Commands lists what your terminals ran; <code>cmd open</code> opens files.
+              </li>
+              <li>
+                Window outlines no longer spill into the gap. <a href="#">Read more</a>
+              </li>
+            </ul>
+          </Prose>
+        </Card>
+      </Spec>
       <Spec title="CodeBlock" code="<CodeBlock tone maxHeight>">
         <CodeBlock>{`$ deno check data.ts\nCheck file:///widgets/weather/data.ts\nOK`}</CodeBlock>
         <CodeBlock tone="danger">{`error: Uncaught (in promise) TypeError: fetch failed\n    at data.ts:12:15`}</CodeBlock>
@@ -831,6 +870,7 @@ function OverlaysPage() {
   const [dialog, setDialog] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [divided, setDivided] = useState(false);
+  const [welcome, setWelcome] = useState(false);
   const [space, setSpace] = useState("work");
   const [msg, setMsg] = useState("");
   return (
@@ -883,36 +923,86 @@ function OverlaysPage() {
           </Popover>
         </Row>
       </Spec>
-      <Spec title="Dialog and ConfirmDialog" code="<Dialog title actions divided?> · <ConfirmDialog danger>">
+      <Spec
+        title="Dialog and ConfirmDialog"
+        code="<Dialog title actions aside height divided?> · <ConfirmDialog danger>"
+        note="Sheets share one shape: centred, the kit's title row (or a SheetHeader when it greets), the body's controls 12px apart, and a footer with the aside (status, a checkbox, PageDots) across from the actions."
+      >
         <Row>
           <Button onClick={() => setDialog(true)}>Send Feedback…</Button>
           <Button variant="danger" onClick={() => setConfirm(true)}>
             Delete Space…
           </Button>
           <Button onClick={() => setDivided(true)}>What's New</Button>
+          <Button onClick={() => setWelcome(true)}>Welcome</Button>
         </Row>
         <Dialog
           open={divided}
           onClose={() => setDivided(false)}
           title="What's New"
-          width={480}
+          width={560}
+          position="center"
           divided
+          aside="You're on cmd 0.14.1"
           actions={
             <Button variant="primary" onClick={() => setDivided(false)}>
               Done
             </Button>
           }
         >
-          {Array.from({ length: 12 }, (_, i) => (
-            <p key={i} style={{ margin: "0 0 10px" }}>
-              Release notes that scroll between the title and the actions, line {i + 1}.
-            </p>
-          ))}
+          <Prose>
+            {Array.from({ length: 4 }, (_, i) => (
+              <Fragment key={i}>
+                {i > 0 && <hr />}
+                <h3>
+                  0.14.{4 - i} <small>5 October 2026</small>
+                </h3>
+                <Badge size="sm" tone="accent">
+                  New
+                </Badge>
+                <ul>
+                  <li>
+                    <strong>PDF viewer.</strong> PDFs open in their own window, with search and <code>⌘F</code>.
+                  </li>
+                  <li>Release notes scroll between the title and the actions.</li>
+                </ul>
+              </Fragment>
+            ))}
+          </Prose>
+        </Dialog>
+        <Dialog
+          open={welcome}
+          onClose={() => setWelcome(false)}
+          width={480}
+          height={560}
+          position="center"
+          label="Welcome"
+          aside={<PageDots count={2} current={0} />}
+          actions={
+            <Button variant="primary" onClick={() => setWelcome(false)}>
+              Get Started
+            </Button>
+          }
+        >
+          <SheetHeader icon="command.square.fill" title="Welcome to cmd" subtitle="Terminals and coding agents, side by side." />
+          <FeatureList
+            items={[
+              { icon: "rectangle.3.group", title: "One desk", description: "Terminals, agents, a browser and an editor as windows." },
+              { icon: "wand.and.stars", title: "Magic widgets", description: "Ask for a window and an agent builds it." },
+            ]}
+          />
         </Dialog>
         <Dialog
           open={dialog}
           onClose={() => setDialog(false)}
           title="Send Feedback"
+          width={480}
+          position="center"
+          aside={
+            <Checkbox checked onChange={() => {}}>
+              Include version and system info
+            </Checkbox>
+          }
           actions={
             <>
               <Button onClick={() => setDialog(false)}>Cancel</Button>
@@ -922,13 +1012,8 @@ function OverlaysPage() {
             </>
           }
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Segmented fill value="idea" onChange={() => {}} options={["bug", "idea", "other"]} labels={{ bug: "Bug", idea: "Idea", other: "Other" }} />
-            <TextArea value={msg} onChange={setMsg} placeholder="What happened, or what would you like?" rows={4} />
-            <Checkbox checked onChange={() => {}}>
-              Include system info
-            </Checkbox>
-          </div>
+          <Segmented fill value="idea" onChange={() => {}} options={["bug", "idea", "other"]} labels={{ bug: "Bug", idea: "Idea", other: "Other" }} />
+          <TextArea value={msg} onChange={setMsg} placeholder="What happened, or what would you like?" rows={4} />
         </Dialog>
         <ConfirmDialog
           open={confirm}
