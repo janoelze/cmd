@@ -11,10 +11,13 @@
 // One delegated listener per document finds the nearest tipped ancestor of
 // the pointer (or keyboard focus). The first tip waits a moment; once one has
 // been shown, moving to a neighbour shows the next at once and the card glides
-// over (macOS behaves the same). A press, a key, a scroll or leaving the window
+// over (macOS behaves the same), unless it would travel far or change sides:
+// then it just appears at the new place. A press, a key, a scroll or leaving the window
 // hides it, and the pressed element stays quiet until the pointer leaves it.
 // Placement: the side with room (above in the lower part of the window, below
 // otherwise), flipped if it doesn't fit, shifted to stay inside the window.
+// Along a long anchor (a full-height resize edge) it sits at the pointer, not
+// the anchor's middle.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
@@ -30,6 +33,9 @@ const SHOW_DELAY = 450; // first tip
 const WARM = 400; // after a tip hides, the next shows without delay for this long
 const GAP = 6; // anchor to tip
 const MARGIN = 8; // tip to window edge
+const GLIDE_MAX = 160; // farther than this, a tip appears at its new place instead of gliding
+const LONG = 120; // anchors longer than this place their tip at the pointer along that axis
+const NEAR = 10; // half the pointer's extent, for that
 
 // Rich tips by element; the box is updated on each render of its owner.
 const rich = new WeakMap<Element, { current: RichTip }>();
@@ -43,9 +49,11 @@ interface State {
   glide: boolean;
   /** Bumped to re-render rich content whose owner re-rendered. */
   rev: number;
+  /** The pointer when the tip was asked for (none from the keyboard). */
+  point: { x: number; y: number } | null;
 }
 
-let state: State = { anchor: null, shown: false, glide: false, rev: 0 };
+let state: State = { anchor: null, shown: false, glide: false, rev: 0, point: null };
 const listeners = new Set<() => void>();
 const set = (next: Partial<State>) => {
   state = { ...state, ...next };
@@ -56,6 +64,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let candidate: Element | null = null; // under the pointer or focused, shown or waiting
 let hiddenAt = 0;
 let quiet: Element | null = null; // pressed: no tip until the pointer leaves it
+let pointer: { x: number; y: number } | null = null; // where the pointer entered the candidate
 
 function tipped(el: Element): boolean {
   if (rich.has(el)) return true;
@@ -74,7 +83,7 @@ const expanded = (el: Element) => el.getAttribute("aria-expanded") === "true";
 function show(el: Element) {
   clearTimeout(timer);
   if (expanded(el) || !el.isConnected) return;
-  set({ anchor: el, shown: true, glide: state.shown || performance.now() - hiddenAt < WARM });
+  set({ anchor: el, shown: true, glide: state.shown || performance.now() - hiddenAt < WARM, point: pointer });
 }
 
 function hide(cool = false) {
@@ -86,8 +95,9 @@ function hide(cool = false) {
   } else if (cool) hiddenAt = 0;
 }
 
-function enter(el: Element | null) {
+function enter(el: Element | null, at: { x: number; y: number } | null) {
   if (el === candidate) return;
+  pointer = at;
   if (!el || el === quiet) return hide();
   candidate = el;
   clearTimeout(timer);
@@ -102,7 +112,7 @@ function install(doc: Document) {
     (e) => {
       if (e.pointerType === "touch" || e.buttons) return; // not while dragging
       if (quiet && !quiet.contains(e.target as Node)) quiet = null;
-      enter(anchorOf(e.target));
+      enter(anchorOf(e.target), { x: e.clientX, y: e.clientY });
     },
     true,
   );
@@ -122,7 +132,7 @@ function install(doc: Document) {
   // Keyboard focus shows a tip too (only focus from the keyboard: :focus-visible).
   doc.addEventListener("focusin", (e) => {
     const el = anchorOf(e.target);
-    if (el && (e.target as Element).matches?.(":focus-visible")) enter(el);
+    if (el && (e.target as Element).matches?.(":focus-visible")) enter(el, null);
   });
   doc.addEventListener("focusout", (e) => {
     if (candidate && !candidate.contains(e.relatedTarget as Node | null) && !candidate.matches(":hover")) hide();
@@ -160,6 +170,7 @@ function Layer() {
   );
   const pos = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
+  const placed = useRef({ x: 0, y: 0 }); // where the card is, to tell a glide from a jump
   // What the card shows: the anchor's tip as of now. Kept while it fades out.
   const anchor = s.anchor;
   const r = anchor ? rich.get(anchor)?.current : undefined;
@@ -174,25 +185,38 @@ function Layer() {
       return;
     }
     const side = (anchor.getAttribute("data-tip-side") as TipSide | null) ?? r?.side;
+    let from = placed.current;
     let last = "";
     const place = (first: boolean) => {
-      const a = anchor.getBoundingClientRect();
+      const a = nearPoint(anchor.getBoundingClientRect(), s.point);
       const w = p.offsetWidth;
       const h = p.offsetHeight;
       const sig = `${a.left},${a.top},${a.width},${a.height},${w},${h},${innerWidth},${innerHeight}`;
       if (sig === last) return;
       last = sig;
       const at = placeTip(a, w, h, side);
-      p.style.transition = first && s.glide ? "" : "none";
+      // Glide only between neighbours; a long way off, appear there instead.
+      if (first) far = at.side !== c.dataset.side || Math.hypot(at.x - from.x, at.y - from.y) > GLIDE_MAX;
+      p.style.transition = first && s.glide && !far ? "" : "none";
       p.style.transform = `translate(${at.x}px, ${at.y}px)`;
       c.dataset.side = at.side;
+      from = at;
       // Grows from the point nearest the anchor's centre.
       const ox = Math.min(w, Math.max(0, a.left + a.width / 2 - at.x));
       const oy = Math.min(h, Math.max(0, a.top + a.height / 2 - at.y));
       c.style.transformOrigin = `${ox}px ${oy}px`;
     };
+    const wasShown = c.hasAttribute("data-shown");
+    let far = false;
     place(true);
-    if (!s.glide) void c.offsetWidth; // start from the hidden pose, then animate in
+    if (!s.glide && !wasShown) void c.offsetWidth; // start from the hidden pose, then animate in
+    else if (wasShown && far) {
+      // Was showing a long way off: start over from the hidden pose here.
+      c.style.transition = "none";
+      c.removeAttribute("data-shown");
+      void c.offsetWidth;
+      c.style.transition = "";
+    }
     c.setAttribute("data-shown", "");
     // Follow the anchor while shown (it can move, resize or disappear).
     let raf = requestAnimationFrame(function tick() {
@@ -202,7 +226,10 @@ function Layer() {
       place(false);
       raf = requestAnimationFrame(tick);
     });
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      placed.current = from;
+    };
   });
 
   return (
@@ -221,9 +248,26 @@ function Layer() {
   );
 }
 
+type Rect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
+
+/** Rect `a` narrowed to the pointer along any axis where it is long, so the tip sits by the pointer, not mid-anchor. */
+export function nearPoint(a: Rect, p: { x: number; y: number } | null): Rect {
+  if (!p) return a;
+  let { left, top, right, bottom } = a;
+  if (a.height > LONG) {
+    top = Math.max(a.top, Math.min(p.y - NEAR, a.bottom - 2 * NEAR));
+    bottom = top + Math.min(2 * NEAR, a.height);
+  }
+  if (a.width > LONG * 3) {
+    left = Math.max(a.left, Math.min(p.x - NEAR, a.right - 2 * NEAR));
+    right = left + Math.min(2 * NEAR, a.width);
+  }
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
 /** Where a w×h tip goes beside rect `a`: the preferred side if it fits, else the other, kept inside the window. */
 export function placeTip(
-  a: { left: number; top: number; right: number; bottom: number; width: number; height: number },
+  a: Rect,
   w: number,
   h: number,
   prefer: TipSide | undefined,
