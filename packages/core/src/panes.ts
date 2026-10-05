@@ -129,6 +129,8 @@ export interface PaneEvents {
 
 export interface PaneManagerOptions {
   socketPath: string;
+  /** Put first on PATH in shells: holds the `cmd` CLI (agents/hooks.ts). */
+  binDir?: string | null;
   /** Foreground poll interval; 0 disables polling (tests call pollForeground). */
   pollMs?: number;
   settings?: () => Settings;
@@ -168,6 +170,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   #backend: TermBackend;
   #panes = new Map<PaneId, Live>();
   #socketPath: string;
+  #binDir: string | null;
   #settings: () => Settings;
   #inspector: Inspector | null;
   #shellEnv: () => Record<string, string>;
@@ -183,6 +186,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     super();
     this.#backend = typeof backend === "function" ? new LocalBackend(backend) : backend;
     this.#socketPath = o.socketPath;
+    this.#binDir = o.binDir ?? null;
     this.#settings = o.settings ?? (() => DEFAULT_SETTINGS);
     this.#inspector = o.inspector ?? null;
     this.#shellEnv = o.shellEnv ?? (() => ({}));
@@ -272,8 +276,9 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       TERM_PROGRAM: "cmd",
       [ENV.socket]: this.#socketPath,
       [ENV.paneId]: id,
-      // Compatible with the installed ghostty-agents hook (see agents/statusfiles.ts).
+      // For the ghostty-agents fork's hook, and sandbox wrappers that pass only this (agents/statusfiles.ts).
       [STATUS_ENV]: id,
+      ...(this.#binDir ? { PATH: [this.#binDir, env.PATH].filter(Boolean).join(path.delimiter) } : {}),
       ...opts.env,
     });
 

@@ -107,12 +107,12 @@ To check a release by hand: `spctl --assess --type execute -vv /Applications/cmd
 The core detects agents in two ways, both ported from the ghostty-agents fork.
 
 - **Foreground process.** A small native helper (`packages/core/native/procinfo.c`, built by `pnpm install`) reads each terminal's foreground process with its full argv. Agents are found even behind wrappers such as `bash …/safehouse … claude`, `sandbox-exec … claude` and `node …/codex`. The process start time is used to ignore stale hook status.
-- **Hook status files.** Every pane is started with `GHOSTTY_AGENTS_SURFACE_ID=<pane id>`, so the hook already installed by the fork (`~/.claude/hooks/ghostty-agents-status.sh`) works unchanged. It writes `$TMPDIR/ghostty-agents/<pane id>/<Event>.json`, and the core watches that directory. The fork's `.zshrc` patch already passes the variable through safehouse.
+- **Hook status files.** At startup the core writes a hook script to `<state dir>/hooks/cmd-hook`, pointing into its own build (`packages/core/src/agents/hooks.ts`). Settings → Agents → Hooks (or `cmd hooks install`) puts it into each agent's config: every Claude config folder the transcript search knows, `$CODEX_HOME/hooks.json`, `~/.gemini/settings.json`. Gemini's event names are mapped to Claude's (`hookEventName` in `state.ts`). Installing replaces the fork's `ghostty-agents-status.sh` and older `cmd hook` entries. The script writes `$TMPDIR/cmd-agents/<pane id>/<Event>.json` (pane id from `CMD_PANE_ID`), and the core watches that directory. The fork's `$TMPDIR/ghostty-agents` and `GHOSTTY_AGENTS_SURFACE_ID` are still read and set while its hook may be around; a sandbox wrapper has to pass `CMD_PANE_ID` (or the old variable) and, for peer briefings, `CMD_SOCKET`.
   - State comes from the newest session only, and files older than the agent process are ignored.
   - The last prompt becomes the title fallback.
   - The current tool is shown only if its call came after the last prompt.
 
-`cmd hook <kind>` (talks to the socket; `cmd hooks claude` prints its config) remains an alternative for agents without the shell hook.
+Only SessionStart and prompts, and only while peer briefings (`agents.peers`) are on, go further: the script then pipes the payload to `agents/hook-main.ts` (plain `node:net`, run by the app's Electron as Node), which sends it to the core and prints the briefing. A flag file next to the script says whether they're on, so the script needs no core round trip otherwise. The core also writes `<state dir>/bin/cmd`, the CLI of its build, and puts that folder first on the PATH in panes; packaged builds stage the CLI into the runtime for it (`scripts/stage-runtime.mjs`). `cmd hook <kind>` (the CLI talking to the socket) still works for configs that have it.
 
 ## Notifications
 
@@ -150,7 +150,7 @@ The host key and route live in `$CMD_HOME/remote/host.json`, paired devices and 
 **Done**
 - Core: PTYs mirrored into headless terminals, OSC 0/2/7/9/777/133 parsing, launch commands typed once the shell is ready
 - Terminals survive core restarts (PTY host) and come back after reboots and crashes, agents resumed
-- Agents: detected from the foreground process's full argv (through wrappers), state from Claude/Codex hooks, Claude subagents as virtual children
+- Agents: detected from the foreground process's full argv (through wrappers), state from Claude/Codex/Gemini hooks (installed from Settings → Agents), Claude subagents as virtual children
 - Host API: spawn, send, read, wait, kill (`--tree`)
 - Transcript search (SQLite, indexed in a worker), resume from the palette and sidebar
 - Settings and SQLite persistence
@@ -162,5 +162,3 @@ The host key and route live in `$CMD_HOME/remote/host.json`, paired devices and 
 
 **Next**
 - Plugin host (routines and monitors in the core)
-- Codex hook install
-- Bundle the CLI with the app

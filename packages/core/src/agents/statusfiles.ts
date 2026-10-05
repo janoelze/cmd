@@ -1,25 +1,34 @@
-// Agent hook status files, in the format of the ghostty-agents fork, so the hook
-// that is already installed (~/.claude/hooks/ghostty-agents-status.sh) works
-// unchanged:
+// Agent hook status files, written by cmd's hook script (hooks.ts, installed from
+// Settings → Agents or `cmd hooks install`):
 //
-//   $TMPDIR/ghostty-agents/<pane-id>/<HookEventName>.json
+//   $TMPDIR/cmd-agents/<pane-id>/<HookEventName>.json
 //   = {"agent": "claude", "ts": <unix s>, "event": <raw hook payload>}
 //
-// Every pane is started with GHOSTTY_AGENTS_SURFACE_ID=<pane-id>. The hook is a
-// tiny shell script that only writes files, so it is fast (runs on every tool
-// call), works inside sandboxes, and works while the core is down: status is
-// re-derived from the whole file set whenever it changes.
+// Every pane is started with CMD_PANE_ID=<pane-id>. The hook is a tiny shell
+// script that only writes files, so it is fast (runs on every tool call), works
+// inside sandboxes, and works while the core is down: status is re-derived from
+// the whole file set whenever it changes.
+//
+// The ghostty-agents fork's hook (ghostty-agents-status.sh) writes the same files
+// under $TMPDIR/ghostty-agents, keyed by GHOSTTY_AGENTS_SURFACE_ID; that folder is
+// still read until installing cmd's hook has replaced it everywhere.
 
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import type { AgentState, PaneId } from "@cmd/protocol";
-import { describeTool } from "./state.ts";
+import { describeTool, hookEventName } from "./state.ts";
 
+/** The fork's pane variable, still set for its hook (and sandbox wrappers that pass only it). */
 export const STATUS_ENV = "GHOSTTY_AGENTS_SURFACE_ID";
 
 export function statusRoot(): string {
+  return path.join(os.tmpdir(), "cmd-agents");
+}
+
+/** Where the fork's hook writes the same files. */
+export function legacyStatusRoot(): string {
   return path.join(os.tmpdir(), "ghostty-agents");
 }
 
@@ -92,7 +101,7 @@ function readEvents(dir: string): Ev[] {
       if (!root.event || typeof root.event !== "object") continue;
       // mtime has sub-second precision; several hooks often fire within one second.
       const date = fs.statSync(file).mtimeMs || (root.ts ?? 0) * 1000;
-      out.push({ name: str(root.event.hook_event_name) ?? n.slice(0, -5), agent: str(root.agent), date, payload: root.event });
+      out.push({ name: hookEventName(str(root.agent), str(root.event.hook_event_name) ?? n.slice(0, -5)), agent: str(root.agent), date, payload: root.event });
     } catch {
       // half-written or foreign file
     }

@@ -34,8 +34,8 @@ usage: cmd <command> [options]
   notify <message…> [--title T] [--global]
                                       a notification; inside cmd it comes from (and marks) this pane
   events [--output]                   stream core events as NDJSON
-  hook <kind>                         hook entry point: reads the hook payload on stdin
-  hooks <kind>                        print hook config to add to the agent's settings
+  hooks [--json]                      agent configs (Claude Code, Codex, Gemini) and whether cmd's hook is in them
+  hooks install|remove [AGENT|FILE]   add cmd's hook to them (all by default), or take it out
   open <path|url> [--kind K] [--types] open in a cmd window (folder, text, browser, …);
                                       --types lists window types
   search <query…> [--json] [--limit N]  search past agent sessions
@@ -118,7 +118,6 @@ async function main(): Promise<number> {
     return 0;
   }
   if (cmd === "hook") return hook(pos[0] ?? "claude");
-  if (cmd === "hooks") return printHooks(pos[0] ?? "claude");
   if (cmd === "magic") return magicCommand(argv.slice(1));
   if (cmd === "widget") return widgetCommand(argv.slice(1));
 
@@ -139,6 +138,23 @@ async function run({ client, closed }: Connection): Promise<number> {
       const [panes, agents] = await Promise.all([client.call("pane.list", {}), client.call("agent.list", {})]);
       if (opt.json) return out({ panes, agents });
       printTree(panes, agents);
+      return 0;
+    }
+    case "hooks": {
+      const sub = pos[0];
+      let targets = await client.call("hooks.status", {});
+      if (sub === "install" || sub === "remove") {
+        const which = pos[1];
+        const picked = targets.filter((t) => !which || t.agent === which || t.file === path.resolve(which));
+        if (!picked.length) return fail(which ? `no agent config matches ${which}` : "no agent configs found");
+        for (const t of picked) targets = await client.call(sub === "install" ? "hooks.install" : "hooks.remove", { file: t.file });
+      } else if (sub) {
+        return fail(`unknown: hooks ${sub}`);
+      }
+      if (opt.json) return out(targets);
+      const label = { installed: "installed", missing: "not installed", legacy: "old hook (ghostty-agents or cmd hook)", elsewhere: "another cmd's hook" };
+      for (const t of targets) console.log(`${t.title.padEnd(12)} ${label[t.state].padEnd(14)} ${t.file}`);
+      if (targets.some((t) => t.agent === "codex" && t.state === "installed")) console.log("\nCodex runs a new hook only once you approve it: run /hooks in Codex.");
       return 0;
     }
     case "identify": {
@@ -364,33 +380,6 @@ async function hook(kind: string): Promise<number> {
   return 0;
 }
 
-function printHooks(kind: string): number {
-  const self = process.argv[1]!.replace(/src\/main\.ts$/, "bin/cmd");
-  const events = [
-    "SessionStart",
-    "SessionEnd",
-    "UserPromptSubmit",
-    "PreToolUse",
-    "PostToolUse",
-    "PermissionRequest",
-    "Notification",
-    "Stop",
-    "StopFailure",
-    "SubagentStart",
-    "SubagentStop",
-    "PreCompact",
-  ];
-  const entry = (matcher?: string) => ({
-    ...(matcher ? { matcher } : {}),
-    hooks: [{ type: "command", command: `${self} hook ${kind}`, timeout: 5 }],
-  });
-  const hooks = Object.fromEntries(
-    events.map((e) => [e, [entry(e.endsWith("ToolUse") ? "*" : undefined)]]),
-  );
-  const file = kind === "codex" ? "~/.codex/hooks.json" : "~/.claude/settings.json";
-  console.error(`# merge into ${file} → "hooks" (sandbox wrappers must pass ${ENV.paneId} and ${ENV.socket})`);
-  return out({ hooks });
-}
 
 async function resolveAgent(client: Connection["client"], prefix: string): Promise<string> {
   const agents = await client.call("agent.list", {});

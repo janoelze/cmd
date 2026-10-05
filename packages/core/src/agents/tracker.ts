@@ -26,6 +26,8 @@ export interface TrackerOptions {
   settings?: () => Settings;
   /** Hook status directory to watch (statusRoot()); null disables. */
   statusRoot?: string | null;
+  /** Also read this one (legacyStatusRoot(): the fork's hook), after statusRoot. */
+  legacyStatusRoot?: string | null;
   /** A launched agent whose process never shows up within this time is dropped. */
   startTimeoutMs?: number;
   /** How to resume past sessions per agent (default: the built-ins). */
@@ -53,9 +55,10 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #store: Store | null;
   #settings: () => Settings;
   #statusRoot: string | null;
+  #statusRoots: string[];
   #startTimeoutMs: number;
   #sources: TranscriptSources;
-  #watcher: StatusWatcher | null = null;
+  #watchers: StatusWatcher[] = [];
   #backstop: NodeJS.Timeout | undefined;
 
   constructor(panes: PaneManager, o: TrackerOptions = {}) {
@@ -64,12 +67,16 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     this.#store = o.store ?? null;
     this.#settings = o.settings ?? (() => DEFAULT_SETTINGS);
     this.#statusRoot = o.statusRoot ?? null;
+    this.#statusRoots = this.#statusRoot ? [this.#statusRoot, ...(o.legacyStatusRoot ? [o.legacyStatusRoot] : [])] : [];
     this.#startTimeoutMs = o.startTimeoutMs ?? 15_000;
     this.#sources = o.sources ?? registerBuiltinSources(new TranscriptSources());
     if (this.#statusRoot) {
-      this.#watcher = new StatusWatcher(this.#statusRoot);
-      this.#watcher.on("changed", (paneId) => this.applyStatus(paneId));
-      this.#watcher.start();
+      for (const root of this.#statusRoots) {
+        const w = new StatusWatcher(root);
+        w.on("changed", (paneId) => this.applyStatus(paneId));
+        w.start();
+        this.#watchers.push(w);
+      }
       // FSEvents can drop events; re-read agent panes periodically as a backstop.
       this.#backstop = setInterval(() => {
         for (const a of this.#agents.values()) if (a.paneId) this.applyStatus(a.paneId);
@@ -79,7 +86,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     panes.on("foreground", (paneId, fg) => this.#onForeground(paneId, fg));
     panes.on("removed", (paneId) => {
       this.#onPaneRemoved(paneId);
-      if (this.#statusRoot) removeStatus(paneId, this.#statusRoot);
+      for (const root of this.#statusRoots) removeStatus(paneId, root);
     });
     panes.on("osc", (paneId, ev) => {
       if (ev.type !== "notify") return;
@@ -126,7 +133,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
 
   close(): void {
     clearInterval(this.#backstop);
-    this.#watcher?.close();
+    for (const w of this.#watchers) w.close();
   }
 
   #onForeground(paneId: PaneId, fg: Foreground): void {
@@ -156,7 +163,9 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (!this.#statusRoot || !this.#panes.get(paneId)) return;
     const fg = this.#panes.foreground(paneId);
     // Ignore status written before the current agent process started.
-    const status = readStatus(paneId, fg?.startedAt ? fg.startedAt - 500 : 0, this.#statusRoot);
+    const notBefore = fg?.startedAt ? fg.startedAt - 500 : 0;
+    let status = null;
+    for (const root of this.#statusRoots) if ((status = readStatus(paneId, notBefore, root))) break;
     if (!status) return;
     let agent = this.#byPane(paneId);
     if (!agent) {

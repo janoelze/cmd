@@ -22,6 +22,12 @@ export function nativeSession(kind: AgentKind, sessionId: string): { claudeSessi
   return kind === "codex" ? { codexThreadId: sessionId } : { claudeSessionId: sessionId };
 }
 
+/** Gemini CLI's names for the hook events Claude and Codex share; the rest are the same or unused. */
+const GEMINI_EVENTS: Record<string, string> = { BeforeAgent: "UserPromptSubmit", AfterAgent: "Stop", BeforeTool: "PreToolUse", AfterTool: "PostToolUse", PreCompress: "PreCompact" };
+
+/** The Claude/Codex name of an agent's hook event. */
+export const hookEventName = (kind: string | null, event: string): string => (kind === "gemini" && GEMINI_EVENTS[event]) || event;
+
 export function applyHook(kind: AgentKind, event: string, p: Payload): StateChange {
   const change: StateChange = {};
   const sessionId = str(p.session_id);

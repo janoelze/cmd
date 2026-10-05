@@ -5,10 +5,12 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { Agent, AgentId, AppWindow, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WindowId } from "@cmd/protocol";
 import { lineSplitter } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
+import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./agents/hooks.ts";
+import { hookEventName } from "./agents/state.ts";
 import { NotificationCenter } from "./notifications.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { restoreSession } from "./restore.ts";
@@ -16,7 +18,7 @@ import type { TermBackend } from "./terminals/types.ts";
 import { ProcessSampler, ResourceMonitor, type ProcSampler, type TreeSampler } from "./resources.ts";
 import type { SearchService } from "./search/service.ts";
 import { registerBuiltinSources } from "./search/builtin.ts";
-import { TranscriptSources } from "./search/sources.ts";
+import { locateContext, TranscriptSources } from "./search/sources.ts";
 import { listDir, parseOverrides, readText, resolvePaths, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { gitStatus } from "./git.ts";
@@ -64,6 +66,8 @@ export interface CoreOptions {
   procSampler?: ProcSampler | null;
   /** Hook status directory (statusRoot()); null disables file-based hooks. */
   statusRoot?: string | null;
+  /** The fork's (legacyStatusRoot()), also read. */
+  legacyStatusRoot?: string | null;
   /**
    * Transcript search (runs its own indexing worker) for the current settings and
    * transcript sources; called again when search.* changes. Returns null when search is off.
@@ -111,6 +115,8 @@ export class Core {
   /** Agents already counted for usage stats. */
   #countedAgents = new Set<AgentId>();
   #startedAt = Date.now();
+  /** cmd's agent hook files, when this core writes them (a state dir and status files). */
+  #hooks: HookFiles | null = null;
   /** Listening servers: one, plus one per time the socket file was put back (the old ones keep their clients). */
   #servers: net.Server[] = [];
   /** Open socket connections, cut on close so a lingering client can't hold it up. */
@@ -148,7 +154,19 @@ export class Core {
     registerBuiltins(this.windowTypes);
     this.transcripts = registerBuiltinSources(new TranscriptSources());
     const overrides = () => parseOverrides(this.settings.settings["open.handlers"]);
+    // cmd's hook script and CLI wrapper for agents, rewritten for this build (agents/hooks.ts).
+    if (opts.stateDir && opts.statusRoot) {
+      const files = hookFiles(opts.stateDir);
+      try {
+        writeHookFiles(files);
+        this.#hooks = files;
+        this.settings.bind(["agents.peers"], () => setBriefingFlag(files, this.settings.settings["agents.peers"]));
+      } catch (err) {
+        log.error(`could not write the agent hook: ${(err as Error).message}`);
+      }
+    }
     this.panes = new PaneManager(opts.terminals, {
+      binDir: this.#hooks?.bin ?? null,
       socketPath: opts.socketPath,
       pollMs: opts.pollMs,
       settings,
@@ -166,7 +184,7 @@ export class Core {
         log.error(`could not write shell rules: ${(err as Error).message}`);
       }
     });
-    this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null, sources: this.transcripts });
+    this.agents = new AgentTracker(this.panes, { store: this.store, settings, statusRoot: opts.statusRoot ?? null, legacyStatusRoot: opts.legacyStatusRoot ?? null, sources: this.transcripts });
     this.notifications = new NotificationCenter(this.panes, this.agents, settings);
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler, 2000, () => this.#subscribers.size > 0) : null;
@@ -297,9 +315,20 @@ export class Core {
     "agent.kill": (p) => ({ killed: this.agents.kill(p.agentId, p.tree) }),
     "agent.markSeen": (p) => (this.agents.markSeen(p.agentId), null),
     "hook.ingest": (p) => {
-      const agentId = this.agents.ingestHook(p.paneId, p.agent, p.event, p.payload)?.id ?? null;
-      const context = agentId ? this.agents.peerBriefing(agentId, p.event) : null;
+      const event = hookEventName(p.agent, p.event);
+      const agentId = this.agents.ingestHook(p.paneId, p.agent, event, p.payload)?.id ?? null;
+      const context = agentId ? this.agents.peerBriefing(agentId, event) : null;
       return context ? { agentId, context } : { agentId };
+    },
+    "hooks.status": () => this.#hookTargets(),
+    "hooks.install": (p) => {
+      const t = this.#hookTarget(p.file);
+      installHooks(t.agent, t.file, this.#hooks!.script);
+      return this.#hookTargets();
+    },
+    "hooks.remove": (p) => {
+      removeHooks(this.#hookTarget(p.file).file);
+      return this.#hookTargets();
     },
     identify: (p) => {
       const pane = this.panes.get(p.paneId);
@@ -422,6 +451,19 @@ export class Core {
       ui: this.store.uiState(),
     }),
   };
+
+  #hookTargets(): HookTarget[] {
+    if (!this.#hooks) return [];
+    const script = this.#hooks.script;
+    return hookTargets(this.transcripts, locateContext()).map((t) => ({ ...t, state: hookState(t.agent, t.file, script) }));
+  }
+
+  /** Only the agent configs hooks.status lists can be written. */
+  #hookTarget(file: string): HookTarget {
+    const t = this.#hookTargets().find((x) => x.file === file);
+    if (!t) throw new Error(`not an agent config cmd installs hooks into: ${file}`);
+    return t;
+  }
 
   #restartSearch(): void {
     const gen = ++this.#searchGen;

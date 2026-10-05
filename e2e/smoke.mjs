@@ -861,6 +861,15 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(fn(), what);
   };
 
+  // Agents → Hooks: the fixture's Claude config, and Install writes cmd's hook into it.
+  await page("Agents");
+  const claudeRow = sw.locator(".ui-row", { has: sw.locator(".ui-row-title", { hasText: "Claude Code" }) });
+  await claudeRow.locator("button", { hasText: "Install" }).click();
+  await claudeRow.locator("button", { hasText: "Remove" }).waitFor();
+  const claudeSettings = JSON.parse(fs.readFileSync(path.join(transcripts, ".claude", "settings.json"), "utf8"));
+  check(JSON.stringify(claudeSettings.hooks?.PreToolUse ?? []).includes("/hooks/cmd-hook' claude"), "Settings → Agents installs cmd's hook into the Claude config");
+  await sw.screenshot({ path: path.join(shots, "5-settings-agents.png") });
+
   await page("About");
   await sw.waitForSelector(".ui-row:has-text('Status') .sw-value");
   const status = await row("Status").locator(".sw-value").textContent();

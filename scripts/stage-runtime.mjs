@@ -21,15 +21,15 @@ for (const p of ["package.json", "src", "shell", "widget-runtime"]) copy(`packag
 // package per entry point that re-exports it from there (Node won't strip types
 // from .ts files under node_modules). Plain files, so they survive packaging on
 // every platform, unlike a symlink (Windows).
-function stageWorkspacePackage(name) {
+function stageWorkspacePackage(name, into = modules) {
   const dir = `packages/${name.slice("@cmd/".length)}`;
   for (const p of ["package.json", "src"]) copy(`${dir}/${p}`, `${dir}/${p}`);
   const entries = JSON.parse(fs.readFileSync(path.join(root, dir, "package.json"), "utf8")).exports;
-  const shim = path.join(modules, name);
+  const shim = path.join(into, name);
   fs.mkdirSync(shim, { recursive: true });
   const exports = {};
   for (const [key, target] of Object.entries(entries)) {
-    const file = `${key === "." ? "index" : key.slice(2)}.js`;
+    const file = `${key === "." ? "index" : key.slice(2).replaceAll("/", "-")}.js`; // flat: one level deep, like the path below
     exports[key] = `./${file}`;
     fs.writeFileSync(path.join(shim, file), `export * from "../../../../${path.basename(dir)}/${target.replace(/^\.\//, "")}";\n`);
   }
@@ -37,6 +37,14 @@ function stageWorkspacePackage(name) {
 }
 const corePkg = JSON.parse(fs.readFileSync(path.join(root, "packages/core/package.json"), "utf8"));
 for (const name of Object.keys(corePkg.dependencies)) if (name.startsWith("@cmd/")) stageWorkspacePackage(name);
+
+// The CLI, for the `cmd` the core puts on PATH in panes (agents/hooks.ts). Its own
+// node_modules: shims for the workspace packages (the core's source is already
+// staged), and its other dependencies.
+const cliModules = path.join(out, "packages/cli/node_modules");
+for (const p of ["package.json", "src"]) copy(`packages/cli/${p}`, `packages/cli/${p}`);
+const cliPkg = JSON.parse(fs.readFileSync(path.join(root, "packages/cli/package.json"), "utf8"));
+for (const name of Object.keys(cliPkg.dependencies)) if (name.startsWith("@cmd/")) stageWorkspacePackage(name, cliModules);
 
 // The native helper (macOS; gitignored, built by postinstall). Without it the
 // core falls back to process names (no CPU/memory sampling): the Windows case.
@@ -65,15 +73,16 @@ function depsOf(pkgDir) {
   return [...Object.keys(pkg.dependencies ?? {}), ...peers];
 }
 
-function stageDeps(pkgDir) {
+function stageDeps(pkgDir, into = modules) {
   for (const name of depsOf(pkgDir)) {
-    if (name.startsWith("@cmd/") || fs.existsSync(path.join(modules, name))) continue;
+    if (name.startsWith("@cmd/") || fs.existsSync(path.join(into, name))) continue;
     const src = findPackage(pkgDir, name);
-    fs.cpSync(src, path.join(modules, name), { recursive: true, dereference: true, filter: (f) => path.basename(f) !== "node_modules" });
-    stageDeps(src);
+    fs.cpSync(src, path.join(into, name), { recursive: true, dereference: true, filter: (f) => path.basename(f) !== "node_modules" });
+    stageDeps(src, into);
   }
 }
 stageDeps(path.join(root, "packages/core"));
+stageDeps(path.join(root, "packages/cli"), cliModules);
 
 // node-pty: keep only this platform's prebuilds and what loads them.
 const pty = path.join(modules, "node-pty");

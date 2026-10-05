@@ -11,7 +11,7 @@ import { USAGE_URL } from "./usage.ts";
 import { nodePtyFactory } from "./panes.ts";
 import { adoptLoginPath } from "./loginpath.ts";
 import { ProcInfo } from "./agents/procinfo.ts";
-import { statusRoot } from "./agents/statusfiles.ts";
+import { legacyStatusRoot, statusRoot } from "./agents/statusfiles.ts";
 import { locateContext } from "./search/sources.ts";
 import { SearchService } from "./search/service.ts";
 import { connectHost } from "./terminals/remote.ts";
@@ -84,6 +84,7 @@ const core = new Core({
   sampler: procinfo.available ? (pids) => procinfo.trees(pids) : null,
   procSampler: procinfo.available ? (pids) => procinfo.procs(pids) : null,
   statusRoot: statusRoot(),
+  legacyStatusRoot: legacyStatusRoot(),
   build,
   stateDir: home,
   // Release builds started by the app; anything else only when asked to.

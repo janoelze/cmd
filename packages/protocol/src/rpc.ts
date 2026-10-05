@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WindowId, WindowTypeInfo } from "./model.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { MagicModel, MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
@@ -119,6 +119,11 @@ export interface Methods {
     /** context: text for the hook to hand the agent (peer briefings, `agents.peers`). */
     result: { agentId: AgentId | null; context?: string };
   };
+  /** Agent configs cmd's hook can go into, and whether it is there (agents/hooks.ts). */
+  "hooks.status": { params: {}; result: HookTarget[] };
+  /** file: one of hooks.status's. */
+  "hooks.install": { params: { file: string }; result: HookTarget[] };
+  "hooks.remove": { params: { file: string }; result: HookTarget[] };
   "identify": { params: { paneId: PaneId }; result: { pane: Pane | null; agent: Agent | null } };
 
   "settings.get": { params: {}; result: SettingsSnapshot };

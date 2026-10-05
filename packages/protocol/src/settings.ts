@@ -320,7 +320,7 @@ export const SETTINGS_SCHEMA = {
     title: "Tell agents about each other (beta)",
     type: "boolean",
     default: false,
-    description: "When an agent starts in a repository where other agents are working (in any of its worktrees), tell it who they are, where and on what, and that it can message them with `cmd send`. Told again when agents come or go. Needs cmd's hook (`cmd hooks claude`).",
+    description: "When an agent starts in a repository where other agents are working (in any of its worktrees), tell it who they are, where and on what, and that it can message them with `cmd send`. Told again when agents come or go. Needs cmd's hook in the agent (Hooks, above).",
   },
   "agents.copilot.command": { title: "Copilot CLI command", code: true, type: "string", default: "copilot", description: "Command used to resume GitHub Copilot CLI sessions." },
 

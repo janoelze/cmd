@@ -31,6 +31,7 @@ import { Button, Callout, EmptyState, FormRow, FormSection, IconButton, NumberFi
 import { useSettings } from "./useSettings.ts";
 import { About } from "./About.tsx";
 import { Remote } from "./Remote.tsx";
+import { AgentHooks } from "./AgentHooks.tsx";
 import { allThemes } from "@cmd/ui/themes";
 import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page as SettingsPage } from "./layout.ts";
 
@@ -170,7 +171,7 @@ export function SettingsWindow() {
       <>
         {p.sections.map((s, i) => {
           const items = s.items.filter((it: Item) => itemShown(it, snap.settings));
-          return (
+          const section = (
             <FormSection key={s.title ?? i} title={s.title}>
               {items.map((it) => (
                 <ItemRow key={itemKey(it)} k={itemKey(it)} ctx={ctx} />
@@ -178,6 +179,9 @@ export function SettingsWindow() {
               {s.items.some((it) => itemKey(it) === "search.enabled") && <IndexStatusRow status={search} enabled={snap.settings["search.enabled"]} />}
             </FormSection>
           );
+          // cmd's hook goes before what needs it (peer briefings).
+          if (s.items.some((it) => itemKey(it) === "agents.peers")) return [<AgentHooks key="hooks" />, section];
+          return section;
         })}
         <div className="sw-page-foot">
           <Button disabled={!changed.length} onClick={() => changed.forEach(ctx.reset)}>

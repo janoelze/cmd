@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install
 
 Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications. cmd updates itself in the background and installs the update when you quit; your terminals keep running. Settings → Updates switches to notify-only or off.
 
-**Agent state.** cmd recognises a running agent by its process alone. To also see what it's doing (working, waiting for input, done), add cmd's hook: `cmd hooks claude` (or `codex`) prints the snippet for `~/.claude/settings.json` (or `~/.codex/hooks.json`).
+**Agent state.** cmd recognises a running agent by its process alone. To also see what it's doing (working, waiting for input, done), install cmd's hook in Settings → Agents → Hooks (or `cmd hooks install`). It goes into Claude Code (every config folder cmd finds), Codex and Gemini CLI. Codex runs a new hook only after you approve it once with `/hooks`.
 
 ## Features
 
@@ -107,11 +107,11 @@ cmd kill <agent> --tree
 cmd notify "deploy finished"         # marks this terminal inside cmd
 cmd events                           # NDJSON event stream
 cmd settings                         # list; `set KEY VALUE`, `reset KEY`, `path`
-cmd hooks claude                     # the hook config for ~/.claude/settings.json
+cmd hooks                            # agent configs and whether cmd's hook is in them; `install`, `remove`
 cmd magic "how full is my disk"      # build a Magic widget without the app
 ```
 
-The CLI isn't bundled with the app yet. Run it from a checkout ([DEVELOPMENT.md](DEVELOPMENT.md)) and link it onto your PATH: `ln -s $PWD/packages/cli/bin/cmd ~/bin/cmd`.
+`cmd` is on the PATH in cmd's terminals. To use it elsewhere, link `~/Library/Application Support/cmd/bin/cmd` onto your PATH, or run it from a checkout ([DEVELOPMENT.md](DEVELOPMENT.md)).
 
 ## Configuration
 

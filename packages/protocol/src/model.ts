@@ -171,6 +171,16 @@ export interface Agent {
   createdAt: number;
 }
 
+/** An agent config file cmd's hook can be installed into (Settings → Agents → Hooks). */
+export interface HookTarget {
+  agent: AgentKind;
+  /** "Claude Code", … */
+  title: string;
+  file: string;
+  /** elsewhere: another cmd's hook (a dev build); legacy: the ghostty-agents fork's or `cmd hook`. */
+  state: "installed" | "missing" | "legacy" | "elsewhere";
+}
+
 // ── windows ──────────────────────────────────────────────
 
 /**
