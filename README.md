@@ -81,6 +81,7 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 | ⌘K | command palette: `>` commands, `@` sessions, `?` past sessions |
 | ⌥⌘1 / 2 / 3 / 4 | focus / grid / strip / canvas |
 | ⌘↩ | focus on the selected window, and back |
+| ⌥⌘+ / ⌥⌘− | strip: make the selected window wider / narrower |
 | ⌃⌘J | next session that needs you |
 | ⌥⌘← / ⌥⌘→, ⌘1–9 | previous / next session, select a session |
 | ⌘W / ⇧⌘W | close the terminal (asks if something runs) / close the window |

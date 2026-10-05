@@ -68,6 +68,8 @@ export const COMMANDS = spec([
   { id: "view.canvasFit", label: "Zoom Canvas to Fit", keys: ["Shift+Cmd+1"] },
   { id: "view.canvasZoomWindow", label: "Zoom Canvas to Window", keys: ["Shift+Cmd+2"] },
   { id: "view.cycleWidth", label: "Cycle Window Width", keys: ["Ctrl+Cmd+R"] },
+  { id: "view.widen", label: "Wider Window", keys: ["Alt+Cmd+Plus", "Alt+Cmd+="] },
+  { id: "view.narrow", label: "Narrower Window", keys: ["Alt+Cmd+-"] },
   { id: "view.toggleEdit", label: "Toggle Preview / Edit", keys: ["Cmd+E"] },
   // Sidebars (docs/21-sidebars.md). view.sidebar keeps its id: keybindings.json uses it.
   { id: "view.sidebar", label: "Show Left Sidebar", keys: ["Ctrl+Cmd+S"], checkable: "checkbox" },

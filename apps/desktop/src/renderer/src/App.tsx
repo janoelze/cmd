@@ -32,7 +32,7 @@ import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, isWidget, nextAfterClose, pushHistory, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
 import { getSpaceView, getState, onNotification, onWindowFocus, setSpaceView, setUsageShown, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
-import { DEFAULT_FRACTION, nextPreset, withWidth } from "./strip.ts";
+import { DEFAULT_FRACTION, MIN_WIDTH, nextPreset, stepFraction, withWidth } from "./strip.ts";
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
 import type { Rect } from "./layouts.ts";
 import { windowActions } from "./windowActions.ts";
@@ -339,6 +339,12 @@ export function App() {
     if (s.panes.has(selected)) terminals.requestFind(selected, r);
     else windowActions(selected)?.find?.(r);
   };
+  // ⌥⌘+ / ⌥⌘−: the selected window's strip width in steps (the floor roughly MIN_WIDTH, so ⌥⌘+ always shows).
+  const stepWidth = (dir: 1 | -1) => {
+    if (!selected) return;
+    if (mode !== "strip") setMode("strip");
+    setStripWidth(selected, stepFraction(stripWidths[selected] ?? DEFAULT_FRACTION, dir, MIN_WIDTH / window.innerWidth));
+  };
   const handlers: Record<CommandId, () => void> = {
     "app.settings": () => cmd.openSettings(),
     "app.setup": () => (setPalette(false), showSetup()),
@@ -420,6 +426,8 @@ export function App() {
       if (mode !== "strip") setMode("strip");
       setStripWidth(selected, nextPreset(stripWidths[selected] ?? DEFAULT_FRACTION));
     },
+    "view.widen": () => stepWidth(1),
+    "view.narrow": () => stepWidth(-1),
     "view.sidebar": () => toggleSide("left"),
     "view.rightSidebar": () => toggleSide("right"),
     "window.dockLeft": () => selected && setDocks((d) => dock(d, selected, "left")),

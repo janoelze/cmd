@@ -114,6 +114,8 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("view.canvasFit"),
         ...i("view.canvasZoomWindow"),
         ...i("view.cycleWidth"),
+        ...i("view.widen"),
+        ...i("view.narrow"),
         ...i("view.toggleEdit"),
         sep,
         ...i("view.sidebar"),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampWidth, layout, maxWidth, nextPreset, revealOffset, widthFor, withWidth } from "../src/renderer/src/strip.ts";
+import { clampWidth, layout, maxWidth, nextPreset, revealOffset, stepFraction, widthFor, withWidth } from "../src/renderer/src/strip.ts";
 
 const G = 8;
 const VP = 1000;
@@ -28,6 +28,17 @@ describe("strip geometry", () => {
     expect(nextPreset(0.5)).toBe(0.618);
     expect(nextPreset(1)).toBe(0.382);
     expect(nextPreset(0.45)).toBe(0.5);
+  });
+
+  it("steps widths by tenths, snapping odd ones to the grid", () => {
+    expect(stepFraction(0.5, 1)).toBe(0.6);
+    expect(stepFraction(0.5, -1)).toBe(0.4);
+    expect(stepFraction(0.618, 1)).toBe(0.7);
+    expect(stepFraction(0.618, -1)).toBe(0.6);
+    expect(stepFraction(1, 1)).toBe(1);
+    expect(stepFraction(0.1, -1)).toBe(0.1);
+    expect(stepFraction(0.4, -1, 0.25)).toBe(0.3);
+    expect(stepFraction(0.3, -1, 0.25)).toBe(0.25);
   });
 });
 
