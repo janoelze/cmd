@@ -24,7 +24,7 @@ interface Props {
   camera: Camera;
   onCamera: (cam: Camera) => void;
   onDeselect: () => void;
-  /** Canvas: px the sidebars cover (WindowsView). */
+  /** Canvas and strip: px the sidebars cover (WindowsView). */
   insets: { left: number; right: number };
 }
 

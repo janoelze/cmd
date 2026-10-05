@@ -732,8 +732,8 @@ export function App() {
     >
       <TopBar spaceBar={spaceBar} mode={mode} run={run} onNew={newMenu} />
       <NavigatorContext.Provider value={navigatorData}>
-        {/* Canvas: the canvas runs under the sidebars (docs/21-sidebars.md). */}
-        <div className={`stage${mode === "canvas" ? " canvas" : ""}`}>
+        {/* Canvas and strip run under the sidebars (docs/21-sidebars.md). */}
+        <div className={`stage${mode === "canvas" || mode === "strip" ? " under" : ""}`}>
           {SIDES.map((side) => {
             const row = docks[side].hidden ? undefined : allFlat.find((r) => windowIdOf(r) === docks[side].id);
             return row ? (

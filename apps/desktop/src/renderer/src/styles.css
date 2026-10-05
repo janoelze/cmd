@@ -98,9 +98,9 @@ kbd {
 /* All in row 1: auto-placement would move an item whose column comes before the last one's to a new row. */
 .stage > * { grid-row: 1; }
 .stage > .main { grid-column: 2; }
-/* Canvas: one canvas under everything; the sidebars float over it. */
-.stage.canvas > .main { grid-column: 1 / -1; }
-.stage.canvas > .dock { z-index: 1; }
+/* Canvas and strip: the workspace runs under the sidebars, which float over it. */
+.stage.under > .main { grid-column: 1 / -1; }
+.stage.under > .dock { z-index: 1; }
 .dock {
   position: relative;
   display: flex;

@@ -78,6 +78,15 @@ export function requestCanvas(r: CanvasRequest): void {
   for (const fn of canvasRequests) fn(r);
 }
 
+const NO_INSETS = { left: 0, right: 0 };
+
+/** A strip layout moved right by the left sidebar, with room for both (they cover its ends when scrolled). */
+function underSidebars(lay: Layout, ins: { left: number; right: number }): Layout {
+  if (!ins.left && !ins.right) return lay;
+  const rects = new Map([...lay.rects].map(([id, r]) => [id, { ...r, x: r.x + ins.left }]));
+  return { ...lay, rects, contentWidth: lay.contentWidth + ins.left + ins.right, dropIndex: (x, y) => lay.dropIndex(x - ins.left, y) };
+}
+
 /** A row that has a window: a terminal (pane) or a browser/file window (win). */
 type Row = SidebarRow;
 
@@ -104,8 +113,9 @@ interface Props {
   /** Canvas: a click on the background selects nothing. */
   onDeselect: () => void;
   /**
-   * Canvas: px the sidebars cover at the left and right edges. The canvas runs
-   * under them; framing, revealing and the minimap use the area between.
+   * Canvas and strip: px the sidebars cover at the left and right edges. Both run
+   * under them; framing, revealing, the minimap and the strip's scroll range use
+   * the area between.
    */
   insets: { left: number; right: number };
 }
@@ -159,8 +169,14 @@ export function WindowsView(p: Props) {
   // The workspace's own selection: a selected sidebar (docs/21-sidebars.md) leaves focus mode on the window it showed.
   const shownRef = useRef<PaneId | null>(null);
   if (selected && ids.includes(selected)) shownRef.current = selected;
+  // Canvas and strip run under the sidebars (docs/21-sidebars.md). The strip's maths
+  // stays in the visible area between them (its viewport is stripW, offsets mean the
+  // same); only the windows' rects move right by the left sidebar.
+  const under = mode === "canvas" || mode === "strip" ? p.insets : NO_INSETS;
+  const stripW = Math.max(1, vp.w - under.left - under.right);
+  const shift = mode === "strip" ? under.left : 0;
   const pxWidths = ids.map((id) =>
-    resizing?.id === id ? resizing.w : widthFor(p.widths[id] ?? DEFAULT_FRACTION, vp.w || 1000, padX),
+    resizing?.id === id ? resizing.w : widthFor(p.widths[id] ?? DEFAULT_FRACTION, vp.w ? stripW : 1000, padX),
   );
   // Canvas: stored rects, new windows placed next to the last selected one.
   const lastPlaced = useRef<PaneId | null>(null);
@@ -171,11 +187,13 @@ export function WindowsView(p: Props) {
     mode === "grid"
       ? gridLayout(ids, vp, spacing)
       : mode === "strip"
-        ? stripLayout(ids, pxWidths, vp, spacing)
+        ? underSidebars(stripLayout(ids, pxWidths, { w: stripW, h: vp.h }, spacing), under)
         : arranged
           ? canvasLayout(arranged.rects)
           : focusLayout(ids, shownRef.current, vp);
-  const stripSlots: Slot[] = ids.map((id) => ({ x: lay.rects.get(id)!.x, w: lay.rects.get(id)!.w }));
+  // In the strip's own coordinates (without the left sidebar's shift), like its offsets.
+  const stripSlots: Slot[] = ids.map((id) => ({ x: lay.rects.get(id)!.x - shift, w: lay.rects.get(id)!.w }));
+  const stripTotal = lay.contentWidth - (mode === "strip" ? under.left + under.right : 0);
   // The DOM keeps a stable order; the dots go in the strip's.
   const stripDots = ids.map((id, i) => ({ id, slot: stripSlots[i]! })).sort((a, b) => a.slot.x - b.slot.x);
 
@@ -205,7 +223,7 @@ export function WindowsView(p: Props) {
   // The canvas spans the sidebars too (docs/21-sidebars.md): cameras are worked out for
   // the visible area between them, then moved back to the whole view's origin.
   const insetRef = useRef(p.insets);
-  insetRef.current = mode === "canvas" ? p.insets : { left: 0, right: 0 };
+  insetRef.current = under;
   const shown = (vp: { w: number; h: number }) => ({ w: Math.max(1, vp.w - insetRef.current.left - insetRef.current.right), h: vp.h });
   const toShown = (c: Camera): Camera => ({ ...c, x: c.x + insetRef.current.left / c.zoom });
   const fromShown = (c: Camera): Camera => ({ ...c, x: c.x - insetRef.current.left / c.zoom });
@@ -256,8 +274,8 @@ export function WindowsView(p: Props) {
   }, [lim.min, lim.max]);
 
   // Latest values for event handlers registered once.
-  const live = useRef({ lay, ids, settled, vp, selected, mode, preview, drag });
-  live.current = { lay, ids, settled, vp, selected, mode, preview, drag };
+  const live = useRef({ lay, ids, settled, vp, stripW, selected, mode, preview, drag });
+  live.current = { lay, ids, settled, vp, stripW, selected, mode, preview, drag };
 
   // Windows placed for the first time are stored, so they stay put. The first
   // time on the canvas, the camera frames them all (not the default camera's corner).
@@ -323,8 +341,13 @@ export function WindowsView(p: Props) {
     const v = Math.max(0, Math.min(max, o));
     // Kept unrounded: scrollLeft snaps to device pixels and would eat small trackpad deltas.
     offsetRef.current = v;
-    if (mode === "strip" && !glidingRef.current) scrollerRef.current!.scrollLeft = v;
-    else setOffsetState(v);
+    if (mode === "strip" && !glidingRef.current) {
+      const sc = scrollerRef.current!;
+      sc.scrollLeft = v;
+      // The browser clamps to what it thinks is scrollable (it can lag the layout while
+      // windows move): keep what it took, or reveal would think it already scrolled there.
+      if (Math.abs(sc.scrollLeft - v) > 1) offsetRef.current = sc.scrollLeft;
+    } else setOffsetState(v);
   }, []);
 
   // Leaving the strip: the scroll position moves to the track's transform (no
@@ -364,9 +387,20 @@ export function WindowsView(p: Props) {
   }, [gliding]);
   useLayoutEffect(() => {
     if (gliding || !glidingRef.current) return;
-    // Same frame as dropping the transform, so nothing moves.
+    // Same frame as dropping the transform, so nothing moves. scrollLeft is clamped to
+    // what the browser thinks is scrollable, so first make that the untransformed track:
+    // - without the switch's transition, which would glide the track back from the offset;
+    // - with will-change off for a moment: Chromium keeps a composited track's scrollable
+    //   overflow from while it was transformed (scrollWidth stays short) until it changes.
     glidingRef.current = false;
-    scrollerRef.current!.scrollLeft = offsetRef.current;
+    const sc = scrollerRef.current!;
+    const track = sc.firstElementChild as HTMLElement;
+    track.style.transition = "none";
+    track.style.willChange = "auto";
+    void sc.scrollWidth;
+    sc.scrollLeft = offsetRef.current;
+    track.style.transition = "";
+    track.style.willChange = "";
   }, [gliding]);
 
   // Follow the scroller (wheel, embedded pages' bubbled scroll, focus, our own writes).
@@ -476,8 +510,10 @@ export function WindowsView(p: Props) {
     const was = revealedFor.current;
     revealedFor.current = { w: vp.w, mode, selected };
     if (skipReveal.current) return void (skipReveal.current = false);
-    if (was.w && was.w !== vp.w && was.mode === mode && was.selected === selected) return;
-    const target = revealOffset(offsetRef.current, selSlot, vp.w, padX, lay.contentWidth);
+    // A resized window keeps its scroll; but entering the strip changes the width too
+    // (the workspace runs under the sidebars), and that reveal must use the new one.
+    if (was.w && was.w !== vp.w && was.mode === mode && was.selected === selected && !switching) return;
+    const target = revealOffset(offsetRef.current, selSlot, stripW, padX, stripTotal);
     if (Math.abs(target - offsetRef.current) > 0.5) animateTo(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, selSlot?.x, selSlot?.w, vp.w, lay.contentWidth]);
@@ -613,7 +649,9 @@ export function WindowsView(p: Props) {
       const root = rootRef.current;
       if (d && root) {
         const r = root.getBoundingClientRect();
-        const vx = edge(d.x - r.left, r.right - d.x);
+        // From the visible edges: the sidebars cover the rest.
+        const ins = insetRef.current;
+        const vx = edge(d.x - r.left - ins.left, r.right - ins.right - d.x);
         if (mode === "strip" && vx) {
           // The lifted window is placed from the offset: render it in the same frame as the scroll.
           setOffset(offsetRef.current + vx);
@@ -692,7 +730,7 @@ export function WindowsView(p: Props) {
     const startX = e.clientX;
     let w = startW;
     const move = (ev: PointerEvent) => {
-      w = clampWidth(startW + ev.clientX - startX, live.current.vp.w, padRef.current);
+      w = clampWidth(startW + ev.clientX - startX, live.current.stripW, padRef.current);
       setResizing({ id, w });
     };
     const up = () => {
@@ -700,7 +738,7 @@ export function WindowsView(p: Props) {
       handle.removeEventListener("pointerup", up);
       handle.removeEventListener("pointercancel", up);
       setResizing(null);
-      p.onWidth(id, fractionFor(w, live.current.vp.w, padRef.current));
+      p.onWidth(id, fractionFor(w, live.current.stripW, padRef.current));
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
@@ -882,12 +920,12 @@ export function WindowsView(p: Props) {
         <StripDots
           scroller={scrollerRef}
           slots={stripDots.map((d) => d.slot)}
-          total={lay.contentWidth}
-          viewport={vp.w}
+          total={stripTotal}
+          viewport={stripW}
           selected={stripDots.findIndex((d) => d.id === selected)}
           onGo={(i) => {
             const { id, slot } = stripDots[i]!;
-            if (id === selected) animateTo(revealOffset(offsetRef.current, slot, vp.w, padX, lay.contentWidth));
+            if (id === selected) animateTo(revealOffset(offsetRef.current, slot, stripW, padX, stripTotal));
             else onSelect(id);
           }}
         />
