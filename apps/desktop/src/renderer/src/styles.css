@@ -687,15 +687,16 @@ kbd {
 .windows-track > .tile.hidden-tile { visibility: hidden; pointer-events: none; }
 
 /* Unfocused windows are dimmed by an overlay (not a filter, which would soften text).
-   It covers the outline too, so the outline dims with the line under the title. Amount: ui.unfocusedDim (--window-dim-amount, set
+   It stops inside the outline, so outlines match across the workspace and the
+   sidebars, which aren't dimmed. Amount: ui.unfocusedDim (--window-dim-amount, set
    in App) times the theme's --window-dim. A window that needs you isn't dimmed. */
 .windows-track > .tile > .tile-frame::after {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: var(--edge-w);
   background: var(--scrim);
   opacity: min(1, calc(var(--window-dim) * var(--window-dim-amount, 0.1)));
-  border-radius: inherit;
+  border-radius: max(0px, calc(var(--window-radius) - var(--edge-w)));
   transition: opacity 160ms ease;
 }
 .windows-track > .tile.sel > .tile-frame::after,
