@@ -42,7 +42,7 @@ import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page a
 
 const PAGES: SettingsPage[] = settingsPages();
 type Nav = { id: string; title: string; icon: string };
-const NAV: Nav[] = [...PAGES, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard" }, { id: "about", title: "About", icon: "info.circle" }];
+const NAV: Nav[] = [...PAGES, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard" }, { id: "about", title: "Updates & About", icon: "info.circle" }];
 
 const APPLIES_NOTE = { newTerminals: "Applies to new terminals.", firstLaunch: "Applies on first launch." } as const;
 const COMMAND_GROUPS: Record<string, string> = { app: "App", file: "File", edit: "Edit", view: "View", session: "Sessions", space: "Spaces", help: "Help" };
@@ -54,7 +54,8 @@ function initialPage(): string {
   const asked = askedPage?.split("/")[0];
   if (asked && NAV.some((n) => n.id === asked)) return asked;
   try {
-    const p = localStorage.getItem(PAGE_KEY);
+    // "agents" was its own page before it joined "ai".
+    const p = localStorage.getItem(PAGE_KEY)?.replace(/^agents$/, "ai");
     if (p && NAV.some((n) => n.id === p)) return p;
   } catch {}
   return NAV[0]!.id;

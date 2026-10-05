@@ -120,7 +120,7 @@ const api = {
   showPane: (spaceId: string, paneId: string) => ipcRenderer.send("show-pane", spaceId, paneId),
   /** Restart into a downloaded update. */
   installUpdate: () => ipcRenderer.send("install-update"),
-  /** Settings → About. */
+  /** Settings → Updates & About. */
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke("app-info"),
   restartCore: (): Promise<void> => ipcRenderer.invoke("restart-core"),
   revealPath: (p: string) => ipcRenderer.send("reveal-path", p),

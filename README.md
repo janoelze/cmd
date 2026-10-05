@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install
 
 Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications. cmd updates itself in the background and installs the update when you quit; your terminals keep running. Settings → Updates switches to notify-only or off.
 
-**Agent state.** cmd recognises a running agent by its process alone. To also see what it's doing (working, waiting for input, done, what it changed), cmd puts its hook into Claude Code (every config folder it finds, profiles included), Codex and Gemini CLI by itself, keeping a copy of each file it changes; Settings → Agents → Hooks shows where, and turns that off. Codex runs a new hook only after you approve it once with `/hooks`.
+**Agent state.** cmd recognises a running agent by its process alone. To also see what it's doing (working, waiting for input, done, what it changed), cmd puts its hook into Claude Code (every config folder it finds, profiles included), Codex and Gemini CLI by itself, keeping a copy of each file it changes; Settings → AI & Agents → Hooks shows where, and turns that off. Codex runs a new hook only after you approve it once with `/hooks`.
 
 ## Features
 
@@ -45,7 +45,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 - **Remote access (beta).** Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted.
 - **Terminals keep running.** A background process owns them, so quitting, reloading or updating the app doesn't end them.
 - **Session search.** Full-text search over Claude Code, Codex, Qwen Code and Copilot CLI transcripts. Return resumes a session.
-- **Session summaries.** Right-click an agent's title bar and choose Summarize Session: a Markdown window fills in with what the session did, ready to edit and paste into a message or ticket. Needs an AI provider (Settings → AI).
+- **Session summaries.** Right-click an agent's title bar and choose Summarize Session: a Markdown window fills in with what the session did, ready to edit and paste into a message or ticket. Needs an AI provider (Settings → AI & Agents).
 - **Widgets.** Agent Activity and a Live Diff of your uncommitted changes come built in; with Magic, describe anything else and an agent builds a live widget for it. They live in the Widget Library (⇧⌘L). [More below](#magic-widgets).
 - **Web browser** next to your terminals, with phone, tablet and desktop sizes.
 - **Files and editor.** A file browser, a text editor and Markdown windows. `open README.md` in a shell opens it in cmd.
@@ -64,7 +64,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 
 Press ⇧⌘M and type what you want to see: "my open merge requests", "the last CI runs", a JSON URL, a command. An agent looks around with read-only commands, writes a small widget, checks that it works, and shows it in your theme. The widget refreshes on its own without calling the model. Change it by asking (⌘L), edit its versions, settings and files (⌘E), or take it off the desk when you're done: it stays in your Widget Library (⇧⌘L), ready to put back in any Space.
 
-**Setup.** Magic widgets use your own Anthropic or OpenAI API key, asked for on first launch and kept in Settings → AI. cmd picks the newest models your key can use. Keys are stored outside `settings.json` and readable only by you. Widgets' data runs on [Deno](https://deno.com); cmd uses yours or downloads its own.
+**Setup.** Magic widgets use your own Anthropic or OpenAI API key, asked for on first launch and kept in Settings → AI & Agents. cmd picks the newest models your key can use. Keys are stored outside `settings.json` and readable only by you. Widgets' data runs on [Deno](https://deno.com); cmd uses yours or downloads its own.
 
 **Safety.** The agent can only read. Its commands pass a read-only policy, and widgets run in a sandbox with only the hosts and programs they declare. Your keys, keychains, browser profiles and `.env` files are off limits, and tokens never reach the model.
 

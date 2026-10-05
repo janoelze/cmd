@@ -891,12 +891,12 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
   await sw.waitForSelector(".sw-nav-item");
   const pages = await sw.locator(".sw-nav-label").allTextContents();
-  check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "Agents", "AI", "Magic Widgets", "Keyboard Shortcuts", "About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
+  check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "AI & Agents", "Magic Widgets", "Keyboard Shortcuts", "Updates & About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
 
-  // AI: a row per provider, models only once it has a key. Keys typed here are
+  // AI & Agents: a row per provider, models only once it has a key. Keys typed here are
   // checked with the provider first; this one goes in as `cmd settings secret`
   // does, so the run needs no network. Stored outside settings.json, shown as a hint.
-  await sw.locator(".sw-nav-item", { has: sw.getByText("AI", { exact: true }) }).click();
+  await sw.locator(".sw-nav-item", { has: sw.getByText("AI & Agents", { exact: true }) }).click();
   await sw.waitForSelector(".ui-row-title:has-text('Anthropic')");
   const rowTitles = () => sw.locator(".ui-row-title").allTextContents();
   let titles = await rowTitles();
@@ -922,16 +922,15 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(fn(), what);
   };
 
-  // Agents → Hooks: the fixture's Claude config, and Install writes cmd's hook into it.
-  await page("Agents");
+  // AI & Agents → Hooks: the fixture's Claude config, and Install writes cmd's hook into it.
   const claudeRow = sw.locator(".ui-row", { has: sw.locator(".ui-row-title", { hasText: "Claude Code" }) });
   await claudeRow.locator("button", { hasText: "Install" }).click();
   await claudeRow.locator("button", { hasText: "Remove" }).waitFor();
   const claudeSettings = JSON.parse(fs.readFileSync(path.join(transcripts, ".claude", "settings.json"), "utf8"));
-  check(JSON.stringify(claudeSettings.hooks?.PreToolUse ?? []).includes("/hooks/cmd-hook' claude"), "Settings → Agents installs cmd's hook into the Claude config");
+  check(JSON.stringify(claudeSettings.hooks?.PreToolUse ?? []).includes("/hooks/cmd-hook' claude"), "Settings → AI & Agents installs cmd's hook into the Claude config");
   await sw.screenshot({ path: path.join(shots, "5-settings-agents.png") });
 
-  await page("About");
+  await page("Updates & About");
   await sw.waitForSelector(".ui-row:has-text('Status') .sw-value");
   const status = await row("Status").locator(".sw-value").textContent();
   check(/^pid \d+$/.test(status ?? ""), `About shows the running core (${status})`);

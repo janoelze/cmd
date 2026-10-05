@@ -263,7 +263,7 @@ async function stopCore(pid: number): Promise<void> {
   await exited(2000);
 }
 
-/** Settings → About, the sidebar's core status, Restart Core: stop the core and start one from this app's code (it takes the terminals over). */
+/** Settings → Updates & About, the sidebar's core status, Restart Core: stop the core and start one from this app's code (it takes the terminals over). */
 async function restartCore(): Promise<void> {
   const conn = await connect(socketPath).catch(() => null);
   if (conn) {
@@ -567,7 +567,7 @@ ipcMain.on("renderer-error", (e, r: { kind: string; message: string; stack: stri
   const page = isSettings(from) ? "settings" : isUtility(from) ? "tasks" : "app";
   recordCrash("renderer", r.kind, r.message, r.stack, { page });
 });
-/** Settings → About: the app's side of the diagnostics (core.info is the core's). */
+/** Settings → Updates & About: the app's side of the diagnostics (core.info is the core's). */
 ipcMain.handle("app-info", async () => ({
   version: app.getVersion(),
   dev: devBuild,

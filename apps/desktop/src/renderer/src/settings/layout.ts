@@ -84,30 +84,9 @@ export const SETTINGS_PAGES: Page[] = [
     ],
   },
   {
-    id: "agents",
-    title: "Agents",
-    icon: "sparkles",
-    sections: [
-      { title: "Commands", items: ["agents.claude.command", "agents.codex.command", "agents.qwen.command", "agents.copilot.command"] },
-      { title: "Working together", items: ["agents.peers"] },
-      { title: "Setup", items: ["agents.hooks.auto", "agents.homes"] },
-      { title: "Transcript search", items: ["search.enabled", "search.archiveDirs"] },
-    ],
-  },
-  {
-    id: "remote",
-    title: "Remote Access",
-    icon: "iphone",
-    sections: [
-      { items: ["remote.enabled"] },
-      { title: "Connection", items: ["remote.relay", "remote.client"] },
-      { title: "Devices", items: ["remote.deviceExpiryDays"] },
-    ],
-  },
-  {
     id: "ai",
-    title: "AI",
-    icon: "brain",
+    title: "AI & Agents",
+    icon: "sparkles",
     sections: [
       { title: "Providers", items: ["ai.anthropic.apiKey", "ai.openai.apiKey", { key: "ai.provider", when: bothKeys }] },
       {
@@ -124,6 +103,20 @@ export const SETTINGS_PAGES: Page[] = [
           { key: "ai.openai.fastModel", when: hasKey("openai") },
         ],
       },
+      { title: "Commands", items: ["agents.claude.command", "agents.codex.command", "agents.qwen.command", "agents.copilot.command"] },
+      { title: "Working together", items: ["agents.peers"] },
+      { title: "Setup", items: ["agents.hooks.auto", "agents.homes"] },
+      { title: "Transcript search", items: ["search.enabled", "search.archiveDirs"] },
+    ],
+  },
+  {
+    id: "remote",
+    title: "Remote Access",
+    icon: "iphone",
+    sections: [
+      { items: ["remote.enabled"] },
+      { title: "Connection", items: ["remote.relay", "remote.client"] },
+      { title: "Devices", items: ["remote.deviceExpiryDays"] },
     ],
   },
   {

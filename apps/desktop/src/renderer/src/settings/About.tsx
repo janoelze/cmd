@@ -1,4 +1,4 @@
-// Settings → About: versions and updates, the core's health, crash reports and
+// Settings → Updates & About: versions and updates, the core's health, crash reports and
 // where cmd keeps its files and logs, plus what to do when something is off
 // (restart the core, open its log, copy everything for a bug report). core.info
 // is polled while the page is open, faster while an update is checked or downloaded.
@@ -80,7 +80,7 @@ function PathRow(p: { title: string; path: string | null | undefined }) {
 
 const updateBusy = (a: AppInfo | null) => !!a && (a.updates.checking || !!a.updates.downloading);
 
-/** Settings → About's "Latest version" button: what the next step is. */
+/** Settings → Updates & About's "Latest version" button: what the next step is. */
 function UpdateButton(p: { app: AppInfo | null; poll: () => void }) {
   const u = p.app?.updates;
   const check = () => (cmd.checkForUpdates(), setTimeout(p.poll, 100));
