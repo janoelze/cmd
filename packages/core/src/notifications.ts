@@ -16,7 +16,13 @@ import type { Agent, AppNotification, Attention, Pane, PaneId, Settings, WindowI
 import type { OscEvent } from "./osc.ts";
 import type { PaneManager } from "./panes.ts";
 import type { AgentTracker } from "./agents/tracker.ts";
-import { agentNotice } from "./agents/notice.ts";
+import { agentNotice, type NoticeKind } from "./agents/notice.ts";
+
+/** Writes an agent notification's body with AI; null: use cmd's own (agents/notice.ts). */
+export type NoticeWriter = (a: Agent, kind: NoticeKind, signal: AbortSignal) => Promise<string | null>;
+
+/** How long a notification waits for its AI wording before going out with cmd's own. */
+export const AI_WAIT_MS = { needs: 1500, done: 2500, stopped: 2500 } as const;
 
 /** Bells closer together than this in one terminal count as one (a held key, a noisy script). */
 const BELL_EVERY_MS = 2000;
@@ -49,10 +55,13 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
   #lastBell = new Map<PaneId, number>();
   #running = new Map<PaneId, Running>();
 
-  constructor(panes: PaneManager, agents: AgentTracker, settings: () => Settings) {
+  #writer: NoticeWriter | null;
+
+  constructor(panes: PaneManager, agents: AgentTracker, settings: () => Settings, writer: NoticeWriter | null = null) {
     super();
     this.#panes = panes;
     this.#settings = settings;
+    this.#writer = writer;
     panes.on("osc", (id, ev) => this.#onOsc(id, ev));
     panes.on("foreground", (id, fg) => {
       const r = this.#running.get(id);
@@ -117,10 +126,23 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
     if (!needy && !finished && !stopped) return;
     const cfg = this.#settings();
     if ((needy && !cfg["notifications.needsInput"]) || (!needy && !cfg["notifications.done"])) return;
-    const pane = a.paneId ? this.#panes.get(a.paneId) : null;
-    const { title, body } = agentNotice(a, needy ? "needs" : finished ? "done" : "stopped");
-    // The agent's light is its marker; no attention marker on the pane.
-    this.#emit({ source: needy ? "agent-input" : "agent-done", paneId: a.paneId, title, body, alert: !pane?.muted, urgent: needy });
+    const kind: NoticeKind = needy ? "needs" : finished ? "done" : "stopped";
+    const { title, body } = agentNotice(a, kind);
+    const send = (text: string) => {
+      const pane = a.paneId ? this.#panes.get(a.paneId) : null;
+      // The agent's light is its marker; no attention marker on the pane.
+      this.#emit({ source: needy ? "agent-input" : "agent-done", paneId: a.paneId, title, body: text, alert: !pane?.muted, urgent: needy });
+    };
+    if (!this.#writer || !cfg["notifications.ai"]) return send(body);
+    // AI wording, if it comes in time: a posted notification can't be changed.
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), AI_WAIT_MS[kind]);
+    void this.#writer(a, kind, ac.signal)
+      .catch(() => null)
+      .then((text) => {
+        clearTimeout(timer);
+        send(!ac.signal.aborted && text ? text : body);
+      });
   }
 
   #onOsc(id: PaneId, ev: OscEvent): void {

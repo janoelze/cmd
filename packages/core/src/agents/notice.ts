@@ -17,6 +17,10 @@ export interface Notice {
 /** A project name longer than this is cut; the state is always whole. */
 const SUBJECT_MAX = 28;
 const BODY_MAX = 140;
+/** The agent's own words in a notification without AI: its first clause, about this long. */
+const GIST_MAX = 72;
+/** An AI-written body (asked for 70). */
+const AI_MAX = 90;
 
 /** The agent's name if it has one, else its project: the checkout's folder, else its folder. */
 export function subjectOf(a: Pick<Agent, "name" | "cwd" | "kind">): string {
@@ -50,10 +54,17 @@ function cut(s: string, max: number): string {
 export function gist(md: string, max = BODY_MAX): string {
   const text = plain(md);
   const sentences = text.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+  // A filler opener ("Sure.", "Good idea.", "Yes.") says nothing on its own: the next sentence does.
   let out = sentences[0] ?? text;
-  if (out.length < 30 && sentences[1]) out = `${out} ${sentences[1]}`;
-  return cut(out, max);
+  if (FILLER.test(out) && sentences[1]) out = sentences[1];
+  if (out.length <= max) return out;
+  // Long: end at a clause boundary before the limit, else at a word.
+  const head = out.slice(0, max);
+  const at = Math.max(head.lastIndexOf(", "), head.lastIndexOf("; "), head.lastIndexOf(": "), head.lastIndexOf(" — "));
+  return at > max * 0.45 ? `${head.slice(0, at)}…` : cut(out, max);
 }
+
+const FILLER = /^(sure|yes|no|ok(ay)?|done|great|got it|right|partly|perfect|absolutely|good (idea|question|catch|point)|makes sense|understood|will do)[.!,:]?$/i;
 
 /** 40 s, 7 min, 1 h 5 min. */
 export function shortDuration(ms: number): string {
@@ -96,6 +107,61 @@ export function agentNotice(a: Agent, kind: NoticeKind): Notice {
   if (kind === "stopped") return { title, body: gist(t?.error ?? a.detail ?? "The request failed.") };
   const said = t?.final ?? a.lastMessage ?? "";
   const known = facts(t);
-  const words = said ? gist(said, BODY_MAX - (known ? known.length + 1 : 0)) : "";
+  const words = said ? gist(said, GIST_MAX) : "";
   return { title, body: [words, known].filter(Boolean).join(" ") };
+}
+
+// ── AI wording ──────────────────────────────────────────────
+// With an AI provider set up (notifications.ai, on by default), the body is
+// written by the fast tier from the turn's context; the title stays cmd's own
+// (subject · state). Falls back to agentNotice's body when slow or unavailable.
+
+export const NOTICE_SYSTEM = `You write the body of a macOS notification about a coding agent, for the developer who started it. They glance at it for a second.
+
+- One short line, at most 70 characters. Fragments are fine. Snappy, like a teammate's one-line update.
+- The result, not the process. Never retell steps, never copy the agent's wording, no filler ("Yes.", "Sure.", "Done.", "Good idea.", "Partly."). Don't overstate: proposed isn't done, started isn't finished.
+- done: what came out of it, in a few words. Only if its last message ends by asking the developer something, add what it asks ("Asks whether to merge."). Never "Wants to" for done.
+- needs: "Wants to" + what it wants to do, with the exact command or file.
+- stopped: why, and when it can go on if that's known.
+- Only facts from the input. No invented results, numbers or files.
+- The title already says the project and the state. Don't repeat them.
+- Plain text. No Markdown, emoji, exclamation marks or quotes around the line. Don't start with "The agent" or "I".
+
+Examples:
+Fixed add(); tests pass.
+Summaries are committed on the summary branch.
+v0.11.0 is out, signed and notarized.
+Done. Asks whether to merge.
+Wants to run rm NOTES.md.
+Wants to edit calc.py.
+Weekly limit hit. Resets Oct 7, 3 am.`;
+
+/** What the model gets: the turn's facts, cut to size. */
+export function noticeContext(a: Agent, kind: NoticeKind): Record<string, unknown> {
+  const t = a.turn;
+  const clip = (s: string | null | undefined, n: number) => (s ? (s.length > n ? `${s.slice(0, n)}…` : s) : undefined);
+  return {
+    state: kind,
+    project: subjectOf(a),
+    agent: a.kind,
+    prompt: clip(t?.prompt ?? a.lastPrompt, 600),
+    promptFromAgent: t?.auto || undefined,
+    followUps: t?.followUps.length ? t.followUps.map((f) => clip(f, 200)) : undefined,
+    finalMessage: kind !== "needs" ? clip(t?.final ?? a.lastMessage, 1500) : undefined,
+    asking: kind === "needs" ? (t?.ask ?? { message: a.detail }) : undefined,
+    error: kind === "stopped" ? clip(t?.error ?? a.detail, 300) : undefined,
+    filesChanged: t?.files.length ? t.files.slice(0, 15).map((f) => path.basename(f.path)) : undefined,
+    moreFiles: t && t.files.length > 15 ? t.files.length - 15 : undefined,
+    took: t?.endedAt ? shortDuration(t.endedAt - t.startedAt) : undefined,
+    stillRunning: t?.background.length ? t.background : undefined,
+    agentNote: t?.notes.length ? clip(t.notes.at(-1), 300) : undefined,
+  };
+}
+
+/** A model's answer made safe for a notification body: one line, plain, short. */
+export function cleanAiBody(text: string): string | null {
+  let s = plain(text.split("\n").find((l) => l.trim()) ?? "").replace(/^["“'](.*)["”']$/s, "$1").trim();
+  if (!s || s.length < 4) return null;
+  if (!/[.?!…]$/.test(s)) s += ".";
+  return cut(s, AI_MAX);
 }

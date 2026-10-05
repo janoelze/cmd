@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, type AppNotification, type Settings } from "@cmd/protocol";
 import { AgentTracker } from "../src/agents/tracker.ts";
-import { formatDuration, NotificationCenter } from "../src/notifications.ts";
+import { AI_WAIT_MS, formatDuration, NotificationCenter, type NoticeWriter } from "../src/notifications.ts";
 import { PaneManager } from "../src/panes.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 
@@ -134,4 +134,45 @@ it("formats durations", () => {
   expect(formatDuration(42_000)).toBe("42s");
   expect(formatDuration(192_000)).toBe("3m 12s");
   expect(formatDuration(3_900_000)).toBe("1h 5m");
+});
+
+describe("agent notifications with AI wording", () => {
+  const setup = (writer: NoticeWriter | null, ai = true) => {
+    const f = fakeFactory();
+    const panes = new PaneManager(f.factory, { socketPath: "/tmp/t.sock", pollMs: 0 });
+    const agents = new AgentTracker(panes);
+    const sent: AppNotification[] = [];
+    const center = new NotificationCenter(panes, agents, () => ({ ...DEFAULT_SETTINGS, "notifications.ai": ai }), writer);
+    center.on("notification", (n) => sent.push(n));
+    const pane = panes.create();
+    const finish = () => {
+      agents.ingestHook(pane.id, "claude", "UserPromptSubmit", { session_id: "s", prompt: "fix add()" });
+      agents.ingestHook(pane.id, "claude", "Stop", { session_id: "s", last_assistant_message: "I fixed the bug in `add()` by changing the operator, then ran the tests, which all pass now." });
+    };
+    return { sent, finish };
+  };
+  const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  it("uses the AI's line when it comes in time; the title stays cmd's", async () => {
+    const { sent, finish } = setup(async () => "Fixed add(); tests pass.");
+    finish();
+    await tick(10);
+    expect(sent).toMatchObject([{ source: "agent-done", title: expect.stringMatching(/ · done$/), body: "Fixed add(); tests pass." }]);
+  });
+
+  it("goes out with cmd's own words when the AI is slow, fails or is off", async () => {
+    vi.useFakeTimers();
+    const slow = setup((_a, _k, signal) => new Promise((r) => signal.addEventListener("abort", () => r("too late"))));
+    slow.finish();
+    await vi.advanceTimersByTimeAsync(AI_WAIT_MS.done + 10);
+    expect(slow.sent[0]!.body).toMatch(/^I fixed the bug in add\(\)/);
+    vi.useRealTimers();
+    const failing = setup(async () => { throw new Error("no key"); });
+    failing.finish();
+    await tick(10);
+    expect(failing.sent[0]!.body).toMatch(/^I fixed the bug/);
+    const off = setup(async () => "never used", false);
+    off.finish();
+    expect(off.sent[0]!.body).toMatch(/^I fixed the bug/);
+  });
 });

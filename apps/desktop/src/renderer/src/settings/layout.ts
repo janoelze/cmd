@@ -78,6 +78,7 @@ export const SETTINGS_PAGES: Page[] = [
     icon: "bell",
     sections: [
       { title: "Notify me when", items: ["notifications.needsInput", "notifications.done", "notifications.longCommand", "notifications.terminalSequences", "notifications.widgets"] },
+      { title: "Wording", items: ["notifications.ai"] },
       { title: "Delivery", items: ["notifications.when", "notifications.sound", "notifications.bounceDock", "notifications.dockBadge"] },
       { title: "Terminal bell", items: ["notifications.bell", "notifications.visualBell"] },
     ],

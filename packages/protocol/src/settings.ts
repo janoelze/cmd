@@ -223,7 +223,13 @@ export const SETTINGS_SCHEMA = {
   "canvas.minimap": { title: "Show minimap", type: "boolean", default: true, description: "Canvas: an overview of all windows in the bottom-right corner; click or drag it to move around." },
 
   "notifications.needsInput": { title: "Agent needs input", type: "boolean", default: true, description: "Notify when an agent needs input." },
-  "notifications.done": { title: "Agent finished a turn", type: "boolean", default: true, description: "Notify when an agent finishes a turn." },
+  "notifications.done": { title: "Agent finished a turn", type: "boolean", default: true, description: "Notify when an agent finishes a turn, or stops on an error." },
+  "notifications.ai": {
+    title: "Write agent notifications with AI",
+    type: "boolean",
+    default: true,
+    description: "Your AI provider writes what an agent did or wants, from its prompt, its answer and what it changed. Off, or without a provider, notifications show the agent's own last sentence.",
+  },
   "notifications.widgets": { title: "Widgets report something", type: "boolean", default: true, description: "Notify when a Magic widget reports news (a failed build, a dropped VPN). Mute a single widget from its menu." },
   "notifications.dockBadge": { title: "Badge the Dock icon", type: "boolean", default: true, description: "Show the attention count on the Dock icon." },
   "notifications.when": {

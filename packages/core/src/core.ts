@@ -12,6 +12,7 @@ import { AgentTracker } from "./agents/tracker.ts";
 import { ActivityLog } from "./agents/activity/log.ts";
 import { rewrite } from "./agents/activity/fixture.ts";
 import { AgentHomes } from "./agents/homes.ts";
+import { cleanAiBody, NOTICE_SYSTEM, noticeContext, type NoticeKind } from "./agents/notice.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./agents/hooks.ts";
 import { hookEventName } from "./agents/state.ts";
 import { NotificationCenter } from "./notifications.ts";
@@ -243,7 +244,7 @@ export class Core {
       this.settings.bind(["agents.homes"], () => this.#homesDiscovered && this.#discoverHomes());
       this.settings.bind(["agents.hooks.auto"], () => this.#homesDiscovered && this.#autoHooks());
     }
-    this.notifications = new NotificationCenter(this.panes, this.agents, settings);
+    this.notifications = new NotificationCenter(this.panes, this.agents, settings, (a, kind, signal) => this.#writeNotice(a, kind, signal));
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler, 2000, () => this.#subscribers.size > 0) : null;
     this.processes = opts.procSampler ? new ProcessSampler(opts.procSampler) : null;
@@ -589,6 +590,13 @@ export class Core {
     const t = this.#hookTargets().find((x) => x.file === file);
     if (!t) throw new Error(`not an agent config cmd installs hooks into: ${file}`);
     return t;
+  }
+
+  /** An agent notification's body from the fast tier (notifications.ai); null without a provider. */
+  async #writeNotice(a: Agent, kind: NoticeKind, signal: AbortSignal): Promise<string | null> {
+    if (!this.ai.status().ready) return null;
+    const res = await this.ai.complete({ tier: "fast", purpose: `notify.${kind}`, system: NOTICE_SYSTEM, prompt: JSON.stringify(noticeContext(a, kind)), effort: "minimal", maxOutputTokens: 800, signal });
+    return cleanAiBody(res.value);
   }
 
   #discoverHomes(): void {

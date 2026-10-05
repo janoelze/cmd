@@ -52,7 +52,8 @@ People turn notifications off when they cry wolf, so:
 - **Only when it matters:** an agent needs the person, finished or stopped while they looked away, or cmd did something on its own they should know about. One notification per event; no reminders for the same thing.
 - **Honest urgency.** "Needs you" is urgent (sound). Done and stopped inform. Things cmd did by itself are quiet.
 - **Title: subject · state.** The subject is the agent's name if it has one, else its project (the repository's folder name). The state is one of: done, needs you, stopped, and for done with work left running, "done, 1 task still running".
-- **Body: the agent's own words, shortened,** not rephrased: the first sentence (or two, if the first is very short) of its final message, Markdown removed. Then the facts cmd checked, as a fragment sentence: "4 files changed, 7 min."
+- **Body: snappy, one line, the result.** Read in a second: at most ~70 characters, fragments welcome. "Fixed add(); tests pass." "Summaries are on the summary branch." Never a retelling of steps, never the agent's paragraph pasted in, no filler ("Sure.", "Done.").
+- **Written with AI out of the box** when a provider is set up (`notifications.ai`): the fast tier gets the turn's facts (prompt, final message, question, files, error) and writes the body; the title stays cmd's own. Without a provider: the agent's first clause, cut short, then the facts cmd checked ("4 files changed, 7 min.").
 - **Needs you says what it asks:** Allow “rm NOTES.md”? Allow editing “calc.py”? Otherwise the agent's own question.
 - **Stopped says why,** in the agent's words: "You've hit your weekly limit · resets Oct 7 at 3am".
 - No app name, no "Notification:", no sensitive data beyond what's already on screen.
@@ -61,7 +62,7 @@ People turn notifications off when they cry wolf, so:
 
 | Before | After |
 |---|---|
-| claude is done / (empty) | **cmd-agent-activity · done** / Session summaries are on the summary branch. 4 files changed, 7 min. |
+| claude is done / (empty) | **cmd-agent-activity · done** / Summaries are on the summary branch. Asks whether to merge. |
 | claude needs you / Allow Bash? | **agent-playground · needs you** / Allow “rm NOTES.md”? |
 | (nothing on failure) | **cmd · stopped** / You've hit your weekly limit · resets Oct 7 at 3am |
 | cmd set up your agents / Added cmd's hook to Gemini CLI (~/.gemini/settings.json), so their state shows in cmd. Settings → Agents → Hooks to change it. | **Gemini CLI set up** / Its state shows in cmd now. Change it in Settings → Agents. |

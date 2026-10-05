@@ -52,7 +52,8 @@ export interface AiBackendOptions {
   model: string;
   apiKey: string;
   /** How hard the model thinks: low keeps calls fast. Sent only to models that take it. */
-  effort?: "low" | "medium" | "high";
+  /** minimal: OpenAI's reasoning models barely think (fast one-liners); Anthropic takes it as low. */
+  effort?: "minimal" | "low" | "medium" | "high";
 }
 
 async function languageModel(o: AiBackendOptions): Promise<LanguageModel> {
@@ -67,7 +68,7 @@ async function languageModel(o: AiBackendOptions): Promise<LanguageModel> {
 /** Effort for the models that take it: Anthropic's newer models, OpenAI's reasoning models. */
 function effortOptions(o: AiBackendOptions): Record<string, Record<string, string>> | undefined {
   const effort = o.effort ?? "low";
-  if (o.provider === "anthropic") return /haiku|claude-3|-4-5|-4-1|-4-0|sonnet-4-0/.test(o.model) ? undefined : { anthropic: { effort } };
+  if (o.provider === "anthropic") return /haiku|claude-3|-4-5|-4-1|-4-0|sonnet-4-0/.test(o.model) ? undefined : { anthropic: { effort: effort === "minimal" ? "low" : effort } };
   return /^(o\d|gpt-5|gpt-6)/.test(o.model) ? { openai: { reasoningEffort: effort } } : undefined;
 }
 

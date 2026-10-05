@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Agent, AgentTurn } from "@cmd/protocol";
-import { agentNotice, gist, plain, shortDuration, subjectOf } from "../src/agents/notice.ts";
+import { agentNotice, cleanAiBody, gist, noticeContext, plain, shortDuration, subjectOf } from "../src/agents/notice.ts";
 import { newTurn } from "../src/agents/activity/reduce.ts";
 
 const agent = (o: Partial<Agent> = {}, turn: Partial<AgentTurn> = {}): Agent => ({
@@ -22,7 +22,8 @@ describe("agent notifications", () => {
       files: [1, 2, 3, 4].map((i) => ({ path: `/r/f${i}`, change: "M", via: ["git"] as ("git" | "fs" | "tool")[] })),
       startedAt: 0, endedAt: 7 * 60_000,
     }), "done");
-    expect(n).toEqual({ title: "cmd-agent-activity · done", body: "Session summaries are built and committed on the summary branch in ~/src/cmd-summary. 4 files changed, 7 min." });
+    expect(n.title).toBe("cmd-agent-activity · done");
+    expect(n.body).toBe("Session summaries are built and committed on the summary branch in… 4 files changed, 7 min.");
   });
 
   it("done with work left running says so in the title", () => {
@@ -68,13 +69,33 @@ describe("text helpers", () => {
     expect(plain("## Done\n\nFixed **add()** in [calc.py](/r/calc.py:1), see `git diff`.\n\n```\ncode\n```")).toBe("Done Fixed add() in calc.py, see git diff.");
   });
 
-  it("takes the first sentence, or two when the first is very short", () => {
-    expect(gist("Fixed it. Then ran the tests, all 12 pass. More.")).toBe("Fixed it. Then ran the tests, all 12 pass.");
+  it("takes the first sentence, skipping a filler opener, cut at a clause", () => {
+    expect(gist("Fixed it. Then ran the tests, all 12 pass. More.")).toBe("Fixed it.");
+    expect(gist("Sure. Here's the list you asked for.")).toBe("Here's the list you asked for.");
+    expect(gist("The release is out, signed, notarized and verified against every check we have", 40)).toBe("The release is out, signed…");
     expect(gist("The add() bug is fixed and the tests pass. Details follow.")).toBe("The add() bug is fixed and the tests pass.");
     expect(gist("Version 1.2.3 is out and tagged.")).toBe("Version 1.2.3 is out and tagged.");
   });
 
   it("formats durations short", () => {
     expect([40_000, 7 * 60_000, 65 * 60_000, 120 * 60_000].map(shortDuration)).toEqual(["40 s", "7 min", "1 h 5 min", "2 h"]);
+  });
+});
+
+describe("AI wording", () => {
+  it("keeps a model's answer to one plain, short line", () => {
+    expect(cleanAiBody("Fixed `add()`; tests pass")).toBe("Fixed add(); tests pass.");
+    expect(cleanAiBody('"Wants to run rm NOTES.md."\n\nExplanation: …')).toBe("Wants to run rm NOTES.md.");
+    expect(cleanAiBody("  ")).toBeNull();
+    expect(cleanAiBody("word ".repeat(40))!.length).toBeLessThanOrEqual(90);
+  });
+
+  it("gives the model the turn's facts, not its process", () => {
+    const c = noticeContext(agent({}, { prompt: "fix it", final: "Fixed.", files: [{ path: "/r/calc.py", change: "M", via: ["git"] }], commands: ["npm test"], startedAt: 0, endedAt: 60_000 }), "done");
+    expect(c).toMatchObject({ state: "done", prompt: "fix it", finalMessage: "Fixed.", filesChanged: ["calc.py"], took: "1 min" });
+    expect(c).not.toHaveProperty("recentCommands");
+    const needs = noticeContext(agent({ state: "needs_input" }, { ask: { message: "Allow Bash?", tool: "Bash", input: "rm x" } }), "needs");
+    expect(needs).toMatchObject({ state: "needs", asking: { input: "rm x" } });
+    expect(needs.finalMessage).toBeUndefined();
   });
 });
