@@ -51,6 +51,14 @@ export function SpaceBar(p: Props) {
       onContextMenu: () => p.onMenu(sp),
     };
   });
+  // No Spaces yet: the core hasn't sent its first snapshot (there's always Home
+  // after it), so there is nothing to pick and the picker couldn't open one.
+  if (!p.spaces.length)
+    return (
+      <div className="spacebar">
+        <span className="space-trigger pending">Connecting…</span>
+      </div>
+    );
   return (
     <div className="spacebar">
       <button
@@ -66,7 +74,7 @@ export function SpaceBar(p: Props) {
         }}
       >
         {shown && <SpaceIcon space={shown} />}
-        <span ref={name} className="space-name">{shown?.name ?? "—"}</span>
+        <span ref={name} className="space-name">{shown?.name ?? "Spaces"}</span>
         {mark && (
           <Badge size="sm" solid tone={mark === "needs" ? "warning" : "success"} tip={`${others.length} other Space${others.length === 1 ? "" : "s"} ${mark === "needs" ? "need you" : "finished"}`}>
             {others.length}
