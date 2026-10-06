@@ -460,8 +460,8 @@ kbd {
    instead (Slot.tsx sets .sliver; short values like "~" aren't squeezed). */
 .slot.sliver .slot-v, .slot.sliver .slot-divider { visibility: hidden; }
 .tile-title { cursor: grab; touch-action: none; }
-/* The mark a little closer to the name than the bar's gap, as WindowBar's icon. */
-.tile-title > :is(.mark, .mark-drag) { margin-right: -2px; }
+/* 5px from the mark to the name, as WindowBar's icon. */
+.tile-title > :is(.mark, .mark-drag) { margin-right: -1px; }
 /* Sidebars don't drag (Dock.tsx): no grab hand. */
 .dock .tile-title { cursor: default; }
 .empty-main { display: grid; place-items: center; }
