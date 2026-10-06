@@ -14,6 +14,7 @@
 
 import os from "node:os";
 import { logger } from "@cmd/protocol/node";
+import { buildContext } from "../ai/context.ts";
 import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type JournalDay, type JournalFormat, type JournalEvent, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
 import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import type { CallOptions } from "../ai/service.ts";
@@ -39,6 +40,8 @@ const REREAD_DAYS = 90;
 const UPGRADE_RECENT_DAYS = 2;
 const CURRENT: JournalFormat = { schema: JOURNAL_SCHEMA, threads: THREADS_FORMAT, writer: WRITER_FORMAT };
 const sameFormat = (a: JournalFormat, b: JournalFormat) => a.schema === b.schema && a.threads === b.threads && a.writer === b.writer;
+/** Characters of digest a day may send (about 40k tokens); a busier day is cut in the middle. */
+const DAY_BUDGET = 160_000;
 /** Today is written again at most this often unless forced. */
 const TODAY_EVERY_MS = 30 * 60_000;
 /** Earlier events read for context (a release ships what merged since the one before). */
@@ -201,8 +204,10 @@ export class JournalService {
     // Only a model writes days: titled from the data alone, they read like a list of prompts.
     const model = this.#o.ai?.modelName() ?? null;
     if (mode === "never" || !model || !this.#o.ai || (mode === "stale" && !stale)) return shown;
+    // The digest, redacted and fitted, with the keys of the events it came from (ai/context.ts).
+    const ctx = buildContext({ purpose: "journal.day", budget: DAY_BUDGET, parts: [{ name: "day", text: `<day>\n${d.text}\n</day>`, events: [...new Set(threads.flatMap((t) => t.events))].map((id) => events.find((e) => e.id === id)?.key).filter((k): k is string => !!k) }] });
     const write = this.#o.ai
-      .object<WrittenDay>({ tier: "smart", purpose: "journal.day", background: true, system: SYSTEM, prompt: `<day>\n${d.text}\n</day>`, schema: SCHEMA as unknown as Record<string, unknown>, maxOutputTokens: 6000 })
+      .object<WrittenDay>({ tier: "smart", purpose: "journal.day", background: true, system: SYSTEM, prompt: ctx.text, context: ctx.record, schema: SCHEMA as unknown as Record<string, unknown>, maxOutputTokens: 6000 })
       .then((r) => {
         const day = toDay(r.value, d, threads, events, { date, scope, writtenBy: r.model });
         this.store.saveDay(day);

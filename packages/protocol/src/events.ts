@@ -43,7 +43,18 @@ export interface EventPayloads {
   /** A notification shown by cmd. */
   notification: { source: string; title: string; body: string; urgent: boolean };
   /** A model call: what for, which model, how long, how many tokens. Input and output are blobs on child events. */
-  "ai.call": { purpose: string; provider: string; model: string; tier: string; ms: number; tokens: { in: number; out: number }; ok: boolean; error?: string };
+  "ai.call": {
+    purpose: string;
+    provider: string;
+    model: string;
+    tier: string;
+    ms: number;
+    tokens: { in: number; out: number };
+    ok: boolean;
+    error?: string;
+    /** What the input was made of (core/src/ai/context.ts): parts, sizes, cuts, redactions, source events, hash. */
+    context?: { budget: number; chars: number; hash: string; parts: { name: string; chars: number; of: number; cut: boolean; redacted: number; events?: number }[]; events: string[] };
+  };
   /** Something a person or an agent wrote down on purpose. */
   note: { by: "user" | "agent"; agentSession: string | null };
   /** Agent transcripts, one line each (docs/28 §2); shapes per agent in core/src/data/sources/transcripts.ts. */

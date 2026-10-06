@@ -14,6 +14,7 @@ import { JournalService } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
 import { recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
 import { DataService } from "./data/service.ts";
+import { buildContext } from "./ai/context.ts";
 import { matchesQuery } from "./data/match.ts";
 import { WidgetTokens, widgetQuery } from "./data/widgets.ts";
 import { ViewsStore } from "./data/views/views.ts";
@@ -320,7 +321,7 @@ export class Core {
       onCall: (c) => {
         const at = Date.now() - c.ms;
         const content = c.input !== undefined || c.output !== undefined ? `${c.input ?? ""}\n\n=== output ===\n\n${c.output ?? ""}` : null;
-        this.data.record({ id: `ai:${at}:${c.purpose}:${Math.random().toString(36).slice(2, 8)}`, at, until: at + c.ms, type: "ai.call", source: "cmd", text: `${c.purpose} · ${c.model}`, data: { purpose: c.purpose, provider: c.provider, model: c.model, tier: c.tier, ms: c.ms, tokens: { in: c.usage?.input ?? 0, out: c.usage?.output ?? 0 }, ok: c.ok, ...(c.error ? { error: c.error } : {}) }, content });
+        this.data.record({ id: `ai:${at}:${c.purpose}:${Math.random().toString(36).slice(2, 8)}`, at, until: at + c.ms, type: "ai.call", source: "cmd", text: `${c.purpose} · ${c.model}`, data: { purpose: c.purpose, provider: c.provider, model: c.model, tier: c.tier, ms: c.ms, tokens: { in: c.usage?.input ?? 0, out: c.usage?.output ?? 0 }, ok: c.ok, ...(c.error ? { error: c.error } : {}), ...(c.context ? { context: { budget: c.context.budget, chars: c.context.chars, hash: c.context.hash, parts: c.context.parts, events: c.context.events.slice(0, 500) } } : {}) }, content });
       },
     });
     this.ai.on("updated", (status) => this.#broadcast({ type: "ai.updated", status }));
@@ -714,7 +715,8 @@ export class Core {
   /** An agent notification's body from the fast tier (notifications.ai); null without a provider. */
   async #writeNotice(a: Agent, kind: NoticeKind, signal: AbortSignal): Promise<string | null> {
     if (!this.ai.status().ready) return null;
-    const res = await this.ai.complete({ tier: "fast", purpose: `notify.${kind}`, system: NOTICE_SYSTEM, prompt: JSON.stringify(noticeContext(a, kind)), effort: "minimal", maxOutputTokens: 800, signal });
+    const ctx = buildContext({ purpose: `notify.${kind}`, budget: 6000, parts: [{ name: "turn", text: JSON.stringify(noticeContext(a, kind)) }] });
+    const res = await this.ai.complete({ tier: "fast", purpose: `notify.${kind}`, system: NOTICE_SYSTEM, prompt: ctx.text, effort: "minimal", maxOutputTokens: 800, signal, context: ctx.record });
     return cleanAiBody(res.value);
   }
 

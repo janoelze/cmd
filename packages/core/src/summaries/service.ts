@@ -22,6 +22,7 @@ import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import type { CallOptions } from "../ai/service.ts";
 import { parseClaude, parseCodex, type ConversationEntry, type SessionDocument } from "../search/parser.ts";
 import { prune, redact } from "./prune.ts";
+import { buildContext } from "../ai/context.ts";
 import { renderSummary, SUMMARY_SCHEMA, type SummaryFacts, type SummaryText } from "./render.ts";
 
 const log = logger("summaries");
@@ -173,28 +174,23 @@ The title says what the session was about or achieved, as a person would name it
 - Leave out secrets, tokens, passwords and personal data, even where they appear. "[redacted]" and "[… cut …]" mark text left out before you saw it.
 - Write in the language of the user's prompts. Plain and concrete: no filler, no praise, no emoji.`;
 
-function promptFor(facts: SummaryFacts, entries: ConversationEntry[], omitted: number): string {
+/** The prompt's parts for the context builder: the facts, the session (fitted later), the outline of prompts read last. */
+function promptParts(facts: SummaryFacts, all: ConversationEntry[]): { facts: string; session: (entries: ConversationEntry[], omitted: number) => string; outline: string } {
   const hm = (t?: number) => (t ? new Date(t).toTimeString().slice(0, 5) + " " : "");
-  const outline = entries.filter((e) => e.role === "user").map((e, i) => `${i + 1}. ${hm(e.at)}${e.text.replace(/\s+/g, " ").slice(0, 160)}`);
   const label = { user: "user", assistant: "agent", tool: "tool" } as const;
-  const lines = entries.map((e) => `[${e.role === "user" ? hm(e.at) : ""}${label[e.role]}] ${e.text}`);
-  return [
+  const head = [
     `Agent: ${facts.agent}`,
     `Project: ${facts.project} (${tildify(facts.cwd)})${facts.branch ? `, branch ${facts.branch}` : ""}`,
     facts.files.length ? `Files changed (recorded by cmd): ${facts.files.slice(0, 80).map((f) => f.path).join(", ")}${facts.files.length > 80 ? ", …" : ""}` : "Files changed (recorded by cmd): none recorded",
     facts.commits.length ? `Commits in the repository since the session began (some may be others' work):\n${facts.commits.map((c) => `${c.hash} ${c.subject}`).join("\n")}` : "",
-    omitted ? `${omitted} older messages were left out to fit.` : "",
-    "",
-    "<session>",
-    ...lines,
-    "</session>",
-    "",
+  ].filter(Boolean);
+  const outline = all.filter((e) => e.role === "user").map((e, i) => `${i + 1}. ${hm(e.at)}${e.text.replace(/\s+/g, " ").slice(0, 160)}`);
+  return {
+    facts: head.join("\n"),
+    session: (entries, omitted) => ["", ...(omitted ? [`${omitted} older messages were left out to fit.`, ""] : []), "<session>", ...entries.map((e) => `[${e.role === "user" ? hm(e.at) : ""}${label[e.role]}] ${e.text}`), "</session>", ""].join("\n"),
     // After the session, where it's read last: the end of a session isn't all of it.
-    "Summarise the whole session above. The user's prompts, in order; each one that led to work belongs in the summary, weighted by what it produced:",
-    ...outline,
-  ]
-    .filter((l, i, a) => l || a[i - 1])
-    .join("\n");
+    outline: ["Summarise the whole session above. The user's prompts, in order; each one that led to work belongs in the summary, weighted by what it produced:", ...outline].join("\n"),
+  };
 }
 
 export class SummaryService {
@@ -262,7 +258,19 @@ export class SummaryService {
       }
     };
 
-    const pruned = prune(entries.map((e) => ({ ...e, text: redact(e.text) })), SUMMARY_BUDGET);
+    let pruned = prune(entries.map((e) => ({ ...e, text: redact(e.text) })), SUMMARY_BUDGET);
+    // The input through the context builder: facts and the prompt outline kept, the session fitted by the pruner into what's left.
+    const parts = promptParts(facts, entries);
+    const ctx = buildContext({
+      purpose: "agents.summary",
+      budget: SUMMARY_BUDGET + 20_000,
+      separator: "\n",
+      parts: [
+        { name: "facts", text: parts.facts, fixed: true },
+        { name: "session", fit: (max) => ((pruned = prune(entries.map((e) => ({ ...e, text: redact(e.text) })), max - 40)), parts.session(pruned.entries, pruned.omitted)) },
+        { name: "outline", text: parts.outline, weight: 0.1 },
+      ],
+    });
     write(renderSummary(facts, {}, { pending: `Summarizing ${facts.prompts === 1 ? "1 prompt" : `${facts.prompts} prompts`} with ${model}…` }));
     const windowId = o.open === false ? null : this.#o.show(file, a.spaceId);
 
@@ -282,7 +290,8 @@ export class SummaryService {
         tier: "fast",
         purpose: "agents.summary",
         system: SYSTEM,
-        prompt: promptFor(facts, pruned.entries, pruned.omitted),
+        prompt: ctx.text,
+        context: ctx.record,
         schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>,
         maxOutputTokens: 3000,
         onPartial: (p) => {

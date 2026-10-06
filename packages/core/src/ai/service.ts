@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
+import type { ContextRecord } from "./context.ts";
 import { logger } from "@cmd/protocol/node";
 import {
   AI_PROVIDER_IDS,
@@ -70,6 +71,7 @@ export interface AiCallRecord {
   error?: string;
   input?: string;
   output?: string;
+  context?: ContextRecord;
 }
 
 export interface CallOptions {
@@ -82,6 +84,8 @@ export interface CallOptions {
   provider?: AiProvider;
   model?: string;
   effort?: AiBackendOptions["effort"];
+  /** What the input was built from (ai/context.ts), recorded with the call. */
+  context?: ContextRecord;
 }
 
 interface Cached {
@@ -338,12 +342,12 @@ export class AiService extends EventEmitter<{ updated: [AiStatus] }> {
     try {
       const r = await (o.background ? this.#background.run(fn) : fn());
       log.info(o.purpose, { provider: b.provider, model: r.model, ms: Date.now() - t0, tokens: { in: r.usage.input, out: r.usage.output } });
-      this.#o.onCall?.({ purpose: o.purpose, provider: b.provider, model: r.model, tier: o.tier, ms: Date.now() - t0, usage: r.usage, ok: true, input: io?.input, output: io ? safeOutput(() => io.output(r)) : undefined });
+      this.#o.onCall?.({ purpose: o.purpose, provider: b.provider, model: r.model, tier: o.tier, ms: Date.now() - t0, usage: r.usage, ok: true, input: io?.input, output: io ? safeOutput(() => io.output(r)) : undefined, context: o.context });
       return r;
     } catch (e) {
       if (isAuthError(e)) this.#reject(b.provider);
       log.warn(`${o.purpose} failed`, { provider: b.provider, model: b.model, error: (e as Error).message });
-      this.#o.onCall?.({ purpose: o.purpose, provider: b.provider, model: b.model, tier: o.tier, ms: Date.now() - t0, usage: null, ok: false, error: (e as Error).message, input: io?.input });
+      this.#o.onCall?.({ purpose: o.purpose, provider: b.provider, model: b.model, tier: o.tier, ms: Date.now() - t0, usage: null, ok: false, error: (e as Error).message, input: io?.input, context: o.context });
       throw e;
     }
   }
