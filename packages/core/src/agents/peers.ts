@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Agent } from "@cmd/protocol";
-import { gitRoot } from "../spaces/paths.ts";
+import { checkoutOf as readCheckout } from "../checkout.ts";
 
 export interface Checkout {
   /** The repository's shared .git folder: equal for all worktrees of one repo. */
@@ -17,26 +17,12 @@ export interface Checkout {
   branch: string | null;
 }
 
-/** The checkout `dir` is in, read from .git without running git; null outside a repository. */
+/** The checkout `dir` is in (checkout.ts), keyed by the real path of its shared .git; null outside a repository. */
 export function checkoutOf(dir: string): Checkout | null {
-  const root = dir ? gitRoot(dir) : null;
-  if (!root) return null;
+  const c = readCheckout(dir);
+  if (!c) return null;
   try {
-    let gitDir = path.join(root, ".git");
-    let repo = gitDir;
-    if (fs.statSync(gitDir).isFile()) {
-      // Linked worktree: "gitdir: <repo>/.git/worktrees/<name>", whose commondir points back.
-      const m = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(gitDir, "utf8"));
-      if (!m) return null;
-      gitDir = path.resolve(root, m[1]!.trim());
-      repo = gitDir;
-      try {
-        repo = path.resolve(gitDir, fs.readFileSync(path.join(gitDir, "commondir"), "utf8").trim());
-      } catch {}
-    }
-    const head = fs.readFileSync(path.join(gitDir, "HEAD"), "utf8").trim();
-    const branch = /^ref: refs\/heads\/(.+)$/.exec(head)?.[1] ?? null;
-    return { repo: fs.realpathSync(repo), root, branch };
+    return { repo: fs.realpathSync(c.common), root: c.top, branch: c.branch };
   } catch {
     return null;
   }

@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { checkoutOf } from "../checkout.ts";
 
 /**
  * Canonical absolute path: `~` expanded, relative paths resolved against `base`,
@@ -53,18 +54,7 @@ export function deepest<T extends { root: string }>(items: Iterable<T>, p: strin
  * roots, as `git rev-parse --show-toplevel` has it). null outside a repository.
  */
 export function gitRoot(p: string): string | null {
-  let dir = p;
-  try {
-    if (!fs.statSync(dir).isDirectory()) dir = path.dirname(dir);
-  } catch {
-    return null;
-  }
-  for (;;) {
-    if (fs.existsSync(path.join(dir, ".git"))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
+  return checkoutOf(p)?.top ?? null;
 }
 
 /** Default display name for a root: its folder name ("/" for the file system root). */

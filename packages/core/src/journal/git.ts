@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { JournalData } from "@cmd/protocol";
 import type { NewJournalEvent } from "./store.ts";
+import { checkoutOf } from "../checkout.ts";
 
 export interface RepoInfo {
   /** The main worktree's folder: the project. */
@@ -30,37 +31,16 @@ function git(cwd: string, args: string[], timeout = 5000): Promise<string | null
   );
 }
 
-const repoCache = new Map<string, { at: number; info: RepoInfo | null }>();
-
-/** The repository a folder is in; null outside one. Cached for a minute (branches change). */
+/** The repository a folder is in (checkout.ts); null outside one. */
 export async function repoOf(cwd: string): Promise<RepoInfo | null> {
-  const hit = repoCache.get(cwd);
-  if (hit && Date.now() - hit.at < 60_000) return hit.info;
-  const out = await git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir", "--show-toplevel", "--abbrev-ref", "HEAD"]);
-  const [common = "", top = "", branch = ""] = (out ?? "").split("\n");
-  const info = common && top ? { repo: path.basename(common) === ".git" ? path.dirname(common) : common, top, common, branch: branch && branch !== "HEAD" ? branch : null } : null;
-  repoCache.set(cwd, { at: Date.now(), info });
-  return info;
+  const c = checkoutOf(cwd);
+  return c ? { repo: c.repo, top: c.top, common: c.common, branch: c.branch } : null;
 }
 
-/** The repository a path is in without running git: the nearest folder with a .git (a worktree's .git file points at its common dir). */
+/** The repository a path is in (checkout.ts), without running git. */
 export function repoOfSync(p: string): { repo: string; top: string } | null {
-  for (let dir = p; dir !== path.dirname(dir); dir = path.dirname(dir)) {
-    const g = path.join(dir, ".git");
-    let st: fs.Stats | undefined;
-    try {
-      st = fs.statSync(g);
-    } catch {
-      continue;
-    }
-    if (st.isDirectory()) return { repo: dir, top: dir };
-    const m = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(g, "utf8"));
-    const wt = m?.[1]?.trim();
-    // <repo>/.git/worktrees/<name>
-    if (wt && path.basename(path.dirname(wt)) === "worktrees") return { repo: path.dirname(path.dirname(path.dirname(wt))), top: dir };
-    return { repo: dir, top: dir };
-  }
-  return null;
+  const c = checkoutOf(p);
+  return c ? { repo: c.repo, top: c.top } : null;
 }
 
 export interface ReflogEntry {
