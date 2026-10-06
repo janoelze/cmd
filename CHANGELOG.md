@@ -2,6 +2,12 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.17.1 — 2026-10-07
+
+### Improved
+
+- An empty Space shows a few shortcuts worth knowing, such as ⌘K for the command palette.
+
 ## 0.17.0 — 2026-10-07
 
 Bigger, sharper icons and one toolbar for every window.
