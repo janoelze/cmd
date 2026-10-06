@@ -10,7 +10,8 @@ import type { ViewsStore } from "./views.ts";
 
 const log = logger("sessions");
 
-const VERSION = 1;
+// 2: message counts were doubled for transcripts read twice (archived copies).
+const VERSION = 2;
 const SQL = `
   CREATE TABLE IF NOT EXISTS sessions (
     key TEXT PRIMARY KEY,
