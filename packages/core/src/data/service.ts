@@ -13,6 +13,7 @@ import { logger } from "@cmd/protocol/node";
 import { redact, redactDeep } from "../redact.ts";
 import { hookEvents, journalEvents } from "./sources/legacy.ts";
 import { DataStore, type StoreEvent } from "./store.ts";
+import { excludedBy, parseExclude, type ExcludeRules } from "./exclude.ts";
 
 const log = logger("data");
 
@@ -28,7 +29,18 @@ export interface DataServiceOptions {
   now?: () => number;
 }
 
-export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [DataEvent[]] }> {
+/** What a forget names: everything of a session, of a project, before a time, of some types (all given must match). */
+export interface ForgetWhat {
+  sessionId?: string;
+  projectId?: string;
+  before?: number;
+  types?: string[];
+}
+
+export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [DataEvent[]]; removed: [{ types: string[]; count: number }] }> {
+  #rules: { setting: string; rules: ExcludeRules } | null = null;
+  /** Sessions and projects the person told cmd to forget: never recorded again (a re-read transcript included). */
+  #forgotten: Set<string> | null = null;
   readonly store: DataStore;
   #o: DataServiceOptions;
   #seen = new Set<string>();
@@ -75,7 +87,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
    */
   record(e: NewDataEvent): DataEvent | null {
     const c = classOf(e.type);
-    if (!this.enabled(c)) return null;
+    if (!this.enabled(c) || this.#refused(e)) return null;
     let flags = 0;
     const text = e.text ? redact(e.text) : (e.text ?? null);
     const body = e.body ? redact(e.body) : (e.body ?? null);
@@ -113,7 +125,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
     this.store.transaction(() => {
       for (const e of events) {
         const c = classOf(e.type);
-        if (!this.enabled(c)) continue;
+        if (!this.enabled(c) || this.#refused(e)) continue;
         const cap = DATA_CLASSES[c].cap;
         let content = typeof e.content === "string" ? redact(e.content) : (e.content ?? null);
         let flags = DATA_FLAGS.imported;
@@ -157,6 +169,69 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
       const info = DATA_CLASSES[c];
       return { class: c, ...info, keepDays: info.keepDays === "setting" ? keepDays : info.keepDays, enabled: this.enabled(c), events: counts.get(c) ?? 0 };
     });
+  }
+
+  /** The exclusion rules as the settings say now (data.exclude), parsed once per change. */
+  rules(): ExcludeRules {
+    const setting = String((this.#o.settings() as unknown as Record<string, unknown>)["data.exclude"] ?? "");
+    if (this.#rules?.setting !== setting) this.#rules = { setting, rules: parseExclude(setting) };
+    return this.#rules.rules;
+  }
+
+  /** Not recorded: excluded by the rules, or of a forgotten session or project. */
+  #refused(e: NewDataEvent): boolean {
+    if (excludedBy(this.rules(), e)) return true;
+    this.#forgotten ??= new Set(this.store.entities("forgotten").map((x) => x.id));
+    return (!!e.sessionId && this.#forgotten.has(e.sessionId)) || (!!e.projectId && this.#forgotten.has(e.projectId));
+  }
+
+  /**
+   * Deletes what's named (and the blobs only it used) and records that something
+   * was forgotten, not what. A forgotten session or project stays forgotten:
+   * its events are refused from then on, even when its transcript is read again.
+   */
+  forget(w: ForgetWhat): number {
+    if (!w.sessionId && !w.projectId && !w.before && !w.types?.length) throw new Error("say what to forget: a session, a project, a time or types");
+    const types = this.#typesOf(w);
+    const n = this.store.delete({ sessionId: w.sessionId, projectId: w.projectId, before: w.before, types: w.types });
+    for (const id of [w.sessionId, w.projectId]) if (id) this.store.entity("forgotten", id, {}, this.#now), this.#forgotten?.add(id);
+    this.store.sweepBlobs();
+    this.record({ id: `data:forget:${this.#now}`, at: this.#now, type: "data.op", source: "cmd", data: { op: "forget", detail: { events: n, session: !!w.sessionId, project: !!w.projectId, before: w.before ?? null, types: w.types ?? null } } });
+    if (n) this.emit("removed", { types, count: n });
+    return n;
+  }
+
+  /** The types a forget will touch, for the views to know what to rebuild. */
+  #typesOf(w: ForgetWhat): string[] {
+    const [where, args] = [[] as string[], [] as (string | number)[]];
+    if (w.sessionId) where.push("session_id = ?"), args.push(w.sessionId);
+    if (w.projectId) where.push("project_id = ?"), args.push(w.projectId);
+    if (w.before) where.push("at < ?"), args.push(w.before);
+    const rows = this.store.db.prepare(`SELECT DISTINCT type FROM events ${where.length ? `WHERE ${where.join(" AND ")}` : ""}`).all(...args) as { type: string }[];
+    return rows.map((r) => r.type).filter((t) => !w.types?.length || w.types.some((x) => (x.endsWith(".") ? t.startsWith(x) : t === x)));
+  }
+
+  /** Applies the exclusion rules to what's already kept; returns how many events went. */
+  applyRules(): number {
+    const rules = this.rules();
+    if (!rules.folders.length && !rules.hosts.length && !rules.commands.length) return 0;
+    const seqs: number[] = [];
+    const types = new Set<string>();
+    let after = 0;
+    for (;;) {
+      const page = this.store.query({ after, limit: 5000 });
+      if (!page.length) break;
+      for (const e of page) if (excludedBy(rules, e as unknown as NewDataEvent)) seqs.push(e.seq), types.add(e.type);
+      after = page.at(-1)!.seq;
+    }
+    let n = 0;
+    for (let i = 0; i < seqs.length; i += 500) n += this.store.delete({ seqs: seqs.slice(i, i + 500) });
+    this.store.sweepBlobs();
+    if (n) {
+      this.record({ id: `data:rules:${this.#now}`, at: this.#now, type: "data.op", source: "cmd", data: { op: "prune", detail: { events: n, rules: true } } });
+      this.emit("removed", { types: [...types], count: n });
+    }
+    return n;
   }
 
   /** Views follow the facts: called with the time before which agent events were pruned. */

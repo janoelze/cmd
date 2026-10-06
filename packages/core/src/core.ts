@@ -261,6 +261,11 @@ export class Core {
     }
     this.data.on("recorded", (e) => this.#dataChanged([e]));
     this.data.on("batch", (events) => this.#dataChanged(events));
+    // Views follow what was forgotten or excluded: rebuilt from what's left.
+    this.data.on("removed", ({ types }) => {
+      if (types.some((t) => t.startsWith("agent."))) this.agents.activity.rebuild();
+      if (types.some((t) => t.startsWith("transcript."))) this.sessions.rebuild(), this.#searchView.invalidate();
+    });
     const activity = new ActivityView(this.data, this.views);
     this.sessions = new SessionsView(this.views, this.data);
     this.#searchView = new SearchView(this.data, this.sessions);
@@ -521,6 +526,8 @@ export class Core {
       throw new Error("widget.hello is for the widgets socket");
     },
     "data.unsubscribe": () => null,
+    "data.forget": (p) => ({ events: this.data.forget(p) }),
+    "data.applyRules": () => ({ events: this.data.applyRules() }),
     "agents.export": (p) => {
       const log = this.agents.activity;
       const since = Date.now() - (p.days ?? 14) * 86400_000;

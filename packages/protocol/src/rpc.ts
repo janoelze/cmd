@@ -179,6 +179,10 @@ export interface Methods {
   /** On the widgets socket: which widget this connection is (a token issued for its data.ts run); then data.query is allowed. */
   "widget.hello": { params: { token: string }; result: { widgetId: string; spaceId: string | null } };
   "data.unsubscribe": { params: { id: string }; result: null };
+  /** Deletes a session's, a project's, a time range's or some types' events (all given must match); a forgotten session or project is never recorded again. */
+  "data.forget": { params: { sessionId?: string; projectId?: string; before?: number; types?: string[] }; result: { events: number } };
+  /** Applies the exclusion rules (data.exclude) to what's already kept. */
+  "data.applyRules": { params: {}; result: { events: number } };
   /** Where agents keep their config (discovered); rescan: look again first. */
   "agents.homes": { params: { rescan?: boolean }; result: AgentHome[] };
 

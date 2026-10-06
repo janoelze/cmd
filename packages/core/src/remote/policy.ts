@@ -69,6 +69,8 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "data.subscribe": "never",
   "widget.hello": "never",
   "data.unsubscribe": "never",
+  "data.forget": "never",
+  "data.applyRules": "never",
   "agents.export": "never",
   "hook.ingest": "never",
   "hooks.status": "never",

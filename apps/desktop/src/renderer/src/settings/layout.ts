@@ -135,6 +135,7 @@ export const SETTINGS_PAGES: Page[] = [
     sections: [
       { title: "What cmd keeps", items: ["data.record.transcripts", "data.record.output", "data.record.browsing", "data.record.actions"] },
       { title: "For how long", items: ["data.keepDays"] },
+      { title: "Never record", items: ["data.exclude"] },
     ],
   },
 ];

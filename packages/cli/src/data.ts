@@ -16,6 +16,9 @@ export const DATA_HELP = `  data stats                          what the event l
   data subscribe [--type T,…] [--since 7d] [--project PATH] [--text WORDS] [--json]
                                       events as they're recorded, one line each (Ctrl-C to stop)
   data ai [--since 30d]               model calls by purpose: how many, tokens in and out, failures, what was cut to fit
+  data forget [--session AGENT:ID] [--project PATH] [--before DATE] [--type T,…]
+                                      delete what's named, for good; a forgotten session or project is never recorded again
+  data prune --rules                  remove what the data.exclude setting says never to keep
   data export [--since 30d] [--out FILE]
                                       every event as JSONL (one line each, the envelope and its data; blobs by hash)
   data import FILE                    events from an export`;
@@ -98,6 +101,26 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
       const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
       for (const [p, r] of [...by].sort((a, b) => b[1].tin - a[1].tin))
         console.log(`  ${p.padEnd(22)} ${String(r.n).padStart(5)} calls  ${k(r.tin).padStart(7)} in  ${k(r.tout).padStart(7)} out${r.failed ? `  ${r.failed} failed` : ""}${r.cut ? `  ${r.cut} cut to fit` : ""}  ${[...r.models].join(", ")}`);
+      return 0;
+    }
+    case "forget": {
+      const p: { sessionId?: string; projectId?: string; before?: number; types?: string[] } = {};
+      if (typeof opt.session === "string") p.sessionId = opt.session;
+      if (typeof opt.project === "string") p.projectId = `dir:${opt.project.replace(/^~/, process.env.HOME ?? "~")}`;
+      if (typeof opt.before === "string") {
+        const t = Date.parse(opt.before);
+        if (Number.isNaN(t)) throw new Error(`--before takes a date (2026-10-01): not "${opt.before}"`);
+        p.before = t;
+      }
+      if (typeof opt.type === "string") p.types = opt.type.split(",").map((t) => t.trim()).filter(Boolean);
+      const { events } = await client.call("data.forget", p);
+      console.log(json ? JSON.stringify({ events }) : events ? `${events} event${events === 1 ? "" : "s"} forgotten.` : "Nothing matched.");
+      return 0;
+    }
+    case "prune": {
+      if (!opt.rules) throw new Error("usage: cmd data prune --rules");
+      const { events } = await client.call("data.applyRules", {});
+      console.log(json ? JSON.stringify({ events }) : events ? `${events} event${events === 1 ? "" : "s"} removed.` : "Nothing to remove.");
       return 0;
     }
     case "subscribe": {
