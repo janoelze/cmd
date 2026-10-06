@@ -15,6 +15,7 @@ export const DATA_HELP = `  data stats                          what the event l
                                       events, oldest first; types may be prefixes ("git.")
   data subscribe [--type T,…] [--since 7d] [--project PATH] [--text WORDS] [--json]
                                       events as they're recorded, one line each (Ctrl-C to stop)
+  data ai [--since 30d]               model calls by purpose: how many, tokens in and out, failures, what was cut to fit
   data export [--since 30d] [--out FILE]
                                       every event as JSONL (one line each, the envelope and its data; blobs by hash)
   data import FILE                    events from an export`;
@@ -78,6 +79,25 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
       if (json) return console.log(JSON.stringify(events, null, 2)), 0;
       for (const e of events) console.log(line(e));
       if (!events.length) console.log("Nothing recorded for that.");
+      return 0;
+    }
+    case "ai": {
+      const since = sinceOf(opt.since ?? "30d")!;
+      const calls = await client.call("data.query", { query: { types: ["ai.call"], at: [since, Date.now() + 1], limit: 100_000 } });
+      const by = new Map<string, { n: number; failed: number; tin: number; tout: number; cut: number; models: Set<string> }>();
+      for (const e of calls) {
+        const d = e.data as { purpose: string; model: string; ok: boolean; tokens: { in: number; out: number }; context?: { parts: { cut: boolean }[] } };
+        const r = by.get(d.purpose) ?? { n: 0, failed: 0, tin: 0, tout: 0, cut: 0, models: new Set<string>() };
+        r.n++, (r.tin += d.tokens.in), (r.tout += d.tokens.out), r.models.add(d.model);
+        if (!d.ok) r.failed++;
+        if (d.context?.parts.some((p) => p.cut)) r.cut++;
+        by.set(d.purpose, r);
+      }
+      if (json) return console.log(JSON.stringify(Object.fromEntries([...by].map(([k, v]) => [k, { ...v, models: [...v.models] }])), null, 2)), 0;
+      if (!by.size) return console.log("No model calls recorded in that time."), 0;
+      const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
+      for (const [p, r] of [...by].sort((a, b) => b[1].tin - a[1].tin))
+        console.log(`  ${p.padEnd(22)} ${String(r.n).padStart(5)} calls  ${k(r.tin).padStart(7)} in  ${k(r.tout).padStart(7)} out${r.failed ? `  ${r.failed} failed` : ""}${r.cut ? `  ${r.cut} cut to fit` : ""}  ${[...r.models].join(", ")}`);
       return 0;
     }
     case "subscribe": {
