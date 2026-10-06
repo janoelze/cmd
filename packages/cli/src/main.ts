@@ -123,7 +123,6 @@ const { values: opt, positionals: pos } = parseArgs({
     project: { type: "string" },
     session: { type: "string" },
     text: { type: "string" },
-    out: { type: "string" },
     rescan: { type: "boolean" },
     anonymize: { type: "boolean" },
     out: { type: "string" },
