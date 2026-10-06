@@ -2,6 +2,20 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.15.1 — 2026-10-06
+
+### New
+
+- **New… (⌘N).** One place for every new window and widget, windows first. Type a URL or a path to open it, or describe a widget to make it with Magic.
+
+### Improved
+
+- New Terminal is now ⌘T, and the top bar's + opens New….
+
+### Fixed
+
+- ↑ and ↓ in the command palette scroll the list along with the selection.
+
 ## 0.15.0 — 2026-10-06
 
 ### New
