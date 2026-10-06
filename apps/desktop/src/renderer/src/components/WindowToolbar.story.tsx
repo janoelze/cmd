@@ -1,13 +1,16 @@
 // Workbench stories (pnpm workbench windowtoolbar): the kit's WindowToolbar as each
 // window type uses it, at the widths windows get (a narrow sidebar to a wide tile),
 // selected and at rest. The toolbars here are the specs the views follow.
+// Fields: Fields shows the three kinds (text, search, address) at rest and in use.
 
 import {
+  ToolbarAddressField,
   ToolbarButton,
   ToolbarField,
   ToolbarGroup,
   ToolbarMenu,
   ToolbarPath,
+  ToolbarSearchField,
   ToolbarSegmented,
   ToolbarSeparator,
   ToolbarSpacer,
@@ -23,7 +26,7 @@ import { useState, type ReactNode } from "react";
 const WIDTHS = [220, 320, 480, 640];
 
 function Browser() {
-  const [url, setUrl] = useState("github.com/janoelze/cmd/pulls");
+  const [url, setUrl] = useState("https://www.github.com/janoelze/cmd/pulls?q=is%3Aopen");
   return (
     <WindowToolbar label="Browser">
       <ToolbarGroup>
@@ -31,7 +34,7 @@ function Browser() {
         <ToolbarButton icon="chevron.right" label="Forward" shortcut="⌘]" disabled />
         <ToolbarButton icon="arrow.clockwise" label="Reload" shortcut="⌘R" priority={2} />
       </ToolbarGroup>
-      <ToolbarField value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Enter a URL" minWidth={90} />
+      <ToolbarAddressField value={url} onSubmit={setUrl} placeholder="Search or enter address" minWidth={90} />
       <ToolbarButton icon="safari" label="Open in Default Browser" secondary priority={1} />
     </WindowToolbar>
   );
@@ -59,7 +62,7 @@ function Pdf() {
   return (
     <WindowToolbar label="PDF">
       <ToolbarButton icon="sidebar.left" label={sidebar ? "Hide Sidebar" : "Show Sidebar"} pressed={sidebar} onClick={() => setSidebar((s) => !s)} priority={2} />
-      <ToolbarField defaultValue="3" aria-label="Page" minWidth={36} maxWidth={44} style={{ textAlign: "center" }} />
+      <ToolbarField defaultValue="3" aria-label="Page" align="center" minWidth={36} maxWidth={44} />
       <ToolbarText priority={0}>of 24</ToolbarText>
       <ToolbarSpacer />
       <ToolbarGroup>
@@ -79,7 +82,7 @@ function Events() {
   const [q, setQ] = useState("");
   return (
     <WindowToolbar label="Filter events">
-      <ToolbarField icon="magnifyingglass" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter events" end={q ? "12" : undefined} />
+      <ToolbarSearchField value={q} onChange={setQ} placeholder="Filter events" count="12" />
       <ToolbarButton icon="pause" label="Pause" showLabel secondary priority={1} />
     </WindowToolbar>
   );
@@ -169,6 +172,25 @@ export const Resize = () => {
       {KINDS.map((k) => (
         <Win key={k.name} width={w} icon={k.icon} name={k.name} selected>
           <k.bar />
+        </Win>
+      ))}
+    </Stage>
+  );
+};
+
+/** The three fields: a page number (text), a filter (search, with its count and clear), an address (at rest, then click it). */
+export const Fields = () => {
+  const [q, setQ] = useState("agent");
+  const [url, setUrl] = useState("https://www.github.com/janoelze/cmd/pulls?q=is%3Aopen");
+  return (
+    <Stage>
+      {[480, 260].map((w) => (
+        <Win key={w} width={w} icon="globe" name="Fields" selected>
+          <WindowToolbar label="Fields">
+            <ToolbarField defaultValue="12" aria-label="Page" align="center" minWidth={36} maxWidth={44} />
+            <ToolbarSearchField value={q} onChange={setQ} placeholder="Filter" count="3 of 12" minWidth={80} />
+            <ToolbarAddressField value={url} onSubmit={setUrl} placeholder="Search or enter address" minWidth={90} />
+          </WindowToolbar>
         </Win>
       ))}
     </Stage>

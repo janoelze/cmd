@@ -1083,7 +1083,17 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
    Fields, labels, paths and text all share this, so they share a baseline. */
 .ui-tb-field input { flex: 1; min-width: 0; height: 100%; padding: 0 0 2px; font: inherit; color: var(--text); background: none; border: 0; outline: none; user-select: text; }
 .ui-tb-field input::placeholder { color: var(--input-placeholder); }
-.ui-tb-field-end { flex: none; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ui-tb-field[data-align="center"] input { text-align: center; }
+/* A search field's count gives way to the text it counts when the field is narrow. */
+.ui-tb-search { container-type: inline-size; }
+@container (max-width: 150px) { .ui-tb-field-count { display: none; } }
+/* An address at rest: centred, quieter, as browsers show it; editing, plain. */
+.ui-tb-address:not(:focus-within) input { text-align: center; color: color-mix(in srgb, var(--text) 72%, transparent); text-overflow: ellipsis; cursor: default; }
+.ui-tb-address:not(:focus-within) { cursor: default; }
+/* Centred, not lifted with the text beside it. */
+.ui-tb-field-clear { position: relative; top: 1px; display: grid; place-items: center; width: 16px; height: 16px; margin-right: -3px; padding: 0; color: var(--text-dim); background: none; border: 0; cursor: default; }
+.ui-tb-field-clear:hover { color: var(--text); }
+.ui-tb-field-end { flex: none; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .ui-tb-text-item { padding: 0 4px; font-size: 11.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

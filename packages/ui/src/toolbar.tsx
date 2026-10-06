@@ -223,20 +223,122 @@ export interface ToolbarFieldProps extends Omit<InputHTMLAttributes<HTMLInputEle
   minWidth?: number;
   /** As wide as it gets, in px; without one it takes the room left. */
   maxWidth?: number;
-  /** After the text, inside: a count ("3 of 12"). */
+  /** After the text, inside: a count ("3 of 12"), a clear button. */
   end?: ReactNode;
+  /** The text's alignment (a page number centres). */
+  align?: "start" | "center";
 }
 
-/** A text input in the bar: an address, a filter, a page number. It takes the room left, down to its minimum. */
-export const ToolbarField = forwardRef<HTMLInputElement, ToolbarFieldProps>(function ToolbarField({ icon, minWidth = 80, maxWidth, end, className, style, ...rest }, ref) {
+/** A text input in the bar (a page number, a name). It takes the room left, down to its minimum. */
+export const ToolbarField = forwardRef<HTMLInputElement, ToolbarFieldProps>(function ToolbarField({ icon, minWidth = 80, maxWidth, end, align, className, style, ...rest }, ref) {
   return (
-    <label className={cls("ui-tb-field", className)} style={{ minWidth, maxWidth, flexGrow: maxWidth ? 0 : 1, flexBasis: maxWidth ?? 0, ...style }}>
+    <label className={cls("ui-tb-field", className)} data-align={align} style={{ minWidth, maxWidth, flexGrow: maxWidth ? 0 : 1, flexBasis: maxWidth ?? 0, ...style }}>
       {icon && iconNode(icon, ICON.control + 2)}
       <input ref={ref} spellCheck={false} {...rest} />
       {end != null && <span className="ui-tb-field-end">{end}</span>}
     </label>
   );
 });
+
+/** A filter or find field: a magnifying glass, a count, a clear button; Escape clears it (then `onEscape`). */
+export const ToolbarSearchField = forwardRef<
+  HTMLInputElement,
+  Omit<ToolbarFieldProps, "icon" | "value" | "onChange"> & { value: string; onChange: (v: string) => void; count?: ReactNode; onEscape?: () => void }
+>(function ToolbarSearchField({ value, onChange, count, onEscape, onKeyDown, end, ...rest }, ref) {
+  return (
+    <ToolbarField
+      ref={ref}
+      icon="magnifyingglass"
+      className="ui-tb-search"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        onKeyDown?.(e);
+        if (e.defaultPrevented || e.key !== "Escape") return;
+        if (value) onChange("");
+        else onEscape?.();
+      }}
+      end={
+        <>
+          {count != null && value && <span className="ui-tb-field-count">{count}</span>}
+          {end}
+          {value && (
+            <button type="button" className="ui-tb-field-clear" aria-label="Clear" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={() => onChange("")}>
+              {iconNode("xmark.circle.fill", ICON.control + 2)}
+            </button>
+          )}
+        </>
+      }
+      {...rest}
+    />
+  );
+});
+
+/**
+ * An address as browsers show one: at rest, without the protocol, "www.", the
+ * query and a trailing slash, centred and quieter; focused, the whole address,
+ * selected, to edit. Enter submits it (`onSubmit`), Escape puts it back.
+ */
+export const ToolbarAddressField = forwardRef<
+  HTMLInputElement,
+  Omit<ToolbarFieldProps, "value" | "onChange" | "onSubmit"> & { value: string; onSubmit: (text: string) => void; onEscape?: () => void; display?: (url: string) => string }
+>(function ToolbarAddressField({ value, onSubmit, onEscape, display = displayAddress, onFocus, onBlur, onKeyDown, ...rest }, ref) {
+  const own = useRef<HTMLInputElement | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const editing = draft !== null;
+  return (
+    <ToolbarField
+      ref={(el) => {
+        own.current = el;
+        if (typeof ref === "function") ref(el);
+        else if (ref) ref.current = el;
+      }}
+      className="ui-tb-address"
+      data-editing={editing || undefined}
+      value={editing ? draft : display(value)}
+      title={editing ? undefined : value || undefined}
+      onFocus={(e) => {
+        setDraft(value);
+        // After React puts the whole address in.
+        const el = e.currentTarget;
+        requestAnimationFrame(() => el.select());
+        onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setDraft(null);
+        onBlur?.(e);
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        onKeyDown?.(e);
+        if (e.defaultPrevented) return;
+        if (e.key === "Enter" && draft !== null) {
+          onSubmit(draft.trim());
+          own.current?.blur();
+        } else if (e.key === "Escape") {
+          setDraft(value);
+          own.current?.blur();
+          onEscape?.();
+        }
+      }}
+      {...rest}
+    />
+  );
+});
+
+/** How an address shows at rest: host and path, no protocol, "www.", query, fragment or trailing slash. */
+export function displayAddress(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("file://")) return decodeURI(url.slice(7));
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return url;
+    const path = u.pathname === "/" ? "" : u.pathname.replace(/\/$/, "");
+    return decodeURI(u.host.replace(/^www\./, "") + path);
+  } catch {
+    return url;
+  }
+}
 
 /** Dim text in the bar ("of 12", a count). With a `priority` it hides when there is no room (no menu entry). */
 export function ToolbarText({ children, className, ...p }: ItemProps & { children: ReactNode; className?: string }) {

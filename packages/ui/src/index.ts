@@ -15,6 +15,6 @@ export { Callout, Card, CodeBlock, EmptyState, FeatureList, FormRow, FormSection
 export { ConfirmDialog, Dialog, Menu, Popover, Toast, Toaster, dismissToast, placePopover, toast, type MenuItemProps, type ToastOptions } from "./overlay.tsx";
 export { Badge, Kbd, PageDots, Progress, ProgressRing, Spinner, StatusDot, type DotState, type Tone } from "./status.tsx";
 export { installScrollbars, SCROLLBAR_CSS } from "./scrollbars.ts";
-export { ToolbarButton, ToolbarField, ToolbarGroup, ToolbarMenu, ToolbarPath, ToolbarSegmented, ToolbarSeparator, ToolbarSpacer, ToolbarText, WindowToolbar, type ToolbarButtonProps, type ToolbarFieldProps } from "./toolbar.tsx";
+export { displayAddress, ToolbarAddressField, ToolbarButton, ToolbarField, ToolbarSearchField, ToolbarGroup, ToolbarMenu, ToolbarPath, ToolbarSegmented, ToolbarSeparator, ToolbarSpacer, ToolbarText, WindowToolbar, type ToolbarButtonProps, type ToolbarFieldProps } from "./toolbar.tsx";
 export { Window, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "./window.tsx";
 export { installTooltips, placeTip, useTooltip, type TipSide } from "./tooltips.tsx";
