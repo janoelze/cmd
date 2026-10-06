@@ -1,0 +1,52 @@
+/* Journal (prototype): days, their ribbon and a timeline of entries. Parts that
+   last (the ribbon, the timeline rail) belong in @cmd/ui once the shape settles. */
+
+.journal .ui-panel-body { padding: 4px 0 16px; }
+
+.journal-writing { display: flex; align-items: center; gap: 8px; margin: 6px 14px 2px; font-size: var(--text-sm); color: var(--text-dim); }
+
+.journal-day { padding: 10px 14px 4px; }
+.journal-day + .journal-day { border-top: 1px solid var(--separator); margin-top: 8px; }
+.journal-day-head { display: flex; align-items: baseline; gap: 8px; min-height: 22px; }
+.journal-day-head h3 { margin: 0; font: 600 var(--text-lg) var(--font-ui); color: var(--text); }
+.journal-day-span { flex: 1; font-size: var(--text-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.journal-day-headline { margin: 4px 0 10px; font-size: var(--text-md); line-height: 1.45; color: var(--text); text-wrap: pretty; }
+
+/* The ribbon: hours across, entries as bars on lanes. */
+.journal-ribbon { --lane: 7px; margin: 0 0 10px; }
+.journal-ribbon-track { position: relative; height: calc(var(--lanes) * var(--lane)); border-radius: 3px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.journal-ribbon-bar { position: absolute; height: 5px; margin-top: 1px; padding: 0; border: 0; border-radius: 3px; cursor: pointer; background: hsl(var(--hue) 62% 58%); opacity: 0.85; transition: opacity var(--dur-fast) var(--ease); }
+.journal-ribbon-bar:hover, .journal-ribbon-bar[data-picked] { opacity: 1; box-shadow: 0 0 0 1.5px var(--window-bg, var(--bg)), 0 0 0 3px hsl(var(--hue) 62% 58%); }
+.journal-ribbon-ticks { position: relative; height: 14px; margin-top: 3px; font-size: var(--text-2xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.journal-ribbon-ticks span { position: absolute; transform: translateX(-50%); }
+.journal-ribbon-ticks span:first-child { transform: none; }
+.journal-ribbon-ticks span:last-child { transform: translateX(-100%); }
+
+/* Entries: time, a rail with the kind's mark, the text. */
+.journal-entries { display: flex; flex-direction: column; }
+.journal-entry { display: grid; grid-template-columns: 38px 15px 1fr; column-gap: 6px; }
+.journal-entry-time { padding-top: 3px; font-size: var(--text-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; text-align: right; }
+.journal-entry-rail { position: relative; display: flex; justify-content: center; }
+.journal-entry-rail::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--separator); }
+.journal-entry:first-child .journal-entry-rail::before { top: 10px; }
+.journal-entry:last-child .journal-entry-rail::before { bottom: auto; height: 10px; }
+.journal-entry-mark { position: relative; width: 9px; height: 9px; margin-top: 7px; border-radius: 50%; background: hsl(var(--hue) 62% 58%); box-shadow: 0 0 0 3px var(--window-bg, var(--bg)); }
+.journal-entry[data-open] .journal-entry-summary { display: block; }
+.journal-entry-body { min-width: 0; padding-bottom: 14px; }
+.journal-entry-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 0 0; border: 0; background: none; text-align: left; color: var(--text); cursor: pointer; font: 600 var(--text-base) / 1.35 var(--font-ui); }
+.journal-entry-title { min-width: 0; }
+.journal-entry-head:hover .journal-entry-title { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--text) 30%, transparent); text-underline-offset: 2px; }
+.journal-entry-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 2px 0 4px; font-size: var(--text-md); line-height: 1.45; color: var(--text-dim); text-wrap: pretty; }
+.journal-entry-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+.journal-glyph { display: inline-grid; place-items: center; width: 14px; height: 14px; }
+
+/* An entry's events. */
+.journal-events { margin: 8px 0 0; padding: 6px 8px; list-style: none; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.journal-events li { display: flex; align-items: center; gap: 6px; min-height: 20px; font-size: var(--text-sm); color: var(--text); }
+.journal-events li .journal-glyph { color: var(--icon, var(--text-dim)); }
+.journal-events li[data-failed] .journal-event-text, .journal-events li[data-failed] .journal-glyph { color: var(--danger); }
+.journal-event-time { flex: none; width: 34px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.journal-event-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.journal-event-text.mono { font: var(--text-sm) var(--font-mono); }
+.journal-event-meta { flex: none; margin-left: auto; color: var(--text-dim); font-size: var(--text-xs); }
