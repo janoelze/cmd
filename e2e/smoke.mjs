@@ -860,6 +860,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await menu("file.new");
     await win.waitForSelector(".palette", { timeout: 5000 });
     const offered = await win.locator(".palette-list .palette-label").allTextContents();
+    await win.mouse.move(0, 0);
+    await win.waitForTimeout(500); // the rows' symbols load from macOS
     await win.screenshot({ path: path.join(shots, "new-picker.png") });
     await win.locator(".palette-input").fill("timer");
     await win.keyboard.press("Enter");
