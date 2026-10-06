@@ -10,7 +10,7 @@ import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { DATA_CLASSES, DATA_FLAGS, classOf, type DataClass, type DataClassInfo, type DataEvent, type DataQuery, type DataStats, type NewDataEvent, type Settings } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import { redact, redactDeep } from "../redact.ts";
+import { redact, redactDeep, redactEvent } from "../redact.ts";
 import { hookEvents, journalEvents, remoteAudit } from "./sources/legacy.ts";
 import { DataStore, type StoreEvent } from "./store.ts";
 import { excludedBy, parseExclude, type ExcludeRules } from "./exclude.ts";
@@ -148,18 +148,22 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
     }
   }
 
-  /** Like recordAll, returning the stored events (for views fed from a batch). */
-  recordBatch(events: Iterable<NewDataEvent>): DataEvent[] {
+  /**
+   * Like recordAll, returning the stored events (for views fed from a batch).
+   * `redacted`: the caller ran redactEvent already (the transcript reader does, off the core's thread).
+   */
+  recordBatch(events: Iterable<NewDataEvent>, o: { redacted?: boolean } = {}): DataEvent[] {
     const out: DataEvent[] = [];
     this.store.transaction(() => {
-      for (const e of events) {
-        const c = classOf(e.type);
-        if (!this.enabled(c) || this.#refused(e)) continue;
+      for (const raw of events) {
+        const c = classOf(raw.type);
+        if (!this.enabled(c) || this.#refused(raw)) continue;
+        const e = o.redacted ? raw : redactEvent(raw);
         const cap = DATA_CLASSES[c].cap;
-        let content = typeof e.content === "string" ? redact(e.content) : (e.content ?? null);
+        let content = e.content ?? null;
         let flags = DATA_FLAGS.imported;
         if (cap && typeof content === "string" && content.length > cap) (content = content.slice(0, cap)), (flags |= DATA_FLAGS.cut);
-        this.store.record({ ...e, text: e.text ? redact(e.text) : e.text, body: e.body ? redact(e.body) : e.body, data: redactDeep(e.data), content, flags });
+        this.store.record({ ...e, content, flags });
         this.#entities(e);
         const stored = this.store.get(e.id);
         if (stored) out.push(stored);

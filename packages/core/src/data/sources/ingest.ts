@@ -35,6 +35,9 @@ const FILES_SQL = `
   );
 `;
 
+/** Events recorded at a time while reading in the background (#recordInSteps). */
+const STEP = 250;
+
 export interface IngestOptions {
   data: DataService;
   views: ViewsStore;
@@ -58,7 +61,8 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
   constructor(o: IngestOptions) {
     super();
     this.#o = o;
-    o.views.ensure("transcript_files", 1, ["transcript_files"], FILES_SQL);
+    // Version 2: lines without a timestamp were stored at 0 (and dropped by retention): read every file again, those rows first gone.
+    if (o.views.ensure("transcript_files", 2, ["transcript_files"], FILES_SQL).rebuilt) o.data.store.delete({ types: ["transcript."], before: 1 });
     this.#roots = [...o.roots];
     for (const r of this.#learnedRoots()) if (isDir(r.dir) && !this.#roots.some((k) => k.dir === r.dir || covers(k, r.dir))) this.#roots.push(r);
     this.#status = { ...this.#status, ...this.#counts() };
@@ -138,17 +142,33 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
     this.#worker?.postMessage(m);
   }
 
-  /** A file's events into the log and the sessions view; where its reading stopped into the table. */
-  #record(state: FileState, events: ReturnType<typeof readTranscript>["events"], env: Record<string, string> | null): void {
+  /**
+   * #record a few hundred events at a time, letting the core answer in between:
+   * keystrokes reach terminals through it, and a first read is hundreds of
+   * thousands of events. Where the file's reading stopped is saved with the last.
+   * The worker redacted them already.
+   */
+  async #recordInSteps(state: FileState, events: ReturnType<typeof readTranscript>["events"], env: Record<string, string> | null): Promise<void> {
+    let i = 0;
+    for (; i + STEP < events.length; i += STEP) {
+      this.#record(null, events.slice(i, i + STEP), env, state, true);
+      await new Promise((r) => setImmediate(r));
+      if (this.#closed) return;
+    }
+    this.#record(state, events.slice(i), env, state, true);
+  }
+
+  /** Events into the log and the sessions view; with `state`, where the file's reading stopped into the table. */
+  #record(state: FileState | null, events: ReturnType<typeof readTranscript>["events"], env: Record<string, string> | null, file: FileState = state!, redacted = false): void {
     if (events.length) {
-      const stored = this.#o.data.recordBatch(events);
-      this.#o.sessions.apply(stored, { path: state.path, env, mtime: state.mtime });
+      const stored = this.#o.data.recordBatch(events, { redacted });
+      this.#o.sessions.apply(stored, { path: file.path, env, mtime: file.mtime });
       for (const key of new Set(stored.map((e) => e.sessionId).filter((k): k is string => !!k))) {
         const row = this.#o.sessions.get(key);
         if (row) describeSession(this.#o.data, row);
       }
     }
-    this.#o.views.stmt(`INSERT OR REPLACE INTO transcript_files (path, root_dir, size, mtime, offset, lines, agent) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(state.path, state.rootDir, state.size, state.mtime, state.offset, state.lines, state.agent);
+    if (state) this.#o.views.stmt(`INSERT OR REPLACE INTO transcript_files (path, root_dir, size, mtime, offset, lines, agent) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(state.path, state.rootDir, state.size, state.mtime, state.offset, state.lines, state.agent);
   }
 
   #onMessage(m: IngestMessage): void {
@@ -158,12 +178,9 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
         this.#setStatus({ indexing: m.done < m.total, done: m.done, total: m.total });
         break;
       case "file":
-        try {
-          this.#record(m.state, m.events, m.file.root.env);
-        } catch (err) {
-          log.error(`recording ${m.file.path} failed`, err);
-        }
-        this.#send({ type: "ack" });
+        void this.#recordInSteps(m.state, m.events, m.file.root.env)
+          .catch((err) => log.error(`recording ${m.file.path} failed`, err))
+          .finally(() => this.#send({ type: "ack" }));
         break;
       case "removed":
         for (const p of m.paths) this.#o.views.stmt(`DELETE FROM transcript_files WHERE path = ?`).run(p);

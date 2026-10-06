@@ -236,6 +236,28 @@ describe("owned transcripts + search", () => {
     expect(searcher.recent(1)).toHaveLength(1);
   });
 
+  it("dates lines without a timestamp from their neighbours and keeps a repeated title once", () => {
+    const file = path.join(projects, "s-dateless.jsonl");
+    fs.writeFileSync(file, jsonl(
+      { type: "ai-title", aiTitle: "Dateless" },
+      { type: "user", sessionId: "s-dateless", timestamp: "2026-10-02T09:00:00Z", message: { role: "user", content: "hello there" } },
+      { type: "ai-title", aiTitle: "Dateless" },
+      { type: "permission-mode", permissionMode: "default" },
+      { type: "assistant", sessionId: "s-dateless", timestamp: "2026-10-02T09:05:00Z", message: { role: "assistant", content: "hi" } },
+      { type: "ai-title", aiTitle: "Dateless, renamed" },
+    ));
+    ingest.pass();
+    const evs = data.store.query({ types: ["transcript."], sessionId: "claude:s-dateless", order: "asc", limit: 100 });
+    expect(evs.filter((e) => e.type === "transcript.title").map((e) => [e.text, new Date(e.at).toISOString()])).toEqual([
+      ["Dateless", "2026-10-02T09:00:00.000Z"],
+      ["Dateless, renamed", "2026-10-02T09:05:00.000Z"],
+    ]);
+    expect(evs.every((e) => e.at >= Date.parse("2026-10-02T09:00:00Z"))).toBe(true);
+    expect(data.store.query({ types: ["transcript."], at: [0, 1], limit: 10 })).toEqual([]);
+    fs.rmSync(file);
+    ingest.pass();
+  });
+
   it("tolerates typos", () => {
     const hits = searcher.search("wiregaurd");
     expect(hits[0]).toMatchObject({ sessionId: "s-vpn", fuzzy: true });
@@ -279,6 +301,33 @@ describe("owned transcripts + search", () => {
     expect(searcher.search("quokka").map((h) => h.sessionId)).toEqual(["s-else"]);
     expect(data.store.entities("transcript-root").map((e) => e.id)).toContainEqual(expect.stringContaining(path.join("elsewhere", "projects")));
   });
+});
+
+describe("reading transcripts in the background", () => {
+  it("redacts in the worker and records a big session in steps, all of it", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-ingest-"));
+    const projects = path.join(dir, "projects", "-Users-me-src-big");
+    fs.mkdirSync(projects, { recursive: true });
+    const lines: unknown[] = [];
+    for (let i = 0; i < 600; i++) lines.push({ type: "user", uuid: `u${i}`, sessionId: "s-big", timestamp: new Date(Date.parse("2026-10-01T10:00:00Z") + i * 1000).toISOString(), message: { role: "user", content: `step ${i}` } });
+    lines.push({ type: "user", uuid: "secret", sessionId: "s-big", timestamp: "2026-10-01T11:00:00Z", message: { role: "user", content: "export GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789AB" } });
+    fs.writeFileSync(path.join(projects, "s-big.jsonl"), jsonl(...lines));
+    const data = new DataService({ file: null, recordedBy: "test", settings: () => DEFAULT_SETTINGS });
+    const views = new ViewsStore(null);
+    const sessions = new SessionsView(views, data);
+    const ingest = new TranscriptIngest({ data, views, sessions, sources, roots: [{ agent: "claude", dir: path.join(dir, "projects"), depth: 2, env: null }] });
+    const done = new Promise<void>((r) => ingest.on("changed", () => r()));
+    ingest.start();
+    await done;
+    expect(data.store.count({ types: ["transcript."] })).toBe(601);
+    const secret = data.store.get("claude:secret")!;
+    expect(secret.text).toContain("[redacted]");
+    expect(JSON.stringify(secret.data)).not.toContain("ghp_abcdefghij");
+    await ingest.close();
+    data.dispose();
+    views.close();
+    rmTemp(dir);
+  }, 20_000);
 });
 
 describe("transcript sources", () => {

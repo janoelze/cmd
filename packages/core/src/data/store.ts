@@ -9,7 +9,10 @@ import zlib from "node:zlib";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { DataEvent, DataEventType, DataQuery, DataStats, NewDataEvent } from "@cmd/protocol";
 import { DATA_FLAGS, EVENT_V } from "@cmd/protocol";
+import { logger } from "@cmd/protocol/node";
 import { EVENTS_SCHEMA, FTS_SQL, SCHEMA_SQL } from "./schema.ts";
+
+const log = logger("data");
 
 /** A recorder's event plus what the store adds on the way in. */
 export type StoreEvent = NewDataEvent & { v?: number; flags?: number };
@@ -37,7 +40,24 @@ export class DataStore {
     this.db = new DatabaseSync(file, { timeout: 5000 });
     this.db.exec(SCHEMA_SQL);
     this.db.exec(FTS_SQL);
-    if (!this.meta("schema")) this.setMeta("schema", String(EVENTS_SCHEMA));
+    if (!this.meta("schema")) {
+      this.setMeta("schema", String(EVENTS_SCHEMA));
+      this.setMeta("blobs.recounted", "1"); // counted right from the start
+    }
+  }
+
+  /**
+   * Once per log: blob counts written before record() handled rewritten rows
+   * right (some too high, some 0 while still in use) are counted again. Reads
+   * the whole log (seconds on a big one), so it runs with retention, not at startup.
+   */
+  recountBlobs(): boolean {
+    if (this.meta("blobs.recounted")) return false;
+    this.transaction(() => {
+      this.db.exec(`UPDATE blobs SET refs = 0; UPDATE blobs SET refs = x.n FROM (SELECT blob, COUNT(*) AS n FROM events WHERE blob IS NOT NULL GROUP BY blob) AS x WHERE blobs.hash = x.blob`);
+      this.setMeta("blobs.recounted", "1");
+    });
+    return true;
   }
 
   close(): void {
@@ -100,7 +120,8 @@ export class DataStore {
          flags = flags | excluded.flags
        RETURNING seq`,
     ).get(e.id, Math.round(e.at), e.until == null ? null : Math.round(e.until), e.type, e.v ?? EVENT_V[e.type as DataEventType] ?? 1, e.source, this.#o.recordedBy, e.parentId ?? null, e.spaceId ?? null, e.projectId ?? null, e.sessionId ?? null, e.agentId ?? null, e.paneId ?? null, e.windowId ?? null, e.deviceId ?? null, e.text ?? null, data, blob, e.flags ?? 0) as { seq: number };
-    if (before?.blob && before.blob !== blob) this.#unref(before.blob);
+    // A new blob replaces the old one (the same one: putBlob counted it twice); without one the row keeps its blob.
+    if (before?.blob && blob) this.#unref(before.blob);
     if (before) this.#stmt(`DELETE FROM events_fts WHERE rowid = ?`).run(before.seq);
     if (e.text || e.body) this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`).run(r.seq, e.text ?? "", (e.body ?? "").slice(0, this.#o.bodyCap));
     return { seq: r.seq, inserted: !before };
@@ -172,6 +193,7 @@ export class DataStore {
 
   /** Deletes blobs nothing refers to; returns how many. */
   sweepBlobs(): number {
+    if (this.recountBlobs()) log.info("blob references counted again");
     return Number(this.#stmt(`DELETE FROM blobs WHERE refs <= 0`).run().changes);
   }
 

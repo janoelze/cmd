@@ -151,6 +151,32 @@ describe("replaying agents with their pane's activity", () => {
     view.rebuild();
     expect(view.turns("a1")[0]).toMatchObject({ outcome: "done" });
   });
+
+  it("without recorded activity, a prompt after a quiet stretch starts a turn; one typed while it works steers it", async () => {
+    const { view, hook } = await setup();
+    const t0 = Date.now() - 3600_000;
+    hook(t0, "UserPromptSubmit", { prompt: "first" });
+    hook(t0 + 5_000, "PreToolUse", { tool_name: "Bash", tool_use_id: "u1", tool_input: { command: "ls" } });
+    hook(t0 + 6_000, "PostToolUse", { tool_name: "Bash", tool_use_id: "u1", tool_input: { command: "ls" }, tool_response: {} });
+    hook(t0 + 61_000, "UserPromptSubmit", { prompt: "second, after Esc" }); // 55 s of nothing
+    hook(t0 + 70_000, "UserPromptSubmit", { prompt: "and also this" }); // while it works
+    hook(t0 + 90_000, "Stop", { last_assistant_message: "Done." });
+    view.rebuild();
+    const turns = view.turns("a1");
+    expect(turns.map((t) => [t.prompt, t.outcome])).toEqual([["first", "interrupted"], ["second, after Esc", "done"]]);
+    expect(turns[1]!.followUps).toEqual(["and also this"]);
+  });
+
+  it("an agent that ran across the upgrade: the timing rules start where its recorded activity does", async () => {
+    const { view, hook, span } = await setup();
+    const t0 = Date.now() - 3600_000;
+    hook(t0, "UserPromptSubmit", { prompt: "think long" }); // before the upgrade: no activity recorded
+    hook(t0 + 120_000, "Stop", { last_assistant_message: "Thought." });
+    hook(t0 + 200_000, "UserPromptSubmit", { prompt: "after the upgrade" });
+    span(t0 + 200_000, t0 + 210_000);
+    view.rebuild();
+    expect(view.turns("a1").map((t) => [t.prompt, t.outcome])).toEqual([["think long", "done"], ["after the upgrade", "interrupted"]]);
+  });
 });
 
 describe("cleaned pane output", () => {

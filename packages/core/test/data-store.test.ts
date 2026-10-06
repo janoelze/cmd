@@ -36,6 +36,28 @@ describe("DataStore", () => {
     s.close();
   });
 
+  it("counts a blob once per row when a row is recorded again, with or without its content", () => {
+    const file = tmp();
+    const s = new DataStore(file);
+    const big = "line\n".repeat(5000);
+    const refs = () => (s.db.prepare(`SELECT refs FROM blobs`).all() as { refs: number }[]).map((r) => r.refs);
+    s.record({ id: "a", at: 1, type: "transcript.message", source: "t", data: {}, content: big });
+    s.record({ id: "a", at: 1, type: "transcript.message", source: "t", data: {}, content: big }); // the archived copy
+    expect(refs()).toEqual([1]);
+    s.record({ id: "a", at: 1, type: "transcript.message", source: "t", data: {} }); // read again, short enough to stay inline
+    expect(refs()).toEqual([1]);
+    expect(s.sweepBlobs()).toBe(0);
+    expect(s.blob(s.query({})[0]!.blob!)!.toString()).toBe(big);
+    // Counts an older build got wrong are counted again, once.
+    s.db.exec(`UPDATE blobs SET refs = 7; DELETE FROM meta WHERE key = 'blobs.recounted'`);
+    s.close();
+    const again = new DataStore(file);
+    expect(again.recountBlobs()).toBe(true);
+    expect(again.recountBlobs()).toBe(false);
+    expect((again.db.prepare(`SELECT refs FROM blobs`).all() as { refs: number }[]).map((r) => r.refs)).toEqual([1]);
+    again.close();
+  });
+
   it("filters by type prefix, time, identity and full text", () => {
     const s = new DataStore(tmp());
     s.record({ id: "1", at: 10, type: "git.commit", source: "git", projectId: "p", text: "Fix the flaky test", body: "Fix the flaky test\n\nIt raced on startup.", data: {} });

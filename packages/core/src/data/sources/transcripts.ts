@@ -276,11 +276,19 @@ export function readTranscript(file: TranscriptFile, state: ReadState | null, so
       const head = headObjects(fileLines(file.path), 1)[0];
       if (head && isObj(head.payload)) (codex.sessionId = str(head.payload.id)), (codex.cwd = str(head.payload.cwd));
     }
+    let title: string | null = null;
     const offset = readLinesFrom(file.path, start, (line) => {
       lines++;
       const e = agent === "codex" ? codexLine(line, lines, file, codex) : claudeLine(line, lines, file, hint);
-      if (e) events.push(e), (sessionId = e.sessionId ?? sessionId);
+      if (!e) return;
+      // Claude writes its title again and again, the same one: a row when it changes.
+      if (e.type === "transcript.title") {
+        if (e.text === title) return;
+        title = e.text ?? null;
+      }
+      events.push(e), (sessionId = e.sessionId ?? sessionId);
     });
+    datelessLines(events, stat.mtime);
     return { events, offset, lines, agent, sessionId };
   }
   // Whole-file parsers: Copilot, and anything sniffed as nothing cmd knows line by line.
@@ -288,6 +296,24 @@ export function readTranscript(file: TranscriptFile, state: ReadState | null, so
   const doc = sources.parse(root, fileLines(file.path), file.path);
   if (doc) events.push(...docEvents(doc, file, stat.mtime)), (sessionId = `${doc.agent}:${doc.id}`);
   return { events, offset: stat.size, lines: 0, agent: doc?.agent ?? agent, sessionId };
+}
+
+/**
+ * Lines without a timestamp (Claude's titles and bookkeeping) take the time of
+ * the line before them, else the one after, else the file's: at 0 they'd read as
+ * 1970 and retention would drop them.
+ */
+function datelessLines(events: NewEvent[], mtime: number): void {
+  let next = mtime;
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (events[i]!.at) next = events[i]!.at;
+    else events[i]!.at = -next; // marked: from the line after, unless one before has a time
+  }
+  let prev = 0;
+  for (const e of events) {
+    if (e.at > 0) prev = e.at;
+    else e.at = prev || -e.at;
+  }
 }
 
 /** One read buffer, reused for every transcript. */

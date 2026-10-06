@@ -216,8 +216,10 @@ export class ActivityView {
    * Where its pane's activity was recorded (pane.activity), the reducer's 2 s
    * check runs between events against it, so the timing rules (quiet for 30 s,
    * a question answered or dismissed) decide what they decided live; the core's
-   * own interrupt notes are then their result, not an input. Without recorded
-   * activity (older history) only the agents' events count.
+   * own interrupt notes are then their result, not an input. Before the first
+   * recorded activity (history from a cmd that didn't record it, an agent that
+   * ran across the upgrade) the notes count, and a turn quiet for as long as the
+   * rules allow ends when the next prompt comes, as it most likely did live.
    */
   replay(agentId: AgentId, save?: (t: AgentTurn, lastSeq: number, cwd: string | null) => void, until = Date.now()): { turn: AgentTurn | null; state: string | null; cause: string | null; turns: number } {
     const events = this.events({ agentId, oldest: true, limit: 1_000_000 });
@@ -243,10 +245,12 @@ export class ActivityView {
       while (i < spans.length && spans[i]!.at <= t) seen = Math.max(seen, spans[i]!.until), i++;
       return Math.min(seen, t);
     };
+    // Where recorded activity starts: the timing rules only run from there.
+    const from = spans[0]?.at ?? Number.POSITIVE_INFINITY;
     let clock = 0;
     const tickUntil = (to: number) => {
-      if (!spans.length) return;
-      clock = Math.max(clock, red.lastEventAt);
+      if (to <= from) return;
+      clock = Math.max(clock, red.lastEventAt, from - TICK_MS);
       let steps = 0;
       while (red.open && clock + TICK_MS <= to) {
         // A long wait (a question left for hours) jumps ahead instead of stepping through it.
@@ -257,8 +261,13 @@ export class ActivityView {
       }
     };
     for (const ev of events) {
-      if (ev.source === "core" && spans.length) continue;
+      if (ev.source === "core" && ev.at >= from) continue;
       tickUntil(ev.at);
+      if (ev.at < from && ev.kind === "prompt") {
+        // No output to go by: the gap since its last event is all there is (outputAt 0).
+        const r = red.tick(ev.at, 0);
+        if (r) take(r, lastSeq);
+      }
       take(red.apply(ev), ev.id);
       lastSeq = ev.id;
     }

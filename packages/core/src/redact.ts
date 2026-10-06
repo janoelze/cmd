@@ -88,3 +88,8 @@ export function redactDeep<T>(v: T): T {
   }
   return v;
 }
+
+/** An event's text, body, payload and content, redacted (what the log stores). */
+export function redactEvent<E extends { text?: string | null; body?: string | null; data?: unknown; content?: string | Buffer | null }>(e: E): E {
+  return { ...e, text: e.text ? redact(e.text) : e.text, body: e.body ? redact(e.body) : e.body, data: redactDeep(e.data), content: typeof e.content === "string" ? redact(e.content) : e.content };
+}

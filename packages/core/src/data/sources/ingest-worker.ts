@@ -12,6 +12,7 @@ import { registerBuiltinSources } from "../../search/builtin.ts";
 import { covers, isDir, locateContext, TranscriptSources, type TranscriptRoot } from "../../search/sources.ts";
 import type { StoreEvent } from "../store.ts";
 import { planPass, scanFiles, type FileState, type FoundFile } from "./ingest-pass.ts";
+import { redactEvent } from "../../redact.ts";
 import { readTranscript } from "./transcripts.ts";
 
 export interface WorkerInit {
@@ -62,7 +63,7 @@ async function pass(): Promise<void> {
       const state: FileState = { path: f.path, rootDir: f.root.dir, size: f.size, mtime: f.mtime, offset: result.offset, lines: result.lines, agent: result.agent };
       known.set(f.path, state);
       const wait = acked();
-      post({ type: "file", file: f, state, events: result.events, sessionId: result.sessionId });
+      post({ type: "file", file: f, state, events: result.events.map(redactEvent), sessionId: result.sessionId });
       await wait;
       if (changed.length > 10 && (i + 1) % 10 === 0) post({ type: "progress", done: i + 1, total: changed.length });
     }
