@@ -22,7 +22,7 @@ describe("classify (port of AgentProcess.classify)", () => {
   });
 });
 
-// Hook status files written by ~/.claude/hooks/ghostty-agents-status.sh
+// Hook status files written by cmd's hook (agents/hooks.ts)
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-status-"));
 function writeEvent(paneId: string, name: string, payload: Record<string, unknown>, at: number) {
   const dir = path.join(root, paneId);

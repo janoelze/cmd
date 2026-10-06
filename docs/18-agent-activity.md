@@ -31,7 +31,7 @@ Principles:
 
 ## Capture
 
-**The hook spools every event.** cmd's hook script (rewritten by the core at every start, so installed configs pick up changes without reinstalling) still writes `<status root>/<pane>/<Event>.json` (the latest of each, for older cores and the fork's readers) and now also hard-links the same file into `<pane>/log/<ts>.<pid>.<Event>.json`. Linking after writing makes every spool file complete when it appears; unique names mean none is overwritten. The record carries the agent's config dir from its environment (`$CLAUDE_CONFIG_DIR`, `$CODEX_HOME`, `$GEMINI_CLI_HOME`, JSON-escaped in sh). SessionEnd no longer deletes the pane's folder (`/clear` fires SessionEnd while the process lives on); the core cleans up when the pane goes.
+**The hook spools every event.** cmd's hook (its code inline in each agent config, so a change to it rewrites the entries: the installed app does that at its next start) still writes `<status root>/<pane>/<Event>.json` (the latest of each, for older cores) and now also hard-links the same file into `<pane>/log/<ts>.<pid>.<Event>.json`. Linking after writing makes every spool file complete when it appears; unique names mean none is overwritten. The record carries the agent's config dir from its environment (`$CLAUDE_CONFIG_DIR`, `$CODEX_HOME`, `$GEMINI_CLI_HOME`, JSON-escaped in sh). SessionEnd no longer deletes the pane's folder (`/clear` fires SessionEnd while the process lives on); the core cleans up when the pane goes.
 
 **The core takes the spool into SQLite.** On every change (FSEvents, 30 ms debounce) and every 2 s as a backstop, the tracker drains a pane's spool in write-time order (mtime, ns) into `agent_events`, raw, with long strings cut (4 KB) and long arrays shortened. Events that arrive before the agent is detected (SessionStart usually beats the process poll) are stored unclaimed and taken by the agent when it appears. Capture doesn't depend on the core running: a core that's down reads the spool when it's back. Events and turns are kept 14 days.
 
@@ -104,7 +104,7 @@ New homes get their transcripts indexed (`TranscriptSource.rootsIn`, the search 
 
 ## Hooks out of the box
 
-The installed app (`autoHooks`, set in `main.ts` for the release instance only) puts cmd's hook into every home's config that has **no cmd hook, an old one** (the fork's, `cmd hook`, its own in an older form: the config carries the hook's code, so an update that changes it rewrites the entry) **or a broken one** (a cmd hook whose script is gone: a deleted worktree's development build). At startup, every few hours, when homes change and when the setting is turned on. It never:
+The installed app (`autoHooks`, set in `main.ts` for the release instance only) puts cmd's hook into every home's config that has **no cmd hook, an old one** (`cmd hook`, its own in an older form: the config carries the hook's code, so an update that changes it rewrites the entry) **or a broken one** (a cmd hook whose script is gone: a deleted worktree's development build). At startup, every few hours, when homes change and when the setting is turned on. It never:
 
 - replaces another live cmd's hook (`elsewhere`, e.g. a development build's),
 - touches a file the user removed the hook from (`hooks.remove` remembers it; Install forgets it),

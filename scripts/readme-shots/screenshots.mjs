@@ -99,7 +99,7 @@ const app = await electron.launch({
     CMD_NO_SANDBOX: "1",
     CMD_TRANSCRIPTS_HOME: transcripts,
     ZDOTDIR: zdotdir,
-    // Isolates the hook status dir ($TMPDIR/ghostty-agents) from real sessions.
+    // Isolates the hook status dir ($TMPDIR/cmd-agents) from real sessions.
     TMPDIR: path.join(home, "tmp") + "/",
   },
 });

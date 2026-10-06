@@ -1,7 +1,7 @@
 // cmd's agent hooks. At startup the core writes a hook script and a `cmd` CLI
 // wrapper into its state dir, pointing into this build; installing puts the hook
 // into a coding agent's config (Settings → Agents → Hooks, `cmd hooks install`),
-// replacing the ghostty-agents fork's hook and `cmd hook` entries.
+// replacing older `cmd hook` entries.
 //
 // The config's command carries the script's body itself (`sh -c '<body>'
 // '<script>' <kind>`), behind a check for a cmd pane: outside cmd nothing runs,
@@ -47,7 +47,7 @@ function hookBody(script: string): string {
   const flag = path.join(path.dirname(script), "briefings");
   return `kind=$1
 payload=$(cat)
-id=\${CMD_PANE_ID:-$GHOSTTY_AGENTS_SURFACE_ID}
+id=$CMD_PANE_ID
 quiet() { [ "$kind" = gemini ] && echo '{}'; exit 0; }
 case "$id" in "" | *[!0-9A-Fa-f-]*) quiet ;; esac
 case "$kind:$CLAUDE_CODE_ENTRYPOINT" in claude:sdk*) quiet ;; esac
@@ -101,7 +101,7 @@ ${hookBody(script)}`;
  * Gemini wants JSON on stdout either way.
  */
 export function hookCommand(agent: AgentKind, script: string): string {
-  const inCmd = `[ -z "$CMD_PANE_ID$GHOSTTY_AGENTS_SURFACE_ID" ]`;
+  const inCmd = `[ -z "$CMD_PANE_ID" ]`;
   const run = `exec /bin/sh -c ${shq(hookBody(script))} ${shq(script)} ${agent}`;
   return agent === "gemini" ? `${inCmd} && echo '{}' || ${run}` : `${inCmd} || ${run}`;
 }
@@ -166,8 +166,8 @@ type Group = { hooks?: Handler[] };
 type Config = { hooks?: Record<string, Group[]> };
 
 const ours = (c: string) => /\/hooks\/cmd-hook\b/.test(c);
-/** The fork's hook, and `cmd hook <kind>` from `cmd hooks` before cmd installed its own. */
-const legacy = (c: string) => c.includes("ghostty-agents-status.sh") || /(^|\/)cmd\s+hook\s+\w+\s*$/.test(c);
+/** `cmd hook <kind>` from `cmd hooks` before cmd installed its own. */
+const legacy = (c: string) => /(^|\/)cmd\s+hook\s+\w+\s*$/.test(c);
 
 function read(file: string): Config {
   let text: string;
@@ -197,7 +197,7 @@ export function hookState(agent: AgentKind, file: string, script: string): HookT
     return "missing";
   }
   if (cmds.includes(hookCommand(agent, script))) return "installed";
-  // This cmd's, but older (another build, the script run as a file): replaced like the fork's.
+  // This cmd's, but older (another build, the script run as a file): replaced.
   if (cmds.some((c) => ours(c) && scriptOf(c) === script)) return "legacy";
   const others = cmds.filter(ours);
   if (others.length) return others.every((c) => !fs.existsSync(scriptOf(c) ?? "")) ? "stale" : "elsewhere";
@@ -210,7 +210,7 @@ function backupOnce(target: string): void {
   if (fs.existsSync(target) && !fs.existsSync(backup)) fs.copyFileSync(target, backup);
 }
 
-/** Drops cmd's and the fork's hooks from `cfg`, keeping everything else. */
+/** Drops cmd's hooks from `cfg`, keeping everything else. */
 function strip(cfg: Config): void {
   if (!cfg.hooks || typeof cfg.hooks !== "object") return;
   for (const [event, groups] of Object.entries(cfg.hooks)) {

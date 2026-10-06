@@ -138,7 +138,7 @@ describe("installing into agent configs", () => {
       JSON.stringify({
         model: "opus",
         hooks: {
-          Stop: [{ hooks: [{ type: "command", command: "/Users/me/.claude/hooks/ghostty-agents-status.sh" }, { type: "command", command: "say done" }] }],
+          Stop: [{ hooks: [{ type: "command", command: "say done" }] }],
           PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "/src/cmd/packages/cli/bin/cmd hook claude" }] }],
         },
       }),

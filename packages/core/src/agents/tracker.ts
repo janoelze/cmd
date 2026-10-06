@@ -2,7 +2,7 @@
 // into one state per agent, and implements the host API (spawn/send/wait/kill).
 // Hook events are taken from the hook's spool into the activity log and reduced
 // to state and turns (activity/); the per-event status files are the fallback
-// for hooks that don't spool (the fork's). See docs/05-agent-integration.md,
+// for a pane whose hook hasn't spooled anything. See docs/05-agent-integration.md,
 // docs/08-host-agents.md and docs/18-agent-activity.md.
 
 import { randomUUID } from "node:crypto";
@@ -35,8 +35,6 @@ export interface TrackerOptions {
   settings?: () => Settings;
   /** Hook status directory to watch (statusRoot()); null disables. */
   statusRoot?: string | null;
-  /** Also read this one (legacyStatusRoot(): the fork's hook), after statusRoot. */
-  legacyStatusRoot?: string | null;
   /** A launched agent whose process never shows up within this time is dropped. */
   startTimeoutMs?: number;
   /** How to resume past sessions per agent (default: the built-ins). */
@@ -74,7 +72,6 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #store: Store | null;
   #settings: () => Settings;
   #statusRoot: string | null;
-  #statusRoots: string[];
   #startTimeoutMs: number;
   #sources: TranscriptSources;
   #watchers: StatusWatcher[] = [];
@@ -92,18 +89,15 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     this.#store = o.store ?? null;
     this.#settings = o.settings ?? (() => DEFAULT_SETTINGS);
     this.#statusRoot = o.statusRoot ?? null;
-    this.#statusRoots = this.#statusRoot ? [this.#statusRoot, ...(o.legacyStatusRoot ? [o.legacyStatusRoot] : [])] : [];
     this.#startTimeoutMs = o.startTimeoutMs ?? 15_000;
     this.#sources = o.sources ?? registerBuiltinSources(new TranscriptSources());
     this.activity = o.activity ?? new ActivityLog();
     this.#git = o.git ?? false;
     if (this.#statusRoot) {
-      for (const root of this.#statusRoots) {
-        const w = new StatusWatcher(root);
-        w.on("changed", (paneId) => this.applyStatus(paneId));
-        w.start();
-        this.#watchers.push(w);
-      }
+      const w = new StatusWatcher(this.#statusRoot);
+      w.on("changed", (paneId) => this.applyStatus(paneId));
+      w.start();
+      this.#watchers.push(w);
       // FSEvents can drop events; re-read agent panes periodically as a backstop.
       this.#backstop = setInterval(() => this.tick(), 2000);
       this.#backstop.unref();
@@ -112,7 +106,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     panes.on("removed", (paneId) => {
       if (this.#statusRoot) this.#ingest(paneId, this.#drain(paneId), this.#byPane(paneId) ?? null);
       this.#onPaneRemoved(paneId);
-      for (const root of this.#statusRoots) removeStatus(paneId, root);
+      if (this.#statusRoot) removeStatus(paneId, this.#statusRoot);
     });
     panes.on("osc", (paneId, ev) => {
       if (ev.type !== "notify") return;
@@ -192,7 +186,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
 
   /**
    * Takes a pane's new hook events (spool) into the log and its agent's state.
-   * Panes whose hook doesn't spool (the fork's) fall back to the status files.
+   * Panes whose hook hasn't spooled anything fall back to the status files.
    */
   applyStatus(paneId: PaneId): void {
     if (!this.#statusRoot || !this.#panes.get(paneId)) return;
@@ -232,8 +226,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const fg = this.#panes.foreground(paneId);
     // Ignore status written before the current agent process started.
     const notBefore = fg?.startedAt ? fg.startedAt - 500 : 0;
-    let status = null;
-    for (const root of this.#statusRoots) if ((status = readStatus(paneId, notBefore, root))) break;
+    const status = this.#statusRoot ? readStatus(paneId, notBefore, this.#statusRoot) : null;
     if (!status) return;
     let agent = this.#byPane(paneId);
     if (!agent) {

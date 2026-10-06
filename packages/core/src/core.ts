@@ -74,8 +74,6 @@ export interface CoreOptions {
   procSampler?: ProcSampler | null;
   /** Hook status directory (statusRoot()); null disables file-based hooks. */
   statusRoot?: string | null;
-  /** The fork's (legacyStatusRoot()), also read. */
-  legacyStatusRoot?: string | null;
   /**
    * Transcript search (runs its own indexing worker) for the current settings and
    * transcript sources; called again when search.* changes. Returns null when search is off.
@@ -227,7 +225,6 @@ export class Core {
       store: this.store,
       settings,
       statusRoot: opts.statusRoot ?? null,
-      legacyStatusRoot: opts.legacyStatusRoot ?? null,
       sources: this.transcripts,
       activity,
       git: !!opts.stateDir,
@@ -644,7 +641,7 @@ export class Core {
 
   /**
    * Out of the box: cmd's hook in every agent config without one, an old one
-   * (the fork's, `cmd hook`) or a broken one (its script gone). Never over
+   * (`cmd hook`, this cmd's in an older form) or a broken one (its script gone). Never over
    * another live cmd's hook, never into a file the user removed it from, never
    * from a development build (opts.autoHooks).
    */

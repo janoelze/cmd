@@ -8,10 +8,6 @@
 // script that only writes files, so it is fast (runs on every tool call), works
 // inside sandboxes, and works while the core is down: status is re-derived from
 // the whole file set whenever it changes.
-//
-// The ghostty-agents fork's hook (ghostty-agents-status.sh) writes the same files
-// under $TMPDIR/ghostty-agents, keyed by GHOSTTY_AGENTS_SURFACE_ID; that folder is
-// still read until installing cmd's hook has replaced it everywhere.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -20,16 +16,8 @@ import { EventEmitter } from "node:events";
 import type { AgentState, PaneId } from "@cmd/protocol";
 import { describeTool, hookEventName } from "./state.ts";
 
-/** The fork's pane variable, still set for its hook (and sandbox wrappers that pass only it). */
-export const STATUS_ENV = "GHOSTTY_AGENTS_SURFACE_ID";
-
 export function statusRoot(): string {
   return path.join(os.tmpdir(), "cmd-agents");
-}
-
-/** Where the fork's hook writes the same files. */
-export function legacyStatusRoot(): string {
-  return path.join(os.tmpdir(), "ghostty-agents");
 }
 
 export interface HookStatus {

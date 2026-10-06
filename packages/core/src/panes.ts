@@ -15,7 +15,6 @@ import { usageChanged } from "./resources.ts";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
 import { DEVICE_REPLIES, OscScanner, type OscEvent } from "./osc.ts";
 import { agentVersion, classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
-import { STATUS_ENV } from "./agents/statusfiles.ts";
 import type { Store } from "./store.ts";
 import { integrate, shellName } from "./shells.ts";
 import { LocalBackend } from "./terminals/local.ts";
@@ -280,8 +279,6 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       TERM_PROGRAM: "cmd",
       [ENV.socket]: this.#socketPath,
       [ENV.paneId]: id,
-      // For the ghostty-agents fork's hook, and sandbox wrappers that pass only this (agents/statusfiles.ts).
-      [STATUS_ENV]: id,
       ...(this.#binDir ? { PATH: [this.#binDir, env.PATH].filter(Boolean).join(path.delimiter) } : {}),
       ...opts.env,
     });

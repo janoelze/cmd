@@ -49,7 +49,6 @@ describe("detection", () => {
     expect(ptys[0]!.opts.env).toMatchObject({
       CMD_PANE_ID: pane.id,
       CMD_SOCKET: "/tmp/test.sock",
-      GHOSTTY_AGENTS_SURFACE_ID: pane.id,
     });
   });
 

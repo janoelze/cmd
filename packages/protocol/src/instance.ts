@@ -46,7 +46,6 @@ export const PANE_ENV: readonly string[] = [
   "CMD_OPEN_HANDLES_TEXT",
   "CMD_RESTORE_COMMAND",
   "CMD_PANE_HISTFILE",
-  "GHOSTTY_AGENTS_SURFACE_ID",
 ];
 
 /**
