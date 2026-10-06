@@ -153,7 +153,7 @@ Views also get `placement: "workspace" | "sidebar"` (context, not a prop on ever
 
 ### Settings
 
-- `ui.sidebarRecent` and `ui.sidebarPadding` stay, describing the Navigator. Their wording changes, and so does their place in `settings/layout.ts` if a Navigator section makes sense.
+- `ui.sidebarRecent` stays, describing the Navigator (`ui.sidebarPadding` was retired: the inset is the `--sidebar-pad` token). Its wording changes, and so does its place in `settings/layout.ts` if a Navigator section makes sense.
 - No new settings at first. Sidebar insets follow `ui.gutter`, and their look follows the window settings (radius, outline, shadow), because they are windows.
 
 ## Plan

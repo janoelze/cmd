@@ -211,7 +211,6 @@ export const SETTINGS_SCHEMA = {
   "ui.paddingY": { title: "Vertical padding", unit: "px", type: "number", default: 14, min: 0, max: 48, step: 1, description: "Space at the top and bottom edges." },
   "ui.gutter": { title: "Gap between windows", unit: "px", type: "number", default: 11, min: 0, max: 32, step: 1, description: "Space between windows." },
   "ui.sidebarRecent": { title: "Recent sessions", unit: "sessions", type: "number", default: 5, min: 0, max: 20, step: 1, description: "Past sessions under Recent. 0 hides them." },
-  "ui.sidebarPadding": { title: "Sidebar padding", unit: "px", type: "number", default: 14, min: 0, max: 24, step: 1, description: "Space around the sidebar's rows." },
   "ui.windowOutline": { title: "Outline width", unit: "px", type: "number", default: 1, min: 0, max: 3, step: 1, description: "Width of every window's outline. 0 is none." },
   "ui.windowOutlineContrast": { title: "Outline contrast", unit: "%", type: "number", default: 20, min: 0, max: 40, step: 1, description: "How much outlines stand out." },
   "ui.windowShadow": { title: "Shadow", labels: { none: "None", subtle: "Subtle", medium: "Medium", strong: "Strong", deep: "Deep" }, type: "enum", default: "subtle", options: ["none", "subtle", "medium", "strong", "deep"], description: "A drop shadow under windows and sidebars." },
@@ -441,9 +440,10 @@ export const currentKey = (key: string): string => RENAMED_SETTINGS[key] ?? key;
 
 /**
  * Keys that no longer exist; ignored without an error (ui.sidebarWidth: drag the
- * sidebar edge; magic.baseUrl: only Anthropic and OpenAI are providers now).
+ * sidebar edge; magic.baseUrl: only Anthropic and OpenAI are providers now;
+ * ui.sidebarPadding: the app's to set).
  */
-export const REMOVED_SETTINGS: ReadonlySet<string> = new Set(["ui.sidebarWidth", "magic.baseUrl"]);
+export const REMOVED_SETTINGS: ReadonlySet<string> = new Set(["ui.sidebarWidth", "magic.baseUrl", "ui.sidebarPadding"]);
 
 export const APPLIES_LABEL: Record<SettingApplies, string> = {
   newTerminals: "new terminals only",

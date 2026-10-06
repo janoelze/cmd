@@ -757,7 +757,6 @@ export function App() {
       style={{
         ["--dock-left-w" as string]: `${widths.left || DOCK_WIDTH.default}px`,
         ["--gutter" as string]: `${cfg["ui.gutter"]}px`,
-        ["--sidebar-pad" as string]: `${cfg["ui.sidebarPadding"]}px`,
         ["--pad-x" as string]: `${cfg["ui.paddingX"]}px`,
         ["--pad-y" as string]: `${cfg["ui.paddingY"]}px`,
         ["--window-dim-amount" as string]: `${cfg["ui.unfocusedDim"] / 100}`,
