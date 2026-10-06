@@ -187,6 +187,8 @@ export interface Methods {
   "data.forget": { params: { sessionId?: string; projectId?: string; before?: number; types?: string[] }; result: { events: number } };
   /** What the log knows about an entity (agent, session, project, pane, window, space), or the newest of a kind, with links. */
   "data.entities": { params: { kind: string; id?: string; limit?: number }; result: { kind: string; id: string; created: number; seen: number; attrs: Record<string, unknown>; links: { from: [string, string]; to: [string, string]; kind: string; at: number; until: number | null }[] }[] };
+  /** Rebuilds a view from the log with the current rules (turns: the reducer and its timing rules; sessions: the transcripts). */
+  "data.rebuild": { params: { view: "turns" | "sessions" }; result: { rows: number } };
   /** Applies the exclusion rules (data.exclude) to what's already kept. */
   "data.applyRules": { params: {}; result: { events: number } };
   /** Where agents keep their config (discovered); rescan: look again first. */

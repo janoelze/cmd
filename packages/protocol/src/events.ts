@@ -16,6 +16,10 @@ export const EVENTS_SCHEMA = 1;
 export interface EventPayloads {
   /** A hook event as the agent sent it (the activity log's raw row). */
   "agent.hook": { name: string; agent: AgentKind | null; env?: Record<string, string>; hook?: number | null; payload: Record<string, unknown> };
+  /** A stretch of output in an agent's pane (at → until): what the timing rules (quiet, question answered) read, so a rebuild can replay them. */
+  "pane.activity": Record<string, never>;
+  /** What an agent's pane printed during one turn, escape codes stripped; the text is the content. */
+  "agent.output": { turn: number; chars: number; cut: boolean };
   /** Something the core inferred about an agent (an interrupt) or couldn't make sense of (an anomaly). */
   "agent.note": { name: "interrupt" | "anomaly"; agent: AgentKind | null; text: string };
   /** A shell command in a terminal (not an agent's), once it ended. Its output is the blob. */
@@ -82,6 +86,8 @@ export type DataEventType = keyof EventPayloads;
 export const EVENT_V: Record<DataEventType, number> = {
   "agent.hook": 1,
   "agent.note": 1,
+  "pane.activity": 1,
+  "agent.output": 1,
   command: 1,
   "git.commit": 1,
   "git.merge": 1,
@@ -215,9 +221,9 @@ export interface DataClassInfo {
 }
 
 export const DATA_CLASSES: Record<DataClass, Omit<DataClassInfo, "class" | "keepDays"> & { keepDays: number | null | "setting" }> = {
-  agents: { title: "Agent events", description: "What agents' hooks report: prompts, tool calls, questions, stops.", types: ["agent."], keepDays: "setting", cap: 64_000, setting: null, leaves: "Only to a model you set up, when a feature asks (journal, summaries)." },
+  agents: { title: "Agent events", description: "What agents' hooks report: prompts, tool calls, questions, stops.", types: ["agent.", "pane.activity"], keepDays: "setting", cap: 64_000, setting: null, leaves: "Only to a model you set up, when a feature asks (journal, summaries)." },
   transcripts: { title: "Transcripts", description: "cmd's copy of each agent session: messages, tool calls and results.", types: ["transcript."], keepDays: "setting", cap: 64_000, setting: "data.record.transcripts", leaves: "Only to a model you set up, when a feature asks." },
-  output: { title: "Command output", description: "What commands printed in your terminals, after they ended.", types: ["command"], keepDays: 90, cap: 256_000, setting: "data.record.output", leaves: "Only to a model you set up, when a feature asks." },
+  output: { title: "Command output", description: "What commands printed in your terminals, after they ended.", types: ["command", "agent.output"], keepDays: 90, cap: 256_000, setting: "data.record.output", leaves: "Only to a model you set up, when a feature asks." },
   browsing: { title: "Pages and files", description: "Pages browser windows showed, files opened in windows.", types: ["browser.", "file.", "window."], keepDays: "setting", cap: null, setting: "data.record.browsing", leaves: "Only to a model you set up, when a feature asks." },
   actions: { title: "Your actions", description: "What you focused, opened, closed and ran in cmd.", types: ["user.", "space."], keepDays: "setting", cap: null, setting: "data.record.actions", leaves: null },
   ai: { title: "Model calls", description: "Each call cmd made to a model: purpose, model, tokens, what was sent and what came back.", types: ["ai."], keepDays: "setting", cap: 1_000_000, setting: null, leaves: "The call itself goes to the provider; the record stays here." },
@@ -227,11 +233,11 @@ export const DATA_CLASSES: Record<DataClass, Omit<DataClassInfo, "class" | "keep
   remote: { title: "Remote access", description: "Who paired, connected, was refused or revoked.", types: ["remote."], keepDays: 90, cap: null, setting: null, leaves: null },
 };
 
-/** The class of an event type ("system" for kinds no class names). */
+/** The class of an event type: a class naming the type exactly wins over one naming its prefix ("system" for kinds no class names). */
 export function classOf(type: string): DataClass {
-  for (const [c, info] of Object.entries(DATA_CLASSES) as [DataClass, (typeof DATA_CLASSES)[DataClass]][]) {
-    for (const t of info.types) if (t.endsWith(".") ? type.startsWith(t) : type === t) return c;
-  }
+  const all = Object.entries(DATA_CLASSES) as [DataClass, (typeof DATA_CLASSES)[DataClass]][];
+  for (const [c, info] of all) if (info.types.includes(type)) return c;
+  for (const [c, info] of all) for (const t of info.types) if (t.endsWith(".") && type.startsWith(t)) return c;
   return "system";
 }
 

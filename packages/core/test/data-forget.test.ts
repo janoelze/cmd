@@ -110,3 +110,83 @@ describe("the notification log", () => {
     }
   });
 });
+
+describe("replaying agents with their pane's activity", () => {
+  const setup = async () => {
+    const { ActivityView } = await import("../src/data/views/activity.ts");
+    const { ViewsStore } = await import("../src/data/views/views.ts");
+    const { d } = service();
+    const view = new ActivityView(d, new ViewsStore(null));
+    const hook = (at: number, name: string, extra: Record<string, unknown> = {}) => view.insert({ at, agent: "claude", name, payload: { hook_event_name: name, session_id: "s", ...extra } }, "p1", "a1");
+    const span = (at: number, until: number) => d.record({ id: `activity:p1:${at}`, at, until, type: "pane.activity", source: "pty", paneId: "p1", agentId: "a1", data: {} });
+    return { d, view, hook, span };
+  };
+
+  it("ends a turn as interrupted when the pane went quiet, as the live core did", async () => {
+    const { view, hook, span } = await setup();
+    const t0 = Date.now() - 3600_000;
+    hook(t0, "UserPromptSubmit", { prompt: "do it" });
+    span(t0, t0 + 20_000); // output for 20 s, then nothing (Esc, no event)
+    view.rebuild();
+    const [t] = view.turns("a1");
+    expect(t).toMatchObject({ outcome: "interrupted", endedAt: t0 + 20_000 });
+    expect(t!.inferred.join()).toMatch(/quiet for 30 s/);
+  });
+
+  it("keeps a turn working while its pane prints, until the agent says it's done", async () => {
+    const { view, hook, span } = await setup();
+    const t0 = Date.now() - 3600_000;
+    hook(t0, "UserPromptSubmit", { prompt: "long build" });
+    span(t0, t0 + 100_000); // a 100 s build printing all along
+    hook(t0 + 101_000, "Stop", { last_assistant_message: "Built." });
+    const replay = view.replay("a1");
+    expect(replay).toMatchObject({ state: "done", turn: { outcome: "done", final: "Built." } });
+  });
+
+  it("without recorded activity, only the agent's events count (older history rebuilds as before)", async () => {
+    const { view, hook } = await setup();
+    const t0 = Date.now() - 3600_000;
+    hook(t0, "UserPromptSubmit", { prompt: "do it" });
+    hook(t0 + 100_000, "Stop", { last_assistant_message: "Done." });
+    view.rebuild();
+    expect(view.turns("a1")[0]).toMatchObject({ outcome: "done" });
+  });
+});
+
+describe("cleaned pane output", () => {
+  it("strips escape codes and collapses a spinner's redraws", async () => {
+    const { cleanOutput } = await import("../src/data/sources/pane-output.ts");
+    expect(cleanOutput("\x1b[32m✓\x1b[0m built\r\n⠋ working\n⠋ working\n⠋ working\ndone\n")).toBe("✓ built\n⠋ working\ndone");
+  });
+});
+
+describe("the pane output recorder", () => {
+  it("records stretches of an agent pane's output, and what a turn printed when it ends", async () => {
+    const { PaneOutputRecorder } = await import("../src/data/sources/pane-output.ts");
+    const { ActivityView } = await import("../src/data/views/activity.ts");
+    const { ViewsStore } = await import("../src/data/views/views.ts");
+    const { PaneManager } = await import("../src/panes.ts");
+    const { fakeFactory } = await import("./fake-pty.ts");
+    const f = fakeFactory();
+    const panes = new PaneManager(f.factory, { socketPath: "/tmp/t.sock", pollMs: 0 });
+    const { d } = service();
+    const view = new ActivityView(d, new ViewsStore(null));
+    const rec = new PaneOutputRecorder({ data: d, panes, activity: view, paneOf: () => pane.id });
+    const pane = panes.create();
+    f.ptys[0]!.output("plain shell output\r\n"); // no agent yet: not recorded
+    expect(d.query({ types: ["pane.activity"] })).toEqual([]);
+    panes.setAgent(pane.id, "a1");
+    const start = Date.now();
+    f.ptys[0]!.output("\x1b[1mthinking\x1b[0m\r\n");
+    f.ptys[0]!.output("Edited calc.py\r\n");
+    const spans = d.query({ types: ["pane.activity"] });
+    expect(spans).toHaveLength(1);
+    expect(spans[0]).toMatchObject({ paneId: pane.id, agentId: "a1" });
+    view.saveTurn({ format: 2, derivedBy: null, agentId: "a1", agentKind: "claude", agentVersion: null, model: null, index: 0, sessionId: "s", turnId: null, startedAt: start - 10, endedAt: Date.now(), prompt: "fix", auto: false, followUps: [], notes: [], background: [], outcome: "done", ask: null, final: null, error: null, tools: [], commands: [], shellWrites: 0, files: [], subagents: 0, events: 2, inferred: [] }, 1, "/w");
+    const [out] = d.query({ types: ["agent.output"] });
+    expect(out).toMatchObject({ agentId: "a1", sessionId: "claude:s", data: { turn: 0 } });
+    expect(d.store.blob(out!.blob!)!.toString()).toBe("thinking\nEdited calc.py");
+    rec.dispose();
+    panes.dispose();
+  });
+});

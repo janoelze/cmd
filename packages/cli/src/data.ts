@@ -22,6 +22,7 @@ export const DATA_HELP = `  data stats                          what the event l
                                       agents, sessions, projects, panes, windows, spaces: what they are and what they link to
   data forget [--session AGENT:ID] [--project PATH] [--before DATE] [--type T,…]
                                       delete what's named, for good; a forgotten session or project is never recorded again
+  data rebuild turns|sessions         a view from the log again, with the current rules
   data prune --rules                  remove what the data.exclude setting says never to keep
   data export [--since 30d] [--out FILE]
                                       every event as JSONL (one line each, the envelope and its data; blobs by hash)
@@ -136,6 +137,13 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
       if (typeof opt.type === "string") p.types = opt.type.split(",").map((t) => t.trim()).filter(Boolean);
       const { events } = await client.call("data.forget", p);
       console.log(json ? JSON.stringify({ events }) : events ? `${events} event${events === 1 ? "" : "s"} forgotten.` : "Nothing matched.");
+      return 0;
+    }
+    case "rebuild": {
+      const view = rest[0];
+      if (view !== "turns" && view !== "sessions") throw new Error("usage: cmd data rebuild turns|sessions");
+      const { rows } = await client.call("data.rebuild", { view });
+      console.log(json ? JSON.stringify({ rows }) : `${rows} ${view} rebuilt from the log.`);
       return 0;
     }
     case "prune": {

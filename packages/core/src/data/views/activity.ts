@@ -8,7 +8,10 @@
 import { ACTIVITY_SCHEMA, TURN_FORMAT, type ActivityEvent, type ActivityKind, type AgentCoverage, type AgentId, type AgentKind, type AgentTurn, type DataEvent, type PaneId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { capPayload, normalize, type RawEvent } from "../../agents/activity/normalize.ts";
-import { ActivityReducer } from "../../agents/activity/reduce.ts";
+import { ActivityReducer, type Reduction } from "../../agents/activity/reduce.ts";
+
+/** How often the live core runs the reducer's timing check (tracker.ts tick); a replay steps the same. */
+const TICK_MS = 2000;
 import { decodeDoc, decodeRows, decodeTurn } from "../../stored.ts";
 import type { DataService } from "../service.ts";
 import type { ViewsStore } from "./views.ts";
@@ -198,19 +201,7 @@ export class ActivityView {
     try {
     this.#views.transaction(() => {
       this.#views.db.exec(`DELETE FROM turns`);
-      for (const { agent_id } of agents) {
-        const events = this.events({ agentId: agent_id, oldest: true, limit: 1_000_000 });
-        const kind = events.find((e) => e.agent)?.agent ?? "unknown";
-        const version = events.find((e) => e.agentVersion)?.agentVersion ?? null;
-        const cwd = events.find((e) => e.cwd)?.cwd ?? null;
-        const red = new ActivityReducer(agent_id, 0, { agentKind: kind, agentVersion: version, derivedBy: this.recordedBy });
-        for (const ev of events) {
-          const r = red.apply(ev);
-          // Every turn the event touched, by (agent, idx): a closed one and the one it opened may both be in `r`.
-          if (r.closed) this.saveTurn(r.closed, ev.id, cwd);
-          if (r.turn && r.turn !== r.closed) this.saveTurn(r.turn, ev.id, cwd);
-        }
-      }
+      for (const { agent_id } of agents) this.replay(agent_id, (t, seq, cwd) => this.saveTurn(t, seq, cwd));
       turns = (this.#views.db.prepare(`SELECT COUNT(*) AS n FROM turns`).get() as { n: number }).n;
     });
     } finally {
@@ -218,6 +209,61 @@ export class ActivityView {
     }
     log.info("turns rebuilt from events", { agents: agents.length, turns, ms: Date.now() - t0 });
     return { agents: agents.length, turns };
+  }
+
+  /**
+   * An agent's turns and state from its events, in order, through the reducer.
+   * Where its pane's activity was recorded (pane.activity), the reducer's 2 s
+   * check runs between events against it, so the timing rules (quiet for 30 s,
+   * a question answered or dismissed) decide what they decided live; the core's
+   * own interrupt notes are then their result, not an input. Without recorded
+   * activity (older history) only the agents' events count.
+   */
+  replay(agentId: AgentId, save?: (t: AgentTurn, lastSeq: number, cwd: string | null) => void, until = Date.now()): { turn: AgentTurn | null; state: string | null; cause: string | null; turns: number } {
+    const events = this.events({ agentId, oldest: true, limit: 1_000_000 });
+    const kind = events.find((e) => e.agent)?.agent ?? "unknown";
+    const version = events.find((e) => e.agentVersion)?.agentVersion ?? null;
+    const cwd = events.find((e) => e.cwd)?.cwd ?? null;
+    const red = new ActivityReducer(agentId, 0, { agentKind: kind, agentVersion: version, derivedBy: this.recordedBy });
+    const panes = [...new Set(events.map((e) => e.paneId).filter((p): p is string => !!p))];
+    const spans = panes.flatMap((paneId) => this.#data.store.query({ types: ["pane.activity"], paneId, limit: 100_000 })).map((s) => ({ at: s.at, until: s.until ?? s.at })).sort((a, b) => a.at - b.at);
+    let state: string | null = null;
+    let cause: string | null = null;
+    let turns = 0;
+    let lastSeq = 0;
+    const take = (r: Reduction, seq: number) => {
+      if (r.change.state) (state = r.change.state), (cause = r.cause ?? null);
+      if (r.closed) save?.(r.closed, seq, cwd), turns++;
+      if (r.turn && r.turn !== r.closed) save?.(r.turn, seq, cwd);
+    };
+    // The newest output at or before t, from the recorded stretches.
+    let i = 0;
+    let seen = 0;
+    const outputAt = (t: number) => {
+      while (i < spans.length && spans[i]!.at <= t) seen = Math.max(seen, spans[i]!.until), i++;
+      return Math.min(seen, t);
+    };
+    let clock = 0;
+    const tickUntil = (to: number) => {
+      if (!spans.length) return;
+      clock = Math.max(clock, red.lastEventAt);
+      let steps = 0;
+      while (red.open && clock + TICK_MS <= to) {
+        // A long wait (a question left for hours) jumps ahead instead of stepping through it.
+        if (++steps > 50_000) clock = to - TICK_MS;
+        clock += TICK_MS;
+        const r = red.tick(clock, outputAt(clock));
+        if (r) take(r, lastSeq);
+      }
+    };
+    for (const ev of events) {
+      if (ev.source === "core" && spans.length) continue;
+      tickUntil(ev.at);
+      take(red.apply(ev), ev.id);
+      lastSeq = ev.id;
+    }
+    tickUntil(Math.min(until, (spans.at(-1)?.until ?? red.lastEventAt) + 10 * 60_000));
+    return { turn: red.turn, state, cause, turns };
   }
 
   /** What each agent's events carried over the last `days`: kinds, fields present, unmapped names. */

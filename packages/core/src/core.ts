@@ -16,6 +16,7 @@ import { recordNotifications, recordSpaces, recordWindows } from "./data/recorde
 import { DataService } from "./data/service.ts";
 import { buildContext } from "./ai/context.ts";
 import { describeAgent, describePane } from "./data/describe.ts";
+import { PaneOutputRecorder } from "./data/sources/pane-output.ts";
 import { projectIdOf } from "./data/project.ts";
 import { matchesQuery } from "./data/match.ts";
 import { WidgetTokens, widgetQuery } from "./data/widgets.ts";
@@ -219,6 +220,7 @@ export class Core {
   #playwright: Promise<Previewer | null> | null = null;
   #opts: CoreOptions;
   #ingest: TranscriptIngest | null = null;
+  #paneOutput: PaneOutputRecorder;
   readonly sessions: SessionsView;
   #searchView: SearchView;
   #closed = false;
@@ -303,6 +305,7 @@ export class Core {
       activity,
       git: !!opts.stateDir,
     });
+    this.#paneOutput = new PaneOutputRecorder({ data: this.data, panes: this.panes, activity, paneOf: (id) => this.agents.get(id)?.paneId ?? null });
     this.homes = new AgentHomes(this.store.db, opts.homesContext ?? locateContext, () => splitList(this.settings.settings["agents.homes"]));
     this.agents.on("home", (agent, dir) => this.#newHome(this.homes.learn(agent, dir, "hook")));
     this.agents.on("transcript", (agent, file) => {
@@ -567,6 +570,7 @@ export class Core {
     "data.unsubscribe": () => null,
     "data.forget": (p) => ({ events: this.data.forget(p) }),
     "data.applyRules": () => ({ events: this.data.applyRules() }),
+    "data.rebuild": (p) => (p.view === "turns" ? { rows: this.agents.activity.rebuild().turns } : { rows: (this.sessions.rebuild(), this.sessions.counts().sessions) }),
     "data.entities": (p) => {
       const list = p.id ? [this.data.store.entityOf(p.kind, p.id)].filter((e) => !!e) : this.data.store.entities(p.kind).slice(0, Math.min(p.limit ?? 50, 1000)).map((e) => ({ kind: p.kind, ...e }));
       return list.map((e) => ({ ...e!, links: this.data.store.linksOf(p.kind, e!.id) }));
@@ -1395,6 +1399,7 @@ export class Core {
     this.journal.dispose();
     // The transcript reader first: its worker's last batches must not land on closed stores.
     this.#closed = true;
+    this.#paneOutput.dispose();
     if (this.#dataFlush) clearTimeout(this.#dataFlush);
     if (this.#viewFlush) clearTimeout(this.#viewFlush);
     await this.#searchSwap;
