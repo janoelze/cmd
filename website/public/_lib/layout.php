@@ -145,6 +145,7 @@ p.more a:hover { color: var(--link); }
   <a href="/cmd/<?= $href ?>" class="<?= $href === '' ? 'brand' : '' ?> <?= $href === $current ? 'current' : '' ?>"><?= h($label) ?></a>
 <?php endforeach ?>
   <a href="https://github.com/janoelze/cmd">GitHub</a>
+  <a href="https://discord.gg/BVQjfAFpaS">Discord</a>
 </header>
 <main>
 <?php
