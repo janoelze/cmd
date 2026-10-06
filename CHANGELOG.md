@@ -12,6 +12,7 @@ One record of your work, kept on your Mac, and you decide what goes in it.
 - **Settings → Data.** Choose what cmd keeps and for how long, and name folders, sites and commands it should never record.
 - **This week.** The Journal widget sums up the week's main threads of work, and agents can ask for it with `cmd journal week`.
 - **`cmd data`.** Search everything cmd recorded, follow it as it happens, or forget a session or project for good.
+- **Event Stream.** Everything cmd records, as it happens. Turn on Settings → Magic Widgets → Developer widgets to find it in the Widget Library.
 
 ### Improved
 
