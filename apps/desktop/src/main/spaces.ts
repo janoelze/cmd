@@ -5,7 +5,7 @@
 // Which window shows what (and where it sits) is kept in windows.json, so all
 // windows come back on launch. The core's space.show events (`cmd .`) arrive here too.
 
-import { app, BrowserWindow, screen } from "electron";
+import { app, autoUpdater, BrowserWindow, screen } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { HOME_SPACE_ID } from "@cmd/protocol";
@@ -42,10 +42,13 @@ export class SpaceWindows {
 
   constructor(create: (spaceId: string, bounds: Bounds) => BrowserWindow) {
     this.#create = create;
-    app.on("before-quit", () => {
+    const quitting = () => {
       this.#save();
       this.#quitting = true;
-    });
+    };
+    app.on("before-quit", quitting);
+    // An update restart closes every window before before-quit: keep them too.
+    autoUpdater.on("before-quit-for-update", quitting);
   }
 
   /** Reopen the windows of the last session (at least one). */
@@ -123,7 +126,8 @@ export class SpaceWindows {
       if (this.#quitting) return;
       this.#shown.delete(win);
       this.#bounds.delete(win);
-      this.#save();
+      // The last window stays saved, so the next launch reopens its Space.
+      if (this.#shown.size > 0) this.#save();
     });
     this.#save();
     return win;

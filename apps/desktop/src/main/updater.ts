@@ -79,7 +79,7 @@ export function installUpdate(): void {
 
 function install(): void {
   log("installing", ready);
-  // Windows close normally (Spaces are saved); the core keeps running.
+  // Windows close before before-quit; spaces.ts saves them on before-quit-for-update. The core keeps running.
   setImmediate(() => autoUpdater.quitAndInstall(false, true));
 }
 
