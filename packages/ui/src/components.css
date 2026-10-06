@@ -1215,7 +1215,8 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
   box-shadow: inset 0 -1px 0 var(--window-edge);
 }
 .ui-window[data-selected] .ui-window-bar { color: var(--text); }
-.ui-window-bar-icon { flex: none; display: flex; color: var(--icon); }
+/* The icon a little closer to the name than the bar's gap. */
+.ui-window-bar-icon { flex: none; display: flex; margin-right: -2px; color: var(--icon); }
 .ui-window-bar-name { flex: 0 1 auto; display: flex; align-items: center; min-width: 0; font-weight: 500; }
 /* Info, not the name: always dim, selected or not, and the first to shrink. */
 .ui-window-bar-meta { margin-left: auto; display: flex; min-width: 0; flex: 0 100 auto; overflow: hidden; color: var(--text-dim); }

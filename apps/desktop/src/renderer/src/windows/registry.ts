@@ -23,6 +23,8 @@ export interface WindowView {
    * the window's live status (setWindowStatus).
    */
   describe?(win: AppWindow): { name?: string; place?: string; kind?: string | null };
+  /** Its toolbar shows the Place (an address, a path): the title bar leaves it out; sidebar rows keep it. */
+  placeInToolbar?: boolean;
   /** Context-menu entries for the title bar and sidebar row. */
   menu?(win: AppWindow): MenuEntry[];
   /** The window's own main actions: first in that menu, above Show, Move and Close. */

@@ -61,6 +61,8 @@ export function TileTitle({
   const edit = useTitleEdit(row.win?.id ?? null);
   // Docked too: a widget's scope and options shouldn't go away in a sidebar.
   const menu = row.win ? viewFor(row.win.kind)?.titleMenu?.(row.win) : undefined;
+  // A Place its toolbar already shows (an address, a path) isn't said twice.
+  const place = f.place && !bare && !(row.win && viewFor(row.win.kind)?.placeInToolbar) ? f.place : undefined;
   const file = fileOf(row);
   const url = file ? null : urlOf(row);
   return (
@@ -91,13 +93,13 @@ export function TileTitle({
       <span className="ui-window-bar-meta tile-meta">
         <Slot className="slot-kind" value={f.kind && !bare ? { text: f.kind } : undefined} />
         {/* A divider only after a field that's there. */}
-        <Slot className="slot-place" value={f.place && !bare ? { text: f.place } : undefined} clipStart divider={!!f.kind && !bare} />
+        <Slot className="slot-place" value={place ? { text: place } : undefined} clipStart divider={!!f.kind && !bare} />
         <span
           className="tile-status"
           onPointerDown={action ? (e) => e.stopPropagation() : undefined}
           onClick={action ? (e) => (e.stopPropagation(), action.run()) : undefined}
         >
-          <Slot className={`slot-status${action ? " actionable" : ""}`} value={f.status} divider={!bare && !!(f.kind || f.place)} title={action?.title} />
+          <Slot className={`slot-status${action ? " actionable" : ""}`} value={f.status} divider={!bare && !!(f.kind || place)} title={action?.title} />
         </span>
       </span>
       {menu && (

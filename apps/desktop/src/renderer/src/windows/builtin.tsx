@@ -46,6 +46,7 @@ const parentOf = (p: string) => shortPath(p.split("/").slice(0, -1).join("/") ||
 registerWindowView({
   kind: "browser",
   View: BrowserView,
+  placeInToolbar: true,
   describe: (w) => {
     const url = stateStr(w, "url") ?? null;
     const host = hostOf(url).replace(/^www\./, "");
@@ -69,8 +70,8 @@ registerWindowView({
 registerWindowView({
   kind: "files",
   View: FilesView,
-  // No Place: the toolbar's path shows where it is.
-  describe: () => ({}),
+  placeInToolbar: true,
+  describe: (w) => ({ place: parentOf(stateStr(w, "path") ?? "/") }),
   menu: (w) => {
     const p = stateStr(w, "path");
     return p

@@ -199,7 +199,6 @@ kbd {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding-top: 8px;
   background: var(--bg-sidebar);
 }
 
@@ -233,6 +232,8 @@ kbd {
 
 /* Section headings are the kit's ListHeading, inset like the rows. */
 .navigator { --list-inset: var(--sidebar-pad); }
+/* Below its search toolbar, a little room before the first section. */
+.navigator > .ui-tb + .sidebar-scroll { padding-top: 6px; }
 
 
 .row {
@@ -459,6 +460,8 @@ kbd {
    instead (Slot.tsx sets .sliver; short values like "~" aren't squeezed). */
 .slot.sliver .slot-v, .slot.sliver .slot-divider { visibility: hidden; }
 .tile-title { cursor: grab; touch-action: none; }
+/* The mark a little closer to the name than the bar's gap, as WindowBar's icon. */
+.tile-title > :is(.mark, .mark-drag) { margin-right: -2px; }
 /* Sidebars don't drag (Dock.tsx): no grab hand. */
 .dock .tile-title { cursor: default; }
 .empty-main { display: grid; place-items: center; }

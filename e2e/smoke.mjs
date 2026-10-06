@@ -824,8 +824,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.waitForTimeout(600);
     const tile = win.locator(`.tile[data-pane="${w.id}"]`);
     const versions = await tile.locator(".magic-revision").count();
-    const tabs = await tile.locator(".ui-tabs [role=tab]").allTextContents();
-    await tile.locator(".ui-tabs [role=tab]", { hasText: "Settings" }).click();
+    const tabs = await tile.locator(".ui-tb-seg [role=radio]").allTextContents();
+    await tile.locator(".ui-tb-seg [role=radio]", { hasText: "Settings" }).click();
     const fields = await tile.locator(".ui-row").allTextContents();
     await win.screenshot({ path: path.join(shots, "magic-edit.png") });
     await menu("view.toggleEdit");
@@ -899,9 +899,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(ldFiles.join(",") === "a.txt,b.txt" && ldLines.includes("+two") && ldLines.includes("+new"), `Live Diff shows a repository's changes, untracked files too (${ldFiles.join(", ")})`);
     const aa = await call("widget.add", { ref: "type:agents" });
     await win.locator(`.tile[data-pane="${aa.id}"] .aa`).waitFor({ timeout: 5000 });
-    const aaSummary = await win.locator(`.tile[data-pane="${aa.id}"] .aa-summary`).textContent();
+    // Its scope is the title bar's menu, as in the other list widgets.
+    const aaScope = (await win.locator(`.tile[data-pane="${aa.id}"] .tile-menu`).textContent()) ?? "";
     const inWidgets = (await win.locator(".sb-widgets").textContent()) ?? "";
-    check(inWidgets.includes("Agent Activity") && inWidgets.includes("Changes · diff-repo") && !!aaSummary, `Agent Activity and Live Diff are listed under the sidebar's Widgets (${aaSummary})`);
+    check(inWidgets.includes("Agent Activity") && inWidgets.includes("Changes · diff-repo") && aaScope.includes("This Space"), `Agent Activity and Live Diff are listed under the sidebar's Widgets, Agent Activity's scope in its title bar (${aaScope})`);
     await call("window.close", { id: ld.id });
     await call("window.close", { id: aa.id });
 
