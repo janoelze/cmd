@@ -36,6 +36,7 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 23 | [The journal](23-journal.md) | What happened, as a work log: events kept 180 days (agents, commands, git, pages), threads by identity and links, days written by a model; `cmd journal`, the Journal widget |
 | 24 | [Journal versions](24-journal-versions.md) | A version per layer (event schema, sources, threads, writer), stamped on the data; what a bump re-reads, rewrites or keeps; the runbook for a revision |
 | 25 | [The data model, challenged](25-data-model-critique.md) | Four event logs and no event model: what cmd stores, where the same facts live several times, how derivation and retention differ per feature, what the next features would cost; the questions the requirements must answer |
+| 26 | [Data requirements](26-data-requirements.md) | What the data layer must do for the next year, against the vision (primitives below, intelligence above): twelve scenarios, requirements for facts, views, query, intelligence, operations and developer experience; non-requirements; what the plan decides |
 
 ## Key findings
 1. **Nothing has to be invented for agent awareness.** Every tool in this space combines three things:
