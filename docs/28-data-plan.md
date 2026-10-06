@@ -1,6 +1,6 @@
 # The data layer: design and plan
 
-> Status (2026-10-06), branch `data-model`: the fourth document, a proposal. [25](25-data-model-critique.md) said what's wrong, [26](26-data-requirements.md) what the layer must do, [27](27-data-research.md) what others do. This is the design that meets 26 using what 27 showed works, and the phases to build it. Nothing is built; phase 0 is a spike that checks the numbers before anything is committed to. Requirement ids (A1…F3) refer to 26.
+> Status (2026-10-06): the fourth document. [25](25-data-model-critique.md) said what's wrong, [26](26-data-requirements.md) what the layer must do, [27](27-data-research.md) what others do. This is the design that meets 26 using what 27 showed works, and the phases to build it. **Phase 0 (the spike) is done**, branch `data-spike`: the author's 3.5 months of data imported into the proposed file and measured; the numbers and the decisions they forced are in §11. Decided by the user on 2026-10-06: two files; the person's actions recorded by default; command output as blobs; a year of retention. Requirement ids (A1…F3) refer to 26.
 
 ## In one paragraph
 
@@ -200,7 +200,7 @@ One worktree per phase, each green (`pnpm typecheck && pnpm test`, e2e once at t
 
 About seven to eight weeks of focused work; phases 3 and 4 can run in parallel worktrees after 2. Each phase ends with its numbers added to this document.
 
-## 10. Risks
+## 10. Risks (written before the spike; see §11 for what it settled)
 
 - **Scope.** The design touches every feature. Mitigation: phases that each leave the app working, wrappers during transition, no big-bang cutover; the spike before any commitment.
 - **`node:sqlite` features.** JSONB, generated columns, FTS5 external content and `update_hook`-equivalents must work in the SQLite Node 22 bundles; the spike checks. Fallback: text JSON and a polling publisher on `PRAGMA data_version`.
@@ -208,3 +208,25 @@ About seven to eight weeks of focused work; phases 3 and 4 can run in parallel w
 - **Replay cost.** A year of hook events through the reducer: the spike measures; snapshots per session bound it.
 - **Renderer migration to subscriptions** is the widest UI change; done per widget behind the existing RPC wrappers.
 - **Privacy expectations.** Recording the person's actions and command output is new; it is on by default only where 26 proposed it, visible in Settings → Data, and `cmd data explain` says exactly what is kept.
+
+## 11. Phase 0: what the spike showed
+
+`scripts/data/spike.ts` (branch `data-spike`) imports a copy of `cmd.sqlite` (`agent_events`, the journal's live and git kinds) and every transcript on this Mac into the events file of §2 (`packages/core/src/data/`), builds the FTS, replays the activity reducer over the imported hook events against the turns the core stored, and times the queries. Run on 2026-10-06 against 605 transcripts (571 Claude Code, 34 Codex; 239,618 lines; 1,916 MB on disk; 22 June to 6 October; 485 sessions, 221 projects; 10–22k lines a day in the last two weeks).
+
+**Size.** Everything in, uncut, deflate-compressed blobs: 1,494 MB. With zstd and tool results cut at 64 KB: **647 MB**, imported in 65 s. Of that: blobs 349 MB (662 MB raw → 298 MB, 45%), the events table 208 MB (243k rows, ~850 bytes a row: the envelope plus the inline message for lines under 2 KB), indexes 56 MB, FTS 10 MB. At this autumn's pace that is about **2.2 GB a year**, inside 26's "a few GB". Where the bytes were before the cap: tool results (file reads, command output) were 80% of all raw content (22k blobs, 1,459 MB, 251 of them over 1 MB); messages 199 MB; attachments 128 MB. Codex's `reasoning` items are encrypted and don't compress (77%); their bytes are dropped, the row kept.
+
+**Decisions the numbers forced.**
+- **zstd, not deflate**, for blobs: 36% vs 64% of raw on a 400-blob sample (`node:zlib` has it since 22.15). Level 3.
+- **A per-class content cap is the retention lever**, exactly as A8 says: tool results at 64 KB halves the file; everything else is small. Messages and attachments stay whole.
+- **FTS `detail=full`**: `detail=column` forbids phrase queries, and the index is 10 MB either way next to 600 MB of rows. Contentless with `contentless_delete`; coverage verified (phrases from the same day's session are found).
+- **`+at` when a type filter is present**: the planner picked the wide `at` index over `(type, at)` even after `ANALYZE`; `git.*` in 30 days went from 50 ms to 2 ms.
+- **Noise line types stay out of the row store or become counters**: Claude's `last-prompt`, `atis-latch`, `mode`, `cost-state`, `file-history-delta` and Codex's `token_count` are 35k of 243k rows and say nothing a view wants; phase 1 maps them to counters or skips them.
+- The 2 KB inline threshold puts 64% of assistant lines (they carry `usage` and long text) into blobs; with zstd that is the right side to be on.
+
+**Replay (S9).** 44 agents' hook events replayed through today's reducer in 65 ms total. 29 agents came out identical to the stored turns. All 15 that differed had turns stored by cmd 0.11.0 under `TURN_FORMAT` 1, which ended a turn at the next prompt (docs/19); today's rules merge those into fewer turns with follow-ups (one agent: 13 stored, 7 of them left `working`; replayed: 6, all `done`, 7 follow-ups). No outcome or prompt mismatch anywhere else. So: today's `agent_turns` is a mix of rule versions that was never re-derived, and re-deriving from the log is one function call. Inferred interrupts (the quiet rule) can't be replayed until terminal activity is in the log (A7); the spike counted none that mattered.
+
+**Queries (C5), median of 7 on the 647 MB file:** last 50 events of the busiest session (4,726 events) 0.2 ms; that whole session 17 ms; the busiest agent's hook events (replay input) 5 ms; `git.*` in 30 days 2 ms; FTS "flaky OR test" 0.5 ms, "sqlite" within one project 2.4 ms; events per type per day over 30 days 33 ms; a 1.3 MB blob read and decompress 34 ms. One number to remember rather than fix: materialising 62k rows of one project's week took 716 ms, almost all of it JSON parsing in JS; views aggregate, the UI pages, nobody asks for that.
+
+**Also confirmed:** `node:sqlite` in Node 22.23 is SQLite 3.53 with JSONB, generated columns, FTS5 `contentless_delete`; redaction on import cost nothing measurable; the importer is the phase-3 backfill (the same `claudeLine`/`codexLine` will be fed by the tailer).
+
+**Go.** The design holds at this scale with headroom; phase 1 starts from `packages/core/src/data/` as the spike left it.

@@ -43,7 +43,9 @@ const say = (s = "") => (console.log(s), report.push(s));
 const mb = (b: number) => `${(b / 1024 / 1024).toFixed(1)} MB`;
 const ms = (t: number) => `${t.toFixed(1)} ms`;
 
-for (const f of [out, `${out}-wal`, `${out}-shm`]) fs.rmSync(f, { force: true });
+/** --reuse: measure an existing file instead of importing again. */
+const reuse = flag("reuse") && fs.existsSync(out);
+if (!reuse) for (const f of [out, `${out}-wal`, `${out}-shm`]) fs.rmSync(f, { force: true });
 const store = new DataStore(out, { recordedBy: "spike" });
 
 say(`# Data spike, ${new Date().toISOString().slice(0, 16)}${toolResultCap ? ` (tool results cut at ${toolResultCap} chars)` : ""}`);
@@ -51,7 +53,7 @@ say();
 
 // ── 1. Legacy tables ─────────────────────────────────────────
 const src = dbPath ? new DatabaseSync(dbPath, { readOnly: true }) : null;
-if (src) {
+if (src && !reuse) {
   let t = performance.now();
   const n1 = store.recordAll(redacted(hookEvents(src)));
   say(`- agent_events → ${n1} agent.hook events in ${ms(performance.now() - t)}`);
@@ -63,7 +65,7 @@ if (src) {
 // ── 2. Transcripts ───────────────────────────────────────────
 let files = 0, lines = 0, bytesIn = 0, blobbed = 0;
 const perAgent = new Map<string, { files: number; lines: number; bytes: number }>();
-if (flag("transcripts")) {
+if (flag("transcripts") && !reuse) {
   const t0 = performance.now();
   for (const file of transcriptFiles(homes)) {
     if (limit && files >= limit) break;
@@ -97,7 +99,7 @@ if (flag("transcripts")) {
 store.checkpoint();
 
 // ── 3. FTS ───────────────────────────────────────────────────
-{
+if (!reuse) {
   const t = performance.now();
   // Body text wasn't kept in the row; rebuild from text only here, bodies were indexed during record().
   const before = store.pageBytes();

@@ -250,7 +250,8 @@ export class DataStore {
       args.push(...exact, ...prefixes.flatMap((p) => [p, `${p}￿`]));
       where.push(`(${parts.join(" OR ")})`);
     }
-    if (q.at) where.push(`at >= ? AND at < ?`), args.push(q.at[0], q.at[1]);
+    // With a type filter the (type, at) index is the narrow one; `+at` keeps the planner off the wide at index (spike: 50 ms → <1 ms).
+    if (q.at) where.push(q.types?.length ? `+at >= ? AND +at < ?` : `at >= ? AND at < ?`), args.push(q.at[0], q.at[1]);
     for (const k of ["sessionId", "agentId", "projectId", "spaceId", "paneId", "parentId"] as const) {
       const v = q[k];
       if (v) where.push(`${COL[k]} = ?`), args.push(v);
