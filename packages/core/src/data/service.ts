@@ -11,7 +11,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { DATA_CLASSES, DATA_FLAGS, classOf, type DataClass, type DataClassInfo, type DataEvent, type DataQuery, type DataStats, type NewDataEvent, type Settings } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { redact, redactDeep } from "../redact.ts";
-import { hookEvents, journalEvents } from "./sources/legacy.ts";
+import { hookEvents, journalEvents, remoteAudit } from "./sources/legacy.ts";
 import { DataStore, type StoreEvent } from "./store.ts";
 import { excludedBy, parseExclude, type ExcludeRules } from "./exclude.ts";
 
@@ -231,6 +231,15 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
       this.record({ id: `data:rules:${this.#now}`, at: this.#now, type: "data.op", source: "cmd", data: { op: "prune", detail: { events: n, rules: true } } });
       this.emit("removed", { types: [...types], count: n });
     }
+    return n;
+  }
+
+  /** The remote access audit an older cmd kept in cmd.sqlite (remote_log), once; returns how many rows came along. */
+  importRemoteLog(db: DatabaseSync): number {
+    if (this.store.meta("import.remote_log")) return 0;
+    const has = !!db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'remote_log'`).get();
+    const n = has ? this.recordAll(remoteAudit(db)) : 0;
+    this.store.setMeta("import.remote_log", new Date().toISOString());
     return n;
   }
 

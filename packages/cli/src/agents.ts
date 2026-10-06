@@ -8,6 +8,7 @@ import os from "node:os";
 import type { ActivityEvent, AgentTurn } from "@cmd/protocol";
 import type { Connection } from "@cmd/protocol/node";
 import { rawFromLog, toFixture } from "@cmd/core/activity/fixture";
+import { toActivity } from "@cmd/core/activity/view";
 
 type Client = Connection["client"];
 
@@ -72,11 +73,13 @@ export async function agentsCommand(client: Client, closed: Promise<void>, pos: 
       const print = (e: ActivityEvent) => console.log(json ? JSON.stringify(e) : eventLine(e) + (opt.raw && e.raw ? `\n${JSON.stringify(e.raw)}` : ""));
       evs.forEach(print);
       if (!opt.follow) return 0;
+      // A live query over the log: the agent's (or pane's) hook events and the core's notes, as they're recorded.
+      const { id } = await client.call("data.subscribe", { query: { types: ["agent.hook", "agent.note"], agentId: t.agentId, paneId: t.agentId ? undefined : t.paneId, limit: 1 } });
       client.onEvent((e) => {
-        if (e.type !== "agent.activity") return;
-        if ((t.agentId && e.event.agentId === t.agentId) || (t.paneId && e.event.paneId === t.paneId)) print(e.event);
+        if (e.type !== "data.changed" || e.id !== id) return;
+        for (const d of e.events) print(toActivity(d, !!opt.raw));
       });
-      await client.call("events.subscribe", {});
+      await client.call("events.subscribe", { types: ["data.changed"] });
       await closed;
       return 0;
     }

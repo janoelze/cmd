@@ -1,6 +1,6 @@
 # The journal
 
-> Status (2026-10-06), branch `journal`: built: the event log and its tables, git from reflogs, backfill from the activity log and the transcript index, live recording of commands, pages and files, threads, the digest, the day writer, `journal.*` RPC, `cmd journal`, the Journal widget. Tested on two real days of this repository and a made-up messy one. Versioned per layer: [24-journal-versions.md](24-journal-versions.md) (all at 1). Not yet: UI actions, week rollups, an agent tool beyond the CLI, the Settings switch. See "Next".
+> Status (2026-10-06), branch `journal`: built: events from the data layer's log (docs/28: commands, git, pages, files, notes, Spaces), the turns view and the sessions view, git from reflogs, threads, the digest, the day writer, `journal.*` RPC, `cmd journal`, the Journal widget. Tested on two real days of this repository and a made-up messy one. Versioned per layer: [24-journal-versions.md](24-journal-versions.md) (all at 1). Not yet: UI actions, week rollups, an agent tool beyond the CLI, the Settings switch. See "Next".
 
 cmd sees most of what happens in a workspace: agents and their prompts, terminals and their commands, git, pages read, files opened. Until now it kept almost none of it: the activity log goes after 14 days and has no Space, commands live in memory, a browser window remembers one URL, and an agent's row goes when it does. The journal keeps it, and turns it into what a person would write in a work log: "Released v0.14.4", "Investigated a corrupt search index (cause still open)", "Compared Stripe Checkout with Adyen". Not a timeline of tools; the work.
 
@@ -26,8 +26,8 @@ Kinds: `agent.session`, `agent.turn`, `command`, `git.commit`, `git.merge`, `git
 
 **Two ways in** (`journal/service.ts`):
 
-- **Pulled**, for sources that keep their own record: turns from the activity log, sessions from the transcript index, git from reflogs. `sync()` reads what changed since the last pull, with an overlap, every 5 minutes and before a day is written. A core that was down misses nothing; the first sync reaches 30 days back.
-- **Pushed**, for signals nothing else keeps (`journal/recorders.ts`): commands when they end (CommandLog), pages browser windows show (one visit per page per half hour, titled), files windows open, notes (`cmd journal note`).
+- **From the log** (since docs/28): commands with their output, pages browser windows show (one visit per page per half hour, titled), files windows open, Spaces, notes (`cmd journal note`) are events the core records as they happen (`data/recorders.ts`, `commands.ts`); turns come from the turns view and sessions from the sessions view, read when a day is asked for. `journal/store.ts` assembles them into the events below.
+- **Git** is the one source the journal still reads itself, from reflogs: `sync()` reads what changed since the last read, with an overlap, every 5 minutes and before a day is written, into the log. A core that was down misses nothing; the first sync reaches 30 days back.
 
 **Git** (`journal/git.ts`) is read from reflog files, not by running git: the main worktree's HEAD log, each linked worktree's, each branch's. They hold 90 days, so they're the backfill too. A branch merged and deleted (cmd's own workflow: a worktree per task) leaves only its merge in the main log; the commits it brought come from the merge's range. Each commit knows its branch and the worktree it was made in. Tags are releases.
 
@@ -83,7 +83,7 @@ Scopes: a Space is its events, plus events without a Space whose project or fold
 1. **Agents writing it down.** `cmd journal note` from an agent's terminal joins its session; a line in the agent briefing ("note decisions and causes with `cmd journal note`") would give investigations their conclusions in the agent's own words.
 2. **Agents reading it.** `cmd journal --days 7` is already Markdown an agent can read. A briefing line, or an MCP tool, so "what were we doing on the payments branch?" works across sessions.
 3. **UI actions** worth keeping: Spaces opened, windows opened and closed, widgets made with Magic, settings changed. Record in the core's handlers (the renderer's `run(id)` misses the palette's and context menus' paths).
-4. **Turns with their Space.** Turns are matched to a Space by their folder when their agent is gone; recording `spaceId` and `cwd` on `agent_turns` would make it exact.
+4. **Turns with their Space**, partly done: turns carry where their agent ran (`cwd`, the turns view) and agent events carry their pane's Space; a turn's own Space still comes from its live agent or its folder.
 5. **Weeks**, built (2026-10-06): `journal/weeks.ts`. A week (Monday 04:00 to Monday 04:00) is written by the smart tier from its days' entries, never from raw events again, into 2–6 themes and a headline; non-chores the model leaves out are gathered under "Also". Kept in `journal_weeks` and written again only when one of its days was (`daysHash`) or `WEEK_FORMAT` changes. `journal.week` RPC, `cmd journal week [--weeks N]`, and "This week" at the top of the Journal widget.
 6. **Outcomes that change.** An entry "merged" on Monday whose branch shipped on Tuesday could say "shipped" when Monday is read again (links already know).
 7. **Settings**: `journal.enabled`, the tier, kept days; pages and commands could be opt-out for people who don't want them recorded.

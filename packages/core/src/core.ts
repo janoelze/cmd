@@ -6,7 +6,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery } from "@cmd/protocol";
+import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery, AppNotification } from "@cmd/protocol";
 import { EXPORT_FORMAT, lineSplitter, TURN_FORMAT } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker, sessionIdOf } from "./agents/tracker.ts";
@@ -28,7 +28,7 @@ import { AgentHomes } from "./agents/homes.ts";
 import { cleanAiBody, NOTICE_SYSTEM, noticeContext, type NoticeKind } from "./agents/notice.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./agents/hooks.ts";
 import { hookEventName } from "./agents/state.ts";
-import { NotificationCenter } from "./notifications.ts";
+import { NotificationCenter, MAX_LOG } from "./notifications.ts";
 import { CommandLog } from "./commands.ts";
 import { TimerAlarms } from "./timers.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
@@ -253,6 +253,8 @@ export class Core {
       try {
         this.data.importLegacy(this.store.db);
         this.store.db.exec(`DROP TABLE IF EXISTS agent_events; DROP TABLE IF EXISTS agent_turns; DROP TABLE IF EXISTS journal_events;`);
+        this.data.importRemoteLog(this.store.db);
+        this.store.db.exec(`DROP TABLE IF EXISTS remote_log;`);
         // The transcript index of cmd ≤ 0.15: the log and the sessions view replace it.
         for (const f of ["search.sqlite", "search.sqlite-wal", "search.sqlite-shm"]) fs.rmSync(path.join(opts.stateDir, f), { force: true });
       } catch (err) {
@@ -267,6 +269,7 @@ export class Core {
       if (types.some((t) => t.startsWith("transcript."))) this.sessions.rebuild(), this.#searchView.invalidate();
     });
     const activity = new ActivityView(this.data, this.views);
+    activity.spaceOf = (paneId) => this.panes.get(paneId)?.spaceId ?? null;
     this.sessions = new SessionsView(this.views, this.data);
     this.#searchView = new SearchView(this.data, this.sessions);
     this.agents = new AgentTracker(this.panes, {
@@ -278,7 +281,6 @@ export class Core {
       git: !!opts.stateDir,
     });
     this.homes = new AgentHomes(this.store.db, opts.homesContext ?? locateContext, () => splitList(this.settings.settings["agents.homes"]));
-    this.agents.on("activity", (event) => this.#broadcast({ type: "agent.activity", event }));
     this.agents.on("home", (agent, dir) => this.#newHome(this.homes.learn(agent, dir, "hook")));
     this.agents.on("transcript", (agent, file) => {
       const dir = this.homes.homeOfTranscript(agent, file);
@@ -418,6 +420,10 @@ export class Core {
     });
     this.remote = new RemoteService({
       store: this.store,
+      audit: {
+        record: (kind, deviceId, detail) => this.data.record({ id: `remote:${Date.now()}:${kind}:${Math.random().toString(36).slice(2, 7)}`, at: Date.now(), type: "remote.audit", source: "cmd", deviceId, text: `${kind}${detail ? `: ${detail}` : ""}`, data: { kind, detail } }),
+        list: (limit) => this.data.query({ types: ["remote.audit"], order: "desc", limit }).map((e) => ({ at: e.at, kind: (e.data as { kind: string }).kind, deviceId: e.deviceId, detail: (e.data as { detail: string | null }).detail })),
+      },
       settings: this.settings,
       stateDir: opts.stateDir ?? null,
       serve: (conn) => this.serve(conn),
@@ -469,8 +475,12 @@ export class Core {
     "pane.setMuted": (p) => (this.notifications.setMuted(p.paneId, p.muted), null),
     "pane.clearAttention": (p) => (this.notifications.clearAttention(p.paneId), null),
     "notify.send": (p) => (this.notifications.send(p.paneId ?? null, p.title, p.body), null),
-    "notify.list": () => this.notifications.list(),
-    "notify.clear": () => (this.notifications.clear(), null),
+    "notify.list": () => this.#notificationLog(),
+    "notify.clear": () => {
+      this.data.record({ id: `notification-clear:${Date.now()}`, at: Date.now(), type: "notification.clear", source: "user", data: {} });
+      this.notifications.clear();
+      return null;
+    },
     "command.list": (p) => this.commands.list(p.spaceId),
     "pane.snapshot": (p) => this.panes.snapshot(p.paneId),
     "pane.read": async (p) => ({ text: await this.panes.read(p.paneId, p.lines) }),
@@ -833,6 +843,15 @@ export class Core {
   }
 
   /** Kill the Space's terminals (their agents go with them) and remove its windows; keep it as a recent Space. */
+  /** The notifications since the widget was last cleared, newest first, from the log (MAX_LOG at most). */
+  #notificationLog(): AppNotification[] {
+    const cleared = this.data.query({ types: ["notification.clear"], order: "desc", limit: 1 })[0]?.at ?? 0;
+    return this.data.query({ types: ["notification"], at: [cleared + 1, Number.MAX_SAFE_INTEGER], order: "desc", limit: MAX_LOG }).map((e) => {
+      const d = e.data as { source: AppNotification["source"]; title: string; body: string; urgent: boolean; alert?: boolean };
+      return { id: e.id.replace(/^notification:/, ""), source: d.source, paneId: e.paneId, windowId: e.windowId, title: d.title, body: d.body, alert: d.alert ?? true, urgent: d.urgent, at: e.at };
+    });
+  }
+
   /** The selection in a Space moved: the previous focus span ends, a new one starts (user.focus). */
   #focused(spaceId: string, id: string): void {
     const prev = this.#focus.get(spaceId);

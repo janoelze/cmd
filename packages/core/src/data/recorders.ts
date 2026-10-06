@@ -62,6 +62,6 @@ export function recordSpaces(data: DataService, spaces: SpaceManager): void {
 
 export function recordNotifications(data: DataService, center: NotificationCenter): void {
   center.on("notification", (n: AppNotification) => {
-    data.record({ id: `notification:${n.id}`, at: n.at, type: "notification", source: "cmd", paneId: n.paneId, windowId: n.windowId ?? null, text: n.title, body: n.body, data: { source: n.source, title: n.title, body: n.body, urgent: n.urgent } });
+    data.record({ id: `notification:${n.id}`, at: n.at, type: "notification", source: "cmd", paneId: n.paneId, windowId: n.windowId ?? null, text: n.title, body: n.body, data: { source: n.source, title: n.title, body: n.body, urgent: n.urgent, alert: n.alert } });
   });
 }

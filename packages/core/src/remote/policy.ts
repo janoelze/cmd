@@ -361,7 +361,6 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
       return true;
     case "notifications.cleared":
     case "command.updated":
-    case "agent.activity":
     case "settings.updated":
     case "secrets.updated":
     case "ai.updated":

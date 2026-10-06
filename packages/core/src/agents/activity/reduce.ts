@@ -83,7 +83,7 @@ export class ActivityReducer {
   /** The current turn, or the last one once it ended. */
   turn: AgentTurn | null = null;
   lastEventAt = 0;
-  /** Events up to this id are already in `turn` (it was saved with them; see ActivityLog.lastTurn). */
+  /** Events up to this id are already in `turn` (it was saved with them; see ActivityView.lastTurn). */
   replayedTo = 0;
   #next: number;
   /** Tool calls started and not ended: id (or name) → start time, and → tool name. */

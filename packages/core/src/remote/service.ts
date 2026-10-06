@@ -27,6 +27,8 @@ export const REMOTE_VERSION = "1";
 
 export interface RemoteServiceOptions {
   store: Store;
+  /** The audit log, as events in the log (remote.audit); none: the log stays in the process (tests). */
+  audit?: { record: (kind: string, deviceId: string | null, detail: string | null) => void; list: (limit: number) => { at: number; kind: string; deviceId: string | null; detail: string | null }[] };
   settings: SettingsService;
   /** $CMD_HOME; null keeps the host key in memory (tests). */
   stateDir: string | null;
@@ -35,6 +37,8 @@ export interface RemoteServiceOptions {
 }
 
 export class RemoteService {
+  /** The audit log without an event log (tests). */
+  #memoryLog: { at: number; kind: string; deviceId: string | null; detail: string | null }[] = [];
   #o: RemoteServiceOptions;
   #keys: HostKeys;
   #key: KeyPair | null = null;
@@ -134,7 +138,7 @@ export class RemoteService {
 
   log(limit = 100): RemoteLogEntry[] {
     const names = new Map(this.#o.store.remoteDevices().map((d) => [d.id, d.name]));
-    return this.#o.store.remoteLog(Math.min(limit, 500)).map((e) => ({ ...e, device: e.deviceId ? (names.get(e.deviceId) ?? null) : null }));
+    return (this.#o.audit?.list(Math.min(limit, 500)) ?? this.#memoryLog.slice(-Math.min(limit, 500)).reverse()).map((e) => ({ ...e, device: e.deviceId ? (names.get(e.deviceId) ?? null) : null }));
   }
 
   /** The device behind a remote connection, by name. */
@@ -219,7 +223,8 @@ export class RemoteService {
   audit(kind: string, deviceId: string | null, detail: string | null): void {
     log.info(`${kind}${deviceId ? ` ${deviceId}` : ""}${detail ? `: ${detail}` : ""}`);
     try {
-      this.#o.store.logRemote(kind, deviceId, detail);
+      if (this.#o.audit) this.#o.audit.record(kind, deviceId, detail);
+      else this.#memoryLog.push({ at: Date.now(), kind, deviceId, detail });
     } catch {
       // the store is closed (shutting down)
     }

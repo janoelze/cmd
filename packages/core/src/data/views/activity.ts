@@ -7,7 +7,7 @@
 
 import { ACTIVITY_SCHEMA, TURN_FORMAT, type ActivityEvent, type ActivityKind, type AgentCoverage, type AgentId, type AgentKind, type AgentTurn, type DataEvent, type PaneId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import { normalize, type RawEvent } from "../../agents/activity/normalize.ts";
+import { capPayload, normalize, type RawEvent } from "../../agents/activity/normalize.ts";
 import { ActivityReducer } from "../../agents/activity/reduce.ts";
 import { decodeDoc, decodeRows, decodeTurn } from "../../stored.ts";
 import type { DataService } from "../service.ts";
@@ -68,10 +68,21 @@ export class ActivityView {
     return ACTIVITY_SCHEMA;
   }
 
-  /** Stores an event an agent's hook reported; returns it normalised. */
+  /** The Space a pane is in, for agent events (set by the core; tests leave it). */
+  spaceOf: (paneId: PaneId) => string | null = () => null;
+
+  /**
+   * Stores an event an agent's hook reported; returns it normalised. The row
+   * keeps the payload with long strings cut (normalising needs the shape, not a
+   * file's contents); a payload that was cut is kept whole as the event's
+   * content, within the agents class's cap.
+   */
   insert(r: RawEvent, paneId: PaneId | null, agentId: AgentId | null, agentVersion: string | null = null): ActivityEvent {
     const sessionId = typeof r.payload.session_id === "string" ? r.payload.session_id : null;
-    const data: HookData = { name: r.name, agent: r.agent, env: r.env, hook: r.hook ?? null, agentVersion, payload: r.payload };
+    const full = JSON.stringify(r.payload);
+    const payload = capPayload(r.payload) as Record<string, unknown>;
+    const cut = JSON.stringify(payload).length < full.length;
+    const data: HookData = { name: r.name, agent: r.agent, env: r.env, hook: r.hook ?? null, agentVersion, payload };
     const text = typeof r.payload.prompt === "string" ? line1(r.payload.prompt) : typeof r.payload.tool_name === "string" ? r.payload.tool_name : typeof r.payload.last_assistant_message === "string" ? line1(r.payload.last_assistant_message) : r.name;
     const body = typeof r.payload.prompt === "string" ? r.payload.prompt : typeof r.payload.last_assistant_message === "string" ? r.payload.last_assistant_message : null;
     const toolId = typeof r.payload.tool_use_id === "string" ? r.payload.tool_use_id : null;
@@ -84,10 +95,12 @@ export class ActivityView {
       sessionId: sessionId ? `${r.agent ?? "agent"}:${sessionId}` : null,
       agentId,
       paneId,
+      spaceId: paneId ? this.spaceOf(paneId) : null,
       projectId: projectIdOf(typeof r.payload.cwd === "string" ? r.payload.cwd : null),
       text,
       body,
       data,
+      content: cut ? full : null,
     });
     if (!ev) throw new Error("agent events are always recorded");
     return toActivity(ev, false);
@@ -101,7 +114,7 @@ export class ActivityView {
 
   /** Stores something the core inferred or noticed (interrupt, anomaly). */
   note(kind: "interrupt" | "anomaly", text: string, at: number, paneId: PaneId | null, agentId: AgentId | null, agent: AgentKind | null): ActivityEvent {
-    const ev = this.#data.record({ id: `note:${paneId ?? "-"}:${Math.round(at * 1000)}:${kind}:${this.#n++}`, at, type: "agent.note", source: `cmd:${this.recordedBy ?? "?"}`, agentId, paneId, text, data: { name: kind, agent, text } });
+    const ev = this.#data.record({ id: `note:${paneId ?? "-"}:${Math.round(at * 1000)}:${kind}:${this.#n++}`, at, type: "agent.note", source: `cmd:${this.recordedBy ?? "?"}`, agentId, paneId, spaceId: paneId ? this.spaceOf(paneId) : null, text, data: { name: kind, agent, text } });
     if (!ev) throw new Error("agent notes are always recorded");
     return toActivity(ev, false);
   }

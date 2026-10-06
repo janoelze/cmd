@@ -61,6 +61,13 @@ export function* hookEvents(db: DatabaseSync): Generator<NewEvent> {
   }
 }
 
+/** remote_log (the remote access audit) → `remote.audit` events. */
+export function* remoteAudit(db: DatabaseSync): Generator<NewEvent> {
+  let n = 0;
+  for (const r of db.prepare(`SELECT at, kind, device_id, detail FROM remote_log ORDER BY at`).iterate() as Iterable<{ at: number; kind: string; device_id: string | null; detail: string | null }>)
+    yield { id: `remote:import:${r.at}:${n++}`, at: r.at, type: "remote.audit", source: "import:remote_log", deviceId: r.device_id, text: `${r.kind}${r.detail ? `: ${r.detail}` : ""}`, data: { kind: r.kind, detail: r.detail }, flags: FLAG_IMPORTED };
+}
+
 interface JournalRow {
   id: number;
   at: number;

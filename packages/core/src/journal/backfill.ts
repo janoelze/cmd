@@ -18,7 +18,7 @@ const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
 import { projectOf } from "../data/project.ts";
 export { projectOf };
 
-/** Agent sessions from the transcript index (search.sqlite's sessions table). */
+/** Agent sessions from the sessions view (data/views/sessions.ts). */
 export function sessionEvents(rows: SessionRow[]): NewJournalEvent[] {
   return rows.filter((r): r is SessionRow & { started: number } => r.started !== null).map((r) => {
     const title = r.title?.trim() || null;

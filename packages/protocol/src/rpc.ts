@@ -433,8 +433,6 @@ export type CoreEvent =
   | { type: "pane.removed"; paneId: PaneId }
   | { type: "agent.updated"; agent: Agent }
   | { type: "agent.removed"; agentId: AgentId }
-  /** Something was recorded about an agent (activity log): one per hook event. */
-  | { type: "agent.activity"; event: ActivityEvent }
   | { type: "settings.updated"; snapshot: SettingsSnapshot }
   | { type: "secrets.updated"; status: SecretsStatus }
   | { type: "ai.updated"; status: AiStatus }

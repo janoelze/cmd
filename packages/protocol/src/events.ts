@@ -41,7 +41,9 @@ export interface EventPayloads {
   /** A pane or window had the focus (a span: extended while it keeps it). */
   "user.focus": { paneId?: PaneId; windowId?: WindowId };
   /** A notification shown by cmd. */
-  notification: { source: string; title: string; body: string; urgent: boolean };
+  notification: { source: string; title: string; body: string; urgent: boolean; alert?: boolean };
+  /** The Notifications widget was cleared: it lists what came after. */
+  "notification.clear": Record<string, never>;
   /** A model call: what for, which model, how long, how many tokens. Input and output are blobs on child events. */
   "ai.call": {
     purpose: string;
@@ -67,6 +69,8 @@ export interface EventPayloads {
   "transcript.system": Record<string, unknown>;
   "transcript.session": Record<string, unknown>;
   "transcript.other": Record<string, unknown>;
+  /** Remote access, for its audit log: sessions, pairings, revocations, denied calls, failed handshakes. */
+  "remote.audit": { kind: string; detail: string | null };
   /** The data layer about itself: a rebuild, a prune, an import, a forget. */
   "data.op": { op: "import" | "prune" | "rebuild" | "forget"; detail: Record<string, unknown> };
 }
@@ -95,6 +99,7 @@ export const EVENT_V: Record<DataEventType, number> = {
   "user.command": 1,
   "user.focus": 1,
   notification: 1,
+  "notification.clear": 1,
   "ai.call": 1,
   note: 1,
   "transcript.message": 1,
@@ -107,6 +112,7 @@ export const EVENT_V: Record<DataEventType, number> = {
   "transcript.session": 1,
   "transcript.other": 1,
   "data.op": 1,
+  "remote.audit": 1,
 };
 
 /** An event as stored and as every client sees it. */
@@ -189,7 +195,7 @@ export interface DataQuery {
 }
 
 /** Classes of data: what a retention rule, a switch and a privacy line are about. */
-export type DataClass = "agents" | "transcripts" | "output" | "browsing" | "actions" | "ai" | "git" | "notes" | "system";
+export type DataClass = "agents" | "transcripts" | "output" | "browsing" | "actions" | "ai" | "git" | "notes" | "system" | "remote";
 
 export interface DataClassInfo {
   class: DataClass;
@@ -215,8 +221,9 @@ export const DATA_CLASSES: Record<DataClass, Omit<DataClassInfo, "class" | "keep
   actions: { title: "Your actions", description: "What you focused, opened, closed and ran in cmd.", types: ["user.", "space."], keepDays: "setting", cap: null, setting: "data.record.actions", leaves: null },
   ai: { title: "Model calls", description: "Each call cmd made to a model: purpose, model, tokens, what was sent and what came back.", types: ["ai."], keepDays: "setting", cap: 1_000_000, setting: null, leaves: "The call itself goes to the provider; the record stays here." },
   git: { title: "Git", description: "Commits, merges, branches and tags in your projects.", types: ["git."], keepDays: null, cap: null, setting: null, leaves: null },
-  notes: { title: "Notes and notifications", description: "Notes you or agents wrote down; notifications shown.", types: ["note", "notification"], keepDays: null, cap: null, setting: null, leaves: null },
+  notes: { title: "Notes and notifications", description: "Notes you or agents wrote down; notifications shown.", types: ["note", "notification", "notification.clear"], keepDays: null, cap: null, setting: null, leaves: null },
   system: { title: "The data layer", description: "Imports, prunes, rebuilds.", types: ["data."], keepDays: null, cap: null, setting: null, leaves: null },
+  remote: { title: "Remote access", description: "Who paired, connected, was refused or revoked.", types: ["remote."], keepDays: 90, cap: null, setting: null, leaves: null },
 };
 
 /** The class of an event type ("system" for kinds no class names). */

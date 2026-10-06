@@ -7,8 +7,9 @@
 // the terminal's mute; it sets the terminal's attention marker and emits an
 // AppNotification. The UI decides whether to show it, since it knows focus and
 // selection (notifications.when), and how (sound, Dock bounce, visual bell).
-// Looking at the terminal clears its marker (pane.clearAttention). The newest
-// MAX_LOG are kept in memory for the Notifications widget (notify.list).
+// Looking at the terminal clears its marker (pane.clearAttention). Every
+// notification is an event in the log (data/recorders.ts); the Notifications
+// widget lists them from there (notify.list in core.ts).
 
 import { EventEmitter } from "node:events";
 import os from "node:os";
@@ -58,8 +59,6 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
   #agentStates = new Map<string, Agent["state"]>();
   #lastBell = new Map<PaneId, number>();
   #running = new Map<PaneId, Running>();
-  /** Oldest first. */
-  #log: AppNotification[] = [];
 
   #writer: NoticeWriter | null;
 
@@ -107,13 +106,8 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
     this.#emit({ source: "widget", paneId: null, windowId: n.windowId, title: n.title, body: n.body, alert: !n.muted, urgent: n.urgent });
   }
 
-  /** Sent since the core started, newest first. */
-  list(): AppNotification[] {
-    return [...this.#log].reverse();
-  }
-
+  /** The widget was cleared (the core records it in the log): tell the clients. */
   clear(): void {
-    this.#log = [];
     this.emit("cleared");
   }
 
@@ -234,8 +228,6 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
 
   #emit(n: Omit<AppNotification, "id" | "at">): void {
     const full: AppNotification = { id: randomUUID(), ...n, at: Date.now() };
-    this.#log.push(full);
-    if (this.#log.length > MAX_LOG) this.#log.splice(0, this.#log.length - MAX_LOG);
     this.emit("notification", full);
   }
 }

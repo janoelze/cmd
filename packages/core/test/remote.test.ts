@@ -176,8 +176,9 @@ describe("remote access", () => {
     await expect.poll(again.closed).toBe(true);
   });
 
-  it("logs what happened", () => {
-    const kinds = core.store.remoteLog().map((r) => r.kind);
+  it("logs what happened, as events in the log", async () => {
+    const kinds = (await core.call("remote.log", { limit: 500 })).map((r) => r.kind);
+    expect(core.data.query({ types: ["remote.audit"], limit: 500 }).length).toBe(kinds.length);
     for (const k of ["enabled", "paired", "session", "denied", "pair-denied", "handshake-failed", "revoked"]) expect(kinds).toContain(k);
   });
 });

@@ -72,3 +72,41 @@ describe("forget", () => {
     expect(() => d.forget({})).toThrow(/say what/);
   });
 });
+
+describe("agent events in the log", () => {
+  it("keeps a hook payload's long strings cut in the row and the whole payload as its content, with the pane's Space", async () => {
+    const { ActivityView } = await import("../src/data/views/activity.ts");
+    const { ViewsStore } = await import("../src/data/views/views.ts");
+    const { d } = service();
+    const view = new ActivityView(d, new ViewsStore(null));
+    view.spaceOf = (paneId) => (paneId === "p1" ? "space-1" : null);
+    const big = "x".repeat(20_000);
+    view.insert({ at: 1, agent: "claude", name: "PostToolUse", payload: { hook_event_name: "PostToolUse", session_id: "s", tool_name: "Read", tool_response: big } }, "p1", "a1");
+    const [e] = d.query({ types: ["agent.hook"] });
+    expect(e!.spaceId).toBe("space-1");
+    expect(JSON.stringify(e!.data).length).toBeLessThan(6000);
+    expect(JSON.parse(d.store.blob(e!.blob!)!.toString()).tool_response).toBe(big);
+    view.insert({ at: 2, agent: "claude", name: "Stop", payload: { hook_event_name: "Stop", session_id: "s" } }, "p1", "a1");
+    expect(d.query({ types: ["agent.hook"] })[1]!.blob).toBeNull();
+  });
+});
+
+describe("the notification log", () => {
+  it("lists notifications from the log, newest first, and starts over after Clear", async () => {
+    const { Core } = await import("../src/core.ts");
+    const { fakeFactory } = await import("./fake-pty.ts");
+    const core = new Core({ socketPath: "", dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0 });
+    try {
+      core.notifications.send(null, "first", "one");
+      core.notifications.send(null, "second", "two");
+      expect((await core.call("notify.list", {})).map((n) => n.title)).toEqual(["second", "first"]);
+      await core.call("notify.clear", {});
+      await new Promise((r) => setTimeout(r, 2));
+      core.notifications.send(null, "third", "three");
+      expect((await core.call("notify.list", {})).map((n) => n.title)).toEqual(["third"]);
+      expect(core.data.query({ types: ["notification"] }).length).toBe(3); // cleared from the widget, kept in the log
+    } finally {
+      await core.close();
+    }
+  });
+});
