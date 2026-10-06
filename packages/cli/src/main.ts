@@ -11,6 +11,7 @@ import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node"
 import { magicCommand } from "./magic.ts";
 import { widgetCommand } from "./widget.ts";
 import { AGENTS_HELP, agentsCommand } from "./agents.ts";
+import { JOURNAL_HELP, journalCommand } from "./journal.ts";
 
 const HELP = `cmd — terminal + agent workbench
 
@@ -38,6 +39,7 @@ usage: cmd <command> [options]
   hooks [--json]                      agent configs (Claude Code, Codex, Gemini) and whether cmd's hook is in them
   hooks install|remove [AGENT|FILE]   add cmd's hook to them (all by default), or take it out
 ${AGENTS_HELP}
+${JOURNAL_HELP}
   open <path|url> [--kind K] [--types] open in a cmd window (folder, text, browser, …);
                                       --types lists window types
   search <query…> [--json] [--limit N]  search past agent sessions
@@ -60,7 +62,7 @@ ${AGENTS_HELP}
 
 env: ${ENV.socket} (default ${defaultSocketPath()})`;
 
-const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "open", "search", "resume", "settings", "space", "remote", "help"]);
+const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "journal", "open", "search", "resume", "settings", "space", "remote", "help"]);
 
 /**
  * `cmd .`, `cmd ~/src/x`, `cmd ../y`: a folder to open as a Space. A command name
@@ -117,6 +119,11 @@ const { values: opt, positionals: pos } = parseArgs({
     anonymize: { type: "boolean" },
     out: { type: "string" },
     open: { type: "boolean" },
+    space: { type: "string" },
+    repo: { type: "string" },
+    day: { type: "string" },
+    write: { type: "boolean" },
+    "no-write": { type: "boolean" },
   },
 });
 
@@ -169,6 +176,8 @@ async function run({ client, closed }: Connection): Promise<number> {
     }
     case "agents":
       return agentsCommand(client, closed, pos, opt);
+    case "journal":
+      return journalCommand(client, pos, opt, callerPaneId);
     case "identify": {
       const paneId = process.env[ENV.paneId];
       if (!paneId) return fail("not inside a cmd pane");

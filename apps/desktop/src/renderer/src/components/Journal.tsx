@@ -1,61 +1,40 @@
-// Journal (prototype, pnpm workbench journal): what happened in a Space, as a
-// work log people can read at a glance. A day is a headline, a ribbon of the
-// hours worked and a few entries ("Released v0.14.4", "Investigated a corrupt
-// database"), each made from the raw events the core records (agent sessions,
-// commands, commits, pages, files) and summarised by AI: a title and a few lines
-// each. Presentational only: the data comes as props, so the
-// story can show what a summariser could make before one exists.
+// Journal, a built-in widget (docs/23-journal.md): what happened in a Space,
+// as a work log people can read at a glance. A day is a headline, a ribbon of
+// the hours worked and a few entries ("Released v0.14.4", "Investigated a
+// corrupt database"), which the core writes from what it recorded (agent
+// sessions, commands, commits, pages) with AI. Journal draws days it's given
+// (stories pass made-up ones); JournalView fetches them.
 
 import { Badge, Chip, EmptyState, IconButton, Panel, PanelBody, Spinner, type Tone } from "@cmd/ui";
 import { useState, type CSSProperties } from "react";
+import type { JournalDay, JournalEntry, JournalEntryKind, JournalOutcome } from "@cmd/protocol";
 import { projectHue } from "../model.ts";
 import "./journal.css";
 
-export type EntryKind = "release" | "investigation" | "feature" | "fix" | "design" | "research" | "chore";
-export type Outcome = "shipped" | "fixed" | "merged" | "open" | "dropped";
-
-export interface JournalEntry {
-  id: string;
-  kind: EntryKind;
-  title: string;
-  /** One or two sentences, in the past tense. */
-  summary: string;
-  start: number;
-  end: number;
-  project?: string;
-  outcome?: Outcome;
-  /** What it was made from, counted. */
-  counts: Partial<Record<"agents" | "commands" | "commits" | "pages" | "files", number>>;
-}
-
-export interface JournalDay {
-  /** Midnight, local time. A work day ends at 4 am, so a late night stays with the day it began on. */
-  date: number;
-  /** One sentence for the whole day. */
-  headline: string;
-  entries: JournalEntry[];
-}
-
 /** Each kind's colour on the rail and the ribbon; the project is the chip. */
-const KIND: Record<EntryKind, { label: string; hue: number }> = {
+const KIND: Record<JournalEntryKind, { label: string; hue: number }> = {
   release: { label: "Release", hue: 210 },
   investigation: { label: "Investigation", hue: 25 },
   feature: { label: "Feature", hue: 275 },
   fix: { label: "Fix", hue: 145 },
   design: { label: "Design", hue: 330 },
+  refactor: { label: "Refactor", hue: 245 },
   research: { label: "Research", hue: 185 },
+  review: { label: "Review", hue: 55 },
+  ops: { label: "Setup", hue: 100 },
   chore: { label: "Chore", hue: 220 },
 };
 
-const OUTCOME: Record<Outcome, { tone: Tone; label: string }> = {
+const OUTCOME: Record<JournalOutcome, { tone: Tone; label: string }> = {
   shipped: { tone: "accent", label: "Shipped" },
-  fixed: { tone: "success", label: "Fixed" },
   merged: { tone: "success", label: "Merged" },
+  fixed: { tone: "success", label: "Fixed" },
+  answered: { tone: "success", label: "Answered" },
   open: { tone: "warning", label: "Open" },
   dropped: { tone: "neutral", label: "Dropped" },
 };
 
-const COUNT_LABEL: Record<keyof JournalEntry["counts"], [string, string]> = {
+const COUNT_LABEL: Partial<Record<keyof JournalEntry["counts"], [string, string]>> = {
   agents: ["agent", "agents"],
   commands: ["command", "commands"],
   commits: ["commit", "commits"],
@@ -63,11 +42,15 @@ const COUNT_LABEL: Record<keyof JournalEntry["counts"], [string, string]> = {
   files: ["file", "files"],
 };
 
+/** A work day starts at 04:00 (the core's DAY_STARTS_AT). */
+const DAY_START_H = 4;
+const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+/** A work day runs 04:00 to 04:00 (the core's DAY_STARTS_AT): at 2 am, today is still yesterday's. */
 function dayName(date: number, now: number): string {
   const day = 86_400_000;
-  const today = new Date(now).setHours(0, 0, 0, 0);
+  const today = new Date(now - DAY_START_H * 3600_000).setHours(0, 0, 0, 0);
   if (date === today) return "Today";
   if (date === today - day) return "Yesterday";
   return new Date(date).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
@@ -81,12 +64,14 @@ function spanText(ms: number): string {
 const countsText = (c: JournalEntry["counts"]) =>
   (Object.keys(COUNT_LABEL) as (keyof typeof COUNT_LABEL)[])
     .filter((k) => c[k])
-    .map((k) => `${c[k]} ${COUNT_LABEL[k][c[k] === 1 ? 0 : 1]}`)
+    .map((k) => `${c[k]} ${COUNT_LABEL[k]![c[k] === 1 ? 0 : 1]}`)
     .join(" · ");
 
 /** The day's hours as a strip: one bar per entry, in its project's colour, on its own lane where entries overlap. */
 function Ribbon({ day, onPick, picked }: { day: JournalDay; onPick: (id: string) => void; picked: string | null }) {
-  const starts = day.entries.map((e) => e.start), ends = day.entries.map((e) => e.end);
+  // Hours of the work day (04:00 to 04:00) that had work in them.
+  const clip = (t: number) => Math.min(Math.max(t, day.date + DAY_START_H * 3_600_000), day.date + (DAY_START_H + 24) * 3_600_000);
+  const starts = day.entries.map((e) => clip(e.start)), ends = day.entries.map((e) => clip(e.end));
   const from = Math.floor((Math.min(...starts) - day.date) / 3_600_000);
   const to = Math.ceil((Math.max(...ends) - day.date) / 3_600_000);
   const hours = Math.max(1, to - from);
@@ -112,7 +97,7 @@ function Ribbon({ day, onPick, picked }: { day: JournalDay; onPick: (id: string)
             data-picked={picked === e.id || undefined}
             data-tip={`${e.title} · ${time(e.start)}–${time(e.end)}`}
             onClick={() => onPick(e.id)}
-            style={{ left: `${x(e.start)}%`, width: `max(4px, ${x(e.end) - x(e.start)}%)`, top: `calc(${lane.get(e.id)} * var(--lane))`, "--hue": KIND[e.kind].hue } as CSSProperties}
+            style={{ left: `${x(clip(e.start))}%`, width: `max(4px, ${x(clip(e.end)) - x(clip(e.start))}%)`, top: `calc(${lane.get(e.id)} * var(--lane))`, "--hue": KIND[e.kind].hue } as CSSProperties}
           />
         ))}
       </div>
@@ -147,7 +132,7 @@ function Entry({ e, picked, showProject }: { e: JournalEntry; picked: boolean; s
         </div>
         <p className="journal-entry-summary">{e.summary}</p>
         <div className="journal-entry-meta">
-          {showProject && e.project && <Chip hue={projectHue(e.project)}>{e.project}</Chip>}
+          {showProject && e.repo && <Chip hue={projectHue(base(e.repo))}>{base(e.repo)}</Chip>}
           <span>{[spanText(e.end - e.start), countsText(e.counts)].join(" · ")}</span>
         </div>
       </div>

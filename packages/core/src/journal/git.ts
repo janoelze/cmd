@@ -144,10 +144,14 @@ export async function gitEvents(repoDir: string, since = 0): Promise<NewJournalE
   // Merges seen in any log, to expand into the commits they brought.
   const merges: { e: ReflogEntry; branch: string; into: string | null; worktree: string | null }[] = [];
 
+  // What each worktree has checked out now: a log without checkouts has been on it all along.
+  const now = new Map<string | null, string | null>();
+  for (const log of reflogs(common, repo)) if (!log.branch && log.worktree) now.set(log.worktree, (await repoOf(log.worktree))?.branch ?? null);
   for (const log of reflogs(common, repo)) {
+    const entries = parseReflog(read(log.file));
     // What a worktree's HEAD log says it has checked out, as it goes.
-    let current: string | null = log.branch;
-    for (const e of parseReflog(read(log.file))) {
+    let current: string | null = log.branch ?? (entries.some((e) => e.message.startsWith("checkout:")) ? null : (now.get(log.worktree) ?? null));
+    for (const e of entries) {
       const m = e.message;
       let x: RegExpExecArray | null;
       if ((x = /^checkout: moving from (.+) to (.+)$/.exec(m))) current = x[2]!;

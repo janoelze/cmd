@@ -6,7 +6,7 @@ import { Worker } from "node:worker_threads";
 import { DatabaseSync } from "node:sqlite";
 import type { AgentKind } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import { Searcher, type IndexStatus, type SearchHit } from "./index.ts";
+import { Searcher, type IndexStatus, type SearchHit, type SessionRow } from "./index.ts";
 import type { TranscriptRoot } from "./sources.ts";
 import type { WorkerMessage, WorkerRequest } from "./worker.ts";
 
@@ -40,6 +40,11 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
 
   recent(limit?: number, exclude?: string[]): SearchHit[] {
     return this.#reader()?.recent(limit, exclude) ?? [];
+  }
+
+  /** Sessions active since `since`, for the journal. */
+  sessionsSince(since: number): SessionRow[] {
+    return this.#reader()?.sessionsSince(since) ?? [];
   }
 
   /** A live agent's transcript: if it lies outside every known folder, its folder is indexed from now on. */

@@ -90,7 +90,7 @@ export function digest(threads: JournalThread[], events: JournalEvent[], o: { ti
         const commits = ev.filter((e) => e.data.kind === "git.commit");
         const merge = ev.find((e) => e.data.kind === "git.merge");
         const name = t.label;
-        lines.push(`${head} · branch ${name}: ${commits.length} commit${commits.length === 1 ? "" : "s"}${merge ? `, merged ${hm(merge.at)}` : ", not merged"}${links ? ` · ${links}` : ""}`);
+        lines.push(`${head} · ${t.id.includes("@") ? "on" : "branch"} ${name}: ${commits.length} commit${commits.length === 1 ? "" : "s"}${merge ? `, merged ${hm(merge.at)}` : t.id.includes("@") ? "" : ", not merged"}${links ? ` · ${links}` : ""}`);
         const shown = commits.length > COMMITS_PER_BRANCH ? [...commits.slice(0, COMMITS_PER_BRANCH - 1), commits.at(-1)!] : commits;
         for (const c of shown) lines.push(`  - ${one(c.text, 140)}`);
         if (commits.length > COMMITS_PER_BRANCH) lines.push(`  (… ${commits.length - COMMITS_PER_BRANCH} more commits)`);
@@ -119,7 +119,7 @@ export function digest(threads: JournalThread[], events: JournalEvent[], o: { ti
         break;
       }
       case "browsing": {
-        lines.push(`${head} · browsed ${ev.length} pages`);
+        lines.push(`${head} · browsed ${ev.length} pages${links ? ` · ${links}` : ""}`);
         const seen = new Set<string>();
         for (const e of ev) {
           const d = e.data;

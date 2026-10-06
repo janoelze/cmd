@@ -15,6 +15,7 @@ import { LiveDiff } from "../components/LiveDiff.tsx";
 import { watchUrl, YouTubeView } from "../components/YouTubeView.tsx";
 import { NavigatorView } from "../components/Navigator.tsx";
 import { CommandsView } from "../components/CommandsView.tsx";
+import { JournalView } from "../components/JournalView.tsx";
 import { NotificationsView } from "../components/NotificationsView.tsx";
 import { ResourcesView } from "../components/ResourcesView.tsx";
 import { TimerView } from "../components/TimerView.tsx";
@@ -227,6 +228,7 @@ const scopeLabel = (w: AppWindow) => (scopeOf(w.state.scope) === "all" ? "All Sp
 const scoped = (extra: (w: AppWindow) => MenuEntry[]) => (w: AppWindow) => [...scopeMenu(w.id, scopeOf(w.state.scope)), "-" as const, ...extra(w)];
 const commandsMenu = scoped((w) => [{ label: "Failed Only", checked: w.state.failedOnly === true, run: () => setWidgetState(w.id, { failedOnly: w.state.failedOnly !== true }) }]);
 const notificationsMenu = scoped(() => [{ label: "Clear Notifications", run: () => void cmd.call("notify.clear", {}).catch(() => {}) }]);
+const journalMenu = scoped((w) => [{ label: "Write Today Again", run: () => void cmd.call("journal.day", { ...(scopeOf(w.state.scope) === "all" ? { scope: "all" } : { spaceId: w.spaceId }), date: Date.now(), write: "force" }).catch(() => {}) }]);
 const resourcesMenu = scoped(() => [{ label: "Open Task Manager", run: () => cmd.openTaskManager() }]);
 
 registerWindowView({
@@ -235,6 +237,14 @@ registerWindowView({
   describe: () => ({ kind: null }),
   titleMenu: (w) => ({ label: scopeLabel(w), entries: commandsMenu(w) }),
   menu: commandsMenu,
+});
+
+registerWindowView({
+  kind: "journal",
+  View: JournalView,
+  describe: () => ({ kind: null }),
+  titleMenu: (w) => ({ label: scopeLabel(w), entries: journalMenu(w) }),
+  menu: journalMenu,
 });
 
 registerWindowView({

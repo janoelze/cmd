@@ -297,6 +297,23 @@ function rowToHit(r: Record<string, unknown>, fuzzy: boolean): SearchHit {
 }
 
 /** Searcher over a read connection; caches the vocabulary until the index changes. */
+/** A session as the index knows it, for the journal (journal/backfill.ts). */
+export interface SessionRow {
+  id: string;
+  agent: string;
+  cwd: string | null;
+  branch: string | null;
+  title: string | null;
+  first_prompt: string | null;
+  started: number;
+  updated: number | null;
+}
+
+/** Sessions active since `since` (updated then or later). */
+export function sessionsSince(db: DatabaseSync, since: number): SessionRow[] {
+  return db.prepare(`SELECT id, agent, cwd, branch, title, first_prompt, started, updated FROM sessions WHERE updated >= ? AND started IS NOT NULL ORDER BY started`).all(since) as unknown as SessionRow[];
+}
+
 export class Searcher {
   #db: DatabaseSync;
   #vocab: Vocabulary | null = null;
@@ -307,6 +324,10 @@ export class Searcher {
 
   counts(): { sessions: number; files: number } {
     return indexCounts(this.#db);
+  }
+
+  sessionsSince(since: number): SessionRow[] {
+    return sessionsSince(this.#db, since);
   }
 
   close(): void {

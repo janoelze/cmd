@@ -7,6 +7,7 @@ import type { AiModel, AiStatus } from "./ai.ts";
 import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
 import type { ActivityEvent, ActivityExportHeader, AgentCoverage, AgentHome, AgentTurn } from "./activity.ts";
+import type { JournalDay, JournalEvent, JournalEventKind, JournalThread } from "./journal.ts";
 
 export interface CoreInfo {
   pid: number;
@@ -142,6 +143,21 @@ export interface Methods {
   };
   /** What each agent's events actually carried over the last `days` (default 7). */
   "agents.coverage": { params: { days?: number }; result: AgentCoverage[] };
+  /**
+   * The journal (docs/23-journal.md). A scope is a Space (spaceId), "repo:<path>" or "all" (the default).
+   * `write`: "stale" writes days whose events changed (the default), "never" only reads, "force" writes again.
+   */
+  "journal.days": { params: { spaceId?: SpaceId; scope?: string; count?: number; write?: "never" | "stale" | "force" }; result: JournalDay[] };
+  /** One work day by its local midnight (a work day runs 04:00 to 04:00); null when nothing happened. */
+  "journal.day": { params: { spaceId?: SpaceId; scope?: string; date: number; write?: "never" | "stale" | "force" }; result: JournalDay | null };
+  /** The recorded events, oldest first. */
+  "journal.events": { params: { since?: number; until?: number; spaceId?: SpaceId; repo?: string; kinds?: JournalEventKind[]; limit?: number }; result: JournalEvent[] };
+  /** A day's threads and the digest a model would get: how the journal sees it, before any model. */
+  "journal.threads": { params: { spaceId?: SpaceId; scope?: string; date: number }; result: { threads: JournalThread[]; digest: string } };
+  /** Writes something down: from an agent's terminal (paneId), it joins that agent's session. */
+  "journal.note": { params: { text: string; paneId?: PaneId; spaceId?: SpaceId }; result: { id: number } };
+  /** Reads new turns, sessions and git now (it does every few minutes). */
+  "journal.sync": { params: {}; result: null };
   /** Where agents keep their config (discovered); rescan: look again first. */
   "agents.homes": { params: { rescan?: boolean }; result: AgentHome[] };
 

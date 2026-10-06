@@ -31,7 +31,8 @@ export interface ThreadOptions {
 const kindOf = (id: string): JournalThreadKind => (id.split(":")[0] as JournalThreadKind) ?? "other";
 const isPrompt = (e: JournalEvent) => e.data.kind === "agent.turn" && !!e.data.prompt && !e.data.auto && !e.data.prompt.startsWith("<task-notification>");
 
-export function buildThreads(all: JournalEvent[], o: ThreadOptions): JournalThread[] {
+export function buildThreads(events: JournalEvent[], o: ThreadOptions): JournalThread[] {
+  const all = [...events].sort((a, b) => a.at - b.at || a.id - b.id);
   const inDay = (e: JournalEvent) => (e.until ?? e.at) >= o.from && e.at < o.to;
   const groups = new Map<string, JournalEvent[]>();
   const add = (id: string, e: JournalEvent) => {
@@ -54,7 +55,7 @@ export function buildThreads(all: JournalEvent[], o: ThreadOptions): JournalThre
     return id;
   };
 
-  for (const e of [...all].sort((a, b) => a.at - b.at)) {
+  for (const e of all) {
     if (!inDay(e)) continue;
     const d = e.data;
     switch (d.kind) {
@@ -149,7 +150,25 @@ export function buildThreads(all: JournalEvent[], o: ThreadOptions): JournalThre
       }
     }
   }
-  for (const t of threads.values()) t.minor = isMinor(t, groups.get(t.id)!);
+  // Commits on the default branch while a session worked in the main worktree: the session made them.
+  for (const t of threads.values()) {
+    if (t.kind !== "branch" || !t.id.includes("@")) continue;
+    const commits = groups.get(t.id)!.filter((e) => e.data.kind === "git.commit");
+    for (const s of threads.values()) {
+      if (s.kind !== "session" || s.repo !== t.repo) continue;
+      const turns = groups.get(s.id)!.filter((e) => e.data.kind === "agent.turn");
+      const mainFiles = turns.some((e) => e.data.kind === "agent.turn" && e.data.files.some((f) => s.repo && f.startsWith(s.repo + "/")));
+      if (mainFiles && commits.some((c) => turns.some((e) => c.at >= e.at && c.at <= (e.until ?? e.at) + 5 * 60_000))) link(s, t.id, "committed during the session");
+    }
+  }
+  // Terminals and pages busy while exactly one session worked in the same project or Space: probably part of it. A hint, not a group.
+  for (const t of threads.values()) {
+    if (t.kind !== "terminal" && t.kind !== "browsing") continue;
+    if (t.links.length) continue;
+    const during = [...threads.values()].filter((s) => s.kind === "session" && overlaps(s, t) && (s.repo === t.repo || (!!s.spaceId && s.spaceId === t.spaceId)) && !isMinor(s, groups.get(s.id)!));
+    if (during.length === 1) link(t, during[0]!.id, t.kind === "terminal" ? "ran while that session worked" : "read while that session worked");
+  }
+  for (const t of threads.values()) t.minor = isMinor(t, groups.get(t.id)!, o.from);
   const sorted = [...threads.values()].sort((a, b) => a.start - b.start);
   group(sorted, groups);
   return sorted;
@@ -179,7 +198,7 @@ function group(threads: JournalThread[], events: Map<string, JournalEvent[]>): v
   };
   for (const t of threads) {
     if (t.kind !== "session" && t.kind !== "terminal") continue;
-    const branches = t.links.filter((l) => l.to.startsWith("branch:"));
+    const branches = t.links.filter((l) => l.to.startsWith("branch:") && STRONG(l.rule));
     if (branches.length < 3) for (const l of branches) union(t.id, l.to);
     const prompts = (events.get(t.id) ?? []).filter((e) => isPrompt(e) && !TRIVIAL_PROMPT.test((e.data as { prompt: string }).prompt.trim()));
     const releasing = prompts.length <= 3 || prompts.every((e) => /\brelease|\/release|changelog|\bship/i.test((e.data as { prompt: string }).prompt));
@@ -203,7 +222,7 @@ function labelOf(id: string, kind: JournalThreadKind, events: JournalEvent[]): s
     case "session": {
       const s = events.find((e) => e.data.kind === "agent.session");
       const title = s?.data.kind === "agent.session" ? s.data.title : null;
-      return title ?? events.find(isPrompt)?.text ?? s?.text ?? "Agent session";
+      return title || events.find(isPrompt)?.text || s?.text || "Agent session";
     }
     case "branch":
     case "release":
@@ -217,12 +236,14 @@ function labelOf(id: string, kind: JournalThreadKind, events: JournalEvent[]): s
   }
 }
 
-function isMinor(t: JournalThread, events: JournalEvent[]): boolean {
+function isMinor(t: JournalThread, events: JournalEvent[], from = 0): boolean {
   if (t.links.length) return false;
   switch (t.kind) {
     case "session": {
       if (events.some((e) => e.cwd && /^\/(private\/)?(tmp|var\/folders)\//.test(e.cwd))) return true;
       const turns = events.filter((e) => e.data.kind === "agent.turn");
+      // Only its span reaches into the day (resumed, or its file touched): its work was the day before.
+      if (!turns.length && t.start < from) return true;
       if (!turns.length) return t.end - t.start < 3 * 60_000;
       const real = turns.filter((e) => isPrompt(e) && !TRIVIAL_PROMPT.test((e.data as { prompt: string }).prompt.trim()));
       const files = turns.reduce((n, e) => n + (e.data.kind === "agent.turn" ? e.data.files.length : 0), 0);
@@ -236,6 +257,11 @@ function isMinor(t: JournalThread, events: JournalEvent[]): boolean {
       return false;
   }
 }
+
+const overlaps = (a: JournalThread, b: JournalThread) => a.start <= b.end + 5 * 60_000 && b.start <= a.end + 5 * 60_000;
+
+/** Links that say two threads are one piece of work (the rest are hints). */
+export const STRONG = (rule: string) => !/^(ran|read) while/.test(rule) && !rule.startsWith("shipped");
 
 function link(t: JournalThread, to: string, rule: string): void {
   if (to !== t.id && !t.links.some((l) => l.to === to)) t.links.push({ to, rule } satisfies JournalLink);

@@ -51,6 +51,13 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "agent.turns": "never",
   "agent.summarize": "never",
   "agents.coverage": "never",
+  // The journal holds prompts, commands and pages: local only.
+  "journal.days": "never",
+  "journal.day": "never",
+  "journal.events": "never",
+  "journal.threads": "never",
+  "journal.note": "never",
+  "journal.sync": "never",
   "agents.homes": "never",
   "agents.export": "never",
   "hook.ingest": "never",

@@ -242,6 +242,7 @@ function scopedWidget(kind: string, title: string, icon: string, description: st
 
 export const commandsType = scopedWidget("commands", "Commands", "terminal", "Every command your terminals ran: how long it took and whether it worked.", ["failedOnly"]);
 export const notificationsType = scopedWidget("notifications", "Notifications", "bell", "The notifications cmd sent, including the ones you missed.");
+export const journalType = scopedWidget("journal", "Journal", "book", "What happened, a few lines a day: releases, features, fixes and investigations, from your agents, terminals and git.");
 export const resourcesType = scopedWidget("resources", "Resources", "gauge.with.dots.needle.33percent", "What each terminal uses: CPU and memory of everything running in it.");
 
 /** Seconds. 0 h 0 m 1 s to 24 h. */
@@ -431,6 +432,7 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(navigatorType);
   types.register(commandsType);
   types.register(notificationsType);
+  types.register(journalType);
   types.register(resourcesType);
   types.register(timerType);
 }

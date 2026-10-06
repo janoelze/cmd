@@ -76,14 +76,17 @@ export function toDay(w: WrittenDay, d: Digest, threads: JournalThread[], events
     for (const t of ts) covered.add(t.id);
     const ev = ts.flatMap((t) => t.events.map((id) => byEvent.get(id))).filter((e): e is JournalEvent => !!e);
     const major = ts.filter((t) => !t.minor);
+    // Its span is the work's (sessions, branches, releases), not a dev server left running or pages read around it.
+    const core = major.filter((t) => t.kind === "session" || t.kind === "branch" || t.kind === "release");
+    const span = core.length ? core : major.length ? major : ts;
     return {
       id: (major[0] ?? ts[0]!).id,
       kind,
       title: title.trim().replace(/\.$/, ""),
       summary: summary.trim(),
       outcome,
-      start: Math.min(...(major.length ? major : ts).map((t) => t.start)),
-      end: Math.max(...(major.length ? major : ts).map((t) => t.end)),
+      start: Math.min(...span.map((t) => t.start)),
+      end: Math.max(...span.map((t) => t.end)),
       repo: ts.find((t) => t.repo)?.repo ?? null,
       threads: ts.map((t) => t.id),
       counts: countsOf(ev),

@@ -2,13 +2,26 @@
 // of this repo's own history as a summariser might write them up.
 import { Window, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "@cmd/ui";
 import type { ReactNode } from "react";
-import { Journal, type JournalDay } from "./Journal.tsx";
+import type { JournalDay, JournalEntry } from "@cmd/protocol";
+import { Journal } from "./Journal.tsx";
+
+type Draft = Omit<JournalEntry, "repo" | "threads" | "counts" | "outcome"> & { project?: string; outcome?: JournalEntry["outcome"]; counts: Partial<JournalEntry["counts"]> };
+const day = (d: { date: number; headline: string; entries: Draft[] }): JournalDay => ({
+  ...d,
+  scope: "space:cmd",
+  writtenBy: "Claude Sonnet 5.5",
+  writtenAt: d.date,
+  inputHash: "",
+  minor: 3,
+  entries: d.entries.map(({ project, counts, ...e }) => ({ ...e, outcome: e.outcome ?? null, repo: project ? `/Users/sam/src/${project}` : null, threads: [e.id], counts: { agents: 0, prompts: 0, commands: 0, commits: 0, pages: 0, files: 0, ...counts } })),
+});
 
 const NOW = new Date(2026, 9, 6, 11, 45).getTime();
 const at = (d: number, h: number, m: number) => new Date(2026, 9, d, h, m).getTime();
 const midnight = (d: number) => new Date(2026, 9, d).getTime();
 
-const DAYS: JournalDay[] = [
+const DAYS: JournalDay[] = (
+  [
   {
     date: midnight(6),
     headline: "Drag and drop landed and shipped in v0.14.4, then the kit took over drawing every window.",
@@ -108,7 +121,8 @@ const DAYS: JournalDay[] = [
       },
     ],
   },
-];
+  ] satisfies { date: number; headline: string; entries: Draft[] }[]
+).map(day);
 
 /** A widget tile as the desk draws it. */
 function Tile({ width, height, children }: { width: number; height: number; children: ReactNode }) {

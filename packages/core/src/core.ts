@@ -10,6 +10,9 @@ import { EXPORT_FORMAT, lineSplitter, TURN_FORMAT } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
 import { ActivityLog } from "./agents/activity/log.ts";
+import { JournalService } from "./journal/service.ts";
+import { JournalStore } from "./journal/store.ts";
+import { recordCommands, recordWindows } from "./journal/recorders.ts";
 import { rewrite } from "./agents/activity/fixture.ts";
 import { AgentHomes } from "./agents/homes.ts";
 import { cleanAiBody, NOTICE_SYSTEM, noticeContext, type NoticeKind } from "./agents/notice.ts";
@@ -137,6 +140,7 @@ export class Core {
   readonly secrets: SecretsService;
   readonly ai: AiService;
   readonly summaries: SummaryService;
+  readonly journal: JournalService;
   readonly remote: RemoteService;
   readonly usage: UsageStats;
   /** Agents already counted for usage stats. */
@@ -292,6 +296,23 @@ export class Core {
       },
       notify: (id, title, body) => this.notifications.window(id, "summary", title, body),
     });
+    this.journal = new JournalService({
+      store: new JournalStore(this.store.db),
+      activityDb: this.store.db,
+      sessions: (since) => this.#search?.sessionsSince(since) ?? [],
+      spaces: () => this.spaces.list(),
+      agentSpace: (id) => this.agents.get(id)?.spaceId ?? null,
+      ai: {
+        object: (o) => this.ai.object(o),
+        modelName: () => {
+          const p = this.ai.provider();
+          return p ? (this.ai.status().providers[p].models?.smart.name ?? null) : null;
+        },
+      },
+    });
+    recordCommands(this.journal, this.commands);
+    recordWindows(this.journal, this.windows);
+    if (opts.stateDir) this.journal.start();
     this.magic = new MagicService({
       windows: this.windows,
       settings,
@@ -414,6 +435,21 @@ export class Core {
       return { path: s.path, windowId: s.windowId, markdown: p.wait ? await s.done : null };
     },
     "agents.coverage": (p) => this.agents.activity.coverage(p.days),
+    "journal.days": (p) => this.journal.days(journalScope(p), Math.min(p.count ?? 7, 60), p.write),
+    "journal.day": async (p) => (await this.journal.sync(), this.journal.day(journalScope(p), this.journal.dayOf(p.date), p.write)),
+    "journal.events": (p) => this.journal.store.events(p),
+    "journal.threads": async (p) => {
+      await this.journal.sync();
+      const t = this.journal.threads(journalScope(p), this.journal.dayOf(p.date));
+      return { threads: t.threads, digest: t.digest.text };
+    },
+    "journal.note": (p) => {
+      const pane = p.paneId ? this.panes.get(p.paneId) : undefined;
+      const agent = pane?.agentId ? this.agents.get(pane.agentId) : null;
+      const session = agent ? (agent.native.claudeSessionId ?? agent.native.codexThreadId ?? null) : null;
+      return { id: this.journal.note(p.text, { by: agent ? "agent" : "user", agentSession: session, spaceId: p.spaceId ?? pane?.spaceId ?? null, cwd: pane?.cwd ?? null }) };
+    },
+    "journal.sync": async () => (await this.journal.sync(), null),
     "agents.export": (p) => {
       const log = this.agents.activity;
       const since = Date.now() - (p.days ?? 14) * 86400_000;
@@ -1065,6 +1101,7 @@ export class Core {
     this.agents.close();
     this.usage.close();
     this.ai.dispose();
+    this.journal.dispose();
     await this.usage.flush();
     this.magic.dispose();
     this.remote.close();
@@ -1127,4 +1164,9 @@ function magicRef(ref: string): string {
   const r = widgetRef(ref);
   if (!r.widgetId) throw new Error(`built-in widgets can't be renamed, duplicated or deleted: ${ref}`);
   return r.widgetId;
+}
+
+/** A journal method's scope: a Space, else the one asked for, else everything. */
+function journalScope(p: { spaceId?: SpaceId; scope?: string }): string {
+  return p.spaceId ? `space:${p.spaceId}` : (p.scope ?? "all");
 }

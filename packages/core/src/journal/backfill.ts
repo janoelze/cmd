@@ -6,6 +6,7 @@
 
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import type { SessionRow } from "../search/index.ts";
 import type { AgentTurn } from "@cmd/protocol";
 import { decodeRows, decodeTurn } from "../stored.ts";
 import { repoOfSync } from "./git.ts";
@@ -24,17 +25,7 @@ export function projectOf(cwd: string | null): string | null {
 }
 
 /** Agent sessions from the transcript index (search.sqlite's sessions table). */
-export function sessionEvents(search: DatabaseSync, since: number): NewJournalEvent[] {
-  const rows = search.prepare(`SELECT id, agent, cwd, branch, title, first_prompt, started, updated FROM sessions WHERE updated >= ? AND started IS NOT NULL`).all(since) as {
-    id: string;
-    agent: string;
-    cwd: string | null;
-    branch: string | null;
-    title: string | null;
-    first_prompt: string | null;
-    started: number;
-    updated: number | null;
-  }[];
+export function sessionEvents(rows: SessionRow[]): NewJournalEvent[] {
   return rows.map((r) => {
     const title = r.title?.trim() || null;
     return {
