@@ -13,6 +13,8 @@ export const DATA_HELP = `  data stats                          what the event l
   data explain                        every class of recorded data: kept how long, its switch, whether it leaves this Mac
   data query [--type T,…] [--since 7d] [--project PATH] [--session ID] [--agent ID] [--text WORDS] [--limit N] [--json]
                                       events, oldest first; types may be prefixes ("git.")
+  data subscribe [--type T,…] [--since 7d] [--project PATH] [--text WORDS] [--json]
+                                      events as they're recorded, one line each (Ctrl-C to stop)
   data export [--since 30d] [--out FILE]
                                       every event as JSONL (one line each, the envelope and its data; blobs by hash)
   data import FILE                    events from an export`;
@@ -77,6 +79,16 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
       for (const e of events) console.log(line(e));
       if (!events.length) console.log("Nothing recorded for that.");
       return 0;
+    }
+    case "subscribe": {
+      const { id, events } = await client.call("data.subscribe", { query: { limit: 50, ...queryOf(opt) } });
+      for (const e of events) console.log(json ? JSON.stringify(e) : line(e));
+      client.onEvent((e) => {
+        if (e.type !== "data.changed" || e.id !== id) return;
+        for (const ev of e.events) console.log(json ? JSON.stringify(ev) : line(ev));
+      });
+      await client.call("events.subscribe", { types: ["data.changed"] });
+      await new Promise(() => {}); // until Ctrl-C
     }
     case "export": {
       const out = typeof opt.out === "string" ? fs.createWriteStream(opt.out) : null;

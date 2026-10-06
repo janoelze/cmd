@@ -28,7 +28,7 @@ export interface DataServiceOptions {
   now?: () => number;
 }
 
-export class DataService extends EventEmitter<{ recorded: [DataEvent] }> {
+export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [DataEvent[]] }> {
   readonly store: DataStore;
   #o: DataServiceOptions;
   #seen = new Set<string>();
@@ -94,21 +94,17 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent] }> {
 
   /** Several at once (imports, backfills), in one transaction; returns how many were kept. */
   recordAll(events: Iterable<NewDataEvent>): number {
-    let n = 0;
-    this.store.transaction(() => {
-      for (const e of events) {
-        const c = classOf(e.type);
-        if (!this.enabled(c)) continue;
-        const cap = DATA_CLASSES[c].cap;
-        let content = typeof e.content === "string" ? redact(e.content) : (e.content ?? null);
-        let flags = DATA_FLAGS.imported;
-        if (cap && typeof content === "string" && content.length > cap) (content = content.slice(0, cap)), (flags |= DATA_FLAGS.cut);
-        this.store.record({ ...e, text: e.text ? redact(e.text) : e.text, body: e.body ? redact(e.body) : e.body, data: redactDeep(e.data), content, flags });
-        this.#entities(e);
-        n++;
-      }
-    });
-    return n;
+    return this.recordBatch(events).length;
+  }
+
+  /** Whether an event's words match a full-text expression (for subscriptions with `text`). */
+  textMatches(seq: number, expression: string): boolean {
+    try {
+      // Not `rowid = ? AND MATCH`: on a contentless table FTS5 takes the rowid lookup and can't check the match, so it says yes to everything.
+      return !!this.store.db.prepare(`SELECT 1 WHERE ? IN (SELECT rowid FROM events_fts WHERE events_fts MATCH ?)`).get(seq, expression);
+    } catch {
+      return false;
+    }
   }
 
   /** Like recordAll, returning the stored events (for views fed from a batch). */
@@ -128,6 +124,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent] }> {
         if (stored) out.push(stored);
       }
     });
+    if (out.length) this.emit("batch", out);
     return out;
   }
 

@@ -7,7 +7,7 @@
 // payload's shape: raise its EVENT_V and add an upcaster in core/src/data/upcast.ts;
 // stored rows keep their `v`, readers see the current shape.
 
-import type { AgentKind, PaneId, SpaceId, WindowId } from "./model.ts";
+import type { AgentKind, CommandRun, PaneId, SpaceId, WindowId } from "./model.ts";
 
 /** The events file's schema version (tables), not the payloads'. */
 export const EVENTS_SCHEMA = 1;
@@ -214,6 +214,12 @@ export function classOf(type: string): DataClass {
     for (const t of info.types) if (t.endsWith(".") ? type.startsWith(t) : type === t) return c;
   }
   return "system";
+}
+
+/** A command event as the CommandRun the Commands widget shows (runs are recorded when they start, updated when they end). */
+export function commandRunOf(e: DataEvent): CommandRun {
+  const d = e.data as EventPayloads["command"];
+  return { id: e.id.replace(/^command:/, ""), paneId: e.paneId ?? "", spaceId: e.spaceId ?? "", command: d.command, cwd: d.cwd, startedAt: e.at, endedAt: e.until, exitCode: d.exitCode };
 }
 
 export interface DataStats {

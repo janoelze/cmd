@@ -171,6 +171,12 @@ export interface Methods {
   "data.record": { params: { event: NewDataEvent }; result: { seq: number } | null };
   /** Events from a `cmd data export` file; returns how many were kept. */
   "data.import": { params: { events: NewDataEvent[] }; result: { imported: number } };
+  /**
+   * The query's events now, and from then on a `data.changed` for every event
+   * recorded or updated that answers it, until unsubscribed or the connection closes.
+   */
+  "data.subscribe": { params: { query: DataQuery }; result: { id: string; events: DataEvent[] } };
+  "data.unsubscribe": { params: { id: string }; result: null };
   /** Where agents keep their config (discovered); rescan: look again first. */
   "agents.homes": { params: { rescan?: boolean }; result: AgentHome[] };
 
@@ -441,6 +447,8 @@ export type CoreEvent =
   | { type: "widget.library"; entries: WidgetEntry[] }
   /** A watched file or folder changed on disk (see fs.watch). */
   | { type: "fs.changed"; path: string }
+  /** Events recorded or updated since the last one, for a data.subscribe subscription (merge by id). */
+  | { type: "data.changed"; id: string; events: DataEvent[] }
   /** Bring a window to the front (e.g. `open .` in a terminal). */
   | { type: "window.focus"; id: WindowId }
   | { type: "notification"; notification: AppNotification }

@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { PaneId, SearchHit, SearchStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { openSession } from "../actions.ts";
-import { usePersisted, useStoreValue } from "../store.ts";
+import { usePersisted, useStoreValue, subscribeData } from "../store.ts";
 import { terminals } from "../terminals.ts";
 import { filterRows, flatten, sectionOf, SECTIONS, type Section, type SidebarRow } from "../model.ts";
 import { HistoryRow, SectionHeading, SessionRow } from "./SidebarRows.tsx";
@@ -212,6 +212,17 @@ function useRecent(live: string[], status: SearchStatus | null): SearchHit[] {
   const [hits, setHits] = useState<SearchHit[]>([]);
   const liveKey = live.join("\n");
   const indexKey = status ? `${status.sessions}|${status.files}|${status.indexing}` : "";
+  const [tick, setTick] = useState(0);
+  // Sessions change as transcripts grow: a live query over their events, debounced.
+  useEffect(() => {
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const off = subscribeData({ types: ["transcript.title", "transcript.summary", "transcript.message"], at: [Date.now(), Number.MAX_SAFE_INTEGER], limit: 1 }, (_e, initial) => {
+      if (initial) return;
+      clearTimeout(debounce);
+      debounce = setTimeout(() => setTick((n) => n + 1), 2000);
+    });
+    return () => (clearTimeout(debounce), off());
+  }, []);
   useEffect(() => {
     if (limit <= 0) return setHits([]);
     let stale = false;
@@ -220,7 +231,7 @@ function useRecent(live: string[], status: SearchStatus | null): SearchHit[] {
       () => !stale && setHits([]), // search off, or an older core
     );
     return () => void (stale = true);
-  }, [liveKey, indexKey, limit]);
+  }, [liveKey, indexKey, limit, tick]);
   return hits;
 }
 

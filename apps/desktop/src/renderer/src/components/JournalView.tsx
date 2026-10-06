@@ -4,6 +4,7 @@
 // line. Write Again rewrites today. Every 15 minutes it looks again, and when
 // AI gets set up. Without AI nothing is written: it says how to set it up.
 
+import { subscribeData } from "../store.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JournalDay } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -45,8 +46,15 @@ export function JournalView({ win }: WindowViewProps) {
   useEffect(() => {
     setDays(null);
     void load("stale");
+    // Written again when something happened (a live query over the kinds the journal reads), with a slow backstop.
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const off = subscribeData({ types: ["command", "git.", "browser.visit", "file.open", "note", "space.", "transcript.message", "agent.note"], at: [Date.now(), Number.MAX_SAFE_INTEGER], limit: 1 }, (_events, initial) => {
+      if (initial) return;
+      clearTimeout(debounce);
+      debounce = setTimeout(() => void load("stale"), 5000);
+    });
     const t = setInterval(() => void load("stale"), REFRESH_MS);
-    return () => clearInterval(t);
+    return () => (clearInterval(t), clearTimeout(debounce), off());
   }, [load]);
 
   const repos = new Set((days ?? []).flatMap((d) => d.entries.map((e) => e.repo)));

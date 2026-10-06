@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 // The core process: owns panes and agents, serves JSON-RPC on a Unix socket.
 
 import { execFileSync } from "node:child_process";
@@ -5,7 +6,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
+import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery } from "@cmd/protocol";
 import { EXPORT_FORMAT, lineSplitter, TURN_FORMAT } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker, sessionIdOf } from "./agents/tracker.ts";
@@ -13,6 +14,7 @@ import { JournalService } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
 import { recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
 import { DataService } from "./data/service.ts";
+import { matchesQuery } from "./data/match.ts";
 import { ViewsStore } from "./data/views/views.ts";
 import { ActivityView } from "./data/views/activity.ts";
 import { SessionsView } from "./data/views/sessions.ts";
@@ -175,6 +177,10 @@ export class Core {
   readonly watches = new WatchService();
   /** fs.watch subscriptions per connection, released when it closes. */
   #connWatches = new Map<Connection, string[]>();
+  /** data.subscribe subscriptions per connection: id → query; events that answer one are sent as data.changed, a few at a time. */
+  #dataSubs = new Map<Connection, Map<string, DataQuery>>();
+  #dataPending = new Map<Connection, Map<string, DataEvent[]>>();
+  #dataFlush: ReturnType<typeof setTimeout> | null = null;
   /** Windows each connection shows (window.follow); remote sessions get output only for these. */
   #follows = new Map<Connection, Set<string>>();
   /** Connections that render widget previews (the app's main process), newest last. */
@@ -245,6 +251,8 @@ export class Core {
         log.error("importing the older tables failed", err);
       }
     }
+    this.data.on("recorded", (e) => this.#dataChanged([e]));
+    this.data.on("batch", (events) => this.#dataChanged(events));
     const activity = new ActivityView(this.data, this.views);
     this.sessions = new SessionsView(this.views, this.data);
     this.#searchView = new SearchView(this.data, this.sessions);
@@ -499,6 +507,8 @@ export class Core {
       return e ? { seq: e.seq } : null;
     },
     "data.import": (p) => ({ imported: this.data.recordAll(p.events) }),
+    "data.subscribe": (p) => ({ id: randomUUID(), events: this.data.query(p.query) }),
+    "data.unsubscribe": () => null,
     "agents.export": (p) => {
       const log = this.agents.activity;
       const since = Date.now() - (p.days ?? 14) * 86400_000;
@@ -1047,6 +1057,8 @@ export class Core {
         this.#follows.delete(conn);
         for (const p of this.#connWatches.get(conn) ?? []) this.watches.unwatch(p);
         this.#connWatches.delete(conn);
+        this.#dataSubs.delete(conn);
+        this.#dataPending.delete(conn);
       },
     };
   }
@@ -1109,6 +1121,12 @@ export class Core {
       const list = this.#connWatches.get(conn) ?? [];
       const i = list.indexOf(wp);
       if (i >= 0) list.splice(i, 1);
+    } else if (method === "data.subscribe") {
+      const subs = this.#dataSubs.get(conn) ?? new Map<string, DataQuery>();
+      subs.set((result as { id: string }).id, params.query as DataQuery);
+      this.#dataSubs.set(conn, subs);
+    } else if (method === "data.unsubscribe") {
+      this.#dataSubs.get(conn)?.delete(params.id as string);
     } else if (method === "window.follow") {
       this.#follows.set(conn, new Set(params.ids as string[]));
       if (conn.access !== "local") this.remote.following(conn, params.ids as string[]);
@@ -1158,6 +1176,36 @@ export class Core {
     return (this.#playwright ??= playwrightPreviewer());
   }
 
+  /** New or updated events against every subscription; what matches is sent a few at a time, as one data.changed per subscription. */
+  #dataChanged(events: DataEvent[]): void {
+    if (!this.#dataSubs.size) return;
+    const text = (seq: number, expr: string) => this.data.textMatches(seq, expr);
+    for (const [conn, subs] of this.#dataSubs) {
+      for (const [id, q] of subs) {
+        const hits = events.filter((e) => matchesQuery(q, e, text));
+        if (!hits.length) continue;
+        let pending = this.#dataPending.get(conn);
+        if (!pending) this.#dataPending.set(conn, (pending = new Map()));
+        pending.set(id, [...(pending.get(id) ?? []), ...hits]);
+      }
+    }
+    if (this.#dataPending.size && !this.#dataFlush) {
+      this.#dataFlush = setTimeout(() => {
+        this.#dataFlush = null;
+        for (const [conn, pending] of this.#dataPending) {
+          for (const [id, evs] of pending) {
+            const event: CoreEvent = { type: "data.changed", id, events: evs.slice(-500) };
+            const line = JSON.stringify({ jsonrpc: "2.0", method: "event", params: event }) + "\n";
+            if (conn.event) conn.event(event, line);
+            else conn.send(line);
+          }
+        }
+        this.#dataPending.clear();
+      }, 50);
+      this.#dataFlush.unref?.();
+    }
+  }
+
   #broadcast(event: CoreEvent): void {
     if (this.#subscribers.size === 0) return;
     const line = JSON.stringify({ jsonrpc: "2.0", method: "event", params: event }) + "\n";
@@ -1177,6 +1225,7 @@ export class Core {
     this.journal.dispose();
     // The transcript reader first: its worker's last batches must not land on closed stores.
     this.#closed = true;
+    if (this.#dataFlush) clearTimeout(this.#dataFlush);
     await this.#searchSwap;
     await this.#ingest?.close();
     this.data.dispose();

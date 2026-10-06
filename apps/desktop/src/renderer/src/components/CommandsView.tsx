@@ -6,11 +6,12 @@
 import { Chip, EmptyState, IconButton, ListRow, ListSection, ListValue, Panel, PanelBody } from "@cmd/ui";
 import { useEffect, useMemo, useState } from "react";
 import type { CommandRun } from "@cmd/protocol";
+import { commandRunOf } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { copy, newTerminalIn } from "../actions.ts";
 import { showContextMenu } from "../context.ts";
 import { project, projectHue } from "../model.ts";
-import { onCommand, useStore } from "../store.ts";
+import { useStore, subscribeData } from "../store.ts";
 import { durationText, goTo, scopeOf, useWidgetStatus } from "../widgets.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
 import { shortAgo } from "./SidebarRows.tsx";
@@ -19,23 +20,20 @@ import { shortAgo } from "./SidebarRows.tsx";
 const STOPPED = new Set([130, 137, 143]);
 const failed = (r: CommandRun) => r.exitCode !== null && r.exitCode !== 0 && !STOPPED.has(r.exitCode);
 
-/** The log, kept current from command.updated. */
+/** The log: a live query over command events (runs are recorded when they start and updated when they end). */
 function useCommands(): CommandRun[] {
   const [runs, setRuns] = useState<CommandRun[]>([]);
-  useEffect(() => {
-    let stale = false;
-    const off = onCommand((run) =>
-      setRuns((rs) => {
-        const i = rs.findIndex((r) => r.id === run.id);
-        return i < 0 ? [run, ...rs] : rs.map((r, j) => (j === i ? run : r));
-      }),
-    );
-    cmd.call("command.list", {}).then(
-      (list) => !stale && setRuns((rs) => [...rs.filter((r) => !list.some((x) => x.id === r.id)), ...list].sort((a, b) => b.startedAt - a.startedAt)),
-      () => {}, // an older core
-    );
-    return () => ((stale = true), off());
-  }, []);
+  useEffect(
+    () =>
+      subscribeData({ types: ["command"], order: "desc", limit: 300 }, (events, initial) =>
+        setRuns((rs) => {
+          const incoming = events.map(commandRunOf);
+          const base = initial ? [] : rs;
+          return [...incoming, ...base.filter((r) => !incoming.some((x) => x.id === r.id))].sort((a, b) => b.startedAt - a.startedAt).slice(0, 300);
+        }),
+      ),
+    [],
+  );
   return runs;
 }
 

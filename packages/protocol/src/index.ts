@@ -4,7 +4,7 @@ export { ACTIVITY_SCHEMA, EXPORT_FORMAT, HOOK_FORMAT, TURN_FORMAT } from "./acti
 export type * from "./journal.ts";
 export { JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT } from "./journal.ts";
 export type * from "./events.ts";
-export { DATA_CLASSES, DATA_FLAGS, EVENTS_SCHEMA, EVENT_V, classOf } from "./events.ts";
+export { DATA_CLASSES, DATA_FLAGS, EVENTS_SCHEMA, EVENT_V, classOf, commandRunOf } from "./events.ts";
 export * from "./rpc.ts";
 export * from "./attention.ts";
 export * from "./space.ts";

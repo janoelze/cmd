@@ -4,7 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -71,6 +71,49 @@ export function onNotification(fn: (n: AppNotification) => void): () => void {
 }
 
 /** Commands terminals run (core/commands.ts), for the Commands widget. */
+/**
+ * A live query over the event log (data.subscribe): `fn` gets the events now
+ * (initial) and then every event recorded or updated that answers the query,
+ * to merge by id. Subscriptions are made again after a reconnect.
+ */
+interface DataSub {
+  query: DataQuery;
+  fn: (events: DataEvent[], initial: boolean) => void;
+  id: string | null;
+  stale: boolean;
+}
+const dataSubs = new Set<DataSub>();
+const dataById = new Map<string, DataSub>();
+async function openDataSub(sub: DataSub): Promise<void> {
+  try {
+    const r = await cmd.call("data.subscribe", { query: sub.query });
+    if (sub.stale) return void cmd.call("data.unsubscribe", { id: r.id }).catch(() => {});
+    sub.id = r.id;
+    dataById.set(r.id, sub);
+    sub.fn(r.events, true);
+  } catch {
+    // an older core, or none yet: tried again on the next connection
+  }
+}
+export function subscribeData(query: DataQuery, fn: (events: DataEvent[], initial: boolean) => void): () => void {
+  const sub: DataSub = { query, fn, id: null, stale: false };
+  dataSubs.add(sub);
+  if (state.connected) void openDataSub(sub);
+  return () => {
+    sub.stale = true;
+    dataSubs.delete(sub);
+    if (sub.id) {
+      dataById.delete(sub.id);
+      void cmd.call("data.unsubscribe", { id: sub.id }).catch(() => {});
+      sub.id = null;
+    }
+  };
+}
+function reopenDataSubs(): void {
+  dataById.clear();
+  for (const sub of dataSubs) (sub.id = null), void openDataSub(sub);
+}
+
 const commandListeners = new Set<(run: CommandRun) => void>();
 export function onCommand(fn: (run: CommandRun) => void): () => void {
   commandListeners.add(fn);
@@ -416,6 +459,9 @@ function handle(e: CoreEvent): void {
     case "command.updated":
       for (const fn of commandListeners) fn(e.run);
       return;
+    case "data.changed":
+      dataById.get(e.id)?.fn(e.events, false);
+      return;
     case "window.focus":
       for (const fn of focusListeners) fn(e.id);
       return;
@@ -517,4 +563,5 @@ cmd.onStatus(async (status) => {
     }),
   );
   performance.mark("boot:terminals");
+  reopenDataSubs();
 });
