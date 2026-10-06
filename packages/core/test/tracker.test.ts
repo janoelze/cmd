@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, HOME_SPACE_ID, type Agent } from "@cmd/protocol";
 import { AgentTracker } from "../src/agents/tracker.ts";
 import { PaneManager } from "../src/panes.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
@@ -89,7 +89,75 @@ describe("hooks", () => {
     agents.ingestHook(pane.id, "claude", "SessionEnd", {});
     expect(agents.list()).toEqual([]);
   });
+
+  it("retires finished subagents when the host's turn ends", async () => {
+    const pane = panes.create();
+    const host = agents.ingestHook(pane.id, "claude", "UserPromptSubmit", {})!;
+    agents.ingestHook(pane.id, "claude", "SubagentStart", { agent_id: "sub1", agent_type: "Explore" });
+    agents.ingestHook(pane.id, "claude", "SubagentStart", { agent_id: "sub2", agent_type: "Plan" });
+    agents.ingestHook(pane.id, "claude", "SubagentStop", { agent_id: "sub1", last_assistant_message: "found it" });
+    // Still part of the turn: the tree shows 1 of 2 done.
+    expect(agents.list().filter((a) => a.parentId === host.id).map((a) => a.state).sort()).toEqual(["done", "working"]);
+
+    agents.ingestHook(pane.id, "claude", "Stop", { last_assistant_message: "all good" });
+    const left = agents.list().filter((a) => a.parentId === host.id);
+    expect(left.map((a) => a.name)).toEqual(["Plan"]); // the one still working stays
+    expect(agents.get(host.id)).toMatchObject({ state: "done" });
+
+    // A background subagent reporting after the host went idle: already told through the host's prompt.
+    agents.ingestHook(pane.id, "claude", "SubagentStop", { agent_id: "sub2", last_assistant_message: "planned" });
+    expect(agents.list().map((a) => a.id)).toEqual([host.id]);
+  });
+
+  it("sweeps finished subagents an idle host left behind", async () => {
+    vi.useFakeTimers();
+    const t = new AgentTracker(panes, { subagentDoneTtlMs: 1000 });
+    const pane = panes.create();
+    const now = Date.now();
+    const host = t.restore({ ...stub("h", pane.id), state: "idle" }, true);
+    const child = t.restore({ ...stub("c", null), parentId: host.id, rootId: host.id, depth: 1, state: "done", stateSince: now, name: "Explore" }, true);
+    expect(t.get(child.id)).toMatchObject({ parentId: host.id, state: "done" });
+    t.tick(now + 500);
+    expect(t.get(child.id)).toBeTruthy();
+    t.tick(now + 1000);
+    expect(t.get(child.id)).toBeNull();
+    expect(t.get(host.id)).toBeTruthy();
+  });
+
+  it("removes a subagent on request", async () => {
+    const pane = panes.create();
+    const host = agents.ingestHook(pane.id, "claude", "UserPromptSubmit", {})!;
+    agents.ingestHook(pane.id, "claude", "SubagentStart", { agent_id: "sub1", agent_type: "Explore" });
+    const child = agents.list().find((a) => a.parentId === host.id)!;
+    expect(agents.kill(child.id)).toEqual([child.id]);
+    expect(agents.list().map((a) => a.id)).toEqual([host.id]);
+  });
 });
+
+/** A stored agent record, as the store hands them to restore(). */
+function stub(id: string, paneId: string | null): Agent {
+  const now = Date.now();
+  return {
+    id,
+    paneId,
+    spaceId: HOME_SPACE_ID,
+    kind: "claude",
+    name: null,
+    cwd: "/",
+    parentId: null,
+    rootId: id,
+    depth: 0,
+    spawn: { source: paneId ? "detected" : "claude-subagent" },
+    native: {},
+    state: "idle",
+    stateSince: now,
+    detail: null,
+    lastMessage: null,
+    lastPrompt: null,
+    seenAt: null,
+    createdAt: now,
+  };
+}
 
 describe("host API", () => {
   it("spawns children in their own panes, linked to the host", async () => {

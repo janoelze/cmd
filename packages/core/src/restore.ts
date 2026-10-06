@@ -128,8 +128,9 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
     const live = a.paneId ? back.get(a.paneId) : undefined;
     const keep = a.paneId
       ? live === true || resumed.get(a.paneId) === a.id
-      : // A virtual child (a subagent) lives in its parent's process: only if that kept running.
-        !!a.parentId && alive.has(a.parentId) && back.get(stored.find((p) => p.id === a.parentId)?.paneId ?? "") === true;
+      : // A virtual child (a subagent) lives in its parent's process: only if that kept running,
+        // and only while it still works; a finished one has nothing left to say.
+        a.state !== "done" && !!a.parentId && alive.has(a.parentId) && back.get(stored.find((p) => p.id === a.parentId)?.paneId ?? "") === true;
     if (!keep) {
       count("agent dropped", a.id, { kind: a.kind, virtual: !a.paneId });
       store.deleteAgent(a.id);

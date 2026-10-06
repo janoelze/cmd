@@ -304,10 +304,19 @@ export function App() {
     return () => (off(), offClick());
   }, [select]);
 
+  /** The terminal a row lives in: its own, or for a subagent (no window of its own) its host's. */
+  const homeOf = useCallback((r: SidebarRow): string | null => {
+    const own = windowIdOf(r);
+    if (own) return own;
+    let at = r.agent;
+    while (at && !at.paneId && at.parentId) at = s.agents.get(at.parentId) ?? null;
+    return at?.paneId ?? null;
+  }, [s.agents]);
+
   const selectRow = useCallback((r: SidebarRow) => {
-    const id = windowIdOf(r);
+    const id = homeOf(r);
     if (id) select(id);
-  }, [select]);
+  }, [select, homeOf]);
   /** Rows with a window (terminal, browser, files), sidebar order. */
   const withPane = useMemo(() => flat.filter((r) => r.pane || r.win), [flat]);
   /** The selected terminal, if the selected window is one. */
@@ -564,7 +573,14 @@ export function App() {
             { label: r.pane ? "Close Terminal" : "Close Window", run: () => void closePane(windowIdOf(r)!) },
             "-" as const,
           ]
-        : []),
+        : a
+          ? [
+              // A subagent, or a host whose terminal is gone: no window of its own.
+              ...(homeOf(r) ? [{ label: "Show Host", run: () => select(homeOf(r)!) }] : []),
+              { label: "Remove", run: () => void cmd.call("agent.kill", { agentId: a.id }) },
+              "-" as const,
+            ]
+          : []),
       // Entries the window's type contributes (see windows/registry.ts).
       ...(r.win ? [...(viewFor(r.win.kind)?.menu?.(r.win) ?? []), "-" as const] : []),
       ...(a

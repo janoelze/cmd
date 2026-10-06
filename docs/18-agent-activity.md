@@ -70,6 +70,14 @@ A tool call that hasn't reported back when its turn ends counts as failed (`infe
 
 A **turn** runs from a prompt to stop, failure or interruption. It has the prompt (and whether the agent sent it itself), outcome (`working`, `waiting`, `done`, `failed`, `interrupted`), the ask while waiting, the final message, the error, tools by name with failures, the last commands, how many shell commands looked like writes, files changed, subagents, background work left running, and `inferred` (rules that decided something). Saved on every change with the id of the last event in it, so a restarted core resumes the reducer from the last turn and replays only later events. The current turn is `Agent.turn`, so every client gets it through `agent.updated`.
 
+**Subagents** (Claude's Agent tool, `subagent.start/stop`) are virtual children of their host in the tree (`tracker.ts`): no pane, no process of their own, named after their type (Explore, Plan). A subagent belongs to the host's turn and lives as long as that is useful:
+
+- While the host's turn runs, its subagents stay, working or done, so the tree shows the work in progress ("1/2 done").
+- When the turn ends (stop, failure, interruption), the finished ones go. One still working is a background task: it stays, and goes when it reports, since by then its result has reached the host as a `<task-notification>` prompt.
+- A finished subagent of an idle host that is still there after 5 minutes (its host's reducer gave up, a stop that came while the core was away) is swept on the next tick.
+- A core restart keeps a working subagent of a host that kept running; a finished one is dropped (`restore.ts`).
+- All of them die with their host's process, and "Remove" in a row's menu (`agent.kill`) drops one by hand.
+
 The "done" notification's body is the agent's final message again (it was always empty: the file path never read `last_assistant_message`).
 
 ## Files changed

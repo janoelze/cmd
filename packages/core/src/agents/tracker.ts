@@ -33,6 +33,9 @@ import { drainSpool } from "./activity/spool.ts";
 
 const log = logger("agents");
 
+/** How long a finished subagent stays in the tree once its host is idle (the sweep in tick()). */
+const SUBAGENT_DONE_TTL_MS = 5 * 60_000;
+
 export interface TrackerOptions {
   store?: Store | null;
   settings?: () => Settings;
@@ -46,6 +49,8 @@ export interface TrackerOptions {
   activity?: ActivityView;
   /** Snapshot the work tree with git at each turn's start and end (files changed). */
   git?: boolean;
+  /** How long a finished subagent stays once its host is idle (default 5 min). */
+  subagentDoneTtlMs?: number;
 }
 
 export interface TrackerEvents {
@@ -83,6 +88,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   /** Per agent whose events arrive through the spool: state and turns. */
   #reducers = new Map<AgentId, ActivityReducer>();
   #git: boolean;
+  #subagentDoneTtlMs: number;
   /** "Before" snapshots of open turns (or a folder watch outside git), by agent id + turn index. */
   #snaps = new Map<string, { git: Promise<GitSnapshot | null>; watch: TurnWatch | null }>();
 
@@ -96,6 +102,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     this.#sources = o.sources ?? registerBuiltinSources(new TranscriptSources());
     this.activity = o.activity ?? new ActivityView(new DataService({ file: null, recordedBy: "test", settings: () => DEFAULTS }), new ViewsStore(null));
     this.#git = o.git ?? false;
+    this.#subagentDoneTtlMs = o.subagentDoneTtlMs ?? SUBAGENT_DONE_TTL_MS;
     if (this.#statusRoot) {
       const w = new StatusWatcher(this.#statusRoot);
       w.on("changed", (paneId) => this.applyStatus(paneId));
@@ -211,6 +218,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
 
   /** Every 2 s: spooled events FSEvents didn't report, and agents that went quiet mid-turn. */
   tick(now = Date.now()): void {
+    this.#sweepSubagents(now);
     for (const a of [...this.#agents.values()]) {
       if (!a.paneId) continue;
       this.applyStatus(a.paneId);
@@ -308,7 +316,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const change: StateChange = { ...r.change };
     if (ev.sessionId) change.native = { ...nativeSession(agent.kind, ev.sessionId), ...change.native };
     // Replayed events (claimed late, or after a restart) don't start subagents or snapshots again.
-    if (change.subagent && live) this.#subagent(agent, agent.kind, change.subagent);
+    if (change.subagent && live) this.#subagent(agent, agent.kind, change.subagent, red.open);
     delete change.subagent;
     if (r.exited) {
       // SessionEnd: the agent is gone unless its process is still there (/clear starts a new session).
@@ -331,6 +339,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (ev.home && ev.agent) this.emit("home", ev.agent, ev.home);
     else if (ev.kind === "session.start" && ev.transcriptPath && ev.agent) this.emit("transcript", ev.agent, ev.transcriptPath);
     this.#update(agent, change, fields);
+    // The turn is over: the subagents that worked for it have said their piece.
+    if (r.closed) this.#retireSubagents(agent);
     if (live && this.#git) {
       if (r.opened) this.#snapStart(agent, r.opened);
       if (r.closed) void this.#snapEnd(agent, red, r.closed);
@@ -422,7 +432,15 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     return this.#agents.has(agent.id) ? this.get(agent.id) : null;
   }
 
-  #subagent(parent: Agent, kind: AgentKind, s: NonNullable<StateChange["subagent"]>): void {
+  /**
+   * A subagent (Claude's Agent tool) is a virtual child of its host: no pane, no
+   * process of its own. It belongs to the host's turn: kept while that runs, so the
+   * tree shows the work, and retired once the turn is over (#retireSubagents). One
+   * that finishes after its host went idle (a background task) reported back through
+   * the host's prompt already, so it goes at once; a sweep (#sweepSubagents) catches
+   * what a host that never stops again would leave behind.
+   */
+  #subagent(parent: Agent, kind: AgentKind, s: NonNullable<StateChange["subagent"]>, hostBusy: boolean): void {
     let child = [...this.#agents.values()].find((a) => a.native.claudeAgentId === s.id);
     if (s.op === "start") {
       if (!child) {
@@ -438,7 +456,29 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       }
       this.#update(child, { state: "working" });
     } else if (child) {
-      this.#update(child, { state: "done", detail: null, lastMessage: s.lastMessage });
+      if (!hostBusy) this.#remove(child.id);
+      else this.#update(child, { state: "done", detail: null, lastMessage: s.lastMessage });
+    }
+  }
+
+  /** Drop a host's finished virtual children (those done since `before`, if given). */
+  #retireSubagents(host: Agent, before = Infinity): void {
+    for (const c of this.#children(host.id)) {
+      if (!c.paneId && c.state === "done" && c.stateSince <= before) this.#remove(c.id);
+    }
+  }
+
+  /** Finished subagents of idle hosts, older than the TTL (a host whose turn never closed, a stop that came while the core was away). */
+  #sweepSubagents(now: number): void {
+    const hosts = new Set<AgentId>();
+    for (const a of this.#agents.values()) {
+      if (!a.paneId && a.parentId && a.state === "done" && now - a.stateSince >= this.#subagentDoneTtlMs) hosts.add(a.parentId);
+    }
+    for (const id of hosts) {
+      const host = this.#agents.get(id);
+      if (!host) continue;
+      const busy = this.#reducers.get(id)?.open ?? host.state === "working";
+      if (!busy) this.#retireSubagents(host, now - this.#subagentDoneTtlMs);
     }
   }
 
