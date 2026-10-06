@@ -2,6 +2,26 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.14.4 — 2026-10-06
+
+### New
+
+- **Drag and drop.** Drag files from Finder or a file browser into a terminal to type their paths, into a file browser to move them, or anywhere else to open them.
+- **Drag files out.** Drag a file browser's rows, or a window's title icon, into Finder, Mail or any other app.
+
+### Improved
+
+- Every move from a drag can be undone from its toast, and cmd asks before moving something an open window uses.
+- Your home folder, disks and folders like Documents and Library can't be moved by accident, and cmd tells you why.
+- Hold ⌘ while dropping a folder on a terminal to type `cd` and its path.
+- Onboarding, Feedback, What's New and the Widget Library look like your windows, with a title bar.
+- Dimmed windows keep a crisp outline that matches the sidebars.
+
+### Fixed
+
+- The Task Manager's column headers line up with their columns.
+- A text window whose file was moved or deleted no longer shows an error.
+
 ## 0.14.3 — 2026-10-06
 
 ### Improved
