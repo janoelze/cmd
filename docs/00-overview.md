@@ -37,6 +37,8 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 24 | [Journal versions](24-journal-versions.md) | A version per layer (event schema, sources, threads, writer), stamped on the data; what a bump re-reads, rewrites or keeps; the runbook for a revision |
 | 25 | [The data model, challenged](25-data-model-critique.md) | Four event logs and no event model: what cmd stores, where the same facts live several times, how derivation and retention differ per feature, what the next features would cost; the questions the requirements must answer |
 | 26 | [Data requirements](26-data-requirements.md) | What the data layer must do for the next year, against the vision (primitives below, intelligence above): twelve scenarios, requirements for facts, views, query, intelligence, operations and developer experience; non-requirements; what the plan decides |
+| 27 | [Data models elsewhere](27-data-research.md) | What comparable systems do, from primary sources: event sourcing on SQLite (LiveStore, Linear), activity trackers (ActivityWatch, Atuin, Screenpipe), agent observability (OTel GenAI, Langfuse, LangSmith), the agents' own transcripts, memory layers (Graphiti, Letta), FTS5/JSONB/subscriptions, privacy; recurring patterns and anti-patterns with evidence |
+| 28 | [The data layer: design and plan](28-data-plan.md) | One event log with one envelope, blobs, entities and links; views as versioned materialisations rebuilt by replay; one query shape with subscriptions and policy; a context builder; retention as a table; two files; seven phases from a spike to memory |
 
 ## Key findings
 1. **Nothing has to be invented for agent awareness.** Every tool in this space combines three things:
