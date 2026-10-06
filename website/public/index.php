@@ -24,7 +24,6 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
   <a class="button" href="<?= h($latest['dmg'] ?? $latest['url']) ?>">Download <?= h($latest['tag']) ?></a>
 <?php endif ?>
   <a class="button secondary" href="https://github.com/janoelze/cmd">View on GitHub</a>
-  <a class="button secondary" href="https://discord.gg/BVQjfAFpaS">Join the Discord</a>
   <span class="muted">For Macs with Apple silicon</span>
 </p>
 
