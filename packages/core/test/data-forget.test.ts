@@ -30,7 +30,7 @@ describe("exclusion rules", () => {
     expect(excludedBy(r, { id: "w", at: 1, type: "browser.visit", source: "window", data: { url: "https://notbank.example/", title: null } })).toBeNull();
   });
 
-  it("refuses excluded events when recording, and removes kept ones when asked", () => {
+  it("refuses excluded events when recording, and removes kept ones when asked", async () => {
     const { d, settings } = service();
     d.record(cmd("c1", "op read x"));
     d.record(cmd("c2", "ls"));
@@ -39,7 +39,7 @@ describe("exclusion rules", () => {
     expect(d.query({ types: ["command"] }).map((e) => e.id)).toEqual(["c1", "c2"]);
     const removed: string[][] = [];
     d.on("removed", (r) => removed.push(r.types));
-    expect(d.applyRules()).toBe(1);
+    expect(await d.applyRules()).toBe(1);
     expect(d.query({ types: ["command"] }).map((e) => e.id)).toEqual(["c2"]);
     expect(removed).toEqual([["command"]]);
   });

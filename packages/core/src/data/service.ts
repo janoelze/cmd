@@ -279,20 +279,25 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
   }
 
   /** Applies the exclusion rules to what's already kept; returns how many events went. */
-  applyRules(): number {
+  async applyRules(): Promise<number> {
     const rules = this.rules();
     if (!rules.folders.length && !rules.hosts.length && !rules.commands.length) return 0;
     const seqs: number[] = [];
     const types = new Set<string>();
     let after = 0;
+    // The whole log, a page at a time, the core answering in between.
     for (;;) {
-      const page = this.store.query({ after, limit: 5000 });
+      const page = this.store.query({ after, limit: 2000 });
       if (!page.length) break;
       for (const e of page) if (excludedBy(rules, e as unknown as NewDataEvent)) seqs.push(e.seq), types.add(e.type);
       after = page.at(-1)!.seq;
+      await new Promise((r) => setImmediate(r));
     }
     let n = 0;
-    for (let i = 0; i < seqs.length; i += 500) n += this.store.delete({ seqs: seqs.slice(i, i + 500) });
+    for (let i = 0; i < seqs.length; i += 500) {
+      n += this.store.delete({ seqs: seqs.slice(i, i + 500) });
+      await new Promise((r) => setImmediate(r));
+    }
     this.store.sweepBlobs();
     if (n) {
       this.record({ id: `data:rules:${this.#now}`, at: this.#now, type: "data.op", source: "cmd", data: { op: "prune", detail: { events: n, rules: true } } });

@@ -12,7 +12,7 @@ type Client = Connection["client"];
 export const DATA_HELP = `  data stats                          what the event log holds and how big it is
   data explain                        every class of recorded data: kept how long, its switch, whether it leaves this Mac
   data query [--type T,…] [--since 7d] [--project PATH] [--session ID] [--agent ID] [--text WORDS] [--limit N] [--json]
-                                      events, oldest first; types may be prefixes ("git.")
+                                      the newest events (200, or --limit) by when they happened, oldest first; types may be prefixes ("git.")
   data subscribe --view turns|sessions [--agent ID] [--session AGENT:ID] [--project PATH] [--json]
                                       a view's rows as they change: turns as agents work, sessions as transcripts grow
   data subscribe [--type T,…] [--since 7d] [--project PATH] [--text WORDS] [--json]

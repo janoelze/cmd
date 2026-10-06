@@ -304,7 +304,7 @@ async function run({ client, closed }: Connection): Promise<number> {
       for (const h of hits) {
         const when = h.updatedAt ? new Date(h.updatedAt).toISOString().slice(0, 10) : "";
         console.log(`${h.sessionId.slice(0, 8)}  ${h.agent.padEnd(6)} ${when}  ${h.title.slice(0, 70)}`);
-        if (h.snippet) console.log(`          ${h.snippet.replace(/\x01/g, "\x1b[1m").replace(/\x02/g, "\x1b[0m").slice(0, 160)}`);
+        if (h.snippet) console.log(`          ${h.snippet.replace(/\x01/g, process.stdout.isTTY ? "\x1b[1m" : "").replace(/\x02/g, process.stdout.isTTY ? "\x1b[0m" : "").slice(0, 160)}`);
       }
       if (!hits.length) console.log("(no matches)");
       return 0;

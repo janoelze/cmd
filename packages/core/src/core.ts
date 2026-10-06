@@ -569,7 +569,7 @@ export class Core {
     },
     "data.unsubscribe": () => null,
     "data.forget": (p) => ({ events: this.data.forget(p) }),
-    "data.applyRules": () => ({ events: this.data.applyRules() }),
+    "data.applyRules": async () => ({ events: await this.data.applyRules() }),
     "data.rebuild": async (p) => (p.view === "turns" ? { rows: this.agents.activity.rebuild().turns } : { rows: (await this.sessions.rebuild(), this.sessions.counts().sessions) }),
     "data.entities": (p) => {
       const list = p.id ? [this.data.store.entityOf(p.kind, p.id)].filter((e) => !!e) : this.data.store.entities(p.kind).slice(0, Math.min(p.limit ?? 50, 1000)).map((e) => ({ kind: p.kind, ...e }));
