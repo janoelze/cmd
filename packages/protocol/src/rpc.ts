@@ -290,6 +290,11 @@ export interface Methods {
   "fs.duplicate": { params: { path: string }; result: string };
   /** New empty file or folder in `dir`, named "untitled" / "untitled folder" (then " 2"…); returns its path. */
   "fs.create": { params: { dir: string; kind: "file" | "dir" }; result: string };
+  /**
+   * Copy or move files and folders into `dir` (drag and drop); "auto" moves on the
+   * same disk and copies from another, like Finder. A taken name gets " 2"… Returns where each one ended up.
+   */
+  "fs.transfer": { params: { paths: string[]; dir: string; op: "copy" | "move" | "auto" }; result: string[] };
   /** Git state of the repository a folder is in, limited to that folder; null outside a work tree or without git. */
   "git.status": { params: { path: string }; result: GitStatus | null };
   /** Uncommitted changes under a folder (or one file of it) against HEAD, as a unified diff; null outside a repository. */

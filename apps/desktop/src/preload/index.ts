@@ -206,6 +206,8 @@ const api = {
   writeClipboard: (text: string) => ipcRenderer.send("clipboard-write", text),
   /** The path of a file dropped from Finder ("" for one that isn't on disk). */
   pathForFile: (f: File): string => webUtils.getPathForFile(f),
+  /** Turn the drag starting now into a native one of these files: Finder, other apps and cmd's own windows get real files (renderer/src/drags.ts). */
+  startFileDrag: (paths: string[]) => ipcRenderer.send("start-file-drag", paths),
   /** Native context menu; resolves with the chosen item id or null. */
   contextMenu: (items: ContextItem[]): Promise<string | null> => ipcRenderer.invoke("context-menu", items),
 };

@@ -28,7 +28,7 @@ import { locateContext, TranscriptSources, type LocateContext } from "./search/s
 import { listDir, parseOverrides, readText, resolvePaths, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { gitDiff, gitStatus } from "./git.ts";
-import { createPath, duplicatePath, renamePath } from "./fileops.ts";
+import { createPath, duplicatePath, renamePath, transferPaths } from "./fileops.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
 import { SpaceManager } from "./spaces/manager.ts";
@@ -531,6 +531,7 @@ export class Core {
     "fs.rename": (p) => renamePath(p.path, p.name),
     "fs.duplicate": (p) => duplicatePath(p.path),
     "fs.create": (p) => createPath(p.dir, p.kind),
+    "fs.transfer": (p) => transferPaths(p.paths, p.dir, p.op),
     "git.status": (p) => gitStatus(p.path),
     "git.diff": (p) => gitDiff(p.path, p.file),
     // Connection-aware; handled in #serve. These run for in-process callers.

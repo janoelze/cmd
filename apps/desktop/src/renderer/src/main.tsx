@@ -9,6 +9,7 @@ import "./windows/builtin.tsx"; // built-in window views (browser, files, text)
 import { App } from "./App.tsx";
 import { TOPBAR_HEIGHT } from "../../shared/chrome.ts";
 import { installErrorReporting } from "./errors.ts";
+import { installDrops } from "./drops.ts";
 import { installScrollbars, installTooltips, UIProvider } from "@cmd/ui";
 import "@cmd/ui/themes/builtin";
 import { bootTheme } from "@cmd/ui/themes";
@@ -17,6 +18,7 @@ installErrorReporting();
 bootTheme();
 installScrollbars();
 installTooltips();
+installDrops();
 
 // macOS draws the traffic lights over the page; elsewhere the platform's frame sits above it.
 document.documentElement.classList.add(navigator.platform.startsWith("Mac") ? "platform-mac" : "platform-other");

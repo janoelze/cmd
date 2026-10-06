@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pasteRisk, preview, shellWord } from "../src/renderer/src/paste.ts";
+import { parseUriList, pasteRisk, preview, shellWord } from "../src/renderer/src/paste.ts";
 
 describe("terminal paste", () => {
   it("lets single lines and bracketed pastes through", () => {
@@ -24,8 +24,18 @@ describe("terminal paste", () => {
 describe("dropped paths", () => {
   it("quotes only what needs it", () => {
     expect(shellWord("/Users/me/src/a-b_c.txt")).toBe("/Users/me/src/a-b_c.txt");
-    expect(shellWord("/Users/me/My Files/x.txt")).toBe("'/Users/me/My Files/x.txt'");
-    expect(shellWord("/tmp/it's")).toBe("'/tmp/it'\\''s'");
-    expect(shellWord("/tmp/$HOME*")).toBe("'/tmp/$HOME*'");
+    expect(shellWord("/Users/me/My Files/x.txt")).toBe("/Users/me/My\\ Files/x.txt");
+    expect(shellWord("/tmp/it's (1)")).toBe("/tmp/it\\'s\\ \\(1\\)");
+    expect(shellWord("/tmp/$HOME*")).toBe("/tmp/\\$HOME\\*");
+    expect(shellWord("/tmp/Übung")).toBe("/tmp/Übung");
+    expect(shellWord("/tmp/two\nlines")).toBe("'/tmp/two\nlines'");
+  });
+});
+
+describe("dropped links", () => {
+  it("splits text/uri-list into file paths and other URLs", () => {
+    const list = "# from a browser\r\nfile:///Users/me/My%20Files/a.png\r\nhttps://example.com/x?y=1\r\n\r\nfile:///tmp/%C3%9Cbung";
+    expect(parseUriList(list)).toEqual({ files: ["/Users/me/My Files/a.png", "/tmp/Übung"], urls: ["https://example.com/x?y=1"] });
+    expect(parseUriList("")).toEqual({ files: [], urls: [] });
   });
 });

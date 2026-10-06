@@ -1,9 +1,12 @@
 // Title bar of a window tile, the same for every window type
 // (docs/10-window-titles.md): Mark · Name · Dirty ……… Kind | Place | Status.
 // Each field is a Slot, so state changes animate instead of popping.
+// The Mark of a window that shows a file or folder (a text file, a file browser's
+// folder, a terminal's working directory) drags that file, like the icon in a
+// macOS document's title bar (drags.ts); a browser window's drags its link.
 
 import { fieldsOf, windowIdOf, type SidebarRow, type WindowFields } from "../model.ts";
-import { typeFor, viewFor } from "../windows/registry.ts";
+import { stateStr, typeFor, viewFor } from "../windows/registry.ts";
 import { showContextMenu } from "../context.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { useEffect, useRef, useState } from "react";
@@ -11,9 +14,22 @@ import { editTitle, useTitleEdit, useWindowStatus, type TitleEdit } from "../win
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
 import { RemoteBadge } from "./Remote.tsx";
 import { countRender } from "../perf.ts";
+import { dragFiles, dragLink } from "../drags.ts";
 
 /** SF Symbol for a window kind (from the core's window type registry). */
 export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "macwindow";
+
+/** The file or folder a window shows, if any: what dragging its Mark drags. */
+export function fileOf(row: SidebarRow): string | null {
+  const p = row.pane ? row.pane.cwd : row.win ? stateStr(row.win, "path") : undefined;
+  return p?.startsWith("/") ? p : null;
+}
+
+/** The web page a window shows, if any: dragging its Mark drags the link. */
+const urlOf = (row: SidebarRow): string | null => {
+  const u = row.win ? stateStr(row.win, "url") : undefined;
+  return u && /^https?:/i.test(u) ? u : null;
+};
 
 /** A row's title fields, with the window's live status. */
 export function useFields(row: SidebarRow | undefined, now = Date.now()): WindowFields | undefined {
@@ -43,9 +59,22 @@ export function TileTitle({
   const action = useWindowStatus(row.win?.id ?? null)?.action;
   const edit = useTitleEdit(row.win?.id ?? null);
   const menu = row.win && !bare ? viewFor(row.win.kind)?.titleMenu?.(row.win) : undefined;
+  const file = fileOf(row);
+  const url = file ? null : urlOf(row);
   return (
     <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} data-tip={title}>
-      <Mark light={f.light} icon={f.icon} />
+      {file || url ? (
+        <span
+          className="mark-drag"
+          draggable
+          onPointerDown={(e) => e.stopPropagation()} // a file or link drag, not moving the window
+          onDragStart={(e) => (file ? dragFiles(e, [file]) : dragLink(e, url!))}
+        >
+          <Mark light={f.light} icon={f.icon} />
+        </span>
+      ) : (
+        <Mark light={f.light} icon={f.icon} />
+      )}
       <span className={`tile-name${edit ? " editing" : ""}`}>
         {edit ? (
           <TitleInput id={row.win!.id} edit={edit} />

@@ -20,6 +20,7 @@ import { cmd } from "./bridge.ts";
 import { currentTheme, onThemeChange, terminalColors } from "@cmd/ui/themes";
 import { findLinks } from "./links.ts";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
+import { registerDropTarget } from "./drops.ts";
 
 // ⌘ keys sent to the PTY as readline control characters: kill line, start, end.
 const CMD_KEYS: Record<string, string> = { Backspace: "\x15", ArrowLeft: "\x01", ArrowRight: "\x05" };
@@ -48,6 +49,8 @@ interface Host {
   /** When it was last fitted, and a pending trailing fit (see resized). */
   fittedAt: number;
   fitTimer: ReturnType<typeof setTimeout> | null;
+  /** Removes its drop target (drops.ts). */
+  undrop: () => void;
 }
 
 /** While a terminal keeps changing size (the app window being resized), fit it at most this often. */
@@ -314,6 +317,7 @@ class Terminals {
       lastUsed: Date.now(),
       fittedAt: 0,
       fitTimer: null,
+      undrop: () => {},
     };
     const host = h;
     if (this.#settings["terminal.images"]) this.#setImages(h, true);
@@ -576,6 +580,7 @@ class Terminals {
     // Closing the pane mid-drag would leave them calling into the disposed renderer
     // ("reading 'dimensions'") on every later drag, so end the drag first.
     if (h.opened && h.term.modes.mouseTrackingMode !== "none") document.dispatchEvent(new MouseEvent("mouseup"));
+    h.undrop();
     h.webgl?.dispose();
     h.term.dispose();
     h.el.remove();
@@ -718,23 +723,16 @@ class Terminals {
       },
       true,
     );
-    // Files dropped from Finder (or the file browser) type their paths, quoted; text types itself.
-    el.addEventListener("dragover", (e) => {
-      const types = e.dataTransfer?.types ?? [];
-      if (!types.includes("Files") && !types.includes("text/plain")) return;
-      e.preventDefault();
-      e.stopPropagation();
-      e.dataTransfer!.dropEffect = "copy";
-    });
-    el.addEventListener("drop", (e) => {
-      const dt = e.dataTransfer;
-      if (!dt) return;
-      const paths = [...dt.files].map((f) => cmd.pathForFile(f)).filter(Boolean);
-      const text = paths.length ? paths.map(shellWord).join(" ") + " " : dt.getData("text/plain");
-      if (!text) return;
-      e.preventDefault();
-      e.stopPropagation();
-      void this.paste(paneId, text);
+    // Files dropped (from Finder, the file browser, a title icon) type their paths
+    // as shell words, as Terminal.app does, so agents attach them; ⌘ types `cd` and
+    // the path, to press Return on. Links and text type themselves. Router: drops.ts.
+    h.undrop = registerDropTarget(paneId, {
+      over: (d) => (d.files || d.urls || d.text ? "copy" : null),
+      drop: (items, d) => {
+        const words = items.files.map(shellWord);
+        const text = !words.length ? items.urls.join(" ") || items.text : d.meta && words.length === 1 ? `cd ${words[0]}` : words.join(" ") + " ";
+        void this.paste(paneId, text);
+      },
     });
   }
 

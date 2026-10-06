@@ -708,6 +708,10 @@ kbd {
    selected one, in the attention colour. */
 .windows-track > .tile.bell { --ring-color: var(--state-needs); animation: tile-bell 450ms ease-out; }
 .windows-track > .tile.bell > .tile-frame { animation: tile-bell-ring 450ms ease-out; }
+/* A drag over a window that takes it (drops.ts): the ring in the accent, undimmed. */
+.tile.drop-over { --ring-color: var(--accent); }
+.tile.drop-over > .tile-frame, .dock-tile.drop-over > .tile-frame { box-shadow: var(--ring), var(--drop); }
+.windows-track > .tile.drop-over > .tile-frame::after { opacity: 0; }
 @keyframes tile-bell { 0%, 30% { border-color: var(--state-needs); } }
 @keyframes tile-bell-ring { 0%, 30% { box-shadow: var(--ring), var(--drop); } }
 @media (prefers-reduced-motion: reduce) {
@@ -997,6 +1001,9 @@ kbd {
   user-select: text;
 }
 .file-list:focus .file-row.sel { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+/* The folder a drag would drop into (FilesView): its row, or the whole list for the root. */
+.file-row.drop-into, .file-list:focus .file-row.drop-into { background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px var(--accent); }
+.file-list.drop-into { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent); }
 .file-row .twisty { color: var(--text-dim); }
 /* Git state (FilesView): name and mark coloured; ignored files dimmed like hidden ones. */
 .git-mark { font-size: 0.85em; font-weight: 600; text-align: center; }
@@ -1219,6 +1226,7 @@ kbd {
 /* 16px box: every icon canvas (even sizes up to 16) and the 8px light centre on
    whole pixels inside it. Its parent must give it an even height to centre in. */
 .mark { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; }
+.mark-drag { flex: none; display: inline-grid; -webkit-user-drag: element; }
 .mark > * {
   grid-area: 1 / 1;
   transition: opacity 140ms ease, transform 140ms var(--ease), background-color 140ms ease, box-shadow 140ms ease;

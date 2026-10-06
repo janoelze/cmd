@@ -604,6 +604,17 @@ ipcMain.on("set-window-size", (e, width: number, height: number) => {
 ipcMain.on("core-socket", (e) => (e.returnValue = socketPath));
 ipcMain.on("reveal-path", (_e, p: string) => shell.showItemInFolder(p));
 ipcMain.handle("trash-path", (_e, p: string) => shell.trashItem(p));
+// A file drag (renderer/src/drags.ts): macOS's own drag of the files, shown with
+// the first one's Finder icon. It has to start while the mouse is still down.
+ipcMain.on("start-file-drag", async (e, paths: unknown) => {
+  const files = Array.isArray(paths) ? paths.filter((p): p is string => typeof p === "string" && path.isAbsolute(p) && fs.existsSync(p)) : [];
+  const first = files[0];
+  if (!first) return;
+  const icon = await app.getFileIcon(first, { size: "normal" }).catch(() => null);
+  const shown = icon && !icon.isEmpty() ? icon : nativeImage.createFromNamedImage("NSMultipleDocuments");
+  if (e.sender.isDestroyed() || shown.isEmpty()) return; // startDrag throws without an icon
+  e.sender.startDrag({ file: first, files, icon: shown });
+});
 // Uncaught errors in the app's pages (renderer/src/errors.ts): each one once per launch.
 const rendererErrors = new Set<string>();
 ipcMain.on("renderer-error", (e, r: { kind: string; message: string; stack: string | null }) => {

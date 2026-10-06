@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { createPath, duplicatePath, renamePath } from "../src/fileops.ts";
+import { createPath, duplicatePath, renamePath, transferPaths } from "../src/fileops.ts";
 import { rmTemp } from "./tmp.ts";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-fileops-"));
@@ -41,5 +41,34 @@ describe("file operations", () => {
     // Case-only renames work on case-insensitive disks too.
     expect(renamePath(at("s.txt"), "S.txt")).toBe(at("S.txt"));
     expect(fs.readdirSync(dir)).toContain("S.txt");
+  });
+
+  it("copies and moves into a folder, never overwriting", () => {
+    fs.mkdirSync(at("t/in"), { recursive: true });
+    fs.mkdirSync(at("t/to"));
+    fs.writeFileSync(at("t/in/a.txt"), "a");
+    fs.writeFileSync(at("t/to/a.txt"), "taken");
+    fs.mkdirSync(at("t/in/sub"));
+    fs.writeFileSync(at("t/in/sub/f"), "f");
+    expect(transferPaths([at("t/in/a.txt"), at("t/in/sub")], at("t/to"), "copy")).toEqual([at("t/to/a 2.txt"), at("t/to/sub")]);
+    expect(fs.readFileSync(at("t/to/a.txt"), "utf8")).toBe("taken");
+    expect(fs.readFileSync(at("t/to/sub/f"), "utf8")).toBe("f");
+    expect(fs.existsSync(at("t/in/a.txt"))).toBe(true);
+    expect(transferPaths([at("t/in/a.txt")], at("t/to"), "move")).toEqual([at("t/to/a 3.txt")]);
+    expect(fs.existsSync(at("t/in/a.txt"))).toBe(false);
+    // Moving where it already is: nothing happens.
+    expect(transferPaths([at("t/in/sub")], at("t/in"), "move")).toEqual([at("t/in/sub")]);
+    // auto: the same disk, so a move.
+    expect(transferPaths([at("t/in/sub")], at("t/to"), "auto")).toEqual([at("t/to/sub 2")]);
+    expect(fs.existsSync(at("t/in/sub"))).toBe(false);
+  });
+
+  it("refuses a folder into itself, and missing paths, before touching anything", () => {
+    fs.mkdirSync(at("u/d/inner"), { recursive: true });
+    fs.writeFileSync(at("u/f"), "f");
+    expect(() => transferPaths([at("u/f"), at("u/d")], at("u/d/inner"), "move")).toThrow(/itself/);
+    expect(() => transferPaths([at("u/f"), at("u/nope")], at("u/d"), "copy")).toThrow(/ENOENT/);
+    expect(fs.existsSync(at("u/f"))).toBe(true);
+    expect(fs.existsSync(at("u/d/f"))).toBe(false);
   });
 });

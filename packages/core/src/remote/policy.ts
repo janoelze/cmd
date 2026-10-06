@@ -110,6 +110,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "fs.rename": "control",
   "fs.duplicate": "control",
   "fs.create": "control",
+  "fs.transfer": "control",
   "git.status": "view",
   "git.diff": "view",
   "search.query": "never",
@@ -223,6 +224,14 @@ const ARGS: { [M in Method]?: Check<M> } = {
   },
   "fs.duplicate": (p, ctx) => allowedPath(ctx, p.path),
   "fs.create": (p, ctx) => allowedPath(ctx, p.dir),
+  "fs.transfer": (p, ctx) => {
+    if (!Array.isArray(p.paths) || !["copy", "move", "auto"].includes(p.op)) throw new RemoteDenied("bad transfer");
+    allowedPath(ctx, p.dir);
+    for (const f of p.paths) {
+      allowedPath(ctx, f);
+      allowedPath(ctx, path.join(p.dir, path.basename(f))); // what it becomes there, e.g. not a .env
+    }
+  },
   "git.status": (p, ctx) => allowedPath(ctx, p.path),
   "git.diff": (p, ctx) => {
     allowedPath(ctx, p.path);

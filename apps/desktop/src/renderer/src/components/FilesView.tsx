@@ -18,6 +18,12 @@
 // Bookmarks: folders and files you keep coming back to, shared by every file browser
 // (UI state). Right-click to add one; the bookmark button (or, as a sidebar, the
 // folder's name) lists them: a folder becomes the root, a file opens.
+//
+// Drag and drop (docs/22-drag-and-drop.md): rows drag out as real files (Finder,
+// other apps, terminals). Files dropped here, from anywhere, go into the folder
+// under the pointer (a file's row means its folder, empty space the root): moved
+// on the same disk, copied from another or with ⌥, like Finder. Hovering a closed
+// folder for a moment opens it.
 
 import { Callout, EmptyState, IconButton, PanelHeader } from "@cmd/ui";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -27,6 +33,8 @@ import { copy, newTerminalIn, openPath, selectPane } from "../actions.ts";
 import { showContextMenu, type MenuEntry } from "../context.ts";
 import { formatBytes, shortPath } from "../model.ts";
 import { onFsChanged, usePersisted, useStoreValue } from "../store.ts";
+import { registerDropTarget } from "../drops.ts";
+import { dragFiles } from "../drags.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { PlacementContext } from "../windows/registry.ts";
 import { useWholePixelWidth } from "../pixels.ts";
@@ -69,6 +77,8 @@ const GIT_WORD: Record<GitFileState, string> = {
 const GIT_RANK: Record<GitFileState, number> = { ignored: 0, added: 1, untracked: 1, modified: 2, renamed: 2, deleted: 2, conflict: 3 };
 /** How often git state is re-read while the app is in front (changes deep in collapsed folders aren't watched). */
 const GIT_POLL_MS = 5000;
+/** How long a drag rests on a closed folder before it opens (Finder's spring-loading). */
+const SPRING_MS = 700;
 
 /** A bookmarked folder or file. */
 interface Bookmark {
@@ -379,6 +389,49 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     if (done && next) setSel(next.entry.path);
   };
 
+  // ── drag and drop ──
+  /** The folder a drop would go into, marked while a drag is over the list. */
+  const [dropDir, setDropDir] = useState<string | null>(null);
+  const transfer = async (paths: string[], dir: string, copy: boolean) => {
+    const made = await op(() => cmd.call("fs.transfer", { paths, dir, op: copy ? "copy" : "auto" }).then((r) => r[0] ?? null), dir);
+    if (!made) return;
+    if (dir !== root) setOpen(dir, true);
+    setSel(made);
+  };
+  // The target reads this render's state through a ref: it is registered once per window.
+  const dropState = useRef({ rows, root, showChanges, isOpen, setOpen, transfer });
+  dropState.current = { rows, root, showChanges, isOpen, setOpen, transfer };
+  useEffect(() => {
+    let marked: string | null = null;
+    const mark = (dir: string | null) => dir !== marked && setDropDir((marked = dir));
+    let resting = { dir: "", since: 0 };
+    const folderAt = (target: Element): { dir: string; closed: boolean } => {
+      const s = dropState.current;
+      const path = target.closest<HTMLElement>(".file-row")?.dataset.path;
+      const row = path ? s.rows.find((r) => r.entry.path === path) : undefined;
+      if (!row) return { dir: s.root, closed: false };
+      if (s.showChanges || row.entry.kind !== "dir") return { dir: parentOf(row.entry.path), closed: false };
+      return { dir: row.entry.path, closed: !s.isOpen(row.entry.path) };
+    };
+    return registerDropTarget(win.id, {
+      over: (d) => {
+        if (!d.files) return null;
+        const { dir, closed } = folderAt(d.target);
+        mark(dir);
+        if (resting.dir !== dir) resting = { dir, since: Date.now() };
+        else if (closed && Date.now() - resting.since > SPRING_MS) dropState.current.setOpen(dir, true);
+        return d.alt ? "copy" : "move";
+      },
+      drop: (items, d) => {
+        const { dir } = folderAt(d.target);
+        mark(null);
+        const paths = items.files.filter((p) => p !== dir); // a folder onto itself: nothing to do
+        if (paths.length) void dropState.current.transfer(paths, dir, d.alt);
+      },
+      leave: () => mark(null),
+    });
+  }, [win.id]);
+
   // Breadcrumbs: "~ › src › cmd" inside the home folder, "/ › etc" elsewhere.
   const crumbs = useMemo(() => {
     const home = /^\/Users\/[^/]+/.exec(root)?.[0];
@@ -560,7 +613,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       </div>
       )}
       <div
-        className="file-list"
+        className={`file-list ${dropDir === root ? "drop-into" : ""}`}
         ref={listRef}
         tabIndex={0}
         onKeyDown={onKey}
@@ -589,8 +642,10 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
               data-path={e.path}
               role="treeitem"
               aria-expanded={dir ? open : undefined}
-              className={`file-row ${sel === e.path ? "sel" : ""} ${e.hidden ? "hidden-file" : ""} ${tone ? `git-${tone}` : ""}`}
+              className={`file-row ${sel === e.path ? "sel" : ""} ${dropDir === e.path ? "drop-into" : ""} ${e.hidden ? "hidden-file" : ""} ${tone ? `git-${tone}` : ""}`}
               style={{ ["--depth" as string]: depth }}
+              draggable={renaming !== e.path}
+              onDragStart={(ev) => dragFiles(ev, [e.path])}
               onMouseDown={() => setSel(e.path)}
               onDoubleClick={() => activate(e)}
               onContextMenu={(ev) => {
