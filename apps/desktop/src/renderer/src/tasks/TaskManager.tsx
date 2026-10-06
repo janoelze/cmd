@@ -146,15 +146,21 @@ export function TaskManager() {
         <h1>Task Manager</h1>
       </div>
       <div className="tm-table" role="grid">
-        <div className="tm-head" role="row">
-          {COLUMNS.map((c) => (
-            <button key={c.key} className={`tm-col tm-${c.key}${sort.key === c.key ? " sorted" : ""}`} onClick={() => header(c.key)}>
-              {c.label}
-              {sort.key === c.key && <span className="tm-arrow">{sort.desc ? "▾" : "▴"}</span>}
-            </button>
-          ))}
-        </div>
         <div className="tm-body">
+          {/* In the scroller (sticky) so its columns share the rows' width, scrollbar or not. */}
+          <div className="tm-head" role="row">
+            {COLUMNS.map((c) => {
+              // Numbers are right-aligned: the arrow goes before the label so the label lines up with them.
+              const arrow = sort.key === c.key && <span className="tm-arrow">{sort.desc ? "▾" : "▴"}</span>;
+              return (
+                <button key={c.key} className={`tm-col tm-${c.key}${sort.key === c.key ? " sorted" : ""}`} onClick={() => header(c.key)}>
+                  {c.numeric && arrow}
+                  {c.label}
+                  {!c.numeric && arrow}
+                </button>
+              );
+            })}
+          </div>
           {!snap && <EmptyState compact>{error ?? "Loading…"}</EmptyState>}
           {sections.map((s) => (
             <Fragment key={s.title}>

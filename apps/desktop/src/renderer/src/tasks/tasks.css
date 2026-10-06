@@ -34,7 +34,7 @@ body.tasks-window { background: var(--bg); }
   padding: 0 12px;
   column-gap: 8px;
 }
-.tm-head { flex: none; height: 26px; border-bottom: 1px solid var(--separator); }
+.tm-head { position: sticky; top: 0; z-index: 1; height: 26px; margin-bottom: 4px; background: var(--bg); border-bottom: 1px solid var(--separator); }
 .tm-col {
   height: 100%;
   padding: 0;
@@ -46,12 +46,12 @@ body.tasks-window { background: var(--bg); }
 }
 .tm-col.tm-name { display: block; text-align: left; padding-left: 18px; }
 .tm-col.sorted { color: var(--text); }
-.tm-arrow { margin-left: 3px; font-size: 10px; }
+.tm-arrow { margin: 0 3px; font-size: 10px; }
 
-.tm-body { flex: 1; overflow-y: auto; padding: 4px 0 8px; }
+.tm-body { flex: 1; overflow-y: auto; padding-bottom: 8px; }
 
 .tm-section { height: 28px; margin-top: 6px; font-weight: 600; font-size: 12px; color: var(--text-dim); }
-.tm-section:first-child { margin-top: 0; }
+.tm-head + .tm-section { margin-top: 0; }
 .tm-section .tm-name { padding-left: 18px; }
 
 .tm-row { height: 24px; margin: 0 6px; padding: 0 6px; border-radius: var(--radius); }
