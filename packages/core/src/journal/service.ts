@@ -16,12 +16,12 @@
 import os from "node:os";
 import type { DatabaseSync } from "node:sqlite";
 import { logger } from "@cmd/protocol/node";
-import { HOME_SPACE_ID, type JournalDay, type JournalEvent, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
+import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type JournalDay, type JournalFormat, type JournalEvent, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
 import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import type { CallOptions } from "../ai/service.ts";
 import type { SessionRow } from "../search/index.ts";
 import { projectOf, sessionEvents, turnEvents } from "./backfill.ts";
-import { digest, type Digest } from "./digest.ts";
+import { digest, eventsHash, type Digest } from "./digest.ts";
 import { gitEvents } from "./git.ts";
 import { JournalStore, type NewJournalEvent } from "./store.ts";
 import { buildThreads } from "./threads.ts";
@@ -37,6 +37,12 @@ const FIRST_SYNC_DAYS = 30;
 /** Pulls overlap by this much: a session's row keeps changing while it runs. */
 const SYNC_OVERLAP = 2 * 3600_000;
 const SYNC_EVERY_MS = 5 * 60_000;
+/** A new SOURCES_FORMAT reads sources again this far back (git keeps 90 days). */
+const REREAD_DAYS = 90;
+/** Days written by older rules are written again when they're this recent (today, yesterday); older ones stay as written. */
+const UPGRADE_RECENT_DAYS = 2;
+const CURRENT: JournalFormat = { schema: JOURNAL_SCHEMA, threads: THREADS_FORMAT, writer: WRITER_FORMAT };
+const sameFormat = (a: JournalFormat, b: JournalFormat) => a.schema === b.schema && a.threads === b.threads && a.writer === b.writer;
 /** Today is written again at most this often unless forced. */
 const TODAY_EVERY_MS = 30 * 60_000;
 /** Earlier events read for context (a release ships what merged since the one before). */
@@ -69,8 +75,13 @@ export type JournalScope = string;
 export class JournalService {
   readonly store: JournalStore;
   #o: JournalServiceOptions;
-  /** Per source, when it was last read: a source that wasn't there (the index still opening) is read from the start next time. */
+  /**
+   * Per source, when it was last read, kept in the database so a restart reads
+   * only what's new. A source that wasn't there (the index still opening) is read
+   * from the start next time; a new SOURCES_FORMAT reads them all again.
+   */
   #read = { turns: 0, sessions: 0, git: 0 };
+  #reread = false;
   #syncing: Promise<void> | null = null;
   #writing = new Map<string, Promise<JournalDay | null>>();
   #timer: ReturnType<typeof setInterval> | null = null;
@@ -78,6 +89,8 @@ export class JournalService {
   constructor(o: JournalServiceOptions) {
     this.#o = o;
     this.store = o.store;
+    if (Number(this.store.meta("sources.format") ?? 0) !== SOURCES_FORMAT) this.#reread = true;
+    else for (const k of ["turns", "sessions", "git"] as const) this.#read[k] = Number(this.store.meta(`sync.${k}`) ?? 0);
   }
 
   get #now(): number {
@@ -112,7 +125,7 @@ export class JournalService {
 
   async #sync(): Promise<void> {
     const now = this.#now;
-    const since = (last: number) => (last ? last - SYNC_OVERLAP : now - FIRST_SYNC_DAYS * DAY_MS);
+    const since = (last: number) => (last ? last - SYNC_OVERLAP : now - (this.#reread ? REREAD_DAYS : FIRST_SYNC_DAYS) * DAY_MS);
     const t0 = Date.now();
     const pulled: NewJournalEvent[] = [];
     try {
@@ -138,6 +151,11 @@ export class JournalService {
       git += this.store.recordAll(ev.map((e) => ({ ...e, spaceId: this.#spaceOf(e.repo) })));
     }
     this.#read.git = now;
+    for (const k of ["turns", "sessions", "git"] as const) if (this.#read[k]) this.store.setMeta(`sync.${k}`, String(this.#read[k]));
+    if (this.#reread && this.#read.sessions) {
+      this.store.setMeta("sources.format", String(SOURCES_FORMAT));
+      this.#reread = false;
+    }
     log.info("journal synced", { events: pulled.length + git, repos: repos.size, ms: Date.now() - t0 });
   }
 
@@ -201,12 +219,18 @@ export class JournalService {
     const { events, threads, digest: d } = this.threads(scope, date);
     if (!threads.some((t) => !t.minor)) return null;
     const stored = this.store.day(scope, date);
-    const fresh = stored && stored.inputHash === d.hash;
+    const outdated = !!stored && !sameFormat(stored.format, CURRENT);
+    const shown = stored && { ...stored, outdated };
+    // Days from before they carried an events hash compare by their digest.
+    const happened = stored && (stored.eventsHash ? stored.eventsHash !== eventsHash(threads, events) : stored.inputHash !== d.hash);
     const today = date === this.dayOf(this.#now);
-    const recent = stored && today && this.#now - stored.writtenAt < TODAY_EVERY_MS;
+    const recentDay = this.dayOf(this.#now) - date < UPGRADE_RECENT_DAYS * DAY_MS;
+    const throttled = stored && today && this.#now - stored.writtenAt < TODAY_EVERY_MS;
+    // Written again when something happened since, or when it's recent and older rules wrote it. History stays as written.
+    const stale = !stored || (happened && !throttled) || (outdated && recentDay && !throttled);
     // Only a model writes days: titled from the data alone, they read like a list of prompts.
     const model = this.#o.ai?.modelName() ?? null;
-    if (mode === "never" || !model || !this.#o.ai || (mode === "stale" && (fresh || recent))) return stored;
+    if (mode === "never" || !model || !this.#o.ai || (mode === "stale" && !stale)) return shown;
     const write = this.#o.ai
       .object<WrittenDay>({ tier: "smart", purpose: "journal.day", background: true, system: SYSTEM, prompt: `<day>\n${d.text}\n</day>`, schema: SCHEMA as unknown as Record<string, unknown>, maxOutputTokens: 6000 })
       .then((r) => {
@@ -217,7 +241,7 @@ export class JournalService {
       })
       .catch((err: Error) => {
         log.warn(`could not write the day: ${err.message}`, { scope });
-        return stored;
+        return shown;
       })
       .finally(() => this.#writing.delete(key));
     this.#writing.set(key, write);

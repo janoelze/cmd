@@ -150,6 +150,8 @@ export interface Methods {
   "journal.days": { params: { spaceId?: SpaceId; scope?: string; count?: number; write?: "never" | "stale" | "force" }; result: JournalDay[] };
   /** One work day by its local midnight (a work day runs 04:00 to 04:00); null when nothing happened. */
   "journal.day": { params: { spaceId?: SpaceId; scope?: string; date: number; write?: "never" | "stale" | "force" }; result: JournalDay | null };
+  /** A day as each earlier version wrote it, newest first (kept when a day is written again): for comparing revisions. */
+  "journal.history": { params: { spaceId?: SpaceId; scope?: string; date: number }; result: JournalDay[] };
   /** The recorded events, oldest first. */
   "journal.events": { params: { since?: number; until?: number; spaceId?: SpaceId; repo?: string; kinds?: JournalEventKind[]; limit?: number }; result: JournalEvent[] };
   /** A day's threads and the digest a model would get: how the journal sees it, before any model. */

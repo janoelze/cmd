@@ -1,11 +1,14 @@
-// Writing a day (docs/23-journal.md): the digest goes to a model, which answers
+// Writing a day (docs/23-journal.md). Changing SYSTEM, SCHEMA or the checks in
+// toDay changes what a day says: raise WRITER_FORMAT (docs/24-journal-versions.md).
+// the digest goes to a model, which answers
 // with entries that name the threads they're made of, and a headline. The answer
 // is checked against the threads: unknown refs are dropped, and every thread
 // that isn't minor ends up in an entry (one the model left out gets a plain
 // entry of its own from its label), so nothing that happened goes missing
 // because a model skipped it.
 
-import type { JournalDay, JournalEntry, JournalEntryKind, JournalEvent, JournalOutcome, JournalThread } from "@cmd/protocol";
+import { JOURNAL_SCHEMA, THREADS_FORMAT, WRITER_FORMAT, type JournalDay, type JournalEntry, type JournalEntryKind, type JournalEvent, type JournalOutcome, type JournalThread } from "@cmd/protocol";
+import { eventsHash } from "./digest.ts";
 import type { Digest } from "./digest.ts";
 
 export const ENTRY_KINDS: JournalEntryKind[] = ["release", "investigation", "feature", "fix", "design", "refactor", "research", "review", "ops", "chore"];
@@ -114,6 +117,8 @@ export function toDay(w: WrittenDay, d: Digest, threads: JournalThread[], events
     entries: entries.sort((a, b) => b.start - a.start),
     writtenBy: o.writtenBy,
     writtenAt: Date.now(),
+    format: { schema: JOURNAL_SCHEMA, threads: THREADS_FORMAT, writer: WRITER_FORMAT },
+    eventsHash: eventsHash(threads, events),
     inputHash: d.hash,
     minor: threads.filter((t) => t.minor && !covered.has(t.id)).length,
   };

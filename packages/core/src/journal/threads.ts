@@ -6,7 +6,8 @@
 // the branches merged since the one before; a session that ran the release
 // command made the release. Deterministic: the same events give the same
 // threads with the same ids, which is what keeps entries stable when a day is
-// written again.
+// written again. Changing a rule changes threads: raise THREADS_FORMAT
+// (docs/24-journal-versions.md).
 
 import path from "node:path";
 import type { JournalEvent, JournalLink, JournalThread, JournalThreadKind } from "@cmd/protocol";

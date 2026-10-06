@@ -54,6 +54,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   // The journal holds prompts, commands and pages: local only.
   "journal.days": "never",
   "journal.day": "never",
+  "journal.history": "never",
   "journal.events": "never",
   "journal.threads": "never",
   "journal.note": "never",

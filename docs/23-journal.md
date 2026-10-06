@@ -1,6 +1,6 @@
 # The journal
 
-> Status (2026-10-06), branch `journal`: built: the event log and its tables, git from reflogs, backfill from the activity log and the transcript index, live recording of commands, pages and files, threads, the digest, the day writer, `journal.*` RPC, `cmd journal`, the Journal widget. Tested on two real days of this repository and a made-up messy one. Not yet: UI actions, week rollups, an agent tool beyond the CLI, the Settings switch. See "Next".
+> Status (2026-10-06), branch `journal`: built: the event log and its tables, git from reflogs, backfill from the activity log and the transcript index, live recording of commands, pages and files, threads, the digest, the day writer, `journal.*` RPC, `cmd journal`, the Journal widget. Tested on two real days of this repository and a made-up messy one. Versioned per layer: [24-journal-versions.md](24-journal-versions.md) (all at 1). Not yet: UI actions, week rollups, an agent tool beyond the CLI, the Settings switch. See "Next".
 
 cmd sees most of what happens in a workspace: agents and their prompts, terminals and their commands, git, pages read, files opened. Until now it kept almost none of it: the activity log goes after 14 days and has no Space, commands live in memory, a browser window remembers one URL, and an agent's row goes when it does. The journal keeps it, and turns it into what a person would write in a work log: "Released v0.14.4", "Investigated a corrupt search index (cause still open)", "Compared Stripe Checkout with Adyen". Not a timeline of tools; the work.
 

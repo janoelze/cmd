@@ -8,7 +8,9 @@ import { Core } from "../src/core.ts";
 import { digest } from "../src/journal/digest.ts";
 import { gitEvents, parseReflog } from "../src/journal/git.ts";
 import { JournalService, type JournalAi } from "../src/journal/service.ts";
-import { JournalStore, type NewJournalEvent } from "../src/journal/store.ts";
+import { DatabaseSync } from "node:sqlite";
+import { JOURNAL_SCHEMA, SOURCES_FORMAT, WRITER_FORMAT, type JournalDay } from "@cmd/protocol";
+import { JournalStore, UPGRADES, type NewJournalEvent } from "../src/journal/store.ts";
 import { buildThreads } from "../src/journal/threads.ts";
 import { toDay, type WrittenDay } from "../src/journal/writer.ts";
 import { fakeFactory } from "./fake-pty.ts";
@@ -202,5 +204,104 @@ describe("journal service", () => {
     } finally {
       await core.close();
     }
+  });
+});
+
+describe("journal versions", () => {
+  const space: Space = { id: "shop", name: "Shopfront", root: "/Users/sam/src/shopfront" } as unknown as Space;
+  const written = (headline: string) => ({ value: { headline, entries: [] }, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }, model: "m" });
+
+  function service(store: JournalStore, now: number, onWrite: () => void) {
+    const ai: JournalAi = { modelName: () => "Model", object: async <T,>() => (onWrite(), written("New rules.") as unknown as { value: T; usage: { input: number; output: number; cacheRead: number; cacheWrite: number }; model: string }) };
+    return new JournalService({ store, activityDb: null, sessions: () => [], spaces: () => [space], agentSpace: () => null, ai, now: () => now });
+  }
+
+  it("records the schema, and which cmd wrote each event", () => {
+    const db = new DatabaseSync(":memory:");
+    const s = new JournalStore(db, { recordedBy: "0.15.0" });
+    s.record(note(1, "a"));
+    expect(s.schemaVersion()).toBe(JOURNAL_SCHEMA);
+    expect(db.prepare(`SELECT schema, cmd FROM journal_events`).get()).toEqual({ schema: JOURNAL_SCHEMA, cmd: "0.15.0" });
+  });
+
+  it("runs the upgrades between an older database's schema and this one", () => {
+    const db = new DatabaseSync(":memory:");
+    new JournalStore(db);
+    db.prepare(`UPDATE schema_versions SET version = ? WHERE name = 'journal'`).run(JOURNAL_SCHEMA - 1);
+    const ran: number[] = [];
+    const had = UPGRADES[JOURNAL_SCHEMA];
+    UPGRADES[JOURNAL_SCHEMA] = () => void ran.push(JOURNAL_SCHEMA);
+    try {
+      expect(new JournalStore(db).schemaVersion()).toBe(JOURNAL_SCHEMA);
+      expect(ran).toEqual([JOURNAL_SCHEMA]);
+      new JournalStore(db);
+      expect(ran).toEqual([JOURNAL_SCHEMA]); // once
+    } finally {
+      if (had) UPGRADES[JOURNAL_SCHEMA] = had;
+      else delete UPGRADES[JOURNAL_SCHEMA];
+    }
+  });
+
+  it("skips rows it can't read instead of failing the day", () => {
+    const db = new DatabaseSync(":memory:");
+    const s = new JournalStore(db);
+    s.recordAll([note(1, "ok"), note(2, "bad"), note(3, "other")]);
+    db.prepare(`UPDATE journal_events SET data = '{' WHERE key = 'bad'`).run();
+    db.prepare(`UPDATE journal_events SET kind = 'future.kind' WHERE key = 'other'`).run();
+    expect(s.events().map((e) => e.key)).toEqual(["ok"]);
+  });
+
+  it("reads days written before they carried their format, and keeps the ones it replaces", () => {
+    const db = new DatabaseSync(":memory:");
+    const s = new JournalStore(db);
+    const old = { date: 1, scope: "all", headline: "v1", entries: [], writtenBy: "m", writtenAt: 1, inputHash: "x", minor: 0 };
+    db.prepare(`INSERT INTO journal_days (scope, date, doc) VALUES ('all', 1, ?)`).run(JSON.stringify(old));
+    expect(s.day("all", 1)).toMatchObject({ headline: "v1", format: { schema: 1, threads: 1, writer: 1 }, eventsHash: "" });
+    for (const h of ["v2", "v3", "v4", "v5"]) s.saveDay({ ...s.day("all", 1)!, headline: h, outdated: true });
+    expect(s.day("all", 1)?.headline).toBe("v5");
+    expect(s.day("all", 1)).not.toHaveProperty("outdated");
+    expect(s.history("all", 1).map((d) => d.headline)).toEqual(["v4", "v3", "v2"]);
+  });
+
+  /** The fixture's day, stored as written by an older writer. */
+  function olderDay(store: JournalStore, now: number): { date: number; j: JournalService; calls: () => number } {
+    let n = 0;
+    const j = service(store, now, () => n++);
+    const date = j.dayOf(from + 3600_000);
+    const t = j.threads("all", date);
+    const day: JournalDay = { date, scope: "all", headline: "Old rules.", entries: [], writtenBy: "m", writtenAt: now - 86400_000, format: { schema: JOURNAL_SCHEMA, threads: 1, writer: WRITER_FORMAT - 1 }, eventsHash: "", inputHash: t.digest.hash, minor: 0 };
+    store.saveDay(day);
+    return { date, j, calls: () => n };
+  }
+
+  it("keeps a past day written by older rules as it was, marked outdated", async () => {
+    const { store } = fixture();
+    const { date, j, calls } = olderDay(store, to + 5 * 86400_000);
+    expect(await j.day("all", date)).toMatchObject({ headline: "Old rules.", outdated: true });
+    expect(calls()).toBe(0);
+    expect(await j.day("all", date, "force")).toMatchObject({ headline: "New rules.", format: { writer: WRITER_FORMAT } });
+    expect(calls()).toBe(1);
+    expect(store.history("all", date)[0]?.headline).toBe("Old rules.");
+  });
+
+  it("writes a recent day again when older rules wrote it", async () => {
+    const { store } = fixture();
+    const { date, j, calls } = olderDay(store, to - 3600_000);
+    expect((await j.day("all", date))?.headline).toBe("New rules.");
+    expect(calls()).toBe(1);
+  });
+
+  it("reads sources again when their format changed, then only what's new", async () => {
+    const store = new JournalStore();
+    const asked: number[] = [];
+    const make = () => new JournalService({ store, activityDb: null, sessions: (since) => (asked.push(since), []), spaces: () => [], agentSpace: () => null, ai: null, now: () => 100 * 86400_000 });
+    await make().sync();
+    expect(asked[0]).toBe(10 * 86400_000); // 90 days back
+    expect(store.meta("sources.format")).toBe(String(SOURCES_FORMAT));
+    await make().sync();
+    expect(asked[1]).toBe(100 * 86400_000 - 2 * 3600_000); // from the last read, kept across restarts
+    store.setMeta("sources.format", String(SOURCES_FORMAT - 1));
+    await make().sync();
+    expect(asked[2]).toBe(10 * 86400_000);
   });
 });

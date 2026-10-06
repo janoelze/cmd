@@ -11,8 +11,30 @@
 
 import type { AgentKind, SpaceId } from "./model.ts";
 
-/** Raise when JournalEvent's stored shape changes incompatibly. */
+/**
+ * Versions of the journal's layers (docs/24-journal-versions.md). Each says
+ * which rules made a piece of data, so a revision never has to guess.
+ * - JOURNAL_SCHEMA: the stored event (table columns, JournalData per kind).
+ *   Raise when a kind's data changes shape; readers keep reading older rows.
+ * - SOURCES_FORMAT: how pulled sources (turns, sessions, git) map to events.
+ *   Raise when that mapping changes: the next sync reads them all again (keys
+ *   are stable, so events are updated in place).
+ * - THREADS_FORMAT: the threading rules and the digest's text (threads.ts, digest.ts).
+ * - WRITER_FORMAT: the prompt, the answer's schema and its checks (writer.ts).
+ * A written day records all of them; one written by older rules is kept as
+ * written unless its events changed, it's recent, or it's asked for again.
+ */
 export const JOURNAL_SCHEMA = 1;
+export const SOURCES_FORMAT = 1;
+export const THREADS_FORMAT = 1;
+export const WRITER_FORMAT = 1;
+
+/** Which versions of the rules a day was written with. */
+export interface JournalFormat {
+  schema: number;
+  threads: number;
+  writer: number;
+}
 
 export type JournalEventKind =
   /** An agent session: a span from its first to its latest activity. Upserted as it grows. */
@@ -151,10 +173,17 @@ export interface JournalDay {
   scope: string;
   headline: string;
   entries: JournalEntry[];
-  /** Written by (model), when, from which input (hash): rewritten only when the input changed. */
+  /** The model that wrote it, and when. */
   writtenBy: string | null;
   writtenAt: number;
+  /** The rules it was written with. Missing: written before days carried it (format 1). */
+  format: JournalFormat;
+  /** What happened that day, hashed: when it changes, the day is written again. Independent of the rules. */
+  eventsHash: string;
+  /** The digest the model got, hashed (for comparing revisions). */
   inputHash: string;
+  /** Written by older rules than this cmd's (set when read, not stored). */
+  outdated?: boolean;
   /** Threads left out as minor, counted. */
   minor: number;
 }

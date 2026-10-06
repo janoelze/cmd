@@ -297,7 +297,7 @@ export class Core {
       notify: (id, title, body) => this.notifications.window(id, "summary", title, body),
     });
     this.journal = new JournalService({
-      store: new JournalStore(this.store.db),
+      store: new JournalStore(this.store.db, { recordedBy: this.agents.activity.recordedBy }),
       activityDb: this.store.db,
       sessions: (since) => this.#search?.sessionsSince(since) ?? null,
       spaces: () => this.spaces.list(),
@@ -437,6 +437,7 @@ export class Core {
     "agents.coverage": (p) => this.agents.activity.coverage(p.days),
     "journal.days": (p) => this.journal.days(journalScope(p), Math.min(p.count ?? 7, 60), p.write),
     "journal.day": async (p) => (await this.journal.sync(), this.journal.day(journalScope(p), this.journal.dayOf(p.date), p.write)),
+    "journal.history": (p) => this.journal.store.history(journalScope(p), this.journal.dayOf(p.date)),
     "journal.events": (p) => this.journal.store.events(p),
     "journal.threads": async (p) => {
       await this.journal.sync();

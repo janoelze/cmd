@@ -11,6 +11,8 @@ const day = (d: { date: number; headline: string; entries: Draft[] }): JournalDa
   scope: "space:cmd",
   writtenBy: "Claude Sonnet 5.5",
   writtenAt: d.date,
+  format: { schema: 1, threads: 1, writer: 1 },
+  eventsHash: "",
   inputHash: "",
   minor: 3,
   entries: d.entries.map(({ project, counts, ...e }) => ({ ...e, outcome: e.outcome ?? null, repo: project ? `/Users/sam/src/${project}` : null, threads: [e.id], counts: { agents: 0, prompts: 0, commands: 0, commits: 0, pages: 0, files: 0, ...counts } })),

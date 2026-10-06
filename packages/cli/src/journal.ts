@@ -12,6 +12,7 @@ export const JOURNAL_HELP = `  journal [--days N] [--all|--space ID|--repo PATH]
                                       what happened, day by day: releases, features, investigations
   journal note TEXT                   write something down (from an agent's terminal: in its session)
   journal threads [--day YYYY-MM-DD]  how cmd grouped a day, before AI: what a model is given
+  journal history [--day YYYY-MM-DD]  a day as written now and by earlier versions (after --write)
   journal events [--days N] [--kind K] [--json]
                                       the recorded events: turns, commands, commits, pages, notes
   journal sync                        read new turns, sessions and git now`;
@@ -65,6 +66,16 @@ export async function journalCommand(client: Client, pos: string[], opt: Record<
       const date = typeof opt.day === "string" ? new Date(`${opt.day}T12:00:00`).getTime() : Date.now();
       const r = await client.call("journal.threads", { ...(await scope(client, opt, paneId)), date });
       console.log(json ? JSON.stringify(r, null, 2) : r.digest);
+      return 0;
+    }
+    case "history": {
+      const date = typeof opt.day === "string" ? new Date(`${opt.day}T12:00:00`).getTime() : Date.now();
+      const s = await scope(client, opt, paneId);
+      const [now, ...before] = [await client.call("journal.day", { ...s, date, write: "never" }), ...(await client.call("journal.history", { ...s, date }))];
+      const all = [now, ...before].filter((d): d is JournalDay => !!d);
+      if (json) return console.log(JSON.stringify(all, null, 2)), 0;
+      if (!all.length) return console.log("Nothing written for that day."), 0;
+      console.log(all.map((d, i) => `${i === 0 ? "# Now" : `# Before (${i})`}: ${d.writtenBy ?? "?"}, ${new Date(d.writtenAt).toLocaleString("en-GB")}, rules ${d.format.threads}/${d.format.writer}${d.outdated ? " (outdated)" : ""}\n\n${dayMarkdown(d, false)}`).join("\n\n"));
       return 0;
     }
     case "events": {

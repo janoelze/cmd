@@ -10,6 +10,22 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import type { JournalEvent, JournalThread } from "@cmd/protocol";
 
+/**
+ * What happened in a day, hashed, whatever the rules that read it: each event
+ * in a thread, by key, span and text. A day is written again when this changes;
+ * a change of rules alone (THREADS_FORMAT, WRITER_FORMAT) doesn't change it.
+ */
+export function eventsHash(threads: JournalThread[], events: JournalEvent[]): string {
+  const byId = new Map(events.map((e) => [e.id, e]));
+  const ids = [...new Set(threads.flatMap((t) => t.events))].sort((a, b) => a - b);
+  const h = createHash("sha256");
+  for (const id of ids) {
+    const e = byId.get(id);
+    if (e) h.update(`${e.key}\0${e.until ?? e.at}\0${e.text}\n`);
+  }
+  return h.digest("hex").slice(0, 16);
+}
+
 export interface Digest {
   text: string;
   /** Ref → thread id. */
