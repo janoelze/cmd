@@ -5,6 +5,13 @@
 
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
+  ToolbarAddressField,
+  ToolbarButton,
+  ToolbarGroup,
+  ToolbarPath,
+  ToolbarSearchField,
+  ToolbarSpacer,
+  WindowToolbar,
   Badge,
   Button,
   ButtonGroup,
@@ -861,6 +868,33 @@ function ContentPage() {
           </Toolbar>
           <div style={{ height: 60, background: "var(--well)" }} />
         </div>
+      </Spec>
+      <Spec title="WindowToolbar" plain>
+        {[520, 260].map((w) => (
+          <div key={w} style={{ width: w, borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--separator)" }}>
+            <WindowToolbar label="Browser">
+              <ToolbarGroup>
+                <ToolbarButton icon="chevron.left" label="Back" />
+                <ToolbarButton icon="chevron.right" label="Forward" disabled />
+                <ToolbarButton icon="arrow.clockwise" label="Reload" priority={2} />
+              </ToolbarGroup>
+              <ToolbarAddressField value="https://www.github.com/janoelze/cmd" onSubmit={() => {}} minWidth={90} />
+              <ToolbarButton icon="arrow.up.forward.app" label="Open in Browser" secondary priority={1} />
+            </WindowToolbar>
+            <WindowToolbar label="Files">
+              <ToolbarButton icon="chevron.up" label="Enclosing Folder" shortcut="⌘↑" />
+              <ToolbarPath segments={["~", "src", "cmd"].map((l) => ({ key: l, label: l }))} onSelect={() => {}} />
+              <ToolbarSpacer />
+              <ToolbarButton icon="arrow.triangle.branch" label="main" showLabel badge="3" priority={3} />
+              <ToolbarButton icon="eye.slash" label="Show Hidden Files" secondary priority={1} />
+            </WindowToolbar>
+            <WindowToolbar label="Filter">
+              <ToolbarSearchField value="agent" onChange={() => {}} count="12" placeholder="Filter" />
+              <ToolbarButton label="Done" />
+            </WindowToolbar>
+            <div style={{ height: 30, background: "var(--well)" }} />
+          </div>
+        ))}
       </Spec>
     </>
   );

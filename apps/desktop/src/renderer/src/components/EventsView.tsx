@@ -7,7 +7,7 @@
 // replaces its row and moves it up. A click shows the event as stored; the
 // title bar's menu hides classes, pauses and clears.
 
-import { Chip, CodeBlock, EmptyState, ListRow, ListValue, Panel, PanelBody, SearchField, Toolbar } from "@cmd/ui";
+import { Chip, CodeBlock, EmptyState, ListRow, ListValue, Panel, PanelBody, ToolbarSearchField, WindowToolbar } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DataClassInfo, DataEvent } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -191,9 +191,9 @@ export function EventsView({ win }: WindowViewProps) {
 
   return (
     <Panel>
-      <Toolbar edge="top" label="Filter events">
-        <SearchField value={query} placeholder="Filter: any word in an event" onChange={setQuery} />
-      </Toolbar>
+      <WindowToolbar label="Filter events">
+        <ToolbarSearchField value={query} placeholder="Filter: any word in an event" count={q ? `${shown.length}` : undefined} onChange={setQuery} />
+      </WindowToolbar>
       <PanelBody>
         {shown.map(row)}
         {shown.length === 0 && (

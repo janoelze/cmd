@@ -1,14 +1,11 @@
 /* Built-in widgets (docs/16-widgets.md): Agent Activity (aa-), Live Diff (ld-), YouTube (yt-), Resources (rs-) and Timer (tm-). The list widgets are @cmd/ui Panels. */
 
 .aa, .ld { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); font: var(--text-sm) var(--font-ui); color: var(--text); }
-.aa-bar, .ld-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--separator); min-height: 34px; }
 .aa-list, .ld-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 0; display: flex; flex-direction: column; }
 .aa-list > *, .ld-list > * { flex: none; }
 .aa-list > .ui-empty, .ld-list > .ui-empty { flex: 1; min-height: max-content; }
 
 /* ── Agent Activity ── */
-.aa-summary { display: flex; gap: 10px; color: var(--text-dim); font-size: var(--text-xs); min-width: 0; overflow: hidden; white-space: nowrap; }
-.aa-count[data-tone="needs"] { color: var(--state-needs); font-weight: 600; }
 .aa-row { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: default; }
 .aa-row:hover { background: var(--bg-hover); }
 .aa-row[data-depth] { padding-left: 30px; }
@@ -20,9 +17,6 @@
 .aa-place { max-width: 100%; }
 
 /* ── Live Diff ── */
-.ld-branch { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; min-width: 0; overflow: hidden; white-space: nowrap; }
-.ld-ab { color: var(--text-dim); font-weight: 400; font-size: var(--text-xs); }
-.ld-summary { display: flex; gap: 8px; color: var(--text-dim); font-size: var(--text-xs); white-space: nowrap; }
 .ld-plus { color: var(--git-added); }
 .ld-minus { color: var(--git-deleted); }
 .ld-file + .ld-file { border-top: 1px solid var(--separator); }

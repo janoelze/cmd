@@ -732,31 +732,6 @@ kbd {
   flex-direction: column;
   background: var(--well);
 }
-.window-toolbar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  height: 32px;
-  padding: 0 6px;
-  border-bottom: 1px solid var(--separator);
-  background: var(--bg);
-}
-.address {
-  flex: 1;
-  min-width: 0;
-  height: 22px;
-  margin: 0 4px;
-  padding: 0 8px;
-  font: 12px var(--font-ui);
-  color: var(--text);
-  background: var(--well);
-  border: 1px solid var(--input-edge);
-  border-radius: 5px;
-  outline: none;
-  user-select: text;
-}
-.address:focus { border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
 .browser-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
 .webview { flex: 1; min-height: 0; background: #fff; }
 .browser-blank.ui-empty { flex: 1; background: var(--well); cursor: text; }

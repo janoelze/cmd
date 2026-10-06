@@ -250,12 +250,12 @@ export const ToolbarField = forwardRef<HTMLInputElement, ToolbarFieldProps>(func
 export const ToolbarSearchField = forwardRef<
   HTMLInputElement,
   Omit<ToolbarFieldProps, "icon" | "value" | "onChange"> & { value: string; onChange: (v: string) => void; count?: ReactNode; onEscape?: () => void }
->(function ToolbarSearchField({ value, onChange, count, onEscape, onKeyDown, end, ...rest }, ref) {
+>(function ToolbarSearchField({ value, onChange, count, onEscape, onKeyDown, end, className, ...rest }, ref) {
   return (
     <ToolbarField
       ref={ref}
       icon="magnifyingglass"
-      className="ui-tb-search"
+      className={cls("ui-tb-search", className)}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={(e) => {
@@ -288,7 +288,7 @@ export const ToolbarSearchField = forwardRef<
 export const ToolbarAddressField = forwardRef<
   HTMLInputElement,
   Omit<ToolbarFieldProps, "value" | "onChange" | "onSubmit"> & { value: string; onSubmit: (text: string) => void; onEscape?: () => void; display?: (url: string) => string }
->(function ToolbarAddressField({ value, onSubmit, onEscape, display = displayAddress, onFocus, onBlur, onKeyDown, ...rest }, ref) {
+>(function ToolbarAddressField({ value, onSubmit, onEscape, display = displayAddress, onFocus, onBlur, onKeyDown, className, ...rest }, ref) {
   const own = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const editing = draft !== null;
@@ -299,7 +299,7 @@ export const ToolbarAddressField = forwardRef<
         if (typeof ref === "function") ref(el);
         else if (ref) ref.current = el;
       }}
-      className="ui-tb-address"
+      className={cls("ui-tb-address", className)}
       data-editing={editing || undefined}
       value={editing ? draft : display(value)}
       title={editing ? undefined : value || undefined}

@@ -177,11 +177,9 @@ registerWindowView({
 registerWindowView({
   kind: "agents",
   View: AgentActivity,
-  describe: (w) => ({ place: w.state.scope === "all" ? "all Spaces" : undefined, kind: null }),
-  menu: (w) => [
-    { label: "This Space", checked: w.state.scope !== "all", run: () => void cmd.call("window.update", { id: w.id, state: { scope: "space" } }) },
-    { label: "All Spaces", checked: w.state.scope === "all", run: () => void cmd.call("window.update", { id: w.id, state: { scope: "all" } }) },
-  ],
+  describe: () => ({ kind: null }),
+  titleMenu: (w) => ({ label: scopeLabel(w), entries: scopeMenu(w.id, scopeOf(w.state.scope)) }),
+  menu: (w) => scopeMenu(w.id, scopeOf(w.state.scope)),
 });
 
 registerWindowView({

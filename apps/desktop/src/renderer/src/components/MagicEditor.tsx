@@ -24,16 +24,18 @@ import {
   NumberField,
   ResetButton,
   SecretField,
-  Select,
   Spacer,
+  Select,
   Spinner,
   StatusDot,
   Switch,
-  Tabs,
   TextArea,
   TextField,
-  Toolbar,
-  type TabItem,
+  ToolbarButton,
+  ToolbarSegmented,
+  ToolbarSpacer,
+  ToolbarText,
+  WindowToolbar,
 } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
 import { copy, openPath } from "../actions.ts";
@@ -42,11 +44,11 @@ import { ago } from "../model.ts";
 import { StepList } from "./MagicView.tsx";
 
 type Tab = "changes" | "settings" | "files" | "health";
-const TABS: TabItem<Tab>[] = [
-  { id: "changes", label: "Changes" },
-  { id: "settings", label: "Settings" },
-  { id: "files", label: "Files" },
-  { id: "health", label: "Health" },
+const TABS: { value: Tab; label: string }[] = [
+  { value: "changes", label: "Changes" },
+  { value: "settings", label: "Settings" },
+  { value: "files", label: "Files" },
+  { value: "health", label: "Health" },
 ];
 
 const fileUrl = (p: string) => `cmd-file://local/?path=${encodeURIComponent(p)}`;
@@ -66,18 +68,16 @@ export function MagicEditor({ win, live, onRun, onClose }: { win: AppWindow; liv
 
   return (
     <div className="magic-edit">
-      <Toolbar label="Widget editor">
-        <Tabs value={tab} onChange={setTab} label="Editor" items={TABS.map((t) => (t.id === "health" && healthBad ? { ...t, badge: "dot", tone: "danger" } : t))} />
-        <Spacer />
+      <WindowToolbar label="Widget editor">
+        <ToolbarSegmented label="Editor" value={tab} onChange={setTab} options={TABS.map((t) => (t.value === "health" && healthBad ? { ...t, badge: <StatusDot size="sm" state="danger" /> } : t))} />
+        <ToolbarSpacer />
         {working && (
-          <span className="magic-working">
+          <ToolbarText>
             <Spinner size={11} /> Working…
-          </span>
+          </ToolbarText>
         )}
-        <Button size="sm" onClick={onClose} data-tip="Back to the widget" data-tip-key="⌘E">
-          Done
-        </Button>
-      </Toolbar>
+        <ToolbarButton label="Done" shortcut="⌘E" tip="Back to the widget" onClick={onClose} />
+      </WindowToolbar>
       <div className="magic-edit-body">
         {tab === "changes" && <Changes win={win} info={info} working={working} onRun={onRun} />}
         {tab === "settings" && <Settings win={win} info={info} />}

@@ -102,8 +102,6 @@
 
 /* the edit view (MagicEditor.tsx): @cmd/ui controls; only its lists are its own */
 .magic-edit { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--well); font: var(--text-base)/1.45 var(--font-ui); color: var(--text); }
-.magic-edit .ui-toolbar { background: var(--well); }
-.magic-working { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-dim); }
 .magic-edit-body { flex: 1; overflow: auto; padding: 14px 16px 24px; display: flex; flex-direction: column; gap: 22px; }
 .magic-edit-body .ui-form-section + .ui-form-section { margin-top: 0; }
 .magic-note { font-size: var(--text-sm); color: var(--text-dim); }

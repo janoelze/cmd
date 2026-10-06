@@ -1,9 +1,10 @@
 // Agent Activity, a built-in widget (docs/16-widgets.md): every agent in this
 // Space, or all of them, at a glance: who waits for you first, then who is
 // working, then what finished. Rows say what the sidebar says (fieldsOf), so
-// the two never disagree; a click goes to the agent's terminal.
+// the two never disagree; a click goes to the agent's terminal. The counts are
+// the title bar's status, and its menu switches the scope.
 
-import { Button, EmptyState, Segmented } from "@cmd/ui";
+import { Button, EmptyState } from "@cmd/ui";
 import { useEffect, useMemo, useState } from "react";
 import { bucketOf, type Agent } from "@cmd/protocol";
 import { newAgent, selectPane } from "../actions.ts";
@@ -12,6 +13,7 @@ import { fieldsOf, project, type SidebarRow } from "../model.ts";
 import { showSpace } from "../spaces.tsx";
 import { useStore } from "../store.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
+import { useWidgetStatus } from "../widgets.ts";
 import { Mark } from "./Slot.tsx";
 import { shortAgo } from "./SidebarRows.tsx";
 import "./widgets.css";
@@ -56,6 +58,9 @@ export function AgentActivity({ win }: WindowViewProps) {
     done: all.filter((a) => a.state === "done").length,
   };
 
+  // The title bar's status: who waits, who works, what's done (its menu has the scope).
+  useWidgetStatus(win.id, [counts.needs && `${counts.needs} waiting for you`, counts.working && `${counts.working} working`, counts.done && `${counts.done} done`].filter(Boolean).join(" · ") || null, "summary");
+
   const go = (a: Agent) => {
     // Subagents without a terminal of their own live in their host's.
     let at: Agent | undefined = a;
@@ -89,18 +94,8 @@ export function AgentActivity({ win }: WindowViewProps) {
     );
   };
 
-  const setScope = (v: "space" | "all") => void cmd.call("window.update", { id: win.id, state: { scope: v } }).catch(() => {});
   return (
     <div className="aa">
-      <div className="aa-bar">
-        <span className="aa-summary">
-          {counts.needs > 0 && <span className="aa-count" data-tone="needs">{counts.needs} waiting for you</span>}
-          {counts.working > 0 && <span className="aa-count">{counts.working} working</span>}
-          {counts.done > 0 && <span className="aa-count">{counts.done} done</span>}
-          {!all.length && <span className="aa-count">No agents</span>}
-        </span>
-        <Segmented size="sm" value={scope} options={[{ value: "space", label: "This Space" }, { value: "all", label: "All Spaces" }]} onChange={setScope} />
-      </div>
       <div className="aa-list">
         {roots.length ? (
           roots.map((a) => row(a, 0))

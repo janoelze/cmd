@@ -47,7 +47,7 @@ export function TileTitle({
   bare,
 }: {
   row: SidebarRow;
-  /** A sidebar's title bar: the name and status, no kind or place (docs/21-sidebars.md). */
+  /** A sidebar's title bar: the name, status and menu, no kind or place (docs/21-sidebars.md). */
   bare?: boolean;
   onPointerDown?: (e: React.PointerEvent) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
@@ -59,7 +59,8 @@ export function TileTitle({
   // A status can be a button ("Updated 12s ago" refreshes); presses on it don't start a drag.
   const action = useWindowStatus(row.win?.id ?? null)?.action;
   const edit = useTitleEdit(row.win?.id ?? null);
-  const menu = row.win && !bare ? viewFor(row.win.kind)?.titleMenu?.(row.win) : undefined;
+  // Docked too: a widget's scope and options shouldn't go away in a sidebar.
+  const menu = row.win ? viewFor(row.win.kind)?.titleMenu?.(row.win) : undefined;
   const file = fileOf(row);
   const url = file ? null : urlOf(row);
   return (

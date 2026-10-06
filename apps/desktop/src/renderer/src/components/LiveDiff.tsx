@@ -1,7 +1,8 @@
 // Live Diff, a built-in widget (docs/16-widgets.md): the uncommitted changes in
 // a folder's repository (git.status for the files, git.diff for their lines),
 // current as you work: at once when git's index or HEAD changes (stage, commit,
-// checkout), and by polling while cmd is in front for edits anywhere below.
+// checkout), and by polling while cmd is in front for edits anywhere below. The
+// branch and totals are the title bar's status.
 
 import { Badge, Button, EmptyState } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +13,7 @@ import { onFsChanged } from "../store.ts";
 import { shortPath } from "../model.ts";
 import { stateStr, type WindowViewProps } from "../windows/registry.ts";
 import { parseDiff, type FileDiff } from "../diff.ts";
+import { useWidgetStatus } from "../widgets.ts";
 import { Symbol } from "./Symbol.tsx";
 import "./widgets.css";
 
@@ -102,6 +104,11 @@ export function LiveDiff({ win }: WindowViewProps) {
     return { added: t.added + (d?.added ?? 0), removed: t.removed + (d?.removed ?? 0) };
   }, { added: 0, removed: 0 });
 
+  // The title bar's status: the branch, how far from its upstream, what changed.
+  const branch = status ? `${status.branch ?? status.head ?? "no commits"}${status.ahead ? ` ↑${status.ahead}` : ""}${status.behind ? ` ↓${status.behind}` : ""}` : null;
+  const changed = files.length ? [`${files.length} ${files.length === 1 ? "file" : "files"}`, totals.added || totals.removed ? `+${totals.added} −${totals.removed}` : ""].filter(Boolean).join(" ") : "no changes";
+  useWidgetStatus(win.id, branch && `${branch} · ${changed}`, "summary");
+
   const choose = async () => {
     const p = await cmd.chooseFolder();
     if (p) void cmd.call("window.update", { id: win.id, state: { path: p } }).catch(() => {});
@@ -118,19 +125,6 @@ export function LiveDiff({ win }: WindowViewProps) {
     );
   return (
     <div className="ld">
-      <div className="ld-bar">
-        <span className="ld-branch">
-          <Symbol name="arrow.triangle.branch" size={12} />
-          {status.branch ?? status.head ?? "no commits"}
-          {status.ahead > 0 && <span className="ld-ab">↑{status.ahead}</span>}
-          {status.behind > 0 && <span className="ld-ab">↓{status.behind}</span>}
-        </span>
-        <span className="ld-summary">
-          {files.length ? `${files.length} ${files.length === 1 ? "file" : "files"}` : "No changes"}
-          {totals.added > 0 && <span className="ld-plus">+{totals.added}</span>}
-          {totals.removed > 0 && <span className="ld-minus">−{totals.removed}</span>}
-        </span>
-      </div>
       <div className="ld-list">
         {!files.length && (
           <EmptyState compact icon="checkmark.circle.fill" title="Nothing uncommitted">
