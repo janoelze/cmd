@@ -117,6 +117,10 @@
   --window-bg: var(--well);
   --window-bar-h: 26px;
   --window-bar-bg: var(--bg-sidebar);
+  /* The window toolbar (toolbar.tsx): one height for the bar, one for its items. */
+  --toolbar-h: 30px;
+  --toolbar-item-h: 22px;
+  --toolbar-bg: var(--bg);
   /* Sheets look like windows: their corners, outline and the same shadow, higher
      (4× the windows' elevation, at most 6). */
   --sheet-radius: var(--window-radius);

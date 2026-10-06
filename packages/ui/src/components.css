@@ -1000,6 +1000,116 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-toast[data-tone="neutral"] .ui-toast-icon { color: var(--icon); }
 .ui-toast-text { flex: 1; min-width: 0; }
 
+/* ── window toolbar (toolbar.tsx) ──
+   One row of items, all --toolbar-item-h tall, ghost at rest. data-step is set by
+   measuring (labels → icons → compact → overflow); secondary items show while
+   their window is hovered, selected or focused. */
+.ui-tb {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--toolbar-h);
+  padding: 0 6px;
+  overflow: hidden;
+  font: 12px var(--font-ui);
+  color: var(--text);
+  background: var(--toolbar-bg);
+  box-shadow: inset 0 -1px 0 var(--separator);
+}
+.ui-tb > *, .ui-tb-group > * { flex: none; }
+.ui-tb-group { display: flex; align-items: center; gap: 0; }
+.ui-tb-spacer { flex: 1 1 0; min-width: 0; }
+.ui-tb-sep { width: 1px; height: 14px; margin: 0 4px; background: var(--separator); }
+
+.ui-tb-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: var(--toolbar-item-h);
+  min-width: var(--toolbar-item-h);
+  padding: 0 4px;
+  font: inherit;
+  color: var(--icon);
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: default;
+  -webkit-app-region: no-drag;
+  transition: background-color var(--dur-fast), color var(--dur-fast), opacity var(--dur);
+}
+.ui-tb-button:has(.ui-tb-label, .ui-tb-text) { padding: 0 6px; }
+.ui-tb-button:hover:not(:disabled) { color: var(--text); background: var(--bg-hover); }
+.ui-tb-button:active:not(:disabled), .ui-tb-button[aria-expanded="true"] { color: var(--text); background: var(--control-active); }
+.ui-tb-button[aria-pressed="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ui-tb-button:disabled { opacity: var(--disabled-opacity); }
+.ui-tb-button:focus-visible { outline: none; box-shadow: var(--input-ring); }
+.ui-tb-button[data-tone="accent"] { color: var(--accent); }
+.ui-tb-button[data-tone="danger"] { color: var(--danger); }
+.ui-tb-button[data-tone="needs"] { color: var(--state-needs); }
+.ui-tb-label, .ui-tb-text { color: var(--text); }
+.ui-tb-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ui-tb-badge { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.ui-tb-chevron { display: inline-grid; margin-left: -1px; color: var(--text-dim); }
+/* Labels only while they fit. */
+.ui-tb:not([data-step="labels"]) .ui-tb-label { display: none; }
+.ui-tb:not([data-step="labels"]) .ui-tb-button[data-labelled]:not(:has(.ui-tb-text)) { padding: 0 4px; }
+
+.ui-tb-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 1;
+  height: var(--toolbar-item-h);
+  margin: 0 2px;
+  padding: 0 7px;
+  color: var(--text-dim);
+  background: var(--field-bg);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--input-edge);
+  cursor: text;
+  -webkit-app-region: no-drag;
+  transition: box-shadow var(--dur-fast);
+}
+.ui-tb-field:focus-within { box-shadow: var(--input-ring); }
+.ui-tb-field input { flex: 1; min-width: 0; height: 100%; padding: 0; font: inherit; color: var(--text); background: none; border: 0; outline: none; user-select: text; }
+.ui-tb-field input::placeholder { color: var(--input-placeholder); }
+.ui-tb-field-end { flex: none; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.ui-tb-text-item { padding: 0 4px; font-size: 11.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ui-tb-seg { display: flex; align-items: center; gap: 1px; }
+.ui-tb-seg .ui-tb-button[aria-checked="true"] { color: var(--text); background: var(--bg-selected); }
+.ui-tb-seg .ui-tb-button[aria-checked="false"] .ui-tb-text { color: var(--text-dim); }
+.ui-tb-seg .ui-tb-button:hover .ui-tb-text { color: var(--text); }
+
+.ui-tb-path { display: flex; align-items: center; min-width: 0; }
+.ui-tb-path-seg { display: flex; align-items: center; min-width: 0; }
+.ui-tb-path-sep { display: inline-grid; padding: 0 1px; color: var(--text-dim); opacity: 0.7; }
+.ui-tb-path-button { height: var(--toolbar-item-h); max-width: 160px; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); cursor: default; -webkit-app-region: no-drag; }
+.ui-tb-path-seg[data-last] .ui-tb-path-button { color: var(--text); font-weight: 500; }
+.ui-tb-path-button:hover { color: var(--text); background: var(--bg-hover); }
+/* Compacted: the last part only, and it may shrink. */
+.ui-tb:is([data-step="compact"], [data-step="overflow"]) .ui-tb-path { flex-shrink: 1; }
+.ui-tb:is([data-step="compact"], [data-step="overflow"]) .ui-tb-path-seg:not([data-last]) { display: none; }
+.ui-tb:is([data-step="compact"], [data-step="overflow"]) .ui-tb-path-sep { display: none; }
+.ui-tb-seg-pop { display: none !important; }
+.ui-tb:is([data-step="compact"], [data-step="overflow"]) .ui-tb-seg { display: none; }
+.ui-tb:is([data-step="compact"], [data-step="overflow"]) .ui-tb-seg-pop { display: inline-flex !important; }
+
+/* In the ⋯ menu instead. */
+.ui-tb [data-tb-moved] { display: none !important; }
+.ui-tb-more[hidden] { display: none; }
+
+/* At rest, only what matters: secondary items show with the window's hover, selection or focus. */
+.ui-tb [data-secondary] { opacity: 0; transition: opacity var(--dur); }
+:is(.ui-window:hover, .ui-window[data-selected], .ui-window:focus-within) .ui-tb [data-secondary],
+.ui-tb:is(:hover, :focus-within, [data-active]) [data-secondary] { opacity: 1; }
+/* A window at rest: its toolbar's icons a step dimmer. */
+.ui-window:not([data-selected]):not(:hover) .ui-tb-button:not([aria-pressed="true"]):not([data-tone]) { color: color-mix(in srgb, var(--icon) 75%, transparent); }
+
 /* ── windows (window.tsx) ── */
 
 .ui-window {
