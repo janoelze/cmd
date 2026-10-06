@@ -23,13 +23,6 @@ const DAYS: JournalDay[] = [
         project: "cmd",
         outcome: "merged",
         counts: { agents: 2, commands: 14, commits: 2 },
-        events: [
-          { kind: "agent", text: "Make windows part of the kit", at: at(6, 11, 20), meta: "Claude · 17 min" },
-          { kind: "agent", text: "e2e: run without stealing focus", at: at(6, 11, 22), meta: "Claude · 15 min" },
-          { kind: "command", text: "pnpm workbench matrix whatsnew", at: at(6, 11, 31), meta: "8 s" },
-          { kind: "commit", text: "Windows are the kit's: Window, WindowBody…", at: at(6, 11, 35), meta: "master" },
-          { kind: "commit", text: "e2e background mode: windows are transparent…", at: at(6, 11, 37), meta: "master" },
-        ],
       },
       {
         id: "v0144",
@@ -41,14 +34,6 @@ const DAYS: JournalDay[] = [
         project: "cmd",
         outcome: "shipped",
         counts: { agents: 1, commands: 9, commits: 6 },
-        events: [
-          { kind: "commit", text: "Drag and drop: files between Finder, terminals…", at: at(6, 10, 58) },
-          { kind: "commit", text: "Drag and drop guards: protected folders…", at: at(6, 11, 16) },
-          { kind: "command", text: "pnpm typecheck && pnpm test", at: at(6, 11, 21), meta: "48 s" },
-          { kind: "commit", text: "Changelog for v0.14.4", at: at(6, 11, 25) },
-          { kind: "command", text: "pnpm release 0.14.4", at: at(6, 11, 26), meta: "1 min" },
-          { kind: "release", text: "v0.14.4 published on GitHub", at: at(6, 11, 34) },
-        ],
       },
       {
         id: "dnd",
@@ -60,12 +45,6 @@ const DAYS: JournalDay[] = [
         project: "cmd",
         outcome: "merged",
         counts: { agents: 3, commands: 31, commits: 3, files: 12 },
-        events: [
-          { kind: "agent", text: "Drag files between Finder and cmd", at: at(6, 9, 40), meta: "Claude · 1 h 18 min" },
-          { kind: "command", text: "pnpm vitest run drops", at: at(6, 10, 22), failed: true, meta: "exit 1" },
-          { kind: "command", text: "pnpm vitest run drops", at: at(6, 10, 31), meta: "3 s" },
-          { kind: "file", text: "docs/drag-and-drop.md", at: at(6, 10, 59) },
-        ],
       },
     ],
   },
@@ -83,10 +62,6 @@ const DAYS: JournalDay[] = [
         project: "cmd",
         outcome: "shipped",
         counts: { agents: 2, commands: 22, commits: 24 },
-        events: [
-          { kind: "command", text: "pnpm release 0.14.2", at: at(6, 0, 43), meta: "1 min" },
-          { kind: "command", text: "pnpm release 0.14.3", at: at(6, 1, 18), meta: "1 min" },
-        ],
       },
       {
         id: "workbench",
@@ -98,10 +73,6 @@ const DAYS: JournalDay[] = [
         project: "cmd",
         outcome: "merged",
         counts: { agents: 1, commands: 40, commits: 5 },
-        events: [
-          { kind: "agent", text: "A workbench for prototyping UI", at: at(5, 21, 10), meta: "Claude · 2 h 37 min" },
-          { kind: "commit", text: "Workbench: one component at a time in the real app", at: at(5, 23, 47) },
-        ],
       },
       {
         id: "db",
@@ -113,14 +84,6 @@ const DAYS: JournalDay[] = [
         project: "cmd",
         outcome: "open",
         counts: { agents: 2, commands: 26, pages: 4, files: 3 },
-        events: [
-          { kind: "note", text: "“search shows nothing since the crash”", at: at(5, 15, 5) },
-          { kind: "command", text: "sqlite3 cmd.db 'PRAGMA integrity_check'", at: at(5, 15, 12), failed: true, meta: "malformed" },
-          { kind: "page", text: "SQLite FTS5: The 'rebuild' command", at: at(5, 15, 30), meta: "sqlite.org" },
-          { kind: "agent", text: "Why is the search index corrupt?", at: at(5, 15, 34), meta: "Claude · 1 h 50 min" },
-          { kind: "page", text: "WAL mode and crashes", at: at(5, 16, 2), meta: "sqlite.org" },
-          { kind: "command", text: "pnpm vitest run search", at: at(5, 17, 20), meta: "6 s" },
-        ],
       },
       {
         id: "il-kit",
@@ -132,7 +95,6 @@ const DAYS: JournalDay[] = [
         project: "il-agent-kit",
         outcome: "merged",
         counts: { agents: 1, commits: 1 },
-        events: [{ kind: "agent", text: "Jira skill: JQL first", at: at(5, 14, 10), meta: "Claude · 40 min" }],
       },
       {
         id: "pr-review",
@@ -143,10 +105,6 @@ const DAYS: JournalDay[] = [
         end: at(5, 12, 5),
         project: "cmd",
         counts: { pages: 9, agents: 1 },
-        events: [
-          { kind: "page", text: "Raycast Store: publishing an extension", at: at(5, 11, 3), meta: "developers.raycast.com" },
-          { kind: "page", text: "Übersicht widgets gallery", at: at(5, 11, 20), meta: "tracesof.net" },
-        ],
       },
     ],
   },
@@ -176,11 +134,6 @@ export const Sidebar = () => (
 export const AllSpaces = () => (
   <Tile width={520} height={760}>
     <Journal days={DAYS} now={NOW} onRefresh={() => {}} />
-  </Tile>
-);
-export const Opened = () => (
-  <Tile width={420} height={760}>
-    <Journal days={DAYS.slice(1)} now={NOW} showProject={false} initialOpen="db" />
   </Tile>
 );
 export const Writing = () => (

@@ -2,28 +2,17 @@
 // work log people can read at a glance. A day is a headline, a ribbon of the
 // hours worked and a few entries ("Released v0.14.4", "Investigated a corrupt
 // database"), each made from the raw events the core records (agent sessions,
-// commands, commits, pages, files) and summarised by AI. An entry opens to the
-// events it was made from. Presentational only: the data comes as props, so the
+// commands, commits, pages, files) and summarised by AI: a title and a few lines
+// each. Presentational only: the data comes as props, so the
 // story can show what a summariser could make before one exists.
 
-import { Badge, Chip, EmptyState, ICON, IconButton, iconNode, Panel, PanelBody, Spinner, type Tone } from "@cmd/ui";
+import { Badge, Chip, EmptyState, IconButton, Panel, PanelBody, Spinner, type Tone } from "@cmd/ui";
 import { useState, type CSSProperties } from "react";
 import { projectHue } from "../model.ts";
 import "./journal.css";
 
 export type EntryKind = "release" | "investigation" | "feature" | "fix" | "design" | "research" | "chore";
 export type Outcome = "shipped" | "fixed" | "merged" | "open" | "dropped";
-
-/** A raw event an entry was made from. */
-export interface JournalEvent {
-  kind: "agent" | "command" | "commit" | "page" | "file" | "release" | "note";
-  text: string;
-  at: number;
-  /** A failed command, a crashed agent. */
-  failed?: boolean;
-  /** Dim text after it: a duration, a branch, a host. */
-  meta?: string;
-}
 
 export interface JournalEntry {
   id: string;
@@ -37,7 +26,6 @@ export interface JournalEntry {
   outcome?: Outcome;
   /** What it was made from, counted. */
   counts: Partial<Record<"agents" | "commands" | "commits" | "pages" | "files", number>>;
-  events: JournalEvent[];
 }
 
 export interface JournalDay {
@@ -65,16 +53,6 @@ const OUTCOME: Record<Outcome, { tone: Tone; label: string }> = {
   merged: { tone: "success", label: "Merged" },
   open: { tone: "warning", label: "Open" },
   dropped: { tone: "neutral", label: "Dropped" },
-};
-
-const EVENT_ICON: Record<JournalEvent["kind"], string> = {
-  agent: "sparkle",
-  command: "terminal",
-  commit: "point.topleft.down.to.point.bottomright.curvepath",
-  page: "globe",
-  file: "doc.text",
-  release: "shippingbox",
-  note: "text.bubble",
 };
 
 const COUNT_LABEL: Record<keyof JournalEntry["counts"], [string, string]> = {
@@ -149,48 +127,33 @@ function Ribbon({ day, onPick, picked }: { day: JournalDay; onPick: (id: string)
   );
 }
 
-function Entry({ e, open, onToggle, showProject }: { e: JournalEntry; open: boolean; onToggle: () => void; showProject: boolean }) {
+function Entry({ e, picked, showProject }: { e: JournalEntry; picked: boolean; showProject: boolean }) {
   const k = KIND[e.kind];
   const o = e.outcome && OUTCOME[e.outcome];
   return (
-    <article className="journal-entry" data-open={open || undefined} id={`journal-${e.id}`} style={{ "--hue": k.hue } as CSSProperties}>
+    <article className="journal-entry" data-picked={picked || undefined} id={`journal-${e.id}`} style={{ "--hue": k.hue } as CSSProperties}>
       <div className="journal-entry-time">{time(e.start)}</div>
       <div className="journal-entry-rail">
         <span className="journal-entry-mark" data-tip={k.label} />
       </div>
       <div className="journal-entry-body">
-        <button type="button" className="journal-entry-head" onClick={onToggle} aria-expanded={open}>
+        <div className="journal-entry-head">
           <span className="journal-entry-title">{e.title}</span>
           {o && (
             <Badge size="sm" tone={o.tone}>
               {o.label}
             </Badge>
           )}
-        </button>
+        </div>
         <p className="journal-entry-summary">{e.summary}</p>
         <div className="journal-entry-meta">
           {showProject && e.project && <Chip hue={projectHue(e.project)}>{e.project}</Chip>}
           <span>{[spanText(e.end - e.start), countsText(e.counts)].join(" · ")}</span>
         </div>
-        {open && (
-          <ul className="journal-events">
-            {e.events.map((ev, i) => (
-              <li key={i} data-failed={ev.failed || undefined}>
-                <span className="journal-event-time">{time(ev.at)}</span>
-                <IconGlyph name={EVENT_ICON[ev.kind]} />
-                <span className={ev.kind === "command" || ev.kind === "commit" ? "journal-event-text mono" : "journal-event-text"}>{ev.text}</span>
-                {ev.meta && <span className="journal-event-meta">{ev.meta}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
     </article>
   );
 }
-
-/** An SF Symbol through the kit's provider (ListMark's icon without its light). */
-const IconGlyph = ({ name }: { name: string }) => <span className="journal-glyph">{iconNode(name, ICON.small)}</span>;
 
 export function Journal({
   days,
@@ -198,7 +161,6 @@ export function Journal({
   showProject = true,
   summarising,
   onRefresh,
-  initialOpen = null,
 }: {
   days: JournalDay[];
   now?: number;
@@ -207,12 +169,11 @@ export function Journal({
   /** Writing the newest entries: a line at the top. */
   summarising?: string | null;
   onRefresh?: () => void;
-  /** An entry shown open, with its events. */
-  initialOpen?: string | null;
 }) {
-  const [open, setOpen] = useState<string | null>(initialOpen);
+  // A bar in the ribbon picks its entry: highlighted and scrolled to.
+  const [picked, setPicked] = useState<string | null>(null);
   const pick = (id: string) => {
-    setOpen((o) => (o === id ? null : id));
+    setPicked((p) => (p === id ? null : id));
     document.getElementById(`journal-${id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   };
   return (
@@ -237,12 +198,12 @@ export function Journal({
               {onRefresh && d === days[0] && <IconButton size="sm" icon="arrow.clockwise" label="Write Again" onClick={onRefresh} />}
             </header>
             <p className="journal-day-headline">{d.headline}</p>
-            {d.entries.length > 0 && <Ribbon day={d} picked={open} onPick={pick} />}
+            {d.entries.length > 0 && <Ribbon day={d} picked={picked} onPick={pick} />}
             <div className="journal-entries">
               {[...d.entries]
                 .sort((a, b) => b.start - a.start)
                 .map((e) => (
-                  <Entry key={e.id} e={e} open={open === e.id} onToggle={() => setOpen((o) => (o === e.id ? null : e.id))} showProject={showProject} />
+                  <Entry key={e.id} e={e} picked={picked === e.id} showProject={showProject} />
                 ))}
             </div>
           </section>
