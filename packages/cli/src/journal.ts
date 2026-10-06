@@ -5,6 +5,7 @@
 
 import type { JournalDay, JournalEvent } from "@cmd/protocol";
 import type { Connection } from "@cmd/protocol/node";
+import { when } from "./data.ts";
 
 type Client = Connection["client"];
 
@@ -47,7 +48,7 @@ export function dayMarkdown(d: JournalDay, multiRepo: boolean): string {
   return lines.join("\n");
 }
 
-const eventLine = (e: JournalEvent) => `${new Date(e.at).toISOString().slice(5, 16).replace("T", " ")}  ${e.kind.padEnd(14)} ${e.repo ? tilde(e.repo).split("/").pop()!.padEnd(14) : " ".repeat(14)} ${e.text.replace(/\s+/g, " ").slice(0, 100)}`;
+const eventLine = (e: JournalEvent) => `${when(e.at)}  ${e.kind.padEnd(14)} ${e.repo ? tilde(e.repo).split("/").pop()!.padEnd(14) : " ".repeat(14)} ${e.text.replace(/\s+/g, " ").slice(0, 100)}`;
 
 export async function journalCommand(client: Client, pos: string[], opt: Record<string, unknown>, paneId: string | undefined): Promise<number> {
   const [sub, ...rest] = pos;

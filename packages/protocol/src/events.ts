@@ -196,6 +196,12 @@ export interface DataQuery {
   /** Full text over text and body (FTS5 syntax). */
   text?: string;
   order?: "asc" | "desc";
+  /**
+   * seq (default): the order they were recorded, what paging and live queries
+   * follow. time: by when they happened, for reading: history read in later
+   * (transcripts, an upgrade's import) has old times and new seqs.
+   */
+  by?: "seq" | "time";
   limit?: number;
   /** Only events after this seq (paging, cursors). */
   after?: number;

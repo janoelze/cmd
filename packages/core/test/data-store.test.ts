@@ -68,6 +68,11 @@ describe("DataStore", () => {
     expect(s.query({ projectId: "q" }).map((e) => e.id)).toEqual(["3"]);
     expect(s.query({ text: "raced" }).map((e) => e.id)).toEqual(["1"]);
     expect(s.query({ text: "test", order: "desc" }).map((e) => e.id)).toEqual(["3", "1"]);
+    // History read in later (a transcript): an old time, a new seq.
+    s.record({ id: "4", at: 5, type: "transcript.message", source: "t", text: "older", data: {} });
+    expect(s.query({ order: "desc", limit: 2 }).map((e) => e.id)).toEqual(["4", "3"]);
+    expect(s.query({ by: "time", order: "desc", limit: 2 }).map((e) => e.id)).toEqual(["3", "2"]);
+    expect(s.query({ by: "time" }).map((e) => e.id)).toEqual(["4", "1", "2", "3"]);
     s.close();
   });
 

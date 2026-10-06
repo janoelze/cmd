@@ -36,3 +36,14 @@ describe("checkoutOf", () => {
     expect(checkoutOf(path.join(dir, "missing"))).toBeNull();
   });
 });
+
+describe("projectOf", () => {
+  it("is the folder outside a repository, and nothing for a relative path", async () => {
+    const { projectIdOf } = await import("../src/data/project.ts");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-project-"));
+    expect(projectIdOf(dir)).toBe(`dir:${dir}`);
+    expect(projectIdOf(".")).toBeNull();
+    expect(projectIdOf("src/app")).toBeNull();
+    rmTemp(dir);
+  });
+});

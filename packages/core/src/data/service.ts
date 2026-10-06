@@ -8,6 +8,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { Worker } from "node:worker_threads";
 import { DATA_CLASSES, DATA_FLAGS, classOf, type DataClass, type DataClassInfo, type DataEvent, type DataQuery, type DataStats, type NewDataEvent, type Settings } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { redact, redactDeep, redactEvent } from "../redact.ts";
@@ -207,18 +208,32 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
     return this.store.query(q);
   }
 
-  stats(): DataStats {
-    return this.store.stats();
+  /** What the log holds and how big: in a worker for a log on disk (it reads every row). */
+  async stats(): Promise<DataStats> {
+    if (this.store.file === ":memory:") return this.store.stats();
+    const w = new Worker(new URL("./stats-worker.ts", import.meta.url), { workerData: { file: this.store.file } });
+    try {
+      const m = await new Promise<{ stats?: DataStats; error?: string }>((resolve, reject) => w.once("message", resolve).once("error", reject));
+      if (m.error) throw new Error(m.error);
+      return m.stats!;
+    } finally {
+      void w.terminate();
+    }
   }
 
   /** Every class with its retention, switch and whether it leaves the Mac, as the settings say now. */
   explain(): (DataClassInfo & { enabled: boolean; events: number })[] {
-    const keepDays = Number((this.#o.settings() as unknown as Record<string, unknown>)["data.keepDays"] ?? 365) || 365;
     const counts = new Map<string, number>();
-    for (const t of this.store.stats().types) counts.set(classOf(t.type), (counts.get(classOf(t.type)) ?? 0) + t.rows);
+    for (const t of this.store.counts()) counts.set(classOf(t.type), (counts.get(classOf(t.type)) ?? 0) + t.rows);
+    return this.#classes().map((c) => ({ ...c, events: counts.get(c.class) ?? 0 }));
+  }
+
+  /** Each class with its retention as the settings say now. */
+  #classes(): (DataClassInfo & { enabled: boolean })[] {
+    const keepDays = Number((this.#o.settings() as unknown as Record<string, unknown>)["data.keepDays"] ?? 365) || 365;
     return (Object.keys(DATA_CLASSES) as DataClass[]).map((c) => {
       const info = DATA_CLASSES[c];
-      return { class: c, ...info, keepDays: info.keepDays === "setting" ? keepDays : info.keepDays, enabled: this.enabled(c), events: counts.get(c) ?? 0 };
+      return { class: c, ...info, keepDays: info.keepDays === "setting" ? keepDays : info.keepDays, enabled: this.enabled(c) };
     });
   }
 
@@ -306,7 +321,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
     let events = 0;
     let more = false;
     let agentsBefore: number | null = null;
-    for (const c of this.explain()) {
+    for (const c of this.#classes()) {
       if (c.keepDays === null) continue;
       const before = now - c.keepDays * DAY_MS;
       if (c.class === "agents") agentsBefore = before;

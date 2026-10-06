@@ -405,6 +405,8 @@ export interface EventQuery {
   /** Full text over what people typed and agents wrote (FTS5 syntax). */
   text?: string;
   order?: "asc" | "desc";
+  /** "time": by when things happened (for showing them); default "seq", the order cmd recorded them (paging with `after`). */
+  by?: "seq" | "time";
   limit?: number;
   after?: number;
 }

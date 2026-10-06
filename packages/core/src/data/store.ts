@@ -245,7 +245,8 @@ export class DataStore {
 
   query(q: DataQuery): DataEvent[] {
     const [cond, args] = conditions(q);
-    const sql = `SELECT *, json(data) AS data_json FROM events ${cond ? `WHERE ${cond}` : ""} ORDER BY seq ${q.order === "desc" ? "DESC" : "ASC"} LIMIT ?`;
+    const dir = q.order === "desc" ? "DESC" : "ASC";
+    const sql = `SELECT *, json(data) AS data_json FROM events ${cond ? `WHERE ${cond}` : ""} ORDER BY ${q.by === "time" ? `at ${dir}, seq ${dir}` : `seq ${dir}`} LIMIT ?`;
     return (this.db.prepare(sql).all(...args, Math.min(q.limit ?? 1000, 100_000)) as unknown as Row[]).map(toEvent);
   }
 
@@ -255,18 +256,12 @@ export class DataStore {
   }
 
   stats(): DataStats {
-    const types = this.db.prepare(`SELECT type, COUNT(*) AS rows, SUM(length(data) + COALESCE(length(text), 0) + length(id) + 80) AS bytes, SUM(CASE WHEN blob IS NOT NULL THEN 1 ELSE 0 END) AS blobs FROM events GROUP BY type ORDER BY bytes DESC`).all() as DataStats["types"];
-    const blobs = this.db.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS size, COALESCE(SUM(stored), 0) AS stored FROM blobs`).get() as DataStats["blobs"];
-    const events = (this.db.prepare(`SELECT COUNT(*) AS n FROM events`).get() as { n: number }).n;
-    const now = Date.now();
-    const day = (this.db.prepare(`SELECT COUNT(*) AS n FROM events WHERE at >= ?`).get(now - 86400_000) as { n: number }).n;
-    const week = (this.db.prepare(`SELECT COUNT(*) AS n FROM events WHERE at >= ?`).get(now - 7 * 86400_000) as { n: number }).n;
-    const oldest = (this.db.prepare(`SELECT MIN(at) AS t FROM events WHERE at > 0`).get() as { t: number | null }).t;
-    let fileBytes = 0;
-    try {
-      if (this.file !== ":memory:") fileBytes = fs.statSync(this.file).size + (fs.existsSync(`${this.file}-wal`) ? fs.statSync(`${this.file}-wal`).size : 0);
-    } catch {}
-    return { file: this.file === ":memory:" ? null : this.file, fileBytes, events, blobs, types, recent: { day, week }, oldest };
+    return logStats(this.db, this.file);
+  }
+
+  /** Rows per type, from the type index (quick, unlike stats). */
+  counts(): { type: string; rows: number }[] {
+    return this.db.prepare(`SELECT type, COUNT(*) AS rows FROM events GROUP BY type`).all() as { type: string; rows: number }[];
   }
 
   /** Pages by table and index (dbstat), in bytes. */
@@ -281,6 +276,22 @@ export class DataStore {
   checkpoint(): void {
     this.db.exec(`PRAGMA wal_checkpoint(TRUNCATE)`);
   }
+}
+
+/** What a log holds, with sizes per type: reads every row (seconds on a big log; the core asks a worker, stats-worker.ts). */
+export function logStats(db: DatabaseSync, file: string): DataStats {
+  const types = db.prepare(`SELECT type, COUNT(*) AS rows, SUM(length(data) + COALESCE(length(text), 0) + length(id) + 80) AS bytes, SUM(CASE WHEN blob IS NOT NULL THEN 1 ELSE 0 END) AS blobs FROM events GROUP BY type ORDER BY bytes DESC`).all() as DataStats["types"];
+  const blobs = db.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS size, COALESCE(SUM(stored), 0) AS stored FROM blobs`).get() as DataStats["blobs"];
+  const events = (db.prepare(`SELECT COUNT(*) AS n FROM events`).get() as { n: number }).n;
+  const now = Date.now();
+  const day = (db.prepare(`SELECT COUNT(*) AS n FROM events WHERE at >= ?`).get(now - 86400_000) as { n: number }).n;
+  const week = (db.prepare(`SELECT COUNT(*) AS n FROM events WHERE at >= ?`).get(now - 7 * 86400_000) as { n: number }).n;
+  const oldest = (db.prepare(`SELECT MIN(at) AS t FROM events WHERE at > 0`).get() as { t: number | null }).t;
+  let fileBytes = 0;
+  try {
+    if (file !== ":memory:") fileBytes = fs.statSync(file).size + (fs.existsSync(`${file}-wal`) ? fs.statSync(`${file}-wal`).size : 0);
+  } catch {}
+  return { file: file === ":memory:" ? null : file, fileBytes, events, blobs, types, recent: { day, week }, oldest };
 }
 
 const COL = { sessionId: "session_id", agentId: "agent_id", projectId: "project_id", spaceId: "space_id", paneId: "pane_id", windowId: "window_id", parentId: "parent_id" } as const;

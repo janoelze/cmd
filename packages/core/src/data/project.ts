@@ -3,11 +3,12 @@
 // one project; a folder that isn't a repository is its own. Recorded with every
 // event at the time, never inferred from a path later.
 
+import path from "node:path";
 import { repoOfSync } from "../journal/git.ts";
 
-/** The project a folder belongs to: its repository's main worktree, else the folder. Null for nothing. */
+/** The project a folder belongs to: its repository's main worktree, else the folder. Null for nothing, or a relative path (no telling where it was). */
 export function projectOf(cwd: string | null | undefined): string | null {
-  if (!cwd) return null;
+  if (!cwd || !path.isAbsolute(cwd)) return null;
   return repoOfSync(cwd)?.repo ?? cwd;
 }
 

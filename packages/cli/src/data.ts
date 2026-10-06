@@ -29,7 +29,12 @@ export const DATA_HELP = `  data stats                          what the event l
   data import FILE                    events from an export`;
 
 const mb = (b: number) => `${(b / 1024 / 1024).toFixed(1)} MB`;
-const when = (t: number) => new Date(t).toISOString().slice(5, 16).replace("T", " ");
+/** MM-DD HH:MM in local time (YYYY-MM-DD HH:MM with `year`). */
+export const when = (t: number, year = false) => {
+  const d = new Date(t);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${year ? `${d.getFullYear()}-` : ""}${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
+};
 const tilde = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 
 /** "7d", "12h", "30m" or a number of days. */
@@ -83,7 +88,8 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
       return 0;
     }
     case "query": {
-      const events = await client.call("data.query", { query: { limit: 200, ...queryOf(opt) } });
+      // The newest by when they happened, oldest of those first.
+      const events = (await client.call("data.query", { query: { limit: 200, ...queryOf(opt), by: "time", order: "desc" } })).reverse();
       if (json) return console.log(JSON.stringify(events, null, 2)), 0;
       for (const e of events) console.log(line(e));
       if (!events.length) console.log("Nothing recorded for that.");
@@ -116,7 +122,7 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
       for (const e of list) {
         const a = e.attrs;
         const name = String(a.title ?? a.name ?? a.path ?? a.root ?? a.kind ?? "");
-        console.log(`${e.id}  ${tilde(name).slice(0, 80)}  · seen ${new Date(e.seen).toISOString().slice(0, 16).replace("T", " ")}`);
+        console.log(`${e.id}  ${tilde(name).slice(0, 80)}  · seen ${when(e.seen, true)}`);
         if (id) {
           for (const [k, v] of Object.entries(a)) if (v !== null && v !== undefined && v !== "") console.log(`  ${k}: ${typeof v === "string" ? tilde(v) : JSON.stringify(v)}`);
           for (const l of e.links) console.log(`  ${l.from[0] === kind && l.from[1] === e.id ? `${l.kind} → ${l.to[0]} ${l.to[1]}` : `← ${l.from[0]} ${l.from[1]} (${l.kind})`}`);
