@@ -32,7 +32,7 @@ function Browser() {
         <ToolbarButton icon="arrow.clockwise" label="Reload" shortcut="⌘R" priority={2} />
       </ToolbarGroup>
       <ToolbarField value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Enter a URL" minWidth={90} />
-      <ToolbarButton icon="safari" label="Open in Default Browser" secondary priority={1} />
+      <ToolbarButton icon="safari" label="Open in Default Browser" priority={1} />
     </WindowToolbar>
   );
 }
@@ -47,9 +47,9 @@ function Files() {
       <ToolbarPath segments={segs} onSelect={() => {}} onMenu={() => {}} tip="~/src/cmd/apps/desktop" />
       <ToolbarSpacer />
       <ToolbarButton icon="arrow.triangle.branch" label="Changes Only" showLabel pressed={changes} badge="12" onClick={() => setChanges((c) => !c)} priority={4} />
-      <ToolbarButton icon="bookmark" label="Bookmarks" menu secondary priority={2} />
-      <ToolbarButton icon={hidden ? "eye" : "eye.slash"} label={hidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={hidden} onClick={() => setHidden((h) => !h)} secondary priority={1} />
-      <ToolbarButton icon="terminal" label="New Terminal Here" secondary priority={3} />
+      <ToolbarButton icon="bookmark" label="Bookmarks" menu priority={2} />
+      <ToolbarButton icon={hidden ? "eye" : "eye.slash"} label={hidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={hidden} onClick={() => setHidden((h) => !h)} priority={1} />
+      <ToolbarButton icon="terminal" label="New Terminal Here" priority={3} />
     </WindowToolbar>
   );
 }
@@ -80,7 +80,7 @@ function Events() {
   return (
     <WindowToolbar label="Filter events">
       <ToolbarField icon="magnifyingglass" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter events" end={q ? "12" : undefined} />
-      <ToolbarButton icon="pause" label="Pause" showLabel secondary priority={1} />
+      <ToolbarButton icon="pause" label="Pause" showLabel priority={1} />
     </WindowToolbar>
   );
 }
@@ -144,7 +144,7 @@ export const Widths = () => (
   </Stage>
 );
 
-/** Selected beside at rest: secondary items show only on the selected (or hovered) one. */
+/** Selected beside at rest. */
 export const Rest = () => (
   <Stage>
     {KINDS.map((k) => (

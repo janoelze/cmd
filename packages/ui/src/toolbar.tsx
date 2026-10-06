@@ -9,8 +9,6 @@
 // to their last part; then items with a `priority` move, lowest first, into a
 // ⋯ menu built from their props. Fields shrink to their minimum last.
 //
-// Items marked `secondary` show while the window is hovered, selected or has
-// focus (or the toolbar itself, outside a window), so windows at rest stay quiet.
 // Every button's tooltip is its label and shortcut.
 
 import {
@@ -51,18 +49,15 @@ function useOverflow(entry: OverflowEntry | null): string {
   return key;
 }
 
-/** Shared by every item that can move to the ⋯ menu or hide at rest. */
+/** Shared by every item that can move to the ⋯ menu. */
 interface ItemProps {
   /** Moves to the ⋯ menu when there is no room, lowest first; without one it stays. */
   priority?: number;
-  /** Shows only while the window is hovered, selected or focused. */
-  secondary?: boolean;
 }
 
 const itemAttrs = (key: string, p: ItemProps) => ({
   "data-tb-key": key,
   "data-tb-priority": p.priority,
-  "data-secondary": p.secondary || undefined,
 });
 
 // ── the bar ────────────────────────────────────────────
@@ -73,14 +68,11 @@ export function WindowToolbar({
   children,
   label,
   className,
-  active,
 }: {
   children: ReactNode;
   /** Its accessible name ("Browser", "Filter events"). */
   label?: string;
   className?: string;
-  /** Show the secondary items (outside a kit Window, which decides that itself). */
-  active?: boolean;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
@@ -131,7 +123,7 @@ export function WindowToolbar({
 
   return (
     <Registry.Provider value={registry}>
-      <div ref={bar} className={cls("ui-tb", className)} role="toolbar" aria-label={label} data-active={active || undefined}>
+      <div ref={bar} className={cls("ui-tb", className)} role="toolbar" aria-label={label}>
         {children}
         <button
           ref={more}
@@ -322,9 +314,9 @@ export function ToolbarPath({ segments, onSelect, onMenu, tip }: { segments: rea
 }
 
 /** Items that belong together, closer than the bar's gap (Back · Forward · Reload). */
-export function ToolbarGroup({ children, secondary }: { children: ReactNode; secondary?: boolean }) {
+export function ToolbarGroup({ children }: { children: ReactNode }) {
   return (
-    <div className="ui-tb-group" data-secondary={secondary || undefined}>
+    <div className="ui-tb-group">
       {children}
     </div>
   );
