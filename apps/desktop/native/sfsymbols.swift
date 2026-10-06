@@ -12,6 +12,12 @@
 // pixels (the least antialiased coverage), like hinting: a stroke centred on a
 // pixel boundary would otherwise smear over two half-lit pixels.
 //
+// Then the ink is centred: symbols carry their own padding (they're laid out to
+// line up with text), so a box, a circle and a chevron sit differently in their
+// images. The ink's bounding box is moved, by whole device pixels, to the
+// canvas's centre (a half pixel left over goes below), so every icon centres on
+// the same line in a button or a row.
+//
 // Template symbols draw black on transparent; the UI tints them via CSS masks.
 
 import AppKit
@@ -26,6 +32,27 @@ let weights: [String: NSFont.Weight] = [
   "medium": .medium, "semibold": .semibold, "bold": .bold, "heavy": .heavy,
 ]
 let config = NSImage.SymbolConfiguration(pointSize: CGFloat(pt), weight: weights[args[2]] ?? .regular)
+
+/** The ink (its solid pixels' box) moved by whole pixels so its bounding box centres in the canvas; a leftover pixel goes below. */
+func centreInk(_ a: [UInt8], _ w: Int, _ h: Int) -> [UInt8] {
+  var top = h, bottom = -1, left = w, right = -1
+  for y in 0..<h {
+    // What reads as ink: faint antialiased edges (a diagonal's) would pull the box off what the eye sees.
+    for x in 0..<w where a[y * w + x] > 100 {
+      top = min(top, y); bottom = max(bottom, y); left = min(left, x); right = max(right, x)
+    }
+  }
+  if bottom < 0 { return a }
+  let dy = (h - (bottom - top + 1)) / 2 - top
+  let dx = (w - (right - left + 1)) / 2 - left
+  if dx == 0 && dy == 0 { return a }
+  // Every pixel moves (faint edges outside the box too); what would leave the canvas is dropped.
+  var out = [UInt8](repeating: 0, count: w * h)
+  for y in 0..<h where y + dy >= 0 && y + dy < h {
+    for x in 0..<w where x + dx >= 0 && x + dx < w { out[(y + dy) * w + (x + dx)] = a[y * w + x] }
+  }
+  return out
+}
 
 var out: [String: [String: Any]] = [:]
 for name in args.dropFirst(4) {
@@ -94,13 +121,14 @@ for name in args.dropFirst(4) {
       if best == nil || s < best!.score { best = (alpha, s) }
     }
   }
-  guard let alpha = best?.alpha,
+  guard let drawn = best?.alpha,
         let rep = NSBitmapImageRep(
           bitmapDataPlanes: nil, pixelsWide: pw, pixelsHigh: ph, bitsPerSample: 8, samplesPerPixel: 4,
           hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: pw * 4, bitsPerPixel: 32),
         let pixels = rep.bitmapData
   else { continue }
   rep.size = pointSize
+  let alpha = centreInk(drawn, pw, ph)
   // Black, premultiplied: the alpha is all the UI uses (a CSS mask).
   for i in 0..<(pw * ph) { pixels[i * 4] = 0; pixels[i * 4 + 1] = 0; pixels[i * 4 + 2] = 0; pixels[i * 4 + 3] = alpha[i] }
   guard let png = rep.representation(using: .png, properties: [:]) else { continue }
