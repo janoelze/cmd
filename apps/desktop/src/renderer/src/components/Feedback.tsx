@@ -80,6 +80,7 @@ export function Feedback({
     <Dialog
       open
       onClose={onClose}
+      window={{ icon: "bubble.left", name: "Feedback" }}
       title="Send Feedback"
       width={480}
       position="center"

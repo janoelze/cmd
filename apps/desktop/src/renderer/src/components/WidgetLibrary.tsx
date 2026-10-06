@@ -107,6 +107,7 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
     <Dialog
       open
       onClose={onClose}
+      window={{ icon: "square.grid.2x2", name: "Widget Library" }}
       title="Widget Library"
       width={720}
       height={640}

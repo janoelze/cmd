@@ -104,6 +104,11 @@
   --sheet-edge: var(--popover-edge);
   --sheet-edge-width: 1px;
   --sheet-shadow: 0 20px 60px var(--shadow);
+  /* Sheets dressed as windows (Dialog window): the title bar and the window's ground. */
+  --window-bar-h: 26px;
+  --window-bar-bg: var(--bg-sidebar);
+  --window-bar-edge: var(--sheet-edge);
+  --window-bg: var(--well);
   --radius-pill: 999px;
 
   /* ── motion ── */
