@@ -57,8 +57,8 @@ describe("command log", () => {
     pty.output("\x1b[32m✓\x1b[0m 12 passed\r\n");
     pty.output("\x1b]133;D;0\x07\x1b]133;A\x07");
     const [e] = core.data.query({ types: ["command"] });
-    expect(e).toMatchObject({ text: "pnpm test", until: expect.any(Number), data: { command: "pnpm test", exitCode: 0, output: { chars: 12, cut: false } } });
-    expect(core.data.store.blob(e!.blob!)!.toString()).toBe("✓ 12 passed\n");
+    expect(e).toMatchObject({ text: "pnpm test", until: expect.any(Number), data: { command: "pnpm test", exitCode: 0, output: { chars: 11, cut: false } } });
+    expect(core.data.store.blob(e!.blob!)!.toString()).toBe("✓ 12 passed");
     // A command log over the same store lists it after a restart.
     const again = new CommandLog(core.panes, core.data);
     expect(again.list().map((r) => r.command)).toEqual(["pnpm test"]);

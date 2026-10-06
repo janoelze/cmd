@@ -452,7 +452,7 @@ export class Core {
       store: this.store,
       audit: {
         record: (kind, deviceId, detail) => this.data.record({ id: `remote:${Date.now()}:${kind}:${Math.random().toString(36).slice(2, 7)}`, at: Date.now(), type: "remote.audit", source: "cmd", deviceId, text: `${kind}${detail ? `: ${detail}` : ""}`, data: { kind, detail } }),
-        list: (limit) => this.data.query({ types: ["remote.audit"], order: "desc", limit }).map((e) => ({ at: e.at, kind: (e.data as { kind: string }).kind, deviceId: e.deviceId, detail: (e.data as { detail: string | null }).detail })),
+        list: (limit) => this.data.query({ types: ["remote.audit"], by: "time", order: "desc", limit }).map((e) => ({ at: e.at, kind: (e.data as { kind: string }).kind, deviceId: e.deviceId, detail: (e.data as { detail: string | null }).detail })),
       },
       settings: this.settings,
       stateDir: opts.stateDir ?? null,
@@ -881,8 +881,8 @@ export class Core {
   /** Kill the Space's terminals (their agents go with them) and remove its windows; keep it as a recent Space. */
   /** The notifications since the widget was last cleared, newest first, from the log (MAX_LOG at most). */
   #notificationLog(): AppNotification[] {
-    const cleared = this.data.query({ types: ["notification.clear"], order: "desc", limit: 1 })[0]?.at ?? 0;
-    return this.data.query({ types: ["notification"], at: [cleared + 1, Number.MAX_SAFE_INTEGER], order: "desc", limit: MAX_LOG }).map((e) => {
+    const cleared = this.data.query({ types: ["notification.clear"], by: "time", order: "desc", limit: 1 })[0]?.at ?? 0;
+    return this.data.query({ types: ["notification"], at: [cleared + 1, Number.MAX_SAFE_INTEGER], by: "time", order: "desc", limit: MAX_LOG }).map((e) => {
       const d = e.data as { source: AppNotification["source"]; title: string; body: string; urgent: boolean; alert?: boolean };
       return { id: e.id.replace(/^notification:/, ""), source: d.source, paneId: e.paneId, windowId: e.windowId, title: d.title, body: d.body, alert: d.alert ?? true, urgent: d.urgent, at: e.at };
     });

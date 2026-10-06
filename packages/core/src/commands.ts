@@ -61,7 +61,7 @@ export class CommandLog extends EventEmitter<{ updated: [CommandRun] }> {
   /** Newest first, of one Space or all, from the log (runs in flight included: they're recorded when they start). */
   list(spaceId?: SpaceId): CommandRun[] {
     if (!this.#data) return [...this.#running.values()].sort((a, b) => b.startedAt - a.startedAt).map((r) => ({ ...r }));
-    return this.#data.query({ types: ["command"], spaceId, order: "desc", limit: MAX_RUNS }).map(commandRunOf);
+    return this.#data.query({ types: ["command"], spaceId, by: "time", order: "desc", limit: MAX_RUNS }).map(commandRunOf);
   }
 
   #start(id: PaneId): void {
