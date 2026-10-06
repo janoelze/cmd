@@ -97,6 +97,7 @@ export function Palette({
   const [active, setActive] = useState(0);
   const [found, setFound] = useState<PaletteItem[] | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLUListElement>(null);
   // Prefixes only where they mean something: ? with a search, > and @ with their groups.
   const searching = !!search && query.startsWith(SEARCH_PREFIX);
   const searchText = searching ? query.slice(1).trim() : "";
@@ -141,6 +142,12 @@ export function Palette({
   }, [items, query, recent, searching, found, dynamic, fallback, groups]);
 
   useEffect(() => setActive(0), [query]);
+  // Keep the active row in view as ↑↓ move past the list's edge (not on hover: the list would move under the mouse).
+  const byKey = useRef(false);
+  useEffect(() => {
+    if (byKey.current) list.current?.children[active]?.scrollIntoView({ block: "nearest" });
+    byKey.current = false;
+  }, [active]);
 
   const run = (it: PaletteItem | undefined, alt = false) => {
     if (!it) return;
@@ -168,17 +175,17 @@ export function Palette({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Escape") onClose();
-            else if (e.key === "ArrowDown") (e.preventDefault(), setActive((a) => Math.min(a + 1, results.length - 1)));
-            else if (e.key === "ArrowUp") (e.preventDefault(), setActive((a) => Math.max(a - 1, 0)));
+            else if (e.key === "ArrowDown") (e.preventDefault(), (byKey.current = true), setActive((a) => Math.min(a + 1, results.length - 1)));
+            else if (e.key === "ArrowUp") (e.preventDefault(), (byKey.current = true), setActive((a) => Math.max(a - 1, 0)));
             else if (e.key === "Enter") run(results[active], e.metaKey);
           }}
         />
-        <ul className="palette-list">
+        <ul ref={list} className="palette-list">
           {results.map((it, i) => (
             <li
               key={it.id}
               className={`${i === active ? "on" : ""} ${it.meta ? "rich" : ""}`}
-              onMouseEnter={() => setActive(i)}
+              onMouseEnter={() => ((byKey.current = false), setActive(i))}
               onClick={(e) => run(it, e.metaKey)}
             >
               {it.meta ? (
