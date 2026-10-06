@@ -364,7 +364,7 @@ export class Core {
     if (opts.stateDir) this.journal.start();
     if (opts.stateDir) this.data.start();
     this.magic = new MagicService({
-      widgetSocket: { path: widgetsSocketPath(opts.socketPath), token: (widgetId, spaceId) => this.widgetTokens.issue({ widgetId, spaceId }) },
+      widgetSocket: path.isAbsolute(opts.socketPath) ? { path: widgetsSocketPath(opts.socketPath), token: (widgetId, spaceId) => this.widgetTokens.issue({ widgetId, spaceId }) } : null,
       windows: this.windows,
       settings,
       ai: this.ai,
