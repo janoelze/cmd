@@ -75,7 +75,8 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 
 | | |
 |---|---|
-| ⌘N | new terminal, in the folder of the selected window |
+| ⌘N | New…: any window or widget, or type a URL, a path, or a widget to make with Magic |
+| ⌘T | new terminal, in the folder of the selected window |
 | ⌥⌘N | new Claude session |
 | ⇧⌘M | new widget with Magic; in one, ⌘L changes it, ⌘E edits it, ⌘R refreshes it |
 | ⇧⌘L | Widget Library: your widgets, to put back on the workspace |

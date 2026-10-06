@@ -63,6 +63,8 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
     {
       label: "File",
       submenu: [
+        ...i("file.new"),
+        sep,
         ...i("file.newTerminal"),
         ...i("file.newClaude"),
         ...i("file.newCodex"),

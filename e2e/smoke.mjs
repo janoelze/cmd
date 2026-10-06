@@ -164,12 +164,12 @@ await win.screenshot({ path: path.join(shots, "1-empty.png") });
 }
 
 if (mac) {
-  check((await accel("file.newTerminal")) === "Cmd+N", "⌘N is New Terminal");
+  check((await accel("file.new")) === "Cmd+N" && (await accel("file.newTerminal")) === "Cmd+T", "⌘N is New…, ⌘T New Terminal");
   check((await accel("file.close")) === "Cmd+W", "⌘W is Close Terminal");
   check((await accel("session.next")) === "Alt+Cmd+Right", "⌥⌘→ is Next Session");
 } else {
   // The Windows Terminal-style keymap (shared/commands.ts otherPlatformKey) reached the native menu.
-  check((await accel("file.newTerminal")) === "Ctrl+Shift+N", "Ctrl+Shift+N is New Terminal");
+  check((await accel("file.new")) === "Ctrl+Shift+N" && (await accel("file.newTerminal")) === "Ctrl+Shift+T", "Ctrl+Shift+N is New…, Ctrl+Shift+T New Terminal");
   check((await accel("view.palette")) === "Ctrl+Shift+K", "Ctrl+Shift+K is the command palette");
   check((await accel("session.next")) === "Ctrl+Alt+Right", "Ctrl+Alt+→ is Next Session");
 }
@@ -855,6 +855,24 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await menu("file.close");
     check((await win.locator(".widget-library").count()) === 0, "⌘W closes the Widget Library first");
     await call("window.close", { id: back.id });
+
+    // New… (⌘N): windows first, then your widgets and the built-in ones, then Magic; typing finds one.
+    await menu("file.new");
+    await win.waitForSelector(".palette", { timeout: 5000 });
+    const offered = await win.locator(".palette-list .palette-label").allTextContents();
+    await win.screenshot({ path: path.join(shots, "new-picker.png") });
+    await win.locator(".palette-input").fill("timer");
+    await win.keyboard.press("Enter");
+    let timer = null;
+    for (let i = 0; i < 20 && !timer; i++) {
+      await win.waitForTimeout(200);
+      timer = (await call("window.list")).find((x) => x.kind === "timer");
+    }
+    check(
+      offered[0] === "Terminal" && offered.indexOf("Counter") > offered.indexOf("Text Window") && offered.at(-1) === "New Widget with Magic" && !!timer && (await win.locator(".palette").count()) === 0,
+      `New… lists windows, then widgets, then Magic, and opens what you type (${offered.join(", ")})`,
+    );
+    if (timer) await call("window.close", { id: timer.id });
 
     // Built-in widgets: Live Diff shows a repository's changes; Agent Activity opens from the library too.
     const repo = path.join(home, "diff-repo");

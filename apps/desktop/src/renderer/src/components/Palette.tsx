@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SearchStatus } from "@cmd/protocol";
+import { ICON, iconNode } from "@cmd/ui";
 import { IndexRing } from "./IndexRing.tsx";
 
 export interface PaletteItem {
   id: string;
-  group: "Commands" | "Sessions" | "History" | "Spaces" | "Recent" | "Folders";
+  /** "Commands", "Sessions", "Spaces", "Windows", "Widgets"… */
+  group: string;
   label: string;
+  /** SF Symbol before the label. */
+  icon?: string;
   hint?: string;
   /** Second line (search results): agent · folder · when. */
   meta?: string;
@@ -16,7 +20,7 @@ export interface PaletteItem {
   runAlt?: () => void;
 }
 
-const PREFIX: Record<string, PaletteItem["group"]> = { ">": "Commands", "@": "Sessions" };
+const PREFIX: Record<string, string> = { ">": "Commands", "@": "Sessions" };
 /** `?query` searches agent transcripts (async, in the core). */
 const SEARCH_PREFIX = "?";
 
@@ -37,6 +41,9 @@ function score(label: string, q: string): number {
   return Math.max(1, 50 - gaps);
 }
 
+/** A group's place in `groups`; unknown groups go last. */
+const rank = (groups: string[], g: string) => (groups.indexOf(g) + 1 || groups.length + 1);
+
 /** Render \x01…\x02 markers as highlights. */
 export function Highlighted({ text }: { text: string }) {
   const parts = text.split(/(\x01[^\x02]*\x02)/);
@@ -56,6 +63,8 @@ export function Palette({
   search,
   searchStatus,
   dynamic,
+  fallback,
+  groups,
   placeholder = "Type a command, @session, ?search…",
   footer,
   emptyText,
@@ -72,6 +81,13 @@ export function Palette({
   searchStatus?: SearchStatus | null;
   /** Extra items computed from the raw query (e.g. "Open <url>"), listed first. */
   dynamic?: (query: string) => PaletteItem[];
+  /** Items computed from the raw query, listed last (e.g. "Make a widget: …"). */
+  fallback?: (query: string) => PaletteItem[];
+  /**
+   * Groups in the order they are listed, whatever the query: matches are
+   * ranked within their group, and each group is labelled once (the New… picker).
+   */
+  groups?: string[];
   placeholder?: string;
   /** Replaces the footer's hints (pickers other than the command palette). */
   footer?: React.ReactNode;
@@ -81,7 +97,8 @@ export function Palette({
   const [active, setActive] = useState(0);
   const [found, setFound] = useState<PaletteItem[] | null>(null);
   const input = useRef<HTMLInputElement>(null);
-  const searching = query.startsWith(SEARCH_PREFIX);
+  // Prefixes only where they mean something: ? with a search, > and @ with their groups.
+  const searching = !!search && query.startsWith(SEARCH_PREFIX);
   const searchText = searching ? query.slice(1).trim() : "";
 
   useEffect(() => input.current?.focus(), []);
@@ -104,7 +121,8 @@ export function Palette({
   const results = useMemo(() => {
     if (searching) return found ?? [];
     const extra = dynamic?.(query) ?? [];
-    const group = PREFIX[query[0] ?? ""];
+    const prefixed = PREFIX[query[0] ?? ""];
+    const group = prefixed && items.some((it) => it.group === prefixed) ? prefixed : undefined;
     const q = (group ? query.slice(1) : query).trim().toLowerCase();
     const matched = items
       .filter((it) => !group || it.group === group)
@@ -116,11 +134,11 @@ export function Palette({
         return { it, s: s > 0 && r >= 0 ? s + (q ? 10 : 1000) - r : s };
       })
       .filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s)
+      .sort((a, b) => (groups ? rank(groups, a.it.group) - rank(groups, b.it.group) : 0) || b.s - a.s)
       .slice(0, 50)
       .map((x) => x.it);
-    return [...extra, ...matched];
-  }, [items, query, recent, searching, found, dynamic]);
+    return [...extra, ...matched, ...(fallback?.(query) ?? [])];
+  }, [items, query, recent, searching, found, dynamic, fallback, groups]);
 
   useEffect(() => setActive(0), [query]);
 
@@ -177,7 +195,8 @@ export function Palette({
                 </div>
               ) : (
                 <>
-                  <span className="palette-group">{it.group}</span>
+                  <span className="palette-group">{!groups || results[i - 1]?.group !== it.group ? it.group : ""}</span>
+                  {it.icon && <span className="palette-icon">{iconNode(it.icon, ICON.row)}</span>}
                   <span className="palette-label">{it.label}</span>
                   {it.hint && <kbd>{it.hint}</kbd>}
                 </>

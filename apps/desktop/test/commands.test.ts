@@ -16,7 +16,8 @@ describe("commands", () => {
   });
 
   it("binds HIG defaults and ⌥⌘←/→ for sessions", () => {
-    expect(MAC["file.newTerminal"]).toEqual(["Cmd+N", "Cmd+T"]);
+    expect(MAC["file.new"]).toEqual(["Cmd+N"]);
+    expect(MAC["file.newTerminal"]).toEqual(["Cmd+T"]);
     expect(MAC["file.close"]).toEqual(["Cmd+W"]);
     expect(MAC["session.next"]?.[0]).toBe("Alt+Cmd+Right");
     expect(MAC["session.prev"]?.[0]).toBe("Alt+Cmd+Left");
@@ -30,7 +31,8 @@ describe("commands", () => {
     expect(otherPlatformKey("Cmd+,")).toBe("Ctrl+,");
     expect(otherPlatformKey("Cmd+=")).toBe("Ctrl+=");
     expect(otherPlatformKey("Ctrl+3")).toBe("Ctrl+3");
-    expect(OTHER["file.newTerminal"]).toEqual(["Ctrl+Shift+N", "Ctrl+Shift+T"]);
+    expect(OTHER["file.new"]).toEqual(["Ctrl+Shift+N"]);
+    expect(OTHER["file.newTerminal"]).toEqual(["Ctrl+Shift+T"]);
     expect(OTHER["view.palette"]).toEqual(["Ctrl+Shift+K"]);
     // No plain Ctrl+letter: those belong to the shell.
     expect(Object.values(OTHER).flat().filter((k) => /^Ctrl\+[A-Z]$/.test(k))).toEqual([]);

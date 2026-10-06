@@ -18,9 +18,7 @@ import {
   newMagic,
   newFiles,
   newText,
-  openableTarget,
   openLink,
-  openPath,
   openSession,
   copyResumeCommand,
   sessionId,
@@ -42,6 +40,8 @@ import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Feedback } from "./components/Feedback.tsx";
 import { WidgetLibrary } from "./components/WidgetLibrary.tsx";
+import { NewPicker } from "./components/NewPicker.tsx";
+import { openItems } from "./newItems.ts";
 import { APP_VERSION, RELEASES, releasesSince, WhatsNew } from "./components/WhatsNew.tsx";
 import { closeSetup, Onboarding, showSetup, stepsAtLaunch, useSetup } from "./onboarding/Onboarding.tsx";
 import { compareVersions, type Release } from "../../shared/changelog.ts";
@@ -353,6 +353,7 @@ export function App() {
     "app.remoteAccess": () => cmd.openSettings("remote"),
     "app.pairDevice": () => cmd.openSettings("remote/pair"),
     "app.disconnectRemote": () => void cmd.call("remote.disconnect", {}).catch(() => {}),
+    "file.new": () => (setPalette(false), setLibrary(false), setPicker((p) => (p?.kind === "new" ? null : { kind: "new" }))),
     "file.newTerminal": () => void newTerminal(),
     "file.newClaude": () => void newAgent("claude"),
     "file.newCodex": () => void newAgent("codex"),
@@ -626,14 +627,6 @@ export function App() {
   );
   const pickerProps = usePickers(picker, () => setPicker(null));
 
-  /** The sidebar's + button: windows, then widgets (docs/16-widgets.md). */
-  const newMenu = () =>
-    void showContextMenu(
-      (["file.newTerminal", "file.newClaude", "file.newCodex", "-", "file.newBrowser", "file.newFiles", "file.newText", "-", "widget.library", "file.newMagic"] as const).map((id) =>
-        id === "-" ? id : { label: COMMANDS.find((c) => c.id === id)!.label, run: () => run(id) },
-      ),
-    );
-
   /** Per-terminal mute: no system notifications from it (its marker still shows). */
   const muteEntry = (paneId: PaneId) => {
     const muted = !!getState().panes.get(paneId)?.muted;
@@ -735,7 +728,7 @@ export function App() {
         ["--window-desaturate" as string]: `${cfg["ui.unfocusedDesaturation"] / 100}`,
       }}
     >
-      <TopBar spaceBar={spaceBar} mode={mode} run={run} onNew={newMenu} />
+      <TopBar spaceBar={spaceBar} mode={mode} run={run} onNew={() => run("file.new")} />
       <NavigatorContext.Provider value={navigatorData}>
         {/* Canvas and strip run under the sidebars (docs/21-sidebars.md). */}
         <div className={`stage${mode === "canvas" || mode === "strip" ? " under" : ""}`}>
@@ -781,16 +774,8 @@ export function App() {
       {palette !== false && (
         <Palette
           items={paletteItems}
-          dynamic={(q) => {
-            // Typing a URL or a path offers to open it in a window.
-            const t = openableTarget(q);
-            if (!t) return [];
-            return [
-              t.kind === "url"
-                ? { id: `open-url`, group: "Commands" as const, label: `Open ${t.value}`, hint: "url", run: () => void openPath(t.value) }
-                : { id: `open-path`, group: "Commands" as const, label: `Open ${t.value}`, hint: "path", run: () => void openPath(t.value) },
-            ];
-          }}
+          // Typing a URL or a path offers to open it in a window.
+          dynamic={(q) => openItems(q, "Commands")}
           recent={recent}
           onRun={remember}
           onClose={() => setPalette(false)}
@@ -800,6 +785,7 @@ export function App() {
         />
       )}
       {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}
+      {picker?.kind === "new" && <NewPicker run={run} onClose={() => setPicker(null)} />}
       {picker?.kind === "icon" && <SpaceIconPicker space={all.spaces.get(picker.space.id) ?? picker.space} onClose={() => setPicker(null)} />}
       {library && <WidgetLibrary onClose={() => setLibrary(false)} />}
       <Toaster />

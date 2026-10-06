@@ -35,7 +35,7 @@ Every entry point, label and menu follows from these three sentences.
 
 Magic is the brand of making, so it appears wherever a widget is being made or was made, and nowhere else:
 
-- the ✦ on **New Widget with Magic…** (⇧⌘M, the shortcut New Magic Widget has today), in the menu, the palette and the sidebar's +;
+- the ✦ on **New Widget with Magic…** (⇧⌘M, the shortcut New Magic Widget has today), in the menu, the palette and New… (⌘N);
 - the library's own button, **✦ New Widget** (the sparkle icon says Magic), beside its search field (first a card in the grid; a button keeps making apart from finding);
 - the making window itself: the prompt field, the live steps, the view drawing itself in. It is unchanged; it already feels right;
 - "Made with Magic" under the name of widgets you made in the library (a ✦ on their avatar was tried and dropped: it read as noise); their title bars keep the sparkle icon of the Magic type;
@@ -47,8 +47,9 @@ Each action has one place and does one thing.
 
 | Intent | How |
 |---|---|
+| "Open something new" | **New…** (⌘N, the top bar's +): windows, then widgets, then Magic (below) |
 | "What's available?" | **Widget Library…** (⇧⌘L): a gallery. Its search field only searches. |
-| "Make a new one" | **New Widget with Magic…** (⇧⌘M), or ✦ New Widget in the library |
+| "Make a new one" | **New Widget with Magic…** (⇧⌘M), ✦ New Widget in the library, or a request typed into New… |
 | "Change this one" | **Edit Widget** (⌘E), **Change…** (⌘L) |
 | "Take it off my desk" | ⌘W: **Remove from Desk** |
 | "Get rid of it" | **Delete Widget**, only in the library or the widget's edit view, with a confirmation |
@@ -58,9 +59,19 @@ Each action has one place and does one thing.
 The library is ⇧⌘L, as Xcode's Library is: L for Library. ⌥⌘M looks natural next to ⇧⌘M but is taken: the Window menu's Minimize (⌘M) gets Minimize All (⌥⌘M) as its macOS alternate. ⌃⌘M would collide with ⇧⌘M on Windows (both become Ctrl+Alt+Shift+M, `otherPlatformKey`). ⇧⌘L becomes Ctrl+Alt+Shift+L there, also free.
 
 
-- **File** holds windows only: Terminal, Claude, Codex, Browser, File Browser, Text.
+- **File** starts with **New…** (⌘N), then holds windows only: Terminal (⌘T), Claude, Codex, Browser, File Browser, Text.
 - A **Widgets** menu (after Space, before Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Change Widget…, Refresh Widget, Stop Making Widget, Remove from Desk. The Magic View-menu items moved here; their ids (`file.newMagic`, `view.magic*`) stay, since keybindings.json uses them. Edit stays ⌘E in View (Toggle Preview / Edit), which already serves every window.
-- The sidebar's + menu has the same two groups, windows then widgets.
+- The top bar's + is New…, as ⌘N is.
+
+### New…
+
+One picker for everything new, in the command palette's frame (`renderer/src/newItems.ts`, `components/NewPicker.tsx`), so the menu, the + and ⌘N offer the same things in the same order:
+
+1. **Windows**, in the File menu's order, each with its own shortcut: Terminal, Claude Session, Codex Session, Browser Window, File Browser, Text Window. ⌘N ⏎ is a new terminal, as ⌘N was before.
+2. **Widgets**: yours by last use, then the built-in ones. A pick is the library's Add (`widget.add`).
+3. **New Widget with Magic** last. With text typed it becomes **Make “…” with Magic**, which opens a Magic window and starts making that request.
+
+Groups keep this order whatever is typed; a query only ranks within a group, so "t" offers Terminal and Text Window before Timer. A typed URL or path offers **Open …** first (the palette's `window.openTarget`), and no Magic. Each window runs its own command, so it opens in the same Space and folder as from the menu. The direct shortcuts (⌘T, ⌥⌘N, ⇧⌘B, ⇧⌘O, ⇧⌘E, ⇧⌘M) skip the picker.
 - The sidebar lists widgets on the desk in their own **Widgets** section, after Windows.
 
 ### The library

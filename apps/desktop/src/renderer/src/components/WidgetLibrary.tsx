@@ -9,7 +9,7 @@ import { Button, Callout, Dialog, EmptyState, IconButton, SearchField, SectionHe
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WidgetEntry } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { newMagic, selectPane } from "../actions.ts";
+import { addWidget, newMagic } from "../actions.ts";
 import { showContextMenu } from "../context.ts";
 import { setLibrary, useStoreValue } from "../store.ts";
 import { projectHue } from "../model.ts";
@@ -45,9 +45,8 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
   const fail = (err: unknown) => setError((err as Error).message);
   const add = async (e: WidgetEntry) => {
     try {
-      const w = await cmd.call("widget.add", { ref: e.ref, spaceId });
+      await addWidget(e.ref, spaceId);
       onClose();
-      selectPane(w.id);
     } catch (err) {
       fail(err);
     }

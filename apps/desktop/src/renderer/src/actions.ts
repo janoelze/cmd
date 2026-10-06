@@ -140,7 +140,7 @@ function removedFromDesk(win: AppWindow): void {
   toast(`Removed “${win.title}” from the workspace. It's in your Widget Library.`, {
     icon: "sparkles",
     duration: 8000,
-    action: { label: "Undo", run: () => void cmd.call("widget.add", { ref: `magic:${widgetId}`, spaceId: win.spaceId }).then((w) => select(w.id), () => {}) },
+    action: { label: "Undo", run: () => void addWidget(`magic:${widgetId}`, win.spaceId).catch(() => {}) },
   });
 }
 
@@ -220,6 +220,12 @@ export async function openPath(target: string): Promise<void> {
   else cmd.openPath(t);
 }
 
+/** Put a widget from the library (`type:timer`, `magic:<id>`) on the workspace; throws when it can't. */
+export async function addWidget(ref: string, spaceId: string = here()): Promise<void> {
+  const w = await cmd.call("widget.add", { ref, spaceId });
+  select(w.id);
+}
+
 /** A new widget made with Magic (docs/12-magic-widgets.md); with a request, it starts making it right away. */
 export async function newMagic(prompt?: string): Promise<void> {
   const w = await cmd.call("window.open", { kind: "magic", input: {}, spaceId: here() });
@@ -237,15 +243,4 @@ export async function newFiles(path?: string): Promise<void> {
 export async function newText(): Promise<void> {
   const w = await cmd.call("window.open", { kind: "text", input: { cwd: contextCwd() }, spaceId: here() });
   select(w.id);
-}
-
-/** Does palette input look like a URL or a path we can open? */
-export function openableTarget(text: string): { kind: "url" | "path"; value: string } | null {
-  const t = text.trim();
-  if (!t || /\s/.test(t)) return null;
-  if (/^[a-z][\w+.-]+:\/\//i.test(t) || /^(localhost(:\d+)?|127\.0\.0\.1)/i.test(t) || /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(t)) {
-    return { kind: "url", value: t };
-  }
-  if (/^(~|\/)/.test(t)) return { kind: "path", value: t };
-  return null;
 }
