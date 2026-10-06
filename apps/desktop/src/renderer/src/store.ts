@@ -4,7 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery } from "@cmd/protocol";
+import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -112,6 +112,43 @@ export function subscribeData(query: DataQuery, fn: (events: DataEvent[], initia
 function reopenDataSubs(): void {
   dataById.clear();
   for (const sub of dataSubs) (sub.id = null), void openDataSub(sub);
+  viewById.clear();
+  for (const sub of viewSubs) (sub.id = null), void openViewSub(sub);
+}
+
+/** A live query over a view (turns, sessions): rows now (initial), then the rows that change. Made again after a reconnect. */
+interface ViewSub {
+  query: ViewQuery;
+  fn: (rows: (TurnRow | SessionInfo)[], initial: boolean) => void;
+  id: string | null;
+  stale: boolean;
+}
+const viewSubs = new Set<ViewSub>();
+const viewById = new Map<string, ViewSub>();
+async function openViewSub(sub: ViewSub): Promise<void> {
+  try {
+    const r = await cmd.call("data.subscribeView", { query: sub.query });
+    if (sub.stale) return void cmd.call("data.unsubscribe", { id: r.id }).catch(() => {});
+    sub.id = r.id;
+    viewById.set(r.id, sub);
+    sub.fn(r.rows, true);
+  } catch {
+    // an older core, or none yet
+  }
+}
+export function subscribeView(query: ViewQuery, fn: (rows: (TurnRow | SessionInfo)[], initial: boolean) => void): () => void {
+  const sub: ViewSub = { query, fn, id: null, stale: false };
+  viewSubs.add(sub);
+  if (state.connected) void openViewSub(sub);
+  return () => {
+    sub.stale = true;
+    viewSubs.delete(sub);
+    if (sub.id) {
+      viewById.delete(sub.id);
+      void cmd.call("data.unsubscribe", { id: sub.id }).catch(() => {});
+      sub.id = null;
+    }
+  };
 }
 
 const commandListeners = new Set<(run: CommandRun) => void>();
@@ -461,6 +498,9 @@ function handle(e: CoreEvent): void {
       return;
     case "data.changed":
       dataById.get(e.id)?.fn(e.events, false);
+      return;
+    case "view.changed":
+      viewById.get(e.id)?.fn(e.rows, false);
       return;
     case "window.focus":
       for (const fn of focusListeners) fn(e.id);

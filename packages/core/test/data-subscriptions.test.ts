@@ -94,3 +94,26 @@ describe("the widgets socket", () => {
     w.close();
   });
 });
+
+describe("view subscriptions", () => {
+  it("answers with a view's rows now, then each turn and session that changes and matches", async () => {
+    const turn = (index: number, outcome: "working" | "done") => ({ format: 2, derivedBy: null, agentId: "va", agentKind: "claude" as const, agentVersion: null, model: null, index, sessionId: "vs", turnId: null, startedAt: Date.now(), endedAt: outcome === "done" ? Date.now() : null, prompt: `p${index}`, auto: false, followUps: [], notes: [], background: [], outcome, ask: null, final: null, error: null, tools: [], commands: [], shellWrites: 0, files: [], subagents: 0, events: 1, inferred: [] });
+    core.agents.activity.saveTurn(turn(0, "done"), 1, "/w");
+    const views: Extract<CoreEvent, { type: "view.changed" }>[] = [];
+    conn.client.onEvent((e) => {
+      if (e.type === "view.changed") views.push(e);
+    });
+    await conn.client.call("events.subscribe", { types: ["data.changed", "view.changed"] });
+    const t = await conn.client.call("data.subscribeView", { query: { view: "turns", agentId: "va" } });
+    expect(t.rows.map((r) => ("index" in r ? r.index : -1))).toEqual([0]);
+    core.agents.activity.saveTurn(turn(1, "working"), 2, "/w");
+    core.agents.activity.saveTurn(turn(1, "done"), 3, "/w");
+    core.agents.activity.saveTurn({ ...turn(0, "done"), agentId: "other" }, 4, "/w"); // another agent
+    const s = await conn.client.call("data.subscribeView", { query: { view: "sessions" } });
+    core.sessions.apply(core.data.recordBatch([{ id: "vm1", at: Date.now(), type: "transcript.message", source: "t", sessionId: "claude:vs2", text: "hello", data: { role: "user", cwd: "/w" } }]));
+    await settle();
+    const mine = views.filter((e) => e.id === t.id).flatMap((e) => e.rows);
+    expect(mine.map((r) => ("index" in r ? `${r.index}:${r.outcome}` : "?"))).toEqual(["1:done"]); // the two saves of turn 1 coalesced
+    expect(views.filter((e) => e.id === s.id).flatMap((e) => e.rows).map((r) => ("key" in r ? r.key : "?"))).toEqual(["claude:vs2"]);
+  });
+});

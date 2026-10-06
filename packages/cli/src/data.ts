@@ -13,6 +13,8 @@ export const DATA_HELP = `  data stats                          what the event l
   data explain                        every class of recorded data: kept how long, its switch, whether it leaves this Mac
   data query [--type T,…] [--since 7d] [--project PATH] [--session ID] [--agent ID] [--text WORDS] [--limit N] [--json]
                                       events, oldest first; types may be prefixes ("git.")
+  data subscribe --view turns|sessions [--agent ID] [--session AGENT:ID] [--project PATH] [--json]
+                                      a view's rows as they change: turns as agents work, sessions as transcripts grow
   data subscribe [--type T,…] [--since 7d] [--project PATH] [--text WORDS] [--json]
                                       events as they're recorded, one line each (Ctrl-C to stop)
   data ai [--since 30d]               model calls by purpose: how many, tokens in and out, failures, what was cut to fit
@@ -143,6 +145,18 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
       return 0;
     }
     case "subscribe": {
+      if (opt.view === "turns" || opt.view === "sessions") {
+        const q = queryOf(opt);
+        const { id, rows } = await client.call("data.subscribeView", { query: { view: opt.view, agentId: q.agentId, sessionId: q.sessionId, projectId: q.projectId, since: q.at?.[0], limit: 20 } });
+        const show = (r: (typeof rows)[number]) =>
+          console.log(json ? JSON.stringify(r) : "key" in r ? `${r.key.slice(0, 20).padEnd(20)} ${String(r.messages).padStart(5)} msgs  ${(r.title ?? r.firstPrompt ?? "").slice(0, 70)}` : `${r.agentId.slice(0, 8)} #${String(r.index).padEnd(3)} ${r.outcome.padEnd(11)} ${(r.prompt ?? "").replace(/\s+/g, " ").slice(0, 70)}`);
+        rows.forEach(show);
+        client.onEvent((e) => {
+          if (e.type === "view.changed" && e.id === id) e.rows.forEach(show);
+        });
+        await client.call("events.subscribe", { types: ["view.changed"] });
+        await new Promise(() => {});
+      }
       const { id, events } = await client.call("data.subscribe", { query: { limit: 50, ...queryOf(opt) } });
       for (const e of events) console.log(json ? JSON.stringify(e) : line(e));
       client.onEvent((e) => {

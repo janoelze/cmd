@@ -3,7 +3,7 @@
 // (agent, file, env, folder, branch, title, first prompt, span). Fed as events
 // arrive; rebuilt from the log when its rules change or the views file is gone.
 
-import type { AgentKind, DataEvent } from "@cmd/protocol";
+import type { AgentKind, DataEvent, SessionInfo } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { DataService } from "../service.ts";
 import type { ViewsStore } from "./views.ts";
@@ -66,6 +66,7 @@ export class SessionsView {
     const set = (col: string) => this.#views.stmt(`UPDATE sessions SET ${col} = ? WHERE key = ? AND ${col} IS NULL`);
     const title = this.#views.stmt(`UPDATE sessions SET title = ? WHERE key = ?`);
     const bump = this.#views.stmt(`UPDATE sessions SET messages = messages + 1 WHERE key = ?`);
+    const touched = new Set<string>();
     this.#views.transaction(() => {
       for (const e of events) {
         if (!e.sessionId || !e.type.startsWith("transcript.")) continue;
@@ -75,6 +76,7 @@ export class SessionsView {
         const at = e.at > 0 ? e.at : (file?.mtime ?? null);
         const until = e.until && e.until > 0 ? e.until : at;
         upsert.run(e.sessionId, id, agent, file?.path ?? null, file?.env ? JSON.stringify(file.env) : null, at, until);
+        touched.add(e.sessionId);
         const d = e.data as Record<string, unknown>;
         if (typeof d.cwd === "string") set("cwd").run(d.cwd, e.sessionId);
         if (typeof d.gitBranch === "string") set("branch").run(d.gitBranch, e.sessionId);
@@ -87,12 +89,35 @@ export class SessionsView {
         }
       }
     });
+    if (!this.#rebuilding && this.#listeners.length && touched.size) {
+      const rows = [...touched].map((k) => this.get(k)).filter((r): r is SessionRow => !!r && r.started !== null).map(sessionInfo);
+      for (const fn of this.#listeners) fn(rows);
+    }
+  }
+
+  /** Called with the sessions an apply changed (not during a rebuild), for live queries. */
+  onChange(fn: (rows: SessionInfo[]) => void): void {
+    this.#listeners.push(fn);
+  }
+  #listeners: ((rows: SessionInfo[]) => void)[] = [];
+  #rebuilding = false;
+
+  /** Sessions matching a view query, newest activity first. */
+  list(q: { sessionId?: string; projectId?: string; since?: number; limit?: number }): SessionInfo[] {
+    const where: string[] = ["started IS NOT NULL"];
+    const args: (string | number)[] = [];
+    if (q.sessionId) where.push("key = ?"), args.push(q.sessionId);
+    if (q.projectId) where.push("project_id = ?"), args.push(q.projectId);
+    if (q.since) where.push("updated >= ?"), args.push(q.since);
+    const rows = this.#views.db.prepare(`SELECT * FROM sessions WHERE ${where.join(" AND ")} ORDER BY updated DESC LIMIT ?`).all(...args, Math.min(q.limit ?? 50, 1000)) as unknown as SessionRow[];
+    return rows.map(sessionInfo);
   }
 
   /** The view from every transcript event in the log, in order. */
   rebuild(): number {
     const t0 = Date.now();
     this.#views.db.exec(`DELETE FROM sessions`);
+    this.#rebuilding = true;
     let after = 0;
     let n = 0;
     for (;;) {
@@ -102,6 +127,7 @@ export class SessionsView {
       n += page.length;
       after = page.at(-1)!.seq;
     }
+    this.#rebuilding = false;
     log.info("sessions rebuilt from events", { events: n, sessions: this.counts().sessions, ms: Date.now() - t0 });
     return n;
   }
@@ -128,4 +154,9 @@ export class SessionsView {
   counts(): { sessions: number } {
     return { sessions: (this.#views.stmt(`SELECT COUNT(*) AS n FROM sessions WHERE started IS NOT NULL`).get() as { n: number }).n };
   }
+}
+
+/** A view row as protocol's SessionInfo. */
+export function sessionInfo(r: SessionRow): SessionInfo {
+  return { key: r.key, id: r.id, agent: r.agent, path: r.path, cwd: r.cwd, branch: r.branch, title: r.title, firstPrompt: r.first_prompt, started: r.started, updated: r.updated, messages: r.messages, projectId: r.project_id };
 }

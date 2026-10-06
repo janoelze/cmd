@@ -6,7 +6,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery, AppNotification } from "@cmd/protocol";
+import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery, AppNotification, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
 import { EXPORT_FORMAT, lineSplitter, TURN_FORMAT } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker, sessionIdOf } from "./agents/tracker.ts";
@@ -16,6 +16,7 @@ import { recordNotifications, recordSpaces, recordWindows } from "./data/recorde
 import { DataService } from "./data/service.ts";
 import { buildContext } from "./ai/context.ts";
 import { describeAgent, describePane } from "./data/describe.ts";
+import { projectIdOf } from "./data/project.ts";
 import { matchesQuery } from "./data/match.ts";
 import { WidgetTokens, widgetQuery } from "./data/widgets.ts";
 import { ViewsStore } from "./data/views/views.ts";
@@ -132,6 +133,21 @@ const splitList = (v: string) => v.split(",").map((d) => d.trim()).filter(Boolea
 
 type Handlers = { [M in Method]: (params: Params<M>) => Result<M> | Promise<Result<M>> };
 
+/** Whether a view row answers a view query. */
+function viewMatches(q: ViewQuery, r: TurnRow | SessionInfo): boolean {
+  if ("key" in r) {
+    if (q.sessionId && r.key !== q.sessionId) return false;
+    if (q.projectId && r.projectId !== q.projectId) return false;
+    if (q.since && (r.updated ?? 0) < q.since) return false;
+    return true;
+  }
+  if (q.agentId && r.agentId !== q.agentId) return false;
+  if (q.sessionId && `${r.agentKind}:${r.sessionId}` !== q.sessionId) return false;
+  if (q.projectId && projectIdOf(r.cwd) !== q.projectId) return false;
+  if (q.since && r.startedAt < q.since) return false;
+  return true;
+}
+
 /** The widgets socket lives beside the main one. */
 export const widgetsSocketPath = (socketPath: string) => path.join(path.dirname(socketPath), "widgets.sock");
 
@@ -187,6 +203,10 @@ export class Core {
   #dataSubs = new Map<Connection, Map<string, DataQuery>>();
   #dataPending = new Map<Connection, Map<string, DataEvent[]>>();
   #dataFlush: ReturnType<typeof setTimeout> | null = null;
+  /** data.subscribeView subscriptions per connection, and the changed rows waiting to go (by row key). */
+  #viewSubs = new Map<Connection, Map<string, ViewQuery>>();
+  #viewPending = new Map<Connection, Map<string, Map<string, TurnRow | SessionInfo>>>();
+  #viewFlush: ReturnType<typeof setTimeout> | null = null;
   /** Connections on the widgets socket, and which widget each said it is (null until widget.hello). */
   #widgetConns = new Map<Connection, { widgetId: string; spaceId: string | null } | null>();
   readonly widgetTokens = new WidgetTokens();
@@ -272,6 +292,8 @@ export class Core {
     const activity = new ActivityView(this.data, this.views);
     activity.spaceOf = (paneId) => this.panes.get(paneId)?.spaceId ?? null;
     this.sessions = new SessionsView(this.views, this.data);
+    this.sessions.onChange((rows) => this.#viewChanged("sessions", rows));
+    activity.onTurn((t, cwd) => this.#viewChanged("turns", [{ ...t, cwd }]));
     this.#searchView = new SearchView(this.data, this.sessions);
     this.agents = new AgentTracker(this.panes, {
       store: this.store,
@@ -538,6 +560,7 @@ export class Core {
     },
     "data.import": (p) => ({ imported: this.data.recordAll(p.events) }),
     "data.subscribe": (p) => ({ id: randomUUID(), events: this.data.query(p.query) }),
+    "data.subscribeView": (p) => ({ id: randomUUID(), rows: this.#viewRows(p.query) }),
     "widget.hello": () => {
       throw new Error("widget.hello is for the widgets socket");
     },
@@ -1136,6 +1159,8 @@ export class Core {
         this.#connWatches.delete(conn);
         this.#dataSubs.delete(conn);
         this.#dataPending.delete(conn);
+        this.#viewSubs.delete(conn);
+        this.#viewPending.delete(conn);
       },
     };
   }
@@ -1221,8 +1246,13 @@ export class Core {
       const subs = this.#dataSubs.get(conn) ?? new Map<string, DataQuery>();
       subs.set((result as { id: string }).id, params.query as DataQuery);
       this.#dataSubs.set(conn, subs);
+    } else if (method === "data.subscribeView") {
+      const subs = this.#viewSubs.get(conn) ?? new Map<string, ViewQuery>();
+      subs.set((result as { id: string }).id, params.query as ViewQuery);
+      this.#viewSubs.set(conn, subs);
     } else if (method === "data.unsubscribe") {
       this.#dataSubs.get(conn)?.delete(params.id as string);
+      this.#viewSubs.get(conn)?.delete(params.id as string);
     } else if (method === "window.follow") {
       this.#follows.set(conn, new Set(params.ids as string[]));
       if (conn.access !== "local") this.remote.following(conn, params.ids as string[]);
@@ -1302,6 +1332,50 @@ export class Core {
     }
   }
 
+  /** A view's rows for a query: turns oldest first, sessions newest first. */
+  #viewRows(q: ViewQuery): (TurnRow | SessionInfo)[] {
+    const limit = Math.min(q.limit ?? 50, 1000);
+    if (q.view === "sessions") return this.sessions.list(q);
+    const since = q.since ?? Date.now() - 7 * 86400_000;
+    const rows = q.agentId && !q.since ? this.agents.activity.turns(q.agentId, limit).map((t) => ({ ...t, cwd: null })) : this.agents.activity.turnsSince(since).map(({ turn, cwd }) => ({ ...turn, cwd }));
+    return rows.filter((r) => viewMatches(q, r)).slice(-limit);
+  }
+
+  /** A changed view row against every view subscription; what matches goes out in one view.changed per subscription. */
+  #viewChanged(view: "turns" | "sessions", rows: (TurnRow | SessionInfo)[]): void {
+    if (!this.#viewSubs.size) return;
+    for (const [conn, subs] of this.#viewSubs) {
+      for (const [id, q] of subs) {
+        if (q.view !== view) continue;
+        for (const r of rows) {
+          if (!viewMatches(q, r)) continue;
+          let pending = this.#viewPending.get(conn);
+          if (!pending) this.#viewPending.set(conn, (pending = new Map()));
+          let m = pending.get(id);
+          if (!m) pending.set(id, (m = new Map()));
+          m.set("key" in r ? r.key : `${r.agentId}#${r.index}`, r);
+        }
+      }
+    }
+    if (this.#viewPending.size && !this.#viewFlush) {
+      this.#viewFlush = setTimeout(() => {
+        this.#viewFlush = null;
+        for (const [conn, pending] of this.#viewPending) {
+          for (const [id, m] of pending) {
+            const q = this.#viewSubs.get(conn)?.get(id);
+            if (!q) continue;
+            const event: CoreEvent = { type: "view.changed", id, view: q.view, rows: [...m.values()] };
+            const line = JSON.stringify({ jsonrpc: "2.0", method: "event", params: event }) + "\n";
+            if (conn.event) conn.event(event, line);
+            else conn.send(line);
+          }
+        }
+        this.#viewPending.clear();
+      }, 50);
+      this.#viewFlush.unref?.();
+    }
+  }
+
   #broadcast(event: CoreEvent): void {
     if (this.#subscribers.size === 0) return;
     const line = JSON.stringify({ jsonrpc: "2.0", method: "event", params: event }) + "\n";
@@ -1322,6 +1396,7 @@ export class Core {
     // The transcript reader first: its worker's last batches must not land on closed stores.
     this.#closed = true;
     if (this.#dataFlush) clearTimeout(this.#dataFlush);
+    if (this.#viewFlush) clearTimeout(this.#viewFlush);
     await this.#searchSwap;
     await this.#ingest?.close();
     this.data.dispose();

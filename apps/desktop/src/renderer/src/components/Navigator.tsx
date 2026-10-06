@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { PaneId, SearchHit, SearchStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { openSession } from "../actions.ts";
-import { usePersisted, useStoreValue, subscribeData } from "../store.ts";
+import { usePersisted, useStoreValue, subscribeView } from "../store.ts";
 import { terminals } from "../terminals.ts";
 import { filterRows, flatten, sectionOf, SECTIONS, type Section, type SidebarRow } from "../model.ts";
 import { HistoryRow, SectionHeading, SessionRow } from "./SidebarRows.tsx";
@@ -213,10 +213,10 @@ function useRecent(live: string[], status: SearchStatus | null): SearchHit[] {
   const liveKey = live.join("\n");
   const indexKey = status ? `${status.sessions}|${status.files}|${status.indexing}` : "";
   const [tick, setTick] = useState(0);
-  // Sessions change as transcripts grow: a live query over their events, debounced.
+  // A live query over the sessions view: refetch when a session changes (a title, new activity), debounced.
   useEffect(() => {
     let debounce: ReturnType<typeof setTimeout> | undefined;
-    const off = subscribeData({ types: ["transcript.title", "transcript.summary", "transcript.message"], at: [Date.now(), Number.MAX_SAFE_INTEGER], limit: 1 }, (_e, initial) => {
+    const off = subscribeView({ view: "sessions", since: Date.now(), limit: 1 }, (_rows, initial) => {
       if (initial) return;
       clearTimeout(debounce);
       debounce = setTimeout(() => setTick((n) => n + 1), 2000);

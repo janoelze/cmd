@@ -2,7 +2,7 @@
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
 import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, CommandRun, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
-import type { DataClassInfo, DataEvent, DataQuery, DataStats, NewDataEvent } from "./events.ts";
+import type { DataClassInfo, DataEvent, DataQuery, DataStats, NewDataEvent, SessionInfo, TurnRow, ViewQuery } from "./events.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
 import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
@@ -181,6 +181,8 @@ export interface Methods {
   /** On the widgets socket: which widget this connection is (a token issued for its data.ts run); then data.query is allowed. */
   "widget.hello": { params: { token: string }; result: { widgetId: string; spaceId: string | null } };
   "data.unsubscribe": { params: { id: string }; result: null };
+  /** A view's rows now (turns or sessions), and from then on a `view.changed` for every row that changes and matches. Unsubscribe with data.unsubscribe. */
+  "data.subscribeView": { params: { query: ViewQuery }; result: { id: string; rows: (TurnRow | SessionInfo)[] } };
   /** Deletes a session's, a project's, a time range's or some types' events (all given must match); a forgotten session or project is never recorded again. */
   "data.forget": { params: { sessionId?: string; projectId?: string; before?: number; types?: string[] }; result: { events: number } };
   /** What the log knows about an entity (agent, session, project, pane, window, space), or the newest of a kind, with links. */
@@ -457,6 +459,8 @@ export type CoreEvent =
   | { type: "fs.changed"; path: string }
   /** Events recorded or updated since the last one, for a data.subscribe subscription (merge by id). */
   | { type: "data.changed"; id: string; events: DataEvent[] }
+  /** Rows of a view that changed, for a data.subscribeView subscription (turns by agent and index, sessions by key). */
+  | { type: "view.changed"; id: string; view: "turns" | "sessions"; rows: (TurnRow | SessionInfo)[] }
   /** Bring a window to the front (e.g. `open .` in a terminal). */
   | { type: "window.focus"; id: WindowId }
   | { type: "notification"; notification: AppNotification }

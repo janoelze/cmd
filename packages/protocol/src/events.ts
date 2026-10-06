@@ -8,6 +8,7 @@
 // stored rows keep their `v`, readers see the current shape.
 
 import type { AgentKind, CommandRun, PaneId, SpaceId, WindowId } from "./model.ts";
+import type { AgentTurn } from "./activity.ts";
 
 /** The events file's schema version (tables), not the payloads'. */
 export const EVENTS_SCHEMA = 1;
@@ -250,4 +251,36 @@ export interface DataStats {
   /** Events in the last 24 hours and 7 days. */
   recent: { day: number; week: number };
   oldest: number | null;
+}
+
+/** A turn as the turns view keeps it: the turn and where its agent ran. */
+export type TurnRow = AgentTurn & { cwd: string | null };
+
+/** A session as the sessions view keeps it. */
+export interface SessionInfo {
+  /** "<agent>:<session id>", the log's session id. */
+  key: string;
+  id: string;
+  agent: string;
+  path: string | null;
+  cwd: string | null;
+  branch: string | null;
+  title: string | null;
+  firstPrompt: string | null;
+  started: number | null;
+  updated: number | null;
+  messages: number;
+  projectId: string | null;
+}
+
+/** A live query over a view (data.subscribeView): rows now, then each row that changes. */
+export interface ViewQuery {
+  view: "turns" | "sessions";
+  agentId?: string;
+  /** "<agent>:<session id>". */
+  sessionId?: string;
+  projectId?: string;
+  /** Turns started, or sessions active, since this time (ms). */
+  since?: number;
+  limit?: number;
 }

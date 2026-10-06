@@ -118,6 +118,7 @@ const { values: opt, positionals: pos } = parseArgs({
     follow: { type: "boolean", short: "f" },
     days: { type: "string" },
     weeks: { type: "string" },
+    view: { type: "string" },
     // cmd data
     before: { type: "string" },
     rules: { type: "boolean" },

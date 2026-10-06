@@ -70,6 +70,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "data.subscribe": "never",
   "widget.hello": "never",
   "data.unsubscribe": "never",
+  "data.subscribeView": "never",
   "data.forget": "never",
   "data.entities": "never",
   "data.applyRules": "never",
@@ -374,6 +375,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "remote.input":
     case "widget.library":
     case "data.changed": // to its subscriber only, and data.* is never remote
+    case "view.changed":
     case "magic.previewRequest": // sent to the app's previewer only, never broadcast
       return false;
     default: {

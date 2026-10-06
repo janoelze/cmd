@@ -146,6 +146,13 @@ export class ActivityView {
   }
 
   /** `lastSeq`: the newest event reduced into it (a restarted core replays only later ones). `cwd`: where the agent ran. */
+  /** Called with each turn saved (not during a rebuild), for live queries. */
+  onTurn(fn: (t: AgentTurn, cwd: string | null) => void): void {
+    this.#listeners.push(fn);
+  }
+  #listeners: ((t: AgentTurn, cwd: string | null) => void)[] = [];
+  #rebuilding = false;
+
   saveTurn(t: AgentTurn, lastSeq?: number, cwd?: string | null): void {
     this.#views
       .stmt(
@@ -153,6 +160,10 @@ export class ActivityView {
          ON CONFLICT(agent_id, idx) DO UPDATE SET doc = excluded.doc, last_seq = MAX(last_seq, excluded.last_seq), cwd = COALESCE(excluded.cwd, cwd)`,
       )
       .run(t.agentId, t.index, t.startedAt, lastSeq ?? 0, cwd ?? null, JSON.stringify(t));
+    if (!this.#rebuilding && this.#listeners.length) {
+      const stored = cwd ?? (this.#views.stmt(`SELECT cwd FROM turns WHERE agent_id = ? AND idx = ?`).get(t.agentId, t.index) as { cwd: string | null } | undefined)?.cwd ?? null;
+      for (const fn of this.#listeners) fn(t, stored);
+    }
   }
 
   lastTurn(agentId: AgentId): { turn: AgentTurn; lastEvent: number } | null {
@@ -183,6 +194,8 @@ export class ActivityView {
     const t0 = Date.now();
     const agents = this.#data.store.db.prepare(`SELECT DISTINCT agent_id FROM events WHERE type = 'agent.hook' AND agent_id IS NOT NULL`).all() as { agent_id: string }[];
     let turns = 0;
+    this.#rebuilding = true;
+    try {
     this.#views.transaction(() => {
       this.#views.db.exec(`DELETE FROM turns`);
       for (const { agent_id } of agents) {
@@ -200,6 +213,9 @@ export class ActivityView {
       }
       turns = (this.#views.db.prepare(`SELECT COUNT(*) AS n FROM turns`).get() as { n: number }).n;
     });
+    } finally {
+      this.#rebuilding = false;
+    }
     log.info("turns rebuilt from events", { agents: agents.length, turns, ms: Date.now() - t0 });
     return { agents: agents.length, turns };
   }
