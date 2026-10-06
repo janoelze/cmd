@@ -225,12 +225,12 @@ function* transcriptFiles(roots: string[]): Generator<TranscriptFile> {
   for (const home of roots) {
     const projects = path.join(home, "projects");
     if (fs.existsSync(projects)) {
-      for (const f of walk(projects)) yield { agent: "claude", path: f, home };
+      for (const f of walk(projects)) yield { agent: "claude", path: f, env: null };
       continue;
     }
     for (const sub of ["sessions", "archived_sessions"]) {
       const d = path.join(home, sub);
-      if (fs.existsSync(d)) for (const f of walk(d)) yield { agent: "codex", path: f, home };
+      if (fs.existsSync(d)) for (const f of walk(d)) yield { agent: "codex", path: f, env: null };
     }
   }
 }

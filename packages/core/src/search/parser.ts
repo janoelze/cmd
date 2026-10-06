@@ -134,7 +134,7 @@ function textOf(content: unknown): string | undefined {
 }
 
 /** The memorable parts of a tool call's input: what it ran, on which files, and why. */
-function describeToolInput(input: unknown): string | undefined {
+export function describeToolInput(input: unknown): string | undefined {
   if (!isObj(input)) return undefined;
   const keys = ["description", "command", "cmd", "file_path", "absolute_path", "notebook_path", "path", "pattern", "url", "query", "prompt", "skill"];
   const parts: string[] = [];

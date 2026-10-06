@@ -186,7 +186,7 @@ export class DataStore {
 
   /** Builds the full-text index over what's recorded (after an import, or when it was dropped). */
   buildFts(bodyOf?: (e: DataEvent) => string | null): void {
-    this.db.exec(`DROP TABLE IF EXISTS events_fts`);
+    this.db.exec(`DROP TABLE IF EXISTS events_vocab; DROP TABLE IF EXISTS events_fts`);
     this.db.exec(FTS_SQL);
     const ins = this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`);
     this.transaction(() => {

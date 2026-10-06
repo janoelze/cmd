@@ -5,7 +5,7 @@
 // recorded days changes nothing but adds what was missed.
 
 import path from "node:path";
-import type { SessionRow } from "../search/index.ts";
+import type { SessionRow } from "../data/views/sessions.ts";
 import type { AgentTurn } from "@cmd/protocol";
 import type { NewJournalEvent } from "./store.ts";
 
@@ -20,7 +20,7 @@ export { projectOf };
 
 /** Agent sessions from the transcript index (search.sqlite's sessions table). */
 export function sessionEvents(rows: SessionRow[]): NewJournalEvent[] {
-  return rows.map((r) => {
+  return rows.filter((r): r is SessionRow & { started: number } => r.started !== null).map((r) => {
     const title = r.title?.trim() || null;
     return {
       at: r.started,

@@ -286,7 +286,6 @@ export const SETTINGS_SCHEMA = {
     description: "When a command that ran this long finishes.",
   },
 
-  "search.enabled": { title: "Index transcripts", type: "boolean", default: true, description: "Search agent transcripts with ? in the palette." },
   "search.archiveDirs": {
     title: "Archive folders", placeholder: "~/claude-transcripts-archive", code: true,
     type: "string",
@@ -426,6 +425,7 @@ export type SettingKey = keyof typeof SETTINGS_SCHEMA;
 
 /** Keys that were renamed: old settings files keep working (old → new). */
 export const RENAMED_SETTINGS: Readonly<Record<string, SettingKey>> = {
+  "search.enabled": "data.record.transcripts",
   "terminal.fontFamily": "font.code",
   "terminal.fontSize": "font.codeSize",
   "magic.model": "ai.anthropic.model",

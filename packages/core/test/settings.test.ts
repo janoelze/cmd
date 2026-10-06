@@ -5,7 +5,6 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, parseJsonc, parseSettingValue, resolveSettings, type Settings } from "@cmd/protocol";
 import { Core } from "../src/core.ts";
-import type { SearchService } from "../src/search/service.ts";
 import { SettingsService } from "../src/settings.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { launchCommand } from "../src/agents/tracker.ts";
@@ -108,41 +107,22 @@ describe("live apply", () => {
     expect(seen).toEqual([DEFAULT_SETTINGS["font.codeSize"], 16]);
   });
 
-  it("restarts search when search.* changes, one service at a time", async () => {
+  it("reads transcripts again when their settings change, one reader at a time, none when they're off", async () => {
     const made: Settings[] = [];
-    let open = 0;
-    let maxOpen = 0;
-    const fake = (s: Settings) => {
-      made.push(s);
-      if (!s["search.enabled"]) return null;
-      maxOpen = Math.max(maxOpen, ++open);
-      const svc = {
-        on: () => svc,
-        status: () => ({ sessions: 0, files: 0, indexing: false, done: 0, total: 0 }),
-        search: () => [],
-        close: async () => void open--,
-      };
-      return svc as unknown as SearchService;
-    };
-    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, search: fake });
+    const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, ingestInline: true, transcriptRoots: (s) => (made.push(s), []) });
     const settle = () => new Promise((r) => setTimeout(r, 0));
     await settle();
     await core.call("settings.set", { key: "search.archiveDirs", value: "~/a, ~/b" });
     await settle();
-    await core.call("settings.set", { key: "font.codeSize", value: 15 }); // not search: no restart
+    await core.call("settings.set", { key: "font.codeSize", value: 15 }); // not transcripts: no restart
     await settle();
-    // Changes in a burst start one service, with the latest settings.
+    // Changes in a burst start one reader, with the latest settings; off means none.
     await core.call("settings.set", { key: "search.archiveDirs", value: "~/c" });
-    await core.call("settings.set", { key: "search.enabled", value: false });
+    await core.call("settings.set", { key: "data.record.transcripts", value: false });
     await settle();
+    expect(made.map((s) => s["search.archiveDirs"])).toEqual([DEFAULT_SETTINGS["search.archiveDirs"], "~/a, ~/b"]);
+    await expect(core.call("search.reindex", {})).rejects.toThrow(/off/);
     await core.close();
-    expect(made.map((s) => [s["search.enabled"], s["search.archiveDirs"]])).toEqual([
-      [true, DEFAULT_SETTINGS["search.archiveDirs"]],
-      [true, "~/a, ~/b"],
-      [false, "~/c"],
-    ]);
-    expect(maxOpen).toBe(1);
-    expect(open).toBe(0);
   });
 
   it.skipIf(!fs.existsSync("/bin/zsh"))("keeps the shell `open` rules file current for running shells", async () => {

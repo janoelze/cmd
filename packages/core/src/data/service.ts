@@ -111,6 +111,26 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent] }> {
     return n;
   }
 
+  /** Like recordAll, returning the stored events (for views fed from a batch). */
+  recordBatch(events: Iterable<NewDataEvent>): DataEvent[] {
+    const out: DataEvent[] = [];
+    this.store.transaction(() => {
+      for (const e of events) {
+        const c = classOf(e.type);
+        if (!this.enabled(c)) continue;
+        const cap = DATA_CLASSES[c].cap;
+        let content = typeof e.content === "string" ? redact(e.content) : (e.content ?? null);
+        let flags = DATA_FLAGS.imported;
+        if (cap && typeof content === "string" && content.length > cap) (content = content.slice(0, cap)), (flags |= DATA_FLAGS.cut);
+        this.store.record({ ...e, text: e.text ? redact(e.text) : e.text, body: e.body ? redact(e.body) : e.body, data: redactDeep(e.data), content, flags });
+        this.#entities(e);
+        const stored = this.store.get(e.id);
+        if (stored) out.push(stored);
+      }
+    });
+    return out;
+  }
+
   /** The entities an event names, noted once per process (their seen time follows the event). */
   #entities(e: NewDataEvent): void {
     const pairs: [string, string | null | undefined][] = [["space", e.spaceId], ["project", e.projectId], ["session", e.sessionId], ["agent", e.agentId], ["pane", e.paneId], ["window", e.windowId], ["device", e.deviceId]];

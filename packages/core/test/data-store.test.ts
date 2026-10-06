@@ -60,7 +60,7 @@ describe("DataStore", () => {
 
   it("turns a Claude transcript line into an event with the agent's ids kept", () => {
     const line = JSON.stringify({ type: "assistant", uuid: "u2", parentUuid: "u1", sessionId: "s", timestamp: "2026-10-06T10:00:00Z", cwd: "/w", message: { role: "assistant", id: "m1", model: "claude-opus-5-5", content: [{ type: "text", text: "Done.\nMore." }, { type: "tool_use", id: "t1", name: "Bash", input: { command: "ls" } }] } });
-    const e = claudeLine(line, 1, { agent: "claude", path: "/x/s.jsonl" })!;
+    const e = claudeLine(line, 1, { agent: "claude", path: "/x/s.jsonl", env: null })!;
     expect(e).toMatchObject({ id: "claude:u2", parentId: "claude:u1", sessionId: "claude:s", projectId: "dir:/w", type: "transcript.message", text: "Done.", at: Date.parse("2026-10-06T10:00:00Z") });
     expect((e.data as { blocks: { name?: string }[] }).blocks[1]!.name).toBe("Bash");
     expect(e.content).toBeNull();

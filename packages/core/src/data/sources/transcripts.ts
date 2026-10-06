@@ -1,31 +1,54 @@
-// Agent transcripts as events (docs/28 §2, "Transcript messages"; requirement
-// A6: cmd owns transcripts). One JSONL line of a Claude Code or Codex session
-// becomes one `transcript.*` event: the agent's own ids kept verbatim
-// (`claude:<uuid>`, parent = parentUuid; `codex:<session>:<n>`), the message
-// normalised into a small `data` (role, blocks with tool ids, sizes), the words
-// as `body` for search, and the verbatim line as the blob when it's big.
-// Spike: used by the importer; phase 3 feeds the same function from a tailer.
+// Agent transcripts as events (docs/28 §2; requirement A6: cmd owns
+// transcripts). One JSONL line of a session becomes one `transcript.*` event:
+// the agent's own ids kept verbatim (`claude:<uuid>`, parent = parentUuid;
+// `codex:<session>:<n>`), the message normalised into a small `data`, the words
+// for search as `body` (prompts, answers, tool inputs with their identifier
+// parts), the verbatim line as the blob when it's big. Files are read from
+// where the last read stopped (readTranscript), so a live session costs only
+// its new lines. Agents whose lines cmd doesn't know line by line (Copilot) are
+// read whole through their parser and re-emitted on change; ids keep that idempotent.
 
-import { parseClaude, parseCodex } from "../../search/parser.ts";
-import type { DataEventType } from "@cmd/protocol";
-import type { StoreEvent as NewEvent } from "../store.ts";
+import fs from "node:fs";
+import { StringDecoder } from "node:string_decoder";
+import type { AgentKind, DataEventType } from "@cmd/protocol";
+import { cleanClaudePrompt, describeToolInput, headObjects, type SessionDocument, type TranscriptText } from "../../search/parser.ts";
+import { identifierParts } from "../../search/query.ts";
+import type { TranscriptRoot, TranscriptSources } from "../../search/sources.ts";
 import { projectIdOf } from "../project.ts";
+import type { StoreEvent as NewEvent } from "../store.ts";
 
 /** Lines shorter than this are kept whole in `data`; longer ones go to a blob with a summary inline. */
 export const INLINE_LINE = 2048;
 const TEXT_LINE = 300;
+/** Words indexed per event are cut here. */
+const BODY_CAP = 20_000;
 
 export interface TranscriptFile {
-  agent: "claude" | "codex";
+  /** Whose transcripts (null in a mixed folder: sniffed from the file). */
+  agent: AgentKind | null;
   path: string;
-  /** The config dir it lives in (CLAUDE_CONFIG_DIR, CODEX_HOME), for resume env. */
-  home?: string | null;
+  /** Environment the agent needs to find these sessions again (the root's). */
+  env: Record<string, string> | null;
+}
+
+/** Where a file's reading stopped. */
+export interface ReadState {
+  offset: number;
+  lines: number;
+  agent: AgentKind | null;
+}
+
+export interface ReadResult extends ReadState {
+  events: NewEvent[];
+  /** The session the file's lines belong to (the last one seen). */
+  sessionId: string | null;
 }
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => !!v && typeof v === "object" && !Array.isArray(v);
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
 const line1 = (s: string) => (s.split(/\r?\n/).find((l) => l.trim()) ?? "").trim().slice(0, TEXT_LINE);
+const cap = (s: string) => (s.length > BODY_CAP ? s.slice(0, BODY_CAP) : s);
 
 /** Text blocks of a message's content, joined. */
 export function textOf(content: unknown): string {
@@ -51,12 +74,25 @@ function blocksOf(content: unknown): Obj[] {
   });
 }
 
+/** Tool calls in a message as text for search ("Bash: pnpm test"), with the identifiers' parts. */
+function toolText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  const parts: string[] = [];
+  for (const b of content) {
+    if (!isObj(b) || (b.type !== "tool_use" && b.type !== "server_tool_use")) continue;
+    const t = describeToolInput(b.input);
+    if (t) parts.push(`${str(b.name) ?? "tool"}: ${t}`);
+  }
+  return parts.join("\n");
+}
+
 /**
- * One Claude Code line → an event, or null for lines that aren't part of the
- * record (progress noise). Every line type is kept as a kind of its own so a
+ * One Claude Code line → an event, or null for
+ * a line that isn't JSON. Every line type is kept as a kind of its own so a
  * reader can tell dialogue from compaction summaries and metadata.
  */
 export function claudeLine(line: string, n: number, file: TranscriptFile, sessionHint?: string): NewEvent | null {
+  const agent = "claude";
   let o: Obj;
   try {
     o = JSON.parse(line) as Obj;
@@ -67,24 +103,27 @@ export function claudeLine(line: string, n: number, file: TranscriptFile, sessio
   const type = str(o.type) ?? "unknown";
   const uuid = str(o.uuid);
   const sessionId = str(o.sessionId) ?? sessionHint;
-  const id = uuid ? `claude:${uuid}` : `claude:${sessionId ?? file.path}:${n}`;
+  const id = uuid ? `${agent}:${uuid}` : `${agent}:${sessionId ?? file.path}:${n}`;
   const at = o.timestamp ? Date.parse(String(o.timestamp)) : NaN;
   const base: Omit<NewEvent, "type" | "data"> = {
     id,
     at: Number.isFinite(at) ? at : 0,
-    source: `transcript:claude${str(o.version) ? `@${o.version}` : ""}`,
-    parentId: str(o.parentUuid) ? `claude:${o.parentUuid}` : null,
-    sessionId: sessionId ? `claude:${sessionId}` : null,
+    source: `transcript:${agent}${str(o.version) ? `@${o.version}` : ""}`,
+    parentId: str(o.parentUuid) ? `${agent}:${o.parentUuid}` : null,
+    sessionId: sessionId ? `${agent}:${sessionId}` : null,
     projectId: projectIdOf(str(o.cwd)),
   };
   const message = isObj(o.message) ? o.message : null;
+  const side = o.isSidechain === true || o.isMeta === true;
   const common: Obj = { line: type, cwd: o.cwd, gitBranch: o.gitBranch, version: o.version, isSidechain: o.isSidechain === true, isMeta: o.isMeta === true };
 
   if (message && (type === "user" || type === "assistant")) {
     const role = str(message.role) ?? type;
-    const text = textOf(message.content);
+    const raw = textOf(message.content);
+    const text = role === "user" ? cleanClaudePrompt(raw) : raw;
     const blocks = blocksOf(message.content);
     const isToolResult = blocks.some((b) => b.type === "tool_result") && !blocks.some((b) => b.type === "text");
+    const tools = toolText(message.content);
     const big = line.length > INLINE_LINE;
     const data: Obj = {
       ...common,
@@ -96,11 +135,13 @@ export function claudeLine(line: string, n: number, file: TranscriptFile, sessio
       isCompactSummary: o.isCompactSummary === true,
       ...(big ? { chars: line.length } : { message }),
     };
+    // Subagent internals and injected meta messages are kept, not searched (the parser skipped them too).
+    const body = isToolResult || side ? null : cap([text, tools, identifierParts([text, tools])].filter(Boolean).join("\n"));
     return {
       ...base,
       type: isToolResult ? "transcript.tool_result" : o.isCompactSummary === true ? "transcript.compaction" : "transcript.message",
       text: line1(text) || (blocks.find((b) => b.name) ? `${blocks.find((b) => b.name)!.name as string}` : null),
-      body: isToolResult ? null : text,
+      body,
       data,
       content: big ? line : null,
     };
@@ -109,8 +150,10 @@ export function claudeLine(line: string, n: number, file: TranscriptFile, sessio
     case "summary":
       return { ...base, type: "transcript.summary", text: line1(str(o.summary) ?? ""), body: str(o.summary) ?? null, data: { ...common, leafUuid: o.leafUuid } };
     case "ai-title":
-    case "custom-title":
-      return { ...base, type: "transcript.title", text: str(o.aiTitle) ?? str(o.customTitle) ?? null, data: { ...common, title: o.aiTitle ?? o.customTitle } };
+    case "custom-title": {
+      const title = str(o.aiTitle) ?? str(o.customTitle) ?? null;
+      return { ...base, type: "transcript.title", text: title, body: title, data: { ...common, title, custom: type === "custom-title" } };
+    }
     case "system":
       return { ...base, type: str(o.subtype) === "compact_boundary" ? "transcript.compaction" : "transcript.system", text: line1(str(o.content) ?? str(o.subtype) ?? ""), data: { ...common, subtype: o.subtype, compactMetadata: o.compactMetadata, logicalParentUuid: o.logicalParentUuid }, content: line.length > INLINE_LINE ? line : null };
     default:
@@ -151,26 +194,143 @@ export function codexLine(line: string, n: number, file: TranscriptFile, state: 
   let body: string | null = null;
   if (inner === "user_message" || (inner === "message" && payload.role === "user")) {
     type = "transcript.message";
-    body = str(payload.message) ?? textOf(payload.content);
-    text = line1(body);
+    const t = str(payload.message) ?? textOf(payload.content);
+    if (inner === "message" && t.startsWith("<")) type = "transcript.other"; // environment context, not the person
+    else (body = cap(`${t}\n${identifierParts([t])}`)), (text = line1(t));
   } else if (inner === "agent_message" || (inner === "message" && payload.role === "assistant")) {
     type = "transcript.message";
-    body = str(payload.message) ?? textOf(payload.content);
-    text = line1(body);
+    const t = str(payload.message) ?? textOf(payload.content);
+    body = cap(`${t}\n${identifierParts([t])}`);
+    text = line1(t);
   } else if (inner === "function_call" || inner === "custom_tool_call" || inner === "local_shell_call") {
     type = "transcript.tool_use";
-    text = `${str(payload.name) ?? "shell"}`;
+    let input: unknown = payload.arguments ?? payload.input ?? payload.action;
+    if (typeof input === "string") {
+      try {
+        input = JSON.parse(input);
+      } catch {}
+    }
+    const t = describeToolInput(input);
+    text = `${str(payload.name) ?? "shell"}${t ? `: ${line1(t)}` : ""}`;
+    body = t ? cap(`${t}\n${identifierParts([t])}`) : null;
     common.callId = payload.call_id;
   } else if (inner === "function_call_output" || inner === "custom_tool_call_output") {
     type = "transcript.tool_result";
     common.callId = payload.call_id;
   } else if (outer === "compacted" || inner === "compacted") type = "transcript.compaction";
   else if (outer === "session_meta") type = "transcript.session";
-  else if (outer === "turn_context") type = "transcript.other";
   return { ...base, type, text, body, data: { ...common, role: payload.role }, content: big ? line : null };
 }
 
-/** Session rows (title, first prompt, span) the old index kept, from the same file, for the sessions view later. */
-export function sessionSummary(text: string, file: TranscriptFile) {
-  return file.agent === "claude" ? parseClaude(text, file.path) : parseCodex(text, file.path);
+/**
+ * A session read whole through its parser (agents without line-by-line
+ * readers: Copilot, unknown formats): its prompts, answers and tool calls as
+ * events, ids from their position so re-reading changes nothing.
+ */
+export function docEvents(doc: SessionDocument, file: TranscriptFile, mtime: number): NewEvent[] {
+  const agent = doc.agent;
+  const sid = `${agent}:${doc.id}`;
+  const at = doc.startedAt ?? mtime;
+  const base = { source: `transcript:${agent}`, sessionId: sid, projectId: projectIdOf(doc.cwd) };
+  const out: NewEvent[] = [];
+  const common = { cwd: doc.cwd, gitBranch: doc.branch, whole: true };
+  doc.prompts.forEach((p, i) => out.push({ ...base, id: `${sid}:p${i}`, at, type: "transcript.message", text: line1(p), body: cap(`${p}\n${identifierParts([p])}`), data: { ...common, role: "user", message: { role: "user", content: p } } }));
+  doc.responses.forEach((r, i) => out.push({ ...base, id: `${sid}:r${i}`, at, type: "transcript.message", text: line1(r), body: cap(`${r}\n${identifierParts([r])}`), data: { ...common, role: "assistant", message: { role: "assistant", content: r } } }));
+  doc.tools.forEach((t, i) => out.push({ ...base, id: `${sid}:t${i}`, at, type: "transcript.tool_use", text: line1(t), body: cap(`${t}\n${identifierParts([t])}`), data: { ...common, tool: t } }));
+  if (doc.title) out.push({ ...base, id: `${sid}:title`, at, type: "transcript.title", text: line1(doc.title), body: doc.title, data: { ...common, title: doc.title } });
+  if (doc.updatedAt) for (const e of out) e.until = doc.updatedAt;
+  return out;
+}
+
+/** The agent whose file this is: the root's, else sniffed from the first lines. */
+export function sniffAgent(path: string, sources: TranscriptSources): AgentKind | null {
+  const head = headObjects(fileLines(path), 20);
+  return sources.all().find((s) => s.sniff(head))?.agent ?? null;
+}
+
+/**
+ * Reads a transcript from where the last read stopped and returns the events of
+ * the complete lines since, with where to continue. A file that shrank (a
+ * rewrite) is read from the start again; ids keep that idempotent.
+ */
+export function readTranscript(file: TranscriptFile, state: ReadState | null, sources: TranscriptSources, stat: { size: number; mtime: number }): ReadResult {
+  let agent = file.agent ?? state?.agent ?? null;
+  if (!agent) agent = sniffAgent(file.path, sources);
+  const start = state && state.offset <= stat.size ? state.offset : 0;
+  let lines = start ? (state?.lines ?? 0) : 0;
+  const events: NewEvent[] = [];
+  let sessionId: string | null = null;
+
+  // Qwen's lines look like Claude's but carry Gemini-style parts: its parser reads the file whole.
+  if (agent === "claude" || agent === "codex") {
+    const codex: { sessionId?: string; cwd?: string } = {};
+    const hint = agent !== "codex" ? file.path.split(/[\\/]/).pop()?.replace(/\.jsonl$/, "") : undefined;
+    // Codex's session id is on its first line: a resumed read needs it again.
+    if (agent === "codex" && start) {
+      const head = headObjects(fileLines(file.path), 1)[0];
+      if (head && isObj(head.payload)) (codex.sessionId = str(head.payload.id)), (codex.cwd = str(head.payload.cwd));
+    }
+    const offset = readLinesFrom(file.path, start, (line) => {
+      lines++;
+      const e = agent === "codex" ? codexLine(line, lines, file, codex) : claudeLine(line, lines, file, hint);
+      if (e) events.push(e), (sessionId = e.sessionId ?? sessionId);
+    });
+    return { events, offset, lines, agent, sessionId };
+  }
+  // Whole-file parsers: Copilot, and anything sniffed as nothing cmd knows line by line.
+  const root: TranscriptRoot = { agent, dir: "", env: file.env };
+  const doc = sources.parse(root, fileLines(file.path), file.path);
+  if (doc) events.push(...docEvents(doc, file, stat.mtime)), (sessionId = `${doc.agent}:${doc.id}`);
+  return { events, offset: stat.size, lines: 0, agent: doc?.agent ?? agent, sessionId };
+}
+
+/** One read buffer, reused for every transcript. */
+const chunk = Buffer.allocUnsafe(1 << 20);
+
+/** Calls `fn` for every complete line from `start`; returns the offset after the last complete line. */
+function readLinesFrom(file: string, start: number, fn: (line: string) => void): number {
+  const fd = fs.openSync(file, "r");
+  try {
+    const decoder = new StringDecoder("utf8");
+    let rest = "";
+    let pos = start;
+    let consumed = start;
+    for (let n; (n = fs.readSync(fd, chunk, 0, chunk.length, pos)) > 0; ) {
+      pos += n;
+      const text = rest + decoder.write(chunk.subarray(0, n));
+      let from = 0;
+      for (let i; (i = text.indexOf("\n", from)) >= 0; from = i + 1) {
+        const line = text.slice(from, i);
+        if (line.trim()) fn(line);
+        consumed += Buffer.byteLength(line, "utf8") + 1;
+      }
+      rest = text.slice(from);
+    }
+    return consumed;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** A transcript's lines on demand (sniffing, whole-file parsers). */
+export function fileLines(file: string): TranscriptText {
+  return (fn) => {
+    const fd = fs.openSync(file, "r");
+    try {
+      const decoder = new StringDecoder("utf8");
+      let rest = "";
+      for (let n; (n = fs.readSync(fd, chunk, 0, chunk.length, null)) > 0; ) {
+        const text = rest + decoder.write(chunk.subarray(0, n));
+        let start = 0;
+        for (let i; (i = text.indexOf("\n", start)) >= 0; start = i + 1) {
+          if (fn(text.slice(start, i)) === false) return;
+        }
+        rest = text.slice(start);
+      }
+      rest += decoder.end();
+      if (rest) fn(rest);
+    } finally {
+      fs.closeSync(fd);
+    }
+  };
 }

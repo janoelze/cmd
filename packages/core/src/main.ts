@@ -13,7 +13,6 @@ import { adoptLoginPath } from "./loginpath.ts";
 import { ProcInfo } from "./agents/procinfo.ts";
 import { statusRoot } from "./agents/statusfiles.ts";
 import { locateContext } from "./search/sources.ts";
-import { SearchService } from "./search/service.ts";
 import { connectHost } from "./terminals/remote.ts";
 import type { TermBackend } from "./terminals/types.ts";
 
@@ -67,11 +66,6 @@ try {
 }
 
 const core = new Core({
-  search: (s, sources) => {
-    if (!s["search.enabled"]) return null;
-    const archives = s["search.archiveDirs"].split(",").map((d) => d.trim()).filter(Boolean);
-    return new SearchService(path.join(home, "search.sqlite"), sources.locate(locateContext(), archives));
-  },
   socketPath,
   dbPath: path.join(home, "cmd.sqlite"),
   settingsPath: path.join(configDir(), "settings.json"),
@@ -89,6 +83,7 @@ const core = new Core({
   statusRoot: statusRoot(),
   build,
   stateDir: home,
+  transcripts: true,
   // Release builds started by the app; anything else only when asked to. "off": never (CI, e2e).
   // The installed app sets agents up by itself; development builds don't (their hook would point into a checkout).
   autoHooks: instanceName() === "release" && !!process.env.CMD_APP_VERSION && !process.env.CMD_TRANSCRIPTS_HOME,

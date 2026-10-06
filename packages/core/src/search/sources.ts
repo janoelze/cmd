@@ -105,7 +105,12 @@ export class TranscriptSources {
     if (!transcriptPath.endsWith(".jsonl") || known.some((r) => covers(r, transcriptPath))) return null;
     const source = this.get(agent);
     const root = source?.rootFor?.(transcriptPath, ctx) ?? null;
-    return root && covers(root, transcriptPath) ? root : null;
+    // Roots are real paths; the reported path may go through a symlink (macOS's /var, dotfile repos).
+    let real = transcriptPath;
+    try {
+      real = fs.realpathSync(transcriptPath);
+    } catch {}
+    return root && (covers(root, transcriptPath) || covers(root, real)) ? root : null;
   }
 
   /** The roots in an agent home that no known root covers yet. */

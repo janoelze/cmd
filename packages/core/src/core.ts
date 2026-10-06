@@ -8,13 +8,17 @@ import path from "node:path";
 import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId } from "@cmd/protocol";
 import { EXPORT_FORMAT, lineSplitter, TURN_FORMAT } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
-import { AgentTracker } from "./agents/tracker.ts";
+import { AgentTracker, sessionIdOf } from "./agents/tracker.ts";
 import { JournalService } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
 import { recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
 import { DataService } from "./data/service.ts";
 import { ViewsStore } from "./data/views/views.ts";
 import { ActivityView } from "./data/views/activity.ts";
+import { SessionsView } from "./data/views/sessions.ts";
+import { SearchView } from "./data/views/search.ts";
+import { TranscriptIngest } from "./data/sources/ingest.ts";
+import { conversationOf } from "./data/views/conversation.ts";
 import { rewrite } from "./agents/activity/fixture.ts";
 import { AgentHomes } from "./agents/homes.ts";
 import { cleanAiBody, NOTICE_SYSTEM, noticeContext, type NoticeKind } from "./agents/notice.ts";
@@ -27,9 +31,8 @@ import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { restoreSession } from "./restore.ts";
 import type { TermBackend } from "./terminals/types.ts";
 import { ProcessSampler, ResourceMonitor, type ProcSampler, type TreeSampler } from "./resources.ts";
-import type { SearchService } from "./search/service.ts";
 import { registerBuiltinSources } from "./search/builtin.ts";
-import { locateContext, TranscriptSources, type LocateContext } from "./search/sources.ts";
+import { locateContext, TranscriptSources, type LocateContext, type TranscriptRoot } from "./search/sources.ts";
 import { listDir, parseOverrides, readText, resolvePaths, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { gitDiff, gitStatus } from "./git.ts";
@@ -79,11 +82,12 @@ export interface CoreOptions {
   procSampler?: ProcSampler | null;
   /** Hook status directory (statusRoot()); null disables file-based hooks. */
   statusRoot?: string | null;
-  /**
-   * Transcript search (runs its own indexing worker) for the current settings and
-   * transcript sources; called again when search.* changes. Returns null when search is off.
-   */
-  search?: ((settings: Settings, sources: TranscriptSources) => SearchService | null) | null;
+  /** Read agent transcripts into the log (main.ts). Tests leave it off, or pass `transcriptRoots`. */
+  transcripts?: boolean;
+  /** Tests: the transcript folders to read (default: TranscriptSources.locate plus search.archiveDirs). */
+  transcriptRoots?: (settings: Settings) => TranscriptRoot[];
+  /** Tests: read transcripts on this thread instead of in a worker. */
+  ingestInline?: boolean;
   /** File that keeps running shells' `open` rules current; null: rules are fixed when a shell starts. */
   shellRulesFile?: string | null;
   /** Source hash this core was started from (see sourceBuildId). */
@@ -179,7 +183,9 @@ export class Core {
   #previewWaits = new Map<string, { resolve: (s: MagicPreviewShot[]) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   #playwright: Promise<Previewer | null> | null = null;
   #opts: CoreOptions;
-  #search: SearchService | null = null;
+  #ingest: TranscriptIngest | null = null;
+  readonly sessions: SessionsView;
+  #searchView: SearchView;
   #closed = false;
   /** Restarts are chained so two workers never index at once. */
   #searchSwap: Promise<void> = Promise.resolve();
@@ -233,11 +239,15 @@ export class Core {
       try {
         this.data.importLegacy(this.store.db);
         this.store.db.exec(`DROP TABLE IF EXISTS agent_events; DROP TABLE IF EXISTS agent_turns; DROP TABLE IF EXISTS journal_events;`);
+        // The transcript index of cmd ≤ 0.15: the log and the sessions view replace it.
+        for (const f of ["search.sqlite", "search.sqlite-wal", "search.sqlite-shm"]) fs.rmSync(path.join(opts.stateDir, f), { force: true });
       } catch (err) {
         log.error("importing the older tables failed", err);
       }
     }
     const activity = new ActivityView(this.data, this.views);
+    this.sessions = new SessionsView(this.views, this.data);
+    this.#searchView = new SearchView(this.data, this.sessions);
     this.agents = new AgentTracker(this.panes, {
       store: this.store,
       settings,
@@ -311,6 +321,7 @@ export class Core {
       },
       agent: (id) => this.agents.get(id),
       turns: (id) => this.agents.activity.turns(id, 500),
+      transcript: (a) => (sessionIdOf(a) ? conversationOf(this.data, `${a.kind}:${sessionIdOf(a)}`) : null),
       agentTitle: (kind) => this.transcripts.get(kind)?.title ?? kind,
       dir: opts.stateDir ? path.join(opts.stateDir, "summaries") : null,
       show: (file, spaceId) => {
@@ -321,7 +332,7 @@ export class Core {
       notify: (id, title, body) => this.notifications.window(id, "summary", title, body),
     });
     this.journal = new JournalService({
-      store: new JournalStore(this.store.db, { recordedBy: this.agents.activity.recordedBy, data: this.data, turns: (since) => this.agents.activity.turnsSince(since), sessions: (since) => this.#search?.sessionsSince(since) ?? null }),
+      store: new JournalStore(this.store.db, { recordedBy: this.agents.activity.recordedBy, data: this.data, turns: (since) => this.agents.activity.turnsSince(since), sessions: (since) => this.sessions.sessionsSince(since) }),
       spaces: () => this.spaces.list(),
       agentSpace: (id) => this.agents.get(id)?.spaceId ?? null,
       ai: {
@@ -358,7 +369,7 @@ export class Core {
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
     this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
-    if (opts.search) this.settings.bind(["search.enabled", "search.archiveDirs"], () => this.#restartSearch());
+    if (opts.transcripts || opts.transcriptRoots) this.settings.bind(["data.record.transcripts", "search.archiveDirs"], () => this.#restartSearch());
 
     this.panes.on("output", (paneId, data) => this.#broadcast({ type: "pane.output", paneId, data }));
     this.panes.on("updated", (pane) => this.#broadcast({ type: "pane.updated", pane }));
@@ -377,7 +388,7 @@ export class Core {
       this.#broadcast({ type: "agent.updated", agent });
       this.#countAgent(agent);
       // Hooks report where the transcript is: picks up folders discovery doesn't know.
-      if (agent.native.transcriptPath) this.#search?.learn(agent.kind, agent.native.transcriptPath);
+      if (agent.native.transcriptPath) this.#ingest?.learn(agent.kind, agent.native.transcriptPath);
     });
     this.agents.on("removed", (agentId) => {
       this.#countedAgents.delete(agentId);
@@ -612,12 +623,12 @@ export class Core {
     // Connection-aware; handled in #serve. These run for in-process callers.
     "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),
-    "search.query": (p) => this.#search?.search(p.text, p.limit) ?? [],
-    "search.recent": (p) => this.#search?.recent(Math.min(p.limit ?? 5, 50), p.exclude) ?? [],
-    "search.status": () => this.#search?.status() ?? NO_SEARCH,
+    "search.query": (p) => this.#searchView.search(p.text, p.limit),
+    "search.recent": (p) => this.#searchView.recent(Math.min(p.limit ?? 5, 50), p.exclude),
+    "search.status": () => this.#ingest?.status() ?? NO_SEARCH,
     "search.reindex": () => {
-      if (!this.#search) throw new Error("transcript search is off (search.enabled)");
-      this.#search.reindex();
+      if (!this.#ingest) throw new Error("transcripts are off (Settings → Data)");
+      this.#ingest.reindex();
       return null;
     },
     "agent.resumeCommand": (p) => this.agents.resumeCommand(p.agentId),
@@ -666,7 +677,7 @@ export class Core {
     const script = this.#hooks.script;
     if (!this.#homesDiscovered) {
       this.#homesDiscovered = true;
-      for (const h of this.homes.discover()) this.#search?.learnHome(h.agent, h.dir);
+      for (const h of this.homes.discover()) this.#ingest?.learnHome(h.agent, h.dir);
     }
     const declined = this.#declined();
     return hookTargets(this.homes.all()).map((t) => ({ ...t, state: hookState(t.agent, t.file, script), ...(declined.has(t.file) ? { declined: true } : {}) }));
@@ -690,7 +701,7 @@ export class Core {
     if (this.#closed) return;
     this.#homesDiscovered = true;
     try {
-      for (const h of this.homes.discover()) this.#search?.learnHome(h.agent, h.dir);
+      for (const h of this.homes.discover()) this.#ingest?.learnHome(h.agent, h.dir);
     } catch (err) {
       log.error(`looking for agent homes: ${(err as Error).message}`);
     }
@@ -700,7 +711,7 @@ export class Core {
   /** A home cmd didn't know: its transcripts are indexed, and it may get the hook. */
   #newHome(h: AgentHome | null): void {
     if (!h) return;
-    this.#search?.learnHome(h.agent, h.dir);
+    this.#ingest?.learnHome(h.agent, h.dir);
     if (this.#homesDiscovered) this.#autoHooks();
   }
 
@@ -742,17 +753,26 @@ export class Core {
     }
   }
 
+  /** Reads transcripts for the current settings (folders, on/off); again when they change. */
   #restartSearch(): void {
     const gen = ++this.#searchGen;
     this.#searchSwap = this.#searchSwap.then(async () => {
-      const old = this.#search;
-      this.#search = null;
+      const old = this.#ingest;
+      this.#ingest = null;
       await old?.close();
       if (gen !== this.#searchGen || this.#closed) return; // a newer restart replaces this one
-      const next = this.#opts.search!(this.settings.settings, this.transcripts);
-      this.#search = next;
-      for (const h of this.homes.all()) next?.learnHome(h.agent, h.dir);
-      next?.on("status", (status) => this.#broadcast({ type: "search.status", status }));
+      const s = this.settings.settings;
+      let next: TranscriptIngest | null = null;
+      if (s["data.record.transcripts"]) {
+        const archives = s["search.archiveDirs"].split(",").map((d) => d.trim()).filter(Boolean);
+        const roots = this.#opts.transcriptRoots?.(s) ?? this.transcripts.locate(locateContext(), archives);
+        next = new TranscriptIngest({ data: this.data, views: this.views, sessions: this.sessions, sources: this.transcripts, roots, inline: this.#opts.ingestInline });
+        for (const h of this.homes.all()) next.learnHome(h.agent, h.dir);
+        next.on("status", (status) => this.#broadcast({ type: "search.status", status }));
+        next.on("changed", () => this.#searchView.invalidate());
+        next.start();
+      }
+      this.#ingest = next;
       this.#broadcast({ type: "search.status", status: next?.status() ?? NO_SEARCH });
     });
   }
@@ -1155,6 +1175,10 @@ export class Core {
     this.usage.close();
     this.ai.dispose();
     this.journal.dispose();
+    // The transcript reader first: its worker's last batches must not land on closed stores.
+    this.#closed = true;
+    await this.#searchSwap;
+    await this.#ingest?.close();
     this.data.dispose();
     this.views.close();
     await this.usage.flush();
@@ -1170,11 +1194,8 @@ export class Core {
     try {
       if (this.#sockIno !== null && fs.statSync(this.#opts.socketPath).ino === this.#sockIno) fs.unlinkSync(this.#opts.socketPath);
     } catch {}
-    this.#closed = true;
     this.resources?.close();
     this.timers.close();
-    await this.#searchSwap;
-    await this.#search?.close();
     this.watches.close();
     this.agents.close();
     this.store.close();

@@ -183,7 +183,7 @@ export function SettingsWindow() {
               {items.map((it) => (
                 <ItemRow key={itemKey(it)} k={itemKey(it)} ctx={ctx} />
               ))}
-              {s.items.some((it) => itemKey(it) === "search.enabled") && <IndexStatusRow status={search} enabled={snap.settings["search.enabled"]} />}
+              {s.items.some((it) => itemKey(it) === "search.archiveDirs") && <IndexStatusRow status={search} enabled={snap.settings["data.record.transcripts"]} />}
             </FormSection>
           );
           // cmd's hook goes before what needs it (peer briefings).

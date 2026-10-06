@@ -14,7 +14,7 @@ import { DATA_FLAGS, DEFAULT_SETTINGS, JOURNAL_SCHEMA, type AgentTurn, type Data
 import { logger } from "@cmd/protocol/node";
 import { DataService } from "../data/service.ts";
 import { projectOf } from "../data/project.ts";
-import type { SessionRow } from "../search/index.ts";
+import type { SessionRow } from "../data/views/sessions.ts";
 import { sessionEvents, turnEvent } from "./backfill.ts";
 
 const log = logger("journal");

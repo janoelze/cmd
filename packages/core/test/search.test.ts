@@ -4,7 +4,13 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cleanClaudePrompt, parseClaude, parseCodex, parseCopilot, parseQwen } from "../src/search/parser.ts";
 import { identifierParts, SearchQuery, Vocabulary, words } from "../src/search/query.ts";
-import { clearIndex, indexPass, learnedRoots, openIndex, saveLearnedRoot, Searcher, transcriptFiles } from "../src/search/index.ts";
+import { DataService } from "../src/data/service.ts";
+import { ViewsStore } from "../src/data/views/views.ts";
+import { SessionsView } from "../src/data/views/sessions.ts";
+import { SearchView } from "../src/data/views/search.ts";
+import { TranscriptIngest } from "../src/data/sources/ingest.ts";
+import { conversationOf } from "../src/data/views/conversation.ts";
+import { scanFiles } from "../src/data/sources/ingest-pass.ts";
 import { registerBuiltinSources } from "../src/search/builtin.ts";
 import { TranscriptSources, type TranscriptRoot } from "../src/search/sources.ts";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
@@ -137,7 +143,7 @@ describe("Qwen Code and Copilot CLI parsers", () => {
   });
 });
 
-describe("index + search", () => {
+describe("owned transcripts + search", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-search-"));
   const claudeCfg = path.join(dir, "claude");
   const projects = path.join(claudeCfg, "projects", "-Users-me-src-cmd");
@@ -152,8 +158,11 @@ describe("index + search", () => {
     { agent: "qwen", dir: path.join(dir, "qwen", "projects"), depth: 4, env: null },
     { agent: "copilot", dir: copilot, depth: 2, fileName: "events.jsonl", env: null },
   ];
-  let db: ReturnType<typeof openIndex>;
-  let searcher: Searcher;
+  let data: DataService;
+  let views: ViewsStore;
+  let sessions: SessionsView;
+  let searcher: SearchView;
+  let ingest: TranscriptIngest;
 
   beforeAll(() => {
     fs.mkdirSync(projects, { recursive: true });
@@ -161,10 +170,10 @@ describe("index + search", () => {
     fs.mkdirSync(codex, { recursive: true });
     fs.writeFileSync(path.join(projects, "s-sidebar.jsonl"), claudeSession("s-sidebar", "make the sidebar collapsible", "Collapsible sidebar done."));
     fs.writeFileSync(path.join(projects, "s-vpn.jsonl"), claudeSession("s-vpn", "wireguard vpn keeps dropping", "Restarted wg-quick."));
-    // a subagent log: below the root's depth, not indexed
+    // a subagent log: below the root's depth, not read
     fs.mkdirSync(path.join(projects, "s-vpn", "subagents"), { recursive: true });
     fs.writeFileSync(path.join(projects, "s-vpn", "subagents", "agent-1.jsonl"), claudeSession("s-vpn", "subagent kumquat", "kumquat"));
-    // the same session archived: must not show twice
+    // the same session archived: the same ids, so one session
     fs.writeFileSync(path.join(archive, "s-sidebar.jsonl"), claudeSession("s-sidebar", "make the sidebar collapsible", "Collapsible sidebar done."));
     // a Codex session in the mixed archive folder: its agent is sniffed
     fs.writeFileSync(
@@ -178,23 +187,28 @@ describe("index + search", () => {
     fs.mkdirSync(path.join(qwen, "archive"), { recursive: true });
     fs.writeFileSync(path.join(qwen, "q-live.jsonl"), qwenSession("q-live", "fix the retry loop", "Retries now back off."));
     fs.writeFileSync(path.join(qwen, "archive", "q-old.jsonl"), qwenSession("q-old", "rename the zebra module", "Renamed."));
-    // a Qwen session in the mixed archive: Claude-like, but must be sniffed as Qwen
+    // a Qwen session in the mixed archive: Claude-like, but sniffed as Qwen
     fs.writeFileSync(path.join(archive, "q-archived.jsonl"), qwenSession("q-archived", "explain the walrus operator", "It assigns."));
     fs.mkdirSync(path.join(copilot, "c-1", "checkpoints"), { recursive: true });
     fs.writeFileSync(path.join(copilot, "c-1", "events.jsonl"), copilotSession("c-1", "add a lint step", "Added it."));
     fs.writeFileSync(path.join(copilot, "c-1", "other.jsonl"), jsonl({ text: "not a transcript" })); // only events.jsonl counts
-    db = openIndex(path.join(dir, "search.sqlite"));
-    expect(indexPass(db, roots, sources)).toEqual({ changed: 9, removed: 0 });
-    searcher = new Searcher(db);
+    data = new DataService({ file: null, recordedBy: "test", settings: () => DEFAULT_SETTINGS });
+    views = new ViewsStore(null);
+    sessions = new SessionsView(views, data);
+    searcher = new SearchView(data, sessions);
+    ingest = new TranscriptIngest({ data, views, sessions, sources, roots, inline: true });
+    ingest.start();
+    expect(ingest.status()).toMatchObject({ files: 9, indexing: false });
   });
   afterAll(() => {
-    db.close(); // Windows can't delete an open database file
+    data.dispose();
+    views.close();
     rmTemp(dir);
   });
 
   it("finds sessions by prompt words, with a highlighted snippet and resume info", () => {
     const hits = searcher.search("collapsible");
-    expect(hits).toHaveLength(1); // archive copy deduplicated
+    expect(hits).toHaveLength(1); // the archive copy has the same ids
     expect(hits[0]).toMatchObject({ sessionId: "s-sidebar", agent: "claude", cwd: "/Users/me/src/cmd", branch: "main", env: { CLAUDE_CONFIG_DIR: claudeCfg } });
     expect(hits[0]!.snippet).toContain("\x01");
   });
@@ -227,38 +241,43 @@ describe("index + search", () => {
     expect(hits[0]).toMatchObject({ sessionId: "s-vpn", fuzzy: true });
   });
 
-  it("re-indexes changed files and forgets removed ones", () => {
-    const messages = () => (db.prepare(`SELECT count(*) AS n FROM message_fts`).get() as { n: number }).n;
-    const vpnMessages = () =>
-      (db.prepare(`SELECT count(*) AS n FROM message_fts WHERE session = (SELECT rowid FROM sessions WHERE id = 's-vpn')`).get() as { n: number }).n;
-    const before = messages();
-    const vpnBefore = vpnMessages();
-    const archived = (db.prepare(`SELECT msg_last - msg_first + 1 AS n FROM sessions WHERE path = ?`).get(path.join(archive, "s-sidebar.jsonl")) as { n: number }).n;
-    fs.appendFileSync(path.join(projects, "s-vpn.jsonl"), jsonl({ type: "user", sessionId: "s-vpn", message: { role: "user", content: "also check tailscale" } }));
+  it("reads only a file's new lines on the next pass; a removed file's session stays, it's cmd's now", () => {
+    const vpnEvents = () => data.query({ sessionId: "claude:s-vpn", types: ["transcript."] }).length;
+    const before = vpnEvents();
+    const total = data.store.count({ types: ["transcript."] });
+    fs.appendFileSync(path.join(projects, "s-vpn.jsonl"), jsonl({ type: "user", uuid: "u-tail", sessionId: "s-vpn", timestamp: "2026-10-02T10:00:00Z", message: { role: "user", content: "also check tailscale" } }));
     fs.rmSync(path.join(archive, "s-sidebar.jsonl"));
-    const r = indexPass(db, roots, sources);
-    expect(r).toEqual({ changed: 1, removed: 1 });
+    ingest.pass();
     searcher.invalidate();
     expect(searcher.search("tailscale").map((h) => h.sessionId)).toEqual(["s-vpn"]);
-    // The changed session's old messages are replaced, not duplicated; the removed
-    // copy's messages are gone; everyone else's stay.
-    expect(vpnMessages()).toBe(vpnBefore + 1);
-    expect(messages()).toBe(before + 1 - archived);
-    expect(indexPass(db, roots, sources)).toEqual({ changed: 0, removed: 0 });
+    expect(vpnEvents()).toBe(before + 1);
+    expect(data.store.count({ types: ["transcript."] })).toBe(total + 1);
+    expect(searcher.search("collapsible").map((h) => h.sessionId)).toEqual(["s-sidebar"]);
+    expect(ingest.status().files).toBe(8);
+    const again = data.store.count({ types: ["transcript."] });
+    ingest.pass();
+    expect(data.store.count({ types: ["transcript."] })).toBe(again);
   });
 
-  it("rebuilds from scratch, keeping learned folders; big passes announce their size first", () => {
-    saveLearnedRoot(db, { agent: "claude", dir: "/learned/projects", depth: 2, env: null });
-    const before = searcher.recent(50).length;
-    clearIndex(db);
+  it("gives summaries the conversation from the owned copy", () => {
+    const entries = conversationOf(data, "claude:s-vpn");
+    expect(entries.map((e) => e.role)).toEqual(expect.arrayContaining(["user", "assistant", "tool"]));
+    expect(entries.find((e) => e.role === "user")?.text).toMatch(/wireguard/);
+    expect(entries.find((e) => e.role === "tool")?.text).toMatch(/pnpm test|Read/);
+  });
+
+  it("reads everything again on reindex and learns folders live agents report", () => {
+    const n = data.store.count({ types: ["transcript."] });
+    ingest.reindex();
+    expect(data.store.count({ types: ["transcript."] })).toBe(n); // the same ids
+    expect(ingest.status().files).toBe(scanFiles(roots).length);
+    const learned = path.join(dir, "elsewhere", "projects", "-x");
+    fs.mkdirSync(learned, { recursive: true });
+    fs.writeFileSync(path.join(learned, "s-else.jsonl"), claudeSession("s-else", "the quokka question", "Answered."));
+    ingest.learn("claude", path.join(learned, "s-else.jsonl"));
     searcher.invalidate();
-    expect(searcher.search("collapsible")).toEqual([]);
-    const progress: [number, number][] = [];
-    const r = indexPass(db, roots, sources, (done, total) => progress.push([done, total]));
-    expect(r.changed).toBe(transcriptFiles(roots).length);
-    expect(progress.at(-1)).toEqual([r.changed, r.changed]);
-    expect(searcher.recent(50)).toHaveLength(before);
-    expect(learnedRoots(db).map((l) => l.dir)).toEqual(["/learned/projects"]);
+    expect(searcher.search("quokka").map((h) => h.sessionId)).toEqual(["s-else"]);
+    expect(data.store.entities("transcript-root").map((e) => e.id)).toContainEqual(expect.stringContaining(path.join("elsewhere", "projects")));
   });
 });
 
@@ -333,7 +352,7 @@ describe("transcript sources", () => {
   it("walks roots only as deep as allowed", () => {
     mk("deep", "a", "b");
     for (const p of ["deep/1.jsonl", "deep/a/2.jsonl", "deep/a/b/3.jsonl", "deep/a/x.txt"]) fs.writeFileSync(path.join(home, p), "");
-    const names = (depth?: number) => transcriptFiles([{ agent: null, dir: path.join(home, "deep"), depth, env: null }]).map((f) => path.basename(f.path)).sort();
+    const names = (depth?: number) => scanFiles([{ agent: null, dir: path.join(home, "deep"), depth, env: null }]).map((f) => path.basename(f.path)).sort();
     expect(names(1)).toEqual(["1.jsonl"]);
     expect(names(2)).toEqual(["1.jsonl", "2.jsonl"]);
     expect(names()).toEqual(["1.jsonl", "2.jsonl", "3.jsonl"]);

@@ -47,7 +47,7 @@ describe("stored types", () => {
 
 describe("reading stored state", () => {
   // Saved documents are decoded (stored.ts); a cast trusts whatever an older cmd wrote.
-  const files = ["store.ts", "data/views/activity.ts", "data/store.ts", "agents/homes.ts", "search/index.ts"];
+  const files = ["store.ts", "data/views/activity.ts", "data/views/sessions.ts", "data/store.ts", "agents/homes.ts"];
   for (const f of files) {
     it(`${f} doesn't cast parsed documents to their type`, () => {
       const src = fs.readFileSync(path.join(import.meta.dirname, "../src", f), "utf8");

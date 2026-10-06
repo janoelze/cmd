@@ -38,6 +38,8 @@ export interface SummaryAi {
 }
 
 export interface SummaryServiceOptions {
+  /** The session's conversation from cmd's own copy of the transcript; null or empty: not there yet. */
+  transcript?: (a: Agent) => ConversationEntry[] | null;
   ai: SummaryAi;
   agent: (id: AgentId) => Agent | null;
   turns: (id: AgentId) => AgentTurn[];
@@ -91,7 +93,10 @@ const tildify = (p: string) => (p.startsWith(os.homedir()) ? `~${p.slice(os.home
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "session";
 
 /** The session's conversation in order: from the transcript, else from the recorded turns. */
-function conversation(a: Agent, turns: AgentTurn[]): { entries: ConversationEntry[]; doc: SessionDocument | null } {
+function conversation(a: Agent, turns: AgentTurn[], owned?: (a: Agent) => ConversationEntry[] | null): { entries: ConversationEntry[]; doc: SessionDocument | null } {
+  // cmd's own copy of the session first (docs/28, A6); the agent's file when it has none yet.
+  const mine = owned?.(a);
+  if (mine?.length) return { entries: mine.map(subagentResult), doc: null };
   const file = a.native.transcriptPath;
   const parse = a.kind === "claude" ? parseClaude : a.kind === "codex" ? parseCodex : null;
   if (file && parse) {
@@ -224,7 +229,7 @@ export class SummaryService {
 
     const session = sessionOf(a);
     const turns = this.#o.turns(agentId).filter((t) => !session || !t.sessionId || t.sessionId === session);
-    const { entries, doc } = conversation(a, turns);
+    const { entries, doc } = conversation(a, turns, this.#o.transcript);
     if (!entries.length) throw new Error("Nothing to summarise yet: this session has no prompts.");
 
     const cwd = doc?.cwd ?? a.cwd;
