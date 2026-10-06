@@ -1,21 +1,29 @@
-// An empty space's hint: cycles through a few shortcuts worth knowing. Commands
-// are listed by id; labels and keys come from the command list and the user's
-// keybindings, so a remap shows here and an unbound command is skipped.
+// An empty space's hint: cycles through a few shortcuts worth knowing, as
+// "Press ⌘K for the command palette". Commands are listed by id with the phrase
+// that follows their keys; keys come from the user's keybindings, so a remap
+// shows here and an unbound command is skipped.
 
 import { useEffect, useState } from "react";
 import { Kbd } from "@cmd/ui";
-import { COMMAND_BY_ID, prettyAccelerator } from "../../../shared/commands.ts";
+import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
 
-const TIPS = ["view.palette", "file.new", "file.newTerminal", "file.newClaude", "view.search", "file.openSpace", "app.settings"];
+const TIPS: [CommandId, string][] = [
+  ["view.palette", "for the command palette"],
+  ["file.new", "to open a window or widget"],
+  ["file.newTerminal", "for a new terminal"],
+  ["file.newClaude", "to start a Claude session"],
+  ["view.search", "to search past sessions"],
+  ["file.openSpace", "to open a folder as a Space"],
+  ["app.settings", "for settings"],
+];
 const EVERY_MS = 4000;
 
 export function ShortcutTips() {
   const { bindings } = useKeybindings();
-  const tips = TIPS.flatMap((id) => {
+  const tips = TIPS.flatMap(([id, phrase]) => {
     const keys = prettyAccelerator(bindings[id]?.[0]);
-    const label = COMMAND_BY_ID.get(id)?.label.replace(/…$/, "");
-    return keys && label ? [{ id, keys, label }] : [];
+    return keys ? [{ id, keys, phrase }] : [];
   });
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -28,8 +36,7 @@ export function ShortcutTips() {
   if (!tip) return null;
   return (
     <div className="shortcut-tip" key={tip.id} aria-live="polite">
-      <Kbd keys={tip.keys} />
-      <span>{tip.label}</span>
+      Press <Kbd keys={tip.keys} /> {tip.phrase}
     </div>
   );
 }

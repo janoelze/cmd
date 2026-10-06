@@ -334,7 +334,7 @@ kbd {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.35em;
   /* Even, fixed height (the footer's icon buttons'), not the text's fractional line:
      the light centres on whole pixels. */
   height: 22px;
@@ -469,11 +469,14 @@ kbd {
 .shortcut-tip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.35em;
   font-size: var(--text-base);
   color: var(--text-dim);
+  opacity: 0.6;
   animation: shortcut-tip-in 400ms ease-out;
 }
+/* A plain filled key, roomier than the kit's outlined one. */
+.shortcut-tip .ui-kbd { padding: 4px 7px; background: var(--bg-selected); box-shadow: none; }
 @keyframes shortcut-tip-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .shortcut-tip { animation: none; } }
 
