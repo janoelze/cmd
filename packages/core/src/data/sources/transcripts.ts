@@ -46,6 +46,10 @@ export interface ReadResult extends ReadState {
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => !!v && typeof v === "object" && !Array.isArray(v);
+/** Claude's bookkeeping lines that say nothing about the work (docs/28 §11): not rows. */
+const CLAUDE_NOISE = new Set(["last-prompt", "atis-latch", "mode", "cost-state", "file-history-delta"]);
+/** Codex's per-call token counters: not rows either. */
+const CODEX_NOISE = new Set(["token_count"]);
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
 const line1 = (s: string) => (s.split(/\r?\n/).find((l) => l.trim()) ?? "").trim().slice(0, TEXT_LINE);
 const cap = (s: string) => (s.length > BODY_CAP ? s.slice(0, BODY_CAP) : s);
@@ -101,6 +105,7 @@ export function claudeLine(line: string, n: number, file: TranscriptFile, sessio
   }
   if (!isObj(o)) return null;
   const type = str(o.type) ?? "unknown";
+  if (CLAUDE_NOISE.has(type)) return null;
   const uuid = str(o.uuid);
   const sessionId = str(o.sessionId) ?? sessionHint;
   const id = uuid ? `${agent}:${uuid}` : `${agent}:${sessionId ?? file.path}:${n}`;
@@ -174,6 +179,7 @@ export function codexLine(line: string, n: number, file: TranscriptFile, state: 
   const payload = isObj(o.payload) ? o.payload : o;
   const outer = str(o.type) ?? "unknown";
   const inner = str(payload.type);
+  if (inner && CODEX_NOISE.has(inner)) return null;
   if (outer === "session_meta") {
     state.sessionId = str(payload.id) ?? state.sessionId;
     state.cwd = str(payload.cwd) ?? state.cwd;
