@@ -10,7 +10,7 @@ import { cmd } from "../bridge.ts";
 const STATE: Record<HookTarget["state"], { text: string; tone: "accent" | "warning" | "dim" }> = {
   installed: { text: "Installed.", tone: "dim" },
   missing: { text: "Not installed.", tone: "dim" },
-  legacy: { text: "Has an older hook (ghostty-agents or `cmd hook`). Install replaces it.", tone: "warning" },
+  legacy: { text: "Has an older version of the hook. Install replaces it.", tone: "warning" },
   elsewhere: { text: "Has the hook of another cmd (e.g. a development build). Install points it here.", tone: "warning" },
   stale: { text: "Has a cmd hook whose script is gone. Install replaces it.", tone: "warning" },
 };

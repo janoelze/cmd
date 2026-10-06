@@ -1,8 +1,13 @@
 // cmd's agent hooks. At startup the core writes a hook script and a `cmd` CLI
-// wrapper into its state dir, pointing into this build (so they survive updates
-// and moving the app); installing puts the script into a coding agent's config
-// (Settings → Agents → Hooks, `cmd hooks install`), replacing the ghostty-agents
-// fork's hook and `cmd hook` entries.
+// wrapper into its state dir, pointing into this build; installing puts the hook
+// into a coding agent's config (Settings → Agents → Hooks, `cmd hooks install`),
+// replacing the ghostty-agents fork's hook and `cmd hook` entries.
+//
+// The config's command carries the script's body itself (`sh -c '<body>'
+// '<script>' <kind>`), behind a check for a cmd pane: outside cmd nothing runs,
+// and a sandboxed agent (Agent Safehouse, sandbox-exec) that can't read our state
+// dir still reports from inside cmd. The file stays as the hook's name and the
+// sign that its cmd is still there (`stale` when it's gone).
 //
 // The script stores every event as a status file (statusfiles.ts) and links it
 // into the pane's spool (activity/spool.ts), where none is overwritten: plain sh,
@@ -17,7 +22,7 @@ import { HOOK_FORMAT, type AgentHome, type AgentKind, type HookTarget } from "@c
 import { shq } from "../shell.ts";
 
 export interface HookFiles {
-  /** The hook script agents run: `<script> <kind>`. */
+  /** The hook script, `<script> <kind>`; agent configs carry its code and name it (hookCommand). */
   script: string;
   /** Present while peer briefings are on (agents.peers). */
   flag: string;
@@ -37,29 +42,19 @@ export function hookFiles(stateDir: string): HookFiles {
 /** A command running `entry` with this core's Node; ELECTRON_RUN_AS_NODE lets the packaged app's Electron be it. */
 const node = (entry: string, exec = "") => `ELECTRON_RUN_AS_NODE=1 ${exec}${shq(process.execPath)} --no-warnings ${shq(path.join(ROOT, entry))}`;
 
-function hookScript(f: HookFiles): string {
-  return `#!/bin/sh
-# cmd's agent hook (written by cmd at startup: packages/core/src/agents/hooks.ts).
-# Usage: cmd-hook <claude|codex|gemini>, the hook payload on stdin. Stores the
-# event as $TMPDIR/cmd-agents/<pane id>/<event>.json (the latest of each) and
-# links it into log/ (every one, until cmd has read it). Never fails or blocks
-# the agent; outside cmd, or for a headless Claude, it does nothing.
-
-kind=$1
+/** The hook's shell code: `$1` is the agent, the payload on stdin. No comments: it is inlined into agent configs. */
+function hookBody(script: string): string {
+  const flag = path.join(path.dirname(script), "briefings");
+  return `kind=$1
 payload=$(cat)
 id=\${CMD_PANE_ID:-$GHOSTTY_AGENTS_SURFACE_ID}
 quiet() { [ "$kind" = gemini ] && echo '{}'; exit 0; }
 case "$id" in "" | *[!0-9A-Fa-f-]*) quiet ;; esac
-# A headless Claude (claude -p, the Agent SDK) inherits the pane of whatever
-# started it, often the pane's own agent: its events would pass for that agent's.
 case "$kind:$CLAUDE_CODE_ENTRYPOINT" in claude:sdk*) quiet ;; esac
-
 base=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null) || base="\${TMPDIR:-/tmp}/"
 dir="\${base%/}/cmd-agents/$id"
 event=$(printf '%s\\n' "$payload" | sed -n 's/.*"hook_event_name"[[:space:]]*:[[:space:]]*"\\([A-Za-z]*\\)".*/\\1/p' | head -n 1)
 [ -n "$event" ] || quiet
-
-# The agent's config dirs, when set: they say which profile the session runs in.
 env=
 addenv() {
   [ -n "$2" ] || return 0
@@ -70,23 +65,45 @@ addenv() {
 addenv CLAUDE_CONFIG_DIR "$CLAUDE_CONFIG_DIR"
 addenv CODEX_HOME "$CODEX_HOME"
 addenv GEMINI_CLI_HOME "$GEMINI_CLI_HOME"
-
 mkdir -p "$dir/log" 2>/dev/null || quiet
 ts=$(date +%s)
 tmp="$dir/.$event.$$"
 printf '{"v":${HOOK_FORMAT},"agent":"%s","ts":%s,"env":{%s},"event":%s}\\n' "$kind" "$ts" "$env" "$payload" >"$tmp" 2>/dev/null || quiet
 ln "$tmp" "$dir/log/$ts.$$.$event.json" 2>/dev/null
 mv -f "$tmp" "$dir/$event.json" 2>/dev/null
-
-# Peer briefings: the core says who else works in this repository.
 case "$event" in SessionStart | UserPromptSubmit | BeforeAgent)
-  if [ -e ${shq(f.flag)} ] && [ -n "$CMD_SOCKET" ]; then
+  if [ -e ${shq(flag)} ] && [ -n "$CMD_SOCKET" ]; then
     printf '%s' "$payload" | ${node("packages/core/src/agents/hook-main.ts")} "$kind" "$event" "$id" spooled
     exit 0
   fi ;;
 esac
 quiet
 `;
+}
+
+function hookScript(script: string): string {
+  return `#!/bin/sh
+# cmd's agent hook (written by cmd at startup: packages/core/src/agents/hooks.ts).
+# Usage: cmd-hook <claude|codex|gemini>, the hook payload on stdin. Stores the
+# event as $TMPDIR/cmd-agents/<pane id>/<event>.json (the latest of each) and
+# links it into log/ (every one, until cmd has read it), with the agent's config
+# dirs ($CLAUDE_CONFIG_DIR, …: which profile the session runs in). Asks the core
+# for a peer briefing while the briefings flag is there. Never fails or blocks
+# the agent; outside cmd it does nothing. Nor for a headless Claude (claude -p,
+# the Agent SDK): it inherits the pane of whatever started it, often the pane's
+# own agent, and its events would pass for that agent's. Agent configs carry
+# this code inline.
+${hookBody(script)}`;
+}
+
+/**
+ * The command an agent config runs: the script's code, only in a cmd pane.
+ * Gemini wants JSON on stdout either way.
+ */
+export function hookCommand(agent: AgentKind, script: string): string {
+  const inCmd = `[ -z "$CMD_PANE_ID$GHOSTTY_AGENTS_SURFACE_ID" ]`;
+  const run = `exec /bin/sh -c ${shq(hookBody(script))} ${shq(script)} ${agent}`;
+  return agent === "gemini" ? `${inCmd} && echo '{}' || ${run}` : `${inCmd} || ${run}`;
 }
 
 /** (Re)writes the hook script and the `cmd` wrapper for this build. */
@@ -97,7 +114,7 @@ export function writeHookFiles(f: HookFiles): void {
     fs.writeFileSync(tmp, text, { mode: 0o755 });
     fs.renameSync(tmp, file);
   };
-  write(f.script, hookScript(f));
+  write(f.script, hookScript(f.script));
   if (f.bin) write(path.join(f.bin, "cmd"), `#!/bin/sh\n# cmd's CLI from the build of the core that wrote this (hooks.ts).\n${node("packages/cli/src/main.ts", "exec ")} "$@"\n`);
 }
 
@@ -169,8 +186,8 @@ function read(file: string): Config {
 const commands = (cfg: Config) =>
   Object.values(cfg.hooks ?? {}).flatMap((groups) => (Array.isArray(groups) ? groups : []).flatMap((g) => (g?.hooks ?? []).map((h) => String(h?.command ?? ""))));
 
-/** The script a cmd hook command runs (`'<script>' <kind>`). */
-const scriptOf = (command: string): string | null => command.match(/^'((?:[^']|'\\'')*)'\s+\w+\s*$/)?.[1]?.replaceAll("'\\''", "'") ?? command.match(/^(\S+)\s+\w+\s*$/)?.[1] ?? null;
+/** The script a cmd hook command names, the quoted word before `<kind>`: `… sh -c '<body>' '<script>' <kind>`, or `'<script>' <kind>` before the code went inline. */
+const scriptOf = (command: string): string | null => command.match(/'((?:[^']|'\\'')*)'\s+\w+\s*$/)?.[1]?.replaceAll("'\\''", "'") ?? command.match(/^(\S+)\s+\w+\s*$/)?.[1] ?? null;
 
 export function hookState(agent: AgentKind, file: string, script: string): HookTarget["state"] {
   let cmds: string[];
@@ -179,7 +196,9 @@ export function hookState(agent: AgentKind, file: string, script: string): HookT
   } catch {
     return "missing";
   }
-  if (cmds.includes(`${shq(script)} ${agent}`)) return "installed";
+  if (cmds.includes(hookCommand(agent, script))) return "installed";
+  // This cmd's, but older (another build, the script run as a file): replaced like the fork's.
+  if (cmds.some((c) => ours(c) && scriptOf(c) === script)) return "legacy";
   const others = cmds.filter(ours);
   if (others.length) return others.every((c) => !fs.existsSync(scriptOf(c) ?? "")) ? "stale" : "elsewhere";
   return cmds.some(legacy) ? "legacy" : "missing";
@@ -224,7 +243,7 @@ export function installHooks(agent: AgentKind, file: string, script: string): vo
   const cfg = read(file);
   strip(cfg);
   const hooks = (cfg.hooks ??= {});
-  const handler = { type: "command", command: `${shq(script)} ${agent}`, timeout: spec.timeout, ...(agent === "gemini" ? { name: "cmd" } : {}) };
+  const handler = { type: "command", command: hookCommand(agent, script), timeout: spec.timeout, ...(agent === "gemini" ? { name: "cmd" } : {}) };
   for (const e of spec.events) (hooks[e] ??= []).push({ ...(spec.tools.includes(e) ? { matcher: "*" } : {}), hooks: [handler] });
   write(file, cfg);
 }

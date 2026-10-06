@@ -104,7 +104,7 @@ New homes get their transcripts indexed (`TranscriptSource.rootsIn`, the search 
 
 ## Hooks out of the box
 
-The installed app (`autoHooks`, set in `main.ts` for the release instance only) puts cmd's hook into every home's config that has **no cmd hook, an old one** (the fork's, `cmd hook`) **or a broken one** (a cmd hook whose script is gone: a deleted worktree's development build). At startup, every few hours, when homes change and when the setting is turned on. It never:
+The installed app (`autoHooks`, set in `main.ts` for the release instance only) puts cmd's hook into every home's config that has **no cmd hook, an old one** (the fork's, `cmd hook`, its own in an older form: the config carries the hook's code, so an update that changes it rewrites the entry) **or a broken one** (a cmd hook whose script is gone: a deleted worktree's development build). At startup, every few hours, when homes change and when the setting is turned on. It never:
 
 - replaces another live cmd's hook (`elsewhere`, e.g. a development build's),
 - touches a file the user removed the hook from (`hooks.remove` remembers it; Install forgets it),

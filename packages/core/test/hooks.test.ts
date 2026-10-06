@@ -6,7 +6,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { connect, type Connection } from "@cmd/protocol/node";
 import { Core } from "../src/core.ts";
-import { hookFiles, hookState, hookTargets, installHooks, removeHooks } from "../src/agents/hooks.ts";
+import { hookCommand, hookFiles, hookState, hookTargets, installHooks, removeHooks } from "../src/agents/hooks.ts";
 import { readStatus, statusRoot } from "../src/agents/statusfiles.ts";
 import { drainSpool } from "../src/agents/activity/spool.ts";
 import { AgentHomes } from "../src/agents/homes.ts";
@@ -103,11 +103,30 @@ describe.skipIf(process.platform === "win32")("cmd's agent hook", () => {
     await conn.client.call("settings.set", { key: "agents.peers", value: false });
     expect(fs.existsSync(files.flag)).toBe(false);
   });
+
+  it("runs from the agent config's command alone: nothing outside cmd, no script file needed inside", () => {
+    // What an agent does with it; the script path is one no sandbox would let it read.
+    const gone = path.join(dir, "unreadable", "hooks", "cmd-hook");
+    const run = (kind: string, payload: object, env: Record<string, string> = {}) => {
+      const r = spawnSync("/bin/sh", ["-c", hookCommand(kind as "claude", gone)], { input: JSON.stringify(payload), env: { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR, ...env }, encoding: "utf8" });
+      return { code: r.status, out: r.stdout, err: r.stderr };
+    };
+    expect(run("claude", { hook_event_name: "Stop" })).toEqual({ code: 0, out: "", err: "" });
+    expect(run("gemini", { hook_event_name: "AfterAgent" })).toEqual({ code: 0, out: "{}\n", err: "" });
+    const id = randomUUID();
+    try {
+      expect(run("claude", { hook_event_name: "Stop" }, { CMD_PANE_ID: id })).toEqual({ code: 0, out: "", err: "" });
+      expect(run("gemini", { hook_event_name: "AfterAgent" }, { CMD_PANE_ID: id })).toEqual({ code: 0, out: "{}\n", err: "" });
+      expect(drainSpool(statusRoot(), id).events.map((e) => e.name)).toEqual(["Stop", "AfterAgent"]);
+    } finally {
+      fs.rmSync(path.join(statusRoot(), id), { recursive: true, force: true });
+    }
+  });
 });
 
 describe("installing into agent configs", () => {
   const script = "/Users/me/Library/Application Support/cmd/hooks/cmd-hook";
-  const ours = `'${script}' claude`;
+  const ours = hookCommand("claude", script);
   const commands = (cfg: { hooks?: Record<string, { hooks: { command: string }[] }[]> }) =>
     Object.fromEntries(Object.entries(cfg.hooks ?? {}).map(([e, gs]) => [e, gs.flatMap((g) => g.hooks.map((h) => h.command))]));
 
@@ -147,6 +166,13 @@ describe("installing into agent configs", () => {
     installHooks("claude", file, script); // again: no duplicates
     expect(commands(read(file)).Stop).toEqual(["say done", ours]);
 
+    // This cmd's hook as it was written before the code went inline: an old one, replaced.
+    const old = path.join(dir, "claude", "old-form.json");
+    fs.writeFileSync(old, JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: `'${script}' claude` }] }] } }));
+    expect(hookState("claude", old, script)).toBe("legacy");
+    installHooks("claude", old, script);
+    expect(commands(read(old)).Stop).toEqual([ours]);
+
     removeHooks(file);
     expect(read(file)).toEqual({ model: "opus", hooks: { Stop: [{ hooks: [{ type: "command", command: "say done" }] }] } });
     expect(hookState("claude", file, script)).toBe("missing");
@@ -163,7 +189,7 @@ describe("installing into agent configs", () => {
     expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
     const cfg = read(real);
     expect(Object.keys(cfg.hooks)).toEqual(expect.arrayContaining(["BeforeAgent", "AfterAgent", "BeforeTool"]));
-    expect(cfg.hooks.BeforeTool[0]).toMatchObject({ matcher: "*", hooks: [{ name: "cmd", timeout: 10_000, command: `'${script}' gemini` }] });
+    expect(cfg.hooks.BeforeTool[0]).toMatchObject({ matcher: "*", hooks: [{ name: "cmd", timeout: 10_000, command: hookCommand("gemini", script) }] });
   });
 
   it("leaves a file it can't parse alone", () => {
@@ -236,7 +262,7 @@ describe.skipIf(process.platform === "win32")("setting agents up out of the box"
     try {
       const cfg = read(path.join(home, ".claude/settings.json"));
       expect(cfg.model).toBe("opus");
-      expect(cfg.hooks.Stop.map((g: { hooks: { command: string }[] }) => g.hooks[0]!.command)).toEqual(["say done", `'${script}' claude`]);
+      expect(cfg.hooks.Stop.map((g: { hooks: { command: string }[] }) => g.hooks[0]!.command)).toEqual(["say done", hookCommand("claude", script)]);
       // A copy of the user's file as it was, once.
       expect(read(path.join(home, ".claude/settings.json.cmd-backup")).hooks.Stop).toHaveLength(1);
       // The dead dev build's hook is replaced; another live cmd's is not; a file that isn't JSON is left alone.

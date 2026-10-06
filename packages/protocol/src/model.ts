@@ -209,7 +209,8 @@ export interface HookTarget {
   file: string;
   /**
    * elsewhere: another cmd's hook (a dev build); stale: a cmd hook whose script is
-   * gone (a deleted worktree's); legacy: the ghostty-agents fork's or `cmd hook`.
+   * gone (a deleted worktree's); legacy: the ghostty-agents fork's, `cmd hook`, or this
+   * cmd's in an older form (another build's code, or before the code went inline).
    */
   state: "installed" | "missing" | "legacy" | "elsewhere" | "stale";
   /** The user took cmd's hook out of this file: automatic installs leave it alone. */
