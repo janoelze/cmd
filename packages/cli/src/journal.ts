@@ -78,7 +78,11 @@ export async function journalCommand(client: Client, pos: string[], opt: Record<
       const write = opt.write ? "force" : opt["no-write"] ? "never" : "stale";
       const list = await client.call("journal.days", { ...(await scope(client, opt, paneId)), count: days ?? 3, write });
       if (json) return console.log(JSON.stringify(list, null, 2)), 0;
-      if (!list.length) return console.log("Nothing recorded yet."), 0;
+      if (!list.length) {
+        const ai = await client.call("ai.status", {}).catch(() => null);
+        console.log(ai && !ai.ready ? "The journal needs AI to write what happened. Add an API key in Settings → AI." : "Nothing recorded yet.");
+        return 0;
+      }
       const multi = new Set(list.flatMap((d) => d.entries.map((e) => e.repo))).size > 1;
       console.log(list.map((d) => dayMarkdown(d, multi)).join("\n\n"));
       return 0;

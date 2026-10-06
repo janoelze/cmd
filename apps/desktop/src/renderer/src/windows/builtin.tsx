@@ -228,7 +228,7 @@ const scopeLabel = (w: AppWindow) => (scopeOf(w.state.scope) === "all" ? "All Sp
 const scoped = (extra: (w: AppWindow) => MenuEntry[]) => (w: AppWindow) => [...scopeMenu(w.id, scopeOf(w.state.scope)), "-" as const, ...extra(w)];
 const commandsMenu = scoped((w) => [{ label: "Failed Only", checked: w.state.failedOnly === true, run: () => setWidgetState(w.id, { failedOnly: w.state.failedOnly !== true }) }]);
 const notificationsMenu = scoped(() => [{ label: "Clear Notifications", run: () => void cmd.call("notify.clear", {}).catch(() => {}) }]);
-const journalMenu = scoped((w) => [{ label: "Write Today Again", run: () => void cmd.call("journal.day", { ...(scopeOf(w.state.scope) === "all" ? { scope: "all" } : { spaceId: w.spaceId }), date: Date.now(), write: "force" }).catch(() => {}) }]);
+const journalMenu = (w: AppWindow) => scopeMenu(w.id, scopeOf(w.state.scope));
 const resourcesMenu = scoped(() => [{ label: "Open Task Manager", run: () => cmd.openTaskManager() }]);
 
 registerWindowView({

@@ -299,7 +299,7 @@ export class Core {
     this.journal = new JournalService({
       store: new JournalStore(this.store.db),
       activityDb: this.store.db,
-      sessions: (since) => this.#search?.sessionsSince(since) ?? [],
+      sessions: (since) => this.#search?.sessionsSince(since) ?? null,
       spaces: () => this.spaces.list(),
       agentSpace: (id) => this.agents.get(id)?.spaceId ?? null,
       ai: {

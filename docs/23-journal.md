@@ -56,7 +56,7 @@ The **writer** (`writer.ts`) asks for `{ headline, entries: [{ refs, kind, title
 
 Kinds: release, investigation, feature, fix, design, refactor, research, review, ops, chore. Outcomes: shipped, merged, fixed, answered, open, dropped.
 
-**When**: on request (the widget, `cmd journal`), when the digest changed; today at most every 30 minutes unless asked. One call per day and scope, `smart` tier, in the background queue. Without an AI provider, a day is its groups, titled from the data.
+**When**: on request (the widget, `cmd journal`), when the digest changed; today at most every 30 minutes unless asked. One call per day and scope, `smart` tier, in the background queue. Without an AI provider no day is written: titled from the data alone, entries read like a list of prompts (tried, dropped). Events are still recorded, so the days are written once a provider is set up; the widget and `cmd journal` say how. Titles are 2 to 4 words ("Drag and drop for files"); the summary carries the detail.
 
 ## What the runs showed
 

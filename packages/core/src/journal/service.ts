@@ -10,8 +10,8 @@
 // Days are written on request (the Journal widget, `cmd journal`): threads and
 // a digest from the events, then a model, unless the digest is the one the
 // stored day was written from. Today is written again at most every
-// TODAY_EVERY_MS unless asked to; without an AI provider, a day is the threads
-// themselves, titled from the data.
+// TODAY_EVERY_MS unless asked to. Without an AI provider no day is
+// written at all (events are still recorded, so they can be once there is).
 
 import os from "node:os";
 import type { DatabaseSync } from "node:sqlite";
@@ -25,7 +25,7 @@ import { digest, type Digest } from "./digest.ts";
 import { gitEvents } from "./git.ts";
 import { JournalStore, type NewJournalEvent } from "./store.ts";
 import { buildThreads } from "./threads.ts";
-import { plainDay, SCHEMA, SYSTEM, toDay, type WrittenDay } from "./writer.ts";
+import { SCHEMA, SYSTEM, toDay, type WrittenDay } from "./writer.ts";
 
 const log = logger("journal");
 
@@ -52,8 +52,8 @@ export interface JournalServiceOptions {
   store: JournalStore;
   /** The core's database (activity log tables); null: no turns. */
   activityDb: DatabaseSync | null;
-  /** Agent sessions from the transcript index. */
-  sessions: (since: number) => SessionRow[];
+  /** Agent sessions from the transcript index; null while there is none (search off or not open yet). */
+  sessions: (since: number) => SessionRow[] | null;
   spaces: () => Space[];
   /** A live agent's Space. */
   agentSpace: (agentId: string) => SpaceId | null;
@@ -69,9 +69,10 @@ export type JournalScope = string;
 export class JournalService {
   readonly store: JournalStore;
   #o: JournalServiceOptions;
-  #lastSync = 0;
+  /** Per source, when it was last read: a source that wasn't there (the index still opening) is read from the start next time. */
+  #read = { turns: 0, sessions: 0, git: 0 };
   #syncing: Promise<void> | null = null;
-  #writing = new Map<string, Promise<JournalDay>>();
+  #writing = new Map<string, Promise<JournalDay | null>>();
   #timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(o: JournalServiceOptions) {
@@ -111,12 +112,19 @@ export class JournalService {
 
   async #sync(): Promise<void> {
     const now = this.#now;
-    const since = this.#lastSync ? this.#lastSync - SYNC_OVERLAP : now - FIRST_SYNC_DAYS * DAY_MS;
+    const since = (last: number) => (last ? last - SYNC_OVERLAP : now - FIRST_SYNC_DAYS * DAY_MS);
     const t0 = Date.now();
     const pulled: NewJournalEvent[] = [];
     try {
-      if (this.#o.activityDb) pulled.push(...turnEvents(this.#o.activityDb, since).map((e) => ({ ...e, spaceId: e.data.kind === "agent.turn" && e.data.agentId ? this.#o.agentSpace(e.data.agentId) : null })));
-      pulled.push(...sessionEvents(this.#o.sessions(since)));
+      if (this.#o.activityDb) {
+        pulled.push(...turnEvents(this.#o.activityDb, since(this.#read.turns)).map((e) => ({ ...e, spaceId: e.data.kind === "agent.turn" && e.data.agentId ? this.#o.agentSpace(e.data.agentId) : null })));
+        this.#read.turns = now;
+      }
+      const sessions = this.#o.sessions(since(this.#read.sessions));
+      if (sessions) {
+        pulled.push(...sessionEvents(sessions));
+        this.#read.sessions = now;
+      }
     } catch (err) {
       log.warn(`journal sync: ${(err as Error).message}`);
     }
@@ -126,11 +134,11 @@ export class JournalService {
     const repos = new Set([...this.store.repos(now - FIRST_SYNC_DAYS * DAY_MS).map((r) => r.repo), ...this.#o.spaces().filter((s) => s.id !== HOME_SPACE_ID).map((s) => s.root)]);
     let git = 0;
     for (const r of repos) {
-      const ev = await gitEvents(r, since).catch(() => []);
+      const ev = await gitEvents(r, since(this.#read.git)).catch(() => []);
       git += this.store.recordAll(ev.map((e) => ({ ...e, spaceId: this.#spaceOf(e.repo) })));
     }
-    this.#lastSync = now;
-    log.info("journal synced", { since: new Date(since).toISOString(), events: pulled.length + git, repos: repos.size, ms: Date.now() - t0 });
+    this.#read.git = now;
+    log.info("journal synced", { events: pulled.length + git, repos: repos.size, ms: Date.now() - t0 });
   }
 
   /** The Space whose folder holds `p` (deepest wins); null: only Home's. */
@@ -185,7 +193,7 @@ export class JournalService {
     return s ? `Space ${s.name} (${tilde(s.root)}).` : "";
   }
 
-  /** One day, written if it needs to be (see WriteMode). Null when nothing happened. */
+  /** One day, written if it needs to be (see WriteMode). Null when nothing happened, or it isn't written and can't be (no AI provider). */
   async day(scope: JournalScope, date: number, mode: WriteMode = "stale"): Promise<JournalDay | null> {
     const key = `${scope}@${date}`;
     const running = this.#writing.get(key);
@@ -196,9 +204,9 @@ export class JournalService {
     const fresh = stored && stored.inputHash === d.hash;
     const today = date === this.dayOf(this.#now);
     const recent = stored && today && this.#now - stored.writtenAt < TODAY_EVERY_MS;
-    if (mode === "never" || (mode === "stale" && (fresh || recent))) return stored ?? plainDay(d, threads, events, { date, scope });
+    // Only a model writes days: titled from the data alone, they read like a list of prompts.
     const model = this.#o.ai?.modelName() ?? null;
-    if (!model || !this.#o.ai) return plainDay(d, threads, events, { date, scope });
+    if (mode === "never" || !model || !this.#o.ai || (mode === "stale" && (fresh || recent))) return stored;
     const write = this.#o.ai
       .object<WrittenDay>({ tier: "smart", purpose: "journal.day", background: true, system: SYSTEM, prompt: `<day>\n${d.text}\n</day>`, schema: SCHEMA as unknown as Record<string, unknown>, maxOutputTokens: 6000 })
       .then((r) => {
@@ -209,7 +217,7 @@ export class JournalService {
       })
       .catch((err: Error) => {
         log.warn(`could not write the day: ${err.message}`, { scope });
-        return stored ?? plainDay(d, threads, events, { date, scope });
+        return stored;
       })
       .finally(() => this.#writing.delete(key));
     this.#writing.set(key, write);

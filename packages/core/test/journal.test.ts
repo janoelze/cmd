@@ -147,7 +147,7 @@ describe("journal writer", () => {
     expect(fts).toMatchObject({ kind: "fix", title: "Fixed search index corruption", outcome: "merged" });
     expect(fts.counts).toMatchObject({ agents: 1, prompts: 5, commits: 2 });
     // The release the model skipped: an entry from the data.
-    expect(day.entries.find((e) => e.threads.includes("release:/Users/sam/src/shopfront#v2.3.0"))).toMatchObject({ kind: "release", title: "Released v2.3.0", summary: "Shipped checkout-btn, fts-rebuild." });
+    expect(day.entries.find((e) => e.threads.includes("release:/Users/sam/src/shopfront#v2.3.0"))).toMatchObject({ kind: "release", title: "Released v2.3.0", summary: "Shipped Checkout btn, Fts rebuild." });
     // Every thread that isn't minor is in an entry.
     const covered = new Set(day.entries.flatMap((e) => e.threads));
     expect(threads.filter((t) => !t.minor && !covered.has(t.id))).toEqual([]);
@@ -181,12 +181,16 @@ describe("journal service", () => {
     expect(calls).toBe(3);
   });
 
-  it("without a model, a day is its threads", async () => {
-    const day = (await service(null).day("space:shop", new Date(DAY).setHours(0, 0, 0, 0)))!;
-    expect(day.writtenBy).toBeNull();
-    expect(day.entries.map((e) => e.title)).toContain("Released v2.3.0");
-    // The dotfiles evening isn't in the Shopfront Space.
-    expect(day.entries.some((e) => e.repo === "/Users/sam/src/dotfiles")).toBe(false);
+  it("writes no day without a model", async () => {
+    expect(await service(null).day("space:shop", new Date(DAY).setHours(0, 0, 0, 0))).toBeNull();
+  });
+
+  it("keeps a Space to its own projects", async () => {
+    let prompt = "";
+    const ai: JournalAi = { modelName: () => "Model", object: async <T,>(o: { prompt: string }) => ((prompt = o.prompt), { value: { headline: "", entries: [] } as T, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }, model: "m" }) };
+    await service(ai).day("space:shop", new Date(DAY).setHours(0, 0, 0, 0));
+    expect(prompt).toContain("v2.3.0");
+    expect(prompt).not.toContain("dotfiles");
   });
 
   it("notes from an agent's terminal join its session", async () => {

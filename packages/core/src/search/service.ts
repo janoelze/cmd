@@ -42,9 +42,9 @@ export class SearchService extends EventEmitter<{ status: [IndexStatus] }> {
     return this.#reader()?.recent(limit, exclude) ?? [];
   }
 
-  /** Sessions active since `since`, for the journal. */
-  sessionsSince(since: number): SessionRow[] {
-    return this.#reader()?.sessionsSince(since) ?? [];
+  /** Sessions active since `since`, for the journal; null while the index isn't there yet. */
+  sessionsSince(since: number): SessionRow[] | null {
+    return this.#reader()?.sessionsSince(since) ?? null;
   }
 
   /** A live agent's transcript: if it lies outside every known folder, its folder is indexed from now on. */

@@ -1,11 +1,13 @@
 // The Journal widget's window view: fetches the days Journal draws. What's
 // written shows at once (journal.days without writing); then the core writes
 // what changed since, which takes a model a few seconds, under a "Writing…"
-// line. Write Again rewrites today. Every 15 minutes it looks again.
+// line. Write Again rewrites today. Every 15 minutes it looks again, and when
+// AI gets set up. Without AI nothing is written: it says how to set it up.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JournalDay } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
+import { useAiStatus } from "../ai/status.ts";
 import { scopeOf } from "../widgets.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
 import { Journal } from "./Journal.tsx";
@@ -15,6 +17,8 @@ const REFRESH_MS = 15 * 60_000;
 
 export function JournalView({ win }: WindowViewProps) {
   const scope = scopeOf(win.state.scope);
+  const ai = useAiStatus();
+  const needsAi = ai !== null && !ai.ready;
   const [days, setDays] = useState<JournalDay[] | null>(null);
   const [writing, setWriting] = useState(false);
   const gen = useRef(0);
@@ -35,7 +39,7 @@ export function JournalView({ win }: WindowViewProps) {
         if (g === gen.current) setWriting(false);
       }
     },
-    [scope, win.spaceId],
+    [scope, win.spaceId, needsAi],
   );
 
   useEffect(() => {
@@ -46,5 +50,5 @@ export function JournalView({ win }: WindowViewProps) {
   }, [load]);
 
   const repos = new Set((days ?? []).flatMap((d) => d.entries.map((e) => e.repo)));
-  return <Journal days={days ?? []} showProject={scope === "all" || repos.size > 1} summarising={writing ? "Writing up what happened…" : null} onRefresh={() => void load("force")} />;
+  return <Journal days={days ?? []} showProject={scope === "all" || repos.size > 1} summarising={days === null ? "Reading the journal…" : writing ? "Writing up what happened…" : null} onRefresh={needsAi ? undefined : () => void load("force")} onSetUpAi={needsAi ? () => cmd.openSettings("ai") : undefined} />;
 }

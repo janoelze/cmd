@@ -21,8 +21,8 @@ Each line starting with a ref (S = agent session, B = git branch, R = release, T
 
 - One entry per piece of work. A group is one entry (its refs together), unless it clearly holds unrelated work. A thread on its own is usually one entry. A session and the branch it built are one entry; so are a release and the session that cut it. Several small related fixes may be one entry ("Polished the settings window"). A long session that moved between unrelated tasks becomes several entries (its ref in each).
 - Every thread above "Minor" belongs to at least one entry, by ref. Minor threads only when they're part of a real entry.
-- title: past tense, what was achieved or done, specific, at most 8 words, sentence case, no trailing period. "Released v0.14.4", "Built drag and drop for files", "Investigated a corrupt search index", "Compared widget stores". Never "Worked on…", "Session about…", or a branch name.
-- summary: one or two sentences, at most 40 words, past tense, plain: what changed or was found and why it matters. A release lists the main things it shipped. An investigation says what was found, or that the cause is still open.
+- title: 2 to 4 words, a name for the work like a good ticket title, sentence case, no trailing period: "Released v0.14.4", "Drag and drop for files", "Search index corruption", "Stripe vs Adyen", "Flaky cart test". Never a prompt, a sentence, "Worked on…" or a raw branch name.
+- summary: one or two sentences, at most 40 words, past tense, plain: what was done, changed or found, and why it matters. The summary carries the detail the title leaves out. A release lists the main things it shipped. An investigation says what was found, or that the cause is still open.
 - kind: release, investigation (debugging, finding a cause), feature (new capability), fix, design (UI, look, copy), refactor, research (reading, comparing, planning, answering a question), review, ops (setup, config, tooling, environments), chore.
 - outcome: shipped (in a release), merged, fixed, answered (a question was answered), open (unfinished, or the cause is unknown), dropped (abandoned or reverted); null when none fits.
 - Order does not matter; times come from the threads.
@@ -119,23 +119,36 @@ export function toDay(w: WrittenDay, d: Digest, threads: JournalThread[], events
   };
 }
 
-/** Entries written without a model (none set up): one per thread that isn't minor, titled from the data. */
-export function plainDay(d: Digest, threads: JournalThread[], events: JournalEvent[], o: { date: number; scope: string }): JournalDay {
-  return toDay({ headline: "", entries: [] }, d, threads, events, { ...o, writtenBy: null });
-}
-
-/** An entry for a group no model wrote: a release by its tag and what it shipped, else by the session's title or the branch's commits. */
+/** An entry for a group no model wrote: a release by its tag and what it shipped, else a short name from the branch, the session's title or a commit. */
 function fallback(g: JournalThread[], all: JournalThread[], byEvent: Map<number, JournalEvent>): { kind: JournalEntryKind; title: string; summary: string; outcome: JournalOutcome | null } {
   const release = g.find((t) => t.kind === "release");
   if (release) {
     const shipped = release.links.filter((l) => l.rule.startsWith("shipped")).map((l) => all.find((t) => t.id === l.to)?.label ?? l.to.slice(l.to.indexOf("#") + 1));
-    return { kind: "release", title: `Released ${release.label}`, summary: shipped.length ? `Shipped ${shipped.join(", ")}.` : "", outcome: "shipped" };
+    return { kind: "release", title: `Released ${release.label}`, summary: shipped.length ? `Shipped ${shipped.map(humanize).join(", ")}.` : "", outcome: "shipped" };
   }
-  const session = g.find((t) => t.kind === "session");
-  const commits = g.flatMap((t) => t.events.map((id) => byEvent.get(id))).filter((e) => e?.data.kind === "git.commit").map((e) => e!.text);
-  const merged = g.some((t) => t.events.some((id) => byEvent.get(id)?.data.kind === "git.merge"));
-  const title = session && !session.label.startsWith("/") ? session.label : commits[0] ?? g[0]!.label;
-  return { kind: "chore", title, summary: commits.slice(0, 3).join(". "), outcome: merged ? "merged" : null };
+  const ev = g.flatMap((t) => t.events.map((id) => byEvent.get(id))).filter((e): e is JournalEvent => !!e);
+  const commits = ev.filter((e) => e.data.kind === "git.commit").map((e) => e.text);
+  const merged = ev.some((e) => e.data.kind === "git.merge");
+  const branch = g.find((t) => t.kind === "branch" && !t.id.includes("@"));
+  const session = ev.find((e) => e.data.kind === "agent.session")?.data;
+  const sessionTitle = session?.kind === "agent.session" ? session.title : null;
+  const prompt = ev.find((e) => e.data.kind === "agent.turn" && e.data.prompt && !e.data.auto)?.text;
+  const title = branch ? humanize(branch.label) : sessionTitle ? words(sessionTitle, 5) : commits[0] ? words(commits[0].split(":")[0]!, 4) : prompt ? words(prompt, 4) : words(g[0]!.label, 4);
+  const summary = commits.length ? commits.slice(0, 3).join(". ") : sessionTitle && branch ? sessionTitle : prompt && title !== words(prompt, 4) ? prompt : "";
+  return { kind: "chore", title, summary, outcome: merged ? "merged" : null };
+}
+
+/** "strip-dots-selection" → "Strip dots selection". */
+const humanize = (name: string) => {
+  const s = name.replace(/^(feat|fix|chore|wip)[/-]/, "").replace(/[-_/]+/g, " ").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+/** The first `n` words, with an ellipsis when there were more. */
+function words(s: string, n: number): string {
+  const w = s.replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, "").replace(/\s+/g, " ").trim().split(" ");
+  const t = w.slice(0, n).join(" ").replace(/[,.;:]$/, "");
+  return w.length > n ? `${t}…` : t;
 }
 
 /** A session split into two entries gives both the same first thread: the second gets a suffix. */

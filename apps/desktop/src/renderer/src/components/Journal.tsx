@@ -5,7 +5,7 @@
 // sessions, commands, commits, pages) with AI. Journal draws days it's given
 // (stories pass made-up ones); JournalView fetches them.
 
-import { Badge, Chip, EmptyState, IconButton, Panel, PanelBody, Spinner, type Tone } from "@cmd/ui";
+import { Badge, Button, Chip, EmptyState, IconButton, Panel, PanelBody, Spinner, type Tone } from "@cmd/ui";
 import { useState, type CSSProperties } from "react";
 import type { JournalDay, JournalEntry, JournalEntryKind, JournalOutcome } from "@cmd/protocol";
 import { projectHue } from "../model.ts";
@@ -146,6 +146,7 @@ export function Journal({
   showProject = true,
   summarising,
   onRefresh,
+  onSetUpAi,
 }: {
   days: JournalDay[];
   now?: number;
@@ -154,6 +155,8 @@ export function Journal({
   /** Writing the newest entries: a line at the top. */
   summarising?: string | null;
   onRefresh?: () => void;
+  /** No AI provider: the journal can't be written, and says how to fix that. */
+  onSetUpAi?: () => void;
 }) {
   // A bar in the ribbon picks its entry: highlighted and scrolled to.
   const [picked, setPicked] = useState<string | null>(null);
@@ -170,7 +173,21 @@ export function Journal({
             <span>{summarising}</span>
           </div>
         )}
-        {days.length === 0 && !summarising && (
+        {days.length === 0 && !summarising && onSetUpAi && (
+          <EmptyState
+            compact
+            icon="sparkles"
+            title="Your journal needs AI"
+            action={
+              <Button size="sm" onClick={onSetUpAi}>
+                Set Up AI…
+              </Button>
+            }
+          >
+            cmd writes up what happened from your agents, terminals and git. Add an API key and it starts with the last few days.
+          </EmptyState>
+        )}
+        {days.length === 0 && !summarising && !onSetUpAi && (
           <EmptyState compact icon="book" title="Nothing yet">
             What you and your agents do in this Space shows up here, a few lines a day.
           </EmptyState>

@@ -155,6 +155,11 @@ export const Writing = () => (
     <Journal days={DAYS.slice(0, 1)} now={NOW} summarising="Writing up the last hour…" showProject={false} />
   </Tile>
 );
+export const NeedsAi = () => (
+  <Tile width={360} height={300}>
+    <Journal days={[]} now={NOW} onSetUpAi={() => {}} />
+  </Tile>
+);
 export const Empty = () => (
   <Tile width={360} height={300}>
     <Journal days={[]} now={NOW} />
