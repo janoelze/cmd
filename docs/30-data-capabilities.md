@@ -13,7 +13,7 @@ One log of facts (`$CMD_HOME/data/events.sqlite`), each with the same envelope: 
 | When an agent's pane was printing, and what each turn printed | `pane.activity`, `agent.output` | a year / 90 days |
 | Every shell command in a terminal: line, folder, exit code, how long, **what it printed** | `command` | 90 days for output |
 | Git: commits, merges, branches, checkouts, tags, rebases, resets, per worktree | `git.*` | forever |
-| Pages browser windows showed, files opened, windows and Spaces opened and closed | `browser.visit`, `file.open`, `window.*`, `space.*` | a year |
+| Pages browser windows showed, files opened, windows (not terminals: those are their commands) and Spaces opened and closed | `browser.visit`, `file.open`, `window.*`, `space.*` | a year |
 | What **you** did: which pane or window had focus and for how long, which commands you ran, which agents you looked at | `user.focus`, `user.command`, `user.look` | a year |
 | Notifications shown, notes written down | `notification`, `note` | forever |
 | Every model call cmd made: purpose, model, tokens, what was sent and what came back, and what the input was built from | `ai.call` | a year |
@@ -137,7 +137,7 @@ subscribeData({ types: ["command"], spaceId, order: "desc", limit: 300 }, (event
 ## Limits worth knowing
 
 - **Agents without hooks** (aider, amp, plain ssh) give processes, OSC marks, commands and git, but no prompts or tool calls unless their transcripts are a format cmd reads.
-- **Turn output is a terminal's output**: escape codes stripped and redraws collapsed, but a TUI's screen is not a clean log; the transcript is the better source for what an agent said.
+- **Turn output is what the screen showed**: the pane's rendered lines from the prompt's echo to the end of the turn, without the input box. A turn longer than the last 1000 lines keeps its end; a cleared screen keeps what's left. The transcript is the better source for what an agent said; the output is what you saw.
 - **The agent's current state** is restored from its snapshot after a restart (fast); `ActivityView.replay` derives it from the log on demand, but nothing uses that at startup yet.
 - **Size**: about 2.5–3 GB a year of heavy use on the author's Mac, mostly transcripts and command output. Retention per class and "Never record" are the levers.
 - **Views are disposable, facts are not**: deleting `data/views.sqlite` costs a rebuild; deleting `data/events.sqlite` loses history. Back up the one file.
