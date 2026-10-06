@@ -20,36 +20,6 @@
   --gutter: 8px; /* between windows */
   --pad-x: 8px; /* to the left and right edges */
   --pad-y: 8px; /* to the top and bottom edges */
-  /* Windows: rounded corners and crisp whole-pixel outlines, the selected one in the
-     accent with a soft glow. Set on :root from settings (look.ts): --window-radius
-     (ui.windowRadius), --window-outline (ui.windowOutline), --window-edge-mix
-     (ui.windowOutlineContrast), --window-elevation (ui.windowShadow),
-     --focus-outline (ui.focusOutline), --focus-glow (ui.focusGlow, 1 = the
-     default halo). What's built from them is declared on .tile, where those
-     values resolve. */
-  --window-radius: 8px;
-  --window-outline: 1px;
-  --window-elevation: 0.5;
-  --focus-outline: 1px;
-  --focus-glow: 1;
-  /* Window outline and the line under the title bar: one opaque colour (the
-     separator over the title bar), so both look the same over any background. */
-  --window-edge: color-mix(in srgb, var(--ink) var(--window-edge-mix, 9%), var(--bg-sidebar));
-  --window-highlight: var(--accent);
-  /* Sheets (the kit's Dialog) look like windows: their corners, outline and the
-     same shadow, higher (4× the windows' elevation, at most 6). On :root, so
-     dialogs portalled out of .app get them too. */
-  --sheet-radius: var(--window-radius);
-  --sheet-edge-width: var(--window-outline);
-  --sheet-edge: var(--window-edge);
-  --sheet-elev: min(6, calc(var(--window-elevation) * 4));
-  --sheet-sh: color-mix(in oklab, var(--shadow) 85%, var(--bg));
-  --sheet-shadow:
-    0 calc(0.5px * var(--sheet-elev)) calc(1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 36%, transparent),
-    0 calc(1px * var(--sheet-elev)) calc(2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 30%, transparent),
-    0 calc(2px * var(--sheet-elev)) calc(4px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 24%, transparent),
-    0 calc(4px * var(--sheet-elev)) calc(8px * var(--sheet-elev)) calc(-1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 20%, transparent),
-    0 calc(8px * var(--sheet-elev)) calc(16px * var(--sheet-elev)) calc(-2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 16%, transparent);
   --window-dim: 1; /* theme factor on ui.unfocusedDim (darkening of unfocused windows) */
 }
 /* Outside macOS the window has its own frame: no traffic-light area to keep free. */
@@ -450,80 +420,13 @@ kbd {
 @keyframes prompt-flash { to { background: transparent; } }
 .xterm .xterm-viewport { background: transparent !important; }
 
-.tile {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--well);
-  border: var(--window-outline) solid var(--window-edge);
-  border-radius: var(--window-radius);
-  /* Inside the outline, curves are smaller by its width, so they stay concentric.
-     Declared here, not on :root: a variable built from another resolves where it's
-     declared, and the radius is set per app (setting) and per mode (focus). */
-  --window-radius-inner: max(0px, calc(var(--window-radius) - var(--window-outline)));
-  --window-edge: color-mix(in srgb, var(--ink) var(--window-edge-mix, 9%), var(--bg-sidebar));
-  /* The outline colour where it's emphasised: selected (ui.focusColor), or needing you. */
-  --ring-color: var(--window-highlight);
-}
-/* Clips the content; the tile itself doesn't, so resize handles can sit outside it. */
-.tile-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-radius: var(--window-radius-inner);
-}
+/* Windows are the kit's (window.tsx: .ui-window, -body, -frame, -bar), with the
+   app's classes beside them (.tile, .tile-body, .tile-frame, .tile-title) for
+   what's cmd's own: the focus colour setting, sidebars, the canvas, dimming. */
 /* ui.focusColor neutral: the theme's text colour instead of the accent (minimap too). */
 :root[data-focus-color="neutral"] { --window-highlight: color-mix(in srgb, var(--ink) 70%, var(--bg-sidebar)); }
-.tile.sel { border-color: var(--ring-color); }
-.tile.needs { --ring-color: var(--state-needs); border-color: var(--ring-color); }
-.tile.sel.needs { --ring-color: var(--window-highlight); }
-
-/* The frame (.tile-frame, over the window's outline) draws the outline and the
-   emphasised ring and glow as inset box-shadows, from the window's outer edge
-   inward over the content's edge: selecting a window never moves its content, and
-   nothing but the drop shadow reaches past the window (into a sidebar's gap, say).
-   On the canvas the frame gets the zoom (--z) and widths are divided by it: the
-   track is scaled, and a 1px outline would vanish at 30%. The border itself stays
-   put, so zooming never resizes a terminal. */
-.tile-frame {
-  position: absolute;
-  inset: calc(-1 * var(--window-outline));
-  border-radius: var(--window-radius);
-  pointer-events: none;
-  z-index: 3;
-  /* Outline: the border, widened inward to its width on screen when zoomed out. */
-  --edge-w: max(var(--window-outline), calc(var(--window-outline) / var(--z, 1)));
-  /* Emphasised, inward from the outer edge: the border and up to ui.focusOutline on
-     screen, then a 1px halo and a blur (ui.focusGlow). */
-  --ring-w: max(var(--window-outline), calc(var(--focus-outline) / var(--z, 1)));
-  --ring:
-    inset 0 0 0 var(--ring-w) var(--ring-color),
-    inset 0 0 0 calc(var(--ring-w) + 1px / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(55% * var(--focus-glow))), transparent),
-    inset 0 0 calc(14px * var(--focus-glow) / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(35% * var(--focus-glow))), transparent);
-  --drop: 0 0 transparent;
-  box-shadow: inset 0 0 0 var(--edge-w) var(--window-edge), var(--drop);
-}
-/* ui.windowShadow: one elevation shadow, --e high (0 = none). Five layers, each twice
-   as far down and as blurred as the last, so the light falls off softly instead of
-   as one grey blob; the far ones pulled in at the sides, so they pool below the
-   window. Their colour is the theme's --shadow with some of the backdrop's hue,
-   which reads cleaner than black on coloured themes. A window being dragged floats
-   higher (--lift). */
-.tile-frame {
-  --lift: 0;
-  --sh: color-mix(in oklab, var(--shadow) 85%, var(--bg));
-  --elev: calc(var(--window-elevation) + var(--lift));
-  --drop:
-    0 calc(0.5px * var(--elev)) calc(1px * var(--elev)) color-mix(in srgb, var(--sh) 36%, transparent),
-    0 calc(1px * var(--elev)) calc(2px * var(--elev)) color-mix(in srgb, var(--sh) 30%, transparent),
-    0 calc(2px * var(--elev)) calc(4px * var(--elev)) color-mix(in srgb, var(--sh) 24%, transparent),
-    0 calc(4px * var(--elev)) calc(8px * var(--elev)) calc(-1px * var(--elev)) color-mix(in srgb, var(--sh) 20%, transparent),
-    0 calc(8px * var(--elev)) calc(16px * var(--elev)) calc(-2px * var(--elev)) color-mix(in srgb, var(--sh) 16%, transparent);
-}
+/* A window being dragged floats higher. */
 .windows-track > .tile.lifted > .tile-frame { --lift: 1.5; }
-.tile.sel > .tile-frame, .tile.needs > .tile-frame { box-shadow: var(--ring), var(--drop); }
 
 /* ui.focusTitleBar: the selected window's title bar takes some of its outline colour. */
 .app.title-tint-subtle .tile.sel .tile-title { background: color-mix(in srgb, var(--ring-color) 8%, var(--bg-sidebar)); }
@@ -536,21 +439,6 @@ kbd {
 .dock-tile.sel.needs > .tile-frame { box-shadow: var(--ring), var(--drop); }
 .app .tile.dock-tile.sel .tile-title { background: var(--bg-sidebar); }
 .tile .term-well { padding-top: 6px; }
-.tile-title {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  font-size: 11.5px;
-  color: var(--text-dim);
-  background: var(--bg-sidebar);
-  /* separator as an inset shadow: no layout space, so the mark centres on whole pixels */
-  box-shadow: inset 0 -1px 0 var(--window-edge);
-}
-.tile.sel .tile-title { color: var(--text); }
-.tile-name { flex: 0 1 auto; display: flex; align-items: center; min-width: 0; font-weight: 500; }
 .tile-name.editing { flex: 1 1 auto; margin-right: 8px; }
 .tile-title-input {
   flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent;
@@ -558,7 +446,6 @@ kbd {
 }
 /* Kind · Place · Status. Narrow windows drop from the right: status first, the name last. */
 /* Info, not the name: always dim, selected or not. */
-.tile-meta { margin-left: auto; display: flex; min-width: 0; flex: 0 100 auto; overflow: hidden; color: var(--text-dim); }
 .tile-meta .slot-v { --gap: 8px; }
 /* Dividers between Kind | Place | Status: 7px, 1px line, 7px. */
 .tile-meta .slot.divided .slot-v, .statusbar-session .slot.divided .slot-v { --gap: 15px; }
@@ -577,9 +464,6 @@ kbd {
 /* The status wrapper only carries the click; layout stays the slot's. */
 .tile-meta .tile-status { display: contents; }
 .tile-meta .slot-status.actionable:hover { color: var(--text); }
-/* A view's menu at the right end (titleMenu: a widget's scope and options). */
-.tile-menu { flex: none; display: flex; align-items: center; gap: 4px; height: 18px; margin-right: -4px; padding: 0 5px; font: inherit; color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); cursor: default; white-space: nowrap; }
-.tile-menu:hover { color: var(--text); background: var(--bg-hover); }
 /* Place or status squeezed to a sliver would show just its gap and "…": hide it
    instead (Slot.tsx sets .sliver; short values like "~" aren't squeezed). */
 .slot.sliver .slot-v, .slot.sliver .slot-divider { visibility: hidden; }

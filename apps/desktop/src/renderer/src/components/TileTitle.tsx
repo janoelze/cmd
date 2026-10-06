@@ -1,6 +1,7 @@
 // Title bar of a window tile, the same for every window type
 // (docs/10-window-titles.md): Mark · Name · Dirty ……… Kind | Place | Status.
-// Each field is a Slot, so state changes animate instead of popping.
+// The bar is the kit's WindowBar; each field is a Slot, so state changes animate
+// instead of popping.
 // The Mark of a window that shows a file or folder (a text file, a file browser's
 // folder, a terminal's working directory) drags that file, like the icon in a
 // macOS document's title bar (drags.ts); a browser window's drags its link.
@@ -8,7 +9,7 @@
 import { fieldsOf, windowIdOf, type SidebarRow, type WindowFields } from "../model.ts";
 import { stateStr, typeFor, viewFor } from "../windows/registry.ts";
 import { showContextMenu } from "../context.ts";
-import { ICON, Symbol } from "./Symbol.tsx";
+import { WindowBar, WindowBarMenu } from "@cmd/ui";
 import { useEffect, useRef, useState } from "react";
 import { editTitle, useTitleEdit, useWindowStatus, type TitleEdit } from "../windowActions.ts";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
@@ -62,7 +63,7 @@ export function TileTitle({
   const file = fileOf(row);
   const url = file ? null : urlOf(row);
   return (
-    <div className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} data-tip={title}>
+    <WindowBar className="tile-title" onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} data-tip={title}>
       {file || url ? (
         <span
           className="mark-drag"
@@ -75,7 +76,7 @@ export function TileTitle({
       ) : (
         <Mark light={f.light} icon={f.icon} />
       )}
-      <span className={`tile-name${edit ? " editing" : ""}`}>
+      <span className={`ui-window-bar-name tile-name${edit ? " editing" : ""}`}>
         {edit ? (
           <TitleInput id={row.win!.id} edit={edit} />
         ) : (
@@ -86,7 +87,7 @@ export function TileTitle({
         )}
       </span>
       <RemoteBadge id={windowIdOf(row)} />
-      <span className="tile-meta">
+      <span className="ui-window-bar-meta tile-meta">
         <Slot className="slot-kind" value={f.kind && !bare ? { text: f.kind } : undefined} />
         {/* A divider only after a field that's there. */}
         <Slot className="slot-place" value={f.place && !bare ? { text: f.place } : undefined} clipStart divider={!!f.kind && !bare} />
@@ -99,17 +100,16 @@ export function TileTitle({
         </span>
       </span>
       {menu && (
-        <button
+        <WindowBarMenu
           className="tile-menu"
           onPointerDown={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
           onClick={(e) => (e.stopPropagation(), void showContextMenu(menu.entries))}
         >
           {menu.label}
-          <Symbol name="chevron.down" size={ICON.disclosure} />
-        </button>
+        </WindowBarMenu>
       )}
-    </div>
+    </WindowBar>
   );
 }
 

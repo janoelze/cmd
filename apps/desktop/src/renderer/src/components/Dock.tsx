@@ -5,6 +5,7 @@
 // (Electron reattaches a moved <webview>); terminals reattach their xterm as is.
 
 import type { PaneId } from "@cmd/protocol";
+import { Window, WindowBody, WindowFrame } from "@cmd/ui";
 import { needsYou, windowIdOf, type SidebarRow } from "../model.ts";
 import { DOCK_WIDTH, type Side } from "../docks.ts";
 import { PlacementContext } from "../windows/registry.ts";
@@ -37,15 +38,17 @@ export function Dock(p: Props) {
   };
   return (
     <aside className={`dock dock-${p.side}`} style={{ width: p.width }}>
-      <div
+      <Window
         data-pane={id}
+        selected={p.selected}
+        attention={p.attention && needsYou(r)}
         className={`tile dock-tile kind-${r.win?.kind ?? "terminal"} ${p.selected ? "sel" : ""} ${p.attention && needsYou(r) ? "needs" : ""}`}
         onMouseDown={() => p.onSelect(id)}
         onFocusCapture={() => !p.selected && p.onSelect(id)}
         // Right-clicks an embedded page reports (Magic widgets, embed.ts) open the title bar's menu.
         onContextMenu={(e) => e.target instanceof Element && e.target.closest("[data-embed]") && menu(e)}
       >
-        <div className="tile-body">
+        <WindowBody className="tile-body">
           <TileTitle row={r} onContextMenu={menu} bare />
           <PlacementContext.Provider value="sidebar">
             {r.pane ? (
@@ -54,9 +57,9 @@ export function Dock(p: Props) {
               <WindowContent win={r.win} focused={p.selected} />
             ) : null}
           </PlacementContext.Provider>
-        </div>
-        <div className="tile-frame" />
-      </div>
+        </WindowBody>
+        <WindowFrame className="tile-frame" />
+      </Window>
       <DockResize side={p.side} max={p.maxWidth} onWidth={p.onWidth} />
     </aside>
   );

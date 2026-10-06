@@ -2,7 +2,8 @@
 // portalled out of .app (dialogs) gets them: --window-radius (ui.windowRadius),
 // --window-outline (ui.windowOutline), --window-edge-mix (ui.windowOutlineContrast),
 // --window-elevation (ui.windowShadow), --focus-outline and --focus-glow, and
-// data-focus-color (ui.focusColor). styles.css builds windows and sheets from them.
+// data-focus-color (ui.focusColor). The kit builds windows and sheets from them
+// (@cmd/ui: window.tsx, Dialog).
 
 import type { Settings } from "@cmd/protocol";
 

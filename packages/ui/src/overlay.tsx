@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { ICON, iconNode } from "./icon.tsx";
 import { Button, IconButton } from "./button.tsx";
 import type { Tone } from "./status.tsx";
+import { WindowBar } from "./window.tsx";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -360,11 +361,9 @@ export function Dialog({
     >
       <div ref={ref} className={cls("ui-dialog", className)} data-divided={divided || undefined} data-window={win ? true : undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : win?.name)} tabIndex={-1} style={{ width, height }}>
         {win && (
-          <div className="ui-window-bar">
-            {win.icon && <span className="ui-window-bar-icon">{iconNode(win.icon, ICON.small)}</span>}
-            <span className="ui-window-bar-name">{win.name}</span>
+          <WindowBar icon={win.icon} name={win.name}>
             {dismissable && win.close !== false && <IconButton icon="xmark" size="sm" label="Close" onClick={onClose} />}
-          </div>
+          </WindowBar>
         )}
         {title && (
           <div className="ui-dialog-head">

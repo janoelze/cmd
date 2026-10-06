@@ -1,5 +1,5 @@
 /* The kit's components (button.tsx, choice.tsx, fields.tsx, status.tsx,
-   layout.tsx, overlay.tsx). Tokens only (tokens.css); variants and sizes are
+   layout.tsx, overlay.tsx, window.tsx). Tokens only (tokens.css); variants and sizes are
    data attributes (data-variant, data-size, data-tone), so a component's
    class never collides with an app class of the same word.
 
@@ -916,13 +916,11 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-dialog[data-divided] .ui-dialog-head { padding: 12px 14px 12px var(--dialog-pad); border-bottom: 1px solid var(--separator); }
 .ui-dialog[data-divided] .ui-dialog-head + .ui-dialog-body[data-padded] { padding-top: var(--dialog-pad); }
 .ui-dialog[data-divided] .ui-dialog-foot { padding: 12px var(--dialog-pad); border-top: 1px solid var(--separator); }
-/* Dialog window: one of the app's windows. Its title bar (the windows' look: a
-   small icon and name, the line under it), the window's ground, and the title
-   under the bar, larger. */
+/* Dialog window: one of the app's windows, with its title bar (WindowBar) and
+   ground, and the title under the bar, larger. */
 .ui-dialog[data-window] { background: var(--window-bg); }
-.ui-window-bar { flex: none; display: flex; align-items: center; gap: 6px; height: var(--window-bar-h); padding: 0 4px 0 10px; font: 500 11.5px var(--font-ui); color: var(--text); background: var(--window-bar-bg); box-shadow: inset 0 -1px 0 var(--window-bar-edge); }
-.ui-window-bar-icon { display: flex; color: var(--icon); }
-.ui-window-bar-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-dialog .ui-window-bar { padding-right: 4px; color: var(--text); }
+.ui-dialog .ui-window-bar-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-dialog[data-window] .ui-dialog-head { padding: 18px var(--dialog-pad) 0; }
 .ui-dialog[data-window] .ui-dialog-title { font: 600 var(--text-xl) / 1.25 var(--font-ui); letter-spacing: -0.01em; }
 .ui-dialog[data-window][data-divided] .ui-dialog-head { padding: 18px var(--dialog-pad) 14px; }
@@ -998,3 +996,94 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-toast-icon { flex: none; display: flex; color: var(--tone); }
 .ui-toast[data-tone="neutral"] .ui-toast-icon { color: var(--icon); }
 .ui-toast-text { flex: 1; min-width: 0; }
+
+/* ── windows (window.tsx) ── */
+
+.ui-window {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--window-bg);
+  border: var(--window-outline) solid var(--window-edge);
+  border-radius: var(--window-radius);
+  /* Inside the outline, curves are smaller by its width, so they stay concentric.
+     Declared here, not on :root: a variable built from another resolves where it's
+     declared, and an app may set the radius per mode. */
+  --window-radius-inner: max(0px, calc(var(--window-radius) - var(--window-outline)));
+  --window-edge: color-mix(in srgb, var(--ink) var(--window-edge-mix, 9%), var(--bg-sidebar));
+  /* The outline colour where it's emphasised: selected, or needing attention. */
+  --ring-color: var(--window-highlight);
+}
+.ui-window:is([data-selected], [data-attention]) { border-color: var(--ring-color); }
+.ui-window[data-attention] { --ring-color: var(--state-needs); }
+.ui-window[data-selected][data-attention] { --ring-color: var(--window-highlight); }
+/* Clips the content; the window itself doesn't, so handles can sit outside it. */
+.ui-window-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--window-radius-inner);
+}
+
+/* The frame (over the window's outline) draws the outline and the emphasised
+   ring and glow as inset box-shadows, from the window's outer edge inward over
+   the content's edge: selecting a window never moves its content, and nothing but
+   the drop shadow reaches past the window. Under a scale (--z, a zoomed-out
+   canvas), widths are divided by it, so a 1px outline stays 1px on screen. */
+.ui-window-frame {
+  position: absolute;
+  inset: calc(-1 * var(--window-outline));
+  border-radius: var(--window-radius);
+  pointer-events: none;
+  z-index: 3;
+  /* Outline: the border, widened inward to its width on screen when zoomed out. */
+  --edge-w: max(var(--window-outline), calc(var(--window-outline) / var(--z, 1)));
+  /* Emphasised, inward from the outer edge: the border and up to --focus-outline on
+     screen, then a 1px halo and a blur (--focus-glow). */
+  --ring-w: max(var(--window-outline), calc(var(--focus-outline) / var(--z, 1)));
+  --ring:
+    inset 0 0 0 var(--ring-w) var(--ring-color),
+    inset 0 0 0 calc(var(--ring-w) + 1px / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(55% * var(--focus-glow))), transparent),
+    inset 0 0 calc(14px * var(--focus-glow) / var(--z, 1)) color-mix(in srgb, var(--ring-color) min(100%, calc(35% * var(--focus-glow))), transparent);
+  /* One elevation shadow, --window-elevation high (0 = none), plus --lift. Five
+     layers, each twice as far down and as blurred as the last, so the light falls
+     off softly instead of as one grey blob; the far ones pulled in at the sides, so
+     they pool below the window. Their colour is the theme's --shadow with some of
+     the backdrop's hue, which reads cleaner than black on coloured themes. */
+  --lift: 0;
+  --sh: color-mix(in oklab, var(--shadow) 85%, var(--bg));
+  --elev: calc(var(--window-elevation) + var(--lift));
+  --drop:
+    0 calc(0.5px * var(--elev)) calc(1px * var(--elev)) color-mix(in srgb, var(--sh) 36%, transparent),
+    0 calc(1px * var(--elev)) calc(2px * var(--elev)) color-mix(in srgb, var(--sh) 30%, transparent),
+    0 calc(2px * var(--elev)) calc(4px * var(--elev)) color-mix(in srgb, var(--sh) 24%, transparent),
+    0 calc(4px * var(--elev)) calc(8px * var(--elev)) calc(-1px * var(--elev)) color-mix(in srgb, var(--sh) 20%, transparent),
+    0 calc(8px * var(--elev)) calc(16px * var(--elev)) calc(-2px * var(--elev)) color-mix(in srgb, var(--sh) 16%, transparent);
+  box-shadow: inset 0 0 0 var(--edge-w) var(--window-edge), var(--drop);
+}
+.ui-window:is([data-selected], [data-attention]) > .ui-window-frame { box-shadow: var(--ring), var(--drop); }
+
+/* The title bar: icon · name ……… info · menu. */
+.ui-window-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--window-bar-h);
+  padding: 0 10px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  background: var(--window-bar-bg);
+  /* separator as an inset shadow: no layout space, so the icon centres on whole pixels */
+  box-shadow: inset 0 -1px 0 var(--window-edge);
+}
+.ui-window[data-selected] .ui-window-bar { color: var(--text); }
+.ui-window-bar-icon { flex: none; display: flex; color: var(--icon); }
+.ui-window-bar-name { flex: 0 1 auto; display: flex; align-items: center; min-width: 0; font-weight: 500; }
+/* Info, not the name: always dim, selected or not, and the first to shrink. */
+.ui-window-bar-meta { margin-left: auto; display: flex; min-width: 0; flex: 0 100 auto; overflow: hidden; color: var(--text-dim); }
+.ui-window-bar-menu { flex: none; display: flex; align-items: center; gap: 4px; height: 18px; margin-right: -4px; padding: 0 5px; font: inherit; color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); cursor: default; white-space: nowrap; }
+.ui-window-bar-menu:hover { color: var(--text); background: var(--bg-hover); }

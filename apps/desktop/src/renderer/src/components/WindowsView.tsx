@@ -20,7 +20,7 @@
 // Windows are never remounted or reordered in the DOM, so terminals keep
 // running and pointer capture is never lost.
 
-import { EmptyState, PageDots } from "@cmd/ui";
+import { EmptyState, PageDots, Window, WindowBody, WindowFrame } from "@cmd/ui";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
@@ -866,9 +866,11 @@ export function WindowsView(p: Props) {
             />
           );
           return (
-            <div
+            <Window
               key={id}
               data-pane={id}
+              selected={id === selected}
+              attention={attention && needsYou(r)}
               className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${settling === id ? "settling" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""} ${attention && needsYou(r) ? "needs" : ""}`}
               style={{
                 transform: `translate(${x}px, ${y}px)`,
@@ -895,17 +897,17 @@ export function WindowsView(p: Props) {
             >
               {/* The body clips the content; resize handles sit outside it, in the
                   gutter, so they never cover a scrollbar or the content's edge. */}
-              <div className="tile-body">
+              <WindowBody className="tile-body">
                 {lay.chrome && <SlotMotion.Provider value={motion}>{title}</SlotMotion.Provider>}
                 {r.pane ? (
                   <TerminalView paneId={id} focused={id === selected} onMenu={p.onTerminalMenu} />
                 ) : r.win ? (
                   <WindowContent win={r.win} focused={id === selected} />
                 ) : null}
-              </div>
+              </WindowBody>
               {/* Outline rings, glow, shadow and dimming: a leaf, so the canvas zoom can be
                   set on it (screen-constant widths) without restyling the window's content. */}
-              <div className="tile-frame" style={canvas ? zVar : undefined} />
+              <WindowFrame className="tile-frame" style={canvas ? zVar : undefined} />
               {lay.resizable &&
                 (["left", "right"] as const).map((edge) => {
                   // Half the space beside this edge: the window's gutter, or the strip's padding at its ends.
@@ -934,7 +936,7 @@ export function WindowsView(p: Props) {
                     onPointerDown={(e) => startSizing(e, id, rect, axes)}
                   />
                 ))}
-            </div>
+            </Window>
           );
         })}
       </div>

@@ -56,6 +56,11 @@ import {
   TextField,
   Toast,
   Toolbar,
+  Window,
+  WindowBar,
+  WindowBarMenu,
+  WindowBody,
+  WindowFrame,
   toast,
   type DotState,
 } from "../src/index.ts";
@@ -923,6 +928,25 @@ function OverlaysPage() {
               </ButtonGroup>
             </div>
           </Popover>
+        </Row>
+      </Spec>
+      <Spec
+        title="Window"
+        code="<Window selected? attention?> <WindowBody> <WindowBar icon name> <WindowBarMenu> </WindowBody> <WindowFrame /> </Window>"
+        note="The app's windows: an outline, a title bar with the icon, the name and dim info, and a ring when selected or needing attention. Dialog's window sheets share the bar."
+      >
+        <Row>
+          {([["Terminal", "terminal", {}], ["Selected", "doc.text", { selected: true }], ["Needs you", "sparkles", { attention: true }]] as const).map(([name, icon, state]) => (
+            <Window key={name} {...state} style={{ width: 220, height: 120 }}>
+              <WindowBody>
+                <WindowBar icon={icon} name={name}>
+                  <span className="ui-window-bar-meta">~/src</span>
+                  {name === "Selected" && <WindowBarMenu>Today</WindowBarMenu>}
+                </WindowBar>
+              </WindowBody>
+              <WindowFrame />
+            </Window>
+          ))}
         </Row>
       </Spec>
       <Spec

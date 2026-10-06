@@ -98,17 +98,38 @@
   --radius-md: 8px; /* cards, callouts */
   --radius-lg: 10px; /* menus, popovers */
   --radius-xl: 12px; /* dialogs, the palette */
-  /* Sheets (Dialog): their corners, outline and shadow. An app can map these to
-     its own windows' look (cmd: the ui.window* settings, in styles.css). */
-  --sheet-radius: var(--radius-xl);
-  --sheet-edge: var(--popover-edge);
-  --sheet-edge-width: 1px;
-  --sheet-shadow: 0 20px 60px var(--shadow);
-  /* Sheets dressed as windows (Dialog window): the title bar and the window's ground. */
+  /* Windows (window.tsx) and sheets (Dialog): rounded corners and crisp
+     whole-pixel outlines, the selected one in the highlight with a soft glow, and
+     an elevation shadow. An app maps these to its own settings (cmd: the ui.window*
+     settings, look.ts): --window-radius, --window-outline, --window-edge-mix (the
+     outline's contrast), --window-elevation, --focus-outline, --focus-glow (1 =
+     the default halo). What's built from them is declared again on .ui-window,
+     where an app's per-mode values resolve. */
+  --window-radius: 8px;
+  --window-outline: 1px;
+  --window-elevation: 0.5;
+  --focus-outline: 1px;
+  --focus-glow: 1;
+  /* The outline and the line under the title bar: one opaque colour (the separator
+     over the title bar), so both look the same over any background. */
+  --window-edge: color-mix(in srgb, var(--ink) var(--window-edge-mix, 9%), var(--bg-sidebar));
+  --window-highlight: var(--accent);
+  --window-bg: var(--well);
   --window-bar-h: 26px;
   --window-bar-bg: var(--bg-sidebar);
-  --window-bar-edge: var(--sheet-edge);
-  --window-bg: var(--well);
+  /* Sheets look like windows: their corners, outline and the same shadow, higher
+     (4× the windows' elevation, at most 6). */
+  --sheet-radius: var(--window-radius);
+  --sheet-edge-width: var(--window-outline);
+  --sheet-edge: var(--window-edge);
+  --sheet-elev: min(6, calc(var(--window-elevation) * 4));
+  --sheet-sh: color-mix(in oklab, var(--shadow) 85%, var(--bg));
+  --sheet-shadow:
+    0 calc(0.5px * var(--sheet-elev)) calc(1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 36%, transparent),
+    0 calc(1px * var(--sheet-elev)) calc(2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 30%, transparent),
+    0 calc(2px * var(--sheet-elev)) calc(4px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 24%, transparent),
+    0 calc(4px * var(--sheet-elev)) calc(8px * var(--sheet-elev)) calc(-1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 20%, transparent),
+    0 calc(8px * var(--sheet-elev)) calc(16px * var(--sheet-elev)) calc(-2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 16%, transparent);
   --radius-pill: 999px;
 
   /* ── motion ── */
