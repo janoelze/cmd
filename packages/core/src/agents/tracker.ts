@@ -555,8 +555,11 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   restore(stored: Agent, live: boolean): Agent {
     const parent = stored.parentId ? this.#agents.get(stored.parentId) : undefined;
     const now = Date.now();
+    // Its turn from the turns view, the one copy (older stores kept it in the agent's row too).
+    const turn = this.activity.lastTurn(stored.id)?.turn ?? stored.turn ?? null;
     const agent: Agent = {
       ...stored,
+      turn,
       // A parent that didn't come back makes this the root of its own tree.
       parentId: parent?.id ?? null,
       rootId: parent?.rootId ?? stored.id,

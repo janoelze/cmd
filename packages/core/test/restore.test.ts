@@ -279,3 +279,26 @@ describe("records another cmd version saved", () => {
     await b.core.close();
   });
 });
+
+describe("agents in the store", () => {
+  it("keep their identity and state, not a copy of their turn; restore takes the turn from the turns view", async () => {
+    const { Store } = await import("../src/store.ts");
+    const { AgentTracker } = await import("../src/agents/tracker.ts");
+    const { PaneManager } = await import("../src/panes.ts");
+    const store = new Store(":memory:");
+    const panes = new PaneManager(fakeFactory().factory, { socketPath: "/tmp/t.sock", pollMs: 0 });
+    const tracker = new AgentTracker(panes, { store });
+    const turn = { format: 2, derivedBy: null, agentId: "a1", agentKind: "claude", agentVersion: null, model: null, index: 0, sessionId: "s", turnId: null, startedAt: 1, endedAt: 2, prompt: "hi", auto: false, followUps: [], notes: [], background: [], outcome: "done", ask: null, final: "Done.", error: null, tools: [], commands: [], shellWrites: 0, files: [], subagents: 0, events: 1, inferred: [] } as const;
+    tracker.activity.saveTurn({ ...turn, followUps: [], notes: [], background: [], tools: [], commands: [], files: [], inferred: [] }, 1);
+    store.saveAgent({ id: "a1", paneId: null, spaceId: "home", kind: "claude", name: null, cwd: "/w", parentId: null, rootId: "a1", depth: 0, spawn: { source: "detected" }, native: {}, state: "done", stateSince: 2, detail: null, lastMessage: "Done.", lastPrompt: "hi", seenAt: null, createdAt: 1, turn: { ...turn, followUps: [], notes: [], background: [], tools: [], commands: [], files: [], inferred: [] } });
+    const raw = JSON.parse((store.db.prepare(`SELECT doc FROM agents WHERE id = 'a1'`).get() as { doc: string }).doc);
+    expect(raw).not.toHaveProperty("turn");
+    const [row] = store.agents();
+    expect(row!.turn ?? null).toBeNull();
+    const back = tracker.restore(row!, true);
+    expect(back.turn).toMatchObject({ index: 0, prompt: "hi", final: "Done." });
+    tracker.close();
+    panes.dispose();
+    store.close();
+  });
+});

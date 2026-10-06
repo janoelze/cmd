@@ -152,13 +152,18 @@ export class Store {
     this.#stmt(`DELETE FROM ui_state WHERE substr(key, -?) = ?`).run(suffix.length, suffix);
   }
 
+  /**
+   * An agent's identity and current state, for restoring it. Not its turn: the
+   * turns view (data/views/activity.ts) has that, and restore takes it from there.
+   */
   saveAgent(a: Agent): void {
+    const { turn: _turn, ...doc } = a;
     this.#stmt(
         `INSERT INTO agents (id, parent_id, root_id, doc, updated_at) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET parent_id = excluded.parent_id, root_id = excluded.root_id,
            doc = excluded.doc, updated_at = excluded.updated_at`,
       )
-      .run(a.id, a.parentId, a.rootId, JSON.stringify(a), Date.now());
+      .run(a.id, a.parentId, a.rootId, JSON.stringify(doc), Date.now());
   }
 
   deleteAgent(id: AgentId): void {
