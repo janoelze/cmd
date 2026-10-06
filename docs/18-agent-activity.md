@@ -18,7 +18,7 @@ Principles:
 |---|---|
 | Hook script: status files + spool + the agent's config dir | `core/src/agents/hooks.ts` |
 | Spool reader | `agents/activity/spool.ts` |
-| Event log and turns in SQLite (`agent_events`, `agent_turns`) | `agents/activity/log.ts` |
+| Hook events in the event log (`agent.hook`, `agent.note`), turns as a view | `data/views/activity.ts` over `data/service.ts` (docs/28) |
 | Raw payload → `ActivityEvent` | `agents/activity/normalize.ts` |
 | Events → state and turns | `agents/activity/reduce.ts` |
 | Files changed: git snapshots, folder watch | `agents/activity/gitsnap.ts`, `fswatch.ts` |
@@ -33,7 +33,7 @@ Principles:
 
 **The hook spools every event.** cmd's hook (its code inline in each agent config, so a change to it rewrites the entries: the installed app does that at its next start) still writes `<status root>/<pane>/<Event>.json` (the latest of each, for older cores) and now also hard-links the same file into `<pane>/log/<ts>.<pid>.<Event>.json`. Linking after writing makes every spool file complete when it appears; unique names mean none is overwritten. The record carries the agent's config dir from its environment (`$CLAUDE_CONFIG_DIR`, `$CODEX_HOME`, `$GEMINI_CLI_HOME`, JSON-escaped in sh). SessionEnd no longer deletes the pane's folder (`/clear` fires SessionEnd while the process lives on); the core cleans up when the pane goes.
 
-**The core takes the spool into SQLite.** On every change (FSEvents, 30 ms debounce) and every 2 s as a backstop, the tracker drains a pane's spool in write-time order (mtime, ns) into `agent_events`, raw, with long strings cut (4 KB), long arrays shortened and credentials replaced by `[redacted]` (`core/src/redact.ts`, one list for every store and every model call; its patterns were checked against the author's transcripts, see docs/25 3.8). Events that arrive before the agent is detected (SessionStart usually beats the process poll) are stored unclaimed and taken by the agent when it appears. Capture doesn't depend on the core running: a core that's down reads the spool when it's back. Events and turns are kept 14 days.
+**The core takes the spool into SQLite.** On every change (FSEvents, 30 ms debounce) and every 2 s as a backstop, the tracker drains a pane's spool in write-time order (mtime, ns) into the event log as `agent.hook` events, raw, with long strings cut (4 KB), long arrays shortened and credentials replaced by `[redacted]` (`core/src/redact.ts`, one list for every store and every model call; its patterns were checked against the author's transcripts, see docs/25 3.8). Events that arrive before the agent is detected (SessionStart usually beats the process poll) are stored unclaimed and taken by the agent when it appears. Capture doesn't depend on the core running: a core that's down reads the spool when it's back. Events are kept by the data layer's retention (a year by default, Settings → Data); turns follow their events and are rebuilt from them when `TURN_FORMAT` changes (docs/28 §3).
 
 `hook.ingest` (the socket path) is now only for peer briefings (`spooled: true`: the core reads the spool first) and the old `cmd hook` (its event goes into the same log). Both paths reduce the same way.
 
@@ -119,8 +119,8 @@ Data recorded now has to stay readable when cmd, the agents and these formats ch
 
 | Version | Covers | Where it's kept |
 |---|---|---|
-| `ACTIVITY_SCHEMA` (1) | the stored event envelope | `agent_events.schema`, `ActivityEvent.recorded.schema`; the database's in `schema_versions` |
-| `HOOK_FORMAT` (2) | the record cmd's hook writes (`{v, agent, ts, env, event}`) | `agent_events.hook`; spool files without `v` are 2 |
+| `ACTIVITY_SCHEMA` (1) | the normalised event (`ActivityEvent.recorded.schema`) | the stored envelope is the event log's (docs/28 §2: `type`, `v`, `source`, `recorded`) |
+| `HOOK_FORMAT` (2) | the record cmd's hook writes (`{v, agent, ts, env, event}`) | `agent.hook` data (`hook`); spool files without `v` are 2 |
 | `TURN_FORMAT` (1) | `AgentTurn` and the rules that derive it | `AgentTurn.format` |
 | `EXPORT_FORMAT` (1) | `cmd agents export` files | the header line's `version` |
 | fixture format (1) | recorded test sessions | the fixture's header line |

@@ -12,7 +12,7 @@ Each is derived from the one before and can be derived again when the rules or t
 
 | Layer | What | Deterministic | Where |
 |---|---|---|---|
-| **Events** | Facts, as recorded or backfilled, kept 180 days | yes | `journal/store.ts`, table `journal_events` |
+| **Events** | Facts from the event log (commands, git, pages, files, notes), the turns view and the transcript index, assembled on read (docs/28) | yes | `journal/store.ts` over `data/`, `turns` and `search.sqlite` |
 | **Threads** | Events grouped by identity, with links between them that say why | yes | `journal/threads.ts` |
 | **Days** | Entries a model wrote from a digest of a day's threads, and a headline | no (a model) | `journal/digest.ts`, `writer.ts`, table `journal_days` |
 
@@ -60,7 +60,7 @@ Kinds: release, investigation, feature, fix, design, refactor, research, review,
 
 ## What the runs showed
 
-`scripts/journal/lab.ts` backfills a throwaway journal from a copy of `cmd.sqlite`, the transcript index and git, and prints threads, the digest or the written day (`claude -p` stands in for AiService).
+`scripts/journal/lab.ts` backfills a throwaway journal from a copy of `$CMD_HOME/data` (`--data`), the transcript index and git, and prints threads, the digest or the written day (`claude -p` stands in for AiService).
 
 - **Monday 5 Oct, this repository** (≈70 sessions, 92 merges, 8 releases): 84 threads, 12 minor, 30k characters of digest. Sonnet wrote 27 entries that match what happened, merged each session with its branch and its release, split nothing wrongly, in 18–20 s. Haiku (through `claude -p`) left half the threads out and over-merged; the fallbacks caught it, but its entries were thin. **Use the smart tier** for days: about 9k tokens in, a few cents a day.
 - **Tuesday 6 Oct** (the morning so far): 7 entries, including this branch ("Prototyped the workspace journal and its core", open). It split one session that did two things (dialogs, the window kit) into two entries, as the prompt asks.
