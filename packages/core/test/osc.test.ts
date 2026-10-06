@@ -113,3 +113,13 @@ describe("OSC 9;4 progress", () => {
     expect(parseOsc("9;build done")).toEqual({ type: "notify", title: "", body: "build done" });
   });
 });
+
+describe("commandOutput", () => {
+  it("drops the shell's partial-line marker and trailing space", async () => {
+    const { commandOutput } = await import("../src/commands.ts");
+    expect(commandOutput("hello\r\n%" + " ".repeat(99) + "\r \r")).toBe("hello");
+    expect(commandOutput("\x1b[1mno newline\x1b[0m%" + " ".repeat(40))).toBe("no newline"); // the marker right after it
+    expect(commandOutput("50% done\n")).toBe("50% done");
+    expect(commandOutput("⏎" + " ".repeat(30))).toBe("");
+  });
+});

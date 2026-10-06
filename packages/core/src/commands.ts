@@ -21,6 +21,13 @@ export const MAX_RUNS = 300;
 /** Escape sequences out of captured output: colours, cursor moves, OSC titles, carriage returns. */
 export const stripAnsi = (s: string) => s.replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]|\r/g, "");
 
+/**
+ * A command's output as recorded: escape codes out, without the partial-line
+ * marker zsh and fish print after it (`%` or `⏎` and a screen's width of
+ * spaces, drawn over by the next prompt), trailing blank space trimmed.
+ */
+export const commandOutput = (raw: string) => stripAnsi(raw).replace(/[%#⏎] {8,}[ \t]*$/, "").trimEnd();
+
 export class CommandLog extends EventEmitter<{ updated: [CommandRun] }> {
   #panes: PaneManager;
   #data: DataService | null;
@@ -75,7 +82,7 @@ export class CommandLog extends EventEmitter<{ updated: [CommandRun] }> {
     this.#running.delete(id);
     run.endedAt = Date.now();
     run.exitCode = exitCode;
-    this.#record(run, output ? stripAnsi(output) : null);
+    this.#record(run, output ? commandOutput(output) || null : null);
     this.emit("updated", { ...run });
   }
 
