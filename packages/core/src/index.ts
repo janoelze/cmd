@@ -11,7 +11,7 @@ export { normalize } from "./agents/activity/normalize.ts";
 export { ActivityReducer } from "./agents/activity/reduce.ts";
 export { AgentHomes } from "./agents/homes.ts";
 export { classify, ProcInfo } from "./agents/procinfo.ts";
-export { deriveStatus, readStatus, statusRoot } from "./agents/statusfiles.ts";
+export { statusRoot } from "./agents/statusfiles.ts";
 export { SettingsService } from "./settings.ts";
 export * from "./windows/index.ts";
 export { TranscriptIngest } from "./data/sources/ingest.ts";

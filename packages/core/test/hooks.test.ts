@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { connect, type Connection } from "@cmd/protocol/node";
 import { Core } from "../src/core.ts";
 import { hookCommand, hookFiles, hookState, hookTargets, installHooks, removeHooks } from "../src/agents/hooks.ts";
-import { readStatus, statusRoot } from "../src/agents/statusfiles.ts";
+import { statusRoot } from "../src/agents/statusfiles.ts";
 import { drainSpool } from "../src/agents/activity/spool.ts";
 import { AgentHomes } from "../src/agents/homes.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
@@ -62,12 +62,12 @@ describe.skipIf(process.platform === "win32")("cmd's agent hook", () => {
     expect(ptys.at(-1)!.opts.env.PATH?.split(path.delimiter)[0]).toBe(files.bin);
   });
 
-  it("stores events as status files and spools every one, silently", () => {
+  it("stores the newest event of each kind (for older cores) and spools every one, silently", () => {
     const id = randomUUID();
     const env = { CMD_PANE_ID: id, CLAUDE_CONFIG_DIR: '/Users/x/my "profile"' };
     try {
       expect(hook("claude", { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" } }, env)).toEqual({ code: 0, out: "" });
-      expect(readStatus(id, 0, statusRoot())).toMatchObject({ state: "working", agent: "claude" });
+      expect(JSON.parse(fs.readFileSync(path.join(statusRoot(), id, "PreToolUse.json"), "utf8"))).toMatchObject({ agent: "claude", event: { tool_name: "Bash" } });
       expect(hook("gemini", { hook_event_name: "BeforeAgent", prompt: "hi" }, env)).toEqual({ code: 0, out: "{}\n" });
       expect(hook("claude", { hook_event_name: "SessionEnd" }, env).code).toBe(0);
       const { events } = drainSpool(statusRoot(), id);
@@ -78,7 +78,7 @@ describe.skipIf(process.platform === "win32")("cmd's agent hook", () => {
       expect(hook("claude", { hook_event_name: "Stop" })).toEqual({ code: 0, out: "" });
       // A headless Claude started in the pane (claude -p from an agent's shell): nothing.
       expect(hook("claude", { hook_event_name: "Stop", last_assistant_message: "{}" }, { ...env, CLAUDE_CODE_ENTRYPOINT: "sdk-cli" })).toEqual({ code: 0, out: "" });
-      expect(readStatus(id, 0, statusRoot())?.state).not.toBe("done");
+      expect(fs.existsSync(path.join(statusRoot(), id, "Stop.json"))).toBe(false);
     } finally {
       fs.rmSync(path.join(statusRoot(), id), { recursive: true, force: true });
     }
@@ -213,14 +213,6 @@ describe("installing into agent configs", () => {
       ["gemini", ".gemini/settings.json"],
     ]);
   });
-});
-
-it("reads Gemini's events as the ones Claude and Codex share", () => {
-  const id = randomUUID();
-  const d = path.join(dir, "gem", id);
-  fs.mkdirSync(d, { recursive: true });
-  fs.writeFileSync(path.join(d, "BeforeTool.json"), JSON.stringify({ agent: "gemini", ts: 1, event: { hook_event_name: "BeforeTool", tool_name: "run_shell_command" } }));
-  expect(readStatus(id, 0, path.join(dir, "gem"))).toMatchObject({ state: "working", agent: "gemini" });
 });
 
 describe.skipIf(process.platform === "win32")("setting agents up out of the box", () => {

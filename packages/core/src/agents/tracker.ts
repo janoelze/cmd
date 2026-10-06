@@ -20,7 +20,7 @@ import { registerBuiltinSources } from "../search/builtin.ts";
 import { locateContext, TranscriptSources } from "../search/sources.ts";
 import { briefing, checkoutOf } from "./peers.ts";
 import { nativeSession, type StateChange } from "./state.ts";
-import { readStatus, removeStatus, StatusWatcher, type HookStatus } from "./statusfiles.ts";
+import { removeStatus, StatusWatcher } from "./statusfiles.ts";
 import { watchTurn, type TurnWatch } from "./activity/fswatch.ts";
 import { changedBetween, snapshot, type GitSnapshot } from "./activity/gitsnap.ts";
 import { ActivityView } from "../data/views/activity.ts";
@@ -196,7 +196,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
 
   /**
    * Takes a pane's new hook events (spool) into the log and its agent's state.
-   * Panes whose hook hasn't spooled anything fall back to the status files.
+   * The hook's status files (the newest event of each kind) are for older cores;
+   * this one reads only the spool, so state has one derivation (reduce.ts).
    */
   applyStatus(paneId: PaneId): void {
     if (!this.#statusRoot || !this.#panes.get(paneId)) return;
@@ -211,9 +212,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
         this.#started.add(agent.id);
       }
     }
-    if (agent && (this.#ingest(paneId, fresh, agent) || this.#reducers.has(agent.id))) return;
-    if (!agent) this.#ingest(paneId, fresh, null);
-    this.#applyStatusFiles(paneId);
+    if (agent) this.#ingest(paneId, fresh, agent);
+    else this.#ingest(paneId, fresh, null);
   }
 
   /** Every 2 s: spooled events FSEvents didn't report, and agents that went quiet mid-turn. */
@@ -230,23 +230,6 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       this.emit("activity", ev);
       this.#applyReduction(a, red!, r, ev, false);
     }
-  }
-
-  /** The fallback: state from the newest status file of each event (statusfiles.ts). */
-  #applyStatusFiles(paneId: PaneId): void {
-    const fg = this.#panes.foreground(paneId);
-    // Ignore status written before the current agent process started.
-    const notBefore = fg?.startedAt ? fg.startedAt - 500 : 0;
-    const status = this.#statusRoot ? readStatus(paneId, notBefore, this.#statusRoot) : null;
-    if (!status) return;
-    let agent = this.#byPane(paneId);
-    if (!agent) {
-      if (fg?.class.kind !== "other" || !status.agent) return;
-      agent = this.#create({ kind: status.agent, paneId, source: "detected" });
-      this.#started.add(agent.id);
-    }
-    this.#hooked.add(agent.id);
-    this.#update(agent, statusChange(agent.kind, status), { lastPrompt: status.lastPrompt ?? agent.lastPrompt });
   }
 
   /** A pane's spooled events, stored; unclaimed (no agent) until an agent takes them. */
@@ -794,12 +777,6 @@ export function sessionIdOf(a: Agent): string | null {
   return a.native.claudeSessionId ?? a.native.codexThreadId ?? null;
 }
 
-function statusChange(kind: AgentKind, s: HookStatus): StateChange {
-  const detail = s.state === "needs_input" ? (s.message ?? "Needs input") : s.state === "working" ? s.activity : null;
-  const native: StateChange["native"] = s.sessionId ? nativeSession(kind, s.sessionId) : {};
-  if (s.transcriptPath) native.transcriptPath = s.transcriptPath;
-  return { state: s.state, detail, native, cwd: s.cwd ?? undefined };
-}
 
 /** Typed into the user's shell (not exec'd) so aliases and sandbox wrappers still apply. */
 export function launchCommand(
