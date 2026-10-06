@@ -4,11 +4,13 @@
 //   means it was answered), so a rebuild needs it to give the turns the live
 //   core gave (ActivityView.rebuild). A new stretch starts after a second of
 //   quiet; the open one is saved every couple of seconds, not on every chunk.
-// - `agent.output`: what a turn printed, escape codes stripped, once it ends.
+// - `agent.output`: what a turn left on the screen, once it ends: the pane's
+//   rendered lines (the PTY host's terminal) from the prompt's echo on, without
+//   the agent's input box. Not the raw stream: a TUI draws with cursor moves,
+//   and stripped of them its words run together.
 // Only panes running an agent: plain terminals' output is their commands'.
 
 import type { AgentTurn, PaneId } from "@cmd/protocol";
-import { stripAnsi } from "../../commands.ts";
 import type { PaneManager } from "../../panes.ts";
 import type { DataService } from "../service.ts";
 import type { ActivityView } from "../views/activity.ts";
@@ -17,8 +19,10 @@ import type { ActivityView } from "../views/activity.ts";
 export const STRETCH_GAP_MS = 1000;
 /** The open stretch is saved this often. */
 const SAVE_EVERY_MS = 2000;
-/** Output kept per pane for its turn (the class cap cuts what's recorded further). */
-const KEEP_CHARS = 600_000;
+/** Rendered lines read when a turn ends (the class cap cuts what's recorded further). */
+const TURN_LINES = 1000;
+/** Without the prompt's echo on screen (an auto turn, a cleared screen): this many last lines. */
+const FALLBACK_LINES = 200;
 
 interface Stretch {
   id: string;
@@ -31,29 +35,32 @@ export class PaneOutputRecorder {
   #data: DataService;
   #panes: PaneManager;
   #stretch = new Map<PaneId, Stretch>();
-  #chunks = new Map<PaneId, { t: number; text: string }[]>();
-  #sizes = new Map<PaneId, number>();
   #written = new Set<string>();
   #timer: ReturnType<typeof setInterval>;
   #paneOf: (agentId: string) => PaneId | null;
+  #settleMs: number;
+  #disposed = false;
 
-  constructor(o: { data: DataService; panes: PaneManager; activity: ActivityView; paneOf: (agentId: string) => PaneId | null }) {
+  /** `settleMs`: how long after a turn ends its screen is read (the final answer is drawn after the Stop event). */
+  constructor(o: { data: DataService; panes: PaneManager; activity: ActivityView; paneOf: (agentId: string) => PaneId | null; settleMs?: number }) {
     this.#data = o.data;
     this.#panes = o.panes;
     this.#paneOf = o.paneOf;
-    o.panes.on("output", (id, text) => this.#output(id, text));
-    o.panes.on("removed", (id) => (this.#close(id), this.#chunks.delete(id), this.#sizes.delete(id)));
+    this.#settleMs = o.settleMs ?? 1500;
+    o.panes.on("output", (id) => this.#output(id));
+    o.panes.on("removed", (id) => this.#close(id));
     o.activity.onTurn((t) => this.#turn(t));
     this.#timer = setInterval(() => this.#saveOpen(), SAVE_EVERY_MS);
     this.#timer.unref?.();
   }
 
   dispose(): void {
+    this.#disposed = true;
     clearInterval(this.#timer);
     for (const id of [...this.#stretch.keys()]) this.#close(id);
   }
 
-  #output(id: PaneId, text: string, now = Date.now()): void {
+  #output(id: PaneId, now = Date.now()): void {
     const pane = this.#panes.get(id);
     if (!pane?.agentId) return;
     const s = this.#stretch.get(id);
@@ -64,12 +71,6 @@ export class PaneOutputRecorder {
       this.#stretch.set(id, n);
       this.#save(id, n);
     }
-    const chunks = this.#chunks.get(id) ?? [];
-    chunks.push({ t: now, text });
-    let size = (this.#sizes.get(id) ?? 0) + text.length;
-    while (size > KEEP_CHARS && chunks.length > 1) size -= chunks.shift()!.text.length;
-    this.#chunks.set(id, chunks);
-    this.#sizes.set(id, size);
   }
 
   #save(id: PaneId, s: Stretch): void {
@@ -93,7 +94,7 @@ export class PaneOutputRecorder {
     }
   }
 
-  /** A turn that ended: what its pane printed meanwhile, once per end. */
+  /** A turn that ended: what it left on its pane's screen, once per end. */
   #turn(t: AgentTurn): void {
     if (t.endedAt === null) return;
     const key = `${t.agentId}#${t.index}#${t.endedAt}`;
@@ -101,17 +102,37 @@ export class PaneOutputRecorder {
     const paneId = this.#paneOf(t.agentId);
     if (!paneId) return;
     this.#written.add(key);
-    const text = cleanOutput((this.#chunks.get(paneId) ?? []).filter((c) => c.t >= t.startedAt && c.t <= t.endedAt! + 1500).map((c) => c.text).join(""));
-    if (!text) return;
+    const timer = setTimeout(() => void this.#record(t, paneId), this.#settleMs);
+    timer.unref?.();
+  }
+
+  async #record(t: AgentTurn, paneId: PaneId): Promise<void> {
+    const screen = this.#panes.get(paneId) ? await this.#panes.read(paneId, TURN_LINES).catch(() => "") : "";
+    const text = turnScreen(screen, t.prompt);
+    if (!text || this.#disposed) return;
     const pane = this.#panes.get(paneId);
     this.#data.record({ id: `output:${t.agentId}:${t.index}`, at: t.startedAt, until: t.endedAt, type: "agent.output", source: "pty", paneId, agentId: t.agentId, spaceId: pane?.spaceId ?? null, sessionId: t.sessionId ? `${t.agentKind}:${t.sessionId}` : null, text: `turn ${t.index}: ${text.length} characters`, data: { turn: t.index, chars: text.length, cut: text.length > 256_000 }, content: text });
   }
 }
 
-/** A TUI's output as text: escape codes out, the spinner's repeated redraws collapsed. */
-export function cleanOutput(raw: string): string {
-  const lines = stripAnsi(raw).split("\n").map((l) => l.replace(/\s+$/, ""));
-  const out: string[] = [];
-  for (const l of lines) if (l && l !== out.at(-1)) out.push(l);
-  return out.join("\n");
+/**
+ * A turn's part of a rendered screen: from the last line echoing its prompt
+ * (else the last lines), without the input box an agent draws at the bottom
+ * (a rule, the prompt line, a rule, status lines), blank runs collapsed.
+ */
+export function turnScreen(screen: string, prompt: string | null): string {
+  const lines = screen.split("\n").map((l) => l.replace(/\s+$/, ""));
+  const squash = (x: string) => x.replace(/\s+/g, " ").trim();
+  const head = squash(prompt?.split("\n").find((l) => l.trim()) ?? "").slice(0, 30);
+  let from = -1;
+  if (head.length >= 4) for (let i = lines.length - 1; i >= 0 && from < 0; i--) if (squash(lines[i]!).includes(head)) from = i;
+  let out = lines.slice(from >= 0 ? from : Math.max(0, lines.length - FALLBACK_LINES));
+  const rule = (l: string) => /^\s*[─━═-]{20,}\s*$/.test(l);
+  const tail = Math.max(1, out.length - 8);
+  const box = out.findIndex((l, i) => i >= tail && rule(l));
+  if (box > 0) out = out.slice(0, box);
+  const kept: string[] = [];
+  for (const l of out) if (l || kept.at(-1)) kept.push(l);
+  while (kept.length && !kept.at(-1)) kept.pop();
+  return kept.join("\n");
 }

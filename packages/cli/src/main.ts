@@ -202,7 +202,9 @@ async function run({ client, closed }: Connection): Promise<number> {
     }
     case "new": {
       const dash = argv.indexOf("--");
-      const command = dash >= 0 ? argv.slice(dash + 1).join(" ") : undefined;
+      // One argument is a command line as typed ("pnpm dev | tee log"); several are words, each quoted.
+      const words = dash >= 0 ? argv.slice(dash + 1) : [];
+      const command = !words.length ? undefined : words.length === 1 ? words[0] : words.map((w) => (/^[\w@%+=:,./-]+$/.test(w) ? w : `'${w.replace(/'/g, `'\\''`)}'`)).join(" ");
       const pane = await client.call("pane.create", { cwd: str(opt.cwd) ?? process.cwd(), command, callerPaneId });
       return out(opt.json ? pane : pane.id);
     }

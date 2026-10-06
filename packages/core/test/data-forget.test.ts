@@ -179,10 +179,34 @@ describe("replaying agents with their pane's activity", () => {
   });
 });
 
-describe("cleaned pane output", () => {
-  it("strips escape codes and collapses a spinner's redraws", async () => {
-    const { cleanOutput } = await import("../src/data/sources/pane-output.ts");
-    expect(cleanOutput("\x1b[32m✓\x1b[0m built\r\n⠋ working\n⠋ working\n⠋ working\ndone\n")).toBe("✓ built\n⠋ working\ndone");
+describe("a turn's screen", () => {
+  it("takes the lines from the prompt's echo, without the agent's input box", async () => {
+    const { turnScreen } = await import("../src/data/sources/pane-output.ts");
+    const rule = "─".repeat(60);
+    const screen = [
+      "❯ earlier prompt",
+      "⏺ Earlier answer.",
+      "",
+      "❯ Add a function mul(a, b) to calc.py that returns a*b. Keep it to one edit, then",
+      "  say done.",
+      "  Read 1 file",
+      "⏺ Update(calc.py)",
+      "  ⎿  Added 4 lines",
+      "",
+      "",
+      "⏺ Done. I added mul(a, b) to calc.py.",
+      "✻ Crunched for 6s",
+      rule,
+      "❯ ",
+      rule,
+      "  repo │ main │ Opus 5.5 │ ctx 4%",
+      "  ⏵⏵ auto mode on",
+    ].join("\n");
+    expect(turnScreen(screen, "Add a function mul(a, b) to calc.py that returns a*b. Keep it to one edit, then say done.")).toBe(
+      ["❯ Add a function mul(a, b) to calc.py that returns a*b. Keep it to one edit, then", "  say done.", "  Read 1 file", "⏺ Update(calc.py)", "  ⎿  Added 4 lines", "", "⏺ Done. I added mul(a, b) to calc.py.", "✻ Crunched for 6s"].join("\n"),
+    );
+    // No echo of the prompt (an auto turn): the last lines.
+    expect(turnScreen("a\nb\n", null)).toBe("a\nb");
   });
 });
 
@@ -197,21 +221,22 @@ describe("the pane output recorder", () => {
     const panes = new PaneManager(f.factory, { socketPath: "/tmp/t.sock", pollMs: 0 });
     const { d } = service();
     const view = new ActivityView(d, new ViewsStore(null));
-    const rec = new PaneOutputRecorder({ data: d, panes, activity: view, paneOf: () => pane.id });
+    const rec = new PaneOutputRecorder({ data: d, panes, activity: view, paneOf: () => pane.id, settleMs: 0 });
     const pane = panes.create();
     f.ptys[0]!.output("plain shell output\r\n"); // no agent yet: not recorded
     expect(d.query({ types: ["pane.activity"] })).toEqual([]);
     panes.setAgent(pane.id, "a1");
     const start = Date.now();
-    f.ptys[0]!.output("\x1b[1mthinking\x1b[0m\r\n");
+    f.ptys[0]!.output("❯ fix the bug\r\n\x1b[1mthinking\x1b[0m\r\n");
     f.ptys[0]!.output("Edited calc.py\r\n");
     const spans = d.query({ types: ["pane.activity"] });
     expect(spans).toHaveLength(1);
     expect(spans[0]).toMatchObject({ paneId: pane.id, agentId: "a1" });
-    view.saveTurn({ format: 2, derivedBy: null, agentId: "a1", agentKind: "claude", agentVersion: null, model: null, index: 0, sessionId: "s", turnId: null, startedAt: start - 10, endedAt: Date.now(), prompt: "fix", auto: false, followUps: [], notes: [], background: [], outcome: "done", ask: null, final: null, error: null, tools: [], commands: [], shellWrites: 0, files: [], subagents: 0, events: 2, inferred: [] }, 1, "/w");
+    view.saveTurn({ format: 2, derivedBy: null, agentId: "a1", agentKind: "claude", agentVersion: null, model: null, index: 0, sessionId: "s", turnId: null, startedAt: start - 10, endedAt: Date.now(), prompt: "fix the bug", auto: false, followUps: [], notes: [], background: [], outcome: "done", ask: null, final: null, error: null, tools: [], commands: [], shellWrites: 0, files: [], subagents: 0, events: 2, inferred: [] }, 1, "/w");
+    for (let i = 0; i < 100 && !d.query({ types: ["agent.output"] }).length; i++) await new Promise((r) => setTimeout(r, 10));
     const [out] = d.query({ types: ["agent.output"] });
     expect(out).toMatchObject({ agentId: "a1", sessionId: "claude:s", data: { turn: 0 } });
-    expect(d.store.blob(out!.blob!)!.toString()).toBe("thinking\nEdited calc.py");
+    expect(d.store.blob(out!.blob!)?.toString() ?? out!.data).toBe("❯ fix the bug\nthinking\nEdited calc.py");
     rec.dispose();
     panes.dispose();
   });
