@@ -180,8 +180,24 @@ export class DataStore {
     return (this.#stmt(`SELECT id, created, seen, json(attrs) AS attrs FROM entities WHERE kind = ? ORDER BY seen DESC`).all(kind) as { id: string; created: number; seen: number; attrs: string }[]).map((r) => ({ ...r, attrs: JSON.parse(r.attrs) as Record<string, unknown> }));
   }
 
+  /** One link per (from, to, kind): seen again, it keeps its first time and takes the newest end. */
   link(from: [string, string], to: [string, string], kind: string, at: number, until: number | null = null): void {
-    this.#stmt(`INSERT OR REPLACE INTO links (from_kind, from_id, to_kind, to_id, kind, at, until) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(from[0], from[1], to[0], to[1], kind, at, until);
+    this.#stmt(
+      `INSERT INTO links (from_kind, from_id, to_kind, to_id, kind, at, until) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(from_kind, from_id, to_kind, to_id, kind) DO UPDATE SET at = MIN(at, excluded.at), until = COALESCE(excluded.until, until)`,
+    ).run(from[0], from[1], to[0], to[1], kind, at, until);
+  }
+
+  /** One entity, or null. */
+  entityOf(kind: string, id: string): { kind: string; id: string; created: number; seen: number; attrs: Record<string, unknown> } | null {
+    const r = this.#stmt(`SELECT kind, id, created, seen, json(attrs) AS attrs FROM entities WHERE kind = ? AND id = ?`).get(kind, id) as { kind: string; id: string; created: number; seen: number; attrs: string } | undefined;
+    return r ? { ...r, attrs: JSON.parse(r.attrs) as Record<string, unknown> } : null;
+  }
+
+  /** An entity's links, both ways. */
+  linksOf(kind: string, id: string): { from: [string, string]; to: [string, string]; kind: string; at: number; until: number | null }[] {
+    const rows = this.#stmt(`SELECT * FROM links WHERE (from_kind = ? AND from_id = ?) OR (to_kind = ? AND to_id = ?) ORDER BY at`).all(kind, id, kind, id) as { from_kind: string; from_id: string; to_kind: string; to_id: string; kind: string; at: number; until: number | null }[];
+    return rows.map((r) => ({ from: [r.from_kind, r.from_id], to: [r.to_kind, r.to_id], kind: r.kind, at: r.at, until: r.until }));
   }
 
   /** Builds the full-text index over what's recorded (after an import, or when it was dropped). */

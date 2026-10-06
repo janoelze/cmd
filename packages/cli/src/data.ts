@@ -16,6 +16,8 @@ export const DATA_HELP = `  data stats                          what the event l
   data subscribe [--type T,…] [--since 7d] [--project PATH] [--text WORDS] [--json]
                                       events as they're recorded, one line each (Ctrl-C to stop)
   data ai [--since 30d]               model calls by purpose: how many, tokens in and out, failures, what was cut to fit
+  data entities KIND [ID] [--limit N] [--json]
+                                      agents, sessions, projects, panes, windows, spaces: what they are and what they link to
   data forget [--session AGENT:ID] [--project PATH] [--before DATE] [--type T,…]
                                       delete what's named, for good; a forgotten session or project is never recorded again
   data prune --rules                  remove what the data.exclude setting says never to keep
@@ -101,6 +103,23 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
       const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
       for (const [p, r] of [...by].sort((a, b) => b[1].tin - a[1].tin))
         console.log(`  ${p.padEnd(22)} ${String(r.n).padStart(5)} calls  ${k(r.tin).padStart(7)} in  ${k(r.tout).padStart(7)} out${r.failed ? `  ${r.failed} failed` : ""}${r.cut ? `  ${r.cut} cut to fit` : ""}  ${[...r.models].join(", ")}`);
+      return 0;
+    }
+    case "entities": {
+      const [kind, id] = rest;
+      if (!kind) throw new Error("usage: cmd data entities KIND [ID]   (agent, session, project, pane, window, space)");
+      const list = await client.call("data.entities", { kind, id, limit: typeof opt.limit === "string" ? Number(opt.limit) : 20 });
+      if (json) return console.log(JSON.stringify(list, null, 2)), 0;
+      for (const e of list) {
+        const a = e.attrs;
+        const name = String(a.title ?? a.name ?? a.path ?? a.root ?? a.kind ?? "");
+        console.log(`${e.id}  ${tilde(name).slice(0, 80)}  · seen ${new Date(e.seen).toISOString().slice(0, 16).replace("T", " ")}`);
+        if (id) {
+          for (const [k, v] of Object.entries(a)) if (v !== null && v !== undefined && v !== "") console.log(`  ${k}: ${typeof v === "string" ? tilde(v) : JSON.stringify(v)}`);
+          for (const l of e.links) console.log(`  ${l.from[0] === kind && l.from[1] === e.id ? `${l.kind} → ${l.to[0]} ${l.to[1]}` : `← ${l.from[0]} ${l.from[1]} (${l.kind})`}`);
+        }
+      }
+      if (!list.length) console.log("Nothing of that kind recorded.");
       return 0;
     }
     case "forget": {

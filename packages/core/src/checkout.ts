@@ -68,3 +68,14 @@ function read(top: string, dotGit: string, isDir: boolean): Checkout | null {
     return null;
   }
 }
+
+/** The repository's origin URL from its config (credentials in it stripped); null without one. */
+export function remoteOf(common: string): string | null {
+  try {
+    const config = fs.readFileSync(path.join(common, "config"), "utf8");
+    const m = /\[remote "origin"\][^[]*?\burl\s*=\s*(\S+)/.exec(config);
+    return m ? m[1]!.replace(/\/\/[^/@]+@/, "//") : null;
+  } catch {
+    return null;
+  }
+}

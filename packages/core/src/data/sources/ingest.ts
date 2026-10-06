@@ -19,6 +19,7 @@ import type { ViewsStore } from "../views/views.ts";
 import { planPass, scanFiles, type FileState } from "./ingest-pass.ts";
 import type { IngestMessage, IngestRequest, WorkerInit } from "./ingest-worker.ts";
 import { readTranscript } from "./transcripts.ts";
+import { describeSession } from "../describe.ts";
 
 const log = logger("transcripts");
 
@@ -139,7 +140,14 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
 
   /** A file's events into the log and the sessions view; where its reading stopped into the table. */
   #record(state: FileState, events: ReturnType<typeof readTranscript>["events"], env: Record<string, string> | null): void {
-    if (events.length) this.#o.sessions.apply(this.#o.data.recordBatch(events), { path: state.path, env, mtime: state.mtime });
+    if (events.length) {
+      const stored = this.#o.data.recordBatch(events);
+      this.#o.sessions.apply(stored, { path: state.path, env, mtime: state.mtime });
+      for (const key of new Set(stored.map((e) => e.sessionId).filter((k): k is string => !!k))) {
+        const row = this.#o.sessions.get(key);
+        if (row) describeSession(this.#o.data, row);
+      }
+    }
     this.#o.views.stmt(`INSERT OR REPLACE INTO transcript_files (path, root_dir, size, mtime, offset, lines, agent) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(state.path, state.rootDir, state.size, state.mtime, state.offset, state.lines, state.agent);
   }
 

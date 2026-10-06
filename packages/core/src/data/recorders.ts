@@ -12,6 +12,7 @@ import type { NotificationCenter } from "../notifications.ts";
 import type { SpaceManager } from "../spaces/manager.ts";
 import type { WindowManager } from "../windows/manager.ts";
 import type { DataService } from "./service.ts";
+import { describeSpace, describeWindow } from "./describe.ts";
 
 /** A page seen again within this long is the same visit (its title arrives after its URL). */
 const VISIT_MS = 30 * 60_000;
@@ -22,6 +23,7 @@ export function recordWindows(data: DataService, windows: WindowManager): void {
   const closed = new Map<string, AppWindow>();
   windows.on("updated", (w: AppWindow) => {
     const now = Date.now();
+    describeWindow(data, w);
     closed.set(w.id, w);
     if (!seen.has(w.id)) {
       seen.add(w.id);
@@ -47,8 +49,9 @@ export function recordWindows(data: DataService, windows: WindowManager): void {
 
 export function recordSpaces(data: DataService, spaces: SpaceManager): void {
   const known = new Map<string, Space>();
-  for (const s of spaces.list()) known.set(s.id, s);
+  for (const s of spaces.list()) known.set(s.id, s), describeSpace(data, s);
   spaces.on("updated", (s: Space) => {
+    describeSpace(data, s);
     const first = !known.has(s.id);
     known.set(s.id, s);
     if (first && s.id !== HOME_SPACE_ID) data.record({ id: `space:${s.id}:open:${Date.now()}`, at: Date.now(), type: "space.open", source: "user", spaceId: s.id, projectId: `dir:${projectOf(s.root) ?? s.root}`, text: s.name, data: { name: s.name, root: s.root } });

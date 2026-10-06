@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS links (
   PRIMARY KEY (from_kind, from_id, to_kind, to_id, kind, at)
 );
 CREATE INDEX IF NOT EXISTS links_to ON links(to_kind, to_id);
+CREATE UNIQUE INDEX IF NOT EXISTS links_one ON links(from_kind, from_id, to_kind, to_id, kind);
 `;
 
 /**

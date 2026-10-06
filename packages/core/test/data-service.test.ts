@@ -75,3 +75,21 @@ describe("DataService", () => {
     expect(d.query({ types: ["data.op"] }).length).toBe(1);
   });
 });
+
+describe("entities", () => {
+  it("are described once per change, with links kept once, and a project knows its folder", async () => {
+    const os = await import("node:os");
+    const d = service();
+    d.describe("agent", "a1", { kind: "claude", cwd: "/w" }, 10);
+    d.describe("agent", "a1", { kind: "claude", cwd: "/w" }, 20); // the same: not written
+    expect(d.store.entityOf("agent", "a1")).toMatchObject({ created: 10, seen: 10, attrs: { kind: "claude", cwd: "/w" } });
+    d.describe("agent", "a1", { kind: "claude", cwd: "/w", model: "m" }, 30);
+    expect(d.store.entityOf("agent", "a1")).toMatchObject({ seen: 30, attrs: { model: "m" } });
+    d.link(["agent", "a1"], ["session", "claude:s"], "runs", 10);
+    d.link(["agent", "a1"], ["session", "claude:s"], "runs", 50);
+    d.store.link(["agent", "a1"], ["session", "claude:s"], "runs", 5); // straight to the store: still one row, earliest time
+    expect(d.store.linksOf("session", "claude:s")).toEqual([{ from: ["agent", "a1"], to: ["session", "claude:s"], kind: "runs", at: 5, until: null }]);
+    d.record({ id: "c", at: 1, type: "command", source: "osc", projectId: `dir:${os.tmpdir()}`, data: { command: "ls", exitCode: 0, cwd: os.tmpdir(), output: null } });
+    expect(d.store.entityOf("project", `dir:${os.tmpdir()}`)?.attrs).toMatchObject({ path: os.tmpdir(), git: false });
+  });
+});

@@ -14,6 +14,14 @@ import { redact, redactDeep } from "../redact.ts";
 import { hookEvents, journalEvents, remoteAudit } from "./sources/legacy.ts";
 import { DataStore, type StoreEvent } from "./store.ts";
 import { excludedBy, parseExclude, type ExcludeRules } from "./exclude.ts";
+import { checkoutOf, remoteOf } from "../checkout.ts";
+
+/** A project's attributes from its folder: name, path, and the repository's remote when it has one. */
+function projectAttrs(id: string): Record<string, unknown> {
+  const p = id.startsWith("dir:") ? id.slice(4) : id;
+  const c = checkoutOf(p);
+  return { path: p, name: p.split("/").filter(Boolean).pop() ?? p, git: !!c, ...(c ? { remote: remoteOf(c.common) } : {}) };
+}
 
 const log = logger("data");
 
@@ -44,6 +52,8 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
   readonly store: DataStore;
   #o: DataServiceOptions;
   #seen = new Set<string>();
+  #described = new Map<string, string>();
+  #linked = new Set<string>();
   #timer: ReturnType<typeof setInterval> | null = null;
   #pruners: ((before: number) => void)[] = [];
   readonly recordedBy: string;
@@ -148,8 +158,26 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
       const key = `${kind}:${id}`;
       if (this.#seen.has(key)) continue;
       this.#seen.add(key);
-      this.store.entity(kind, id, {}, e.at);
+      this.store.entity(kind, id, kind === "project" ? projectAttrs(id) : {}, e.at);
     }
+  }
+
+  /** What an entity is: its attributes, written when they change (not on every update). */
+  describe(kind: string, id: string, attrs: Record<string, unknown>, at = this.#now): void {
+    const json = JSON.stringify(attrs);
+    const key = `${kind}:${id}`;
+    if (this.#described.get(key) === json) return;
+    this.#described.set(key, json);
+    this.#seen.add(key);
+    this.store.entity(kind, id, attrs, at);
+  }
+
+  /** A link between two entities (agent → session, session → project, …); kept once. */
+  link(from: [string, string], to: [string, string], kind: string, at = this.#now): void {
+    const key = `${from.join(":")}>${kind}>${to.join(":")}`;
+    if (this.#linked.has(key)) return;
+    this.#linked.add(key);
+    this.store.link(from, to, kind, at);
   }
 
   query(q: DataQuery): DataEvent[] {

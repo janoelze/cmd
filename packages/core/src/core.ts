@@ -15,6 +15,7 @@ import { JournalStore } from "./journal/store.ts";
 import { recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
 import { DataService } from "./data/service.ts";
 import { buildContext } from "./ai/context.ts";
+import { describeAgent, describePane } from "./data/describe.ts";
 import { matchesQuery } from "./data/match.ts";
 import { WidgetTokens, widgetQuery } from "./data/widgets.ts";
 import { ViewsStore } from "./data/views/views.ts";
@@ -396,7 +397,10 @@ export class Core {
     if (opts.transcripts || opts.transcriptRoots) this.settings.bind(["data.record.transcripts", "search.archiveDirs"], () => this.#restartSearch());
 
     this.panes.on("output", (paneId, data) => this.#broadcast({ type: "pane.output", paneId, data }));
-    this.panes.on("updated", (pane) => this.#broadcast({ type: "pane.updated", pane }));
+    this.panes.on("updated", (pane) => {
+      this.#broadcast({ type: "pane.updated", pane });
+      describePane(this.data, pane);
+    });
     this.panes.on("removed", (paneId) => {
       this.store.deleteUiStateOf(paneId);
       this.#broadcast({ type: "pane.removed", paneId });
@@ -409,6 +413,7 @@ export class Core {
       version: process.env.CMD_APP_VERSION ?? "source",
     });
     this.agents.on("updated", (agent) => {
+      describeAgent(this.data, agent);
       this.#broadcast({ type: "agent.updated", agent });
       this.#countAgent(agent);
       // Hooks report where the transcript is: picks up folders discovery doesn't know.
@@ -539,6 +544,10 @@ export class Core {
     "data.unsubscribe": () => null,
     "data.forget": (p) => ({ events: this.data.forget(p) }),
     "data.applyRules": () => ({ events: this.data.applyRules() }),
+    "data.entities": (p) => {
+      const list = p.id ? [this.data.store.entityOf(p.kind, p.id)].filter((e) => !!e) : this.data.store.entities(p.kind).slice(0, Math.min(p.limit ?? 50, 1000)).map((e) => ({ kind: p.kind, ...e }));
+      return list.map((e) => ({ ...e!, links: this.data.store.linksOf(p.kind, e!.id) }));
+    },
     "agents.export": (p) => {
       const log = this.agents.activity;
       const since = Date.now() - (p.days ?? 14) * 86400_000;
