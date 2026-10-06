@@ -97,6 +97,8 @@ interface Live {
   token: string;
   /** The command line running, as the shell integration reports it. */
   command: string | null;
+  /** Output since the command started (OSC 133 C), until it ends; null between commands. */
+  capture: string | null;
   /** The record as last stored, to skip writes that change nothing. */
   saved: string;
   /** Output since the screen was last saved. */
@@ -115,6 +117,8 @@ const QUIET_POLL_MS = 5000;
 
 /** Shell counts as ready once its startup output has been quiet this long. */
 const READY_QUIET_MS = 250;
+/** Output kept per command for the log (the data layer cuts at its class cap). */
+const CAPTURE_MAX = 300_000;
 /** Send anyway after this long, e.g. for a shell that prints nothing. */
 const READY_MAX_MS = 4000;
 
@@ -128,6 +132,8 @@ export interface PaneEvents {
   request: [paneId: PaneId, action: string, arg: string];
   /** The shell is about to run this command line (its integration's exec request). */
   exec: [paneId: PaneId, command: string];
+  /** What a command printed, when it ended (before its D mark is emitted as `osc`); bounded. */
+  captured: [paneId: PaneId, output: string];
 }
 
 export interface PaneManagerOptions {
@@ -348,7 +354,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   }
 
   #attach(pane: Pane, term: Term, token: string): Live {
-    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, saved: "", dirty: true, screenHash: "", polledAt: 0, outputSincePoll: true, progressTimer: null };
+    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, capture: null, saved: "", dirty: true, screenHash: "", polledAt: 0, outputSincePoll: true, progressTimer: null };
     this.#panes.set(pane.id, live);
     term.onData((data) => this.#onData(live, data));
     term.onExit((code) => this.#exited(live, code));
@@ -399,7 +405,13 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     live.outputSincePoll = true;
     live.pane.lastActivityAt = Date.now();
     this.emit("output", live.pane.id, data);
+    if (live.capture !== null && live.capture.length < CAPTURE_MAX) live.capture += data.slice(0, CAPTURE_MAX - live.capture.length);
     for (const ev of live.osc.feed(data)) {
+      if (ev.type === "prompt" && ev.mark === "C") live.capture = "";
+      if (ev.type === "prompt" && (ev.mark === "D" || ev.mark === "A") && live.capture !== null) {
+        this.emit("captured", live.pane.id, live.capture);
+        live.capture = null;
+      }
       let changed = false;
       if (ev.type === "title" && ev.title !== live.pane.title) {
         live.pane.title = ev.title;

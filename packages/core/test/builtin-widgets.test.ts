@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppNotification } from "@cmd/protocol";
 import { Core } from "../src/core.ts";
+import { CommandLog } from "../src/commands.ts";
 import { durationLabel, timerType, type TimerState } from "../src/windows/builtin.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 
@@ -46,6 +47,21 @@ describe("command log", () => {
     const list = await core.call("command.list", { spaceId: pane.spaceId });
     expect(list.map((r) => r.command)).toEqual([null, "pwd", "ls"]);
     expect(await core.call("command.list", { spaceId: "elsewhere" })).toEqual([]);
+  });
+
+  it("keeps what a command printed, without escape sequences, as the event's content", async () => {
+    core.panes.create();
+    const pty = ptys[0]!;
+    const token = pty.opts.env.CMD_PANE_TOKEN;
+    pty.output(`\x1b]133;C\x07\x1b]777;cmd;${token};exec;pnpm test\x07`);
+    pty.output("\x1b[32m✓\x1b[0m 12 passed\r\n");
+    pty.output("\x1b]133;D;0\x07\x1b]133;A\x07");
+    const [e] = core.data.query({ types: ["command"] });
+    expect(e).toMatchObject({ text: "pnpm test", until: expect.any(Number), data: { command: "pnpm test", exitCode: 0, output: { chars: 12, cut: false } } });
+    expect(core.data.store.blob(e!.blob!)!.toString()).toBe("✓ 12 passed\n");
+    // A command log over the same store lists it after a restart.
+    const again = new CommandLog(core.panes, core.data);
+    expect(again.list().map((r) => r.command)).toEqual(["pnpm test"]);
   });
 
   it("ends a run whose shell came back without D, or whose terminal closed", async () => {

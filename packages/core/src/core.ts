@@ -262,7 +262,7 @@ export class Core {
     this.notifications = new NotificationCenter(this.panes, this.agents, settings, (a, kind, signal) => this.#writeNotice(a, kind, signal));
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
     this.notifications.on("cleared", () => this.#broadcast({ type: "notifications.cleared" }));
-    this.commands = new CommandLog(this.panes);
+    this.commands = new CommandLog(this.panes, this.data);
     this.commands.on("updated", (run) => this.#broadcast({ type: "command.updated", run }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler, 2000, () => this.#subscribers.size > 0) : null;
     this.processes = opts.procSampler ? new ProcessSampler(opts.procSampler) : null;
