@@ -33,6 +33,7 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 20 | [Session summaries](20-session-summaries.md) | Right-click an agent's title: what the session did, streamed into an editable Markdown file, pruned to fit, shaped to the kind of session |
 | 21 | [Sidebars are windows](21-sidebars.md) | Any window docks left or right per Space; today's sidebar becomes the Navigator widget; a top bar with the Space switcher; window hosts so nothing remounts |
 | 22 | [Drag and drop](22-drag-and-drop.md) | Files and links between Finder, terminals, file browsers and windows: native file drags out, one drop router in, window drop targets, `fs.transfer` |
+| 23 | [The journal](23-journal.md) | What happened, as a work log: events kept 180 days (agents, commands, git, pages), threads by identity and links, days written by a model; `cmd journal`, the Journal widget |
 
 ## Key findings
 1. **Nothing has to be invented for agent awareness.** Every tool in this space combines three things:
