@@ -1,8 +1,8 @@
 // Today's tables as events (docs/28 §5, "Imports"): the activity log's raw hook
-// Remove once installs from before the event log (cmd ≤ 0.15) have started a newer cmd once: the import runs at most once per install.
 // payloads and the journal's live kinds, read from a cmd.sqlite. Derived kinds
 // (agent.turn, agent.session) are left out: they become views. Used by the
 // spike and, once, by the phase-1 migration.
+// Remove once installs from before the event log (cmd ≤ 0.15) have started a newer cmd once: the import runs at most once per install.
 
 import type { DatabaseSync } from "node:sqlite";
 import { FLAG_IMPORTED } from "../schema.ts";
