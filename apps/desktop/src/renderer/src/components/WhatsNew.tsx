@@ -50,7 +50,6 @@ export function WhatsNew({ releases, onClose, onLink }: { releases: Release[]; o
       open
       onClose={onClose}
       window={{ icon: "sparkles", name: "What's New" }}
-      title="What's New"
       width={560}
       position="center"
       divided

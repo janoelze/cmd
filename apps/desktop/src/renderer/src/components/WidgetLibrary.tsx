@@ -108,7 +108,6 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       window={{ icon: "square.grid.2x2", name: "Widget Library" }}
-      title="Widget Library"
       width={720}
       height={640}
       position="center"

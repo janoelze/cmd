@@ -329,8 +329,8 @@ export function Dialog({
   scrim?: boolean;
   /** Lines under the title and above the actions, like the palette's: for content that scrolls between them. */
   divided?: boolean;
-  /** Dressed as one of the app's windows: a title bar with its icon and name, the title (larger) under it. */
-  window?: { icon?: string | ReactNode; name: string };
+  /** Dressed as one of the app's windows: a title bar with its icon and name (and a title, larger, under it if given). `close: false` leaves out its close button. */
+  window?: { icon?: string | ReactNode; name: string; close?: boolean };
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -358,12 +358,12 @@ export function Dialog({
         }
       }}
     >
-      <div ref={ref} className={cls("ui-dialog", className)} data-divided={divided || undefined} data-window={win ? true : undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : undefined)} tabIndex={-1} style={{ width, height }}>
+      <div ref={ref} className={cls("ui-dialog", className)} data-divided={divided || undefined} data-window={win ? true : undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : win?.name)} tabIndex={-1} style={{ width, height }}>
         {win && (
           <div className="ui-window-bar">
             {win.icon && <span className="ui-window-bar-icon">{iconNode(win.icon, ICON.small)}</span>}
             <span className="ui-window-bar-name">{win.name}</span>
-            {dismissable && <IconButton icon="xmark" size="sm" label="Close" onClick={onClose} />}
+            {dismissable && win.close !== false && <IconButton icon="xmark" size="sm" label="Close" onClick={onClose} />}
           </div>
         )}
         {title && (

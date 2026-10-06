@@ -74,7 +74,7 @@ export function Onboarding({ ids, onClose }: { ids: readonly string[]; onClose: 
       position="center"
       divided
       className="onboarding"
-      window={{ icon: "hand.wave", name: "Welcome" }}
+      window={{ icon: "hand.wave", name: "Welcome", close: false }}
       label={step.title}
       aside={steps.length > 1 && <PageDots count={steps.length} current={at} label={`Step ${at + 1} of ${steps.length}`} />}
       actions={

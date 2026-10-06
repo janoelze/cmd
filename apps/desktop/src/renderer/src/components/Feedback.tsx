@@ -69,7 +69,7 @@ export function Feedback({
 
   if (state === "sent")
     return (
-      <Dialog open onClose={onClose} width={480} position="center" label="Feedback sent">
+      <Dialog open onClose={onClose} width={480} position="center" label="Feedback sent" window={{ icon: "bubble.left", name: "Send Feedback" }}>
         <EmptyState icon="checkmark.circle" title="Thanks for the feedback">
           It's on its way.
         </EmptyState>
@@ -80,8 +80,7 @@ export function Feedback({
     <Dialog
       open
       onClose={onClose}
-      window={{ icon: "bubble.left", name: "Feedback" }}
-      title="Send Feedback"
+      window={{ icon: "bubble.left", name: "Send Feedback" }}
       width={480}
       position="center"
       divided
