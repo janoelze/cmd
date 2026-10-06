@@ -478,7 +478,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
 5. **Presence.**
    - `remote.updated` events say who is connected, with which scope, since when, and from which IP (as the relay reports it, informational only).
    - The status bar shows a phone icon while remote access is on, lit whenever a device is connected; it is the visible "on" signal.
-   - Every session start and end, pairing, revoke, denied call and failed handshake is written to the log scope `remote` and kept in `remote_log` (SQLite) for 30 days.
+   - Every session start and end, pairing, revoke, denied call and failed handshake is written to the log scope `remote` and kept as `remote.audit` events in the event log (docs/28) for 90 days.
 6. **Sleep.** With `remote.keepAwake` on, the core runs `caffeinate -i -w <core pid>` while remote access is enabled. This stops idle sleep, not lid-close sleep, and the UI says so.
 
 ### Push notifications
@@ -516,7 +516,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
 | new `packages/remote-crypto` | Noise IK/IKpsk1 over WebCrypto, framing, fingerprint words. Shared by core and web client, browser-safe (no `node:` imports). Tested against the cacophony/snow Noise test vectors |
 | `packages/core/src/core.ts` | Connection abstraction (`#serve`, `#subscribers`, `#connWatches`, `#broadcast`); policy check in `call`; handlers for the new methods; constructs `RemoteService`; `close()` shuts it down |
 | new `packages/core/src/remote/` | `service.ts` (lifecycle, relay link, reconnect with backoff, settings binding via `SettingsService.bind(["remote.*"])`); `session.ts` (Noise per device, the `Connection` implementation, coalescing writer); `policy.ts` (`REMOTE_ACCESS`, argument checks, event filter); `devices.ts` (store); `keys.ts` (Keychain or file); `push.ts`; `audit.ts` |
-| `packages/core/src/store.ts` | Tables `remote_devices` and `remote_log` |
+| `packages/core/src/store.ts` | Table `remote_devices`; the audit log is `remote.audit` events (`data/`) |
 | `packages/core/src/panes.ts` | Desktop size + one temporary override per pane (`fitOverride`, `reclaim`, release on close or local input). Output coalescing stays per connection, not here |
 | `packages/cli/src/main.ts` (`hook`), `packages/core/src/agents/` | Phase 2: the optional waiting `PermissionRequest` path for approvals from a notification (`agent.decide`) |
 | `packages/core/src/notifications.ts` | Emit to `RemoteService` for push; idle/presence rule |

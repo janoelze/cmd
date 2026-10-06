@@ -99,10 +99,6 @@ function safeDirents(d: string): fs.Dirent[] {
   }
 }
 
-/** The files a watcher should watch to hear about new reflog entries. */
-export function reflogFiles(common: string, repo: string): string[] {
-  return reflogs(common, repo).map((r) => r.file);
-}
 
 const short = (h: string) => h.slice(0, 9);
 const ZERO = /^0+$/;

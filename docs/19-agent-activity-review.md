@@ -37,7 +37,7 @@ cmd agents export --anonymize --out ~/src/agent-activity-export.jsonl
 
 `--anonymize` only rewrites the home folder to `~`. The file still contains prompts, commands, file contents in tool payloads (cut at 4 KB per string) and final messages. **Don't commit it**, don't paste it into issues; keep it local. What goes into the repo are fixtures, cut down and rewritten (step 4).
 
-The same data is in the app's SQLite file for ad-hoc queries: `~/Library/Application Support/cmd/cmd.sqlite`, tables `agent_events` (raw payload in `doc`, provenance in `schema`, `cmd`, `hook`, `agent_version`), `agent_turns` (`doc` is an `AgentTurn`), `agent_homes`, `schema_versions`. Open it read-only (`sqlite3 -readonly`); the core writes to it.
+The same data is in the event log for ad-hoc queries (docs/28): `cmd data query --type agent.hook --agent <id>`, or `~/Library/Application Support/cmd/data/events.sqlite` read-only (`sqlite3 -readonly`; table `events`, type `agent.hook`, the raw payload in `json(data)`, provenance in `source` and `recorded`; whole payloads over 4 KB per string as blobs). Turns are the `turns` table of `data/views.sqlite`; `cmd data rebuild turns` derives them again with the current rules.
 
 ## The lab loop
 
@@ -49,7 +49,7 @@ The fastest way to find out how an agent really behaves, and to turn that into r
 4. **Drive and watch** with `scripts/agent-lab.mjs`: `open` a pane with the launch script, `type` prompts, `keys` for answers (`1`, `\r`, `\e`), `wait` for the screen, and after every step `state`: the agent's state, its cause and the current turn as cmd sees them. Each scenario is a few lines: ask for a command, wait for the dialog, approve or deny or Esc, poll `state` every couple of seconds until it settles. `cmd agents events <pane>` shows the raw stream.
 5. **Compare** what's on the screen with what cmd says. Every mismatch is a finding: a missing event, a field in an unexpected place, a rule that fires wrong or not at all. Write it into Findings below.
 6. **Fix** in `normalize.ts` / `reduce.ts`, with a unit test (the timing rules need synthetic timelines: terminal output times aren't in the log). Restart the core (`pnpm core:stop && pnpm core`; terminals survive) and run the scenario again.
-7. **Keep the session as a fixture**: `node packages/core/test/fixtures/agents/cut.ts .cmd-dev/cmd.sqlite <pane> <agent> <out.jsonl> <scenario>` (add `--scrub` for anything from real work), into `test/fixtures/agents/<agent>-<version>/`, with a test that pins what it showed.
+7. **Keep the session as a fixture**: `node packages/core/test/fixtures/agents/cut.ts .cmd-dev/data/events.sqlite <pane> <agent> <out.jsonl> <scenario>` (add `--scrub` for anything from real work), into `test/fixtures/agents/<agent>-<version>/`, with a test that pins what it showed.
 
 The same loop works for a person instead of the script: open the pane, do the steps by hand, ask the session to read `state` and the events afterwards. The script is faster and repeatable; a person finds the cases nobody scripted (a prompt typed into the wrong window, two agents racing in one repository, an agent asking in prose instead of a dialog).
 
