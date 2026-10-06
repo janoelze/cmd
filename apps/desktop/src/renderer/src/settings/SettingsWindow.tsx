@@ -26,7 +26,7 @@ import {
   type SettingsSnapshot,
 } from "@cmd/protocol";
 import { COMMANDS, COMMAND_BY_ID, DEFAULT_KEYBINDINGS, norm, prettyAccelerator, type CommandSpec } from "../../../shared/commands.ts";
-import { Symbol } from "../components/Symbol.tsx";
+import { ICON, Symbol } from "../components/Symbol.tsx";
 import { IndexRing } from "../components/IndexRing.tsx";
 import { acceleratorOf, usableShortcut, useKeybindings } from "../keybindings.ts";
 import { cmd } from "../bridge.ts";
@@ -200,7 +200,7 @@ export function SettingsWindow() {
   }
 
   return (
-    <div className="sw" style={{ ["--sidebar-pad" as string]: `${snap.settings["ui.sidebarPadding"]}px` }}>
+    <div className="sw">
       <aside className="sidebar sw-side">
         <div className="sidebar-titlebar" />
         <SearchField ref={input} className="sb-search" size="lg" value={query} placeholder="Search settings" onChange={(v) => (setQuery(v), setScrolled(false))} />
@@ -212,16 +212,16 @@ export function SettingsWindow() {
               className={`row short sw-nav-item${!q && n.id === page ? " sel" : ""}${q && !hitPages.has(n.id) ? " dim" : ""}`}
               onClick={() => (setQuery(""), setPage(n.id), setScrolled(false))}
             >
-              {/* a fixed-size tile: symbols differ in width, the labels should line up */}
+              {/* a fixed-size slot: symbols differ in width, the labels should line up */}
               <span className="sw-nav-icon">
-                <Symbol name={n.icon} size={13} weight="semibold" />
+                <Symbol name={n.icon} size={ICON.bar} />
               </span>
               <span className="sw-nav-label">{n.title}</span>
             </button>
           ))}
         </nav>
         <button className="sw-side-foot" onClick={() => cmd.openSettingsFile(snap.path)} disabled={!snap.path} data-tip={snap.path}>
-          <Symbol name="curlybraces" size={11} weight="semibold" />
+          <Symbol name="curlybraces" size={ICON.row} />
           Open settings.json
         </button>
       </aside>

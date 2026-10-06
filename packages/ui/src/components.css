@@ -475,10 +475,11 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
    colour: working chases round, needs blinks its diagonals, unseen is all lit,
    done keeps one diagonal, idle is all dim, off a single pixel. Loops share one
    clock (--ui-dot-phase, set by StatusDot), so every working dot turns in step;
-   data-enter plays once on a change into needs (a pop) or unseen (a burst). */
+   data-enter plays once on a change into needs (a pop) or unseen (a burst).
+   Size and gap leave whole-pixel squares (4px, 3px small), crisp at 1x too. */
 .ui-dot {
-  --size: 8px;
-  --gap: 1px;
+  --size: 10px;
+  --gap: 2px;
   flex: none;
   display: inline-grid;
   grid-template: 1fr 1fr / 1fr 1fr;
@@ -487,7 +488,7 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
   height: var(--size);
   vertical-align: middle;
 }
-.ui-dot[data-size="sm"] { --size: 6px; }
+.ui-dot[data-size="sm"] { --size: 7px; --gap: 1px; }
 .ui-dot > i {
   border-radius: 1px;
   background: var(--tone);
@@ -771,7 +772,7 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 
 /* ── lists: panels, sections, rows (list.tsx) ──
    The Navigator's and the file browser's sidebar look. --list-inset is the rows'
-   inset from the panel's edges (the Navigator sets it from ui.sidebarPadding). */
+   inset from the panel's edges (the Navigator sets it from --sidebar-pad). */
 .ui-panel { --list-inset: 6px; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); color: var(--text); font: var(--text-md) var(--font-ui); }
 .ui-panel-head { flex: none; display: flex; align-items: center; gap: 2px; height: 28px; padding: 0 6px 0 4px; box-shadow: inset 0 -1px 0 var(--separator); }
 .ui-panel-title { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px; font: 600 11px var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); }
