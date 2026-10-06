@@ -93,3 +93,15 @@ describe("entities", () => {
     expect(d.store.entityOf("project", `dir:${os.tmpdir()}`)?.attrs).toMatchObject({ path: os.tmpdir(), git: false });
   });
 });
+
+describe("retention in batches", () => {
+  it("deletes at most a batch per call, oldest first, and says when more are due", () => {
+    const now = 1_800_000_000_000;
+    const d = service({ "data.keepDays": 1 } as Partial<Settings>, () => now);
+    d.recordAll(Array.from({ length: 12 }, (_, i) => ({ id: `u${i}`, at: now - 10 * 86400_000 + i, type: "user.look" as const, source: "user", data: { agentId: "a" } })));
+    expect(d.prune(5)).toMatchObject({ events: 5, more: true });
+    expect(d.prune(5)).toMatchObject({ events: 5, more: true });
+    expect(d.prune(5)).toMatchObject({ events: 2, more: false });
+    expect(d.query({ types: ["user.look"] })).toEqual([]);
+  });
+});

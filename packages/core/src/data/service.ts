@@ -26,6 +26,10 @@ function projectAttrs(id: string): Record<string, unknown> {
 const log = logger("data");
 
 const DAY_MS = 86400_000;
+/** The first retention run waits this long after the core starts; then batches of PRUNE_BATCH events with pauses between. */
+const PRUNE_FIRST_MS = 30_000;
+const PRUNE_BATCH = 5000;
+const PRUNE_PAUSE_MS = 250;
 /** Retention runs this often while the core is up. */
 const PRUNE_EVERY_MS = 6 * 3600_000;
 
@@ -71,13 +75,28 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
   }
 
   /** Prune now and every few hours. */
+  /**
+   * Retention runs once the core is up and then every few hours, in batches
+   * with pauses between them: a first run on a big log (a year of transcripts
+   * coming due) must not hold up the core's start or its clients.
+   */
   start(): void {
-    this.prune();
-    this.#timer = setInterval(() => this.prune(), PRUNE_EVERY_MS);
+    const run = () => {
+      if (this.#disposed) return;
+      const r = this.prune(PRUNE_BATCH);
+      if (r.more) this.#batch = setTimeout(run, PRUNE_PAUSE_MS);
+    };
+    this.#batch = setTimeout(run, PRUNE_FIRST_MS);
+    this.#batch.unref?.();
+    this.#timer = setInterval(run, PRUNE_EVERY_MS);
     this.#timer.unref?.();
   }
+  #batch: ReturnType<typeof setTimeout> | null = null;
+  #disposed = false;
 
   dispose(): void {
+    this.#disposed = true;
+    if (this.#batch) clearTimeout(this.#batch);
     if (this.#timer) clearInterval(this.#timer);
     this.store.close();
   }
@@ -277,23 +296,32 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
   }
 
   /** Deletes what the classes' retention says is too old, and the blobs nothing refers to any more. */
-  prune(): { events: number; blobs: number } {
+  /** `limit`: at most this many events this call; `more` says there are others due. */
+  prune(limit?: number): { events: number; blobs: number; more: boolean } {
     const now = this.#now;
     let events = 0;
+    let more = false;
     let agentsBefore: number | null = null;
     for (const c of this.explain()) {
       if (c.keepDays === null) continue;
       const before = now - c.keepDays * DAY_MS;
       if (c.class === "agents") agentsBefore = before;
-      events += this.store.delete({ before, types: c.types });
+      const left = limit === undefined ? undefined : limit - events;
+      if (left !== undefined && left <= 0) {
+        more = true;
+        break;
+      }
+      const n = this.store.delete({ before, types: c.types, limit: left });
+      events += n;
+      if (left !== undefined && n >= left) more = true;
     }
     if (agentsBefore !== null) for (const fn of this.#pruners) fn(agentsBefore);
     const blobs = this.store.sweepBlobs();
     if (events || blobs) {
-      log.info("pruned", { events, blobs });
+      log.info("pruned", { events, blobs, more });
       this.record({ id: `data:prune:${now}`, at: now, type: "data.op", source: "cmd", data: { op: "prune", detail: { events, blobs } } });
     }
-    return { events, blobs };
+    return { events, blobs, more };
   }
 
   /**

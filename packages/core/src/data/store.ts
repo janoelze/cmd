@@ -120,7 +120,13 @@ export class DataStore {
   }
 
   /** Removes events (and their FTS rows, blob references); returns how many. */
-  delete(where: { before?: number; types?: string[]; sessionId?: string; projectId?: string; seqs?: number[] }): number {
+  delete(where: { before?: number; types?: string[]; sessionId?: string; projectId?: string; seqs?: number[]; limit?: number }): number {
+    if (where.limit) {
+      // At most `limit` at a time (retention on a big log runs in batches): the oldest matching first.
+      const [c, a] = conditions({ at: where.before ? [0, where.before] : undefined, types: where.types, sessionId: where.sessionId, projectId: where.projectId });
+      const seqs = (this.db.prepare(`SELECT seq FROM events ${c ? `WHERE ${c}` : ""} ORDER BY seq LIMIT ?`).all(...a, where.limit) as { seq: number }[]).map((r) => r.seq);
+      return seqs.length ? this.delete({ seqs }) : 0;
+    }
     const [cond, args] = conditions({ at: where.before ? [0, where.before] : undefined, types: where.types, sessionId: where.sessionId, projectId: where.projectId });
     const parts = [...(cond ? [cond] : []), ...(where.seqs?.length ? [`seq IN (${where.seqs.map(() => "?").join(",")})`] : [])];
     if (!parts.length) return 0;
