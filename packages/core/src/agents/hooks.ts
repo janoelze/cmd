@@ -43,13 +43,16 @@ function hookScript(f: HookFiles): string {
 # Usage: cmd-hook <claude|codex|gemini>, the hook payload on stdin. Stores the
 # event as $TMPDIR/cmd-agents/<pane id>/<event>.json (the latest of each) and
 # links it into log/ (every one, until cmd has read it). Never fails or blocks
-# the agent; outside cmd it does nothing.
+# the agent; outside cmd, or for a headless Claude, it does nothing.
 
 kind=$1
 payload=$(cat)
 id=\${CMD_PANE_ID:-$GHOSTTY_AGENTS_SURFACE_ID}
 quiet() { [ "$kind" = gemini ] && echo '{}'; exit 0; }
 case "$id" in "" | *[!0-9A-Fa-f-]*) quiet ;; esac
+# A headless Claude (claude -p, the Agent SDK) inherits the pane of whatever
+# started it, often the pane's own agent: its events would pass for that agent's.
+case "$kind:$CLAUDE_CODE_ENTRYPOINT" in claude:sdk*) quiet ;; esac
 
 base=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null) || base="\${TMPDIR:-/tmp}/"
 dir="\${base%/}/cmd-agents/$id"

@@ -76,6 +76,9 @@ describe.skipIf(process.platform === "win32")("cmd's agent hook", () => {
       expect(fs.readdirSync(path.join(statusRoot(), id, "log"))).toEqual([]);
       // Outside cmd: nothing.
       expect(hook("claude", { hook_event_name: "Stop" })).toEqual({ code: 0, out: "" });
+      // A headless Claude started in the pane (claude -p from an agent's shell): nothing.
+      expect(hook("claude", { hook_event_name: "Stop", last_assistant_message: "{}" }, { ...env, CLAUDE_CODE_ENTRYPOINT: "sdk-cli" })).toEqual({ code: 0, out: "" });
+      expect(readStatus(id, 0, statusRoot())?.state).not.toBe("done");
     } finally {
       fs.rmSync(path.join(statusRoot(), id), { recursive: true, force: true });
     }
