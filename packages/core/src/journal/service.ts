@@ -15,7 +15,8 @@
 import os from "node:os";
 import { logger } from "@cmd/protocol/node";
 import { buildContext } from "../ai/context.ts";
-import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type JournalDay, type JournalFormat, type JournalEvent, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
+import { WEEK_FORMAT, WEEK_SCHEMA, WEEK_SYSTEM, daysHash, daysOfWeek, toWeek, weekDigest, weekOf, type WrittenWeek } from "./weeks.ts";
+import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type JournalDay, type JournalFormat, type JournalEvent, type JournalWeek, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
 import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import type { CallOptions } from "../ai/service.ts";
 import { digest, eventsHash, type Digest } from "./digest.ts";
@@ -234,6 +235,49 @@ export class JournalService {
       date = this.dayOf(date - 12 * 3600_000);
     }
     return out;
+  }
+
+  /**
+   * The week a work day falls in, rolled up from its days: the days are written
+   * first if they need to be (by `mode`), then the week, unless the stored one
+   * was written from the same days by the same rules. Null when no day of it has
+   * anything, or nothing can be written (no AI provider and none stored).
+   */
+  async week(scope: JournalScope, date: number, mode: WriteMode = "stale"): Promise<JournalWeek | null> {
+    const start = weekOf(this.dayOf(date));
+    const key = `week:${scope}@${start}`;
+    const running = this.#writing.get(key) as Promise<JournalWeek | null> | undefined;
+    if (running) return running;
+    await this.sync();
+    const today = this.dayOf(this.#now);
+    const days: JournalDay[] = [];
+    for (const d of daysOfWeek(start)) {
+      if (d > today) break;
+      const day = await this.day(scope, d, mode === "force" ? "stale" : mode);
+      if (day?.entries.length) days.push(day);
+    }
+    const stored = this.store.week(scope, start);
+    if (!days.length) return stored;
+    const fresh = stored && stored.daysHash === daysHash(days) && stored.format === WEEK_FORMAT;
+    const model = this.#o.ai?.modelName() ?? null;
+    if (mode === "never" || !model || !this.#o.ai || (mode === "stale" && fresh)) return stored;
+    const { text, ids } = weekDigest(days);
+    const ctx = buildContext({ purpose: "journal.week", budget: 60_000, parts: [{ name: "week", text: `<week>\n${text}\n</week>` }] });
+    const write = this.#o.ai
+      .object<WrittenWeek>({ tier: "smart", purpose: "journal.week", background: true, system: WEEK_SYSTEM, prompt: ctx.text, context: ctx.record, schema: WEEK_SCHEMA as unknown as Record<string, unknown>, maxOutputTokens: 3000 })
+      .then((r) => {
+        const w = toWeek(r.value, days, ids, { start, scope, writtenBy: r.model });
+        this.store.saveWeek(w);
+        log.info("week written", { scope, start: new Date(start).toDateString(), themes: w.themes.length, days: days.length });
+        return w;
+      })
+      .catch((err: Error) => {
+        log.warn(`could not write the week: ${err.message}`, { scope });
+        return stored;
+      })
+      .finally(() => this.#writing.delete(key));
+    this.#writing.set(key, write as unknown as Promise<JournalDay | null>);
+    return write;
   }
 
   /** Something written down on purpose: by a person, or by an agent (with its session, so it joins its thread). */

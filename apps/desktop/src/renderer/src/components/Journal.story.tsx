@@ -2,7 +2,7 @@
 // of this repo's own history as a summariser might write them up.
 import { Window, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "@cmd/ui";
 import type { ReactNode } from "react";
-import type { JournalDay, JournalEntry } from "@cmd/protocol";
+import type { JournalDay, JournalEntry, JournalWeek } from "@cmd/protocol";
 import { Journal } from "./Journal.tsx";
 
 type Draft = Omit<JournalEntry, "repo" | "threads" | "counts" | "outcome"> & { project?: string; outcome?: JournalEntry["outcome"]; counts: Partial<JournalEntry["counts"]> };
@@ -142,9 +142,25 @@ function Tile({ width, height, children }: { width: number; height: number; chil
   );
 }
 
+const WEEK: JournalWeek = {
+  start: NOW - 3 * 86400_000,
+  scope: "all",
+  headline: "Shipped v0.14.4 with drag and drop, rebuilt the sidebars, and started the journal.",
+  themes: [
+    { title: "Drag and drop", summary: "Files move between Finder, terminals and file browsers; released in v0.14.4.", entries: [] },
+    { title: "Sidebars as windows", summary: "Any window docks left or right; the Navigator replaced the old sidebar.", entries: [] },
+    { title: "Work journal", summary: "Days written from agents, terminals and git; weeks still open.", entries: [] },
+  ],
+  days: [],
+  writtenBy: "Model",
+  writtenAt: NOW,
+  format: 1,
+  daysHash: "",
+};
+
 export const Sidebar = () => (
   <Tile width={360} height={760}>
-    <Journal days={DAYS} now={NOW} showProject={false} onRefresh={() => {}} />
+    <Journal days={DAYS} week={WEEK} now={NOW} showProject={false} onRefresh={() => {}} />
   </Tile>
 );
 export const AllSpaces = () => (

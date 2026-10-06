@@ -10,6 +10,10 @@
 .journal-day-head { display: flex; align-items: baseline; gap: 8px; min-height: 22px; }
 .journal-day-head h3 { margin: 0; font: 600 var(--text-lg) var(--font-ui); color: var(--text); }
 .journal-day-span { flex: 1; font-size: var(--text-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+/* The week: its threads of work, one line of title and a summary each. */
+.journal-week-themes { margin: 0 0 4px; padding: 0; list-style: none; display: grid; gap: 6px; }
+.journal-week-themes .journal-entry-title { font-weight: 600; }
+
 .journal-day-headline { margin: 4px 0 10px; font-size: var(--text-md); line-height: 1.45; color: var(--text); text-wrap: pretty; }
 
 /* The ribbon: hours across, entries as bars on lanes. */

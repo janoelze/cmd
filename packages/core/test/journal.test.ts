@@ -314,3 +314,38 @@ describe("journal versions", () => {
     expect(asked[2]).toBe(10 * 86400_000);
   });
 });
+
+describe("journal weeks", () => {
+  const space: Space = { id: "shop", name: "Shopfront", root: "/Users/sam/src/shopfront", home: false, icon: null, order: 0, closedAt: null, createdAt: 0, lastActiveAt: 0, view: {} } as unknown as Space;
+  const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 };
+
+  it("rolls a week up from its days, keeps it until a day changes, and gathers what the model left out", async () => {
+    const calls: string[] = [];
+    const ai: JournalAi = {
+      modelName: () => "Model",
+      object: async <T,>(o: { purpose: string; prompt: string }) => {
+        calls.push(o.purpose);
+        if (o.purpose === "journal.week") {
+          expect(o.prompt).toMatch(/\[E1\]/);
+          return { value: { headline: "A week.", themes: [{ title: "Checkout work.", summary: "Fixed the cart.", entries: ["E1", "E99"] }] } as T, usage, model: "m" };
+        }
+        return { value: { headline: "A day.", entries: [{ refs: ["S1"], kind: "fix", title: "Cart fix", summary: "Fixed.", outcome: "fixed" }] } as T, usage, model: "m" };
+      },
+    };
+    const store = new JournalStore();
+    store.recordAll(syntheticDay(DAY));
+    const now = to + 3 * 86400_000;
+    const j = new JournalService({ store, spaces: () => [space], agentSpace: () => null, ai, now: () => now });
+    const w = (await j.week("all", from + 3600_000))!;
+    expect(w.headline).toBe("A week.");
+    expect(w.themes[0]).toMatchObject({ title: "Checkout work", entries: [{ day: j.dayOf(from + 3600_000) }] }); // E99 dropped
+    expect(w.themes.at(-1)!.title).toBe("Also"); // the day's other entries (fallbacks) the model didn't place
+    expect(w.days).toEqual([j.dayOf(from + 3600_000)]);
+    const weekCalls = () => calls.filter((c) => c === "journal.week").length;
+    await j.week("all", from + 3600_000);
+    expect(weekCalls()).toBe(1); // the same days: kept
+    await j.week("all", from + 3600_000, "force");
+    expect(weekCalls()).toBe(2);
+    expect(await j.week("all", from + 3600_000, "never")).toMatchObject({ headline: "A week." });
+  });
+});

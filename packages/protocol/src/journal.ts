@@ -187,3 +187,21 @@ export interface JournalDay {
   /** Threads left out as minor, counted. */
   minor: number;
 }
+
+/** A week rolled up from its days (core/src/journal/weeks.ts). */
+export interface JournalWeek {
+  /** Monday 00:00 (local) of the week; work days run 04:00 to 04:00. */
+  start: number;
+  scope: string;
+  headline: string;
+  /** The week's main threads of work, each with the day entries it covers. */
+  themes: { title: string; summary: string; entries: { day: number; entry: string }[] }[];
+  /** The work days it was written from. */
+  days: number[];
+  writtenBy: string | null;
+  writtenAt: number;
+  /** WEEK_FORMAT it was written with. */
+  format: number;
+  /** What its days said, hashed: written again when it changes. */
+  daysHash: string;
+}

@@ -10,6 +10,8 @@ type Client = Connection["client"];
 
 export const JOURNAL_HELP = `  journal [--days N] [--all|--space ID|--repo PATH] [--write|--no-write] [--json]
                                       what happened, day by day: releases, features, investigations
+  journal week [--weeks N] [--all|--space ID|--repo PATH] [--write|--no-write] [--json]
+                                      the week's main threads of work, rolled up from its days
   journal note TEXT                   write something down (from an agent's terminal: in its session)
   journal threads [--day YYYY-MM-DD]  how cmd grouped a day, before AI: what a model is given
   journal history [--day YYYY-MM-DD]  a day as written now and by earlier versions (after --write)
@@ -52,6 +54,29 @@ export async function journalCommand(client: Client, pos: string[], opt: Record<
   const json = !!opt.json;
   const days = typeof opt.days === "string" ? Math.max(1, Number(opt.days)) : undefined;
   switch (sub) {
+    case "week": {
+      const write = opt.write ? "force" : opt["no-write"] ? "never" : "stale";
+      const n = typeof opt.weeks === "string" ? Math.max(1, Number(opt.weeks)) : 1;
+      const sc = await scope(client, opt, paneId);
+      const out: string[] = [];
+      for (let i = 0; i < n; i++) {
+        const w = await client.call("journal.week", { ...sc, date: Date.now() - i * 7 * 86400_000, write });
+        if (!w) continue;
+        if (json) {
+          out.push(JSON.stringify(w));
+          continue;
+        }
+        const from = new Date(w.start).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+        out.push([`## Week of ${from}`, "", w.headline, "", ...w.themes.map((t) => `- **${t.title}**  \n  ${t.summary}`)].join("\n"));
+      }
+      if (!out.length) {
+        const ai = await client.call("ai.status", {}).catch(() => null);
+        console.log(ai && !ai.ready ? "The journal needs AI to write what happened. Add an API key in Settings → AI." : "Nothing recorded yet.");
+        return 0;
+      }
+      console.log(json ? `[${out.join(",")}]` : out.join("\n\n"));
+      return 0;
+    }
     case "note": {
       const text = rest.join(" ").trim();
       if (!text) throw new Error("usage: cmd journal note TEXT");

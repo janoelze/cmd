@@ -84,7 +84,7 @@ Scopes: a Space is its events, plus events without a Space whose project or fold
 2. **Agents reading it.** `cmd journal --days 7` is already Markdown an agent can read. A briefing line, or an MCP tool, so "what were we doing on the payments branch?" works across sessions.
 3. **UI actions** worth keeping: Spaces opened, windows opened and closed, widgets made with Magic, settings changed. Record in the core's handlers (the renderer's `run(id)` misses the palette's and context menus' paths).
 4. **Turns with their Space.** Turns are matched to a Space by their folder when their agent is gone; recording `spaceId` and `cwd` on `agent_turns` would make it exact.
-5. **Weeks.** A week is its days' entries, rolled up: "This week: v0.11 to v0.14.4, sidebars, summaries, drag and drop".
+5. **Weeks**, built (2026-10-06): `journal/weeks.ts`. A week (Monday 04:00 to Monday 04:00) is written by the smart tier from its days' entries, never from raw events again, into 2–6 themes and a headline; non-chores the model leaves out are gathered under "Also". Kept in `journal_weeks` and written again only when one of its days was (`daysHash`) or `WEEK_FORMAT` changes. `journal.week` RPC, `cmd journal week [--weeks N]`, and "This week" at the top of the Journal widget.
 6. **Outcomes that change.** An entry "merged" on Monday whose branch shipped on Tuesday could say "shipped" when Monday is read again (links already know).
 7. **Settings**: `journal.enabled`, the tier, kept days; pages and commands could be opt-out for people who don't want them recorded.
 8. **Shell history** with timestamps (zsh's extended history) as a backfill for commands run outside cmd.

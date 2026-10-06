@@ -10,7 +10,7 @@
 // become events; THREADS_FORMAT and WRITER_FORMAT the layers above.
 
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { DATA_FLAGS, DEFAULT_SETTINGS, JOURNAL_SCHEMA, type AgentTurn, type DataEvent, type DataEventType, type JournalData, type JournalDay, type JournalEvent, type JournalEventKind, type NewDataEvent, type SpaceId } from "@cmd/protocol";
+import { DATA_FLAGS, DEFAULT_SETTINGS, JOURNAL_SCHEMA, type AgentTurn, type DataEvent, type DataEventType, type JournalData, type JournalDay, type JournalEvent, type JournalEventKind, type JournalWeek, type NewDataEvent, type SpaceId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { DataService } from "../data/service.ts";
 import { projectOf } from "../data/project.ts";
@@ -86,6 +86,7 @@ export class JournalStore {
       );
       CREATE INDEX IF NOT EXISTS journal_days_history_day ON journal_days_history(scope, date);
       CREATE TABLE IF NOT EXISTS journal_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS journal_weeks (scope TEXT NOT NULL, start INTEGER NOT NULL, doc TEXT NOT NULL, PRIMARY KEY (scope, start));
       CREATE TABLE IF NOT EXISTS schema_versions (name TEXT PRIMARY KEY, version INTEGER NOT NULL, updated_at INTEGER NOT NULL);
     `);
     this.#upgrade();
@@ -222,6 +223,21 @@ export class JournalStore {
       this.#db.exec("ROLLBACK");
       throw err;
     }
+  }
+
+  week(scope: string, start: number): JournalWeek | null {
+    const r = this.#stmt(`SELECT doc FROM journal_weeks WHERE scope = ? AND start = ?`).get(scope, start) as { doc: string } | undefined;
+    if (!r) return null;
+    try {
+      const w = JSON.parse(r.doc) as JournalWeek;
+      return typeof w.start === "number" && Array.isArray(w.themes) ? w : null;
+    } catch {
+      return null;
+    }
+  }
+
+  saveWeek(w: JournalWeek): void {
+    this.#stmt(`INSERT OR REPLACE INTO journal_weeks (scope, start, doc) VALUES (?, ?, ?)`).run(w.scope, w.start, JSON.stringify(w));
   }
 
   /** Earlier versions of a day, newest first. */

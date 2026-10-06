@@ -7,7 +7,7 @@
 
 import { Badge, Button, Chip, EmptyState, IconButton, Panel, PanelBody, Spinner, type Tone } from "@cmd/ui";
 import { useState, type CSSProperties } from "react";
-import type { JournalDay, JournalEntry, JournalEntryKind, JournalOutcome } from "@cmd/protocol";
+import type { JournalDay, JournalEntry, JournalEntryKind, JournalOutcome, JournalWeek } from "@cmd/protocol";
 import { projectHue } from "../model.ts";
 import "./journal.css";
 
@@ -142,6 +142,7 @@ function Entry({ e, picked, showProject }: { e: JournalEntry; picked: boolean; s
 
 export function Journal({
   days,
+  week,
   now = Date.now(),
   showProject = true,
   summarising,
@@ -149,6 +150,8 @@ export function Journal({
   onSetUpAi,
 }: {
   days: JournalDay[];
+  /** The week so far, rolled up from its days: its threads of work above the days. */
+  week?: JournalWeek | null;
   now?: number;
   /** Projects as chips (off when the Space is one project). */
   showProject?: boolean;
@@ -191,6 +194,22 @@ export function Journal({
           <EmptyState compact icon="book" title="Nothing yet">
             What you and your agents do in this Space shows up here, a few lines a day.
           </EmptyState>
+        )}
+        {week && week.themes.length > 0 && days.length > 0 && (
+          <section className="journal-day journal-week">
+            <header className="journal-day-head">
+              <h3>This week</h3>
+            </header>
+            <p className="journal-day-headline">{week.headline}</p>
+            <ul className="journal-week-themes">
+              {week.themes.map((t) => (
+                <li key={t.title}>
+                  <span className="journal-entry-title">{t.title}</span>
+                  <p className="journal-entry-summary">{t.summary}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
         {days.map((d) => (
           <section key={d.date} className="journal-day">

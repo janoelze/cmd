@@ -8,7 +8,7 @@ import type { AiModel, AiStatus } from "./ai.ts";
 import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
 import type { ActivityEvent, ActivityExportHeader, AgentCoverage, AgentHome, AgentTurn } from "./activity.ts";
-import type { JournalDay, JournalEvent, JournalEventKind, JournalThread } from "./journal.ts";
+import type { JournalDay, JournalEvent, JournalEventKind, JournalThread, JournalWeek } from "./journal.ts";
 
 export interface CoreInfo {
   pid: number;
@@ -151,6 +151,8 @@ export interface Methods {
   "journal.days": { params: { spaceId?: SpaceId; scope?: string; count?: number; write?: "never" | "stale" | "force" }; result: JournalDay[] };
   /** One work day by its local midnight (a work day runs 04:00 to 04:00); null when nothing happened. */
   "journal.day": { params: { spaceId?: SpaceId; scope?: string; date: number; write?: "never" | "stale" | "force" }; result: JournalDay | null };
+  /** The week a date falls in, rolled up from its days (written if they need to be, by `write`); null when nothing happened. */
+  "journal.week": { params: { spaceId?: SpaceId; scope?: string; date: number; write?: "never" | "stale" | "force" }; result: JournalWeek | null };
   /** A day as each earlier version wrote it, newest first (kept when a day is written again): for comparing revisions. */
   "journal.history": { params: { spaceId?: SpaceId; scope?: string; date: number }; result: JournalDay[] };
   /** The recorded events, oldest first. */

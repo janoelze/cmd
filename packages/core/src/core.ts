@@ -498,6 +498,7 @@ export class Core {
     "agents.coverage": (p) => this.agents.activity.coverage(p.days),
     "journal.days": (p) => this.journal.days(journalScope(p), Math.min(p.count ?? 7, 60), p.write),
     "journal.day": async (p) => (await this.journal.sync(), this.journal.day(journalScope(p), this.journal.dayOf(p.date), p.write)),
+    "journal.week": (p) => this.journal.week(journalScope(p), p.date, p.write),
     "journal.history": (p) => this.journal.store.history(journalScope(p), this.journal.dayOf(p.date)),
     "journal.events": (p) => this.journal.store.events(p),
     "journal.threads": async (p) => {

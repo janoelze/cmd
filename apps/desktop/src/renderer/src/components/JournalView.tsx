@@ -6,7 +6,7 @@
 
 import { subscribeData } from "../store.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { JournalDay } from "@cmd/protocol";
+import type { JournalDay, JournalWeek } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { useAiStatus } from "../ai/status.ts";
 import { scopeOf } from "../widgets.ts";
@@ -21,6 +21,7 @@ export function JournalView({ win }: WindowViewProps) {
   const ai = useAiStatus();
   const needsAi = ai !== null && !ai.ready;
   const [days, setDays] = useState<JournalDay[] | null>(null);
+  const [week, setWeek] = useState<JournalWeek | null>(null);
   const [writing, setWriting] = useState(false);
   const gen = useRef(0);
   const params = scope === "all" ? { scope: "all" } : { spaceId: win.spaceId };
@@ -34,6 +35,9 @@ export function JournalView({ win }: WindowViewProps) {
         setWriting(true);
         if (write === "force") await cmd.call("journal.day", { ...params, date: Date.now(), write: "force" });
         ok(await cmd.call("journal.days", { ...params, count: DAYS, write: "stale" }));
+        // The week after its days: it's written from them.
+        const w = await cmd.call("journal.week", { ...params, date: Date.now(), write: write === "force" ? "force" : "stale" }).catch(() => null);
+        if (g === gen.current) setWeek(w);
       } catch {
         // an older core, or none: what's shown stays
       } finally {
@@ -58,5 +62,5 @@ export function JournalView({ win }: WindowViewProps) {
   }, [load]);
 
   const repos = new Set((days ?? []).flatMap((d) => d.entries.map((e) => e.repo)));
-  return <Journal days={days ?? []} showProject={scope === "all" || repos.size > 1} summarising={days === null ? "Reading the journal…" : writing ? "Writing up what happened…" : null} onRefresh={needsAi ? undefined : () => void load("force")} onSetUpAi={needsAi ? () => cmd.openSettings("ai") : undefined} />;
+  return <Journal days={days ?? []} week={week} showProject={scope === "all" || repos.size > 1} summarising={days === null ? "Reading the journal…" : writing ? "Writing up what happened…" : null} onRefresh={needsAi ? undefined : () => void load("force")} onSetUpAi={needsAi ? () => cmd.openSettings("ai") : undefined} />;
 }

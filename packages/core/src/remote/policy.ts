@@ -55,6 +55,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "journal.days": "never",
   "journal.day": "never",
   "journal.history": "never",
+  "journal.week": "never",
   "journal.events": "never",
   "journal.threads": "never",
   "journal.note": "never",
