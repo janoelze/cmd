@@ -3,7 +3,10 @@ export { PaneManager, nodePtyFactory, type Pty, type PtyFactory } from "./panes.
 export { AgentTracker, launchCommand } from "./agents/tracker.ts";
 export { shq, envPrefix } from "./shell.ts";
 export { describeTool } from "./agents/state.ts";
-export { ActivityLog } from "./agents/activity/log.ts";
+export { ActivityView } from "./data/views/activity.ts";
+export { DataService } from "./data/service.ts";
+export { DataStore } from "./data/store.ts";
+export { ViewsStore } from "./data/views/views.ts";
 export { normalize } from "./agents/activity/normalize.ts";
 export { ActivityReducer } from "./agents/activity/reduce.ts";
 export { AgentHomes } from "./agents/homes.ts";

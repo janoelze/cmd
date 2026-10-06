@@ -9,11 +9,12 @@ import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvid
 import { EXPORT_FORMAT, lineSplitter, TURN_FORMAT } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
-import { ActivityLog } from "./agents/activity/log.ts";
 import { JournalService } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
 import { recordCommands, recordWindows } from "./journal/recorders.ts";
 import { DataService } from "./data/service.ts";
+import { ViewsStore } from "./data/views/views.ts";
+import { ActivityView } from "./data/views/activity.ts";
 import { rewrite } from "./agents/activity/fixture.ts";
 import { AgentHomes } from "./agents/homes.ts";
 import { cleanAiBody, NOTICE_SYSTEM, noticeContext, type NoticeKind } from "./agents/notice.ts";
@@ -130,6 +131,7 @@ export class Core {
   readonly timers: TimerAlarms;
   readonly store: Store;
   readonly data: DataService;
+  readonly views: ViewsStore;
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
   readonly processes: ProcessSampler | null;
@@ -154,7 +156,6 @@ export class Core {
   readonly homes: AgentHomes;
   #homesDiscovered = false;
   #homesTimer: NodeJS.Timeout | undefined;
-  #pruneTimer: NodeJS.Timeout | undefined;
   /** Listening servers: one, plus one per time the socket file was put back (the old ones keep their clients). */
   #servers: net.Server[] = [];
   /** Open socket connections, cut on close so a lingering client can't hold it up. */
@@ -223,11 +224,17 @@ export class Core {
       }
     });
     // Every event says which cmd recorded it: the app's version, or the checkout's build.
-    const activity = new ActivityLog(this.store.db, { recordedBy: process.env.CMD_APP_VERSION || (opts.build ? `source+${opts.build.slice(0, 8)}` : null) });
     this.data = new DataService({ file: opts.stateDir ? path.join(opts.stateDir, "data", "events.sqlite") : null, recordedBy: process.env.CMD_APP_VERSION || (opts.build ? `source+${opts.build.slice(0, 8)}` : "source"), settings: () => this.settings.settings });
-    activity.prune();
-    this.#pruneTimer = setInterval(() => activity.prune(), 6 * 3600_000);
-    this.#pruneTimer.unref();
+    this.views = new ViewsStore(opts.stateDir ? path.join(opts.stateDir, "data", "views.sqlite") : null);
+    if (opts.stateDir) {
+      // What older cmds kept in cmd.sqlite comes along once, then its tables go: their readers read the log now.
+      try {
+        if (this.data.importLegacy(this.store.db)) this.store.db.exec(`DROP TABLE IF EXISTS agent_events; DROP TABLE IF EXISTS agent_turns;`);
+      } catch (err) {
+        log.error("importing the older tables failed", err);
+      }
+    }
+    const activity = new ActivityView(this.data, this.views);
     this.agents = new AgentTracker(this.panes, {
       store: this.store,
       settings,
@@ -301,7 +308,7 @@ export class Core {
     });
     this.journal = new JournalService({
       store: new JournalStore(this.store.db, { recordedBy: this.agents.activity.recordedBy }),
-      activityDb: this.store.db,
+      turns: (since) => this.agents.activity.turnsSince(since),
       sessions: (since) => this.#search?.sessionsSince(since) ?? null,
       spaces: () => this.spaces.list(),
       agentSpace: (id) => this.agents.get(id)?.spaceId ?? null,
@@ -316,15 +323,7 @@ export class Core {
     recordCommands(this.journal, this.commands);
     recordWindows(this.journal, this.windows);
     if (opts.stateDir) this.journal.start();
-    if (opts.stateDir) {
-      // What older cmds kept in cmd.sqlite comes along once; the tables go when their readers do.
-      try {
-        this.data.importLegacy(this.store.db);
-      } catch (err) {
-        log.error("importing the older tables failed", err);
-      }
-      this.data.start();
-    }
+    if (opts.stateDir) this.data.start();
     this.magic = new MagicService({
       windows: this.windows,
       settings,
@@ -479,7 +478,7 @@ export class Core {
       const events = log.events({ since, afterId: p.afterId, limit: limit + 1, raw: true, oldest: true });
       const more = events.length > limit;
       const page = more ? events.slice(0, limit) : events;
-      const turns = p.afterId ? [] : log.turnsSince(since);
+      const turns = p.afterId ? [] : log.turnsSince(since).map((t) => t.turn);
       const header: ActivityExportHeader = { format: "cmd-agent-activity", version: EXPORT_FORMAT, schema: log.schemaVersion(), turnFormat: TURN_FORMAT, exportedAt: Date.now(), cmd: log.recordedBy, since, anonymized: !!p.anonymize };
       const anon = <T,>(v: T): T => (p.anonymize ? (rewrite(v, [[os.homedir(), "~"]]) as T) : v);
       return { header, turns: anon(turns), events: anon(page), next: more ? page.at(-1)!.id : null };
@@ -1118,13 +1117,13 @@ export class Core {
 
   async close(): Promise<void> {
     if (this.#libraryTimer) clearTimeout(this.#libraryTimer);
-    clearInterval(this.#pruneTimer);
     clearInterval(this.#homesTimer);
     this.agents.close();
     this.usage.close();
     this.ai.dispose();
     this.journal.dispose();
     this.data.dispose();
+    this.views.close();
     await this.usage.flush();
     this.magic.dispose();
     this.remote.close();

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { DATA_FLAGS, DEFAULT_SETTINGS, HOOK_FORMAT, type Settings } from "@cmd/protocol";
 import { DataService } from "../src/data/service.ts";
-import { ActivityLog } from "../src/agents/activity/log.ts";
 import { JournalStore } from "../src/journal/store.ts";
 
 const service = (over: Partial<Settings> = {}, now = () => 1_800_000_000_000) => new DataService({ file: null, recordedBy: "test", settings: () => ({ ...DEFAULT_SETTINGS, ...over }), now });
@@ -51,10 +50,13 @@ describe("DataService", () => {
 
   it("imports what an older cmd kept, once", () => {
     const legacy = new DatabaseSync(":memory:");
-    const activity = new ActivityLog(legacy, { recordedBy: "0.14.4" });
-    activity.insert({ at: 1000, agent: "claude", name: "UserPromptSubmit", payload: { hook_event_name: "UserPromptSubmit", session_id: "s", prompt: "fix the flaky test", cwd: "/w" }, hook: HOOK_FORMAT }, "p", "a");
-    activity.insert({ at: 2000, agent: "claude", name: "PreToolUse", payload: { hook_event_name: "PreToolUse", session_id: "s", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "pnpm test" } }, hook: HOOK_FORMAT }, "p", "a");
-    activity.insert({ at: 3000, agent: "claude", name: "PostToolUse", payload: { hook_event_name: "PostToolUse", session_id: "s", tool_name: "Bash", tool_use_id: "t1", tool_response: "ok" }, hook: HOOK_FORMAT }, "p", "a");
+    // The activity log's tables as cmd ≤ 0.15 made them.
+    legacy.exec(`CREATE TABLE agent_events (id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL NOT NULL, pane_id TEXT, agent_id TEXT, agent TEXT, source TEXT NOT NULL, name TEXT NOT NULL, doc TEXT NOT NULL, env TEXT, schema INTEGER, cmd TEXT, hook INTEGER, agent_version TEXT, session_id TEXT);
+                 CREATE TABLE agent_turns (agent_id TEXT NOT NULL, idx INTEGER NOT NULL, started_at REAL NOT NULL, last_event INTEGER NOT NULL DEFAULT 0, doc TEXT NOT NULL, PRIMARY KEY (agent_id, idx));`);
+    const ins = legacy.prepare(`INSERT INTO agent_events (at, pane_id, agent_id, agent, source, name, doc, schema, cmd, hook, session_id) VALUES (?, 'p', 'a', 'claude', 'hook', ?, ?, 1, '0.14.4', ?, 's')`);
+    ins.run(1000, "UserPromptSubmit", JSON.stringify({ hook_event_name: "UserPromptSubmit", session_id: "s", prompt: "fix the flaky test", cwd: "/w" }), HOOK_FORMAT);
+    ins.run(2000, "PreToolUse", JSON.stringify({ hook_event_name: "PreToolUse", session_id: "s", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "pnpm test" } }), HOOK_FORMAT);
+    ins.run(3000, "PostToolUse", JSON.stringify({ hook_event_name: "PostToolUse", session_id: "s", tool_name: "Bash", tool_use_id: "t1", tool_response: "ok" }), HOOK_FORMAT);
     const journal = new JournalStore(legacy);
     journal.record({ at: 4000, until: 4100, kind: "command", key: "command:x", spaceId: null, repo: null, cwd: "/w", thread: "pane:p", text: "pnpm test", data: { kind: "command", command: "pnpm test", exitCode: 0, paneId: "p" } });
     journal.record({ at: 5000, until: null, kind: "agent.session", key: "session:s", spaceId: null, repo: null, cwd: "/w", thread: "session:s", text: "derived", data: { kind: "agent.session", agent: "claude", sessionId: "s", title: null, firstPrompt: null, branch: null } });

@@ -162,7 +162,7 @@ describe("journal service", () => {
   function service(ai: JournalAi | null) {
     const store = new JournalStore();
     store.recordAll(syntheticDay(DAY));
-    return new JournalService({ store, activityDb: null, sessions: () => [], spaces: () => [space], agentSpace: () => null, ai, now: () => to + 3 * 86400_000 });
+    return new JournalService({ store, turns: null, sessions: () => [], spaces: () => [space], agentSpace: () => null, ai, now: () => to + 3 * 86400_000 });
   }
 
   it("writes a day once, until its events change", async () => {
@@ -213,7 +213,7 @@ describe("journal versions", () => {
 
   function service(store: JournalStore, now: number, onWrite: () => void) {
     const ai: JournalAi = { modelName: () => "Model", object: async <T,>() => (onWrite(), written("New rules.") as unknown as { value: T; usage: { input: number; output: number; cacheRead: number; cacheWrite: number }; model: string }) };
-    return new JournalService({ store, activityDb: null, sessions: () => [], spaces: () => [space], agentSpace: () => null, ai, now: () => now });
+    return new JournalService({ store, turns: null, sessions: () => [], spaces: () => [space], agentSpace: () => null, ai, now: () => now });
   }
 
   it("records the schema, and which cmd wrote each event", () => {
@@ -294,7 +294,7 @@ describe("journal versions", () => {
   it("reads sources again when their format changed, then only what's new", async () => {
     const store = new JournalStore();
     const asked: number[] = [];
-    const make = () => new JournalService({ store, activityDb: null, sessions: (since) => (asked.push(since), []), spaces: () => [], agentSpace: () => null, ai: null, now: () => 100 * 86400_000 });
+    const make = () => new JournalService({ store, turns: null, sessions: (since) => (asked.push(since), []), spaces: () => [], agentSpace: () => null, ai: null, now: () => 100 * 86400_000 });
     await make().sync();
     expect(asked[0]).toBe(10 * 86400_000); // 90 days back
     expect(store.meta("sources.format")).toBe(String(SOURCES_FORMAT));

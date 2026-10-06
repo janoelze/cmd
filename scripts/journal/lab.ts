@@ -4,6 +4,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
 import { JournalStore } from "../../packages/core/src/journal/store.ts";
+import { DataService } from "../../packages/core/src/data/service.ts";
+import { ActivityView } from "../../packages/core/src/data/views/activity.ts";
+import { ViewsStore } from "../../packages/core/src/data/views/views.ts";
+import { DEFAULT_SETTINGS } from "@cmd/protocol";
+import path from "node:path";
 import { sessionEvents, turnEvents } from "../../packages/core/src/journal/backfill.ts";
 import { sessionsSince } from "../../packages/core/src/search/index.ts";
 import { gitEvents } from "../../packages/core/src/journal/git.ts";
@@ -13,14 +18,15 @@ import { SCHEMA, SYSTEM, toDay, type WrittenDay } from "../../packages/core/src/
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 
-const { values: a, positionals } = parseArgs({ allowPositionals: true, options: { synthetic: { type: "boolean" }, model: { type: "string", default: "sonnet" }, out: { type: "string" }, db: { type: "string" }, search: { type: "string" }, day: { type: "string" }, repo: { type: "string" }, all: { type: "boolean" } } });
+const { values: a, positionals } = parseArgs({ allowPositionals: true, options: { synthetic: { type: "boolean" }, model: { type: "string", default: "sonnet" }, out: { type: "string" }, data: { type: "string" }, search: { type: "string" }, day: { type: "string" }, repo: { type: "string" }, all: { type: "boolean" } } });
 const day = new Date(`${a.day}T04:00:00`).getTime();
 const from = day, to = day + 86400_000;
 const since = from - 3 * 86400_000;
 
 const store = new JournalStore();
 if (a.search) store.recordAll(sessionEvents(sessionsSince(new DatabaseSync(a.search, { readOnly: true }), since)));
-if (a.db) store.recordAll(turnEvents(new DatabaseSync(a.db, { readOnly: true }), since));
+// --data: a copy of $CMD_HOME/data (events.sqlite and views.sqlite).
+if (a.data) store.recordAll(turnEvents(new ActivityView(new DataService({ file: path.join(a.data, "events.sqlite"), recordedBy: "lab", settings: () => DEFAULT_SETTINGS }), new ViewsStore(path.join(a.data, "views.sqlite"))).turnsSince(since)));
 if (a.synthetic) store.recordAll((await import("../../packages/core/test/fixtures/journal-day.ts")).syntheticDay(a.day!));
 const repos = new Set(store.repos(since).map((r) => r.repo));
 if (!a.synthetic) for (const r of repos) store.recordAll(await gitEvents(r, since));

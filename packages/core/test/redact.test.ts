@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { HOOK_FORMAT } from "@cmd/protocol";
 import { redact, redactDeep } from "../src/redact.ts";
-import { ActivityLog } from "../src/agents/activity/log.ts";
+import { ActivityView } from "../src/data/views/activity.ts";
+import { DataService } from "../src/data/service.ts";
+import { ViewsStore } from "../src/data/views/views.ts";
+import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { JournalStore } from "../src/journal/store.ts";
 
 // Values here are made up in the shape of real ones (checked against the author's transcripts, docs/25 3.8).
@@ -98,7 +101,7 @@ describe("redact", () => {
 
 describe("redaction at the stores", () => {
   it("the activity log never keeps a credential", () => {
-    const log = new ActivityLog(new DatabaseSync(":memory:"));
+    const log = new ActivityView(new DataService({ file: null, recordedBy: "test", settings: () => DEFAULT_SETTINGS }), new ViewsStore(null));
     const ev = log.insert({ at: 1, agent: "claude", name: "PreToolUse", payload: { hook_event_name: "PreToolUse", session_id: "s", tool_name: "Bash", tool_input: { command: "curl -H 'Authorization: Bearer abcdefghijklmnopqrstuvwxyz' https://x.y" } }, hook: HOOK_FORMAT }, "p", "a");
     expect(ev.tool?.command).toContain("[redacted]");
     expect(JSON.stringify(log.events({ agentId: "a", raw: true }))).not.toContain("abcdefghij");

@@ -1,6 +1,6 @@
 // Cuts one agent's recorded events out of a cmd core's database into a fixture
 // (docs/19-agent-activity-review.md, "The lab loop"):
-//   node test/fixtures/agents/cut.ts <cmd.sqlite> <pane-prefix> <agent> <out.jsonl> <scenario> [--scrub] [--from HH:MM:SS --to HH:MM:SS]
+//   node test/fixtures/agents/cut.ts <events.sqlite> <pane-prefix> <agent> <out.jsonl> <scenario> [--scrub] [--from HH:MM:SS --to HH:MM:SS]
 // Paths: the session's folder becomes /work/repo, the home folder /Users/me.
 // --scrub replaces prompts, messages, tool inputs and outputs with placeholders
 // (for sessions from real work); without it the payloads stay as recorded (lab
@@ -22,13 +22,15 @@ const from = flag("--from");
 const to = flag("--to");
 const [dbPath = "", panePrefix = "", agent = "", out = "", scenario = ""] = args;
 if (!out) {
-  console.error("usage: cut.ts <cmd.sqlite> <pane-prefix> <agent> <out.jsonl> <scenario> [--scrub] [--from HH:MM:SS --to HH:MM:SS]");
+  console.error("usage: cut.ts <events.sqlite> <pane-prefix> <agent> <out.jsonl> <scenario> [--scrub] [--from HH:MM:SS --to HH:MM:SS]");
   process.exit(2);
 }
 
 type Row = { at: number; agent: string; name: string; doc: string; env: string | null; hook: number | null; agent_version: string | null; cmd: string | null };
 const db = new DatabaseSync(dbPath, { readOnly: true });
-let rows = db.prepare(`SELECT * FROM agent_events WHERE pane_id LIKE ? AND agent = ? AND source = 'hook' ORDER BY id`).all(`${panePrefix}%`, agent) as unknown as Row[];
+let rows = db
+  .prepare(`SELECT at, json_extract(data, '$.agent') AS agent, json_extract(data, '$.name') AS name, json_extract(data, '$.payload') AS doc, json_extract(data, '$.env') AS env, json_extract(data, '$.hook') AS hook, json_extract(data, '$.agentVersion') AS agent_version, recorded AS cmd FROM events WHERE pane_id >= ? AND pane_id < ? AND type = 'agent.hook' AND json_extract(data, '$.agent') = ? ORDER BY seq`)
+  .all(panePrefix, `${panePrefix}\uffff`, agent) as unknown as Row[];
 const clock = (t: number) => new Date(t).toTimeString().slice(0, 8);
 if (from) rows = rows.filter((r) => clock(r.at) >= from);
 if (to) rows = rows.filter((r) => clock(r.at) <= to);

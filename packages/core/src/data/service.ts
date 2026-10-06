@@ -33,10 +33,13 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent] }> {
   #o: DataServiceOptions;
   #seen = new Set<string>();
   #timer: ReturnType<typeof setInterval> | null = null;
+  #pruners: ((before: number) => void)[] = [];
+  readonly recordedBy: string;
 
   constructor(o: DataServiceOptions) {
     super();
     this.#o = o;
+    this.recordedBy = o.recordedBy;
     if (o.file) fs.mkdirSync(path.dirname(o.file), { recursive: true });
     this.store = new DataStore(o.file ?? ":memory:", { recordedBy: o.recordedBy });
   }
@@ -139,14 +142,23 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent] }> {
     });
   }
 
+  /** Views follow the facts: called with the time before which agent events were pruned. */
+  onPrune(fn: (before: number) => void): void {
+    this.#pruners.push(fn);
+  }
+
   /** Deletes what the classes' retention says is too old, and the blobs nothing refers to any more. */
   prune(): { events: number; blobs: number } {
     const now = this.#now;
     let events = 0;
+    let agentsBefore: number | null = null;
     for (const c of this.explain()) {
       if (c.keepDays === null) continue;
-      events += this.store.delete({ before: now - c.keepDays * DAY_MS, types: c.types });
+      const before = now - c.keepDays * DAY_MS;
+      if (c.class === "agents") agentsBefore = before;
+      events += this.store.delete({ before, types: c.types });
     }
+    if (agentsBefore !== null) for (const fn of this.#pruners) fn(agentsBefore);
     const blobs = this.store.sweepBlobs();
     if (events || blobs) {
       log.info("pruned", { events, blobs });

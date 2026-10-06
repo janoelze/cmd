@@ -8,7 +8,11 @@ import { FIXTURE_EPOCH, fixtureMeta, readFixture, toFixture } from "../src/agent
 import { agentVersion } from "../src/agents/procinfo.ts";
 import { Core } from "../src/core.ts";
 import { changedBetween, snapshot } from "../src/agents/activity/gitsnap.ts";
-import { ActivityLog } from "../src/agents/activity/log.ts";
+import { ActivityView } from "../src/data/views/activity.ts";
+import { DataService } from "../src/data/service.ts";
+import { ViewsStore } from "../src/data/views/views.ts";
+
+const activityView = () => new ActivityView(new DataService({ file: null, recordedBy: "test", settings: () => DEFAULT_SETTINGS }), new ViewsStore(null));
 import { normalize, shellWrites, type RawEvent } from "../src/agents/activity/normalize.ts";
 import { watchTurn } from "../src/agents/activity/fswatch.ts";
 import { ActivityReducer, QUIET_MS, type Reduction } from "../src/agents/activity/reduce.ts";
@@ -127,7 +131,7 @@ describe("tracker: turns that end as another begins", () => {
   it("saves the ended turn in its final state", () => {
     const f = fakeFactory();
     const panes = new PaneManager(f.factory, { socketPath: "/tmp/t.sock", pollMs: 0 });
-    const activity = new ActivityLog();
+    const activity = activityView();
     const agents = new AgentTracker(panes, { activity });
     const pane = panes.create();
     const a = agents.ingestHook(pane.id, "claude", "UserPromptSubmit", { session_id: "s1", prompt: "one" })!;
@@ -430,7 +434,7 @@ describe("tracker: spooled events", () => {
   let panes: PaneManager;
   let agents: AgentTracker;
   let ptys: FakePty[];
-  let activity: ActivityLog;
+  let activity: ActivityView;
   const root = () => path.join(dir, "status");
 
   /** Writes recorded events into a pane's spool as cmd's hook would. */
@@ -448,7 +452,7 @@ describe("tracker: spooled events", () => {
     const f = fakeFactory();
     ptys = f.ptys;
     panes = new PaneManager(f.factory, { socketPath: "/tmp/t.sock", pollMs: 0 });
-    activity = new ActivityLog();
+    activity = activityView();
     agents = new AgentTracker(panes, { statusRoot: root(), activity });
   });
   afterEach(() => agents.close());
@@ -637,26 +641,8 @@ describe("fixtures", () => {
 });
 
 describe("versions and provenance", () => {
-  it("adds missing columns to an older database and reads its rows as schema 1", async () => {
-    const { DatabaseSync } = await import("node:sqlite");
-    const db = new DatabaseSync(":memory:");
-    // The shape development builds of 2026-10-05 created.
-    db.exec(`CREATE TABLE agent_events (id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL NOT NULL, pane_id TEXT, agent_id TEXT, agent TEXT, source TEXT NOT NULL, name TEXT NOT NULL, doc TEXT NOT NULL, env TEXT);
-             CREATE TABLE agent_turns (agent_id TEXT NOT NULL, idx INTEGER NOT NULL, started_at REAL NOT NULL, doc TEXT NOT NULL, PRIMARY KEY (agent_id, idx));`);
-    db.prepare(`INSERT INTO agent_events (at, pane_id, agent_id, agent, source, name, doc) VALUES (1, 'p', 'a', 'claude', 'hook', 'Stop', '{"hook_event_name":"Stop","last_assistant_message":"old"}')`).run();
-    const log = new ActivityLog(db, { recordedBy: "0.11.0" });
-    expect(log.schemaVersion()).toBe(ACTIVITY_SCHEMA);
-    const [old] = log.events({ agentId: "a" });
-    expect(old).toMatchObject({ kind: "stop", text: "old", recorded: { schema: 1, cmd: null, hook: null } });
-    const ev = log.insert({ at: 2, agent: "claude", name: "Stop", payload: { hook_event_name: "Stop", session_id: "s" }, hook: HOOK_FORMAT }, "p", "a", "2.1.289");
-    expect(ev).toMatchObject({ agentVersion: "2.1.289", recorded: { schema: ACTIVITY_SCHEMA, cmd: "0.11.0", hook: HOOK_FORMAT } });
-    expect(log.events({ agentId: "a" }).at(-1)).toMatchObject({ agentVersion: "2.1.289", recorded: { cmd: "0.11.0", hook: HOOK_FORMAT } });
-    // Opening it again changes nothing.
-    expect(() => new ActivityLog(db)).not.toThrow();
-  });
-
   it("reads format 1 turns, which have no followUps or notes, and resumes from them", () => {
-    const log = new ActivityLog();
+    const log = activityView();
     const red = new ActivityReducer("a1", 0, { agentKind: "claude" });
     for (const [i, raw] of fixture("claude-2.1.289/edit-and-bash.jsonl").entries()) red.apply(normalize(raw, i));
     const { followUps: _f, notes: _n, ...v1 } = { ...red.turn!, format: 1 };

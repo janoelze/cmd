@@ -23,7 +23,10 @@ import { nativeSession, type StateChange } from "./state.ts";
 import { readStatus, removeStatus, StatusWatcher, type HookStatus } from "./statusfiles.ts";
 import { watchTurn, type TurnWatch } from "./activity/fswatch.ts";
 import { changedBetween, snapshot, type GitSnapshot } from "./activity/gitsnap.ts";
-import { ActivityLog } from "./activity/log.ts";
+import { ActivityView } from "../data/views/activity.ts";
+import { DataService } from "../data/service.ts";
+import { ViewsStore } from "../data/views/views.ts";
+import { DEFAULT_SETTINGS as DEFAULTS } from "@cmd/protocol";
 import type { RawEvent } from "./activity/normalize.ts";
 import { ActivityReducer, addFile, type Reduction } from "./activity/reduce.ts";
 import { drainSpool } from "./activity/spool.ts";
@@ -40,7 +43,7 @@ export interface TrackerOptions {
   /** How to resume past sessions per agent (default: the built-ins). */
   sources?: TranscriptSources;
   /** Where events and turns are kept (default: in memory). */
-  activity?: ActivityLog;
+  activity?: ActivityView;
   /** Snapshot the work tree with git at each turn's start and end (files changed). */
   git?: boolean;
 }
@@ -76,7 +79,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #sources: TranscriptSources;
   #watchers: StatusWatcher[] = [];
   #backstop: NodeJS.Timeout | undefined;
-  readonly activity: ActivityLog;
+  readonly activity: ActivityView;
   /** Per agent whose events arrive through the spool: state and turns. */
   #reducers = new Map<AgentId, ActivityReducer>();
   #git: boolean;
@@ -91,7 +94,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     this.#statusRoot = o.statusRoot ?? null;
     this.#startTimeoutMs = o.startTimeoutMs ?? 15_000;
     this.#sources = o.sources ?? registerBuiltinSources(new TranscriptSources());
-    this.activity = o.activity ?? new ActivityLog();
+    this.activity = o.activity ?? new ActivityView(new DataService({ file: null, recordedBy: "test", settings: () => DEFAULTS }), new ViewsStore(null));
     this.#git = o.git ?? false;
     if (this.#statusRoot) {
       const w = new StatusWatcher(this.#statusRoot);
@@ -320,9 +323,9 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (r.cause && change.state) fields.stateCause = r.cause;
     if (red.model && red.model !== agent.model) fields.model = red.model;
     // A turn that ended with this event, when another one began with it, is saved too.
-    if (r.closed && r.closed !== r.turn) this.activity.saveTurn(r.closed, ev.id);
+    if (r.closed && r.closed !== r.turn) this.activity.saveTurn(r.closed, ev.id, agent.cwd);
     if (r.turn) {
-      this.activity.saveTurn(r.turn, ev.id);
+      this.activity.saveTurn(r.turn, ev.id, agent.cwd);
       fields.turn = structuredClone(r.turn);
     }
     if (ev.home && ev.agent) this.emit("home", ev.agent, ev.home);
@@ -365,7 +368,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     } else return;
     if (!changed.size) return;
     for (const [p, c] of changed) addFile(t, p, c, via);
-    this.activity.saveTurn(t);
+    this.activity.saveTurn(t, undefined, agent.cwd);
     const a = this.#agents.get(agent.id);
     if (a && red.turn === t) this.#update(a, {}, { turn: structuredClone(t) });
   }

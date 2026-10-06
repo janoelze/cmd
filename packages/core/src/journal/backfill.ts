@@ -5,10 +5,8 @@
 // recorded days changes nothing but adds what was missed.
 
 import path from "node:path";
-import type { DatabaseSync } from "node:sqlite";
 import type { SessionRow } from "../search/index.ts";
 import type { AgentTurn } from "@cmd/protocol";
-import { decodeRows, decodeTurn } from "../stored.ts";
 import { repoOfSync } from "./git.ts";
 import type { NewJournalEvent } from "./store.ts";
 
@@ -76,13 +74,9 @@ export function turnEvent(t: AgentTurn, cwd: string | null, source: "live" | "ba
   };
 }
 
-/** Turns from the activity log (agent_turns), each with its agent's folder from the events (agent_events). */
-export function turnEvents(db: DatabaseSync, since: number): NewJournalEvent[] {
-  const cwdOf = new Map<string, string>();
-  for (const r of db.prepare(`SELECT agent_id, json_extract(doc, '$.cwd') AS cwd FROM agent_events WHERE agent_id IS NOT NULL AND json_extract(doc, '$.cwd') IS NOT NULL AND at >= ? GROUP BY agent_id`).all(since - 86400_000) as { agent_id: string; cwd: string }[])
-    cwdOf.set(r.agent_id, r.cwd);
-  const rows = db.prepare(`SELECT doc FROM agent_turns WHERE started_at >= ? ORDER BY started_at`).all(since) as { doc: string }[];
-  return decodeRows("turn", rows.map((r) => r.doc), decodeTurn).map((t) => turnEvent(t, cwdOf.get(t.agentId) ?? null, "backfill"));
+/** Turns from the turns view (data/views/activity.ts), each with where its agent ran. */
+export function turnEvents(turns: { turn: AgentTurn; cwd: string | null }[]): NewJournalEvent[] {
+  return turns.map(({ turn, cwd }) => turnEvent(turn, cwd, "backfill"));
 }
 
 export const isScratch = (cwd: string | null) => !!cwd && SCRATCH.test(cwd);

@@ -14,9 +14,8 @@
 // written at all (events are still recorded, so they can be once there is).
 
 import os from "node:os";
-import type { DatabaseSync } from "node:sqlite";
 import { logger } from "@cmd/protocol/node";
-import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type JournalDay, type JournalFormat, type JournalEvent, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
+import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type AgentTurn, type JournalDay, type JournalFormat, type JournalEvent, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
 import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import type { CallOptions } from "../ai/service.ts";
 import type { SessionRow } from "../search/index.ts";
@@ -56,8 +55,8 @@ export interface JournalAi {
 
 export interface JournalServiceOptions {
   store: JournalStore;
-  /** The core's database (activity log tables); null: no turns. */
-  activityDb: DatabaseSync | null;
+  /** Turns started since a time, with where each agent ran (the turns view); null: no turns. */
+  turns: ((since: number) => { turn: AgentTurn; cwd: string | null }[]) | null;
   /** Agent sessions from the transcript index; null while there is none (search off or not open yet). */
   sessions: (since: number) => SessionRow[] | null;
   spaces: () => Space[];
@@ -129,8 +128,8 @@ export class JournalService {
     const t0 = Date.now();
     const pulled: NewJournalEvent[] = [];
     try {
-      if (this.#o.activityDb) {
-        pulled.push(...turnEvents(this.#o.activityDb, since(this.#read.turns)).map((e) => ({ ...e, spaceId: e.data.kind === "agent.turn" && e.data.agentId ? this.#o.agentSpace(e.data.agentId) : null })));
+      if (this.#o.turns) {
+        pulled.push(...turnEvents(this.#o.turns(since(this.#read.turns))).map((e) => ({ ...e, spaceId: e.data.kind === "agent.turn" && e.data.agentId ? this.#o.agentSpace(e.data.agentId) : null })));
         this.#read.turns = now;
       }
       const sessions = this.#o.sessions(since(this.#read.sessions));
