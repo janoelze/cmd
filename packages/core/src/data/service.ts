@@ -116,6 +116,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
    * says so; the entities it names are noted.
    */
   record(e: NewDataEvent): DataEvent | null {
+    if (this.#disposed) return null; // closed while something still reports (shutting down)
     const c = classOf(e.type);
     if (!this.enabled(c) || this.#refused(e)) return null;
     let flags = 0;
@@ -154,6 +155,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
    * `redacted`: the caller ran redactEvent already (the transcript reader does, off the core's thread).
    */
   recordBatch(events: Iterable<NewDataEvent>, o: { redacted?: boolean } = {}): DataEvent[] {
+    if (this.#disposed) return [];
     const out: DataEvent[] = [];
     this.store.transaction(() => {
       for (const raw of events) {

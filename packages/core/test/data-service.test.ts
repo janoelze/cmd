@@ -6,6 +6,13 @@ import { DataService } from "../src/data/service.ts";
 const service = (over: Partial<Settings> = {}, now = () => 1_800_000_000_000) => new DataService({ file: null, recordedBy: "test", settings: () => ({ ...DEFAULT_SETTINGS, ...over }), now });
 
 describe("DataService", () => {
+  it("drops what's recorded after it's closed (terminals still print while the core shuts down)", () => {
+    const d = new DataService({ file: null, recordedBy: "test", settings: () => DEFAULT_SETTINGS });
+    d.dispose();
+    expect(d.record({ id: "late", at: 1, type: "note", source: "cmd", text: "late", data: { by: "user", agentSession: null } })).toBeNull();
+    expect(d.recordAll([{ id: "late2", at: 1, type: "note", source: "cmd", text: "late", data: { by: "user", agentSession: null } }])).toBe(0);
+  });
+
   it("records with redaction, marks what it changed, notes the entities", () => {
     const d = service();
     const e = d.record({ id: "c1", at: 1, type: "command", source: "osc", paneId: "p1", spaceId: "s1", text: "export TOKEN=abcdefghijklmnop", data: { command: "export TOKEN=abcdefghijklmnop", exitCode: 0, cwd: "/w", output: null } })!;

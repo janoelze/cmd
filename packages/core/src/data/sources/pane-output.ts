@@ -47,16 +47,22 @@ export class PaneOutputRecorder {
     this.#panes = o.panes;
     this.#paneOf = o.paneOf;
     this.#settleMs = o.settleMs ?? 1500;
-    o.panes.on("output", (id) => this.#output(id));
-    o.panes.on("removed", (id) => this.#close(id));
+    o.panes.on("output", this.#onOutput);
+    o.panes.on("removed", this.#onRemoved);
     o.activity.onTurn((t) => this.#turn(t));
     this.#timer = setInterval(() => this.#saveOpen(), SAVE_EVERY_MS);
     this.#timer.unref?.();
   }
 
+  #onOutput = (id: PaneId) => this.#output(id);
+  #onRemoved = (id: PaneId) => this.#close(id);
+
+  /** Saves the open stretches and stops listening: terminals keep printing while the core shuts down. */
   dispose(): void {
     this.#disposed = true;
     clearInterval(this.#timer);
+    this.#panes.off("output", this.#onOutput);
+    this.#panes.off("removed", this.#onRemoved);
     for (const id of [...this.#stretch.keys()]) this.#close(id);
   }
 
