@@ -29,8 +29,8 @@ const log = logger("data");
 const DAY_MS = 86400_000;
 /** The first retention run waits this long after the core starts; then batches of PRUNE_BATCH events with pauses between. */
 const PRUNE_FIRST_MS = 30_000;
-const PRUNE_BATCH = 5000;
-const PRUNE_PAUSE_MS = 250;
+const PRUNE_BATCH = 1000;
+const PRUNE_PAUSE_MS = 100;
 /** Retention runs this often while the core is up. */
 const PRUNE_EVERY_MS = 6 * 3600_000;
 
