@@ -7,7 +7,7 @@ import { JournalStore } from "../../packages/core/src/journal/store.ts";
 import { DataService } from "../../packages/core/src/data/service.ts";
 import { ActivityView } from "../../packages/core/src/data/views/activity.ts";
 import { ViewsStore } from "../../packages/core/src/data/views/views.ts";
-import { DEFAULT_SETTINGS } from "@cmd/protocol";
+import { DEFAULT_SETTINGS } from "../../packages/protocol/src/index.ts";
 import path from "node:path";
 import { sessionEvents, turnEvents } from "../../packages/core/src/journal/backfill.ts";
 import { SessionsView } from "../../packages/core/src/data/views/sessions.ts";
