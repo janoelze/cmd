@@ -132,6 +132,8 @@ export class Core {
   readonly store: Store;
   readonly data: DataService;
   readonly views: ViewsStore;
+  /** Per Space, the pane or window selected there and the focus event that says so (its span ends when the selection moves). */
+  #focus = new Map<string, { id: string; eventId: string; at: number }>();
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
   readonly processes: ProcessSampler | null;
@@ -284,7 +286,18 @@ export class Core {
     });
     this.secrets = new SecretsService(opts.secretsPath ?? null);
     this.secrets.on("updated", (status) => this.#broadcast({ type: "secrets.updated", status }));
-    this.ai = new AiService({ settings, secrets: this.secrets, stateDir: opts.stateDir ?? null, listModels: opts.aiListModels });
+    this.ai = new AiService({
+      settings,
+      secrets: this.secrets,
+      stateDir: opts.stateDir ?? null,
+      listModels: opts.aiListModels,
+      // Every model call is a fact: what for, which model, how much; what was sent and what came back as the content.
+      onCall: (c) => {
+        const at = Date.now() - c.ms;
+        const content = c.input !== undefined || c.output !== undefined ? `${c.input ?? ""}\n\n=== output ===\n\n${c.output ?? ""}` : null;
+        this.data.record({ id: `ai:${at}:${c.purpose}:${Math.random().toString(36).slice(2, 8)}`, at, until: at + c.ms, type: "ai.call", source: "cmd", text: `${c.purpose} · ${c.model}`, data: { purpose: c.purpose, provider: c.provider, model: c.model, tier: c.tier, ms: c.ms, tokens: { in: c.usage?.input ?? 0, out: c.usage?.output ?? 0 }, ok: c.ok, ...(c.error ? { error: c.error } : {}) }, content });
+      },
+    });
     this.ai.on("updated", (status) => this.#broadcast({ type: "ai.updated", status }));
     this.settings.bind(["ai.provider", "ai.anthropic.model", "ai.anthropic.fastModel", "ai.openai.model", "ai.openai.fastModel"], () => this.ai.settingsChanged());
     if (opts.stateDir) this.ai.start();
@@ -438,7 +451,11 @@ export class Core {
     "agent.send": async (p) => (await this.agents.send(p.agentId, p.text, p.submit), null),
     "agent.wait": (p) => this.agents.wait(p.agentIds, p.until, p.mode, p.timeoutMs),
     "agent.kill": (p) => ({ killed: this.agents.kill(p.agentId, p.tree) }),
-    "agent.markSeen": (p) => (this.agents.markSeen(p.agentId), null),
+    "agent.markSeen": (p) => {
+      this.agents.markSeen(p.agentId);
+      this.data.record({ id: `look:${p.agentId}:${Date.now()}`, at: Date.now(), type: "user.look", source: "user", agentId: p.agentId, paneId: this.agents.get(p.agentId)?.paneId ?? null, spaceId: this.agents.get(p.agentId)?.spaceId ?? null, data: { agentId: p.agentId } });
+      return null;
+    },
     "agent.events": (p) => this.agents.activity.events(p),
     "agent.turns": (p) => this.agents.activity.turns(p.agentId, p.limit),
     "agent.summarize": async (p) => {
@@ -545,7 +562,11 @@ export class Core {
       return r;
     },
     "space.match": (p) => this.spaces.match(p.path, p.cwd),
-    "space.update": (p) => this.spaces.update(p.id, p),
+    "space.update": (p) => {
+      const sel = p.view?.["selection.pane"];
+      if (typeof sel === "string") this.#focused(p.id, sel);
+      return this.spaces.update(p.id, p);
+    },
     "space.close": (p) => (this.#closeSpace(p.id), null),
     "space.forget": (p) => (this.spaces.forget(p.id), null),
     "magic.run": (p) => (this.magic.run(p.id, p.prompt), null),
@@ -761,6 +782,18 @@ export class Core {
   }
 
   /** Kill the Space's terminals (their agents go with them) and remove its windows; keep it as a recent Space. */
+  /** The selection in a Space moved: the previous focus span ends, a new one starts (user.focus). */
+  #focused(spaceId: string, id: string): void {
+    const prev = this.#focus.get(spaceId);
+    const now = Date.now();
+    if (prev?.id === id) return;
+    if (prev) this.data.record({ id: prev.eventId, at: prev.at, until: now, type: "user.focus", source: "user", spaceId, ...(this.panes.get(prev.id) ? { paneId: prev.id, data: { paneId: prev.id } } : { windowId: prev.id, data: { windowId: prev.id } }) });
+    const eventId = `focus:${spaceId}:${id}:${now}`;
+    const pane = this.panes.get(id);
+    this.data.record({ id: eventId, at: now, type: "user.focus", source: "user", spaceId, ...(pane ? { paneId: id, agentId: pane.agentId, data: { paneId: id } } : { windowId: id, data: { windowId: id } }) });
+    this.#focus.set(spaceId, { id, eventId, at: now });
+  }
+
   #closeSpace(id: SpaceId): void {
     const space = this.spaces.mustOpen(id);
     if (space.home) throw new Error("Home can't be closed");

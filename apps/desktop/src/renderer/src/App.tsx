@@ -480,9 +480,13 @@ export function App() {
   }
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
-  const run = useCallback((id: string) => handlersRef.current[id as CommandId]?.(), []);
+  // Every app command that runs is a fact in the log (user.command): which, and from where.
+  const run = useCallback((id: string, via: "palette" | "menu" | "shortcut" | "cli" | "other" = "other") => {
+    handlersRef.current[id as CommandId]?.();
+    void cmd.call("data.record", { event: { id: `command:${Date.now()}:${id}`, at: Date.now(), type: "user.command", source: "user", data: { command: id, via } } }).catch(() => {});
+  }, []);
 
-  useEffect(() => cmd.onCommand(run), [run]);
+  useEffect(() => cmd.onCommand((id) => run(id, "menu")), [run]);
   useEffect(() => cmd.onOpenUrl(openLink), []);
   // Once, in the first window after a launch: onboarding steps this Mac hasn't
   // seen, then (after an update) what changed since the version it last ran as.
@@ -690,7 +694,7 @@ export function App() {
       group: "Commands" as const,
       label: c.label.replace(/…$/, ""),
       hint: prettyAccelerator(keys.bindings[c.id]?.[0]),
-      run: () => run(c.id),
+      run: () => run(c.id, "palette"),
     })),
     ...withPane.map((r) => {
       const f = fieldsOf(r, undefined, Date.now());

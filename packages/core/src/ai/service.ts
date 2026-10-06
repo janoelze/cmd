@@ -54,6 +54,22 @@ export interface AiServiceOptions {
   stateDir: string | null;
   /** Tests: the model list (default: the provider's /v1/models). */
   listModels?: typeof listModels;
+  /** Every call, when it ended: for the event log (ai.call) and cost totals. */
+  onCall?: (call: AiCallRecord) => void;
+}
+
+/** What one model call was: for the log. Input and output are the texts sent and received, when the call had them. */
+export interface AiCallRecord {
+  purpose: string;
+  provider: AiProvider;
+  model: string;
+  tier: AiTier;
+  ms: number;
+  usage: Usage | null;
+  ok: boolean;
+  error?: string;
+  input?: string;
+  output?: string;
 }
 
 export interface CallOptions {
@@ -317,15 +333,17 @@ export class AiService extends EventEmitter<{ updated: [AiStatus] }> {
   }
 
   /** Run a call: queued if in the background, logged, and a refused key marks the provider. */
-  async #call<T>(o: CallOptions, b: AiBackendOptions, fn: () => Promise<{ usage: Usage; model: string } & T>): Promise<T & { usage: Usage; model: string }> {
+  async #call<T>(o: CallOptions, b: AiBackendOptions, fn: () => Promise<{ usage: Usage; model: string } & T>, io?: { input: string; output: (r: T) => string }): Promise<T & { usage: Usage; model: string }> {
     const t0 = Date.now();
     try {
       const r = await (o.background ? this.#background.run(fn) : fn());
       log.info(o.purpose, { provider: b.provider, model: r.model, ms: Date.now() - t0, tokens: { in: r.usage.input, out: r.usage.output } });
+      this.#o.onCall?.({ purpose: o.purpose, provider: b.provider, model: r.model, tier: o.tier, ms: Date.now() - t0, usage: r.usage, ok: true, input: io?.input, output: io ? safeOutput(() => io.output(r)) : undefined });
       return r;
     } catch (e) {
       if (isAuthError(e)) this.#reject(b.provider);
       log.warn(`${o.purpose} failed`, { provider: b.provider, model: b.model, error: (e as Error).message });
+      this.#o.onCall?.({ purpose: o.purpose, provider: b.provider, model: b.model, tier: o.tier, ms: Date.now() - t0, usage: null, ok: false, error: (e as Error).message, input: io?.input });
       throw e;
     }
   }
@@ -340,12 +358,21 @@ export class AiService extends EventEmitter<{ updated: [AiStatus] }> {
   /** One answer as text. */
   complete(o: CallOptions & CompleteRequest): Promise<CompleteResult<string>> {
     const b = this.#choose(o);
-    return this.#call(o, b, () => completeText(b, o));
+    return this.#call(o, b, () => completeText(b, o), { input: inputText(o), output: (r) => r.value });
   }
 
   /** One answer as an object matching `schema` (JSON schema); streamed with `onPartial`. */
   object<T>(o: CallOptions & ObjectRequest<T>): Promise<CompleteResult<T>> {
     const b = this.#choose(o);
-    return this.#call(o, b, () => completeObject<T>(b, o));
+    return this.#call(o, b, () => completeObject<T>(b, o), { input: inputText(o), output: (r) => JSON.stringify(r.value) });
   }
 }
+
+const inputText = (o: CompleteRequest) => (o.system ? `${o.system}\n\n---\n\n` : "") + o.prompt;
+const safeOutput = (fn: () => string) => {
+  try {
+    return fn();
+  } catch {
+    return undefined;
+  }
+};
