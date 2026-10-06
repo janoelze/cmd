@@ -144,7 +144,7 @@ await win.screenshot({ path: path.join(shots, "1-empty.png") });
   const btn = await win.locator(".statusbar :is(.ui-icon-button, .ui-seg button)").first().boundingBox();
   check(right.x === 0 && Math.abs(right.width - vw) < 0.5 && core.x < 40 && right.height >= btn.height,
     `the footer spans the window with the core's health on the left (${right.width} / ${vw}, core at ${core.x})`);
-  check(right.height === 30, `the footer keeps its 30 px height (${right.height})`);
+  check(right.height === 34, `the footer keeps its 34 px height (${right.height})`);
   // Every Space starts with the Navigator docked left, under the top bar.
   await win.waitForSelector(".dock-left .tile.kind-navigator .navigator");
   const nav = await win.locator(".dock-left").boundingBox();

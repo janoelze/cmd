@@ -4,7 +4,7 @@
 // 28 pt (title bar), 38 pt (compact toolbar) and 52 pt (toolbar).
 
 /** The app window's top bar (docs/21-sidebars.md). */
-export const TOPBAR_HEIGHT = 32;
+export const TOPBAR_HEIGHT = 38;
 /** The Settings window's sidebar title row (its --titlebar-h). */
 export const SETTINGS_TITLEBAR_HEIGHT = 38;
 

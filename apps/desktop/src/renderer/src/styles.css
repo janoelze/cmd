@@ -14,8 +14,8 @@
   --sidebar-w: 280px; /* the Settings window's sidebar */
   --sidebar-pad: 14px; /* rows' inset from the sidebar edges (ui.sidebarPadding, set on .app / .sw) */
   --titlebar-h: 38px; /* traffic-light area at the top of the Settings window's sidebar */
-  --topbar-h: 32px; /* the app window's top bar; on macOS set from shared/chrome.ts TOPBAR_HEIGHT */
-  --statusbar-h: 30px; /* the footer */
+  --topbar-h: 38px; /* the app window's top bar; on macOS set from shared/chrome.ts TOPBAR_HEIGHT */
+  --statusbar-h: 34px; /* the footer */
   /* Window spacing in grid and strip (set on .app from ui.gutter, ui.paddingX/Y). */
   --gutter: 8px; /* between windows */
   --pad-x: 8px; /* to the left and right edges */
@@ -23,7 +23,7 @@
   --window-dim: 1; /* theme factor on ui.unfocusedDim (darkening of unfocused windows) */
 }
 /* Outside macOS the window has its own frame: no traffic-light area to keep free. */
-.platform-other { --titlebar-h: 28px; --topbar-h: 30px; }
+.platform-other { --titlebar-h: 28px; --topbar-h: 36px; }
 
 html, body, #root { height: 100%; margin: 0; }
 
