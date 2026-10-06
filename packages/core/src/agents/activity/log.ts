@@ -12,6 +12,7 @@ import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { ACTIVITY_SCHEMA, type ActivityEvent, type ActivityKind, type AgentCoverage, type AgentId, type AgentKind, type AgentTurn, type PaneId } from "@cmd/protocol";
 import { capPayload, normalize, type RawEvent } from "./normalize.ts";
 import { decodeDoc, decodeRows, decodeTurn } from "../../stored.ts";
+import { redactDeep } from "../../redact.ts";
 
 /** Events and turns older than this are dropped. */
 const KEEP_MS = 14 * 86400_000;
@@ -107,13 +108,14 @@ export class ActivityLog {
 
   /** Stores an event an agent's hook reported; returns it normalised. `agentVersion`: of the agent it's from, when known. */
   insert(r: RawEvent, paneId: PaneId | null, agentId: AgentId | null, agentVersion: string | null = null): ActivityEvent {
-    const doc = JSON.stringify(capPayload(r.payload));
+    // Raw as the agent sent it, minus credentials: a pasted key or a `curl -H "Authorization: …"` is never kept.
+    const doc = JSON.stringify(redactDeep(capPayload(r.payload)));
     const env = r.env && Object.keys(r.env).length ? JSON.stringify(r.env) : null;
     const sessionId = typeof r.payload.session_id === "string" ? r.payload.session_id : null;
     const { lastInsertRowid } = this.#stmt(
       `INSERT INTO agent_events (at, pane_id, agent_id, agent, source, name, doc, env, schema, cmd, hook, agent_version, session_id) VALUES (?, ?, ?, ?, 'hook', ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(r.at, paneId, agentId, r.agent, r.name, doc, env, ACTIVITY_SCHEMA, this.recordedBy, r.hook ?? null, agentVersion, sessionId);
-    return { ...normalize(r, Number(lastInsertRowid)), paneId, agentId, ...(agentVersion ? { agentVersion } : {}), recorded: { schema: ACTIVITY_SCHEMA, cmd: this.recordedBy, hook: r.hook ?? null } };
+    return { ...normalize({ ...r, payload: JSON.parse(doc) as Record<string, unknown> }, Number(lastInsertRowid)), paneId, agentId, ...(agentVersion ? { agentVersion } : {}), recorded: { schema: ACTIVITY_SCHEMA, cmd: this.recordedBy, hook: r.hook ?? null } };
   }
 
   /** Stores something the core inferred or noticed (interrupt, anomaly). */

@@ -323,27 +323,7 @@ export function credentialsForPrograms(programs: string[]): Credentials {
   return out;
 }
 
-/** Token-shaped strings, replaced before any command output reaches the model. */
-const SECRET_PATTERNS = [
-  /\b(gh[pousr]_[A-Za-z0-9]{30,})\b/g,
-  /\b(github_pat_[A-Za-z0-9_]{30,})\b/g,
-  /\b(glpat-[A-Za-z0-9_-]{20,})\b/g,
-  /\b(gl(?:cbt|dt|ft|imt|oas|ptt|rt|soat)-[A-Za-z0-9_-]{20,})\b/g,
-  /\b(xox[abposr]-[A-Za-z0-9-]{10,})\b/g,
-  /\b(sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,})\b/g,
-  /\b((?:AKIA|ASIA)[0-9A-Z]{16})\b/g,
-  /\b(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/g,
-  /(-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----)/g,
-  /((?:token|password|passwd|secret|api[_-]?key)["']?\s*[:=]\s*["']?)([^\s"',}]{8,})/gi,
-];
-
-export function redact(text: string): string {
-  let out = text;
-  for (const re of SECRET_PATTERNS) {
-    out = out.replace(re, (m, a: string, b?: string) => (b !== undefined && typeof b === "string" && /[:=]/.test(a) ? a + "[redacted]" : "[redacted]"));
-  }
-  return out;
-}
+export { redact } from "../redact.ts";
 
 export interface PolicyOptions {
   deny?: string[];

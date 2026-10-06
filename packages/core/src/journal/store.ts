@@ -12,6 +12,7 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { JOURNAL_SCHEMA, type JournalData, type JournalDay, type JournalEvent, type JournalEventKind, type SpaceId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
+import { redact, redactDeep } from "../redact.ts";
 
 const log = logger("journal");
 
@@ -166,6 +167,8 @@ export class JournalStore {
    * data are the newest, and a live recording wins over a backfill. Returns its id.
    */
   record(e: NewJournalEvent): number {
+    // Kept for months and read by a model: no credentials, whatever a command or prompt carried.
+    e = { ...e, text: redact(e.text), data: redactDeep(e.data) };
     const r = this.#stmt(
       `INSERT INTO journal_events (at, until, kind, key, space_id, repo, cwd, thread, text, data, source, schema, cmd)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

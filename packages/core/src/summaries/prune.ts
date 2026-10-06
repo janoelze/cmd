@@ -192,26 +192,4 @@ export function prune(entries: ConversationEntry[], budget: number): Pruned {
 
 // ── secrets ──────────────────────────────────────────────
 
-/** Credentials that turn up in transcripts (pasted env, config files, command lines). */
-const SECRET_PATTERNS: RegExp[] = [
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
-  /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}/g, // Anthropic, OpenAI
-  /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b/g, // GitHub
-  /\bgithub_pat_[A-Za-z0-9_]{30,}\b/g,
-  /\bglpat-[A-Za-z0-9_-]{20,}\b/g, // GitLab
-  /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g, // Slack
-  /\bAKIA[0-9A-Z]{16}\b/g, // AWS access key id
-  /\bAIza[0-9A-Za-z_-]{35}\b/g, // Google API key
-  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, // JWT
-  /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:[^\s@/]{3,}@/gi, // user:password@ in URLs
-];
-
-/** KEY=value and "key": "value" where the name says it's a secret. */
-const NAMED_SECRET = /\b([A-Za-z0-9_.-]*(?:api[_-]?key|secret|token|passw(?:or)?d|credential|private[_-]?key|auth)[A-Za-z0-9_.-]*)(["']?\s*[:=]\s*["']?)([^\s"',;]{8,})/gi;
-
-/** `text` with likely credentials replaced by [redacted]. */
-export function redact(text: string): string {
-  let r = text;
-  for (const p of SECRET_PATTERNS) r = r.replace(p, (m) => (m.includes("://") ? m.replace(/:[^:@/]+@$/, ":[redacted]@") : "[redacted]"));
-  return r.replace(NAMED_SECRET, (m, name: string, sep: string, value: string) => (/^\[redacted\]$|^\$|^<|^process\.env/.test(value) ? m : `${name}${sep}[redacted]`));
-}
+export { redact } from "../redact.ts";

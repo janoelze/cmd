@@ -20,7 +20,7 @@ Each is derived from the one before and can be derived again when the rules or t
 
 `JournalEvent` (`protocol/src/journal.ts`): `at`, `until` (spans: sessions, turns, commands), `kind`, a `key`, `spaceId`, `repo` (the project: a repository's main worktree, so worktrees of one repository are one project), `cwd`, `thread` (the identity it was recorded under, the threads' seed), `text` (one line) and typed `data` per kind.
 
-The key makes recording idempotent: seeing an event again (live, then a backfill; a session that grows) updates it. The span grows, the newest text wins, live wins over backfill.
+The key makes recording idempotent: seeing an event again (live, then a backfill; a session that grows) updates it. The span grows, the newest text wins, live wins over backfill. Text and data are redacted as they're recorded (`core/src/redact.ts`): a token typed into a terminal is never kept for 180 days or sent in a digest.
 
 Kinds: `agent.session`, `agent.turn`, `command`, `git.commit`, `git.merge`, `git.branch`, `git.checkout`, `git.tag`, `git.rebase`, `git.reset`, `browser.visit`, `file.open`, `note`, `space.open/close`.
 
