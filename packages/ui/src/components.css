@@ -631,16 +631,18 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
   display: flex;
   align-items: center;
   gap: 20px;
-  min-height: 44px;
-  padding: 10px 14px;
+  /* The same padding on every side; the min height is a control's (24) inside it. */
+  --row-pad: 16px;
+  min-height: calc(24px + 2 * var(--row-pad));
+  padding: var(--row-pad);
   font-size: var(--text-base);
 }
 .ui-row + .ui-row::before {
   content: "";
   position: absolute;
   top: 0;
-  left: 14px;
-  right: 14px;
+  left: var(--row-pad);
+  right: var(--row-pad);
   height: 1px;
   background: var(--separator);
 }

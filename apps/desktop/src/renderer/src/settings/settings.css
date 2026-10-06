@@ -16,6 +16,10 @@ body.settings-window { background: var(--bg); }
 
 /* ── sidebar: the main window's ───────────────────────── */
 
+/* The same inset on every side: the search starts --sidebar-pad below the traffic
+   lights (centred in --titlebar-h, so 12px above its bottom edge). */
+.sw { --sidebar-pad: 16px; }
+.sw .sidebar > .sidebar-titlebar { height: calc(var(--titlebar-h) - 12px + var(--sidebar-pad)); }
 .sw-nav { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
 .sw-nav-item {
   font: 13px var(--font-ui);
@@ -46,7 +50,7 @@ body.settings-window { background: var(--bg); }
   align-items: center;
   gap: 8px;
   height: 28px;
-  margin: 6px var(--sidebar-pad) 10px;
+  margin: 6px var(--sidebar-pad) var(--sidebar-pad);
   padding: 0 8px;
   font-size: 12px;
   color: var(--text-dim);
