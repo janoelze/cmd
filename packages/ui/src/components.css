@@ -1008,13 +1008,16 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
   display: flex;
   align-items: center;
   gap: 2px;
+  box-sizing: border-box;
   height: var(--toolbar-h);
-  padding: 0 6px;
+  /* The line at the bottom is inside the height: items centre in the 30px above it. */
+  padding: 0 6px 1px;
   overflow: hidden;
   font: 12px var(--font-ui);
   color: var(--text);
   background: var(--toolbar-bg);
-  box-shadow: inset 0 -1px 0 var(--separator);
+  /* The line under it: the window's outline colour, as the title bar's is. */
+  box-shadow: inset 0 -1px 0 var(--window-edge);
 }
 .ui-tb > *, .ui-tb-group > * { flex: none; }
 .ui-tb-group { display: flex; align-items: center; gap: 0; }
@@ -1049,6 +1052,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-tb-button[data-tone="danger"] { color: var(--danger); }
 .ui-tb-button[data-tone="needs"] { color: var(--state-needs); }
 .ui-tb-label, .ui-tb-text { color: var(--text); }
+.ui-tb-label, .ui-tb-text, .ui-tb-badge, .ui-tb-text-item, .ui-tb-path-button, .ui-tb-field-end { position: relative; top: -1px; }
 .ui-tb-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ui-tb-badge { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
 .ui-tb-chevron { display: inline-grid; margin-left: -1px; color: var(--text-dim); }
@@ -1073,7 +1077,11 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
   transition: box-shadow var(--dur-fast);
 }
 .ui-tb-field:focus-within { box-shadow: var(--input-ring); }
-.ui-tb-field input { flex: 1; min-width: 0; height: 100%; padding: 0; font: inherit; color: var(--text); background: none; border: 0; outline: none; user-select: text; }
+/* A line box centres ascent to descent, which leaves the letters half a pixel low (measured); lifted by that. */
+/* Text in the bar sits 1px above centre: a line box centres ascent to descent, which
+   leaves the letters half a pixel low (measured), and half a pixel can't be crisp at 1x.
+   Fields, labels, paths and text all share this, so they share a baseline. */
+.ui-tb-field input { flex: 1; min-width: 0; height: 100%; padding: 0 0 2px; font: inherit; color: var(--text); background: none; border: 0; outline: none; user-select: text; }
 .ui-tb-field input::placeholder { color: var(--input-placeholder); }
 .ui-tb-field-end { flex: none; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
