@@ -41,6 +41,7 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 28 | [The data layer: design and plan](28-data-plan.md) | One event log with one envelope, blobs, entities and links; views as versioned materialisations rebuilt by replay; one query shape with subscriptions and policy; a context builder; retention as a table; two files; seven phases from a spike to memory |
 | 29 | [Memory and recall](29-memory.md) | Planned, not built: facts that expire instead of being deleted, with sources; editable blocks per project; `cmd recall`, an MCP tool and the briefing line; evals before shipping |
 | 30 | [What the data model makes possible](30-data-capabilities.md) | What cmd knows now (one log of agents, transcripts, commands with output, git, pages, your focus, model calls), what that won over the four old logs, features it makes possible from "a screen away" to memory, and examples to run today |
+| 31 | [Context-aware notifications](31-context-notifications.md) | Handoff, not built: what cmd notifies about today, principles, 20 new notifications as rules over the event log (a failing command passes now, an agent changed a file you have open, two agents on one file, a stopped agent can go on, …), a rule engine in the core, a dry run over real history before anything ships |
 
 ## Key findings
 1. **Nothing has to be invented for agent awareness.** Every tool in this space combines three things:

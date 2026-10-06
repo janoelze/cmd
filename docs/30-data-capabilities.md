@@ -70,7 +70,7 @@ Has: `user.focus` (spans), `pane.activity`, `projectId` everywhere. Needs: the r
 
 ### Small features on the new primitives
 
-**Notifications that know context.** "The test you ran ten minutes ago passes now." "The agent finished the branch you have open." "This build fails the same way it did at 11:02."
+**Notifications that know context.** "The test you ran ten minutes ago passes now." "The agent finished the branch you have open." "This build fails the same way it did at 11:02." Planned in [31](31-context-notifications.md).
 Has: commands with exit codes and output, turns, focus, live queries in the core. Needs: a few rules over those (no model needed for most).
 
 **Command history that remembers what happened.** `⌃R`-style search over every command you ran anywhere, with its exit code, folder and output, and "run it again here".
