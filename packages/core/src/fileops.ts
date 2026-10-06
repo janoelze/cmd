@@ -6,6 +6,7 @@
 // Moving to the Trash is the app's (Electron's shell.trashItem).
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { expandHome } from "./windows/builtin.ts";
 
@@ -55,6 +56,26 @@ export function createPath(dir: string, kind: "file" | "dir"): string {
   return target;
 }
 
+/** Folders in the home folder that macOS and apps expect where they are. */
+const HOME_FOLDERS = new Set(["Applications", "Desktop", "Documents", "Downloads", "Library", "Movies", "Music", "Pictures", "Public"]);
+
+/**
+ * Why a file or folder must stay where it is, or null: the disk's root and
+ * everything at its top (/Applications, /Users, /System…), disks under /Volumes,
+ * home folders, and in your own home its standard folders and its dotfiles
+ * (~/.ssh, ~/.config). Drag and drop is one stray release away from moving them.
+ */
+export function protectedReason(p: string, home = os.homedir()): string | null {
+  const parent = path.dirname(p);
+  const name = `“${path.basename(p) || p}”`;
+  if (p === "/" || parent === "/" || parent === "/private") return `macOS needs ${name} where it is.`;
+  if (parent === "/Volumes") return `${name} is a disk. Move what's on it instead.`;
+  if (p === home || parent === "/Users") return `${name} is a home folder. Move what's in it instead.`;
+  if (parent === home && (HOME_FOLDERS.has(path.basename(p)) || path.basename(p).startsWith(".")))
+    return `macOS and your apps expect ${name} where it is.`;
+  return null;
+}
+
 /**
  * Copy or move files and folders into `dir`; returns where each one ended up.
  * "auto" is Finder's plain drag: move on the same disk, copy from another.
@@ -68,8 +89,13 @@ export function transferPaths(paths: string[], dir: string, op: "copy" | "move" 
   if (!dest.isDirectory()) throw new Error(`not a folder: ${dir}`);
   const from = paths.map(abs);
   for (const f of from) {
-    fs.lstatSync(f); // throws ENOENT with the path
-    if (into === f || into.startsWith(f + path.sep)) throw new Error(`“${path.basename(f)}” can't go into itself`);
+    const stat = fs.lstatSync(f, { throwIfNoEntry: false });
+    if (!stat) throw new Error(`“${path.basename(f)}” isn't there anymore.`);
+    if (into === f || into.startsWith(f + path.sep)) throw new Error(`“${path.basename(f)}” can't go into itself.`);
+    // Protected items stay put; a copy is harmless, except of a whole disk or home.
+    const why = protectedReason(f);
+    const moves = op === "move" || (op === "auto" && stat.dev === dest.dev && path.dirname(f) !== into);
+    if (why && (moves || f === "/" || f === os.homedir() || path.dirname(f) === "/Volumes" || path.dirname(f) === "/Users")) throw new Error(why);
   }
   return from.map((f) => {
     const how = op !== "auto" ? op : fs.lstatSync(f).dev === dest.dev ? "move" : "copy";

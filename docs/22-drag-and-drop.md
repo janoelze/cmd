@@ -40,6 +40,17 @@ Marks are cleared when `dragover` stops coming for 300 ms. Chromium sends one ab
 
 **Dropped paths are escaped like Terminal.app's** (`paste.ts → shellWord`). This changed from single quotes: Terminal.app, iTerm and Ghostty all backslash-escape, so that's what agents expect when they look for dropped image paths. Names with a control character (a newline) are still single-quoted, since a backslash before a newline joins lines.
 
+## Guards
+
+A drop is one stray release away from moving something big, and cmd has no ⌘Z for files the way Finder does. So:
+
+- **Protected items stay put** (core, `protectedReason`): `/` and everything at its top (`/Applications`, `/System`, `/Users`, `/tmp`…), disks under `/Volumes`, home folders, and in your home its standard folders (Desktop, Documents, Downloads, Library…) and dotfiles (`~/.ssh`, `~/.config`). Moving one is refused. Copying one is allowed, except a whole disk or home folder. Because the check lives in `fs.transfer`, it covers every caller, remote clients included.
+- **A native alert says why** whenever the core refuses a drop: a protected item, a folder into itself, a file that's gone. Bold line: "Couldn't move “Documents”"; below it, the reason: "macOS and your apps expect “Documents” where it is."
+- **A native confirmation comes before moving what open windows use** (`windowsUsing`): a terminal working in it, a file browser rooted in it, a file open in a window. That always includes a title-icon drag. Windows keep the path they had, so they'd lose track of it. "Move “src” into “box”?" · Move / Cancel.
+- **Every move can be undone** from its toast ("Moved “a.txt” to “box”" · Undo), which moves the items back to the folders they came from. Copies get no toast: the copy is selected, and the original is untouched. Items that `auto` copied from another disk are left out (`fs.resolve` shows the original is still there).
+
+A text window whose file is moved or deleted keeps its text and no longer throws when the file disappears.
+
 ## Files
 
 | File | Role |
@@ -52,12 +63,13 @@ Marks are cleared when `dragover` stops coming for 300 ms. Chromium sends one ab
 | `apps/desktop/src/renderer/src/components/FilesView.tsx` | rows as drag sources; the folder drop target |
 | `apps/desktop/src/renderer/src/components/TileTitle.tsx` | the Mark as a drag source (`fileOf`, `urlOf`) |
 | `apps/desktop/src/renderer/src/terminals.ts` | the terminal drop target |
-| `packages/core/src/fileops.ts` | `transferPaths` (tested in `packages/core/test/fileops.test.ts`) |
+| `packages/core/src/fileops.ts` | `transferPaths`, `protectedReason` (tested in `packages/core/test/fileops.test.ts`) |
+| `apps/desktop/src/renderer/src/model.ts` | `windowsUsing` (tested in `apps/desktop/test/windows-using.test.ts`) |
 | `e2e/drops.mjs` | `pnpm e2e:drops`: the whole flow in the built app |
 
 ## Testing
 
-`pnpm e2e:drops` builds the app and drives it with CDP's `Input.dispatchDragEvent`. Those are trusted drags with real file paths (`getPathForFile` resolves them), the same as a drag from Finder, modifiers included. The test covers terminals (an escaped path, a link, ⌘-drop types `cd`), the file browser (onto the root, onto a folder's row, ⌥ copies, the marks while hovering and after a cancel), a text window (opens the file), the status bar (refused), and drags out. A native drag session can't be scripted, so for drags out the test stubs `startDrag` in the main process and checks which files reached it.
+`pnpm e2e:drops` builds the app and drives it with CDP's `Input.dispatchDragEvent`. Those are trusted drags with real file paths (`getPathForFile` resolves them), the same as a drag from Finder, modifiers included. The test covers terminals (an escaped path, a link, ⌘-drop types `cd`), the file browser (onto the root, onto a folder's row, ⌥ copies, the marks while hovering and after a cancel), a text window (opens the file), the status bar (refused), the guards (an alert for a refused move, the confirmation for a file open in a window with Cancel and Move, Undo from the toast; native dialogs are stubbed in the main process to record them and choose the answer), and drags out. Protected items are covered by the core's unit tests only: an e2e test that drags `~/Documents` would move it if the guard ever broke. A native drag session can't be scripted, so for drags out the test stubs `startDrag` in the main process and checks which files reached it.
 
 Spike findings on the way:
 - The 0.14 Finder → terminal drop worked under trusted drags; it only didn't cover anything else.
@@ -76,7 +88,7 @@ To check by hand (drags that leave the app or start in it can't be automated): d
 ## Not yet
 
 - Several rows at once: the file browser selects one row, so it drags one file.
-- Undo (⌘Z) for moves.
+- ⌘Z for moves (the toast's Undo is the only way back).
 - Dragging a path out of terminal output (⌘-drag a path link).
 - Dropping on a Space in the switcher, or a sidebar row in the Navigator, to target that window or Space.
 - Remote and web clients: `fs.transfer` is allowed by the remote policy, but no remote client drags yet.

@@ -200,6 +200,8 @@ const api = {
   chooseSavePath: (defaultPath: string): Promise<string | null> => ipcRenderer.invoke("choose-save-path", defaultPath),
   /** Native sheet; resolves true when confirmed. */
   confirm: (o: { message: string; detail?: string; confirm: string }): Promise<boolean> => ipcRenderer.invoke("confirm", o),
+  /** Native sheet with only OK: something couldn't be done, and why. */
+  alert: (o: { message: string; detail?: string }): Promise<void> => ipcRenderer.invoke("alert", o),
   /** The URL of a Magic widget frame whose CSP allows media from these origins (cmd-widget://, main process). */
   widgetFrame: (media: string[]): Promise<string> => ipcRenderer.invoke("widget-frame", media),
   /** Put text on the clipboard, also while the app isn't focused (navigator.clipboard needs focus): OSC 52 from a background terminal. */

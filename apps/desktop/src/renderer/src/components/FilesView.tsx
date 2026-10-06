@@ -25,14 +25,14 @@
 // on the same disk, copied from another or with ⌥, like Finder. Hovering a closed
 // folder for a moment opens it.
 
-import { Callout, EmptyState, IconButton, PanelHeader } from "@cmd/ui";
+import { Callout, EmptyState, IconButton, PanelHeader, toast } from "@cmd/ui";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AppWindow, FileEntry, GitFile, GitFileState, GitStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { copy, newTerminalIn, openPath, selectPane } from "../actions.ts";
 import { showContextMenu, type MenuEntry } from "../context.ts";
-import { formatBytes, shortPath } from "../model.ts";
-import { onFsChanged, usePersisted, useStoreValue } from "../store.ts";
+import { formatBytes, shortPath, windowsUsing } from "../model.ts";
+import { getState, onFsChanged, usePersisted, useStoreValue } from "../store.ts";
 import { registerDropTarget } from "../drops.ts";
 import { dragFiles } from "../drags.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
@@ -88,6 +88,9 @@ interface Bookmark {
 
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 const parentOf = (p: string) => p.slice(0, p.lastIndexOf("/")) || "/";
+const baseName = (p: string) => p.slice(p.lastIndexOf("/") + 1) || p;
+/** An error from the core as people should read it (without Electron's IPC prefix). */
+const errorText = (err: unknown) => (err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
 const relTo = (base: string, p: string) => (p === base ? "." : p.startsWith(base + "/") ? p.slice(base.length + 1) : p);
 
 export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }) {
@@ -345,7 +348,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       refreshGit();
       return made;
     } catch (err) {
-      setOpError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+      setOpError(errorText(err));
       return null;
     }
   };
@@ -392,11 +395,57 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   // ── drag and drop ──
   /** The folder a drop would go into, marked while a drag is over the list. */
   const [dropDir, setDropDir] = useState<string | null>(null);
+  /**
+   * Dropped files into a folder. Moving something an open window uses (a title
+   * icon's file, a terminal's folder) asks first; what the core refuses (system
+   * and home folders, a folder into itself) says why in an alert; a move can be undone.
+   */
   const transfer = async (paths: string[], dir: string, copy: boolean) => {
-    const made = await op(() => cmd.call("fs.transfer", { paths, dir, op: copy ? "copy" : "auto" }).then((r) => r[0] ?? null), dir);
-    if (!made) return;
+    const what = paths.length === 1 ? `“${baseName(paths[0]!)}”` : `${paths.length} items`;
+    const into = `“${baseName(dir)}”`;
+    if (!copy) {
+      const { panes, windows } = getState();
+      const users = windowsUsing(paths, panes.values(), windows.values());
+      if (users.length) {
+        const named = users.length > 3 ? `${users.slice(0, 3).map((n) => `“${n}”`).join(", ")} and ${users.length - 3} more` : users.map((n) => `“${n}”`).join(", ");
+        const ok = await cmd.confirm({
+          message: `Move ${what} into ${into}?`,
+          detail: `Open windows use ${paths.length === 1 ? "it" : "them"}: ${named}. They'll lose track of ${paths.length === 1 ? "it" : "them"} after the move.`,
+          confirm: "Move",
+        });
+        if (!ok) return;
+      }
+    }
+    let made: string[];
+    try {
+      made = await cmd.call("fs.transfer", { paths, dir, op: copy ? "copy" : "auto" });
+    } catch (err) {
+      await cmd.alert({ message: `Couldn't ${copy ? "copy" : "move"} ${what}`, detail: errorText(err) });
+      return;
+    }
+    await fetchDir(dir).catch(() => {});
+    refreshGit();
     if (dir !== root) setOpen(dir, true);
-    setSel(made);
+    if (made[0]) setSel(made[0]);
+    if (copy) return;
+    // "auto" copies from another disk: only what's gone from where it was moved.
+    const still = await cmd.call("fs.resolve", { paths, cwd: "/" }).catch(() => paths);
+    const moved = made.map((to, i) => ({ to, from: paths[i]! })).filter((m, i) => !still[i] && m.to !== m.from);
+    if (!moved.length) return;
+    toast(moved.length === 1 ? `Moved “${baseName(moved[0]!.from)}” to ${into}` : `Moved ${moved.length} items to ${into}`, {
+      action: {
+        label: "Undo",
+        run: () => void undoMoves(moved),
+      },
+    });
+  };
+  /** Put moved items back in the folders they came from (a name taken there meanwhile gets " 2"). */
+  const undoMoves = async (moved: { from: string; to: string }[]) => {
+    try {
+      for (const m of moved) await cmd.call("fs.transfer", { paths: [m.to], dir: parentOf(m.from), op: "move" });
+    } catch (err) {
+      await cmd.alert({ message: "Couldn't undo the move", detail: errorText(err) });
+    }
   };
   // The target reads this render's state through a ref: it is registered once per window.
   const dropState = useRef({ rows, root, showChanges, isOpen, setOpen, transfer });

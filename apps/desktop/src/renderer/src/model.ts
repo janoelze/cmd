@@ -302,6 +302,22 @@ export function projectHue(name: string): number {
   return (h >>> 0) % 360;
 }
 
+/**
+ * Names of the open windows that use one of these paths or something in them:
+ * a terminal working there, a file browser rooted there, a file open in a
+ * window. Moving the path leaves them with the old one (drag and drop asks first).
+ */
+export function windowsUsing(paths: string[], panes: Iterable<Pane>, windows: Iterable<AppWindow>): string[] {
+  const inside = (p: string) => paths.some((q) => p === q || p.startsWith(q + "/"));
+  const names: string[] = [];
+  for (const p of panes) if (p.exitCode === null && inside(p.cwd)) names.push(p.title || "Terminal");
+  for (const w of windows) {
+    const p = w.state.path;
+    if (typeof p === "string" && p && inside(p)) names.push(w.title || p.slice(p.lastIndexOf("/") + 1));
+  }
+  return names;
+}
+
 export function shortPath(p: string): string {
   return p.replace(/^\/Users\/[^/]+/, "~");
 }

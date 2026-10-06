@@ -134,6 +134,46 @@ check(after === before + 1, "only one window opened");
 await dropOn(".statusbar", { files: [out("page.txt")] });
 check(win.url() === startUrl && (await windows()).length === after, "a file dropped outside the workspace (the status bar) is refused");
 
+// ── guards: native alerts and confirmations (dialogs stubbed: record, answer with __answer) ──
+await app.evaluate(({ dialog }) => {
+  globalThis.__dialogs = [];
+  dialog.showMessageBox = async (...args) => {
+    const o = args.at(-1);
+    globalThis.__dialogs.push({ message: o.message, detail: o.detail, buttons: o.buttons });
+    return { response: globalThis.__answer ?? 0, checkboxChecked: false };
+  };
+});
+const dialogs = () => app.evaluate(() => globalThis.__dialogs.splice(0));
+const answer = (n) => app.evaluate((_e, n) => (globalThis.__answer = n), n);
+await select(files.id);
+{
+  // A file that's gone by the time it's dropped.
+  fs.writeFileSync(out("ghost.txt"), "boo");
+  const box = await win.locator(list).boundingBox();
+  const at = { x: box.x + box.width / 2, y: box.y + box.height * 0.8, data: { items: [], files: [out("ghost.txt")], dragOperationsMask: 1 | 16 } };
+  for (const type of ["dragEnter", "dragOver"]) await cdp.send("Input.dispatchDragEvent", { type, ...at });
+  fs.rmSync(out("ghost.txt"));
+  await cdp.send("Input.dispatchDragEvent", { type: "drop", ...at });
+  await win.waitForTimeout(500);
+}
+let shown = await dialogs();
+check(shown.length === 1 && shown[0].message === "Couldn't move “ghost.txt”" && /isn't there anymore/.test(shown[0].detail), `a move the core refuses explains why in an alert (${JSON.stringify(shown)})`);
+// page.txt is open in the text window: moving it asks first.
+await answer(1);
+await dropOn(list, { files: [out("page.txt")], at: [0.5, 0.8] });
+shown = await dialogs();
+check(shown.length === 1 && /^Move “page.txt” into “box”\?$/.test(shown[0].message) && /page\.txt/.test(shown[0].detail) && shown[0].buttons[0] === "Move", `moving a file an open window shows asks first (${JSON.stringify(shown)})`);
+check(fs.existsSync(out("page.txt")) && !fs.existsSync(inBox("page.txt")), "Cancel leaves it where it was");
+await answer(0);
+await dropOn(list, { files: [out("page.txt")], at: [0.5, 0.8] });
+check(await waitFor(() => fs.existsSync(inBox("page.txt"))), "Move moves it");
+await dialogs();
+// Every move can be undone from its toast.
+const undo = win.locator(".ui-toast", { hasText: "Moved “page.txt” to “box”" }).locator("button", { hasText: "Undo" });
+check(await waitFor(() => undo.count()), "a move shows a toast with Undo");
+await undo.click();
+check(await waitFor(() => fs.existsSync(out("page.txt")) && !fs.existsSync(inBox("page.txt"))), "Undo puts it back");
+
 // ── out of cmd: native drags (startDrag stubbed to record) ──
 await app.evaluate(({ webContents }) => {
   globalThis.__startDrags = [];

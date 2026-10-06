@@ -757,6 +757,11 @@ ipcMain.on("focus", (e) => {
   }
 });
 
+ipcMain.handle("alert", async (e, o: { message: string; detail?: string }) => {
+  const opts = { type: "warning" as const, message: o.message, detail: o.detail, buttons: ["OK"] };
+  const win = winOf(e);
+  await (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts));
+});
 ipcMain.handle("confirm", async (e, o: { message: string; detail?: string; confirm: string }) => {
   const opts = { type: "warning" as const, message: o.message, detail: o.detail, buttons: [o.confirm, "Cancel"], defaultId: 0, cancelId: 1 };
   const win = winOf(e);

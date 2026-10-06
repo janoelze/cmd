@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { createPath, duplicatePath, renamePath, transferPaths } from "../src/fileops.ts";
+import { createPath, duplicatePath, protectedReason, renamePath, transferPaths } from "../src/fileops.ts";
 import { rmTemp } from "./tmp.ts";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-fileops-"));
@@ -67,8 +67,19 @@ describe("file operations", () => {
     fs.mkdirSync(at("u/d/inner"), { recursive: true });
     fs.writeFileSync(at("u/f"), "f");
     expect(() => transferPaths([at("u/f"), at("u/d")], at("u/d/inner"), "move")).toThrow(/itself/);
-    expect(() => transferPaths([at("u/f"), at("u/nope")], at("u/d"), "copy")).toThrow(/ENOENT/);
+    expect(() => transferPaths([at("u/f"), at("u/nope")], at("u/d"), "copy")).toThrow(/“nope” isn't there anymore/);
     expect(fs.existsSync(at("u/f"))).toBe(true);
     expect(fs.existsSync(at("u/d/f"))).toBe(false);
+  });
+
+  it("keeps system and home folders where they are", () => {
+    const home = "/Users/me";
+    for (const p of ["/", "/Applications", "/Users", "/private/tmp", "/Volumes/Backup", "/Users/me", "/Users/other", "/Users/me/Documents", "/Users/me/Library", "/Users/me/.ssh"])
+      expect(protectedReason(p, home), p).not.toBeNull();
+    for (const p of ["/Users/me/src", "/Users/me/Documents/notes.txt", "/Users/me/src/.env", "/Volumes/Backup/photos", "/tmp/x"])
+      expect(protectedReason(p, home), p).toBeNull();
+    expect(protectedReason("/Users/me/Documents", home)).toBe("macOS and your apps expect “Documents” where it is.");
+    // Copying one is fine; a home or a disk isn't copied either.
+    expect(() => transferPaths([os.homedir()], dir, "copy")).toThrow(/home folder/);
   });
 });

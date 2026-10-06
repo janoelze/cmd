@@ -192,11 +192,15 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
     void cmd.call("fs.watch", { path: file }).catch(() => {});
     const off = onFsChanged((p) => {
       if (p !== file) return;
-      void cmd.call("fs.read", { path: file }).then((r) => {
-        if (Math.abs(r.mtime - meta.current.mtime) < 1) return; // our own save
-        if (dirtyRef.current) setConflict(true);
-        else void load();
-      });
+      // Gone (deleted, moved away): the window keeps its text, to save again.
+      void cmd.call("fs.read", { path: file }).then(
+        (r) => {
+          if (Math.abs(r.mtime - meta.current.mtime) < 1) return; // our own save
+          if (dirtyRef.current) setConflict(true);
+          else void load();
+        },
+        () => {},
+      );
     });
     return () => {
       off();
