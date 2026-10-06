@@ -9,6 +9,7 @@
 import { parseClaude, parseCodex } from "../../search/parser.ts";
 import type { DataEventType } from "@cmd/protocol";
 import type { StoreEvent as NewEvent } from "../store.ts";
+import { projectIdOf } from "../project.ts";
 
 /** Lines shorter than this are kept whole in `data`; longer ones go to a blob with a summary inline. */
 export const INLINE_LINE = 2048;
@@ -74,7 +75,7 @@ export function claudeLine(line: string, n: number, file: TranscriptFile, sessio
     source: `transcript:claude${str(o.version) ? `@${o.version}` : ""}`,
     parentId: str(o.parentUuid) ? `claude:${o.parentUuid}` : null,
     sessionId: sessionId ? `claude:${sessionId}` : null,
-    projectId: str(o.cwd) ? `dir:${o.cwd}` : null,
+    projectId: projectIdOf(str(o.cwd)),
   };
   const message = isObj(o.message) ? o.message : null;
   const common: Obj = { line: type, cwd: o.cwd, gitBranch: o.gitBranch, version: o.version, isSidechain: o.isSidechain === true, isMeta: o.isMeta === true };
@@ -141,7 +142,7 @@ export function codexLine(line: string, n: number, file: TranscriptFile, state: 
     at: Number.isFinite(at) ? at : 0,
     source: "transcript:codex",
     sessionId: `codex:${sid}`,
-    projectId: state.cwd ? `dir:${state.cwd}` : null,
+    projectId: projectIdOf(state.cwd),
   };
   const big = line.length > INLINE_LINE;
   const common: Obj = { line: outer, item: inner, cwd: state.cwd, ...(big ? { chars: line.length } : { payload }) };

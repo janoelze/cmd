@@ -1,63 +1,41 @@
-// The journal's tables (docs/23-journal.md), in the core's database: events as
-// they're recorded, and the days a model wrote from them. An event has a key,
-// so seeing it twice (live and from a backfill, or a session that grows) updates
-// it instead of adding another. Kept for months, unlike the activity log.
+// The journal over the event log (docs/23, docs/28): what it reads as events is
+// assembled from the log (commands, git, pages, files, notes, Spaces), the
+// turns view (agent.turn) and the transcript index's sessions (agent.session);
+// nothing is copied into a journal table any more. What the journal owns is
+// the days a model wrote and their history (journal_days, journal_days_history),
+// its sync cursors (journal_meta) and its schema version, in the core's database.
 //
-// Versions (docs/24-journal-versions.md): every event row says which schema and
-// which cmd wrote it; a newer cmd adds the columns it needs (COLUMNS) and runs
-// the upgrades between the database's schema and its own (UPGRADES), then
-// records the schema in schema_versions. A day that's written again keeps its
-// earlier version in journal_days_history, so revisions can be compared.
+// Versions (docs/24): JOURNAL_SCHEMA covers the days' documents; UPGRADES move
+// an older database forward. SOURCES_FORMAT covers how turns, sessions and git
+// become events; THREADS_FORMAT and WRITER_FORMAT the layers above.
 
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { JOURNAL_SCHEMA, type JournalData, type JournalDay, type JournalEvent, type JournalEventKind, type SpaceId } from "@cmd/protocol";
+import { DATA_FLAGS, DEFAULT_SETTINGS, JOURNAL_SCHEMA, type AgentTurn, type DataEvent, type DataEventType, type JournalData, type JournalDay, type JournalEvent, type JournalEventKind, type NewDataEvent, type SpaceId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import { redact, redactDeep } from "../redact.ts";
+import { DataService } from "../data/service.ts";
+import { projectOf } from "../data/project.ts";
+import type { SessionRow } from "../search/index.ts";
+import { sessionEvents, turnEvent } from "./backfill.ts";
 
 const log = logger("journal");
 
 /** Earlier versions of a day kept when it's written again. */
 const HISTORY_PER_DAY = 3;
 
-/** Columns added after a table was first created: added to older databases as they're opened. */
-const COLUMNS: Record<string, [string, string][]> = {
-  journal_events: [["cmd", "TEXT"]],
-};
-
-/**
- * Data upgrades: UPGRADES[n] takes a database at schema n - 1 to n (reshape a
- * kind's data, fill a new field). Run in order, in one transaction, when a cmd
- * with a newer JOURNAL_SCHEMA opens an older database. Pulled sources don't
- * need one (raise SOURCES_FORMAT and they're read again); live events (commands,
- * pages, files, notes) do, or readers must take both shapes.
- */
+/** Data upgrades: UPGRADES[n] takes a database at schema n - 1 to n (the days' documents). */
 export const UPGRADES: Record<number, (db: DatabaseSync) => void> = {};
 
 /** Day documents from before days carried their format: format 1. */
 const FORMAT_1 = { schema: 1, threads: 1, writer: 1 };
 
-/** Events older than this are dropped; written days stay (they're small). */
-export const KEEP_MS = 180 * 86400_000;
+/** A span that began this long before a range may still reach into it (commands, visits; sessions and turns bring their own ends). */
+const SPAN_MS = 3 * 86400_000;
+
+/** The journal kinds that are events in the log, by their type there. */
+const FACT_KINDS: JournalEventKind[] = ["command", "git.commit", "git.merge", "git.checkout", "git.branch", "git.tag", "git.rebase", "git.reset", "browser.visit", "file.open", "note", "space.open", "space.close"];
 
 /** What a recorder hands in: an event without its row id. */
 export type NewJournalEvent = Omit<JournalEvent, "id" | "source"> & { source?: JournalEvent["source"] };
-
-interface Row {
-  id: number;
-  at: number;
-  until: number | null;
-  kind: string;
-  key: string;
-  space_id: string | null;
-  repo: string | null;
-  cwd: string | null;
-  thread: string | null;
-  text: string;
-  data: string;
-  source: string;
-  schema: number;
-  cmd: string | null;
-}
 
 export interface EventQuery {
   since?: number;
@@ -69,37 +47,31 @@ export interface EventQuery {
   limit?: number;
 }
 
+export interface JournalSources {
+  /** Turns started since a time, with where each agent ran (the turns view). */
+  turns?: ((since: number) => { turn: AgentTurn; cwd: string | null }[]) | null;
+  /** Sessions active since a time (the transcript index); null while there is none. */
+  sessions?: ((since: number) => SessionRow[] | null) | null;
+}
+
 export class JournalStore {
   #db: DatabaseSync;
   #stmts = new Map<string, StatementSync>();
+  readonly data: DataService;
+  #sources: JournalSources;
+  /** Derived kinds seeded directly (fixtures, the lab): held here, since they aren't events in the log. */
+  #extra: JournalEvent[] = [];
 
   /** The cmd that records: its version, or "source+<build>". */
   readonly recordedBy: string | null;
 
-  /** `db`: the core's database (Store.db); in memory without one. */
-  constructor(db: DatabaseSync | null = null, o: { recordedBy?: string | null } = {}) {
+  /** `db`: the core's database (Store.db); `data`: the event log. In memory without them (tests). */
+  constructor(db: DatabaseSync | null = null, o: { recordedBy?: string | null; data?: DataService } & JournalSources = {}) {
     this.#db = db ?? new DatabaseSync(":memory:");
+    this.data = o.data ?? new DataService({ file: null, recordedBy: o.recordedBy ?? "test", settings: () => DEFAULT_SETTINGS });
+    this.#sources = { turns: o.turns ?? null, sessions: o.sessions ?? null };
     this.recordedBy = o.recordedBy ?? null;
     this.#db.exec(`
-      CREATE TABLE IF NOT EXISTS journal_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        at INTEGER NOT NULL,
-        until INTEGER,
-        kind TEXT NOT NULL,
-        key TEXT NOT NULL UNIQUE,
-        space_id TEXT,
-        repo TEXT,
-        cwd TEXT,
-        thread TEXT,
-        text TEXT NOT NULL,
-        data TEXT NOT NULL,
-        source TEXT NOT NULL,
-        schema INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS journal_events_at ON journal_events(at);
-      CREATE INDEX IF NOT EXISTS journal_events_space ON journal_events(space_id, at);
-      CREATE INDEX IF NOT EXISTS journal_events_repo ON journal_events(repo, at);
-      CREATE INDEX IF NOT EXISTS journal_events_thread ON journal_events(thread);
       CREATE TABLE IF NOT EXISTS journal_days (
         scope TEXT NOT NULL,
         date INTEGER NOT NULL,
@@ -116,10 +88,6 @@ export class JournalStore {
       CREATE TABLE IF NOT EXISTS journal_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS schema_versions (name TEXT PRIMARY KEY, version INTEGER NOT NULL, updated_at INTEGER NOT NULL);
     `);
-    for (const [table, cols] of Object.entries(COLUMNS)) {
-      const have = new Set((this.#db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name));
-      for (const [name, type] of cols) if (!have.has(name)) this.#db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
-    }
     this.#upgrade();
   }
 
@@ -146,7 +114,7 @@ export class JournalStore {
     return (this.#db.prepare(`SELECT version FROM schema_versions WHERE name = 'journal'`).get() as { version: number }).version;
   }
 
-  /** Small state that outlives the core: sync cursors, the sources format events were read with. */
+  /** Small state that outlives the core: sync cursors, the sources format git was read with. */
   meta(key: string): string | null {
     return (this.#stmt(`SELECT value FROM journal_meta WHERE key = ?`).get(key) as { value: string } | undefined)?.value ?? null;
   }
@@ -163,62 +131,67 @@ export class JournalStore {
   }
 
   /**
-   * Adds an event, or updates the one with its key: the span grows, the text and
-   * data are the newest, and a live recording wins over a backfill. Returns its id.
+   * Records an event: a fact goes to the log (seen again, it's updated: the
+   * span grows, the newest text wins); a derived kind (agent.turn, agent.session)
+   * is kept in memory, for fixtures and the lab. Returns its id.
    */
   record(e: NewJournalEvent): number {
-    // Kept for months and read by a model: no credentials, whatever a command or prompt carried.
-    e = { ...e, text: redact(e.text), data: redactDeep(e.data) };
-    const r = this.#stmt(
-      `INSERT INTO journal_events (at, until, kind, key, space_id, repo, cwd, thread, text, data, source, schema, cmd)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET
-         at = MIN(at, excluded.at),
-         until = MAX(COALESCE(until, excluded.until), COALESCE(excluded.until, until)),
-         text = excluded.text,
-         data = excluded.data,
-         space_id = COALESCE(excluded.space_id, space_id),
-         repo = COALESCE(excluded.repo, repo),
-         cwd = COALESCE(excluded.cwd, cwd),
-         thread = COALESCE(excluded.thread, thread),
-         source = CASE WHEN source = 'live' THEN 'live' ELSE excluded.source END,
-         schema = excluded.schema,
-         cmd = excluded.cmd
-       RETURNING id`,
-    ).get(e.at, e.until, e.kind, e.key, e.spaceId, e.repo, e.cwd, e.thread, e.text, JSON.stringify(e.data), e.source ?? "live", JOURNAL_SCHEMA, this.recordedBy) as { id: number };
-    return r.id;
+    if (e.kind.startsWith("agent.")) {
+      const id = 3_000_000_000 + this.#extra.length;
+      this.#extra.push({ ...e, id, source: e.source ?? "backfill" });
+      return id;
+    }
+    const d = this.data.record(toData(e));
+    return d?.seq ?? 0;
   }
 
   /** Several at once, in one transaction (backfills). */
   recordAll(events: NewJournalEvent[]): number {
-    this.#db.exec("BEGIN");
-    try {
-      for (const e of events) this.record(e);
-      this.#db.exec("COMMIT");
-    } catch (err) {
-      this.#db.exec("ROLLBACK");
-      throw err;
-    }
+    const facts = events.filter((e) => !e.kind.startsWith("agent."));
+    for (const e of events) if (e.kind.startsWith("agent.")) this.record(e);
+    this.data.recordAll(facts.map(toData));
     return events.length;
   }
 
   /** Oldest first. Spans that began before `since` but reach into it count. */
   events(q: EventQuery = {}): JournalEvent[] {
-    const where: string[] = [];
-    const args: (string | number)[] = [];
-    if (q.since !== undefined) where.push("COALESCE(until, at) >= ?"), args.push(q.since);
-    if (q.until !== undefined) where.push("at < ?"), args.push(q.until);
-    if (q.spaceId) where.push("space_id = ?"), args.push(q.spaceId);
-    if (q.repo) where.push("repo = ?"), args.push(q.repo);
-    if (q.kinds?.length) where.push(`kind IN (${q.kinds.map(() => "?").join(", ")})`), args.push(...q.kinds);
-    const sql = `SELECT * FROM journal_events ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY at, id LIMIT ?`;
-    const rows = this.#db.prepare(sql).all(...args, q.limit ?? 50_000) as unknown as Row[];
-    return rows.flatMap((r) => toEvent(r) ?? []);
+    const want = (k: JournalEventKind) => !q.kinds?.length || q.kinds.includes(k);
+    const inRange = (e: JournalEvent) => (q.since === undefined || (e.until ?? e.at) >= q.since) && (q.until === undefined || e.at < q.until);
+    const inScope = (e: JournalEvent) => (!q.spaceId || e.spaceId === q.spaceId) && (!q.repo || e.repo === q.repo);
+    const out: JournalEvent[] = [];
+    const types = FACT_KINDS.filter(want) as DataEventType[];
+    if (types.length) {
+      const at: [number, number] | undefined = q.since !== undefined || q.until !== undefined ? [q.since !== undefined ? q.since - SPAN_MS : 0, q.until ?? Number.MAX_SAFE_INTEGER] : undefined;
+      for (const d of this.data.query({ types, at, spaceId: q.spaceId, projectId: q.repo ? `dir:${q.repo}` : undefined, limit: 100_000 })) {
+        const e = toJournal(d);
+        if (e && inRange(e)) out.push(e);
+      }
+    }
+    const since = (q.since ?? 0) - SPAN_MS;
+    if (want("agent.turn") && this.#sources.turns) {
+      let n = 0;
+      for (const { turn, cwd } of this.#sources.turns(since)) {
+        const e = { ...turnEvent(turn, cwd, "backfill"), id: 1_000_000_000 + n++, source: "backfill" as const };
+        if (inRange(e) && inScope(e)) out.push(e);
+      }
+    }
+    if (want("agent.session") && this.#sources.sessions) {
+      const rows = this.#sources.sessions(since);
+      let n = 0;
+      if (rows) for (const s of sessionEvents(rows)) {
+        const e = { ...s, id: 2_000_000_000 + n++, source: "backfill" as const };
+        if (inRange(e) && inScope(e)) out.push(e);
+      }
+    }
+    for (const e of this.#extra) if (want(e.kind) && inRange(e) && inScope(e)) out.push(e);
+    out.sort((a, b) => a.at - b.at || a.id - b.id);
+    return out.slice(0, q.limit ?? 50_000);
   }
 
   /** Repositories with events since `since`, most active first. */
   repos(since = 0): { repo: string; events: number }[] {
-    return this.#stmt(`SELECT repo, COUNT(*) AS events FROM journal_events WHERE repo IS NOT NULL AND at >= ? GROUP BY repo ORDER BY events DESC`).all(since) as { repo: string; events: number }[];
+    const rows = this.data.store.db.prepare(`SELECT project_id, COUNT(*) AS events FROM events WHERE project_id LIKE 'dir:%' AND at >= ? GROUP BY project_id ORDER BY events DESC`).all(since) as { project_id: string; events: number }[];
+    return rows.map((r) => ({ repo: r.project_id.slice(4), events: r.events }));
   }
 
   day(scope: string, date: number): JournalDay | null {
@@ -256,36 +229,58 @@ export class JournalStore {
     const rows = this.#stmt(`SELECT doc FROM journal_days_history WHERE scope = ? AND date = ? ORDER BY replaced_at DESC, rowid DESC`).all(scope, date) as { doc: string }[];
     return rows.flatMap((r) => toDay(r.doc) ?? []);
   }
-
-  prune(now = Date.now()): void {
-    this.#stmt(`DELETE FROM journal_events WHERE COALESCE(until, at) < ?`).run(now - KEEP_MS);
-  }
 }
 
-/** A row as an event; null when its data can't be read (logged, skipped: one bad row never hides a day). */
-function toEvent(r: Row): JournalEvent | null {
-  let data: JournalData;
-  try {
-    data = JSON.parse(r.data) as JournalData;
-  } catch {
-    log.warn("journal event skipped: unreadable data", { id: r.id, kind: r.kind, schema: r.schema });
-    return null;
-  }
-  // Events are typed by their data's kind; a row whose kind it doesn't match is from a format this cmd doesn't know.
-  if (!data || typeof data !== "object" || data.kind !== r.kind) return null;
+/** A journal event as the log records it: the kind is the type, the key the id, the project the repository. */
+export function toData(e: NewJournalEvent): NewDataEvent {
+  const { kind, ...rest } = e.data as JournalData & Record<string, unknown>;
+  const repo = e.repo ?? (e.cwd ? projectOf(e.cwd) : null);
+  const data: Record<string, unknown> = { ...rest };
+  if (kind.startsWith("git.") && repo) data.repo = repo;
+  if (kind === "command") (data.cwd = e.cwd ?? ""), delete data.paneId;
+  if (kind === "browser.visit" || kind === "file.open") delete data.windowId;
   return {
-    id: r.id,
-    at: r.at,
-    until: r.until,
-    kind: r.kind as JournalEventKind,
-    key: r.key,
-    spaceId: r.space_id,
-    repo: r.repo,
-    cwd: r.cwd,
-    thread: r.thread,
-    text: r.text,
-    data,
-    source: r.source === "backfill" ? "backfill" : "live",
+    id: e.key,
+    at: e.at,
+    until: e.until,
+    type: kind as DataEventType,
+    source: kind.startsWith("git.") ? "git" : e.source === "backfill" ? "import:journal" : "journal",
+    spaceId: e.spaceId,
+    projectId: repo ? `dir:${repo}` : null,
+    paneId: typeof (e.data as { paneId?: unknown }).paneId === "string" ? ((e.data as { paneId: string }).paneId as string) : null,
+    windowId: typeof (e.data as { windowId?: unknown }).windowId === "string" ? ((e.data as { windowId: string }).windowId as string) : null,
+    text: e.text,
+    body: kind === "note" || kind === "git.commit" ? e.text : null,
+    data: data as NewDataEvent["data"],
+  };
+}
+
+/** A logged event as the journal sees it; null for kinds the journal doesn't know or data it can't read. */
+export function toJournal(d: DataEvent): JournalEvent | null {
+  if (!FACT_KINDS.includes(d.type as JournalEventKind)) return null;
+  const payload = d.data as Record<string, unknown> | null;
+  if (!payload || typeof payload !== "object") return null;
+  const kind = d.type as JournalEventKind;
+  const repo = d.projectId?.startsWith("dir:") ? d.projectId.slice(4) : null;
+  let data: Record<string, unknown> = { kind, ...payload };
+  let cwd: string | null = null;
+  let thread: string | null = null;
+  if (kind === "command") (data = { kind, command: payload.command ?? null, exitCode: payload.exitCode ?? null, paneId: d.paneId }), (cwd = (payload.cwd as string) || null), (thread = d.paneId ? `pane:${d.paneId}` : null);
+  else if (kind === "browser.visit") (data = { kind, url: payload.url, title: payload.title ?? null, windowId: d.windowId }), (thread = d.windowId ? `window:${d.windowId}` : null);
+  else if (kind === "file.open") (data = { kind, path: payload.path, windowKind: payload.windowKind, windowId: d.windowId }), (cwd = typeof payload.path === "string" ? payload.path : null), (thread = d.windowId ? `window:${d.windowId}` : null);
+  return {
+    id: d.seq,
+    at: d.at,
+    until: d.until,
+    kind,
+    key: d.id,
+    spaceId: d.spaceId,
+    repo,
+    cwd,
+    thread,
+    text: d.text ?? "",
+    data: data as JournalData,
+    source: d.source === "git" || d.source.startsWith("import") || d.flags & DATA_FLAGS.imported ? "backfill" : "live",
   };
 }
 

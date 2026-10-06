@@ -42,13 +42,23 @@ const note = (at: number, key: string, o: Partial<NewJournalEvent> = {}): NewJou
 });
 
 describe("journal store", () => {
-  it("updates an event seen again: the span grows, live wins over backfill", () => {
+  it("updates an event seen again in the log: the span grows, the newest text wins", () => {
     const s = new JournalStore();
-    const id = s.record({ ...note(100, "k"), until: 200, source: "backfill" });
-    expect(s.record({ ...note(150, "k"), until: 400, text: "newer", source: "live" })).toBe(id);
-    s.record({ ...note(120, "k"), until: 300, source: "backfill" });
+    const id = s.record({ ...note(100, "k"), until: 200 });
+    expect(s.record({ ...note(150, "k"), until: 400, text: "newer" })).toBe(id);
+    s.record({ ...note(120, "k"), until: 300 });
     const [e] = s.events();
-    expect(e).toMatchObject({ id, at: 100, until: 400, text: "n", source: "live" });
+    expect(e).toMatchObject({ id, at: 100, until: 400, text: "n", kind: "note" });
+    expect(s.data.query({ types: ["note"] })).toHaveLength(1);
+  });
+
+  it("keeps derived kinds seeded for fixtures apart from the log", () => {
+    const s = new JournalStore();
+    s.recordAll(syntheticDay(DAY));
+    const kinds = new Set(s.events().map((e) => e.kind));
+    expect(kinds.has("agent.turn") && kinds.has("agent.session") && kinds.has("git.commit")).toBe(true);
+    expect(s.data.query({ types: ["agent."] })).toHaveLength(0);
+    expect(s.data.query({ types: ["git."] }).length).toBeGreaterThan(0);
   });
 
   it("finds spans that reach into the range", () => {
@@ -162,7 +172,7 @@ describe("journal service", () => {
   function service(ai: JournalAi | null) {
     const store = new JournalStore();
     store.recordAll(syntheticDay(DAY));
-    return new JournalService({ store, turns: null, sessions: () => [], spaces: () => [space], agentSpace: () => null, ai, now: () => to + 3 * 86400_000 });
+    return new JournalService({ store, spaces: () => [space], agentSpace: () => null, ai, now: () => to + 3 * 86400_000 });
   }
 
   it("writes a day once, until its events change", async () => {
@@ -176,7 +186,7 @@ describe("journal service", () => {
     expect((await j.day("all", date))?.headline).toBe("A day.");
     await j.day("all", date);
     expect(calls).toBe(1);
-    j.record(note(from + 7200_000, "late", { text: "one more thing" }));
+    j.store.record(note(from + 7200_000, "late", { text: "one more thing" }));
     await j.day("all", date);
     expect(calls).toBe(2);
     await j.day("all", date, "force");
@@ -213,15 +223,15 @@ describe("journal versions", () => {
 
   function service(store: JournalStore, now: number, onWrite: () => void) {
     const ai: JournalAi = { modelName: () => "Model", object: async <T,>() => (onWrite(), written("New rules.") as unknown as { value: T; usage: { input: number; output: number; cacheRead: number; cacheWrite: number }; model: string }) };
-    return new JournalService({ store, turns: null, sessions: () => [], spaces: () => [space], agentSpace: () => null, ai, now: () => now });
+    return new JournalService({ store, spaces: () => [space], agentSpace: () => null, ai, now: () => now });
   }
 
-  it("records the schema, and which cmd wrote each event", () => {
+  it("records the days' schema, and which cmd wrote each event", () => {
     const db = new DatabaseSync(":memory:");
     const s = new JournalStore(db, { recordedBy: "0.15.0" });
     s.record(note(1, "a"));
     expect(s.schemaVersion()).toBe(JOURNAL_SCHEMA);
-    expect(db.prepare(`SELECT schema, cmd FROM journal_events`).get()).toEqual({ schema: JOURNAL_SCHEMA, cmd: "0.15.0" });
+    expect(s.data.query({ types: ["note"] })[0]).toMatchObject({ recorded: "0.15.0", source: "journal" });
   });
 
   it("runs the upgrades between an older database's schema and this one", () => {
@@ -242,12 +252,11 @@ describe("journal versions", () => {
     }
   });
 
-  it("skips rows it can't read instead of failing the day", () => {
-    const db = new DatabaseSync(":memory:");
-    const s = new JournalStore(db);
+  it("skips events it can't read instead of failing the day", () => {
+    const s = new JournalStore();
     s.recordAll([note(1, "ok"), note(2, "bad"), note(3, "other")]);
-    db.prepare(`UPDATE journal_events SET data = '{' WHERE key = 'bad'`).run();
-    db.prepare(`UPDATE journal_events SET kind = 'future.kind' WHERE key = 'other'`).run();
+    s.data.store.db.prepare(`UPDATE events SET data = jsonb('null') WHERE id = 'bad'`).run();
+    s.data.store.db.prepare(`UPDATE events SET type = 'future.kind' WHERE id = 'other'`).run();
     expect(s.events().map((e) => e.key)).toEqual(["ok"]);
   });
 
@@ -291,10 +300,10 @@ describe("journal versions", () => {
     expect(calls()).toBe(1);
   });
 
-  it("reads sources again when their format changed, then only what's new", async () => {
+  it("reads git again when the sources format changed, then only what's new", async () => {
     const store = new JournalStore();
     const asked: number[] = [];
-    const make = () => new JournalService({ store, turns: null, sessions: (since) => (asked.push(since), []), spaces: () => [], agentSpace: () => null, ai: null, now: () => 100 * 86400_000 });
+    const make = () => new JournalService({ store, spaces: () => [space], agentSpace: () => null, ai: null, now: () => 100 * 86400_000, git: async (_repo, since) => (asked.push(since), []) });
     await make().sync();
     expect(asked[0]).toBe(10 * 86400_000); // 90 days back
     expect(store.meta("sources.format")).toBe(String(SOURCES_FORMAT));

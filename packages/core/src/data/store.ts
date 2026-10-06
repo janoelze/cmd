@@ -71,9 +71,10 @@ export class DataStore {
   }
 
   /**
-   * Adds an event, or updates the one with its id: `until`, `text`, `data` and
-   * the blob are the newest, identities fill in what was null, `seq` and `at`
-   * stay. Returns the row's seq and whether it was new.
+   * Adds an event, or updates the one with its id: the span grows (`at` the
+   * earliest, `until` the latest), `text`, `data` and the blob are the newest,
+   * identities fill in what was null, `seq` stays. Returns the row's seq and
+   * whether it was new.
    */
   record(e: StoreEvent): { seq: number; inserted: boolean } {
     const blob = e.content != null ? this.putBlob(e.content) : null;
@@ -83,7 +84,8 @@ export class DataStore {
       `INSERT INTO events (id, at, until, type, v, source, recorded, parent_id, space_id, project_id, session_id, agent_id, pane_id, window_id, device_id, text, data, blob, flags)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?)
        ON CONFLICT(id) DO UPDATE SET
-         until = COALESCE(excluded.until, until),
+         at = MIN(at, excluded.at),
+         until = MAX(COALESCE(until, excluded.until), COALESCE(excluded.until, until)),
          text = COALESCE(excluded.text, text),
          data = excluded.data,
          blob = COALESCE(excluded.blob, blob),

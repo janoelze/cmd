@@ -12,6 +12,7 @@ import { ActivityReducer } from "../../agents/activity/reduce.ts";
 import { decodeDoc, decodeRows, decodeTurn } from "../../stored.ts";
 import type { DataService } from "../service.ts";
 import type { ViewsStore } from "./views.ts";
+import { projectIdOf } from "../project.ts";
 
 const log = logger("activity");
 
@@ -83,7 +84,7 @@ export class ActivityView {
       sessionId: sessionId ? `${r.agent ?? "agent"}:${sessionId}` : null,
       agentId,
       paneId,
-      projectId: typeof r.payload.cwd === "string" ? `dir:${r.payload.cwd}` : null,
+      projectId: projectIdOf(typeof r.payload.cwd === "string" ? r.payload.cwd : null),
       text,
       body,
       data,

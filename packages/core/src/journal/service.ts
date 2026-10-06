@@ -1,11 +1,10 @@
 // The journal service (docs/23-journal.md): keeps the event log filled and
 // writes days from it.
 //
-// Two ways in. Sources that keep their own record (the activity log's turns,
-// the transcript index's sessions, git's reflogs) are pulled: `sync` reads what
-// changed since it last looked, idempotently, so a core that was down misses
-// nothing. Signals nothing else keeps (commands, pages, files shown, notes) are
-// pushed with `record` as they happen.
+// Events come from the log (data/), the turns view and the transcript index
+// (journal/store.ts assembles them); git is the one source this service still
+// reads itself, from reflogs, every few minutes, into the log. Notes are
+// recorded here (`note`).
 //
 // Days are written on request (the Journal widget, `cmd journal`): threads and
 // a digest from the events, then a model, unless the digest is the one the
@@ -15,11 +14,9 @@
 
 import os from "node:os";
 import { logger } from "@cmd/protocol/node";
-import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type AgentTurn, type JournalDay, type JournalFormat, type JournalEvent, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
+import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type JournalDay, type JournalFormat, type JournalEvent, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
 import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import type { CallOptions } from "../ai/service.ts";
-import type { SessionRow } from "../search/index.ts";
-import { projectOf, sessionEvents, turnEvents } from "./backfill.ts";
 import { digest, eventsHash, type Digest } from "./digest.ts";
 import { gitEvents } from "./git.ts";
 import { JournalStore, type NewJournalEvent } from "./store.ts";
@@ -55,11 +52,9 @@ export interface JournalAi {
 
 export interface JournalServiceOptions {
   store: JournalStore;
-  /** Turns started since a time, with where each agent ran (the turns view); null: no turns. */
-  turns: ((since: number) => { turn: AgentTurn; cwd: string | null }[]) | null;
-  /** Agent sessions from the transcript index; null while there is none (search off or not open yet). */
-  sessions: (since: number) => SessionRow[] | null;
   spaces: () => Space[];
+  /** Tests: git's events for a repository since a time (default: its reflogs, journal/git.ts). */
+  git?: (repo: string, since: number) => Promise<NewJournalEvent[]>;
   /** A live agent's Space. */
   agentSpace: (agentId: string) => SpaceId | null;
   ai: JournalAi | null;
@@ -75,11 +70,11 @@ export class JournalService {
   readonly store: JournalStore;
   #o: JournalServiceOptions;
   /**
-   * Per source, when it was last read, kept in the database so a restart reads
-   * only what's new. A source that wasn't there (the index still opening) is read
-   * from the start next time; a new SOURCES_FORMAT reads them all again.
+   * When git was last read, kept in the database so a restart reads only what's
+   * new; a new SOURCES_FORMAT reads it all again. Turns and sessions are read
+   * live from their views when a day is asked for.
    */
-  #read = { turns: 0, sessions: 0, git: 0 };
+  #read = { git: 0 };
   #reread = false;
   #syncing: Promise<void> | null = null;
   #writing = new Map<string, Promise<JournalDay | null>>();
@@ -89,21 +84,17 @@ export class JournalService {
     this.#o = o;
     this.store = o.store;
     if (Number(this.store.meta("sources.format") ?? 0) !== SOURCES_FORMAT) this.#reread = true;
-    else for (const k of ["turns", "sessions", "git"] as const) this.#read[k] = Number(this.store.meta(`sync.${k}`) ?? 0);
+    else this.#read.git = Number(this.store.meta("sync.git") ?? 0);
   }
 
   get #now(): number {
     return this.#o.now?.() ?? Date.now();
   }
 
-  /** Sync now and every few minutes; prune daily. */
+  /** Read git now and every few minutes (events' retention is the data layer's). */
   start(): void {
     void this.sync();
-    let ticks = 0;
-    this.#timer = setInterval(() => {
-      void this.sync();
-      if (++ticks % 288 === 0) this.store.prune();
-    }, SYNC_EVERY_MS);
+    this.#timer = setInterval(() => void this.sync(), SYNC_EVERY_MS);
     this.#timer.unref?.();
   }
 
@@ -111,12 +102,7 @@ export class JournalService {
     if (this.#timer) clearInterval(this.#timer);
   }
 
-  /** A pushed event (commands, pages, files, notes). The project is filled in from the folder when missing. */
-  record(e: NewJournalEvent): number {
-    return this.store.record({ ...e, repo: e.repo ?? (e.cwd ? projectOf(e.cwd) : null) });
-  }
-
-  /** Pulls turns, sessions and git since the last pull. Concurrent calls share one run. */
+  /** Reads git since the last read. Concurrent calls share one run. */
   sync(): Promise<void> {
     this.#syncing ??= this.#sync().finally(() => (this.#syncing = null));
     return this.#syncing;
@@ -124,38 +110,23 @@ export class JournalService {
 
   async #sync(): Promise<void> {
     const now = this.#now;
-    const since = (last: number) => (last ? last - SYNC_OVERLAP : now - (this.#reread ? REREAD_DAYS : FIRST_SYNC_DAYS) * DAY_MS);
+    const since = this.#read.git ? this.#read.git - SYNC_OVERLAP : now - (this.#reread ? REREAD_DAYS : FIRST_SYNC_DAYS) * DAY_MS;
     const t0 = Date.now();
-    const pulled: NewJournalEvent[] = [];
-    try {
-      if (this.#o.turns) {
-        pulled.push(...turnEvents(this.#o.turns(since(this.#read.turns))).map((e) => ({ ...e, spaceId: e.data.kind === "agent.turn" && e.data.agentId ? this.#o.agentSpace(e.data.agentId) : null })));
-        this.#read.turns = now;
-      }
-      const sessions = this.#o.sessions(since(this.#read.sessions));
-      if (sessions) {
-        pulled.push(...sessionEvents(sessions));
-        this.#read.sessions = now;
-      }
-    } catch (err) {
-      log.warn(`journal sync: ${(err as Error).message}`);
-    }
-    for (const e of pulled) e.spaceId ??= this.#spaceOf(e.cwd);
-    this.store.recordAll(pulled);
     // Git for every project seen lately and every Space's folder.
     const repos = new Set([...this.store.repos(now - FIRST_SYNC_DAYS * DAY_MS).map((r) => r.repo), ...this.#o.spaces().filter((s) => s.id !== HOME_SPACE_ID).map((s) => s.root)]);
     let git = 0;
+    const read = this.#o.git ?? gitEvents;
     for (const r of repos) {
-      const ev = await gitEvents(r, since(this.#read.git)).catch(() => []);
+      const ev = await read(r, since).catch(() => []);
       git += this.store.recordAll(ev.map((e) => ({ ...e, spaceId: this.#spaceOf(e.repo) })));
     }
     this.#read.git = now;
-    for (const k of ["turns", "sessions", "git"] as const) if (this.#read[k]) this.store.setMeta(`sync.${k}`, String(this.#read[k]));
-    if (this.#reread && this.#read.sessions) {
+    this.store.setMeta("sync.git", String(now));
+    if (this.#reread) {
       this.store.setMeta("sources.format", String(SOURCES_FORMAT));
       this.#reread = false;
     }
-    log.info("journal synced", { events: pulled.length + git, repos: repos.size, ms: Date.now() - t0 });
+    log.info("journal synced", { git, repos: repos.size, ms: Date.now() - t0 });
   }
 
   /** The Space whose folder holds `p` (deepest wins); null: only Home's. */
@@ -263,7 +234,7 @@ export class JournalService {
   /** Something written down on purpose: by a person, or by an agent (with its session, so it joins its thread). */
   note(text: string, o: { by: "user" | "agent"; agentSession?: string | null; spaceId?: SpaceId | null; cwd?: string | null }): number {
     const at = this.#now;
-    return this.record({ at, until: null, kind: "note", key: `note:${at}:${text.slice(0, 40)}`, spaceId: o.spaceId ?? this.#spaceOf(o.cwd ?? null), repo: null, cwd: o.cwd ?? null, thread: null, text: text.trim(), data: { kind: "note", by: o.by, agentSession: o.agentSession ?? null } });
+    return this.store.record({ at, until: null, kind: "note", key: `note:${at}:${text.slice(0, 40)}`, spaceId: o.spaceId ?? this.#spaceOf(o.cwd ?? null), repo: null, cwd: o.cwd ?? null, thread: null, text: text.trim(), data: { kind: "note", by: o.by, agentSession: o.agentSession ?? null } });
   }
 }
 

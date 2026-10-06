@@ -11,7 +11,7 @@ import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker } from "./agents/tracker.ts";
 import { JournalService } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
-import { recordCommands, recordWindows } from "./journal/recorders.ts";
+import { recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
 import { DataService } from "./data/service.ts";
 import { ViewsStore } from "./data/views/views.ts";
 import { ActivityView } from "./data/views/activity.ts";
@@ -229,7 +229,8 @@ export class Core {
     if (opts.stateDir) {
       // What older cmds kept in cmd.sqlite comes along once, then its tables go: their readers read the log now.
       try {
-        if (this.data.importLegacy(this.store.db)) this.store.db.exec(`DROP TABLE IF EXISTS agent_events; DROP TABLE IF EXISTS agent_turns;`);
+        this.data.importLegacy(this.store.db);
+        this.store.db.exec(`DROP TABLE IF EXISTS agent_events; DROP TABLE IF EXISTS agent_turns; DROP TABLE IF EXISTS journal_events;`);
       } catch (err) {
         log.error("importing the older tables failed", err);
       }
@@ -307,9 +308,7 @@ export class Core {
       notify: (id, title, body) => this.notifications.window(id, "summary", title, body),
     });
     this.journal = new JournalService({
-      store: new JournalStore(this.store.db, { recordedBy: this.agents.activity.recordedBy }),
-      turns: (since) => this.agents.activity.turnsSince(since),
-      sessions: (since) => this.#search?.sessionsSince(since) ?? null,
+      store: new JournalStore(this.store.db, { recordedBy: this.agents.activity.recordedBy, data: this.data, turns: (since) => this.agents.activity.turnsSince(since), sessions: (since) => this.#search?.sessionsSince(since) ?? null }),
       spaces: () => this.spaces.list(),
       agentSpace: (id) => this.agents.get(id)?.spaceId ?? null,
       ai: {
@@ -320,8 +319,9 @@ export class Core {
         },
       },
     });
-    recordCommands(this.journal, this.commands);
-    recordWindows(this.journal, this.windows);
+    recordWindows(this.data, this.windows);
+    recordSpaces(this.data, this.spaces);
+    recordNotifications(this.data, this.notifications);
     if (opts.stateDir) this.journal.start();
     if (opts.stateDir) this.data.start();
     this.magic = new MagicService({

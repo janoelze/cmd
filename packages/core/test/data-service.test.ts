@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { DATA_FLAGS, DEFAULT_SETTINGS, HOOK_FORMAT, type Settings } from "@cmd/protocol";
 import { DataService } from "../src/data/service.ts";
-import { JournalStore } from "../src/journal/store.ts";
 
 const service = (over: Partial<Settings> = {}, now = () => 1_800_000_000_000) => new DataService({ file: null, recordedBy: "test", settings: () => ({ ...DEFAULT_SETTINGS, ...over }), now });
 
@@ -57,9 +56,11 @@ describe("DataService", () => {
     ins.run(1000, "UserPromptSubmit", JSON.stringify({ hook_event_name: "UserPromptSubmit", session_id: "s", prompt: "fix the flaky test", cwd: "/w" }), HOOK_FORMAT);
     ins.run(2000, "PreToolUse", JSON.stringify({ hook_event_name: "PreToolUse", session_id: "s", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "pnpm test" } }), HOOK_FORMAT);
     ins.run(3000, "PostToolUse", JSON.stringify({ hook_event_name: "PostToolUse", session_id: "s", tool_name: "Bash", tool_use_id: "t1", tool_response: "ok" }), HOOK_FORMAT);
-    const journal = new JournalStore(legacy);
-    journal.record({ at: 4000, until: 4100, kind: "command", key: "command:x", spaceId: null, repo: null, cwd: "/w", thread: "pane:p", text: "pnpm test", data: { kind: "command", command: "pnpm test", exitCode: 0, paneId: "p" } });
-    journal.record({ at: 5000, until: null, kind: "agent.session", key: "session:s", spaceId: null, repo: null, cwd: "/w", thread: "session:s", text: "derived", data: { kind: "agent.session", agent: "claude", sessionId: "s", title: null, firstPrompt: null, branch: null } });
+    // The journal's own table as cmd ≤ 0.15 made it: live kinds come along, derived ones (agent.*) are views now.
+    legacy.exec(`CREATE TABLE journal_events (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, until INTEGER, kind TEXT NOT NULL, key TEXT NOT NULL UNIQUE, space_id TEXT, repo TEXT, cwd TEXT, thread TEXT, text TEXT NOT NULL, data TEXT NOT NULL, source TEXT NOT NULL, schema INTEGER NOT NULL, cmd TEXT)`);
+    const jins = legacy.prepare(`INSERT INTO journal_events (at, until, kind, key, cwd, thread, text, data, source, schema, cmd) VALUES (?, ?, ?, ?, '/w', ?, ?, ?, 'live', 1, '0.15.0')`);
+    jins.run(4000, 4100, "command", "command:x", "pane:p", "pnpm test", JSON.stringify({ kind: "command", command: "pnpm test", exitCode: 0, paneId: "p" }));
+    jins.run(5000, null, "agent.session", "session:s", "session:s", "derived", JSON.stringify({ kind: "agent.session", agent: "claude", sessionId: "s", title: null, firstPrompt: null, branch: null }));
     const d = service();
     expect(d.importLegacy(legacy)).toEqual({ hooks: 3, journal: 1 });
     expect(d.importLegacy(legacy)).toBeNull();

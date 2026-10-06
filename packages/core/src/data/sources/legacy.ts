@@ -7,6 +7,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { FLAG_IMPORTED } from "../schema.ts";
 import type { DataEventType } from "@cmd/protocol";
 import type { StoreEvent as NewEvent } from "../store.ts";
+import { projectIdOf } from "../project.ts";
 
 interface HookRow {
   id: number;
@@ -51,7 +52,7 @@ export function* hookEvents(db: DatabaseSync): Generator<NewEvent> {
       sessionId: r.session_id ? `${r.agent ?? "agent"}:${r.session_id}` : null,
       agentId: r.agent_id,
       paneId: r.pane_id,
-      projectId: typeof payload.cwd === "string" ? `dir:${payload.cwd}` : null,
+      projectId: projectIdOf(typeof payload.cwd === "string" ? payload.cwd : null),
       text,
       body: typeof payload.prompt === "string" ? payload.prompt : typeof payload.last_assistant_message === "string" ? payload.last_assistant_message : null,
       data: { name: r.name, agent: r.agent, env: r.env ? JSON.parse(r.env) : undefined, hook: r.hook, schema: r.schema, payload },

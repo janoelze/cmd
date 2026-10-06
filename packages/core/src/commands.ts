@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import type { CommandRun, DataEvent, EventPayloads, PaneId, SpaceId } from "@cmd/protocol";
 import type { DataService } from "./data/service.ts";
 import type { PaneManager } from "./panes.ts";
+import { projectIdOf } from "./data/project.ts";
 
 /** Finished runs the widget lists. */
 export const MAX_RUNS = 300;
@@ -83,7 +84,7 @@ export class CommandLog extends EventEmitter<{ updated: [CommandRun] }> {
         source: "osc",
         paneId: run.paneId,
         spaceId: run.spaceId,
-        projectId: `dir:${run.cwd}`,
+        projectId: projectIdOf(run.cwd),
         text: run.command?.split("\n")[0]?.slice(0, 300) ?? null,
         body: run.command,
         data: { command: run.command?.slice(0, 4096) ?? null, exitCode, cwd: run.cwd, output: text ? { chars: text.length, cut: false } : null },

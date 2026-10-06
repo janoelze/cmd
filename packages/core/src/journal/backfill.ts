@@ -7,7 +7,6 @@
 import path from "node:path";
 import type { SessionRow } from "../search/index.ts";
 import type { AgentTurn } from "@cmd/protocol";
-import { repoOfSync } from "./git.ts";
 import type { NewJournalEvent } from "./store.ts";
 
 /** Transcript folders that are scratch, not work (agents' temp dirs, recordings). */
@@ -16,11 +15,8 @@ const SCRATCH = /^\/(private\/)?(tmp|var\/folders)\//;
 export const clip = (s: string | null | undefined, n: number) => (s == null ? null : s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
 
-/** The project a folder belongs to: its repository's main worktree, else the folder. */
-export function projectOf(cwd: string | null): string | null {
-  if (!cwd) return null;
-  return repoOfSync(cwd)?.repo ?? cwd;
-}
+import { projectOf } from "../data/project.ts";
+export { projectOf };
 
 /** Agent sessions from the transcript index (search.sqlite's sessions table). */
 export function sessionEvents(rows: SessionRow[]): NewJournalEvent[] {
