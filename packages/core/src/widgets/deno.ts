@@ -142,6 +142,8 @@ export interface DataResult {
 export interface RunDataOptions extends DenoEnv {
   /** Where run() starts by default (the window's Space). */
   cwd: string;
+  /** The core's widgets socket and this run's token, for `events()` in data.ts (docs/28 §4). */
+  socket?: { path: string; token: string } | null;
   config: Record<string, unknown>;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -149,15 +151,18 @@ export interface RunDataOptions extends DenoEnv {
 
 const MARK = "\u0000cmd-result ";
 
-export function denoRunArgs(dir: string, m: WidgetManifest, env: DenoEnv): string[] {
+export function denoRunArgs(dir: string, m: WidgetManifest, env: DenoEnv, socket?: string | null): string[] {
   const p = m.permissions;
   const home = os.homedir();
-  const read = [dir, RUNTIME_DIR, ...p.read.map((r) => path.resolve(expandPath(r, home)))];
+  const read = [dir, RUNTIME_DIR, ...p.read.map((r) => path.resolve(expandPath(r, home))), ...(socket ? [socket] : [])];
   const args = [env.deno, "run", "--quiet", "--no-prompt", "--no-remote", "--no-npm", "--config", path.join(dir, "deno.json"), `--allow-read=${read.join(",")}`];
-  if (p.net.includes("*")) args.push("--allow-net");
-  else if (p.net.length) args.push(`--allow-net=${p.net.join(",")}`);
+  // The widgets socket: Deno asks net permission for a Unix socket ("unix:<path>"), older ones read and write on its path.
+  if (socket) args.push(`--allow-write=${socket}`);
+  const net = [...p.net, ...(socket ? [`unix:${socket}`] : [])];
+  if (net.includes("*")) args.push("--allow-net");
+  else if (net.length) args.push(`--allow-net=${net.join(",")}`);
   if (p.run.length) args.push(`--allow-run=${p.run.join(",")}`);
-  args.push(`--allow-env=${["CMD_WIDGET_CWD", "CMD_WIDGET_HOME", ...p.env].join(",")}`);
+  args.push(`--allow-env=${["CMD_WIDGET_CWD", "CMD_WIDGET_HOME", ...(socket ? ["CMD_SOCKET", "CMD_WIDGET_TOKEN"] : []), ...p.env].join(",")}`);
   args.push(path.join(RUNTIME_DIR, "runner.ts"), dir);
   return args;
 }
@@ -168,9 +173,10 @@ export async function runData(dir: string, m: WidgetManifest, o: RunDataOptions)
   writeDenoConfig(dir);
   const base = denoExecOptions(o);
   const keep = credentialsForPrograms(m.permissions.run);
-  const r = await execArgv(denoRunArgs(dir, m, o), {
+  const r = await execArgv(denoRunArgs(dir, m, o, o.socket?.path), {
     ...base,
-    env: { ...base.env, CMD_WIDGET_CWD: o.cwd, CMD_WIDGET_HOME: os.homedir() },
+    writable: [...base.writable, ...(o.socket ? [o.socket.path] : [])],
+    env: { ...base.env, CMD_WIDGET_CWD: o.cwd, CMD_WIDGET_HOME: os.homedir(), ...(o.socket ? { CMD_SOCKET: o.socket.path, CMD_WIDGET_TOKEN: o.socket.token } : {}) },
     cwd: o.cwd,
     stdin: JSON.stringify(o.config),
     timeoutMs: o.timeoutMs ?? 20_000,

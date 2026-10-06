@@ -389,3 +389,83 @@ export function notify(n: Notification): void {
 export function takeSignals(): { status: Status | null; notify: Notification[] } {
   return { status: signals.status, notify: [...signals.notify] };
 }
+
+// ── cmd's event log ────────────────────────────────────────────────
+
+/** A query over cmd's event log (docs/28 §4). Types may be prefixes ("git."); `at` is [from, to) in ms. */
+export interface EventQuery {
+  types?: string[];
+  at?: [number, number];
+  spaceId?: string;
+  projectId?: string;
+  sessionId?: string;
+  agentId?: string;
+  paneId?: string;
+  windowId?: string;
+  /** Full text over what people typed and agents wrote (FTS5 syntax). */
+  text?: string;
+  order?: "asc" | "desc";
+  limit?: number;
+  after?: number;
+}
+
+/** One event: what happened, when, where, with a payload typed by `type`. */
+export interface Event {
+  seq: number;
+  id: string;
+  at: number;
+  until: number | null;
+  type: string;
+  source: string;
+  spaceId: string | null;
+  projectId: string | null;
+  sessionId: string | null;
+  agentId: string | null;
+  paneId: string | null;
+  windowId: string | null;
+  text: string | null;
+  data: Record<string, unknown>;
+}
+
+/**
+ * Events from cmd's log: what agents did (agent.hook), commands that ran
+ * (command), commits (git.*), pages (browser.visit), files (file.open), notes,
+ * what you focused (user.*). Read-only, at most 1000 per query; the widget
+ * runs with the token cmd issued for this run.
+ */
+export async function events(query: EventQuery = {}): Promise<Event[]> {
+  const path = Deno.env.get("CMD_SOCKET");
+  const token = Deno.env.get("CMD_WIDGET_TOKEN");
+  if (!path || !token) throw new Error("events(): this widget runs without access to cmd's log");
+  const conn = await Deno.connect({ transport: "unix", path });
+  try {
+    await rpc(conn, 1, "widget.hello", { token });
+    return (await rpc(conn, 2, "data.query", { query })) as Event[];
+  } finally {
+    try {
+      conn.close();
+    } catch {}
+  }
+}
+
+async function rpc(conn: Deno.UnixConn, id: number, method: string, params: unknown): Promise<unknown> {
+  await conn.write(new TextEncoder().encode(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n"));
+  const dec = new TextDecoder();
+  let buf = "";
+  const chunk = new Uint8Array(65536);
+  for (;;) {
+    const n = await conn.read(chunk);
+    if (n === null) throw new Error("cmd closed the connection");
+    buf += dec.decode(chunk.subarray(0, n), { stream: true });
+    let i: number;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i);
+      buf = buf.slice(i + 1);
+      if (!line.trim()) continue;
+      const msg = JSON.parse(line) as { id?: number; result?: unknown; error?: { message: string } };
+      if (msg.id !== id) continue; // an event or another answer
+      if (msg.error) throw new Error(msg.error.message);
+      return msg.result;
+    }
+  }
+}

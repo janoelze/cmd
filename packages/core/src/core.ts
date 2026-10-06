@@ -15,6 +15,7 @@ import { JournalStore } from "./journal/store.ts";
 import { recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
 import { DataService } from "./data/service.ts";
 import { matchesQuery } from "./data/match.ts";
+import { WidgetTokens, widgetQuery } from "./data/widgets.ts";
 import { ViewsStore } from "./data/views/views.ts";
 import { ActivityView } from "./data/views/activity.ts";
 import { SessionsView } from "./data/views/sessions.ts";
@@ -129,6 +130,9 @@ const splitList = (v: string) => v.split(",").map((d) => d.trim()).filter(Boolea
 
 type Handlers = { [M in Method]: (params: Params<M>) => Result<M> | Promise<Result<M>> };
 
+/** The widgets socket lives beside the main one. */
+export const widgetsSocketPath = (socketPath: string) => path.join(path.dirname(socketPath), "widgets.sock");
+
 export class Core {
   readonly panes: PaneManager;
   readonly agents: AgentTracker;
@@ -181,6 +185,9 @@ export class Core {
   #dataSubs = new Map<Connection, Map<string, DataQuery>>();
   #dataPending = new Map<Connection, Map<string, DataEvent[]>>();
   #dataFlush: ReturnType<typeof setTimeout> | null = null;
+  /** Connections on the widgets socket, and which widget each said it is (null until widget.hello). */
+  #widgetConns = new Map<Connection, { widgetId: string; spaceId: string | null } | null>();
+  readonly widgetTokens = new WidgetTokens();
   /** Windows each connection shows (window.follow); remote sessions get output only for these. */
   #follows = new Map<Connection, Set<string>>();
   /** Connections that render widget previews (the app's main process), newest last. */
@@ -357,6 +364,7 @@ export class Core {
     if (opts.stateDir) this.journal.start();
     if (opts.stateDir) this.data.start();
     this.magic = new MagicService({
+      widgetSocket: { path: widgetsSocketPath(opts.socketPath), token: (widgetId, spaceId) => this.widgetTokens.issue({ widgetId, spaceId }) },
       windows: this.windows,
       settings,
       ai: this.ai,
@@ -508,6 +516,9 @@ export class Core {
     },
     "data.import": (p) => ({ imported: this.data.recordAll(p.events) }),
     "data.subscribe": (p) => ({ id: randomUUID(), events: this.data.query(p.query) }),
+    "widget.hello": () => {
+      throw new Error("widget.hello is for the widgets socket");
+    },
     "data.unsubscribe": () => null,
     "agents.export": (p) => {
       const log = this.agents.activity;
@@ -1001,7 +1012,32 @@ export class Core {
       fs.chmodSync(bindTo, 0o600);
       fs.renameSync(bindTo, sock);
       this.#sockIno = fs.statSync(sock).ino;
+      await this.#bindWidgets();
     }
+  }
+
+  #widgetsBound = false;
+
+  /**
+   * The widgets socket beside the main one: every connection on it is a widget's
+   * data.ts (see #widgetCall). Secondary to the main socket: a core that took
+   * the main path takes this one too (renamed over, atomically), and a rebind
+   * of the main socket keeps the one already there.
+   */
+  async #bindWidgets(): Promise<void> {
+    const sock = widgetsSocketPath(this.#opts.socketPath);
+    if (this.#widgetsBound && fs.existsSync(sock)) return;
+    const bindTo = path.join(path.dirname(sock), `.${process.pid}-${this.#servers.length}-w.sock`);
+    fs.rmSync(bindTo, { force: true });
+    const server = net.createServer((s) => this.#serveSocket(s, true));
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(bindTo, () => resolve());
+    });
+    this.#servers.push(server);
+    fs.chmodSync(bindTo, 0o600);
+    fs.renameSync(bindTo, sock);
+    this.#widgetsBound = true;
   }
 
   #rebinding = false;
@@ -1028,18 +1064,21 @@ export class Core {
   }
 
   /** A Unix socket client: local access. */
-  #serveSocket(sock: net.Socket): void {
+  #serveSocket(sock: net.Socket, widget = false): void {
     sock.setEncoding("utf8");
     sock.on("error", () => {});
     this.#sockets.add(sock);
-    rpcLog.debug("connection opened");
-    const served = this.serve({
+    rpcLog.debug(widget ? "widget connection opened" : "connection opened");
+    const conn: Connection = {
       access: "local",
       send: (line) => void (sock.writable && sock.write(line)),
       close: () => sock.destroy(),
-    });
+    };
+    if (widget) this.#widgetConns.set(conn, null);
+    const served = this.serve(conn);
     sock.on("close", () => {
       this.#sockets.delete(sock);
+      this.#widgetConns.delete(conn);
       rpcLog.debug("connection closed");
       served.closed();
     });
@@ -1075,6 +1114,11 @@ export class Core {
     const reply = (msg: object) => conn.send(JSON.stringify({ jsonrpc: "2.0", id: req.id, ...msg }) + "\n");
     try {
       const params = (req.params ?? {}) as never;
+      // A widget's data.ts: it says which widget it is, then it may read events, nothing else.
+      if (this.#widgetConns.has(conn)) {
+        reply({ result: this.#widgetCall(conn, req.method, params) });
+        return;
+      }
       if (conn.access !== "local") checkRemoteCall(req.method, params, conn.access, this.#policy);
       const result =
         req.method === "pane.fitOverride"
@@ -1097,6 +1141,20 @@ export class Core {
       } else rpcLog.warn(`${req.method} failed: ${(err as Error).message}`);
       reply({ error: { code: -32000, message: (err as Error).message } });
     }
+  }
+
+  /** What a widget connection may do (docs/28 §4, S6): identify itself, then query events within the policy. */
+  #widgetCall(conn: Connection, method: Method, params: Record<string, unknown>): unknown {
+    if (method === "widget.hello") {
+      const id = this.widgetTokens.check(String(params.token ?? ""));
+      if (!id) throw new Error("unknown or expired widget token");
+      this.#widgetConns.set(conn, id);
+      return id;
+    }
+    const who = this.#widgetConns.get(conn);
+    if (!who) throw new Error("say widget.hello first");
+    if (method === "data.query") return this.data.query(widgetQuery(params.query as DataQuery));
+    throw new Error(`widgets may only read events (data.query), not ${String(method)}`);
   }
 
   /** Per-connection bookkeeping for the connection-aware methods. */

@@ -79,3 +79,18 @@ describe("data subscriptions", () => {
     expect(received.some((e) => e.id === id)).toBe(false);
   });
 });
+
+describe("the widgets socket", () => {
+  it("lets a widget that says who it is read events, and nothing else", async () => {
+    const { widgetsSocketPath } = await import("../src/core.ts");
+    const w = await connect(widgetsSocketPath(socketPath));
+    await expect(w.client.call("data.query", { query: {} })).rejects.toThrow(/widget.hello/);
+    await expect(w.client.call("widget.hello", { token: "nope" })).rejects.toThrow(/unknown or expired/);
+    const token = core.widgetTokens.issue({ widgetId: "w1", spaceId: "s1" });
+    expect(await w.client.call("widget.hello", { token })).toEqual({ widgetId: "w1", spaceId: "s1" });
+    const events = await w.client.call("data.query", { query: { types: ["note"], limit: 5000 } });
+    expect(events.length).toBeGreaterThan(0);
+    await expect(w.client.call("pane.list", {})).rejects.toThrow(/only read events/);
+    w.close();
+  });
+});

@@ -64,6 +64,8 @@ export interface WidgetNotification {
 }
 
 export interface MagicServiceOptions {
+  /** The core's widgets socket and a token per data.ts run, so widgets can read the event log (docs/28 §4). */
+  widgetSocket?: { path: string; token: (widgetId: string, spaceId: string | null) => string } | null;
   windows: MagicWindows;
   settings: () => Settings;
   /** Show a widget's notification (data.ts notify()). */
@@ -588,7 +590,8 @@ export class MagicService {
     else if (!deno) error = "Deno isn't installed (the widget's Health tab installs it)";
     else {
       const secrets = this.widgetSecrets.get(s.widgetId!);
-      const r = await runData(this.store.dir(s.widgetId!), m.manifest, { ...deno, cwd: this.#cwd(w), config: { ...configValues(m.manifest, s.config), ...secrets } });
+      const sock = this.#o.widgetSocket;
+      const r = await runData(this.store.dir(s.widgetId!), m.manifest, { ...deno, cwd: this.#cwd(w), config: { ...configValues(m.manifest, s.config), ...secrets }, socket: sock ? { path: sock.path, token: sock.token(s.widgetId!, w.spaceId ?? null) } : null });
       ok = r.ok;
       data = r.data;
       retryAfter = r.retryAfter;

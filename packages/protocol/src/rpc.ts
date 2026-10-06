@@ -176,6 +176,8 @@ export interface Methods {
    * recorded or updated that answers it, until unsubscribed or the connection closes.
    */
   "data.subscribe": { params: { query: DataQuery }; result: { id: string; events: DataEvent[] } };
+  /** On the widgets socket: which widget this connection is (a token issued for its data.ts run); then data.query is allowed. */
+  "widget.hello": { params: { token: string }; result: { widgetId: string; spaceId: string | null } };
   "data.unsubscribe": { params: { id: string }; result: null };
   /** Where agents keep their config (discovered); rescan: look again first. */
   "agents.homes": { params: { rescan?: boolean }; result: AgentHome[] };

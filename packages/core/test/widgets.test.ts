@@ -171,6 +171,36 @@ describe.skipIf(!DENO)("data.ts in Deno", () => {
     expect(r.stderr).toContain("noise on stdout");
   });
 
+  it("lets data.ts read cmd's event log through the widgets socket, with the run's token", async () => {
+    const { Core, widgetsSocketPath } = await import("../src/core.ts");
+    const { fakeFactory } = await import("./fake-pty.ts");
+    const sockDir = tmp();
+    const core = new Core({ socketPath: path.join(sockDir, "core.sock"), dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0 });
+    await core.listen();
+    try {
+      core.data.record({ id: "n1", at: 1, type: "note", source: "cmd", text: "a note", data: { by: "user", agentSession: null } });
+      const { dir, m } = widget({
+        "manifest.json": MANIFEST(),
+        "data.ts": `import { s, events, type Infer } from "cmd";
+export const schema = s.object({ notes: s.number(), first: s.string() });
+export type Data = Infer<typeof schema>;
+export default async function data(): Promise<Data> {
+  const evs = await events({ types: ["note"] });
+  return { notes: evs.length, first: evs[0]?.text ?? "" };
+}`,
+      });
+      const token = core.widgetTokens.issue({ widgetId: "w", spaceId: null });
+      const r = await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {}, socket: { path: widgetsSocketPath(path.join(sockDir, "core.sock")), token } });
+      if (!r.ok) console.error("events() run failed:", r.error, "\n", r.stderr);
+      expect(r).toMatchObject({ ok: true, data: { notes: 1, first: "a note" } });
+      // Without the token the log is out of reach.
+      const r2 = await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {} });
+      expect(r2.ok).toBe(false);
+    } finally {
+      await core.close();
+    }
+  });
+
   it("reports data of the wrong shape with the paths that are wrong", async () => {
     const { dir, m } = widget({ "manifest.json": MANIFEST(), "data.ts": DATA().replace("return { n: (config.start ?? 0) + 3 };", 'return { n: "3", label: 4 } as never;') });
     const r = await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {} });
