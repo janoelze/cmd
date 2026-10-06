@@ -866,6 +866,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.waitForTimeout(500); // the rows' symbols load from macOS
     await win.screenshot({ path: path.join(shots, "new-picker.png") });
     await win.locator(".palette-input").fill("timer");
+    // Enter acts on the highlighted row: wait until the filter has made it Timer (pressing at once raced the re-render).
+    await win.waitForSelector(".palette-list li.on .palette-label:text-is('Timer')", { timeout: 3000 }).catch(() => {});
     await win.keyboard.press("Enter");
     let timer = null;
     for (let i = 0; i < 20 && !timer; i++) {
