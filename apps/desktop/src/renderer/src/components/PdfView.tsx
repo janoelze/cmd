@@ -5,7 +5,7 @@
 // changes (LaTeX, an agent writing it) it reloads where you were. Where you are
 // (page, zoom, sidebar) is kept in the window's state. Loaded lazily with pdf.js.
 
-import { Button, EmptyState, IconButton, ListRow, SearchField, Segmented, Spinner, TextField, Twisty } from "@cmd/ui";
+import { Button, EmptyState, ListRow, Segmented, Spinner, TextField, ToolbarButton, ToolbarField, ToolbarGroup, ToolbarMenu, ToolbarSearchField, ToolbarSeparator, ToolbarSpacer, ToolbarText, Twisty, WindowToolbar } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { cmd } from "../bridge.ts";
@@ -270,44 +270,46 @@ export function PdfView({ win, focused }: WindowViewProps) {
 
   return (
     <div className="pdf">
-      <div className="window-toolbar pdf-toolbar">
-        <IconButton icon="sidebar.left" label={sidebar ? "Hide Sidebar" : "Show Sidebar"} pressed={!!sidebar} onClick={() => patch({ sidebar: sidebar ? null : "pages" })} />
-        <span className="pdf-pages">
-          <TextField
-            size="sm"
-            className="pdf-page-field"
-            aria-label="Page"
-            value={pageDraft ?? String(page)}
-            disabled={!pages}
-            onChange={setPageDraft}
-            onFocus={(e) => e.currentTarget.select()}
-            onBlur={() => setPageDraft(null)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const n = Number(pageDraft);
-                if (Number.isFinite(n)) goToPage(n);
-                setPageDraft(null);
-                container.current?.focus();
-              } else if (e.key === "Escape") (setPageDraft(null), container.current?.focus());
-            }}
-          />
-          <span className="pdf-of">of {pages || "–"}</span>
-        </span>
-        <span className="ui-spacer" />
-        <IconButton icon="minus.magnifyingglass" label="Zoom Out" shortcut="⌘−" disabled={!pages} onClick={() => zoomBy(-1)} />
-        <button className="pdf-zoom" disabled={!pages} onClick={zoomMenu} data-tip="Zoom">
-          {zoomLabel(zoom.scale, zoom.preset)}
-        </button>
-        <IconButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" disabled={!pages} onClick={() => zoomBy(1)} />
-        <IconButton icon="magnifyingglass" label="Find" shortcut="⌘F" disabled={!pages} pressed={finding} onClick={() => (finding ? closeFind() : (setFinding(true), requestAnimationFrame(() => findField.current?.focus())))} />
-      </div>
+      <WindowToolbar label="PDF">
+        <ToolbarButton icon="sidebar.left" label={sidebar ? "Hide Sidebar" : "Show Sidebar"} pressed={!!sidebar} onClick={() => patch({ sidebar: sidebar ? null : "pages" })} priority={2} />
+        <ToolbarField
+          aria-label="Page"
+          align="center"
+          minWidth={36}
+          maxWidth={44}
+          value={pageDraft ?? String(page)}
+          disabled={!pages}
+          onChange={(e) => setPageDraft(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={() => setPageDraft(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              const n = Number(pageDraft);
+              if (Number.isFinite(n)) goToPage(n);
+              setPageDraft(null);
+              container.current?.focus();
+            } else if (e.key === "Escape") (setPageDraft(null), container.current?.focus());
+          }}
+        />
+        <ToolbarText priority={0}>of {pages || "–"}</ToolbarText>
+        <ToolbarSpacer />
+        <ToolbarGroup>
+          <ToolbarButton icon="minus.magnifyingglass" label="Zoom Out" shortcut="⌘−" disabled={!pages} onClick={() => zoomBy(-1)} priority={1} />
+          <ToolbarMenu label="Zoom" disabled={!pages} onClick={zoomMenu} priority={3}>
+            {zoomLabel(zoom.scale, zoom.preset)}
+          </ToolbarMenu>
+          <ToolbarButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" disabled={!pages} onClick={() => zoomBy(1)} priority={1} />
+        </ToolbarGroup>
+        <ToolbarSeparator />
+        <ToolbarButton icon="magnifyingglass" label="Find" shortcut="⌘F" disabled={!pages} pressed={finding} onClick={() => (finding ? closeFind() : (setFinding(true), requestAnimationFrame(() => findField.current?.focus())))} />
+      </WindowToolbar>
       {finding && (
-        <div className="pdf-find">
-          <SearchField
+        <WindowToolbar label="Find in PDF">
+          <ToolbarSearchField
             ref={findField}
-            size="sm"
             value={query}
             placeholder="Find in PDF"
+            count={matches ? (matches.total ? `${matches.current} of ${matches.total}` : "No matches") : undefined}
             onChange={(v) => {
               setQuery(v);
               search("", false, v);
@@ -317,13 +319,12 @@ export function PdfView({ win, focused }: WindowViewProps) {
               else if (e.key === "Escape") (e.preventDefault(), closeFind());
             }}
           />
-          <span className="pdf-matches">{query && matches ? (matches.total ? `${matches.current} of ${matches.total}` : "No matches") : ""}</span>
-          <IconButton size="sm" icon="chevron.up" label="Previous" shortcut="⇧⌘G" disabled={!matches?.total} onClick={() => search("again", true)} />
-          <IconButton size="sm" icon="chevron.down" label="Next" shortcut="⌘G" disabled={!matches?.total} onClick={() => search("again")} />
-          <Button size="sm" variant="ghost" onClick={closeFind}>
-            Done
-          </Button>
-        </div>
+          <ToolbarGroup>
+            <ToolbarButton icon="chevron.up" label="Previous" shortcut="⇧⌘G" disabled={!matches?.total} onClick={() => search("again", true)} />
+            <ToolbarButton icon="chevron.down" label="Next" shortcut="⌘G" disabled={!matches?.total} onClick={() => search("again")} />
+          </ToolbarGroup>
+          <ToolbarButton label="Done" onClick={closeFind} />
+        </WindowToolbar>
       )}
       <div className="pdf-main">
         {sidebar && doc && phase.kind === "ready" && (

@@ -73,11 +73,14 @@ export function WindowToolbar({
   children,
   label,
   className,
+  floating,
 }: {
   children: ReactNode;
   /** Its accessible name ("Browser", "Filter events"). */
   label?: string;
   className?: string;
+  /** Over the content (a terminal's find bar): as wide as its items, rounded, with a shadow. */
+  floating?: boolean;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
@@ -128,7 +131,7 @@ export function WindowToolbar({
 
   return (
     <Registry.Provider value={registry}>
-      <div ref={bar} className={cls("ui-tb", className)} role="toolbar" aria-label={label}>
+      <div ref={bar} className={cls("ui-tb", className)} role="toolbar" aria-label={label} data-floating={floating || undefined}>
         {children}
         <button
           ref={more}
@@ -151,7 +154,8 @@ export function WindowToolbar({
 // ── items ──────────────────────────────────────────────
 
 export interface ToolbarButtonProps extends ItemProps {
-  icon: string | ReactNode;
+  /** Without one, it's a text button: the label always shows. */
+  icon?: string | ReactNode;
   /** The tooltip, the accessible name, its ⋯ menu entry, and its text where `showLabel`. */
   label: string;
   shortcut?: string;
@@ -166,6 +170,8 @@ export interface ToolbarButtonProps extends ItemProps {
   tone?: "accent" | "danger" | "needs";
   /** Something after the label: a count. */
   badge?: ReactNode;
+  /** A tooltip other than the label (more detail: a branch's upstream and changes). */
+  tip?: string;
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   className?: string;
 }
@@ -190,13 +196,13 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(f
       aria-label={p.label}
       aria-pressed={p.pressed}
       aria-haspopup={p.menu || undefined}
-      data-tip={p.label}
+      data-tip={p.tip ?? p.label}
       data-tip-key={p.shortcut}
       disabled={p.disabled}
       onClick={p.onClick}
     >
-      {iconNode(p.icon, ICON.toolbar)}
-      {p.showLabel && <span className="ui-tb-label">{p.label}</span>}
+      {p.icon !== undefined && iconNode(p.icon, ICON.toolbar)}
+      {p.icon === undefined ? <span className="ui-tb-text">{p.label}</span> : p.showLabel && <span className="ui-tb-label">{p.label}</span>}
       {p.badge != null && <span className="ui-tb-badge">{p.badge}</span>}
       {p.menu && <span className="ui-tb-chevron">{iconNode("chevron.down", ICON.disclosure)}</span>}
     </button>

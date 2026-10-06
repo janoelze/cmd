@@ -2,17 +2,6 @@
    with a gap and a soft shadow, cmd's toolbar, find bar and sidebar around them. */
 
 .pdf { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); }
-.pdf-toolbar { gap: 2px; }
-.pdf-pages { display: flex; align-items: center; gap: 6px; margin-left: 4px; font: 12px var(--font-ui); color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.pdf-page-field.ui-field { width: 44px; }
-.pdf-page-field input { text-align: center; }
-.pdf-zoom { min-width: 64px; height: 22px; padding: 0 6px; font: 12px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--text); background: none; border: 0; border-radius: var(--radius-sm); }
-.pdf-zoom:hover:not(:disabled) { background: var(--bg-hover); }
-.pdf-zoom:disabled { color: var(--text-dim); }
-
-.pdf-find { flex: none; display: flex; align-items: center; gap: 4px; height: 34px; padding: 0 6px 0 8px; border-bottom: 1px solid var(--separator); background: var(--bg); }
-.pdf-find .ui-field { width: min(260px, 50%); }
-.pdf-matches { min-width: 0; flex: 1; padding: 0 6px; font-size: var(--text-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .pdf-main { flex: 1; min-height: 0; display: flex; }
 .pdf-stage { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; }

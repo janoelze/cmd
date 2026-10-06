@@ -25,7 +25,7 @@
 // on the same disk, copied from another or with ⌥, like Finder. Hovering a closed
 // folder for a moment opens it.
 
-import { Callout, EmptyState, IconButton, PanelHeader, toast } from "@cmd/ui";
+import { Callout, EmptyState, toast, ToolbarButton, ToolbarPath, ToolbarSpacer, WindowToolbar } from "@cmd/ui";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AppWindow, FileEntry, GitFile, GitFileState, GitStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -37,7 +37,6 @@ import { registerDropTarget } from "../drops.ts";
 import { dragFiles } from "../drags.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { PlacementContext } from "../windows/registry.ts";
-import { useWholePixelWidth } from "../pixels.ts";
 
 const iconFor = (e: FileEntry) =>
   e.kind === "dir"
@@ -128,8 +127,6 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     "-",
     { label: isBookmarked(root) ? "Remove This Folder from Bookmarks" : "Bookmark This Folder", run: () => toggleBookmark(root, true) },
   ];
-  const headLabel = useRef<HTMLSpanElement>(null);
-  useWholePixelWidth(headLabel); // the chevron and branch after it stay crisp
   const cameFrom = useRef<string | null>(null);
   const typed = useRef({ text: "", at: 0 });
 
@@ -583,7 +580,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
 
   const anyOpen = expanded.some((p) => p.startsWith(root + "/"));
   const collapseAll = () => setExpanded((x) => x.filter((p) => !p.startsWith(root + "/")));
-  // The header's folder name: the folders above, nearest first (what the crumbs and ⌘↑ do).
+  // The path's last folder: bookmarks, the folders above, nearest first (what the crumbs and ⌘↑ do).
   const folderMenu = () =>
     void showContextMenu([
       { label: "Bookmarks", submenu: bookmarkEntries() },
@@ -596,71 +593,31 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       { label: "Show in Finder", run: () => cmd.revealPath(root) },
       { label: "Copy Path", run: () => copy(root) },
     ]);
-  const moreMenu = () =>
-    void showContextMenu([
-      { label: "Show Hidden Files", checked: showHidden, run: () => setShowHidden((h) => !h) },
-      ...(git ? [{ label: "Changes Only", checked: showChanges, run: () => setChangesOnly((c) => !c) }] : []),
-      "-",
-      { label: "New Terminal Here", run: () => void newTerminalIn(root) },
-      { label: "Show in Finder", run: () => cmd.revealPath(root) },
-    ]);
-
   return (
     <div className={`files${docked ? " in-sidebar" : ""}`}>
-      {docked ? (
-        <PanelHeader
-          title={<span ref={headLabel}>{crumbs.at(-1)?.name || root}</span>}
-          onTitleClick={folderMenu}
-          titleTip={root}
-          actions={
-            <>
-              <IconButton size="sm" icon="doc.badge.plus" label="New File" onClick={() => void create("file", root)} />
-              <IconButton size="sm" icon="folder.badge.plus" label="New Folder" shortcut="⇧⌘N" onClick={() => void create("dir", root)} />
-              <IconButton size="sm" icon="rectangle.compress.vertical" label="Collapse All" disabled={!anyOpen} onClick={collapseAll} />
-              <IconButton size="sm" icon="ellipsis" label="More" onClick={moreMenu} />
-            </>
-          }
-        >
-          {git && (
-            <button className={`files-head-branch ${showChanges ? "on" : ""}`} onClick={() => setChangesOnly((c) => !c)} data-tip={branchTitle}>
-              <Symbol name="arrow.triangle.branch" size={ICON.small} />
-              {changes.length > 0 && <span className="git-count">{changes.length}{git.truncated ? "+" : ""}</span>}
-            </button>
-          )}
-        </PanelHeader>
-      ) : (
-      <div className="window-toolbar">
-        <IconButton icon="chevron.up" label="Enclosing Folder" shortcut="⌘↑" disabled={!rootParent} onClick={rootUp} />
-        <div className="crumbs" data-tip={root}>
-          {crumbs.map((c) => (
-            <button key={c.path} className="crumb" onClick={() => setRoot(c.path)}>
-              {c.name}
-            </button>
-          ))}
-        </div>
+      <WindowToolbar label="Files">
+        <ToolbarButton icon="chevron.up" label="Enclosing Folder" shortcut="⌘↑" disabled={!rootParent} onClick={rootUp} />
+        <ToolbarPath segments={crumbs.map((c) => ({ key: c.path, label: c.name }))} onSelect={setRoot} onMenu={folderMenu} tip={root} />
+        <ToolbarSpacer />
         {git && (
-          <button className={`git-branch ${showChanges ? "on" : ""}`} onClick={() => setChangesOnly((c) => !c)} data-tip={branchTitle}>
-            <Symbol name="arrow.triangle.branch" size={ICON.toolbar} />
-            <span className="git-branch-name">{branchLabel}</span>
-            {git.ahead > 0 && <span className="git-ab">↑{git.ahead}</span>}
-            {git.behind > 0 && <span className="git-ab">↓{git.behind}</span>}
-            {changes.length > 0 && <span className="git-count">{changes.length}{git.truncated ? "+" : ""}</span>}
-          </button>
+          <ToolbarButton
+            icon="arrow.triangle.branch"
+            label={branchLabel}
+            tip={branchTitle}
+            showLabel
+            pressed={showChanges}
+            badge={changes.length > 0 ? `${changes.length}${git.truncated ? "+" : ""}` : undefined}
+            onClick={() => setChangesOnly((c) => !c)}
+            priority={5}
+          />
         )}
-        <IconButton
-          icon={isBookmarked(root) ? "bookmark.fill" : "bookmark"}
-          label="Bookmarks"
-          onClick={() => void showContextMenu(bookmarkEntries())}
-        />
-        <IconButton
-          icon={showHidden ? "eye" : "eye.slash"}
-          label={showHidden ? "Hide Hidden Files" : "Show Hidden Files"}
-          pressed={showHidden}
-          onClick={() => setShowHidden((h) => !h)}
-        />
-        <IconButton icon="terminal" label="New Terminal Here" onClick={() => void newTerminalIn(root)} />
-      </div>
-      )}
+        <ToolbarButton icon="doc.badge.plus" label="New File" onClick={() => void create("file", root)} priority={4} />
+        <ToolbarButton icon="folder.badge.plus" label="New Folder" shortcut="⇧⌘N" onClick={() => void create("dir", root)} priority={4} />
+        <ToolbarButton icon="rectangle.compress.vertical" label="Collapse All" disabled={!anyOpen} onClick={collapseAll} secondary priority={1} />
+        <ToolbarButton icon={isBookmarked(root) ? "bookmark.fill" : "bookmark"} label="Bookmarks" menu onClick={() => void showContextMenu(bookmarkEntries())} secondary priority={2} />
+        <ToolbarButton icon={showHidden ? "eye" : "eye.slash"} label={showHidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={showHidden} onClick={() => setShowHidden((h) => !h)} secondary priority={2} />
+        <ToolbarButton icon="terminal" label="New Terminal Here" onClick={() => void newTerminalIn(root)} secondary priority={3} />
+      </WindowToolbar>
       <div
         className={`file-list ${dropDir === root ? "drop-into" : ""}`}
         ref={listRef}

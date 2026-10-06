@@ -1019,6 +1019,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
   /* The line under it: the window's outline colour, as the title bar's is. */
   box-shadow: inset 0 -1px 0 var(--window-edge);
 }
+.ui-tb[data-floating] { height: auto; padding: 4px; border-radius: var(--radius-md); background: var(--bg-sidebar); box-shadow: 0 0 0 1px var(--window-edge), 0 4px 14px var(--shadow); }
 .ui-tb > *, .ui-tb-group > * { flex: none; }
 .ui-tb-group { display: flex; align-items: center; gap: 0; }
 .ui-tb-spacer { flex: 1 1 0; min-width: 0; }

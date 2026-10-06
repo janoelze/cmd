@@ -69,7 +69,8 @@ registerWindowView({
 registerWindowView({
   kind: "files",
   View: FilesView,
-  describe: (w) => ({ place: parentOf(stateStr(w, "path") ?? "/") }),
+  // No Place: the toolbar's path shows where it is.
+  describe: () => ({}),
   menu: (w) => {
     const p = stateStr(w, "path");
     return p

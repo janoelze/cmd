@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Button, IconButton, TextField, Toast } from "@cmd/ui";
+import { Toast, ToolbarButton, ToolbarGroup, ToolbarSearchField, WindowToolbar } from "@cmd/ui";
 import type { PaneId, Progress } from "@cmd/protocol";
 import { useStoreValue } from "../store.ts";
 import { terminals, type FindResults } from "../terminals.ts";
@@ -150,31 +150,31 @@ function FindBar(p: { paneId: PaneId; handle: React.RefObject<FindHandle | null>
   const count = !query ? "" : res && res.count > 0 ? (res.index >= 0 ? `${res.index + 1} of ${res.count}` : `${res.count}+`) : "No matches";
 
   return (
-    <div className="find-bar" onMouseDown={(e) => e.target !== input.current && e.preventDefault()}>
-      <TextField
-        ref={input}
-        size="sm"
-        width={180}
-        value={query}
-        placeholder="Find"
-        onChange={setQuery}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") step(e.shiftKey ? -1 : 1);
-          else if (e.key === "Escape") p.onClose();
-          else return;
-          e.preventDefault();
-        }}
-      />
-      <span className="find-count">{count}</span>
-      <Button size="sm" variant="ghost" className="find-toggle" pressed={caseSensitive} data-tip="Match Case" onClick={() => setCase(!caseSensitive)}>
-        Aa
-      </Button>
-      <Button size="sm" variant="ghost" className="find-toggle" pressed={regex} data-tip="Regular Expression" onClick={() => setRegex(!regex)}>
-        .*
-      </Button>
-      <IconButton size="sm" icon="chevron.up" label="Previous" shortcut="⇧↩" onClick={() => step(-1)} />
-      <IconButton size="sm" icon="chevron.down" label="Next" shortcut="↩" onClick={() => step(1)} />
-      <IconButton size="sm" icon="xmark" label="Close" shortcut="⎋" onClick={p.onClose} />
+    <div className="find-bar" onMouseDown={(e) => !(e.target instanceof HTMLInputElement) && e.preventDefault()}>
+      <WindowToolbar label="Find" floating>
+        <ToolbarSearchField
+          ref={input}
+          value={query}
+          placeholder="Find"
+          minWidth={150}
+          maxWidth={220}
+          count={count}
+          onChange={setQuery}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") step(e.shiftKey ? -1 : 1);
+            else if (e.key === "Escape") p.onClose();
+            else return;
+            e.preventDefault();
+          }}
+        />
+        <ToolbarButton icon={<span className="find-glyph">Aa</span>} label="Match Case" pressed={caseSensitive} onClick={() => setCase(!caseSensitive)} />
+        <ToolbarButton icon={<span className="find-glyph">.*</span>} label="Regular Expression" pressed={regex} onClick={() => setRegex(!regex)} />
+        <ToolbarGroup>
+          <ToolbarButton icon="chevron.up" label="Previous" shortcut="⇧↩" onClick={() => step(-1)} />
+          <ToolbarButton icon="chevron.down" label="Next" shortcut="↩" onClick={() => step(1)} />
+        </ToolbarGroup>
+        <ToolbarButton icon="xmark" label="Close" shortcut="⎋" onClick={p.onClose} />
+      </WindowToolbar>
     </div>
   );
 }
