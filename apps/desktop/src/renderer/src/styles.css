@@ -465,13 +465,17 @@ kbd {
 /* Sidebars don't drag (Dock.tsx): no grab hand. */
 .dock .tile-title { cursor: default; }
 .empty-main { display: grid; place-items: center; }
-/* Monochrome logo drawn as a mask so it takes the theme's colour. */
-.hello {
-  width: 100px;
-  aspect-ratio: 663 / 89;
-  background-color: var(--text-dim);
-  mask: url("./assets/hack-the-planet.svg") center / contain no-repeat;
+/* ShortcutTips: one shortcut at a time, fading in as it changes. */
+.shortcut-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-base);
+  color: var(--text-dim);
+  animation: shortcut-tip-in 400ms ease-out;
 }
+@keyframes shortcut-tip-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .shortcut-tip { animation: none; } }
 
 /* ── command palette ────────────────────────────────── */
 

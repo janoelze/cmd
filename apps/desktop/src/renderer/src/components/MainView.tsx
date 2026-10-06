@@ -3,6 +3,7 @@ import type { SidebarRow } from "../model.ts";
 import type { Camera } from "../canvas.ts";
 import type { Rect } from "../layouts.ts";
 import { WindowsView } from "./WindowsView.tsx";
+import { ShortcutTips } from "./ShortcutTips.tsx";
 
 export type { ViewMode } from "../layouts.ts";
 import type { ViewMode } from "../layouts.ts";
@@ -53,7 +54,7 @@ export function MainView({
   if (withPane.length === 0) {
     return (
       <main className="main empty-main">
-        <div className="hello" aria-label="hack the planet" />
+        <ShortcutTips />
       </main>
     );
   }
