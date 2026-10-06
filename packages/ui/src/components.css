@@ -1002,7 +1002,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 
 /* ── window toolbar (toolbar.tsx) ──
    One row of items, all --toolbar-item-h tall, ghost at rest. data-step is set by
-   measuring (labels → icons → compact → overflow). */
+   measuring (labels → icons → compact → overflow). Secondary items fade at rest. */
 .ui-tb {
   flex: none;
   display: flex;
@@ -1102,6 +1102,11 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-tb [data-tb-moved] { display: none !important; }
 .ui-tb-more[hidden] { display: none; }
 
+/* Secondary items: faded until their window is hovered, selected or focused. */
+.ui-tb [data-secondary] { opacity: 0.4; transition: opacity var(--dur); }
+:is(.ui-window:hover, .ui-window[data-selected], .ui-window:focus-within) .ui-tb [data-secondary],
+.ui-tb:is(:hover, :focus-within) [data-secondary] { opacity: 1; }
+.ui-tb .ui-tb-button[data-secondary]:disabled { opacity: calc(0.4 * var(--disabled-opacity)); }
 /* An unselected window: its toolbar's icons a step dimmer. */
 .ui-window:not([data-selected]) .ui-tb-button:not([aria-pressed="true"]):not([data-tone]) { color: color-mix(in srgb, var(--icon) 75%, transparent); }
 

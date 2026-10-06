@@ -9,6 +9,8 @@
 // to their last part; then items with a `priority` move, lowest first, into a
 // ⋯ menu built from their props. Fields shrink to their minimum last.
 //
+// Items marked `secondary` are faded until their window is hovered, selected or
+// focused (or the toolbar itself, outside a window): still there, quieter.
 // Every button's tooltip is its label and shortcut.
 
 import {
@@ -49,15 +51,18 @@ function useOverflow(entry: OverflowEntry | null): string {
   return key;
 }
 
-/** Shared by every item that can move to the ⋯ menu. */
+/** Shared by every item that can move to the ⋯ menu or be secondary. */
 interface ItemProps {
   /** Moves to the ⋯ menu when there is no room, lowest first; without one it stays. */
   priority?: number;
+  /** Faded until the window is hovered, selected or focused. */
+  secondary?: boolean;
 }
 
 const itemAttrs = (key: string, p: ItemProps) => ({
   "data-tb-key": key,
   "data-tb-priority": p.priority,
+  "data-secondary": p.secondary || undefined,
 });
 
 // ── the bar ────────────────────────────────────────────
@@ -314,9 +319,9 @@ export function ToolbarPath({ segments, onSelect, onMenu, tip }: { segments: rea
 }
 
 /** Items that belong together, closer than the bar's gap (Back · Forward · Reload). */
-export function ToolbarGroup({ children }: { children: ReactNode }) {
+export function ToolbarGroup({ children, secondary }: { children: ReactNode; secondary?: boolean }) {
   return (
-    <div className="ui-tb-group">
+    <div className="ui-tb-group" data-secondary={secondary || undefined}>
       {children}
     </div>
   );
