@@ -66,6 +66,14 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
     this.#roots = [...o.roots];
     for (const r of this.#learnedRoots()) if (isDir(r.dir) && !this.#roots.some((k) => k.dir === r.dir || covers(k, r.dir))) this.#roots.push(r);
     this.#status = { ...this.#status, ...this.#counts() };
+    o.sessions.fileOf = (id) => this.#fileOf(id);
+  }
+
+  /** The newest file read whose name holds a session id (every agent names its files by it), with its folder's env. */
+  #fileOf(sessionId: string): { path: string; env: Record<string, string> | null } | null {
+    if (sessionId.length < 4) return null;
+    const row = this.#o.views.stmt(`SELECT path, root_dir AS rootDir FROM transcript_files WHERE instr(path, ?) > 0 ORDER BY mtime DESC LIMIT 1`).get(sessionId) as { path: string; rootDir: string } | undefined;
+    return row ? { path: row.path, env: this.#roots.find((r) => r.dir === row.rootDir)?.env ?? null } : null;
   }
 
   /** Reads what changed: in a worker, or now when inline. */

@@ -56,7 +56,7 @@ export class SessionsView {
     this.#views = views;
     this.#data = data;
     const { rebuilt } = views.ensure("sessions", VERSION, ["sessions"], SQL);
-    if (rebuilt && data.store.count({ types: ["transcript."], limit: 1 }) > 0) this.rebuild();
+    if (rebuilt && data.store.count({ types: ["transcript."], limit: 1 }) > 0) void this.rebuild();
   }
 
   /** Folds transcript events into their sessions. `file`: the file they came from (path, resume env). */
@@ -113,21 +113,62 @@ export class SessionsView {
     return rows.map(sessionInfo);
   }
 
-  /** The view from every transcript event in the log, in order. */
-  rebuild(): number {
+  /**
+   * The view from every transcript event in the log, in order: a page at a time
+   * with the core answering in between, each event's few fields the view takes
+   * (not its payload: hundreds of thousands of messages). Calls while one runs
+   * get that one.
+   */
+  /** The transcript a session id was read from, and its resume env (set by the reader, TranscriptIngest). */
+  fileOf: ((sessionId: string) => { path: string; env: Record<string, string> | null } | null) | null = null;
+
+  rebuild(): Promise<number> {
+    this.#running ??= this.#rebuild().finally(() => (this.#running = null));
+    return this.#running;
+  }
+  #running: Promise<number> | null = null;
+
+  async #rebuild(): Promise<number> {
     const t0 = Date.now();
+    // Which file a session came from and how to resume it aren't in the log: kept across.
+    const files = this.#views.db.prepare(`SELECT key, path, env FROM sessions WHERE path IS NOT NULL OR env IS NOT NULL`).all() as { key: string; path: string | null; env: string | null }[];
     this.#views.db.exec(`DELETE FROM sessions`);
     this.#rebuilding = true;
+    const page = this.#data.store.db.prepare(
+      `SELECT seq, type, at, until, session_id AS sessionId, project_id AS projectId, text, json_extract(data, '$.cwd') AS cwd, json_extract(data, '$.gitBranch') AS gitBranch, json_extract(data, '$.role') AS role, json_extract(data, '$.isSidechain') AS isSidechain, json_extract(data, '$.isMeta') AS isMeta
+       FROM events WHERE type >= 'transcript.' AND type < 'transcript/' AND seq > ? ORDER BY seq LIMIT ?`,
+    );
     let after = 0;
     let n = 0;
-    for (;;) {
-      const page = this.#data.store.query({ types: ["transcript."], after, limit: 5000 });
-      if (!page.length) break;
-      this.apply(page);
-      n += page.length;
-      after = page.at(-1)!.seq;
+    try {
+      for (;;) {
+        const rows = page.all(after, 5000) as { seq: number; type: string; at: number; until: number | null; sessionId: string | null; projectId: string | null; text: string | null; cwd: unknown; gitBranch: unknown; role: unknown; isSidechain: unknown; isMeta: unknown }[];
+        if (!rows.length) break;
+        this.apply(rows.map((r) => ({ ...r, data: { cwd: r.cwd, gitBranch: r.gitBranch, role: r.role, isSidechain: !!r.isSidechain, isMeta: !!r.isMeta } }) as unknown as DataEvent));
+        n += rows.length;
+        after = rows.at(-1)!.seq;
+        await new Promise((r) => setImmediate(r));
+      }
+      const keep = this.#views.stmt(`UPDATE sessions SET path = ?, env = ? WHERE key = ?`);
+      this.#views.transaction(() => {
+        for (const f of files) keep.run(f.path, f.env, f.key);
+      });
+      // Sessions without them (the view was dropped): from the reader's files.
+      if (this.fileOf) {
+        const missing = this.#views.db.prepare(`SELECT key, id FROM sessions WHERE path IS NULL`).all() as { key: string; id: string }[];
+        for (let i = 0; i < missing.length; i += 200) {
+          this.#views.transaction(() => {
+            for (const m of missing.slice(i, i + 200)) {
+              const f = this.fileOf!(m.id);
+              if (f) keep.run(f.path, f.env ? JSON.stringify(f.env) : null, m.key);
+            }
+          });
+          await new Promise((r) => setImmediate(r));
+        }
+      }
+    } finally {
+      this.#rebuilding = false;
     }
-    this.#rebuilding = false;
     log.info("sessions rebuilt from events", { events: n, sessions: this.counts().sessions, ms: Date.now() - t0 });
     return n;
   }

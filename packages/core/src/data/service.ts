@@ -150,7 +150,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
   }
 
   /**
-   * Like recordAll, returning the stored events (for views fed from a batch).
+   * Like recordAll, returning the events that are new to the log (for views fed from a batch).
    * `redacted`: the caller ran redactEvent already (the transcript reader does, off the core's thread).
    */
   recordBatch(events: Iterable<NewDataEvent>, o: { redacted?: boolean } = {}): DataEvent[] {
@@ -164,8 +164,9 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
         let content = e.content ?? null;
         let flags = DATA_FLAGS.imported;
         if (cap && typeof content === "string" && content.length > cap) (content = content.slice(0, cap)), (flags |= DATA_FLAGS.cut);
-        this.store.record({ ...e, content, flags });
+        const { inserted } = this.store.record({ ...e, content, flags });
         this.#entities(e);
+        if (!inserted) continue; // read before (an archived copy, a file read again): not news to views or subscribers
         const stored = this.store.get(e.id);
         if (stored) out.push(stored);
       }

@@ -289,7 +289,7 @@ export class Core {
     // Views follow what was forgotten or excluded: rebuilt from what's left.
     this.data.on("removed", ({ types }) => {
       if (types.some((t) => t.startsWith("agent."))) this.agents.activity.rebuild();
-      if (types.some((t) => t.startsWith("transcript."))) this.sessions.rebuild(), this.#searchView.invalidate();
+      if (types.some((t) => t.startsWith("transcript."))) void this.sessions.rebuild().then(() => this.#searchView.invalidate());
     });
     const activity = new ActivityView(this.data, this.views);
     activity.spaceOf = (paneId) => this.panes.get(paneId)?.spaceId ?? null;
@@ -570,7 +570,7 @@ export class Core {
     "data.unsubscribe": () => null,
     "data.forget": (p) => ({ events: this.data.forget(p) }),
     "data.applyRules": () => ({ events: this.data.applyRules() }),
-    "data.rebuild": (p) => (p.view === "turns" ? { rows: this.agents.activity.rebuild().turns } : { rows: (this.sessions.rebuild(), this.sessions.counts().sessions) }),
+    "data.rebuild": async (p) => (p.view === "turns" ? { rows: this.agents.activity.rebuild().turns } : { rows: (await this.sessions.rebuild(), this.sessions.counts().sessions) }),
     "data.entities": (p) => {
       const list = p.id ? [this.data.store.entityOf(p.kind, p.id)].filter((e) => !!e) : this.data.store.entities(p.kind).slice(0, Math.min(p.limit ?? 50, 1000)).map((e) => ({ kind: p.kind, ...e }));
       return list.map((e) => ({ ...e!, links: this.data.store.linksOf(p.kind, e!.id) }));

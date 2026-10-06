@@ -236,6 +236,17 @@ describe("owned transcripts + search", () => {
     expect(searcher.recent(1)).toHaveLength(1);
   });
 
+  it("rebuilds the sessions view from the log to what reading built", async () => {
+    const before = sessions.list({ limit: 100 });
+    expect(before.length).toBeGreaterThan(3);
+    expect(await sessions.rebuild()).toBeGreaterThan(0);
+    expect(sessions.list({ limit: 100 })).toEqual(before);
+    // The view dropped (files and resume env aren't in the log): from the reader's files.
+    views.db.exec(`UPDATE sessions SET path = NULL, env = NULL`);
+    await sessions.rebuild();
+    expect(sessions.get("claude:s-vpn")).toMatchObject({ path: path.join(projects, "s-vpn.jsonl"), env: JSON.stringify({ CLAUDE_CONFIG_DIR: claudeCfg }) });
+  });
+
   it("dates lines without a timestamp from their neighbours and keeps a repeated title once", () => {
     const file = path.join(projects, "s-dateless.jsonl");
     fs.writeFileSync(file, jsonl(
