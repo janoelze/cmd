@@ -1052,7 +1052,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-tb-button[data-tone="danger"] { color: var(--danger); }
 .ui-tb-button[data-tone="needs"] { color: var(--state-needs); }
 .ui-tb-label, .ui-tb-text { color: var(--text); }
-.ui-tb-label, .ui-tb-text, .ui-tb-badge, .ui-tb-text-item, .ui-tb-path-button, .ui-tb-field-end { position: relative; top: -1px; }
+.ui-tb-label, .ui-tb-text, .ui-tb-badge, .ui-tb-text-item, .ui-tb-field-end { position: relative; top: -1px; }
 .ui-tb-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ui-tb-badge { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
 .ui-tb-chevron { display: inline-grid; margin-left: -1px; color: var(--text-dim); }
@@ -1095,7 +1095,8 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-tb-path { display: flex; align-items: center; min-width: 0; }
 .ui-tb-path-seg { display: flex; align-items: center; min-width: 0; }
 .ui-tb-path-sep { display: inline-grid; padding: 0 1px; color: var(--text-dim); opacity: 0.7; }
-.ui-tb-path-button { height: var(--toolbar-item-h); max-width: 160px; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); cursor: default; -webkit-app-region: no-drag; }
+/* Its text lifted inside it (2px below), like a field's: the hover box stays centred. */
+.ui-tb-path-button { height: var(--toolbar-item-h); max-width: 160px; padding: 0 5px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); cursor: default; -webkit-app-region: no-drag; }
 .ui-tb-path-seg[data-last] .ui-tb-path-button { color: var(--text); font-weight: 500; }
 .ui-tb-path-button:hover { color: var(--text); background: var(--bg-hover); }
 /* Compacted: the last part only, and it may shrink. */
