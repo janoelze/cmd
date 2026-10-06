@@ -1,7 +1,8 @@
 # Packages the built app (out/) plus the staged core runtime (.runtime, from
 # scripts/stage-runtime.mjs): a macOS .app, .dmg and .zip, or a Windows
 # installer (NSIS, per user, no admin rights) and .zip.
-# Signing and notarization kick in when CSC_LINK / APPLE_* are set (see .github/workflows).
+# Signing kicks in when a Developer ID is in the keychain; CI notarizes the dmg
+# itself, so electron-builder doesn't notarize the app (see .github/workflows/build.yml).
 appId: dev.janoelze.cmd
 productName: cmd
 copyright: Copyright © 2026 Jan Oelze
@@ -34,6 +35,7 @@ mac:
     - dmg
     - zip
   hardenedRuntime: true
+  notarize: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   artifactName: ${productName}-${version}-${arch}.${ext}
