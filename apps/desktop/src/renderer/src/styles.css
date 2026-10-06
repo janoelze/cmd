@@ -478,7 +478,7 @@ kbd {
 }
 /* A plain filled key, roomier than the kit's outlined one. */
 .shortcut-tip .ui-kbd { padding: 4px 7px; background: var(--bg-selected); box-shadow: none; }
-@keyframes shortcut-tip { 0%, 100% { opacity: 0; } 15%, 85% { opacity: 0.6; } }
+@keyframes shortcut-tip { 0%, 100% { opacity: 0; } 11.25%, 88.75% { opacity: 0.6; } }
 @media (prefers-reduced-motion: reduce) { .shortcut-tip { animation: none; } }
 
 /* ── command palette ────────────────────────────────── */
