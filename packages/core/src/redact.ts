@@ -51,8 +51,10 @@ const URL_PARAM = /([?&](?:token|access_token|api_key|apikey|secret|password|aut
  */
 const SECRET_WORD = "(?:api[_-]?key|(?:secret|access|private|signing|encryption)[_-]?key|secret|token|passw(?:or)?d|pass|pwd|credentials?|authorization|cookie)";
 const NAMED = new RegExp(`(?<![\\w.#$-])((?:[A-Za-z_][A-Za-z0-9_-]*?)?${SECRET_WORD})(["']?[ \\t]*[:=][ \\t]*["']?)(?!\\[redacted\\]|:)([^\\s"'\`,;<>(){}\\[\\]]{8,})(?=$|[\\s"'\`,;<>){}\\]])`, "gi");
-/** "pass" alone is a verb and a test result; it names a secret only as DB_PASS or PASS=. */
-const BARE_PASS = /^pass$/;
+/** "pass" alone is a verb and a test result ("--- PASS: TestX"); it names a secret only as DB_PASS or PASS=. */
+const BARE_PASS = /^pass$/i;
+/** `key: password,` in an object literal: a plain word after an unquoted colon is a variable, not a value. */
+const WORD_AFTER_COLON = (sep: string, value: string) => /^\s*:\s*$/.test(sep) && /^[A-Za-z]+$/.test(value);
 
 /** --password x, --token=x: the flag's value goes. */
 const FLAG = new RegExp(`((?<![\\w-])--?(?:password|passwd|pass|pwd|token|api-?key|secret)(?:=|\\s+))(?!\\$|<|-|\\[redacted\\])([^\\s"'\`]{4,})`, "gi");
@@ -72,7 +74,7 @@ export function redact(text: string): string {
   r = r.replace(URL_PASSWORD, (m, pw: string) => m.slice(0, m.length - pw.length - 1) + "[redacted]@");
   r = r.replace(URL_PARAM, "$1[redacted]");
   r = r.replace(FLAG, (m, flag: string, value: string) => (PLACEHOLDER.test(value) || WORD.test(value) ? m : `${flag}[redacted]`));
-  return r.replace(NAMED, (m, name: string, sep: string, value: string) => (PLACEHOLDER.test(value) || (BARE_PASS.test(name) && name !== "PASS") ? m : `${name}${sep}[redacted]`));
+  return r.replace(NAMED, (m, name: string, sep: string, value: string) => (PLACEHOLDER.test(value) || (BARE_PASS.test(name) && !(name === "PASS" && sep.includes("="))) || WORD_AFTER_COLON(sep, value) ? m : `${name}${sep}[redacted]`));
 }
 
 /** Every string inside a JSON value, redacted; structure kept. */

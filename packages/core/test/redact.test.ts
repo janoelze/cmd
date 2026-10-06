@@ -50,6 +50,8 @@ describe("redact", () => {
     gone("api_key=supersecretvalue123 ok", "supersecret");
     gone("export CMD_TOKEN='abcdefghijklmnop'", "abcdefghijklmnop");
     gone('DB_PASS="maXBnUKZq"', "maXBnUKZq");
+    gone("PASS=correcthorse ./run", "correcthorse");
+    gone('"password": "correcthorse"', "correcthorse");
     gone("TELEGRAM_TOKEN=\"${TELEGRAM_TOKEN:-6145070455:AAEabcdefghijklmnopqrstuvwxyz012345}\"", "AAEabcdef");
     gone("Set-Cookie: hss=abcdefghijklmnopqrstuvwxyz; expires=Mon; Secure", "abcdefghijklmnopqrstuvwxyz");
     expect(redact("api_key=supersecretvalue123 ok")).toContain("ok");
@@ -79,6 +81,8 @@ describe("redact", () => {
       "grep -q 'Authority=Developer ID Application'",
       "the single-pass generation of workflow-authoring: something",
       "Use --token only when automation cannot provide stdin",
+      "--- PASS: TestRedaction (0.00s)",
+      "headers: { AccessKey: password, 'Content-Type': contentType }",
       "npx tool --auth ~/some/credentials.json create",
     ])
       expect(redact(code)).toBe(code);
