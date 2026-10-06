@@ -2,6 +2,18 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.15.0 — 2026-10-06
+
+### New
+
+- **Journal.** A work log of each day, written by your AI provider from your agents, commits, releases and commands. Add it from the Widget Library.
+- **`cmd journal`.** Agents can ask what happened this week, or where work was left, and get the day-by-day log as Markdown.
+
+### Fixed
+
+- Agents started outside cmd, even in a sandbox, no longer fail on cmd's hook.
+- A `claude -p` run from an agent's terminal no longer replaces that terminal's agent.
+
 ## 0.14.4 — 2026-10-06
 
 ### New
