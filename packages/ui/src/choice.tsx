@@ -154,6 +154,7 @@ export function Segmented<T extends string>({
   size = "md",
   label,
   fill,
+  iconSize,
 }: {
   value: T;
   options: readonly Option<T>[];
@@ -163,6 +164,7 @@ export function Segmented<T extends string>({
   label?: string;
   /** Stretch to the container's width, segments equal. */
   fill?: boolean;
+  iconSize?: number;
 }) {
   const opts = normalize(options, labels);
   return (
@@ -188,7 +190,7 @@ export function Segmented<T extends string>({
           data-tip-key={o.shortcut}
           onClick={() => onChange(o.value)}
         >
-          {iconNode(o.icon, size === "sm" ? ICON.small : ICON.row)}
+          {iconNode(o.icon, iconSize ?? (size === "sm" ? ICON.small : ICON.row))}
           {o.label != null && <span>{o.label}</span>}
         </button>
       ))}

@@ -2,7 +2,7 @@
 // over the sidebars and the workspace. The traffic lights, then the Space
 // switcher; the view modes and New… at the right end.
 
-import { IconButton, Segmented } from "@cmd/ui";
+import { ICON, IconButton, Segmented } from "@cmd/ui";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
 import type { ViewMode } from "../layouts.ts";
@@ -29,8 +29,8 @@ export function TopBar(p: Props) {
     <header className="topbar">
       <div className="topbar-lead">{p.spaceBar}</div>
       <div className="topbar-trail">
-        <Segmented size="sm" label="View" value={p.mode} options={modes} onChange={(m) => p.run(`view.${m}`)} />
-        <IconButton variant="default" size="sm" icon="plus" label="New…" onClick={p.onNew} />
+        <Segmented size="sm" iconSize={ICON.bar} label="View" value={p.mode} options={modes} onChange={(m) => p.run(`view.${m}`)} />
+        <IconButton variant="default" size="sm" iconSize={ICON.bar} icon="plus" label="New…" onClick={p.onNew} />
       </div>
     </header>
   );

@@ -21,14 +21,14 @@ export interface IconProps {
  * here, not per use.
  */
 export const ICON = {
-  /** bottom status/action bars */
-  bar: 12,
+  /** the app window's top bar and footer */
+  bar: 14,
   /** window toolbars (browser, files) */
-  toolbar: 12,
+  toolbar: 14,
   /** rows in lists and trees */
-  row: 12,
+  row: 13,
   /** small marks: window-kind icons in sidebar rows and title bars */
-  small: 11,
+  small: 12,
   /** disclosure chevrons */
   disclosure: 8,
   /** inside controls: popup chevrons, steppers, field icons */

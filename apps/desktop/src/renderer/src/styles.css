@@ -86,6 +86,8 @@ kbd {
 .topbar-lead { display: flex; align-items: center; min-width: 0; -webkit-app-region: no-drag; }
 /* Pushed to the right end; the rest of the bar stays a drag region. */
 .topbar-trail { display: flex; align-items: center; gap: 8px; margin-left: auto; -webkit-app-region: no-drag; }
+/* The bar style of the small controls, at full height: room for bar-sized icons. */
+.topbar-trail > .ui-seg[data-size="sm"], .topbar .topbar-trail > .ui-icon-button[data-size="sm"] { --h: var(--control-h); }
 /* On Retina the view-mode symbols' ink sits one device pixel below centre (measured);
    half a point is one device pixel there, so they stay crisp. At 1x they're centred. */
 @media (min-resolution: 2dppx) { .topbar .ui-seg .sf { position: relative; top: -0.5px; } }
@@ -1110,16 +1112,18 @@ kbd {
 @keyframes slot-fade-out { to { opacity: 0; } }
 
 /* Mark: an agent's status light, else the type icon; they cross-fade. */
-/* 16px box: every icon canvas (even sizes up to 16) and the 8px light centre on
-   whole pixels inside it. Its parent must give it an even height to centre in. */
-.mark { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; }
+/* 18×16 box: every icon canvas (even sizes, up to 18 wide, 16 tall) and the 8px light
+   centre on whole pixels inside it. Its parent must give it an even height to centre in. */
+.mark { flex: none; display: inline-grid; place-items: center; width: 18px; height: 16px; }
 .mark-drag { flex: none; display: inline-grid; -webkit-user-drag: element; }
 .mark > * {
   grid-area: 1 / 1;
   transition: opacity 140ms ease, transform 140ms var(--ease), background-color 140ms ease, box-shadow 140ms ease;
 }
 .mark .mark-icon { color: var(--icon); }
-.mark .mark-light { opacity: 0; transform: scale(0.6); }
+/* A grid, not a line box: the inherited line height would make the track taller than
+   the box and push the icon off whole pixels. */
+.mark .mark-light { display: grid; opacity: 0; transform: scale(0.6); }
 .mark.has-light .mark-light { opacity: 1; transform: none; }
 .mark.has-light .mark-icon { opacity: 0; transform: scale(0.6); }
 
