@@ -1087,8 +1087,9 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 /* A search field's count gives way to the text it counts when the field is narrow. */
 .ui-tb-search { container-type: inline-size; }
 @container (max-width: 150px) { .ui-tb-field-count { display: none; } }
-/* An address at rest: centred, quieter, as browsers show it; editing, plain. */
-.ui-tb-address:not(:focus-within) input { text-align: center; color: color-mix(in srgb, var(--text) 72%, transparent); text-overflow: ellipsis; cursor: default; }
+/* An address at rest: centred, in the title bar's colours (dim, the text colour while its window is selected). */
+.ui-tb-address:not(:focus-within) input { text-align: center; color: var(--text-dim); text-overflow: ellipsis; cursor: default; }
+.ui-window[data-selected] .ui-tb-address:not(:focus-within) input { color: var(--text); }
 .ui-tb-address:not(:focus-within) { cursor: default; }
 /* Centred, not lifted with the text beside it. */
 .ui-tb-field-clear { position: relative; top: 1px; display: grid; place-items: center; width: 16px; height: 16px; margin-right: -3px; padding: 0; color: var(--text-dim); background: none; border: 0; cursor: default; }

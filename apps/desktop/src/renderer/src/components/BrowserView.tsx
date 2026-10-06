@@ -12,8 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { ICON, Symbol } from "./Symbol.tsx";
-import { EmptyState, IconButton, SCROLLBAR_CSS } from "@cmd/ui";
+import { EmptyState, SCROLLBAR_CSS, ToolbarAddressField, ToolbarButton, ToolbarGroup, WindowToolbar } from "@cmd/ui";
 import { setWindowStatus } from "../windowActions.ts";
 import { handleEmbedMessage } from "../embed.ts";
 import { deviceById, type Device } from "../devices.ts";
@@ -140,34 +139,31 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       ref.current.loadURL(next).catch(() => {});
       ref.current.focus();
     } catch {
-      input.current?.select();
+      input.current?.focus();
     }
   };
 
   return (
     <div className="browser">
-      <div className="window-toolbar">
-        <IconButton icon="chevron.left" label="Back" disabled={!nav.back} onClick={() => ref.current?.goBack()} />
-        <IconButton icon="chevron.right" label="Forward" disabled={!nav.forward} onClick={() => ref.current?.goForward()} />
-        <IconButton icon={loading ? "xmark" : "arrow.clockwise"} label={loading ? "Stop" : "Reload"} disabled={!live} onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())} />
-        <input
+      <WindowToolbar label="Browser">
+        <ToolbarGroup>
+          <ToolbarButton icon="chevron.left" label="Back" disabled={!nav.back} onClick={() => ref.current?.goBack()} />
+          <ToolbarButton icon="chevron.right" label="Forward" disabled={!nav.forward} onClick={() => ref.current?.goForward()} />
+          <ToolbarButton icon={loading ? "xmark" : "arrow.clockwise"} label={loading ? "Stop" : "Reload"} disabled={!live} onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())} priority={2} />
+        </ToolbarGroup>
+        <ToolbarAddressField
           ref={input}
-          className="address"
           value={isBlank(address) ? "" : address}
           placeholder="Enter a URL"
-          spellCheck={false}
-          onFocus={(e) => e.currentTarget.select()}
-          onChange={(e) => setAddress(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void go(address);
-            if (e.key === "Escape") {
-              setAddress(ref.current?.getURL() ?? (isBlank(url) ? "" : url));
-              ref.current?.focus();
-            }
+          minWidth={90}
+          onSubmit={(text) => {
+            setAddress(text);
+            void go(text);
           }}
+          onEscape={() => ref.current?.focus()}
         />
-        <IconButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url)} />
-      </div>
+        <ToolbarButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url)} secondary priority={1} />
+      </WindowToolbar>
       <div ref={stage} className={device ? "browser-stage device" : "browser-stage"}>
         {initial ? (
           <webview
