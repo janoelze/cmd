@@ -35,7 +35,7 @@ export function ShortcutTips() {
   const tip = tips[i % Math.max(1, tips.length)];
   if (!tip) return null;
   return (
-    <div className="shortcut-tip" key={tip.id} aria-live="polite">
+    <div className="shortcut-tip" key={i} style={tips.length > 1 ? { animationDuration: `${EVERY_MS}ms` } : { animation: "none" }} aria-live="polite">
       Press <Kbd keys={tip.keys} /> {tip.phrase}
     </div>
   );

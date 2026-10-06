@@ -473,11 +473,12 @@ kbd {
   font-size: var(--text-base);
   color: var(--text-dim);
   opacity: 0.6;
-  animation: shortcut-tip-in 400ms ease-out;
+  /* One tip's whole stay (ShortcutTips sets the duration): a slow fade in and out. */
+  animation: shortcut-tip ease-in-out both;
 }
 /* A plain filled key, roomier than the kit's outlined one. */
 .shortcut-tip .ui-kbd { padding: 4px 7px; background: var(--bg-selected); box-shadow: none; }
-@keyframes shortcut-tip-in { from { opacity: 0; } }
+@keyframes shortcut-tip { 0%, 100% { opacity: 0; } 25%, 75% { opacity: 0.6; } }
 @media (prefers-reduced-motion: reduce) { .shortcut-tip { animation: none; } }
 
 /* ── command palette ────────────────────────────────── */
