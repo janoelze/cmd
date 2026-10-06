@@ -98,7 +98,7 @@ Without signing secrets, CI ad-hoc signs the whole bundle (`-c.mac.identity=-`).
    gh secret set APPLE_API_ISSUER --body <issuer uuid>
    ```
    Instead of the API key, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` (from account.apple.com) and `APPLE_TEAM_ID` work too.
-4. Release as usual. The tag build signs with hardened runtime and `build/entitlements.mac.plist`, notarizes and staples the app. A certificate without notarization credentials fails the build, because Gatekeeper would block that app anyway.
+4. Release as usual. The tag build signs with hardened runtime and `build/entitlements.mac.plist`, notarizes the dmg (one submission; its ticket covers the app inside) and staples the dmg and the app. A certificate without notarization credentials fails the build, because Gatekeeper would block that app anyway.
 
 To check a release by hand: `spctl --assess --type execute -vv /Applications/cmd.app` should print `source=Notarized Developer ID`.
 

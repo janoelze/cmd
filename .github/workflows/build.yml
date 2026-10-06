@@ -1,5 +1,5 @@
 # Typecheck, test and package the app for macOS on every push and PR.
-# Pushing a tag `v*` additionally signs + notarizes the macOS app (when the
+# Pushing a tag `v*` additionally signs + notarizes the macOS dmg (when the
 # secrets below exist) and publishes one GitHub release: the .dmg and .zip, and
 # the update metadata (latest-mac.yml, blockmaps) installed apps update from.
 # A tag without a CHANGELOG.md section fails; that section is the release's notes.
@@ -130,8 +130,11 @@ jobs:
             [ "$IS_TAG" = true ] && echo "::warning::No signing secrets: this release is ad-hoc signed, not notarized"
           fi
           if [ "$IS_TAG" = true ]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.0-ci.${GITHUB_RUN_NUMBER}"; fi
-          pnpm exec electron-builder --mac --publish never -c.extraMetadata.version="$version" "${sign[@]}"
-          # electron-builder notarizes the app; the dmg around it is signed and gets its own ticket.
+          builder=(pnpm exec electron-builder --publish never -c.extraMetadata.version="$version" "${sign[@]}")
+          # One notarization, of the dmg (Apple's advice: the outermost container), not
+          # one for the app and another for the dmg: each waits in Apple's queue, which
+          # can take minutes. electron-builder signs the app (mac.notarize: false) ...
+          "${builder[@]}" --mac dmg
           if [ -n "${MAC_CERT_P12_BASE64:-}" ]; then
             if [ -n "${APPLE_API_KEY:-}" ]; then
               auth=(--key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
@@ -140,10 +143,18 @@ jobs:
             fi
             for dmg in dist/*.dmg; do
               codesign --sign "Developer ID Application" --timestamp "$dmg"
-              xcrun notarytool submit "$dmg" "${auth[@]}" --wait
+              # Bounded, so a submission Apple holds fails here rather than at the job timeout.
+              xcrun notarytool submit "$dmg" "${auth[@]}" --wait --timeout 20m
               xcrun stapler staple "$dmg"
             done
+            # ... and the dmg's ticket covers the app inside, so the app can be stapled too.
+            xcrun stapler staple dist/mac-arm64/cmd.app
           fi
+          # The update zip, from the stapled app (--prepackaged doesn't re-sign). A zip can't
+          # carry a ticket, so the app in it must. Its latest-mac.yml and blockmap replace the
+          # dmg pass's, whose hashes predate stapling.
+          rm -f dist/*.blockmap dist/latest-mac.yml
+          "${builder[@]}" --mac zip --prepackaged dist/mac-arm64/cmd.app
 
       # Fail rather than publish an app macOS refuses to open.
       - name: Verify signature

@@ -6,8 +6,8 @@ description: Cut a cmd release (signed, notarized, auto-updating) and verify it,
 # Releasing cmd
 
 A release is a `v<version>` tag. CI (`.github/workflows/build.yml`) builds the tag on macOS. The
-`mac` job signs with Developer ID, notarizes and staples the app and the dmg, and verifies all of
-that. A `release` job then publishes the files as a GitHub release. Installed apps update
+`mac` job signs with Developer ID, notarizes the dmg once (its ticket covers the app), staples
+the dmg and the app, zips the stapled app for updates, and verifies all of that. A `release` job then publishes the files as a GitHub release. Installed apps update
 themselves from it (`apps/desktop/src/main/updater.ts`).
 DEVELOPMENT.md ("Packaging and releases") has the background. This skill is the checklist.
 
@@ -62,11 +62,11 @@ so betas never reach installed apps.
 ```sh
 id=$(gh run list -L 5 --json databaseId,headBranch -q '.[]|select(.headBranch=="vX.Y.Z")|.databaseId' | head -1)
 gh run watch "$id" --exit-status       # run it in the background; ~5–8 min, mostly notarization
-gh run view "$id" --log | grep -E "notarization successful|status: |accepted|source=|::error|⨯"
+gh run view "$id" --log | grep -E "status: |staple and validate|accepted|source=|::error|⨯"
 ```
 
-The log should show `notarization successful` (app), `status: Accepted` (dmg), and in "Verify
-signature" `accepted` / `source=Notarized Developer ID` for both.
+The log should show `status: Accepted` (the dmg), `The staple and validate action worked!` twice
+(dmg, then app), and in "Verify signature" `accepted` / `source=Notarized Developer ID` for both.
 
 ## 4. Verify the published release
 
