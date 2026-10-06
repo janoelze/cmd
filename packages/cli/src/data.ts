@@ -171,8 +171,9 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
         await client.call("events.subscribe", { types: ["view.changed"] });
         await new Promise(() => {});
       }
-      const { id, events } = await client.call("data.subscribe", { query: { limit: 50, ...queryOf(opt) } });
-      for (const e of events) console.log(json ? JSON.stringify(e) : line(e));
+      // The newest 50 first (by when they happened, oldest of them on top), then what's recorded.
+      const { id, events } = await client.call("data.subscribe", { query: { limit: 50, ...queryOf(opt), by: "time", order: "desc" } });
+      for (const e of events.reverse()) console.log(json ? JSON.stringify(e) : line(e));
       client.onEvent((e) => {
         if (e.type !== "data.changed" || e.id !== id) return;
         for (const ev of e.events) console.log(json ? JSON.stringify(ev) : line(ev));

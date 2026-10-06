@@ -25,7 +25,7 @@ function useCommands(): CommandRun[] {
   const [runs, setRuns] = useState<CommandRun[]>([]);
   useEffect(
     () =>
-      subscribeData({ types: ["command"], order: "desc", limit: 300 }, (events, initial) =>
+      subscribeData({ types: ["command"], by: "time", order: "desc", limit: 300 }, (events, initial) =>
         setRuns((rs) => {
           const incoming = events.map(commandRunOf);
           const base = initial ? [] : rs;
