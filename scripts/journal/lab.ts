@@ -1,6 +1,6 @@
 // Journal lab: backfill a throwaway journal from real data (a copy of cmd.sqlite,
 // the transcript index, git) and print a day's threads, digest or journal.
-//   node scripts/journal/lab.ts threads --db <cmd.sqlite> --search <search.sqlite> --day 2026-10-05 [--repo ~/src/cmd]
+//   node scripts/journal/lab.ts threads --data <copy of $CMD_HOME/data> --day 2026-10-05 [--repo ~/src/cmd]
 import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
 import { JournalStore } from "../../packages/core/src/journal/store.ts";
@@ -10,7 +10,7 @@ import { ViewsStore } from "../../packages/core/src/data/views/views.ts";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import path from "node:path";
 import { sessionEvents, turnEvents } from "../../packages/core/src/journal/backfill.ts";
-import { sessionsSince } from "../../packages/core/src/search/index.ts";
+import { SessionsView } from "../../packages/core/src/data/views/sessions.ts";
 import { gitEvents } from "../../packages/core/src/journal/git.ts";
 import { buildThreads } from "../../packages/core/src/journal/threads.ts";
 import { digest } from "../../packages/core/src/journal/digest.ts";
@@ -18,15 +18,19 @@ import { SCHEMA, SYSTEM, toDay, type WrittenDay } from "../../packages/core/src/
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 
-const { values: a, positionals } = parseArgs({ allowPositionals: true, options: { synthetic: { type: "boolean" }, model: { type: "string", default: "sonnet" }, out: { type: "string" }, data: { type: "string" }, search: { type: "string" }, day: { type: "string" }, repo: { type: "string" }, all: { type: "boolean" } } });
+const { values: a, positionals } = parseArgs({ allowPositionals: true, options: { synthetic: { type: "boolean" }, model: { type: "string", default: "sonnet" }, out: { type: "string" }, data: { type: "string" }, day: { type: "string" }, repo: { type: "string" }, all: { type: "boolean" } } });
 const day = new Date(`${a.day}T04:00:00`).getTime();
 const from = day, to = day + 86400_000;
 const since = from - 3 * 86400_000;
 
 const store = new JournalStore();
-if (a.search) store.recordAll(sessionEvents(sessionsSince(new DatabaseSync(a.search, { readOnly: true }), since)));
-// --data: a copy of $CMD_HOME/data (events.sqlite and views.sqlite).
-if (a.data) store.recordAll(turnEvents(new ActivityView(new DataService({ file: path.join(a.data, "events.sqlite"), recordedBy: "lab", settings: () => DEFAULT_SETTINGS }), new ViewsStore(path.join(a.data, "views.sqlite"))).turnsSince(since)));
+// --data: a copy of $CMD_HOME/data (events.sqlite and views.sqlite): turns and sessions from its views.
+if (a.data) {
+  const data = new DataService({ file: path.join(a.data, "events.sqlite"), recordedBy: "lab", settings: () => DEFAULT_SETTINGS });
+  const views = new ViewsStore(path.join(a.data, "views.sqlite"));
+  store.recordAll(turnEvents(new ActivityView(data, views).turnsSince(since)));
+  store.recordAll(sessionEvents(new SessionsView(views, data).sessionsSince(since)));
+}
 if (a.synthetic) store.recordAll((await import("../../packages/core/test/fixtures/journal-day.ts")).syntheticDay(a.day!));
 const repos = new Set(store.repos(since).map((r) => r.repo));
 if (!a.synthetic) for (const r of repos) store.recordAll(await gitEvents(r, since));

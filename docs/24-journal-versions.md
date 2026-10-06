@@ -54,7 +54,7 @@ So a revision updates what people look at now, keeps history as it was said, and
 
 The runbook for the next one.
 
-1. **Work in a worktree** with its own `CMD_HOME` (CLAUDE.md), and iterate with the lab on real data first: `node scripts/journal/lab.ts threads|digest|write --db <copy of cmd.sqlite> --search <copy of search.sqlite> --day YYYY-MM-DD [--repo …]`, and `--synthetic` for the messy fixture day. Write a few days with the old code and the new (`--out a.json`, `--out b.json`) and compare them side by side.
+1. **Work in a worktree** with its own `CMD_HOME` (CLAUDE.md), and iterate with the lab on real data first: `node scripts/journal/lab.ts threads|digest|write --data <copy of $CMD_HOME/data> --day YYYY-MM-DD [--repo …]`, and `--synthetic` for the messy fixture day. Write a few days with the old code and the new (`--out a.json`, `--out b.json`) and compare them side by side.
 2. **Raise the version of each layer you changed**, in `protocol/src/journal.ts`:
    - a threading rule or the digest → `THREADS_FORMAT`;
    - the prompt, the schema or the checks → `WRITER_FORMAT`;

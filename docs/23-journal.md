@@ -12,7 +12,7 @@ Each is derived from the one before and can be derived again when the rules or t
 
 | Layer | What | Deterministic | Where |
 |---|---|---|---|
-| **Events** | Facts from the event log (commands, git, pages, files, notes), the turns view and the transcript index, assembled on read (docs/28) | yes | `journal/store.ts` over `data/`, `turns` and `search.sqlite` |
+| **Events** | Facts from the event log (commands, git, pages, files, notes), the turns view and the sessions view, assembled on read (docs/28) | yes | `journal/store.ts` over `data/`, `turns` and `sessions` |
 | **Threads** | Events grouped by identity, with links between them that say why | yes | `journal/threads.ts` |
 | **Days** | Entries a model wrote from a digest of a day's threads, and a headline | no (a model) | `journal/digest.ts`, `writer.ts`, table `journal_days` |
 
