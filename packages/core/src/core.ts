@@ -261,6 +261,8 @@ export class Core {
       store: this.store,
       historyDir: opts.stateDir ? path.join(opts.stateDir, "history") : null,
     });
+    // Developer widgets come and go from the library with their setting.
+    this.settings.bind(["widgets.developer"], () => this.#libraryChanged());
     this.settings.bind(["shell.openFolders", "shell.openFiles", "shell.openUrls", "open.handlers"], () => {
       try {
         this.panes.writeShellRules();
@@ -932,8 +934,8 @@ export class Core {
     const others = this.windows.others();
     const builtin = this.windowTypes
       .all()
-      .filter((t) => t.role === "widget" && t.kind !== "magic")
-      .map((t): WidgetEntry => ({ ref: `type:${t.kind}`, source: "builtin", kind: t.kind, title: t.title, description: t.description, icon: t.icon, windows: others.filter((w) => w.kind === t.kind).map((w) => w.id) }));
+      .filter((t) => t.role === "widget" && t.kind !== "magic" && (!t.tags?.includes("developer") || this.settings.settings["widgets.developer"]))
+      .map((t): WidgetEntry => ({ ref: `type:${t.kind}`, source: "builtin", kind: t.kind, title: t.title, description: t.description, icon: t.icon, ...(t.tags?.length ? { tags: t.tags } : {}), windows: others.filter((w) => w.kind === t.kind).map((w) => w.id) }));
     const magic = this.windowTypes.get("magic")!;
     const yours = this.magic.library().map((e): WidgetEntry => ({
       ref: `magic:${e.id}`,

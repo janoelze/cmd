@@ -40,7 +40,10 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
 
   const shown = useMemo(() => library.filter((e) => matches(e, query)), [library, query]);
   const yours = shown.filter((e) => e.source === "yours");
-  const builtin = shown.filter((e) => e.source === "builtin");
+  const dev = (e: WidgetEntry) => !!e.tags?.includes("developer");
+  const builtin = shown.filter((e) => e.source === "builtin" && !dev(e));
+  // Shown only with Settings → Magic Widgets → Developer widgets on (the core leaves them out otherwise).
+  const developer = shown.filter((e) => e.source === "builtin" && dev(e));
 
   const fail = (err: unknown) => setError((err as Error).message);
   const add = async (e: WidgetEntry) => {
@@ -148,6 +151,12 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
         <section className="wl-section">
           <SectionHeading>Built-in</SectionHeading>
           <div className="wl-grid">{builtin.map(card)}</div>
+        </section>
+      )}
+      {developer.length > 0 && (
+        <section className="wl-section">
+          <SectionHeading>Developer</SectionHeading>
+          <div className="wl-grid">{developer.map(card)}</div>
         </section>
       )}
       {query && !shown.length && <EmptyState compact>Nothing matches “{query}”. New Widget makes one.</EmptyState>}

@@ -37,6 +37,11 @@ export interface WindowType<S extends Record<string, unknown> = Record<string, u
   role?: "window" | "widget";
   /** One line for the Widget Library. */
   description?: string;
+  /**
+   * What kind of widget it is. "developer": for seeing what cmd records and
+   * does; offered only while the widgets.developer setting is on.
+   */
+  tags?: string[];
   /** What `open <target>` (shell, file tree, palette) can route to this type. */
   opens?: OpenRule;
   /** Turn a matched open target into create input. */
@@ -65,7 +70,7 @@ export class WindowTypes {
 
   /** Serializable description for the UI, CLI and shell integration. */
   info(): WindowTypeInfo[] {
-    return this.all().map((t) => ({ kind: t.kind, title: t.title, icon: t.icon, opens: t.opens ?? {}, role: t.role ?? "window", ...(t.description ? { description: t.description } : {}) }));
+    return this.all().map((t) => ({ kind: t.kind, title: t.title, icon: t.icon, opens: t.opens ?? {}, role: t.role ?? "window", ...(t.description ? { description: t.description } : {}), ...(t.tags?.length ? { tags: t.tags } : {}) }));
   }
 
   /**

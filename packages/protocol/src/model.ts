@@ -259,6 +259,8 @@ export interface WindowTypeInfo {
   role: "window" | "widget";
   /** One line for the Widget Library. */
   description?: string;
+  /** What kind of widget: "developer" (shown with the widgets.developer setting). */
+  tags?: string[];
 }
 
 /** A widget in the Widget Library (docs/16-widgets.md): a built-in widget type, or one made with Magic. */
@@ -272,6 +274,8 @@ export interface WidgetEntry {
   description?: string;
   /** SF Symbol name. */
   icon: string;
+  /** Built-in widgets' tags ("developer"). */
+  tags?: string[];
   /** What was first asked for; widgets made with Magic. */
   request?: string;
   /** A screenshot (file path); widgets made with Magic. */

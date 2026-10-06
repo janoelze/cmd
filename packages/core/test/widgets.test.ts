@@ -560,6 +560,22 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     await core.close();
   });
 
+  it("offers developer widgets only with their setting on, and says so when it changes", async () => {
+    const { core, events } = await setup(scripted([]));
+    const refs = () => (core.handlers["widget.list"]({}) as unknown as { ref: string; tags?: string[] }[]).map((e) => e.ref);
+    const types = core.handlers["window.types"]({}) as unknown as { kind: string; tags?: string[] }[];
+    expect(types.find((t) => t.kind === "events")).toMatchObject({ tags: ["developer"] });
+    expect(refs()).not.toContain("type:events");
+    events.length = 0;
+    await core.handlers["settings.set"]({ key: "widgets.developer", value: true });
+    expect(refs()).toContain("type:events");
+    await until(() => events.some((e) => e.type === "widget.library" && (e as unknown as { entries: { ref: string }[] }).entries.some((x) => x.ref === "type:events")));
+    const w = core.handlers["widget.add"]({ ref: "type:events" }) as unknown as { id: string; state: { hidden: string[]; paused: boolean } };
+    expect(w.state).toEqual({ hidden: [], paused: false });
+    expect(core.handlers["window.update"]({ id: w.id, state: { hidden: ["transcripts", 3], paused: true } })).toMatchObject({ state: { hidden: ["transcripts"], paused: true } });
+    await core.close();
+  });
+
   it("serves the Widget Library over RPC: list, add, rename, duplicate, delete, and a library event", async () => {
     const backend = scripted([{ calls: WIDGET_CALLS(), answer: "v1" }, { calls: [write("manifest.json", MANIFEST({ title: "Counter" }))], answer: "v2" }]);
     const { core, id, state, title, events } = await setup(backend);

@@ -245,6 +245,30 @@ export const notificationsType = scopedWidget("notifications", "Notifications", 
 export const journalType = scopedWidget("journal", "Journal", "book", "What happened, a few lines a day: releases, features, fixes and investigations, from your agents, terminals and git.");
 export const resourcesType = scopedWidget("resources", "Resources", "gauge.with.dots.needle.33percent", "What each terminal uses: CPU and memory of everything running in it.");
 
+/**
+ * Event Stream, a developer widget: every event cmd records, as it's recorded
+ * (docs/28). `hidden`: classes left out (data classes, "transcripts", …);
+ * `paused`: new events wait until it goes on.
+ */
+export const eventsType: WindowType<{ hidden: string[]; paused: boolean }> = {
+  kind: "events",
+  title: "Event Stream",
+  icon: "waveform.path.ecg",
+  role: "widget",
+  tags: ["developer"],
+  description: "Everything cmd records, as it happens: to see what it captures while you work.",
+  create(input) {
+    return { state: { hidden: strings(input.hidden), paused: false }, title: "Event Stream" };
+  },
+  update(state, patch) {
+    const next = { ...state };
+    if (Array.isArray(patch.hidden)) next.hidden = strings(patch.hidden);
+    if (typeof patch.paused === "boolean") next.paused = patch.paused;
+    return { state: next };
+  },
+};
+const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 50) : []);
+
 /** Seconds. 0 h 0 m 1 s to 24 h. */
 const clampDuration = (n: unknown, fallback: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(86_400, Math.max(1, Math.round(n))) : fallback);
 
@@ -434,5 +458,6 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(notificationsType);
   types.register(journalType);
   types.register(resourcesType);
+  types.register(eventsType);
   types.register(timerType);
 }
