@@ -478,7 +478,7 @@ describe("tracker: spooled events", () => {
     // A replayed (claimed) stop doesn't notify, a live one does.
     spool(pane.id, [
       { at: FIXTURE_EPOCH + 100_000, agent: "claude", name: "UserPromptSubmit", payload: { hook_event_name: "UserPromptSubmit", session_id: a.native.claudeSessionId, prompt: "and again" } },
-      { at: FIXTURE_EPOCH + 101_000, agent: "claude", name: "Stop", payload: { hook_event_name: "Stop", session_id: a.native.claudeSessionId, last_assistant_message: "Did it again." } },
+      { at: FIXTURE_EPOCH + 130_000, agent: "claude", name: "Stop", payload: { hook_event_name: "Stop", session_id: a.native.claudeSessionId, last_assistant_message: "Did it again." } }, // long enough to notify (QUICK_TURN_MS)
     ]);
     agents.applyStatus(pane.id);
     expect(sent.at(-1)).toMatchObject({ title: "repo · done", body: "Did it again." });

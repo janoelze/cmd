@@ -7,9 +7,12 @@
 // the terminal's mute; it sets the terminal's attention marker and emits an
 // AppNotification. The UI decides whether to show it, since it knows focus and
 // selection (notifications.when), and how (sound, Dock bounce, visual bell).
-// Looking at the terminal clears its marker (pane.clearAttention). Every
-// notification is an event in the log (data/recorders.ts); the Notifications
-// widget lists them from there (notify.list in core.ts).
+// A turn you prompted that ends within QUICK_TURN_MS isn't news; the UI also
+// drops a "done" you saw happen and sums up agents finishing together
+// (renderer/src/notify.ts). Looking at the terminal clears its marker
+// (pane.clearAttention). Every notification is an event in the log
+// (data/recorders.ts); the Notifications widget lists them from there
+// (notify.list in core.ts).
 
 import { EventEmitter } from "node:events";
 import os from "node:os";
@@ -18,7 +21,7 @@ import type { Agent, AppNotification, Attention, Pane, PaneId, Settings, WindowI
 import type { OscEvent } from "./osc.ts";
 import type { PaneManager } from "./panes.ts";
 import type { AgentTracker } from "./agents/tracker.ts";
-import { agentNotice, type NoticeKind } from "./agents/notice.ts";
+import { agentNotice, subjectOf, type NoticeKind } from "./agents/notice.ts";
 
 /** Writes an agent notification's body with AI; null: use cmd's own (agents/notice.ts). */
 export type NoticeWriter = (a: Agent, kind: NoticeKind, signal: AbortSignal) => Promise<string | null>;
@@ -26,6 +29,8 @@ export type NoticeWriter = (a: Agent, kind: NoticeKind, signal: AbortSignal) => 
 /** How long a notification waits for its AI wording before going out with cmd's own. */
 export const AI_WAIT_MS = { needs: 1500, done: 2500, stopped: 2500 } as const;
 
+/** A turn you prompted that finished quicker than this: you're still there, no "done". */
+export const QUICK_TURN_MS = 20_000;
 /** Bells closer together than this in one terminal count as one (a held key, a noisy script). */
 const BELL_EVERY_MS = 2000;
 /** Exit status of a command stopped with ⌃C: you were there, no need to tell you. */
@@ -136,12 +141,13 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
     if (!needy && !finished && !stopped) return;
     const cfg = this.#settings();
     if ((needy && !cfg["notifications.needsInput"]) || (!needy && !cfg["notifications.done"])) return;
+    if (finished && quick(a)) return;
     const kind: NoticeKind = needy ? "needs" : finished ? "done" : "stopped";
     const { title, body } = agentNotice(a, kind);
     const send = (text: string) => {
       const pane = a.paneId ? this.#panes.get(a.paneId) : null;
       // The agent's light is its marker; no attention marker on the pane.
-      this.#emit({ source: needy ? "agent-input" : "agent-done", paneId: a.paneId, title, body: text, alert: !pane?.muted, urgent: needy });
+      this.#emit({ source: needy ? "agent-input" : "agent-done", paneId: a.paneId, title, body: text, alert: !pane?.muted, urgent: needy, ...(finished ? { done: subjectOf(a) } : {}) });
     };
     if (!this.#writer || !cfg["notifications.ai"]) return send(body);
     // AI wording, if it comes in time: a posted notification can't be changed.
@@ -230,6 +236,15 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
     const full: AppNotification = { id: randomUUID(), ...n, at: Date.now() };
     this.emit("notification", full);
   }
+}
+
+/**
+ * A turn you started (not the agent's own follow-up) that ended within
+ * QUICK_TURN_MS. One whose prompt cmd didn't see began earlier than it knows.
+ */
+function quick(a: Agent): boolean {
+  const t = a.turn;
+  return !!t && !t.auto && t.prompt !== null && t.endedAt !== null && t.endedAt - t.startedAt < QUICK_TURN_MS;
 }
 
 /** What to call a terminal in a notification: its title, else its process. */

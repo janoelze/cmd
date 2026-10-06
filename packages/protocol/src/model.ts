@@ -98,6 +98,8 @@ export interface AppNotification {
   alert: boolean;
   /** Needs you (plays the sound, may bounce the Dock) rather than merely informs. */
   urgent: boolean;
+  /** An agent finished a turn: its name or project. The UI sums up several that finish close together. */
+  done?: string;
   /** When it was sent. */
   at: number;
 }

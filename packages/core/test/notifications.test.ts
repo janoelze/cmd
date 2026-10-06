@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, type AppNotification, type Settings } from "@cmd/protocol";
 import { AgentTracker } from "../src/agents/tracker.ts";
-import { AI_WAIT_MS, formatDuration, NotificationCenter, type NoticeWriter } from "../src/notifications.ts";
+import { AI_WAIT_MS, formatDuration, NotificationCenter, QUICK_TURN_MS, type NoticeWriter } from "../src/notifications.ts";
 import { PaneManager } from "../src/panes.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 
@@ -145,13 +145,24 @@ describe("agent notifications with AI wording", () => {
     const center = new NotificationCenter(panes, agents, () => ({ ...DEFAULT_SETTINGS, "notifications.ai": ai }), writer);
     center.on("notification", (n) => sent.push(n));
     const pane = panes.create();
-    const finish = () => {
+    /** A turn that took `took` ms (only the clock moves; timers stay as the test has them). */
+    const finish = (took = 60_000) => {
+      const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() - took);
       agents.ingestHook(pane.id, "claude", "UserPromptSubmit", { session_id: "s", prompt: "fix add()" });
+      now.mockRestore();
       agents.ingestHook(pane.id, "claude", "Stop", { session_id: "s", last_assistant_message: "I fixed the bug in `add()` by changing the operator, then ran the tests, which all pass now." });
     };
     return { sent, finish };
   };
   const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  it("stay quiet about a quick turn you just prompted", async () => {
+    const { sent, finish } = setup(null);
+    finish(QUICK_TURN_MS - 1000);
+    finish(QUICK_TURN_MS + 1000);
+    await tick(10);
+    expect(sent).toMatchObject([{ source: "agent-done", done: expect.any(String) }]);
+  });
 
   it("uses the AI's line when it comes in time; the title stays cmd's", async () => {
     const { sent, finish } = setup(async () => "Fixed add(); tests pass.");

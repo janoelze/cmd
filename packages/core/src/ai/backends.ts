@@ -66,10 +66,20 @@ async function languageModel(o: AiBackendOptions): Promise<LanguageModel> {
 }
 
 /** Effort for the models that take it: Anthropic's newer models, OpenAI's reasoning models. */
-function effortOptions(o: AiBackendOptions): Record<string, Record<string, string>> | undefined {
+export function effortOptions(o: Pick<AiBackendOptions, "provider" | "model" | "effort">): Record<string, Record<string, string>> | undefined {
   const effort = o.effort ?? "low";
   if (o.provider === "anthropic") return /haiku|claude-3|-4-5|-4-1|-4-0|sonnet-4-0/.test(o.model) ? undefined : { anthropic: { effort: effort === "minimal" ? "low" : effort } };
-  return /^(o\d|gpt-5|gpt-6)/.test(o.model) ? { openai: { reasoningEffort: effort } } : undefined;
+  if (!/^(o\d|gpt-5|gpt-6)/.test(o.model)) return undefined;
+  return { openai: { reasoningEffort: effort === "minimal" ? openaiMinimal(o.model) : effort } };
+}
+
+/**
+ * OpenAI's least effort: "minimal" only on the first GPT-5 models; from 5.1 on
+ * it's "none" (5.4-mini refuses "minimal"); o-series models start at "low".
+ */
+function openaiMinimal(model: string): string {
+  if (/^o\d/.test(model)) return "low";
+  return /^gpt-5(-|$)/.test(model) ? "minimal" : "none";
 }
 
 export function aiBackend(o: AiBackendOptions): Backend {

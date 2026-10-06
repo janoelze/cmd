@@ -30,6 +30,7 @@ import { useKeybindings } from "./keybindings.ts";
 import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, isWidget, nextAfterClose, pushHistory, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
 import { getSpaceView, getState, onNotification, onWindowFocus, setSpaceView, setUsageShown, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
+import { DoneBatch, Looks } from "./notify.ts";
 import { DEFAULT_FRACTION, MIN_WIDTH, nextPreset, stepFraction, withWidth } from "./strip.ts";
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
 import type { Rect } from "./layouts.ts";
@@ -244,6 +245,14 @@ export function App() {
     window.addEventListener("blur", off);
     return () => (window.removeEventListener("focus", on), window.removeEventListener("blur", off));
   }, []);
+  // What you look at and when you looked away, for notifications (notify.ts):
+  // an agent you watched finish isn't news, and one you look at leaves the next sum.
+  const [looks] = useState(() => new Looks());
+  const [doneBatch] = useState(() => new DoneBatch());
+  useEffect(() => {
+    looks.look(appFocused ? selected : null);
+    if (appFocused && selected) doneBatch.seen(selected);
+  }, [selected, appFocused]); // eslint-disable-line react-hooks/exhaustive-deps
   // Only what it reads: on every store change this sent IPC (closeNotification) and repeated RPCs.
   const selectedPane = selected ? s.panes.get(selected) : undefined;
   const selectedAgent = selectedPane ? s.agents.get(selectedPane.agentId ?? "") : undefined;
@@ -289,12 +298,19 @@ export function App() {
       // The window it's about: a terminal, or another window (a widget).
       const from = n.paneId ?? n.windowId ?? null;
       const looking = document.hasFocus() && from !== null && from === selectedRef.current;
-      if (c["notifications.when"] === "never" || (c["notifications.when"] === "background" && looking)) return;
+      // An agent that finished while you watched it, or just after you looked away: you saw it.
+      const saw = looking || (n.done !== undefined && from !== null && looks.saw(from, n.at));
+      if (c["notifications.when"] === "never" || (c["notifications.when"] === "background" && saw)) return;
+      // Agents that finish close together: one notification for all of them.
+      const shown = n.done !== undefined && from !== null
+        ? doneBatch.add({ tag: from, name: n.done, title: n.title, body: n.body, at: n.at })
+        : { tag: from ?? n.id, title: n.title, body: n.body, replaces: [] };
+      for (const tag of shown.replaces) cmd.closeNotification(tag);
       const sound = c["notifications.sound"];
       cmd.notify({
-        tag: from ?? n.id,
-        title: n.title,
-        body: n.body,
+        tag: shown.tag,
+        title: shown.title,
+        body: shown.body,
         sound: n.urgent && sound !== "none" ? sound : null,
         paneId: from,
       });
@@ -302,7 +318,7 @@ export function App() {
       if (!document.hasFocus() && (bounce === "any" || (bounce === "needsInput" && n.urgent))) cmd.bounce();
     });
     return () => (off(), offClick());
-  }, [select]);
+  }, [select, looks, doneBatch]);
 
   /** The terminal a row lives in: its own, or for a subagent (no window of its own) its host's. */
   const homeOf = useCallback((r: SidebarRow): string | null => {
