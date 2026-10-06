@@ -853,7 +853,9 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await menu("widget.library");
     await win.waitForSelector(".widget-library", { timeout: 5000 });
     await menu("file.close");
-    check((await win.locator(".widget-library").count()) === 0, "⌘W closes the Widget Library first");
+    // The command reaches the renderer over IPC after the click returns: wait for the sheet to go.
+    const libraryClosed = await win.waitForSelector(".widget-library", { state: "detached", timeout: 3000 }).then(() => true, () => false);
+    check(libraryClosed, "⌘W closes the Widget Library first");
     await call("window.close", { id: back.id });
 
     // New… (⌘N): windows first, then your widgets and the built-in ones, then Magic; typing finds one.
@@ -872,7 +874,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     }
     check(
       offered[0] === "Terminal" && offered.indexOf("Counter") > offered.indexOf("Text Window") && offered.at(-1) === "New Widget with Magic" && !!timer && (await win.locator(".palette").count()) === 0,
-      `New… lists windows, then widgets, then Magic, and opens what you type (${offered.join(", ")})`,
+      `New… lists windows, then widgets, then Magic, and opens what you type (${offered.join(", ")}; timer ${!!timer}, palette ${await win.locator(".palette").count()})`,
     );
     if (timer) await call("window.close", { id: timer.id });
 
