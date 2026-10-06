@@ -60,6 +60,12 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "journal.note": "never",
   "journal.sync": "never",
   "agents.homes": "never",
+  // The event log holds prompts, commands, pages and output: local only.
+  "data.query": "never",
+  "data.stats": "never",
+  "data.explain": "never",
+  "data.record": "never",
+  "data.import": "never",
   "agents.export": "never",
   "hook.ingest": "never",
   "hooks.status": "never",

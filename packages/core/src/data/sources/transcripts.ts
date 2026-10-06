@@ -7,7 +7,8 @@
 // Spike: used by the importer; phase 3 feeds the same function from a tailer.
 
 import { parseClaude, parseCodex } from "../../search/parser.ts";
-import type { NewEvent } from "../store.ts";
+import type { DataEventType } from "@cmd/protocol";
+import type { StoreEvent as NewEvent } from "../store.ts";
 
 /** Lines shorter than this are kept whole in `data`; longer ones go to a blob with a summary inline. */
 export const INLINE_LINE = 2048;
@@ -111,13 +112,8 @@ export function claudeLine(line: string, n: number, file: TranscriptFile, sessio
       return { ...base, type: "transcript.title", text: str(o.aiTitle) ?? str(o.customTitle) ?? null, data: { ...common, title: o.aiTitle ?? o.customTitle } };
     case "system":
       return { ...base, type: str(o.subtype) === "compact_boundary" ? "transcript.compaction" : "transcript.system", text: line1(str(o.content) ?? str(o.subtype) ?? ""), data: { ...common, subtype: o.subtype, compactMetadata: o.compactMetadata, logicalParentUuid: o.logicalParentUuid }, content: line.length > INLINE_LINE ? line : null };
-    case "file-history-snapshot":
-    case "attachment":
-    case "permission-mode":
-    case "agent-name":
-    case "queue-operation":
-      return { ...base, type: `transcript.${type}`, text: null, data: { ...common, chars: line.length }, content: line.length > INLINE_LINE ? line : null };
     default:
+      // Bookkeeping lines (attachment, permission-mode, file-history-snapshot, queue-operation, …): a row with its kind in `line`, bytes only when big.
       return { ...base, type: "transcript.other", text: null, data: { ...common, chars: line.length }, content: line.length > INLINE_LINE ? line : null };
   }
 }
@@ -149,7 +145,7 @@ export function codexLine(line: string, n: number, file: TranscriptFile, state: 
   };
   const big = line.length > INLINE_LINE;
   const common: Obj = { line: outer, item: inner, cwd: state.cwd, ...(big ? { chars: line.length } : { payload }) };
-  let type = "transcript.other";
+  let type: DataEventType = "transcript.other";
   let text: string | null = null;
   let body: string | null = null;
   if (inner === "user_message" || (inner === "message" && payload.role === "user")) {
@@ -169,7 +165,7 @@ export function codexLine(line: string, n: number, file: TranscriptFile, state: 
     common.callId = payload.call_id;
   } else if (outer === "compacted" || inner === "compacted") type = "transcript.compaction";
   else if (outer === "session_meta") type = "transcript.session";
-  else if (outer === "turn_context") type = "transcript.turn_context";
+  else if (outer === "turn_context") type = "transcript.other";
   return { ...base, type, text, body, data: { ...common, role: payload.role }, content: big ? line : null };
 }
 

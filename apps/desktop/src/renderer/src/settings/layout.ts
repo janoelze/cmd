@@ -128,6 +128,15 @@ export const SETTINGS_PAGES: Page[] = [
       { title: "Running widgets", items: ["magic.autoFix", "magic.deno"] },
     ],
   },
+  {
+    id: "data",
+    title: "Data",
+    icon: "internaldrive",
+    sections: [
+      { title: "What cmd keeps", items: ["data.record.transcripts", "data.record.output", "data.record.browsing", "data.record.actions"] },
+      { title: "For how long", items: ["data.keepDays"] },
+    ],
+  },
 ];
 
 /** Settings shown on a page of their own making (About shows the update mode, crash reports and usage stats). */

@@ -1,76 +1,18 @@
 // The facts store (docs/28 §2): records events idempotently by id, offloads big
-// content to blobs, keeps entities and links, answers the basic queries and
-// says how big everything is. Spike: enough to import and measure; phase 1 adds
-// retention, redaction rules, the typed EventTypes map and the views' cursor.
+// content to zstd blobs, keeps entities and links, answers the query shape of
+// protocol/events.ts and says how big everything is. Policy (what to record,
+// redaction, caps, retention) lives in service.ts; this file only stores.
 
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import zlib from "node:zlib";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { EVENTS_SCHEMA, FLAG_CUT, FTS_SQL, SCHEMA_SQL } from "./schema.ts";
+import type { DataEvent, DataEventType, DataQuery, DataStats, NewDataEvent } from "@cmd/protocol";
+import { DATA_FLAGS, EVENT_V } from "@cmd/protocol";
+import { EVENTS_SCHEMA, FTS_SQL, SCHEMA_SQL } from "./schema.ts";
 
-/** What a recorder hands in. `content`: big text or bytes kept as a blob, not in the row. */
-export interface NewEvent {
-  id: string;
-  at: number;
-  until?: number | null;
-  type: string;
-  v?: number;
-  source: string;
-  parentId?: string | null;
-  spaceId?: string | null;
-  projectId?: string | null;
-  sessionId?: string | null;
-  agentId?: string | null;
-  paneId?: string | null;
-  windowId?: string | null;
-  deviceId?: string | null;
-  text?: string | null;
-  data: unknown;
-  content?: string | Buffer | null;
-  /** Words for full text beyond `text` (a prompt, a message body); capped by the store. */
-  body?: string | null;
-  flags?: number;
-}
-
-export interface StoredEvent {
-  seq: number;
-  id: string;
-  at: number;
-  until: number | null;
-  type: string;
-  v: number;
-  source: string;
-  recorded: string;
-  parentId: string | null;
-  spaceId: string | null;
-  projectId: string | null;
-  sessionId: string | null;
-  agentId: string | null;
-  paneId: string | null;
-  windowId: string | null;
-  deviceId: string | null;
-  text: string | null;
-  data: unknown;
-  blob: string | null;
-  flags: number;
-}
-
-export interface EventQuery {
-  types?: string[];
-  at?: [number, number];
-  sessionId?: string;
-  agentId?: string;
-  projectId?: string;
-  spaceId?: string;
-  paneId?: string;
-  parentId?: string;
-  /** FTS over text and body. */
-  text?: string;
-  order?: "asc" | "desc";
-  limit?: number;
-  after?: number;
-}
+/** A recorder's event plus what the store adds on the way in. */
+export type StoreEvent = NewDataEvent & { v?: number; flags?: number };
 
 export interface StoreOptions {
   /** The cmd that records (events.recorded). */
@@ -88,17 +30,14 @@ export class DataStore {
   readonly file: string;
   #o: Required<StoreOptions>;
   #stmts = new Map<string, StatementSync>();
-  #fts = false;
 
   constructor(file: string, o: StoreOptions = {}) {
     this.file = file;
     this.#o = { ...DEFAULTS, ...o };
     this.db = new DatabaseSync(file, { timeout: 5000 });
     this.db.exec(SCHEMA_SQL);
-    const v = this.meta("schema");
-    if (!v) this.setMeta("schema", String(EVENTS_SCHEMA));
     this.db.exec(FTS_SQL);
-    this.#fts = true;
+    if (!this.meta("schema")) this.setMeta("schema", String(EVENTS_SCHEMA));
   }
 
   close(): void {
@@ -136,10 +75,9 @@ export class DataStore {
    * the blob are the newest, identities fill in what was null, `seq` and `at`
    * stay. Returns the row's seq and whether it was new.
    */
-  record(e: NewEvent): { seq: number; inserted: boolean } {
+  record(e: StoreEvent): { seq: number; inserted: boolean } {
     const blob = e.content != null ? this.putBlob(e.content) : null;
     const data = JSON.stringify(e.data ?? null);
-    const flags = (e.flags ?? 0) | (blob && !e.content ? FLAG_CUT : 0);
     const before = this.#stmt(`SELECT seq, blob FROM events WHERE id = ?`).get(e.id) as { seq: number; blob: string | null } | undefined;
     const r = this.#stmt(
       `INSERT INTO events (id, at, until, type, v, source, recorded, parent_id, space_id, project_id, session_id, agent_id, pane_id, window_id, device_id, text, data, blob, flags)
@@ -159,16 +97,14 @@ export class DataStore {
          device_id = COALESCE(device_id, excluded.device_id),
          flags = flags | excluded.flags
        RETURNING seq`,
-    ).get(e.id, Math.round(e.at), e.until == null ? null : Math.round(e.until), e.type, e.v ?? 1, e.source, this.#o.recordedBy, e.parentId ?? null, e.spaceId ?? null, e.projectId ?? null, e.sessionId ?? null, e.agentId ?? null, e.paneId ?? null, e.windowId ?? null, e.deviceId ?? null, e.text ?? null, data, blob, flags) as { seq: number };
+    ).get(e.id, Math.round(e.at), e.until == null ? null : Math.round(e.until), e.type, e.v ?? EVENT_V[e.type as DataEventType] ?? 1, e.source, this.#o.recordedBy, e.parentId ?? null, e.spaceId ?? null, e.projectId ?? null, e.sessionId ?? null, e.agentId ?? null, e.paneId ?? null, e.windowId ?? null, e.deviceId ?? null, e.text ?? null, data, blob, e.flags ?? 0) as { seq: number };
     if (before?.blob && before.blob !== blob) this.#unref(before.blob);
-    if (this.#fts) {
-      if (before) this.#stmt(`DELETE FROM events_fts WHERE rowid = ?`).run(before.seq);
-      if (e.text || e.body) this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`).run(r.seq, e.text ?? "", (e.body ?? "").slice(0, this.#o.bodyCap));
-    }
+    if (before) this.#stmt(`DELETE FROM events_fts WHERE rowid = ?`).run(before.seq);
+    if (e.text || e.body) this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`).run(r.seq, e.text ?? "", (e.body ?? "").slice(0, this.#o.bodyCap));
     return { seq: r.seq, inserted: !before };
   }
 
-  recordAll(events: Iterable<NewEvent>): number {
+  recordAll(events: Iterable<StoreEvent>): number {
     let n = 0;
     this.transaction(() => {
       for (const e of events) this.record(e), n++;
@@ -176,7 +112,26 @@ export class DataStore {
     return n;
   }
 
-  /** Content-addressed; deflated when that saves space. Returns the hash. */
+  get(id: string): DataEvent | null {
+    const row = this.#stmt(`SELECT *, json(data) AS data_json FROM events WHERE id = ?`).get(id) as unknown as Row | undefined;
+    return row ? toEvent(row) : null;
+  }
+
+  /** Removes events (and their FTS rows, blob references); returns how many. */
+  delete(where: { before?: number; types?: string[]; sessionId?: string; projectId?: string; seqs?: number[] }): number {
+    const [cond, args] = conditions({ at: where.before ? [0, where.before] : undefined, types: where.types, sessionId: where.sessionId, projectId: where.projectId });
+    const parts = [...(cond ? [cond] : []), ...(where.seqs?.length ? [`seq IN (${where.seqs.map(() => "?").join(",")})`] : [])];
+    if (!parts.length) return 0;
+    const w = `WHERE ${parts.join(" AND ")}`;
+    const all = [...args, ...(where.seqs ?? [])];
+    return this.transaction(() => {
+      for (const r of this.db.prepare(`SELECT blob FROM events ${w} AND blob IS NOT NULL`).all(...all) as { blob: string }[]) this.#unref(r.blob);
+      this.db.prepare(`DELETE FROM events_fts WHERE rowid IN (SELECT seq FROM events ${w})`).run(...all);
+      return Number(this.db.prepare(`DELETE FROM events ${w}`).run(...all).changes);
+    });
+  }
+
+  /** Content-addressed; zstd when that saves space. Returns the hash. */
   putBlob(content: string | Buffer): string {
     const raw = typeof content === "string" ? Buffer.from(content, "utf8") : content;
     const hash = createHash("sha256").update(raw).digest("hex");
@@ -187,7 +142,7 @@ export class DataStore {
     }
     let bytes = raw;
     let enc = "raw";
-    // zstd (Node ≥ 22.15): on this Mac's transcripts 36% of raw against deflate's 64%; level 3 is the fast default.
+    // zstd (Node ≥ 22.15): on the author's transcripts 36% of raw against deflate's 64%; level 3 is the fast default.
     if (this.#o.compress && raw.length > 256) {
       const z = zlib.zstdCompressSync(raw, { params: { [zlib.constants.ZSTD_c_compressionLevel]: 3 } });
       if (z.length < raw.length * 0.9) (bytes = z), (enc = "zstd");
@@ -219,15 +174,18 @@ export class DataStore {
     ).run(kind, id, at, at, JSON.stringify(attrs));
   }
 
+  entities(kind: string): { id: string; created: number; seen: number; attrs: Record<string, unknown> }[] {
+    return (this.#stmt(`SELECT id, created, seen, json(attrs) AS attrs FROM entities WHERE kind = ? ORDER BY seen DESC`).all(kind) as { id: string; created: number; seen: number; attrs: string }[]).map((r) => ({ ...r, attrs: JSON.parse(r.attrs) as Record<string, unknown> }));
+  }
+
   link(from: [string, string], to: [string, string], kind: string, at: number, until: number | null = null): void {
     this.#stmt(`INSERT OR REPLACE INTO links (from_kind, from_id, to_kind, to_id, kind, at, until) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(from[0], from[1], to[0], to[1], kind, at, until);
   }
 
   /** Builds the full-text index over what's recorded (after an import, or when it was dropped). */
-  buildFts(bodyOf?: (e: StoredEvent) => string | null): void {
+  buildFts(bodyOf?: (e: DataEvent) => string | null): void {
     this.db.exec(`DROP TABLE IF EXISTS events_fts`);
     this.db.exec(FTS_SQL);
-    this.#fts = true;
     const ins = this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`);
     this.transaction(() => {
       for (const row of this.db.prepare(`SELECT *, json(data) AS data_json FROM events ORDER BY seq`).iterate() as Iterable<Row>) {
@@ -239,40 +197,30 @@ export class DataStore {
     this.db.exec(`INSERT INTO events_fts(events_fts) VALUES ('optimize')`);
   }
 
-  query(q: EventQuery): StoredEvent[] {
-    const where: string[] = [];
-    const args: (string | number)[] = [];
-    if (q.types?.length) {
-      const exact = q.types.filter((t) => !t.endsWith("."));
-      const prefixes = q.types.filter((t) => t.endsWith("."));
-      // A range, not LIKE: LIKE is case-insensitive by default and skips the index.
-      const parts = [...(exact.length ? [`type IN (${exact.map(() => "?").join(",")})`] : []), ...prefixes.map(() => `(type >= ? AND type < ?)`)];
-      args.push(...exact, ...prefixes.flatMap((p) => [p, `${p}￿`]));
-      where.push(`(${parts.join(" OR ")})`);
-    }
-    // With a type filter the (type, at) index is the narrow one; `+at` keeps the planner off the wide at index (spike: 50 ms → <1 ms).
-    if (q.at) where.push(q.types?.length ? `+at >= ? AND +at < ?` : `at >= ? AND at < ?`), args.push(q.at[0], q.at[1]);
-    for (const k of ["sessionId", "agentId", "projectId", "spaceId", "paneId", "parentId"] as const) {
-      const v = q[k];
-      if (v) where.push(`${COL[k]} = ?`), args.push(v);
-    }
-    if (q.after) where.push(`seq > ?`), args.push(q.after);
-    if (q.text) where.push(`seq IN (SELECT rowid FROM events_fts WHERE events_fts MATCH ?)`), args.push(q.text);
-    const sql = `SELECT *, json(data) AS data_json FROM events ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY seq ${q.order === "desc" ? "DESC" : "ASC"} LIMIT ?`;
-    args.push(q.limit ?? 1000);
-    return (this.db.prepare(sql).all(...args) as unknown as Row[]).map(toEvent);
+  query(q: DataQuery): DataEvent[] {
+    const [cond, args] = conditions(q);
+    const sql = `SELECT *, json(data) AS data_json FROM events ${cond ? `WHERE ${cond}` : ""} ORDER BY seq ${q.order === "desc" ? "DESC" : "ASC"} LIMIT ?`;
+    return (this.db.prepare(sql).all(...args, Math.min(q.limit ?? 1000, 100_000)) as unknown as Row[]).map(toEvent);
   }
 
-  /** Rows and bytes per type, blob totals, the file's size. */
-  stats(): { types: { type: string; rows: number; bytes: number; blobs: number }[]; blobs: { count: number; size: number; stored: number }; fileBytes: number; events: number } {
-    const types = this.db.prepare(`SELECT type, COUNT(*) AS rows, SUM(length(data) + COALESCE(length(text), 0) + length(id) + 80) AS bytes, SUM(CASE WHEN blob IS NOT NULL THEN 1 ELSE 0 END) AS blobs FROM events GROUP BY type ORDER BY bytes DESC`).all() as { type: string; rows: number; bytes: number; blobs: number }[];
-    const blobs = this.db.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS size, COALESCE(SUM(stored), 0) AS stored FROM blobs`).get() as { count: number; size: number; stored: number };
+  count(q: DataQuery): number {
+    const [cond, args] = conditions(q);
+    return (this.db.prepare(`SELECT COUNT(*) AS n FROM events ${cond ? `WHERE ${cond}` : ""}`).get(...args) as { n: number }).n;
+  }
+
+  stats(): DataStats {
+    const types = this.db.prepare(`SELECT type, COUNT(*) AS rows, SUM(length(data) + COALESCE(length(text), 0) + length(id) + 80) AS bytes, SUM(CASE WHEN blob IS NOT NULL THEN 1 ELSE 0 END) AS blobs FROM events GROUP BY type ORDER BY bytes DESC`).all() as DataStats["types"];
+    const blobs = this.db.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS size, COALESCE(SUM(stored), 0) AS stored FROM blobs`).get() as DataStats["blobs"];
     const events = (this.db.prepare(`SELECT COUNT(*) AS n FROM events`).get() as { n: number }).n;
+    const now = Date.now();
+    const day = (this.db.prepare(`SELECT COUNT(*) AS n FROM events WHERE at >= ?`).get(now - 86400_000) as { n: number }).n;
+    const week = (this.db.prepare(`SELECT COUNT(*) AS n FROM events WHERE at >= ?`).get(now - 7 * 86400_000) as { n: number }).n;
+    const oldest = (this.db.prepare(`SELECT MIN(at) AS t FROM events WHERE at > 0`).get() as { t: number | null }).t;
     let fileBytes = 0;
     try {
-      fileBytes = fs.statSync(this.file).size + (fs.existsSync(`${this.file}-wal`) ? fs.statSync(`${this.file}-wal`).size : 0);
+      if (this.file !== ":memory:") fileBytes = fs.statSync(this.file).size + (fs.existsSync(`${this.file}-wal`) ? fs.statSync(`${this.file}-wal`).size : 0);
     } catch {}
-    return { types, blobs, fileBytes, events };
+    return { file: this.file === ":memory:" ? null : this.file, fileBytes, events, blobs, types, recent: { day, week }, oldest };
   }
 
   /** Pages by table and index (dbstat), in bytes. */
@@ -289,7 +237,30 @@ export class DataStore {
   }
 }
 
-const COL = { sessionId: "session_id", agentId: "agent_id", projectId: "project_id", spaceId: "space_id", paneId: "pane_id", parentId: "parent_id" } as const;
+const COL = { sessionId: "session_id", agentId: "agent_id", projectId: "project_id", spaceId: "space_id", paneId: "pane_id", windowId: "window_id", parentId: "parent_id" } as const;
+
+/** WHERE clause and arguments for a query (without ORDER and LIMIT). */
+function conditions(q: DataQuery): [string, (string | number)[]] {
+  const where: string[] = [];
+  const args: (string | number)[] = [];
+  if (q.types?.length) {
+    const exact = q.types.filter((t) => !t.endsWith("."));
+    const prefixes = q.types.filter((t) => t.endsWith("."));
+    // A range, not LIKE: LIKE is case-insensitive by default and skips the index.
+    const parts = [...(exact.length ? [`type IN (${exact.map(() => "?").join(",")})`] : []), ...prefixes.map(() => `(type >= ? AND type < ?)`)];
+    args.push(...exact, ...prefixes.flatMap((p) => [p, `${p}￿`]));
+    where.push(`(${parts.join(" OR ")})`);
+  }
+  // With a type filter the (type, at) index is the narrow one; `+at` keeps the planner off the wide at index.
+  if (q.at) where.push(q.types?.length ? `+at >= ? AND +at < ?` : `at >= ? AND at < ?`), args.push(q.at[0], q.at[1]);
+  for (const k of ["sessionId", "agentId", "projectId", "spaceId", "paneId", "windowId", "parentId"] as const) {
+    const v = q[k];
+    if (v) where.push(`${COL[k]} = ?`), args.push(v);
+  }
+  if (q.after) where.push(`seq > ?`), args.push(q.after);
+  if (q.text) where.push(`seq IN (SELECT rowid FROM events_fts WHERE events_fts MATCH ?)`), args.push(q.text);
+  return [where.join(" AND "), args];
+}
 
 interface Row {
   seq: number;
@@ -315,7 +286,7 @@ interface Row {
   flags: number;
 }
 
-function toEvent(r: Row): StoredEvent {
+function toEvent(r: Row): DataEvent {
   // JSONB is bytes in the row; every read asks for json(data) beside it.
   let data: unknown = null;
   try {
@@ -326,7 +297,7 @@ function toEvent(r: Row): StoredEvent {
     id: r.id,
     at: r.at,
     until: r.until,
-    type: r.type,
+    type: r.type as DataEventType,
     v: r.v,
     source: r.source,
     recorded: r.recorded,
@@ -339,8 +310,10 @@ function toEvent(r: Row): StoredEvent {
     windowId: r.window_id,
     deviceId: r.device_id,
     text: r.text,
-    data,
+    data: data as DataEvent["data"],
     blob: r.blob,
     flags: r.flags,
   };
 }
+
+export { DATA_FLAGS };

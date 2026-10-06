@@ -2,6 +2,7 @@
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
 import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, CommandRun, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
+import type { DataClassInfo, DataEvent, DataQuery, DataStats, NewDataEvent } from "./events.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
 import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
@@ -160,6 +161,16 @@ export interface Methods {
   "journal.note": { params: { text: string; paneId?: PaneId; spaceId?: SpaceId }; result: { id: number } };
   /** Reads new turns, sessions and git now (it does every few minutes). */
   "journal.sync": { params: {}; result: null };
+  /** The event log (docs/28): events and views by one query shape. Prefix types end in a dot ("git."). */
+  "data.query": { params: { query: DataQuery }; result: DataEvent[] };
+  /** Size and counts of the events file. */
+  "data.stats": { params: {}; result: DataStats };
+  /** Every class of recorded data: what it is, how long it's kept, its switch, whether it leaves the Mac. */
+  "data.explain": { params: {}; result: (DataClassInfo & { enabled: boolean; events: number })[] };
+  /** Record something from a client: a note, an action the renderer saw (user.*). Other types are the core's to record. */
+  "data.record": { params: { event: NewDataEvent }; result: { seq: number } | null };
+  /** Events from a `cmd data export` file; returns how many were kept. */
+  "data.import": { params: { events: NewDataEvent[] }; result: { imported: number } };
   /** Where agents keep their config (discovered); rescan: look again first. */
   "agents.homes": { params: { rescan?: boolean }; result: AgentHome[] };
 

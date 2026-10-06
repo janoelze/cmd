@@ -13,6 +13,7 @@ import { ActivityLog } from "./agents/activity/log.ts";
 import { JournalService } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
 import { recordCommands, recordWindows } from "./journal/recorders.ts";
+import { DataService } from "./data/service.ts";
 import { rewrite } from "./agents/activity/fixture.ts";
 import { AgentHomes } from "./agents/homes.ts";
 import { cleanAiBody, NOTICE_SYSTEM, noticeContext, type NoticeKind } from "./agents/notice.ts";
@@ -128,6 +129,7 @@ export class Core {
   readonly commands: CommandLog;
   readonly timers: TimerAlarms;
   readonly store: Store;
+  readonly data: DataService;
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
   readonly processes: ProcessSampler | null;
@@ -222,6 +224,7 @@ export class Core {
     });
     // Every event says which cmd recorded it: the app's version, or the checkout's build.
     const activity = new ActivityLog(this.store.db, { recordedBy: process.env.CMD_APP_VERSION || (opts.build ? `source+${opts.build.slice(0, 8)}` : null) });
+    this.data = new DataService({ file: opts.stateDir ? path.join(opts.stateDir, "data", "events.sqlite") : null, recordedBy: process.env.CMD_APP_VERSION || (opts.build ? `source+${opts.build.slice(0, 8)}` : "source"), settings: () => this.settings.settings });
     activity.prune();
     this.#pruneTimer = setInterval(() => activity.prune(), 6 * 3600_000);
     this.#pruneTimer.unref();
@@ -313,6 +316,15 @@ export class Core {
     recordCommands(this.journal, this.commands);
     recordWindows(this.journal, this.windows);
     if (opts.stateDir) this.journal.start();
+    if (opts.stateDir) {
+      // What older cmds kept in cmd.sqlite comes along once; the tables go when their readers do.
+      try {
+        this.data.importLegacy(this.store.db);
+      } catch (err) {
+        log.error("importing the older tables failed", err);
+      }
+      this.data.start();
+    }
     this.magic = new MagicService({
       windows: this.windows,
       settings,
@@ -451,6 +463,15 @@ export class Core {
       return { id: this.journal.note(p.text, { by: agent ? "agent" : "user", agentSession: session, spaceId: p.spaceId ?? pane?.spaceId ?? null, cwd: pane?.cwd ?? null }) };
     },
     "journal.sync": async () => (await this.journal.sync(), null),
+    "data.query": (p) => this.data.query(p.query),
+    "data.stats": () => this.data.stats(),
+    "data.explain": () => this.data.explain(),
+    "data.record": (p) => {
+      if (!/^(user\.|note$)/.test(p.event.type)) throw new Error("clients record user actions and notes; the core records the rest");
+      const e = this.data.record({ ...p.event, source: p.event.source || "client" });
+      return e ? { seq: e.seq } : null;
+    },
+    "data.import": (p) => ({ imported: this.data.recordAll(p.events) }),
     "agents.export": (p) => {
       const log = this.agents.activity;
       const since = Date.now() - (p.days ?? 14) * 86400_000;
@@ -1103,6 +1124,7 @@ export class Core {
     this.usage.close();
     this.ai.dispose();
     this.journal.dispose();
+    this.data.dispose();
     await this.usage.flush();
     this.magic.dispose();
     this.remote.close();

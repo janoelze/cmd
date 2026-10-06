@@ -5,7 +5,8 @@
 
 import type { DatabaseSync } from "node:sqlite";
 import { FLAG_IMPORTED } from "../schema.ts";
-import type { NewEvent } from "../store.ts";
+import type { DataEventType } from "@cmd/protocol";
+import type { StoreEvent as NewEvent } from "../store.ts";
 
 interface HookRow {
   id: number;
@@ -88,7 +89,7 @@ export function* journalEvents(db: DatabaseSync): Generator<NewEvent> {
       id: r.key,
       at: r.at,
       until: r.until,
-      type: r.kind,
+      type: r.kind as DataEventType,
       source: r.source === "live" ? `cmd:${r.cmd ?? "?"}` : "git",
       spaceId: r.space_id,
       projectId: r.repo ? `dir:${r.repo}` : r.cwd ? `dir:${r.cwd}` : null,
