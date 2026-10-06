@@ -2,6 +2,31 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.17.0 — 2026-10-07
+
+Bigger, sharper icons and one toolbar for every window.
+
+### New
+
+- **One toolbar for every window.** Browser, Files, PDF and widgets share a toolbar that fits any width, moving what doesn't fit into a ⋯ menu. Widget summaries are now in the title bar.
+
+### Improved
+
+- Icons are larger in the top bar, the footer and toolbars, and sharp on every display.
+- The browser's address bar shows just the site and page until you click into it.
+- Files looks and works the same docked in a sidebar as in a window.
+- Fewer "done" notifications: none for a quick turn you watched, and agents that finish together share one.
+- Settings has more room around its rows and in its sidebar.
+
+### Fixed
+
+- Icons sit level with the text beside them instead of a pixel off.
+- Notifications about finished agents no longer arrive late with OpenAI models.
+
+### Removed
+
+- The Sidebar padding setting; cmd now sets the spacing itself.
+
 ## 0.16.0 — 2026-10-06
 
 One record of your work, kept on your Mac, and you decide what goes in it.
