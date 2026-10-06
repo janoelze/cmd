@@ -45,6 +45,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 - **Remote access (beta).** Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted.
 - **Terminals keep running.** A background process owns them, so quitting, reloading or updating the app doesn't end them.
 - **Session search.** Full-text search over Claude Code, Codex, Qwen Code and Copilot CLI transcripts. Return resumes a session.
+- **Your history, kept.** cmd keeps its own copy of every agent session, with the commands you ran and what they printed, commits, pages and files: searchable, a year by default, on this Mac only. Credentials are redacted before anything is stored. Settings → Data says what's kept, for how long, and what never to record; `cmd data forget` deletes a session or a project for good.
 - **Session summaries.** Right-click an agent's title bar and choose Summarize Session: a Markdown window fills in with what the session did, ready to edit and paste into a message or ticket. Needs an AI provider (Settings → AI & Agents).
 - **Widgets.** Agent Activity and a Live Diff of your uncommitted changes come built in; with Magic, describe anything else and an agent builds a live widget for it. They live in the Widget Library (⇧⌘L). [More below](#magic-widgets).
 - **Web browser** next to your terminals, with phone, tablet and desktop sizes.
@@ -115,6 +116,7 @@ cmd settings                         # list; `set KEY VALUE`, `reset KEY`, `path
 cmd hooks                            # agent configs and whether cmd's hook is in them; `install`, `remove`
 cmd agents turns <agent>             # what an agent did, turn by turn (also: events, coverage, homes)
 cmd agents summary <agent>           # summarise its session with AI, as Markdown
+cmd data query --type git. --since 7d # what cmd recorded (also: stats, explain, subscribe, ai, forget, export)
 cmd magic "how full is my disk"      # build a Magic widget without the app
 cmd widget list                      # the Widget Library; `cmd widget add <widget>` puts one on the workspace
 ```
@@ -127,4 +129,4 @@ Settings live in `~/.config/cmd/settings.json`. Change them in the Settings wind
 
 ## How it works
 
-An Electron app in front of a separate core process that owns the terminals, agents, settings and the transcript index. The app, the CLI and agent hooks talk to the core over a Unix socket. Design notes are in [`docs/`](docs/00-overview.md), building and contributing in [DEVELOPMENT.md](DEVELOPMENT.md).
+An Electron app in front of a separate core process that owns the terminals, agents, settings and the event log (everything cmd records, in `data/events.sqlite`; what's derived from it, like the search index, in `data/views.sqlite`). The app, the CLI and agent hooks talk to the core over a Unix socket. Design notes are in [`docs/`](docs/00-overview.md), building and contributing in [DEVELOPMENT.md](DEVELOPMENT.md).

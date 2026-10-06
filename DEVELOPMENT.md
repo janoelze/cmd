@@ -118,6 +118,16 @@ Only SessionStart and prompts, and only while peer briefings (`agents.peers`) ar
 
 One path for every source (`packages/core/src/notifications.ts`): agents needing input or finishing a turn, terminal bells (`\a`), notifications programs ask for with escape codes (OSC 9, OSC 777, kitty's OSC 99), commands that ran longer than `notifications.longCommand` seconds (from the shell integration's OSC 133 marks), and `cmd notify`. A terminal that wants you gets an attention marker in its title bar and sidebar row, and counts toward the Dock badge, until you look at it.
 
+## Data
+
+Everything cmd records is an event in one log, `$CMD_HOME/data/events.sqlite` (docs/28-data-plan.md): hook events, transcripts (read by a worker from the agents' folders, `data/sources/ingest.ts`), commands with their output, git, pages, files, windows, the person's focus and commands, model calls with what was sent. One envelope (`packages/protocol/src/events.ts`: types, classes, retention), payloads as JSONB, big content as zstd blobs, redaction (`core/src/redact.ts`) and the `data.exclude` rules applied before anything is written. What's derived lives in `data/views.sqlite` (turns, sessions, the transcript index, the turns' and sessions' cursors) and is rebuilt from the log when its version changes or the file is gone. Model input is built by `core/src/ai/context.ts`, which records what went in with each `ai.call`.
+
+- Add an event: a type in `EventPayloads` and `EVENT_V`, a class in `DATA_CLASSES` if it's a new kind of data, then `core.data.record(…)` where it happens.
+- Add a view: a module in `core/src/data/views/` that ensures its tables with a version (`ViewsStore.ensure`) and folds events; raise the version to rebuild it.
+- Read: `data.query` / `data.subscribe` (RPC), `cmd data query|subscribe`, `events()` in a widget's data.ts.
+- Inspect: `cmd data stats|explain|ai`; the files open read-only with `sqlite3 -readonly` (JSONB: `json(data)`).
+- Evals for the journal's writer: `node scripts/evals/journal.ts corpus|run`.
+
 ## Settings
 
 The schema is `packages/protocol/src/settings.ts`, with flat dotted keys. User values go in `~/.config/cmd/settings.json`, or in `$CMD_HOME` in dev. The core watches the file, so edits apply live, including to running shells (`open` rules) and search (the indexer restarts). The exceptions are tagged in the UI and CLI: `shell.program`, `shell.login` and `shell.integration` affect new terminals only, and `ui.defaultView` only the first launch.
