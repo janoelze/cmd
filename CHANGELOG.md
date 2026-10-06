@@ -2,6 +2,28 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.16.0 — 2026-10-06
+
+One record of your work, kept on your Mac, and you decide what goes in it.
+
+### New
+
+- **Your sessions, kept.** cmd keeps its own copy of every agent session, command and commit, so search and the Journal still find work an agent has since deleted.
+- **Settings → Data.** Choose what cmd keeps and for how long, and name folders, sites and commands it should never record.
+- **This week.** The Journal widget sums up the week's main threads of work, and agents can ask for it with `cmd journal week`.
+- **`cmd data`.** Search everything cmd recorded, follow it as it happens, or forget a session or project for good.
+
+### Improved
+
+- Passwords and tokens are taken out before cmd stores text or sends it to your AI provider.
+- Magic widgets can show your own work, like the commands that failed today or this week's commits.
+- The Commands widget keeps every command and what it printed across restarts.
+
+### Fixed
+
+- Open Spaces are no longer forgotten after an update or when you close the last window.
+- Subagents leave the agent list once their agent's turn is over.
+
 ## 0.15.1 — 2026-10-06
 
 ### New
