@@ -80,7 +80,7 @@ CREATE INDEX IF NOT EXISTS links_to ON links(to_kind, to_id);
  */
 export const FTS_SQL = `
 CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
-  text, body, content='', contentless_delete=1, detail=column, tokenize='unicode61 remove_diacritics 2'
+  text, body, content='', contentless_delete=1, detail=full, tokenize='unicode61 remove_diacritics 2'
 );
 `;
 

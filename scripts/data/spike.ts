@@ -21,6 +21,7 @@ import type { AgentTurn } from "@cmd/protocol";
 import { decodeRows, decodeTurn } from "../../packages/core/src/stored.ts";
 import { DataStore, type NewEvent } from "../../packages/core/src/data/store.ts";
 import { hookEvents, journalEvents } from "../../packages/core/src/data/sources/legacy.ts";
+import { FLAG_CUT } from "../../packages/core/src/data/schema.ts";
 import { claudeLine, codexLine, type TranscriptFile } from "../../packages/core/src/data/sources/transcripts.ts";
 import { redact, redactDeep } from "../../packages/core/src/redact.ts";
 
@@ -34,6 +35,8 @@ const flag = (name: string) => args.includes(`--${name}`);
 const dbPath = opt("db");
 const out = opt("out", path.join(os.tmpdir(), "cmd-spike-events.sqlite"))!;
 const limit = Number(opt("limit", "0"));
+/** Tool results (file reads, command output: 80% of all bytes) are cut here before storage; 0 = keep whole. */
+const toolResultCap = Number(opt("tool-result-cap", "0"));
 const homes = (opt("homes", `${os.homedir()}/.claude,${os.homedir()}/.claude-profiles/work,${os.homedir()}/.codex`) ?? "").split(",").filter(Boolean);
 const report: string[] = [];
 const say = (s = "") => (console.log(s), report.push(s));
@@ -43,7 +46,7 @@ const ms = (t: number) => `${t.toFixed(1)} ms`;
 for (const f of [out, `${out}-wal`, `${out}-shm`]) fs.rmSync(f, { force: true });
 const store = new DataStore(out, { recordedBy: "spike" });
 
-say(`# Data spike, ${new Date().toISOString().slice(0, 16)}`);
+say(`# Data spike, ${new Date().toISOString().slice(0, 16)}${toolResultCap ? ` (tool results cut at ${toolResultCap} chars)` : ""}`);
 say();
 
 // ── 1. Legacy tables ─────────────────────────────────────────
@@ -208,7 +211,12 @@ function* redacted(events: Iterable<NewEvent>): Generator<NewEvent> {
 }
 
 function redactEvent(e: NewEvent): NewEvent {
-  return { ...e, text: e.text ? redact(e.text) : e.text, body: e.body ? redact(e.body) : e.body, data: redactDeep(e.data), content: typeof e.content === "string" ? redact(e.content) : e.content };
+  let content = typeof e.content === "string" ? redact(e.content) : e.content;
+  let flags = e.flags ?? 0;
+  // Policy under test (docs/26 A8): tool results cut at the cap; Codex's encrypted reasoning kept as a row, not as bytes.
+  if (toolResultCap && e.type === "transcript.tool_result" && typeof content === "string" && content.length > toolResultCap) (content = content.slice(0, toolResultCap)), (flags |= FLAG_CUT);
+  if (e.type === "transcript.other" && (e.data as { item?: string })?.item === "reasoning") (content = null), (flags |= FLAG_CUT);
+  return { ...e, text: e.text ? redact(e.text) : e.text, body: e.body ? redact(e.body) : e.body, data: redactDeep(e.data), content, flags };
 }
 
 function* transcriptFiles(roots: string[]): Generator<TranscriptFile> {
