@@ -5,7 +5,7 @@
 
 import fs from "node:fs";
 import os from "node:os";
-import type { ActivityEvent, AgentTurn } from "@cmd/protocol";
+import type { ActivityEvent, AgentTurn, TurnRow } from "@cmd/protocol";
 import type { Connection } from "@cmd/protocol/node";
 import { rawFromLog, toFixture } from "@cmd/core/activity/fixture";
 import { toActivity } from "@cmd/core/activity/view";
@@ -28,7 +28,7 @@ const one = (s: string, n = 90) => {
   return l.length > n ? l.slice(0, n - 1) + "…" : l;
 };
 
-/** A live agent (or pane) by id prefix or name; else the argument as a full id (agents that are gone keep their events). */
+/** A live agent (or pane) by id prefix or name; else one that is gone, by id prefix in the log (agents that are gone keep their events). */
 async function target(client: Client, ref: string): Promise<{ agentId?: string; paneId?: string }> {
   const [agents, panes] = await Promise.all([client.call("agent.list", {}), client.call("pane.list", {})]);
   const a = agents.filter((x) => x.id.startsWith(ref) || x.name === ref);
@@ -36,8 +36,20 @@ async function target(client: Client, ref: string): Promise<{ agentId?: string; 
   if (a.length > 1) throw new Error(`ambiguous agent: ${ref}`);
   const p = panes.filter((x) => x.id.startsWith(ref));
   if (p.length === 1) return p[0]!.agentId ? { agentId: p[0]!.agentId } : { paneId: p[0]!.id };
-  // Gone: an agent id (prefix) in the log, else a pane's.
-  return (await client.call("agent.events", { agentId: ref, limit: 1 })).length ? { agentId: ref } : { paneId: ref };
+  // Gone: an agent's id (prefix) in the log, else a pane's.
+  for (const kind of ["agent", "pane"] as const) {
+    const ids = (await client.call("data.entities", { kind, limit: 1000 })).map((e) => e.id).filter((id) => id.startsWith(ref));
+    if (ids.length > 1) throw new Error(`ambiguous ${kind}: ${ref}`);
+    if (ids.length === 1) return kind === "agent" ? { agentId: ids[0] } : { paneId: ids[0] };
+  }
+  throw new Error(`no agent or terminal: ${ref}`);
+}
+
+/** The agent's (or pane's) hook events and the core's notes about it, from the log: the newest `limit`, oldest first. */
+const ACTIVITY = ["agent.hook", "agent.note"];
+async function activity(client: Client, t: { agentId?: string; paneId?: string }, limit: number, raw: boolean): Promise<ActivityEvent[]> {
+  const evs = await client.call("data.query", { query: { types: ACTIVITY, agentId: t.agentId, paneId: t.agentId ? undefined : t.paneId, order: "desc", limit } });
+  return evs.reverse().map((e) => toActivity(e, raw));
 }
 
 export function eventLine(e: ActivityEvent): string {
@@ -69,12 +81,12 @@ export async function agentsCommand(client: Client, closed: Promise<void>, pos: 
     case "events": {
       if (!ref) throw new Error("usage: cmd agents events <agent|pane>");
       const t = await target(client, ref);
-      const evs = await client.call("agent.events", { ...t, raw: !!opt.raw, limit: limit ?? 200 });
+      const evs = await activity(client, t, limit ?? 200, !!opt.raw);
       const print = (e: ActivityEvent) => console.log(json ? JSON.stringify(e) : eventLine(e) + (opt.raw && e.raw ? `\n${JSON.stringify(e.raw)}` : ""));
       evs.forEach(print);
       if (!opt.follow) return 0;
       // A live query over the log: the agent's (or pane's) hook events and the core's notes, as they're recorded.
-      const { id } = await client.call("data.subscribe", { query: { types: ["agent.hook", "agent.note"], agentId: t.agentId, paneId: t.agentId ? undefined : t.paneId, limit: 1 } });
+      const { id } = await client.call("data.subscribe", { query: { types: ACTIVITY, agentId: t.agentId, paneId: t.agentId ? undefined : t.paneId, limit: 1 } });
       client.onEvent((e) => {
         if (e.type !== "data.changed" || e.id !== id) return;
         for (const d of e.events) print(toActivity(d, !!opt.raw));
@@ -96,7 +108,7 @@ export async function agentsCommand(client: Client, closed: Promise<void>, pos: 
     case "turns": {
       if (!ref) throw new Error("usage: cmd agents turns <agent>");
       const { agentId } = await target(client, ref);
-      const turns = agentId ? await client.call("agent.turns", { agentId, limit }) : [];
+      const turns = agentId ? ((await client.call("data.view", { query: { view: "turns", agentId, limit } })) as TurnRow[]) : [];
       if (json) return console.log(JSON.stringify(turns, null, 2)), 0;
       if (!turns.length) console.log("no turns recorded");
       for (const t of turns) console.log(turnLines(t).join("\n"));
@@ -150,7 +162,7 @@ export async function agentsCommand(client: Client, closed: Promise<void>, pos: 
     case "record": {
       if (!ref || !file) throw new Error("usage: cmd agents record <agent> <out.jsonl>");
       const t = await target(client, ref);
-      const evs = await client.call("agent.events", { ...t, raw: true, limit: 100_000 });
+      const evs = await activity(client, t, 100_000, true);
       const raws = rawFromLog(evs);
       if (!raws.length) throw new Error("no events recorded for it");
       const cwd = evs.find((e) => e.cwd)?.cwd;

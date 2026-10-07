@@ -26,7 +26,7 @@ Principles:
 | Agent homes | `agents/homes.ts` |
 | Fixtures | `agents/activity/fixture.ts`, `test/fixtures/agents/` |
 | Types | `protocol/src/activity.ts` (`ActivityEvent`, `AgentTurn`, `AgentHome`, `AgentCoverage`); `Agent.turn`, `Agent.stateCause` |
-| RPC | `agent.events`, `agent.turns`, `agents.coverage`, `agents.homes`; event `agent.activity` (local only: remote policy says never) |
+| RPC | events from the log (`data.query`, types `agent.hook`/`agent.note`), turns from its view (`data.view`/`data.subscribeView`, `view: "turns"`), `agents.coverage`, `agents.homes` (local only: remote policy says never) |
 | CLI | `cmd agents events|turns|coverage|homes|record` |
 
 ## Capture
@@ -153,9 +153,9 @@ Rules:
 ## What this enables (separate work)
 
 - **Notifications** (built, 2026-10-05: `agents/notice.ts`, worded by the copywriting skill): subject · state, the agent's own first sentence, the files and time cmd checked, what a waiting agent asks, why it stopped, background work left running. Next: AI phrasing ([17-ai.md](17-ai.md): a fast-tier call over the turn record, not the transcript).
-- **Agent Activity widget** as an overview: per agent the current turn, what it wants, files changed, recent turns (`agent.turns`).
+- **Agent Activity widget** as an overview: per agent the current turn, what it wants, files changed, recent turns (the turns view).
 - **Sidebar and tooltips** from turn facts.
-- **Remote "Now"** from structured fields (once the policy allows `agent.turns`).
+- **Remote "Now"** from structured fields (once the policy allows the turns view).
 - **Magic widgets** through a future `cmd.agents()`.
 
 ## Open

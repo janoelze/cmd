@@ -542,8 +542,6 @@ export class Core {
       this.data.record({ id: `look:${p.agentId}:${Date.now()}`, at: Date.now(), type: "user.look", source: "user", agentId: p.agentId, paneId: this.agents.get(p.agentId)?.paneId ?? null, spaceId: this.agents.get(p.agentId)?.spaceId ?? null, data: { agentId: p.agentId } });
       return null;
     },
-    "agent.events": (p) => this.agents.activity.events(p),
-    "agent.turns": (p) => this.agents.activity.turns(p.agentId, p.limit),
     "agent.summarize": async (p) => {
       const s = await this.summaries.start(p.agentId, { open: p.open });
       return { path: s.path, windowId: s.windowId, markdown: p.wait ? await s.done : null };

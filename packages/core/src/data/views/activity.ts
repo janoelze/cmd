@@ -132,20 +132,10 @@ export class ActivityView {
 
   /** Oldest first: the newest `limit`, or with `oldest` the first `limit` (paging with afterId). */
   events(q: EventsQuery): ActivityEvent[] {
-    const agentId = q.agentId ? this.#full("agent_id", q.agentId) : undefined;
-    const paneId = q.paneId ? this.#full("pane_id", q.paneId) : undefined;
-    if ((q.agentId && !agentId) || (q.paneId && !paneId)) return [];
     const limit = q.limit ?? 5000;
-    const rows = this.#data.store.query({ types: TYPES, agentId, paneId, after: q.afterId, at: q.since ? [q.since, Number.MAX_SAFE_INTEGER] : undefined, order: q.oldest ? "asc" : "desc", limit });
+    const rows = this.#data.store.query({ types: TYPES, agentId: q.agentId, paneId: q.paneId, after: q.afterId, at: q.since ? [q.since, Number.MAX_SAFE_INTEGER] : undefined, order: q.oldest ? "asc" : "desc", limit });
     if (!q.oldest) rows.reverse();
     return rows.map((e) => toActivity(e, !!q.raw));
-  }
-
-  /** Full ids, or prefixes (the CLI's short ids for agents that are gone). */
-  #full(col: "agent_id" | "pane_id", v: string): string | undefined {
-    if (v.length >= 36) return v;
-    const row = this.#data.store.db.prepare(`SELECT ${col} AS id FROM events WHERE ${col} >= ? AND ${col} < ? ORDER BY seq DESC LIMIT 1`).get(v, `${v}￿`) as { id: string } | undefined;
-    return row?.id;
   }
 
   /** `lastSeq`: the newest event reduced into it (a restarted core replays only later ones). `cwd`: where the agent ran. */
@@ -176,8 +166,7 @@ export class ActivityView {
   }
 
   turns(agentId: AgentId, limit = 50): AgentTurn[] {
-    const full = this.#full("agent_id", agentId) ?? agentId;
-    const rows = this.#views.stmt(`SELECT doc FROM (SELECT doc, idx FROM turns WHERE agent_id = ? ORDER BY idx DESC LIMIT ?) ORDER BY idx`).all(full, limit) as { doc: string }[];
+    const rows = this.#views.stmt(`SELECT doc FROM (SELECT doc, idx FROM turns WHERE agent_id = ? ORDER BY idx DESC LIMIT ?) ORDER BY idx`).all(agentId, limit) as { doc: string }[];
     return decodeRows("turn", rows.map((r) => r.doc), decodeTurn);
   }
 

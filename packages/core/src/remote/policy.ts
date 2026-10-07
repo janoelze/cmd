@@ -47,8 +47,6 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "agent.kill": "control",
   "agent.markSeen": "view",
   // Raw events and turns carry prompts, commands and paths: local only for now.
-  "agent.events": "never",
-  "agent.turns": "never",
   "agent.summarize": "never",
   "agents.coverage": "never",
   // The journal holds prompts, commands and pages: local only.

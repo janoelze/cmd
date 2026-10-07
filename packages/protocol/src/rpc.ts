@@ -123,10 +123,6 @@ export interface Methods {
   "agent.kill": { params: { agentId: AgentId; tree?: boolean }; result: { killed: AgentId[] } };
   "agent.markSeen": { params: { agentId: AgentId }; result: null };
 
-  /** Every event recorded about an agent (or a pane), oldest first; raw: with the payload as received. */
-  "agent.events": { params: { agentId?: AgentId; paneId?: PaneId; afterId?: number; limit?: number; raw?: boolean }; result: ActivityEvent[] };
-  /** An agent's turns, oldest first (kept after the agent is gone). */
-  "agent.turns": { params: { agentId: AgentId; limit?: number }; result: AgentTurn[] };
   /**
    * Summarise the agent's current session into a Markdown file (docs/20-session-summaries.md).
    * Returns once the file exists and (unless open: false) a window shows it; the answer
