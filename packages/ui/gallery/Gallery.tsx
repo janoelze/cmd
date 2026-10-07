@@ -5,6 +5,9 @@
 
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
+  FindBar,
+  Highlight,
+  NO_FIND_OPTIONS,
   ToolbarAddressField,
   ToolbarButton,
   ToolbarGroup,
@@ -896,7 +899,22 @@ function ContentPage() {
           </div>
         ))}
       </Spec>
+      <Spec title="FindBar" code="<FindBar query options results onStep onClose floating?>" note="⌘F in every window: a second toolbar row, or floating over content without a toolbar. The toggles give way first; supports hides what a window can't do. Highlight marks \x01…\x02 in a snippet.">
+        <FindSpecimen />
+      </Spec>
     </>
+  );
+}
+
+function FindSpecimen() {
+  const [q, setQ] = useState("agent");
+  const [o, setO] = useState(NO_FIND_OPTIONS);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, width: 480 }}>
+      <FindBar query={q} onQuery={setQ} options={o} onOptions={setO} results={q ? { index: 2, count: 17 } : null} onStep={() => {}} onClose={() => setQ("")} />
+      <FindBar query="agnet" onQuery={() => {}} options={NO_FIND_OPTIONS} onOptions={() => {}} supports={{ regex: false }} results={{ index: -1, count: 0 }} onStep={() => {}} onClose={() => {}} placeholder="Find in PDF" />
+      <Highlight text={"…the \x01agent\x02 finished; two \x01agents\x02 on one file…"} />
+    </div>
   );
 }
 

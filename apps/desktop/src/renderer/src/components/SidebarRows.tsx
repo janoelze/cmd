@@ -1,13 +1,12 @@
 // Sidebar rows: open windows and agents (SessionRow), past sessions from the
 // transcript index (HistoryRow), and the section headings that group them.
 
-import { IconButton, ListHeading } from "@cmd/ui";
+import { Highlight, IconButton, ListHeading } from "@cmd/ui";
 import type { ReactNode } from "react";
 import type { PaneId, SearchHit } from "@cmd/protocol";
 import { usePersisted } from "../store.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
-import { Highlighted } from "./Palette.tsx";
 import { useFields } from "./TileTitle.tsx";
 import { ago, labelOf, project, projectHue, shortPath, windowIdOf, type SidebarRow } from "../model.ts";
 import { RemoteBadge } from "./Remote.tsx";
@@ -159,7 +158,7 @@ export function HistoryRow(p: { hit: SearchHit; now: number; onOpen: (h: SearchH
   const h = p.hit;
   const where = [h.cwd ? project(h.cwd) : null, h.branch].filter(Boolean).join(" · ");
   let detail: ReactNode = where || h.agent;
-  if (p.rich && h.snippet) detail = <Highlighted text={h.snippet} />;
+  if (p.rich && h.snippet) detail = <Highlight text={h.snippet} />;
   return (
     <div
       className={`row history ${p.rich ? "tall" : "short"} ${p.active ? "active" : ""}`}

@@ -293,7 +293,6 @@ kbd {
 .row.history { padding-left: 14px; }
 .row.history .mark-icon { color: var(--text-dim); }
 .row.history .row-detail { display: block; }
-.row.history .row-detail mark { background: color-mix(in srgb, var(--match) 25%, transparent); color: var(--text); border-radius: 2px; padding: 0 1px; }
 
 /* Right end: the project chip, swapped for ⌘N and close on hover. */
 .row-end { flex: none; display: flex; align-items: center; }
@@ -735,7 +734,6 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.palette-snippet mark { background: color-mix(in srgb, var(--match) 25%, transparent); color: var(--text); border-radius: 2px; padding: 0 1px; }
 .palette-list li.on .palette-meta, .palette-list li.on .palette-snippet { color: color-mix(in srgb, var(--on-accent) 80%, transparent); }
 .palette-list li.on .palette-snippet mark { background: color-mix(in srgb, var(--on-accent) 30%, transparent); color: var(--on-accent); }
 .palette-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }

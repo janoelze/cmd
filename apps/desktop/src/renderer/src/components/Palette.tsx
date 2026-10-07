@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { SearchStatus } from "@cmd/protocol";
-import { ICON, iconNode } from "@cmd/ui";
+import { Highlight, ICON, iconNode } from "@cmd/ui";
 import { IndexRing } from "./IndexRing.tsx";
 
 export interface PaletteItem {
@@ -43,16 +43,6 @@ function score(label: string, q: string): number {
 
 /** A group's place in `groups`; unknown groups go last. */
 const rank = (groups: string[], g: string) => (groups.indexOf(g) + 1 || groups.length + 1);
-
-/** Render \x01…\x02 markers as highlights. */
-export function Highlighted({ text }: { text: string }) {
-  const parts = text.split(/(\x01[^\x02]*\x02)/);
-  return (
-    <>
-      {parts.map((p, i) => (p.startsWith("\x01") ? <mark key={i}>{p.slice(1, -1)}</mark> : <span key={i}>{p}</span>))}
-    </>
-  );
-}
 
 export function Palette({
   items,
@@ -212,7 +202,7 @@ export function Palette({
                   </div>
                   {it.snippet && (
                     <div className="palette-snippet">
-                      <Highlighted text={it.snippet} />
+                      <Highlight text={it.snippet} />
                     </div>
                   )}
                 </div>

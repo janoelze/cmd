@@ -1232,3 +1232,14 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-window-bar-meta { margin-left: auto; display: flex; min-width: 0; flex: 0 100 auto; overflow: hidden; color: var(--text-dim); }
 .ui-window-bar-menu { flex: none; display: flex; align-items: center; gap: 4px; height: 18px; margin-right: -4px; padding: 0 5px; font: inherit; color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); cursor: default; white-space: nowrap; }
 .ui-window-bar-menu:hover { color: var(--text); background: var(--bg-hover); }
+
+/* ── find ── */
+/* Text as a toolbar icon ("Aa", ".*"): the icon's box, mono, lifted like toolbar text. */
+.ui-glyph { position: relative; top: -1px; display: inline-grid; place-items: center; min-width: 14px; height: 14px; font: 600 11px var(--font-mono); letter-spacing: -0.02em; }
+.ui-glyph-word .ui-glyph { text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+/* Floating, it stays inside what it floats over (its parent sets the room) and gives way like a docked one. */
+.ui-find[data-floating] { max-width: 100%; }
+/* No matches: the count says so in the danger tone, the field stays as it is. */
+.ui-find .ui-tb-field:has(input[aria-invalid]) .ui-tb-field-count { color: var(--danger); }
+/* A match in text (search snippets, results). */
+.ui-match { color: var(--text); background: color-mix(in srgb, var(--match) 25%, transparent); border-radius: 2px; padding: 0 1px; }
