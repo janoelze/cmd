@@ -51,6 +51,10 @@ Diagnose without taking over the user's mouse where you can: pop a native menu f
 | accessibility read `-25204`, screencapturekit "no answer", video encoding `-12903` | sandbox rules missing or the session wasn't started with `SAFEHOUSE_SCREEN=1` |
 | everything passes outside the sandbox, fails inside | `learn` again (a new probe check needs new rules), then restart the session |
 
+## Kai, the person in the videos
+
+Every tour runs on Kai's Mac (`src/persona.ts`, applied unless `meta.persona: "none"`): `kai@kai-mbp` in the prompt, `~/src/atlas` (a trip-planning web app, the main work, with Kai's git history), `~/notes` (standup, todo), four past agent sessions in Recent, and `~/src/fizzbuzz` "for Thursday's interview". The videos are a series about Kai's ordinary day, so they can pick up from each other. Keep the humour to a nod (one fizzbuzz moment, not a theme): the point is showing what cmd can do on real-looking work. Extend Kai's world in `persona.ts` rather than per tour, so every video agrees on it.
+
 ## Writing a tour
 
 ```ts
@@ -61,7 +65,7 @@ import { TYPING } from "../src/typing.ts";
 
 export const meta: TourMeta = {
   size: [1280, 800],                       // window content size, points
-  files: { "notes.md": "# Notes\n", "src/": "" },   // the fixture home ("…/" = folder)
+  files: { "scratch.md": "# Scratch\n" },          // extra files in Kai's home ("…/" = folder)
   settings: {},                            // settings.json for the fixture
   setup: async (t) => { await t.command("file.newTerminal"); },  // unrecorded
 };

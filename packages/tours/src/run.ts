@@ -15,6 +15,7 @@ import { _electron as electron } from "playwright";
 import { Tour } from "./driver.ts";
 import { addAiKeys, fixtureEnv, makeFixture } from "./fixture.ts";
 import { Helper } from "./helper.ts";
+import { applyKai } from "./persona.ts";
 import { renderPreview } from "./post.ts";
 
 export interface TourMeta {
@@ -23,6 +24,8 @@ export interface TourMeta {
   /** Files in the fixture home (path → content; a path ending in / is a folder). */
   files?: Record<string, string>;
   settings?: Record<string, unknown>;
+  /** Whose Mac it is: Kai (persona.ts, the default: prompt, repos, notes, past sessions), or "none" for a bare home. */
+  persona?: "kai" | "none";
   /** Needs a model (a Magic build): the person's AI key goes into the fixture for the run (see fixture.ts). Costs a little per run. */
   ai?: boolean;
   /** Unrecorded: get the app into the state the video starts in. */
@@ -42,6 +45,7 @@ export async function runTour(file: string, out: string, seed = 1) {
   const name = path.basename(file).replace(/\.tour\.ts$|\.ts$/, "");
   fs.mkdirSync(out, { recursive: true });
   const fixture = makeFixture(path.join(root, ".cmd-dev", "tours", name), meta.files, meta.settings);
+  if ((meta.persona ?? "kai") === "kai") applyKai(fixture);
   const secrets = meta.ai ? addAiKeys(fixture) : null;
   const helper = Helper.start();
   const require = createRequire(path.join(root, "apps/desktop/package.json"));

@@ -1,4 +1,4 @@
-// A workspace tour: a terminal in a project, a Files window next to it in the
+// A workspace tour (Kai, persona.ts): a terminal in atlas, a Files window next to it in the
 // grid, a README opened from its native context menu, a Magic widget build
 // kicked off (a real model: meta.ai), then the palette to switch to the canvas
 // while it builds.
@@ -9,14 +9,6 @@ import { TYPING } from "../src/typing.ts";
 
 export const meta: TourMeta = {
   ai: true,
-  files: {
-    "website/README.md": "# Website\n\nThe marketing site. `npm run dev` serves it on port 5173.\n\n## Layout\n\n- `src/` the pages\n- `styles.css` one stylesheet\n",
-    "website/index.html": "<!doctype html>\n<title>Website</title>\n",
-    "website/styles.css": "body { font: 16px system-ui; }\n",
-    "website/package.json": '{ "name": "website", "scripts": { "dev": "vite" } }\n',
-    "website/src/app.ts": "export const app = () => {};\n",
-    "website/src/router.ts": "export const routes = [];\n",
-  },
 };
 
 export default async function (t: Tour) {
@@ -29,7 +21,7 @@ export default async function (t: Tour) {
   await t.press("Return");
   await main.getByRole("textbox", { name: "Terminal input" }).waitFor();
   await t.pause(600);
-  await t.type("cd website && ls\n");
+  await t.type("cd ~/src/atlas && ls\n");
   await t.pause(1300);
 
   // Files, opened where the terminal is.
