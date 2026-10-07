@@ -77,7 +77,8 @@ export function addAiKeys(f: Fixture): { secrets: string; env: Record<string, st
   const anthropic = keys["ai.anthropic.apiKey"];
   if (anthropic) setUpClaudeCode(f, anthropic);
   // Terminals inherit it, so Claude Code in a tour runs on the key (never written to disk outside secrets.json).
-  return { secrets, env: anthropic ? { ANTHROPIC_API_KEY: anthropic } : {} };
+  // No fast mode: its "now available" banner would show in every new session.
+  return { secrets, env: anthropic ? { ANTHROPIC_API_KEY: anthropic, CLAUDE_CODE_DISABLE_FAST_MODE: "1" } : {} };
 }
 
 /**
