@@ -23,6 +23,7 @@ import { WidgetTokens, widgetQuery } from "./data/widgets.ts";
 import { ViewsStore } from "./data/views/views.ts";
 import { ActivityView } from "./data/views/activity.ts";
 import { SessionsView } from "./data/views/sessions.ts";
+import { Scheduler } from "./scheduler.ts";
 import { SearchView } from "./data/views/search.ts";
 import { TranscriptIngest } from "./data/sources/ingest.ts";
 import { conversationOf } from "./data/views/conversation.ts";
@@ -163,6 +164,8 @@ export class Core {
   readonly store: Store;
   readonly data: DataService;
   readonly views: ViewsStore;
+  /** Background work on a budget, startup jobs and the stall watchdog (scheduler.ts). */
+  readonly scheduler: Scheduler;
   /** Per Space, the pane or window selected there and the focus event that says so (its span ends when the selection moves). */
   #focus = new Map<string, { id: string; eventId: string; at: number }>();
   readonly settings: SettingsService;
@@ -233,6 +236,8 @@ export class Core {
 
   constructor(opts: CoreOptions) {
     this.#opts = opts;
+    this.scheduler = new Scheduler({ watchdog: !!opts.stateDir });
+    this.scheduler.on("startup", (status) => this.#broadcast({ type: "core.startup", status }));
     this.store = new Store(opts.dbPath ?? ":memory:");
     this.settings = new SettingsService(opts.settingsPath ?? null);
     const settings = () => this.settings.settings;
@@ -274,21 +279,9 @@ export class Core {
       }
     });
     // Every event says which cmd recorded it: the app's version, or the checkout's build.
-    this.data = new DataService({ file: opts.stateDir ? path.join(opts.stateDir, "data", "events.sqlite") : null, recordedBy: process.env.CMD_APP_VERSION || (opts.build ? `source+${opts.build.slice(0, 8)}` : "source"), settings: () => this.settings.settings });
+    // A real core opens the log now and builds new indexes, imports and rebuilds views in start(), once it answers.
+    this.data = new DataService({ file: opts.stateDir ? path.join(opts.stateDir, "data", "events.sqlite") : null, recordedBy: process.env.CMD_APP_VERSION || (opts.build ? `source+${opts.build.slice(0, 8)}` : "source"), settings: () => this.settings.settings, deferIndexes: !!opts.stateDir });
     this.views = new ViewsStore(opts.stateDir ? path.join(opts.stateDir, "data", "views.sqlite") : null);
-    if (opts.stateDir) {
-      // What older cmds kept in cmd.sqlite comes along once, then its tables go: their readers read the log now.
-      try {
-        this.data.importLegacy(this.store.db);
-        this.store.db.exec(`DROP TABLE IF EXISTS agent_events; DROP TABLE IF EXISTS agent_turns; DROP TABLE IF EXISTS journal_events;`);
-        this.data.importRemoteLog(this.store.db);
-        this.store.db.exec(`DROP TABLE IF EXISTS remote_log;`);
-        // The transcript index of cmd ≤ 0.15: the log and the sessions view replace it.
-        for (const f of ["search.sqlite", "search.sqlite-wal", "search.sqlite-shm"]) fs.rmSync(path.join(opts.stateDir, f), { force: true });
-      } catch (err) {
-        log.error("importing the older tables failed", err);
-      }
-    }
     this.data.on("recorded", (e) => this.#dataChanged([e]));
     this.data.on("batch", (events) => this.#dataChanged(events));
     // Views follow what was forgotten or excluded: rebuilt from what's left.
@@ -296,9 +289,9 @@ export class Core {
       if (types.some((t) => t.startsWith("agent."))) this.agents.activity.rebuild();
       if (types.some((t) => t.startsWith("transcript."))) void this.sessions.rebuild().then(() => this.#searchView.invalidate());
     });
-    const activity = new ActivityView(this.data, this.views);
+    const activity = new ActivityView(this.data, this.views, { deferRebuild: !!opts.stateDir });
     activity.spaceOf = (paneId) => this.panes.get(paneId)?.spaceId ?? null;
-    this.sessions = new SessionsView(this.views, this.data);
+    this.sessions = new SessionsView(this.views, this.data, { deferRebuild: !!opts.stateDir, pace: () => this.scheduler.yield("sessions rebuild") });
     this.sessions.onChange((rows) => this.#viewChanged("sessions", rows));
     this.sessions.onReset(() => this.#viewReset((q) => q.view === "sessions"));
     activity.onTurn((t, cwd) => this.#viewChanged("turns", [{ ...t, cwd }]));
@@ -318,9 +311,8 @@ export class Core {
       const dir = this.homes.homeOfTranscript(agent, file);
       if (dir) this.#newHome(this.homes.learn(agent, dir, "transcript"));
     });
-    // Real cores look for agent homes now, again every few hours and when agents.homes changes.
+    // Real cores look for agent homes at start(), again every few hours and when agents.homes changes.
     if (opts.stateDir && opts.statusRoot) {
-      setImmediate(() => this.#discoverHomes());
       this.#homesTimer = setInterval(() => this.#discoverHomes(), 6 * 3600_000);
       this.#homesTimer.unref();
       // (bind also runs once now: these wait for the startup discovery instead)
@@ -416,8 +408,6 @@ export class Core {
     recordWindows(this.data, this.windows);
     recordSpaces(this.data, this.spaces);
     recordNotifications(this.data, this.notifications);
-    if (opts.stateDir) this.journal.start();
-    if (opts.stateDir) this.data.start();
     this.magic = new MagicService({
       widgetSocket: path.isAbsolute(opts.socketPath) ? { path: widgetsSocketPath(opts.socketPath), token: (widgetId, spaceId) => this.widgetTokens.issue({ widgetId, spaceId }) } : null,
       windows: this.windows,
@@ -440,7 +430,6 @@ export class Core {
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
     this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
-    if (opts.transcripts || opts.transcriptRoots) this.settings.bind(["data.record.transcripts", "search.archiveDirs"], () => this.#restartSearch());
 
     this.panes.on("output", (paneId, data) => this.#broadcast({ type: "pane.output", paneId, data }));
     this.panes.on("updated", (pane) => {
@@ -485,6 +474,43 @@ export class Core {
     });
   }
 
+  #started = false;
+
+  /**
+   * What used to run before the socket opened, now behind it (docs/34): each a
+   * startup job on the scheduler, in this order, each on its own tick, so the
+   * app connects within a second and the UI says what the core is still doing
+   * (core.startup). listen() calls it; tests that don't listen call it themselves.
+   */
+  start(): void {
+    if (this.#started) return;
+    this.#started = true;
+    const o = this.#opts;
+    const s = this.scheduler;
+    if (o.stateDir) {
+      // One statement per index; a new one reads the whole log (seconds), and shows in the stall log by this name.
+      s.startup("indexes", "Preparing the event log", () => this.data.store.ensureIndexes());
+      // What older cmds kept in cmd.sqlite comes along once, then its tables go: their readers read the log now.
+      s.startup("legacy", "Importing older data", () => {
+        this.data.importLegacy(this.store.db);
+        this.store.db.exec(`DROP TABLE IF EXISTS agent_events; DROP TABLE IF EXISTS agent_turns; DROP TABLE IF EXISTS journal_events;`);
+        this.data.importRemoteLog(this.store.db);
+        this.store.db.exec(`DROP TABLE IF EXISTS remote_log;`);
+        // The transcript index of cmd ≤ 0.15: the log and the sessions view replace it.
+        for (const f of ["search.sqlite", "search.sqlite-wal", "search.sqlite-shm"]) fs.rmSync(path.join(o.stateDir!, f), { force: true });
+      });
+    }
+    // Views whose rules changed: from the log again (after the import, which they read).
+    if (this.agents.activity.needsRebuild) s.startup("turns", "Rebuilding agent turns", () => void this.agents.activity.rebuild());
+    if (this.sessions.needsRebuild) s.startup("sessions", "Indexing sessions", () => this.sessions.rebuild().then(() => this.#searchView.invalidate()));
+    // Transcripts are read in a worker and recorded here in paced steps; the reading's own progress is search.status.
+    if (o.transcripts || o.transcriptRoots) s.startup("transcripts", "Starting the transcript reader", () => void this.settings.bind(["data.record.transcripts", "search.archiveDirs"], () => this.#restartSearch()));
+    if (o.stateDir && o.statusRoot) s.startup("homes", "Looking for agents", () => this.#discoverHomes());
+    if (o.stateDir) s.startup("journal", "Starting the journal", () => this.journal.start());
+    if (o.stateDir) s.startup("retention", "Scheduling retention", () => this.data.start());
+    s.ready();
+  }
+
   readonly handlers: Handlers = {
     "core.hello": () => ({ version: VERSION, pid: process.pid, socket: this.#opts.socketPath, build: this.#opts.build ?? "", stateDir: this.#opts.stateDir }),
     "core.info": async () => {
@@ -504,6 +530,8 @@ export class Core {
         socket: this.#opts.socketPath,
         dbPath: this.#opts.dbPath,
         settingsPath: this.#opts.settingsPath ?? null,
+        startup: this.scheduler.status(),
+        stalls: this.scheduler.stalls(),
         ptyHost: this.panes.backend.info?.() ?? null,
       };
     },
@@ -867,7 +895,7 @@ export class Core {
       if (s["data.record.transcripts"]) {
         const archives = s["search.archiveDirs"].split(",").map((d) => d.trim()).filter(Boolean);
         const roots = this.#opts.transcriptRoots?.(s) ?? this.transcripts.locate(locateContext(), archives);
-        next = new TranscriptIngest({ data: this.data, views: this.views, sessions: this.sessions, sources: this.transcripts, roots, inline: this.#opts.ingestInline });
+        next = new TranscriptIngest({ data: this.data, views: this.views, sessions: this.sessions, sources: this.transcripts, roots, inline: this.#opts.ingestInline, pace: () => this.scheduler.yield("transcripts") });
         for (const h of this.homes.all()) next.learnHome(h.agent, h.dir);
         next.on("status", (status) => this.#broadcast({ type: "search.status", status }));
         next.on("changed", () => this.#searchView.invalidate());
@@ -1060,6 +1088,7 @@ export class Core {
   async listen(): Promise<void> {
     await this.#bind();
     this.settings.watch();
+    this.start();
     // The socket file can go while we run (removed by hand, a temp-dir cleaner):
     // put it back, or clients find no core and the app starts another.
     if (this.#sockIno !== null) {
@@ -1202,10 +1231,16 @@ export class Core {
         return;
       }
       if (conn.access !== "local") checkRemoteCall(req.method, params, conn.access, this.#policy);
-      const result =
-        req.method === "pane.fitOverride"
-          ? (this.#fitOverride(conn, conn.access === "local" ? "this Mac" : this.remote.nameOf(conn), params), null)
-          : await this.call(req.method, params);
+      const done = this.scheduler.mark(`rpc ${req.method}`);
+      let result;
+      try {
+        result =
+          req.method === "pane.fitOverride"
+            ? (this.#fitOverride(conn, conn.access === "local" ? "this Mac" : this.remote.nameOf(conn), params), null)
+            : await this.call(req.method, params);
+      } finally {
+        done();
+      }
       this.#afterCall(conn, req.method, params, result);
       reply({ result: result ?? null });
       return;
@@ -1424,6 +1459,7 @@ export class Core {
   async close(): Promise<void> {
     if (this.#libraryTimer) clearTimeout(this.#libraryTimer);
     clearInterval(this.#homesTimer);
+    this.scheduler.dispose(); // a startup job still running fails on the closed stores, quietly
     this.agents.close();
     this.usage.close();
     this.ai.dispose();

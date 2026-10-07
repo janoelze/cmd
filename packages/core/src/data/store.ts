@@ -10,7 +10,7 @@ import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { DataEvent, DataEventType, DataQuery, DataStats, NewDataEvent } from "@cmd/protocol";
 import { DATA_FLAGS, EVENT_V } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import { EVENTS_SCHEMA, FTS_SQL, SCHEMA_SQL } from "./schema.ts";
+import { EVENTS_SCHEMA, FTS_SQL, INDEX_SQL, SCHEMA_SQL } from "./schema.ts";
 
 const log = logger("data");
 
@@ -24,9 +24,11 @@ export interface StoreOptions {
   compress?: boolean;
   /** `body` text indexed per event is cut here. */
   bodyCap?: number;
+  /** Leave the indexes to ensureIndexes() (the core: once it answers). Default: built now. */
+  deferIndexes?: boolean;
 }
 
-const DEFAULTS: Required<StoreOptions> = { recordedBy: "source", compress: true, bodyCap: 20_000 };
+const DEFAULTS: Required<StoreOptions> = { recordedBy: "source", compress: true, bodyCap: 20_000, deferIndexes: false };
 
 export class DataStore {
   readonly db: DatabaseSync;
@@ -40,10 +42,16 @@ export class DataStore {
     this.db = new DatabaseSync(file, { timeout: 5000 });
     this.db.exec(SCHEMA_SQL);
     this.db.exec(FTS_SQL);
+    if (!this.#o.deferIndexes) this.ensureIndexes();
     if (!this.meta("schema")) {
       this.setMeta("schema", String(EVENTS_SCHEMA));
       this.setMeta("blobs.recounted", "1"); // counted right from the start
     }
+  }
+
+  /** The log's indexes; a new one is built here (one statement each, seconds on a big log). Queries work without them, slower. */
+  ensureIndexes(): void {
+    this.db.exec(INDEX_SQL);
   }
 
   /**

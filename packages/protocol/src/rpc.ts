@@ -29,6 +29,25 @@ export interface CoreInfo {
   settingsPath: string | null;
   /** Where terminals run: the PTY host process, or null for in the core (it couldn't start). */
   ptyHost: { pid: number; startedAt: number; root: string } | null;
+  /** What the core is still doing after it began answering (view rebuilds, the first transcript read). */
+  startup: StartupStatus;
+  /** The last times the core's thread was blocked for a while, newest last (core/src/scheduler.ts). */
+  stalls: Stall[];
+}
+
+/** Startup work runs after the socket answers; `tasks` are the jobs still running, in order. */
+export interface StartupStatus {
+  phase: "starting" | "ready";
+  /** Epoch ms the core started. */
+  since: number;
+  tasks: { id: string; label: string }[];
+}
+
+/** The event loop was blocked for `ms` from `at`, while `in` ran (a request's method, a job). */
+export interface Stall {
+  at: number;
+  ms: number;
+  in: string;
 }
 
 export interface SettingsSnapshot {
@@ -439,6 +458,8 @@ export type CoreEvent =
   | { type: "secrets.updated"; status: SecretsStatus }
   | { type: "ai.updated"; status: AiStatus }
   | { type: "search.status"; status: SearchStatus }
+  /** The core's startup phase and the jobs still running (every change). */
+  | { type: "core.startup"; status: StartupStatus }
   | { type: "window.updated"; window: AppWindow }
   | { type: "window.removed"; id: WindowId }
   | { type: "space.updated"; space: Space }

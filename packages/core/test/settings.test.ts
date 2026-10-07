@@ -110,6 +110,8 @@ describe("live apply", () => {
   it("reads transcripts again when their settings change, one reader at a time, none when they're off", async () => {
     const made: Settings[] = [];
     const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, ingestInline: true, transcriptRoots: (s) => (made.push(s), []) });
+    core.start(); // the reader starts as a startup job (listen() would run it)
+    await core.scheduler.idle();
     const settle = () => new Promise((r) => setTimeout(r, 0));
     await settle();
     await core.call("settings.set", { key: "search.archiveDirs", value: "~/a, ~/b" });

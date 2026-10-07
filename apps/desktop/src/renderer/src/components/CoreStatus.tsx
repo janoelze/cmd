@@ -4,9 +4,11 @@
 
 import { Button, Popover, StatusDot } from "@cmd/ui";
 import { useRef, useState } from "react";
+import type { StartupStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { formatUptime, restartCore, SLOW_MS, useCoreHealth, useRestart, type CoreHealth } from "../coreHealth.ts";
 import { formatBytes, usageLabel } from "../model.ts";
+import { useStoreValue } from "../store.ts";
 import { Slot } from "./Slot.tsx";
 
 interface Props {
@@ -24,11 +26,16 @@ interface Summary {
   detail: string;
 }
 
-function summarize(p: Props, h: CoreHealth, restarting: boolean): Summary {
+function summarize(p: Props, h: CoreHealth, restarting: boolean, startup: StartupStatus | null): Summary {
   if (restarting) return { led: "working", text: "Restarting core…", detail: "Starting a new core; terminals keep running." };
   if (!p.connected) {
     if (p.error) return { led: "needs", text: "Core error", detail: p.error };
     return { led: "working", text: "Connecting to core…", detail: "The core isn't reachable; reconnecting." };
+  }
+  // Connected, still starting up behind the socket: say what it does (the first launch of a version rebuilds its views).
+  if (startup?.phase === "starting") {
+    const doing = startup.tasks[0]?.label;
+    return { led: "working", text: doing ? `Starting · ${doing[0]!.toLowerCase()}${doing.slice(1)}` : "Starting…", detail: doing ? `${doing}. Terminals work meanwhile.` : "Finishing startup. Terminals work meanwhile." };
   }
   if (h.unresponsive) return { led: "needs", text: "Core not responding", detail: "The core is connected but didn't answer in time." };
   if (h.outdated) return { led: "needs", text: "Core outdated · restart", detail: "Started from an older version than this app. Restart it to pick up the changes." };
@@ -40,7 +47,9 @@ export function CoreStatus(p: Props) {
   const [open, setOpen] = useState(false);
   const health = useCoreHealth(p.connected, open);
   const restart = useRestart();
-  const s = summarize(p, health, restart.restarting);
+  // The event is the fresh one; core.info's copy covers a window that connected after the last change.
+  const startup = useStoreValue((st) => st.startup) ?? health.info?.startup ?? null;
+  const s = summarize(p, health, restart.restarting, startup);
   // Same key while it changes: the numbers update in place, only showing and hiding animate.
   const usage = p.connected && !restart.restarting && !health.unresponsive ? usageLabel(health.core) : null;
   const button = useRef<HTMLButtonElement>(null);
@@ -67,6 +76,13 @@ export function CoreStatus(p: Props) {
   );
 }
 
+/** The longest time the core's thread was blocked since it started, and by what: a row only when there was one. */
+function stallRow(stalls: { at: number; ms: number; in: string }[] | undefined): [string, string, string?][] {
+  if (!stalls?.length) return [];
+  const worst = stalls.reduce((a, b) => (b.ms > a.ms ? b : a));
+  return [["Stalls", `${stalls.length} · longest ${worst.ms} ms`, `in ${worst.in}`]];
+}
+
 function Details(p: { summary: Summary; health: CoreHealth; connected: boolean; restart: { restarting: boolean; error: string | null } }) {
   const { info, core, ptyHost, latency } = p.health;
   const proc = (x: { memory: number; cpu: number; pid: number } | null) => (x ? `${formatBytes(x.memory)} · ${x.cpu.toFixed(1)}%` : "—");
@@ -79,6 +95,7 @@ function Details(p: { summary: Summary; health: CoreHealth; connected: boolean; 
         ["Terminals", String(info.panes)],
         ["Clients", String(info.connections)],
         ["Build", info.build.slice(0, 8) || "—"],
+        ...stallRow(info.stalls),
       ]
     : [];
   return (

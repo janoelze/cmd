@@ -244,7 +244,8 @@ describe.skipIf(process.platform === "win32")("setting agents up out of the box"
     const core = new Core({ socketPath: path.join(root, "core.sock"), dbPath: path.join(root, "cmd.sqlite"), terminals: fakeFactory().factory, pollMs: 0, statusRoot: path.join(root, "status"), stateDir: path.join(root, "state"), autoHooks, homesContext: () => ({ home, env: {} }) });
     const notes: string[] = [];
     core.notifications.on("notification", (n) => notes.push(n.body));
-    await new Promise((r) => setImmediate(r)); // discovery runs right after startup
+    core.start(); // discovery is a startup job (listen() would run it)
+    await core.scheduler.idle();
     return { core, home, notes, script: hookFiles(path.join(root, "state")).script };
   }
 

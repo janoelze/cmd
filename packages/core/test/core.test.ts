@@ -59,6 +59,10 @@ describe("core over the socket", () => {
     expect(info.connections).toBeGreaterThanOrEqual(1);
     expect(info.rssBytes).toBeGreaterThan(0);
     expect(fs.existsSync(path.join(info.root, "packages/core/src/main.ts"))).toBe(true);
+    // Startup work runs behind the socket; a test core has none left by now.
+    await core.scheduler.idle();
+    expect((await conn.client.call("core.info", {})).startup).toMatchObject({ phase: "ready", tasks: [] });
+    expect(Array.isArray(info.stalls)).toBe(true);
   });
 
   it("runs a shell, streams output and tracks OSC title", async () => {

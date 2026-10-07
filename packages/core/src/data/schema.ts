@@ -6,6 +6,19 @@
 /** The events file's schema version: migrations move it forward, never the rows' `v`. */
 export const EVENTS_SCHEMA = 1;
 
+/** The log's indexes, apart from its tables: a new one is built after the core answers (DataStore.ensureIndexes), since it reads the whole log. */
+export const INDEX_SQL = `
+CREATE INDEX IF NOT EXISTS events_at ON events(at);
+CREATE INDEX IF NOT EXISTS events_type_at ON events(type, at);
+CREATE INDEX IF NOT EXISTS events_session ON events(session_id, seq);
+CREATE INDEX IF NOT EXISTS events_agent ON events(agent_id, seq);
+CREATE INDEX IF NOT EXISTS events_project_at ON events(project_id, at);
+CREATE INDEX IF NOT EXISTS events_space_at ON events(space_id, at);
+CREATE INDEX IF NOT EXISTS events_parent ON events(parent_id);
+CREATE INDEX IF NOT EXISTS blobs_unreferenced ON blobs(refs) WHERE refs <= 0;
+CREATE INDEX IF NOT EXISTS links_to ON links(to_kind, to_id);
+`;
+
 export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
@@ -35,13 +48,6 @@ CREATE TABLE IF NOT EXISTS events (
   blob       TEXT,
   flags      INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS events_at ON events(at);
-CREATE INDEX IF NOT EXISTS events_type_at ON events(type, at);
-CREATE INDEX IF NOT EXISTS events_session ON events(session_id, seq);
-CREATE INDEX IF NOT EXISTS events_agent ON events(agent_id, seq);
-CREATE INDEX IF NOT EXISTS events_project_at ON events(project_id, at);
-CREATE INDEX IF NOT EXISTS events_space_at ON events(space_id, at);
-CREATE INDEX IF NOT EXISTS events_parent ON events(parent_id);
 
 CREATE TABLE IF NOT EXISTS blobs (
   hash    TEXT PRIMARY KEY,
@@ -52,8 +58,6 @@ CREATE TABLE IF NOT EXISTS blobs (
   refs    INTEGER NOT NULL DEFAULT 0,
   bytes   BLOB NOT NULL
 );
--- The sweep's rows: without it, deleting unreferenced blobs reads every blob row (seconds on a big log).
-CREATE INDEX IF NOT EXISTS blobs_unreferenced ON blobs(refs) WHERE refs <= 0;
 
 CREATE TABLE IF NOT EXISTS entities (
   kind    TEXT NOT NULL,
@@ -72,7 +76,6 @@ CREATE TABLE IF NOT EXISTS links (
   until     INTEGER,
   PRIMARY KEY (from_kind, from_id, to_kind, to_id, kind, at)
 );
-CREATE INDEX IF NOT EXISTS links_to ON links(to_kind, to_id);
 CREATE UNIQUE INDEX IF NOT EXISTS links_one ON links(from_kind, from_id, to_kind, to_id, kind);
 `;
 

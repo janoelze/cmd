@@ -4,7 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
+import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, StartupStatus, WidgetEntry, WindowId, DataEvent, DataQuery, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -27,6 +27,8 @@ export interface State {
   error?: string;
   /** Transcript index status (search). */
   search: SearchStatus | null;
+  /** The core's startup phase and what it is still doing (core.startup); null until the core said. */
+  startup: StartupStatus | null;
   /** Persisted UI state (see usePersisted). Loaded with the first snapshot. */
   ui: Record<string, unknown>;
   /** Open Spaces (docs/11-spaces.md). */
@@ -51,6 +53,7 @@ let state: State = {
   settings: { settings: DEFAULT_SETTINGS, overrides: [], errors: [], path: "" },
   ui: {},
   search: null,
+  startup: null,
   spaces: new Map(),
   spaceId: new URLSearchParams(location.search).get("space") || HOME_SPACE_ID,
   remote: null,
@@ -489,6 +492,9 @@ function handle(e: CoreEvent): void {
       return;
     case "search.status":
       set({ search: e.status });
+      return;
+    case "core.startup":
+      set({ startup: e.status });
       return;
     case "settings.updated":
       terminals.configure(e.snapshot.settings);

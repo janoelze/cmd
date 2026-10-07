@@ -367,6 +367,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "secrets.updated":
     case "ai.updated":
     case "search.status":
+    case "core.startup": // this Mac's business (its sidebar footer)
     case "space.show":
     case "window.focus":
     case "remote.updated":

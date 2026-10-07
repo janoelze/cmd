@@ -13,6 +13,8 @@ const log = logger("sessions");
 // 2: message counts were doubled for transcripts read twice (archived copies).
 // 3: names (session.name events, docs/32).
 const VERSION = 3;
+/** Transcript events per step of a rebuild: about 50 ms of work on a big log, so a step stays under the stall threshold. */
+const PAGE = 2000;
 const SQL = `
   CREATE TABLE IF NOT EXISTS sessions (
     key TEXT PRIMARY KEY,
@@ -60,11 +62,18 @@ export class SessionsView {
   #views: ViewsStore;
   #data: DataService;
 
-  constructor(views: ViewsStore, data: DataService) {
+  /** The view's rules changed (or it is new): rebuild() is due. With `deferRebuild` the owner runs it (Core.start). */
+  readonly needsRebuild: boolean;
+  /** Between pages of a rebuild (the scheduler's yield; by default the next tick). */
+  #pace: () => Promise<void>;
+
+  constructor(views: ViewsStore, data: DataService, o: { deferRebuild?: boolean; pace?: () => Promise<void> } = {}) {
     this.#views = views;
     this.#data = data;
+    this.#pace = o.pace ?? (() => new Promise<void>((r) => setImmediate(r)));
     const { rebuilt } = views.ensure("sessions", VERSION, ["sessions"], SQL);
-    if (rebuilt && data.store.count({ types: ["transcript."], limit: 1 }) > 0) void this.rebuild();
+    this.needsRebuild = rebuilt && !!o.deferRebuild;
+    if (rebuilt && !o.deferRebuild && data.store.count({ types: ["transcript."], limit: 1 }) > 0) void this.rebuild();
   }
 
   /** Folds transcript events into their sessions. `file`: the file they came from (path, resume env). */
@@ -175,12 +184,12 @@ export class SessionsView {
     let n = 0;
     try {
       for (;;) {
-        const rows = page.all(after, 5000) as { seq: number; type: string; at: number; until: number | null; sessionId: string | null; projectId: string | null; text: string | null; cwd: unknown; gitBranch: unknown; role: unknown; isSidechain: unknown; isMeta: unknown }[];
+        const rows = page.all(after, PAGE) as { seq: number; type: string; at: number; until: number | null; sessionId: string | null; projectId: string | null; text: string | null; cwd: unknown; gitBranch: unknown; role: unknown; isSidechain: unknown; isMeta: unknown }[];
         if (!rows.length) break;
         this.apply(rows.map((r) => ({ ...r, data: { cwd: r.cwd, gitBranch: r.gitBranch, role: r.role, isSidechain: !!r.isSidechain, isMeta: !!r.isMeta } }) as unknown as DataEvent));
         n += rows.length;
         after = rows.at(-1)!.seq;
-        await new Promise((r) => setImmediate(r));
+        await this.#pace();
       }
       // Names, in the order they were given.
       for (let after = 0; ; ) {
@@ -205,7 +214,7 @@ export class SessionsView {
               if (f) keep.run(f.path, f.env ? JSON.stringify(f.env) : null, m.key);
             }
           });
-          await new Promise((r) => setImmediate(r));
+          await this.#pace();
         }
       }
     } finally {

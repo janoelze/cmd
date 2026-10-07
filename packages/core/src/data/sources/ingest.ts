@@ -47,6 +47,8 @@ export interface IngestOptions {
   roots: TranscriptRoot[];
   /** Read on this thread, now, instead of in a worker (tests). */
   inline?: boolean;
+  /** Between steps of recording a file (the scheduler's yield; by default the next tick). */
+  pace?: () => Promise<void>;
 }
 
 export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; changed: [] }> {
@@ -160,7 +162,7 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
     let i = 0;
     for (; i + STEP < events.length; i += STEP) {
       this.#record(null, events.slice(i, i + STEP), env, state, true);
-      await new Promise((r) => setImmediate(r));
+      await (this.#o.pace?.() ?? new Promise<void>((r) => setImmediate(r)));
       if (this.#closed) return;
     }
     this.#record(state, events.slice(i), env, state, true);

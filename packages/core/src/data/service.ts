@@ -40,6 +40,8 @@ export interface DataServiceOptions {
   recordedBy: string;
   settings: () => Settings;
   now?: () => number;
+  /** Leave the log's indexes to store.ensureIndexes() (the core builds a new one once it answers). */
+  deferIndexes?: boolean;
 }
 
 /** What a forget names: everything of a session, of a project, before a time, of some types (all given must match). */
@@ -68,7 +70,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
     this.#o = o;
     this.recordedBy = o.recordedBy;
     if (o.file) fs.mkdirSync(path.dirname(o.file), { recursive: true });
-    this.store = new DataStore(o.file ?? ":memory:", { recordedBy: o.recordedBy });
+    this.store = new DataStore(o.file ?? ":memory:", { recordedBy: o.recordedBy, deferIndexes: o.deferIndexes });
   }
 
   get #now(): number {

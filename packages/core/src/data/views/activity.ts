@@ -61,12 +61,16 @@ export class ActivityView {
   #n = 0;
   readonly recordedBy: string | null;
 
-  constructor(data: DataService, views: ViewsStore) {
+  /** The view's rules changed (or it is new): rebuild() is due. With `deferRebuild` the owner runs it (Core.start). */
+  readonly needsRebuild: boolean;
+
+  constructor(data: DataService, views: ViewsStore, o: { deferRebuild?: boolean } = {}) {
     this.#data = data;
     this.#views = views;
     this.recordedBy = data.recordedBy;
     const { rebuilt } = views.ensure("turns", TURN_FORMAT, ["turns"], TURNS_SQL);
-    if (rebuilt && this.#data.store.count({ types: TYPES, limit: 1 }) > 0) this.rebuild();
+    this.needsRebuild = rebuilt && !!o.deferRebuild;
+    if (rebuilt && !o.deferRebuild && this.#data.store.count({ types: TYPES, limit: 1 }) > 0) this.rebuild();
     data.onPrune((before) => this.prune(before));
   }
 
