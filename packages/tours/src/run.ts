@@ -17,7 +17,7 @@ import { Tour } from "./driver.ts";
 import { addAiKeys, fixtureEnv, makeFixture } from "./fixture.ts";
 import { Helper } from "./helper.ts";
 import { applyKai } from "./persona.ts";
-import { render } from "./post.ts";
+import { render, type PostOptions } from "./post.ts";
 
 export interface TourMeta {
   /** Window content size, points. */
@@ -29,6 +29,8 @@ export interface TourMeta {
   persona?: "kai" | "none";
   /** Needs a model (a Magic build): the person's AI key goes into the fixture for the run (see fixture.ts). Costs a little per run. */
   ai?: boolean;
+  /** How post renders this tour (e.g. `{ idle: 4 }`: waiting sped up). */
+  post?: PostOptions;
   /** Unrecorded: get the app into the state the video starts in. */
   setup?: (t: Tour) => Promise<void>;
 }
@@ -42,7 +44,7 @@ const root = path.resolve(import.meta.dirname, "..", "..", "..");
 /** Where fixtures live while a tour runs (its core's state and logs too: <FIXTURES>/<tour>/logs). */
 export const FIXTURES = "/private/tmp/cmd-tours";
 
-export async function runTour(file: string, out: string, seed = 1) {
+export async function runTour(file: string, out: string, seed = 1): Promise<TourMeta> {
   const mod = (await import(pathToFileURL(path.resolve(file)).href)) as TourModule;
   const meta = mod.meta ?? {};
   const name = path.basename(file).replace(/\.tour\.ts$|\.ts$/, "");
@@ -88,6 +90,7 @@ export async function runTour(file: string, out: string, seed = 1) {
     fs.writeFileSync(path.join(out, "events.json"), JSON.stringify(events));
     fs.writeFileSync(path.join(out, "meta.json"), JSON.stringify({ name, seed, rect, scale: started.scale, width: started.width, height: started.height, t0: stopped.t0, t1: stopped.t1, frames: stopped.frames, still: { frame: still.frame, size: still.size } }, null, 1));
     console.log(`${name}: ${stopped.frames} frames, ${(((stopped.t1 as number) - (stopped.t0 as number)) / 1e9).toFixed(1)} s → ${out}`);
+    return meta;
   } finally {
     if (recording) await helper.call("record-stop").catch(() => {});
     await helper.call("release").catch(() => {});
@@ -114,8 +117,8 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   };
   const out = opt("--out") ?? path.join(root, ".cmd-dev", "tours", "out", path.basename(file).replace(/\.tour\.ts$|\.ts$/, ""));
   try {
-    await runTour(file, path.resolve(out), Number(opt("--seed") ?? 1));
-    console.log(render(path.resolve(out)));
+    const meta = await runTour(file, path.resolve(out), Number(opt("--seed") ?? 1));
+    console.log(render(path.resolve(out), meta.post));
     process.exit(0);
   } catch (e) {
     console.error((e as Error).message);

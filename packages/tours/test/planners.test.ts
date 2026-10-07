@@ -110,3 +110,17 @@ describe("typos", () => {
     expect(Array.from({ length: 50 }, (_, s) => planKeys(text, rng(s), TYPING.exact).keys.includes("\b")).some(Boolean)).toBe(false);
   });
 });
+
+describe("idle speed-up", async () => {
+  const { idleSegments } = await import("../src/post.ts");
+  it("speeds up long input-free stretches, keeping their ends real-time", () => {
+    const ev = (s: number) => ({ t: 1e9 + s * 1e9, type: "move" });
+    const segs = idleSegments([ev(1), ev(2), ev(12), ev(13)], 1e9, 15, 4);
+    expect(segs).toEqual([
+      [0, 2.9, 1],
+      [2.9, 11.1, 4],
+      [11.1, 15, 1],
+    ]);
+    expect(idleSegments([ev(1), ev(2)], 1e9, 3, 4)).toEqual([[0, 3, 1]]);
+  });
+});

@@ -8,7 +8,7 @@
 //   frame where the log says and in the shape the system showed (arrow,
 //   I-beam, resize…) → 60 fps H.264
 //
-//   node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks]
+//   node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4]
 //
 // No smoothing: the driver's paths are already human; a real recording has none.
 
@@ -48,6 +48,35 @@ export interface PostOptions {
   width?: number;
   /** How much of the output's width the window takes. */
   fill?: number;
+  /**
+   * Speed up stretches without input (waiting on an agent, a build) by this
+   * factor; about a second at each end stays real-time. Off by default: a real
+   * recording doesn't do it, a product video often does.
+   */
+  idle?: number;
+}
+
+/** Input-free stretches longer than this are sped up (with `idle`), seconds. */
+const IDLE_FROM = 3;
+/** Real-time time kept at each end of a sped-up stretch, seconds. */
+const IDLE_KEEP = 0.9;
+
+/** The video's segments [start, end, speed] (seconds): input-free stretches sped up, the rest real-time. */
+export function idleSegments(events: { t: number; type: string }[], t0: number, duration: number, speed: number): [number, number, number][] {
+  const inputs = events.filter((e) => e.type !== "cursor").map((e) => (e.t - t0) / 1e9).filter((t) => t >= 0 && t <= duration);
+  const marks = [0, ...inputs, duration];
+  const out: [number, number, number][] = [];
+  let at = 0;
+  for (let i = 1; i < marks.length; i++) {
+    const a = marks[i - 1]!, b = marks[i]!;
+    if (b - a < IDLE_FROM) continue;
+    const fastFrom = a + IDLE_KEEP, fastTo = b - IDLE_KEEP;
+    if (fastFrom > at) out.push([at, fastFrom, 1]);
+    out.push([fastFrom, fastTo, speed]);
+    at = fastTo;
+  }
+  if (at < duration) out.push([at, duration, 1]);
+  return out.filter(([a, b]) => b - a > 0.02);
 }
 
 const ASSETS = path.join(import.meta.dirname, "..", "assets");
@@ -191,10 +220,19 @@ export function render(dir: string, o: PostOptions = {}): string {
     n++;
   }
   const outW = even(o.width ?? 2560);
-  g.push(`[${label}]scale=${outW}:-2:flags=lanczos,format=yuv420p[out]`);
+  g.push(`[${label}]scale=${outW}:-2:flags=lanczos,format=yuv420p[scaled]`);
+  let length = duration;
+  const segments = o.idle && o.idle > 1 ? idleSegments(events, meta.t0, duration, o.idle) : [];
+  if (segments.some(([, , k]) => k > 1)) {
+    // Cut into segments, play the idle ones faster, join them, back to a steady frame rate.
+    g.push(`[scaled]split=${segments.length}${segments.map((_, i) => `[p${i}]`).join("")}`);
+    segments.forEach(([a, b, k], i) => g.push(`[p${i}]trim=start=${a.toFixed(3)}:end=${b.toFixed(3)},setpts=(PTS-STARTPTS)/${k}[q${i}]`));
+    g.push(`${segments.map((_, i) => `[q${i}]`).join("")}concat=n=${segments.length}:v=1:a=0,fps=${FPS}[out]`);
+    length = segments.reduce((n, [a, b, k]) => n + (b - a) / k, 0);
+  } else g.push(`[scaled]null[out]`);
 
   const out = path.join(dir, "tour.mp4");
-  execFileSync("ffmpeg", ["-v", "error", "-y", ...inputs, "-filter_complex", g.join(";"), "-map", "[out]", "-t", duration.toFixed(3), "-r", String(FPS), "-c:v", "libx264", "-preset", "medium", "-crf", "15", "-movflags", "+faststart", out], { stdio: "inherit" });
+  execFileSync("ffmpeg", ["-v", "error", "-y", ...inputs, "-filter_complex", g.join(";"), "-map", "[out]", "-t", length.toFixed(3), "-r", String(FPS), "-c:v", "libx264", "-preset", "medium", "-crf", "15", "-movflags", "+faststart", out], { stdio: "inherit" });
   return out;
 }
 
@@ -209,5 +247,5 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     const i = args.indexOf(k);
     return i >= 0 ? args[i + 1] : undefined;
   };
-  console.log(render(path.resolve(dir), { wallpaper: opt("--wallpaper"), cursor: opt("--cursor") ? Number(opt("--cursor")) : undefined, clicks: args.includes("--clicks") }));
+  console.log(render(path.resolve(dir), { wallpaper: opt("--wallpaper"), cursor: opt("--cursor") ? Number(opt("--cursor")) : undefined, clicks: args.includes("--clicks"), idle: opt("--idle") ? Number(opt("--idle")) : undefined }));
 }
