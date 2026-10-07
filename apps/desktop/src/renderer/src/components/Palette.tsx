@@ -100,14 +100,16 @@ export function Palette({
 
   useEffect(() => input.current?.focus(), []);
 
-  // Debounced transcript search; stale responses are dropped.
+  // Debounced transcript search; stale responses are dropped. The last results stay
+  // until the next ones arrive, so the list doesn't collapse with every key.
+  const [pending, setPending] = useState(false);
   useEffect(() => {
-    if (!searching || !search) return setFound(null);
-    if (!searchText) return setFound([]);
-    setFound(null);
+    if (!searching || !search) return (setFound(null), setPending(false));
+    if (!searchText) return (setFound([]), setPending(false));
+    setPending(true);
     let live = true;
     const t = setTimeout(() => {
-      void search(searchText).then((r) => live && setFound(r));
+      void search(searchText).then((r) => live && (setFound(r), setPending(false)));
     }, 120);
     return () => {
       live = false;
@@ -166,7 +168,7 @@ export function Palette({
 
   const empty = searching
     ? searchText
-      ? found === null
+      ? found === null || pending
         ? "Searching…"
         : "Nothing matches."
       : 'Search open windows and past Claude Code and Codex sessions. "Phrases" and -exclusions work.'
