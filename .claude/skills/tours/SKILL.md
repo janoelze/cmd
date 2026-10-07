@@ -15,8 +15,11 @@ tours/<name>.tour.ts ─ role/name locators ─→ src/driver.ts (plans motion, 
         │                                          ▼
 src/run.ts ─ launches the built app (fixture) ─ helper/tour-helper.swift
         │                                     ├ ScreenCaptureKit: records the display showing only cmd, cropped
-        │                                     │   to its window, no system cursor → raw.mov (HEVC, 2× , ~60 fps)
-        │                                     ├ CGEvents: real moves, clicks, drags, trackpad scrolls, typing
+        │                                     │   to its window, no system cursor → raw.mov (HEVC, 2×, at the
+        │                                     │   display's rate: 120 fps on ProMotion; the window goes on the
+        │                                     │   sharpest display)
+        │                                     ├ CGEvents: real moves, clicks, drags, typing; trackpad scrolls
+        │                                     │   posted once per display refresh (CVDisplayLink)
         │                                     └ logs every event on the frames' clock → events.json
         ▼
 src/post.ts plans every output frame (which recorded frame, cursor shape and place, camera
@@ -29,15 +32,15 @@ the camera's view, Lanczos-scaled → H.264 at a constant 60 fps (VideoToolbox)
 - **The helper keeps the clock.** Event times are `mach_absolute_time` ns, the clock of ScreenCaptureKit's frames. Node's `process.hrtime` is a different clock (it counts sleep): never timestamp with it, ask the helper (`helper.now()`).
 - **The pointer is data.** `raw.mov` has no cursor; `events.json` says exactly where it was. Re-render the pointer (size, smoothing, style) without re-recording.
 - **High realism is the goal: everything shown is what macOS showed.** The cursor is the real system cursor: while recording, the helper polls `NSCursor.currentSystem` every 30 ms, saves each new shape once (`cursors/cursor-<id>.png`, its largest image, up to 10×, with the hotspot) and logs changes; post draws the logged shape (arrow, I-beam over text and terminals, open/closed hand on title bars and drags, copy-arrow during file drags, resize arrows). Before recording, `window-still` takes the window alone with macOS's real shadow and alpha (`window.png`): its opaque pixels are the window's exact shape (rounded corners, the light edge), the rest is the shadow; post masks the recording with it and lays it on a wallpaper. Click rings are off by default (real recordings have none; `--clicks`). No path smoothing: the driver's motion is already human. **The camera** (`src/camera.ts`) zooms in the video, not the app: each frame is drawn through a view of the canvas, so the cursor zooms with the content like a zoomed screen recording. Views move on two critically damped springs in series (an S-curve: no overshoot, no kick at the start, ~0.8 s), zoom in log space, run in output time (smooth through sped-up stretches). The window sits on an endless desk: the camera follows the pointer (or goes to a place) past the canvas's edges without stopping; the wallpaper is generated three canvases wide each way (16-bit, dithered: a slow 8-bit gradient bands once zoomed) and the renderer extends it beyond that. Everything is fractional: an ffmpeg `crop` version rounded the view to whole, even pixels every frame and the camera wobbled and stepped; that's why post renders with its own Swift renderer. Three ways to drive it:
-- `meta.post: { camera: "auto" }` (`--auto-camera`): zoom in (1.5×) and follow the pointer during bursts of clicking and typing, show the whole window during swipes, scrolls and pans, and when nothing happens for a while. It stays zoomed in across pauses under 3.5 s (out and straight back in looks nervous) and opens on the whole window for a second. A good default for product videos.
-- In the tour, marks on the frames' clock: `await t.camera.focus(locator, zoom?)` (zoom to a place; fits it with room if no zoom), `t.camera.follow(1.6)` (follow the pointer; a dead zone means it drifts only when the pointer nears the view's edge), `t.camera.reset()` (whole window). A tour's own marks replace the automatic ones.
+- **In the tour (the way to go)**, marks on the frames' clock: `await t.camera.focus(locator, zoom?)` (zoom to a place; fits it with room if no zoom), `t.camera.follow(1.6)` (follow the pointer; a dead zone means it drifts only when the pointer nears the view's edge), `t.camera.reset()` (whole window). A tour's own marks replace the automatic ones.
+- `meta.post: { camera: "auto" }` (`--auto-camera`): zoom in (1.5×) and follow the pointer during bursts of clicking and typing, frame typing spots, show the whole window during swipes, scrolls and pans. It exists, but Jan prefers zooms written in the tour to inference ("too much magic"): improve the scripting tools, don't add heuristics (no screen-activity detection).
 - `--follow 1.6`: follow the pointer the whole video (a quick look at a run).
 Zoom upscales the recording: 1.5–1.6× at a 1920 output stays sharp; much more gets soft.
 
 **Dead time is cut by default**: stretches with no input and a frozen screen (ffmpeg `freezedetect` on the recording, so a blinking caret or a spinner doesn't count as change) shrink to 0.3 s, keeping 0.15 s around inputs (`--real-time` keeps everything). **`t.pause(ms)` is a deliberate pause and is never cut or sped up** (it logs a hold): use it where viewers should read or watch, and nowhere else; waiting on the app (`waitFor`, `waitForText`) is cut. Pause lengths: ~0.3–0.6 s after something appears, ~0.8–1.5 s to read. Check a video with `node packages/tours/experiments/dead-time.mjs <run dir>` (dead seconds, as the viewer sees them).
 
 Waiting (an agent working, a build) can play faster: `meta.post: { idle: 4 }` (or `--idle 4`) speeds up input-free stretches over 3 s, keeping ~0.9 s real-time at each end, so output visibly streams in fast.
-- **Motion** (`src/motion.ts`): one gently bent Bezier per move, Fitts' law duration ×1.3 (±10%, at least 160 ms), speed peaking at ~36–44% then tapering (a symmetric minimum-jerk peak at 50% looked mechanical), and moves over 250 pt land a little short or long and correct (Meyer's submovements). No jitter. **Scroll** (`src/scroll.ts`): a finger phase, then Apple-like momentum, sized to the exact distance. **Typing** (`src/typing.ts`): log-normal gaps, `TYPING.terminal` (~70 ms) or `TYPING.field` (~100 ms). Seeded: the same tour and `--seed` move the same way.
+- **Motion** (`src/motion.ts`): one gently bent Bezier per move, Fitts' law duration ×1.3 (±10%, at least 160 ms), speed peaking at ~36–44% then tapering (a symmetric minimum-jerk peak at 50% looked mechanical), and moves over 250 pt land a little short or long and correct (Meyer's submovements). No jitter. **Scroll** (`src/scroll.ts`): a finger phase, then Apple-like momentum, sized to the exact distance. **Typing** (`src/typing.ts`): log-normal gaps, `TYPING.terminal` (~45 ms) or `TYPING.field` (~65 ms), `TYPING.exact` (no typos). Seeded: the same tour and `--seed` move the same way.
 
 ## One-time setup (per Mac)
 
@@ -115,7 +118,7 @@ The `Tour` API (`src/driver.ts`): `click(target, { button, clicks })`, `hover(ta
 - **Setup is unrecorded.** Put what the video shouldn't show (opening windows, getting into a state) in `meta.setup`.
 - **Tours that need a model** (a Magic widget build) set `meta.ai: true`. The runner takes the person's key from the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`/`OPENAI_KEY`) or `~/.secrets`, writes it only into the fixture's `secrets.json` (0600), picks the provider, and deletes the file after the run. Never print or log a key. Such runs cost a little and build something slightly different each time: say so when asking to run one. A Magic build starts from New…: type the prompt, then click the last option, `Make “<prompt>” with Magic`. It runs on the smart tier (`claude-opus-5-5` by default): the first visible step can take more than 12 s, and the build is cut off when the run ends (the core stops), so hold long enough for what the shot should show, or wait for the window's state before ending. Check `/private/tmp/cmd-tours/<name>/logs/core.log` (`[magic] run …`) to see what the build did.
 - The fixture lives at `/private/tmp/cmd-tours/<tour>/` with Kai's home at `…/kai`: cmd shows paths under it as `~`, but a window *on* the home folder shows its parent in full; keep shots inside `~/src`, `~/notes`.
-- Never put the user's real files, sessions, names or tokens in a tour: the fixture (`src/fixture.ts`) gives a demo prompt (`~ ❯`), an empty transcripts folder and its own home.
+- Never put the user's real files, sessions, names or tokens in a tour: the fixture (`src/fixture.ts`) is its own home (Kai's, see above), outside the person's home and any repository, with the running session's environment stripped (`LEAKS` in fixture.ts: Claude Code's child-session markers, the outer cmd pane's `CMD_*`).
 
 ## Running one
 
@@ -143,20 +146,42 @@ The tours (`packages/tours/tours/`), each one kind of story:
 | `first` | the first tour: New…, a command, Files scrolled to a file | no |
 | `agent-probe` | experiment: does Claude Code start clean in the fixture | yes |
 
-**Tell the user before every run** and wait for their go: for the length of the tour their real mouse and keyboard are taken over, a cmd dev window opens on their screen, and they must not touch anything. Moving the mouse stops the run ("the mouse moved…"); a key press would go into the tour. A run that fails mid-way still records up to there.
+**Tell the user before every run** and wait for their go (and only record when they've said the Mac is free; while they work, do post, driver and tests): for the length of the tour their real mouse and keyboard are taken over, a cmd dev window opens on their screen, and they must not touch anything. Moving the mouse stops the run ("the mouse moved…"); a key press would go into the tour. A run that fails mid-way still records up to there.
 
 Output in the run's folder: `raw.mov` (no cursor, square corners), `events.json`, `meta.json` (window rect on screen, scale, `t0`/`t1`), `window.png`, `cursors/`, and `tour.mp4`. Re-render without recording again (another wallpaper, a bigger cursor, a camera): `node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.5] [--clicks] [--idle 4] [--auto-camera] [--follow 1.6] [--width 1920]` (about 20 s for a minute of video). The plan is `post/plan.json`: one row per output frame, handy for checking camera motion numerically (second differences of the view: how much its speed changes per frame).
 
 **Check your work by looking**, not by the exit code: pull frames at the moments that matter and read them.
 
 ```sh
-ffmpeg -v error -ss 8.7 -i preview.mp4 -frames:v 1 -vf scale=1100:-1 frame.png
+ffmpeg -v error -ss 8.7 -i tour.mp4 -frames:v 1 -vf scale=1100:-1 frame.png
 node -e 'const e=require("./events.json"),m=require("./meta.json");for(const x of e.filter(x=>x.type==="down"))console.log(((x.t-m.t0)/1e9).toFixed(2),x.x,x.y)'   # click times
 ```
 
 Verify the pointer's tip sits on what it clicks, text is crisp, nothing personal is visible, and the shot reads. **Check content, not just framing**: compare a frame of `tour.mp4` with `raw.mov` at the same moment (`plan.json` row n: output n/60 s shows source `frames[n][0]` s). A render once showed only `window.png` (the still taken before recording) for the whole video, because the renderer couldn't decode the recording, and frames that looked plausible one at a time hid it. Then run the dead-time check.
 
 When a run stops mid-way, the error says where (`no open menu item "Open"`, a locator timeout, `the mouse moved (it's at …, the tour left it at …)`). The recording up to there is in the run folder. Fix, then ask the user before running again.
+
+## Tips and tricks
+
+- **Iterate on post without recording.** Rendering is about 20 s for a minute of video and needs neither the Mac nor permissions: change post, camera or shot code and re-render the runs in `.cmd-dev/tours/out/` (`node packages/tours/src/post.ts <run dir> …`). Record again only when the tour itself or the app changed.
+- **Prototype marks on an old run.** Copy a run folder, add marks to its `events.json` (a `shot` start/end with a `shot-box`, `camera` marks, `hold`s, timed off the existing `key`/`down` events), and render the copy. That's how shots were first tested, on the showcase recording's ⌘K.
+- **Measure, don't eyeball motion.** Single frames hide judder, dead time and frozen video. The tools: `experiments/dead-time.mjs` (pacing), `experiments/scroll-smooth.mjs` (scroll position per rendered frame and the recording's frame gaps during a real swipe), `post/plan.json` (camera views per frame: their second differences show kicks), and a raw-vs-output frame comparison (content).
+- **Pace with the app, not the clock.** Wait for what's on screen: `.waitFor()` on a locator, `t.waitForText(terminalWindow, /…/)` for terminal and agent output (the core reads the pane; terminals draw on a canvas). Keep `t.pause` for what viewers should see, at the lengths above; post cuts the rest.
+- **Script the camera around the story.** `t.camera.focus(locator)` just before the thing happens (the eased move takes ~0.8 s), `t.camera.reset()` before anything that moves the layout (a swipe, a view change); don't follow the pointer through typing, focus where the text goes.
+- **Loops are written, not edited.** Plan symmetric actions (open → close, Grid → Focus, type → Escape), end with `t.loopBack()`, and check `seam` in `clips.json`: under ~0.05 loops cleanly. Pick a shot's region so its longest state is the shot (`[field, results]`, the palette dialog); the frame follows that state.
+- **Seed by doing, make it look lived-in.** Use the UI in setup to create state (recent commands, open windows); write content (`persona.ts`, `sessions.ts`) with varied ages, folders, branches and real-looking ids. Anything a tooltip or a path can show will be seen.
+- **New Claude Code versions bring new first-run banners.** Find the flag that dismisses one in the binary: `strings "$(readlink ~/.local/bin/claude)" | grep -F "<banner text>"`, then look at the identifiers near it, or for `CLAUDE_CODE_DISABLE_*` variables; add it to `setUpClaudeCode` in fixture.ts (so far: `hasSeenAutoDefaultNotice`, `hasSeenAutoModeEntryWarning`, `CLAUDE_CODE_DISABLE_FAST_MODE`). Check with the cheap `agent-probe` tour.
+- **Diagnose cheaply first.** Most problems show without taking over the mouse: an experiment that launches the app and inspects state (`axdump.mjs` pops a native menu from code), a dry look at locators with Playwright, the core log at `/private/tmp/cmd-tours/<tour>/logs/core.log`.
+- **Read failures literally.**
+
+  | Message | Usually |
+  |---|---|
+  | `the mouse moved (it's at …, the tour left it at …)` | someone touched the mouse, or a move went off-screen (macOS clamps the pointer) |
+  | `still off screen after revealing it` | a sideways or nested scroll container `reveal` couldn't use; `TOUR_DEBUG=1` |
+  | `no open menu item "…"` | the context menu didn't open, or its item is named differently (prefix match) |
+  | a locator timeout on an option | the label differs in that picker, or a typo (use `TYPING.exact`) |
+  | `no frames from the recording` | the renderer couldn't read `raw.mov` (ffmpeg missing or the file truncated) |
+  | probe: `video decoding: Cannot Decode` | sandbox blocks VideoToolbox's decoder: fine, the renderer uses ffmpeg |
 
 ## Working on the helper
 
@@ -171,13 +196,15 @@ When a run stops mid-way, the error says where (`no open menu item "Open"`, a lo
 
 ## Files
 
-- `packages/tours/src/`: `driver.ts` (Tour API), `run.ts` (runner, `pnpm tour`), `post.ts` (pointer render), `helper.ts` (Node side of the helper, rebuilds it when the Swift source is newer), `fixture.ts`, `motion.ts`, `scroll.ts`, `typing.ts`, `random.ts`.
-- `packages/tours/helper/`: `tour-helper.swift` (recording, input, log), `probe.swift` (permissions check), `still.swift` (one-off stills).
+- `packages/tours/src/`: `driver.ts` (Tour API, shots, camera marks), `run.ts` (runner, `pnpm tour`), `post.ts` (plans every frame: time cuts and speed-ups, cursor, camera, shots), `camera.ts` (camera springs, auto camera), `helper.ts` (builds and talks to the Swift tools when their source is newer), `fixture.ts` (the fixture, AI keys, Claude Code setup), `persona.ts` and `sessions.ts` (Kai), `motion.ts`, `scroll.ts`, `typing.ts`, `random.ts`.
+- `packages/tours/helper/`: `tour-helper.swift` (recording, input, cursor shapes, native menus, the log), `render.swift` (draws the video from post's plan), `probe.swift` (permissions check), `still.swift` (one-off stills).
 - `packages/tours/tours/`: the tours. `experiments/`: the experiments that settled the approach.
 - `packages/tours/scripts/safehouse-screen.sh`: the sandbox setup above.
 - Tests: `packages/tours/test/` (the planners; anything that needs real input or recording is checked by running a tour and looking at frames).
 
 ## Not done yet
 
-- Post: camera zoom on clicks (product-video polish, optional; ffmpeg's crop here can't take per-frame commands, so it needs another way).
+- Scripted camera moves in the existing tours (the hero's automatic camera sat on the pointer at New… while the action was elsewhere).
+- Re-recording `agents` and `workspace` with the newer driver (typing drift, holds, faster typing, display-synced scrolling).
+- Hardware video decoding in the sandbox (`learn` with the probe's decoding check): faster renders, not required.
 - Menu-bar menus: the items are found the same way once a menu is open, but opening one (clicking its title in the menu bar) isn't wrapped yet; the menu bar strip itself isn't in the recording (it's the system's, not cmd's).
