@@ -1,14 +1,15 @@
 // Session search over the event log (docs/28 §4, C3): the palette's ?query and
 // the Navigator's search. Matches transcript events in the log's full-text
 // index (text and body: prompts, answers, tool inputs, titles), ranks their
-// sessions (best match, titles weigh more, recent sessions a little more),
+// sessions (best match; titles weigh more, tools' calls and output less, so a
+// session isn't found for a word a command printed; recent sessions a little more),
 // tolerates typos through the index's vocabulary, and answers with one hit
 // per session from the sessions view. Replaces search.sqlite's Searcher.
 
 import { Worker } from "node:worker_threads";
 import type { DataEvent, SearchHit } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import { SearchQuery, Vocabulary, words } from "../../search/query.ts";
+import { SearchQuery, stem, Vocabulary, words } from "../../search/query.ts";
 import { textOf } from "../sources/transcripts.ts";
 import type { DataService } from "../service.ts";
 import type { SessionRow, SessionsView } from "./sessions.ts";
@@ -107,7 +108,7 @@ export class SearchView {
       ranked = [...ranked, ...more];
     }
     // The index is contentless (the words are in the events and their blobs), so the passage is cut here.
-    const terms = [...q.terms, ...expansions.flat(), ...q.phrases.flatMap((p) => p.split(" "))];
+    const terms = [...q.terms, ...q.terms.map(stem), ...expansions.flat(), ...q.phrases.flatMap((p) => p.split(" "))];
     const out: SearchHit[] = [];
     for (const c of ranked) {
       const row = this.#sessions.get(c.key);
@@ -122,23 +123,24 @@ export class SearchView {
   /** Sessions whose transcript events match, best first: one per session, the best event's seq for the snippet. */
   #match(expression: string, now: number): Candidate[] {
     if (!expression) return [];
-    let rows: { session_id: string; seq: number; type: string; bm: number }[];
+    let rows: Row[];
     try {
       rows = this.#data.store.db
         .prepare(
-          `SELECT e.session_id, e.seq, e.type, bm25(events_fts, 3.0, 1.0) AS bm
+          `SELECT e.session_id, e.seq, e.type, bm25(events_fts, 3.0, 1.0) AS bm,
+             (SELECT count(*) FROM json_each(e.data, '$.blocks') WHERE json_extract(value, '$.type') = 'text') AS texts,
+             json_array_length(e.data, '$.blocks') AS blocks
            FROM events_fts JOIN events e ON e.seq = events_fts.rowid
            WHERE events_fts MATCH ? AND e.session_id IS NOT NULL AND e.type >= 'transcript.' AND e.type < 'transcript.￿'
            ORDER BY bm LIMIT 600`,
         )
-        .all(expression) as { session_id: string; seq: number; type: string; bm: number }[];
+        .all(expression) as unknown as Row[];
     } catch {
       return []; // malformed expression
     }
     const by = new Map<string, Candidate & { hits: number }>();
     for (const r of rows) {
-      const w = r.type === "transcript.title" ? 2 : 1;
-      const score = -r.bm * w;
+      const score = -r.bm * weightOf(r);
       const c = by.get(r.session_id);
       if (!c) by.set(r.session_id, { key: r.session_id, seq: r.seq, score, hits: 1 });
       else {
@@ -156,6 +158,30 @@ export class SearchView {
     }
     return out.sort((a, b) => b.score - a.score);
   }
+}
+
+interface Row {
+  session_id: string;
+  seq: number;
+  type: string;
+  bm: number;
+  /** Text blocks in a Claude message, and blocks in all (null: no blocks, another agent's line). */
+  texts: number | null;
+  blocks: number | null;
+}
+
+/**
+ * How much a match in this event says the session is about the words: a title
+ * most, what you and the agent wrote, then the tools' calls and what they printed
+ * (a session that ran the tests isn't about every word the tests print).
+ * Measured on known-item queries over real history (docs/33).
+ */
+export function weightOf(r: Pick<Row, "type" | "texts" | "blocks">): number {
+  if (r.type === "transcript.title") return 2;
+  if (r.type === "transcript.tool_result" || r.type === "transcript.tool_use") return 0.3;
+  // A Claude message that is only tool calls.
+  if (r.type === "transcript.message" && r.blocks && !r.texts) return 0.3;
+  return 1;
 }
 
 /** The words of an event: its message's text when inline, else from the blob, else its line. */

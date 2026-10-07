@@ -113,6 +113,18 @@ What the kit lacks, added to it (with gallery specimens), not to views' CSS:
 
 Settled in the Workbench with the user (prototype skill): the find bar in a narrow tile and a wide one (`FindBar.story.tsx`).
 
+## Ranking, measured
+
+Sixteen "find that session" queries over the author's history (3,047 sessions), each with the one right answer, phrased as remembered rather than copied from the title (2026-10-08):
+
+| | first | top 5 | MRR |
+|---|---|---|---|
+| before | 10 | 13 | 0.70 |
+| tools' calls and output weigh 0.3 | 13 | 13 | 0.81 |
+| and English endings off query words (`stem`) | 13 | 14 | 0.84 |
+
+Built: `weightOf` in `views/search.ts` (title 2, messages 1, tool results, tool calls and messages that are only tool calls 0.3) and `stem` in `search/query.ts`. Tried and dropped: less recency (no change), an any-word fallback when every word finds too little (the right session came 46th). Left: synonyms ("computer name" for "my pc name", "united states" for "US") need more than words; sessions cmd's own evals ran with `claude -p` (6% of the index, `"entrypoint": "sdk-cli"` in the transcript) show up in results and should be left out, which needs the ingest to keep the field and the sessions view to be rebuilt.
+
 ## Backend
 
 ### Search everything cmd has

@@ -3,11 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanClaudePrompt, parseClaude, parseCodex, parseCopilot, parseQwen } from "../src/search/parser.ts";
-import { identifierParts, SearchQuery, Vocabulary, words } from "../src/search/query.ts";
+import { identifierParts, SearchQuery, stem, Vocabulary, words } from "../src/search/query.ts";
 import { DataService } from "../src/data/service.ts";
 import { ViewsStore } from "../src/data/views/views.ts";
 import { SessionsView } from "../src/data/views/sessions.ts";
-import { SearchView } from "../src/data/views/search.ts";
+import { SearchView, weightOf } from "../src/data/views/search.ts";
 import { TranscriptIngest } from "../src/data/sources/ingest.ts";
 import { conversationOf } from "../src/data/views/conversation.ts";
 import { scanFiles } from "../src/data/sources/ingest-pass.ts";
@@ -453,5 +453,21 @@ describe("resume commands", () => {
     expect(cmd("copilot", "c1", null, false)).toBe("copilot --resume='c1'");
     expect(() => cmd("copilot", "c1", null, true)).toThrow(/Copilot CLI can't fork/);
     expect(() => cmd("nope", "x", null, false)).toThrow(/can't resume nope/);
+  });
+});
+
+describe("ranking rules", () => {
+  it("takes English endings off longer words, so a plural finds the singular", () => {
+    expect(["timestamps", "matches", "libraries", "locked", "running", "patches", "boxes"].map(stem)).toEqual(["timestamp", "match", "librar", "lock", "runn", "patch", "boxes"]);
+    expect(["class", "status", "analysis", "notes", "core", "ing"].map(stem)).toEqual(["class", "status", "analysis", "note", "core", "ing"]);
+    expect(new SearchQuery("notification timestamps").expression()).toBe('"notification"* AND "timestamp"*');
+  });
+  it("weighs titles over messages over the tools' calls and output", () => {
+    expect(weightOf({ type: "transcript.title", texts: null, blocks: null })).toBe(2);
+    expect(weightOf({ type: "transcript.message", texts: 1, blocks: 2 })).toBe(1);
+    expect(weightOf({ type: "transcript.message", texts: 0, blocks: 1 })).toBeLessThan(1);
+    expect(weightOf({ type: "transcript.message", texts: null, blocks: null })).toBe(1);
+    expect(weightOf({ type: "transcript.tool_result", texts: 0, blocks: 1 })).toBeLessThan(1);
+    expect(weightOf({ type: "transcript.tool_use", texts: null, blocks: null })).toBeLessThan(1);
   });
 });

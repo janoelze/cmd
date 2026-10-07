@@ -15,6 +15,23 @@ const quoted = (t: string) => `"${t.replace(/"/g, '""')}"`;
 /** Words under three letters match too much as a prefix ("am" → "amplitude"); they match whole words. */
 const prefixed = (t: string) => (t.length >= 3 ? `${quoted(t)}*` : quoted(t));
 
+/**
+ * A word with its English ending off, for the prefix match: "timestamps" finds
+ * "timestamp" (the prefix already finds the other way), "matches" "match",
+ * "libraries" "library", "locked" "lock". Five letters or more, and at least four left.
+ */
+export function stem(t: string): string {
+  if (t.length < 5) return t;
+  const cut = (n: number) => (t.length - n >= 4 ? t.slice(0, -n) : t);
+  if (t.endsWith("ies")) return cut(3);
+  if (/(ss|us|is)$/.test(t)) return t;
+  if (/(ches|shes|xes|zes|sses)$/.test(t)) return cut(2);
+  if (t.endsWith("ing")) return cut(3);
+  if (t.endsWith("ed")) return cut(2);
+  if (t.endsWith("s")) return cut(1);
+  return t;
+}
+
 /** Terms (prefix-matched, typo-tolerant), "quoted phrases" (exact), -excluded terms. All terms must match. */
 export class SearchQuery {
   terms: string[] = [];
@@ -46,7 +63,7 @@ export class SearchQuery {
   expression(expansions?: string[][]): string {
     const parts = this.terms.map((t, i) => {
       const v = expansions?.[i] ?? [];
-      return v.length ? `(${[prefixed(t), ...v.map(quoted)].join(" OR ")})` : prefixed(t);
+      return v.length ? `(${[prefixed(stem(t)), ...v.map(quoted)].join(" OR ")})` : prefixed(stem(t));
     });
     parts.push(...this.phrases.map(quoted));
     if (!parts.length) return "";
@@ -58,7 +75,7 @@ export class SearchQuery {
   /** Any term matching, for picking the passage to show. */
   anyTermExpression(expansions: string[][]): string {
     const parts = this.phrases.map(quoted);
-    this.terms.forEach((t, i) => parts.push(prefixed(t), ...(expansions[i] ?? []).map(quoted)));
+    this.terms.forEach((t, i) => parts.push(prefixed(stem(t)), ...(expansions[i] ?? []).map(quoted)));
     return parts.join(" OR ");
   }
 }
