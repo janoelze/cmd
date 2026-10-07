@@ -22,6 +22,8 @@ export const PACE = {
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** TOUR_DEBUG=1: each step, as it starts. */
+const debug = (...a: unknown[]) => process.env.TOUR_DEBUG && console.log("tour:", ...a);
 
 export class Tour {
   readonly app: ElectronApplication;
@@ -65,6 +67,18 @@ export class Tour {
     return { x: b.x, y: b.y, width: b.width, height: b.height };
   }
 
+  /** For setup: jumps a scroll container (or the first one inside it: the strip in main) to its start, at once. */
+  async scrollToStart(container: Locator) {
+    await container.evaluate((root) => {
+      for (const el of [root, ...root.querySelectorAll("*")]) {
+        const cs = getComputedStyle(el);
+        const x = /(auto|scroll)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 1;
+        const y = /(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1;
+        if (x || y) return el.scrollTo({ left: 0, top: 0, behavior: "instant" });
+      }
+    });
+  }
+
   /** Puts the pointer somewhere without showing it (before recording). */
   async park(p: Point) {
     await this.helper.call("release");
@@ -93,9 +107,10 @@ export class Tour {
    */
   async reveal(target: Locator) {
     for (let round = 0; round < 6; round++) {
+      debug("reveal", round, String(target));
       const need = await target.evaluate((el, margin) => {
         const r = el.getBoundingClientRect();
-        let outer: { box: { x: number; y: number; width: number; height: number }; d: number; axis: "x" | "y" } | null = null;
+        let outer: { box: { x: number; y: number; width: number; height: number }; d: number; axis: "x" | "y"; el: Element } | null = null;
         for (let p = el.parentElement; p; p = p.parentElement) {
           const cs = getComputedStyle(p);
           const b = p.getBoundingClientRect();
@@ -105,25 +120,39 @@ export class Tour {
             const out = r.top < b.top + margin || r.bottom > b.top + p.clientHeight - margin;
             let d = out ? r.top + r.height / 2 - (b.top + p.clientHeight * 0.4) : 0;
             d = Math.max(-p.scrollTop, Math.min(d, p.scrollHeight - p.clientHeight - p.scrollTop));
-            if (Math.abs(d) >= 2) outer = { box, d, axis: "y" };
+            if (Math.abs(d) >= 2) outer = { box, d, axis: "y", el: p };
           }
           // Sideways (the strip): out of view, centre it, or its start if it's wider than the view.
           if (/(auto|scroll)/.test(cs.overflowX) && p.scrollWidth > p.clientWidth + 1) {
             const out = r.left < b.left + margin || r.right > b.left + p.clientWidth - margin;
             let d = !out ? 0 : r.width > p.clientWidth - 2 * margin ? r.left - (b.left + margin) : r.left + r.width / 2 - (b.left + p.clientWidth / 2);
             d = Math.max(-p.scrollLeft, Math.min(d, p.scrollWidth - p.clientWidth - p.scrollLeft));
-            if (Math.abs(d) >= 2) outer = { box, d, axis: "x" };
+            if (Math.abs(d) >= 2) outer = { box, d, axis: "x", el: p };
           }
         }
-        return outer;
+        if (!outer) return null;
+        // Where to swipe: a point whose topmost element is in the container (in the strip,
+        // floating sidebars cover part of it, and a swipe over them scrolls them).
+        const { box: bx, el: sc } = outer;
+        let spot: { x: number; y: number } | null = null;
+        let best = Infinity;
+        for (let i = 1; i < 10; i++)
+          for (let j = 1; j < 6; j++) {
+            const x = bx.x + (bx.width * i) / 10, y = bx.y + (bx.height * j) / 6;
+            const hit = document.elementFromPoint(x, y);
+            if (!hit || !sc.contains(hit)) continue;
+            const far = Math.hypot(x - (bx.x + bx.width / 2), y - (bx.y + bx.height / 2));
+            if (far < best) (best = far), (spot = { x, y });
+          }
+        return { box: outer.box, d: outer.d, axis: outer.axis, spot };
       }, PACE.margin);
       if (!need) return;
+      debug("  scroll", need.axis, Math.round(need.d));
       const area = await this.onScreen(need.box);
-      // Over the container, near where the pointer already is.
-      const over = {
-        x: Math.min(Math.max(this.at.x, area.x + 40), area.x + area.width - 40),
-        y: area.y + area.height * between(this.r, 0.4, 0.6),
-      };
+      // Over the container where nothing covers it (or near the pointer, if it can't tell).
+      const over = need.spot
+        ? await this.onScreen({ x: need.spot.x, y: need.spot.y, width: 0, height: 0 })
+        : { x: Math.min(Math.max(this.at.x, area.x + 40), area.x + area.width - 40), y: area.y + area.height * between(this.r, 0.4, 0.6) };
       await this.moveTo(over, Math.min(area.width, area.height));
       const o = await this.origin();
       const steps = planScroll(need.d * o.zoom);
@@ -134,8 +163,13 @@ export class Tour {
 
   /** Hovers a target: moves there and rests. */
   async hover(target: Locator, rest = between(this.r, ...PACE.hover)) {
+    debug("hover", String(target));
     await this.reveal(target);
     const b = await this.box(target);
+    const w = await this.windowBox();
+    const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    if (cx < w.x || cx > w.x + w.width || cy < w.y || cy > w.y + w.height)
+      throw new Error(`still off screen after revealing it (centre ${Math.round(cx)},${Math.round(cy)}, window ${w.x},${w.y} ${w.width}×${w.height}): ${target}`);
     await this.moveTo(aimAt(b, this.r), Math.min(b.width, b.height));
     await sleep(rest);
   }

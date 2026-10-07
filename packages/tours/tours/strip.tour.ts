@@ -1,6 +1,6 @@
 // Kai's strip: every window side by side in one sideways strip, swiped through
 // with the trackpad. The page dots say which window is which, an edge drag
-// makes one wider, the sidebar and ⇧⌘] jump along it, and clicking into a
+// makes one wider, the sidebar and ⌥⌘← jump along it, and clicking into a
 // window that's off to the side swipes there first, like a person would.
 
 import type { Tour } from "../src/driver.ts";
@@ -34,9 +34,9 @@ export const meta: TourMeta = {
     const home = await p.evaluate(() => (window as unknown as { cmd: { homeDir: string } }).cmd.homeDir);
     await call(t, "window.openTarget", { target: `${home}/src/atlas/README.md` });
     await main.getByRole("group", { name: /^README\.md/ }).waitFor();
-    // Back to the start of the strip.
-    await t.command("session.next");
-    await t.pause(1200);
+    await t.pause(800);
+    await t.scrollToStart(main);
+    await t.pause(600);
   },
 };
 
@@ -46,14 +46,14 @@ export default async function (t: Tour) {
   const dots = p.getByRole("group", { name: "Windows" });
   await t.pause(1000);
 
-  // 1. Swipe along the strip, and back.
+  // 1. Swipe along the strip to the newest windows, then partway back.
   const w = await t.windowBox();
   await t.moveTo({ x: w.x + w.width * 0.55, y: w.y + w.height * 0.5 });
-  await t.swipe(900);
+  await t.swipe(800);
   await t.pause(900);
-  await t.swipe(900);
+  await t.swipe(800);
   await t.pause(1100);
-  await t.swipe(-1500);
+  await t.swipe(-1200);
   await t.pause(900);
 
   // 2. The page dots: one per window, by name. Jump to Claude.
@@ -71,8 +71,8 @@ export default async function (t: Tour) {
   await t.click(p.getByRole("tree", { name: "Windows" }).getByRole("treeitem", { name: /^README\.md/ }));
   await t.pause(1400);
 
-  // 5. And the keyboard: ⇧⌘] to the next one.
-  await t.press("]", "cmd", "shift");
+  // 5. And the keyboard: ⌥⌘← to the one before (arrows are the same on every layout; [ isn't).
+  await t.press("ArrowLeft", "alt", "cmd");
   await t.pause(1200);
 
   // 6. Back in the terminal (off to the side: swiped to, then clicked).
