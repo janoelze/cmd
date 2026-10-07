@@ -1,6 +1,7 @@
 // Checks what a tour recording needs from macOS, one capability a line:
 // Accessibility (to post input and read native menus), Screen Recording,
-// ScreenCaptureKit (list windows, grab one frame) and posting an input event.
+// ScreenCaptureKit (list windows, grab one frame), posting an input event and
+// encoding video (VideoToolbox).
 // Exits non-zero if any fails. --request asks macOS for the permissions
 // (the prompt names the app the command runs in, e.g. cmd).
 // Build: swiftc -O probe.swift -o probe
@@ -8,6 +9,7 @@
 import ApplicationServices
 import Cocoa
 import ScreenCaptureKit
+import VideoToolbox
 
 let request = CommandLine.arguments.contains("--request")
 var failed = false
@@ -40,6 +42,21 @@ if let move = CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState),
   report("post input event", true, "(posted; only Accessibility makes it count)")
 } else {
   report("post input event", false, "could not create the event")
+}
+
+// Encoding the recording goes through VideoToolbox's system services: start a
+// session and encode one frame.
+do {
+  var session: VTCompressionSession?
+  var st = VTCompressionSessionCreate(allocator: nil, width: 640, height: 480, codecType: kCMVideoCodecType_HEVC, encoderSpecification: nil, imageBufferAttributes: nil, compressedDataAllocator: nil, outputCallback: nil, refcon: nil, compressionSessionOut: &session)
+  if st == noErr, let session {
+    var pixels: CVPixelBuffer?
+    CVPixelBufferCreate(nil, 640, 480, kCVPixelFormatType_32BGRA, nil, &pixels)
+    st = VTCompressionSessionEncodeFrame(session, imageBuffer: pixels!, presentationTimeStamp: .zero, duration: .invalid, frameProperties: nil, infoFlagsOut: nil) { _, _, _ in }
+    if st == noErr { st = VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid) }
+    VTCompressionSessionInvalidate(session)
+  }
+  report("video encoding", st == noErr, st == noErr ? "HEVC" : "VideoToolbox \(st)")
 }
 
 let done = DispatchSemaphore(value: 0)
