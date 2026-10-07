@@ -8,7 +8,7 @@ import { agentNotice, cleanAiBody, gist, noticeContext, plain, subjectOf } from 
 import { newTurn } from "../src/agents/activity/reduce.ts";
 
 const agent = (o: Partial<Agent> = {}, turn: Partial<AgentTurn> = {}): Agent => ({
-  id: "a1", paneId: "p1", spaceId: "home", kind: "claude", name: null, cwd: "/nowhere/cmd-agent-activity",
+  id: "a1", paneId: "p1", spaceId: "home", kind: "claude", name: "Agent activity", cwd: "/nowhere/cmd-agent-activity",
   parentId: null, rootId: "a1", depth: 0, spawn: { source: "detected" }, native: {}, state: "done", stateSince: 0,
   detail: null, lastMessage: null, lastPrompt: null, seenAt: null, createdAt: 0,
   turn: { ...newTurn("a1", 0, 0, undefined, { agentKind: "claude" }), ...turn },
@@ -22,17 +22,17 @@ describe("agent notifications", () => {
       files: [1, 2, 3, 4].map((i) => ({ path: `/r/f${i}`, change: "M", via: ["git"] as ("git" | "fs" | "tool")[] })),
       startedAt: 0, endedAt: 7 * 60_000,
     }), "done");
-    expect(n.title).toBe("cmd-agent-activity · done");
+    expect(n.title).toBe("Agent activity · done");
     expect(n.body).toBe("Session summaries are built and committed on the summary branch in… 4 files changed.");
   });
 
   it("done with work left running says so in the title", () => {
-    expect(agentNotice(agent({}, { final: "Running the script in the background.", background: ["python3 report.py"], startedAt: 0, endedAt: 40_000 }), "done").title).toBe("cmd-agent-activity · done, 1 task still running");
+    expect(agentNotice(agent({}, { final: "Running the script in the background.", background: ["python3 report.py"], startedAt: 0, endedAt: 40_000 }), "done").title).toBe("Agent activity · done, 1 task still running");
   });
 
   it("needs you: what it asks, plainly", () => {
     const shell = agentNotice(agent({ state: "needs_input" }, { ask: { message: "Allow Bash?", tool: "Bash", input: "rm -- NOTES.md" } }), "needs");
-    expect(shell).toEqual({ title: "cmd-agent-activity · needs you", body: "Allow “rm -- NOTES.md”?" });
+    expect(shell).toEqual({ title: "Agent activity · needs you", body: "Allow “rm -- NOTES.md”?" });
     const edit = agentNotice(agent({ state: "needs_input" }, { ask: { message: "Allow apply_patch?", tool: "apply_patch", input: "/r/calc.py" } }), "needs");
     expect(edit.body).toBe("Allow editing “calc.py”?");
     const question = agentNotice(agent({ state: "needs_input", detail: "Claude needs your permission" }, { ask: null }), "needs");
@@ -41,24 +41,24 @@ describe("agent notifications", () => {
 
   it("stopped: why, in the agent's words", () => {
     expect(agentNotice(agent({ state: "failed" }, { error: "You've hit your weekly limit · resets Oct 7 at 3am (Europe/Berlin)" }), "stopped")).toEqual({
-      title: "cmd-agent-activity · stopped",
+      title: "Agent activity · stopped",
       body: "You've hit your weekly limit · resets Oct 7 at 3am (Europe/Berlin)",
     });
   });
 
-  it("names the agent if it has a name, else its checkout's folder", () => {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-notice-")));
-    fs.mkdirSync(path.join(dir, "my-repo", "src", "deep"), { recursive: true });
-    execFileSync("git", ["init", "-q", path.join(dir, "my-repo")]);
-    expect(subjectOf({ name: null, kind: "claude", cwd: path.join(dir, "my-repo", "src", "deep") })).toBe("my-repo");
-    expect(subjectOf({ name: "tests", kind: "codex", cwd: dir })).toBe("tests");
-    expect(subjectOf({ name: null, kind: "codex", cwd: "" })).toBe("codex");
-    fs.rmSync(dir, { recursive: true, force: true });
+  it("names the agent by its name, else its kind, never its project", () => {
+    expect(subjectOf({ name: null, kind: "claude" })).toBe("Claude");
+    expect(subjectOf({ name: "Tours", kind: "codex" })).toBe("Tours");
+    expect(subjectOf({ name: null, kind: "opencode" })).toBe("OpenCode");
+  });
+
+  it("skips Markdown headings in the agent's words", () => {
+    expect(gist("## What a name is for\n\nA name is how you'd point at an agent.")).toBe("A name is how you'd point at an agent.");
   });
 
   it("keeps titles and bodies short", () => {
-    const n = agentNotice(agent({ cwd: "/x/a-very-long-project-folder-name-for-testing-limits" }, { final: "word ".repeat(80), startedAt: 0, endedAt: 1000 }), "done");
-    expect(n.title).toBe("a-very-long-project-folder… · done");
+    const n = agentNotice(agent({ name: "A very long name for testing the limits" }, { final: "word ".repeat(80), startedAt: 0, endedAt: 1000 }), "done");
+    expect(n.title).toBe("A very long name for… · done");
     expect(n.body.length).toBeLessThanOrEqual(140);
     expect(n.body).toMatch(/…$/);
   });

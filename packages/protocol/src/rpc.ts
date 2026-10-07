@@ -116,6 +116,8 @@ export interface Methods {
     };
     result: { agents: Agent[]; timedOut: boolean };
   };
+  /** Names an agent (docs/32-session-names.md); null hands naming back to cmd. */
+  "agent.rename": { params: { agentId: AgentId; name: string | null }; result: Agent };
   "agent.kill": { params: { agentId: AgentId; tree?: boolean }; result: { killed: AgentId[] } };
   "agent.markSeen": { params: { agentId: AgentId }; result: null };
 

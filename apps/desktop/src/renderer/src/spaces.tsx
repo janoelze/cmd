@@ -4,13 +4,14 @@
 // to Space" and "Rename Space".
 
 import { useEffect, useState, type ComponentProps } from "react";
-import type { Space, SpaceId } from "@cmd/protocol";
+import type { Agent, Space, SpaceId } from "@cmd/protocol";
+import { agentName } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { shortPath } from "./model.ts";
 import { getState, useStoreValue } from "./store.ts";
 import type { Palette, PaletteItem } from "./components/Palette.tsx";
 
-export type Picker = { kind: "new" } | { kind: "space" } | { kind: "move"; windowId: string } | { kind: "rename"; space: Space } | { kind: "icon"; space: Space };
+export type Picker = { kind: "new" } | { kind: "space" } | { kind: "move"; windowId: string } | { kind: "rename"; space: Space } | { kind: "renameAgent"; agent: Agent } | { kind: "icon"; space: Space };
 
 /** Show a Space here, or in the window that already shows it (newWindow: in a new one). */
 export function showSpace(id: SpaceId, o: { select?: string; newWindow?: boolean } = {}): void {
@@ -105,6 +106,25 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
         const name = q.trim();
         if (!name || name === sp.name) return [];
         return [{ id: "rename", group: "Spaces", label: `Rename to “${name}”`, run: () => void cmd.call("space.update", { id: sp.id, name }) }];
+      },
+    };
+  }
+
+  if (picker.kind === "renameAgent") {
+    const a = getState().agents.get(picker.agent.id) ?? picker.agent;
+    const mine = a.nameBy === "user";
+    return {
+      items: [],
+      onClose: close,
+      initialQuery: a.name ?? "",
+      placeholder: `Name for ${agentName(a)}`,
+      emptyText: mine ? "Type a new name" : "Type a name",
+      footer: <span><kbd>↵</kbd> rename</span>,
+      dynamic: (q) => {
+        const name = q.trim().replace(/\s+/g, " ");
+        if (!name) return mine ? [{ id: "auto", group: "Agents", label: "Let cmd name it", run: () => void cmd.call("agent.rename", { agentId: a.id, name: null }) }] : [];
+        if (name === a.name && mine) return [];
+        return [{ id: "rename", group: "Agents", label: `Rename to “${name}”`, run: () => void cmd.call("agent.rename", { agentId: a.id, name }) }];
       },
     };
   }

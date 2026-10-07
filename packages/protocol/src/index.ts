@@ -15,3 +15,4 @@ export * from "./ai.ts";
 export * from "./secrets.ts";
 export * from "./relay.ts";
 export * from "./summary.ts";
+export * from "./names.ts";

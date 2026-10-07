@@ -10,7 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import type { ActivityEvent, Agent, AgentId, AgentKind, AgentState, AgentTurn, Methods, PaneId, Settings, SpaceId } from "@cmd/protocol";
+import type { ActivityEvent, Agent, AgentId, AgentKind, AgentState, AgentTurn, Methods, NameSource, PaneId, Settings, SpaceId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { Foreground, PaneManager } from "../panes.ts";
@@ -19,6 +19,7 @@ import { shq } from "../shell.ts";
 import { registerBuiltinSources } from "../search/builtin.ts";
 import { locateContext, TranscriptSources } from "../search/sources.ts";
 import { briefing, checkoutOf } from "./peers.ts";
+import { worktreeName } from "./names.ts";
 import { nativeSession, type StateChange } from "./state.ts";
 import { removeStatus, StatusWatcher } from "./statusfiles.ts";
 import { watchTurn, type TurnWatch } from "./activity/fswatch.ts";
@@ -64,6 +65,8 @@ export interface TrackerEvents {
   home: [agent: AgentKind, dir: string];
   /** A session's transcript, at its start (its folder tells the home when the env didn't). */
   transcript: [agent: AgentKind, path: string];
+  /** The agent got a name, or the person handed naming back (name null). */
+  named: [agent: Agent, change: { name: string | null; by: NameSource; was: string | null; reason: string }];
 }
 
 type SpawnParams = Methods["agent.spawn"]["params"];
@@ -319,15 +322,41 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       this.activity.saveTurn(r.turn, ev.id, agent.cwd);
       fields.turn = structuredClone(r.turn);
     }
+    const named = this.#worktreeName(agent, ev);
+    if (named) Object.assign(fields, { name: named.name, nameBy: named.nameBy, nameWas: named.nameWas, namedAt: named.namedAt });
     if (ev.home && ev.agent) this.emit("home", ev.agent, ev.home);
     else if (ev.kind === "session.start" && ev.transcriptPath && ev.agent) this.emit("transcript", ev.agent, ev.transcriptPath);
     this.#update(agent, change, fields);
+    if (named) this.emit("named", { ...agent }, { name: named.name, by: "worktree", was: named.nameWas ?? null, reason: `works in ${named.reason}` });
     // The turn is over: the subagents that worked for it have said their piece.
     if (r.closed) this.#retireSubagents(agent);
     if (live && this.#git) {
       if (r.opened) this.#snapStart(agent, r.opened);
       if (r.closed) void this.#snapEnd(agent, red, r.closed);
     }
+  }
+
+  /**
+   * The name an event's worktree gives (docs/32, "Where names come from"): a
+   * write there names or renames the agent, going there only names one without
+   * a name. Never over a name the person gave.
+   */
+  #worktreeName(agent: Agent, ev: ActivityEvent): (Pick<Agent, "name" | "nameBy" | "nameWas" | "namedAt"> & { reason: string }) | null {
+    if (agent.nameBy === "user" || agent.depth > 0) return null;
+    const w = worktreeName(ev);
+    if (!w || w.name === agent.name || (!w.wrote && agent.name)) return null;
+    return { name: w.name, nameBy: "worktree", nameWas: agent.name, namedAt: ev.at, reason: w.top };
+  }
+
+  /** Names an agent as the person asked; null hands naming back to cmd (its worktree names it again from its next event). */
+  rename(id: AgentId, name: string | null): Agent {
+    const a = this.#must(id);
+    const clean = name?.replace(/\s+/g, " ").trim().slice(0, 60) || null;
+    if (clean === a.name && (clean ? a.nameBy === "user" : !a.nameBy)) return { ...a };
+    const was = a.name;
+    this.#update(a, {}, { name: clean, nameBy: clean ? "user" : null, nameWas: was, namedAt: Date.now() });
+    this.emit("named", { ...a }, { name: clean, by: "user", was, reason: clean ? "renamed" : "handed back" });
+    return { ...a };
   }
 
   #snapStart(agent: Agent, t: AgentTurn): void {
@@ -478,6 +507,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       source: parent ? "host-api" : "user",
       parentId: parent?.id ?? null,
       name: p.name ?? null,
+      nameBy: p.name ? "user" : null,
       cwd: cwd ?? process.cwd(),
       prompt: p.prompt,
       operationId: p.operationId,
@@ -666,6 +696,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     source: Agent["spawn"]["source"];
     parentId?: AgentId | null;
     name?: string | null;
+    nameBy?: NameSource | null;
     cwd?: string;
     prompt?: string;
     operationId?: string;
@@ -681,6 +712,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       spaceId: o.spaceId ?? pane?.spaceId ?? parent?.spaceId ?? HOME_SPACE_ID,
       kind: o.kind,
       name: o.name ?? null,
+      nameBy: o.nameBy ?? null,
       cwd: o.cwd ?? pane?.cwd ?? process.cwd(),
       parentId: parent?.id ?? null,
       rootId: parent?.rootId ?? id,

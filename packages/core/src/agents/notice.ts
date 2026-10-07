@@ -1,11 +1,12 @@
 // What an agent's notification says (the copywriting skill, "Notifications"):
 // the title is subject · state, the body the agent's own words, shortened, then
 // the facts cmd checked ("4 files changed."). Built from the agent and its
-// current turn (docs/18-agent-activity.md); pure apart from finding the project.
+// current turn (docs/18-agent-activity.md); pure. The subject is the agent's
+// name (docs/32-session-names.md).
 
 import path from "node:path";
 import type { Agent, AgentTurn } from "@cmd/protocol";
-import { checkoutOf } from "./peers.ts";
+import { agentName, outputLanguage } from "@cmd/protocol";
 
 export type NoticeKind = "needs" | "done" | "stopped";
 
@@ -14,7 +15,7 @@ export interface Notice {
   body: string;
 }
 
-/** A project name longer than this is cut; the state is always whole. */
+/** A name longer than this is cut; the state is always whole. */
 const SUBJECT_MAX = 28;
 const BODY_MAX = 140;
 /** The agent's own words in a notification without AI: its first clause, about this long. */
@@ -22,11 +23,9 @@ const GIST_MAX = 72;
 /** An AI-written body (asked for 70). */
 const AI_MAX = 90;
 
-/** The agent's name if it has one, else its project: the checkout's folder, else its folder. */
-export function subjectOf(a: Pick<Agent, "name" | "cwd" | "kind">): string {
-  if (a.name) return a.name;
-  const root = a.cwd ? (checkoutOf(a.cwd)?.root ?? a.cwd) : "";
-  return path.basename(root) || a.kind;
+/** Who a notification is about: the agent's name, else its kind ("Claude"); never the project (docs/32-session-names.md). */
+export function subjectOf(a: Pick<Agent, "name" | "kind">): string {
+  return agentName(a);
 }
 
 /** Markdown to plain text: code, links, emphasis, headings and list markers removed. */
@@ -52,7 +51,8 @@ function cut(s: string, max: number): string {
 
 /** The first sentence of an agent's message (two if the first is very short), as plain text. */
 export function gist(md: string, max = BODY_MAX): string {
-  const text = plain(md);
+  // A heading names a section, it isn't something the agent said: "## What a name is for" then the text ran together.
+  const text = plain(md.replace(/^\s{0,3}#{1,6}\s.*$/gm, "")) || plain(md);
   const sentences = text.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
   // A filler opener ("Sure.", "Good idea.", "Yes.") says nothing on its own: the next sentence does.
   let out = sentences[0] ?? text;
@@ -112,7 +112,8 @@ export const NOTICE_SYSTEM = `You write the body of a macOS notification about a
 - needs: "Wants to" + what it wants to do, with the exact command or file.
 - stopped: why, and when it can go on if that's known.
 - Only facts from the input. No invented results, numbers or files.
-- The title already says the project and the state. Don't repeat them.
+- The title already says the agent's name and the state. Don't repeat them, and don't start with the name.
+- Write in the input's language.
 - Plain text. No Markdown, emoji, exclamation marks or quotes around the line. Don't start with "The agent" or "I".
 
 Examples:
@@ -130,7 +131,8 @@ export function noticeContext(a: Agent, kind: NoticeKind): Record<string, unknow
   const clip = (s: string | null | undefined, n: number) => (s ? (s.length > n ? `${s.slice(0, n)}…` : s) : undefined);
   return {
     state: kind,
-    project: subjectOf(a),
+    name: subjectOf(a),
+    language: outputLanguage().name,
     agent: a.kind,
     prompt: clip(t?.prompt ?? a.lastPrompt, 600),
     promptFromAgent: t?.auto || undefined,

@@ -10,7 +10,7 @@ import { APPLIES_LABEL, currentKey, currentSecretKey, ENV, isSecretKey, SECRETS,
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 import { magicCommand } from "./magic.ts";
 import { widgetCommand } from "./widget.ts";
-import { AGENTS_HELP, agentsCommand } from "./agents.ts";
+import { AGENTS_HELP, agentsCommand, pickAgent } from "./agents.ts";
 import { JOURNAL_HELP, journalCommand } from "./journal.ts";
 import { DATA_HELP, dataCommand } from "./data.ts";
 
@@ -419,18 +419,18 @@ async function hook(kind: string): Promise<number> {
 }
 
 
-async function resolveAgent(client: Connection["client"], prefix: string): Promise<string> {
-  const agents = await client.call("agent.list", {});
-  const hits = agents.filter((a) => a.id.startsWith(prefix) || a.name === prefix);
-  if (hits.length !== 1) throw new Error(hits.length ? `ambiguous agent: ${prefix}` : `no such agent: ${prefix}`);
-  return hits[0]!.id;
+async function resolveAgent(client: Connection["client"], ref: string): Promise<string> {
+  const [agents, panes] = await Promise.all([client.call("agent.list", {}), client.call("pane.list", {})]);
+  const a = pickAgent(agents, panes, ref);
+  if (!a) throw new Error(`no such agent: ${ref}`);
+  return a.id;
 }
 
 async function resolvePane(client: Connection["client"], prefix: string): Promise<string> {
   const [panes, agents] = await Promise.all([client.call("pane.list", {}), client.call("agent.list", {})]);
   const pane = panes.find((p) => p.id.startsWith(prefix));
   if (pane) return pane.id;
-  const agent = agents.find((a) => a.id.startsWith(prefix) || a.name === prefix);
+  const agent = pickAgent(agents, panes, prefix);
   if (agent?.paneId) return agent.paneId;
   throw new Error(`no such pane or agent: ${prefix}`);
 }

@@ -1,18 +1,21 @@
 // What the core records as it happens because nothing else keeps it (docs/28
 // §5): pages browser windows show and files windows open (a window's state only
 // holds the current one), windows and Spaces opening and closing, notifications
-// shown. Commands are the CommandLog's, hook events the ActivityView's, git the
+// shown, agents' names. Commands are the CommandLog's, hook events the ActivityView's, git the
 // journal's sync. Listens to the services' emitters, not the core's broadcast.
 
 import path from "node:path";
-import type { AppNotification, AppWindow, Space } from "@cmd/protocol";
-import { HOME_SPACE_ID } from "@cmd/protocol";
+import type { Agent, AppNotification, AppWindow, NameSource, Space } from "@cmd/protocol";
+import { HOME_SPACE_ID, outputLanguage } from "@cmd/protocol";
+import { sessionIdOf, type AgentTracker } from "../agents/tracker.ts";
 import { projectOf } from "../journal/backfill.ts";
 import type { NotificationCenter } from "../notifications.ts";
 import type { SpaceManager } from "../spaces/manager.ts";
 import type { WindowManager } from "../windows/manager.ts";
 import type { DataService } from "./service.ts";
 import { describeSpace, describeWindow } from "./describe.ts";
+import { projectIdOf } from "./project.ts";
+import type { SessionsView } from "./views/sessions.ts";
 
 /** A page seen again within this long is the same visit (its title arrives after its URL). */
 const VISIT_MS = 30 * 60_000;
@@ -66,5 +69,28 @@ export function recordSpaces(data: DataService, spaces: SpaceManager): void {
 export function recordNotifications(data: DataService, center: NotificationCenter): void {
   center.on("notification", (n: AppNotification) => {
     data.record({ id: `notification:${n.id}`, at: n.at, type: "notification", source: "cmd", spaceId: n.spaceId ?? null, paneId: n.paneId, windowId: n.windowId ?? null, text: n.title, body: n.body, data: { source: n.source, title: n.title, body: n.body, urgent: n.urgent, alert: n.alert } });
+  });
+}
+
+/**
+ * Agents' names as session.name events (docs/32-session-names.md), and into the
+ * sessions view, so a name outlives its agent (Recent, the Journal, a resume).
+ * An agent named before its session began is recorded again once it has one.
+ */
+export function recordNames(data: DataService, agents: AgentTracker, sessions: SessionsView): void {
+  const recorded = new Map<string, string>();
+  const record = (a: Agent, by: NameSource, was: string | null, reason: string) => {
+    const sid = sessionIdOf(a);
+    const key = sid ? `${a.kind}:${sid}` : null;
+    const at = a.namedAt ?? Date.now();
+    data.record({ id: `name:${a.id}:${key ?? "-"}:${at}`, at, type: "session.name", source: by === "user" ? "user" : "cmd", sessionId: key, agentId: a.id, paneId: a.paneId, spaceId: a.spaceId, projectId: projectIdOf(a.cwd), text: a.name, data: { name: a.name, by, lang: outputLanguage().code, was, reason } });
+    if (key) sessions.applyName(key, a.name, by, at);
+    recorded.set(a.id, `${key}|${a.name}`);
+  };
+  agents.on("named", (a, c) => record(a, c.by, c.was, c.reason));
+  agents.on("updated", (a) => {
+    const sid = sessionIdOf(a);
+    if (!a.name || !sid || recorded.get(a.id) === `${a.kind}:${sid}|${a.name}`) return;
+    record(a, a.nameBy ?? "user", null, "session");
   });
 }

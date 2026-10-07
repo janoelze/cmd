@@ -11,7 +11,8 @@ import type { ViewsStore } from "./views.ts";
 const log = logger("sessions");
 
 // 2: message counts were doubled for transcripts read twice (archived copies).
-const VERSION = 2;
+// 3: names (session.name events, docs/32).
+const VERSION = 3;
 const SQL = `
   CREATE TABLE IF NOT EXISTS sessions (
     key TEXT PRIMARY KEY,
@@ -26,7 +27,10 @@ const SQL = `
     started REAL,
     updated REAL,
     messages INTEGER NOT NULL DEFAULT 0,
-    project_id TEXT
+    project_id TEXT,
+    name TEXT,
+    name_by TEXT,
+    named_at REAL
   );
   CREATE INDEX IF NOT EXISTS sessions_updated ON sessions(updated);
   CREATE INDEX IF NOT EXISTS sessions_id ON sessions(id);
@@ -47,6 +51,9 @@ export interface SessionRow {
   updated: number | null;
   messages: number;
   project_id: string | null;
+  name: string | null;
+  name_by: string | null;
+  named_at: number | null;
 }
 
 export class SessionsView {
@@ -94,6 +101,16 @@ export class SessionsView {
       const rows = [...touched].map((k) => this.get(k)).filter((r): r is SessionRow => !!r && r.started !== null).map(sessionInfo);
       for (const fn of this.#listeners) fn(rows);
     }
+  }
+
+  /** A session's name from a session.name event (the newest wins); the row may come before its transcript. */
+  applyName(key: string, name: string | null, by: string, at: number): void {
+    const i = key.indexOf(":");
+    if (i < 0) return;
+    this.#views.stmt(`INSERT INTO sessions (key, id, agent, messages) VALUES (?, ?, ?, 0) ON CONFLICT(key) DO NOTHING`).run(key, key.slice(i + 1), key.slice(0, i));
+    this.#views.stmt(`UPDATE sessions SET name = ?, name_by = ?, named_at = ? WHERE key = ? AND (named_at IS NULL OR named_at <= ?)`).run(name, name ? by : null, at, key, at);
+    const row = this.get(key);
+    if (!this.#rebuilding && row?.started != null) for (const fn of this.#listeners) fn([sessionInfo(row)]);
   }
 
   /** Called with the sessions an apply changed (not during a rebuild), for live queries. */
@@ -165,6 +182,15 @@ export class SessionsView {
         after = rows.at(-1)!.seq;
         await new Promise((r) => setImmediate(r));
       }
+      // Names, in the order they were given.
+      for (let after = 0; ; ) {
+        const rows = this.#data.store.db.prepare(`SELECT seq, at, session_id AS key, json_extract(data, '$.name') AS name, json_extract(data, '$.by') AS by FROM events WHERE type = 'session.name' AND session_id IS NOT NULL AND seq > ? ORDER BY seq LIMIT 5000`).all(after) as { seq: number; at: number; key: string; name: string | null; by: string }[];
+        if (!rows.length) break;
+        this.#views.transaction(() => {
+          for (const r of rows) this.applyName(r.key, r.name, r.by, r.at);
+        });
+        after = rows.at(-1)!.seq;
+      }
       const keep = this.#views.stmt(`UPDATE sessions SET path = ?, env = ? WHERE key = ?`);
       this.#views.transaction(() => {
         for (const f of files) keep.run(f.path, f.env, f.key);
@@ -211,5 +237,5 @@ export class SessionsView {
 
 /** A view row as protocol's SessionInfo. */
 export function sessionInfo(r: SessionRow): SessionInfo {
-  return { key: r.key, id: r.id, agent: r.agent, path: r.path, env: r.env ? (JSON.parse(r.env) as Record<string, string>) : null, cwd: r.cwd, branch: r.branch, title: r.title, firstPrompt: r.first_prompt, started: r.started, updated: r.updated, messages: r.messages, projectId: r.project_id };
+  return { key: r.key, id: r.id, agent: r.agent, path: r.path, env: r.env ? (JSON.parse(r.env) as Record<string, string>) : null, cwd: r.cwd, branch: r.branch, title: r.title, firstPrompt: r.first_prompt, started: r.started, updated: r.updated, messages: r.messages, projectId: r.project_id, name: r.name ?? null };
 }

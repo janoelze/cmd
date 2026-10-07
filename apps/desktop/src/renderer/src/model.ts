@@ -1,6 +1,6 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, needsAttention, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type PaneId, type SpaceId } from "@cmd/protocol";
+import { bucketOf, kindLabel, needsAttention, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type PaneId, type SpaceId } from "@cmd/protocol";
 import type { DotState } from "@cmd/ui";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "./windows/registry.ts";
@@ -239,9 +239,10 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
     const cwd = p?.cwd ?? a?.cwd;
     const attn = p?.attention ?? null;
     f = {
-      // Like the fork: agent name, else terminal title, else last prompt, else spawn prompt.
+      // cmd's name for it (docs/32-session-names.md), else, until cmd names every
+      // agent itself, its terminal title, last prompt or spawn prompt, else its kind.
       name: a
-        ? (a.name ?? (!generic ? t : null) ?? a.lastPrompt ?? a.spawn.prompt ?? a.kind)
+        ? (a.name ?? (!generic ? t : null) ?? a.lastPrompt ?? a.spawn.prompt ?? kindLabel(a.kind))
         : (!generic ? t : null) || p?.foreground || "Terminal",
       kind: p?.foreground || a?.kind || "terminal",
       place: cwd ? shortPath(cwd) : undefined,

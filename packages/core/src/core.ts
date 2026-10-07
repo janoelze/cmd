@@ -12,7 +12,7 @@ import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker, sessionIdOf } from "./agents/tracker.ts";
 import { JournalService } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
-import { recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
+import { recordNames, recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
 import { DataService } from "./data/service.ts";
 import { buildContext } from "./ai/context.ts";
 import { describeAgent, describePane } from "./data/describe.ts";
@@ -456,6 +456,7 @@ export class Core {
       // Hooks report where the transcript is: picks up folders discovery doesn't know.
       if (agent.native.transcriptPath) this.#ingest?.learn(agent.kind, agent.native.transcriptPath);
     });
+    recordNames(this.data, this.agents, this.sessions);
     this.agents.on("removed", (agentId) => {
       this.#countedAgents.delete(agentId);
       this.#broadcast({ type: "agent.removed", agentId });
@@ -533,6 +534,7 @@ export class Core {
     "agent.send": async (p) => (await this.agents.send(p.agentId, p.text, p.submit), null),
     "agent.wait": (p) => this.agents.wait(p.agentIds, p.until, p.mode, p.timeoutMs),
     "agent.kill": (p) => ({ killed: this.agents.kill(p.agentId, p.tree) }),
+    "agent.rename": (p) => this.agents.rename(p.agentId, p.name),
     "agent.markSeen": (p) => {
       this.agents.markSeen(p.agentId);
       this.data.record({ id: `look:${p.agentId}:${Date.now()}`, at: Date.now(), type: "user.look", source: "user", agentId: p.agentId, paneId: this.agents.get(p.agentId)?.paneId ?? null, spaceId: this.agents.get(p.agentId)?.spaceId ?? null, data: { agentId: p.agentId } });

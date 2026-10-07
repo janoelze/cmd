@@ -482,6 +482,7 @@ export function App() {
     },
     "session.copyResume": () => currentAgent && void copyResumeCommand(currentAgent),
     "session.summarize": () => currentAgent && void summarizeSession(currentAgent),
+    "session.rename": () => currentAgent && setPicker({ kind: "renameAgent", agent: currentAgent }),
     "session.copyId": () => {
       const id = currentAgent && sessionId(currentAgent);
       if (id) copy(id);
@@ -559,6 +560,7 @@ export function App() {
         "session.prev": withPane.length > 1,
         "session.copyResume": hasSession,
         "session.copyId": hasSession,
+        "session.rename": !!currentAgent,
         // Live: ai.updated re-renders when a key is added or stops working.
         "session.summarize": hasSession && aiReady,
         "session.reveal": hasPane,
@@ -576,7 +578,7 @@ export function App() {
         "window.undock": !!selectedSide,
       },
     });
-  }, [mode, docks, selectedSide, selected, selectedIsPane, selectedIsWidget, withPane.length, hasSession, aiReady, attention > 0, openSpaces.length, !!space, !!space?.home]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, docks, selectedSide, selected, selectedIsPane, selectedIsWidget, withPane.length, hasSession, aiReady, attention > 0, openSpaces.length, !!space, !!space?.home, !!currentAgent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── context menus ──────────────────────────────────────
 
@@ -609,6 +611,7 @@ export function App() {
       ...(r.win ? [...(viewFor(r.win.kind)?.menu?.(r.win) ?? []), "-" as const] : []),
       ...(a
         ? [
+            { label: "Rename…", run: () => setPicker({ kind: "renameAgent", agent: a }) },
             { label: "Copy Resume Command", run: () => void copyResumeCommand(a), enabled: !!id },
             { label: "Copy Session ID", run: () => id && copy(id), enabled: !!id },
             // Only with an AI provider set up; read when the menu opens, so a key added since counts.

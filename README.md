@@ -110,6 +110,7 @@ cmd send <agent> "also update docs"
 cmd read <agent> --lines 40
 cmd wait <agent…> --any --timeout 50
 cmd kill <agent> --tree
+cmd agents rename <agent> Tours       # name it; <agent> is an id or a name (`cmd send tours "…"`)
 cmd notify "deploy finished"         # marks this terminal inside cmd
 cmd events                           # NDJSON event stream
 cmd settings                         # list; `set KEY VALUE`, `reset KEY`, `path`

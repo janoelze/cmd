@@ -43,6 +43,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "agent.send": "control",
   "agent.wait": "never",
   "agent.kill": "control",
+  "agent.rename": "control",
   "agent.markSeen": "view",
   // Raw events and turns carry prompts, commands and paths: local only for now.
   "agent.summarize": "never",
@@ -202,6 +203,10 @@ const ARGS: { [M in Method]?: Check<M> } = {
     text(p.text);
   },
   "agent.kill": (p, ctx) => agent(ctx, p.agentId),
+  "agent.rename": (p, ctx) => {
+    agent(ctx, p.agentId);
+    if (p.name !== null) text(p.name);
+  },
   "agent.markSeen": (p, ctx) => agent(ctx, p.agentId),
   "window.open": (p, ctx) => {
     if (p.spaceId) openSpace(ctx, p.spaceId);

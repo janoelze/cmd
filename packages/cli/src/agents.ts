@@ -5,14 +5,16 @@
 
 import fs from "node:fs";
 import os from "node:os";
-import type { ActivityEvent, AgentTurn, TurnRow } from "@cmd/protocol";
+import type { ActivityEvent, Agent, AgentTurn, Pane, TurnRow } from "@cmd/protocol";
+import { ENV, matchAgents } from "@cmd/protocol";
 import type { Connection } from "@cmd/protocol/node";
 import { rawFromLog, toFixture } from "@cmd/core/activity/fixture";
 import { toActivity } from "@cmd/core/activity/view";
 
 type Client = Connection["client"];
 
-export const AGENTS_HELP = `  agents events <agent|pane> [--raw] [--follow] [--limit N] [--json]
+export const AGENTS_HELP = `  agents rename <agent> [name]        name an agent; without a name cmd names it again
+  agents events <agent|pane> [--raw] [--follow] [--limit N] [--json]
                                       what cmd recorded about an agent, as mapped (--raw: payloads)
   agents turns <agent> [--json]       its turns: prompt, outcome, tools, files, final message
   agents summary <agent> [--open]     summarise its session with AI: prints the Markdown (--open: in a window too)
@@ -28,12 +30,23 @@ const one = (s: string, n = 90) => {
   return l.length > n ? l.slice(0, n - 1) + "…" : l;
 };
 
+/**
+ * The live agent a reference means: an id or its start, else a name, in the
+ * caller's Space first (docs/32-session-names.md, "Names as addresses"). Null
+ * when none; more than one is an error that lists them.
+ */
+export function pickAgent(agents: Agent[], panes: Pane[], ref: string): Agent | null {
+  const here = panes.find((p) => p.id === process.env[ENV.paneId])?.spaceId;
+  const hits = matchAgents(agents, ref, { spaceId: here });
+  if (hits.length > 1) throw new Error(`“${ref}” could mean:\n${hits.map((a) => `  ${a.id.slice(0, 8)} ${a.name ?? a.kind}${a.spaceId !== here ? `  (Space ${a.spaceId.slice(0, 8)})` : ""}`).join("\n")}\nUse an id.`);
+  return hits[0] ?? null;
+}
+
 /** A live agent (or pane) by id prefix or name; else one that is gone, by id prefix in the log (agents that are gone keep their events). */
 async function target(client: Client, ref: string): Promise<{ agentId?: string; paneId?: string }> {
   const [agents, panes] = await Promise.all([client.call("agent.list", {}), client.call("pane.list", {})]);
-  const a = agents.filter((x) => x.id.startsWith(ref) || x.name === ref);
-  if (a.length === 1) return { agentId: a[0]!.id };
-  if (a.length > 1) throw new Error(`ambiguous agent: ${ref}`);
+  const a = pickAgent(agents, panes, ref);
+  if (a) return { agentId: a.id };
   const p = panes.filter((x) => x.id.startsWith(ref));
   if (p.length === 1) return p[0]!.agentId ? { agentId: p[0]!.agentId } : { paneId: p[0]!.id };
   // Gone: an agent's id (prefix) in the log, else a pane's.
@@ -78,6 +91,17 @@ export async function agentsCommand(client: Client, closed: Promise<void>, pos: 
   const json = !!opt.json;
   const limit = typeof opt.limit === "string" ? Number(opt.limit) : undefined;
   switch (sub) {
+    case "rename": {
+      if (!ref) throw new Error("usage: cmd agents rename <agent> [name]");
+      const [agents, panes] = await Promise.all([client.call("agent.list", {}), client.call("pane.list", {})]);
+      const a = pickAgent(agents, panes, ref);
+      if (!a) throw new Error(`no agent: ${ref}`);
+      const name = pos.slice(2).join(" ").trim() || null;
+      const r = await client.call("agent.rename", { agentId: a.id, name });
+      if (json) return console.log(JSON.stringify(r, null, 2)), 0;
+      console.log(name ? `${a.id.slice(0, 8)} is “${r.name}”` : `${a.id.slice(0, 8)}: cmd names it again${r.name ? ` (now “${r.name}”)` : ""}`);
+      return 0;
+    }
     case "events": {
       if (!ref) throw new Error("usage: cmd agents events <agent|pane>");
       const t = await target(client, ref);

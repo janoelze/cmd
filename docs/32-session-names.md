@@ -1,6 +1,6 @@
 # Session names
 
-> Status (2026-10-07): **plan, not built.** cmd gives every agent session a name of its own: 1–3 nouns, in the person's words, that tell the agents in a Space apart in a notification, a sidebar row, Recent and the Journal, and that follow the work when it changes. Read first: this doc; `packages/core/src/agents/notice.ts` (the notification subject); `apps/desktop/src/renderer/src/model.ts` (a terminal's name); `packages/core/src/data/views/sessions.ts`; the copywriting skill's Notifications. Builds on the event log ([28](28-data-plan.md)) and the context builder.
+> Status (2026-10-07): **step 1 built** (branch `session-names`): names from the worktree an agent writes in, Rename… on the title bar and sidebar row (and Rename Agent… in the palette), `cmd agents rename`, `session.name` events and names in the sessions view, notifications titled by the name else the kind, names as `cmd send`/`wait`/`kill` targets, `outputLanguage()`, the two body fixes. Until the model names agents (step 3) the sidebar still falls back to the terminal title and the last prompt; notifications don't. Steps 2–5 not built. cmd gives every agent session a name of its own: 1–3 nouns, in the person's words, that tell the agents in a Space apart in a notification, a sidebar row, Recent and the Journal, and that follow the work when it changes. Read first: this doc; `packages/core/src/agents/notice.ts` (the notification subject); `apps/desktop/src/renderer/src/model.ts` (a terminal's name); `packages/core/src/data/views/sessions.ts`; the copywriting skill's Notifications. Builds on the event log ([28](28-data-plan.md)) and the context builder.
 
 ## Why
 
@@ -142,7 +142,7 @@ A single `outputLanguage()` (protocol, `"en"` for now) that every AI writer pass
 
 - A `session.name` event: `{ name: string | null, by: "user" | "agent" | "worktree" | "model", lang: string, verdict?: "change", was?: string }`, with `sessionId`, `agentId`, `paneId`, `spaceId`, `projectId`. `name: null` by `user` hands naming back. In the `agents` class (a year), `text` = the name (search finds sessions by it).
 - The sessions view gets `name` and `name_by` (the newest event's); it is rebuilt from the log like the rest, so names survive `cmd data rebuild sessions`. `data.forget` takes them with the session.
-- `Agent` gets `title: { name, by } | null` from its session's view row (an agent without a session yet: from its own events). `subjectOf` and the renderer's name rule read it: the name, else the kind. The terminal title stays the terminal's, shown only for agents without hooks.
+- `Agent.name` is cmd's name, with `nameBy`, `nameWas` and `namedAt` (persisted with the agent; restore keeps them). `subjectOf` reads it: the name, else the kind. The sidebar falls back to the terminal title and the last prompt until step 3, then to the kind only (the terminal title stays for agents without hooks).
 - `agent.rename { agentId, name: string | null }` in `Methods`; the handler records the event.
 
 ## Measuring it

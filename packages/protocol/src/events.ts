@@ -9,6 +9,7 @@
 
 import type { AgentKind, AppNotification, CommandRun, PaneId, SpaceId, WindowId } from "./model.ts";
 import type { AgentTurn } from "./activity.ts";
+import type { NameSource } from "./names.ts";
 
 /** The events file's schema version (tables), not the payloads'. */
 export const EVENTS_SCHEMA = 1;
@@ -20,6 +21,8 @@ export interface EventPayloads {
   "pane.activity": Record<string, never>;
   /** What an agent's pane printed during one turn, escape codes stripped; the text is the content. */
   "agent.output": { turn: number; chars: number; cut: boolean };
+  /** An agent's session got a name (docs/32-session-names.md); null: the person handed naming back to cmd. */
+  "session.name": { name: string | null; by: NameSource; lang: string; was: string | null; reason?: string };
   /** Something the core inferred about an agent (an interrupt) or couldn't make sense of (an anomaly). */
   "agent.note": { name: "interrupt" | "anomaly"; agent: AgentKind | null; text: string };
   /** A shell command in a terminal (not an agent's), once it ended. Its output is the blob. */
@@ -86,6 +89,7 @@ export type DataEventType = keyof EventPayloads;
 export const EVENT_V: Record<DataEventType, number> = {
   "agent.hook": 1,
   "agent.note": 1,
+  "session.name": 1,
   "pane.activity": 1,
   "agent.output": 1,
   command: 1,
@@ -227,7 +231,7 @@ export interface DataClassInfo {
 }
 
 export const DATA_CLASSES: Record<DataClass, Omit<DataClassInfo, "class" | "keepDays"> & { keepDays: number | null | "setting" }> = {
-  agents: { title: "Agent events", description: "What agents' hooks report: prompts, tool calls, questions, stops.", types: ["agent.", "pane.activity"], keepDays: "setting", cap: 64_000, setting: null, leaves: "Only to a model you set up, when a feature asks (journal, summaries)." },
+  agents: { title: "Agent events", description: "What agents' hooks report: prompts, tool calls, questions, stops.", types: ["agent.", "pane.activity", "session.name"], keepDays: "setting", cap: 64_000, setting: null, leaves: "Only to a model you set up, when a feature asks (journal, summaries)." },
   transcripts: { title: "Transcripts", description: "cmd's copy of each agent session: messages, tool calls and results.", types: ["transcript."], keepDays: "setting", cap: 64_000, setting: "data.record.transcripts", leaves: "Only to a model you set up, when a feature asks." },
   output: { title: "Command output", description: "What commands printed in your terminals, after they ended.", types: ["command", "agent.output"], keepDays: 90, cap: 256_000, setting: "data.record.output", leaves: "Only to a model you set up, when a feature asks." },
   browsing: { title: "Pages and files", description: "Addresses and titles of pages in cmd's browser windows (not other browsers), paths of files opened in cmd.", types: ["browser.", "file.", "window."], keepDays: "setting", cap: null, setting: "data.record.browsing", leaves: "Only to a model you set up, when a feature asks." },
@@ -291,6 +295,8 @@ export interface SessionInfo {
   updated: number | null;
   messages: number;
   projectId: string | null;
+  /** What cmd called it (docs/32-session-names.md); null: never named. */
+  name: string | null;
 }
 
 /** A live query over a view (data.subscribeView): rows now, then each row that changes. */

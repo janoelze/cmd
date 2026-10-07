@@ -1,6 +1,7 @@
 // Domain model shared by core, CLI and UI. See docs/08-host-agents.md.
 
 import type { AgentTurn } from "./activity.ts";
+import type { NameSource } from "./names.ts";
 
 export type PaneId = string;
 export type AgentId = string;
@@ -170,7 +171,13 @@ export interface Agent {
   /** Its pane's Space; virtual children have their parent's. */
   spaceId: SpaceId;
   kind: AgentKind;
+  /** What cmd calls it (docs/32-session-names.md): 1–3 nouns, or null for its kind. */
   name: string | null;
+  /** Who named it; a person's name is never replaced by cmd's. */
+  nameBy?: NameSource | null;
+  /** Its name before the last rename, and when that was: it still answers to it for a while. */
+  nameWas?: string | null;
+  namedAt?: number | null;
   cwd: string;
 
   parentId: AgentId | null;
