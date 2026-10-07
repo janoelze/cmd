@@ -15,7 +15,7 @@ import { logger } from "@cmd/protocol/node";
 import { DataService } from "../data/service.ts";
 import { projectOf } from "../data/project.ts";
 import type { SessionRow } from "../data/views/sessions.ts";
-import { sessionEvents, turnEvent } from "./backfill.ts";
+import { projectsOnce, sessionEvents, turnEvent } from "./backfill.ts";
 
 const log = logger("journal");
 
@@ -169,17 +169,18 @@ export class JournalStore {
       }
     }
     const since = (q.since ?? 0) - SPAN_MS;
+    const project = projectsOnce();
     if (want("agent.turn") && this.#sources.turns) {
       let n = 0;
       for (const { turn, cwd } of this.#sources.turns(since)) {
-        const e = { ...turnEvent(turn, cwd, "backfill"), id: 1_000_000_000 + n++, source: "backfill" as const };
+        const e = { ...turnEvent(turn, cwd, "backfill", project), id: 1_000_000_000 + n++, source: "backfill" as const };
         if (inRange(e) && inScope(e)) out.push(e);
       }
     }
     if (want("agent.session") && this.#sources.sessions) {
       const rows = this.#sources.sessions(since);
       let n = 0;
-      if (rows) for (const s of sessionEvents(rows)) {
+      if (rows) for (const s of sessionEvents(rows, project)) {
         const e = { ...s, id: 2_000_000_000 + n++, source: "backfill" as const };
         if (inRange(e) && inScope(e)) out.push(e);
       }

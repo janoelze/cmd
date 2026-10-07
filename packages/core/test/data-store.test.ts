@@ -55,6 +55,10 @@ describe("DataStore", () => {
     expect(again.recountBlobs()).toBe(true);
     expect(again.recountBlobs()).toBe(false);
     expect((again.db.prepare(`SELECT refs FROM blobs`).all() as { refs: number }[]).map((r) => r.refs)).toEqual([1]);
+    // The sweep finds unreferenced blobs by their index, not by reading every blob.
+    expect((again.db.prepare(`EXPLAIN QUERY PLAN DELETE FROM blobs WHERE refs <= 0`).all() as { detail: string }[]).map((r) => r.detail).join()).toContain("blobs_unreferenced");
+    again.delete({ seqs: again.query({}).map((e) => e.seq) });
+    expect(again.sweepBlobs()).toBe(1);
     again.close();
   });
 

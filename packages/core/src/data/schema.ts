@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS blobs (
   refs    INTEGER NOT NULL DEFAULT 0,
   bytes   BLOB NOT NULL
 );
+-- The sweep's rows: without it, deleting unreferenced blobs reads every blob row (seconds on a big log).
+CREATE INDEX IF NOT EXISTS blobs_unreferenced ON blobs(refs) WHERE refs <= 0;
 
 CREATE TABLE IF NOT EXISTS entities (
   kind    TEXT NOT NULL,

@@ -18,8 +18,21 @@ const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
 import { projectOf } from "../data/project.ts";
 export { projectOf };
 
+/** A folder's project (projectOf); a caller reading many events passes one that remembers. */
+export type ProjectOf = (cwd: string) => string | null;
+
+/** projectOf, remembering each folder's answer (it walks the folder's parents): for one read of many events. */
+export function projectsOnce(): ProjectOf {
+  const seen = new Map<string, string | null>();
+  return (cwd) => {
+    let p = seen.get(cwd);
+    if (p === undefined) seen.set(cwd, (p = projectOf(cwd)));
+    return p;
+  };
+}
+
 /** Agent sessions from the sessions view (data/views/sessions.ts). */
-export function sessionEvents(rows: SessionRow[]): NewJournalEvent[] {
+export function sessionEvents(rows: SessionRow[], project: ProjectOf = projectOf): NewJournalEvent[] {
   return rows.filter((r): r is SessionRow & { started: number } => r.started !== null).map((r) => {
     const title = r.title?.trim() || null;
     return {
@@ -28,7 +41,7 @@ export function sessionEvents(rows: SessionRow[]): NewJournalEvent[] {
       kind: "agent.session",
       key: `session:${r.id}`,
       spaceId: null,
-      repo: r.cwd && !SCRATCH.test(r.cwd) ? projectOf(r.cwd) : null,
+      repo: r.cwd && !SCRATCH.test(r.cwd) ? project(r.cwd) : null,
       cwd: r.cwd,
       thread: `session:${r.id}`,
       text: title ?? clip(oneLine(r.first_prompt ?? ""), 80) ?? "Agent session",
@@ -39,7 +52,7 @@ export function sessionEvents(rows: SessionRow[]): NewJournalEvent[] {
 }
 
 /** A turn as a journal event. `cwd`: where its agent ran. */
-export function turnEvent(t: AgentTurn, cwd: string | null, source: "live" | "backfill"): NewJournalEvent {
+export function turnEvent(t: AgentTurn, cwd: string | null, source: "live" | "backfill", project: ProjectOf = projectOf): NewJournalEvent {
   const prompt = t.prompt ? oneLine(t.prompt) : null;
   return {
     at: t.startedAt,
@@ -47,7 +60,7 @@ export function turnEvent(t: AgentTurn, cwd: string | null, source: "live" | "ba
     kind: "agent.turn",
     key: `turn:${t.agentId}:${t.index}`,
     spaceId: null,
-    repo: cwd && !SCRATCH.test(cwd) ? projectOf(cwd) : null,
+    repo: cwd && !SCRATCH.test(cwd) ? project(cwd) : null,
     cwd,
     thread: t.sessionId ? `session:${t.sessionId}` : `agent:${t.agentId}`,
     text: clip(prompt, 120) ?? "(a turn that began before cmd saw it)",

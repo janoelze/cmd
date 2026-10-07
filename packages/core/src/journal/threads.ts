@@ -113,7 +113,15 @@ export function buildThreads(events: JournalEvent[], o: ThreadOptions): JournalT
 
   const threads = new Map<string, JournalThread>();
   for (const [id, events] of groups) threads.set(id, makeThread(id, events));
-  const branchThreads = [...threads.values()].filter((t) => t.kind === "branch" && !t.id.includes("@"));
+  // Each branch's name, worktree and the commands that create or merge it, worked out once (sessions × branches is the hot loop).
+  const end = "(?=$|[\\s\"'`;&|)])";
+  const branchThreads = [...threads.values()]
+    .filter((t) => t.kind === "branch" && !t.id.includes("@"))
+    .map((b) => {
+      const name = b.id.slice(b.id.indexOf("#") + 1);
+      const re = new RegExp(`(worktree add\\b.*-b\\s+${esc(name)}${end}|\\bmerge\\b[^|;&]*\\s${esc(name)}${end}|checkout -b ${esc(name)}${end})`);
+      return { b, name, wt: worktreeOf(b.repo, name), re };
+    });
 
   for (const t of threads.values()) {
     const ev = groups.get(t.id)!;
@@ -128,17 +136,13 @@ export function buildThreads(events: JournalEvent[], o: ThreadOptions): JournalT
       const files = ev.flatMap((e) => (e.data.kind === "agent.turn" ? e.data.files : []));
       const commands = ev.flatMap((e) => (e.data.kind === "agent.turn" ? e.data.commands : e.data.kind === "command" ? [e.data.command] : []));
       const cwds = ev.map((e) => e.cwd).filter((c): c is string => !!c);
-      for (const b of branchThreads) {
-        const name = b.id.slice(b.id.indexOf("#") + 1);
-        const wt = worktreeOf(b.repo, name);
+      const sessionBranch = ev.find((e) => e.data.kind === "agent.session")?.data;
+      for (const { b, name, wt, re } of branchThreads) {
         const inWt = wt ? files.filter((f) => f.startsWith(wt + "/")).length : 0;
         if (inWt) link(t, b.id, `edited ${inWt === 1 ? "a file" : `${inWt} files`} in ${home(wt!)}`);
         else if (wt && cwds.some((c) => c === wt || c.startsWith(wt + "/"))) link(t, b.id, `ran in ${home(wt)}`);
-        const end = "(?=$|[\\s\"'`;&|)])";
-        const re = new RegExp(`(worktree add\\b.*-b\\s+${esc(name)}${end}|\\bmerge\\b[^|;&]*\\s${esc(name)}${end}|checkout -b ${esc(name)}${end})`);
         const cmd = commands.find((c) => re.test(c));
         if (cmd) link(t, b.id, /merge/.test(cmd) ? `merged ${name}` : `created ${name}`);
-        const sessionBranch = ev.find((e) => e.data.kind === "agent.session")?.data;
         if (sessionBranch?.kind === "agent.session" && sessionBranch.branch === name) link(t, b.id, `session on branch ${name}`);
       }
       // A release made during the session: its tag landed while it worked on releasing.
