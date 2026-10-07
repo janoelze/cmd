@@ -178,6 +178,39 @@ describe("restore after a core restart", () => {
     expect(b.core.store.panes()).toEqual([]);
     await b.core.close();
   });
+
+  it("leaves the terminals and agents of a copied database to the cmd it came from", async () => {
+    const db = path.join(dir, "i.sqlite");
+    const transcript = path.join(dir, "session.jsonl");
+    fs.writeFileSync(transcript, "{}\n");
+    const a = start(db);
+    a.core.restore();
+    const pane = a.core.panes.create({ cwd: dir });
+    a.core.agents.ingestHook(pane.id, "claude", "SessionStart", { session_id: "abc-123", transcript_path: transcript, cwd: dir });
+    await a.core.close();
+
+    const copy = path.join(dir, "copy.sqlite");
+    fs.copyFileSync(db, copy);
+    const b = start(copy);
+    b.core.restore();
+    expect(b.core.panes.list()).toEqual([]);
+    expect(b.core.agents.list()).toEqual([]);
+    expect(b.ptys).toEqual([]);
+    expect(b.core.store.panes()).toEqual([]);
+    // The copy is its own from now on: its next terminals come back as usual.
+    const own = b.core.panes.create({ cwd: dir });
+    await b.core.close();
+    const c = start(copy);
+    c.core.restore();
+    expect(c.core.panes.list().map((p) => p.id)).toEqual([own.id]);
+    await c.core.close();
+
+    // The original still has its session.
+    const d = start(db);
+    d.core.restore();
+    expect(d.core.panes.get(pane.id)).toMatchObject({ agentId: expect.any(String) });
+    await d.core.close();
+  });
 });
 
 describe("UI state of closed windows", () => {

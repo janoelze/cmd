@@ -1,8 +1,10 @@
 // Durable state in SQLite (node:sqlite, no native module), mostly as JSON
 // documents: Spaces, windows, UI state, and what restore.ts needs to bring
 // terminals and agents back after a restart (pane records, their last screens,
-// the live agents).
+// the live agents). The file also records where it lives, so a copy of it (a
+// test core on a copy of the real state) knows those terminals aren't its own.
 
+import fs from "node:fs";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { Agent, AgentId, AppWindow, PaneId, RemoteScope, Space } from "@cmd/protocol";
 import type { PaneRecord } from "./panes.ts";
@@ -21,6 +23,8 @@ export interface RemoteDeviceRecord {
 export class Store {
   #db: DatabaseSync;
   #stmts = new Map<string, StatementSync>();
+  /** This file's real path; null in memory. */
+  #path: string | null;
 
   constructor(file: string) {
     // Wait out a short lock (another process on the file) rather than throw.
@@ -64,7 +68,25 @@ export class Store {
         public_key TEXT NOT NULL UNIQUE,
         doc TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
+    this.#path = file === ":memory:" ? null : fs.realpathSync(file);
+  }
+
+  /**
+   * Where this file lived before, when it was copied or moved here; null when it
+   * is where it was (or new). Records the current place: the second call is null.
+   * Restore asks once, before it resurrects anything (restore.ts).
+   */
+  claim(): string | null {
+    if (!this.#path) return null;
+    const row = this.#stmt(`SELECT value FROM meta WHERE key = 'path'`).get() as { value: string } | undefined;
+    if (row?.value === this.#path) return null;
+    this.#stmt(`INSERT OR REPLACE INTO meta (key, value) VALUES ('path', ?)`).run(this.#path);
+    return row?.value ?? null;
   }
 
   /** For services that keep their own tables in the same file (activity log, agent homes). */

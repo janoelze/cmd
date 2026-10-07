@@ -12,6 +12,11 @@
 //    our shell integration; bash puts it in history);
 //  - a record from this instance that isn't running exited while the core was
 //    away: dropped.
+//  - every record, when the database was copied or moved here (Store.claim):
+//    those terminals belong to the cmd it came from, which may still run them.
+//    Resurrecting them would resume its agents a second time, and their hooks
+//    would report into the same status folders as the original panes
+//    ($TMPDIR/cmd-agents/<pane id>, statusfiles.ts), mixing up both cores' agents.
 // Pane ids stay the same, so the layouts and selections in Space.view still fit.
 //
 // Records come from other cmd versions, so each pane and agent is restored on its
@@ -43,6 +48,8 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
   const cfg = settings();
   const backend = panes.backend;
   const records = new Map(store.panes().map((r) => [r.id, r]));
+  const copiedFrom = store.claim();
+  if (copiedFrom) log.warn(`the database was copied from ${copiedFrom}: its terminals stay with the cmd there`);
   const stored = store.agents();
   /** Pane ids back in this core: reattached (true) or resurrected (false). */
   const back = new Map<PaneId, boolean>();
@@ -77,8 +84,11 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
   for (const a of stored) if (a.paneId && !hosted.has(a.paneId)) hosted.set(a.paneId, a);
   for (const rec of records.values()) {
     const space = openSpace(rec.spaceId);
-    const drop =
-      rec.host === backend.instance ? "dropped: exited while the core was away" : !cfg["restore.terminals"] ? "dropped: restore.terminals is off" : !space ? "dropped: its Space is closed" : null;
+    const drop = copiedFrom
+      ? "dropped: the database was copied"
+      : rec.host === backend.instance
+        ? "dropped: exited while the core was away"
+        : !cfg["restore.terminals"] ? "dropped: restore.terminals is off" : !space ? "dropped: its Space is closed" : null;
     if (drop || !space) {
       count(drop ?? "dropped", rec.id);
       panes.discard(rec.id);
