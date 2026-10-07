@@ -919,6 +919,10 @@ export function WindowsView(p: Props) {
                       key={edge}
                       className={`resize-edge strip-resize ${resizing?.id === id && resizing.edge === edge ? "active" : ""}`}
                       data-edge={edge}
+                      // A handle a script (or VoiceOver) finds inside the window: separator "Right edge".
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={edge === "left" ? "Left edge" : "Right edge"}
                       style={{ "--space": `${space}px` } as React.CSSProperties}
                       data-tip="Drag to resize · double-click to cycle widths"
                       onPointerDown={(e) => startResize(e, id, rect.w, edge)}
@@ -933,6 +937,9 @@ export function WindowsView(p: Props) {
                   <div
                     key={axes}
                     className={`canvas-resize resize-${axes}`}
+                    role="separator"
+                    aria-orientation={axes === "y" ? "horizontal" : "vertical"}
+                    aria-label={axes === "x" ? "Right edge" : axes === "y" ? "Bottom edge" : "Corner"}
                     style={zVar}
                     onPointerDown={(e) => startSizing(e, id, rect, axes)}
                   />

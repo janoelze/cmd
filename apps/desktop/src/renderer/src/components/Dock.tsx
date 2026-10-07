@@ -105,6 +105,9 @@ function DockResize({ side, max, onWidth }: { side: Side; max: number; onWidth: 
     <div
       className="resize-edge dock-resize"
       data-edge={side === "left" ? "right" : "left"}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={side === "left" ? "Right edge" : "Left edge"}
       onPointerDown={onPointerDown}
       onDoubleClick={() => onWidth(null)}
       data-tip="Drag to resize · double-click to reset"
