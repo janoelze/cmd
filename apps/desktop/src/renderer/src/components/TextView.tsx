@@ -17,7 +17,7 @@ import { basicSetup } from "codemirror";
 import { Compartment, EditorState, Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
-import { findNext, findPrevious, openSearchPanel } from "@codemirror/search";
+import { searchPanelOpen } from "@codemirror/search";
 import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import type { AppWindow } from "@cmd/protocol";
@@ -26,6 +26,8 @@ import { formatBytes } from "../model.ts";
 import { onFsChanged, useStoreValue } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { syntax } from "../editor/syntax.ts";
+import { editorFindable, findPanel } from "../editor/find.ts";
+import { useFind } from "../find.tsx";
 import { useTheme } from "@cmd/ui/themes";
 
 /** Editor chrome from the app's design tokens. */
@@ -120,6 +122,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
         doc: draft,
         extensions: [
           basicSetup,
+          findPanel,
           keymap.of([indentWithTab]),
           // Like a terminal's "Terminal input"; the window around it carries the file's name.
           EditorView.contentAttributes.of({ "aria-label": "Text editor" }),
@@ -128,6 +131,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
           c.lang.of([]),
           c.readOnly.of(EditorState.readOnly.of(false)),
           EditorView.updateListener.of((u) => {
+            if (findOpen.current && searchPanelOpen(u.startState) && !searchPanelOpen(u.state)) closeFind.current("close");
             if (!u.docChanged) return;
             setDirty(!!saved.current && !u.state.doc.eq(saved.current));
             setLines(u.state.doc.lines);
@@ -248,18 +252,25 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
     setConflict(false);
   };
 
+  // Find (⌘F ⌘G ⇧⌘G, ⌥⌘F replace) with the app's bar; replace only where the text can be edited.
+  const editable = !meta.current.truncated && !meta.current.binary;
+  const findable = editorFindable(() => view.current, () => editable);
+  const find = useFind(editable ? findable : { ...findable, replace: undefined }, { onClose: () => view.current?.focus() });
+  // Escape in the editor closes CodeMirror's (hidden) panel, and with it the matches: the bar goes too.
+  const findOpen = useRef(find.open);
+  findOpen.current = find.open;
+  const closeFind = useRef(find.request);
+  closeFind.current = find.request;
+
   useEffect(
     () =>
       registerWindowActions(win.id, {
         save,
         openExternally: file ? () => cmd.openPath(file) : undefined,
         // The menu bar owns ⌘F ⌘G ⇧⌘G, so CodeMirror's own bindings for them don't fire.
-        find: (r) => {
-          const v = view.current;
-          if (v) (r === "open" ? openSearchPanel : r === "next" ? findNext : findPrevious)(v);
-        },
+        find: find.request,
       }),
-    [win.id, save, file],
+    [win.id, save, file, find.request],
   );
 
   // What the title bar / status bar shows for this window.
@@ -296,6 +307,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
           This file changed on disk.
         </Callout>
       )}
+      {find.bar}
       {error && <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState>}
       <div className="textwin-editor" ref={host} />
     </div>

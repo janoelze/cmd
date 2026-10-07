@@ -5,6 +5,7 @@
 //  - title edits: the title bar as an input for a moment (Magic widgets' Change)
 
 import { useSyncExternalStore } from "react";
+import type { FindRequest } from "./find.tsx";
 
 type Actions = {
   save?: () => void | Promise<void>;
@@ -15,8 +16,8 @@ type Actions = {
   stop?: () => void;
   /** ⌘E: a window's other face (Markdown preview / source, a Magic widget's edit view). */
   toggleEdit?: () => void;
-  /** ⌘F / ⌘G / ⇧⌘G. */
-  find?: (r: "open" | "next" | "prev") => void;
+  /** ⌘F / ⌘G / ⇧⌘G / ⌥⌘F, Use Selection for Find (find.tsx). */
+  find?: (r: FindRequest) => void;
   /** ⌘+ / ⌘− / ⌘0 zoom the window's content (a PDF) instead of the app's text. */
   zoom?: (d: 1 | -1 | 0) => void;
 };

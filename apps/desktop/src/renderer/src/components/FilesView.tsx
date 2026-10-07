@@ -37,6 +37,9 @@ import { registerDropTarget } from "../drops.ts";
 import { dragFiles } from "../drags.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { PlacementContext } from "../windows/registry.ts";
+import { registerWindowActions } from "../windowActions.ts";
+import { useFind } from "../find.tsx";
+import { domFindable } from "../find-dom.ts";
 
 const iconFor = (e: FileEntry) =>
   e.kind === "dir"
@@ -110,6 +113,13 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   /** The last file operation's failure, shown above the list until the next one. */
   const [opError, setOpError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  // Find a name among the rows shown; the current match is selected, so ↩ opens it.
+  const findable = useMemo(
+    () => domFindable(() => listRef.current, { within: ".file-name", onCurrent: (el) => setSel(el.closest<HTMLElement>("[data-path]")?.dataset.path ?? null) }),
+    [],
+  );
+  const find = useFind(findable, { placeholder: "Find a name", onClose: () => listRef.current?.focus() });
+  useEffect(() => registerWindowActions(win.id, { find: find.request }), [win.id, find.request]);
   const docked = useContext(PlacementContext) === "sidebar";
   const [bookmarks, setBookmarks] = usePersisted<Bookmark[]>("files.bookmarks", []);
   const isBookmarked = (p: string) => bookmarks.some((b) => b.path === p);
@@ -618,6 +628,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
         <ToolbarButton icon={showHidden ? "eye" : "eye.slash"} label={showHidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={showHidden} onClick={() => setShowHidden((h) => !h)} secondary priority={2} />
         <ToolbarButton icon="terminal" label="New Terminal Here" onClick={() => void newTerminalIn(root)} secondary priority={3} />
       </WindowToolbar>
+      {find.bar}
       <div
         className={`file-list ${dropDir === root ? "drop-into" : ""}`}
         ref={listRef}

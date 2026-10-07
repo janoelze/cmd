@@ -19,6 +19,8 @@ import { openLink, openPath, selectPane } from "../actions.ts";
 import { syntax } from "../editor/syntax.ts";
 import { onFsChanged } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
+import { useFind } from "../find.tsx";
+import { domFindable } from "../find-dom.ts";
 import { stateStr, type WindowViewProps } from "./registry.ts";
 
 // The highlight style's CSS is normally mounted by an editor; mount it for static use.
@@ -153,14 +155,19 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
     [win.id, words, source === null],
   );
   useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
+  const findable = useMemo(() => domFindable(() => body.current), []);
+  const find = useFind(findable, { onClose: () => scroller.current?.focus() });
   useEffect(
-    () => registerWindowActions(win.id, { openExternally: () => cmd.openPath(file) }),
-    [win.id, file],
+    () => registerWindowActions(win.id, { openExternally: () => cmd.openPath(file), find: find.request }),
+    [win.id, file, find.request],
   );
 
   return (
-    <div className="markdown-scroll" ref={scroller} tabIndex={0} onClick={onClick}>
-      {error ? <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState> : <article className="markdown" ref={body} />}
-    </div>
+    <>
+      {find.bar}
+      <div className="markdown-scroll" ref={scroller} tabIndex={0} onClick={onClick}>
+        {error ? <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState> : <article className="markdown" ref={body} />}
+      </div>
+    </>
   );
 }

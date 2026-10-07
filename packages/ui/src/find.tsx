@@ -5,8 +5,8 @@
 // and the arrows stay. It is controlled: the window does the finding and says
 // what it found; ↩ / ⇧↩ step, ⎋ closes.
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from "react";
-import { ToolbarButton, ToolbarGroup, ToolbarSearchField, WindowToolbar } from "./toolbar.tsx";
+import { forwardRef, useEffect, useImperativeHandle, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { ToolbarButton, ToolbarField, ToolbarGroup, ToolbarSearchField, WindowToolbar } from "./toolbar.tsx";
 
 export interface FindOptions {
   caseSensitive: boolean;
@@ -60,9 +60,11 @@ export interface FindBarProps {
   floating?: boolean;
   /** "Find", "Find in PDF". */
   placeholder?: string;
+  /** Editable text: a second row to replace matches, shown while `open` (docked bars only). */
+  replace?: { open: boolean; onOpen: (open: boolean) => void; value: string; onValue: (v: string) => void; onReplace: (all: boolean) => void } | null;
 }
 
-/** Find in a window: ↩ next, ⇧↩ previous, ⎋ closes (a first ⎋ clears the field). */
+/** Find in a window: ↩ next, ⇧↩ previous, ⎋ closes. */
 export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(p, ref) {
   const input = useRef<HTMLInputElement>(null);
   const focus = () => (input.current?.focus(), input.current?.select());
@@ -73,35 +75,48 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
   const toggle = (k: keyof FindOptions) => p.onOptions({ ...p.options, [k]: !p.options[k] });
   const none = p.results?.count === 0;
 
+  const rep = p.floating ? null : p.replace;
+  const enter = (e: KeyboardEvent, run: (shift: boolean) => void) => {
+    if (e.key === "Enter") run(e.shiftKey);
+    else if (e.key === "Escape") p.onClose();
+    else return;
+    e.preventDefault();
+  };
+
   return (
-    <WindowToolbar label="Find" floating={p.floating} className="ui-find">
-      <ToolbarSearchField
-        ref={input}
-        value={p.query}
-        placeholder={p.placeholder ?? "Find"}
-        minWidth={110}
-        maxWidth={p.floating ? 240 : undefined}
-        // Floating, the bar is as wide as its items: the field asks for its full width, and gives way from there.
-        style={p.floating ? { width: 240 } : undefined}
-        count={findCount(p.query, p.results)}
-        aria-invalid={(p.query && none) || undefined}
-        onChange={p.onQuery}
-        onEscape={p.onClose}
-        onKeyDown={(e) => {
-          if (e.key !== "Enter") return;
-          e.preventDefault();
-          p.onStep(e.shiftKey ? -1 : 1);
-        }}
-      />
-      {can("caseSensitive") && <ToolbarButton icon={<Glyph>Aa</Glyph>} label="Match Case" pressed={p.options.caseSensitive} onClick={() => toggle("caseSensitive")} priority={3} />}
-      {can("wholeWord") && <ToolbarButton icon={<Glyph>ab</Glyph>} label="Whole Words" pressed={p.options.wholeWord} onClick={() => toggle("wholeWord")} priority={2} className="ui-glyph-word" />}
-      {can("regex") && <ToolbarButton icon={<Glyph>.*</Glyph>} label="Regular Expression" pressed={p.options.regex} onClick={() => toggle("regex")} priority={1} />}
-      <ToolbarGroup>
-        <ToolbarButton icon="chevron.up" label="Previous" shortcut="⇧⌘G" disabled={!p.query || none} onClick={() => p.onStep(-1)} />
-        <ToolbarButton icon="chevron.down" label="Next" shortcut="⌘G" disabled={!p.query || none} onClick={() => p.onStep(1)} />
-      </ToolbarGroup>
-      <ToolbarButton icon="xmark" label="Close" shortcut="⎋" onClick={p.onClose} />
-    </WindowToolbar>
+    <>
+      <WindowToolbar label="Find" floating={p.floating} className="ui-find">
+        {rep && <ToolbarButton icon={rep.open ? "chevron.down" : "chevron.right"} label={rep.open ? "Hide Replace" : "Show Replace"} shortcut="⌥⌘F" onClick={() => rep.onOpen(!rep.open)} />}
+        <ToolbarSearchField
+          ref={input}
+          value={p.query}
+          placeholder={p.placeholder ?? "Find"}
+          minWidth={110}
+          maxWidth={p.floating ? 240 : undefined}
+          // Floating, the bar is as wide as its items: the field asks for its full width, and gives way from there.
+          style={p.floating ? { width: 240 } : undefined}
+          count={findCount(p.query, p.results)}
+          aria-invalid={(p.query && none) || undefined}
+          onChange={p.onQuery}
+          onKeyDown={(e) => enter(e, (shift) => p.onStep(shift ? -1 : 1))}
+        />
+        {can("caseSensitive") && <ToolbarButton icon={<Glyph>Aa</Glyph>} label="Match Case" pressed={p.options.caseSensitive} onClick={() => toggle("caseSensitive")} priority={3} />}
+        {can("wholeWord") && <ToolbarButton icon={<Glyph>ab</Glyph>} label="Whole Words" pressed={p.options.wholeWord} onClick={() => toggle("wholeWord")} priority={2} className="ui-glyph-word" />}
+        {can("regex") && <ToolbarButton icon={<Glyph>.*</Glyph>} label="Regular Expression" pressed={p.options.regex} onClick={() => toggle("regex")} priority={1} />}
+        <ToolbarGroup>
+          <ToolbarButton icon="chevron.up" label="Previous" shortcut="⇧⌘G" disabled={!p.query || none} onClick={() => p.onStep(-1)} />
+          <ToolbarButton icon="chevron.down" label="Next" shortcut="⌘G" disabled={!p.query || none} onClick={() => p.onStep(1)} />
+        </ToolbarGroup>
+        <ToolbarButton icon="xmark" label="Close" shortcut="⎋" onClick={p.onClose} />
+      </WindowToolbar>
+      {rep?.open && (
+        <WindowToolbar label="Replace" className="ui-find ui-find-replace">
+          <ToolbarField value={rep.value} placeholder="Replace with" minWidth={110} onChange={(e) => rep.onValue(e.target.value)} onKeyDown={(e) => enter(e, (shift) => rep.onReplace(shift))} />
+          <ToolbarButton label="Replace" tip="Replace, then find the next (↩)" disabled={!p.query || none} onClick={() => rep.onReplace(false)} />
+          <ToolbarButton label="Replace All" tip="Replace All (⇧↩)" disabled={!p.query || none} onClick={() => rep.onReplace(true)} />
+        </WindowToolbar>
+      )}
+    </>
   );
 });
 

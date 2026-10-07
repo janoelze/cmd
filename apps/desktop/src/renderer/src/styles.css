@@ -401,8 +401,8 @@ kbd {
   height: 100%;
 }
 /* The terminal's find bar: a floating WindowToolbar in the top right corner. */
-.find-bar { position: absolute; top: 6px; right: 14px; z-index: 5; }
-.find-glyph { position: relative; top: -1px; font: 600 11px var(--font-mono); } /* text as an icon: lifted like toolbar text */
+.find-bar { position: absolute; top: 6px; right: 14px; left: 14px; z-index: 5; display: flex; justify-content: flex-end; pointer-events: none; }
+.find-bar > * { pointer-events: auto; }
 .xterm-host.typing, .xterm-host.typing * { cursor: none !important; }
 /* OSC 9;4 progress, along the terminal's top edge. */
 .term-progress { position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 4; pointer-events: none; overflow: hidden; }

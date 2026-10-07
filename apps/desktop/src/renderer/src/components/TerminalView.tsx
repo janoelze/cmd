@@ -1,8 +1,9 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Toast, ToolbarButton, ToolbarGroup, ToolbarSearchField, WindowToolbar } from "@cmd/ui";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
+import { Toast, type FindResults } from "@cmd/ui";
 import type { PaneId, Progress } from "@cmd/protocol";
 import { useStoreValue } from "../store.ts";
-import { terminals, type FindResults } from "../terminals.ts";
+import { terminals } from "../terminals.ts";
+import { useFind } from "../find.tsx";
 import { cmd } from "../bridge.ts";
 import { countRender } from "../perf.ts";
 
@@ -14,12 +15,10 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
   const ref = useRef<HTMLDivElement>(null);
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
-  const [finding, setFinding] = useState(false);
   const progress = useStoreValue((s) => s.panes.get(paneId)?.progress ?? null);
   const sizedBy = useStoreValue((s) => s.panes.get(paneId)?.sizedBy ?? null);
   const cols = useStoreValue((s) => s.panes.get(paneId)?.cols ?? 0);
   const rows = useStoreValue((s) => s.panes.get(paneId)?.rows ?? 0);
-  const findRef = useRef<FindHandle | null>(null);
 
   // At startup a terminal is attached once its snapshot is written (terminals.hold);
   // the window around it shows right away.
@@ -51,19 +50,17 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
   // A phone sizes this terminal while it shows it (docs/13); typing here or Take Back ends that.
   useEffect(() => terminals.setOverride(paneId, sizedBy ? { cols, rows } : null), [paneId, sizedBy, cols, rows]);
 
-  useEffect(
-    () =>
-      terminals.onFind(paneId, {
-        request: (r) => {
-          if (r === "open" || !findRef.current) {
-            setFinding(true);
-            findRef.current?.focus(terminals.selectionText(paneId));
-          } else findRef.current.step(r === "next" ? 1 : -1);
-        },
-        results: (r) => findRef.current?.results(r),
-      }),
-    [paneId],
+  // Find in the scrollback; the bar floats over the terminal, which has no toolbar.
+  const report = useRef<(r: FindResults | null) => void>(() => {});
+  const find = useFind(
+    {
+      find: (q, o, step, r) => ((report.current = r), terminals.find(paneId, q, step < 0 ? -1 : 1, { ...o, incremental: step === 0 })),
+      clear: () => terminals.endFind(paneId),
+      selection: () => terminals.selectionText(paneId),
+    },
+    { floating: true, onClose: () => terminals.focus(paneId) },
   );
+  useEffect(() => terminals.onFind(paneId, { request: find.request, results: (r) => report.current(r) }), [paneId, find.request]);
 
   return (
     <div className="term-wrap">
@@ -81,16 +78,11 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
           Sized for {sizedBy} · {cols}×{rows}
         </Toast>
       )}
-      {finding && (
-        <FindBar
-          paneId={paneId}
-          handle={findRef}
-          onClose={() => {
-            setFinding(false);
-            terminals.endFind(paneId);
-            terminals.focus(paneId);
-          }}
-        />
+      {find.bar && (
+        // Clicks on its buttons leave the focus in the field.
+        <div className="find-bar" onMouseDown={(e) => !(e.target instanceof HTMLInputElement) && e.preventDefault()}>
+          {find.bar}
+        </div>
       )}
     </div>
   );
@@ -105,76 +97,3 @@ function ProgressBar({ p }: { p: Progress }) {
   );
 }
 
-interface FindHandle {
-  focus: (seed: string) => void;
-  step: (dir: 1 | -1) => void;
-  results: (r: FindResults) => void;
-}
-
-/** Find in the terminal's scrollback: ↩ next, ⇧↩ previous, ⎋ closes. */
-function FindBar(p: { paneId: PaneId; handle: React.RefObject<FindHandle | null>; onClose: () => void }) {
-  const { paneId } = p;
-  const input = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState(() => terminals.selectionText(paneId));
-  const [caseSensitive, setCase] = useState(false);
-  const [regex, setRegex] = useState(false);
-  const [res, setRes] = useState<FindResults | null>(null);
-  const opts = { caseSensitive, regex };
-  const optsRef = useRef(opts);
-  optsRef.current = opts;
-  const queryRef = useRef(query);
-  queryRef.current = query;
-
-  const step = (dir: 1 | -1) => terminals.find(paneId, queryRef.current, dir, optsRef.current);
-  p.handle.current = {
-    focus: (seed) => {
-      if (seed) setQuery(seed);
-      input.current?.focus();
-      input.current?.select();
-    },
-    step,
-    results: setRes,
-  };
-
-  // Typing searches as you go, from where the last match was.
-  useEffect(() => {
-    terminals.find(paneId, query, 1, { caseSensitive, regex, incremental: true });
-  }, [paneId, query, caseSensitive, regex]);
-
-  useEffect(() => {
-    input.current?.focus();
-    input.current?.select();
-    return () => void (p.handle.current = null);
-  }, []);
-
-  const count = !query ? "" : res && res.count > 0 ? (res.index >= 0 ? `${res.index + 1} of ${res.count}` : `${res.count}+`) : "No matches";
-
-  return (
-    <div className="find-bar" onMouseDown={(e) => !(e.target instanceof HTMLInputElement) && e.preventDefault()}>
-      <WindowToolbar label="Find" floating>
-        <ToolbarSearchField
-          ref={input}
-          value={query}
-          placeholder="Find"
-          minWidth={150}
-          maxWidth={220}
-          count={count}
-          onChange={setQuery}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") step(e.shiftKey ? -1 : 1);
-            else if (e.key === "Escape") p.onClose();
-            else return;
-            e.preventDefault();
-          }}
-        />
-        <ToolbarButton icon={<span className="find-glyph">Aa</span>} label="Match Case" pressed={caseSensitive} onClick={() => setCase(!caseSensitive)} />
-        <ToolbarButton icon={<span className="find-glyph">.*</span>} label="Regular Expression" pressed={regex} onClick={() => setRegex(!regex)} />
-        <ToolbarGroup>
-          <ToolbarButton icon="chevron.up" label="Previous" shortcut="⇧↩" onClick={() => step(-1)} />
-          <ToolbarButton icon="chevron.down" label="Next" shortcut="↩" onClick={() => step(1)} />
-        </ToolbarGroup>
-        <ToolbarButton icon="xmark" label="Close" shortcut="⎋" onClick={p.onClose} />
-      </WindowToolbar>
-    </div>
-  );
-}

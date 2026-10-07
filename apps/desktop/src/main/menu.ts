@@ -98,6 +98,8 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("edit.find"),
         ...i("edit.findNext"),
         ...i("edit.findPrev"),
+        ...i("edit.findReplace"),
+        ...i("edit.findSelection"),
         sep,
         ...i("edit.copyLastOutput"),
         ...i("terminal.prevPrompt"),

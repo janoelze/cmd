@@ -35,6 +35,7 @@ import { DEFAULT_FRACTION, MIN_WIDTH, nextPreset, stepFraction, withWidth } from
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
 import type { Rect } from "./layouts.ts";
 import { windowActions } from "./windowActions.ts";
+import type { FindRequest } from "./find.tsx";
 import { stateStr, viewFor } from "./windows/registry.ts";
 import { toggleMarkdownEdit } from "./windows/markdown.tsx";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
@@ -370,8 +371,9 @@ export function App() {
 
   // ── commands ───────────────────────────────────────────
   // One handler per command id; the menu bar, palette and context menus all call these.
-  const findIn = (r: "open" | "next" | "prev") => {
-    if (!selected || editingText()) return;
+  // In a field of the window's own (its find bar, a text window's editor) the window finds; in a sheet or the palette nothing does.
+  const findIn = (r: FindRequest) => {
+    if (!selected || (editingText() && document.activeElement?.closest("[role=dialog], .palette-backdrop"))) return;
     if (s.panes.has(selected)) terminals.requestFind(selected, r);
     else windowActions(selected)?.find?.(r);
   };
@@ -432,6 +434,8 @@ export function App() {
     "edit.find": () => findIn("open"),
     "edit.findNext": () => findIn("next"),
     "edit.findPrev": () => findIn("prev"),
+    "edit.findReplace": () => findIn("replace"),
+    "edit.findSelection": () => findIn("selection"),
     "edit.copyLastOutput": () => selected && s.panes.has(selected) && terminals.copyLastOutput(selected),
     "terminal.prevPrompt": () => selected && terminals.jumpToPrompt(selected, -1),
     "terminal.nextPrompt": () => selected && terminals.jumpToPrompt(selected, 1),
@@ -543,6 +547,7 @@ export function App() {
   const selectedSide = sideOf(docks, selected);
   const hasSession = !!(currentAgent && sessionId(currentAgent));
   const aiReady = !!useAiStatus()?.ready;
+  const canFind = selectedIsPane || !!windowActions(selected)?.find;
   useEffect(() => {
     const hasPane = !!selected;
     cmd.setMenuState({
@@ -556,6 +561,11 @@ export function App() {
       },
       enabled: {
         "edit.clear": hasPane,
+        "edit.find": canFind,
+        "edit.findNext": canFind,
+        "edit.findPrev": canFind,
+        "edit.findSelection": canFind,
+        "edit.findReplace": canFind && !selectedIsPane,
         "edit.copyLastOutput": selectedIsPane,
         "terminal.prevPrompt": selectedIsPane,
         "terminal.nextPrompt": selectedIsPane,
@@ -581,7 +591,7 @@ export function App() {
         "window.undock": !!selectedSide,
       },
     });
-  }, [mode, docks, selectedSide, selected, selectedIsPane, selectedIsWidget, withPane.length, hasSession, aiReady, attention > 0, openSpaces.length, !!space, !!space?.home, !!currentAgent]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, docks, selectedSide, selected, selectedIsPane, canFind, selectedIsWidget, withPane.length, hasSession, aiReady, attention > 0, openSpaces.length, !!space, !!space?.home, !!currentAgent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── context menus ──────────────────────────────────────
 

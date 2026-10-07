@@ -55,6 +55,9 @@ export const COMMANDS = spec([
   { id: "edit.find", label: "Find…", keys: ["Cmd+F"] },
   { id: "edit.findNext", label: "Find Next", keys: ["Cmd+G"] },
   { id: "edit.findPrev", label: "Find Previous", keys: ["Shift+Cmd+G"] },
+  { id: "edit.findReplace", label: "Find and Replace…", keys: ["Alt+Cmd+F"] },
+  // ⌘E on a Mac, but here ⌘E is Toggle Preview / Edit.
+  { id: "edit.findSelection", label: "Use Selection for Find" },
   { id: "edit.copyLastOutput", label: "Copy Last Command Output", keys: ["Shift+Cmd+A"] },
   // ⌘↑ / ⌘↓ in a terminal (its own keys, so text windows keep theirs: terminals.ts).
   { id: "terminal.prevPrompt", label: "Jump to Previous Prompt" },

@@ -5,7 +5,7 @@
 // changes (LaTeX, an agent writing it) it reloads where you were. Where you are
 // (page, zoom, sidebar) is kept in the window's state. Loaded lazily with pdf.js.
 
-import { Button, EmptyState, ListRow, Segmented, Spinner, TextField, ToolbarButton, ToolbarField, ToolbarGroup, ToolbarMenu, ToolbarSearchField, ToolbarSeparator, ToolbarSpacer, ToolbarText, Twisty, WindowToolbar } from "@cmd/ui";
+import { Button, EmptyState, ListRow, Segmented, Spinner, TextField, ToolbarButton, ToolbarField, ToolbarGroup, ToolbarMenu, ToolbarSeparator, ToolbarSpacer, ToolbarText, Twisty, WindowToolbar, type FindOptions, type FindResults } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { cmd } from "../bridge.ts";
@@ -13,6 +13,7 @@ import { openPath } from "../actions.ts";
 import { showContextMenu } from "../context.ts";
 import { onFsChanged } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
+import { useFind } from "../find.tsx";
 import type { WindowViewProps } from "../windows/registry.ts";
 import { ASSETS, EventBus, fileUrl, LinkTarget, pdfjs, PDFFindController, PDFLinkService, PDFViewer } from "../pdf/lib.ts";
 import "../pdf/pdf.css";
@@ -49,7 +50,7 @@ export function PdfView({ win, focused }: WindowViewProps) {
   const docRef = useRef<PDFDocumentProxy | null>(null);
   const [reloadedAt, setReloadedAt] = useState(0);
   /** The search showing, for reloads. */
-  const findRef = useRef("");
+  const findRef = useRef<{ query: string; o: FindOptions } | null>(null);
 
   // The viewer, once per window.
   useEffect(() => {
@@ -110,9 +111,9 @@ export function PdfView({ win, focused }: WindowViewProps) {
       };
       p.bus.on("pagesinit", once);
       // A search that was showing finds its matches in the new text too.
-      if (reload && findRef.current) p.bus.on("pagesinit", function again() {
+      if (reload && findRef.current?.query) p.bus.on("pagesinit", function again() {
         p.bus.off("pagesinit", again);
-        p.bus.dispatch("find", { source: null, type: "", query: findRef.current, caseSensitive: false, entireWord: false, highlightAll: true, findPrevious: false, matchDiacritics: false });
+        if (findRef.current) pdfFind(p.bus, findRef.current.query, findRef.current.o, 0);
       });
       p.viewer.setDocument(next);
       p.links.setDocument(next, null);
@@ -210,43 +211,42 @@ export function PdfView({ win, focused }: WindowViewProps) {
       ...ZOOMS.map((z) => ({ label: `${z * 100}%`, checked: zoom.preset === z, run: () => setScale(z) })),
     ]);
 
-  // Find (⌘F ⌘G ⇧⌘G).
-  const [finding, setFinding] = useState(false);
-  const [query, setQuery] = useState("");
-  const [matches, setMatches] = useState<{ current: number; total: number } | null>(null);
-  findRef.current = finding ? query : "";
-  const findField = useRef<HTMLInputElement>(null);
+  // Find (⌘F ⌘G ⇧⌘G): pdf.js's find controller, which counts and reports as it goes.
+  const report = useRef<(r: FindResults | null) => void>(() => {});
   useEffect(() => {
     const bus = parts.current?.bus;
     if (!bus) return;
-    const counts = (e: { matchesCount: { current: number; total: number } }) => setMatches(e.matchesCount);
+    const counts = (e: { matchesCount: { current: number; total: number } }) => findRef.current?.query && report.current({ index: e.matchesCount.current - 1, count: e.matchesCount.total });
     bus.on("updatefindmatchescount", counts);
     bus.on("updatefindcontrolstate", counts);
     return () => (bus.off("updatefindmatchescount", counts), bus.off("updatefindcontrolstate", counts));
   }, []);
-  const search = useCallback((type: "" | "again", findPrevious = false, text = query) => {
-    parts.current?.bus.dispatch("find", { source: null, type, query: text, caseSensitive: false, entireWord: false, highlightAll: true, findPrevious, matchDiacritics: false });
-  }, [query]);
-  const closeFind = () => {
-    setFinding(false);
-    setMatches(null);
-    parts.current?.bus.dispatch("find", { source: null, type: "", query: "", highlightAll: false });
-    container.current?.focus();
-  };
+  const find = useFind(
+    {
+      supports: { regex: false },
+      find: (query, o, step, r) => {
+        report.current = r;
+        findRef.current = { query, o };
+        if (parts.current) pdfFind(parts.current.bus, query, o, step);
+      },
+      clear: () => {
+        findRef.current = null;
+        parts.current?.bus.dispatch("find", { source: null, type: "", query: "", highlightAll: false });
+      },
+      selection: () => window.getSelection()?.toString().trim() ?? "",
+    },
+    { placeholder: "Find in PDF", onClose: () => container.current?.focus() },
+  );
+  const finding = find.open;
 
   useEffect(
     () =>
       registerWindowActions(win.id, {
         openExternally: () => cmd.openPath(file),
-        find: (r) => {
-          if (r === "open" || !query) {
-            setFinding(true);
-            requestAnimationFrame(() => (findField.current?.focus(), findField.current?.select()));
-          } else search("again", r === "prev");
-        },
+        find: find.request,
         zoom: (d) => (d === 0 ? setScale(1) : zoomBy(d)),
       }),
-    [win.id, file, query, search],
+    [win.id, file, find.request],
   );
   useEffect(() => {
     if (focused && !finding) container.current?.focus({ preventScroll: true });
@@ -301,31 +301,9 @@ export function PdfView({ win, focused }: WindowViewProps) {
           <ToolbarButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" disabled={!pages} onClick={() => zoomBy(1)} priority={1} />
         </ToolbarGroup>
         <ToolbarSeparator />
-        <ToolbarButton icon="magnifyingglass" label="Find" shortcut="⌘F" disabled={!pages} pressed={finding} onClick={() => (finding ? closeFind() : (setFinding(true), requestAnimationFrame(() => findField.current?.focus())))} />
+        <ToolbarButton icon="magnifyingglass" label="Find" shortcut="⌘F" disabled={!pages} pressed={finding} onClick={() => find.request(finding ? "close" : "open")} />
       </WindowToolbar>
-      {finding && (
-        <WindowToolbar label="Find in PDF">
-          <ToolbarSearchField
-            ref={findField}
-            value={query}
-            placeholder="Find in PDF"
-            count={matches ? (matches.total ? `${matches.current} of ${matches.total}` : "No matches") : undefined}
-            onChange={(v) => {
-              setQuery(v);
-              search("", false, v);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.preventDefault(), search("again", e.shiftKey));
-              else if (e.key === "Escape") (e.preventDefault(), closeFind());
-            }}
-          />
-          <ToolbarGroup>
-            <ToolbarButton icon="chevron.up" label="Previous" shortcut="⇧⌘G" disabled={!matches?.total} onClick={() => search("again", true)} />
-            <ToolbarButton icon="chevron.down" label="Next" shortcut="⌘G" disabled={!matches?.total} onClick={() => search("again")} />
-          </ToolbarGroup>
-          <ToolbarButton label="Done" onClick={closeFind} />
-        </WindowToolbar>
-      )}
+      {find.bar}
       <div className="pdf-main">
         {sidebar && doc && phase.kind === "ready" && (
           <PdfSidebar doc={doc} tab={sidebar} page={page} onTab={(t) => patch({ sidebar: t })} onPage={goToPage} onDest={(d) => void parts.current?.links.goToDestination(d as string)} />
@@ -472,4 +450,9 @@ function OutlineRow({ item, depth, onDest }: { item: OutlineItem; depth: number;
       {open && item.items.map((c, i) => <OutlineRow key={i} item={c} depth={depth + 1} onDest={onDest} />)}
     </>
   );
+}
+
+/** One find in pdf.js: a new query (step 0) or the next / previous match. */
+function pdfFind(bus: EventBus, query: string, o: FindOptions, step: 0 | 1 | -1) {
+  bus.dispatch("find", { source: null, type: step ? "again" : "", query, caseSensitive: o.caseSensitive, entireWord: o.wholeWord, highlightAll: true, findPrevious: step < 0, matchDiacritics: false });
 }

@@ -12,8 +12,9 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { EmptyState, SCROLLBAR_CSS, ToolbarAddressField, ToolbarButton, ToolbarGroup, WindowToolbar } from "@cmd/ui";
-import { setWindowStatus } from "../windowActions.ts";
+import { EmptyState, SCROLLBAR_CSS, ToolbarAddressField, ToolbarButton, ToolbarGroup, WindowToolbar, type FindResults } from "@cmd/ui";
+import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
+import { useFind } from "../find.tsx";
 import { handleEmbedMessage } from "../embed.ts";
 import { deviceById, type Device } from "../devices.ts";
 
@@ -129,6 +130,36 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     if (focused && !live) input.current?.focus();
   }, [focused, live]);
 
+  // Find in the page: Chromium's own find, which counts as it goes (found-in-page). Case only.
+  const report = useRef<(r: FindResults | null) => void>(() => {});
+  const lastQuery = useRef("");
+  const find = useFind({
+    supports: { wholeWord: false, regex: false },
+    find: (query, o, step, r) => {
+      const wv = ref.current;
+      report.current = r;
+      if (!wv) return r(query ? { index: -1, count: 0 } : null);
+      if (!query) return (wv.stopFindInPage("clearSelection"), (lastQuery.current = ""));
+      // A new query (or new options) starts a find session; a step continues it.
+      const fresh = step === 0 || query !== lastQuery.current;
+      lastQuery.current = query;
+      wv.findInPage(query, { forward: step >= 0, findNext: fresh, matchCase: o.caseSensitive });
+    },
+    clear: () => {
+      lastQuery.current = "";
+      ref.current?.stopFindInPage("clearSelection");
+    },
+    selection: async () => (await ref.current?.executeJavaScript("String(getSelection())").catch(() => "")) ?? "",
+  }, { placeholder: "Find in Page", onClose: () => ref.current?.focus() });
+  useEffect(() => {
+    const wv = ref.current;
+    if (!wv) return;
+    const found = (e: { result: { activeMatchOrdinal: number; matches: number } }) => report.current({ index: e.result.activeMatchOrdinal - 1, count: e.result.matches });
+    wv.addEventListener("found-in-page", found as never);
+    return () => void wv.removeEventListener("found-in-page", found as never);
+  }, [live]);
+  useEffect(() => registerWindowActions(win.id, { find: live ? find.request : undefined }), [win.id, live, find.request]);
+
   const go = async (text: string) => {
     try {
       const w = await cmd.call("window.update", { id: win.id, state: { url: text } });
@@ -164,6 +195,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
         />
         <ToolbarButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url)} secondary priority={1} />
       </WindowToolbar>
+      {find.bar}
       <div ref={stage} className={device ? "browser-stage device" : "browser-stage"}>
         {initial ? (
           <webview

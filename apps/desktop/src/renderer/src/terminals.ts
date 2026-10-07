@@ -19,6 +19,8 @@ import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { currentTheme, onThemeChange, terminalColors } from "@cmd/ui/themes";
 import { findLinks } from "./links.ts";
+import type { FindOptions, FindResults } from "@cmd/ui";
+import type { FindRequest } from "./find.tsx";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
 import { registerDropTarget } from "./drops.ts";
 
@@ -73,7 +75,7 @@ window.addEventListener("blur", () => (optionSide = null));
 
 /** #RRGGBB for search highlights (they don't take other formats). */
 const hex = (c: string | undefined, fallback: string): string => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : fallback);
-function searchOptions(o: { caseSensitive: boolean; regex: boolean }): ISearchOptions {
+function searchOptions(o: FindOptions): ISearchOptions {
   const t = theme();
   const match = hex(t.yellow, "#c0a030");
   return {
@@ -88,12 +90,6 @@ function searchOptions(o: { caseSensitive: boolean; regex: boolean }): ISearchOp
   };
 }
 
-export interface FindResults {
-  /** 0-based, -1 when there are too many to count or none. */
-  index: number;
-  count: number;
-}
-type FindRequest = "open" | "next" | "prev";
 
 // ⌘-click links (URLs, existing file paths). xterm asks the provider only for
 // the line under the mouse, when the mouse moves onto it, and caches the reply
@@ -294,7 +290,8 @@ class Terminals {
     term.loadAddon(fit);
     const search = new SearchAddon();
     term.loadAddon(search);
-    search.onDidChangeResults((r) => this.#findListeners.get(paneId)?.results({ index: r.resultIndex, count: r.resultCount }));
+    // Past its highlight limit xterm stops knowing which match is current: "1000+".
+    search.onDidChangeResults((r) => this.#findListeners.get(paneId)?.results({ index: r.resultIndex, count: r.resultCount, more: r.resultIndex < 0 && r.resultCount > 0 }));
     // Emoji and CJK as two cells, as programs measure them (the PTY host's terminal matches: terminals/local.ts).
     term.loadAddon(new Unicode11Addon());
     term.unicode.activeVersion = "11";
@@ -514,7 +511,7 @@ class Terminals {
     return !!l;
   }
 
-  find(paneId: PaneId, query: string, dir: 1 | -1, o: { caseSensitive: boolean; regex: boolean; incremental?: boolean }): void {
+  find(paneId: PaneId, query: string, dir: 1 | -1, o: FindOptions & { incremental?: boolean }): void {
     const h = this.#hosts.get(paneId);
     if (!h) return;
     if (!query) {
@@ -523,10 +520,10 @@ class Terminals {
       this.#findListeners.get(paneId)?.results({ index: -1, count: 0 });
       return;
     }
-    const key = `${o.caseSensitive} ${o.regex}`;
+    const key = `${o.caseSensitive} ${o.regex} ${o.wholeWord}`;
     if (key !== h.findOptions) h.search.clearDecorations(), (h.findOptions = key);
     try {
-      const opts = { ...searchOptions(o), incremental: o.incremental };
+      const opts = { ...searchOptions({ caseSensitive: o.caseSensitive, regex: o.regex, wholeWord: o.wholeWord }), incremental: o.incremental };
       if (dir > 0) h.search.findNext(query, opts);
       else h.search.findPrevious(query, opts);
     } catch {

@@ -1241,5 +1241,8 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-find[data-floating] { max-width: 100%; }
 /* No matches: the count says so in the danger tone, the field stays as it is. */
 .ui-find .ui-tb-field:has(input[aria-invalid]) .ui-tb-field-count { color: var(--danger); }
+/* Matches in rendered text a window finds in (CSS Custom Highlight API: find-dom.ts in the app). */
+::highlight(find) { background-color: color-mix(in srgb, var(--match) 28%, transparent); }
+::highlight(find-current) { background-color: color-mix(in srgb, var(--match) 70%, transparent); color: var(--text); }
 /* A match in text (search snippets, results). */
 .ui-match { color: var(--text); background: color-mix(in srgb, var(--match) 25%, transparent); border-radius: 2px; padding: 0 1px; }
