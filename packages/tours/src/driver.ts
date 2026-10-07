@@ -156,7 +156,7 @@ export class Tour {
       await this.moveTo(over, Math.min(area.width, area.height));
       const o = await this.origin();
       const steps = planScroll(need.d * o.zoom);
-      await this.helper.call("scroll", { x: over.x, y: over.y, axis: need.axis, steps: steps.map((s) => [s.t, s.dy, s.phase]) });
+      await this.helper.call("scroll", { x: over.x, y: over.y, axis: need.axis, steps: steps.map((s) => [s.t, s.d, s.phase]) });
       await sleep(150);
     }
   }
@@ -279,7 +279,7 @@ export class Tour {
     const o = await this.origin();
     const d = Math.hypot(dx, dy);
     const steps = planScroll(d * o.zoom);
-    await this.helper.call("scroll", { ...this.at, dir: [dx / d, dy / d], steps: steps.map((s) => [s.t, s.dy, s.phase]) });
+    await this.helper.call("scroll", { ...this.at, dir: [dx / d, dy / d], steps: steps.map((s) => [s.t, s.d, s.phase]) });
     await sleep(150);
   }
 
@@ -289,7 +289,7 @@ export class Tour {
     else await this.moveTo(await this.emptyCanvasPoint());
     const o = await this.origin();
     const steps = planScroll(-amount * o.zoom);
-    await this.helper.call("scroll", { ...this.at, axis: "y", mods: ["cmd"], steps: steps.map((s) => [s.t, s.dy, s.phase]) });
+    await this.helper.call("scroll", { ...this.at, axis: "y", mods: ["cmd"], steps: steps.map((s) => [s.t, s.d, s.phase]) });
     await sleep(200);
   }
 
@@ -316,7 +316,7 @@ export class Tour {
   private async swipeHere(px: number, axis: "x" | "y") {
     const o = await this.origin();
     const steps = planScroll(px * o.zoom);
-    await this.helper.call("scroll", { ...this.at, axis, steps: steps.map((s) => [s.t, s.dy, s.phase]) });
+    await this.helper.call("scroll", { ...this.at, axis, steps: steps.map((s) => [s.t, s.d, s.phase]) });
     await sleep(150);
   }
 

@@ -68,7 +68,7 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
       AVVideoWidthKey: config.width,
       AVVideoHeightKey: config.height,
       // High enough that terminal text stays crisp; post re-encodes for delivery.
-      AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 60_000_000, AVVideoExpectedSourceFrameRateKey: 60],
+      AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 80_000_000, AVVideoExpectedSourceFrameRateKey: 120],
     ])
     input.expectsMediaDataInRealTime = true
     writer.add(input)
@@ -236,35 +236,124 @@ let SCROLL_PHASE: [String: (Int64, Int64)] = [
   "momentum-began": (0, 1), "momentum": (0, 2), "momentum-ended": (0, 3),
 ]
 
+/** Ticks on every refresh of the display a point is on (CVDisplayLink). */
+final class VSync {
+  private var link: CVDisplayLink?
+  private let tick = DispatchSemaphore(value: 0)
+
+  init?(at p: CGPoint) {
+    var id: CGDirectDisplayID = 0
+    var n: UInt32 = 0
+    CGGetDisplaysWithPoint(p, 1, &id, &n)
+    guard n > 0, CVDisplayLinkCreateWithCGDisplay(id, &link) == kCVReturnSuccess, let link else { return nil }
+    CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, ctx in
+      Unmanaged<VSync>.fromOpaque(ctx!).takeUnretainedValue().tick.signal()
+      return kCVReturnSuccess
+    }, Unmanaged.passUnretained(self).toOpaque())
+    CVDisplayLinkStart(link)
+  }
+
+  /** Until the next refresh (ticks that came while we were busy don't count). */
+  func next() {
+    while tick.wait(timeout: .now()) == .success {}
+    _ = tick.wait(timeout: .now() + .milliseconds(100))
+  }
+
+  deinit {
+    if let link { CVDisplayLinkStop(link) }
+  }
+}
+
+/**
+ * A trackpad gesture, posted in step with the display: one event per refresh,
+ * carrying exactly how far the planned curve moved since the last one. Posting
+ * on our own clock (even at 120 Hz) gave the app one event in some frames and
+ * three in others, so the scroll moved 10, 28, 9, 26 px a frame: judder.
+ * `steps` is the planner's curve ([ms, distance, phase], flings starting at
+ * "began"); only its shape and timing are used, the events are new.
+ */
 func scroll(at p: CGPoint, _ steps: [[Any]], sideways: Bool = false, dir: [Double]? = nil, mods: [String] = []) throws {
   try checkPointer()
   let flags = mods.reduce(CGEventFlags()) { $0.union(MODS[$1] ?? []) }
-  // Along a direction: each step's distance split over both wheels, remainders carried.
-  var carry = (x: 0.0, y: 0.0)
-  let start = nowNs()
+  let along = dir.flatMap { $0.count == 2 ? (x: $0[0], y: $0[1]) : nil } ?? (sideways ? (x: 1.0, y: 0.0) : (x: 0.0, y: 1.0))
+  // The plan, split into flings: each a cumulative distance over time.
+  struct Point { var ms: Double; var total: Double; var phase: String }
+  var flings: [[Point]] = []
   for step in steps where step.count == 3 {
-    guard let ms = step[0] as? Double, let d = step[1] as? Double, let name = step[2] as? String, let (phase, momentum) = SCROLL_PHASE[name] else { continue }
-    waitUntil(start + UInt64(ms * 1e6))
-    // Positive d goes down (or right along) the page; a wheel delta goes the other way.
-    // wheel1 is vertical, wheel2 sideways (a trackpad swipe railed to one axis).
-    var w1 = sideways ? 0 : Int32(-d), w2 = sideways ? Int32(-d) : 0
-    if let dir, dir.count == 2 {
-      carry.x += d * dir[0]
-      carry.y += d * dir[1]
-      let px = carry.x.rounded(.towardZero), py = carry.y.rounded(.towardZero)
-      carry.x -= px
-      carry.y -= py
-      w1 = Int32(-py)
-      w2 = Int32(-px)
-    }
-    guard let e = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2, wheel1: w1, wheel2: w2, wheel3: 0) else { continue }
+    guard let ms = step[0] as? Double, let d = step[1] as? Double, let name = step[2] as? String else { continue }
+    if name == "began" || flings.isEmpty { flings.append([]) }
+    let before = flings[flings.count - 1].last?.total ?? 0
+    flings[flings.count - 1].append(Point(ms: ms, total: before + d, phase: name))
+  }
+  let vsync = VSync(at: p)
+  var carry = (x: 0.0, y: 0.0)
+  func post(_ d: Double, _ name: String) {
+    guard let (phase, momentum) = SCROLL_PHASE[name] else { return }
+    carry.x += d * along.x
+    carry.y += d * along.y
+    let px = carry.x.rounded(.towardZero), py = carry.y.rounded(.towardZero)
+    carry.x -= px
+    carry.y -= py
+    // Positive goes down (or right along) the page; a wheel delta goes the other way.
+    guard let e = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2, wheel1: Int32(-py), wheel2: Int32(-px), wheel3: 0) else { return }
     e.flags = flags
     e.location = p
     e.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+    // The exact (fractional) distance too: apps that read it scroll by fractions of a point when slow.
+    e.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: -d * along.y)
+    e.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: -d * along.x)
     e.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
     e.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum)
     e.post(tap: .cghidEventTap)
-    log("scroll", ["x": p.x, "y": p.y, "dx": -Double(w2), "dy": -Double(w1), "phase": name, "mods": mods])
+    log("scroll", ["x": p.x, "y": p.y, "dx": px, "dy": py, "phase": name, "mods": mods])
+  }
+  let start = nowNs()
+  for fling in flings {
+    guard let first = fling.first, let last = fling.last else { continue }
+    waitUntil(start + UInt64(first.ms * 1e6))
+    let flingStart = nowNs()
+    let fingerEnd = (fling.first { $0.phase == "ended" } ?? last).ms - first.ms
+    let end = last.ms - first.ms
+    // The plan's cumulative distance at a time into the fling.
+    func at(_ t: Double) -> Double {
+      let ms = first.ms + t
+      guard let i = fling.firstIndex(where: { $0.ms >= ms }) else { return last.total }
+      if i == 0 { return fling[0].total }
+      let a = fling[i - 1], b = fling[i]
+      return a.total + (b.total - a.total) * (ms - a.ms) / max(b.ms - a.ms, 1e-6)
+    }
+    var sent = 0.0
+    var stage = 0 // 0 not begun, 1 finger, 2 ended, 3 momentum
+    while true {
+      if let vsync { vsync.next() } else { usleep(8_333) }
+      let t = Double(nowNs() - flingStart) / 1e6
+      switch stage {
+      case 0:
+        let target = at(min(t, fingerEnd))
+        post(target - sent, "began"); sent = target; stage = 1
+      case 1 where t < fingerEnd:
+        let target = at(t)
+        post(target - sent, "changed"); sent = target
+      case 1:
+        let target = at(fingerEnd)
+        post(target - sent, "ended"); sent = target; stage = 2
+        if fingerEnd >= end { break }
+      case 2:
+        let target = at(min(t, end))
+        post(target - sent, "momentum-began"); sent = target; stage = 3
+      default:
+        let target = at(min(t, end))
+        if t >= end {
+          // What rounding left, then the end of the momentum.
+          post(last.total - sent, "momentum"); sent = last.total
+          post(0, "momentum-ended")
+        } else {
+          post(target - sent, "momentum"); sent = target
+        }
+      }
+      if stage == 2 && fingerEnd >= end { break }
+      if stage == 3 && t >= end { break }
+    }
   }
 }
 
@@ -373,7 +462,7 @@ func type(_ text: String, delays: [Double]) {
       e?.flags = []
       e?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
       e?.post(tap: .cghidEventTap)
-      if down { usleep(useconds_t(min(90_000, max(30_000, (i + 1 < delays.count ? delays[i + 1] : 70) * 600)))) }
+      if down { usleep(useconds_t(min(80_000, max(15_000, (i + 1 < delays.count ? delays[i + 1] : 50) * 550)))) }
     }
     log("char", ["char": String(ch)])
   }
@@ -401,7 +490,11 @@ func handle(_ msg: [String: Any]) async {
       }
       config.width = Int(crop.width) * scale
       config.height = Int(crop.height) * scale
-      let fps = msg["fps"] as? Int32 ?? 60
+      // As fast as the display refreshes (120 on ProMotion): capped at 60 the frames come
+      // from a 120 Hz stream at uneven 16.7/25 ms steps, and the 60 fps video repeats a
+      // frame at every 25 ms gap (a hitch). Post resamples to an even 60 by timestamp.
+      let screenFps = NSScreen.screens.first { $0.frame.size == display.frame.size }?.maximumFramesPerSecond ?? 60
+      let fps = msg["fps"] as? Int32 ?? Int32(max(60, screenFps))
       config.minimumFrameInterval = CMTime(value: 1, timescale: fps)
       config.showsCursor = false
       config.pixelFormat = kCVPixelFormatType_32BGRA
@@ -412,7 +505,7 @@ func handle(_ msg: [String: Any]) async {
       try await rec.stream.startCapture()
       recorder = rec
       watchCursor((msg["cursors"] as? String).map { URL(fileURLWithPath: $0) })
-      reply(["ok": true, "width": config.width, "height": config.height, "scale": scale, "now": nowNs()])
+      reply(["ok": true, "width": config.width, "height": config.height, "scale": scale, "fps": fps, "now": nowNs()])
     case "window-still":
       guard let pid = msg["pid"] as? Int32, let out = msg["out"] as? String else { return reply(["ok": false, "error": "pid and out are needed"]) }
       let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)

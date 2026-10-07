@@ -64,13 +64,20 @@ export async function runTour(file: string, out: string, seed = 1): Promise<Tour
     const page = await app.firstWindow();
     await page.waitForSelector(".statusbar .core-status");
     const [w, h] = meta.size ?? [1280, 800];
-    await app.evaluate(({ BrowserWindow, app }, [w, h]) => {
+    // On the sharpest display (a Retina screen: 2× pixels, and 120 Hz on ProMotion), centred.
+    // win.center() picks the screen macOS deems current, which can be a 1×, 60 Hz monitor.
+    const display = await app.evaluate(({ BrowserWindow, app, screen }, [w, h]) => {
       const win = BrowserWindow.getAllWindows()[0]!;
+      const d = [...screen.getAllDisplays()].sort((a, b) => b.scaleFactor - a.scaleFactor || (b.displayFrequency ?? 0) - (a.displayFrequency ?? 0))[0]!;
+      const a = d.workArea;
       win.setContentSize(w!, h!);
-      win.center();
+      const [ow, oh] = win.getSize();
+      win.setPosition(Math.round(a.x + (a.width - ow!) / 2), Math.round(a.y + (a.height - oh!) / 2));
       app.focus({ steal: true });
       win.focus();
+      return `${d.label || d.id} ${d.scaleFactor}× ${d.displayFrequency} Hz`;
     }, [w, h]);
+    if (process.env.TOUR_DEBUG) console.log("tour: display", display);
     // cmd's hook in the fixture's Claude Code, so the sidebar follows its sessions.
     if (ai?.env.ANTHROPIC_API_KEY) await page.evaluate((file) => (window as unknown as { cmd: { call: (m: string, p: unknown) => Promise<unknown> } }).cmd.call("hooks.install", { file }), path.join(fixture.home, ".claude", "settings.json"));
     const tour = new Tour(app, page, helper, seed);

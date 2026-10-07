@@ -1,7 +1,7 @@
 // Typing rhythm: log-normal gaps between keys (right-skewed, like people),
 // longer before a new word, with a floor. Real typing (~240 ms a key) looks
-// sluggish on video, so the medians are faster: 65–75 ms in a terminal, about
-// 100 ms in fields (VHS defaults to 50 ms). Now and then a typo: a neighbouring
+// sluggish on video, so the medians are a fast typist's: ~45 ms in a terminal,
+// ~65 ms in fields (VHS defaults to 50 ms). Now and then a typo: a neighbouring
 // key, noticed a character or two later, a beat, backspaced and fixed.
 
 import { between, lognormal, type Rng } from "./random.ts";
@@ -17,10 +17,10 @@ export interface TypingProfile {
 }
 
 export const TYPING: Record<"terminal" | "field" | "exact", TypingProfile> = {
-  terminal: { median: 70, sigma: 0.35, floor: 35, word: [80, 250], typo: 0.2 },
-  field: { median: 100, sigma: 0.3, floor: 45, word: [60, 180], typo: 0.35 },
+  terminal: { median: 45, sigma: 0.35, floor: 22, word: [40, 140], typo: 0.2 },
+  field: { median: 65, sigma: 0.3, floor: 30, word: [40, 120], typo: 0.35 },
   /** No typos: for text that must arrive exactly as written (a search the next step waits on). */
-  exact: { median: 85, sigma: 0.3, floor: 40, word: [60, 180], typo: 0 },
+  exact: { median: 55, sigma: 0.3, floor: 28, word: [40, 120], typo: 0 },
 };
 
 /** Keys next to each other on a US keyboard, for believable typos. */

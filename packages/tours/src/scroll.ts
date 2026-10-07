@@ -24,7 +24,10 @@ export type Phase = "began" | "changed" | "ended" | "momentum-began" | "momentum
 /** One wheel event, `t` ms after the gesture starts. */
 export interface WheelStep {
   t: number;
+  /** Whole pixels (they sum to the distance). */
   dy: number;
+  /** The exact distance of this step: the curve the helper resamples per display refresh. */
+  d: number;
   phase: Phase;
 }
 
@@ -49,14 +52,20 @@ function fling(d: number, c: ScrollConfig): { t: number; v: number; phase: Phase
   }
   const t0 = n * step;
   let t = 0;
-  // Distance between t and t+step: (v0/k)(e^{-kt} − e^{-k(t+step)}); stop when a frame moves < 0.1 px.
+  // Distance between t and t+step: (v0/k)(e^{-kt} − e^{-k(t+step)}); stop under ~15 px/s (macOS's momentum
+  // ends about there; slower is a long creep of single pixels).
+  const momentum: { t: number; v: number; phase: Phase }[] = [];
   for (let first = true; ; first = false) {
     const delta = (v0 / k) * (Math.exp(-k * t) - Math.exp(-k * (t + step)));
-    if (Math.abs(delta) < 0.1) break;
-    out.push({ t: t0 + t, v: delta, phase: first ? "momentum-began" : "momentum" });
+    if (Math.abs(delta) < 0.12) break;
+    momentum.push({ t: t0 + t, v: delta, phase: first ? "momentum-began" : "momentum" });
     t += step;
   }
-  out.push({ t: t0 + t, v: 0, phase: "momentum-ended" });
+  // The tail cut off above, spread over the whole momentum (dumped at the end it was a jump).
+  const want = d - out.reduce((a, x) => a + x.v, 0);
+  const got = momentum.reduce((a, x) => a + x.v, 0);
+  for (const m of momentum) m.v *= got ? want / got : 1;
+  out.push(...momentum, { t: t0 + t, v: 0, phase: "momentum-ended" });
   return out;
 }
 
@@ -83,7 +92,7 @@ export function planScroll(distance: number, c: ScrollConfig = SCROLL): WheelSte
     const px = Math.trunc(carried);
     carried -= px;
     sent += px;
-    out.push({ t: s.t, dy: px, phase: s.phase });
+    out.push({ t: s.t, dy: px, d: s.v, phase: s.phase });
   }
   // The momentum tail stops before rest: put what's left in the last moving step.
   const last = [...out].reverse().find((s) => s.dy !== 0 || s.phase === "began")!;
