@@ -1,6 +1,7 @@
 // Git as journal events: what a repository's reflogs say happened (commits,
 // merges, checkouts, branches created, rebases, resets) and its tags. Reflogs
-// are read as files, without running git, so watching them is cheap; they hold
+// are read as files, without running git, and asynchronously, so a sync never
+// holds up the core; gitStamp says whether any changed without reading them. They hold
 // 90 days by default, which makes them the backfill too. A merged branch whose
 // worktree and branch are gone still left its merge in the main reflog; the
 // commits it brought are read from the merge's range.
@@ -9,7 +10,7 @@
 // folder, and each event says which worktree it happened in.
 
 import { execFile } from "node:child_process";
-import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import type { JournalData } from "@cmd/protocol";
 import type { NewJournalEvent } from "./store.ts";
@@ -64,39 +65,47 @@ export function parseReflog(text: string): ReflogEntry[] {
   return out;
 }
 
-const read = (f: string) => {
-  try {
-    return fs.readFileSync(f, "utf8");
-  } catch {
-    return "";
-  }
-};
+const read = (f: string) => fsp.readFile(f, "utf8").catch(() => "");
+const safeDirents = (d: string) => fsp.readdir(d, { withFileTypes: true }).catch(() => []);
+
+interface Reflog {
+  file: string;
+  worktree: string | null;
+  branch: string | null;
+}
 
 /** The reflogs of a repository: the main worktree's HEAD, each linked worktree's HEAD, each branch. */
-function reflogs(common: string, repo: string): { file: string; worktree: string | null; branch: string | null }[] {
-  const out: { file: string; worktree: string | null; branch: string | null }[] = [{ file: path.join(common, "logs", "HEAD"), worktree: repo, branch: null }];
-  for (const name of safeDir(path.join(common, "worktrees"))) {
-    const gitdir = read(path.join(common, "worktrees", name, "gitdir")).trim();
-    out.push({ file: path.join(common, "worktrees", name, "logs", "HEAD"), worktree: gitdir ? path.dirname(gitdir) : null, branch: null });
+async function reflogs(common: string, repo: string): Promise<Reflog[]> {
+  const out: Reflog[] = [{ file: path.join(common, "logs", "HEAD"), worktree: repo, branch: null }];
+  for (const e of await safeDirents(path.join(common, "worktrees"))) {
+    if (!e.isDirectory()) continue;
+    const gitdir = (await read(path.join(common, "worktrees", e.name, "gitdir"))).trim();
+    out.push({ file: path.join(common, "worktrees", e.name, "logs", "HEAD"), worktree: gitdir ? path.dirname(gitdir) : null, branch: null });
   }
-  const heads = path.join(common, "logs", "refs", "heads");
-  const walk = (dir: string, prefix: string) => {
-    for (const e of safeDirents(dir)) {
-      if (e.isDirectory()) walk(path.join(dir, e.name), `${prefix}${e.name}/`);
-      else out.push({ file: path.join(dir, e.name), worktree: null, branch: prefix + e.name });
-    }
-  };
-  walk(heads, "");
+  for (const f of await files(path.join(common, "logs", "refs", "heads"))) out.push({ file: f.file, worktree: null, branch: f.name });
   return out;
 }
 
-const safeDir = (d: string) => safeDirents(d).filter((e) => e.isDirectory()).map((e) => e.name);
-function safeDirents(d: string): fs.Dirent[] {
-  try {
-    return fs.readdirSync(d, { withFileTypes: true });
-  } catch {
-    return [];
+/** Every file under a folder, with its path from there. */
+async function files(dir: string, prefix = ""): Promise<{ file: string; name: string }[]> {
+  const out: { file: string; name: string }[] = [];
+  for (const e of await safeDirents(dir)) {
+    if (e.isDirectory()) out.push(...(await files(path.join(dir, e.name), `${prefix}${e.name}/`)));
+    else out.push({ file: path.join(dir, e.name), name: prefix + e.name });
   }
+  return out;
+}
+
+/**
+ * What changes when anything gitEvents reads does: each reflog's and tag's size
+ * and time, and packed-refs', read with stat only. Null outside a repository.
+ */
+export async function gitStamp(repoDir: string): Promise<string | null> {
+  const c = checkoutOf(repoDir);
+  if (!c) return null;
+  const paths = [...(await reflogs(c.common, c.repo)).map((l) => l.file), path.join(c.common, "packed-refs"), ...(await files(path.join(c.common, "refs", "tags"))).map((f) => f.file)];
+  const stats = await Promise.all(paths.map((f) => fsp.stat(f).then((s) => `${s.size}:${s.mtimeMs}`, () => "-")));
+  return paths.map((f, i) => `${f} ${stats[i]}`).join("\n");
 }
 
 
@@ -121,10 +130,11 @@ export async function gitEvents(repoDir: string, since = 0): Promise<NewJournalE
   const merges: { e: ReflogEntry; branch: string; into: string | null; worktree: string | null }[] = [];
 
   // What each worktree has checked out now: a log without checkouts has been on it all along.
+  const logs = await Promise.all((await reflogs(common, repo)).map(async (l) => ({ ...l, entries: parseReflog(await read(l.file)) })));
   const now = new Map<string | null, string | null>();
-  for (const log of reflogs(common, repo)) if (!log.branch && log.worktree) now.set(log.worktree, (await repoOf(log.worktree))?.branch ?? null);
-  for (const log of reflogs(common, repo)) {
-    const entries = parseReflog(read(log.file));
+  for (const log of logs) if (!log.branch && log.worktree) now.set(log.worktree, (await repoOf(log.worktree))?.branch ?? null);
+  for (const log of logs) {
+    const entries = log.entries;
     // What a worktree's HEAD log says it has checked out, as it goes.
     let current: string | null = log.branch ?? (entries.some((e) => e.message.startsWith("checkout:")) ? null : (now.get(log.worktree) ?? null));
     for (const e of entries) {
@@ -154,9 +164,9 @@ export async function gitEvents(repoDir: string, since = 0): Promise<NewJournalE
 
   // Which worktree a branch was created in: the linked worktree whose first entry is at its creation.
   const worktreeOf = new Map<string, string>();
-  for (const log of reflogs(common, repo)) {
+  for (const log of logs) {
     if (!log.branch && log.worktree && log.worktree !== repo) {
-      const first = parseReflog(read(log.file))[0];
+      const first = log.entries[0];
       const b = [...commits.values()].find((c) => c.worktree === log.worktree && c.branch)?.branch;
       if (first && b) worktreeOf.set(b, log.worktree);
     }

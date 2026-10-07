@@ -10,7 +10,7 @@ import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvid
 import { EXPORT_FORMAT, lineSplitter, TURN_FORMAT } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker, sessionIdOf } from "./agents/tracker.ts";
-import { JournalService } from "./journal/service.ts";
+import { JournalService, SYNC_FRESH_MS } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
 import { recordNames, recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
 import { DataService } from "./data/service.ts";
@@ -557,12 +557,12 @@ export class Core {
     },
     "agents.coverage": (p) => this.agents.activity.coverage(p.days),
     "journal.days": (p) => this.journal.days(journalScope(p), Math.min(p.count ?? 7, 60), p.write),
-    "journal.day": async (p) => (await this.journal.sync(), this.journal.day(journalScope(p), this.journal.dayOf(p.date), p.write)),
+    "journal.day": async (p) => (await this.journal.sync(p.write === "force" ? 0 : SYNC_FRESH_MS), this.journal.day(journalScope(p), this.journal.dayOf(p.date), p.write)),
     "journal.week": (p) => this.journal.week(journalScope(p), p.date, p.write),
     "journal.history": (p) => this.journal.store.history(journalScope(p), this.journal.dayOf(p.date)),
     "journal.events": (p) => this.journal.store.events(p),
     "journal.threads": async (p) => {
-      await this.journal.sync();
+      await this.journal.sync(SYNC_FRESH_MS);
       const t = this.journal.threads(journalScope(p), this.journal.dayOf(p.date));
       return { threads: t.threads, digest: t.digest.text };
     },

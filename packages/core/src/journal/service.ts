@@ -6,6 +6,10 @@
 // reads itself, from reflogs, every few minutes, into the log. Notes are
 // recorded here (`note`).
 //
+// Reads (the Journal widget reloads as agents work) take git up to
+// SYNC_FRESH_MS old, and a sync skips repositories whose reflogs haven't
+// changed (gitStamp), so a busy widget costs little.
+//
 // Days are written on request (the Journal widget, `cmd journal`): threads and
 // a digest from the events, then a model, unless the digest is the one the
 // stored day was written from. Today is written again at most every
@@ -20,7 +24,7 @@ import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_F
 import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import type { CallOptions } from "../ai/service.ts";
 import { digest, eventsHash, type Digest } from "./digest.ts";
-import { gitEvents } from "./git.ts";
+import { gitEvents, gitStamp } from "./git.ts";
 import { JournalStore, type NewJournalEvent } from "./store.ts";
 import { buildThreads } from "./threads.ts";
 import { SCHEMA, SYSTEM, toDay, type WrittenDay } from "./writer.ts";
@@ -35,6 +39,8 @@ const FIRST_SYNC_DAYS = 30;
 /** Pulls overlap by this much: a session's row keeps changing while it runs. */
 const SYNC_OVERLAP = 2 * 3600_000;
 const SYNC_EVERY_MS = 5 * 60_000;
+/** How old git may be for a read (days, weeks, threads); writing a day on request and `cmd journal sync` read it now. */
+export const SYNC_FRESH_MS = 60_000;
 /** A new SOURCES_FORMAT reads sources again this far back (git keeps 90 days). */
 const REREAD_DAYS = 90;
 /** Days written by older rules are written again when they're this recent (today, yesterday); older ones stay as written. */
@@ -59,6 +65,8 @@ export interface JournalServiceOptions {
   spaces: () => Space[];
   /** Tests: git's events for a repository since a time (default: its reflogs, journal/git.ts). */
   git?: (repo: string, since: number) => Promise<NewJournalEvent[]>;
+  /** Tests: what changes when a repository's git does (default: gitStamp, or none with a custom `git`). */
+  gitStamp?: (repo: string) => Promise<string | null>;
   /** A live agent's Space. */
   agentSpace: (agentId: string) => SpaceId | null;
   ai: JournalAi | null;
@@ -81,6 +89,10 @@ export class JournalService {
   #read = { git: 0 };
   #reread = false;
   #syncing: Promise<void> | null = null;
+  /** When the last sync started (this process). */
+  #syncedAt = -Infinity;
+  /** Each repository's gitStamp when it was last read: unchanged, it isn't read again. */
+  #stamps = new Map<string, string>();
   #writing = new Map<string, Promise<JournalDay | null>>();
   #timer: ReturnType<typeof setInterval> | null = null;
 
@@ -106,8 +118,9 @@ export class JournalService {
     if (this.#timer) clearInterval(this.#timer);
   }
 
-  /** Reads git since the last read. Concurrent calls share one run. */
-  sync(): Promise<void> {
+  /** Reads git since the last read, unless it was read less than `maxAge` ago. Concurrent calls share one run. */
+  sync(maxAge = 0): Promise<void> {
+    if (!this.#syncing && this.#now - this.#syncedAt < maxAge) return Promise.resolve();
     this.#syncing ??= this.#sync().finally(() => (this.#syncing = null));
     return this.#syncing;
   }
@@ -119,18 +132,33 @@ export class JournalService {
     // Git for every project seen lately and every Space's folder.
     const repos = new Set([...this.store.repos(now - FIRST_SYNC_DAYS * DAY_MS).map((r) => r.repo), ...this.#o.spaces().filter((s) => s.id !== HOME_SPACE_ID).map((s) => s.root)]);
     let git = 0;
+    let skipped = 0;
     const read = this.#o.git ?? gitEvents;
+    const stampOf = this.#o.gitStamp ?? (this.#o.git ? null : gitStamp);
     for (const r of repos) {
-      const ev = await read(r, since).catch(() => []);
+      // Unchanged since it was read: everything in the overlap is recorded already.
+      const stamp = stampOf ? await stampOf(r).catch(() => null) : null;
+      if (stamp !== null && this.#stamps.get(r) === stamp) {
+        skipped++;
+        continue;
+      }
+      let ev: NewJournalEvent[];
+      try {
+        ev = await read(r, since);
+      } catch {
+        continue;
+      }
       git += this.store.recordAll(ev.map((e) => ({ ...e, spaceId: this.#spaceOf(e.repo) })));
+      if (stamp !== null) this.#stamps.set(r, stamp);
     }
     this.#read.git = now;
+    this.#syncedAt = now;
     this.store.setMeta("sync.git", String(now));
     if (this.#reread) {
       this.store.setMeta("sources.format", String(SOURCES_FORMAT));
       this.#reread = false;
     }
-    log.info("journal synced", { git, repos: repos.size, ms: Date.now() - t0 });
+    log.info("journal synced", { git, repos: repos.size, skipped, ms: Date.now() - t0 });
   }
 
   /** The Space whose folder holds `p` (deepest wins); null: only Home's. */
@@ -168,11 +196,15 @@ export class JournalService {
     return { from, to: next.setHours(DAY_STARTS_AT, 0, 0, 0) };
   }
 
-  /** A day's events (with a week before, for context), threads and digest. */
-  threads(scope: JournalScope, date: number): { events: JournalEvent[]; threads: JournalThread[]; digest: Digest; from: number; to: number } {
+  /**
+   * A day's events (with a week before, for context), threads and digest.
+   * `pool`: events read once for several days (#pool), filtered here as the store's query would.
+   */
+  threads(scope: JournalScope, date: number, pool?: JournalEvent[]): { events: JournalEvent[]; threads: JournalThread[]; digest: Digest; from: number; to: number } {
     const { from, to } = this.#window(date);
+    const since = from - CONTEXT_MS;
     const inScope = this.#inScope(scope);
-    const events = this.store.events({ since: from - CONTEXT_MS, until: to }).filter(inScope);
+    const events = (pool ? pool.filter((e) => (e.until ?? e.at) >= since && e.at < to) : this.store.events({ since, until: to })).filter(inScope);
     const threads = buildThreads(events, { from, to });
     const title = `Work day: ${new Date(from).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}, ${DAY_STARTS_AT}:00 to ${DAY_STARTS_AT}:00. ${this.#scopeTitle(scope)}`;
     return { events, threads, digest: digest(threads, events, { title }), from, to };
@@ -186,11 +218,11 @@ export class JournalService {
   }
 
   /** One day, written if it needs to be (see WriteMode). Null when nothing happened, or it isn't written and can't be (no AI provider). */
-  async day(scope: JournalScope, date: number, mode: WriteMode = "stale"): Promise<JournalDay | null> {
+  async day(scope: JournalScope, date: number, mode: WriteMode = "stale", pool?: JournalEvent[]): Promise<JournalDay | null> {
     const key = `${scope}@${date}`;
     const running = this.#writing.get(key);
     if (running) return running;
-    const { events, threads, digest: d } = this.threads(scope, date);
+    const { events, threads, digest: d } = this.threads(scope, date, pool);
     if (!threads.some((t) => !t.minor)) return null;
     const stored = this.store.day(scope, date);
     const outdated = !!stored && !sameFormat(stored.format, CURRENT);
@@ -226,11 +258,14 @@ export class JournalService {
 
   /** The last `count` work days with something in them, newest first. */
   async days(scope: JournalScope, count: number, mode: WriteMode = "stale"): Promise<JournalDay[]> {
-    await this.sync();
+    await this.sync(SYNC_FRESH_MS);
     const out: JournalDay[] = [];
     let date = this.dayOf(this.#now);
-    for (let i = 0; i < Math.max(count * 3, 14) && out.length < count; i++) {
-      const d = await this.day(scope, date, mode);
+    const tries = Math.max(count * 3, 14);
+    // A day more than it may look back, for days with a clock change.
+    const pool = this.#pool(this.#window(date).from - (tries + 1) * DAY_MS);
+    for (let i = 0; i < tries && out.length < count; i++) {
+      const d = await this.day(scope, date, mode, pool);
       if (d) out.push(d);
       date = this.dayOf(date - 12 * 3600_000);
     }
@@ -248,12 +283,13 @@ export class JournalService {
     const key = `week:${scope}@${start}`;
     const running = this.#writing.get(key) as Promise<JournalWeek | null> | undefined;
     if (running) return running;
-    await this.sync();
+    await this.sync(SYNC_FRESH_MS);
     const today = this.dayOf(this.#now);
     const days: JournalDay[] = [];
+    const pool = this.#pool(this.#window(start).from);
     for (const d of daysOfWeek(start)) {
       if (d > today) break;
-      const day = await this.day(scope, d, mode === "force" ? "stale" : mode);
+      const day = await this.day(scope, d, mode === "force" ? "stale" : mode, pool);
       if (day?.entries.length) days.push(day);
     }
     const stored = this.store.week(scope, start);
@@ -278,6 +314,11 @@ export class JournalService {
       .finally(() => this.#writing.delete(key));
     this.#writing.set(key, write as unknown as Promise<JournalDay | null>);
     return write;
+  }
+
+  /** Every event a day from `from` on reads (its week of context included), in one query. */
+  #pool(from: number): JournalEvent[] {
+    return this.store.events({ since: from - CONTEXT_MS, limit: Number.MAX_SAFE_INTEGER });
   }
 
   /** Something written down on purpose: by a person, or by an agent (with its session, so it joins its thread). */

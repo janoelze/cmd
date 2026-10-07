@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { JournalEvent, Space } from "@cmd/protocol";
 import { Core } from "../src/core.ts";
 import { digest } from "../src/journal/digest.ts";
-import { gitEvents, parseReflog } from "../src/journal/git.ts";
-import { JournalService, type JournalAi } from "../src/journal/service.ts";
+import { gitEvents, gitStamp, parseReflog } from "../src/journal/git.ts";
+import { JournalService, SYNC_FRESH_MS, type JournalAi } from "../src/journal/service.ts";
 import { DatabaseSync } from "node:sqlite";
 import { JOURNAL_SCHEMA, SOURCES_FORMAT, WRITER_FORMAT, type JournalDay } from "@cmd/protocol";
 import { JournalStore, UPGRADES, type NewJournalEvent } from "../src/journal/store.ts";
@@ -102,6 +102,31 @@ describe("journal git", () => {
     expect(ev.find((e) => e.kind === "git.tag")).toMatchObject({ thread: `release:${repo}#v1.0.0`, repo });
     // Reading twice gives the same keys.
     expect((await gitEvents(repo)).map((e) => e.key).sort()).toEqual(ev.map((e) => e.key).sort());
+  });
+
+  it("stamps a repository so a sync can tell nothing changed", async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-journal-")));
+    dirs.push(root);
+    const repo = path.join(root, "app");
+    const wt = path.join(root, "app-feat");
+    const git = (cwd: string, ...a: string[]) => execFileSync("git", ["-C", cwd, "-c", "user.name=T", "-c", "user.email=t@x", ...a], { stdio: "pipe" });
+    fs.mkdirSync(repo);
+    expect(await gitStamp(repo)).toBeNull();
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "commit", "-q", "--allow-empty", "-m", "Start");
+    const stamps = [await gitStamp(repo)];
+    expect(await gitStamp(repo)).toBe(stamps[0]);
+    fs.writeFileSync(path.join(repo, "a.txt"), "edited, not committed");
+    expect(await gitStamp(repo)).toBe(stamps[0]);
+    git(repo, "worktree", "add", "-q", wt, "-b", "feat");
+    stamps.push(await gitStamp(wt));
+    git(wt, "commit", "-q", "--allow-empty", "-m", "In the worktree");
+    stamps.push(await gitStamp(repo));
+    git(repo, "tag", "v1");
+    stamps.push(await gitStamp(repo));
+    git(repo, "pack-refs", "--all");
+    stamps.push(await gitStamp(repo));
+    expect(new Set(stamps).size).toBe(stamps.length);
   });
 });
 
@@ -203,6 +228,36 @@ describe("journal service", () => {
     await service(ai).day("space:shop", new Date(DAY).setHours(0, 0, 0, 0));
     expect(prompt).toContain("v2.3.0");
     expect(prompt).not.toContain("dotfiles");
+  });
+
+  it("reads several days from one query as it would one by one", () => {
+    const j = service(null);
+    const date = j.dayOf(from + 3600_000);
+    const pool = j.store.events({ since: from - 30 * 86400_000, limit: Number.MAX_SAFE_INTEGER });
+    for (const d of [date, date - 86400_000, date + 86400_000])
+      for (const scope of ["all", "space:shop"]) {
+        const one = j.threads(scope, d);
+        const pooled = j.threads(scope, d, pool);
+        expect(pooled.events).toEqual(one.events);
+        expect(pooled.digest.hash).toBe(one.digest.hash);
+      }
+  });
+
+  it("reads git at most once a minute for the widget, and skips repositories that didn't change", async () => {
+    let now = 100 * 86400_000;
+    const read: string[] = [];
+    const stamps: Record<string, string> = { [space.root]: "a" };
+    const j = new JournalService({ store: new JournalStore(), spaces: () => [space], agentSpace: () => null, ai: null, now: () => now, git: async (repo) => (read.push(repo), []), gitStamp: async (repo) => stamps[repo] ?? null });
+    await j.sync();
+    expect(read).toHaveLength(1);
+    await j.sync(SYNC_FRESH_MS);
+    expect(read).toHaveLength(1); // fresh enough: not synced at all
+    await j.sync();
+    expect(read).toHaveLength(1); // synced, but nothing changed
+    now += SYNC_FRESH_MS;
+    stamps[space.root] = "b";
+    await j.sync(SYNC_FRESH_MS);
+    expect(read).toHaveLength(2);
   });
 
   it("notes from an agent's terminal join its session", async () => {
