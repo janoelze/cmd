@@ -7,6 +7,16 @@
 //       the system cursor: the cursor is drawn later from the event log.
 //   {"cmd":"record-stop"}  → {"ok":true,"frames":n,"t0":ns,"t1":ns}
 //
+// Input, posted as real events (screen points, top-left origin) and logged:
+//   {"cmd":"path","points":[[ms,x,y],…],"button":"left"?}   moves (drags with a button held)
+//   {"cmd":"down"|"up","x":…,"y":…,"button":"left"|"right","clicks":1}
+//   {"cmd":"scroll","x":…,"y":…,"steps":[[ms,dy,phase],…]}  trackpad-style, pixel deltas
+//   {"cmd":"type","text":"…","delays":[ms,…]}               characters, layout-independent
+//   {"cmd":"key","key":"Return","mods":["cmd"]}
+//   {"cmd":"log"} → {"events":[…]} and clears it
+// Moves stop with an error if the pointer isn't where the last move left it:
+// someone moved the mouse, so the run is spoiled and shouldn't fight them.
+//
 // Times are host-clock nanoseconds (mach_absolute_time in ns), the clock of
 // ScreenCaptureKit's sample buffers. Node's process.hrtime is a different clock
 // (it counts sleep), so the helper keeps time: it posts and logs all input, and
@@ -93,6 +103,129 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
 var recorder: Recorder?
 
+// ── input ──────────────────────────────────────────
+
+var events: [[String: Any]] = []
+func log(_ type: String, _ fields: [String: Any]) {
+  var e = fields
+  e["t"] = nowNs()
+  e["type"] = type
+  events.append(e)
+}
+
+func waitUntil(_ ns: UInt64) {
+  while true {
+    let now = nowNs()
+    if now >= ns { return }
+    let left = ns - now
+    if left > 2_000_000 { usleep(UInt32((left - 1_000_000) / 1000)) }
+  }
+}
+
+let source = CGEventSource(stateID: .hidSystemState)
+var lastPosted: CGPoint?
+
+struct Interfered: Error, LocalizedError {
+  var errorDescription: String? { "the mouse moved: someone is using it, so the tour stopped" }
+}
+
+func pointer() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
+
+func checkPointer() throws {
+  guard let last = lastPosted else { return }
+  let now = pointer()
+  if abs(now.x - last.x) > 3 || abs(now.y - last.y) > 3 { throw Interfered() }
+}
+
+func buttonOf(_ name: String?) -> (CGMouseButton, CGEventType, CGEventType, CGEventType) {
+  name == "right" ? (.right, .rightMouseDown, .rightMouseUp, .rightMouseDragged) : (.left, .leftMouseDown, .leftMouseUp, .leftMouseDragged)
+}
+
+func post(_ type: CGEventType, _ p: CGPoint, _ button: CGMouseButton, clicks: Int64 = 1) {
+  guard let e = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: p, mouseButton: button) else { return }
+  e.setIntegerValueField(.mouseEventClickState, value: clicks)
+  e.post(tap: .cghidEventTap)
+  lastPosted = p
+}
+
+func path(_ points: [[Double]], button: String?) throws {
+  let (b, _, _, dragged) = buttonOf(button)
+  let start = nowNs()
+  for pt in points where pt.count == 3 {
+    waitUntil(start + UInt64(pt[0] * 1e6))
+    try checkPointer()
+    let p = CGPoint(x: pt[1], y: pt[2])
+    post(button == nil ? .mouseMoved : dragged, p, b)
+    log("move", ["x": p.x, "y": p.y, "drag": button != nil])
+  }
+}
+
+// Trackpad phases (CGScrollPhase, CGMomentumScrollPhase) by the planner's names.
+let SCROLL_PHASE: [String: (Int64, Int64)] = [
+  "began": (1, 0), "changed": (2, 0), "ended": (4, 0),
+  "momentum-began": (0, 1), "momentum": (0, 2), "momentum-ended": (0, 3),
+]
+
+func scroll(at p: CGPoint, _ steps: [[Any]]) throws {
+  try checkPointer()
+  let start = nowNs()
+  for step in steps where step.count == 3 {
+    guard let ms = step[0] as? Double, let dy = step[1] as? Double, let name = step[2] as? String, let (phase, momentum) = SCROLL_PHASE[name] else { continue }
+    waitUntil(start + UInt64(ms * 1e6))
+    // Positive dy goes down the page; a wheel delta goes the other way.
+    guard let e = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 1, wheel1: Int32(-dy), wheel2: 0, wheel3: 0) else { continue }
+    e.location = p
+    e.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+    e.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
+    e.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum)
+    e.post(tap: .cghidEventTap)
+    log("scroll", ["x": p.x, "y": p.y, "dy": dy, "phase": name])
+  }
+}
+
+// Virtual key codes for keys that aren't text (and letters, for shortcuts; ANSI positions).
+let KEYS: [String: CGKeyCode] = [
+  "Return": 36, "Enter": 36, "Tab": 48, "Space": 49, "Backspace": 51, "Escape": 53, "Delete": 117,
+  "ArrowLeft": 123, "ArrowRight": 124, "ArrowDown": 125, "ArrowUp": 126, "Home": 115, "End": 119, "PageUp": 116, "PageDown": 121,
+  "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15,
+  "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "9": 25, "7": 26, "8": 28, "0": 29, "o": 31, "u": 32,
+  "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, "n": 45, "m": 46, ",": 43, ".": 47, "/": 44,
+]
+let MODS: [String: CGEventFlags] = ["cmd": .maskCommand, "shift": .maskShift, "alt": .maskAlternate, "ctrl": .maskControl]
+
+func key(_ name: String, mods: [String]) throws {
+  guard let code = KEYS[name] else { throw NSError(domain: "tour", code: 1, userInfo: [NSLocalizedDescriptionKey: "unknown key \(name)"]) }
+  let flags = mods.reduce(CGEventFlags()) { $0.union(MODS[$1] ?? []) }
+  for down in [true, false] {
+    let e = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
+    e?.flags = flags
+    e?.post(tap: .cghidEventTap)
+    if down { usleep(70_000) }
+  }
+  log("key", ["key": name, "mods": mods])
+}
+
+func type(_ text: String, delays: [Double]) {
+  let start = nowNs()
+  var at = 0.0
+  for (i, ch) in text.enumerated() {
+    at += i < delays.count ? delays[i] : 70
+    waitUntil(start + UInt64(at * 1e6))
+    if ch == "\n" {
+      try? key("Return", mods: [])
+      continue
+    }
+    let units = Array(String(ch).utf16)
+    for down in [true, false] {
+      let e = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down)
+      e?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+      e?.post(tap: .cghidEventTap)
+      if down { usleep(useconds_t(min(90_000, max(30_000, (i + 1 < delays.count ? delays[i + 1] : 70) * 600)))) }
+    }
+    log("char", ["char": String(ch)])
+  }
+}
+
 func handle(_ msg: [String: Any]) async {
   let cmd = msg["cmd"] as? String ?? ""
   do {
@@ -132,6 +265,36 @@ func handle(_ msg: [String: Any]) async {
       reply(try await rec.stop())
     case "now":
       reply(["ok": true, "now": nowNs()])
+    case "pointer":
+      let p = pointer()
+      reply(["ok": true, "x": p.x, "y": p.y])
+    case "path":
+      try path(msg["points"] as? [[Double]] ?? [], button: msg["button"] as? String)
+      reply(["ok": true])
+    case "down", "up":
+      let p = CGPoint(x: msg["x"] as? Double ?? 0, y: msg["y"] as? Double ?? 0)
+      try checkPointer()
+      let (b, down, up, _) = buttonOf(msg["button"] as? String)
+      let clicks = Int64(msg["clicks"] as? Int ?? 1)
+      post(cmd == "down" ? down : up, p, b, clicks: clicks)
+      log(cmd, ["x": p.x, "y": p.y, "button": msg["button"] as? String ?? "left", "clicks": clicks])
+      reply(["ok": true])
+    case "scroll":
+      try scroll(at: CGPoint(x: msg["x"] as? Double ?? 0, y: msg["y"] as? Double ?? 0), msg["steps"] as? [[Any]] ?? [])
+      reply(["ok": true])
+    case "type":
+      type(msg["text"] as? String ?? "", delays: msg["delays"] as? [Double] ?? [])
+      reply(["ok": true])
+    case "key":
+      try key(msg["key"] as? String ?? "", mods: msg["mods"] as? [String] ?? [])
+      reply(["ok": true])
+    case "log":
+      reply(["ok": true, "events": events])
+      events = []
+    case "release":
+      // Stop guarding the pointer (between runs, or when the driver hands it back).
+      lastPosted = nil
+      reply(["ok": true])
     default:
       reply(["ok": false, "error": "unknown command \(cmd)"])
     }
