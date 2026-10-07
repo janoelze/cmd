@@ -20,6 +20,7 @@ describe("checking a proposed name", () => {
     expect(checkName("Tours", ["tours"]).problem).toMatch(/another agent/);
     expect(checkName("V0.17.1").problem).toMatch(/version/);
     expect(checkName("Notarize once").problem).toMatch(/verb/);
+    for (const thing of ["Show posters", "Release CI", "Build cache", "Hook design"]) expect(checkName(thing).problem).toBeNull();
   });
 });
 

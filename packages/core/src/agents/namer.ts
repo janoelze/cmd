@@ -53,6 +53,7 @@ export function nameSystem(language = outputLanguage().name): string {
 - Nouns only: the thing worked on, never the activity. No verbs (fix, add, read, check, update, refactor, investigate, review, survey…). An adjective only where it is part of the thing ("Slow release CI", "Broken update").
 - The developer's own words from their prompts and the product's names (Navigator, Spaces, Magic, Tours) over paraphrase. A bug by its symptom.
 - Sentence case. Code names as written (calc.py, ⌘W). No project or repository name, no agent name, no articles, no punctuation, no quotes.
+- Specific enough to tell it from other work: a single generic word (Descriptions, Downloads, Settings, Bugs, Cleanup) isn't a name; say what of ("Episode descriptions").
 - Different from the other agents' names you are given.
 - Written in ${language}.
 - Nothing to name (a greeting, a test, "read a few files", a bare slash command, only a pasted image): name null.
@@ -102,7 +103,8 @@ export function nameInput(o: NamerInput): string {
 }
 
 /** Words a name may not start with: activities, not things. */
-const VERBS = new Set("fix fixes fixing add adds adding read reading check checking update updating remove removing implement implementing refactor refactoring make create debug debugging investigate investigating review reviewing write writing build building run running survey explore exploring find improve improving look let lets move change rename test testing help show set setup clean cleanup convert merge release deploy notarize sign publish ship polish tune speed migrate port tidy rewrite redesign restyle wire hook".split(" "));
+// Only words that are verbs whatever follows: "Release CI", "Build cache", "Show posters" (a TV show) and "Hook design" are things.
+const VERBS = new Set("fix fixes fixing add adds adding read reading check checking update updating remove removing implement implementing refactor refactoring make making create creating debug debugging investigate investigating review reviewing explore exploring find finding improve improving look looking let lets rename renaming help convert converting deploy deploying notarize notarizing publish publishing migrate migrating rewrite rewriting redesign restyle tidy speed".split(" "));
 
 /** Why a proposed name can't be used (null: it can), and the name cleaned. */
 export function checkName(raw: string | null | undefined, others: string[] = []): { name: string | null; problem: string | null } {

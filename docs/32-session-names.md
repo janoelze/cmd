@@ -153,6 +153,20 @@ From cmd's own copy of the transcripts, offline:
 - **Measures**: renames per session (aim 0–2; long sessions like the 1,900-message journal one are the test), names over 3 words or with a verb, clashes among agents live at the same time in a Space, renames that a worktree change would have given anyway, agreement with the hand-named table and later with real renames.
 - `scripts/evals/names.ts corpus|run`, like the journal's; real sessions stay in `$CMD_HOME/evals/names`, out of the repo, and go to a model only with the person's say-so.
 
+### First results (2026-10-07)
+
+The 17 hand-named sessions (2 to 41 turns) through Claude Haiku 4.5 via `claude -p`, after two rounds of tuning:
+
+| | |
+|---|---|
+| Acceptable final name | 15 of 17 ("Read files" rightly none). Misses: "Shortcut tips" for the hack-the-planet session (which did turn into shortcut tips), and the torrent session, which drifted through five topics |
+| Renames per session | 0 in 15, 1 in the two long sessions that really changed task (icon sizes → address field; torrent search → episode descriptions) |
+| Model calls | 0.39 per turn on short sessions, about 0.5 on long ones |
+
+What the first round taught (fixed): two "change" verdicts in a row renamed even when they proposed different names (Missing posters, then Episode posters), so they must now agree; a pause before each prompt of a long session asked every time, so a quiet only lowers the bar for new words; "V0.17.1" and "Notarize once" passed the checks; the verb list rejected "Show posters" (a TV show), so it keeps only words that are verbs whatever follows; one generic word ("Descriptions") was taken as a name, so the prompt asks what of.
+
+Still weak: the match is lenient (a shared word counts: "Saved data" passes for "Journal data"), names of long implementation sessions are vague, and "new folders" fires on most turns of a session that touches many packages. Next: stricter scoring with a person's judgement per name, the other ~200 sessions for renames and cost, real renames as cases (step 5).
+
 ## Plan
 
 | # | Step | Delivers |
