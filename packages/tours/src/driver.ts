@@ -10,7 +10,7 @@ import type { Helper } from "./helper.ts";
 import { aimAt, planMove, type Box, type Point } from "./motion.ts";
 import { between, rng, type Rng } from "./random.ts";
 import { planScroll } from "./scroll.ts";
-import { planTyping, TYPING, type TypingProfile } from "./typing.ts";
+import { planKeys, TYPING, type TypingProfile } from "./typing.ts";
 
 /** Pacing for viewers, ms. */
 export const PACE = {
@@ -80,7 +80,8 @@ export class Tour {
   }
 
   /**
-   * Scrolls the target into view if it isn't: the outermost scroll container
+   * Scrolls the target into view if it isn't (to ~40% of the container's
+   * height, not just inside the edge): the outermost scroll container
    * first, with a gesture of exactly the distance, the pointer over that
    * container. Repeats until it fits (nested containers, late layout).
    */
@@ -94,7 +95,9 @@ export class Tour {
           if (!/(auto|scroll)/.test(cs.overflowY) || p.scrollHeight <= p.clientHeight + 1) continue;
           const b = p.getBoundingClientRect();
           const top = b.top + margin, bottom = b.top + p.clientHeight - margin;
-          let dy = r.top < top ? r.top - top : r.bottom > bottom ? Math.min(r.bottom - bottom, r.top - top) : 0;
+          // Out of view: bring it to ~40% of the container's height, where a viewer looks (not the edge).
+          const out = r.top < top || r.bottom > bottom;
+          let dy = out ? r.top + r.height / 2 - (b.top + p.clientHeight * 0.4) : 0;
           dy = Math.max(-p.scrollTop, Math.min(dy, p.scrollHeight - p.clientHeight - p.scrollTop));
           if (Math.abs(dy) >= 2) outer = { box: { x: b.left, y: b.top, width: p.clientWidth, height: p.clientHeight }, dy };
         }
@@ -180,7 +183,8 @@ export class Tour {
 
   /** Types into whatever has focus. */
   async type(text: string, profile: TypingProfile = TYPING.terminal) {
-    await this.helper.call("type", { text, delays: planTyping(text, this.r, profile) });
+    const k = planKeys(text, this.r, profile);
+    await this.helper.call("type", { text: k.keys, delays: k.delays });
   }
 
   /** A key, with modifiers ("cmd", "shift", "alt", "ctrl"). */

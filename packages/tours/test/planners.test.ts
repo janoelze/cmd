@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { aimAt, minJerk, moveDuration, planMove, taperProfile } from "../src/motion.ts";
 import { rng } from "../src/random.ts";
 import { gestureMs, planScroll } from "../src/scroll.ts";
-import { planTyping, TYPING } from "../src/typing.ts";
+import { planKeys, planTyping, TYPING } from "../src/typing.ts";
 
 describe("motion", () => {
   it("times moves by Fitts' law, slowed and clamped", () => {
@@ -89,5 +89,24 @@ describe("typing", () => {
     const median = sorted[Math.floor(sorted.length / 2)]!;
     const mean = sorted.reduce((a, b) => a + b, 0) / sorted.length;
     expect(mean).toBeGreaterThan(median);
+  });
+});
+
+describe("typos", () => {
+  const apply = (keys: string) => [...keys].reduce((out, k) => (k === "\b" ? out.slice(0, -1) : out + k), "");
+  it("always end in the text as written", () => {
+    for (let seed = 1; seed < 200; seed++) {
+      const text = "git commit -m 'share trips with a link'";
+      const k = planKeys(text, rng(seed), { ...TYPING.field, typo: 1 });
+      expect(apply(k.keys)).toBe(text);
+      expect(k.delays.length).toBe([...k.keys].length);
+    }
+  });
+  it("happen sometimes, never with the exact profile", () => {
+    const text = "the date picker on mobile";
+    const typos = Array.from({ length: 200 }, (_, s) => planKeys(text, rng(s), TYPING.field).keys.includes("\b")).filter(Boolean).length;
+    expect(typos).toBeGreaterThan(30);
+    expect(typos).toBeLessThan(110);
+    expect(Array.from({ length: 50 }, (_, s) => planKeys(text, rng(s), TYPING.exact).keys.includes("\b")).some(Boolean)).toBe(false);
   });
 });

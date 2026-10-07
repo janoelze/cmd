@@ -2,8 +2,9 @@
 // Launches the built app (pnpm build) in a fixture, places its window, runs the
 // tour's unrecorded setup, then records the window while the tour plays.
 // Writes raw.mov (no cursor), events.json (the input, on the frames' clock) and
-// meta.json (crop on screen, scale, first frame), then preview.mp4 with the
-// pointer drawn in (post.ts). The Mac must be left
+// meta.json (crop on screen, scale, first frame), window.png (the window with
+// its shadow) and cursors/ (the real cursor shapes), then tour.mp4 (post.ts).
+// The Mac must be left
 // alone while it runs: moving the mouse stops it.
 
 import { execFileSync } from "node:child_process";
@@ -16,7 +17,7 @@ import { Tour } from "./driver.ts";
 import { addAiKeys, fixtureEnv, makeFixture } from "./fixture.ts";
 import { Helper } from "./helper.ts";
 import { applyKai } from "./persona.ts";
-import { renderPreview } from "./post.ts";
+import { render } from "./post.ts";
 
 export interface TourMeta {
   /** Window content size, points. */
@@ -67,7 +68,10 @@ export async function runTour(file: string, out: string, seed = 1) {
     if (meta.setup) await meta.setup(tour);
     await tour.parkInWindow();
     const rect = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getBounds());
-    const started = await helper.call("record-start", { pid: app.process().pid, out: path.join(out, "raw.mov"), rect: [rect.x, rect.y, rect.width, rect.height] });
+    // The window alone, with its real shadow: post's frame and mask (post.ts).
+    const still = await helper.call("window-still", { pid: app.process().pid, out: path.join(out, "window.png") });
+    fs.rmSync(path.join(out, "cursors"), { recursive: true, force: true });
+    const started = await helper.call("record-start", { pid: app.process().pid, out: path.join(out, "raw.mov"), rect: [rect.x, rect.y, rect.width, rect.height], cursors: path.join(out, "cursors") });
     recording = true;
     await page.waitForTimeout(500);
     await mod.default(tour);
@@ -76,7 +80,7 @@ export async function runTour(file: string, out: string, seed = 1) {
     recording = false;
     const { events } = await helper.call("log");
     fs.writeFileSync(path.join(out, "events.json"), JSON.stringify(events));
-    fs.writeFileSync(path.join(out, "meta.json"), JSON.stringify({ name, seed, rect, scale: started.scale, width: started.width, height: started.height, t0: stopped.t0, t1: stopped.t1, frames: stopped.frames }, null, 1));
+    fs.writeFileSync(path.join(out, "meta.json"), JSON.stringify({ name, seed, rect, scale: started.scale, width: started.width, height: started.height, t0: stopped.t0, t1: stopped.t1, frames: stopped.frames, still: { frame: still.frame, size: still.size } }, null, 1));
     console.log(`${name}: ${stopped.frames} frames, ${(((stopped.t1 as number) - (stopped.t0 as number)) / 1e9).toFixed(1)} s → ${out}`);
   } finally {
     if (recording) await helper.call("record-stop").catch(() => {});
@@ -105,7 +109,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const out = opt("--out") ?? path.join(root, ".cmd-dev", "tours", "out", path.basename(file).replace(/\.tour\.ts$|\.ts$/, ""));
   try {
     await runTour(file, path.resolve(out), Number(opt("--seed") ?? 1));
-    console.log(renderPreview(path.resolve(out)));
+    console.log(render(path.resolve(out)));
     process.exit(0);
   } catch (e) {
     console.error((e as Error).message);

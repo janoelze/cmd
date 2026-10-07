@@ -1,6 +1,7 @@
-// Experiment: one still of an app two ways, to see what each ScreenCaptureKit
-// filter includes (native menus are separate windows of the app).
-//   still <pid> <out-dir>  → display-including-app.png, window-only.png
+// One still of an app's main window alone, with its real shadow and
+// transparency (PNG with alpha), for compositing: the opaque pixels are the
+// window's exact shape (rounded corners), the rest is macOS's own shadow.
+//   still <pid> <out.png>  → prints the window's frame and the image size
 // Build: swiftc -O still.swift -o still
 
 import Cocoa
@@ -8,40 +9,28 @@ import ScreenCaptureKit
 import UniformTypeIdentifiers
 
 let args = CommandLine.arguments
-guard args.count == 3, let pid = Int32(args[1]) else { print("usage: still <pid> <out-dir>"); exit(2) }
-let out = URL(fileURLWithPath: args[2])
-
-func save(_ image: CGImage, _ name: String) throws {
-  let url = out.appendingPathComponent(name)
-  guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else { throw NSError(domain: "still", code: 1) }
-  CGImageDestinationAddImage(dest, image, nil)
-  CGImageDestinationFinalize(dest)
-  print("saved \(name) \(image.width)x\(image.height)")
-}
+guard args.count == 3, let pid = Int32(args[1]) else { print("usage: still <pid> <out.png>"); exit(2) }
 
 let done = DispatchSemaphore(value: 0)
 Task {
   do {
     let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
-    guard let app = content.applications.first(where: { $0.processID == pid }) else { print("no app with pid \(pid)"); exit(1) }
-    let windows = content.windows.filter { $0.owningApplication?.processID == pid }
-    for w in windows { print("window layer=\(w.windowLayer) \(Int(w.frame.width))x\(Int(w.frame.height)) title=\(w.title ?? "-")") }
-    let display = content.displays.first!
+    guard let main = content.windows.filter({ $0.owningApplication?.processID == pid && $0.windowLayer == 0 }).max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else { print("no window"); exit(1) }
     let scale = Int(NSScreen.main?.backingScaleFactor ?? 2)
-
     let config = SCStreamConfiguration()
-    config.width = display.width * scale
-    config.height = display.height * scale
+    config.ignoreShadowsSingleWindow = false
     config.showsCursor = false
-    try save(try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(display: display, including: [app], exceptingWindows: []), configuration: config), "display-including-app.png")
-
-    if let main = windows.filter({ $0.windowLayer == 0 }).max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) {
-      let wc = SCStreamConfiguration()
-      wc.width = Int(main.frame.width) * scale
-      wc.height = Int(main.frame.height) * scale
-      wc.showsCursor = false
-      try save(try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: main), configuration: wc), "window-only.png")
-    }
+    config.captureResolution = .best
+    // Room for the shadow around the window.
+    let pad = 80.0
+    config.width = Int(main.frame.width + 2 * pad) * scale
+    config.height = Int(main.frame.height + 2 * pad) * scale
+    let image = try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: main), configuration: config)
+    let url = URL(fileURLWithPath: args[2])
+    let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)!
+    CGImageDestinationAddImage(dest, image, nil)
+    CGImageDestinationFinalize(dest)
+    print("{\"frame\":[\(main.frame.minX),\(main.frame.minY),\(main.frame.width),\(main.frame.height)],\"image\":[\(image.width),\(image.height)],\"alpha\":\(image.alphaInfo.rawValue)}")
   } catch {
     print("error: \(error.localizedDescription)")
   }

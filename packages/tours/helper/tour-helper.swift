@@ -1,11 +1,17 @@
 // The tour helper: what a tour needs from macOS, driven by the Node driver as
 // JSON lines on stdin, one reply line each on stdout.
 //
-//   {"cmd":"record-start","pid":123,"out":"/x/raw.mov","rect":[x,y,w,h]?,"fps":60}
+//   {"cmd":"record-start","pid":123,"out":"/x/raw.mov","rect":[x,y,w,h]?,"fps":60,"cursors":"/x/cursors"?}
 //       Records the display, showing only that app's windows (its context menus
 //       and menu-bar menus included), cropped to `rect` (screen points), without
-//       the system cursor: the cursor is drawn later from the event log.
+//       the system cursor: the cursor is drawn later from the event log. With
+//       "cursors", the real system cursor's shape is watched: each new shape is
+//       saved there as cursor-<id>.png (its largest image) and every change is
+//       logged as {"type":"cursor","id":…,"w":…,"h":…,"hx":…,"hy":…} (points).
 //   {"cmd":"record-stop"}  → {"ok":true,"frames":n,"t0":ns,"t1":ns}
+//   {"cmd":"window-still","pid":123,"out":"/x/window.png"} → {"frame":[x,y,w,h],"size":[w,h]}
+//       The app's main window alone with its real shadow, transparent around it:
+//       post takes the window's exact shape and macOS's shadow from it.
 //
 // Input, posted as real events (screen points, top-left origin) and logged:
 //   {"cmd":"path","points":[[ms,x,y],…],"button":"left"?}   moves (drags with a button held)
@@ -29,6 +35,7 @@ import AVFoundation
 import Cocoa
 import CoreMedia
 import ScreenCaptureKit
+import UniformTypeIdentifiers
 
 setvbuf(stdout, nil, _IOLBF, 0)
 
@@ -105,14 +112,62 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
 var recorder: Recorder?
 
+// ── the system cursor's shape ──────────────────────
+
+var cursorDir: URL?
+var cursorTimer: DispatchSourceTimer?
+var cursorIds: [Data: Int] = [:]
+var cursorNow = -1
+
+/** Logs the system cursor when its shape changed (arrow, I-beam, resize…), saving each new shape once. */
+func sampleCursor() {
+  guard let dir = cursorDir, let c = NSCursor.currentSystem, let tiff = c.image.tiffRepresentation else { return }
+  var key = tiff
+  withUnsafeBytes(of: c.hotSpot) { key.append(contentsOf: $0) }
+  let id: Int
+  if let known = cursorIds[key] {
+    id = known
+  } else {
+    id = cursorIds.count
+    cursorIds[key] = id
+    // The largest image, so it stays sharp when the video zooms in.
+    if let best = c.image.representations.max(by: { $0.pixelsWide < $1.pixelsWide }) as? NSBitmapImageRep ?? NSBitmapImageRep(data: tiff),
+      let png = best.representation(using: .png, properties: [:])
+    {
+      try? png.write(to: dir.appendingPathComponent("cursor-\(id).png"))
+    }
+  }
+  if id != cursorNow {
+    cursorNow = id
+    log("cursor", ["id": id, "w": c.image.size.width, "h": c.image.size.height, "hx": c.hotSpot.x, "hy": c.hotSpot.y])
+  }
+}
+
+func watchCursor(_ dir: URL?) {
+  cursorTimer?.cancel()
+  cursorTimer = nil
+  cursorDir = dir
+  cursorIds = [:]
+  cursorNow = -1
+  guard let dir else { return }
+  try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+  let t = DispatchSource.makeTimerSource(queue: .main)
+  t.schedule(deadline: .now(), repeating: .milliseconds(30))
+  t.setEventHandler { sampleCursor() }
+  t.resume()
+  cursorTimer = t
+}
+
 // ── input ──────────────────────────────────────────
 
+// Logged from commands and from the cursor timer (main queue): one lock.
 var events: [[String: Any]] = []
+let eventsLock = NSLock()
 func log(_ type: String, _ fields: [String: Any]) {
   var e = fields
   e["t"] = nowNs()
   e["type"] = type
-  events.append(e)
+  eventsLock.withLock { events.append(e) }
 }
 
 func waitUntil(_ ns: UInt64) {
@@ -290,6 +345,10 @@ func type(_ text: String, delays: [Double]) {
       try? key("Return", mods: [])
       continue
     }
+    if ch == "\u{8}" {
+      try? key("Backspace", mods: [])
+      continue
+    }
     let units = Array(String(ch).utf16)
     for down in [true, false] {
       let e = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down)
@@ -335,10 +394,30 @@ func handle(_ msg: [String: Any]) async {
       let rec = try Recorder(filter: filter, config: config, out: URL(fileURLWithPath: out))
       try await rec.stream.startCapture()
       recorder = rec
+      watchCursor((msg["cursors"] as? String).map { URL(fileURLWithPath: $0) })
       reply(["ok": true, "width": config.width, "height": config.height, "scale": scale, "now": nowNs()])
+    case "window-still":
+      guard let pid = msg["pid"] as? Int32, let out = msg["out"] as? String else { return reply(["ok": false, "error": "pid and out are needed"]) }
+      let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+      guard let main = content.windows.filter({ $0.owningApplication?.processID == pid && $0.windowLayer == 0 }).max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else { return reply(["ok": false, "error": "no window"]) }
+      let scale = Int(NSScreen.screens.first { $0.frame.intersects(main.frame) }?.backingScaleFactor ?? 2)
+      let config = SCStreamConfiguration()
+      config.ignoreShadowsSingleWindow = false
+      config.showsCursor = false
+      config.captureResolution = .best
+      // Room for the shadow around the window.
+      let pad = 100.0
+      config.width = Int(main.frame.width + 2 * pad) * scale
+      config.height = Int(main.frame.height + 2 * pad) * scale
+      let image = try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: main), configuration: config)
+      guard let dest = CGImageDestinationCreateWithURL(URL(fileURLWithPath: out) as CFURL, UTType.png.identifier as CFString, 1, nil) else { return reply(["ok": false, "error": "can't write \(out)"]) }
+      CGImageDestinationAddImage(dest, image, nil)
+      CGImageDestinationFinalize(dest)
+      reply(["ok": true, "frame": [main.frame.minX, main.frame.minY, main.frame.width, main.frame.height], "size": [image.width, image.height], "scale": scale])
     case "record-stop":
       guard let rec = recorder else { return reply(["ok": false, "error": "not recording"]) }
       recorder = nil
+      watchCursor(nil)
       reply(try await rec.stop())
     case "now":
       reply(["ok": true, "now": nowNs()])
@@ -369,8 +448,11 @@ func handle(_ msg: [String: Any]) async {
       guard let pid = msg["pid"] as? Int32 else { return reply(["ok": false, "error": "pid is needed"]) }
       reply(["ok": true, "items": try await openMenuItems(pid: pid)])
     case "log":
-      reply(["ok": true, "events": events])
-      events = []
+      let taken = eventsLock.withLock { () -> [[String: Any]] in
+        defer { events = [] }
+        return events
+      }
+      reply(["ok": true, "events": taken])
     case "release":
       // Stop guarding the pointer (between runs, or when the driver hands it back).
       lastPosted = nil
