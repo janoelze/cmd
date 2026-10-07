@@ -6,6 +6,8 @@ What changed in each cmd release, newest first. cmd shows the releases since you
 
 ### Improved
 
+- The Space switcher sits in the middle of the top bar, like a window title, and its menu lists one Space per line.
+- The view modes and New… in the top bar are plain buttons, like those in the status bar.
 - An empty Space shows a few shortcuts worth knowing, such as ⌘K for the command palette.
 
 ## 0.17.0 — 2026-10-07
