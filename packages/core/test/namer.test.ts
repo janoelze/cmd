@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_SETTINGS, type Agent, type AgentTurn } from "@cmd/protocol";
+import { AgentNaming } from "../src/agents/naming.ts";
 import { checkName, decide, mightHaveChanged, nameInput, NO_NAME, shouldAsk, type NamerAnswer, type NamerTurn } from "../src/agents/namer.ts";
 import { replay, sameName, scoreCase, summarize, type Ask, type NameCase } from "../src/agents/names-eval.ts";
 
@@ -114,5 +116,43 @@ describe("replaying a session", () => {
   it("compares names loosely", () => {
     expect(sameName("Release CI", "Slow release CI")).toBe(true);
     expect(sameName("Tours", "Icon sizes")).toBe(false);
+  });
+});
+
+describe("naming live agents", () => {
+  const t = (index: number, prompt: string, over: Partial<AgentTurn> = {}): AgentTurn => ({ format: 2, derivedBy: null, agentId: "a1", agentKind: "claude", agentVersion: null, model: null, index, sessionId: "s1", turnId: null, startedAt: index * 5 * MIN, endedAt: index * 5 * MIN + 1000, prompt, auto: false, followUps: [], notes: [], background: [], outcome: "done", ask: null, final: null, error: null, tools: [], commands: [], shellWrites: 0, files: [], subagents: 0, events: 1, inferred: [], ...over });
+  const setup = (answers: Record<string, NamerAnswer>, agent: Partial<Agent> = {}) => {
+    const turns: AgentTurn[] = [];
+    const asked: string[] = [];
+    const a = { id: "a1", spaceId: "s", kind: "claude", name: null, nameBy: null, depth: 0, ...agent } as Agent;
+    const naming = new AgentNaming({
+      ai: { ready: () => true, object: async <T,>(o: { prompt: string }) => (asked.push(o.prompt), { value: (answers[/<newest>(.*)<\/newest>/.exec(o.prompt)![1]!] ?? { intent: "continue", name: null }) as T }) as never },
+      settings: () => ({ ...DEFAULT_SETTINGS }),
+      agents: () => [a],
+      turns: () => turns,
+      name: (_id, name) => ((a.name = name), (a.nameBy = "model"), true),
+    });
+    const end = async (turn: AgentTurn) => {
+      turns.push(turn);
+      naming.updated({ ...a, turn });
+      await naming.settled("a1");
+    };
+    return { a, asked, end };
+  };
+
+  it("names after the first turn and asks again only when the checks fire", async () => {
+    const { a, asked, end } = setup({ "the release CI takes 20 minutes, why?": { intent: "continue", name: "Slow release CI" } });
+    await end(t(0, "the release CI takes 20 minutes, why?"));
+    expect(a.name).toBe("Slow release CI");
+    await end(t(1, "cache the release build in CI then"));
+    expect(asked).toHaveLength(1);
+  });
+
+  it("leaves agents a person or a worktree named", async () => {
+    for (const nameBy of ["user", "worktree"] as const) {
+      const { a, asked, end } = setup({}, { name: "Mine", nameBy });
+      await end(t(0, "something else entirely now"));
+      expect([a.name, asked.length]).toEqual(["Mine", 0]);
+    }
   });
 });

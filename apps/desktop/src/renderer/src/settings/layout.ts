@@ -104,6 +104,7 @@ export const SETTINGS_PAGES: Page[] = [
         ],
       },
       { title: "Commands", items: ["agents.claude.command", "agents.codex.command", "agents.qwen.command", "agents.copilot.command"] },
+      { title: "Names", items: ["agents.names.ai"] },
       { title: "Working together", items: ["agents.peers"] },
       { title: "Setup", items: ["agents.hooks.auto", "agents.homes"] },
       { title: "Transcript search", items: ["search.archiveDirs"] },

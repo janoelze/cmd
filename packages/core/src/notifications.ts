@@ -66,12 +66,14 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
   #running = new Map<PaneId, Running>();
 
   #writer: NoticeWriter | null;
+  #agents: AgentTracker;
 
   constructor(panes: PaneManager, agents: AgentTracker, settings: () => Settings, writer: NoticeWriter | null = null) {
     super();
     this.#panes = panes;
     this.#settings = settings;
     this.#writer = writer;
+    this.#agents = agents;
     panes.on("osc", (id, ev) => this.#onOsc(id, ev));
     panes.on("foreground", (id, fg) => {
       const r = this.#running.get(id);
@@ -139,9 +141,12 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
     if ((needy && !cfg["notifications.needsInput"]) || (!needy && !cfg["notifications.done"])) return;
     if (finished && quick(a)) return;
     const kind: NoticeKind = needy ? "needs" : finished ? "done" : "stopped";
-    const { title, body } = agentNotice(a, kind);
+    const { title: first, body } = agentNotice(a, kind);
     const send = (text: string) => {
       const pane = a.paneId ? this.#panes.get(a.paneId) : null;
+      // A name given while the wording was written is in the title (agents/naming.ts).
+      const now = this.#agents.get(a.id);
+      const title = now && now.name !== a.name ? agentNotice(now, kind).title : first;
       // The agent's light is its marker; no attention marker on the pane.
       this.#emit({ source: needy ? "agent-input" : "agent-done", paneId: a.paneId, title, body: text, alert: !pane?.muted, urgent: needy, ...(finished ? { done: subjectOf(a) } : {}) });
     };

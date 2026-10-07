@@ -348,6 +348,17 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     return { name: w.name, nameBy: "worktree", nameWas: agent.name, namedAt: ev.at, reason: w.top };
   }
 
+  /** A model's name for an agent (naming.ts); false when the person or a worktree named it (theirs win). */
+  modelName(id: AgentId, name: string, reason: string): boolean {
+    const a = this.#agents.get(id);
+    if (!a || a.nameBy === "user" || a.nameBy === "worktree") return false;
+    if (a.name === name) return true;
+    const was = a.name;
+    this.#update(a, {}, { name, nameBy: "model", nameWas: was, namedAt: Date.now() });
+    this.emit("named", { ...a }, { name, by: "model", was, reason });
+    return true;
+  }
+
   /** Names an agent as the person asked; null hands naming back to cmd (its worktree names it again from its next event). */
   rename(id: AgentId, name: string | null): Agent {
     const a = this.#must(id);

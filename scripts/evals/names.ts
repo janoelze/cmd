@@ -112,7 +112,7 @@ if (positionals[0] === "corpus") {
     const prompt = askText(input);
     try {
       if (ai) return (await ai.object<NamerAnswer>({ tier: "fast", purpose: "names.eval", system, prompt, schema: NAME_SCHEMA as unknown as Record<string, unknown>, maxOutputTokens: 200, model: a.model })).value;
-      const out = execFileSync("claude", ["-p", "--model", a.model ?? "haiku"], { input: `${system}\n\nAnswer with only a JSON object {"intent": "continue"|"develop"|"change", "name": string|null}, no prose.\n\n${prompt}`, encoding: "utf8", maxBuffer: 1 << 22 });
+      const out = execFileSync("claude", ["-p", "--model", a.model ?? "haiku"], { input: `${system}\n\nAnswer with only a JSON object {"intent": "continue"|"develop"|"change", "name": string|null}, no prose.\n\n${prompt}`, encoding: "utf8", maxBuffer: 1 << 22, timeout: 90_000 });
       return JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)) as NamerAnswer;
     } catch (err) {
       console.log(`    ! ${(err as Error).message.split("\n")[0]}`);

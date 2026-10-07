@@ -227,6 +227,13 @@ export const SETTINGS_SCHEMA = {
 
   "notifications.needsInput": { title: "Agent needs input", type: "boolean", default: true, description: "When an agent needs input." },
   "notifications.done": { title: "Agent finished a turn", type: "boolean", default: true, description: "When an agent finishes a turn or stops on an error." },
+  "agents.names.ai": {
+    title: "Name agents with AI",
+    type: "boolean",
+    default: true,
+    description: "Your AI provider names each agent after what it works on.",
+    details: "Sends your recent prompts to it. Agents in a worktree take the branch's name, and names you give always stay.",
+  },
   "notifications.ai": {
     title: "Write agent notifications with AI",
     type: "boolean",

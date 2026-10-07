@@ -29,6 +29,7 @@ import { conversationOf } from "./data/views/conversation.ts";
 import { rewrite } from "./agents/activity/fixture.ts";
 import { AgentHomes } from "./agents/homes.ts";
 import { cleanAiBody, NOTICE_SYSTEM, noticeContext, type NoticeKind } from "./agents/notice.ts";
+import { AgentNaming } from "./agents/naming.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./agents/hooks.ts";
 import { hookEventName } from "./agents/state.ts";
 import { NotificationCenter } from "./notifications.ts";
@@ -176,6 +177,7 @@ export class Core {
   readonly secrets: SecretsService;
   readonly ai: AiService;
   readonly summaries: SummaryService;
+  readonly naming: AgentNaming;
   readonly journal: JournalService;
   readonly remote: RemoteService;
   readonly usage: UsageStats;
@@ -372,6 +374,13 @@ export class Core {
     this.ai.on("updated", (status) => this.#broadcast({ type: "ai.updated", status }));
     this.settings.bind(["ai.provider", "ai.anthropic.model", "ai.anthropic.fastModel", "ai.openai.model", "ai.openai.fastModel"], () => this.ai.settingsChanged());
     if (opts.stateDir) this.ai.start();
+    this.naming = new AgentNaming({
+      ai: { object: (o) => this.ai.object(o), ready: () => this.ai.status().ready },
+      settings: () => this.settings.settings,
+      agents: () => this.agents.list(),
+      turns: (id) => this.agents.activity.turns(id, 40),
+      name: (id, name, why) => this.agents.modelName(id, name, why),
+    });
     this.summaries = new SummaryService({
       ai: {
         object: (o) => this.ai.object(o),
@@ -451,6 +460,7 @@ export class Core {
     });
     this.agents.on("updated", (agent) => {
       describeAgent(this.data, agent);
+      this.naming.updated(agent);
       this.#broadcast({ type: "agent.updated", agent });
       this.#countAgent(agent);
       // Hooks report where the transcript is: picks up folders discovery doesn't know.
@@ -458,6 +468,7 @@ export class Core {
     });
     recordNames(this.data, this.agents, this.sessions);
     this.agents.on("removed", (agentId) => {
+      this.naming.removed(agentId);
       this.#countedAgents.delete(agentId);
       this.#broadcast({ type: "agent.removed", agentId });
     });
@@ -779,7 +790,11 @@ export class Core {
   async #writeNotice(a: Agent, kind: NoticeKind, signal: AbortSignal): Promise<string | null> {
     if (!this.ai.status().ready) return null;
     const ctx = buildContext({ purpose: `notify.${kind}`, budget: 6000, parts: [{ name: "turn", text: JSON.stringify(noticeContext(a, kind)) }] });
-    const res = await this.ai.complete({ tier: "fast", purpose: `notify.${kind}`, system: NOTICE_SYSTEM, prompt: ctx.text, effort: "minimal", maxOutputTokens: 800, signal, context: ctx.record });
+    // A name being decided for this turn goes in the title (the notifier reads it when sending): written meanwhile, within the notifier's wait.
+    // The notifier hears the agent's update before the namer does: after a tick, both have.
+    await null;
+    const named = Promise.race([this.naming.settled(a.id), new Promise((r) => signal.addEventListener("abort", r, { once: true }))]);
+    const [res] = await Promise.all([this.ai.complete({ tier: "fast", purpose: `notify.${kind}`, system: NOTICE_SYSTEM, prompt: ctx.text, effort: "minimal", maxOutputTokens: 800, signal, context: ctx.record }), named]);
     return cleanAiBody(res.value);
   }
 
