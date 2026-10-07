@@ -11,6 +11,13 @@ import { textOf } from "../sources/transcripts.ts";
 import type { DataService } from "../service.ts";
 import type { SessionRow, SessionsView } from "./sessions.ts";
 
+/**
+ * How long a vocabulary is used after the log grew: reading it blocks for a few
+ * hundred ms on a big log, and transcripts grow every pass while agents work.
+ * Only typo tolerance reads it; words as typed match the index directly.
+ */
+const VOCAB_MAX_AGE_MS = 5 * 60_000;
+
 const oneLine = (t: string) => (t.split(/\r?\n/)[0] ?? t).trim().slice(0, 200);
 
 interface Candidate {
@@ -23,22 +30,33 @@ export class SearchView {
   #data: DataService;
   #sessions: SessionsView;
   #vocab: Vocabulary | null = null;
+  #vocabAt = 0;
+  #vocabStale = false;
 
   constructor(data: DataService, sessions: SessionsView) {
     this.#data = data;
     this.#sessions = sessions;
   }
 
-  /** Call after the log grew so typo tolerance sees new words. */
+  /** Call after the log grew so typo tolerance sees new words (within VOCAB_MAX_AGE_MS). */
   invalidate(): void {
-    this.#vocab = null;
+    this.#vocabStale = true;
+  }
+
+  #vocabulary(): Vocabulary {
+    if (!this.#vocab || (this.#vocabStale && Date.now() - this.#vocabAt >= VOCAB_MAX_AGE_MS)) {
+      this.#vocab = new Vocabulary(this.#data.store.db.prepare(`SELECT term, doc FROM events_vocab`).all() as { term: string; doc: number }[]);
+      this.#vocabAt = Date.now();
+      this.#vocabStale = false;
+    }
+    return this.#vocab;
   }
 
   search(text: string, limit = 60, now = Date.now()): SearchHit[] {
     const q = new SearchQuery(text);
     if (q.isEmpty) return [];
-    this.#vocab ??= new Vocabulary(this.#data.store.db.prepare(`SELECT term, doc FROM events_vocab`).all() as { term: string; doc: number }[]);
-    const expansions = q.terms.map((t) => this.#vocab!.expansions(t));
+    const vocab = this.#vocabulary();
+    const expansions = q.terms.map((t) => vocab.expansions(t));
 
     // Tier 1: every term as typed (prefix). Tier 2: typo-tolerant, only if tier 1 came up short.
     let ranked = this.#match(q.expression(), now);

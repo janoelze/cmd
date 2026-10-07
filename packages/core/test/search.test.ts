@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanClaudePrompt, parseClaude, parseCodex, parseCopilot, parseQwen } from "../src/search/parser.ts";
 import { identifierParts, SearchQuery, Vocabulary, words } from "../src/search/query.ts";
 import { DataService } from "../src/data/service.ts";
@@ -272,6 +272,27 @@ describe("owned transcripts + search", () => {
   it("tolerates typos", () => {
     const hits = searcher.search("wiregaurd");
     expect(hits[0]).toMatchObject({ sessionId: "s-vpn", fuzzy: true });
+  });
+
+  it("reads the vocabulary again at most every few minutes as the log grows", () => {
+    const s = new SearchView(data, sessions);
+    const prepare = vi.spyOn(data.store.db, "prepare");
+    const reads = () => prepare.mock.calls.filter(([sql]) => sql.includes("events_vocab")).length;
+    try {
+      vi.useFakeTimers({ now: Date.now(), toFake: ["Date"] });
+      s.search("wiregaurd");
+      s.invalidate();
+      expect(s.search("wiregaurd")[0]).toMatchObject({ sessionId: "s-vpn", fuzzy: true });
+      expect(reads()).toBe(1);
+      vi.advanceTimersByTime(5 * 60_000);
+      s.search("wiregaurd");
+      expect(reads()).toBe(2);
+      s.search("wiregaurd");
+      expect(reads()).toBe(2); // not stale since
+    } finally {
+      vi.useRealTimers();
+      prepare.mockRestore();
+    }
   });
 
   it("reads only a file's new lines on the next pass; a removed file's session stays, it's cmd's now", () => {
