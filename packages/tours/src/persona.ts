@@ -2,13 +2,15 @@
 // a trip-planning web app (atlas) as the main work, notes, a few past agent
 // sessions in Recent, and, as a small nod, a fizzbuzz repo for Thursday's
 // interview. Written into a fixture's home: real git repos with a history by
-// Kai, a prompt that says kai@kai-mbp, transcripts for Recent. Keep it light:
+// Kai, a prompt that says kai@kai-mbp, three weeks of past agent sessions
+// (sessions.ts) for Recent and search. Keep it light:
 // the app is the star, Kai's day just gives it something real to work on.
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import type { Fixture } from "./fixture.ts";
+import { SESSIONS } from "./sessions.ts";
 
 export const KAI = { name: "Kai Moreno", user: "kai", host: "kai-mbp", email: "kai@example.com" };
 
@@ -31,6 +33,14 @@ const FIZZBUZZ: Files = {
   "fizzbuzz.ts": "const n = Number(process.argv[2] ?? 100);\nfor (let i = 1; i <= n; i++) console.log(i % 15 === 0 ? \"FizzBuzz\" : i % 3 === 0 ? \"Fizz\" : i % 5 === 0 ? \"Buzz\" : String(i));\n",
 };
 
+const SITE: Files = {
+  "README.md": "# atlas-site\n\nThe landing page for Atlas. `npm run dev`, deployed on merge.\n",
+  "index.html": '<!doctype html>\n<html lang="en">\n  <head><meta charset="utf-8" /><title>Atlas: plan a trip together</title></head>\n  <body><h1>Plan a trip together</h1></body>\n</html>\n',
+  "pricing.html": "<!doctype html>\n<title>Atlas pricing</title>\n<h1>Free, Plus, Group</h1>\n",
+  "changelog.md": "# Changelog\n\n## 1.4\n\n- Offline itineraries\n- Split costs\n- German and Portuguese\n- A faster trip page\n",
+  "styles.css": "body { font: 18px/1.5 system-ui; }\n",
+};
+
 const NOTES: Files = {
   "standup.md": "# Standup\n\n## Yesterday\n\n- Trip sharing links\n\n## Today\n\n- Fix the date picker on mobile\n- Review Leo's PR\n",
   "todo.md": "- [x] Book Lisbon flights\n- [ ] Date picker on mobile\n- [ ] Prep for Thursday (fizzbuzz, obviously)\n",
@@ -45,19 +55,16 @@ const HISTORY: Record<string, [number, string][]> = {
     [2, "Share a trip with a link"],
     [1, "Styles: follow the system's dark mode"],
   ],
+  "src/atlas-site": [
+    [8, "Landing page"],
+    [6, "Pricing: three plans"],
+    [3, "Changelog for 1.4"],
+  ],
   "src/fizzbuzz": [
     [3, "fizzbuzz"],
     [1, "Take n from the command line"],
   ],
 };
-
-/** Past agent sessions for Recent: [title, folder, first prompt, hours ago]. */
-const SESSIONS: [string, string, string, number][] = [
-  ["Share trips with a link", "src/atlas", "add a share link for a trip, read-only for people who aren't in it", 26],
-  ["Dark mode for the trip page", "src/atlas", "follow the system's dark mode on the trip page", 20],
-  ["FizzBuzz, but clean", "src/fizzbuzz", "make this fizzbuzz something I'd be happy to explain in an interview", 30],
-  ["Why is the date picker off by one on iOS", "src/atlas", "the date picker shows the wrong day on iOS Safari, find out why", 3],
-];
 
 function write(root: string, files: Files) {
   for (const [p, content] of Object.entries(files)) {
@@ -90,26 +97,27 @@ export function applyKai(f: Fixture) {
   fs.writeFileSync(path.join(f.home, ".gitconfig"), `[user]\n\tname = ${KAI.name}\n\temail = ${KAI.email}\n[init]\n\tdefaultBranch = main\n`);
   repo(path.join(f.home, "src/atlas"), ATLAS, HISTORY["src/atlas"]!);
   repo(path.join(f.home, "src/fizzbuzz"), FIZZBUZZ, HISTORY["src/fizzbuzz"]!);
+  repo(path.join(f.home, "src/atlas-site"), SITE, HISTORY["src/atlas-site"]!);
   write(path.join(f.home, "notes"), NOTES);
 
   const projects = path.join(f.transcripts, ".claude", "projects");
-  SESSIONS.forEach(([title, folder, prompt, hoursAgo], i) => {
-    const cwd = path.join(f.home, folder);
+  SESSIONS.forEach((ses, i) => {
+    const cwd = path.join(f.home, ses.folder);
     const dir = path.join(projects, cwd.replace(/[^a-zA-Z0-9]/g, "-"));
     fs.mkdirSync(dir, { recursive: true });
-    const id = `kai-session-${i + 1}`;
-    const at = new Date(Date.now() - hoursAgo * 3_600_000);
-    const file = path.join(dir, `${id}.jsonl`);
-    fs.writeFileSync(
-      file,
-      [
-        { type: "user", sessionId: id, cwd, gitBranch: "main", timestamp: at.toISOString(), message: { role: "user", content: prompt } },
-        { type: "assistant", sessionId: id, timestamp: at.toISOString(), message: { role: "assistant", content: [{ type: "text", text: "Done. The change is in, with a test." }] } },
-        { type: "ai-title", aiTitle: title },
-      ]
-        .map((o) => JSON.stringify(o))
-        .join("\n") + "\n",
+    const id = `kai-session-${String(i + 1).padStart(2, "0")}`;
+    const started = Date.now() - ses.hoursAgo * 3_600_000;
+    // Turns a few minutes apart, as a conversation goes.
+    const at = (n: number) => new Date(started + n * 4 * 60_000).toISOString();
+    const lines: object[] = ses.turns.map((text, n) =>
+      n % 2 === 0
+        ? { type: "user", sessionId: id, cwd, gitBranch: ses.branch ?? "main", timestamp: at(n), message: { role: "user", content: text } }
+        : { type: "assistant", sessionId: id, cwd, timestamp: at(n), message: { role: "assistant", content: [{ type: "text", text }] } },
     );
-    fs.utimesSync(file, at, at);
+    lines.push({ type: "ai-title", aiTitle: ses.title });
+    const file = path.join(dir, `${id}.jsonl`);
+    fs.writeFileSync(file, lines.map((o) => JSON.stringify(o)).join("\n") + "\n");
+    const last = new Date(started + (ses.turns.length - 1) * 4 * 60_000);
+    fs.utimesSync(file, last, last);
   });
 }

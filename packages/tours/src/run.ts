@@ -19,7 +19,7 @@ import { Tour } from "./driver.ts";
 import { addAiKeys, fixtureEnv, makeFixture } from "./fixture.ts";
 import { Helper } from "./helper.ts";
 import { applyKai } from "./persona.ts";
-import { render, type PostOptions } from "./post.ts";
+import { render, renderShots, type PostOptions } from "./post.ts";
 
 export interface TourMeta {
   /** Window content size, points. */
@@ -137,6 +137,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
       try {
         const meta = await runTour(path.join(dir, f), out, Number(opt("--seed") ?? 1));
         console.log(render(out, meta.post));
+        for (const c of renderShots(out, meta.post)) console.log(c.file);
       } catch (e) {
         console.error(`${f}: ${(e as Error).message}`);
         failed.push(f);
@@ -148,6 +149,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   try {
     const meta = await runTour(file, path.resolve(out), Number(opt("--seed") ?? 1));
     console.log(render(path.resolve(out), meta.post));
+    for (const c of renderShots(path.resolve(out), meta.post)) console.log(`${c.file} (${c.width}×${c.height}, ${c.seconds.toFixed(1)} s${c.loop ? `, loop, seam ${c.seam}` : ""})`);
     process.exit(0);
   } catch (e) {
     console.error((e as Error).message);

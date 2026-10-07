@@ -54,6 +54,56 @@ export class Tour {
     },
   };
 
+  /** Running shots: the polling of their region's boxes, and where the pointer was when each began. */
+  private shots = new Map<string, { stop: () => void; from: Point }>();
+
+  /**
+   * Shots: named crops of the recording, rendered as their own videos (post's
+   * renderShots), e.g. a square loop of the command palette for the website.
+   * The region is UI, found by role and name: while a shot runs its boxes are
+   * logged as they change (the palette appears, its list grows), and post frames
+   * the union of them with padding at the aspect ratio. `loop` makes the clip
+   * seamless (end with t.loopBack() so the last frames look like the first).
+   */
+  readonly shot = {
+    start: async (name: string, o: { region: Locator[]; pad?: number; aspect?: number; loop?: boolean }) => {
+      await this.helper.call("mark", { type: "shot", name, phase: "start", pad: o.pad ?? 40, aspect: o.aspect ?? 1, loop: o.loop ?? true });
+      let last = "";
+      let busy = false;
+      const poll = async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          const boxes = (await Promise.all(o.region.map((l) => l.boundingBox({ timeout: 100 }).catch(() => null)))).filter((b) => b !== null);
+          if (!boxes.length) return;
+          const x0 = Math.min(...boxes.map((b) => b.x)), y0 = Math.min(...boxes.map((b) => b.y));
+          const x1 = Math.max(...boxes.map((b) => b.x + b.width)), y1 = Math.max(...boxes.map((b) => b.y + b.height));
+          const box = await this.onScreen({ x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
+          const key = [box.x, box.y, box.width, box.height].map(Math.round).join(" ");
+          if (key === last) return;
+          last = key;
+          await this.helper.call("mark", { type: "shot-box", name, rect: [box.x, box.y, box.width, box.height] });
+        } finally {
+          busy = false;
+        }
+      };
+      await poll();
+      const timer = setInterval(() => void poll(), 200);
+      this.shots.set(name, { stop: () => clearInterval(timer), from: { ...this.at } });
+    },
+    end: async (name: string) => {
+      this.shots.get(name)?.stop();
+      this.shots.delete(name);
+      await this.helper.call("mark", { type: "shot", name, phase: "end" });
+    },
+  };
+
+  /** For a looping shot: the pointer back to where it was when the shot began, so the end matches the start. */
+  async loopBack(name?: string) {
+    const s = name ? this.shots.get(name) : [...this.shots.values()].at(-1);
+    if (s) await this.moveTo(s.from, 60);
+  }
+
   constructor(app: ElectronApplication, page: Page, helper: Helper, seed = 1) {
     this.app = app;
     this.page = page;

@@ -225,7 +225,113 @@ function timeMap(segments: [number, number, number][]) {
   };
 }
 
-export function render(dir: string, o: PostOptions = {}): string {
+/** The canvas the window sits on: 16:10, the window centred (a little high: the shadow falls below), px. */
+function canvasOf(meta: Meta, o: PostOptions) {
+  const cw = even(meta.width / (o.fill ?? 0.82));
+  const ch = even(cw * 0.625);
+  const cx = Math.round((cw - meta.width) / 2);
+  const cy = Math.round((ch - meta.height) / 2 - meta.height * 0.012);
+  return { cw, ch, cx, cy, toCanvas: (p: { x: number; y: number }) => ({ x: cx + (p.x - meta.rect.x) * meta.scale, y: cy + (p.y - meta.rect.y) * meta.scale }) };
+}
+
+/** Seconds of a clip's end crossfaded into its start, so it loops without a seam. */
+const LOOP_FADE = 0.35;
+/** A shot's crop is never smaller than this share of its output width (more would upscale and blur). */
+const SHOT_MIN = 1 / 1.2;
+
+export interface Clip {
+  name: string;
+  file: string;
+  webm: string;
+  poster: string;
+  width: number;
+  height: number;
+  seconds: number;
+  loop: boolean;
+  /** How different the shot's first and last frames are (0 = same); a loop wants it small. */
+  seam: number;
+}
+
+const probeSeconds = (file: string) => Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file], { encoding: "utf8" }).trim());
+
+/**
+ * The tour's shots (t.shot): each its own clip, framed on the UI it named (the
+ * union of its logged boxes, padded, at its aspect ratio), looped seamlessly if
+ * asked, as .mp4 (H.264), .webm (VP9) and a poster, listed in clips/clips.json.
+ */
+export function renderShots(dir: string, o: PostOptions = {}, width = 1080): Clip[] {
+  const meta = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")) as Meta & { name?: string };
+  const events = (JSON.parse(fs.readFileSync(path.join(dir, "events.json"), "utf8")) as (Ev & { name?: string; phase?: string; pad?: number; aspect?: number; loop?: boolean })[]).sort((a, b) => a.t - b.t);
+  const { toCanvas } = canvasOf(meta, o);
+  const S = meta.scale;
+  const sec = (t: number) => (t - meta.t0) / 1e9;
+  const duration = (meta.t1 - meta.t0) / 1e9;
+  const clipsDir = path.join(dir, "clips");
+  fs.mkdirSync(clipsDir, { recursive: true });
+  const clips: Clip[] = [];
+  for (const start of events.filter((e) => e.type === "shot" && e.phase === "start")) {
+    const name = start.name!;
+    const end = events.find((e) => e.type === "shot" && e.phase === "end" && e.name === name && e.t > start.t);
+    const a = sec(start.t), b = end ? sec(end.t) : duration;
+    const boxes = events.filter((e) => e.type === "shot-box" && e.name === name && e.t >= start.t && (!end || e.t <= end.t) && e.rect);
+    if (!boxes.length) {
+      console.warn(`shot ${name}: its region never showed up, skipped`);
+      continue;
+    }
+    // The union of what the region covered, in canvas px, padded, at the aspect ratio, centred.
+    const rects = boxes.map((e) => ({ ...toCanvas({ x: e.rect![0]!, y: e.rect![1]! }), w: e.rect![2]! * S, h: e.rect![3]! * S }));
+    const x0 = Math.min(...rects.map((r) => r.x)), y0 = Math.min(...rects.map((r) => r.y));
+    const x1 = Math.max(...rects.map((r) => r.x + r.w)), y1 = Math.max(...rects.map((r) => r.y + r.h));
+    const pad = (start.pad ?? 40) * S;
+    const aspect = start.aspect ?? 1;
+    const height = even(width / aspect);
+    let w = Math.max(x1 - x0 + 2 * pad, (y1 - y0 + 2 * pad) * aspect, width * SHOT_MIN);
+    const h = w / aspect;
+    w = h * aspect;
+    const view = { x: (x0 + x1) / 2 - w / 2, y: (y0 + y1) / 2 - h / 2, w, h };
+    const base = `${meta.name ?? path.basename(dir)}-${name}`;
+    const plain = path.join(clipsDir, `${base}.plain.mp4`);
+    render(dir, o, { span: [Math.max(0, a - 0.1), Math.min(duration, b + 0.1)], view, width, height, out: plain });
+    const file = path.join(clipsDir, `${base}.mp4`);
+    // How far the end is from the start (mean difference of the two frames, 0–1).
+    const seconds0 = probeSeconds(plain);
+    const frameAt = (t: number, out: string) => execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", String(Math.max(0, t)), "-i", plain, "-frames:v", "1", "-vf", "scale=240:-1", out]);
+    const f0 = path.join(clipsDir, `${base}.first.png`), f1 = path.join(clipsDir, `${base}.last.png`);
+    frameAt(0, f0);
+    frameAt(seconds0 - 0.05, f1);
+    const seam = Number(spawnSync("magick", ["compare", "-metric", "RMSE", f0, f1, "null:"], { encoding: "utf8" }).stderr.match(/\(([\d.]+)\)/)?.[1] ?? 1);
+    fs.rmSync(f1, { force: true });
+    const loop = start.loop !== false;
+    if (loop && seconds0 > LOOP_FADE * 3) {
+      if (seam > 0.08) console.warn(`shot ${name}: its last frame looks quite different from its first (${seam.toFixed(2)}): end it where it started (t.loopBack, close what opened)`);
+      // The body after the first LOOP_FADE s, its end crossfaded into those first frames: seamless.
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-i", plain, "-filter_complex",
+        `[0]split[a][b];[a]trim=0:${LOOP_FADE},setpts=PTS-STARTPTS[head];[b]trim=${LOOP_FADE},setpts=PTS-STARTPTS[body];[body][head]xfade=transition=fade:duration=${LOOP_FADE}:offset=${(seconds0 - 2 * LOOP_FADE).toFixed(3)},format=yuv420p[v]`,
+        "-map", "[v]", "-c:v", "libx264", "-crf", "16", "-preset", "slow", "-movflags", "+faststart", file]);
+      fs.rmSync(plain, { force: true });
+    } else fs.renameSync(plain, file);
+    const webm = path.join(clipsDir, `${base}.webm`);
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-i", file, "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30", "-row-mt", "1", webm]);
+    // The poster is the finished clip's first frame (after a loop's crossfade it isn't the plain one's).
+    const poster = path.join(clipsDir, `${base}.png`);
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-i", file, "-frames:v", "1", poster]);
+    fs.rmSync(f0, { force: true });
+    clips.push({ name, file, webm, poster, width, height, seconds: probeSeconds(file), loop, seam: Math.round(seam * 1000) / 1000 });
+  }
+  if (clips.length) fs.writeFileSync(path.join(clipsDir, "clips.json"), JSON.stringify(clips.map((c) => ({ ...c, file: path.basename(c.file), webm: path.basename(c.webm), poster: path.basename(c.poster) })), null, 1));
+  return clips;
+}
+
+/** A shot to render instead of the whole tour: its source span, a fixed view (canvas px), its output size and file. */
+interface ShotRender {
+  span: [number, number];
+  view: { x: number; y: number; w: number; h: number };
+  width: number;
+  height: number;
+  out: string;
+}
+
+export function render(dir: string, o: PostOptions = {}, shot?: ShotRender): string {
   const meta = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")) as Meta;
   const events = (JSON.parse(fs.readFileSync(path.join(dir, "events.json"), "utf8")) as Ev[]).sort((a, b) => a.t - b.t);
   const work = path.join(dir, "post");
@@ -242,11 +348,7 @@ export function render(dir: string, o: PostOptions = {}): string {
   magick(still, "-crop", `${sw}x${sh}+${sx}+${sy}`, "+repage", shadow);
   magick(still, "-crop", `${ww}x${wh}+${wx}+${wy}`, "+repage", "-alpha", "extract", "-resize", `${meta.width}x${meta.height}!`, mask);
 
-  // The canvas: 16:10, the window centred (a little high: the shadow falls below).
-  const cw = even(meta.width / (o.fill ?? 0.82));
-  const ch = even(cw * 0.625);
-  const cx = Math.round((cw - meta.width) / 2);
-  const cy = Math.round((ch - meta.height) / 2 - meta.height * 0.012);
+  const { cw, ch, cx, cy } = canvasOf(meta, o);
   // The desk the window sits on: three canvases each way, the canvas in the middle, so the
   // camera finds background wherever it goes (the renderer extends it beyond that too).
   const wall = path.join(work, "wallpaper.png");
@@ -284,7 +386,9 @@ export function render(dir: string, o: PostOptions = {}): string {
     const a = (e.t - meta.t0) / 1e9;
     return [a, a + (e.ms ?? 0) / 1000] as [number, number];
   });
-  const segments = timeSegments(inputs, frozen, duration, { idle: o.idle, tighten: o.tighten, holds });
+  let segments = timeSegments(inputs, frozen, duration, { idle: o.idle, tighten: o.tighten, holds });
+  // A shot: only its span of the recording.
+  if (shot) segments = segments.map(([a, b, k]): [number, number, number] => [Math.max(a, shot.span[0]), Math.min(b, shot.span[1]), k]).filter(([a, b]) => b - a > 1e-6);
   const time = timeMap(segments.length ? segments : [[0, duration, 1]]);
   const frames = Math.floor(time.length * FPS) + 1;
   const sec = (e: Ev) => (e.t - meta.t0) / 1e9;
@@ -312,7 +416,7 @@ export function render(dir: string, o: PostOptions = {}): string {
         time.length,
       ),
     );
-  const views = marks.length ? cameraPath(frames, FPS, { w: cw, h: ch }, marks, (u) => pointer(time.source(u))) : null;
+  const views = shot ? null : marks.length ? cameraPath(frames, FPS, { w: cw, h: ch }, marks, (u) => pointer(time.source(u))) : null;
 
   // The plan: per output frame, what to show where (helper/render.swift draws it).
   const presses = events.filter((e) => e.type === "down").map(sec);
@@ -320,7 +424,7 @@ export function render(dir: string, o: PostOptions = {}): string {
   for (let n = 0; n < frames; n++) {
     const u = n / FPS;
     const s = time.source(u);
-    const v = views?.[n] ?? { x: 0, y: 0, w: cw, h: ch };
+    const v = shot?.view ?? views?.[n] ?? { x: 0, y: 0, w: cw, h: ch };
     const p = pointer(s);
     const shape = fallback ? 0 : (cursorAt(events, meta.t0 + s * 1e9)?.id ?? -1);
     const c = cursors[shape];
@@ -332,8 +436,8 @@ export function render(dir: string, o: PostOptions = {}): string {
       pp ? pp.x : 0, pp ? pp.y : 0, pp && press !== undefined ? 1 - (s - press) / (RING_MS / 1000) : 0,
     ].map((x) => Math.round(x * 1000) / 1000));
   }
-  const outW = even(o.width ?? 2560);
-  const outH = even((outW * ch) / cw);
+  const outW = shot?.width ?? even(o.width ?? 2560);
+  const outH = shot?.height ?? even((outW * ch) / cw);
   const plan = {
     fps: FPS,
     width: outW,
@@ -350,9 +454,9 @@ export function render(dir: string, o: PostOptions = {}): string {
     ring,
     frames: rows,
   };
-  const planFile = path.join(work, "plan.json");
+  const planFile = path.join(work, shot ? `plan-${path.basename(shot.out, ".mp4")}.json` : "plan.json");
   fs.writeFileSync(planFile, JSON.stringify(plan));
-  const out = path.join(dir, "tour.mp4");
+  const out = shot?.out ?? path.join(dir, "tour.mp4");
   execFileSync(buildRenderer(), [planFile, out], { stdio: ["ignore", "ignore", "inherit"] });
   return out;
 }

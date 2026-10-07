@@ -63,9 +63,13 @@ The access is real: such a session can see the screen and move the mouse. Use it
 | accessibility read `-25204`, screencapturekit "no answer", video encoding `-12903` | sandbox rules missing or the session wasn't started with `SAFEHOUSE_SCREEN=1` |
 | everything passes outside the sandbox, fails inside | `learn` again (a new probe check needs new rules), then restart the session |
 
+## Shots: square website loops
+
+A tour can cut its own clips: `t.shot.start(name, { region: [locator, …], pad?, aspect? = 1, loop? = true })` … `t.shot.end(name)`. While a shot runs the driver logs the region's boxes as they change (a palette opening, a result list growing); post frames the union, padded, at the aspect ratio (1:1 → 1080×1080), never zoomed past 1.2× so it stays sharp, and renders `clips/<tour>-<name>.mp4` (H.264), `.webm` (VP9), `.png` (poster) and `clips/clips.json`. Loops: end the shot in the state it started (close what opened, Escape, `t.loopBack()` returns the pointer), and post crossfades the last 0.35 s into the first; it warns when the first and last frames differ a lot (`seam` in the manifest). Keep highlight tours small (`palette`, `search`): their own setup, one feature, a clean start and end. `t.type(text, profile, { stay: true })` keeps the pointer still while typing into a palette.
+
 ## Kai, the person in the videos
 
-Every tour runs on Kai's Mac (`src/persona.ts`, applied unless `meta.persona: "none"`): `kai@kai-mbp` in the prompt, `~/src/atlas` (a trip-planning web app, the main work, with Kai's git history), `~/notes` (standup, todo), four past agent sessions in Recent, and `~/src/fizzbuzz` "for Thursday's interview". The videos are a series about Kai's ordinary day, so they can pick up from each other. Keep the humour to a nod (one fizzbuzz moment, not a theme): the point is showing what cmd can do on real-looking work. Extend Kai's world in `persona.ts` rather than per tour, so every video agrees on it.
+Every tour runs on Kai's Mac (`src/persona.ts`, applied unless `meta.persona: "none"`): `kai@kai-mbp` in the prompt, `~/src/atlas` (a trip-planning web app, the main work, with Kai's git history), `~/src/atlas-site` (its landing page), `~/notes` (standup, todo), three weeks of past agent sessions (`src/sessions.ts`: 23 short real-looking conversations, for Recent, sidebar search and the palette's `?` search), and `~/src/fizzbuzz` "for Thursday's interview". UI state like the palette's recent commands is seeded by using it in the tour's setup, not by writing internal state. The videos are a series about Kai's ordinary day, so they can pick up from each other. Keep the humour to a nod (one fizzbuzz moment, not a theme): the point is showing what cmd can do on real-looking work. Extend Kai's world in `persona.ts` rather than per tour, so every video agrees on it.
 
 ## Writing a tour
 
@@ -128,6 +132,8 @@ The tours (`packages/tours/tours/`), each one kind of story:
 
 | Tour | Shows | Model |
 |---|---|---|
+| `palette` | 1:1 loops: commands from the palette; `?` search through past sessions | no |
+| `search` | a 1:1 loop of the sidebar's session search | no |
 | `hero` | the strip + a Claude session from New… + Live Diff filling up + a commit; waiting sped up (`post.idle`) | yes |
 | `strip` | swiping the strip, page dots, widening a window by its edge, sidebar and ⌥⌘← jumps, swipe-then-click | yes (a Claude window in setup) |
 | `canvas` | panning, ⌘-scroll zoom, fit, moving a window, flying to one | no |
