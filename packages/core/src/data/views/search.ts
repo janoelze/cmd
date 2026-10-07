@@ -37,15 +37,22 @@ export class SearchView {
   #vocabAt = 0;
   #vocabStale = false;
   #vocabLoading = false;
+  #vocabTerms = 0;
 
   constructor(data: DataService, sessions: SessionsView) {
     this.#data = data;
     this.#sessions = sessions;
   }
 
-  /** Call after the log grew so typo tolerance sees new words (within VOCAB_MAX_AGE_MS). */
+  /** Call after the log grew so typo tolerance sees new words (within VOCAB_MAX_AGE_MS; at once while there is none, or an empty one from before the first read). */
   invalidate(): void {
     this.#vocabStale = true;
+    if (!this.#vocabTerms) this.#vocabulary();
+  }
+
+  /** Starts the first read, so the first search has typo tolerance (Core.start). */
+  warm(): void {
+    this.#vocabulary();
   }
 
   /**
@@ -55,7 +62,7 @@ export class SearchView {
    * (tests) is read here.
    */
   #vocabulary(): Vocabulary | null {
-    const due = !this.#vocab || (this.#vocabStale && Date.now() - this.#vocabAt >= VOCAB_MAX_AGE_MS);
+    const due = !this.#vocab || (this.#vocabStale && (!this.#vocabTerms || Date.now() - this.#vocabAt >= VOCAB_MAX_AGE_MS));
     if (due && !this.#vocabLoading) {
       const file = this.#data.store.file;
       if (file === ":memory:") this.#loaded(this.#data.store.db.prepare(`SELECT term, doc FROM events_vocab`).all() as { term: string; doc: number }[]);
@@ -78,8 +85,10 @@ export class SearchView {
 
   #loaded(rows: { term: string; doc: number }[]): void {
     this.#vocab = new Vocabulary(rows);
+    this.#vocabTerms = rows.length;
     this.#vocabAt = Date.now();
     this.#vocabStale = false;
+    log.debug("vocabulary read", { terms: rows.length });
   }
 
   search(text: string, limit = 60, now = Date.now()): SearchHit[] {

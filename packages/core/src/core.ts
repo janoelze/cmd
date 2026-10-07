@@ -506,6 +506,7 @@ export class Core {
     if (this.sessions.needsRebuild) s.startup("sessions", "Indexing sessions", () => this.sessions.rebuild().then(() => this.#searchView.invalidate()));
     // Transcripts are read in a worker and recorded here in paced steps; the reading's own progress is search.status.
     if (o.transcripts || o.transcriptRoots) s.startup("transcripts", "Starting the transcript reader", () => void this.settings.bind(["data.record.transcripts", "search.archiveDirs"], () => this.#restartSearch()));
+    if (o.stateDir) s.startup("search", "Preparing search", () => this.#searchView.warm());
     if (o.stateDir && o.statusRoot) s.startup("homes", "Looking for agents", () => this.#discoverHomes());
     if (o.stateDir) s.startup("journal", "Starting the journal", () => this.journal.start());
     if (o.stateDir) s.startup("retention", "Scheduling retention", () => this.data.start());
