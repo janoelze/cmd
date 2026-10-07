@@ -62,10 +62,13 @@ rules_since() {
   local since="$1"
   /usr/bin/log show --start "$since" --style compact \
     --predicate 'eventMessage CONTAINS "Sandbox:" AND eventMessage CONTAINS "deny(" AND eventMessage CONTAINS "probe"' 2>/dev/null |
-    sed -nE 's/.*deny\([0-9]+\) ([a-z*-]+) (.*)$/\1 \2/p' | sort -u |
-    while read -r op arg; do
+    # Only the plain "deny(1) <operation> <name>[ (per-pid)]" form; the log also has
+    # JSON-ish copies of the same denial, which must not become rules.
+    sed -nE 's/.*deny\([0-9]+\) ([a-z*-]+) ([A-Za-z0-9._-]+)( \(per-pid\))?([^A-Za-z0-9._-]|$).*/\1 \2\3/p' | sort -u |
+    while read -r op arg perpid; do
       case "$op" in
-        mach-lookup) echo "(allow mach-lookup (global-name \"$arg\"))" ;;
+        # Another process's per-pid service (an app's axserver): a local name.
+        mach-lookup) [ -n "$perpid" ] && echo "(allow mach-lookup (local-name \"$arg\"))" || echo "(allow mach-lookup (global-name \"$arg\"))" ;;
         mach-register) echo "(allow mach-register (global-name \"$arg\"))" ;;
         iokit-open | iokit-open-user-client) echo "(allow iokit-open (iokit-user-client-class \"$arg\"))" ;;
         user-preference-read) echo "(allow user-preference-read (preference-domain \"$arg\"))" ;;
@@ -77,15 +80,26 @@ rules_since() {
 learn() {
   build_probe
   mkdir -p "$(dirname "$profile")"
-  [ -f "$profile" ] || printf ';; Safehouse: screen recording and input for cmd tours (packages/tours/scripts/safehouse-screen.sh).\n;; Learned from the sandbox denials of a probe that records a frame and posts an event.\n' >"$profile"
+  # From scratch each time, so a run never builds on a bad earlier profile.
+  printf ';; Safehouse: screen recording and input for cmd tours (packages/tours/scripts/safehouse-screen.sh).\n;; Learned from the sandbox denials of a probe that records a frame and posts an event.\n' >"$profile"
   for round in 1 2 3 4 5 6; do
     local since
     since="$(date '+%Y-%m-%d %H:%M:%S')"
     sleep 1
-    if in_sandbox "$probe" >/dev/null 2>&1; then
+    local out
+    if out="$(in_sandbox "$probe" 2>&1)"; then
       echo "round $round: the probe passes in the sandbox"
+      echo "$out" | sed 's/^/  /'
       break
     fi
+    # No probe output at all: the sandbox itself didn't start (a bad profile line).
+    if ! grep -q "accessibility" <<<"$out"; then
+      echo "round $round: the sandbox didn't start:"
+      echo "$out" | sed 's/^/  /'
+      break
+    fi
+    echo "round $round: in the sandbox"
+    echo "$out" | sed 's/^/  /' 
     sleep 2 # denials reach the log a moment later
     local new
     new="$(rules_since "$since" | while read -r line; do grep -qxF "$line" "$profile" || echo "$line"; done)"
