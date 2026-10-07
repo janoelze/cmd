@@ -22,7 +22,7 @@ export interface PaletteItem {
 
 const PREFIX: Record<string, string> = { ">": "Commands", "@": "Sessions" };
 /** `?query` searches agent transcripts (async, in the core). */
-const SEARCH_PREFIX = "?";
+export const SEARCH_PREFIX = "?";
 
 /** Subsequence match; earlier and tighter matches score higher. */
 function score(label: string, q: string): number {
@@ -51,6 +51,7 @@ export function Palette({
   onClose,
   initialQuery = "",
   search,
+  searchGroups = [],
   searchStatus,
   dynamic,
   fallback,
@@ -68,6 +69,8 @@ export function Palette({
   initialQuery?: string;
   /** Transcript search for `?query`. */
   search?: (text: string) => Promise<PaletteItem[]>;
+  /** Groups of `items` that `?query` matches too, listed before what `search` finds (open windows). */
+  searchGroups?: string[];
   /** Shown in the footer while searching, e.g. "3,836 sessions indexed". */
   searchStatus?: SearchStatus | null;
   /** Extra items computed from the raw query (e.g. "Open <url>"), listed first. */
@@ -113,7 +116,19 @@ export function Palette({
   }, [searching, searchText, search]);
 
   const results = useMemo(() => {
-    if (searching) return found ?? [];
+    if (searching) {
+      const q = searchText.toLowerCase();
+      const here = q
+        ? items
+            .filter((it) => searchGroups.includes(it.group))
+            .map((it) => ({ it, s: score(it.meta ? `${it.label} ${it.meta}` : it.label, q) }))
+            .filter((x) => x.s > 0)
+            .sort((a, b) => b.s - a.s)
+            .slice(0, 8)
+            .map((x) => x.it)
+        : [];
+      return [...here, ...(found ?? [])];
+    }
     const extra = dynamic?.(query) ?? [];
     const prefixed = PREFIX[query[0] ?? ""];
     const group = prefixed && items.some((it) => it.group === prefixed) ? prefixed : undefined;
@@ -132,7 +147,7 @@ export function Palette({
       .slice(0, 50)
       .map((x) => x.it);
     return [...extra, ...matched, ...(fallback?.(query) ?? [])];
-  }, [items, query, recent, searching, found, dynamic, fallback, groups]);
+  }, [items, query, recent, searching, searchText, searchGroups, found, dynamic, fallback, groups]);
 
   useEffect(() => setActive(0), [query]);
   // Keep the active row in view as ↑↓ move past the list's edge (not on hover: the list would move under the mouse).
@@ -153,8 +168,8 @@ export function Palette({
     ? searchText
       ? found === null
         ? "Searching…"
-        : "No sessions match."
-      : 'Search past Claude Code and Codex sessions. "Phrases" and -exclusions work.'
+        : "Nothing matches."
+      : 'Search open windows and past Claude Code and Codex sessions. "Phrases" and -exclusions work.'
     : (emptyText ?? "Nothing matches. Type ? to search past agent sessions.");
 
   // A combobox over a listbox: scripts and VoiceOver find `option "New Terminal"`, and the highlighted one is selected.

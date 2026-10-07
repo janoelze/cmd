@@ -13,7 +13,7 @@ const TIPS: [CommandId, string][] = [
   ["file.new", "to open a window or widget"],
   ["file.newTerminal", "for a new terminal"],
   ["file.newClaude", "to start a Claude session"],
-  ["view.search", "to search past sessions"],
+  ["view.search", "to search windows and past sessions"],
   ["file.openSpace", "to open a folder as a Space"],
   ["app.settings", "for settings"],
 ];

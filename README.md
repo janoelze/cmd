@@ -88,12 +88,14 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 | ⌃⌘J | next session that needs you |
 | ⌥⌘← / ⌥⌘→, ⌘1–9 | previous / next session, select a session |
 | ⌘W / ⇧⌘W | close the terminal (asks if something runs) / close the window |
-| ⌘F, ⌘G / ⇧⌘G | find in scrollback, next / previous |
+| ⌘F, ⌘G / ⇧⌘G | find in the window (a terminal's scrollback, a page, a file), next / previous |
+| ⌥⌘F | find and replace in a text window |
 | ⌘↑ / ⌘↓ | jump to the previous / next prompt |
 | ⇧⌘A | copy the last command's output |
 | ⌥-drag | select text in programs that use the mouse |
 | ⇧⌘1 / ⇧⌘2 | canvas: fit all / zoom to the selected window |
-| ⌃⌘S, ⇧⌘F | show or hide the sidebar, search it |
+| ⇧⌘F | search open windows and past sessions (the palette, with `?`) |
+| ⌃⌘S | show or hide the sidebar |
 | ⌘, | settings |
 
 **Canvas.** Drag a title bar to move a window and an edge to resize it. Pinch or ⌘-scroll to zoom, scroll to pan, double-click to zoom to a window or fit everything.

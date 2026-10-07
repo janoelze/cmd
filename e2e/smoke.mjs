@@ -319,12 +319,22 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.waitForTimeout(600);
 }
 
-// Sidebar search (⇧⌘F): filters open windows and searches past sessions; Esc leaves.
+// Search (⇧⌘F): the palette with ? typed, over open windows and past sessions.
 {
   await menu("view.search");
-  const searchFocused = await win.waitForFunction(() => document.activeElement?.closest(".sb-search") !== null, null, { timeout: 2000 }).then(() => true, () => false);
-  if (!searchFocused) console.log("focus is on", await win.evaluate(() => document.activeElement?.outerHTML.slice(0, 200)));
-  check(searchFocused, "⇧⌘F focuses the Navigator's search");
+  await win.locator(".palette").waitFor();
+  check((await win.locator(".palette-input").inputValue()) === "?", "⇧⌘F opens the palette in search mode");
+  await win.keyboard.type("wiregaurd");
+  await win.waitForSelector(".palette .palette-label:has-text('VPN auto reconnect')", { timeout: 15000 }).catch(() => {});
+  check((await win.locator(".palette .palette-label", { hasText: "VPN auto reconnect" }).count()) > 0, "the palette's search finds past sessions, typos and all");
+  await win.screenshot({ path: path.join(shots, "4b-palette-search.png") });
+  await win.keyboard.press("Escape");
+  await win.locator(".palette").waitFor({ state: "detached" });
+}
+
+// Sidebar search: the Navigator's field filters open windows and searches past sessions; Esc leaves.
+{
+  await win.locator(".sb-search input").click();
   await win.keyboard.type("wiregaurd");
   await win.waitForSelector(".sidebar-scroll .row.history", { timeout: 15000 });
   const label = await win.locator(".sidebar-scroll .row.history .row-name").first().textContent();

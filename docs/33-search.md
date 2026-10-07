@@ -1,6 +1,6 @@
 # Search
 
-> Status (2026-10-07): **phase 1 built** (branch `search-design`): the kit's `FindBar`, `Glyph` and `Highlight`; `useFind` (`renderer/src/find.tsx`) in terminals (floating), text windows (CodeMirror's panel replaced, replace on ⌥⌘F), PDF, browser pages (`findInPage`), Markdown previews and Files (`find-dom.ts`, the CSS Custom Highlight API); Use Selection for Find (no shortcut: ⌘E is Toggle Preview / Edit); a shared last query for ⌘G; Find disabled where a window can't. Not yet: Magic widgets (needs find in the widget runtime, `host.js`, over postMessage), phases 2–5. A user asked for full-text search. cmd has two kinds of search today, built separately and unevenly: find in a window (⌘F) and past-session search (⇧⌘F). This doc makes them one story with two keys, extends ⇧⌘F to everything cmd remembers and to the files in your projects, and says where an index of file contents fits (later, as an accelerator, never as the source of truth). Read first: this doc; `packages/core/src/data/views/search.ts`; `packages/core/src/search/query.ts`; docs/26 (S7, C3) and docs/30 ("Search everything"), which already promise most of it. Work in a worktree with its own `CMD_HOME` (CLAUDE.md).
+> Status (2026-10-07): **phase 1 built** (branch `search-design`): the kit's `FindBar`, `Glyph` and `Highlight`; `useFind` (`renderer/src/find.tsx`) in terminals (floating), text windows (CodeMirror's panel replaced, replace on ⌥⌘F), PDF, browser pages (`findInPage`), Markdown previews and Files (`find-dom.ts`, the CSS Custom Highlight API); Use Selection for Find (no shortcut: ⌘E is Toggle Preview / Edit); a shared last query for ⌘G; Find disabled where a window can't. Search in the palette: "Search…" (⇧⌘F, a magnifier in the top bar) opens it with `?`, open windows above past sessions; no Search view of its own. Not yet: Magic widgets (needs find in the widget runtime, `host.js`, over postMessage), phases 2, 4, 5 and the rest of 3. A user asked for full-text search. cmd has two kinds of search today, built separately and unevenly: find in a window (⌘F) and past-session search (⇧⌘F). This doc makes them one story with two keys, extends ⇧⌘F to everything cmd remembers and to the files in your projects, and says where an index of file contents fits (later, as an accelerator, never as the source of truth). Read first: this doc; `packages/core/src/data/views/search.ts`; `packages/core/src/search/query.ts`; docs/26 (S7, C3) and docs/30 ("Search everything"), which already promise most of it. Work in a worktree with its own `CMD_HOME` (CLAUDE.md).
 
 ## What exists
 
@@ -35,7 +35,7 @@ Two keys, each meaning one thing everywhere, both with the field, the keys and t
 |---|---|---|
 | Looks in | the selected window, as it is now | everything cmd remembers, and the files in your projects |
 | Shows | matches in place, "n of m" | a list of results, grouped by kind |
-| Lives | a bar on the window | the Search view |
+| Lives | a bar on the window | the command palette in search mode |
 
 ### ⌘F: Find in the window
 
@@ -63,11 +63,13 @@ interface Findable {
 
 ### ⇧⌘F: Search
 
-One view for everything, "Search…" in the menu (renamed from "Search Sessions…"). One field, the same query syntax as today, a scope and kinds:
+The command palette in search mode, not a view of its own (decided 2026-10-07: no specialised search UI). "Search…" in the menu (renamed from "Search Sessions…"), ⇧⌘F and a magnifier in the top bar open the palette with `?` typed; backspace it and it's the command palette again. The palette already has what search needs: grouped rows with a meta line and a highlighted snippet, ↑↓ / ↩ / ⌘↵, a debounced async search that drops stale answers, the index's progress.
 
-- **Scope:** This Space · This project · Everywhere. Defaults to the selected window's project, else the Space.
-- **Kinds** (toggles, all on by default): Sessions · Commands · Pages · Files · Notes. "Files" means file contents (below); a file you opened in cmd is a Pages-and-files history hit and shows under Files too.
-- **Time:** any time, today, this week, a custom range; `since:` in the query does the same.
+Scope, kinds and time are words in the query, not controls (the palette has one field):
+
+- **Scope:** `in:space`, `in:project`; everywhere by default.
+- **Kinds:** `kind:command`, `kind:page`, `kind:file`… (several allowed); all by default. "Files" means file contents (below); a file you opened in cmd is a history hit and shows under Files too.
+- **Time:** `since:7d`, `since:today`.
 
 Results are grouped by kind, each group ranked on its own (one ranked list across kinds compares bm25 scores of different corpora, which means nothing). Each row: a title, a meta line (where, when) and a highlighted snippet. ↩ does the obvious thing:
 
@@ -82,7 +84,9 @@ Results are grouped by kind, each group ranked on its own (one ranked list acros
 
 ⌘↵ on a session forks it, on a command runs it again in a new terminal in its folder.
 
-**Where the view lives:** a window type (`search`), opened as a sheet over the workspace by ⇧⌘F and kept as a window if you drag it out or pin it. The Navigator's sidebar is too narrow for grouped results with snippets; its field stays a quick filter over its rows plus the Sessions group, from the same backend. The palette's `?` shows the top hits of each kind and "Show All in Search" (opens the view with the query). All three agree because they ask the same method.
+**Built (2026-10-07):** the top bar's magnifier, "Search…" on ⇧⌘F, and the palette's search matching open windows (its Sessions group) above past sessions. The Navigator's field stays a filter over its rows plus past sessions, from the same method; ⇧⌘F no longer goes there.
+
+**The trade-off:** the palette is modal and closes on ↩, which suits "find it and go there" and not working through fifty grep matches one by one (an editor's find-in-files panel stays open). If that's missed: ⌘↵ on a Files group opens its matches as a list in a text window, still no new UI.
 
 ### UI kit pieces
 
@@ -90,25 +94,24 @@ The kit already has the two densities this needs, and new search UI uses them ra
 
 | | Toolbar items (`toolbar.tsx`) | General controls (`fields.tsx`, `list.tsx`) |
 |---|---|---|
-| Where | a window's toolbar, in a tile or a sidebar, at any width | sheets, dialogs, the Search view's body, Settings |
+| Where | a window's toolbar, in a tile or a sidebar, at any width | sheets, dialogs, Settings |
 | Field | `ToolbarSearchField`: ghost at rest, `--toolbar-item-h`, a `count` slot, Escape clears then `onEscape`, shrinks last as the bar gives way | `SearchField`: a `TextField` with sizes (`lg` in the widget library's sheet), a `status` slot (`IndexRing`), Escape clears |
 | Options | `ToolbarButton pressed`, `ToolbarSegmented`, `ToolbarMenu`; `priority` moves them into ⋯ | `Segmented`, `Checkbox`, `Select` |
 
 Where each surface sits:
 
 - **Find bar** (⌘F): toolbar items only. It is a `WindowToolbar` row: `ToolbarSearchField` with the count, the option toggles, previous and next, close. Windows that have a toolbar get it as a second row under theirs (as PDF does now); windows without one (terminals) get it `floating` (as now). The toggles get a `priority`, so in a narrow tile they move into ⋯ and the field, the count and the arrows stay. One component, both placements; no "small find bar" to keep in step.
-- **Search view** (⇧⌘F): in the toolbar, `ToolbarSearchField` with the scope as `ToolbarSegmented` (This Space · This project · Everywhere) and kinds and time as a `ToolbarMenu`, so the view works as a narrow window or in a sidebar. Shown as a sheet, the same items in the same `WindowToolbar`: a sheet is a window here (the window shell), not a different look.
+- **Search** (⇧⌘F): the palette, as it is; its rows draw snippets with the kit's `Highlight`.
 - **Navigator** keeps its `ToolbarSearchField`; the palette keeps its own input (it is a command field, not a search field).
 
 What the kit lacks, added to it (with gallery specimens), not to views' CSS:
 
 1. **Text glyphs as toolbar icons.** "Aa", "ab" (whole word) and ".*" are app CSS today (`.find-glyph` in `renderer/src/styles.css`). Either SF Symbols that say it (`textformat` for case; no good one for regex) or a kit `glyph` icon kind that `iconNode` draws at `ICON.toolbar`, so every find bar's toggles match.
-2. **Highlighted text.** `Highlighted` (`\x01…\x02` marks → `<mark>`) lives in `Palette.tsx`. Move it to the kit as `<Highlight text>`, with the match colour token (`--match`) the terminal and CodeMirror already use, so a snippet looks the same in the palette, the Navigator and the Search view.
-3. **A result row.** `ListRow` with a title, a meta line and a snippet line (`Highlight`), an icon for the kind, a trailing hint (⌘↵). The palette's and the Navigator's history rows become it.
-4. **A grouped, keyboard-driven result list.** Group headers with a count and "Show all", ↑↓ across groups, ↩ / ⌘↵, the active row kept in view, rows appended as streamed results arrive without the active one moving (the Navigator's `useFrozenOrder` idea). Today the palette and the Navigator each do this their own way.
-5. **The find bar** itself (`FindBar`, the `Findable` interface above), composed of 1 and the toolbar items, in the kit so any window type, built-in or plugin, gets it.
+2. **Highlighted text.** `Highlighted` (`\x01…\x02` marks → `<mark>`) lives in `Palette.tsx`. Move it to the kit as `<Highlight text>`, with the match colour token (`--match`) the terminal and CodeMirror already use, so a snippet looks the same in the palette and the Navigator. Built.
+3. **The palette, for streamed results.** Rows appended as file matches arrive without the active one moving (the Navigator's `useFrozenOrder` idea), and a group header per kind. Changes to the palette, not a new list.
+4. **The find bar** itself (`FindBar`, the `Findable` interface above), composed of 1 and the toolbar items, in the kit so any window type, built-in or plugin, gets it. Built.
 
-Settle each in the Workbench with the user before building views on it (prototype skill): the find bar in a narrow tile and a wide one, the Search view as a sheet and as a sidebar.
+Settled in the Workbench with the user (prototype skill): the find bar in a narrow tile and a wide one (`FindBar.story.tsx`).
 
 ## Backend
 
@@ -171,7 +174,7 @@ CLI: `cmd search <text>` keeps its output for sessions; `--kind command,page`, `
 
 1. **⌘F everywhere.** Glyph icons, `Highlight`, `FindBar` and `Findable` in the kit; terminal and PDF moved onto it; browser, markdown, Files, Magic new; CodeMirror's panel replaced; ⌘E; Find disabled where it can't. Small, and the most visible inconsistency today.
 2. **History search over every kind.** `SearchView` by kind with filters and the union result; command and agent output indexed (rebuild, size measured); CLI flags. No new UI yet beyond the palette's `?` groups.
-3. **The Search view.** The kit's result row and grouped list; the `search` window type as a sheet, scope, kinds, time, grouped results, ↩ and ⌘↵ per kind; Navigator and palette on the same method; "Search…" in the menu.
+3. **Search in the palette.** Built: "Search…" (⇧⌘F, the top bar's magnifier) opens the palette with `?`, open windows matched above past sessions. Next: a group per kind from phase 2, ↩ and ⌘↵ per kind, `in:` / `kind:` / `since:` words.
 4. **File contents with ripgrep.** Bundled `rg`, streamed `search.results`, scopes, ranking from the log, open at line with the find bar seeded.
 5. **Trigram index**, if Everywhere is too slow in use: the worker, FSEvents and git dirtiness, verify-on-read, Settings → Data.
 
@@ -180,7 +183,6 @@ Each phase ships on its own. e2e: a fixture project and fixture transcripts (`CM
 ## Open questions
 
 1. **What the asking user meant by "full text search":** history (phases 2–3) or project files (phase 4)? Decides whether 4 comes before 3.
-2. **⇧⌘F with no window selected and no project:** Everywhere, or the Space?
-3. **Command output cap:** the last 20 KB of each, or the first and last 10 KB? Errors are usually at the end, the command's own header at the start.
-4. **Replace in files.** Editors pair find-in-files with replace-in-files. Out of scope here; agents do bulk edits better, and a wrong bulk replace has no Undo across files.
-5. **Semantic search** (docs/26 C3 "may later"): `sqlite-vec` in the views file over the same corpus, as another ranking signal. Not before phase 3 is in use.
+2. **Command output cap:** the last 20 KB of each, or the first and last 10 KB? Errors are usually at the end, the command's own header at the start.
+3. **Replace in files.** Editors pair find-in-files with replace-in-files. Out of scope here; agents do bulk edits better, and a wrong bulk replace has no Undo across files.
+4. **Semantic search** (docs/26 C3 "may later"): `sqlite-vec` in the views file over the same corpus, as another ranking signal. Not before phase 3 is in use.

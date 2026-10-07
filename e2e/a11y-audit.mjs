@@ -158,8 +158,10 @@ await audit("palette");
 await win.keyboard.press("Escape");
 
 await menu("view.search");
+await win.locator(".palette").waitFor();
+await win.keyboard.type("vpn");
 await settle(300);
-await audit("sidebar-search");
+await audit("palette-search");
 await win.keyboard.press("Escape");
 
 await menu("file.newFiles");

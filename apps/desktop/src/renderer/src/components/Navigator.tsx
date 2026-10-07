@@ -17,12 +17,6 @@ import { IndexRing } from "./IndexRing.tsx";
 import { countRender } from "../perf.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
 
-/** A request from a command: focus the search field. */
-export interface SidebarRequest {
-  kind: "search";
-  at: number;
-}
-
 /** What the Navigator shows and does, from App. */
 export interface NavigatorData {
   spaceId: SpaceId;
@@ -33,7 +27,6 @@ export interface NavigatorData {
   onRowMenu: (row: SidebarRow) => void;
   onClose: (row: SidebarRow) => void;
   onNewTerminal: () => void;
-  request: SidebarRequest | null;
   search: SearchStatus | null;
 }
 
@@ -64,13 +57,6 @@ function Navigator(p: NavigatorData) {
   const [query, setQuery] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const searching = query.trim().length > 0;
-
-  // ⇧⌘F reaches a sidebar that may have just opened.
-  useEffect(() => {
-    if (!p.request || Date.now() - p.request.at > 1000) return;
-    input.current?.focus();
-    input.current?.select();
-  }, [p.request]);
 
   const groups = useMemo(() => SECTIONS.map((id) => ({ id, rows: rows.filter((r) => sectionOf(r) === id) })), [rows]);
   // ⌘1–9 follow the visible order of rows that have a window.

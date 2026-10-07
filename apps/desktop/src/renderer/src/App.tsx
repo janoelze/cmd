@@ -48,8 +48,8 @@ import { APP_VERSION, RELEASES, releasesSince, WhatsNew } from "./components/Wha
 import { closeSetup, Onboarding, showSetup, stepsAtLaunch, useSetup } from "./onboarding/Onboarding.tsx";
 import { compareVersions, type Release } from "../../shared/changelog.ts";
 import { PairSheet, useRemoteNotifications } from "./components/Remote.tsx";
-import { Palette, type PaletteItem } from "./components/Palette.tsx";
-import { NavigatorContext, type NavigatorData, type SidebarRequest } from "./components/Navigator.tsx";
+import { Palette, SEARCH_PREFIX as SEARCH, type PaletteItem } from "./components/Palette.tsx";
+import { NavigatorContext, type NavigatorData } from "./components/Navigator.tsx";
 import { Dock } from "./components/Dock.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { dock, dockedIds, dockWidths, DOCK_WIDTH, liveDocks, MIN_WORKSPACE, readDocks, sideOf, SIDES, undock, type Docks, type Side } from "./docks.ts";
@@ -60,6 +60,9 @@ import { StatusBar } from "./components/StatusBar.tsx";
 import { countRender } from "./perf.ts";
 
 /** True when a text field (palette, settings) has focus, so Edit commands target it. */
+/** What the palette's search matches besides past sessions: what's open. */
+const SEARCH_GROUPS = ["Sessions"];
+
 const editingText = () => {
   const el = document.activeElement;
   if (el instanceof HTMLElement && el.isContentEditable) return true; // CodeMirror (text windows)
@@ -114,7 +117,6 @@ export function App() {
   // The sidebar before sidebars were windows: carried over into each Space's first Navigator.
   const [sidebarOpen] = usePersisted("sidebar.open", true);
   const [sidebarWidth] = usePersisted<number | null>("sidebar.width", null);
-  const [sidebarRequest, setSidebarRequest] = useState<SidebarRequest | null>(null);
   const [zoom, setZoom] = usePersisted("terminal.zoom", 0);
   const [recent, setRecent] = usePersisted<string[]>("palette.recent", []);
   // One spatial order shared by grid and strip.
@@ -440,15 +442,8 @@ export function App() {
     "terminal.prevPrompt": () => selected && terminals.jumpToPrompt(selected, -1),
     "terminal.nextPrompt": () => selected && terminals.jumpToPrompt(selected, 1),
     "view.palette": () => setPalette((p) => (p === false ? "" : false)),
-    "view.search": () => {
-      // The Navigator's search: show its side, select it on the workspace, or make one on the left.
-      const nav = [...s.windows.values()].find((w) => w.kind === "navigator");
-      const side = sideOf(docks, nav?.id);
-      if (side) setDocks((d) => ({ ...d, [side]: { ...d[side], hidden: false } }));
-      else if (nav) select(nav.id);
-      else void openNavigator(all.spaceId, "left");
-      setSidebarRequest({ kind: "search", at: Date.now() });
-    },
+    // The palette in search mode (docs/33): `?` typed for you; backspace it for commands.
+    "view.search": () => setPalette((p) => (p === SEARCH ? false : SEARCH)),
     "view.focus": () => setMode("focus"),
     "view.grid": () => setMode("grid"),
     "view.strip": () => setMode("strip"),
@@ -773,7 +768,6 @@ export function App() {
     onRowMenu: rowMenu,
     onClose: (r) => windowIdOf(r) && void closePane(windowIdOf(r)!),
     onNewTerminal: () => void newTerminal(),
-    request: sidebarRequest,
     search: s.search,
   };
 
@@ -841,8 +835,10 @@ export function App() {
           recent={recent}
           onRun={remember}
           onClose={() => setPalette(false)}
+          key={palette === SEARCH ? "search" : "commands"}
           initialQuery={palette}
           search={searchSessions}
+          searchGroups={SEARCH_GROUPS}
           searchStatus={s.search}
         />
       )}
