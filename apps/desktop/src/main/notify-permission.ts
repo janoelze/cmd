@@ -61,6 +61,7 @@ function call(repoRoot: string, fn: "status" | "request"): Promise<NotifyPermiss
     a[fn]((json) => {
       try {
         const r = JSON.parse(json) as Raw;
+        if (fn === "request") log.info("asked macOS", r);
         resolve({ access: accessOf(r), bundleId: r.bundleId });
       } catch {
         resolve(null);
@@ -75,7 +76,8 @@ export const requestNotifyPermission = (repoRoot: string) => call(repoRoot, "req
 
 /** System Settings → Notifications, at cmd's page (macOS 13+; older ones open the Notifications pane). */
 export function openNotifySettings(bundleId: string): void {
-  void shell.openExternal(`x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${encodeURIComponent(bundleId)}`).catch(() =>
-    shell.openExternal("x-apple.systempreferences:com.apple.preference.notifications"),
-  );
+  void shell.openExternal(`x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${encodeURIComponent(bundleId)}`).catch((err: Error) => {
+    log.warn("could not open System Settings at cmd", { bundleId, error: err.message });
+    return shell.openExternal("x-apple.systempreferences:com.apple.preference.notifications");
+  });
 }

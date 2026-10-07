@@ -22,11 +22,16 @@ export function NotifyPermission() {
   }, []);
   if (!p) return null;
 
+  // macOS's prompt; if it doesn't end with notifications on (no prompt came, or
+  // they declined), System Settings is the way left.
   const turnOn = () => {
     setBusy(true);
     cmd
       .requestNotifyPermission()
-      .then(setP, () => {})
+      .then((r) => {
+        setP(r);
+        if (r?.access !== "on") cmd.openNotifySettings();
+      }, () => cmd.openNotifySettings())
       .finally(() => setBusy(false));
   };
   const test = <Button onClick={() => cmd.sendTestNotification()}>Send Test</Button>;
