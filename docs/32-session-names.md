@@ -100,7 +100,7 @@ The name belongs to the **session**: it outlives the agent (Recent, the Journal,
 
 - **Rename Agent…** on the agent's title bar and sidebar row context menus, and in the palette (a command in `shared/commands.ts`, like Rename Space…). The field opens with the current name selected; empty hands naming back to cmd.
 - `cmd agents rename <id> [name]` (no name: back to cmd).
-- A Claude `/rename` (`custom-title`) counts as the person's name too. cmd doesn't write back to the agent: typing `/rename` into a working agent would interrupt it, and its transcript isn't ours to edit.
+- **cmd owns the name** (decided 2026-10-07): the agents' own titles (`ai-title`, `custom-title` from Claude's `/rename`) are neither read as names nor written to. A rename in cmd is the only way to name an agent by hand; the agent never learns its cmd name.
 - Every rename is a labelled case: what cmd called it, what the person wanted, at that point of the session. Kept locally for the eval like the journal's real days, never sent to a model without the person's say-so.
 
 ### Names as addresses
@@ -117,7 +117,7 @@ Names are how agents and the person address agents (decided 2026-10-07): `cmd ls
 
 In order of trust; the first that applies wins.
 
-1. **The person**: a rename, `--name`, `/rename`.
+1. **The person**: a rename in cmd, or `--name` at spawn.
 2. **The worktree**: in a one-worktree-per-task workflow the branch is a name the person already chose. Almost every session starts in the main checkout and moves later (the notify-permission agent's session is recorded on `master`), so this is the folder the agent **works** in, from the hook events (tool calls' cwd, files edited), not where it started. A first edit or `cd` inside a worktree on a branch other than the default names it: `notify-permission` → "Notify permission" (dashes to spaces, sentence case, no `feature/`-style prefixes, ≤ 3 words else the model shortens it). Deterministic, free, stable, and it arrives when the task becomes concrete.
 3. **The model**: the fast tier through the context builder (purpose `session.name`, recorded as `ai.call`), for everything else: the default branch, folders without git, exploration.
 
@@ -157,7 +157,7 @@ From cmd's own copy of the transcripts, offline:
 
 | # | Step | Delivers |
 |---|---|---|
-| 1 | **Names without a model** | `session.name` events and the view's columns, `agent.rename` + Rename Agent… + `cmd agents rename`, `/rename` read as the person's, the worktree rule, `subjectOf` and the renderer on the name else the kind, the two body fixes, `outputLanguage()`, names in `cmd ls` and as targets of `cmd send` and `cmd agents` |
+| 1 | **Names without a model** | `session.name` events and the view's columns, `agent.rename` + Rename Agent… + `cmd agents rename`, the worktree rule, `subjectOf` and the renderer on the name else the kind, the two body fixes, `outputLanguage()`, names in `cmd ls` and as targets of `cmd send` and `cmd agents` |
 | 2 | **Eval harness** | the hand-named table as fixtures, the replay over real sessions, the measures |
 | 3 | **The model's first name** | the prompt with examples, checks, distinctness against live agents; tuned on the eval |
 | 4 | **Change of task** | cheap checks, the three-way classification, hysteresis, "was" on hover and in the Journal; tuned on renames per session |
@@ -167,7 +167,7 @@ Step 1 alone fixes "cmd · done" for everyone working in worktrees.
 
 ## Open questions
 
-- Codex and other agents without `/rename`: the same rules; check their hooks give the working folder (step 1).
+- Codex and other agents: the same rules; check their hooks give the working folder for the worktree rule (step 1).
 
 ## Sources
 
