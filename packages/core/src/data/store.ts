@@ -17,6 +17,8 @@ const log = logger("data");
 /** A recorder's event plus what the store adds on the way in. */
 export type StoreEvent = NewDataEvent & { v?: number; flags?: number };
 
+const hashOf = (raw: Buffer) => createHash("sha256").update(raw).digest("hex");
+
 /** A stored row's fields record() compares a new copy against. */
 interface Before {
   seq: number;
@@ -145,15 +147,14 @@ export class DataStore {
    * whether it was new.
    */
   record(e: StoreEvent): { seq: number; inserted: boolean } {
-    const blob = e.content != null ? this.putBlob(e.content) : null;
+    const raw = e.content == null ? null : typeof e.content === "string" ? Buffer.from(e.content, "utf8") : e.content;
+    const blob = raw ? hashOf(raw) : null;
     const data = JSON.stringify(e.data ?? null);
     const before = this.#stmt(`SELECT seq, blob, at, until, text, json(data) AS data, parent_id, space_id, project_id, session_id, agent_id, pane_id, window_id, device_id, flags FROM events WHERE id = ?`).get(e.id) as Before | undefined;
-    // Handed in again with nothing new (a transcript read again, an archived copy): no rewrite, no index churn.
-    // Every row written is a page in the WAL, and a re-read of the whole log checkpointed every few seconds.
-    if (before && unchanged(before, e, data, blob)) {
-      if (blob) this.#unref(blob); // putBlob counted the row's own blob once more
-      return { seq: before.seq, inserted: false };
-    }
+    // Handed in again with nothing new (a transcript read again, an archived copy): nothing written, not even
+    // the blob's count. Every row written is a page in the WAL, and a re-read of the whole log churned gigabytes.
+    if (before && unchanged(before, e, data, blob)) return { seq: before.seq, inserted: false };
+    if (raw) this.#storeBlob(raw, blob!);
     const sameText = !!before && before.text === (e.text ?? null) && before.blob === blob;
     const r = this.#stmt(
       `INSERT INTO events (id, at, until, type, v, source, recorded, parent_id, space_id, project_id, session_id, agent_id, pane_id, window_id, device_id, text, data, blob, flags)
@@ -221,11 +222,17 @@ export class DataStore {
   /** Content-addressed; zstd when that saves space. Returns the hash. */
   putBlob(content: string | Buffer): string {
     const raw = typeof content === "string" ? Buffer.from(content, "utf8") : content;
-    const hash = createHash("sha256").update(raw).digest("hex");
+    const hash = hashOf(raw);
+    this.#storeBlob(raw, hash);
+    return hash;
+  }
+
+  /** Stores `raw` under its hash, or counts one more reference to it. */
+  #storeBlob(raw: Buffer, hash: string): void {
     const have = this.#stmt(`SELECT 1 FROM blobs WHERE hash = ?`).get(hash);
     if (have) {
       this.#stmt(`UPDATE blobs SET refs = refs + 1 WHERE hash = ?`).run(hash);
-      return hash;
+      return;
     }
     let bytes = raw;
     let enc = "raw";
@@ -235,7 +242,6 @@ export class DataStore {
       if (z.length < raw.length * 0.9) (bytes = z), (enc = "zstd");
     }
     this.#stmt(`INSERT INTO blobs (hash, size, stored, enc, created, refs, bytes) VALUES (?, ?, ?, ?, ?, 1, ?)`).run(hash, raw.length, bytes.length, enc, Date.now(), bytes);
-    return hash;
   }
 
   blob(hash: string): Buffer | null {

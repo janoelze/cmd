@@ -78,8 +78,8 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
     if (o.file) fs.mkdirSync(path.dirname(o.file), { recursive: true });
     this.store = new DataStore(o.file ?? ":memory:", { recordedBy: o.recordedBy, deferIndexes: o.deferIndexes });
     if (o.file && o.maintenance) {
-      // This connection checkpoints only if the worker falls far behind (80 MB of WAL).
-      this.store.db.exec(`PRAGMA wal_autocheckpoint = 20000`);
+      // This connection checkpoints only if the worker falls far behind (80 MB of WAL); the file shrinks back to 64 MB after a reset.
+      this.store.db.exec(`PRAGMA wal_autocheckpoint = 20000; PRAGMA journal_size_limit = 67108864`);
       this.#maintenance = new Worker(new URL("./checkpoint-worker.ts", import.meta.url), { workerData: { file: o.file } });
       this.#maintenance.unref();
       this.#maintenance.on("error", (err) => log.warn(`the checkpoint worker failed: ${err.message}`));

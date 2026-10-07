@@ -30,7 +30,7 @@ describe("DataStore", () => {
     expect(s.record(e).inserted).toBe(true);
     const [c0, h0] = [changes(), hits()];
     expect(s.record({ ...e })).toEqual({ seq: 1, inserted: false });
-    expect(changes() - c0).toBeLessThanOrEqual(2); // the blob counted and uncounted, nothing else
+    expect(changes()).toBe(c0); // not a row written, the blob's count included
     expect(hits()).toBe(h0);
     // Something new: the span grows, an identity fills in, the index follows the text.
     expect(s.record({ ...e, until: 30, agentId: "ag" })).toEqual({ seq: 1, inserted: false });
