@@ -440,7 +440,7 @@ function Thumbnail({ doc, n, ratio, current, root, onClick }: { doc: PDFDocument
     return () => (io.disconnect(), task?.cancel());
   }, [doc, n, root]);
   return (
-    <button className={`pdf-thumb${current ? " current" : ""}`} data-page={n} onClick={onClick}>
+    <button className={`pdf-thumb${current ? " current" : ""}`} data-page={n} aria-label={`Page ${n}`} aria-current={current || undefined} onClick={onClick}>
       <canvas ref={canvas} style={{ width: THUMB_WIDTH, height: drawn ? undefined : THUMB_WIDTH * ratio }} />
       <span className="pdf-thumb-n">{n}</span>
     </button>

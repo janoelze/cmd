@@ -25,7 +25,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 import { createPortal, flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
 import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type Spacing, type ViewMode } from "../layouts.ts";
-import { arrangeTiles, moveInOrder, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
+import { arrangeTiles, labelOf, moveInOrder, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
 import { useStoreValue } from "../store.ts";
 import {
@@ -869,6 +869,7 @@ export function WindowsView(p: Props) {
             <Window
               key={id}
               data-pane={id}
+              label={labelOf(r)}
               selected={id === selected}
               attention={attention && needsYou(r)}
               className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${settling === id ? "settling" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""} ${attention && needsYou(r) ? "needs" : ""}`}
@@ -1006,6 +1007,7 @@ function Minimap(p: {
   return (
     <svg
       className="minimap"
+      aria-label="Minimap"
       style={p.right ? { right: p.right + 10 } : undefined}
       width={W}
       height={H}

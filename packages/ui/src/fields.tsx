@@ -11,6 +11,7 @@ import { forwardRef, useEffect, useRef, useState, type InputHTMLAttributes, type
 import { ICON, Icon, iconNode } from "./icon.tsx";
 import { Button, type Size } from "./button.tsx";
 import { Spinner } from "./status.tsx";
+import { useRowLabel } from "./labels.ts";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -44,6 +45,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const committing = !!onCommit;
   const shown = committing ? draft : value;
   const commit = () => committing && draft !== value && onCommit!(draft);
+  const named = useRowLabel(rest["aria-label"]);
   return (
     <span
       className={cls("ui-field", className)}
@@ -67,6 +69,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           onKeyDown?.(e);
         }}
         aria-invalid={invalid || undefined}
+        {...named}
         {...rest}
       />
       {end != null && <span className="ui-field-end">{end}</span>}
@@ -152,6 +155,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
     }
     onKeyDown?.(e);
   };
+  const named = useRowLabel(rest["aria-label"]);
   return (
     <textarea
       ref={(el) => {
@@ -167,6 +171,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={keys}
+      {...named}
       {...rest}
     />
   );
@@ -218,6 +223,7 @@ export function NumberField({
   };
   const bump = (d: number, big = false) => set(current() + d * step * (big ? 10 : 1));
   // Wide enough for the longest value it takes, beside its unit.
+  const named = useRowLabel(label);
   const chars = Math.max(2, ...[min, max, value].filter((v) => v !== undefined).map((v) => fmt(v).length));
   return (
     <span className="ui-number" data-disabled={disabled || undefined}>
@@ -225,7 +231,7 @@ export function NumberField({
         <input
           inputMode="decimal"
           spellCheck={false}
-          aria-label={label}
+          {...named}
           disabled={disabled}
           style={{ width: `${chars + 0.5}ch` }}
           value={draft}

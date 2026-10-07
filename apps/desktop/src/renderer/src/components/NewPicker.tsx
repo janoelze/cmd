@@ -15,6 +15,7 @@ export function NewPicker({ run, onClose }: { run: (id: CommandId) => void; onCl
   const add = (ref: string) => void addWidget(ref).catch((e: Error) => toast(e.message, { tone: "danger" }));
   return (
     <Palette
+      label="New"
       items={newItems(library, keys.bindings, run, add)}
       groups={NEW_GROUPS}
       dynamic={(q) => openItems(q, "Open", { icon: true })}

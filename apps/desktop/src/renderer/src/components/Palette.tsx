@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { SearchStatus } from "@cmd/protocol";
 import { ICON, iconNode } from "@cmd/ui";
 import { IndexRing } from "./IndexRing.tsx";
@@ -68,6 +68,7 @@ export function Palette({
   placeholder = "Type a command, @session, ?search…",
   footer,
   emptyText,
+  label,
 }: {
   items: PaletteItem[];
   /** Recently run item ids, most recent first; ranked first. */
@@ -92,6 +93,8 @@ export function Palette({
   /** Replaces the footer's hints (pickers other than the command palette). */
   footer?: React.ReactNode;
   emptyText?: string;
+  /** Its accessible name ("Command Palette"); the placeholder if not given. */
+  label?: string;
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [active, setActive] = useState(0);
@@ -164,12 +167,20 @@ export function Palette({
       : 'Search past Claude Code and Codex sessions. "Phrases" and -exclusions work.'
     : (emptyText ?? "Nothing matches. Type ? to search past agent sessions.");
 
+  // A combobox over a listbox: scripts and VoiceOver find `option "New Terminal"`, and the highlighted one is selected.
+  const id = useId();
+  const optionId = (i: number) => `${id}-${i}`;
   return (
     <div className="palette-backdrop" onMouseDown={onClose}>
-      <div className={`palette ${searching ? "searching" : ""}`} onMouseDown={(e) => e.stopPropagation()}>
+      <div className={`palette ${searching ? "searching" : ""}`} role="dialog" aria-label={label ?? placeholder} onMouseDown={(e) => e.stopPropagation()}>
         <input
           ref={input}
           className="palette-input"
+          role="combobox"
+          aria-expanded
+          aria-controls={`${id}-list`}
+          aria-autocomplete="list"
+          aria-activedescendant={results[active] ? optionId(active) : undefined}
           placeholder={placeholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -180,10 +191,15 @@ export function Palette({
             else if (e.key === "Enter") run(results[active], e.metaKey);
           }}
         />
-        <ul ref={list} className="palette-list">
+        <ul ref={list} className="palette-list" id={`${id}-list`} role="listbox" aria-label={label ?? placeholder}>
           {results.map((it, i) => (
             <li
               key={it.id}
+              id={optionId(i)}
+              role="option"
+              aria-selected={i === active}
+              aria-label={it.label}
+              aria-description={it.meta ?? it.group}
               className={`${i === active ? "on" : ""} ${it.meta ? "rich" : ""}`}
               onMouseEnter={() => ((byKey.current = false), setActive(i))}
               onClick={(e) => run(it, e.metaKey)}
@@ -210,7 +226,11 @@ export function Palette({
               )}
             </li>
           ))}
-          {results.length === 0 && <li className="palette-empty">{empty}</li>}
+          {results.length === 0 && (
+            <li className="palette-empty" role="presentation">
+              {empty}
+            </li>
+          )}
         </ul>
         <footer className="palette-foot">
           {footer ?? (

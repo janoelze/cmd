@@ -9,12 +9,21 @@ import { ICON, Symbol } from "./Symbol.tsx";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
 import { Highlighted } from "./Palette.tsx";
 import { useFields } from "./TileTitle.tsx";
-import { ago, project, projectHue, shortPath, windowIdOf, type SidebarRow } from "../model.ts";
+import { ago, labelOf, project, projectHue, shortPath, windowIdOf, type SidebarRow } from "../model.ts";
 import { RemoteBadge } from "./Remote.tsx";
 import { countRender } from "../perf.ts";
 
 /** "2h ago" → "2h": the column is narrow. */
 export const shortAgo = (ts: number, now: number) => ago(ts, now).replace(/ ago$/, "");
+
+/** A Navigator section: a tree named by its title, so a script finds `tree "Windows"` and its rows. */
+export function SidebarSection({ title, className, children }: { title: string; className?: string; children: ReactNode }) {
+  return (
+    <section className={className ? `sb-section ${className}` : "sb-section"} role="tree" aria-label={title}>
+      {children}
+    </section>
+  );
+}
 
 /** The Navigator's section headings: the kit's ListHeading. */
 export function SectionHeading(p: {
@@ -65,6 +74,13 @@ export function SessionRow(props: {
         className={`row ${tall ? "tall" : "short"} ${isSel ? "sel" : ""} ${props.active ? "active" : ""} led-row-${f.light ?? f.tone ?? "none"} ${winId ? "" : "virtual"}`}
         style={{ paddingLeft: 14 + depth * 14 }}
         data-key={row.key}
+        // A tree item named like its window's tile (labelOf), with its status as the description.
+        role="treeitem"
+        aria-label={labelOf(row)}
+        aria-description={f.status?.text}
+        aria-level={depth + 1}
+        aria-selected={isSel}
+        aria-expanded={kids.length > 0 ? open : undefined}
         onClick={() => onSelect(row)}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -148,6 +164,11 @@ export function HistoryRow(p: { hit: SearchHit; now: number; onOpen: (h: SearchH
     <div
       className={`row history ${p.rich ? "tall" : "short"} ${p.active ? "active" : ""}`}
       data-key={`h-${h.agent}-${h.sessionId}`}
+      role="treeitem"
+      aria-label={h.title || "(untitled session)"}
+      aria-description={where || h.agent}
+      aria-level={1}
+      aria-selected={false}
       data-tip-side="right"
       data-tip={[h.title, h.cwd ? shortPath(h.cwd) : null, `${h.agent} · ${h.sessionId}`].filter(Boolean).join("\n")}
       onClick={() => p.onOpen(h)}

@@ -7,6 +7,7 @@
 // schema describes enums), or as { value, label, icon } objects.
 
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useRowLabel } from "./labels.ts";
 import { ICON, Icon, iconNode } from "./icon.tsx";
 import type { Size } from "./button.tsx";
 
@@ -58,8 +59,9 @@ export function Switch({
   size?: "sm" | "md";
   disabled?: boolean;
 }) {
+  const named = useRowLabel(label);
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} className="ui-switch" data-size={size} disabled={disabled} onClick={() => onChange(!checked)}>
+    <button type="button" role="switch" aria-checked={checked} {...named} className="ui-switch" data-size={size} disabled={disabled} onClick={() => onChange(!checked)}>
       <span className="ui-switch-knob" />
     </button>
   );
@@ -118,8 +120,9 @@ export function RadioGroup<T extends string>({
   horizontal?: boolean;
 }) {
   const opts = normalize(options, labels);
+  const named = useRowLabel(label);
   return (
-    <div className="ui-radios" role="radiogroup" aria-label={label} data-horizontal={horizontal || undefined} onKeyDown={(e) => arrowNav(e, (el) => onChange(el.value as T), !horizontal)}>
+    <div className="ui-radios" role="radiogroup" {...named} data-horizontal={horizontal || undefined} onKeyDown={(e) => arrowNav(e, (el) => onChange(el.value as T), !horizontal)}>
       {opts.map((o) => (
         <label key={o.value} className="ui-check" data-disabled={o.disabled || undefined}>
           <button
@@ -167,11 +170,12 @@ export function Segmented<T extends string>({
   iconSize?: number;
 }) {
   const opts = normalize(options, labels);
+  const named = useRowLabel(label);
   return (
     <div
       className="ui-seg"
       role="radiogroup"
-      aria-label={label}
+      {...named}
       data-size={size}
       data-fill={fill || undefined}
       onKeyDown={(e) => arrowNav(e, (el) => onChange(el.value as T))}
@@ -298,9 +302,10 @@ export function Select<T extends string>({
   const opts = normalize(options, labels);
   const known = opts.some((o) => o.value === value);
   const ref = useRef<HTMLSelectElement>(null);
+  const named = useRowLabel(label);
   return (
     <span className={cls("ui-select")} data-size={size} style={width != null ? { width } : undefined}>
-      <select ref={ref} value={value} disabled={disabled} aria-label={label} onChange={(e) => onChange(e.target.value as T)}>
+      <select ref={ref} value={value} disabled={disabled} {...named} onChange={(e) => onChange(e.target.value as T)}>
         {!known && (
           <option value={value} disabled>
             {placeholder ?? value}

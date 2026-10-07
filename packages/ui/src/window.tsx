@@ -13,9 +13,23 @@ const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" "
 
 type DivProps = HTMLAttributes<HTMLDivElement>;
 
-/** The window's box: its outline and corners. Selected or needing attention, its outline is a ring (the highlight, or the attention colour). */
-export const Window = forwardRef<HTMLDivElement, DivProps & { selected?: boolean; attention?: boolean }>(function Window({ selected, attention, className, ...rest }, ref) {
-  return <div ref={ref} className={cls("ui-window", className)} data-selected={selected || undefined} data-attention={attention || undefined} {...rest} />;
+/**
+ * The window's box: its outline and corners. Selected or needing attention, its outline is a ring (the highlight, or the attention colour).
+ * `label` (its title) names it, so a script or VoiceOver finds "the zsh window"; the selected one is aria-current.
+ */
+export const Window = forwardRef<HTMLDivElement, DivProps & { selected?: boolean; attention?: boolean; label?: string }>(function Window({ selected, attention, label, className, ...rest }, ref) {
+  return (
+    <div
+      ref={ref}
+      className={cls("ui-window", className)}
+      role={label ? "group" : undefined}
+      aria-label={label}
+      aria-current={selected || undefined}
+      data-selected={selected || undefined}
+      data-attention={attention || undefined}
+      {...rest}
+    />
+  );
 });
 
 /** Clips the content to the window's inner corners; put the bar and the content in it. */

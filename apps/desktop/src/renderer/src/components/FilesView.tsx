@@ -624,6 +624,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
         tabIndex={0}
         onKeyDown={onKey}
         role="tree"
+        aria-label="Files"
         onContextMenu={(ev) => {
           if (ev.target !== ev.currentTarget) return;
           ev.preventDefault();
@@ -647,6 +648,11 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
               key={e.path}
               data-path={e.path}
               role="treeitem"
+              // Its name alone, not the twisty's "Expand" or the date; git state as the description.
+              aria-label={label ?? e.name}
+              aria-description={g ? GIT_WORD[g.state] : inside ? "Contains changes" : undefined}
+              aria-level={depth + 1}
+              aria-selected={sel === e.path}
               aria-expanded={dir ? open : undefined}
               className={`file-row ${sel === e.path ? "sel" : ""} ${dropDir === e.path ? "drop-into" : ""} ${e.hidden ? "hidden-file" : ""} ${tone ? `git-${tone}` : ""}`}
               style={{ ["--depth" as string]: depth }}

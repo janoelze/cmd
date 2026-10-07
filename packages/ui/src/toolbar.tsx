@@ -240,7 +240,8 @@ export const ToolbarField = forwardRef<HTMLInputElement, ToolbarFieldProps>(func
   return (
     <label className={cls("ui-tb-field", className)} data-align={align} style={{ minWidth, maxWidth, flexGrow: maxWidth ? 0 : 1, flexBasis: maxWidth ?? 0, ...style }}>
       {icon && iconNode(icon, ICON.control + 2)}
-      <input ref={ref} spellCheck={false} {...rest} />
+      {/* Inside a <label> with no text, the placeholder would not name it: say it. */}
+      <input ref={ref} spellCheck={false} aria-label={rest.placeholder} {...rest} />
       {end != null && <span className="ui-tb-field-end">{end}</span>}
     </label>
   );

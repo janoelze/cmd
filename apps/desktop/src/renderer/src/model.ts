@@ -259,6 +259,12 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
   return f;
 }
 
+/** A window's accessible name: its title bar's name, kind and place ("zsh, ~"), for the tile, its sidebar row and scripts. */
+export function labelOf(r: SidebarRow): string {
+  const f = fieldsOf(r, undefined, Date.now());
+  return [f.name, f.kind, f.place].filter(Boolean).join(", ");
+}
+
 function agentStatus(a: Agent, now: number): { text: string; key: string } {
   const text = (() => {
     switch (a.state) {

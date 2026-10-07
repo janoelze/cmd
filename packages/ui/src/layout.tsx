@@ -2,7 +2,8 @@
 // headings, toolbars, separators, key–value lists, cards, code blocks, and the
 // messages a view shows instead of or above its content (Callout, EmptyState).
 
-import type { MouseEvent, ReactNode } from "react";
+import { useId, type MouseEvent, type ReactNode } from "react";
+import { RowLabels } from "./labels.ts";
 import { ICON, iconNode } from "./icon.tsx";
 import { IconButton } from "./button.tsx";
 import { useTooltip } from "./tooltips.tsx";
@@ -64,6 +65,8 @@ export function FormRow({
   /** At the end of the title's line: a link that helps fill the row in ("Get a key"). */
   titleAside?: ReactNode;
 }) {
+  // The controls in the row are named by its title and described by its description (labels.ts).
+  const id = useId();
   const rowNote = note && (
     <div className="ui-row-note" data-tone={noteTone}>
       {note}
@@ -74,17 +77,25 @@ export function FormRow({
       <div className="ui-row-text">
         <div className="ui-row-title">
           {/* The tip on the name only: an accessory or a title aside has its own. */}
-          <span className="ui-row-name" data-tip={tip}>
+          <span className="ui-row-name" id={`${id}-name`} data-tip={tip}>
             {title}
           </span>
           {info ? <InfoButton>{info}</InfoButton> : null}
           {accessory}
           {titleAside ? <span className="ui-row-title-aside">{titleAside}</span> : null}
         </div>
-        {description && <div className="ui-row-desc">{description}</div>}
+        {description && (
+          <div className="ui-row-desc" id={`${id}-desc`}>
+            {description}
+          </div>
+        )}
         {!stacked && rowNote}
       </div>
-      {children != null && <div className="ui-row-control">{children}</div>}
+      {children != null && (
+        <div className="ui-row-control">
+          <RowLabels.Provider value={{ label: `${id}-name`, desc: description ? `${id}-desc` : undefined }}>{children}</RowLabels.Provider>
+        </div>
+      )}
       {/* Stacked, the note is about the control above it (a key that was rejected). */}
       {stacked && rowNote}
     </div>

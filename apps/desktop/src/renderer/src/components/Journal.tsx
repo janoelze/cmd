@@ -96,6 +96,8 @@ function Ribbon({ day, onPick, picked }: { day: JournalDay; onPick: (id: string)
             className="journal-ribbon-bar"
             data-picked={picked === e.id || undefined}
             data-tip={`${e.title} · ${time(e.start)}–${time(e.end)}`}
+            aria-label={`${e.title}, ${time(e.start)}–${time(e.end)}`}
+            aria-pressed={picked === e.id}
             onClick={() => onPick(e.id)}
             style={{ left: `${x(clip(e.start))}%`, width: `max(4px, ${x(clip(e.end)) - x(clip(e.start))}%)`, top: `calc(${lane.get(e.id)} * var(--lane))`, "--hue": KIND[e.kind].hue } as CSSProperties}
           />

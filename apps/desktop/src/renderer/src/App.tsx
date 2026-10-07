@@ -808,6 +808,7 @@ export function App() {
       <StatusBar pane={current} run={run} connected={s.connected} error={s.error} />
       {palette !== false && (
         <Palette
+          label="Command Palette"
           items={paletteItems}
           // Typing a URL or a path offers to open it in a window.
           dynamic={(q) => openItems(q, "Commands")}

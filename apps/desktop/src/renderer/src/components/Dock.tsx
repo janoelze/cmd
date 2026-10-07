@@ -6,7 +6,7 @@
 
 import type { PaneId } from "@cmd/protocol";
 import { Window, WindowBody, WindowFrame } from "@cmd/ui";
-import { needsYou, windowIdOf, type SidebarRow } from "../model.ts";
+import { labelOf, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
 import { DOCK_WIDTH, type Side } from "../docks.ts";
 import { PlacementContext } from "../windows/registry.ts";
 import { TerminalView } from "./TerminalView.tsx";
@@ -40,6 +40,7 @@ export function Dock(p: Props) {
     <aside className={`dock dock-${p.side}`} style={{ width: p.width }}>
       <Window
         data-pane={id}
+        label={labelOf(r)}
         selected={p.selected}
         attention={p.attention && needsYou(r)}
         className={`tile dock-tile kind-${r.win?.kind ?? "terminal"} ${p.selected ? "sel" : ""} ${p.attention && needsYou(r) ? "needs" : ""}`}

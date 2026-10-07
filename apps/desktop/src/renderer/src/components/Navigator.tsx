@@ -12,7 +12,7 @@ import { openSession } from "../actions.ts";
 import { usePersisted, useStoreValue, subscribeView } from "../store.ts";
 import { terminals } from "../terminals.ts";
 import { filterRows, flatten, sectionOf, SECTIONS, type Section, type SidebarRow } from "../model.ts";
-import { HistoryRow, SectionHeading, SessionRow } from "./SidebarRows.tsx";
+import { HistoryRow, SectionHeading, SessionRow, SidebarSection } from "./SidebarRows.tsx";
 import { IndexRing } from "./IndexRing.tsx";
 import { countRender } from "../perf.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
@@ -148,20 +148,20 @@ function Navigator(p: NavigatorData) {
         {searching ? (
           <>
             {matches.length > 0 && (
-              <section className="sb-section">
+              <SidebarSection title="Open">
                 <SectionHeading title="Open" count={matches.length} />
                 {matches.map((r, i) => (
                   <SessionRow key={r.key} row={r} depth={0} flat active={active === i} {...rowProps} />
                 ))}
-              </section>
+              </SidebarSection>
             )}
             {hits.length > 0 && (
-              <section className="sb-section">
+              <SidebarSection title="History">
                 <SectionHeading title="History" count={hits.length} />
                 {hits.map((h, i) => (
                   <HistoryRow key={`${h.agent}-${h.sessionId}`} hit={h} now={now} rich active={active === matches.length + i} onOpen={(x) => pick({ type: "hit", hit: x })} />
                 ))}
-              </section>
+              </SidebarSection>
             )}
             {results.length === 0 && <EmptyState compact>{query.trim().length < 2 ? "Keep typing to search past sessions" : "No matches"}</EmptyState>}
           </>
@@ -170,7 +170,7 @@ function Navigator(p: NavigatorData) {
             {groups.map(
               (g) =>
                 g.rows.length > 0 && (
-                  <section key={g.id} className={`sb-section sb-${g.id}`}>
+                  <SidebarSection key={g.id} title={TITLES[g.id]} className={`sb-${g.id}`}>
                     <SectionHeading
                       title={TITLES[g.id]}
                       count={g.rows.length}
@@ -181,7 +181,7 @@ function Navigator(p: NavigatorData) {
                     />
                     {(g.id === "needs" || isOpen(g.id)) &&
                       g.rows.map((r) => <SessionRow key={r.key} row={r} depth={0} gutter={g.rows.some((x) => x.children.length > 0)} {...rowProps} />)}
-                  </section>
+                  </SidebarSection>
                 ),
             )}
             {rows.length === 0 && (
@@ -196,10 +196,10 @@ function Navigator(p: NavigatorData) {
               />
             )}
             {recent.length > 0 && (
-              <section className="sb-section sb-recent">
+              <SidebarSection title="Recent" className="sb-recent">
                 <SectionHeading title="Recent" open={isOpen("recent")} onToggle={() => toggle("recent")} />
                 {isOpen("recent") && recent.map((h) => <HistoryRow key={`${h.agent}-${h.sessionId}`} hit={h} now={now} onOpen={(x) => void openSession(x)} />)}
-              </section>
+              </SidebarSection>
             )}
           </>
         )}

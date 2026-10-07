@@ -121,6 +121,8 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
         extensions: [
           basicSetup,
           keymap.of([indentWithTab]),
+          // Like a terminal's "Terminal input"; the window around it carries the file's name.
+          EditorView.contentAttributes.of({ "aria-label": "Text editor" }),
           syntaxHighlighting(syntax),
           c.theme.of(appTheme(settings["font.code"], settings["font.codeSize"], dark)),
           c.lang.of([]),

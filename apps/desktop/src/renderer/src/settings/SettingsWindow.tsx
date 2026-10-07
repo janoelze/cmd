@@ -459,7 +459,7 @@ function Shortcuts({ q }: { q?: string }) {
                         <kbd data-tip="Click to change" onClick={() => (setNote(null), setRec({ id: c.id, slot: i }))}>
                           {prettyAccelerator(k)}
                         </kbd>
-                        <button type="button" className="sw-key-remove" data-tip="Remove" onClick={() => save(c.id, bound.filter((_, j) => j !== i))}>
+                        <button type="button" className="sw-key-remove" data-tip="Remove" aria-label={`Remove ${prettyAccelerator(k)}`} onClick={() => save(c.id, bound.filter((_, j) => j !== i))}>
                           <Symbol name="xmark" size={7} weight="bold" />
                         </button>
                       </span>
@@ -472,6 +472,7 @@ function Shortcuts({ q }: { q?: string }) {
                       type="button"
                       className="sw-key-add"
                       data-tip={bound.length ? "Add Another Shortcut" : "Add a Shortcut"}
+                      aria-label={bound.length ? "Add Another Shortcut" : "Add a Shortcut"}
                       onClick={() => (setNote(null), setRec({ id: c.id, slot: bound.length }))}
                     >
                       <Symbol name="plus" size={9} weight="semibold" />
