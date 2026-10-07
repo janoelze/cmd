@@ -10,13 +10,23 @@ import readline from "node:readline";
 
 const SOURCE = path.join(import.meta.dirname, "..", "helper", "tour-helper.swift");
 
-export function buildHelper(): string {
-  const bin = path.join(os.tmpdir(), "cmd-tours", "tour-helper");
-  if (!fs.existsSync(bin) || fs.statSync(SOURCE).mtimeMs > fs.statSync(bin).mtimeMs) {
+/** A Swift tool from helper/, built when its source is newer than the binary. */
+export function buildSwift(source: string, name: string): string {
+  const bin = path.join(os.tmpdir(), "cmd-tours", name);
+  if (!fs.existsSync(bin) || fs.statSync(source).mtimeMs > fs.statSync(bin).mtimeMs) {
     fs.mkdirSync(path.dirname(bin), { recursive: true });
-    execFileSync("swiftc", ["-O", SOURCE, "-o", bin], { stdio: "inherit" });
+    execFileSync("swiftc", ["-O", source, "-o", bin], { stdio: "inherit" });
   }
   return bin;
+}
+
+export function buildHelper(): string {
+  return buildSwift(SOURCE, "tour-helper");
+}
+
+/** The renderer (helper/render.swift): draws the video from post's plan. */
+export function buildRenderer(): string {
+  return buildSwift(path.join(import.meta.dirname, "..", "helper", "render.swift"), "tour-render");
 }
 
 export type Reply = { ok: boolean; error?: string } & Record<string, unknown>;

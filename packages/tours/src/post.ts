@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { autoCamera, cameraPath, type CameraMark } from "./camera.ts";
+import { buildRenderer } from "./helper.ts";
 
 interface Ev {
   t: number;
@@ -123,6 +124,27 @@ const magick = (...args: string[]) => execFileSync("magick", args, { encoding: "
 /** An image region as [w, h, x, y] from ImageMagick's %@ ("WxH+X+Y"). */
 const bbox = (s: string) => s.match(/\d+/g)!.map(Number) as [number, number, number, number];
 
+/** Source seconds for output seconds, through the idle speed-up's segments ([start, end, speed] in source time). */
+function timeMap(segments: [number, number, number][]) {
+  let u0 = 0;
+  const spans = segments.map(([a, b, k]) => {
+    const span = { a, b, k, u0, u1: u0 + (b - a) / k };
+    u0 = span.u1;
+    return span;
+  });
+  return {
+    length: u0,
+    source: (u: number) => {
+      const sp = spans.find((x) => u <= x.u1) ?? spans.at(-1)!;
+      return Math.min(sp.b, sp.a + (u - sp.u0) * sp.k);
+    },
+    output: (s: number) => {
+      const sp = spans.find((x) => s <= x.b) ?? spans.at(-1)!;
+      return sp.u0 + (Math.max(s, sp.a) - sp.a) / sp.k;
+    },
+  };
+}
+
 export function render(dir: string, o: PostOptions = {}): string {
   const meta = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")) as Meta;
   const events = (JSON.parse(fs.readFileSync(path.join(dir, "events.json"), "utf8")) as Ev[]).sort((a, b) => a.t - b.t);
@@ -153,126 +175,86 @@ export function render(dir: string, o: PostOptions = {}): string {
   const shapes = new Map<number, Ev>();
   for (const e of events) if (e.type === "cursor" && !shapes.has(e.id!)) shapes.set(e.id!, e);
   const k = o.cursor ?? 1;
-  const cursorInputs: { id: number; file: string; w: number; h: number; hx: number; hy: number }[] = [];
+  const cursors: Record<string, { path: string; w: number; h: number; hx: number; hy: number }> = {};
   for (const [id, e] of shapes) {
     const file = path.join(dir, "cursors", `cursor-${id}.png`);
-    if (fs.existsSync(file)) cursorInputs.push({ id, file, w: even(e.w! * S * k), h: even(e.h! * S * k), hx: e.hx! * S * k, hy: e.hy! * S * k });
+    if (fs.existsSync(file)) cursors[id] = { path: file, w: e.w! * S * k, h: e.h! * S * k, hx: e.hx! * S * k, hy: e.hy! * S * k };
   }
-  if (!cursorInputs.length) {
+  const fallback = !Object.keys(cursors).length;
+  if (fallback) {
     // No shapes logged (an older run): our own arrow.
     const file = path.join(work, "cursor.png");
-    execFileSync("rsvg-convert", ["-z", String(S * k), "-o", file, path.join(ASSETS, "cursor.svg")]);
-    cursorInputs.push({ id: -1, file, w: even(28 * S * k), h: even(36 * S * k), hx: 3 * S * k, hy: 3 * S * k });
+    execFileSync("rsvg-convert", ["-z", String(S * k * 4), "-o", file, path.join(ASSETS, "cursor.svg")]);
+    cursors["0"] = { path: file, w: 28 * S * k, h: 36 * S * k, hx: 3 * S * k, hy: 3 * S * k };
   }
+  const ring = o.clicks ? path.join(work, "click.png") : null;
+  if (ring) execFileSync("rsvg-convert", ["-z", String(S), "-o", ring, path.join(ASSETS, "click.svg")]);
 
-  // Per frame: each cursor overlay where the pointer is if it's the shape shown, else off canvas.
-  const toCanvas = (p: { x: number; y: number }) => ({ x: cx + (p.x - meta.rect.x) * S, y: cy + (p.y - meta.rect.y) * S });
-  const lines: string[] = [];
-  const last = new Map<number, string>();
+  // Time: output seconds map to source seconds (waiting sped up, if asked).
   const duration = (meta.t1 - meta.t0) / 1e9;
-  for (let i = 0; i / FPS <= duration; i++) {
-    const s = i / FPS;
-    const t = meta.t0 + s * 1e9;
-    const p = pointerAt(events, t);
-    const shown = cursorInputs.length === 1 ? cursorInputs[0]!.id : (cursorAt(events, t)?.id ?? cursorInputs[0]!.id);
-    for (const c of cursorInputs) {
-      let pos = "-9999 -9999";
-      if (p && c.id === shown) {
-        const v = toCanvas(p);
-        pos = `${Math.round(v.x - c.hx)} ${Math.round(v.y - c.hy)}`;
-      }
-      if (last.get(c.id) === pos) continue;
-      last.set(c.id, pos);
-      const [x, y] = pos.split(" ");
-      lines.push(`${s.toFixed(4)} [enter] overlay@c${c.id < 0 ? "x" : c.id} x ${x}, [enter] overlay@c${c.id < 0 ? "x" : c.id} y ${y};`);
-    }
-  }
-  const presses = events.filter((e) => e.type === "down");
-  const ring = path.join(work, "click.png");
-  const ringSize = 64 * S;
-  if (o.clicks) {
-    execFileSync("rsvg-convert", ["-z", String(S), "-o", ring, path.join(ASSETS, "click.svg")]);
-    for (const e of presses) {
-      const v = toCanvas({ x: e.x!, y: e.y! });
-      lines.push(`${Math.max(0, (e.t - meta.t0) / 1e9 - 0.001).toFixed(4)} [enter] overlay@ring x ${Math.round(v.x - ringSize / 2)}, [enter] overlay@ring y ${Math.round(v.y - ringSize / 2)};`);
-    }
-  }
-  // The camera (camera.ts): a view per frame, from the tour's marks (or --follow).
+  const segments = o.idle && o.idle > 1 ? idleSegments(events, meta.t0, duration, o.idle) : [[0, duration, 1] as [number, number, number]];
+  const time = timeMap(segments.length ? segments : [[0, duration, 1]]);
+  const frames = Math.floor(time.length * FPS) + 1;
+  const sec = (e: Ev) => (e.t - meta.t0) / 1e9;
+  const toCanvas = (p: { x: number; y: number }) => ({ x: cx + (p.x - meta.rect.x) * S, y: cy + (p.y - meta.rect.y) * S });
+  const pointer = (s: number) => {
+    const p = pointerAt(events, meta.t0 + s * 1e9);
+    return p ? toCanvas(p) : null;
+  };
+
+  // The camera (camera.ts), in output time so its springs stay smooth through sped-up stretches.
   const marks: CameraMark[] = events
     .filter((e) => e.type === "camera")
     .map((e) => {
       const r = e.rect ? toCanvas({ x: e.rect[0]!, y: e.rect[1]! }) : null;
-      return { s: (e.t - meta.t0) / 1e9, mode: e.mode!, zoom: e.zoom, rect: r ? { x: r.x, y: r.y, w: e.rect![2]! * S, h: e.rect![3]! * S } : undefined };
+      return { s: time.output(sec(e)), mode: e.mode!, zoom: e.zoom, rect: r ? { x: r.x, y: r.y, w: e.rect![2]! * S, h: e.rect![3]! * S } : undefined };
     });
   if (o.follow) marks.unshift({ s: 0, mode: "follow", zoom: o.follow });
-  if (o.camera === "auto" && !marks.length) marks.push(...autoCamera(events.map((e) => ({ s: (e.t - meta.t0) / 1e9, type: e.type })), duration));
-  const camera = marks.length > 0;
-  if (camera) {
-    const frames = Math.floor(duration * FPS) + 1;
-    // Zoomed in, the camera stays on the window (a 24 px margin), not on the wallpaper around it.
-    const m = 24 * S;
-    const views = cameraPath(frames, FPS, { w: cw, h: ch }, marks, (s) => {
-      const p = pointerAt(events, meta.t0 + s * 1e9);
-      return p ? toCanvas(p) : null;
-    }, undefined, { x: cx - m, y: cy - m, w: meta.width + 2 * m, h: meta.height + 2 * m });
-    let prev = "";
-    views.forEach((v, i) => {
-      const key = `${v.x} ${v.y} ${v.w} ${v.h}`;
-      if (key === prev) return;
-      prev = key;
-      const s = (i / FPS).toFixed(4);
-      lines.push(`${s} [enter] crop@cam w ${v.w}, [enter] crop@cam h ${v.h}, [enter] crop@cam x ${v.x}, [enter] crop@cam y ${v.y};`);
-    });
-  }
-  lines.sort((a, b) => parseFloat(a) - parseFloat(b));
-  const cmds = path.join(work, "pointer.cmd");
-  fs.writeFileSync(cmds, lines.join("\n") + "\n");
+  if (o.camera === "auto" && !marks.length) marks.push(...autoCamera(events.map((e) => ({ s: time.output(sec(e)), type: e.type })), time.length));
+  // Zoomed in, the camera stays on the window (a 24 px margin), not on the wallpaper around it.
+  const m = 24 * S;
+  const views = marks.length
+    ? cameraPath(frames, FPS, { w: cw, h: ch }, marks, (u) => pointer(time.source(u)), undefined, { x: cx - m, y: cy - m, w: meta.width + 2 * m, h: meta.height + 2 * m })
+    : null;
 
-  // The graph. The looped images never end on their own: -t stops at the recording's length.
-  const inputs = ["-loop", "1", "-i", wall, "-loop", "1", "-i", shadow, "-i", path.join(dir, "raw.mov"), "-loop", "1", "-i", mask];
-  const g: string[] = [
-    `[2:v]fps=${FPS},sendcmd=f='${cmds}',format=rgba[v]`,
-    `[3:v]format=gray[m]`,
-    `[v][m]alphamerge[win]`,
-    `[0:v][1:v]overlay=x=${cx - (wx - sx)}:y=${cy - (wy - sy)}[bg]`,
-    `[bg][win]overlay=x=${cx}:y=${cy}:shortest=1[k]`,
-  ];
-  let label = "k";
-  let n = 4;
-  if (o.clicks) {
-    inputs.push("-loop", "1", "-i", ring);
-    const shownAt = presses.map((e) => `between(t,${((e.t - meta.t0) / 1e9).toFixed(3)},${((e.t - meta.t0) / 1e9 + RING_MS / 1000).toFixed(3)})`).join("+") || "0";
-    g.push(`[${label}][${n}:v]overlay@ring=x=-9999:y=-9999:enable='${shownAt}'[r]`);
-    label = "r";
-    n++;
-  }
-  for (const c of cursorInputs) {
-    inputs.push("-loop", "1", "-i", c.file);
-    const name = `c${c.id < 0 ? "x" : c.id}`;
-    g.push(`[${n}:v]scale=${c.w}:${c.h}:flags=lanczos,format=rgba[${name}i]`);
-    g.push(`[${label}][${name}i]overlay@${name}=x=-9999:y=-9999[${name}o]`);
-    label = `${name}o`;
-    n++;
+  // The plan: per output frame, what to show where (helper/render.swift draws it).
+  const presses = events.filter((e) => e.type === "down").map(sec);
+  const rows: number[][] = [];
+  for (let n = 0; n < frames; n++) {
+    const u = n / FPS;
+    const s = time.source(u);
+    const v = views?.[n] ?? { x: 0, y: 0, w: cw, h: ch };
+    const p = pointer(s);
+    const shape = fallback ? 0 : (cursorAt(events, meta.t0 + s * 1e9)?.id ?? -1);
+    const c = cursors[shape];
+    const press = ring ? presses.find((ps) => s >= ps && s < ps + RING_MS / 1000) : undefined;
+    const pp = press !== undefined ? pointer(press) : null;
+    rows.push([
+      s, v.x, v.y, v.w, v.h,
+      p && c ? shape : -1, p && c ? p.x - c.hx : 0, p && c ? p.y - c.hy : 0,
+      pp ? pp.x : 0, pp ? pp.y : 0, pp && press !== undefined ? 1 - (s - press) / (RING_MS / 1000) : 0,
+    ].map((x) => Math.round(x * 1000) / 1000));
   }
   const outW = even(o.width ?? 2560);
   const outH = even((outW * ch) / cw);
-  if (camera) {
-    g.push(`[${label}]crop@cam=w=${cw}:h=${ch}:x=0:y=0[cam]`);
-    label = "cam";
-  }
-  g.push(`[${label}]scale=${outW}:${outH}:flags=lanczos,format=yuv420p[scaled]`);
-  let length = duration;
-  const segments = o.idle && o.idle > 1 ? idleSegments(events, meta.t0, duration, o.idle) : [];
-  if (segments.some(([, , k]) => k > 1)) {
-    // Cut into segments, play the idle ones faster, join them, back to a steady frame rate.
-    g.push(`[scaled]split=${segments.length}${segments.map((_, i) => `[p${i}]`).join("")}`);
-    segments.forEach(([a, b, k], i) => g.push(`[p${i}]trim=start=${a.toFixed(3)}:end=${b.toFixed(3)},setpts=(PTS-STARTPTS)/${k}[q${i}]`));
-    g.push(`${segments.map((_, i) => `[q${i}]`).join("")}concat=n=${segments.length}:v=1:a=0,fps=${FPS}[out]`);
-    length = segments.reduce((n, [a, b, k]) => n + (b - a) / k, 0);
-  } else g.push(`[scaled]null[out]`);
-
+  const plan = {
+    fps: FPS,
+    width: outW,
+    height: outH,
+    canvas: [cw, ch],
+    video: path.join(dir, "raw.mov"),
+    window: [cx, cy, meta.width, meta.height],
+    mask,
+    wallpaper: wall,
+    shadow: { path: shadow, x: cx - (wx - sx), y: cy - (wy - sy) },
+    cursors: Object.fromEntries(Object.entries(cursors).map(([id, c]) => [id, { path: c.path, w: c.w, h: c.h }])),
+    ring,
+    frames: rows,
+  };
+  const planFile = path.join(work, "plan.json");
+  fs.writeFileSync(planFile, JSON.stringify(plan));
   const out = path.join(dir, "tour.mp4");
-  execFileSync("ffmpeg", ["-v", "error", "-y", ...inputs, "-filter_complex", g.join(";"), "-map", "[out]", "-t", length.toFixed(3), "-r", String(FPS), "-c:v", "libx264", "-preset", "medium", "-crf", "15", "-movflags", "+faststart", out], { stdio: "inherit" });
+  execFileSync(buildRenderer(), [planFile, out], { stdio: ["ignore", "ignore", "inherit"] });
   return out;
 }
 

@@ -150,7 +150,8 @@ describe("camera", async () => {
     // Once zoomed in, small moves of the pointer around the middle don't move the view.
     const wobble = (s: number) => ({ x: 800 + (s > 3 ? 60 * Math.sin(s * 5) : 0), y: 500 });
     const still2 = cameraPath(360, 60, canvas, [{ s: 0, mode: "follow", zoom: 2 }], wobble);
-    expect(new Set(still2.slice(240).map((x) => x.x)).size).toBe(1);
+    const xs = still2.slice(240).map((x) => x.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(1);
   });
 });
 
@@ -160,7 +161,7 @@ describe("auto camera", async () => {
     const ev = (s: number, type: string) => ({ s, type });
     const marks = autoCamera([ev(1, "down"), ...[1.5, 1.6, 1.7, 1.8].map((s) => ev(s, "char")), ev(4, "scroll"), ev(4.2, "scroll"), ev(8, "down"), ...[8.3, 8.5, 8.7].map((s) => ev(s, "char")), ev(9, "key"), ev(10.5, "down")], 12);
     expect(marks.map((m) => m.mode)).toEqual(["follow", "fit", "fit", "follow", "fit"]);
-    expect(marks[0]!.s).toBeCloseTo(0.55);
+    expect(marks[0]!.s).toBeCloseTo(1); // the video opens on the whole window
     expect(marks.find((m) => m.mode === "fit" && m.s > 3 && m.s < 4.2)).toBeTruthy(); // whole window for the swipe
     expect(marks.filter((m) => m.mode === "follow").length).toBe(2); // the lone click at 10.5 joins the burst before it
   });

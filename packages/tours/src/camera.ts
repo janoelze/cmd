@@ -1,8 +1,9 @@
 // The video's camera: from the tour's camera marks (and the pointer, when
 // following it), a view per frame into the composited canvas, which post crops
-// to and scales back up. Moves are critically damped springs (no overshoot,
-// settled in about 0.6 s), zoom springs in log space so zooming in and out feel
-// the same, and the view never leaves the canvas. Following the pointer has a
+// to and scales back up. Moves are two critically damped springs in series (no
+// overshoot, settled in about 0.8 s, and an S-curve: one spring alone starts
+// with its full acceleration, a visible kick), zoom springs in log space so
+// zooming in and out feel the same, and the view never leaves the canvas. Following the pointer has a
 // dead zone: the view drifts only when the pointer nears its edge, as a camera
 // operator would, rather than shaking along with every move.
 
@@ -23,9 +24,9 @@ export interface View {
 }
 
 export const CAMERA = {
-  /** Spring stiffness for moving and zooming (ω, rad/s): higher settles faster. */
-  move: 5.5,
-  zoom: 4.5,
+  /** Spring stiffness for moving and zooming (ω, rad/s, per stage of the two): higher settles faster. */
+  move: 8,
+  zoom: 7,
   maxZoom: 3,
   /** A focused place fills the view up to 1/room of its size. */
   room: 1.6,
@@ -53,6 +54,9 @@ export function cameraPath(
   const { w: cw, h: ch } = canvas;
   let cx = cw / 2, cy = ch / 2, lz = 0;
   let vx = 0, vy = 0, vz = 0;
+  // The first spring of the two: it follows the target, the camera follows it.
+  let ax = cx, ay = cy, al = lz;
+  let avx = 0, avy = 0, avz = 0;
   // Following: where the view aims, moved only as far as the dead zone needs.
   let aimX = cw / 2, aimY = ch / 2;
   let mi = -1;
@@ -94,16 +98,23 @@ export function cameraPath(
     const tl = Math.log(tz);
     const dt = 1 / fps / sub;
     for (let k = 0; k < sub; k++) {
-      vx += (c.move * c.move * (tx - cx) - 2 * c.move * vx) * dt;
-      vy += (c.move * c.move * (ty - cy) - 2 * c.move * vy) * dt;
-      vz += (c.zoom * c.zoom * (tl - lz) - 2 * c.zoom * vz) * dt;
+      avx += (c.move * c.move * (tx - ax) - 2 * c.move * avx) * dt;
+      avy += (c.move * c.move * (ty - ay) - 2 * c.move * avy) * dt;
+      avz += (c.zoom * c.zoom * (tl - al) - 2 * c.zoom * avz) * dt;
+      ax += avx * dt;
+      ay += avy * dt;
+      al += avz * dt;
+      vx += (c.move * c.move * (ax - cx) - 2 * c.move * vx) * dt;
+      vy += (c.move * c.move * (ay - cy) - 2 * c.move * vy) * dt;
+      vz += (c.zoom * c.zoom * (al - lz) - 2 * c.zoom * vz) * dt;
       cx += vx * dt;
       cy += vy * dt;
       lz += vz * dt;
     }
+    // Fractional all the way: the renderer draws sub-pixel views (whole pixels made zooms wobble).
     const z = Math.max(1, Math.exp(lz));
-    const w = Math.round(cw / z / 2) * 2, h = Math.round(ch / z / 2) * 2;
-    out.push({ x: Math.round(clamp(cx - w / 2, 0, cw - w)), y: Math.round(clamp(cy - h / 2, 0, ch - h)), w, h });
+    const w = cw / z, h = ch / z;
+    out.push({ x: clamp(cx - w / 2, 0, cw - w), y: clamp(cy - h / 2, 0, ch - h), w, h });
   }
   return out;
 }
@@ -123,6 +134,10 @@ export const AUTO = {
   zoom: 1.5,
   /** Bursts shorter than this (s, a single click) aren't worth a zoom. */
   minBurst: 0.6,
+  /** Stay zoomed in across pauses shorter than this (s): out and straight back in looks nervous. */
+  stayIn: 3.5,
+  /** The video opens on the whole window for at least this long (s). */
+  opening: 1,
 };
 
 /**
@@ -143,9 +158,17 @@ export function autoCamera(inputs: CameraInput[], duration: number, a: typeof AU
     if (b && s - b[1] < a.burstGap && !scrolled) b[1] = s;
     else bursts.push([s, s]);
   }
-  for (const [from, to] of bursts) {
-    if (to - from < a.minBurst && !inputs.some((e) => e.type === "char" && e.s >= from && e.s <= to)) continue;
-    marks.push({ s: Math.max(0, from - a.lead), mode: "follow", zoom: a.zoom });
+  // Worth zooming for, then joined across short pauses.
+  const kept = bursts.filter(([from, to]) => to - from >= a.minBurst || inputs.some((e) => e.type === "char" && e.s >= from && e.s <= to));
+  const joined: [number, number][] = [];
+  for (const [from, to] of kept) {
+    const j = joined.at(-1);
+    const scrolled = j && scrolls.some((x) => x > j[1] && x < from);
+    if (j && from - j[1] < a.stayIn && !scrolled) j[1] = to;
+    else joined.push([from, to]);
+  }
+  for (const [from, to] of joined) {
+    marks.push({ s: Math.max(a.opening, from - a.lead), mode: "follow", zoom: a.zoom });
     marks.push({ s: Math.min(duration, to + a.linger), mode: "fit" });
   }
   // Scrolling wins: whole window from just before a gesture to its end.
@@ -159,7 +182,7 @@ export function autoCamera(inputs: CameraInput[], duration: number, a: typeof AU
   for (const [a0, b0] of gestures) {
     out.push({ s: Math.max(0, a0 - 0.3), mode: "fit" });
     // Back to following if a burst was still going on.
-    const burst = bursts.find(([f, t]) => f - a.lead < b0 && t + a.linger > b0);
+    const burst = joined.find(([f, t]) => f - a.lead < b0 && t + a.linger > b0);
     if (burst) out.push({ s: b0 + 0.3, mode: "follow", zoom: a.zoom });
   }
   return out.sort((x, y) => x.s - y.s);
