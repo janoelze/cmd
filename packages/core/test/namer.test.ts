@@ -159,6 +159,14 @@ describe("naming live agents", () => {
     expect(asked).toHaveLength(1);
   });
 
+  it("names a new session (after a /clear) afresh, from its own turns", async () => {
+    const { a, asked, end } = setup({ "the release CI takes 20 minutes, why?": { intent: "continue", name: "Slow release CI" }, "icons are too small on retina": { intent: "continue", name: "Icon sizes" } });
+    await end(t(0, "the release CI takes 20 minutes, why?"));
+    await end(t(1, "icons are too small on retina", { sessionId: "s2" }));
+    expect(a.name).toBe("Icon sizes");
+    expect(asked[1]).not.toContain("release CI");
+  });
+
   it("leaves agents a person or a worktree named", async () => {
     for (const nameBy of ["user", "worktree"] as const) {
       const { a, asked, end } = setup({}, { name: "Mine", nameBy });

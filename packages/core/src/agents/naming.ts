@@ -33,7 +33,7 @@ export function namerTurn(t: AgentTurn): NamerTurn | null {
 
 export class AgentNaming {
   #o: NamingOptions;
-  #state = new Map<AgentId, NameState>();
+  #state = new Map<AgentId, NameState & { session: string | null }>();
   /** The last turn each agent was looked at for. */
   #seen = new Map<AgentId, number>();
   /** Agents being named now, until the answer is in. */
@@ -67,12 +67,15 @@ export class AgentNaming {
   }
 
   async #turnEnded(a: Agent): Promise<void> {
-    const turns = this.#o.turns(a.id).map(namerTurn).filter((t): t is NamerTurn => !!t).slice(-20);
+    // This session's turns only: after a /clear the agent works on something new, and gets a name for it.
+    const session = a.turn?.sessionId ?? null;
+    const turns = this.#o.turns(a.id).filter((t) => t.sessionId === session).map(namerTurn).filter((t): t is NamerTurn => !!t).slice(-20);
     if (!turns.length) return;
+    const known = this.#state.get(a.id);
     // After a restart: what the agent already has stands in for the remembered state.
-    const s = this.#state.get(a.id) ?? (a.name ? { ...NO_NAME, name: a.name, tries: FIRST_TRIES, history: a.nameWas ? [{ name: a.nameWas, until: a.namedAt ?? 0 }] : [] } : NO_NAME);
+    const s: NameState = known?.session === session ? known : !known && a.name ? { ...NO_NAME, name: a.name, tries: FIRST_TRIES, history: a.nameWas ? [{ name: a.nameWas, until: a.namedAt ?? 0 }] : [] } : NO_NAME;
     const why = shouldAsk(s, turns);
-    if (!why) return void this.#state.set(a.id, s);
+    if (!why) return void this.#state.set(a.id, { ...s, session });
     const others = this.#o.agents().filter((x) => x.id !== a.id && x.spaceId === a.spaceId && x.name).map((x) => x.name!);
     const input = { current: s.name, turns, others };
     let answer = await this.#ask(askText(input));
@@ -82,7 +85,7 @@ export class AgentNaming {
       checked = checkName(answer?.name, others);
     }
     const next = decide(s, answer ? { ...answer, name: checked.problem ? null : checked.name } : null, turns.at(-1)!.at);
-    this.#state.set(a.id, next);
+    this.#state.set(a.id, { ...next, session });
     if (next.name && next.name !== a.name && !this.#o.name(a.id, next.name, `${why}: ${answer?.intent ?? "first"}`)) this.#state.delete(a.id);
   }
 
