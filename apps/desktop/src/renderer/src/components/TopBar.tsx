@@ -1,8 +1,9 @@
 // The top bar (docs/21-sidebars.md): the app window's drag region, full width,
 // over the sidebars and the workspace. The Space switcher in the middle, like a
-// window title; the view modes and New… at the right end.
+// window title; at the right end the view modes, a divider and New…, as plain
+// buttons like the footer's.
 
-import { ICON, IconButton, Segmented } from "@cmd/ui";
+import { ICON, IconButton } from "@cmd/ui";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../keybindings.ts";
 import type { ViewMode } from "../layouts.ts";
@@ -24,14 +25,26 @@ interface Props {
 
 export function TopBar(p: Props) {
   const keys = useKeybindings();
-  const modes = MODES.map((m) => ({ ...m, shortcut: prettyAccelerator(keys.bindings[`view.${m.value}`]?.[0]) }));
   return (
     <header className="topbar">
       <div className="topbar-lead" />
       <div className="topbar-center">{p.spaceBar}</div>
       <div className="topbar-trail">
-        <Segmented size="sm" iconSize={ICON.bar} label="View" value={p.mode} options={modes} onChange={(m) => p.run(`view.${m}`)} />
-        <IconButton variant="default" size="sm" iconSize={ICON.bar} icon="plus" label="New…" onClick={p.onNew} />
+        <div className="topbar-modes" role="group" aria-label="View">
+          {MODES.map((m) => (
+            <IconButton
+              key={m.value}
+              icon={m.icon}
+              label={m.tip}
+              shortcut={prettyAccelerator(keys.bindings[`view.${m.value}`]?.[0])}
+              iconSize={ICON.bar}
+              pressed={p.mode === m.value}
+              onClick={() => p.run(`view.${m.value}`)}
+            />
+          ))}
+        </div>
+        <span className="bar-sep" aria-hidden />
+        <IconButton icon="plus" label="New…" shortcut={prettyAccelerator(keys.bindings["file.new"]?.[0])} iconSize={ICON.bar} onClick={p.onNew} />
       </div>
     </header>
   );

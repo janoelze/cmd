@@ -90,14 +90,12 @@ kbd {
 .platform-mac .topbar { --lights-w: calc(80px - var(--pad-x)); }
 /* Empty for now: a drag region like the rest of the bar. */
 .topbar-lead { min-width: 0; }
-.topbar-center { display: flex; justify-content: center; min-width: 0; -webkit-app-region: no-drag; }
-/* At the right end; the rest of the bar stays a drag region. */
-.topbar-trail { display: flex; align-items: center; justify-content: flex-end; gap: 8px; -webkit-app-region: no-drag; }
-/* The bar style of the small controls, at full height: room for bar-sized icons. */
-.topbar-trail > .ui-seg[data-size="sm"], .topbar .topbar-trail > .ui-icon-button[data-size="sm"] { --h: var(--control-h); }
-/* On Retina the view-mode symbols' ink sits one device pixel below centre (measured);
-   half a point is one device pixel there, so they stay crisp. At 1x they're centred. */
-@media (min-resolution: 2dppx) { .topbar .ui-seg .sf { position: relative; top: -0.5px; } }
+/* The columns stay drag regions; only the controls in them aren't (.spacebar is no-drag itself). */
+.topbar-center { display: flex; justify-content: center; min-width: 0; }
+/* At the right end, plain buttons like the footer's. */
+.topbar-trail { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.topbar-trail > :not(.bar-sep) { -webkit-app-region: no-drag; }
+.topbar-modes { display: flex; align-items: center; gap: 2px; }
 
 /* ── stage: sidebars and the workspace ──────────────── */
 
@@ -171,7 +169,8 @@ kbd {
 /* Holds the usage's tooltip; out of the drag region, which would swallow the hover. */
 .statusbar-usage-tip { display: flex; min-width: 0; -webkit-app-region: no-drag; }
 .statusbar-actions { display: flex; align-items: center; gap: 2px; }
-.statusbar-sep { width: 1px; height: 14px; margin: 0 6px; background: var(--separator); }
+/* A divider between groups of bar buttons. */
+.bar-sep { flex: none; width: 1px; height: 14px; margin: 0 6px; background: var(--separator); }
 
 /* Controls (buttons, segmented, fields…) are @cmd/ui's: packages/ui. */
 
