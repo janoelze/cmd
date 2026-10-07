@@ -327,8 +327,19 @@ export function windowsUsing(paths: string[], panes: Iterable<Pane>, windows: It
   return names;
 }
 
+/**
+ * The home folder a path is in: the user's (from the preload, so $HOME counts),
+ * else any /Users/<name> (another account's, or no bridge: tests).
+ */
+export function homeOf(p: string): string | null {
+  const home = (globalThis as { cmd?: { homeDir?: string } }).cmd?.homeDir;
+  if (home && (p === home || p.startsWith(home + "/"))) return home;
+  return /^\/Users\/[^/]+/.exec(p)?.[0] ?? null;
+}
+
 export function shortPath(p: string): string {
-  return p.replace(/^\/Users\/[^/]+/, "~");
+  const home = homeOf(p);
+  return home ? "~" + p.slice(home.length) : p;
 }
 
 export function ago(ts: number, now: number): string {

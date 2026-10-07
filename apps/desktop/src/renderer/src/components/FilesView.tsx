@@ -31,7 +31,7 @@ import type { AppWindow, FileEntry, GitFile, GitFileState, GitStatus } from "@cm
 import { cmd } from "../bridge.ts";
 import { copy, newTerminalIn, openPath, selectPane } from "../actions.ts";
 import { showContextMenu, type MenuEntry } from "../context.ts";
-import { formatBytes, shortPath, windowsUsing } from "../model.ts";
+import { formatBytes, homeOf, shortPath, windowsUsing } from "../model.ts";
 import { getState, onFsChanged, usePersisted, useStoreValue } from "../store.ts";
 import { registerDropTarget } from "../drops.ts";
 import { dragFiles } from "../drags.ts";
@@ -480,7 +480,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
 
   // Breadcrumbs: "~ › src › cmd" inside the home folder, "/ › etc" elsewhere.
   const crumbs = useMemo(() => {
-    const home = /^\/Users\/[^/]+/.exec(root)?.[0];
+    const home = homeOf(root);
     const base = home ?? "";
     const rest = root.slice(base.length).split("/").filter(Boolean);
     const out = [{ name: home ? "~" : "/", path: home ?? "/" }];

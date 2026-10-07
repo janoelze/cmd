@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { HookTarget } from "@cmd/protocol";
 import { Button, FormRow, FormSection } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
+import { shortPath } from "../model.ts";
 
 const STATE: Record<HookTarget["state"], { text: string; tone: "accent" | "warning" | "dim" }> = {
   installed: { text: "Installed.", tone: "dim" },
@@ -15,7 +16,7 @@ const STATE: Record<HookTarget["state"], { text: string; tone: "accent" | "warni
   stale: { text: "Has a cmd hook whose script is gone. Install replaces it.", tone: "warning" },
 };
 
-const tilde = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
+const tilde = shortPath;
 
 export function AgentHooks() {
   const [targets, setTargets] = useState<HookTarget[] | null>(null);

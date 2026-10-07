@@ -1,5 +1,6 @@
 // Bridges the renderer to the core socket. Reconnects if the core restarts.
 
+import os from "node:os";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CoreEvent, Method, Params, Result } from "@cmd/protocol";
 import { connect, type Connection } from "@cmd/protocol/node";
@@ -72,6 +73,8 @@ function open(): Promise<Connection> {
 open();
 
 const api = {
+  /** The user's home folder ($HOME counts, so a tour's fixture home is "~" too). */
+  homeDir: os.homedir(),
   async call<M extends Method>(method: M, params: Params<M>): Promise<Result<M>> {
     const c = conn ?? (await ready);
     return c.client.call(method, params);
