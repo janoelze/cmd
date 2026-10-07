@@ -59,6 +59,12 @@ export class Tour {
     return this.onScreen(b);
   }
 
+  /** The window's content area on screen, points. */
+  async windowBox(): Promise<Box> {
+    const b = await this.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getContentBounds());
+    return { x: b.x, y: b.y, width: b.width, height: b.height };
+  }
+
   /** Puts the pointer somewhere without showing it (before recording). */
   async park(p: Point) {
     await this.helper.call("release");
@@ -89,17 +95,25 @@ export class Tour {
     for (let round = 0; round < 6; round++) {
       const need = await target.evaluate((el, margin) => {
         const r = el.getBoundingClientRect();
-        let outer: { box: { x: number; y: number; width: number; height: number }; dy: number } | null = null;
+        let outer: { box: { x: number; y: number; width: number; height: number }; d: number; axis: "x" | "y" } | null = null;
         for (let p = el.parentElement; p; p = p.parentElement) {
           const cs = getComputedStyle(p);
-          if (!/(auto|scroll)/.test(cs.overflowY) || p.scrollHeight <= p.clientHeight + 1) continue;
           const b = p.getBoundingClientRect();
-          const top = b.top + margin, bottom = b.top + p.clientHeight - margin;
-          // Out of view: bring it to ~40% of the container's height, where a viewer looks (not the edge).
-          const out = r.top < top || r.bottom > bottom;
-          let dy = out ? r.top + r.height / 2 - (b.top + p.clientHeight * 0.4) : 0;
-          dy = Math.max(-p.scrollTop, Math.min(dy, p.scrollHeight - p.clientHeight - p.scrollTop));
-          if (Math.abs(dy) >= 2) outer = { box: { x: b.left, y: b.top, width: p.clientWidth, height: p.clientHeight }, dy };
+          const box = { x: b.left, y: b.top, width: p.clientWidth, height: p.clientHeight };
+          // Down: out of view, bring it to ~40% of the container's height, where a viewer looks (not the edge).
+          if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 1) {
+            const out = r.top < b.top + margin || r.bottom > b.top + p.clientHeight - margin;
+            let d = out ? r.top + r.height / 2 - (b.top + p.clientHeight * 0.4) : 0;
+            d = Math.max(-p.scrollTop, Math.min(d, p.scrollHeight - p.clientHeight - p.scrollTop));
+            if (Math.abs(d) >= 2) outer = { box, d, axis: "y" };
+          }
+          // Sideways (the strip): out of view, centre it, or its start if it's wider than the view.
+          if (/(auto|scroll)/.test(cs.overflowX) && p.scrollWidth > p.clientWidth + 1) {
+            const out = r.left < b.left + margin || r.right > b.left + p.clientWidth - margin;
+            let d = !out ? 0 : r.width > p.clientWidth - 2 * margin ? r.left - (b.left + margin) : r.left + r.width / 2 - (b.left + p.clientWidth / 2);
+            d = Math.max(-p.scrollLeft, Math.min(d, p.scrollWidth - p.clientWidth - p.scrollLeft));
+            if (Math.abs(d) >= 2) outer = { box, d, axis: "x" };
+          }
         }
         return outer;
       }, PACE.margin);
@@ -112,8 +126,8 @@ export class Tour {
       };
       await this.moveTo(over, Math.min(area.width, area.height));
       const o = await this.origin();
-      const steps = planScroll(need.dy * o.zoom);
-      await this.helper.call("scroll", { x: over.x, y: over.y, steps: steps.map((s) => [s.t, s.dy, s.phase]) });
+      const steps = planScroll(need.d * o.zoom);
+      await this.helper.call("scroll", { x: over.x, y: over.y, axis: need.axis, steps: steps.map((s) => [s.t, s.dy, s.phase]) });
       await sleep(150);
     }
   }
@@ -181,6 +195,19 @@ export class Tour {
     await sleep(between(this.r, ...PACE.after));
   }
 
+  /** Drags a target by an offset (points): a resize edge, a slider. */
+  async dragBy(from: Locator, dx: number, dy = 0) {
+    await this.hover(from);
+    await this.helper.call("down", { ...this.at, button: "left" });
+    await sleep(100);
+    const to = { x: this.at.x + dx, y: this.at.y + dy };
+    await this.helper.call("path", { points: planMove(this.at, to, 80, this.r).map((s) => [s.t, s.x, s.y]), button: "left" });
+    this.at = to;
+    await sleep(between(this.r, 100, 200));
+    await this.helper.call("up", { ...this.at, button: "left" });
+    await sleep(between(this.r, ...PACE.after));
+  }
+
   /** Types into whatever has focus. */
   async type(text: string, profile: TypingProfile = TYPING.terminal) {
     const k = planKeys(text, this.r, profile);
@@ -193,13 +220,25 @@ export class Tour {
     await sleep(between(this.r, ...PACE.after));
   }
 
-  /** Scrolls a container by px, or until a target inside it is in view. */
-  async scroll(container: Locator, opts: { by?: number; to?: Locator }) {
+  /** Scrolls a container by px (down, or `x` sideways), or until a target inside it is in view. */
+  async scroll(container: Locator, opts: { by?: number; x?: number; to?: Locator }) {
     if (opts.to) return this.reveal(opts.to);
     await this.hover(container);
+    await this.swipeHere(opts.x ?? opts.by ?? 0, opts.x !== undefined ? "x" : "y");
+  }
+
+  /**
+   * A sideways trackpad swipe where the pointer is: positive moves along to
+   * the right (the strip's next windows). Lands exactly `px` further.
+   */
+  async swipe(px: number) {
+    await this.swipeHere(px, "x");
+  }
+
+  private async swipeHere(px: number, axis: "x" | "y") {
     const o = await this.origin();
-    const steps = planScroll((opts.by ?? 0) * o.zoom);
-    await this.helper.call("scroll", { ...this.at, steps: steps.map((s) => [s.t, s.dy, s.phase]) });
+    const steps = planScroll(px * o.zoom);
+    await this.helper.call("scroll", { ...this.at, axis, steps: steps.map((s) => [s.t, s.dy, s.phase]) });
     await sleep(150);
   }
 

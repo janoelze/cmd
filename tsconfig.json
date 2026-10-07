@@ -3,6 +3,7 @@
   "include": [
     "packages/*/src/**/*.ts",
     "packages/*/test/**/*.ts",
+    "packages/tours/tours/**/*.ts",
     "apps/relay/src/**/*.ts",
     "apps/relay/test/**/*.ts"
   ],
