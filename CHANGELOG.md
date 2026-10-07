@@ -2,6 +2,27 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.18.0 — 2026-10-07
+
+Agents get short names that tell them apart.
+
+### New
+
+- **Agent names.** cmd names each agent after what it works on, or after its worktree's branch. Rename one from its title bar, or turn AI names off in `Settings → AI & Agents`.
+
+### Improved
+
+- Notifications and `cmd send` use the agent's name, and notifications no longer repeat the project.
+- Recent in the Navigator shows the current Space's past sessions and updates as they change.
+- Settings → Notifications says whether macOS shows cmd's notifications, and Turn On… opens System Settings when needed.
+- A widget added from New… opens on the selected terminal's folder, so Live Diff shows that repository.
+- Windows and widgets keep their icon instead of a status light, and Magic widgets pick their own icon.
+
+### Fixed
+
+- A busy widget or a search over a long history no longer makes cmd stall.
+- `~` points to your home folder even when it isn't under `/Users`.
+
 ## 0.17.2 — 2026-10-07
 
 ### Fixed
