@@ -1,12 +1,14 @@
 // A workspace tour: a terminal in a project, a Files window next to it in the
-// grid, a README opened from its native context menu, then the palette to
-// switch to the canvas.
+// grid, a README opened from its native context menu, a Magic widget build
+// kicked off (a real model: meta.ai), then the palette to switch to the canvas
+// while it builds.
 
 import type { Tour } from "../src/driver.ts";
 import type { TourMeta } from "../src/run.ts";
 import { TYPING } from "../src/typing.ts";
 
 export const meta: TourMeta = {
+  ai: true,
   files: {
     "website/README.md": "# Website\n\nThe marketing site. `npm run dev` serves it on port 5173.\n\n## Layout\n\n- `src/` the pages\n- `styles.css` one stylesheet\n",
     "website/index.html": "<!doctype html>\n<title>Website</title>\n",
@@ -48,6 +50,16 @@ export default async function (t: Tour) {
   await main.getByRole("group", { name: /README\.md/ }).waitFor();
   await t.pause(1500);
 
+  // A widget, built by Magic from a sentence.
+  await t.click(p.getByRole("button", { name: "New…" }));
+  await t.type("a hacker shader: green code raining down a CRT", TYPING.field);
+  const make = p.getByRole("option", { name: /^Make “a hacker shader/ });
+  await make.waitFor();
+  await t.pause(400);
+  await t.click(make);
+  await t.away();
+  await t.pause(3500);
+
   // The palette, to the canvas.
   await t.click(p.getByRole("button", { name: "Command Palette" }));
   await t.type("canvas", TYPING.field);
@@ -55,5 +67,5 @@ export default async function (t: Tour) {
   await t.pause(300);
   await t.press("Return");
   await t.away();
-  await t.pause(1800);
+  await t.pause(4000);
 }

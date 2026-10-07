@@ -13,7 +13,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { _electron as electron } from "playwright";
 import { Tour } from "./driver.ts";
-import { fixtureEnv, makeFixture } from "./fixture.ts";
+import { addAiKeys, fixtureEnv, makeFixture } from "./fixture.ts";
 import { Helper } from "./helper.ts";
 import { renderPreview } from "./post.ts";
 
@@ -23,6 +23,8 @@ export interface TourMeta {
   /** Files in the fixture home (path → content; a path ending in / is a folder). */
   files?: Record<string, string>;
   settings?: Record<string, unknown>;
+  /** Needs a model (a Magic build): the person's AI key goes into the fixture for the run (see fixture.ts). Costs a little per run. */
+  ai?: boolean;
   /** Unrecorded: get the app into the state the video starts in. */
   setup?: (t: Tour) => Promise<void>;
 }
@@ -40,6 +42,7 @@ export async function runTour(file: string, out: string, seed = 1) {
   const name = path.basename(file).replace(/\.tour\.ts$|\.ts$/, "");
   fs.mkdirSync(out, { recursive: true });
   const fixture = makeFixture(path.join(root, ".cmd-dev", "tours", name), meta.files, meta.settings);
+  const secrets = meta.ai ? addAiKeys(fixture) : null;
   const helper = Helper.start();
   const require = createRequire(path.join(root, "apps/desktop/package.json"));
   const app = await electron.launch({ executablePath: require("electron") as unknown as string, args: [path.join(root, "apps/desktop")], env: fixtureEnv(fixture) });
@@ -79,6 +82,8 @@ export async function runTour(file: string, out: string, seed = 1) {
     try {
       execFileSync(process.execPath, [path.join(root, "scripts/stop-core.mjs"), "--terminals"], { env: { ...process.env, CMD_HOME: fixture.cmdHome }, stdio: "ignore" });
     } catch {}
+    // The key doesn't outlive the run.
+    if (secrets) fs.rmSync(secrets, { force: true });
   }
 }
 
