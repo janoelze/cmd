@@ -27,7 +27,7 @@ Not for: people who want an AI IDE, people who want to hand a backlog to a swarm
 | It is | It isn't |
 |---|---|
 | A daily driver, open all day | A tool you open for a batch job |
-| A desk: everything you're working on, side by side | A tab bar |
+| Spaces: everything you're working on, side by side, one per project | A tab bar |
 | You plus a few agents, on real projects | An agent farm |
 | Terminals, made agent-aware | An IDE with a chat panel |
 | Disposable widgets you make by asking | A dashboard you configure |
@@ -35,10 +35,10 @@ Not for: people who want an AI IDE, people who want to hand a backlog to a swarm
 
 ## Three pillars
 
-Lead with the desk, because that is what you see first and what replaces the 500 tabs. Agents are why it exists. Magic widgets are the surprise.
+Lead with Spaces, because that is what you see first and what replaces the 500 tabs. Agents are why it exists. Magic widgets are the surprise.
 
-1. **One desk for everything you're working on.** Terminals, agents, browser, editor, Markdown and widgets are all windows on the same desk. Arrange them as a grid, a scrolling strip or an infinite canvas, or focus on one. Every window is one keystroke away from the command palette.
-   *Proof:* four layouts, ⌘K finds anything, `open README.md` from a shell opens it on the desk, spaces per project.
+1. **A Space for everything you're working on.** Terminals, agents, browser, editor, Markdown and widgets are all windows in a Space, one per project. Arrange them as a grid, a scrolling strip or an infinite canvas, or focus on one. Every window is one keystroke away from the command palette.
+   *Proof:* four layouts, ⌘K finds anything, `open README.md` from a shell opens it in the current Space, one Space per project.
 2. **Agents live in terminals, and cmd knows them.** Claude Code, Codex and others are recognised in any terminal, with no setup. The one that is waiting for you is on top. Terminals outlive the app, and every past session is searchable and resumable.
    *Proof:* the "Needs you" group, ⌃⌘J, the Dock badge; the core and PTY host keep terminals running across quits and updates; full-text search over Claude, Codex, Qwen and Copilot transcripts.
 3. **Magic widgets: ask for a window, throw it away tomorrow.** Type what you want to see ("my open merge requests", "the last CI runs", a JSON URL) and an agent builds a live widget for it in your theme. It refreshes on its own without calling the model. When you no longer need it, close it.
@@ -80,16 +80,16 @@ We don't name them in public copy. Internally, the differences are:
 
 | They | We |
 |---|---|
-| **cmux** is a terminal with agent notifications | A desk with more than terminals; transcript search across agents; widgets |
+| **cmux** is a terminal with agent notifications | Spaces with more than terminals; transcript search across agents; widgets |
 | **Superset, Conductor** run many agents in parallel worktrees | One developer with a few agents, on the actual project |
 | **Warp** is an AI terminal with its own agent | Bring your own agents (Claude Code, Codex); cmd hosts them, it doesn't replace them |
-| **IDEs (Cursor, Zed)** put an agent in the editor | cmd leaves the editor alone and puts the editor on the desk |
+| **IDEs (Cursor, Zed)** put an agent in the editor | cmd leaves the editor alone and puts the editor in a Space, next to the terminals |
 
 ## Naming in the product
 
 - **Widgets and Magic** (2026-10-05, [16-widgets.md](16-widgets.md)): *widget* is the one noun, and widgets are no longer "a kind of window" to people: windows are where you work, widgets show you something at a glance and live in the Widget Library. *Magic* is how you make one ("New Widget with Magic", "Made with Magic"). Wire and storage names stay `magic` (the `magic` window kind, `magic.*` settings and RPC methods, `cmd magic`): renaming them would break stored state.
-- **Windows** and **widgets** are the things on the desk. **Spaces** group them by project. **Agents** are terminals with a coding agent in them. **Sessions** are an agent's transcript, live or past.
-- The **desk** is the word for the main area (grid, strip, canvas and focus are ways of arranging it).
+- **Windows** and **widgets** are what you work with. **Spaces** group them by project. **Agents** are terminals with a coding agent in them. **Sessions** are an agent's transcript, live or past.
+- The **workspace** is the main area of a Space, where its windows sit in a layout (grid, strip, canvas and focus are ways of arranging it). Not "the desk": that framing was dropped as kitschy (2026-10-07).
 
 ## Name and icon
 

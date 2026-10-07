@@ -37,7 +37,7 @@ const welcome: OnboardingStep = {
   body: () => (
     <FeatureList
       items={[
-        { icon: "rectangle.3.group", title: "One desk", description: "Terminals, agents, a browser and an editor as windows, in a grid, a strip or on a canvas." },
+        { icon: "rectangle.3.group", title: "A Space per project", description: "Terminals, agents, a browser and an editor as windows, in a grid, a strip or on a canvas." },
         { icon: "terminal", title: "Agents in your terminals", description: "Claude Code and Codex show up in any terminal. The one that needs you is on top." },
         { icon: "wand.and.stars", title: "Magic widgets", description: "Ask for a window, like your open merge requests, and an agent builds it." },
         { icon: "command", title: "Everything on ⌘K", description: "Windows, sessions and commands, one keystroke away." },

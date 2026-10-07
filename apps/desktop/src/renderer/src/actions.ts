@@ -129,7 +129,7 @@ export async function closePane(paneId: PaneId): Promise<void> {
 }
 
 /**
- * A widget made with Magic left the desk but stays in the library
+ * A widget made with Magic left the workspace but stays in the library
  * (docs/16-widgets.md): say so the first time, with a way back. Drafts that
  * never built are gone with their window, so they say nothing.
  */

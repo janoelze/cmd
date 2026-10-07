@@ -5,7 +5,7 @@ description: Write or review any text cmd shows to people: notifications, toasts
 
 # Writing cmd's UI text
 
-cmd is calm, so its text is calm: **friendly and compact**. It sounds like a helpful colleague at the next desk, someone who uses cmd all day, not a product talking about itself. The voice and the words to avoid come from `docs/15-positioning.md`; this skill turns them into rules per surface. Release notes have their own skill (`changelog`) that follows the same voice.
+cmd is calm, so its text is calm: **friendly and compact**. It sounds like a helpful colleague sitting next to you, someone who uses cmd all day, not a product talking about itself. The voice and the words to avoid come from `docs/15-positioning.md`; this skill turns them into rules per surface. Release notes have their own skill (`changelog`) that follows the same voice.
 
 ## Voice
 

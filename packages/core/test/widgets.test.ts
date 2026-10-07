@@ -540,7 +540,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(copyState()).toMatchObject({ phase: "ready", widgetId, revision: 1, prompt: "count", history: ["count"], hasData: true });
     expect(copyState().html).toBe(state().html);
     expect(core.magic.library()[0]!.windows.sort()).toEqual([id, copy.id].sort());
-    expect(() => core.magic.deleteWidget(widgetId)).toThrow(/on the desk/);
+    expect(() => core.magic.deleteWidget(widgetId)).toThrow(/in a Space/);
 
     core.handlers["magic.config"]({ id: copy.id, values: { start: 10 } });
     await until(() => events.some((e) => e.type === "magic.data" && e.id === copy.id && (e.data as { n?: number })?.n === 13));
@@ -610,7 +610,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(title()).toBe("My counter");
     expect(list()[0]!.title).toBe("My counter");
 
-    // Another copy on the desk, and a duplicate to change on its own.
+    // Another copy in a Space, and a duplicate to change on its own.
     const copy = core.handlers["widget.add"]({ ref }) as unknown as { id: string; kind: string; title: string };
     expect(copy).toMatchObject({ kind: "magic", title: "My counter" });
     core.handlers["magic.secret"]({ id, key: "token", value: "s3cret" });
@@ -620,7 +620,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(core.magic.widgetSecrets.get(dup.ref.slice("magic:".length))).toEqual({ token: "s3cret" });
     expect(list().find((e) => e.ref === ref)!.windows.sort()).toEqual([id, copy.id].sort());
 
-    expect(() => core.handlers["widget.delete"]({ ref })).toThrow(/on the desk/);
+    expect(() => core.handlers["widget.delete"]({ ref })).toThrow(/in a Space/);
     expect(() => core.handlers["widget.delete"]({ ref: "type:magic" })).toThrow(/built-in/);
     expect(() => core.handlers["widget.add"]({ ref: "magic:nope" })).toThrow(/no such widget/);
     core.handlers["widget.delete"]({ ref: dup.ref });

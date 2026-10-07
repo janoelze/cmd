@@ -126,7 +126,7 @@ const DAYS: JournalDay[] = (
   ] satisfies { date: number; headline: string; entries: Draft[] }[]
 ).map(day);
 
-/** A widget tile as the desk draws it. */
+/** A widget tile as the workspace draws it. */
 function Tile({ width, height, children }: { width: number; height: number; children: ReactNode }) {
   return (
     <Window style={{ width, height, position: "relative" }}>

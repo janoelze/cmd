@@ -310,7 +310,7 @@ export interface Methods {
 
   /** The Widget Library (docs/16-widgets.md): built-in widgets, then yours by last use. */
   "widget.list": { params: {}; result: WidgetEntry[] };
-  /** Put a widget from the library on the desk (another window showing it, if one already does). */
+  /** Put a widget from the library in a Space (another window showing it, if one already does). */
   "widget.add": { params: Placement & { ref: string }; result: AppWindow };
   /** Name a widget made with Magic; the name sticks across changes. */
   "widget.rename": { params: { ref: string; title: string }; result: null };
@@ -455,7 +455,7 @@ export type CoreEvent =
   | { type: "magic.data"; id: WindowId; data: unknown; at: number; error?: string }
   /** To the previewer connection only: render these pages offscreen and answer with magic.previewResult. */
   | { type: "magic.previewRequest"; reqId: string; requests: MagicPreviewRequest[] }
-  /** The Widget Library changed (a widget made, changed, renamed, deleted, put on or taken off the desk). */
+  /** The Widget Library changed (a widget made, changed, renamed, deleted, put in or taken out of a Space). */
   | { type: "widget.library"; entries: WidgetEntry[] }
   /** A watched file or folder changed on disk (see fs.watch). */
   | { type: "fs.changed"; path: string }

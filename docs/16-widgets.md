@@ -26,7 +26,7 @@ Every entry point, label and menu follows from these three sentences.
 
 - **Widget** is the one noun. There aren't two kinds of thing: a widget either comes with cmd or is one you made.
 - **Magic** is how you make one. It names the act and the moment, the part that should feel delightful: the ✦, the prompt, watching it get built. "New Widget with Magic", "Made with Magic".
-- **Desk**: widgets and windows share it. Taking a widget away is **Remove from Desk**, and getting rid of it is **Delete Widget**.
+- **Workspace**: widgets and windows share it. Taking a widget away is **Remove from Workspace**, and getting rid of it is **Delete Widget**.
 - Wire and storage names stay as they are (`magic` window kind, `magic.*` settings and RPC methods, `cmd magic`). New library methods are `widget.*`.
 
 ## The UI
@@ -51,7 +51,7 @@ Each action has one place and does one thing.
 | "What's available?" | **Widget Library…** (⇧⌘L): a gallery. Its search field only searches. |
 | "Make a new one" | **New Widget with Magic…** (⇧⌘M), ✦ New Widget in the library, or a request typed into New… |
 | "Change this one" | **Edit Widget** (⌘E), **Change…** (⌘L) |
-| "Take it off my desk" | ⌘W: **Remove from Desk** |
+| "Take it off my workspace" | ⌘W: **Remove from Workspace** |
 | "Get rid of it" | **Delete Widget**, only in the library or the widget's edit view, with a confirmation |
 
 ### Menus and sidebar
@@ -60,7 +60,7 @@ The library is ⇧⌘L, as Xcode's Library is: L for Library. ⌥⌘M looks natu
 
 
 - **File** starts with **New…** (⌘N), then holds windows only: Terminal (⌘T), Claude, Codex, Browser, File Browser, Text.
-- A **Widgets** menu (after Space, before Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Change Widget…, Refresh Widget, Stop Making Widget, Remove from Desk. The Magic View-menu items moved here; their ids (`file.newMagic`, `view.magic*`) stay, since keybindings.json uses them. Edit stays ⌘E in View (Toggle Preview / Edit), which already serves every window.
+- A **Widgets** menu (after Space, before Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Change Widget…, Refresh Widget, Stop Making Widget, Remove from Workspace. The Magic View-menu items moved here; their ids (`file.newMagic`, `view.magic*`) stay, since keybindings.json uses them. Edit stays ⌘E in View (Toggle Preview / Edit), which already serves every window.
 - The top bar's + is New…, as ⌘N is.
 
 ### New…
@@ -72,32 +72,32 @@ One picker for everything new, in the command palette's frame (`renderer/src/new
 3. **New Widget with Magic** last. With text typed it becomes **Make “…” with Magic**, which opens a Magic window and starts making that request.
 
 Groups keep this order whatever is typed; a query only ranks within a group, so "t" offers Terminal and Text Window before Timer. A typed URL or path offers **Open …** first (the palette's `window.openTarget`), and no Magic. Each window runs its own command, so it opens in the same Space and folder as from the menu. The direct shortcuts (⌘T, ⌥⌘N, ⇧⌘B, ⇧⌘O, ⇧⌘E, ⇧⌘M) skip the picker.
-- The sidebar lists widgets on the desk in their own **Widgets** section, after Windows.
+- The sidebar lists widgets in the Space in their own **Widgets** section, after Windows.
 
 ### The library
 
 A sheet, like the palette or Settings, with a grid of tall cards, three to a row: an avatar top left (a built-in widget's icon, else the widget's initial, in a colour of its own from its name, like projects' chips in the sidebar), the name and where it comes from beside it ("Made with Magic" or "Built-in"), open space, and the description or what was asked for at the bottom. Screenshots (the latest revision's `shot.png`) are still listed (`WidgetEntry.shot`) but not shown: a hover preview could use them.
 
-- **Your Widgets**: by last use. (A "Here" badge on widgets already on this desk was tried and dropped: unclear.) ✦ New Widget is a button beside the search field, not a card among them.
+- **Your Widgets**: by last use. (A "Here" badge on widgets already in this Space was tried and dropped: unclear.) ✦ New Widget is a button beside the search field, not a card among them.
 - **Built-in**: Agent Activity, Live Diff, and more over time.
 - No **Examples** section. It was built (the Magic prompt's examples as widgets to add and change) and dropped: examples already live as the chips under the prompt when making a widget, and the library is for widgets you have.
 
-Clicking a card adds the widget to the current Space and closes the sheet; ⏎ in the search field adds the first match. A card's menu (right-click, or its … button) has Add to Space, and for yours Rename…, Duplicate, Show in Finder and Delete…. Deleting a widget that is on the desk says its windows close too, closes them, then deletes (the core itself still refuses while a window shows it). The sheet asks the core for a fresh list when it opens; `widget.library` events keep it current. Built: `renderer/src/components/WidgetLibrary.tsx`.
+Clicking a card adds the widget to the current Space and closes the sheet; ⏎ in the search field adds the first match. A card's menu (right-click, or its … button) has Add to Space, and for yours Rename…, Duplicate, Show in Finder and Delete…. Deleting a widget that is in a Space says its windows close too, closes them, then deletes (the core itself still refuses while a window shows it). The sheet asks the core for a fresh list when it opens; `widget.library` events keep it current. Built: `renderer/src/components/WidgetLibrary.tsx`.
 
 ### Making a widget
 
-As today: the widget appears on the desk right away, as a prompt; you describe it and watch it being built. Two additions:
+As today: the widget appears in the Space right away, as a prompt; you describe it and watch it being built. Two additions:
 
 - Once it works for the first time it joins Your Widgets. A draft that was never built goes away when it is closed, so the library doesn't fill with attempts.
-- The first time a made widget is removed from the desk, a toast says where it went: "Removed “…” from the desk. It's in your Widget Library." with Undo (a toast has one action). The flag is the `widgets.removedHint` UI state.
+- The first time a made widget is removed from the workspace, a toast says where it went: "Removed “…” from the workspace. It's in your Widget Library." with Undo (a toast has one action). The flag is the `widgets.removedHint` UI state.
 
 ### Closing and deleting
 
-⌘W on a widget is Remove from Desk (the Widgets menu has it by name; File's item still reads Close Window, since menu labels are static). Widgets you made are kept until you delete them; there is no automatic cleanup, since that would break "it's still in the library". Sorting by last use keeps the library tidy enough. `widgets/closed/` goes away: its folders join the library on migration.
+⌘W on a widget is Remove from Workspace (the Widgets menu has it by name; File's item still reads Close Window, since menu labels are static). Widgets you made are kept until you delete them; there is no automatic cleanup, since that would break "it's still in the library". Sorting by last use keeps the library tidy enough. `widgets/closed/` goes away: its folders join the library on migration.
 
 ### Copies
 
-The same widget can be on the desk more than once (Agent Activity in every Space, the CI widget for two repositories). Each copy has its own settings (config, refresh, `cmd.state`) and runs in its own Space (`cwdFor(w)` already uses the window's Space). What the widget *is* (its files, revisions, problems) is shared: a change made from one copy updates all of them. Duplicate in the library is how you make a separate widget to change on its own.
+The same widget can be on the workspace more than once (Agent Activity in every Space, the CI widget for two repositories). Each copy has its own settings (config, refresh, `cmd.state`) and runs in its own Space (`cwdFor(w)` already uses the window's Space). What the widget *is* (its files, revisions, problems) is shared: a change made from one copy updates all of them. Duplicate in the library is how you make a separate widget to change on its own.
 
 ### Terminal answers
 
@@ -105,7 +105,7 @@ When Magic decides a request is a command (`btop`, `watch …`), it opens a real
 
 ## Under the hood: widgets are windows
 
-People see two things; the code mostly sees one. A widget on the desk is an `AppWindow` like any other: same layouts, title bar, focus, persistence, sync and `viewFor`. What is new is that a widget also exists *without* a window.
+People see two things; the code mostly sees one. A widget on the workspace is an `AppWindow` like any other: same layouts, title bar, focus, persistence, sync and `viewFor`. What is new is that a widget also exists *without* a window.
 
 Three layers:
 
@@ -171,7 +171,7 @@ One worktree per phase; each ends green.
 
 1. **Widgets apart from windows** (core only, no visible change), built: widget ids, `widget.json`, no `closed/`, every copy updated on change, migration; `MagicService.library()`, `opened()`, `deleteWidget()`. Tests in `widgets.test.ts`.
 2. **Registry and protocol**, built: `role`/`description` on window types; `widget.*` methods and event; `cmd widget list/add`.
-3. **The library and the split**, built: the sheet, the Widgets menu, the sidebar's + and Widgets section, Remove from Desk and its toast, new labels in `shared/commands.ts`.
+3. **The library and the split**, built: the sheet, the Widgets menu, the sidebar's + and Widgets section, Remove from Workspace and its toast, new labels in `shared/commands.ts`.
 4. **Built-ins**, built: Agent Activity, then Live Diff with `git.diff`.
 5. **Examples**: built, then dropped (see The library). The changelog is written at release time (the changelog skill); a draft is below.
 
@@ -182,7 +182,7 @@ For whoever cuts the release with these changes in it; it passes `lintChangelog`
 ```markdown
 ### New
 
-- **Widget Library.** ⇧⌘L shows your widgets and the built-in ones. A widget you take off the desk stays there, ready to put back in any Space.
+- **Widget Library.** ⇧⌘L shows your widgets and the built-in ones. A widget you take off the workspace stays there, ready to put back in any Space.
 - **Agent Activity.** A built-in widget with every agent at a glance: who waits for you, who is working and what just finished.
 - **Live Diff.** A built-in widget with the uncommitted changes in a project, updated as you work.
 

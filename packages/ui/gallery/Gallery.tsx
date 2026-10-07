@@ -808,7 +808,7 @@ function ContentPage() {
         <Card>
           <FeatureList
             items={[
-              { icon: "rectangle.3.group", title: "One desk", description: "Terminals, agents, a browser and an editor as windows." },
+              { icon: "rectangle.3.group", title: "A Space per project", description: "Terminals, agents, a browser and an editor as windows." },
               { icon: "terminal", title: "Agents in your terminals", description: "The one that needs you is on top." },
             ]}
           />
@@ -1071,7 +1071,7 @@ function OverlaysPage() {
           <SheetHeader icon="command.square.fill" title="Welcome to cmd" subtitle="Terminals and coding agents, side by side." />
           <FeatureList
             items={[
-              { icon: "rectangle.3.group", title: "One desk", description: "Terminals, agents, a browser and an editor as windows." },
+              { icon: "rectangle.3.group", title: "A Space per project", description: "Terminals, agents, a browser and an editor as windows." },
               { icon: "wand.and.stars", title: "Magic widgets", description: "Ask for a window and an agent builds it." },
             ]}
           />

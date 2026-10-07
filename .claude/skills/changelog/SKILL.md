@@ -104,7 +104,7 @@ Follow the voice in `docs/15-positioning.md`: calm, plain, concrete, first-hand.
   "Pasting into a terminal no longer drops the last character." Not "Fix off-by-one in paste
   handler."
 - **Short, within the limits below.** Every sentence ends with a period.
-- **Name things as the app names them:** windows, spaces, the desk, agents, sessions, Magic
+- **Name things as the app names them:** windows, Spaces, the workspace, agents, sessions, Magic
   widgets, the command palette. Menu paths as `Settings → Terminal`. Shortcuts as the menu shows
   them (⌘K, ⇧⌘T). Setting keys in backticks only when someone would type them (`updates.mode`).
 - **No internals:** no file names, function names, RPC methods, process names (core, PTY host),

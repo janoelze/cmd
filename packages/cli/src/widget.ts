@@ -21,7 +21,7 @@ usage: cmd widget new <dir>        a new widget folder (manifest.json, data.ts, 
        cmd widget run [dir]        run data.ts once and print its data (validated against its schema)
        cmd widget preview [dir]    render it (dark, light, small) and save preview-*.png in the folder
        cmd widget list             the Widget Library: built-in widgets, then yours by last use
-       cmd widget add <widget>     put one on the desk (in this terminal's Space): a ref from list,
+       cmd widget add <widget>     put one in this terminal's Space: a ref from list,
                                    a widget id, or a title
 
   --config key=value   a config value for the run (repeatable)
@@ -134,7 +134,7 @@ export async function widgetCommand(argv: string[]): Promise<number> {
       const entries = await conn.client.call("widget.list", {});
       if (sub === "list") {
         if (o.json) return console.log(JSON.stringify(entries, null, 2)), 0;
-        for (const e of entries) console.log(`${e.ref.padEnd(44)} ${e.title}${e.windows.length ? dim(`  on the desk${e.windows.length > 1 ? ` ×${e.windows.length}` : ""}`) : ""}`);
+        for (const e of entries) console.log(`${e.ref.padEnd(44)} ${e.title}${e.windows.length ? dim(`  in a Space${e.windows.length > 1 ? ` ×${e.windows.length}` : ""}`) : ""}`);
         return 0;
       }
       if (!dirArg) {

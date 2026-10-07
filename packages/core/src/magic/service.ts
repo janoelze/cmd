@@ -792,7 +792,7 @@ export class MagicService {
   /** Delete a widget from the library: its folder, revisions and secrets. Not while a window shows it. */
   deleteWidget(widgetId: string): void {
     if (!this.store.info(widgetId)) throw new Error(`no such widget: ${widgetId}`);
-    if (this.#copies(widgetId).length) throw new Error("This widget is on the desk; remove it from there first.");
+    if (this.#copies(widgetId).length) throw new Error("This widget is in a Space; remove it from there first.");
     this.#unwatch(widgetId);
     this.widgetSecrets.forget(widgetId);
     this.store.delete(widgetId);
