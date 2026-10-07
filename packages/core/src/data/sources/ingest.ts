@@ -35,8 +35,16 @@ const FILES_SQL = `
   );
 `;
 
-/** Events recorded at a time while reading in the background (#recordInSteps). */
-const STEP = 250;
+/**
+ * Events recorded at a time while reading in the background (#recordInSteps):
+ * starts at STEP, halves after a step over STEP_SLOW_MS (big messages, blobs to
+ * compress) and doubles after one under STEP_FAST_MS, between STEP_MIN and STEP_MAX.
+ */
+const STEP = 100;
+const STEP_MIN = 20;
+const STEP_MAX = 400;
+const STEP_SLOW_MS = 40;
+const STEP_FAST_MS = 10;
 
 export interface IngestOptions {
   data: DataService;
@@ -159,13 +167,20 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
    * The worker redacted them already.
    */
   async #recordInSteps(state: FileState, events: ReturnType<typeof readTranscript>["events"], env: Record<string, string> | null): Promise<void> {
-    let i = 0;
-    for (; i + STEP < events.length; i += STEP) {
-      this.#record(null, events.slice(i, i + STEP), env, state, true);
+    let step = STEP;
+    for (let i = 0; ; ) {
+      const n = Math.min(step, events.length - i);
+      const last = i + n >= events.length;
+      const t0 = performance.now();
+      this.#record(last ? state : null, events.slice(i, i + n), env, state, true);
+      if (last) return;
+      i += n;
+      const ms = performance.now() - t0;
+      if (ms > STEP_SLOW_MS) step = Math.max(STEP_MIN, step >> 1);
+      else if (ms < STEP_FAST_MS) step = Math.min(STEP_MAX, step << 1);
       await (this.#o.pace?.() ?? new Promise<void>((r) => setImmediate(r)));
       if (this.#closed) return;
     }
-    this.#record(state, events.slice(i), env, state, true);
   }
 
   /** Events into the log and the sessions view; with `state`, where the file's reading stopped into the table. */

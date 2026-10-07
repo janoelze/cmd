@@ -13,8 +13,12 @@ const log = logger("sessions");
 // 2: message counts were doubled for transcripts read twice (archived copies).
 // 3: names (session.name events, docs/32).
 const VERSION = 3;
-/** Transcript events per step of a rebuild: about 50 ms of work on a big log, so a step stays under the stall threshold. */
-const PAGE = 2000;
+/**
+ * A rebuild steps through the log by seq in spans this wide (a rowid range: no
+ * sort, no index scan per step) and folds each span's events per session before
+ * writing, so a step is a few ms however many events it holds.
+ */
+const SPAN = 5000;
 const SQL = `
   CREATE TABLE IF NOT EXISTS sessions (
     key TEXT PRIMARY KEY,
@@ -56,6 +60,39 @@ export interface SessionRow {
   name: string | null;
   name_by: string | null;
   named_at: number | null;
+}
+
+/** A transcript event's fields a rebuild reads (sessions.ts's span query). */
+interface FoldRow {
+  seq: number;
+  type: string;
+  at: number;
+  until: number | null;
+  sessionId: string | null;
+  projectId: string | null;
+  text: string | null;
+  cwd: unknown;
+  gitBranch: unknown;
+  role: unknown;
+  isSidechain: unknown;
+  isMeta: unknown;
+}
+
+/** One session's part of a rebuild step, before its upsert. */
+interface Fold {
+  key: string;
+  id: string;
+  agent: string;
+  started: number | null;
+  updated: number | null;
+  cwd: string | null;
+  branch: string | null;
+  projectId: string | null;
+  title: string | null;
+  /** A title line was seen: it overwrites the stored title (a summary only fills an empty one). */
+  titleSet: boolean;
+  firstPrompt: string | null;
+  messages: number;
 }
 
 export class SessionsView {
@@ -110,6 +147,49 @@ export class SessionsView {
       const rows = [...touched].map((k) => this.get(k)).filter((r): r is SessionRow => !!r && r.started !== null).map(sessionInfo);
       for (const fn of this.#listeners) fn(rows);
     }
+  }
+
+  /**
+   * apply() for a rebuild's step: the same rules, folded per session first (a
+   * span of thousands of events touches a few dozen sessions), then one upsert
+   * per session. Order within a session: a title line overwrites the title, a
+   * summary fills an empty one, the first user message is the first prompt,
+   * the first cwd, branch and project stick (COALESCE at the upsert).
+   */
+  #applyFolded(rows: FoldRow[]): void {
+    const folds = new Map<string, Fold>();
+    for (const r of rows) {
+      if (!r.sessionId) continue;
+      const i = r.sessionId.indexOf(":");
+      let f = folds.get(r.sessionId);
+      if (!f) folds.set(r.sessionId, (f = { key: r.sessionId, id: r.sessionId.slice(i + 1), agent: r.sessionId.slice(0, i), started: null, updated: null, cwd: null, branch: null, projectId: null, title: null, titleSet: false, firstPrompt: null, messages: 0 }));
+      const at = r.at > 0 ? r.at : null;
+      const until = r.until && r.until > 0 ? r.until : at;
+      if (at !== null) f.started = f.started === null ? at : Math.min(f.started, at);
+      if (until !== null) f.updated = f.updated === null ? until : Math.max(f.updated, until);
+      if (typeof r.cwd === "string") f.cwd ??= r.cwd;
+      if (typeof r.gitBranch === "string") f.branch ??= r.gitBranch;
+      if (r.projectId) f.projectId ??= r.projectId;
+      if (r.type === "transcript.title" && r.text) (f.title = r.text), (f.titleSet = true);
+      else if (r.type === "transcript.summary" && r.text) f.title ??= r.text;
+      else if (r.type === "transcript.message") {
+        f.messages++;
+        if (r.role === "user" && r.text && !r.isSidechain && !r.isMeta) f.firstPrompt ??= r.text;
+      }
+    }
+    const upsert = (title: "set" | "fill") =>
+      this.#views.stmt(
+        `INSERT INTO sessions (key, id, agent, started, updated, cwd, branch, project_id, title, first_prompt, messages) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET
+           started = MIN(COALESCE(started, excluded.started), COALESCE(excluded.started, started)),
+           updated = MAX(COALESCE(updated, excluded.updated), COALESCE(excluded.updated, updated)),
+           cwd = COALESCE(cwd, excluded.cwd), branch = COALESCE(branch, excluded.branch), project_id = COALESCE(project_id, excluded.project_id),
+           title = ${title === "set" ? "excluded.title" : "COALESCE(title, excluded.title)"},
+           first_prompt = COALESCE(first_prompt, excluded.first_prompt), messages = messages + excluded.messages`,
+      );
+    this.#views.transaction(() => {
+      for (const f of folds.values()) upsert(f.titleSet ? "set" : "fill").run(f.key, f.id, f.agent, f.started, f.updated, f.cwd, f.branch, f.projectId, f.title, f.firstPrompt, f.messages);
+    });
   }
 
   /** A session's name from a session.name event (the newest wins); the row may come before its transcript. */
@@ -176,19 +256,18 @@ export class SessionsView {
     const files = this.#views.db.prepare(`SELECT key, path, env FROM sessions WHERE path IS NOT NULL OR env IS NOT NULL`).all() as { key: string; path: string | null; env: string | null }[];
     this.#views.db.exec(`DELETE FROM sessions`);
     this.#rebuilding = true;
-    const page = this.#data.store.db.prepare(
+    const span = this.#data.store.db.prepare(
       `SELECT seq, type, at, until, session_id AS sessionId, project_id AS projectId, text, json_extract(data, '$.cwd') AS cwd, json_extract(data, '$.gitBranch') AS gitBranch, json_extract(data, '$.role') AS role, json_extract(data, '$.isSidechain') AS isSidechain, json_extract(data, '$.isMeta') AS isMeta
-       FROM events WHERE type >= 'transcript.' AND type < 'transcript/' AND seq > ? ORDER BY seq LIMIT ?`,
+       FROM events WHERE seq > ? AND seq <= ? AND type >= 'transcript.' AND type < 'transcript/' ORDER BY seq`,
     );
-    let after = 0;
+    const last = (this.#data.store.db.prepare(`SELECT MAX(seq) AS m FROM events`).get() as { m: number | null }).m ?? 0;
     let n = 0;
     try {
-      for (;;) {
-        const rows = page.all(after, PAGE) as { seq: number; type: string; at: number; until: number | null; sessionId: string | null; projectId: string | null; text: string | null; cwd: unknown; gitBranch: unknown; role: unknown; isSidechain: unknown; isMeta: unknown }[];
-        if (!rows.length) break;
-        this.apply(rows.map((r) => ({ ...r, data: { cwd: r.cwd, gitBranch: r.gitBranch, role: r.role, isSidechain: !!r.isSidechain, isMeta: !!r.isMeta } }) as unknown as DataEvent));
+      for (let after = 0; after < last; after += SPAN) {
+        const rows = span.all(after, after + SPAN) as unknown as FoldRow[];
+        if (!rows.length) continue;
+        this.#applyFolded(rows);
         n += rows.length;
-        after = rows.at(-1)!.seq;
         await this.#pace();
       }
       // Names, in the order they were given.
