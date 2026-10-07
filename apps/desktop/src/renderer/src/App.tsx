@@ -34,7 +34,7 @@ import { DoneBatch, Looks } from "./notify.ts";
 import { DEFAULT_FRACTION, MIN_WIDTH, nextPreset, stepFraction, withWidth } from "./strip.ts";
 import { DEFAULT_CAMERA, type Camera } from "./canvas.ts";
 import type { Rect } from "./layouts.ts";
-import { windowActions } from "./windowActions.ts";
+import { useWindowActions, windowActions } from "./windowActions.ts";
 import type { FindRequest } from "./find.tsx";
 import { stateStr, viewFor } from "./windows/registry.ts";
 import { toggleMarkdownEdit } from "./windows/markdown.tsx";
@@ -547,7 +547,8 @@ export function App() {
   const selectedSide = sideOf(docks, selected);
   const hasSession = !!(currentAgent && sessionId(currentAgent));
   const aiReady = !!useAiStatus()?.ready;
-  const canFind = selectedIsPane || !!windowActions(selected)?.find;
+  const selectedActions = useWindowActions(selected);
+  const canFind = selectedIsPane || !!selectedActions?.find;
   useEffect(() => {
     const hasPane = !!selected;
     cmd.setMenuState({

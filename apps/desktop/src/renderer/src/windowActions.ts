@@ -22,16 +22,32 @@ type Actions = {
   zoom?: (d: 1 | -1 | 0) => void;
 };
 const registry = new Map<string, Actions>();
+let registryVersion = 0;
+const registryListeners = new Set<() => void>();
+const changed = () => {
+  registryVersion++;
+  for (const fn of registryListeners) fn();
+};
 
 export function registerWindowActions(id: string, actions: Actions): () => void {
   registry.set(id, actions);
+  changed();
   return () => {
-    if (registry.get(id) === actions) registry.delete(id);
+    if (registry.get(id) === actions) registry.delete(id), changed();
   };
 }
 
 export function windowActions(id: string | null): Actions | undefined {
   return id ? registry.get(id) : undefined;
+}
+
+/** A window's actions, re-rendering when they change (what the menu bar enables). */
+export function useWindowActions(id: string | null): Actions | undefined {
+  useSyncExternalStore(
+    (fn) => (registryListeners.add(fn), () => registryListeners.delete(fn)),
+    () => registryVersion,
+  );
+  return windowActions(id);
 }
 
 export interface WindowStatus {

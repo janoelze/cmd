@@ -133,6 +133,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   // Find in the page: Chromium's own find, which counts as it goes (found-in-page). Case only.
   const report = useRef<(r: FindResults | null) => void>(() => {});
   const lastQuery = useRef("");
+  const lastCase = useRef(false);
   const find = useFind({
     supports: { wholeWord: false, regex: false },
     find: (query, o, step, r) => {
@@ -143,6 +144,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       // A new query (or new options) starts a find session; a step continues it.
       const fresh = step === 0 || query !== lastQuery.current;
       lastQuery.current = query;
+      lastCase.current = o.caseSensitive;
       wv.findInPage(query, { forward: step >= 0, findNext: fresh, matchCase: o.caseSensitive });
     },
     clear: () => {
@@ -155,8 +157,11 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const wv = ref.current;
     if (!wv) return;
     const found = (e: { result: { activeMatchOrdinal: number; matches: number } }) => report.current({ index: e.result.activeMatchOrdinal - 1, count: e.result.matches });
+    // A new page (a link, a reload, one still loading when you typed): find in it too.
+    const loaded = () => lastQuery.current && wv.findInPage(lastQuery.current, { findNext: true, matchCase: lastCase.current });
     wv.addEventListener("found-in-page", found as never);
-    return () => void wv.removeEventListener("found-in-page", found as never);
+    wv.addEventListener("did-stop-loading", loaded);
+    return () => (wv.removeEventListener("found-in-page", found as never), void wv.removeEventListener("did-stop-loading", loaded));
   }, [live]);
   useEffect(() => registerWindowActions(win.id, { find: live ? find.request : undefined }), [win.id, live, find.request]);
 
