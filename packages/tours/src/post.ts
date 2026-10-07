@@ -261,7 +261,7 @@ const probeSeconds = (file: string) => Number(execFileSync("ffprobe", ["-v", "er
  */
 export function renderShots(dir: string, o: PostOptions = {}, width = 1080): Clip[] {
   const meta = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")) as Meta & { name?: string };
-  const events = (JSON.parse(fs.readFileSync(path.join(dir, "events.json"), "utf8")) as (Ev & { name?: string; phase?: string; pad?: number; aspect?: number; loop?: boolean })[]).sort((a, b) => a.t - b.t);
+  const events = (JSON.parse(fs.readFileSync(path.join(dir, "events.json"), "utf8")) as (Ev & { name?: string; phase?: string; pad?: number; aspect?: number; loop?: boolean; framing?: string })[]).sort((a, b) => a.t - b.t);
   const { toCanvas } = canvasOf(meta, o);
   const S = meta.scale;
   const sec = (t: number) => (t - meta.t0) / 1e9;
@@ -278,10 +278,17 @@ export function renderShots(dir: string, o: PostOptions = {}, width = 1080): Cli
       console.warn(`shot ${name}: its region never showed up, skipped`);
       continue;
     }
-    // The union of what the region covered, in canvas px, padded, at the aspect ratio, centred.
-    const rects = boxes.map((e) => ({ ...toCanvas({ x: e.rect![0]!, y: e.rect![1]! }), w: e.rect![2]! * S, h: e.rect![3]! * S }));
-    const x0 = Math.min(...rects.map((r) => r.x)), y0 = Math.min(...rects.map((r) => r.y));
-    const x1 = Math.max(...rects.map((r) => r.x + r.w)), y1 = Math.max(...rects.map((r) => r.y + r.h));
+    // Framed on the box the region kept longest (a palette mostly shows a filtered list; its tall
+    // unfiltered one flashes by), or with framing: "union", on everything it covered. Canvas px.
+    const rects = boxes.map((e, i) => ({
+      ...toCanvas({ x: e.rect![0]!, y: e.rect![1]! }),
+      w: e.rect![2]! * S,
+      h: e.rect![3]! * S,
+      held: ((boxes[i + 1]?.t ?? end?.t ?? meta.t1) - e.t) / 1e9,
+    }));
+    const framed = start.framing === "union" ? rects : [rects.reduce((a, r) => (r.held > a.held ? r : a))];
+    const x0 = Math.min(...framed.map((r) => r.x)), y0 = Math.min(...framed.map((r) => r.y));
+    const x1 = Math.max(...framed.map((r) => r.x + r.w)), y1 = Math.max(...framed.map((r) => r.y + r.h));
     const pad = (start.pad ?? 40) * S;
     const aspect = start.aspect ?? 1;
     const height = even(width / aspect);

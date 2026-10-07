@@ -66,8 +66,8 @@ export class Tour {
    * seamless (end with t.loopBack() so the last frames look like the first).
    */
   readonly shot = {
-    start: async (name: string, o: { region: Locator[]; pad?: number; aspect?: number; loop?: boolean }) => {
-      await this.helper.call("mark", { type: "shot", name, phase: "start", pad: o.pad ?? 40, aspect: o.aspect ?? 1, loop: o.loop ?? true });
+    start: async (name: string, o: { region: Locator[]; pad?: number; aspect?: number; loop?: boolean; framing?: "longest" | "union" }) => {
+      await this.helper.call("mark", { type: "shot", name, phase: "start", pad: o.pad ?? 40, aspect: o.aspect ?? 1, loop: o.loop ?? true, framing: o.framing ?? "longest" });
       let last = "";
       let busy = false;
       const poll = async () => {

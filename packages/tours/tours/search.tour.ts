@@ -21,13 +21,14 @@ export const meta: TourMeta = {
 
 export default async function (t: Tour) {
   const p = t.page;
-  const sidebar = p.getByRole("complementary").first();
   const field = p.getByRole("textbox", { name: "Search sessions" });
-  await t.shot.start("search", { region: [sidebar], pad: 40 });
+  const history = p.getByRole("tree", { name: "History" });
+  // Framed on the field and its results (the box held longest), not the whole tall sidebar.
+  await t.shot.start("search", { region: [field, history], pad: 48 });
   await t.pause(600);
   await t.click(field);
   await t.type("offline", TYPING.exact, { stay: true });
-  const hit = p.getByRole("tree", { name: "History" }).getByRole("treeitem", { name: /Offline mode/ });
+  const hit = history.getByRole("treeitem", { name: /Offline mode/ });
   await hit.waitFor();
   await t.pause(600);
   await t.hover(hit);

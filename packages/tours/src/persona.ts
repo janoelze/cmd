@@ -7,6 +7,7 @@
 // the app is the star, Kai's day just gives it something real to work on.
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { Fixture } from "./fixture.ts";
@@ -66,6 +67,12 @@ const HISTORY: Record<string, [number, string][]> = {
   ],
 };
 
+/** A UUID-shaped id from a name, the same every run. */
+function uuidFor(name: string): string {
+  const h = createHash("sha1").update(name).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
 function write(root: string, files: Files) {
   for (const [p, content] of Object.entries(files)) {
     const full = path.join(root, p);
@@ -105,7 +112,8 @@ export function applyKai(f: Fixture) {
     const cwd = path.join(f.home, ses.folder);
     const dir = path.join(projects, cwd.replace(/[^a-zA-Z0-9]/g, "-"));
     fs.mkdirSync(dir, { recursive: true });
-    const id = `kai-session-${String(i + 1).padStart(2, "0")}`;
+    // A real-looking session id (a UUID, stable per session): "kai-session-04" in a tooltip gives the fixture away.
+    const id = uuidFor(`kai-${i}-${ses.title}`);
     const started = Date.now() - ses.hoursAgo * 3_600_000;
     // Turns a few minutes apart, as a conversation goes.
     const at = (n: number) => new Date(started + n * 4 * 60_000).toISOString();
