@@ -42,6 +42,7 @@ The goal is to replace the `ghostty-agents` fork with something owned outright.
 | 29 | [Memory and recall](29-memory.md) | Planned, not built: facts that expire instead of being deleted, with sources; editable blocks per project; `cmd recall`, an MCP tool and the briefing line; evals before shipping |
 | 30 | [What the data model makes possible](30-data-capabilities.md) | What cmd knows now (one log of agents, transcripts, commands with output, git, pages, your focus, model calls), what that won over the four old logs, features it makes possible from "a screen away" to memory, and examples to run today |
 | 31 | [Context-aware notifications](31-context-notifications.md) | Handoff, not built: what cmd notifies about today, principles, 20 new notifications as rules over the event log (a failing command passes now, an agent changed a file you have open, two agents on one file, a stopped agent can go on, …), a rule engine in the core, a dry run over real history before anything ships |
+| 32 | [Session names](32-session-names.md) | Plan, not built: names of 1–3 nouns in the person's words that tell agents apart in notifications ("Tours · done", not "cmd · done"); what a good name is, real sessions renamed by hand, renaming from the title bar, the worktree rule, a model for the rest with change-of-task detection and hysteresis, `session.name` events, a replay eval |
 
 ## Key findings
 1. **Nothing has to be invented for agent awareness.** Every tool in this space combines three things:
