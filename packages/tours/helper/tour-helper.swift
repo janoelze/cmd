@@ -14,7 +14,7 @@
 //   {"cmd":"type","text":"…","delays":[ms,…]}               characters, layout-independent
 //   {"cmd":"key","key":"Return","mods":["cmd"]}
 //   {"cmd":"menu-items","pid":123} → {"items":[{title,x,y,w,h,enabled}]}: the app's open
-//       native menu (a context menu, or an open menu-bar menu), via Accessibility
+//       native menus (context menus, an open menu-bar menu), via ScreenCaptureKit + Accessibility
 //   {"cmd":"log"} → {"events":[…]} and clears it
 // Moves stop with an error if the pointer isn't where the last move left it:
 // someone moved the mouse, so the run is spoiled and shouldn't fight them.
@@ -223,30 +223,31 @@ func axFrame(_ el: AXUIElement) -> CGRect? {
 }
 
 /**
- * The items of the app's open menu: context menus hang off the app element,
- * an open menu-bar menu off its menu bar item. Windows aren't searched: their
- * subtree is the whole web page.
+ * The items of the app's open menus. An open context menu isn't in the app's
+ * accessibility tree, but it is on screen: ScreenCaptureKit lists it as one of
+ * the app's windows above layer 0, and the element at a point inside it leads
+ * up to its AXMenu, whose children are the items with their frames.
  */
-func openMenuItems(pid: pid_t) -> [[String: Any]] {
+func openMenuItems(pid: pid_t) async throws -> [[String: Any]] {
+  let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+  let system = AXUIElementCreateSystemWide()
   var found: [[String: Any]] = []
-  func walk(_ el: AXUIElement, depth: Int) {
-    guard depth < 6, let kids: [AXUIElement] = ax(el, kAXChildrenAttribute) else { return }
-    for k in kids {
-      let role: String = ax(k, kAXRoleAttribute) ?? ""
-      if role == kAXWindowRole { continue }
-      if role == kAXMenuRole {
-        for item in (ax(k, kAXChildrenAttribute) as [AXUIElement]?) ?? [] {
-          guard let f = axFrame(item), f.height > 0 else { continue }
-          let title: String = ax(item, kAXTitleAttribute) ?? ""
-          let enabled: Bool = ax(item, kAXEnabledAttribute) ?? true
-          found.append(["title": title, "x": f.minX, "y": f.minY, "w": f.width, "h": f.height, "enabled": enabled])
-        }
-        continue
-      }
-      walk(k, depth: depth + 1)
+  for w in content.windows where w.owningApplication?.processID == pid && w.windowLayer > 0 {
+    var hit: AXUIElement?
+    guard AXUIElementCopyElementAtPosition(system, Float(w.frame.midX), Float(w.frame.minY + min(20, w.frame.height / 2)), &hit) == .success, var el = hit else { continue }
+    // Up to the menu.
+    for _ in 0..<4 where (ax(el, kAXRoleAttribute) as String?) != kAXMenuRole {
+      guard let parent: AXUIElement = ax(el, kAXParentAttribute) else { break }
+      el = parent
+    }
+    guard (ax(el, kAXRoleAttribute) as String?) == kAXMenuRole else { continue }
+    for item in (ax(el, kAXChildrenAttribute) as [AXUIElement]?) ?? [] {
+      guard let f = axFrame(item), f.height > 0 else { continue }
+      let title: String = ax(item, kAXTitleAttribute) ?? ""
+      let enabled: Bool = ax(item, kAXEnabledAttribute) ?? true
+      found.append(["title": title, "x": f.minX, "y": f.minY, "w": f.width, "h": f.height, "enabled": enabled])
     }
   }
-  walk(AXUIElementCreateApplication(pid), depth: 0)
   return found
 }
 
@@ -347,7 +348,7 @@ func handle(_ msg: [String: Any]) async {
       reply(["ok": true])
     case "menu-items":
       guard let pid = msg["pid"] as? Int32 else { return reply(["ok": false, "error": "pid is needed"]) }
-      reply(["ok": true, "items": openMenuItems(pid: pid)])
+      reply(["ok": true, "items": try await openMenuItems(pid: pid)])
     case "log":
       reply(["ok": true, "events": events])
       events = []
