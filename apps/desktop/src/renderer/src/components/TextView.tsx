@@ -14,7 +14,7 @@
 import { Button, Callout, EmptyState } from "@cmd/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { basicSetup } from "codemirror";
-import { Compartment, EditorState, Text } from "@codemirror/state";
+import { Compartment, EditorSelection, EditorState, Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { searchPanelOpen } from "@codemirror/search";
@@ -27,7 +27,7 @@ import { onFsChanged, useStoreValue } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { syntax } from "../editor/syntax.ts";
 import { editorFindable, findPanel } from "../editor/find.ts";
-import { useFind } from "../find.tsx";
+import { shareFindQuery, useFind } from "../find.tsx";
 import { useTheme } from "@cmd/ui/themes";
 
 /** Editor chrome from the app's design tokens. */
@@ -272,6 +272,28 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
       }),
     [win.id, save, file, find.request],
   );
+
+  // A search result opened here: its line in the middle, the text found selected, and ⌘G finds it again.
+  const reveal = win.state.reveal as { line: number; column: number | null; text: string | null; at: number } | undefined;
+  const revealed = useRef(0);
+  useEffect(() => {
+    const v = view.current;
+    if (!v || !loaded || !reveal || reveal.at === revealed.current) return;
+    revealed.current = reveal.at;
+    const line = v.state.doc.line(Math.min(Math.max(1, reveal.line), v.state.doc.lines));
+    let from = line.from;
+    let to = line.from;
+    if (reveal.text) {
+      const hay = line.text.toLowerCase();
+      const needle = reveal.text.toLowerCase();
+      const near = reveal.column ? hay.indexOf(needle, Math.max(0, reveal.column - 3)) : -1;
+      const at = near >= 0 ? near : hay.indexOf(needle);
+      if (at >= 0) (from = line.from + at), (to = from + reveal.text.length);
+      shareFindQuery(reveal.text);
+    }
+    v.dispatch({ selection: EditorSelection.range(from, to), effects: EditorView.scrollIntoView(from, { y: "center" }) });
+    v.focus();
+  }, [loaded, reveal?.at]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // What the title bar / status bar shows for this window.
   const m = meta.current;

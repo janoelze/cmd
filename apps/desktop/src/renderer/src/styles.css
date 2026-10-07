@@ -721,6 +721,10 @@ kbd {
 
 /* Session search results in the palette */
 .palette.searching { width: min(760px, calc(100vw - 32px)); }
+/* A kind's name over its results in a search (Files, Commands…), like the Navigator's section names. */
+.palette-heading { padding: 8px 10px 3px; font: 600 10.5px var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
+.palette-heading:first-child { padding-top: 2px; }
+.palette-list li.rich .palette-icon { margin-top: 1px; }
 .palette-list li.rich { align-items: flex-start; padding: 8px 10px; }
 .palette-hit { flex: 1; min-width: 0; }
 .palette-hit-top { display: flex; align-items: baseline; gap: 10px; }

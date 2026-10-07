@@ -7,7 +7,7 @@
 // per session from the sessions view. Replaces search.sqlite's Searcher.
 
 import { Worker } from "node:worker_threads";
-import type { DataEvent, SearchHit } from "@cmd/protocol";
+import type { DataEvent, HistoryHit, SearchHit } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { SearchQuery, stem, Vocabulary, words } from "../../search/query.ts";
 import { textOf } from "../sources/transcripts.ts";
@@ -120,6 +120,72 @@ export class SearchView {
     return out;
   }
 
+  /**
+   * What happened, by full text (the palette's search): commands (one row per
+   * command line and folder, with how often it ran), pages (per address) and files
+   * opened in cmd (per path). Best match first within each kind, recent ones a
+   * little more; `limit` per kind.
+   */
+  history(text: string, o: { spaceId?: string | null; limit?: number } = {}, now = Date.now()): HistoryHit[] {
+    const q = new SearchQuery(text);
+    if (q.isEmpty) return [];
+    let rows: { e: DataEvent; bm: number }[];
+    try {
+      rows = this.#data.store.matches(q.expression(), ["command", "browser.visit", "file.open"], { spaceId: o.spaceId, limit: 400 });
+    } catch {
+      return []; // malformed expression
+    }
+    const terms = [...q.terms, ...q.terms.map(stem), ...q.phrases.flatMap((p) => p.split(" "))];
+    const limit = o.limit ?? 5;
+    const groups = new Map<string, { hit: HistoryHit; score: number; e: DataEvent }>();
+    for (const { e, bm } of rows) {
+      const d = (e.data ?? {}) as Record<string, unknown>;
+      const ageDays = Math.max(0, now - e.at) / 86_400_000;
+      const score = -bm * (1 + 0.6 * Math.exp(-ageDays / 21));
+      let key: string;
+      let hit: HistoryHit;
+      if (e.type === "command") {
+        const command = typeof d.command === "string" ? d.command : (e.text ?? "");
+        if (!command.trim()) continue;
+        const cwd = typeof d.cwd === "string" ? d.cwd : null;
+        key = `c\0${command}\0${cwd}`;
+        hit = { kind: "command", command: command.split("\n")[0]!.slice(0, 300), cwd, exitCode: typeof d.exitCode === "number" ? d.exitCode : null, at: e.at, paneId: e.paneId, runs: 1, snippet: null };
+      } else if (e.type === "browser.visit") {
+        const url = typeof d.url === "string" ? d.url : null;
+        if (!url) continue;
+        key = `p\0${url}`;
+        hit = { kind: "page", url, title: typeof d.title === "string" ? d.title : null, at: e.at };
+      } else {
+        const p = typeof d.path === "string" ? d.path : null;
+        if (!p) continue;
+        key = `f\0${p}`;
+        hit = { kind: "file", path: p, at: e.at };
+      }
+      const g = groups.get(key);
+      if (!g) groups.set(key, { hit, score, e });
+      else {
+        if (g.hit.kind === "command") g.hit.runs++;
+        // The best match ranks the row; the newest run is the one it shows.
+        if (score > g.score) g.score = score;
+        if (e.at > g.hit.at) (g.e = e), (g.hit = g.hit.kind === "command" && hit.kind === "command" ? { ...hit, runs: g.hit.runs } : hit);
+      }
+    }
+    const out: HistoryHit[] = [];
+    const per = new Map<string, number>();
+    for (const g of [...groups.values()].sort((a, b) => b.score - a.score)) {
+      const n = per.get(g.hit.kind) ?? 0;
+      if (n >= limit) continue;
+      per.set(g.hit.kind, n + 1);
+      // A command's snippet: where its output has the words, if the line doesn't.
+      if (g.hit.kind === "command" && g.e.blob && !terms.some((t) => g.hit.kind === "command" && g.hit.command.toLowerCase().includes(t))) {
+        const output = this.#data.store.blob(g.e.blob)?.toString("utf8");
+        if (output) g.hit.snippet = snippetOf(output, terms);
+      }
+      out.push(g.hit);
+    }
+    return out;
+  }
+
   /** Sessions whose transcript events match, best first: one per session, the best event's seq for the snippet. */
   #match(expression: string, now: number): Candidate[] {
     if (!expression) return [];
@@ -206,15 +272,15 @@ export function snippetOf(text: string, terms: string[], span = 18): string | nu
   if (!flat) return null;
   const tokens = flat.split(" ");
   const wanted = terms.filter(Boolean);
-  const matches = (tok: string) => {
-    const w = words(tok)[0] ?? "";
-    return wanted.some((t) => (t.length >= 3 ? w.startsWith(t) : w === t));
-  };
+  const wordMatches = (w: string) => wanted.some((t) => (t.length >= 3 ? w.startsWith(t) : w === t));
+  // Any word in the token: "flaky" is in packages/test/flaky.test.ts; only that word is marked.
+  const matches = (tok: string) => words(tok).some(wordMatches);
+  const mark = (tok: string) => tok.replace(/[\p{L}\p{N}]+/gu, (w) => (wordMatches(words(w)[0] ?? "") ? `\x01${w}\x02` : w));
   let first = tokens.findIndex(matches);
   if (first < 0) return tokens.slice(0, span).join(" ") + (tokens.length > span ? "…" : "");
   const start = Math.max(0, first - Math.floor(span / 3));
   const end = Math.min(tokens.length, start + span);
-  const part = tokens.slice(start, end).map((tok) => (matches(tok) ? `\x01${tok}\x02` : tok));
+  const part = tokens.slice(start, end).map((tok) => (matches(tok) ? mark(tok) : tok));
   return `${start > 0 ? "…" : ""}${part.join(" ")}${end < tokens.length ? "…" : ""}`;
 }
 

@@ -23,6 +23,43 @@ export const stripAnsi = (s: string) => s.replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b\
  */
 export const commandOutput = (raw: string) => stripAnsi(raw).replace(/[%#⏎] {8,}[ \t]*$/, "").trimEnd();
 
+/** How much of what a command printed is searchable: its end, where the result and the errors are. */
+const OUTPUT_INDEXED = 16_000;
+
+/** What a command is found by: its line, then the end of its output. */
+export function commandBody(command: string | null, output: string | null): string | null {
+  const tail = output ? output.slice(-OUTPUT_INDEXED) : "";
+  return [command, tail].filter(Boolean).join("\n") || null;
+}
+
+/**
+ * Once per log: commands recorded before their output was searchable get it in
+ * the full-text index (from their content blobs), a page at a time between yields.
+ */
+export async function indexCommandOutput(data: DataService, pace: { yield(): Promise<void> }): Promise<number> {
+  const store = data.store;
+  if (store.meta("fts.commandOutput")) return 0;
+  let after = 0;
+  let n = 0;
+  for (;;) {
+    const page = store.query({ types: ["command"], after, limit: 500 });
+    if (!page.length) break;
+    store.transaction(() => {
+      for (const e of page) {
+        if (!e.blob) continue;
+        const output = store.blob(e.blob)?.toString("utf8") ?? null;
+        const command = typeof (e.data as { command?: unknown }).command === "string" ? ((e.data as { command: string }).command) : e.text;
+        store.reindex(e.seq, e.text, commandBody(command, output));
+        n++;
+      }
+    });
+    after = page[page.length - 1]!.seq;
+    await pace.yield();
+  }
+  store.setMeta("fts.commandOutput", "1");
+  return n;
+}
+
 export class CommandLog {
   #panes: PaneManager;
   #data: DataService | null;
@@ -83,7 +120,7 @@ export class CommandLog {
       spaceId: run.spaceId,
       projectId: projectIdOf(run.cwd),
       text: run.command?.split("\n")[0]?.slice(0, 300) ?? null,
-      body: run.command,
+      body: commandBody(run.command, output),
       data: { command: run.command?.slice(0, 4096) ?? null, exitCode: run.exitCode, cwd: run.cwd, output: output ? { chars: output.length, cut: false } : null },
       content: output || null,
     });

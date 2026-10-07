@@ -26,6 +26,11 @@ export interface Findable {
 }
 
 let shared = { query: "", options: NO_FIND_OPTIONS };
+
+/** What ⌘G finds next, set from outside a find bar (a search result opened at its match). */
+export function shareFindQuery(query: string): void {
+  shared = { query, options: NO_FIND_OPTIONS };
+}
 const oneLine = (s: string) => (s.includes("\n") ? "" : s);
 
 export interface WindowFind {

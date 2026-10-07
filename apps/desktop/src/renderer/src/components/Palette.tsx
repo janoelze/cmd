@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { SearchStatus } from "@cmd/protocol";
 import { Highlight, ICON, iconNode } from "@cmd/ui";
 import { IndexRing } from "./IndexRing.tsx";
@@ -21,6 +21,8 @@ export interface PaletteItem {
 }
 
 const PREFIX: Record<string, string> = { ">": "Commands", "@": "Sessions" };
+/** A group's name over search results, where it differs (the open sessions and windows). */
+const HEADING: Record<string, string> = { Sessions: "Open" };
 /** `?query` searches agent transcripts (async, in the core). */
 export const SEARCH_PREFIX = "?";
 
@@ -200,8 +202,14 @@ export function Palette({
         />
         <ul ref={list} className="palette-list" id={`${id}-list`} role="listbox" aria-label={label ?? placeholder}>
           {results.map((it, i) => (
+            <Fragment key={it.id}>
+            {/* Search mixes kinds: each kind under its name. */}
+            {searching && results[i - 1]?.group !== it.group && (
+              <li className="palette-heading" role="presentation">
+                {HEADING[it.group] ?? it.group}
+              </li>
+            )}
             <li
-              key={it.id}
               id={optionId(i)}
               role="option"
               aria-selected={i === active}
@@ -212,6 +220,8 @@ export function Palette({
               onClick={(e) => run(it, e.metaKey)}
             >
               {it.meta ? (
+                <>
+                {it.icon && <span className="palette-icon">{iconNode(it.icon, ICON.row)}</span>}
                 <div className="palette-hit">
                   <div className="palette-hit-top">
                     <span className="palette-label">{it.label}</span>
@@ -223,6 +233,7 @@ export function Palette({
                     </div>
                   )}
                 </div>
+                </>
               ) : (
                 <>
                   <span className="palette-group">{!groups || results[i - 1]?.group !== it.group ? it.group : ""}</span>
@@ -232,6 +243,7 @@ export function Palette({
                 </>
               )}
             </li>
+            </Fragment>
           ))}
           {results.length === 0 && (
             <li className="palette-empty" role="presentation">

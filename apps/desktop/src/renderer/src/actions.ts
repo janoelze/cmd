@@ -54,7 +54,7 @@ export function windowSelected(id: string | null): void {
  * window is (or the last selected one that is in a folder): anywhere in Home,
  * inside the root in other Spaces; otherwise (undefined) the core starts them at the root.
  */
-function contextCwd(): string | undefined {
+export function contextCwd(): string | undefined {
   const cwd = folderOf(currentPane()) ?? folderOf(lastWithFolder);
   const space = getState().spaces.get(here());
   return cwd && space && (space.home || under(space.root, cwd)) ? cwd : undefined;
@@ -213,6 +213,17 @@ export function openLink(url: string): void {
  * Open a path or URL in the window type that handles it (core registry); bare
  * domains get https://; anything no type handles goes to the default app.
  */
+/**
+ * A file at a line, in a text window (a search result): the one already showing
+ * it in this Space, else a new one; `found` (the text found) is selected there.
+ */
+export async function openFileAt(path: string, line: number, column: number | null, found: string | null): Promise<void> {
+  const reveal = { line, column, text: found, at: Date.now() };
+  const open = [...getState().windows.values()].find((w) => w.kind === "text" && w.spaceId === here() && w.state.path === path);
+  const w = open ? await cmd.call("window.update", { id: open.id, state: { reveal } }) : await cmd.call("window.open", { kind: "text", input: { path, reveal }, spaceId: here() });
+  select(w.id);
+}
+
 export async function openPath(target: string): Promise<void> {
   const t = /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(target) || /^localhost(:\d+)?/i.test(target) ? `https://${target}`.replace("https://localhost", "http://localhost") : target;
   const w = await cmd.call("window.openTarget", { target: t, spaceId: here() }).catch(() => null);

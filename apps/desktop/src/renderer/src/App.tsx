@@ -19,6 +19,9 @@ import {
   newFiles,
   newText,
   openLink,
+  openPath,
+  openFileAt,
+  contextCwd,
   openSession,
   copyResumeCommand,
   sessionId,
@@ -723,20 +726,61 @@ export function App() {
 
   // ── palette ────────────────────────────────────────────
 
-  // ?query in the palette: past agent sessions. Enter switches to a live one, else resumes it.
-  const searchSessions = useCallback(async (text: string): Promise<PaletteItem[]> => {
-    const hits = await cmd.call("search.query", { text, limit: 40 });
+  // ?query in the palette (docs/33): the Space's files (live from disk), past
+  // agent sessions, commands and what they printed, pages and files opened in cmd.
+  // Open windows come from the palette's own items (SEARCH_GROUPS).
+  const searchAll = useCallback(async (text: string): Promise<PaletteItem[]> => {
+    const st = getState();
+    const space = st.spaces.get(st.spaceId);
     const now = Date.now();
-    return hits.map((h) => ({
-      id: `h-${h.agent}-${h.sessionId}`,
-      group: "History" as const,
-      label: h.title || "(untitled session)",
-      meta: [h.agent, h.cwd ? shortPath(h.cwd) : null, h.branch, h.updatedAt ? ago(h.updatedAt, now) : null, h.fuzzy ? "~" : null]
-        .filter(Boolean)
-        .join(" · "),
-      snippet: h.snippet,
-      run: () => void openSession(h),
-    }));
+    const [sessions, files, history] = await Promise.all([
+      cmd.call("search.query", { text, limit: 8 }).catch(() => []),
+      cmd.call("search.files", { text, spaceId: st.spaceId, cwd: contextCwd() ?? null, limit: 20 }).catch(() => ({ root: null, hits: [] })),
+      // Home holds what happened anywhere; another Space what happened in it.
+      cmd.call("search.history", { text, spaceId: space?.home ? null : st.spaceId, limit: 5 }).catch(() => []),
+    ]);
+    const meta = (...parts: (string | number | null | false | undefined)[]) => parts.filter(Boolean).join(" · ");
+    const base = (p: string) => p.slice(p.lastIndexOf("/") + 1);
+    const dirIn = (p: string, root: string) => {
+      const rel = p.startsWith(root + "/") ? p.slice(root.length + 1) : shortPath(p);
+      return rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : files.root ? base(files.root) : "";
+    };
+    const shown = new Set(files.hits.map((h) => h.path));
+    return [
+      ...files.hits.map((h): PaletteItem =>
+        h.line === null
+          ? { id: `f-${h.path}`, group: "Files", icon: "doc", label: base(h.path), meta: dirIn(h.path, h.root), run: () => void openPath(h.path) }
+          : { id: `l-${h.path}:${h.line}`, group: "Files", icon: "text.alignleft", label: `${base(h.path)}:${h.line}`, meta: dirIn(h.path, h.root), snippet: h.text, run: () => void openFileAt(h.path, h.line!, h.column, text.trim()) },
+      ),
+      ...sessions.map((h): PaletteItem => ({
+        id: `h-${h.agent}-${h.sessionId}`,
+        group: "Past sessions",
+        icon: "clock.arrow.circlepath",
+        label: h.title || "(untitled session)",
+        meta: meta(h.agent, h.cwd && shortPath(h.cwd), h.branch, h.updatedAt && ago(h.updatedAt, now), h.fuzzy && "~"),
+        snippet: h.snippet,
+        run: () => void openSession(h),
+      })),
+      ...history.flatMap((h): PaletteItem[] => {
+        if (h.kind === "command")
+          return [{
+            id: `c-${h.command}-${h.cwd}`,
+            group: "Commands",
+            icon: "terminal",
+            label: h.command,
+            meta: meta(h.cwd && shortPath(h.cwd), h.exitCode ? `exit ${h.exitCode}` : null, h.runs > 1 && `${h.runs}×`, ago(h.at, now)),
+            snippet: h.snippet,
+            // Its terminal if that is still open, else a new one in its folder.
+            run: () => (h.paneId && getState().panes.has(h.paneId) ? select(h.paneId) : void newTerminalIn(h.cwd ?? "~")),
+          }];
+        if (h.kind === "page") {
+          const host = /^https?:\/\/([^/]+)/.exec(h.url)?.[1] ?? h.url;
+          return [{ id: `p-${h.url}`, group: "Pages", icon: "globe", label: h.title || h.url, meta: meta(host, ago(h.at, now)), run: () => openLink(h.url) }];
+        }
+        if (shown.has(h.path)) return [];
+        return [{ id: `o-${h.path}`, group: "Opened files", icon: "doc", label: base(h.path), meta: meta(shortPath(h.path.slice(0, h.path.lastIndexOf("/"))), ago(h.at, now)), run: () => void openPath(h.path) }];
+      }),
+    ];
   }, []);
 
   const remember = (id: string) => setRecent((r) => [id, ...r.filter((x) => x !== id)].slice(0, 20));
@@ -837,7 +881,7 @@ export function App() {
           onClose={() => setPalette(false)}
           key={palette === SEARCH ? "search" : "commands"}
           initialQuery={palette}
-          search={searchSessions}
+          search={searchAll}
           searchGroups={SEARCH_GROUPS}
           searchStatus={s.search}
         />

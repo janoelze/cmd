@@ -70,9 +70,15 @@ export const filesType: WindowType<{ path: string }> = {
 /**
  * A text editor for one file, or an untitled buffer (no path): `dir` is where
  * Save asks first, `draft` the unsaved text, kept so it survives reloads. Saving
- * sets `path` and drops the draft.
+ * sets `path` and drops the draft. `reveal` asks the editor to show a line (a
+ * search result): its line, column and the text to select; `at` makes each ask new.
  */
-export const textType: WindowType<{ path: string; dir?: string; draft?: string }> = {
+type Reveal = { line: number; column: number | null; text: string | null; at: number };
+const revealOf = (v: unknown): Reveal | undefined => {
+  const r = v as Partial<Reveal> | null | undefined;
+  return r && typeof r.line === "number" ? { line: r.line, column: typeof r.column === "number" ? r.column : null, text: typeof r.text === "string" ? r.text : null, at: typeof r.at === "number" ? r.at : Date.now() } : undefined;
+};
+export const textType: WindowType<{ path: string; dir?: string; draft?: string; reveal?: Reveal }> = {
   kind: "text",
   title: "Text",
   icon: "doc.text",
@@ -91,9 +97,12 @@ export const textType: WindowType<{ path: string; dir?: string; draft?: string }
     if (!p) return { state: { path: "", dir: path.resolve(expandHome(str(input.cwd) ?? os.homedir())), draft: str(input.draft) ?? "" }, title: "Untitled" };
     const file = path.resolve(expandHome(p));
     if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
-    return { state: { path: file }, title: path.basename(file) };
+    const reveal = revealOf(input.reveal);
+    return { state: reveal ? { path: file, reveal } : { path: file }, title: path.basename(file) };
   },
   update(state, patch) {
+    const reveal = revealOf(patch.reveal);
+    if (reveal && state.path) return { state: { ...state, reveal } };
     const p = str(patch.path);
     if (p) {
       const file = path.resolve(expandHome(p));

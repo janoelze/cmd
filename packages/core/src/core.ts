@@ -34,13 +34,15 @@ import { AgentNaming } from "./agents/naming.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./agents/hooks.ts";
 import { hookEventName } from "./agents/state.ts";
 import { NotificationCenter } from "./notifications.ts";
-import { CommandLog } from "./commands.ts";
+import { CommandLog, indexCommandOutput } from "./commands.ts";
 import { TimerAlarms } from "./timers.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
 import { restoreSession } from "./restore.ts";
 import type { TermBackend } from "./terminals/types.ts";
 import { ProcessSampler, ResourceMonitor, type ProcSampler, type TreeSampler } from "./resources.ts";
 import { registerBuiltinSources } from "./search/builtin.ts";
+import { FileSearch } from "./search/files.ts";
+import { checkoutOf } from "./checkout.ts";
 import { locateContext, TranscriptSources, type LocateContext, type TranscriptRoot } from "./search/sources.ts";
 import { listDir, parseOverrides, readText, resolvePaths, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
@@ -229,6 +231,7 @@ export class Core {
   #paneOutput: PaneOutputRecorder;
   readonly sessions: SessionsView;
   #searchView: SearchView;
+  #fileSearch: FileSearch;
   #closed = false;
   /** Restarts are chained so two workers never index at once. */
   #searchSwap: Promise<void> = Promise.resolve();
@@ -296,6 +299,7 @@ export class Core {
     this.sessions.onReset(() => this.#viewReset((q) => q.view === "sessions"));
     activity.onTurn((t, cwd) => this.#viewChanged("turns", [{ ...t, cwd }]));
     this.#searchView = new SearchView(this.data, this.sessions);
+    this.#fileSearch = new FileSearch({ excluded: () => this.data.rules().folders });
     this.agents = new AgentTracker(this.panes, {
       store: this.store,
       settings,
@@ -507,10 +511,23 @@ export class Core {
     // Transcripts are read in a worker and recorded here in paced steps; the reading's own progress is search.status.
     if (o.transcripts || o.transcriptRoots) s.startup("transcripts", "Starting the transcript reader", () => void this.settings.bind(["data.record.transcripts", "search.archiveDirs"], () => this.#restartSearch()));
     if (o.stateDir) s.startup("search", "Preparing search", () => this.#searchView.warm());
+    // Commands from before their output was searchable: once, from what they printed.
+    if (o.stateDir) s.startup("command-output", "Indexing command output", () => void indexCommandOutput(this.data, s).then((n) => n && log.info("command output indexed", { commands: n })));
     if (o.stateDir && o.statusRoot) s.startup("homes", "Looking for agents", () => this.#discoverHomes());
     if (o.stateDir) s.startup("journal", "Starting the journal", () => this.journal.start());
     if (o.stateDir) s.startup("retention", "Scheduling retention", () => this.data.start());
     s.ready();
+  }
+
+  /**
+   * Where a Space's files are searched: its folder, but in the Home Space (the
+   * home folder: too big to search as you type) the project of `cwd`, if any.
+   */
+  #searchRoot(spaceId: SpaceId | null, cwd: string | null): string | null {
+    const space = spaceId ? this.spaces.get(spaceId) : undefined;
+    if (space && !space.home) return space.root;
+    const at = cwd && path.isAbsolute(cwd) ? checkoutOf(cwd)?.top ?? null : null;
+    return at && at !== os.homedir() ? at : null;
   }
 
   readonly handlers: Handlers = {
@@ -752,6 +769,11 @@ export class Core {
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),
     "search.query": (p) => this.#searchView.search(p.text, p.limit),
     "search.status": () => this.#ingest?.status() ?? NO_SEARCH,
+    "search.files": async (p) => {
+      const root = this.#searchRoot(p.spaceId ?? null, p.cwd ?? null);
+      return { root, hits: root ? await this.#fileSearch.search(root, p.text, { limit: p.limit }) : [] };
+    },
+    "search.history": (p) => this.#searchView.history(p.text, { spaceId: p.spaceId ?? null, limit: p.limit }),
     "search.reindex": () => {
       if (!this.#ingest) throw new Error("transcripts are off (Settings → Data)");
       this.#ingest.reindex();

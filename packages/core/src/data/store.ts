@@ -307,6 +307,24 @@ export class DataStore {
     this.db.exec(`INSERT INTO events_fts(events_fts) VALUES ('optimize')`);
   }
 
+  /** Events of these types matching an FTS5 expression, best first, with their bm25 (lower is better); `spaceId` narrows. */
+  matches(expression: string, types: string[], o: { spaceId?: string | null; limit?: number } = {}): { e: DataEvent; bm: number }[] {
+    const space = o.spaceId ? ` AND e.space_id = ?` : "";
+    const rows = this.db
+      .prepare(
+        `SELECT e.*, json(e.data) AS data_json, bm25(events_fts, 3.0, 1.0) AS bm FROM events_fts JOIN events e ON e.seq = events_fts.rowid
+         WHERE events_fts MATCH ? AND e.type IN (${types.map(() => "?").join(",")})${space} ORDER BY bm LIMIT ?`,
+      )
+      .all(expression, ...types, ...(o.spaceId ? [o.spaceId] : []), o.limit ?? 300) as unknown as (Row & { bm: number })[];
+    return rows.map((r) => ({ e: toEvent(r), bm: r.bm }));
+  }
+
+  /** An event's words in the full-text index again (what it's found by changed: a command's output). */
+  reindex(seq: number, text: string | null, body: string | null): void {
+    this.#stmt(`DELETE FROM events_fts WHERE rowid = ?`).run(seq);
+    if (text || body) this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`).run(seq, text ?? "", (body ?? "").slice(0, this.#o.bodyCap));
+  }
+
   query(q: DataQuery): DataEvent[] {
     const [cond, args] = conditions(q);
     const dir = q.order === "desc" ? "DESC" : "ASC";

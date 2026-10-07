@@ -367,6 +367,14 @@ export interface Methods {
 
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };
+  /**
+   * Live search in the files of a Space's folder: names, then lines (docs/33).
+   * The Home Space's folder is the home folder, too big: there `cwd` (the selected
+   * window's folder) picks the project instead. `root`: where it looked, null if nowhere.
+   */
+  "search.files": { params: { text: string; spaceId?: SpaceId | null; cwd?: string | null; limit?: number }; result: { root: string | null; hits: FileHit[] } };
+  /** What happened, by full text: commands (and what they printed), pages and files opened in cmd; newest matches first per kind. */
+  "search.history": { params: { text: string; spaceId?: SpaceId | null; limit?: number }; result: HistoryHit[] };
   /** The most recently active past sessions, newest first; `exclude`: session ids to leave out (open ones). */
   "search.status": { params: {}; result: SearchStatus };
   /** Rebuild the transcript index from scratch; progress arrives as search.status events. Fails when search is off. */
@@ -510,6 +518,23 @@ export interface SearchHit {
   snippet: string | null;
   fuzzy: boolean;
 }
+
+/** A file whose path has the words (line null), or a line in it that has the text. */
+export interface FileHit {
+  path: string;
+  /** The folder searched. */
+  root: string;
+  line: number | null;
+  column: number | null;
+  /** The line, matches marked \x01…\x02. */
+  text: string | null;
+}
+
+/** Something that happened, found by its words. */
+export type HistoryHit =
+  | { kind: "command"; command: string; cwd: string | null; exitCode: number | null; at: number; paneId: PaneId | null; runs: number; snippet: string | null }
+  | { kind: "page"; url: string; title: string | null; at: number }
+  | { kind: "file"; path: string; at: number };
 
 export interface SearchStatus {
   sessions: number;

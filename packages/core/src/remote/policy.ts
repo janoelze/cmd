@@ -135,6 +135,8 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "git.status": "view",
   "git.diff": "view",
   "search.query": "never",
+  "search.files": "never",
+  "search.history": "never",
   "search.status": "never",
   "search.reindex": "never",
   "agent.resumeCommand": "never",
