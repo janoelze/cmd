@@ -125,7 +125,7 @@ Without a provider set up: 1 and 2, else the kind. No name from cutting prompts 
 
 ### The model's part
 
-**First name**, after the first turn ends (its prompt alone is often "read X" or a pasted image; the turn adds the files and tools): input the first prompts, the files touched, the agent's final message's first lines, the names of the other live agents in the Space (to stay distinct); output one name or `none`. Examples in the prompt (the table above) do more for length than instructions do; the output is checked (1–3 words, no verb from a stoplist, ≤ 24 characters, not a clash) and asked again once, else `none`.
+**First name**, as soon as a prompt arrives (from the prompt alone), and if that gives nothing ("read X", a pasted image) again when the turn ends, with the files and the answer: input the first prompts, the files touched, the agent's final message's first lines, the names of the other live agents in the Space (to stay distinct); output one name or `none`. Examples in the prompt (the table above) do more for length than instructions do; the output is checked (1–3 words, no verb from a stoplist, ≤ 24 characters, not a clash) and asked again once, else `none`.
 
 **Change of task**, at each later turn end, in two steps so most turns cost nothing:
 
@@ -166,6 +166,8 @@ The 17 hand-named sessions (2 to 44 turns), first through Claude Haiku 4.5 via `
 Names at temperature 0: Slow release CI, Recent by Space, Gopher link, Broken update, Notify permission, Session names, Flaky ⌘W test, JSON in notification, Hack the planet, Icon sizes, Widget status lights, Torrent search sources, Accessibility for tours, Production db, Hook outside sessions, Saved data.
 
 What the runs taught (fixed): with no current name, the model sometimes answered "continue" and no name, so the prompt says plainly that a first name is always asked for; pasted text was left out, which hid the task of sessions that start with a paste (an e2e failure), so its first 200 characters are kept; names repeated the project ("Cmd data model"), so the project is given and refused in a name; answers changed from run to run, so naming asks at temperature 0; two "change" verdicts in a row renamed even when they proposed different names (Missing posters, then Episode posters), so they must now agree; a pause before each prompt of a long session asked every time, so a quiet only lowers the bar for new words; "V0.17.1" and "Notarize once" passed the checks; the verb list rejected "Show posters" (a TV show), so it keeps only words that are verbs whatever follows; one generic word ("Descriptions") was taken as a name, so the prompt asks what of.
+
+Asking at the prompt (2026-10-07): while an agent has no name the namer asks as soon as a prompt arrives, from the prompt alone, and again at the turn's end with what it wrote and said. On the 17: 14 of 16 named at their first prompt (the others at the first turn's end and the second prompt), 16 of 17 acceptable, 0.43 calls per turn. One name came out vaguer from the prompt alone ("UI accessibility survey" for the session that became Tours).
 
 Still weak: the match is lenient (a shared word counts: "Saved data" passes for "Journal data"), names of long implementation sessions are vague ("Saved data"), long sessions that drifted keep their first name at temperature 0, and "new folders" fires on most turns of a session that touches many packages. Next: stricter scoring with a person's judgement per name, the other ~200 sessions for renames and cost, real renames as cases (step 5).
 

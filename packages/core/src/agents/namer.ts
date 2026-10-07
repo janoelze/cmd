@@ -3,7 +3,8 @@
 // and when a proposed name is taken. Pure: the live core (step 4) and the eval
 // (scripts/evals/names.ts) drive the same functions turn by turn.
 //
-// A first name after the first turn that gives something to name. Later, cheap
+// A first name as soon as a prompt gives something to name (from the prompt
+// alone), else after the turn (with what it wrote and said). Later, cheap
 // checks decide whether a turn might be a new task; only then is the model
 // asked to classify the newest prompt (continue, develop, change; Def-DTS) and
 // to propose a name for a change, which is taken after two changes in a row that
@@ -182,8 +183,8 @@ export interface NameState {
 }
 
 export const NO_NAME: NameState = { name: null, pending: null, history: [], tries: 0 };
-/** First-name questions before the namer waits for a cheap check to fire. */
-export const FIRST_TRIES = 4;
+/** First-name questions (at a prompt and at its turn's end) before the namer waits for a cheap check to fire. */
+export const FIRST_TRIES = 6;
 /** A name left this recently isn't taken again. */
 export const RECENT_MS = 60 * 60_000;
 
@@ -216,4 +217,26 @@ export function shouldAsk(s: NameState, turns: NamerTurn[]): string | null {
   if (!s.name) return s.tries < FIRST_TRIES ? "first name" : mightHaveChanged("", turns);
   if (s.pending) return "pending change";
   return mightHaveChanged(s.name, turns);
+}
+
+export type Ask = (input: NamerInput & { rejected?: string }) => Promise<NamerAnswer | null>;
+
+/** A turn as it stands when its prompt is submitted: nothing written or said yet. */
+export function atPrompt(t: NamerTurn): NamerTurn {
+  return { ...t, files: [], final: null };
+}
+
+/**
+ * One question: the model's answer, its name checked, asked again once with
+ * what was wrong, then no name rather than a bad one.
+ */
+export async function askChecked(ask: Ask, input: NamerInput): Promise<{ answer: NamerAnswer | null; problem: string | null; calls: number }> {
+  let answer = await ask(input);
+  let checked = checkName(answer?.name, input.others, input.project);
+  if (!checked.problem) return { answer: answer && { ...answer, name: checked.name }, problem: null, calls: 1 };
+  let problem = `${checked.name}: ${checked.problem}`;
+  answer = await ask({ ...input, rejected: problem });
+  checked = checkName(answer?.name, input.others, input.project);
+  if (checked.problem) problem += `; then ${checked.name}: ${checked.problem}`;
+  return { answer: answer && { ...answer, name: checked.problem ? null : checked.name }, problem, calls: 2 };
 }

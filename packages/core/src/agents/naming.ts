@@ -1,8 +1,10 @@
-// Names agents with the fast tier as their turns end (docs/32-session-names.md,
-// steps 3–4): the namer's rules (namer.ts) run live, the same way the eval
-// replays them. Only agents nobody named: a person's name and a worktree's
-// branch both win over a model's. A turn is asked about only when the cheap
-// checks fire; one question per agent at a time; a failed call names nothing.
+// Names agents with the fast tier (docs/32-session-names.md, steps 3–4): the
+// namer's rules (namer.ts) run live, the same way the eval replays them. While
+// an agent has no name, it's asked as soon as a prompt arrives (the prompt
+// alone often says enough), and again when the turn ends (with what it wrote
+// and said); once named, at turn ends when the cheap checks fire. Only agents
+// nobody named: a person's name and a worktree's branch both win over a
+// model's. One question per agent at a time, in order; a failed call names nothing.
 
 import path from "node:path";
 import type { Agent, AgentId, AgentTurn, Settings } from "@cmd/protocol";
@@ -12,7 +14,7 @@ import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import { buildContext } from "../ai/context.ts";
 import { projectOf } from "../data/project.ts";
 import { askText } from "./names-eval.ts";
-import { checkName, decide, NAME_SCHEMA, nameSystem, NO_NAME, shouldAsk, FIRST_TRIES, type NameState, type NamerAnswer, type NamerTurn } from "./namer.ts";
+import { askChecked, atPrompt, decide, NAME_SCHEMA, nameSystem, NO_NAME, shouldAsk, FIRST_TRIES, type NameState, type NamerAnswer, type NamerTurn } from "./namer.ts";
 
 const log = logger("names");
 
@@ -33,29 +35,34 @@ export function namerTurn(t: AgentTurn): NamerTurn | null {
   return { at: t.startedAt, prompt, files: t.files.map((f) => f.path), final: t.final };
 }
 
+type Moment = "prompt" | "end";
+
 export class AgentNaming {
   #o: NamingOptions;
   #state = new Map<AgentId, NameState & { session: string | null }>();
-  /** The last turn each agent was looked at for. */
-  #seen = new Map<AgentId, number>();
-  /** Agents being named now, until the answer is in. */
+  /** Per agent, the turn moments already looked at ("3 prompt", "3 end"). */
+  #seen = new Map<AgentId, string>();
+  /** Per agent, the questions queued or running: one at a time, in order. */
   #busy = new Map<AgentId, Promise<void>>();
 
   constructor(o: NamingOptions) {
     this.#o = o;
   }
 
-  /** An agent changed: if a turn of it just ended, maybe name it. */
+  /** An agent changed: a prompt arrived while it has no name, or a turn ended: maybe name it. */
   updated(a: Agent): void {
     const t = a.turn;
-    if (!t || t.endedAt === null || this.#seen.get(a.id) === t.index || this.#busy.has(a.id)) return;
-    if (a.depth > 0 || a.nameBy === "user" || a.nameBy === "worktree") return;
+    if (!t || a.depth > 0 || a.nameBy === "user" || a.nameBy === "worktree") return;
+    const moment: Moment | null = t.endedAt !== null ? "end" : !a.name && !t.auto && t.prompt?.trim() ? "prompt" : null;
+    const key = `${t.index} ${moment}`;
+    if (!moment || this.#seen.get(a.id) === key || (moment === "prompt" && this.#seen.get(a.id) === `${t.index} end`)) return;
     if (!this.#o.settings()["agents.names.ai"] || !this.#o.ai.ready()) return;
-    this.#seen.set(a.id, t.index);
-    const run = this.#turnEnded(a)
-      .catch((err) => log.warn(`naming ${a.id.slice(0, 8)} failed: ${(err as Error).message}`))
-      .finally(() => this.#busy.delete(a.id));
+    this.#seen.set(a.id, key);
+    const run = (this.#busy.get(a.id) ?? Promise.resolve())
+      .then(() => this.#name(a.id, t, moment))
+      .catch((err) => log.warn(`naming ${a.id.slice(0, 8)} failed: ${(err as Error).message}`));
     this.#busy.set(a.id, run);
+    void run.finally(() => this.#busy.get(a.id) === run && this.#busy.delete(a.id));
   }
 
   /** Resolves once a name being decided for the agent is in (at once when none is): its notification waits for it. */
@@ -68,27 +75,26 @@ export class AgentNaming {
     this.#seen.delete(id);
   }
 
-  async #turnEnded(a: Agent): Promise<void> {
+  async #name(id: AgentId, t: AgentTurn, moment: Moment): Promise<void> {
+    // As it is now: an earlier question may have named it, or the person did meanwhile.
+    const a = this.#o.agents().find((x) => x.id === id);
+    if (!a || a.nameBy === "user" || a.nameBy === "worktree") return;
     // This session's turns only: after a /clear the agent works on something new, and gets a name for it.
-    const session = a.turn?.sessionId ?? null;
-    const turns = this.#o.turns(a.id).filter((t) => t.sessionId === session).map(namerTurn).filter((t): t is NamerTurn => !!t).slice(-20);
+    const session = t.sessionId;
+    const past = this.#o.turns(id).filter((x) => x.sessionId === session && x.index < t.index);
+    const now = namerTurn(t);
+    const turns = [...past.map(namerTurn), now && (moment === "prompt" ? atPrompt(now) : now)].filter((x): x is NamerTurn => !!x).slice(-20);
     if (!turns.length) return;
-    const known = this.#state.get(a.id);
+    const known = this.#state.get(id);
     // After a restart: what the agent already has stands in for the remembered state.
     const s: NameState = known?.session === session ? known : !known && a.name ? { ...NO_NAME, name: a.name, tries: FIRST_TRIES, history: a.nameWas ? [{ name: a.nameWas, until: a.namedAt ?? 0 }] : [] } : NO_NAME;
-    const why = shouldAsk(s, turns);
-    if (!why) return void this.#state.set(a.id, { ...s, session });
-    const others = this.#o.agents().filter((x) => x.id !== a.id && x.spaceId === a.spaceId && x.name).map((x) => x.name!);
-    const input = { current: s.name, turns, others, project: path.basename(projectOf(a.cwd) ?? "") || null };
-    let answer = await this.#ask(askText(input));
-    let checked = checkName(answer?.name, others, input.project);
-    if (checked.problem) {
-      answer = await this.#ask(askText({ ...input, rejected: `${checked.name}: ${checked.problem}` }));
-      checked = checkName(answer?.name, others, input.project);
-    }
-    const next = decide(s, answer ? { ...answer, name: checked.problem ? null : checked.name } : null, turns.at(-1)!.at);
-    this.#state.set(a.id, { ...next, session });
-    if (next.name && next.name !== a.name && !this.#o.name(a.id, next.name, `${why}: ${answer?.intent ?? "first"}`)) this.#state.delete(a.id);
+    const why = moment === "prompt" ? (s.name || s.tries >= FIRST_TRIES ? null : "first name, at the prompt") : shouldAsk(s, turns);
+    if (!why) return void this.#state.set(id, { ...s, session });
+    const others = this.#o.agents().filter((x) => x.id !== id && x.spaceId === a.spaceId && x.name).map((x) => x.name!);
+    const { answer } = await askChecked((input) => this.#ask(askText(input)), { current: s.name, turns, others, project: path.basename(projectOf(a.cwd) ?? "") || null });
+    const next = decide(s, answer, turns.at(-1)!.at);
+    this.#state.set(id, { ...next, session });
+    if (next.name && next.name !== a.name && !this.#o.name(id, next.name, `${why}: ${answer?.intent ?? "first"}`)) this.#state.delete(id);
   }
 
   async #ask(prompt: string): Promise<NamerAnswer | null> {

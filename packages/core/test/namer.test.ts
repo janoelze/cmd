@@ -28,7 +28,7 @@ describe("checking a proposed name", () => {
 describe("when to ask", () => {
   it("asks for a first name until it has one, a few times", () => {
     expect(shouldAsk(NO_NAME, [turn(0, "hi")])).toBe("first name");
-    expect(shouldAsk({ ...NO_NAME, tries: 4 }, [turn(0, "hi")])).toBeNull();
+    expect(shouldAsk({ ...NO_NAME, tries: 6 }, [turn(0, "hi")])).toBeNull();
   });
 
   it("doesn't ask while the prompts stay on the thing", () => {
@@ -99,17 +99,29 @@ describe("replaying a session", () => {
     expect: { final: ["Tours"] },
   };
 
-  it("names after the first turn, follows a change confirmed by the next turn, and asks only when the checks fire", async () => {
+  it("names at the first prompt, follows a change confirmed by the next turn, and asks only when the checks fire", async () => {
     const r = await replay(drift, scripted({
       "audit the app for accessible names": { intent: "continue", name: "Accessibility audit" },
       "now record marketing videos with scripted tours": { intent: "change", name: "Tours" },
       "the cursor in the tour video lags behind": { intent: "change", name: "Tours" },
     }));
-    expect(r.steps.map((s) => s.name)).toEqual(["Accessibility audit", "Accessibility audit", "Accessibility audit", "Tours", "Tours"]);
-    expect(r.steps.map((s) => s.why)).toEqual(["first name", null, "new words", "pending change", null]);
+    expect(r.steps.map((s) => `${s.turn + 1} ${s.at}: ${s.why ?? "-"} = ${s.name}`)).toEqual([
+      "1 prompt: first name = Accessibility audit",
+      "1 end: - = Accessibility audit",
+      "2 end: - = Accessibility audit",
+      "3 end: new words = Accessibility audit",
+      "4 end: pending change = Tours",
+      "5 end: - = Tours",
+    ]);
     const s = scoreCase(drift, r);
-    expect(s).toMatchObject({ final: "Tours", renames: 1, match: 1, calls: 3 });
-    expect(summarize([s])).toMatchObject({ cases: 1, named: 1, match: 1, callsPerTurn: 3 / 5 });
+    expect(s).toMatchObject({ final: "Tours", renames: 1, match: 1, calls: 3, firstAt: { turn: 0, at: "prompt" } });
+    expect(summarize([s])).toMatchObject({ cases: 1, named: 1, atFirstPrompt: 1, match: 1, callsPerTurn: 3 / 5 });
+  });
+
+  it("tries again at the turn's end when the prompt alone gives nothing to name", async () => {
+    const c: NameCase = { id: "late", turns: [{ ...turn(0, "read a few files"), files: ["/r/packages/tours/a.ts"], final: "The tours package records demo videos." }] };
+    const r = await replay(c, async (input) => ({ intent: "change", name: input.turns.at(-1)!.final ? "Tours" : null }));
+    expect(scoreCase(c, r)).toMatchObject({ final: "Tours", calls: 2, firstAt: { turn: 0, at: "end" } });
   });
 
   it("asks again once when a proposal breaks the rules, then keeps nothing", async () => {
@@ -158,6 +170,22 @@ describe("naming live agents", () => {
     expect(a.name).toBe("Slow release CI");
     await end(t(1, "cache the release build in CI then"));
     expect(asked).toHaveLength(1);
+  });
+
+  it("names at the prompt, before the turn ends, and doesn't ask again at its end", async () => {
+    const { a, asked, end } = setup({ "the release CI takes 20 minutes, why?": { intent: "change", name: "Slow release CI" } });
+    await end(t(0, "the release CI takes 20 minutes, why?", { endedAt: null }));
+    expect(a.name).toBe("Slow release CI");
+    await end(t(0, "the release CI takes 20 minutes, why?"));
+    expect(asked).toHaveLength(1);
+  });
+
+  it("asks again at the turn's end when the prompt gave nothing to name", async () => {
+    const { a, asked, end } = setup({});
+    await end(t(0, "read a few files", { endedAt: null }));
+    expect(a.name).toBeNull();
+    await end(t(0, "read a few files"));
+    expect(asked).toHaveLength(2);
   });
 
   it("names a new session (after a /clear) afresh, from its own turns", async () => {

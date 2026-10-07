@@ -4,7 +4,7 @@
 // a function, so tests answer from a script and scripts/evals/names.ts from a
 // real provider. Deterministic given the answers.
 
-import { checkName, decide, nameInput, NO_NAME, sameName, shouldAsk, type NameState, type NamerAnswer, type NamerInput, type NamerTurn } from "./namer.ts";
+import { askChecked, atPrompt, decide, FIRST_TRIES, nameInput, NO_NAME, sameName, shouldAsk, type Ask, type NameState, type NamerAnswer, type NamerInput, type NamerTurn } from "./namer.ts";
 
 /** One session to name, and what a good result is. */
 export interface NameCase {
@@ -25,45 +25,38 @@ export interface NameCase {
   };
 }
 
-export { sameName };
-
-export type Ask = (input: NamerInput & { rejected?: string }) => Promise<NamerAnswer | null>;
+export { sameName, type Ask };
 
 export interface Step {
   turn: number;
+  /** When it was asked: as the prompt was submitted (only while unnamed), or as its turn ended. */
+  at: "prompt" | "end";
   why: string | null;
   answer: NamerAnswer | null;
   problem: string | null;
   name: string | null;
 }
 
-/** Replays a case's turns through the namer; one entry per turn. */
+/** Replays a case's turns through the namer as the live core runs it: at each prompt while unnamed, and at each turn's end. */
 export async function replay(c: NameCase, ask: Ask): Promise<{ steps: Step[]; state: NameState; calls: number }> {
   let s: NameState = NO_NAME;
   let calls = 0;
   const steps: Step[] = [];
+  const question = async (turns: NamerTurn[], at: number) => {
+    const r = await askChecked(ask, { current: s.name, turns, others: c.others ?? [], project: c.project ?? null });
+    calls += r.calls;
+    s = decide(s, r.answer, at);
+    return r;
+  };
   for (let i = 0; i < c.turns.length; i++) {
     const turns = c.turns.slice(0, i + 1);
-    const why = shouldAsk(s, turns);
-    let answer: NamerAnswer | null = null;
-    let problem: string | null = null;
-    if (why) {
-      const input: NamerInput = { current: s.name, turns, others: c.others ?? [], project: c.project ?? null };
-      calls++;
-      answer = await ask(input);
-      let checked = checkName(answer?.name, input.others, input.project);
-      // One more try with what was wrong, then nothing rather than a bad name.
-      if (checked.problem) {
-        calls++;
-        problem = `${checked.name}: ${checked.problem}`;
-        answer = await ask({ ...input, rejected: problem });
-        checked = checkName(answer?.name, input.others, input.project);
-        if (checked.problem) problem += `; then ${checked.name}: ${checked.problem}`;
-      }
-      answer = answer ? { ...answer, name: checked.problem ? null : checked.name } : null;
+    if (!s.name && s.tries < FIRST_TRIES) {
+      const r = await question([...turns.slice(0, -1), atPrompt(turns.at(-1)!)], c.turns[i]!.at);
+      steps.push({ turn: i, at: "prompt", why: "first name", answer: r.answer, problem: r.problem, name: s.name });
     }
-    s = why ? decide(s, answer, c.turns[i]!.at) : s;
-    steps.push({ turn: i, why, answer, problem, name: s.name });
+    const why = shouldAsk(s, turns);
+    const r = why ? await question(turns, c.turns[i]!.at) : null;
+    steps.push({ turn: i, at: "end", why, answer: r?.answer ?? null, problem: r?.problem ?? null, name: s.name });
   }
   return { steps, state: s, calls };
 }
@@ -81,6 +74,8 @@ export interface CaseScore {
   calls: number;
   turns: number;
   problems: number;
+  /** When the first name came: the turn (0-based) and whether at its prompt or its end; null: never. */
+  firstAt: { turn: number; at: "prompt" | "end" } | null;
   /** 1 when the final name is acceptable (or rightly none), 0 when not; null without an expectation. */
   match: number | null;
   issues: string[];
@@ -99,7 +94,8 @@ export function scoreCase(c: NameCase, r: Awaited<ReturnType<typeof replay>>): C
   if (renames > (c.expect?.maxRenames ?? 2)) issues.push(`${renames} renames: ${names.join(" → ")}`);
   const problems = r.steps.filter((s) => s.problem).length;
   for (const s of r.steps.filter((s) => s.problem)) issues.push(`turn ${s.turn + 1}: ${s.problem}`);
-  return { id: c.id, final, names, renames, calls: r.calls, turns: c.turns.length, problems, match, issues };
+  const first = r.steps.find((st) => st.name);
+  return { id: c.id, final, names, renames, calls: r.calls, turns: c.turns.length, problems, firstAt: first ? { turn: first.turn, at: first.at } : null, match, issues };
 }
 
 export interface Summary {
@@ -107,6 +103,8 @@ export interface Summary {
   /** Mean match over cases with an expectation. */
   match: number | null;
   named: number;
+  /** Named as their first prompt was submitted. */
+  atFirstPrompt: number;
   renames: { mean: number; max: number; over2: number };
   /** Model calls per turn: what naming costs. */
   callsPerTurn: number;
@@ -120,6 +118,7 @@ export function summarize(scores: CaseScore[]): Summary {
     cases: scores.length,
     match: judged.length ? judged.reduce((n, s) => n + s.match!, 0) / judged.length : null,
     named: scores.filter((s) => s.final).length,
+    atFirstPrompt: scores.filter((s) => s.firstAt?.turn === 0 && s.firstAt.at === "prompt").length,
     renames: { mean: scores.reduce((n, s) => n + s.renames, 0) / (scores.length || 1), max: Math.max(0, ...scores.map((s) => s.renames)), over2: scores.filter((s) => s.renames > 2).length },
     callsPerTurn: turns ? scores.reduce((n, s) => n + s.calls, 0) / turns : 0,
     problems: scores.reduce((n, s) => n + s.problems, 0),

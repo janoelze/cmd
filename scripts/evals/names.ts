@@ -132,12 +132,13 @@ if (positionals[0] === "corpus") {
     const s = scoreCase(c, r);
     scores.push(s);
     const mark = s.match === null ? " " : s.match ? "✓" : "✗";
-    console.log(`${mark} ${c.id.slice(0, 20)}  ${String(s.turns).padStart(4)} turns ${String(s.calls).padStart(3)} calls  ${s.names.join(" → ") || "(none)"}`);
+    const when = s.firstAt ? `turn ${s.firstAt.turn + 1} ${s.firstAt.at}` : "";
+    console.log(`${mark} ${c.id.slice(0, 20)}  ${String(s.turns).padStart(4)} turns ${String(s.calls).padStart(3)} calls  ${(s.names.join(" → ") || "(none)").padEnd(28)} ${when}`);
     for (const i of s.issues.slice(0, 4)) console.log(`    - ${i}`);
-    if (a.verbose) for (const st of r.steps.filter((x) => x.why)) console.log(`    ${st.turn + 1}: ${st.why} → ${st.answer ? `${st.answer.intent} ${st.answer.name ?? "-"}` : "no answer"} = ${st.name ?? "-"}`);
+    if (a.verbose) for (const st of r.steps.filter((x) => x.why)) console.log(`    ${st.turn + 1} ${st.at}: ${st.why} → ${st.answer ? `${st.answer.intent} ${st.answer.name ?? "-"}` : "no answer"} = ${st.name ?? "-"}`);
   }
   const sum = summarize(scores);
-  console.log(`\n${sum.cases} sessions, ${sum.named} named; match ${sum.match === null ? "n/a" : sum.match.toFixed(2)} on the hand-named; renames mean ${sum.renames.mean.toFixed(2)}, max ${sum.renames.max}, ${sum.renames.over2} over 2; ${sum.callsPerTurn.toFixed(2)} calls per turn; ${sum.problems} rejected proposals`);
+  console.log(`\n${sum.cases} sessions, ${sum.named} named (${sum.atFirstPrompt} at the first prompt); match ${sum.match === null ? "n/a" : sum.match.toFixed(2)} on the hand-named; renames mean ${sum.renames.mean.toFixed(2)}, max ${sum.renames.max}, ${sum.renames.over2} over 2; ${sum.callsPerTurn.toFixed(2)} calls per turn; ${sum.problems} rejected proposals`);
 } else {
   console.error("usage: node scripts/evals/names.ts corpus|run (see the top of the file)");
   process.exit(2);
