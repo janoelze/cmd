@@ -187,6 +187,16 @@ export interface LiveStatus {
   dirty?: boolean;
 }
 
+let cmdNames = false;
+/**
+ * Whether cmd names agents itself (AI naming on, a provider ready; the app
+ * says so): an agent without a name then shows its kind until cmd's arrives,
+ * instead of its terminal title and prompts, which change several times on the way.
+ */
+export function setCmdNames(on: boolean): void {
+  cmdNames = on;
+}
+
 /** A window's title fields, the same for every type (docs/10-window-titles.md). */
 export interface WindowFields {
   /** What it is about: short, no path. */
@@ -239,10 +249,10 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
     const cwd = p?.cwd ?? a?.cwd;
     const attn = p?.attention ?? null;
     f = {
-      // cmd's name for it (docs/32-session-names.md), else, until cmd names every
-      // agent itself, its terminal title, last prompt or spawn prompt, else its kind.
+      // cmd's name for it (docs/32-session-names.md), else its kind while cmd's is on
+      // the way; without AI naming, its terminal title, last prompt or spawn prompt.
       name: a
-        ? (a.name ?? (!generic ? t : null) ?? a.lastPrompt ?? a.spawn.prompt ?? kindLabel(a.kind))
+        ? (a.name ?? (cmdNames ? null : ((!generic ? t : null) ?? a.lastPrompt ?? a.spawn.prompt)) ?? kindLabel(a.kind))
         : (!generic ? t : null) || p?.foreground || "Terminal",
       kind: p?.foreground || a?.kind || "terminal",
       place: cwd ? shortPath(cwd) : undefined,
@@ -255,7 +265,7 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
     };
   }
   // Rule 2: no repeats (a shell named after its process, a page titled with its host).
-  if (f.kind === f.name) f.kind = undefined;
+  if (f.kind?.toLowerCase() === f.name.toLowerCase()) f.kind = undefined;
   if (f.place === f.name) f.place = undefined;
   return f;
 }

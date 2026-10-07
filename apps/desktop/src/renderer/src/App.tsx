@@ -27,7 +27,7 @@ import {
 import { aiStatus, useAiStatus } from "./ai/status.ts";
 import { showContextMenu, type MenuEntry } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
-import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, isWidget, nextAfterClose, pushHistory, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
+import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, isWidget, nextAfterClose, pushHistory, setCmdNames, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
 import { getSpaceView, getState, onNotification, onWindowFocus, setSpaceView, setUsageShown, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DoneBatch, Looks } from "./notify.ts";
@@ -91,6 +91,9 @@ export function App() {
   countRender("App");
   /** Everything, every Space: attention, the Dock badge, cross-Space jumps. */
   const all = useStore();
+  // Before any row is drawn: whether an unnamed agent waits for cmd's name (model.ts).
+  const naming = !!useAiStatus()?.ready;
+  setCmdNames(naming && all.settings.settings["agents.names.ai"]);
   /** What this app window shows: its Space's terminals, agents and windows. */
   const s = useMemo(() => inSpace(all), [all]);
   useRemoteNotifications();

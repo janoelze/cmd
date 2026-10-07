@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Agent, AppWindow, Pane } from "@cmd/protocol";
-import { fieldsOf, type SidebarRow } from "../src/renderer/src/model.ts";
+import { fieldsOf, setCmdNames, type SidebarRow } from "../src/renderer/src/model.ts";
 import { registerWindowView, setWindowTypes } from "../src/renderer/src/windows/registry.ts";
 
 // Window title fields (docs/10-window-titles.md): one meaning per field, for every type.
@@ -59,6 +59,16 @@ describe("window fields", () => {
     const agent = { name: "fix tests", kind: "claude", state: "needs_input", detail: null, cwd: "/tmp", stateSince: 0, spawn: {} } as unknown as Agent;
     const f = fieldsOf(row({ pane: pane({ foreground: "claude" }), agent }), undefined, 0);
     expect(f).toMatchObject({ name: "fix tests", kind: "claude", light: "needs", status: { text: "Needs input", key: "needs_input" } });
+  });
+
+  it("agent without a name: its kind while cmd names it, else its terminal title or prompt", () => {
+    const agent = { name: null, kind: "claude", state: "working", detail: null, cwd: "/tmp", stateSince: 0, lastPrompt: "read a few files", spawn: {} } as unknown as Agent;
+    const r = row({ pane: pane({ foreground: "claude", title: "✳ Read files" }), agent });
+    setCmdNames(true);
+    expect(fieldsOf(r, undefined, 0)).toMatchObject({ name: "Claude", kind: undefined });
+    setCmdNames(false);
+    expect(fieldsOf(r, undefined, 0).name).toBe("Read files");
+    expect(fieldsOf(row({ pane: pane({ foreground: "claude", title: "" }), agent }), undefined, 0).name).toBe("read a few files");
   });
 
   it("windows: kind is the type, status and dirty come from the live status", () => {
