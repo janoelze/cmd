@@ -178,9 +178,10 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
         const last = i + n >= events.length;
         const t0 = performance.now();
         this.#record(last && final ? state : null, events.slice(i, i + n), env, state, true);
+        const ms = performance.now() - t0;
+        if (ms > 100) log.debug(`a slow step recording ${state.path}`, { events: n, ms: Math.round(ms), chars: events.slice(i, i + n).reduce((c, e) => c + (e.content?.length ?? 0) + (e.body?.length ?? 0), 0) });
         if (last) return;
         i += n;
-        const ms = performance.now() - t0;
         if (ms > STEP_SLOW_MS) step = Math.max(STEP_MIN, step >> 1);
         else if (ms < STEP_FAST_MS) step = Math.min(STEP_MAX, step << 1);
         await pace.yield();

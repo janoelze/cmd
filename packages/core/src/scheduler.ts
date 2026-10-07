@@ -54,9 +54,13 @@ export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [
   #sliceAt: number | null = null;
   /** The activity that began most recently (a request, a job's step); what a stall is blamed on. */
   #current: string | null = null;
-  /** The activity that ended last, and when: a stall's timer fires only once the thread is free, after the culprit ended. */
-  #last: string | null = null;
-  #lastEndedAt = 0;
+  /**
+   * Activities that ended lately, with how long each ran: a stall's timer fires
+   * only once the thread is free, after the culprit ended, and the one that ran
+   * longest since the stall began is the likely one (a trivial request answered
+   * right after the block isn't).
+   */
+  #ended: { activity: string; ms: number; at: number }[] = [];
   #stalls: Stall[] = [];
   #tick: ReturnType<typeof setInterval> | null = null;
   #expected = 0;
@@ -79,12 +83,18 @@ export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [
    */
   mark(activity: string): () => void {
     const before = this.#current;
+    const startedAt = performance.now();
     this.#current = activity;
     return () => {
-      this.#last = activity;
-      this.#lastEndedAt = performance.now();
+      this.#ran(activity, startedAt);
       if (this.#current === activity) this.#current = before;
     };
+  }
+
+  #ran(activity: string, since: number): void {
+    const now = performance.now();
+    this.#ended.push({ activity, ms: now - since, at: now });
+    if (this.#ended.length > 64) this.#ended.splice(0, this.#ended.length - 64);
   }
 
   /**
@@ -99,8 +109,9 @@ export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [
     if (used < this.#budget) {
       await new Promise<void>((r) => setImmediate(r));
     } else {
-      // The job isn't running while it pauses: a stall then is someone else's.
+      // The job isn't running while it pauses: a stall then is someone else's, unless its last slice was the block.
       const held = this.#current;
+      if (held) this.#ran(held, this.#sliceAt);
       this.#current = null;
       const pause = Math.min(MAX_PAUSE_MS, (used * (1 - this.#share)) / this.#share);
       await new Promise<void>((r) => setTimeout(r, pause));
@@ -184,8 +195,10 @@ export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [
       const late = now - this.#expected;
       this.#expected = now + TICK_MS;
       if (late < STALL_MS) return;
-      // Blamed on what runs now, else on what ended since the timer came due: the block held the thread until then.
-      const blame = this.#current ?? (this.#lastEndedAt >= now - late ? this.#last : null) ?? "(idle: timers, I/O callbacks)";
+      // Blamed on what runs now, else on what ran longest among what ended since the timer came due (the block held the thread until then).
+      const began = now - late;
+      const ended = this.#ended.filter((e) => e.at >= began).sort((a, b) => b.ms - a.ms)[0];
+      const blame = this.#current ?? (ended && ended.ms >= late / 4 ? ended.activity : null) ?? "(idle: timers, I/O callbacks)";
       const stall: Stall = { at: Date.now() - late, ms: Math.round(late), in: blame };
       this.#stalls.push(stall);
       if (this.#stalls.length > STALLS_KEPT) this.#stalls.shift();
