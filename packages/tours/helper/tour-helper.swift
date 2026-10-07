@@ -23,6 +23,8 @@
 //   {"cmd":"key","key":"Return","mods":["cmd"]}
 //   {"cmd":"menu-items","pid":123} → {"items":[{title,x,y,w,h,enabled}]}: the app's open
 //       native menus (context menus, an open menu-bar menu), via ScreenCaptureKit + Accessibility
+//   {"cmd":"mark","type":"camera",…} logs an event of that type with the other fields, on the
+//       frames' clock (the tour's camera moves, chapters)
 //   {"cmd":"log"} → {"events":[…]} and clears it
 // Moves stop with an error if the pointer isn't where the last move left it:
 // someone moved the mouse, so the run is spoiled and shouldn't fight them.
@@ -557,6 +559,12 @@ func handle(_ msg: [String: Any]) async {
     case "menu-items":
       guard let pid = msg["pid"] as? Int32 else { return reply(["ok": false, "error": "pid is needed"]) }
       reply(["ok": true, "items": try await openMenuItems(pid: pid)])
+    case "mark":
+      var fields = msg
+      fields.removeValue(forKey: "cmd")
+      let type = fields.removeValue(forKey: "type") as? String ?? "mark"
+      log(type, fields)
+      reply(["ok": true])
     case "log":
       let taken = eventsLock.withLock { () -> [[String: Any]] in
         defer { events = [] }

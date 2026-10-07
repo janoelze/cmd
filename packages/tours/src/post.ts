@@ -8,7 +8,7 @@
 //   frame where the log says and in the shape the system showed (arrow,
 //   I-beam, resize…) → 60 fps H.264
 //
-//   node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920]
+//   node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920] [--follow 1.6] [--auto-camera]
 //
 // No smoothing: the driver's paths are already human; a real recording has none.
 
@@ -16,10 +16,14 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { autoCamera, cameraPath, type CameraMark } from "./camera.ts";
 
 interface Ev {
   t: number;
   type: string;
+  mode?: CameraMark["mode"];
+  rect?: number[];
+  zoom?: number;
   x?: number;
   y?: number;
   id?: number;
@@ -54,6 +58,10 @@ export interface PostOptions {
    * recording doesn't do it, a product video often does.
    */
   idle?: number;
+  /** Follow the pointer the whole video at this zoom (tours mark the camera with t.camera instead). */
+  follow?: number;
+  /** "auto": zoom in on bursts of clicking and typing, whole window while scrolling (camera.ts autoCamera); a tour's own t.camera marks win. */
+  camera?: "auto";
 }
 
 /** Input-free stretches longer than this are sped up (with `idle`), seconds. */
@@ -189,6 +197,33 @@ export function render(dir: string, o: PostOptions = {}): string {
       lines.push(`${Math.max(0, (e.t - meta.t0) / 1e9 - 0.001).toFixed(4)} [enter] overlay@ring x ${Math.round(v.x - ringSize / 2)}, [enter] overlay@ring y ${Math.round(v.y - ringSize / 2)};`);
     }
   }
+  // The camera (camera.ts): a view per frame, from the tour's marks (or --follow).
+  const marks: CameraMark[] = events
+    .filter((e) => e.type === "camera")
+    .map((e) => {
+      const r = e.rect ? toCanvas({ x: e.rect[0]!, y: e.rect[1]! }) : null;
+      return { s: (e.t - meta.t0) / 1e9, mode: e.mode!, zoom: e.zoom, rect: r ? { x: r.x, y: r.y, w: e.rect![2]! * S, h: e.rect![3]! * S } : undefined };
+    });
+  if (o.follow) marks.unshift({ s: 0, mode: "follow", zoom: o.follow });
+  if (o.camera === "auto" && !marks.length) marks.push(...autoCamera(events.map((e) => ({ s: (e.t - meta.t0) / 1e9, type: e.type })), duration));
+  const camera = marks.length > 0;
+  if (camera) {
+    const frames = Math.floor(duration * FPS) + 1;
+    // Zoomed in, the camera stays on the window (a 24 px margin), not on the wallpaper around it.
+    const m = 24 * S;
+    const views = cameraPath(frames, FPS, { w: cw, h: ch }, marks, (s) => {
+      const p = pointerAt(events, meta.t0 + s * 1e9);
+      return p ? toCanvas(p) : null;
+    }, undefined, { x: cx - m, y: cy - m, w: meta.width + 2 * m, h: meta.height + 2 * m });
+    let prev = "";
+    views.forEach((v, i) => {
+      const key = `${v.x} ${v.y} ${v.w} ${v.h}`;
+      if (key === prev) return;
+      prev = key;
+      const s = (i / FPS).toFixed(4);
+      lines.push(`${s} [enter] crop@cam w ${v.w}, [enter] crop@cam h ${v.h}, [enter] crop@cam x ${v.x}, [enter] crop@cam y ${v.y};`);
+    });
+  }
   lines.sort((a, b) => parseFloat(a) - parseFloat(b));
   const cmds = path.join(work, "pointer.cmd");
   fs.writeFileSync(cmds, lines.join("\n") + "\n");
@@ -220,7 +255,12 @@ export function render(dir: string, o: PostOptions = {}): string {
     n++;
   }
   const outW = even(o.width ?? 2560);
-  g.push(`[${label}]scale=${outW}:-2:flags=lanczos,format=yuv420p[scaled]`);
+  const outH = even((outW * ch) / cw);
+  if (camera) {
+    g.push(`[${label}]crop@cam=w=${cw}:h=${ch}:x=0:y=0[cam]`);
+    label = "cam";
+  }
+  g.push(`[${label}]scale=${outW}:${outH}:flags=lanczos,format=yuv420p[scaled]`);
   let length = duration;
   const segments = o.idle && o.idle > 1 ? idleSegments(events, meta.t0, duration, o.idle) : [];
   if (segments.some(([, , k]) => k > 1)) {
@@ -240,12 +280,12 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const args = process.argv.slice(2);
   const dir = args.find((a) => !a.startsWith("--"));
   if (!dir) {
-    console.log("usage: node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920]");
+    console.log("usage: node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920] [--follow 1.6] [--auto-camera]");
     process.exit(2);
   }
   const opt = (k: string) => {
     const i = args.indexOf(k);
     return i >= 0 ? args[i + 1] : undefined;
   };
-  console.log(render(path.resolve(dir), { wallpaper: opt("--wallpaper"), cursor: opt("--cursor") ? Number(opt("--cursor")) : undefined, clicks: args.includes("--clicks"), idle: opt("--idle") ? Number(opt("--idle")) : undefined, width: opt("--width") ? Number(opt("--width")) : undefined }));
+  console.log(render(path.resolve(dir), { wallpaper: opt("--wallpaper"), cursor: opt("--cursor") ? Number(opt("--cursor")) : undefined, clicks: args.includes("--clicks"), idle: opt("--idle") ? Number(opt("--idle")) : undefined, width: opt("--width") ? Number(opt("--width")) : undefined, follow: opt("--follow") ? Number(opt("--follow")) : undefined, camera: args.includes("--auto-camera") ? "auto" : undefined }));
 }

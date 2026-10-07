@@ -33,6 +33,26 @@ export class Tour {
   /** Where the pointer is, screen points. */
   private at: Point = { x: 0, y: 0 };
 
+  /**
+   * The video's camera, rendered in post (post.ts): marks in the event log on
+   * the frames' clock. Zooming happens in the video, not in the app.
+   */
+  readonly camera = {
+    /** Zoom to a place (an element, or a box in screen points); `zoom` fits it with room if left out. */
+    focus: async (target: Locator | Box, zoom?: number) => {
+      const b = "x" in target ? target : await this.box(target);
+      await this.helper.call("mark", { type: "camera", mode: "focus", rect: [b.x, b.y, b.width, b.height], ...(zoom ? { zoom } : {}) });
+    },
+    /** Stay zoomed in and follow the pointer smoothly (it drifts only when the pointer nears the view's edge). */
+    follow: async (zoom = 1.6) => {
+      await this.helper.call("mark", { type: "camera", mode: "follow", zoom });
+    },
+    /** Back to the whole window. */
+    reset: async () => {
+      await this.helper.call("mark", { type: "camera", mode: "fit" });
+    },
+  };
+
   constructor(app: ElectronApplication, page: Page, helper: Helper, seed = 1) {
     this.app = app;
     this.page = page;

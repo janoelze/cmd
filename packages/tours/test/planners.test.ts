@@ -124,3 +124,55 @@ describe("idle speed-up", async () => {
     expect(idleSegments([ev(1), ev(2)], 1e9, 3, 4)).toEqual([[0, 3, 1]]);
   });
 });
+
+describe("camera", async () => {
+  const { cameraPath } = await import("../src/camera.ts");
+  const canvas = { w: 1600, h: 1000 };
+  const still = () => ({ x: 800, y: 500 });
+  it("shows the whole canvas without marks", () => {
+    expect(cameraPath(10, 60, canvas, [], still).every((v) => v.w === 1600 && v.x === 0)).toBe(true);
+  });
+  it("zooms to a place smoothly, without overshoot, and settles on it", () => {
+    const v = cameraPath(120, 60, canvas, [{ s: 0, mode: "focus", rect: { x: 1000, y: 600, w: 300, h: 200 } }], still);
+    const widths = v.map((x) => x.w);
+    expect(widths.every((w, i) => i === 0 || w <= widths[i - 1]!)).toBe(true); // only ever closer
+    const last = v.at(-1)!;
+    expect(last.w).toBeLessThan(800);
+    expect(Math.abs(last.x + last.w / 2 - 1150)).toBeLessThan(40);
+    expect(v.every((x) => x.x >= 0 && x.y >= 0 && x.x + x.w <= 1600 && x.y + x.h <= 1000)).toBe(true);
+  });
+  it("follows the pointer only past the dead zone", () => {
+    const moving = (s: number) => ({ x: 800 + Math.min(s, 1) * 500, y: 500 });
+    const v = cameraPath(180, 60, canvas, [{ s: 0, mode: "follow", zoom: 2 }], moving);
+    const mid = (x: { x: number; w: number }) => x.x + x.w / 2;
+    expect(mid(v[20]!)).toBeLessThan(mid(v.at(-1)!));
+    expect(mid(v.at(-1)!)).toBeLessThan(1300); // lags the pointer by the dead zone, doesn't sit on it
+    // Once zoomed in, small moves of the pointer around the middle don't move the view.
+    const wobble = (s: number) => ({ x: 800 + (s > 3 ? 60 * Math.sin(s * 5) : 0), y: 500 });
+    const still2 = cameraPath(360, 60, canvas, [{ s: 0, mode: "follow", zoom: 2 }], wobble);
+    expect(new Set(still2.slice(240).map((x) => x.x)).size).toBe(1);
+  });
+});
+
+describe("auto camera", async () => {
+  const { autoCamera } = await import("../src/camera.ts");
+  it("zooms in on bursts of work, out for scrolling and between bursts", () => {
+    const ev = (s: number, type: string) => ({ s, type });
+    const marks = autoCamera([ev(1, "down"), ...[1.5, 1.6, 1.7, 1.8].map((s) => ev(s, "char")), ev(4, "scroll"), ev(4.2, "scroll"), ev(8, "down"), ...[8.3, 8.5, 8.7].map((s) => ev(s, "char")), ev(9, "key"), ev(10.5, "down")], 12);
+    expect(marks.map((m) => m.mode)).toEqual(["follow", "fit", "fit", "follow", "fit"]);
+    expect(marks[0]!.s).toBeCloseTo(0.55);
+    expect(marks.find((m) => m.mode === "fit" && m.s > 3 && m.s < 4.2)).toBeTruthy(); // whole window for the swipe
+    expect(marks.filter((m) => m.mode === "follow").length).toBe(2); // the lone click at 10.5 joins the burst before it
+  });
+});
+
+describe("camera bounds", async () => {
+  const { cameraPath } = await import("../src/camera.ts");
+  it("keeps a zoomed view on the window, not the wallpaper", () => {
+    const win = { x: 100, y: 100, w: 1400, h: 800 };
+    const corner = () => ({ x: 1590, y: 10 }); // the canvas's corner, outside the window
+    const v = cameraPath(240, 60, { w: 1600, h: 1000 }, [{ s: 0, mode: "follow", zoom: 2 }], corner, undefined, win).at(-1)!;
+    expect(v.x + v.w).toBeLessThanOrEqual(win.x + win.w + 1);
+    expect(v.y).toBeGreaterThanOrEqual(win.y - 1);
+  });
+});

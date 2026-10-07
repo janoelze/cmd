@@ -10,8 +10,8 @@ import { TYPING } from "../src/typing.ts";
 
 export const meta: TourMeta = {
   ai: true,
-  // The agent's working time plays at 4× (its ends stay real-time).
-  post: { idle: 4 },
+  // The agent's working time plays at 4× (its ends stay real-time); the camera zooms in on the work.
+  post: { idle: 4, camera: "auto" },
   // Unrecorded: a terminal and Files in atlas, in the strip, from its start.
   setup: async (t) => {
     const p = t.page;
