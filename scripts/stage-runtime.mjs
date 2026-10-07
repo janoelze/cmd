@@ -92,6 +92,15 @@ function stageDeps(pkgDir, into = modules) {
   }
 }
 stageDeps(path.join(root, "packages/core"));
+// ripgrep's binary is an optional dependency per platform (file search, search/files.ts): this platform's.
+{
+  const name = `@vscode/ripgrep-${process.platform}-${process.arch}`;
+  const src = findPackage(findPackage(path.join(root, "packages/core"), "@vscode/ripgrep"), name);
+  fs.cpSync(src, path.join(modules, name), { recursive: true, dereference: true });
+  const bin = path.join(modules, name, "bin", process.platform === "win32" ? "rg.exe" : "rg");
+  if (!fs.existsSync(bin)) throw new Error(`${name} has no ripgrep binary`);
+  if (process.platform !== "win32") fs.chmodSync(bin, 0o755);
+}
 stageDeps(path.join(root, "packages/cli"), cliModules);
 
 // node-pty: keep only this platform's prebuilds and what loads them.

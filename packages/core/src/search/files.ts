@@ -1,12 +1,14 @@
 // Live search in the files of a folder (docs/33, phase 4): the names and the
 // lines that contain what was typed, read from disk each time, so nothing is
-// stale. ripgrep does the work when it's installed (it respects .gitignore and
-// skips binaries); in a git repository without it, `git ls-files` and `git grep`.
+// stale. ripgrep does the work (it respects .gitignore and skips binaries): the
+// one cmd ships (@vscode/ripgrep), else one on PATH; without either, in a git
+// repository, `git ls-files` and `git grep`.
 // Each search is bounded in hits and time; secrets (.env, keys) and the folders
 // in data.exclude are never searched.
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import type { FileHit } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
@@ -23,7 +25,7 @@ const NAMES_LIMIT = 200_000;
 export interface FileSearchOptions {
   /** Folders never searched (data.exclude). */
   excluded: () => string[];
-  /** Where to look for `rg`; PATH by default (the login shell's, see loginpath.ts). */
+  /** The `rg` to use; by default the bundled one, else PATH's (the login shell's, see loginpath.ts). */
   rg?: string | null;
 }
 
@@ -109,7 +111,7 @@ export class FileSearch {
       }
       return null;
     };
-    const rg = this.#o.rg ?? find("rg");
+    const rg = this.#o.rg ?? bundledRg() ?? find("rg");
     const git = find("git");
     this.#tool = rg ? { kind: "rg", bin: rg } : git ? { kind: "git", bin: git } : null;
     if (!rg) log.info(git ? "no ripgrep: file search uses git in repositories" : "no ripgrep or git: no file search");
@@ -207,6 +209,19 @@ const isSecret = (rel: string) => {
   const base = path.basename(rel);
   return SECRET_GLOBS.some((g) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`).test(base));
 };
+
+/** The ripgrep that ships with cmd: @vscode/ripgrep's binary for this platform (staged next to the core when packaged). */
+function bundledRg(): string | null {
+  try {
+    const req = createRequire(import.meta.url);
+    const pkg = `@vscode/ripgrep-${process.platform}-${process.arch}`;
+    const file = req.resolve(`${pkg}/bin/${process.platform === "win32" ? "rg.exe" : "rg"}`, { paths: [path.dirname(req.resolve("@vscode/ripgrep"))] });
+    fs.accessSync(file, fs.constants.X_OK);
+    return file;
+  } catch {
+    return null;
+  }
+}
 
 /** markMatches, case-sensitive (a query with capitals). */
 function markCase(text: string, q: string): string {
