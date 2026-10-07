@@ -67,7 +67,7 @@ Cutting Claude's title down would get about half of these; it misses drift, two-
 
 ## In notifications
 
-The title stays *subject · state* (copywriting skill); the subject becomes the agent's name instead of the project. The project moves to the notification's **subtitle** (macOS shows it between title and body; Electron's `subtitle`), shown when it says something: the agent is in another Space than the one in front, or agents in more than one project notified in the last hour.
+The title stays *subject · state* (copywriting skill); the subject becomes the agent's name instead of the project. The project is left out for now (decided 2026-10-07): the name is enough to tell agents apart, and the app's name above the title already says "cmd". If agents in several projects turn out to be confusable, the project could go in the notification's subtitle (macOS, Electron's `subtitle`).
 
 The same notifications, as they would have read:
 
@@ -76,7 +76,7 @@ The same notifications, as they would have read:
 | cmd · done — *Tours merged into master; videos saved.* | **Tours · done** — *Merged into master; videos saved.* |
 | cmd · done — *Notifications permission UI added; asks whether to merge.* | **Notify permission · done** — *Permission UI added; asks whether to merge.* |
 | cmd · needs you — *Wants to edit showcase.tour.ts.* | **Tours · needs you** — *Wants to edit “showcase.tour.ts”.* |
-| image-line-com-navigation · done — *Wants to delete nav-seo-hardening-and-tests from GitLab.* | **Gopher link · done** / image-line-com-navigation — *Wants to delete the branch from GitLab.* |
+| image-line-com-navigation · done — *Wants to delete nav-seo-hardening-and-tests from GitLab.* | **Gopher link · done** — *Wants to delete the branch from GitLab.* |
 | cmd · done — *Summarized the data model and agent session handling.* | **Session names · done** — *…* |
 | cmd · done | **Claude · done** (no name yet) |
 
@@ -102,6 +102,16 @@ The name belongs to the **session**: it outlives the agent (Recent, the Journal,
 - `cmd agents rename <id> [name]` (no name: back to cmd).
 - A Claude `/rename` (`custom-title`) counts as the person's name too. cmd doesn't write back to the agent: typing `/rename` into a working agent would interrupt it, and its transcript isn't ours to edit.
 - Every rename is a labelled case: what cmd called it, what the person wanted, at that point of the session. Kept locally for the eval like the journal's real days, never sent to a model without the person's say-so.
+
+### Names as addresses
+
+Names are how agents and the person address agents (decided 2026-10-07): `cmd ls` shows each agent's name, and `cmd send`, `cmd agents wait|kill` and the rest take a name wherever they take an id.
+
+- **Resolved in the caller's Space first** (where names are kept distinct), then across all Spaces if only one agent there has it; an id or id prefix still works and wins over a name.
+- **Matched loosely**: case, spaces and dashes ignored, so `cmd send notify-permission "…"` and `cmd send "Notify permission" "…"` reach the same agent; a unique prefix of a word is enough (`cmd send tours`).
+- **Ambiguous is an error** that lists the candidates with their ids and Spaces, never a guess: a message to the wrong agent is worse than none.
+- **A renamed agent still answers to its old name** for an hour, if no live agent has taken it, so a message written before the rename arrives.
+- Only live agents are addressed; a past session's name finds it in `cmd data entities` and Recent, not in `cmd send`.
 
 ## Where names come from
 
@@ -147,7 +157,7 @@ From cmd's own copy of the transcripts, offline:
 
 | # | Step | Delivers |
 |---|---|---|
-| 1 | **Names without a model** | `session.name` events and the view's columns, `agent.rename` + Rename Agent… + `cmd agents rename`, `/rename` read as the person's, the worktree rule, `subjectOf` and the renderer on the name else the kind, the project as the notification subtitle, the two body fixes, `outputLanguage()` |
+| 1 | **Names without a model** | `session.name` events and the view's columns, `agent.rename` + Rename Agent… + `cmd agents rename`, `/rename` read as the person's, the worktree rule, `subjectOf` and the renderer on the name else the kind, the two body fixes, `outputLanguage()`, names in `cmd ls` and as targets of `cmd send` and `cmd agents` |
 | 2 | **Eval harness** | the hand-named table as fixtures, the replay over real sessions, the measures |
 | 3 | **The model's first name** | the prompt with examples, checks, distinctness against live agents; tuned on the eval |
 | 4 | **Change of task** | cheap checks, the three-way classification, hysteresis, "was" on hover and in the Journal; tuned on renames per session |
@@ -157,8 +167,6 @@ Step 1 alone fixes "cmd · done" for everyone working in worktrees.
 
 ## Open questions
 
-- The subtitle rule: only when it says something (proposed), or always the project?
-- Whether names should show in `cmd ls` and as `cmd send <name>` targets (unique in a Space, so addressable), or stay display only.
 - Codex and other agents without `/rename`: the same rules; check their hooks give the working folder (step 1).
 
 ## Sources
