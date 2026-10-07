@@ -16,6 +16,7 @@ pnpm vitest run packages/core/test/osc.test.ts   # one file
 pnpm vitest run -t "name"                        # one test by name
 pnpm typecheck               # root tsc (packages/*) + desktop tsc
 pnpm e2e                     # build, then Playwright drives the real app; screenshots in .cmd-dev/shots
+pnpm tour <file.tour.ts>     # record a scripted demo video with real input (tours skill; needs the built app and screen access)
 pnpm core                    # run the core directly
 pnpm core:stop               # stop the core of $CMD_HOME, else the dev one; core:stop-all stops every non-release core
 pnpm cmd <args>              # run the CLI from source

@@ -25,6 +25,7 @@
     "e2e": "pnpm build && node e2e/smoke.mjs",
     "e2e:drops": "pnpm build && node e2e/drops.mjs",
     "e2e:a11y": "pnpm build && node e2e/a11y-audit.mjs",
+    "tour": "node packages/tours/src/run.ts",
     "e2e:remote": "pnpm build && node --no-warnings e2e/remote.mjs",
     "e2e:web": "node --no-warnings e2e/web.mjs",
     "dist": "pnpm build && node scripts/stage-runtime.mjs && pnpm --filter @cmd/desktop dist",
