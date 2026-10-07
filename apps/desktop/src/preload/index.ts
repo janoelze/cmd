@@ -11,6 +11,7 @@ import type { UpdateStatus } from "../main/updater.ts";
 import type { CrashStatus } from "../main/crash.ts";
 import type { FeedbackRequest, FeedbackStatus } from "../main/feedback.ts";
 import type { WhatsNewClaim } from "../main/whats-new.ts";
+import type { NotifyAccess, NotifyPermission } from "../main/notify-permission.ts";
 import type { OnboardingClaim } from "../main/onboarding.ts";
 import type { AppProcess } from "../main/metrics.ts";
 
@@ -103,6 +104,19 @@ const api = {
     const h = (_e: unknown, paneId: string) => fn(paneId);
     ipcRenderer.on("notification-click", h);
     return () => ipcRenderer.off("notification-click", h);
+  },
+  /** Whether macOS shows cmd's notifications; null where it can't tell (main/notify-permission.ts). */
+  notifyPermission: (): Promise<NotifyPermission | null> => ipcRenderer.invoke("notify-permission"),
+  /** macOS's "Allow notifications?" prompt, if not answered yet; then the status. */
+  requestNotifyPermission: (): Promise<NotifyPermission | null> => ipcRenderer.invoke("notify-permission-request"),
+  /** System Settings → Notifications, at cmd. */
+  openNotifySettings: () => ipcRenderer.send("notify-settings"),
+  sendTestNotification: () => ipcRenderer.send("notify-test"),
+  /** A notification was posted that macOS won't show (once per launch). */
+  onNotifyBlocked(fn: (access: NotifyAccess) => void): () => void {
+    const h = (_e: unknown, access: NotifyAccess) => fn(access);
+    ipcRenderer.on("notify-blocked", h);
+    return () => ipcRenderer.off("notify-blocked", h);
   },
   /** Native appearance (traffic lights, menus, vibrancy), window background and Dock icon for the active theme. */
   setAppearance: (a: Appearance) => ipcRenderer.send("appearance", a),

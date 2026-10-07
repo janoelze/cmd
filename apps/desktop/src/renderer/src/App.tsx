@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Toaster } from "@cmd/ui";
+import { Toaster, toast } from "@cmd/ui";
 import type { PaneId, Space, SpaceId } from "@cmd/protocol";
 import type { WebviewTag } from "electron";
 import { bucketOf, needsAttention } from "@cmd/protocol";
@@ -317,7 +317,15 @@ export function App() {
       const bounce = c["notifications.bounceDock"];
       if (!document.hasFocus() && (bounce === "any" || (bounce === "needsInput" && n.urgent))) cmd.bounce();
     });
-    return () => (off(), offClick());
+    // Posted, but macOS won't show it (main says so once per launch).
+    const offBlocked = cmd.onNotifyBlocked((access) =>
+      toast(access === "off" ? "macOS has cmd's notifications turned off" : "macOS shows cmd's notifications without a banner", {
+        tone: "warning",
+        duration: 10_000,
+        action: { label: "Open System Settings", run: () => cmd.openNotifySettings() },
+      }),
+    );
+    return () => (off(), offClick(), offBlocked());
   }, [select, looks, doneBatch]);
 
   /** The terminal a row lives in: its own, or for a subagent (no window of its own) its host's. */

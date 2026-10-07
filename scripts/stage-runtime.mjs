@@ -56,6 +56,16 @@ if (fs.existsSync(procinfo)) {
   throw new Error("packages/core/native/build/procinfo missing; run pnpm install");
 }
 
+// The app's notification permission addon (macOS; built by postinstall), loaded
+// by Electron main from here (src/main/notify-permission.ts).
+const notifications = path.join(root, "apps/desktop/native/build/notifications.node");
+if (fs.existsSync(notifications)) {
+  fs.mkdirSync(path.join(out, "apps/desktop/native/build"), { recursive: true });
+  fs.copyFileSync(notifications, path.join(out, "apps/desktop/native/build/notifications.node"));
+} else if (process.platform === "darwin") {
+  throw new Error("apps/desktop/native/build/notifications.node missing; run pnpm install");
+}
+
 /** Node-style lookup of `name` from `dir` upwards; returns the real package dir. */
 function findPackage(dir, name) {
   for (let d = dir; ; d = path.dirname(d)) {

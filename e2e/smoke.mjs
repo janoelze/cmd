@@ -998,6 +998,14 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(fn(), what);
   };
 
+  // Notifications: whether macOS shows them at all, read from macOS (Electron's bundle id in a dev build).
+  await page("Notifications");
+  const macos = sw.locator(".ui-row-title", { hasText: /^Notifications (are on|aren't on yet|are quiet|are off)$/ });
+  await macos.waitFor();
+  check(await macos.count() === 1, `Notifications says whether macOS shows them (${await macos.textContent()})`);
+  await sw.screenshot({ path: path.join(shots, "5-settings-notifications.png") });
+  await page("AI & Agents");
+
   // AI & Agents → Hooks: the fixture's Claude config, and Install writes cmd's hook into it.
   const claudeRow = sw.locator(".ui-row", { has: sw.locator(".ui-row-title", { hasText: "Claude Code" }) });
   await claudeRow.locator("button", { hasText: "Install" }).click();

@@ -35,6 +35,18 @@ try {
   console.warn("postinstall: could not build sfsymbols (icons fall back to resized bitmaps):", err.message);
 }
 
+// Build the desktop app's notification permission addon (native/notifications.m).
+if (process.platform === "darwin") {
+  try {
+    const dir = path.resolve("apps/desktop/native");
+    fs.mkdirSync(path.join(dir, "build"), { recursive: true });
+    const args = ["-O2", "-Wall", "-fobjc-arc", "-mmacosx-version-min=12.0", "-bundle", "-undefined", "dynamic_lookup", "-framework", "Foundation", "-framework", "UserNotifications"];
+    execFileSync("/usr/bin/clang", [...args, "-o", path.join(dir, "build/notifications.node"), path.join(dir, "notifications.m")], { stdio: "inherit" });
+  } catch (err) {
+    console.warn("postinstall: could not build the notifications addon (Settings can't tell whether macOS allows notifications):", err.message);
+  }
+}
+
 // pnpm sometimes skips electron's own postinstall (build-script approval);
 // fetch the binary if it is missing.
 try {

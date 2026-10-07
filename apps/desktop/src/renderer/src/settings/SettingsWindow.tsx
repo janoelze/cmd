@@ -37,6 +37,7 @@ import { useAiStatus } from "../ai/status.ts";
 import { About } from "./About.tsx";
 import { Remote } from "./Remote.tsx";
 import { AgentHooks } from "./AgentHooks.tsx";
+import { NotifyPermission } from "./NotifyPermission.tsx";
 import { allThemes } from "@cmd/ui/themes";
 import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page as SettingsPage } from "./layout.ts";
 
@@ -188,6 +189,8 @@ export function SettingsWindow() {
           );
           // cmd's hook goes before what needs it (peer briefings).
           if (s.items.some((it) => itemKey(it) === "agents.peers")) return [<AgentHooks key="hooks" />, section];
+          // Whether macOS shows them at all, before what to notify about.
+          if (s.items.some((it) => itemKey(it) === "notifications.needsInput")) return [<NotifyPermission key="macos" />, section];
           return section;
         })}
         <div className="sw-page-foot">

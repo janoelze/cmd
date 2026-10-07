@@ -3,7 +3,7 @@
 
 // Boot timeline marks (boot:*), read by the boot benchmark; the renderer adds its own.
 performance.mark("boot:main-script");
-import "./background.ts";
+import { background } from "./background.ts";
 import { servePreviews } from "./preview.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, webContents, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
@@ -26,6 +26,7 @@ import { SpaceWindows, type Bounds } from "./spaces.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
 import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } from "./feedback.ts";
 import { claimWhatsNew } from "./whats-new.ts";
+import { notifyPermission, openNotifySettings, requestNotifyPermission } from "./notify-permission.ts";
 import { claimOnboarding, recordOnboarding } from "./onboarding.ts";
 import { ensureKeybindingsFile, loadKeybindings, resetKeybindings, watchKeybindings, writeKeybinding, type KeybindingsSnapshot } from "./keybindings.ts";
 
@@ -570,6 +571,26 @@ ipcMain.on("notify", (e, o: NotifyOptions) => {
   n.on("close", () => shown.get(o.tag) === n && shown.delete(o.tag));
   shown.set(o.tag, n);
   n.show();
+  warnIfBlocked(sender);
+});
+// A notification macOS won't show: say so once per launch, in the window it came from.
+// Not asked yet: ask now (macOS's prompt), so the first one isn't lost for good.
+let blockedWarned = false;
+function warnIfBlocked(win: BrowserWindow | null): void {
+  if (blockedWarned || background) return;
+  blockedWarned = true;
+  void notifyPermission(repoRoot).then(async (p) => {
+    if (p?.access === "ask") p = await requestNotifyPermission(repoRoot);
+    if (p?.access !== "off" && p?.access !== "quiet") return void (blockedWarned = p?.access === "on");
+    if (win && !win.isDestroyed()) win.webContents.send("notify-blocked", p.access);
+  });
+}
+ipcMain.handle("notify-permission", () => notifyPermission(repoRoot));
+ipcMain.handle("notify-permission-request", () => requestNotifyPermission(repoRoot));
+ipcMain.on("notify-settings", () => void notifyPermission(repoRoot).then((p) => openNotifySettings(p?.bundleId ?? "dev.janoelze.cmd")));
+ipcMain.on("notify-test", () => {
+  if (!Notification.isSupported()) return;
+  new Notification({ title: "Notifications work", body: "This is how cmd tells you an agent is done or needs you." }).show();
 });
 /** Looking at the window it came from: its notification is no longer news. */
 ipcMain.on("notify-close", (_e, tag: string) => {
