@@ -1,6 +1,6 @@
 # Startup phases and the work scheduler
 
-> Status (2026-10-07): **phases, the scheduler and the watchdog built** (branch `scheduler`): the core answers before it rebuilds anything, startup jobs run behind the socket in order and show in the footer ("Indexing sessions…"), long jobs yield on a budget, and the watchdog logs every block of the thread over 100 ms with what ran (`[lag] 642 ms in sessions rebuild`), kept in `core.info.stalls` and shown in the core details. Not built: moving one-statement work (index builds, the search vocabulary) to a worker; an e2e check on a large fixture; the app's start wait. Read first: this doc; `packages/core/src/scheduler.ts`; `Core.start()` in `packages/core/src/core.ts`; `apps/desktop/src/main/index.ts` (`waitForCore`). Builds on the data layer ([28](28-data-plan.md)): the views it rebuilds are the ones this schedules.
+> Status (2026-10-07): **phases, the scheduler and the watchdog built and stress-tested**: the core answers before it rebuilds anything, startup jobs run behind the socket in order and show in the footer ("Indexing sessions…"), long jobs yield on a budget, and the watchdog logs every block of the thread over 100 ms with what ran (`[lag] 642 ms in sessions rebuild`), kept in `core.info.stalls` and shown in the core details. The stress harness (below) then found and fixed what the watchdog named: on the author's 1.6 GB log a first launch now answers in 2 ms, finishes its rebuilds in 5 s and reads 4,260 transcripts in 4 minutes with one stall of 109 ms in the whole run. Not built: index builds on a worker; an e2e check on a large fixture; the app's start wait. Read first: this doc; `packages/core/src/scheduler.ts`; `Core.start()` in `packages/core/src/core.ts`; `apps/desktop/src/main/index.ts` (`waitForCore`). Builds on the data layer ([28](28-data-plan.md)): the views it rebuilds are the ones this schedules.
 
 ## Why
 
@@ -46,7 +46,32 @@ The phase and the jobs still running are `core.info.startup` and the `core.start
 
 A 50 ms timer measures how late it fires. Over `STALL_MS` (100 ms) is a stall: logged as `[lag] <ms> ms in <activity>`, kept (the last 20) in `core.info.stalls`, shown in the core details as "Stalls · 3 · longest 642 ms · in sessions rebuild". The blame is what runs now, else what ended since the timer came due (a block holds the thread until it ends, so the timer fires after the culprit finished), else "(idle: timers, I/O callbacks)", which means a timer or I/O callback that nothing marked.
 
-This replaces sampling the live core by hand. The first run on a copy of the author's log showed it working: the socket answered after 781 ms, then one stall of 316 s during the sessions rebuild that the standalone rebuild (10.7 s, longest block 139 ms) does not have. That is the next thing to fix, and it was found by the watchdog, not by a person.
+This replaces sampling the live core by hand. On the first run on a copy of the author's log the socket answered after 781 ms, then the thread blocked for 316 s during the sessions rebuild; that block never reproduced (five more cold starts, a standalone rebuild), and its blame was wrong because of the first bug below. What the watchdog named afterwards is in the next section.
+
+## What the stress test found
+
+A harness on a copy of the author's event log (`data/` only, never `cmd.sqlite`, which would resume the author's agents) with a client pinging every 20 ms for request latency, and load phases one after another: the view rebuilds of a first launch, a first transcript pass over 4,260 files, 30 terminals printing 3,000 lines each, journal reloads with searches, query floods, idle. Six runs; each fixed what the previous one blamed.
+
+| Found | Blamed by | Fix |
+|---|---|---|
+| A rebuild page of 2,000 events took up to 340 ms: six UPDATE statements per event, and each page re-scanned the whole type index | `sessions rebuild` | steps by seq range (a rowid range, no sort), folded per session before one upsert each; 16 s → 1.6 s, identical rows |
+| A 134 MB transcript arrived from the worker as one message: 120 ms to receive | `transcripts` | the worker sends a file in chunks of 4 MB or 500 events, each acked |
+| The first search after a transcript pass reread the vocabulary: 300–500 ms | wrongly `transcripts` (a yield's name stuck to everything after it) | the vocabulary is read on a worker, the old one serving meanwhile; a job's name ends with its step, and a stall blames the longest activity that ended since it began |
+| Transcript steps of 20 events took 200 ms about every 20 s, regardless of size | `transcripts`, once the blame was right | a re-read of the whole log rewrote every row (`data = excluded.data`) and counted and uncounted every blob, gigabytes of WAL; every 1000 pages SQLite checkpointed into the 1.6 GB file inside a commit. `record()` now leaves an unchanged row alone (span, text, data, content, identities, flags), and checkpoints run on a worker (`checkpoint-worker.ts`, passive, every 3 s; this connection only at 80 MB of WAL, the file capped at 64 MB) |
+| The turns rebuild in one transaction: 360 ms | `startup: turns` | yields between agents |
+| The journal's first git read recorded 2,500 events in one transaction | `journal sync` | steps of 200 |
+
+Before and after, same harness, same log (pings p95 / max, stalls over 100 ms):
+
+| Phase | First run | Last run |
+|---|---|---|
+| View rebuilds (first launch) | 71 s, 71 ms / 339 ms, 21 stalls | 5 s, —, 1 stall (109 ms, turns) |
+| First transcript pass | 344 s, 24 ms / 531 ms, 31 stalls | 241 s, 1 ms / 104 ms, 0 |
+| 30 chatty terminals | 0 ms / 26 ms, 0 | 0 ms / 6 ms, 0 |
+| Journal reloads and searches | 47 ms / 273 ms, 1 | 43 ms / 114 ms, 0 |
+| Query floods | 16 ms / 80 ms, 0 | 18 ms / 27 ms, 0 |
+
+The pattern held every time: the stall log named a job, a profile or an offline reproduction of that job found the statement, and the fix was either smaller steps, work folded before it is written, or a worker for what can't be split.
 
 ## Rules for new code
 
@@ -57,7 +82,7 @@ This replaces sampling the live core by hand. The first run on a copy of the aut
 
 ## Not built
 
-1. **A worker for one-statement work.** `CREATE INDEX` on a big table, the FTS vocabulary read, `recountBlobs`, `buildFts`: each is one SQLite statement and can't yield. They should run on a worker thread with its own connection (WAL allows it), with the main thread notified when done. The `indexes` job is the first candidate: a new index still blocks once per version.
+1. **A worker for the rest of the one-statement work.** The vocabulary read and checkpoints run on workers now; `CREATE INDEX` on a big table, `recountBlobs` and `buildFts` still don't. The `indexes` job is the first candidate: a new index still blocks about 2 s once per version.
 2. **The app's wait.** `waitForCore` in `main/index.ts` treats an alive core as busy for up to 10 minutes and shows "Connecting to core…". With phases the core answers in about a second, so this matters less; the dialog after 5 s without a pid file, and the cores spawned every 10 s while another holds the lock (they exit "already running"), can go.
 3. **An e2e check** on a large fixture asserting the socket answers within 2 s of spawn and no startup stall exceeds 250 ms.
 4. **Budgets per job type**, as Cesium does, if two background jobs ever compete; today they run in sequence.
