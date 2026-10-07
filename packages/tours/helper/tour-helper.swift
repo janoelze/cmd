@@ -251,14 +251,31 @@ func openMenuItems(pid: pid_t) async throws -> [[String: Any]] {
   return found
 }
 
+/** The modifier keys themselves, so a shortcut is played like a keyboard: modifiers down, the key, modifiers up. */
+let MOD_KEYS: [String: CGKeyCode] = ["cmd": 55, "shift": 56, "alt": 58, "ctrl": 59]
+
 func key(_ name: String, mods: [String]) throws {
   guard let code = KEYS[name] else { throw NSError(domain: "tour", code: 1, userInfo: [NSLocalizedDescriptionKey: "unknown key \(name)"]) }
-  let flags = mods.reduce(CGEventFlags()) { $0.union(MODS[$1] ?? []) }
+  var flags = CGEventFlags()
+  for m in mods {
+    flags.formUnion(MODS[m] ?? [])
+    let e = CGEvent(keyboardEventSource: source, virtualKey: MOD_KEYS[m] ?? 55, keyDown: true)
+    e?.flags = flags
+    e?.post(tap: .cghidEventTap)
+    usleep(25_000)
+  }
   for down in [true, false] {
     let e = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
     e?.flags = flags
     e?.post(tap: .cghidEventTap)
-    if down { usleep(70_000) }
+    usleep(down ? 70_000 : 25_000)
+  }
+  for m in mods.reversed() {
+    flags.subtract(MODS[m] ?? [])
+    let e = CGEvent(keyboardEventSource: source, virtualKey: MOD_KEYS[m] ?? 55, keyDown: false)
+    e?.flags = flags
+    e?.post(tap: .cghidEventTap)
+    usleep(15_000)
   }
   log("key", ["key": name, "mods": mods])
 }
@@ -276,6 +293,8 @@ func type(_ text: String, delays: [Double]) {
     let units = Array(String(ch).utf16)
     for down in [true, false] {
       let e = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down)
+      // No modifiers: a shortcut before must not turn letters into commands.
+      e?.flags = []
       e?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
       e?.post(tap: .cghidEventTap)
       if down { usleep(useconds_t(min(90_000, max(30_000, (i + 1 < delays.count ? delays[i + 1] : 70) * 600)))) }
