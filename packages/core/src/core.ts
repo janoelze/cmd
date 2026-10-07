@@ -639,7 +639,7 @@ export class Core {
     "widget.add": (p) => {
       const r = widgetRef(p.ref);
       if (!r.widgetId && this.windowTypes.get(r.kind)?.role !== "widget") throw new Error(`not a widget: ${p.ref}`);
-      return this.#openWindow({ ...p, kind: r.kind, input: r.widgetId ? { widgetId: r.widgetId } : {} });
+      return this.#openWindow({ ...p, kind: r.kind, input: r.widgetId ? { widgetId: r.widgetId } : p.cwd ? { cwd: p.cwd } : {} });
     },
     "widget.rename": (p) => (this.magic.renameWidget(magicRef(p.ref), p.title), null),
     "widget.duplicate": (p) => {

@@ -221,8 +221,9 @@ export async function openPath(target: string): Promise<void> {
 }
 
 /** Put a widget from the library (`type:timer`, `magic:<id>`) on the workspace; throws when it can't. */
+/** Adds a widget; a built-in one is about the selected terminal's folder (Live Diff shows that repository). */
 export async function addWidget(ref: string, spaceId: string = here()): Promise<void> {
-  const w = await cmd.call("widget.add", { ref, spaceId });
+  const w = await cmd.call("widget.add", { ref, spaceId, cwd: contextCwd() });
   select(w.id);
 }
 

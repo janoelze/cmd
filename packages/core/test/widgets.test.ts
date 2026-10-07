@@ -601,6 +601,9 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     ]);
     const activity = core.handlers["widget.add"]({ ref: "type:agents" }) as unknown as { id: string; kind: string; state: { scope: string } };
     expect(activity).toMatchObject({ kind: "agents", state: { scope: "space" } });
+    // A built-in widget can be about a folder: Live Diff of the selected terminal's repository.
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-diff-"));
+    expect(core.handlers["widget.add"]({ ref: "type:diff", cwd: repo })).toMatchObject({ kind: "diff", state: { path: repo } });
     expect(all()[0]!.windows).toEqual([activity.id]);
     core.handlers["window.close"]({ id: activity.id });
     await until(() => events.some((e) => e.type === "widget.library"));

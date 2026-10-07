@@ -305,7 +305,8 @@ export interface Methods {
   /** The Widget Library (docs/16-widgets.md): built-in widgets, then yours by last use. */
   "widget.list": { params: {}; result: WidgetEntry[] };
   /** Put a widget from the library in a Space (another window showing it, if one already does). */
-  "widget.add": { params: Placement & { ref: string }; result: AppWindow };
+  /** `cwd`: the folder a built-in widget is about (Live Diff's repository), e.g. the selected terminal's. */
+  "widget.add": { params: Placement & { ref: string; cwd?: string }; result: AppWindow };
   /** Name a widget made with Magic; the name sticks across changes. */
   "widget.rename": { params: { ref: string; title: string }; result: null };
   /** A copy of a widget made with Magic, to change on its own (files, revisions, secrets). */
