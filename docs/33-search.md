@@ -84,6 +84,32 @@ Results are grouped by kind, each group ranked on its own (one ranked list acros
 
 **Where the view lives:** a window type (`search`), opened as a sheet over the workspace by ⇧⌘F and kept as a window if you drag it out or pin it. The Navigator's sidebar is too narrow for grouped results with snippets; its field stays a quick filter over its rows plus the Sessions group, from the same backend. The palette's `?` shows the top hits of each kind and "Show All in Search" (opens the view with the query). All three agree because they ask the same method.
 
+### UI kit pieces
+
+The kit already has the two densities this needs, and new search UI uses them rather than adding search widgets of its own:
+
+| | Toolbar items (`toolbar.tsx`) | General controls (`fields.tsx`, `list.tsx`) |
+|---|---|---|
+| Where | a window's toolbar, in a tile or a sidebar, at any width | sheets, dialogs, the Search view's body, Settings |
+| Field | `ToolbarSearchField`: ghost at rest, `--toolbar-item-h`, a `count` slot, Escape clears then `onEscape`, shrinks last as the bar gives way | `SearchField`: a `TextField` with sizes (`lg` in the widget library's sheet), a `status` slot (`IndexRing`), Escape clears |
+| Options | `ToolbarButton pressed`, `ToolbarSegmented`, `ToolbarMenu`; `priority` moves them into ⋯ | `Segmented`, `Checkbox`, `Select` |
+
+Where each surface sits:
+
+- **Find bar** (⌘F): toolbar items only. It is a `WindowToolbar` row: `ToolbarSearchField` with the count, the option toggles, previous and next, close. Windows that have a toolbar get it as a second row under theirs (as PDF does now); windows without one (terminals) get it `floating` (as now). The toggles get a `priority`, so in a narrow tile they move into ⋯ and the field, the count and the arrows stay. One component, both placements; no "small find bar" to keep in step.
+- **Search view** (⇧⌘F): in the toolbar, `ToolbarSearchField` with the scope as `ToolbarSegmented` (This Space · This project · Everywhere) and kinds and time as a `ToolbarMenu`, so the view works as a narrow window or in a sidebar. Shown as a sheet, the same items in the same `WindowToolbar`: a sheet is a window here (the window shell), not a different look.
+- **Navigator** keeps its `ToolbarSearchField`; the palette keeps its own input (it is a command field, not a search field).
+
+What the kit lacks, added to it (with gallery specimens), not to views' CSS:
+
+1. **Text glyphs as toolbar icons.** "Aa", "ab" (whole word) and ".*" are app CSS today (`.find-glyph` in `renderer/src/styles.css`). Either SF Symbols that say it (`textformat` for case; no good one for regex) or a kit `glyph` icon kind that `iconNode` draws at `ICON.toolbar`, so every find bar's toggles match.
+2. **Highlighted text.** `Highlighted` (`\x01…\x02` marks → `<mark>`) lives in `Palette.tsx`. Move it to the kit as `<Highlight text>`, with the match colour token (`--match`) the terminal and CodeMirror already use, so a snippet looks the same in the palette, the Navigator and the Search view.
+3. **A result row.** `ListRow` with a title, a meta line and a snippet line (`Highlight`), an icon for the kind, a trailing hint (⌘↵). The palette's and the Navigator's history rows become it.
+4. **A grouped, keyboard-driven result list.** Group headers with a count and "Show all", ↑↓ across groups, ↩ / ⌘↵, the active row kept in view, rows appended as streamed results arrive without the active one moving (the Navigator's `useFrozenOrder` idea). Today the palette and the Navigator each do this their own way.
+5. **The find bar** itself (`FindBar`, the `Findable` interface above), composed of 1 and the toolbar items, in the kit so any window type, built-in or plugin, gets it.
+
+Settle each in the Workbench with the user before building views on it (prototype skill): the find bar in a narrow tile and a wide one, the Search view as a sheet and as a sidebar.
+
 ## Backend
 
 ### Search everything cmd has
@@ -143,9 +169,9 @@ CLI: `cmd search <text>` keeps its output for sessions; `--kind command,page`, `
 
 ## Phases
 
-1. **⌘F everywhere.** `FindBar` and `Findable` in the kit; terminal and PDF moved onto it; browser, markdown, Files, Magic new; CodeMirror's panel replaced; ⌘E; Find disabled where it can't. Small, and the most visible inconsistency today.
+1. **⌘F everywhere.** Glyph icons, `Highlight`, `FindBar` and `Findable` in the kit; terminal and PDF moved onto it; browser, markdown, Files, Magic new; CodeMirror's panel replaced; ⌘E; Find disabled where it can't. Small, and the most visible inconsistency today.
 2. **History search over every kind.** `SearchView` by kind with filters and the union result; command and agent output indexed (rebuild, size measured); CLI flags. No new UI yet beyond the palette's `?` groups.
-3. **The Search view.** The `search` window type as a sheet, scope, kinds, time, grouped results, ↩ and ⌘↵ per kind; Navigator and palette on the same method; "Search…" in the menu.
+3. **The Search view.** The kit's result row and grouped list; the `search` window type as a sheet, scope, kinds, time, grouped results, ↩ and ⌘↵ per kind; Navigator and palette on the same method; "Search…" in the menu.
 4. **File contents with ripgrep.** Bundled `rg`, streamed `search.results`, scopes, ranking from the log, open at line with the find bar seeded.
 5. **Trigram index**, if Everywhere is too slow in use: the worker, FSEvents and git dirtiness, verify-on-read, Settings → Data.
 
