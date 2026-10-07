@@ -7,7 +7,7 @@
 //    one (loading) appears only if it lasts DELAY ms, and an emptied slot waits
 //    GRACE ms before collapsing, so a value that's replaced (⌘E remounting a
 //    window's view) swaps once instead of going out and coming back in.
-// Mark is the window's status light or type icon, cross-fading between them.
+// Mark is an agent's status light or a window's icon (tinted by its tone), cross-fading between them.
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { StatusDot, type DotState } from "@cmd/ui";
@@ -184,10 +184,10 @@ export function Slot({
 }
 
 /** The window's mark: a status light (an agent's, a window's news or status), else the type icon. */
-export function Mark({ light, icon }: { light?: DotState; icon: string }) {
+export function Mark({ light, tone, icon }: { light?: DotState; tone?: DotState; icon: string }) {
   return (
-    <span className={`mark ${light ? "has-light" : ""}`}>
-      <Symbol name={icon} size={ICON.small} className="mark-icon" />
+    <span className={`mark ${light ? "has-light" : ""}`} data-tone={tone}>
+      <Symbol name={icon} size={ICON.small} className="mark-icon" fallback="sparkles" />
       <span className="mark-light">
         <StatusDot state={light ?? "off"} />
       </span>

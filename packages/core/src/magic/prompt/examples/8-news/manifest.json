@@ -2,6 +2,7 @@
   "cmd": 2,
   "kind": "widget",
   "title": "News · Berlin",
+  "icon": "newspaper",
   "size": "m",
   "refresh": 600,
   "permissions": { "net": ["news.google.com"], "run": [], "env": [], "read": [] },

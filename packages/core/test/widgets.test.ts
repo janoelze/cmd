@@ -59,6 +59,8 @@ describe("manifest", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.manifest).toMatchObject({ kind: "widget", size: "m", refresh: 2, permissions: { net: ["api.x.com"], run: ["ifconfig"], env: [], read: [] } });
+    expect(r.manifest.icon).toBeUndefined();
+    expect(parseManifest({ title: "VPN", icon: " lock.shield " })).toMatchObject({ manifest: { icon: "lock.shield" } });
     expect(configValues(r.manifest, { city: "" })).toEqual({ city: "Lisbon" });
     expect(configValues(r.manifest, { city: "Porto", token: "x" })).toEqual({ city: "Porto" });
   });
@@ -72,6 +74,7 @@ describe("manifest", () => {
     expect(bad({ title: "x", permissions: { run: ["/usr/bin/python3"] } })[0]).toMatch(/run anything/);
     expect(bad({ title: "x", permissions: { net: ["a b"] } })[0]).toMatch(/not a host/);
     expect(bad({ title: "x", kind: "terminal" })[0]).toMatch(/command/);
+    expect(bad({ title: "x", icon: "Cloud Sun" })[0]).toMatch(/SF Symbol/);
     expect(bad({ kind: "widget" })[0]).toMatch(/title/);
     expect(bad({ title: "x", media: ["http://radio.example"] })[0]).toMatch(/https origin/);
   });

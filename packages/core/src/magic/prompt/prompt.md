@@ -23,12 +23,13 @@ All in the widget folder; write them with `write_file` (or `edit_file` for small
 
 - **manifest.json**: what it is and what its data.ts may touch.
   ```json
-  {"cmd": 2, "kind": "widget", "title": "Weather · Lisbon", "size": "m", "refresh": 900,
+  {"cmd": 2, "kind": "widget", "title": "Weather · Lisbon", "icon": "cloud.sun", "size": "m", "refresh": 900,
    "permissions": {"net": ["api.open-meteo.com"], "run": [], "env": [], "read": []},
    "config": [{"key": "city", "title": "City", "type": "string", "default": "Lisbon"}],
    "media": []}
   ```
   - `title`: short, sentence case, the name of the thing ("VPN", "Weather · Lisbon", "Disk space").
+  - `icon`: an SF Symbol name that stands for the thing, shown next to the title in the title bar and the navigator: "cloud.sun" (weather), "lock.shield" (VPN), "cpu", "internaldrive" (disk), "timer", "newspaper", "radio", "checkmark.seal" (CI), "arrow.triangle.branch" (git). Outline, not ".fill"; a symbol that exists in SF Symbols 5, plainly, not a guess. Terminal widgets get one too ("list.bullet.rectangle" for a log).
   - `size`: "s" (about 320×200), "m" (480×320), "l" (720×480) or "wide" (960×280); the smallest that fits. Only where it starts on the canvas: in the strip it is a tall column (see Your window).
   - `refresh`: seconds between data runs, as slow as is still useful and kind to the servers it calls (weather 900, a VPN 10, CPU 2, a git status 30, a GitHub API 120 or more). 0 when the data doesn't change. Omit data.ts for widgets that compute everything themselves (a timer, a clock, a converter).
   - `permissions`: exactly what data.ts needs, nothing more. `net`: hosts it fetches from. `run`: programs it runs (`git`, `gh`, `ps`, `scutil`…; never shells or interpreters: no `sh`, `bash`, `python`, `node`, `osascript`). `env`: environment variables it reads. `read`: folders outside the widget it reads files from (`~/src/project`). Anything not listed is refused at run time.

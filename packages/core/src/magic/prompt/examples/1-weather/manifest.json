@@ -2,6 +2,7 @@
   "cmd": 2,
   "kind": "widget",
   "title": "Weather · Lisbon",
+  "icon": "cloud.sun",
   "size": "m",
   "refresh": 900,
   "permissions": { "net": ["geocoding-api.open-meteo.com", "api.open-meteo.com"], "run": [], "env": [], "read": [] },

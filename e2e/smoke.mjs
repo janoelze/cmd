@@ -924,7 +924,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const bstate = async () => (await call("window.list")).find((x) => x.id === b.id).state;
     const statusText = () => btile.locator(".tile-status").textContent();
     for (let i = 0; i < 20 && !(await statusText()).includes("all good"); i++) await win.waitForTimeout(300);
-    check((await statusText()).includes("all good") && (await btile.locator(".mark.has-light").count()) === 1, `a widget's status line shows in its title bar with a light (${await statusText()})`);
+    check((await statusText()).includes("all good") && (await btile.locator('.mark[data-tone="success"]:not(.has-light)').count()) === 1, `a widget's status line shows in its title bar, its icon tinted, no light (${await statusText()})`);
 
     // Select another window, so the news isn't seen at once.
     const other = (await call("pane.list"))[0];

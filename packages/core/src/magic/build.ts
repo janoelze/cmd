@@ -62,7 +62,7 @@ export type BuildEvent =
   | { type: "step-end"; id: number; ms: number; output: string; isError: boolean; at: number }
   | { type: "turn"; at: number }
   | { type: "text"; delta: string; at: number }
-  | { type: "title"; title: string; at: number }
+  | { type: "title"; title: string; icon?: string; at: number }
   | { type: "verify"; at: number }
   | { type: "repair"; reason: string; at: number };
 
@@ -118,12 +118,12 @@ export async function buildWidget(o: BuildOptions): Promise<BuildResult> {
     if (fast) {
       emit({ type: "route", route: fast.route, at: at() });
       if (fast.route === "json") {
-        w.store.write(w.id, "manifest.json", JSON.stringify({ cmd: 2, kind: "widget", title: "JSON", size: "m", refresh: 0 }, null, 2) + "\n");
+        w.store.write(w.id, "manifest.json", JSON.stringify({ cmd: 2, kind: "widget", title: "JSON", icon: "curlybraces", size: "m", refresh: 0 }, null, 2) + "\n");
         w.store.write(w.id, "static.json", JSON.stringify(fast.data, null, 1) + "\n");
         w.store.write(w.id, "view.html", JSON_VIEW_HTML);
         w.store.write(w.id, "view.ts", JSON_VIEW_TS);
       } else {
-        w.store.write(w.id, "manifest.json", JSON.stringify({ cmd: 2, kind: "terminal", title: fast.command.split(/\s+/)[0], size: "m", refresh: 0, command: fast.command }, null, 2) + "\n");
+        w.store.write(w.id, "manifest.json", JSON.stringify({ cmd: 2, kind: "terminal", title: fast.command.split(/\s+/)[0], icon: "terminal", size: "m", refresh: 0, command: fast.command }, null, 2) + "\n");
       }
       const verdict = await verifyWidget({ ...w, deno: fast.route === "json" ? null : w.deno, previewer: fast.route === "json" ? null : w.previewer });
       return { ...base, route: fast.route, ok: verdict.usable, verdict: { ...verdict, ok: verdict.usable }, timings: { done: at() } };
@@ -135,7 +135,7 @@ export async function buildWidget(o: BuildOptions): Promise<BuildResult> {
   const ctx: ToolContext = { cwd: w.cwd, home: os.homedir(), deny: o.deny ?? DEFAULT_DENY_PATHS, sandbox: o.sandbox ?? "required", signal: o.signal };
   const trace: TraceStep[] = [];
   const timings: BuildResult["timings"] = { done: 0 };
-  const state: WidgetToolState = { dirty: false, onManifest: (title) => emit({ type: "title", title, at: at() }) };
+  const state: WidgetToolState = { dirty: false, onManifest: (title, icon) => emit({ type: "title", title, icon, at: at() }) };
   let stepId = 0;
   const exec = async (name: string, input: Record<string, unknown>): Promise<ToolOutput> => {
     const id = ++stepId;

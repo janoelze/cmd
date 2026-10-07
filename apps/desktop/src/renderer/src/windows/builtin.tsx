@@ -145,7 +145,8 @@ registerWindowView({
     // No "magic" kind label: the sparkle icon says it, and title bars are short on room.
     // "Magic" is the placeholder title of widgets made before the rename.
     const placeholder = w.title === "Magic Widget" || w.title === "Magic";
-    return { name: placeholder ? stateStr(w, "prompt") || "New Widget" : w.title, place, kind: null };
+    // The icon the build picked (manifest.json), else the type's sparkles.
+    return { name: placeholder ? stateStr(w, "prompt") || "New Widget" : w.title, place, kind: null, icon: stateStr(w, "icon") };
   },
   // Change, Refresh and Stop have no buttons on the window (nothing covers a
   // widget): they are here, on right-click in the widget or its title bar, and

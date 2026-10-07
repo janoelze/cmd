@@ -2,6 +2,7 @@
   "cmd": 2,
   "kind": "widget",
   "title": "Top processes",
+  "icon": "cpu",
   "size": "m",
   "refresh": 3,
   "permissions": { "net": [], "run": ["ps"], "env": [], "read": [] },

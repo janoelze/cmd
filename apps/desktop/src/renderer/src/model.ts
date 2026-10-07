@@ -198,8 +198,10 @@ export interface WindowFields {
   /** Live state; `key` says which state, so a changed text with the same key updates in place. */
   status?: { text: string; key: string; transient?: boolean };
   dirty?: boolean;
-  /** Agents, and windows with news or a status: the status light (Mark). Everything else shows `icon`. */
-  light?: Led | DotState;
+  /** Agents only: the status light (Mark). Everything else shows `icon`. */
+  light?: Led;
+  /** Windows and terminals with news or a status: tints their icon (and gives a sidebar row its status line). */
+  tone?: DotState;
   icon: string;
 }
 
@@ -226,8 +228,8 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
             ? { text: ws.text, key: "widget-status" }
             : undefined,
       dirty: live?.dirty,
-      light: attn ? (attn.urgent ? "needs" : "unseen") : ws?.tone ? TONE_LIGHT[ws.tone] : undefined,
-      icon: type?.icon ?? "macwindow",
+      tone: attn ? (attn.urgent ? "needs" : "unseen") : ws?.tone ? TONE_LIGHT[ws.tone] : undefined,
+      icon: d.icon || type?.icon || "macwindow",
     };
   } else {
     const a = r.agent;
@@ -246,7 +248,8 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
       // A terminal's attention marker (a bell, a notification, a finished command;
       // see packages/core/src/notifications.ts) shows like an agent's state until seen.
       status: a ? agentStatus(a, now) : attn ? { text: attn.text, key: `attention:${attn.kind}` } : undefined,
-      light: a ? ledOf(a) : attn ? (attn.urgent ? "needs" : "unseen") : undefined,
+      light: a ? ledOf(a) : undefined,
+      tone: !a && attn ? (attn.urgent ? "needs" : "unseen") : undefined,
       icon: "terminal",
     };
   }

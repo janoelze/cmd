@@ -243,6 +243,7 @@ export class MagicService {
         }
         case "title":
           if (!refining) this.#o.windows.update(id, { title: e.title });
+          if (e.icon) this.#o.windows.update(id, { state: { icon: e.icon } });
           send({ type: "title", title: e.title });
           break;
         case "verify":
@@ -361,6 +362,7 @@ export class MagicService {
       state: {
         phase: "ready",
         kind: m.kind,
+        icon: m.icon,
         html: m.kind === "widget" ? html : undefined,
         command: m.command,
         size: m.size,

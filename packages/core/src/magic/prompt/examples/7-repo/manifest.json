@@ -2,6 +2,7 @@
   "cmd": 2,
   "kind": "widget",
   "title": "shop · changes",
+  "icon": "arrow.triangle.branch",
   "size": "l",
   "refresh": 30,
   "permissions": { "net": [], "run": ["git"], "env": [], "read": [] },

@@ -22,7 +22,7 @@ export interface WindowView {
    * name already say it). Kind comes from the type; Status and Dirty from
    * the window's live status (setWindowStatus).
    */
-  describe?(win: AppWindow): { name?: string; place?: string; kind?: string | null };
+  describe?(win: AppWindow): { name?: string; place?: string; kind?: string | null; icon?: string };
   /** Its toolbar shows the Place (an address, a path): the title bar leaves it out; sidebar rows keep it. */
   placeInToolbar?: boolean;
   /** Context-menu entries for the title bar and sidebar row. */

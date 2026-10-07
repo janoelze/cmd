@@ -55,8 +55,8 @@ export const WIDGET_TOOL_SPECS: ToolSpec[] = [
 export interface WidgetToolState {
   /** A file changed since the checks last passed. */
   dirty: boolean;
-  /** The manifest parsed after the last write (for the window's title). */
-  onManifest?: (title: string) => void;
+  /** The manifest parsed after the last write (for the window's title and icon). */
+  onManifest?: (title: string, icon?: string) => void;
 }
 
 const err = (output: string): ToolOutput => ({ output, isError: true });
@@ -145,11 +145,11 @@ export async function runWidgetTool(name: string, input: Record<string, unknown>
   return null;
 }
 
-/** After a write: say at once when manifest.json is broken, and report its title. */
+/** After a write: say at once when manifest.json is broken, and report its title and icon. */
 function afterWrite(c: VerifyContext, p: string, state: WidgetToolState): string {
   if (p !== "manifest.json") return "";
   const m = c.store.manifest(c.id);
   if (!m.ok) return ` But it isn't valid: ${m.errors.join("; ")}`;
-  state.onManifest?.(m.manifest.title);
+  state.onManifest?.(m.manifest.title, m.manifest.icon);
   return "";
 }

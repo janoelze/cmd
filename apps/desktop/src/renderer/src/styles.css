@@ -1040,6 +1040,10 @@ kbd {
   transition: opacity 140ms ease, transform 140ms var(--ease), background-color 140ms ease, box-shadow 140ms ease;
 }
 .mark .mark-icon { color: var(--icon); }
+/* A window's tone (news, a widget's status): its icon takes the colour the agents' light would have. */
+.mark[data-tone="needs"] .mark-icon { color: var(--state-needs); }
+.mark[data-tone="unseen"] .mark-icon { color: var(--state-done); }
+.mark:is([data-tone="success"], [data-tone="warning"], [data-tone="danger"]) .mark-icon { color: var(--tone); }
 /* A grid, not a line box: the inherited line height would make the track taller than
    the box and push the icon off whole pixels. */
 .mark .mark-light { display: grid; opacity: 0; transform: scale(0.6); }

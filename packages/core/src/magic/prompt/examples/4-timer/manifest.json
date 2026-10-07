@@ -2,6 +2,7 @@
   "cmd": 2,
   "kind": "widget",
   "title": "Pomodoro",
+  "icon": "timer",
   "size": "s",
   "refresh": 0
 }

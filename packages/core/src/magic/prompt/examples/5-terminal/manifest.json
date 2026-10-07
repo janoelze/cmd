@@ -2,6 +2,7 @@
   "cmd": 2,
   "kind": "terminal",
   "title": "System errors",
+  "icon": "exclamationmark.triangle",
   "size": "l",
   "refresh": 0,
   "command": "log stream --predicate 'messageType == error' --style compact"

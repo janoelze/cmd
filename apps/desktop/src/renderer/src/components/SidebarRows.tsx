@@ -56,13 +56,13 @@ export function SessionRow(props: {
   const isSel = !!winId && winId === selected;
   // Agents and terminals that want you get a second line for their status;
   // everything else is one line: name, then where it is.
-  const tall = !!f.light;
+  const tall = !!(f.light || f.tone);
   const proj = tall && depth === 0 && !row.win ? project(row.agent?.cwd ?? row.pane?.cwd ?? "") : null;
 
   return (
     <>
       <div
-        className={`row ${tall ? "tall" : "short"} ${isSel ? "sel" : ""} ${props.active ? "active" : ""} led-row-${f.light ?? "none"} ${winId ? "" : "virtual"}`}
+        className={`row ${tall ? "tall" : "short"} ${isSel ? "sel" : ""} ${props.active ? "active" : ""} led-row-${f.light ?? f.tone ?? "none"} ${winId ? "" : "virtual"}`}
         style={{ paddingLeft: 14 + depth * 14 }}
         data-key={row.key}
         onClick={() => onSelect(row)}
@@ -85,7 +85,7 @@ export function SessionRow(props: {
         ) : (
           (props.gutter || depth > 0) && <span className="twisty-space" />
         )}
-        <Mark light={f.light} icon={f.icon} />
+        <Mark light={f.light} tone={f.tone} icon={f.icon} />
         <div className="row-text">
           <div className="row-title">
             <Slot value={{ text: f.name }} fade />

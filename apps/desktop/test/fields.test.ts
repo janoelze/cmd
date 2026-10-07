@@ -8,9 +8,11 @@ import { registerWindowView, setWindowTypes } from "../src/renderer/src/windows/
 setWindowTypes([
   { kind: "text", title: "Text", icon: "doc.text" },
   { kind: "browser", title: "Browser", icon: "globe" },
+  { kind: "magic", title: "Magic Widget", icon: "sparkles" },
 ] as never);
 registerWindowView({ kind: "text", View: () => null, describe: () => ({ place: "~/src/cmd" }) });
 registerWindowView({ kind: "browser", View: () => null, describe: (w) => ({ name: w.title, place: "github.com" }) });
+registerWindowView({ kind: "magic", View: () => null, describe: (w) => ({ icon: typeof w.state.icon === "string" ? w.state.icon : undefined }) });
 
 const pane = (p: Partial<Pane> = {}): Pane =>
   ({ id: "p1", title: "", cwd: "/Users/someone/src/cmd", foreground: "zsh", agentId: null, usage: null, attention: null, muted: false, sizedBy: null, ...p }) as Pane;
@@ -38,12 +40,19 @@ describe("window fields", () => {
     expect(pwsh("Administrator: npm run dev").name).toBe("npm run dev");
   });
 
-  it("shell with an attention marker: its text as status, a light until seen", () => {
+  it("shell with an attention marker: its text as status, a tinted icon until seen", () => {
     const at = 0;
     const bell = fieldsOf(row({ pane: pane({ attention: { kind: "bell", text: "Bell", urgent: true, at } }) }), undefined, 0);
-    expect(bell).toMatchObject({ status: { text: "Bell", key: "attention:bell" }, light: "needs" });
+    expect(bell).toMatchObject({ status: { text: "Bell", key: "attention:bell" }, tone: "needs", icon: "terminal" });
     const done = fieldsOf(row({ pane: pane({ attention: { kind: "command", text: "make finished · 42s", urgent: false, at } }) }), undefined, 0);
-    expect(done).toMatchObject({ status: { text: "make finished · 42s" }, light: "unseen" });
+    expect(done).toMatchObject({ status: { text: "make finished · 42s" }, tone: "unseen" });
+  });
+
+  it("widget: the icon its build picked, else the type's; news tints it, never a light", () => {
+    expect(fieldsOf(row({ win: win({ kind: "magic", title: "Weather" }) }), undefined, 0).icon).toBe("sparkles");
+    const f = fieldsOf(row({ win: win({ kind: "magic", title: "Weather", state: { icon: "cloud.sun", attention: { kind: "notification", text: "Rain soon", urgent: true, at: 0 } } }) }), undefined, 0);
+    expect(f).toMatchObject({ icon: "cloud.sun", tone: "needs", status: { text: "Rain soon" } });
+    expect(f.light).toBeUndefined();
   });
 
   it("agent: name, status light, state as status keyed by state", () => {

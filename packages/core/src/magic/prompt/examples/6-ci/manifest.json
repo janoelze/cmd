@@ -2,6 +2,7 @@
   "cmd": 2,
   "kind": "widget",
   "title": "CI · acme/shop",
+  "icon": "checkmark.seal",
   "size": "m",
   "refresh": 60,
   "permissions": { "net": [], "run": ["gh"], "env": [], "read": [] },

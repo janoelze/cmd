@@ -66,8 +66,11 @@ export function Symbol({
   // Medium reads crisper than regular at 11–13 pt (thin strokes are mostly edge).
   weight = "medium",
   className = "",
+  fallback,
 }: {
   name: string;
+  /** Drawn instead when `name` isn't a symbol (a name a widget's manifest made up). */
+  fallback?: string;
   /** Point size (like a font size). */
   size?: number;
   weight?: "ultralight" | "thin" | "light" | "regular" | "medium" | "semibold" | "bold";
@@ -85,6 +88,7 @@ export function Symbol({
     };
   }, [key, name, size, weight, scale]);
 
+  if (img === null && fallback && fallback !== name) return <Symbol name={fallback} size={size} weight={weight} className={className} />;
   // The box is the rendered canvas (square, even, whole points), so the bitmap maps
   // 1:1 to device pixels and centres on whole pixels.
   const even = Math.ceil(size / 2) * 2;

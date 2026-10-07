@@ -18,7 +18,8 @@ Every window, whatever its type, is described by the same six fields:
 ### Mark
 
 - An agent terminal shows its **status light** (needs input, done-unseen, working, idle…). State is what matters about an agent, so the light wins over the icon.
-- Every other window, plain shells included, shows its **type icon** (the SF Symbol from the core's window type: `terminal`, `globe`, `folder`, `doc.text`, `doc.richtext`).
+- Every other window, plain shells and widgets included, shows its **type icon** (the SF Symbol from the core's window type: `terminal`, `globe`, `folder`, `doc.text`, `doc.richtext`). A Magic widget shows the icon its build picked (manifest.json's `icon`), sparkles until it has one.
+- A window or shell with news (an attention marker, a widget's status tone) keeps its icon and tints it; the moving light is for agents only.
 - A plain shell has no state worth a light. Its hollow "shell" light reads as "agent, idle" and is retired in favour of the `terminal` icon.
 
 ### Name
@@ -155,6 +156,7 @@ interface WindowFields {
   status?: string;
   dirty?: boolean;
   light?: Led;           // agents only; otherwise the type icon is used
+  tone?: DotState;       // other windows with news or a status: tints the icon
 }
 
 interface WindowView {

@@ -20,6 +20,8 @@ export interface WidgetManifest {
   cmd: 2;
   kind: "widget" | "terminal";
   title: string;
+  /** SF Symbol for the window's title bar and the navigator ("cloud.sun", "lock.shield"); absent: sparkles. */
+  icon?: string;
   description?: string;
   size: WidgetSize;
   /** Seconds between data runs; 0: only on Refresh Now. Ignored without data.ts. */
@@ -57,6 +59,8 @@ export function parseManifest(v: unknown): { ok: true; manifest: WidgetManifest 
   if (!kind) errors.push('kind must be "widget" or "terminal"');
   const title = typeof m.title === "string" ? m.title.trim().slice(0, 120) : "";
   if (!title) errors.push("title is required");
+  const icon = typeof m.icon === "string" ? m.icon.trim() : undefined;
+  if (icon && !/^[a-z0-9]+(\.[a-z0-9]+)*$/.test(icon)) errors.push(`icon: "${icon}" is not an SF Symbol name (like "cloud.sun.fill")`);
   const size = m.size === "s" || m.size === "m" || m.size === "l" || m.size === "wide" ? m.size : "m";
   const refreshRaw = typeof m.refresh === "number" && Number.isFinite(m.refresh) && m.refresh >= 0 ? m.refresh : 0;
   const refresh = refreshRaw === 0 ? 0 : Math.max(MIN_REFRESH, Math.round(refreshRaw));
@@ -96,6 +100,7 @@ export function parseManifest(v: unknown): { ok: true; manifest: WidgetManifest 
       cmd: 2,
       kind: kind!,
       title,
+      icon: icon || undefined,
       description: typeof m.description === "string" ? m.description : undefined,
       size,
       refresh,

@@ -2,6 +2,7 @@
   "cmd": 2,
   "kind": "widget",
   "title": "VPN",
+  "icon": "lock.shield",
   "size": "s",
   "refresh": 10,
   "permissions": { "net": [], "run": ["ifconfig", "netstat", "scutil"], "env": [], "read": [] }

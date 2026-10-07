@@ -74,10 +74,10 @@ export function TileTitle({
           onPointerDown={(e) => e.stopPropagation()} // a file or link drag, not moving the window
           onDragStart={(e) => (file ? dragFiles(e, [file]) : dragLink(e, url!))}
         >
-          <Mark light={f.light} icon={f.icon} />
+          <Mark light={f.light} tone={f.tone} icon={f.icon} />
         </span>
       ) : (
-        <Mark light={f.light} icon={f.icon} />
+        <Mark light={f.light} tone={f.tone} icon={f.icon} />
       )}
       <span className={`ui-window-bar-name tile-name${edit ? " editing" : ""}`}>
         {edit ? (
