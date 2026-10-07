@@ -20,11 +20,18 @@ let axOptions = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: re
 report("accessibility", AXIsProcessTrustedWithOptions(axOptions))
 report("screen recording", request ? CGRequestScreenCaptureAccess() : CGPreflightScreenCaptureAccess())
 
-// The menu bar of the frontmost app, through the Accessibility API (how native menus are found).
-let system = AXUIElementCreateSystemWide()
-var front: CFTypeRef?
-let axErr = AXUIElementCopyAttributeValue(system, kAXFocusedApplicationAttribute as CFString, &front)
-report("accessibility read", axErr == .success, axErr == .success ? "" : "AXError \(axErr.rawValue)")
+// An app's menu bar through the Accessibility API, the way the driver finds
+// native menus: by the app's pid. (The system-wide "focused application" is
+// unreliable from a command-line tool, AXError -25204.) Finder always runs.
+if let finder = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == "com.apple.finder" }) {
+  var bar: CFTypeRef?
+  let axErr = AXUIElementCopyAttributeValue(AXUIElementCreateApplication(finder.processIdentifier), kAXMenuBarAttribute as CFString, &bar)
+  var items: CFTypeRef?
+  if axErr == .success { AXUIElementCopyAttributeValue(bar as! AXUIElement, kAXChildrenAttribute as CFString, &items) }
+  report("accessibility read", axErr == .success, axErr == .success ? "Finder's menu bar, \((items as? [AnyObject])?.count ?? 0) menus" : "AXError \(axErr.rawValue)")
+} else {
+  report("accessibility read", false, "Finder isn't running")
+}
 
 // Post a mouse move to where the pointer already is: harmless, but goes through the real input path.
 let here = CGEvent(source: nil)?.location ?? .zero

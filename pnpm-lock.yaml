@@ -223,6 +223,8 @@ importers:
 
   packages/remote-crypto: {}
 
+  packages/tours: {}
+
   packages/ui:
     dependencies:
       lucide-static:
