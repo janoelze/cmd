@@ -85,6 +85,8 @@ The `Tour` API (`src/driver.ts`): `click(target, { button, clicks })`, `hover(ta
 
 - **Move the pointer off buttons you're done with** (`t.away()`): a pointer resting on a button keeps its hover state and tooltip up, e.g. at the end of a shot.
 - **Wait for the state you mean**: `getByRole("option", { name: "Canvas", exact: true, selected: true }).waitFor()` before pressing Return in the palette; a new Files window opens in the selected terminal's folder (`cd` there first).
+- **Drags are real.** `t.drag(from, to)` works for pointer-driven drags (a window by its title: the title bar has no role, so take its text inside the window's group, `group.getByText(/^Untitled/)`) and for HTML5 drag and drop (a Files row onto the terminal puts its path at the prompt).
+- **A parked pointer can hover things.** The pointer starts in the middle of the window; a palette or popover that opens under it highlights the item under the pointer. Wait for the option you mean (`selected: true`) before pressing Return.
 - **Find things by role and name**, never CSS classes: windows are `group "<name>, <kind>, <place>"`, the Navigator's sections are `tree "Windows"` with `treeitem`s, the palette is a `combobox` over `option`s, Files is `tree "Files"`, Settings rows name their controls. If something can't be found by role and name, fix its accessibility in the app (and `pnpm e2e:a11y` keeps it fixed), don't reach for a class.
 - **Don't script scrolling to reach things.** `click`/`hover` scroll the target into view themselves, visibly. Write `scroll` only when scrolling is the point of the shot.
 - **Wait on the app, pace for people.** Wait for state with locators (`.waitFor()`); use `pause` only so viewers can follow (0.8–1.5 s on a result).
@@ -119,6 +121,7 @@ When a run stops mid-way, the error says where (`no open menu item "Open"`, a lo
 
 ## Working on the helper
 
+- Shortcuts are played like a keyboard: modifier keys down, the key, modifiers up (`key()`); typed characters set empty flags. Posting a key with the Command flag but no Command press left the event source thinking Command was held, and the text typed after `⌘K` went out as shortcuts.
 - Posted events land a few ms after `post()`: don't compare the pointer to the last posted point mid-path (the interference check runs once per command and waits up to 60 ms for the pointer to arrive).
 - A new kind of system call can need a new sandbox rule even when the permissions are fine (VideoToolbox failed with `-12903` until `coremedia.videoencoder` was allowed). Add a check for it to `probe.swift` first, so `learn` sees the denial, then the user reruns `learn` and restarts the session.
 - Repo TypeScript rules apply (type stripping): no parameter properties, `import type`, `.ts` extensions; the repo has `noUncheckedIndexedAccess`. Scripts that import Playwright must live in the repo (e.g. `experiments/`), not in `$TMPDIR`, or the import doesn't resolve.
