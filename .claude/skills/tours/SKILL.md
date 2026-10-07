@@ -143,6 +143,8 @@ When a run stops mid-way, the error says where (`no open menu item "Open"`, a lo
 
 ## Working on the helper
 
+- Recording quality, measured on a strip swipe: ~57 fps delivered (ScreenCaptureKit sends a frame only when something changed), the longest gap 25 ms, never two frames missed in a row; post resamples to a steady 60. `raw.mov` is HEVC with B-frames, so frame timestamps come out of order: sort them before measuring gaps (and `-of csv` leaves a trailing comma on the first line).
+
 - Shortcuts are played like a keyboard: modifier keys down, the key, modifiers up (`key()`); typed characters set empty flags. Posting a key with the Command flag but no Command press left the event source thinking Command was held, and the text typed after `⌘K` went out as shortcuts.
 - ffmpeg with `-loop 1` image inputs never ends on its own: give the output `-t` (the first composite ran until a timeout killed it).
 - Posted events land a few ms after `post()`: don't compare the pointer to the last posted point mid-path (the interference check runs once per command and waits up to 60 ms for the pointer to arrive).
