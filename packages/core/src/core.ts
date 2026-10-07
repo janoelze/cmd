@@ -31,7 +31,7 @@ import { AgentHomes } from "./agents/homes.ts";
 import { cleanAiBody, NOTICE_SYSTEM, noticeContext, type NoticeKind } from "./agents/notice.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./agents/hooks.ts";
 import { hookEventName } from "./agents/state.ts";
-import { NotificationCenter, MAX_LOG } from "./notifications.ts";
+import { NotificationCenter } from "./notifications.ts";
 import { CommandLog } from "./commands.ts";
 import { TimerAlarms } from "./timers.ts";
 import { PaneManager, type Inspector, type PtyFactory } from "./panes.ts";
@@ -327,9 +327,7 @@ export class Core {
     }
     this.notifications = new NotificationCenter(this.panes, this.agents, settings, (a, kind, signal) => this.#writeNotice(a, kind, signal));
     this.notifications.on("notification", (notification) => this.#broadcast({ type: "notification", notification }));
-    this.notifications.on("cleared", () => this.#broadcast({ type: "notifications.cleared" }));
     this.commands = new CommandLog(this.panes, this.data);
-    this.commands.on("updated", (run) => this.#broadcast({ type: "command.updated", run }));
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler, 2000, () => this.#subscribers.size > 0) : null;
     this.processes = opts.procSampler ? new ProcessSampler(opts.procSampler) : null;
     this.spaces = new SpaceManager(this.store, opts.home);
@@ -345,6 +343,7 @@ export class Core {
     this.spaces.on("updated", rootsChanged);
     this.spaces.on("removed", rootsChanged);
     this.windows = new WindowManager(this.panes, this.store, this.windowTypes, overrides);
+    this.notifications.spaceOf = (paneId, windowId) => (paneId ? this.panes.get(paneId)?.spaceId : windowId ? this.windows.others().find((w) => w.id === windowId)?.spaceId : null) ?? null;
     // Windows of a Space that is gone or closed (e.g. the core died mid-close) go Home.
     for (const w of this.windows.others()) {
       if (this.spaces.get(w.spaceId)?.closedAt !== null) this.windows.move(w.id, this.spaces.home().id);
@@ -518,13 +517,10 @@ export class Core {
     "pane.setMuted": (p) => (this.notifications.setMuted(p.paneId, p.muted), null),
     "pane.clearAttention": (p) => (this.notifications.clearAttention(p.paneId), null),
     "notify.send": (p) => (this.notifications.send(p.paneId ?? null, p.title, p.body), null),
-    "notify.list": () => this.#notificationLog(),
     "notify.clear": () => {
       this.data.record({ id: `notification-clear:${Date.now()}`, at: Date.now(), type: "notification.clear", source: "user", data: {} });
-      this.notifications.clear();
       return null;
     },
-    "command.list": (p) => this.commands.list(p.spaceId),
     "pane.snapshot": (p) => this.panes.snapshot(p.paneId),
     "pane.read": async (p) => ({ text: await this.panes.read(p.paneId, p.lines) }),
     "pane.reset": async (p) => (await this.panes.resetState(p.paneId), null),
@@ -890,15 +886,6 @@ export class Core {
   }
 
   /** Kill the Space's terminals (their agents go with them) and remove its windows; keep it as a recent Space. */
-  /** The notifications since the widget was last cleared, newest first, from the log (MAX_LOG at most). */
-  #notificationLog(): AppNotification[] {
-    const cleared = this.data.query({ types: ["notification.clear"], by: "time", order: "desc", limit: 1 })[0]?.at ?? 0;
-    return this.data.query({ types: ["notification"], at: [cleared + 1, Number.MAX_SAFE_INTEGER], by: "time", order: "desc", limit: MAX_LOG }).map((e) => {
-      const d = e.data as { source: AppNotification["source"]; title: string; body: string; urgent: boolean; alert?: boolean };
-      return { id: e.id.replace(/^notification:/, ""), source: d.source, paneId: e.paneId, windowId: e.windowId, title: d.title, body: d.body, alert: d.alert ?? true, urgent: d.urgent, at: e.at };
-    });
-  }
-
   /** The selection in a Space moved: the previous focus span ends, a new one starts (user.focus). */
   #focused(spaceId: string, id: string): void {
     const prev = this.#focus.get(spaceId);

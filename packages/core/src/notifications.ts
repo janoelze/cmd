@@ -11,13 +11,13 @@
 // drops a "done" you saw happen and sums up agents finishing together
 // (renderer/src/notify.ts). Looking at the terminal clears its marker
 // (pane.clearAttention). Every notification is an event in the log
-// (data/recorders.ts); the Notifications widget lists them from there
-// (notify.list in core.ts).
+// (data/recorders.ts), with the Space of what it is about; the Notifications
+// widget is a live query over them.
 
 import { EventEmitter } from "node:events";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
-import type { Agent, AppNotification, Attention, Pane, PaneId, Settings, WindowId } from "@cmd/protocol";
+import type { Agent, AppNotification, Attention, Pane, PaneId, Settings, SpaceId, WindowId } from "@cmd/protocol";
 import type { OscEvent } from "./osc.ts";
 import type { PaneManager } from "./panes.ts";
 import type { AgentTracker } from "./agents/tracker.ts";
@@ -55,10 +55,10 @@ export function formatDuration(ms: number): string {
 const tildify = (p: string) => (p.startsWith(os.homedir()) ? `~${p.slice(os.homedir().length)}` : p);
 const cleanTitle = (t: string) => t.replace(/^[\s✳✻✽✶✢·•*◐◑◒◓⠀-⣿]+/u, "").trim();
 
-/** How many notifications notify.list keeps. */
-export const MAX_LOG = 200;
 
-export class NotificationCenter extends EventEmitter<{ notification: [AppNotification]; cleared: [] }> {
+export class NotificationCenter extends EventEmitter<{ notification: [AppNotification] }> {
+  /** The Space a terminal or window is in, for the notifications about it (set by the core once windows exist). */
+  spaceOf: (paneId: PaneId | null, windowId: WindowId | null) => SpaceId | null = () => null;
   #panes: PaneManager;
   #settings: () => Settings;
   #agentStates = new Map<string, Agent["state"]>();
@@ -112,10 +112,6 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
   }
 
   /** The widget was cleared (the core records it in the log): tell the clients. */
-  clear(): void {
-    this.emit("cleared");
-  }
-
   clearAttention(paneId: PaneId): void {
     this.#panes.setAttention(paneId, null);
   }
@@ -233,7 +229,7 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
   }
 
   #emit(n: Omit<AppNotification, "id" | "at">): void {
-    const full: AppNotification = { id: randomUUID(), ...n, at: Date.now() };
+    const full: AppNotification = { id: randomUUID(), ...n, spaceId: this.spaceOf(n.paneId, n.windowId ?? null), at: Date.now() };
     this.emit("notification", full);
   }
 }

@@ -151,18 +151,6 @@ export function subscribeView(query: ViewQuery, fn: (rows: (TurnRow | SessionInf
   };
 }
 
-const commandListeners = new Set<(run: CommandRun) => void>();
-export function onCommand(fn: (run: CommandRun) => void): () => void {
-  commandListeners.add(fn);
-  return () => commandListeners.delete(fn);
-}
-
-/** The notification log was cleared (notify.clear). */
-const clearedListeners = new Set<() => void>();
-export function onNotificationsCleared(fn: () => void): () => void {
-  clearedListeners.add(fn);
-  return () => clearedListeners.delete(fn);
-}
 
 /** A watched file or folder changed on disk (see fs.watch). */
 export function onFsChanged(fn: (path: string) => void): () => void {
@@ -489,12 +477,6 @@ function handle(e: CoreEvent): void {
       return;
     case "notification":
       for (const fn of notificationListeners) fn(e.notification);
-      return;
-    case "notifications.cleared":
-      for (const fn of clearedListeners) fn();
-      return;
-    case "command.updated":
-      for (const fn of commandListeners) fn(e.run);
       return;
     case "data.changed":
       dataById.get(e.id)?.fn(e.events, false);

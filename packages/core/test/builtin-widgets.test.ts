@@ -2,10 +2,11 @@
 // Commands, the notification log behind Notifications, the Timer's state and
 // the alarms that ring it.
 
+import fs from "node:fs";
+import os from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppNotification } from "@cmd/protocol";
+import { commandRunOf, notificationOf, type AppNotification } from "@cmd/protocol";
 import { Core } from "../src/core.ts";
-import { CommandLog } from "../src/commands.ts";
 import { durationLabel, timerType, type TimerState } from "../src/windows/builtin.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 
@@ -23,17 +24,21 @@ afterEach(async () => {
   await core.close();
 });
 
+/** What the Commands and Notifications widgets subscribe to, newest first. */
+const runs = (spaceId?: string) => core.data.query({ types: ["command"], spaceId, by: "time", order: "desc", limit: 300 }).map(commandRunOf);
+const notifications = () => core.data.query({ types: ["notification"], by: "time", order: "desc", limit: 300 }).map(notificationOf);
+
 describe("command log", () => {
   it("records a command from C, its line from exec, and its status from D", async () => {
     const pane = core.panes.create();
     const pty = ptys[0]!;
     const token = pty.opts.env.CMD_PANE_TOKEN;
     pty.output(`\x1b]133;C\x07\x1b]777;cmd;${token};exec;make test\x07`);
-    let [run] = await core.call("command.list", {});
+    let [run] = runs();
     expect(run).toMatchObject({ paneId: pane.id, spaceId: pane.spaceId, command: "make test", endedAt: null, exitCode: null });
 
     pty.output("\x1b]133;D;2\x07\x1b]133;A\x07");
-    [run] = await core.call("command.list", {});
+    [run] = runs();
     expect(run).toMatchObject({ command: "make test", exitCode: 2 });
     expect(run!.endedAt).toBeGreaterThanOrEqual(run!.startedAt);
   });
@@ -44,9 +49,9 @@ describe("command log", () => {
     const token = pty.opts.env.CMD_PANE_TOKEN;
     for (const line of ["ls", "pwd"]) pty.output(`\x1b]133;C\x07\x1b]777;cmd;${token};exec;${line}\x07\x1b]133;D;0\x07`);
     pty.output(`\x1b]133;C\x07\x1b]777;cmd;forged;exec;rm -rf ~\x07\x1b]133;D;0\x07`);
-    const list = await core.call("command.list", { spaceId: pane.spaceId });
+    const list = runs(pane.spaceId);
     expect(list.map((r) => r.command)).toEqual([null, "pwd", "ls"]);
-    expect(await core.call("command.list", { spaceId: "elsewhere" })).toEqual([]);
+    expect(runs("elsewhere")).toEqual([]);
   });
 
   it("keeps what a command printed, without escape sequences, as the event's content", async () => {
@@ -59,58 +64,46 @@ describe("command log", () => {
     const [e] = core.data.query({ types: ["command"] });
     expect(e).toMatchObject({ text: "pnpm test", until: expect.any(Number), data: { command: "pnpm test", exitCode: 0, output: { chars: 11, cut: false } } });
     expect(core.data.store.blob(e!.blob!)!.toString()).toBe("✓ 12 passed");
-    // A command log over the same store lists it after a restart.
-    const again = new CommandLog(core.panes, core.data);
-    expect(again.list().map((r) => r.command)).toEqual(["pnpm test"]);
+    expect(runs().map((r) => r.command)).toEqual(["pnpm test"]);
   });
 
   it("ends a run whose shell came back without D, or whose terminal closed", async () => {
     core.panes.create();
     const pty = ptys[0]!;
     pty.output("\x1b]133;C\x07\x1b]133;A\x07");
-    expect((await core.call("command.list", {}))[0]).toMatchObject({ exitCode: null });
-    expect((await core.call("command.list", {}))[0]!.endedAt).not.toBeNull();
+    expect((runs())[0]).toMatchObject({ exitCode: null });
+    expect((runs())[0]!.endedAt).not.toBeNull();
     pty.output("\x1b]133;C\x07");
     pty.exit(0);
-    expect((await core.call("command.list", {}))[0]!.endedAt).not.toBeNull();
+    expect((runs())[0]!.endedAt).not.toBeNull();
   });
 
   it("leaves out terminals cmd started an agent in", async () => {
     const agent = await core.call("agent.spawn", { kind: "claude" });
     expect(agent.paneId).toBeTruthy();
     ptys.at(-1)!.output("\x1b]133;C\x07\x1b]133;D;0\x07");
-    expect(await core.call("command.list", {})).toEqual([]);
-  });
-
-  it("broadcasts each change", () => {
-    const seen: string[] = [];
-    core.commands.on("updated", (r) => seen.push(r.endedAt === null ? "start" : "end"));
-    core.panes.create();
-    ptys[0]!.output("\x1b]133;C\x07\x1b]133;D;0\x07");
-    expect(seen).toEqual(["start", "end"]);
+    expect(runs()).toEqual([]);
   });
 });
 
 describe("notification log", () => {
-  it("keeps what was sent with its time, newest first, until cleared", async () => {
-    const cleared = vi.fn();
-    core.notifications.on("cleared", cleared);
+  it("records what was sent with its time, and Clear as a marker that keeps them", async () => {
     core.notifications.info("First", "one");
     core.notifications.info("Second", "two");
-    const list: AppNotification[] = await core.call("notify.list", {});
-    expect(list.map((n) => n.title)).toEqual(["Second", "First"]);
-    expect(list[0]!.at).toBeGreaterThan(0);
+    expect(notifications().map((n) => n.title)).toEqual(["Second", "First"]);
+    expect(notifications()[0]!.at).toBeGreaterThan(0);
     await core.call("notify.clear", {});
-    expect(await core.call("notify.list", {})).toEqual([]);
-    expect(cleared).toHaveBeenCalledOnce();
+    expect(core.data.query({ types: ["notification.clear"] })).toHaveLength(1);
+    expect(notifications()).toHaveLength(2);
   });
 
-  it("keeps the newest 200", async () => {
-    for (let i = 0; i < 205; i++) core.notifications.info(`n${i}`, "");
-    const list = await core.call("notify.list", {});
-    expect(list).toHaveLength(200);
-    expect(list[0]!.title).toBe("n204");
-    expect(list.at(-1)!.title).toBe("n5");
+  it("keeps the Space of the terminal it is about, even after the terminal is gone", async () => {
+    const space = core.spaces.open(fs.realpathSync(os.tmpdir())).space;
+    const pane = await core.call("pane.create", { spaceId: space.id });
+    core.notifications.send(pane.id, "From a terminal", "hi");
+    core.notifications.info("About nothing", "");
+    await core.call("pane.kill", { paneId: pane.id });
+    expect(notifications().map((n) => [n.title, n.spaceId])).toEqual([["About nothing", null], ["From a terminal", space.id]]);
   });
 });
 

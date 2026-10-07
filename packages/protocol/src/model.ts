@@ -92,6 +92,8 @@ export interface AppNotification {
   paneId: PaneId | null;
   /** The window it came from, when not a terminal (a widget). */
   windowId?: WindowId | null;
+  /** The Space of that terminal or window when it was sent; null: about nothing in particular (every Space). */
+  spaceId?: SpaceId | null;
   title: string;
   body: string;
   /** Show a system notification (false: only the attention marker / visual bell). */

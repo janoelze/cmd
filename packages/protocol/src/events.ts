@@ -7,7 +7,7 @@
 // payload's shape: raise its EVENT_V and add an upcaster in core/src/data/upcast.ts;
 // stored rows keep their `v`, readers see the current shape.
 
-import type { AgentKind, CommandRun, PaneId, SpaceId, WindowId } from "./model.ts";
+import type { AgentKind, AppNotification, CommandRun, PaneId, SpaceId, WindowId } from "./model.ts";
 import type { AgentTurn } from "./activity.ts";
 
 /** The events file's schema version (tables), not the payloads'. */
@@ -251,6 +251,12 @@ export function classOf(type: string): DataClass {
 export function commandRunOf(e: DataEvent): CommandRun {
   const d = e.data as EventPayloads["command"];
   return { id: e.id.replace(/^command:/, ""), paneId: e.paneId ?? "", spaceId: e.spaceId ?? "", command: d.command, cwd: d.cwd, startedAt: e.at, endedAt: e.until, exitCode: d.exitCode };
+}
+
+/** A notification event as the AppNotification the Notifications widget shows. */
+export function notificationOf(e: DataEvent): AppNotification {
+  const d = e.data as EventPayloads["notification"];
+  return { id: e.id.replace(/^notification:/, ""), source: d.source as AppNotification["source"], paneId: e.paneId, windowId: e.windowId, spaceId: e.spaceId, title: d.title, body: d.body, alert: d.alert ?? true, urgent: d.urgent, at: e.at };
 }
 
 export interface DataStats {

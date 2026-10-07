@@ -1,8 +1,9 @@
 // The Journal widget's window view: fetches the days Journal draws. What's
 // written shows at once (journal.days without writing); then the core writes
 // what changed since, which takes a model a few seconds, under a "Writing…"
-// line. Write Again rewrites today. Every 15 minutes it looks again, and when
-// AI gets set up. Without AI nothing is written: it says how to set it up.
+// line. Write Again rewrites today. It looks again when something it reads is
+// recorded (a live query), when the day turns, and when AI gets set up.
+// Without AI nothing is written: it says how to set it up.
 
 import { subscribeData } from "../store.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -14,7 +15,9 @@ import type { WindowViewProps } from "../windows/registry.ts";
 import { Journal } from "./Journal.tsx";
 
 const DAYS = 7;
-const REFRESH_MS = 15 * 60_000;
+
+/** How long until just after the next local midnight: a new day to show, and maybe a new week. */
+const untilTomorrow = () => new Date(new Date().setHours(24, 0, 5, 0)).getTime() - Date.now();
 
 export function JournalView({ win }: WindowViewProps) {
   const scope = scopeOf(win.state.scope);
@@ -57,8 +60,10 @@ export function JournalView({ win }: WindowViewProps) {
       clearTimeout(debounce);
       debounce = setTimeout(() => void load("stale"), 5000);
     });
-    const t = setInterval(() => void load("stale"), REFRESH_MS);
-    return () => (clearInterval(t), clearTimeout(debounce), off());
+    let t: ReturnType<typeof setTimeout>;
+    const tomorrow = () => (t = setTimeout(() => (void load("stale"), tomorrow()), untilTomorrow()));
+    tomorrow();
+    return () => (clearTimeout(t), clearTimeout(debounce), off());
   }, [load]);
 
   const repos = new Set((days ?? []).flatMap((d) => d.entries.map((e) => e.repo)));

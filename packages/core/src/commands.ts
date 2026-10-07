@@ -7,16 +7,11 @@
 // The Commands widget subscribes to those events. Terminals cmd started an
 // agent in are left out: the agent's own state says what it does.
 
-import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import type { CommandRun, PaneId, SpaceId } from "@cmd/protocol";
-import { commandRunOf } from "@cmd/protocol";
+import type { CommandRun, PaneId } from "@cmd/protocol";
 import type { DataService } from "./data/service.ts";
 import type { PaneManager } from "./panes.ts";
 import { projectIdOf } from "./data/project.ts";
-
-/** Finished runs the widget lists. */
-export const MAX_RUNS = 300;
 
 /** Escape sequences out of captured output: colours, cursor moves, OSC titles, carriage returns. */
 export const stripAnsi = (s: string) => s.replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]|\r/g, "");
@@ -28,7 +23,7 @@ export const stripAnsi = (s: string) => s.replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b\
  */
 export const commandOutput = (raw: string) => stripAnsi(raw).replace(/[%#⏎] {8,}[ \t]*$/, "").trimEnd();
 
-export class CommandLog extends EventEmitter<{ updated: [CommandRun] }> {
+export class CommandLog {
   #panes: PaneManager;
   #data: DataService | null;
   #running = new Map<PaneId, CommandRun>();
@@ -36,7 +31,6 @@ export class CommandLog extends EventEmitter<{ updated: [CommandRun] }> {
   #output = new Map<PaneId, string>();
 
   constructor(panes: PaneManager, data: DataService | null = null) {
-    super();
     this.#panes = panes;
     this.#data = data;
     panes.on("osc", (id, ev) => {
@@ -52,16 +46,9 @@ export class CommandLog extends EventEmitter<{ updated: [CommandRun] }> {
       if (run && run.command === null) {
         run.command = command;
         this.#record(run, null);
-        this.emit("updated", { ...run });
       }
     });
     panes.on("removed", (id) => this.#end(id, null));
-  }
-
-  /** Newest first, of one Space or all, from the log (runs in flight included: they're recorded when they start). */
-  list(spaceId?: SpaceId): CommandRun[] {
-    if (!this.#data) return [...this.#running.values()].sort((a, b) => b.startedAt - a.startedAt).map((r) => ({ ...r }));
-    return this.#data.query({ types: ["command"], spaceId, by: "time", order: "desc", limit: MAX_RUNS }).map(commandRunOf);
   }
 
   #start(id: PaneId): void {
@@ -71,7 +58,6 @@ export class CommandLog extends EventEmitter<{ updated: [CommandRun] }> {
     const run: CommandRun = { id: randomUUID(), paneId: id, spaceId: pane.spaceId, command: null, cwd: pane.cwd, startedAt: Date.now(), endedAt: null, exitCode: null };
     this.#running.set(id, run);
     this.#record(run, null);
-    this.emit("updated", { ...run });
   }
 
   #end(id: PaneId, exitCode: number | null): void {
@@ -83,7 +69,6 @@ export class CommandLog extends EventEmitter<{ updated: [CommandRun] }> {
     run.endedAt = Date.now();
     run.exitCode = exitCode;
     this.#record(run, output ? commandOutput(output) || null : null);
-    this.emit("updated", { ...run });
   }
 
   /** The run as it is now, into the log (the same id: an update). A run without a command line (bash without a preexec hook) is still a run. */

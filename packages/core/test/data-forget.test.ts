@@ -92,18 +92,19 @@ describe("agent events in the log", () => {
 });
 
 describe("the notification log", () => {
-  it("lists notifications from the log, newest first, and starts over after Clear", async () => {
+  it("records Clear as a marker after the notifications, which stay in the log", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
     const core = new Core({ socketPath: "", dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     try {
       core.notifications.send(null, "first", "one");
       core.notifications.send(null, "second", "two");
-      expect((await core.call("notify.list", {})).map((n) => n.title)).toEqual(["second", "first"]);
       await core.call("notify.clear", {});
       await new Promise((r) => setTimeout(r, 2));
       core.notifications.send(null, "third", "three");
-      expect((await core.call("notify.list", {})).map((n) => n.title)).toEqual(["third"]);
+      const [clear] = core.data.query({ types: ["notification.clear"] });
+      const after = core.data.query({ types: ["notification"], at: [clear!.at + 1, Number.MAX_SAFE_INTEGER] });
+      expect(after.map((e) => e.text)).toEqual(["third"]); // what the widget shows
       expect(core.data.query({ types: ["notification"] }).length).toBe(3); // cleared from the widget, kept in the log
     } finally {
       await core.close();
