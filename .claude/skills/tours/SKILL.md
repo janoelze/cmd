@@ -105,6 +105,7 @@ The `Tour` API (`src/driver.ts`): `click(target, { button, clicks })`, `hover(ta
 - **A parked pointer can hover things.** The pointer starts in the middle of the window; a palette or popover that opens under it highlights the item under the pointer. Wait for the option you mean (`selected: true`) before pressing Return.
 - **Find things by role and name**, never CSS classes: windows are `group "<name>, <kind>, <place>"`, the Navigator's sections are `tree "Windows"` with `treeitem`s, the palette is a `combobox` over `option`s, Files is `tree "Files"`, Settings rows name their controls. If something can't be found by role and name, fix its accessibility in the app (and `pnpm e2e:a11y` keeps it fixed), don't reach for a class.
 - **Don't script scrolling to reach things.** `click`/`hover` scroll the target into view themselves, visibly. Write `scroll` only when scrolling is the point of the shot.
+- **Typing moves the pointer toward the work**: before typing, if the pointer is far from the text cursor it drifts near it (beside it, not on it), and the spot is logged (a `typing` mark) so the automatic camera frames the typing instead of the pointer. `t.type(text, profile, { stay: true })` keeps the pointer where it is. Without this, the pointer sat on New… while the text appeared elsewhere, and the camera followed the pointer.
 - **Typing makes the odd typo** and fixes it (a neighbouring key, noticed a character or two later, backspaced): `TYPING.terminal` ~20% of 12+ character texts, `TYPING.field` ~35%. Use `TYPING.exact` when the next step depends on the text (a search whose result you wait for). Seeded, so a run's typos repeat with its `--seed`.
 - **Wait on the app, pace for people.** Wait for state with locators (`.waitFor()`); use `pause` only so viewers can follow (0.8–1.5 s on a result).
 - **Setup is unrecorded.** Put what the video shouldn't show (opening windows, getting into a state) in `meta.setup`.
@@ -147,12 +148,13 @@ ffmpeg -v error -ss 8.7 -i preview.mp4 -frames:v 1 -vf scale=1100:-1 frame.png
 node -e 'const e=require("./events.json"),m=require("./meta.json");for(const x of e.filter(x=>x.type==="down"))console.log(((x.t-m.t0)/1e9).toFixed(2),x.x,x.y)'   # click times
 ```
 
-Verify the pointer's tip sits on what it clicks, text is crisp, nothing personal is visible, and the shot reads.
+Verify the pointer's tip sits on what it clicks, text is crisp, nothing personal is visible, and the shot reads. **Check content, not just framing**: compare a frame of `tour.mp4` with `raw.mov` at the same moment (`plan.json` row n: output n/60 s shows source `frames[n][0]` s). A render once showed only `window.png` (the still taken before recording) for the whole video, because the renderer couldn't decode the recording, and frames that looked plausible one at a time hid it. Then run the dead-time check.
 
 When a run stops mid-way, the error says where (`no open menu item "Open"`, a locator timeout, `the mouse moved (it's at …, the tour left it at …)`). The recording up to there is in the run folder. Fix, then ask the user before running again.
 
 ## Working on the helper
 
+- The renderer decodes `raw.mov` with ffmpeg (software), piped in as BGRA with the frame times from `ffprobe`: in the sandbox VideoToolbox's *decoder* service is blocked (the probe's "video decoding" line; `learn` could allow it), and `AVAssetReader` then fails with "Cannot Decode". It stops with an error if no frames arrive.
 - Recording quality, measured on a strip swipe: ~57 fps delivered (ScreenCaptureKit sends a frame only when something changed), the longest gap 25 ms, never two frames missed in a row; post resamples to a steady 60. `raw.mov` is HEVC with B-frames, so frame timestamps come out of order: sort them before measuring gaps (and `-of csv` leaves a trailing comma on the first line).
 
 - Shortcuts are played like a keyboard: modifier keys down, the key, modifiers up (`key()`); typed characters set empty flags. Posting a key with the Command flag but no Command press left the event source thinking Command was held, and the text typed after `⌘K` went out as shortcuts.

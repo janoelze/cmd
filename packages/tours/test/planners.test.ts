@@ -207,3 +207,15 @@ describe("holds", async () => {
     expect(at(4.5)).toBeGreaterThan(1);
   });
 });
+
+describe("auto camera and typing", async () => {
+  const { autoCamera } = await import("../src/camera.ts");
+  it("frames where the text goes while typing, then follows the pointer again", () => {
+    const rect = { x: 100, y: 800, w: 600, h: 160 };
+    const ev = [{ s: 2, type: "down" }, { s: 2.5, type: "typing", rect }, ...[2.6, 2.7, 2.8, 2.9, 3.0].map((s) => ({ s, type: "char" })), { s: 4.5, type: "down" }, { s: 5, type: "down" }];
+    const marks = autoCamera(ev, 10);
+    const focus = marks.find((m) => m.mode === "focus");
+    expect(focus?.rect).toEqual(rect);
+    expect(marks.find((m) => m.mode === "follow" && m.s > focus!.s)).toBeTruthy();
+  });
+});

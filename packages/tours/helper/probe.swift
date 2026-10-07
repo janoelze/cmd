@@ -1,13 +1,14 @@
 // Checks what a tour recording needs from macOS, one capability a line:
 // Accessibility (to post input and read native menus), Screen Recording,
-// ScreenCaptureKit (list windows, grab one frame), posting an input event and
-// encoding video (VideoToolbox).
+// ScreenCaptureKit (list windows, grab one frame), posting an input event, and
+// encoding and decoding video (VideoToolbox).
 // Exits non-zero if any fails. --request asks macOS for the permissions
 // (the prompt names the app the command runs in, e.g. cmd).
 // Build: swiftc -O probe.swift -o probe
 
 import ApplicationServices
 import Cocoa
+import AVFoundation
 import ScreenCaptureKit
 import VideoToolbox
 
@@ -57,6 +58,40 @@ do {
     VTCompressionSessionInvalidate(session)
   }
   report("video encoding", st == noErr, st == noErr ? "HEVC" : "VideoToolbox \(st)")
+}
+
+// Reading a recording back (AVAssetReader) goes through VideoToolbox's decoder service: write a
+// one-frame movie, then decode it. (The renderer decodes with ffmpeg instead, so this is about speed.)
+do {
+  let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("cmd-probe-\(getpid()).mov")
+  try? FileManager.default.removeItem(at: url)
+  var ok = false, why = ""
+  if let w = try? AVAssetWriter(outputURL: url, fileType: .mov) {
+    let input = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.hevc, AVVideoWidthKey: 64, AVVideoHeightKey: 64])
+    let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: nil)
+    w.add(input)
+    w.startWriting()
+    w.startSession(atSourceTime: .zero)
+    var pb: CVPixelBuffer?
+    CVPixelBufferCreate(nil, 64, 64, kCVPixelFormatType_32BGRA, nil, &pb)
+    if let pb { adaptor.append(pb, withPresentationTime: .zero) }
+    input.markAsFinished()
+    let sem = DispatchSemaphore(value: 0)
+    w.finishWriting { sem.signal() }
+    sem.wait()
+    let asset = AVURLAsset(url: url)
+    if let track = asset.tracks(withMediaType: .video).first, let reader = try? AVAssetReader(asset: asset) {
+      let out = AVAssetReaderTrackOutput(track: track, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+      reader.add(out)
+      reader.startReading()
+      ok = out.copyNextSampleBuffer() != nil
+      why = reader.error?.localizedDescription ?? (ok ? "" : "no frame")
+    } else {
+      why = "couldn't write the test movie: \(w.error?.localizedDescription ?? "?")"
+    }
+  }
+  try? FileManager.default.removeItem(at: url)
+  report("video decoding", ok, ok ? "HEVC" : why)
 }
 
 let done = DispatchSemaphore(value: 0)

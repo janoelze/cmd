@@ -263,8 +263,46 @@ export class Tour {
     await sleep(between(this.r, ...PACE.after));
   }
 
-  /** Types into whatever has focus. */
-  async type(text: string, profile: TypingProfile = TYPING.terminal) {
+  /**
+   * Where typing goes, on screen: the text cursor's spot (xterm's hidden
+   * textarea sits at the terminal's cursor; editors have a selection; fields
+   * their box), widened a little so it reads as a place, not a point.
+   */
+  private async caretBox(): Promise<Box | null> {
+    const b = await this.page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el || el === document.body) return null;
+      let r: DOMRect | null = null;
+      if (el.isContentEditable) {
+        const sel = getSelection();
+        if (sel?.rangeCount) r = sel.getRangeAt(0).getBoundingClientRect();
+      }
+      if (!r || (r.width === 0 && r.height === 0)) r = el.getBoundingClientRect();
+      // A terminal's or editor's line: some room to the right for what's typed, a few lines around it.
+      const host = el.closest('[role="group"][aria-label]')?.getBoundingClientRect();
+      const w = Math.min(host?.width ?? 600, 640);
+      const x = Math.max(host?.left ?? r.left, Math.min(r.left - 40, (host?.right ?? r.left + w) - w));
+      return { x, y: r.top - 60, width: w, height: Math.max(r.height, 20) + 120 };
+    });
+    return b ? this.onScreen(b) : null;
+  }
+
+  /**
+   * Types into whatever has focus. Before typing, the pointer drifts near the
+   * text cursor if it's far from it (people do, and it keeps the shot on the
+   * work), and the spot is logged so the automatic camera frames the typing.
+   * `{ stay: true }` leaves the pointer where it is.
+   */
+  async type(text: string, profile: TypingProfile = TYPING.terminal, o: { stay?: boolean } = {}) {
+    const caret = await this.caretBox().catch(() => null);
+    if (caret) {
+      await this.helper.call("mark", { type: "typing", rect: [caret.x, caret.y, caret.width, caret.height] });
+      const near = { x: caret.x + caret.width * 0.75, y: caret.y + caret.height + 40 };
+      const w = await this.windowBox();
+      near.x = Math.min(Math.max(near.x, w.x + 30), w.x + w.width - 30);
+      near.y = Math.min(Math.max(near.y, w.y + 50), w.y + w.height - 50);
+      if (!o.stay && Math.hypot(near.x - this.at.x, near.y - this.at.y) > 280) await this.moveTo(near, 200);
+    }
     const k = planKeys(text, this.r, profile);
     await this.helper.call("type", { text: k.keys, delays: k.delays });
   }

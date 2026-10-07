@@ -147,6 +147,13 @@ export function idleSegments(events: { t: number; type: string }[], t0: number, 
   return timeSegments(inputs, [], duration, { idle: speed });
 }
 
+/** Each frame's time in a recording, seconds from the first, in presentation order (HEVC stores them out of order). */
+export function frameTimes(video: string): number[] {
+  const out = execFileSync("ffprobe", ["-v", "error", "-select_streams", "v", "-show_entries", "frame=pts_time", "-of", "csv=p=0", video], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const t = out.split("\n").map((l) => parseFloat(l)).filter((n) => !Number.isNaN(n)).sort((a, b) => a - b);
+  return t.map((x) => Math.round((x - t[0]!) * 1e6) / 1e6);
+}
+
 /** Where the recording is frozen (nothing on screen changing beyond noise), [start, end] seconds. */
 export function frozenStretches(video: string, duration: number): [number, number][] {
   // freezedetect reports on stderr; small changes (a blinking caret, a spinner) stay under its noise floor.
@@ -270,7 +277,7 @@ export function render(dir: string, o: PostOptions = {}): string {
 
   // Time: output seconds map to source seconds (waiting sped up, if asked).
   const duration = (meta.t1 - meta.t0) / 1e9;
-  const inputs = events.filter((e) => !["cursor", "camera", "hold"].includes(e.type)).map((e) => (e.t - meta.t0) / 1e9);
+  const inputs = events.filter((e) => !["cursor", "camera", "hold", "typing"].includes(e.type)).map((e) => (e.t - meta.t0) / 1e9);
   const frozen = o.tighten !== false ? frozenStretches(path.join(dir, "raw.mov"), duration) : [];
   // Deliberate pauses (t.pause), kept whole.
   const holds = events.filter((e) => e.type === "hold").map((e) => {
@@ -295,7 +302,16 @@ export function render(dir: string, o: PostOptions = {}): string {
       return { s: time.output(sec(e)), mode: e.mode!, zoom: e.zoom, rect: r ? { x: r.x, y: r.y, w: e.rect![2]! * S, h: e.rect![3]! * S } : undefined };
     });
   if (o.follow) marks.unshift({ s: 0, mode: "follow", zoom: o.follow });
-  if (o.camera === "auto" && !marks.length) marks.push(...autoCamera(events.map((e) => ({ s: time.output(sec(e)), type: e.type })), time.length));
+  if (o.camera === "auto" && !marks.length)
+    marks.push(
+      ...autoCamera(
+        events.map((e) => {
+          const r = e.type === "typing" && e.rect ? toCanvas({ x: e.rect[0]!, y: e.rect[1]! }) : null;
+          return { s: time.output(sec(e)), type: e.type, rect: r ? { x: r.x, y: r.y, w: e.rect![2]! * S, h: e.rect![3]! * S } : undefined };
+        }),
+        time.length,
+      ),
+    );
   const views = marks.length ? cameraPath(frames, FPS, { w: cw, h: ch }, marks, (u) => pointer(time.source(u))) : null;
 
   // The plan: per output frame, what to show where (helper/render.swift draws it).
@@ -324,6 +340,8 @@ export function render(dir: string, o: PostOptions = {}): string {
     height: outH,
     canvas: [cw, ch],
     video: path.join(dir, "raw.mov"),
+    videoSize: [meta.width, meta.height],
+    videoFrames: frameTimes(path.join(dir, "raw.mov")),
     window: [cx, cy, meta.width, meta.height],
     mask,
     wallpaper: { path: wall, ...desk },

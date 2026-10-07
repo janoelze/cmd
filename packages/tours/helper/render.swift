@@ -21,6 +21,9 @@ struct Plan: Decodable {
   let height: Int
   let canvas: [Double] // w, h
   let video: String
+  /** The recording's frames: pixel size, and each frame's time in seconds from the first (sorted). */
+  let videoSize: [Int]
+  let videoFrames: [Double]
   let window: [Double] // x, y, w, h: where the recording goes on the canvas
   let mask: String
   struct Box: Decodable { let path: String; let x: Double; let y: Double; let w: Double; let h: Double }
@@ -69,21 +72,46 @@ var cursorImages: [Int: CIImage] = [:]
 for (id, c) in plan.cursors { cursorImages[Int(id)!] = scaled(image(c.path), w: c.w, h: c.h) }
 let ring = plan.ring.map { image($0) }
 
-// The recording, read in order; each output frame shows the newest frame at its source time.
-let asset = AVURLAsset(url: URL(fileURLWithPath: plan.video))
-guard let track = asset.tracks(withMediaType: .video).first, let reader = try? AVAssetReader(asset: asset) else { fail("can't read \(plan.video)") }
-let readerOut = AVAssetReaderTrackOutput(track: track, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
-readerOut.alwaysCopiesSampleData = false
-reader.add(readerOut)
-reader.startReading()
+// The recording, decoded by ffmpeg (in software: VideoToolbox's decoder service can be out of reach,
+// in a sandbox, and AVAssetReader then just says "Cannot Decode") and piped in as BGRA frames, in
+// presentation order; the plan has their times. Each output frame shows the newest frame at its time.
+let (vw, vh) = (plan.videoSize[0], plan.videoSize[1])
+let frameBytes = vw * vh * 4
+let decoder = Process()
+decoder.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+decoder.arguments = ["ffmpeg", "-v", "error", "-i", plan.video, "-f", "rawvideo", "-pix_fmt", "bgra", "-fps_mode", "passthrough", "-"]
+let pipe = Pipe()
+decoder.standardOutput = pipe
+// Stopped once the plan is drawn: its "Broken pipe" on the way out is expected, not news.
+decoder.standardError = FileHandle.nullDevice
+do { try decoder.run() } catch { fail("ffmpeg: \(error)") }
+let stream = pipe.fileHandleForReading
+var next = 0 // index of the next frame in the pipe
 var current: CIImage?
-var pending: CMSampleBuffer? = readerOut.copyNextSampleBuffer()
-func frame(at s: Double) -> CIImage? {
-  while let p = pending, CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(p)) <= s + 1e-4 {
-    if let buf = CMSampleBufferGetImageBuffer(p) { current = CIImage(cvImageBuffer: buf) }
-    pending = readerOut.copyNextSampleBuffer()
+func readFrame() -> CIImage? {
+  var data = Data(capacity: frameBytes)
+  while data.count < frameBytes {
+    guard let chunk = try? stream.read(upToCount: frameBytes - data.count), !chunk.isEmpty else { return nil }
+    data.append(chunk)
   }
-  if current == nil, let p = pending, let buf = CMSampleBufferGetImageBuffer(p) { current = CIImage(cvImageBuffer: buf) }
+  var pb: CVPixelBuffer?
+  CVPixelBufferCreate(nil, vw, vh, kCVPixelFormatType_32BGRA, [kCVPixelBufferIOSurfacePropertiesKey as String: [:]] as CFDictionary, &pb)
+  guard let pb else { return nil }
+  CVPixelBufferLockBaseAddress(pb, [])
+  let dst = CVPixelBufferGetBaseAddress(pb)!
+  let stride = CVPixelBufferGetBytesPerRow(pb)
+  data.withUnsafeBytes { src in
+    for row in 0..<vh { memcpy(dst + row * stride, src.baseAddress! + row * vw * 4, vw * 4) }
+  }
+  CVPixelBufferUnlockBaseAddress(pb, [])
+  return CIImage(cvPixelBuffer: pb)
+}
+func frame(at s: Double) -> CIImage? {
+  while next < plan.videoFrames.count, plan.videoFrames[next] <= s + 1e-4 || current == nil {
+    guard let f = readFrame() else { break }
+    current = f
+    next += 1
+  }
   return current
 }
 
@@ -115,7 +143,8 @@ for (n, f) in plan.frames.enumerated() {
   guard f.count >= 11 else { continue }
   autoreleasepool {
     var img = background
-    if let v = frame(at: f[0]) {
+    guard let v = frame(at: f[0]) else { fail("no frames from the recording (\(plan.video))") }
+    do {
       let video = place(scaled(v, w: ww, h: wh), x: wx, y: wy)
       img = video.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: img, kCIInputMaskImageKey: mask])
     }
@@ -141,6 +170,7 @@ for (n, f) in plan.frames.enumerated() {
   }
   if n % 300 == 0 { FileHandle.standardError.write("frame \(n)/\(plan.frames.count)\n".data(using: .utf8)!) }
 }
+decoder.terminate()
 input.markAsFinished()
 let done = DispatchSemaphore(value: 0)
 writer.finishWriting { done.signal() }

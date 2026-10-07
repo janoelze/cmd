@@ -115,6 +115,8 @@ export function cameraPath(
 export interface CameraInput {
   s: number;
   type: string;
+  /** "typing" marks: where the text goes (canvas px). */
+  rect?: { x: number; y: number; w: number; h: number };
 }
 
 export const AUTO = {
@@ -140,7 +142,7 @@ export const AUTO = {
  */
 export function autoCamera(inputs: CameraInput[], duration: number, a: typeof AUTO = AUTO): CameraMark[] {
   const marks: CameraMark[] = [];
-  const work = inputs.filter((e) => ["down", "char", "key"].includes(e.type)).map((e) => e.s);
+  const work = inputs.filter((e) => ["down", "char", "key", "typing"].includes(e.type)).map((e) => e.s);
   const scrolls = inputs.filter((e) => e.type === "scroll").map((e) => e.s);
   // Bursts of work, split wherever a scroll happens in between.
   const bursts: [number, number][] = [];
@@ -161,6 +163,17 @@ export function autoCamera(inputs: CameraInput[], duration: number, a: typeof AU
   }
   for (const [from, to] of joined) {
     marks.push({ s: Math.max(a.opening, from - a.lead), mode: "follow", zoom: a.zoom });
+    // Typing: frame where the text goes until the typing stops, then follow the pointer again.
+    for (const ty of inputs.filter((e) => e.type === "typing" && e.rect && e.s >= from - a.lead && e.s <= to)) {
+      const chars = inputs.filter((e) => e.type === "char" && e.s >= ty.s);
+      let end = ty.s;
+      for (const c of chars) {
+        if (c.s - end > 1.2) break;
+        end = c.s;
+      }
+      marks.push({ s: Math.max(a.opening, ty.s - 0.2), mode: "focus", rect: ty.rect, zoom: a.zoom });
+      if (end + 0.6 < to + a.linger) marks.push({ s: end + 0.6, mode: "follow", zoom: a.zoom });
+    }
     marks.push({ s: Math.min(duration, to + a.linger), mode: "fit" });
   }
   // Scrolling wins: whole window from just before a gesture to its end.
