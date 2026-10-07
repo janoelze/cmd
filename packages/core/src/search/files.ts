@@ -186,11 +186,21 @@ export class FileSearch {
     });
 
     const [byName] = await Promise.all([names, grep]);
-    // Nearer files first (fewer folders deep), then by path; a file's lines stay in order.
+    // Where it's defined first (what you're usually after), then nearer files (fewer
+    // folders deep), then by path; a file's lines stay in order.
     const depth = (p: string) => p.split("/").length;
-    contents.sort((a, b) => depth(a.path) - depth(b.path) || a.path.localeCompare(b.path) || a.line! - b.line!);
+    const defines = (h: FileHit) => (h.text && definesIt(h.text.replace(/[\x01\x02]/g, ""), q) ? 0 : 1);
+    contents.sort((a, b) => defines(a) - defines(b) || depth(a.path) - depth(b.path) || a.path.localeCompare(b.path) || a.line! - b.line!);
     return [...byName, ...contents];
   }
+}
+
+/** The line defines what was typed, from its start: `export function useFind`, `class SearchView`, `const SEARCH =`, `def search`, `## Search`. */
+export function definesIt(line: string, q: string): boolean {
+  const name = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const lead = "(export\\s+(default\\s+)?)?(async\\s+)?(pub(\\(\\w+\\))?\\s+)?";
+  const kinds = "function\\*?|class|interface|type|enum|const|let|var|def|fn|func|struct|trait|impl|module";
+  return new RegExp(`^(${lead}(${kinds})\\s+${name}\\b|#+\\s+${name})`, "i").test(line.trim());
 }
 
 const isSecret = (rel: string) => {

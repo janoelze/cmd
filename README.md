@@ -94,7 +94,7 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 | ⇧⌘A | copy the last command's output |
 | ⌥-drag | select text in programs that use the mouse |
 | ⇧⌘1 / ⇧⌘2 | canvas: fit all / zoom to the selected window |
-| ⇧⌘F | search open windows and past sessions (the palette, with `?`) |
+| ⇧⌘F | search the Space: open windows, files (names and lines), past sessions, commands and what they printed, pages (the palette, with `?`) |
 | ⌃⌘S | show or hide the sidebar |
 | ⌘, | settings |
 

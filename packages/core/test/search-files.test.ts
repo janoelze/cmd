@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
-import { FileSearch, markMatches, nameScore } from "../src/search/files.ts";
+import { definesIt, FileSearch, markMatches, nameScore } from "../src/search/files.ts";
 import { DataService } from "../src/data/service.ts";
 import { ViewsStore } from "../src/data/views/views.ts";
 import { SessionsView } from "../src/data/views/sessions.ts";
@@ -46,6 +46,16 @@ describe("file search", () => {
     expect(nameScore("src/search/query.ts", ["query"])).toBeGreaterThan(nameScore("src/query/search.ts", ["query"]));
     expect(nameScore("src/a.ts", ["query"])).toBe(0);
     expect(markMatches("Find it, find it", "find")).toBe("\x01Find\x02 it, \x01find\x02 it");
+  });
+
+  it("knows a line that defines what was typed, which comes first", async () => {
+    expect(definesIt("export function useFind(f: Findable) {", "useFind")).toBe(true);
+    expect(definesIt("const find = useFind(findable);", "useFind")).toBe(false);
+    expect(definesIt('expect(definesIt("export function useFind", "useFind"))', "useFind")).toBe(false);
+    expect(definesIt("pub(crate) fn search(q: &str)", "search")).toBe(true);
+    expect(definesIt("## Search", "search")).toBe(true);
+    const lines = (await new FileSearch({ excluded: () => [] }).search(root, "SearchQuery")).filter((h) => h.line !== null);
+    expect(lines[0]!.path.endsWith("query.ts")).toBe(true);
   });
 });
 

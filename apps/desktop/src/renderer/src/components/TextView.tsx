@@ -291,7 +291,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
       if (at >= 0) (from = line.from + at), (to = from + reveal.text.length);
       shareFindQuery(reveal.text);
     }
-    v.dispatch({ selection: EditorSelection.range(from, to), effects: EditorView.scrollIntoView(from, { y: "center" }) });
+    v.dispatch({ selection: EditorSelection.range(from, to), effects: EditorView.scrollIntoView(EditorSelection.range(from, to), { y: "center" }) });
     v.focus();
   }, [loaded, reveal?.at]); // eslint-disable-line react-hooks/exhaustive-deps
 

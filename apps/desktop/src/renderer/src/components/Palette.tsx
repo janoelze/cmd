@@ -258,7 +258,7 @@ export function Palette({
                 <kbd>↑↓</kbd> move
               </span>
               <span>
-                <kbd>↵</kbd> {searching ? "open or resume" : "run"}
+                <kbd>↵</kbd> {searching ? "open" : "run"}
               </span>
               {searching ? (
                 <span className="palette-status">
