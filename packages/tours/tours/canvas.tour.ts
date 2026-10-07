@@ -37,34 +37,34 @@ export const meta: TourMeta = {
 export default async function (t: Tour) {
   const p = t.page;
   const main = p.getByRole("main");
-  await t.pause(900);
+  await t.pause(500);
 
   // 1. Pan around with two fingers, over empty canvas.
   await t.pan(420, 220);
-  await t.pause(700);
+  await t.pause(400);
   await t.pan(-600, -120);
-  await t.pause(700);
+  await t.pause(400);
 
   // 2. Zoom out to see everything (⌘-scroll), then fit with ⇧⌘1.
   await t.zoom(-500);
-  await t.pause(900);
+  await t.pause(500);
   await t.press("1", "shift", "cmd");
-  await t.pause(1300);
+  await t.pause(800);
 
   // 3. Move a window: drag the standup notes by their title.
   const notes = main.getByRole("group", { name: /^standup\.md/ });
   const terminal = main.getByRole("group", { name: /^zsh/ });
   await t.dragBy(notes.getByText(/^standup\.md$/).first(), -220, 140);
-  await t.pause(900);
+  await t.pause(500);
 
   // 4. Fly to a window: double-click its title.
   await t.click(terminal.getByText(/^zsh$/).first(), { clicks: 2 });
-  await t.pause(1400);
+  await t.pause(800);
 
   // 5. Work there.
   await t.click(terminal);
   await t.type("git status --short && ls\n");
   await t.waitForText(terminal, /README\.md/);
   await t.away();
-  await t.pause(1500);
+  await t.pause(1000);
 }

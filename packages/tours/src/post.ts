@@ -8,11 +8,11 @@
 //   frame where the log says and in the shape the system showed (arrow,
 //   I-beam, resize…) → 60 fps H.264
 //
-//   node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920] [--follow 1.6] [--auto-camera]
+//   node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920] [--follow 1.6] [--auto-camera] [--real-time]
 //
 // No smoothing: the driver's paths are already human; a real recording has none.
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -25,6 +25,8 @@ interface Ev {
   mode?: CameraMark["mode"];
   rect?: number[];
   zoom?: number;
+  /** A hold's length (t.pause), ms. */
+  ms?: number;
   x?: number;
   y?: number;
   id?: number;
@@ -59,6 +61,11 @@ export interface PostOptions {
    * recording doesn't do it, a product video often does.
    */
   idle?: number;
+  /**
+   * Cut dead time: stretches with no input and nothing changing on screen shrink to 0.3 s.
+   * On by default (a tour's pauses and waits add up); false keeps real time.
+   */
+  tighten?: boolean;
   /** Follow the pointer the whole video at this zoom (tours mark the camera with t.camera instead). */
   follow?: number;
   /** "auto": zoom in on bursts of clicking and typing, whole window while scrolling (camera.ts autoCamera); a tour's own t.camera marks win. */
@@ -69,23 +76,89 @@ export interface PostOptions {
 const IDLE_FROM = 3;
 /** Real-time time kept at each end of a sped-up stretch, seconds. */
 const IDLE_KEEP = 0.9;
+/** Dead time (no input, nothing changing on screen) longer than this is cut down to DEAD_KEEP, seconds. */
+const DEAD_FROM = 0.6;
+const DEAD_KEEP = 0.3;
+/** Real time kept around an input before dead time starts or after it ends, seconds. */
+const DEAD_MARGIN = 0.15;
 
-/** The video's segments [start, end, speed] (seconds): input-free stretches sped up, the rest real-time. */
-export function idleSegments(events: { t: number; type: string }[], t0: number, duration: number, speed: number): [number, number, number][] {
-  const inputs = events.filter((e) => e.type !== "cursor").map((e) => (e.t - t0) / 1e9).filter((t) => t >= 0 && t <= duration);
-  const marks = [0, ...inputs, duration];
-  const out: [number, number, number][] = [];
-  let at = 0;
-  for (let i = 1; i < marks.length; i++) {
-    const a = marks[i - 1]!, b = marks[i]!;
-    if (b - a < IDLE_FROM) continue;
-    const fastFrom = a + IDLE_KEEP, fastTo = b - IDLE_KEEP;
-    if (fastFrom > at) out.push([at, fastFrom, 1]);
-    out.push([fastFrom, fastTo, speed]);
-    at = fastTo;
+/**
+ * How fast each part of the recording plays: [start, end, speed] in source
+ * seconds, covering it all. Dead time (no input and a frozen screen) shrinks
+ * to DEAD_KEEP; with `idle`, input-free stretches where something still
+ * happens (an agent's output streaming in) play `idle` times faster, their
+ * ends real-time; everything else is real-time.
+ */
+export function timeSegments(inputs: number[], frozen: [number, number][], duration: number, o: { idle?: number; tighten?: boolean; holds?: [number, number][] } = {}): [number, number, number][] {
+  const ins = inputs.filter((t) => t >= 0 && t <= duration).sort((a, b) => a - b);
+  const fast: [number, number, number][] = [];
+  if (o.idle && o.idle > 1) {
+    const marks = [0, ...ins, duration];
+    for (let i = 1; i < marks.length; i++) {
+      const a = marks[i - 1]!, b = marks[i]!;
+      if (b - a >= IDLE_FROM) fast.push([a + IDLE_KEEP, b - IDLE_KEEP, o.idle]);
+    }
   }
-  if (at < duration) out.push([at, duration, 1]);
-  return out.filter(([a, b]) => b - a > 0.02);
+  const holds = (o.holds ?? []).slice().sort((a, b) => a[0] - b[0]);
+  if (o.tighten !== false) {
+    // A deliberate pause (t.pause: a hold) is never cut: take holds out of the frozen stretches.
+    const unheld: [number, number][] = [];
+    for (const [fa, fb] of frozen) {
+      let at = fa;
+      for (const [ha, hb] of holds) {
+        if (hb <= at || ha >= fb) continue;
+        if (ha > at) unheld.push([at, ha]);
+        at = Math.max(at, hb);
+      }
+      if (at < fb) unheld.push([at, fb]);
+    }
+    for (const [fa, fb] of unheld) {
+      // Split at inputs inside the frozen stretch; keep a little real time around each.
+      const cuts = [fa, ...ins.filter((t) => t > fa && t < fb), fb];
+      const nearInput = (t: number) => ins.some((x) => Math.abs(x - t) < 0.05);
+      for (let i = 1; i < cuts.length; i++) {
+        const a = cuts[i - 1]! + (nearInput(cuts[i - 1]!) ? DEAD_MARGIN : 0);
+        const b = cuts[i]! - (nearInput(cuts[i]!) ? DEAD_MARGIN : 0);
+        if (b - a > DEAD_FROM) fast.push([a, b, (b - a) / DEAD_KEEP]);
+      }
+    }
+  }
+  // Sweep: each piece plays at the fastest speed asked for it, neighbours of the same speed merge.
+  const edges = [...new Set([0, duration, ...fast.flatMap(([a, b]) => [a, b])])].filter((t) => t >= 0 && t <= duration).sort((a, b) => a - b);
+  const out: [number, number, number][] = [];
+  for (let i = 1; i < edges.length; i++) {
+    const a = edges[i - 1]!, b = edges[i]!;
+    if (b - a < 1e-6) continue;
+    const mid = (a + b) / 2;
+    // A dead stretch's speed shrinks the whole stretch: spread it over this piece by its share.
+    // A hold plays in real time, whatever else asks for speed.
+    const held = holds.some(([ha, hb]) => mid > ha && mid < hb);
+    const k = held ? 1 : Math.max(1, ...fast.filter(([fa, fb]) => mid > fa && mid < fb).map(([, , sp]) => sp));
+    const last = out.at(-1);
+    if (last && Math.abs(last[2] - k) < 1e-9) last[1] = b;
+    else out.push([a, b, k]);
+  }
+  return out;
+}
+
+/** The old name: idle stretches only. */
+export function idleSegments(events: { t: number; type: string }[], t0: number, duration: number, speed: number): [number, number, number][] {
+  const inputs = events.filter((e) => e.type !== "cursor").map((e) => (e.t - t0) / 1e9);
+  return timeSegments(inputs, [], duration, { idle: speed });
+}
+
+/** Where the recording is frozen (nothing on screen changing beyond noise), [start, end] seconds. */
+export function frozenStretches(video: string, duration: number): [number, number][] {
+  // freezedetect reports on stderr; small changes (a blinking caret, a spinner) stay under its noise floor.
+  const { stderr } = spawnSync("ffmpeg", ["-hide_banner", "-i", video, "-vf", "scale=320:-1,freezedetect=n=0.02:d=0.4", "-map", "0:v", "-f", "null", "-"], { encoding: "utf8" });
+  const out: [number, number][] = [];
+  let start: number | null = null;
+  for (const m of stderr.matchAll(/freeze_(start|end): ([\d.]+)/g)) {
+    if (m[1] === "start") start = Number(m[2]);
+    else if (start !== null) (out.push([start, Number(m[2])]), (start = null));
+  }
+  if (start !== null) out.push([start, duration]);
+  return out;
 }
 
 const ASSETS = path.join(import.meta.dirname, "..", "assets");
@@ -192,7 +265,14 @@ export function render(dir: string, o: PostOptions = {}): string {
 
   // Time: output seconds map to source seconds (waiting sped up, if asked).
   const duration = (meta.t1 - meta.t0) / 1e9;
-  const segments = o.idle && o.idle > 1 ? idleSegments(events, meta.t0, duration, o.idle) : [[0, duration, 1] as [number, number, number]];
+  const inputs = events.filter((e) => !["cursor", "camera", "hold"].includes(e.type)).map((e) => (e.t - meta.t0) / 1e9);
+  const frozen = o.tighten !== false ? frozenStretches(path.join(dir, "raw.mov"), duration) : [];
+  // Deliberate pauses (t.pause), kept whole.
+  const holds = events.filter((e) => e.type === "hold").map((e) => {
+    const a = (e.t - meta.t0) / 1e9;
+    return [a, a + (e.ms ?? 0) / 1000] as [number, number];
+  });
+  const segments = timeSegments(inputs, frozen, duration, { idle: o.idle, tighten: o.tighten, holds });
   const time = timeMap(segments.length ? segments : [[0, duration, 1]]);
   const frames = Math.floor(time.length * FPS) + 1;
   const sec = (e: Ev) => (e.t - meta.t0) / 1e9;
@@ -262,12 +342,12 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const args = process.argv.slice(2);
   const dir = args.find((a) => !a.startsWith("--"));
   if (!dir) {
-    console.log("usage: node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920] [--follow 1.6] [--auto-camera]");
+    console.log("usage: node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920] [--follow 1.6] [--auto-camera] [--real-time]");
     process.exit(2);
   }
   const opt = (k: string) => {
     const i = args.indexOf(k);
     return i >= 0 ? args[i + 1] : undefined;
   };
-  console.log(render(path.resolve(dir), { wallpaper: opt("--wallpaper"), cursor: opt("--cursor") ? Number(opt("--cursor")) : undefined, clicks: args.includes("--clicks"), idle: opt("--idle") ? Number(opt("--idle")) : undefined, width: opt("--width") ? Number(opt("--width")) : undefined, follow: opt("--follow") ? Number(opt("--follow")) : undefined, camera: args.includes("--auto-camera") ? "auto" : undefined }));
+  console.log(render(path.resolve(dir), { wallpaper: opt("--wallpaper"), cursor: opt("--cursor") ? Number(opt("--cursor")) : undefined, clicks: args.includes("--clicks"), idle: opt("--idle") ? Number(opt("--idle")) : undefined, width: opt("--width") ? Number(opt("--width")) : undefined, follow: opt("--follow") ? Number(opt("--follow")) : undefined, camera: args.includes("--auto-camera") ? "auto" : undefined, tighten: !args.includes("--real-time") }));
 }

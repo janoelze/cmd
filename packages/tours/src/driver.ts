@@ -14,9 +14,10 @@ import { planKeys, TYPING, type TypingProfile } from "./typing.ts";
 
 /** Pacing for viewers, ms. */
 export const PACE = {
-  hover: [150, 400] as [number, number],
+  hover: [120, 300] as [number, number],
   hold: [80, 130] as [number, number],
-  after: [300, 800] as [number, number],
+  /** After a click, before the next step (a tour's own t.pause is for viewers to read). */
+  after: [180, 400] as [number, number],
   /** Keep this far from a scroll container's edges when revealing, px. */
   margin: 32,
 };
@@ -381,7 +382,13 @@ export class Tour {
     throw new Error(`terminal never showed ${re}`);
   }
 
+  /**
+   * A deliberate pause, for viewers (to read a result, to see a change land):
+   * marked in the log so post keeps it, while it cuts time spent waiting on
+   * the app. Waits (waitFor, waitForText) aren't marked and get cut.
+   */
   async pause(ms: number) {
+    await this.helper.call("mark", { type: "hold", ms });
     await sleep(ms);
   }
 }

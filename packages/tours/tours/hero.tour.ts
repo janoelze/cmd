@@ -33,7 +33,7 @@ export const meta: TourMeta = {
 export default async function (t: Tour) {
   const p = t.page;
   const main = p.getByRole("main");
-  await t.pause(900);
+  await t.pause(500);
 
   // A Claude session, from New…: it joins the strip at the end.
   await t.click(p.getByRole("button", { name: "New…" }));
@@ -42,30 +42,31 @@ export default async function (t: Tour) {
   await t.press("Return");
   const claude = main.getByRole("group", { name: /claude/i }).last();
   await t.waitForText(claude, /\? for shortcuts|auto mode/i, 30_000);
-  await t.pause(500);
+  await t.pause(300);
   await t.type("make renderTrip render the stops it's given instead of the hardcoded string, and add a test. don't run anything", TYPING.field);
-  await t.pause(400);
+  await t.pause(250);
   await t.press("Return");
-  await t.pause(1200);
+  await t.pause(600);
 
   // Live Diff next to it, on atlas.
   await t.click(p.getByRole("button", { name: "New…" }));
   await t.type("live diff", TYPING.exact);
   await p.getByRole("option", { name: /Live Diff/, selected: true }).waitFor();
   await t.press("Return");
-  await t.pause(800);
+  await t.pause(400);
 
   // Watch: swipe back to the agent, then along to the diff as it fills.
   const w = await t.windowBox();
   await t.moveTo({ x: w.x + w.width * 0.6, y: w.y + w.height * 0.55 });
   await t.swipe(-700);
-  await t.pause(2500);
+  await t.pause(1200);
   const agents = p.getByRole("tree", { name: "Agents" });
   await agents.getByRole("treeitem").filter({ hasText: /Done|Finished/ }).first().waitFor({ timeout: 180_000 });
-  await t.pause(1200);
+  await t.pause(500);
   await t.swipe(700);
-  await t.pause(1500);
-  await t.hover(main.getByRole("group", { name: /^Changes/ }), 1800);
+  await t.pause(700);
+  await t.hover(main.getByRole("group", { name: /^Changes/ }));
+  await t.pause(1500); // read the diff
 
   // Back to the terminal (a long swipe), and commit.
   const shell = main.getByRole("group", { name: /^zsh/ });
@@ -73,5 +74,5 @@ export default async function (t: Tour) {
   await t.type("git add -A && git commit -qm 'Render the real stops' && git log --oneline -3\n");
   await t.waitForText(shell, /Render the real stops/);
   await t.away();
-  await t.pause(2500);
+  await t.pause(1500);
 }

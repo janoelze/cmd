@@ -177,3 +177,35 @@ describe("camera bounds", async () => {
     expect(v.y).toBeGreaterThanOrEqual(win.y - 1);
   });
 });
+
+describe("tightening", async () => {
+  const { timeSegments } = await import("../src/post.ts");
+  const playLength = (segs: [number, number, number][]) => segs.reduce((n, [a, b, k]) => n + (b - a) / k, 0);
+  it("cuts dead time to a beat, keeps a little real time around inputs", () => {
+    const segs = timeSegments([1, 6], [[1, 6]], 8);
+    expect(segs[0]).toEqual([0, 1.15, 1]);
+    expect(segs[1]![0]).toBeCloseTo(1.15);
+    expect(segs[1]![1]).toBeCloseTo(5.85);
+    expect(playLength(segs)).toBeCloseTo(1.15 + 0.3 + 0.15 + 2, 5);
+  });
+  it("leaves short pauses and input alone, and real time when asked", () => {
+    expect(timeSegments([1, 1.4], [[1, 1.4]], 3)).toEqual([[0, 3, 1]]);
+    expect(timeSegments([1, 6], [[1, 6]], 8, { tighten: false })).toEqual([[0, 8, 1]]);
+  });
+  it("speeds up input-free stretches that aren't frozen when asked", () => {
+    const segs = timeSegments([0, 10], [], 12, { idle: 4 });
+    expect(segs.find(([, , k]) => k === 4)).toEqual([0.9, 9.1, 4]);
+  });
+});
+
+describe("holds", async () => {
+  const { timeSegments } = await import("../src/post.ts");
+  it("keep a deliberate pause whole, and cut the waiting around it", () => {
+    // Frozen 1–6 s; the tour paused on purpose 2–3.5 s (to let a result be read).
+    const segs = timeSegments([1, 6], [[1, 6]], 8, { holds: [[2, 3.5]] });
+    const at = (t: number) => segs.find(([a, b]) => t >= a && t < b)![2];
+    expect(at(2.5)).toBe(1);
+    expect(at(1.6)).toBeGreaterThan(1);
+    expect(at(4.5)).toBeGreaterThan(1);
+  });
+});

@@ -44,39 +44,40 @@ export default async function (t: Tour) {
   const p = t.page;
   const main = p.getByRole("main");
   const dots = p.getByRole("group", { name: "Windows" });
-  await t.pause(1000);
+  await t.pause(500);
 
   // 1. Swipe along the strip to the newest windows, then partway back.
   const w = await t.windowBox();
   await t.moveTo({ x: w.x + w.width * 0.55, y: w.y + w.height * 0.5 });
   await t.swipe(800);
-  await t.pause(900);
+  await t.pause(500);
   await t.swipe(800);
-  await t.pause(1100);
+  await t.pause(600);
   await t.swipe(-1200);
-  await t.pause(900);
+  await t.pause(500);
 
   // 2. The page dots: one per window, by name. Jump to Claude.
-  await t.hover(dots.getByRole("button", { name: /claude/i }), 900);
+  await t.hover(dots.getByRole("button", { name: /claude/i }));
+  await t.pause(500);
   await t.click(dots.getByRole("button", { name: /claude/i }));
-  await t.pause(1400);
+  await t.pause(800);
 
   // 3. Wider: drag the terminal's right edge.
   const shell = main.getByRole("group", { name: /^zsh/ });
   await t.reveal(shell);
   await t.dragBy(shell.getByRole("separator", { name: "Right edge" }), 260);
-  await t.pause(1000);
+  await t.pause(600);
 
   // 4. The sidebar jumps along the strip too.
   await t.click(p.getByRole("tree", { name: "Windows" }).getByRole("treeitem", { name: /^README\.md/ }));
-  await t.pause(1400);
+  await t.pause(800);
 
   // 5. And the keyboard: ⌥⌘← to the one before (arrows are the same on every layout; [ isn't).
   await t.press("ArrowLeft", "alt", "cmd");
-  await t.pause(1200);
+  await t.pause(700);
 
   // 6. Back in the terminal (off to the side: swiped to, then clicked).
   await t.click(shell);
   await t.type("git status --short\n");
-  await t.pause(1500);
+  await t.pause(1000);
 }
