@@ -46,7 +46,7 @@ env:
 jobs:
   mac:
     runs-on: macos-latest # Apple Silicon
-    timeout-minutes: 30
+    timeout-minutes: 50 # notarization alone can take 20+ min when Apple is slow
     steps:
       - uses: actions/checkout@v5
 
@@ -144,7 +144,7 @@ jobs:
             for dmg in dist/*.dmg; do
               codesign --sign "Developer ID Application" --timestamp "$dmg"
               # Bounded, so a submission Apple holds fails here rather than at the job timeout.
-              xcrun notarytool submit "$dmg" "${auth[@]}" --wait --timeout 20m
+              xcrun notarytool submit "$dmg" "${auth[@]}" --wait --timeout 40m
               xcrun stapler staple "$dmg"
             done
             # ... and the dmg's ticket covers the app inside, so the app can be stapled too.
