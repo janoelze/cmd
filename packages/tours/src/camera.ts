@@ -3,8 +3,10 @@
 // to and scales back up. Moves are two critically damped springs in series (no
 // overshoot, settled in about 0.8 s, and an S-curve: one spring alone starts
 // with its full acceleration, a visible kick), zoom springs in log space so
-// zooming in and out feel the same, and the view never leaves the canvas. Following the pointer has a
-// dead zone: the view drifts only when the pointer nears its edge, as a camera
+// zooming in and out feel the same. The window sits on an endless desk: the
+// view goes wherever the pointer or a place leads, past the canvas's edges (the
+// renderer draws background everywhere). Following the pointer has a dead
+// zone: the view drifts only when the pointer nears its edge, as a camera
 // operator would, rather than shaking along with every move.
 
 export interface CameraMark {
@@ -48,8 +50,6 @@ export function cameraPath(
   marks: CameraMark[],
   pointer: (s: number) => { x: number; y: number } | null,
   c: CameraConfig = CAMERA,
-  /** Zoomed in, the view stays inside this (the window and a small margin: not the wallpaper). */
-  inside: View = { x: 0, y: 0, w: canvas.w, h: canvas.h },
 ): View[] {
   const { w: cw, h: ch } = canvas;
   let cx = cw / 2, cy = ch / 2, lz = 0;
@@ -87,14 +87,6 @@ export function cameraPath(
       ty = aimY;
     }
     tz = clamp(tz, 1, c.maxZoom);
-    // Keep a zoomed view on the window (centred on it if it's wider), the whole view inside the canvas.
-    const tw = cw / tz, th = ch / tz;
-    if (tz > 1) {
-      tx = tw <= inside.w ? clamp(tx, inside.x + tw / 2, inside.x + inside.w - tw / 2) : inside.x + inside.w / 2;
-      ty = th <= inside.h ? clamp(ty, inside.y + th / 2, inside.y + inside.h - th / 2) : inside.y + inside.h / 2;
-    }
-    tx = clamp(tx, tw / 2, cw - tw / 2);
-    ty = clamp(ty, th / 2, ch - th / 2);
     const tl = Math.log(tz);
     const dt = 1 / fps / sub;
     for (let k = 0; k < sub; k++) {
@@ -114,7 +106,7 @@ export function cameraPath(
     // Fractional all the way: the renderer draws sub-pixel views (whole pixels made zooms wobble).
     const z = Math.max(1, Math.exp(lz));
     const w = cw / z, h = ch / z;
-    out.push({ x: clamp(cx - w / 2, 0, cw - w), y: clamp(cy - h / 2, 0, ch - h), w, h });
+    out.push({ x: cx - w / 2, y: cy - h / 2, w, h });
   }
   return out;
 }

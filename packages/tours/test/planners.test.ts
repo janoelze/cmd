@@ -139,7 +139,6 @@ describe("camera", async () => {
     const last = v.at(-1)!;
     expect(last.w).toBeLessThan(800);
     expect(Math.abs(last.x + last.w / 2 - 1150)).toBeLessThan(40);
-    expect(v.every((x) => x.x >= 0 && x.y >= 0 && x.x + x.w <= 1600 && x.y + x.h <= 1000)).toBe(true);
   });
   it("follows the pointer only past the dead zone", () => {
     const moving = (s: number) => ({ x: 800 + Math.min(s, 1) * 500, y: 500 });
@@ -167,14 +166,13 @@ describe("auto camera", async () => {
   });
 });
 
-describe("camera bounds", async () => {
+describe("camera on an endless desk", async () => {
   const { cameraPath } = await import("../src/camera.ts");
-  it("keeps a zoomed view on the window, not the wallpaper", () => {
-    const win = { x: 100, y: 100, w: 1400, h: 800 };
-    const corner = () => ({ x: 1590, y: 10 }); // the canvas's corner, outside the window
-    const v = cameraPath(240, 60, { w: 1600, h: 1000 }, [{ s: 0, mode: "follow", zoom: 2 }], corner, undefined, win).at(-1)!;
-    expect(v.x + v.w).toBeLessThanOrEqual(win.x + win.w + 1);
-    expect(v.y).toBeGreaterThanOrEqual(win.y - 1);
+  it("follows the pointer past the canvas's edge", () => {
+    const corner = () => ({ x: 1590, y: 10 }); // the canvas's corner
+    const v = cameraPath(300, 60, { w: 1600, h: 1000 }, [{ s: 0, mode: "follow", zoom: 2 }], corner).at(-1)!;
+    expect(v.x + v.w).toBeGreaterThan(1600); // the view reaches beyond the canvas
+    expect(v.y).toBeLessThan(0);
   });
 });
 

@@ -23,7 +23,9 @@ struct Plan: Decodable {
   let video: String
   let window: [Double] // x, y, w, h: where the recording goes on the canvas
   let mask: String
-  let wallpaper: String
+  struct Box: Decodable { let path: String; let x: Double; let y: Double; let w: Double; let h: Double }
+  /** The desk under the window, in canvas px (larger than the canvas: the camera may look past its edges). */
+  let wallpaper: Box
   let shadow: Placed
   let cursors: [String: Cursor]
   let ring: String?
@@ -57,10 +59,10 @@ func scaled(_ i: CIImage, w: Double, h: Double) -> CIImage {
   i.transformed(by: CGAffineTransform(scaleX: w / i.extent.width, y: h / i.extent.height))
 }
 
-// The still parts.
-let wallpaper = scaled(image(plan.wallpaper), w: cw, h: ch)
+// The still parts. The desk goes on forever: past the wallpaper's own edges its edge pixels extend.
+let wallpaper = place(scaled(image(plan.wallpaper.path), w: plan.wallpaper.w, h: plan.wallpaper.h), x: plan.wallpaper.x, y: plan.wallpaper.y).clampedToExtent()
 let shadow = place(image(plan.shadow.path), x: plan.shadow.x, y: plan.shadow.y)
-let background = shadow.composited(over: wallpaper).cropped(to: CGRect(x: 0, y: 0, width: cw, height: ch))
+let background = shadow.composited(over: wallpaper)
 let (wx, wy, ww, wh) = (plan.window[0], plan.window[1], plan.window[2], plan.window[3])
 let mask = place(scaled(image(plan.mask), w: ww, h: wh), x: wx, y: wy)
 var cursorImages: [Int: CIImage] = [:]

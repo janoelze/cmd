@@ -240,9 +240,14 @@ export function render(dir: string, o: PostOptions = {}): string {
   const ch = even(cw * 0.625);
   const cx = Math.round((cw - meta.width) / 2);
   const cy = Math.round((ch - meta.height) / 2 - meta.height * 0.012);
+  // The desk the window sits on: three canvases each way, the canvas in the middle, so the
+  // camera finds background wherever it goes (the renderer extends it beyond that too).
   const wall = path.join(work, "wallpaper.png");
-  if (o.wallpaper) magick(o.wallpaper, "-resize", `${cw}x${ch}^`, "-gravity", "center", "-extent", `${cw}x${ch}`, wall);
-  else magick("-size", `${cw}x${ch}`, "-define", "gradient:angle=135", "gradient:#141e30-#35577d", wall);
+  const desk = { x: -cw, y: -ch, w: cw * 3, h: ch * 3 };
+  const deskPx = `${Math.round(desk.w / 2)}x${Math.round(desk.h / 2)}`; // half resolution: it's a soft gradient
+  if (o.wallpaper) magick(o.wallpaper, "-resize", `${deskPx}^`, "-gravity", "center", "-extent", deskPx, wall);
+  // Made in 16 bits and dithered with a little noise: a slow 8-bit gradient shows steps (bands) once zoomed in.
+  else magick("-size", deskPx, "-depth", "16", "-define", "gradient:angle=135", "gradient:#0d1422-#3d6390", "-attenuate", "0.22", "+noise", "Gaussian", "-depth", "8", wall);
 
   // Cursor shapes: the real ones the helper saved, at their size on screen (×S px).
   const shapes = new Map<number, Ev>();
@@ -291,11 +296,7 @@ export function render(dir: string, o: PostOptions = {}): string {
     });
   if (o.follow) marks.unshift({ s: 0, mode: "follow", zoom: o.follow });
   if (o.camera === "auto" && !marks.length) marks.push(...autoCamera(events.map((e) => ({ s: time.output(sec(e)), type: e.type })), time.length));
-  // Zoomed in, the camera stays on the window (a 24 px margin), not on the wallpaper around it.
-  const m = 24 * S;
-  const views = marks.length
-    ? cameraPath(frames, FPS, { w: cw, h: ch }, marks, (u) => pointer(time.source(u)), undefined, { x: cx - m, y: cy - m, w: meta.width + 2 * m, h: meta.height + 2 * m })
-    : null;
+  const views = marks.length ? cameraPath(frames, FPS, { w: cw, h: ch }, marks, (u) => pointer(time.source(u))) : null;
 
   // The plan: per output frame, what to show where (helper/render.swift draws it).
   const presses = events.filter((e) => e.type === "down").map(sec);
@@ -325,7 +326,7 @@ export function render(dir: string, o: PostOptions = {}): string {
     video: path.join(dir, "raw.mov"),
     window: [cx, cy, meta.width, meta.height],
     mask,
-    wallpaper: wall,
+    wallpaper: { path: wall, ...desk },
     shadow: { path: shadow, x: cx - (wx - sx), y: cy - (wy - sy) },
     cursors: Object.fromEntries(Object.entries(cursors).map(([id, c]) => [id, { path: c.path, w: c.w, h: c.h }])),
     ring,
