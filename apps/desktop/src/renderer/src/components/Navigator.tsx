@@ -249,7 +249,7 @@ const hitOf = (r: SessionInfo): SearchHit => ({
   env: r.env,
   cwd: r.cwd,
   branch: r.branch,
-  title: (r.title ?? r.firstPrompt ?? "").split(/\r?\n/)[0]!.trim().slice(0, 200),
+  title: (r.name ?? r.title ?? r.firstPrompt ?? "").split(/\r?\n/)[0]!.trim().slice(0, 200),
   updatedAt: r.updated,
   snippet: null,
   fuzzy: false,
