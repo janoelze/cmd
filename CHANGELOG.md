@@ -2,6 +2,12 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.17.2 — 2026-10-07
+
+### Fixed
+
+- After an update, cmd waits while it finishes getting ready instead of saying it couldn't start.
+
 ## 0.17.1 — 2026-10-07
 
 ### Improved
