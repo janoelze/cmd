@@ -65,6 +65,9 @@ describe("DataStore", () => {
     s.record({ id: "3", at: 30, type: "command", source: "osc", projectId: "q", text: "pnpm test", data: {} });
     expect(s.query({ types: ["git."] }).map((e) => e.id)).toEqual(["1", "2"]);
     expect(s.query({ at: [15, 35] }).map((e) => e.id)).toEqual(["2", "3"]);
+    expect(s.query({ types: ["git.", "command"], at: [15, 35] }).map((e) => e.id)).toEqual(["2", "3"]);
+    expect(s.query({ types: ["git.tag", "command"], at: [0, 25] }).map((e) => e.id)).toEqual(["2"]);
+    expect(s.count({ types: ["git."], at: [0, 15] })).toBe(1);
     expect(s.query({ projectId: "q" }).map((e) => e.id)).toEqual(["3"]);
     expect(s.query({ text: "raced" }).map((e) => e.id)).toEqual(["1"]);
     expect(s.query({ text: "test", order: "desc" }).map((e) => e.id)).toEqual(["3", "1"]);

@@ -7,11 +7,14 @@
 
 import { ACTIVITY_SCHEMA, TURN_FORMAT, type ActivityEvent, type ActivityKind, type AgentCoverage, type AgentId, type AgentKind, type AgentTurn, type DataEvent, type PaneId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { capPayload, normalize, type RawEvent } from "../../agents/activity/normalize.ts";
 import { ActivityReducer, type Reduction } from "../../agents/activity/reduce.ts";
 
 /** How often the live core runs the reducer's timing check (tracker.ts tick); a replay steps the same. */
 const TICK_MS = 2000;
+/** How far back a tool call's PreToolUse is looked for: bounds the lookup to recent rows of the (type, at) index. */
+const TOOL_CALL_MS = 86400_000;
 import { decodeDoc, decodeRows, decodeTurn } from "../../stored.ts";
 import type { DataService } from "../service.ts";
 import type { ViewsStore } from "./views.ts";
@@ -94,7 +97,7 @@ export class ActivityView {
       at: r.at,
       type: "agent.hook",
       source: `hook:${r.agent ?? "?"}${agentVersion ? `@${agentVersion}` : ""}`,
-      parentId: toolId && r.name !== "PreToolUse" && paneId ? this.#startOf(paneId, toolId) : null,
+      parentId: toolId && r.name !== "PreToolUse" && paneId ? this.#startOf(paneId, toolId, r.at) : null,
       sessionId: sessionId ? `${r.agent ?? "agent"}:${sessionId}` : null,
       agentId,
       paneId,
@@ -109,9 +112,13 @@ export class ActivityView {
     return toActivity(ev, false);
   }
 
-  /** The PreToolUse event of a tool call in a pane, for PostToolUse's parent. */
-  #startOf(paneId: PaneId, toolId: string): string | null {
-    const row = this.#data.store.db.prepare(`SELECT id FROM events WHERE pane_id = ? AND type = 'agent.hook' AND json_extract(data, '$.payload.tool_use_id') = ? AND json_extract(data, '$.name') = 'PreToolUse' ORDER BY seq DESC LIMIT 1`).get(paneId, toolId) as { id: string } | undefined;
+  #startStmt: { db: DatabaseSync; st: StatementSync } | null = null;
+
+  /** The PreToolUse event of a tool call in a pane, for PostToolUse's parent: runs on every tool call, so only the last day's hooks are searched. */
+  #startOf(paneId: PaneId, toolId: string, at: number): string | null {
+    const db = this.#data.store.db;
+    if (this.#startStmt?.db !== db) this.#startStmt = { db, st: db.prepare(`SELECT id FROM events WHERE type = 'agent.hook' AND at >= ? AND pane_id = ? AND json_extract(data, '$.payload.tool_use_id') = ? AND json_extract(data, '$.name') = 'PreToolUse' ORDER BY seq DESC LIMIT 1`) };
+    const row = this.#startStmt.st.get(at - TOOL_CALL_MS, paneId, toolId) as { id: string } | undefined;
     return row?.id ?? null;
   }
 

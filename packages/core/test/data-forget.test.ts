@@ -74,6 +74,20 @@ describe("forget", () => {
 });
 
 describe("agent events in the log", () => {
+  it("makes a tool call's PreToolUse the parent of what follows it, looking back a day", async () => {
+    const { ActivityView } = await import("../src/data/views/activity.ts");
+    const { ViewsStore } = await import("../src/data/views/views.ts");
+    const { d } = service();
+    const view = new ActivityView(d, new ViewsStore(null));
+    const hook = (at: number, name: string, tool: string) => view.insert({ at, agent: "claude", name, payload: { hook_event_name: name, session_id: "s", tool_name: "Bash", tool_use_id: tool } }, "p1", "a1");
+    const parent = (id: number) => d.store.query({ types: ["agent.hook"] }).find((e) => e.seq === id)?.parentId ?? null;
+    const pre = hook(1000, "PreToolUse", "t1");
+    const post = hook(2000, "PostToolUse", "t1");
+    expect(parent(post.id)).toBe(d.store.query({ types: ["agent.hook"] }).find((e) => e.seq === pre.id)!.id);
+    hook(3000, "PreToolUse", "t2");
+    expect(parent(hook(3000 + 2 * 86400_000, "PostToolUse", "t2").id)).toBeNull();
+  });
+
   it("keeps a hook payload's long strings cut in the row and the whole payload as its content, with the pane's Space", async () => {
     const { ActivityView } = await import("../src/data/views/activity.ts");
     const { ViewsStore } = await import("../src/data/views/views.ts");

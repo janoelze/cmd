@@ -303,13 +303,16 @@ function conditions(q: DataQuery): [string, (string | number)[]] {
   if (q.types?.length) {
     const exact = q.types.filter((t) => !t.endsWith("."));
     const prefixes = q.types.filter((t) => t.endsWith("."));
+    // With a type filter the (type, at) index is the narrow one: each branch carries the time range, so a
+    // type looks up only its rows in range (one shared range outside the ORs walks every row of the types).
+    const at = q.at ? ` AND at >= ? AND at < ?` : "";
+    const range = q.at ? [q.at[0], q.at[1]] : [];
     // A range, not LIKE: LIKE is case-insensitive by default and skips the index.
-    const parts = [...(exact.length ? [`type IN (${exact.map(() => "?").join(",")})`] : []), ...prefixes.map(() => `(type >= ? AND type < ?)`)];
-    args.push(...exact, ...prefixes.flatMap((p) => [p, `${p}￿`]));
+    const parts = [...(exact.length ? [`(type IN (${exact.map(() => "?").join(",")})${at})`] : []), ...prefixes.map(() => `(type >= ? AND type < ?${at})`)];
+    if (exact.length) args.push(...exact, ...range);
+    for (const p of prefixes) args.push(p, `${p}￿`, ...range);
     where.push(`(${parts.join(" OR ")})`);
-  }
-  // With a type filter the (type, at) index is the narrow one; `+at` keeps the planner off the wide at index.
-  if (q.at) where.push(q.types?.length ? `+at >= ? AND +at < ?` : `at >= ? AND at < ?`), args.push(q.at[0], q.at[1]);
+  } else if (q.at) where.push(`at >= ? AND at < ?`), args.push(q.at[0], q.at[1]);
   for (const k of ["sessionId", "agentId", "projectId", "spaceId", "paneId", "windowId", "parentId"] as const) {
     const v = q[k];
     if (v) where.push(`${COL[k]} = ?`), args.push(v);

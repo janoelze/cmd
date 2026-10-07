@@ -1331,7 +1331,9 @@ export class Core {
         if (!hits.length) continue;
         let pending = this.#dataPending.get(conn);
         if (!pending) this.#dataPending.set(conn, (pending = new Map()));
-        pending.set(id, [...(pending.get(id) ?? []), ...hits]);
+        const list = pending.get(id);
+        if (list) for (const e of hits) list.push(e);
+        else pending.set(id, hits);
       }
     }
     if (this.#dataPending.size && !this.#dataFlush) {

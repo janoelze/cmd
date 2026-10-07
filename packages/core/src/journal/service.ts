@@ -130,7 +130,7 @@ export class JournalService {
     const since = this.#read.git ? this.#read.git - SYNC_OVERLAP : now - (this.#reread ? REREAD_DAYS : FIRST_SYNC_DAYS) * DAY_MS;
     const t0 = Date.now();
     // Git for every project seen lately and every Space's folder.
-    const repos = new Set([...this.store.repos(now - FIRST_SYNC_DAYS * DAY_MS).map((r) => r.repo), ...this.#o.spaces().filter((s) => s.id !== HOME_SPACE_ID).map((s) => s.root)]);
+    const repos = new Set([...this.store.repos(now - FIRST_SYNC_DAYS * DAY_MS), ...this.#o.spaces().filter((s) => s.id !== HOME_SPACE_ID).map((s) => s.root)]);
     let git = 0;
     let skipped = 0;
     const read = this.#o.git ?? gitEvents;

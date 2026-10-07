@@ -189,10 +189,10 @@ export class JournalStore {
     return out.slice(0, q.limit ?? 50_000);
   }
 
-  /** Repositories with events since `since`, most active first. */
-  repos(since = 0): { repo: string; events: number }[] {
-    const rows = this.data.store.db.prepare(`SELECT project_id, COUNT(*) AS events FROM events WHERE project_id LIKE 'dir:%' AND at >= ? GROUP BY project_id ORDER BY events DESC`).all(since) as { project_id: string; events: number }[];
-    return rows.map((r) => ({ repo: r.project_id.slice(4), events: r.events }));
+  /** Repositories with events since `since` (a range over the project index, not LIKE, which skips it). */
+  repos(since = 0): string[] {
+    const rows = this.data.store.db.prepare(`SELECT DISTINCT project_id FROM events WHERE project_id >= 'dir:' AND project_id < 'dir;' AND at >= ?`).all(since) as { project_id: string }[];
+    return rows.map((r) => r.project_id.slice(4));
   }
 
   day(scope: string, date: number): JournalDay | null {

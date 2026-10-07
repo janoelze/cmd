@@ -483,10 +483,11 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     if (!this.#panes.has(live.pane.id)) return; // closed while we were asking
     const c = classify(info);
     const fg: Foreground = { pid: info.pid, startedAt: info.startedAt, name: displayName(c, info), class: c };
-    if (c.kind === "agent") fg.version = agentVersion(info, c.agent);
     const prev = live.fg;
     const same = prev && prev.pid === fg.pid && prev.name === fg.name && prev.class.kind === fg.class.kind;
     if (same) return;
+    // Only for a new process: looking it up stats the PATH, and busy agents are polled twice a second.
+    if (c.kind === "agent") fg.version = agentVersion(info, c.agent);
     live.fg = fg;
     live.pane.foreground = fg.name;
     this.emit("foreground", live.pane.id, fg);
