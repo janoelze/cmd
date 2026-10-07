@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+  <!-- cmd tours' own pointer: a plain arrow, tip at (3,3), white edge, soft shadow. -->
+  <defs><filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1.2" stdDeviation="1.2" flood-opacity="0.35"/></filter></defs>
+  <path filter="url(#s)" d="M3 3 L3 27 L9.2 21.4 L13.4 31 L17.6 29.2 L13.6 19.8 L22 19.8 Z" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+</svg>

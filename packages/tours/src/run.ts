@@ -2,7 +2,8 @@
 // Launches the built app (pnpm build) in a fixture, places its window, runs the
 // tour's unrecorded setup, then records the window while the tour plays.
 // Writes raw.mov (no cursor), events.json (the input, on the frames' clock) and
-// meta.json (crop on screen, scale, first frame) for post. The Mac must be left
+// meta.json (crop on screen, scale, first frame), then preview.mp4 with the
+// pointer drawn in (post.ts). The Mac must be left
 // alone while it runs: moving the mouse stops it.
 
 import { execFileSync } from "node:child_process";
@@ -14,6 +15,7 @@ import { _electron as electron } from "playwright";
 import { Tour } from "./driver.ts";
 import { fixtureEnv, makeFixture } from "./fixture.ts";
 import { Helper } from "./helper.ts";
+import { renderPreview } from "./post.ts";
 
 export interface TourMeta {
   /** Window content size, points. */
@@ -94,6 +96,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const out = opt("--out") ?? path.join(root, ".cmd-dev", "tours", "out", path.basename(file).replace(/\.tour\.ts$|\.ts$/, ""));
   try {
     await runTour(file, path.resolve(out), Number(opt("--seed") ?? 1));
+    console.log(renderPreview(path.resolve(out)));
     process.exit(0);
   } catch (e) {
     console.error((e as Error).message);

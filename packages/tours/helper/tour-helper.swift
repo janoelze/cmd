@@ -126,15 +126,26 @@ let source = CGEventSource(stateID: .hidSystemState)
 var lastPosted: CGPoint?
 
 struct Interfered: Error, LocalizedError {
-  var errorDescription: String? { "the mouse moved: someone is using it, so the tour stopped" }
+  let at: CGPoint
+  let expected: CGPoint
+  var errorDescription: String? { "the mouse moved (it's at \(Int(at.x)),\(Int(at.y)), the tour left it at \(Int(expected.x)),\(Int(expected.y))): someone is using it, so the tour stopped" }
 }
 
 func pointer() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
 
+/**
+ * Before a command: the pointer should be where the last posted event put it.
+ * Posted events land a few ms later, so give it up to 60 ms to get there.
+ */
 func checkPointer() throws {
   guard let last = lastPosted else { return }
-  let now = pointer()
-  if abs(now.x - last.x) > 3 || abs(now.y - last.y) > 3 { throw Interfered() }
+  let until = nowNs() + 60_000_000
+  while true {
+    let now = pointer()
+    if abs(now.x - last.x) <= 3 && abs(now.y - last.y) <= 3 { return }
+    if nowNs() > until { throw Interfered(at: now, expected: last) }
+    usleep(5_000)
+  }
 }
 
 func buttonOf(_ name: String?) -> (CGMouseButton, CGEventType, CGEventType, CGEventType) {
@@ -150,10 +161,10 @@ func post(_ type: CGEventType, _ p: CGPoint, _ button: CGMouseButton, clicks: In
 
 func path(_ points: [[Double]], button: String?) throws {
   let (b, _, _, dragged) = buttonOf(button)
+  try checkPointer()
   let start = nowNs()
   for pt in points where pt.count == 3 {
     waitUntil(start + UInt64(pt[0] * 1e6))
-    try checkPointer()
     let p = CGPoint(x: pt[1], y: pt[2])
     post(button == nil ? .mouseMoved : dragged, p, b)
     log("move", ["x": p.x, "y": p.y, "drag": button != nil])
