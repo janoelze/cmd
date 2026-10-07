@@ -73,6 +73,22 @@ Before and after, same harness, same log (pings p95 / max, stalls over 100 ms):
 
 The pattern held every time: the stall log named a job, a profile or an offline reproduction of that job found the statement, and the fix was either smaller steps, work folded before it is written, or a worker for what can't be split.
 
+### How to run it again
+
+`scripts/perf/stress-core.mjs <core.sock>` is the harness; its header says how to start a core for it. In short: copy only `data/events.sqlite` of a big log into a short, fresh `CMD_HOME` (never `cmd.sqlite`: a core on a copy of it resurrects the person's panes and resumes their agents), start a core there with `--instance=dev`, run the harness, then read `grep '\[lag\]' $CMD_HOME/logs/core.log`. Delete `data/views.sqlite` between runs to get the first-launch rebuilds again. A run takes about six minutes, most of it the transcript pass. Run it after any change to how the core reads or writes the log, and before a release that bumps a view's version.
+
+## Lessons
+
+What the six runs taught, for the next person who sees a stall:
+
+1. **Measure where it runs, not where you think it runs.** Every culprit here was found by the stall log naming a job and a profile or an offline reproduction of that job, never by reading the code first. Reading the code suggested the rebuild's page query (fast: 50 ms) when the cost was six UPDATEs per event; it suggested big messages (120 ms) when the cost was checkpoints. The one guess made without a measurement, that a 316 s block was the sessions rebuild, was wrong.
+2. **Blame needs care, or it misleads.** A watchdog that names "what runs now" is right for a block inside a job and wrong for everything after it: a yield's name stuck to later callbacks, a paused job went unnamed so a trivial request answered right after the block was blamed. The rule that held: what runs now, else the longest activity that ended since the stall began, else "(idle)". When the blame says `rpc core.hello` took 500 ms, the blame is wrong, not the request.
+3. **Write amplification hides in "updates".** Recording an event that already exists did an UPDATE (the same bytes), two blob-count writes, an FTS delete and insert: a page in the WAL for every one of 529k events, and a checkpoint into a 1.6 GB file every few seconds. Compare before writing; a re-read should cost reads.
+4. **Steps must be bounded by time, not count.** 250 events was 6 ms or 500 ms depending on the events; 2,000 rows of a rebuild was 340 ms of UPDATEs. Steps that size themselves (halve when slow, double when fast), or work folded so a step's writes don't grow with its rows, hold a budget; a fixed count doesn't.
+5. **Some work can't yield; give it a thread.** One SQL statement, one structured clone, one checkpoint: no budget helps inside them. Readers of a WAL database on another thread are cheap (the vocabulary), and a writer that only checkpoints is safe (passive, never waiting on anyone). A new index is next.
+6. **Fold before you write.** 529k events into 3,050 sessions: the per-event upserts were a hundred times the work of folding each step in memory and writing once per session, with identical results (checked row by row against the old code on the real log, which is the test to run for any rewrite of a view).
+7. **A first launch is a different workload.** Fresh views, every transcript re-read, a new index: it runs everything at once on the whole log. Startup jobs make it survivable; the stress harness makes it measurable. Neither existed, so a 172 s "Connecting to core…" shipped.
+
 ## Rules for new code
 
 - **Nothing before `listen()` but what the window needs**: opening `cmd.sqlite`, reattaching terminals. Anything that reads the event log in full, scans folders, runs git or a model is a startup job or a scheduled job.

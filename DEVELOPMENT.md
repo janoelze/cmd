@@ -83,6 +83,10 @@ Usage stats (`packages/core/src/usage.ts`): the core counts app launches (the ap
 
 Feedback (Help → Send Feedback…, or the speech bubble in the status bar) goes to a second Discord webhook from `apps/desktop/src/main/feedback.ts`, with the version and platform if the sender leaves that ticked. Like the crash webhook it is baked in at build time, from `$CMD_FEEDBACK_WEBHOOK` (the `CMD_FEEDBACK_WEBHOOK` secret, tagged releases only); development builds can only send when it is set when they run.
 
+### Stalls and the stress test
+
+The core is one thread: a block of it is felt in every terminal. Its watchdog (`packages/core/src/scheduler.ts`, docs/34) logs every block over 100 ms as `[lag] <ms> ms in <activity>`, keeps the last 20 in `core.info.stalls` and shows the longest in the footer's core details. After a change to the core, read the `[lag]` lines; after a change to how the core reads or writes the event log, run `node scripts/perf/stress-core.mjs <core.sock>` against a core on a copy of a big log (the script's header says how to start one; copy only `data/events.sqlite`, never `cmd.sqlite`). It reports request latency per load phase and what the core blamed; docs/34 has the numbers to compare against and what each stall turned out to be.
+
 ### Signing and notarization
 
 Without signing secrets, CI ad-hoc signs the whole bundle (`-c.mac.identity=-`). It runs, but Gatekeeper blocks a downloaded copy until the user clicks Open Anyway in Privacy & Security (or installs with `scripts/install.sh`). To sign with Developer ID and notarize, which needs a paid Apple Developer Program membership:
