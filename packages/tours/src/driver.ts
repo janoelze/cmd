@@ -223,6 +223,27 @@ export class Tour {
     await this.moveTo(to, 200);
   }
 
+  /**
+   * Waits until a terminal window's screen shows some text. Terminals draw on
+   * a canvas, so their text isn't in the page: the core reads the pane.
+   * `win` is the window's group (its data-pane is the pane id).
+   */
+  async waitForText(win: Locator, text: RegExp | string, timeout = 60_000) {
+    const paneId = await win.getAttribute("data-pane", { timeout });
+    if (!paneId) throw new Error(`not a terminal window: ${win}`);
+    const until = Date.now() + timeout;
+    const re = typeof text === "string" ? new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) : text;
+    while (Date.now() < until) {
+      const screen = await this.page.evaluate(
+        (paneId) => (window as unknown as { cmd: { call: (m: string, p: unknown) => Promise<{ text: string }> } }).cmd.call("pane.read", { paneId, lines: 200 }),
+        paneId,
+      );
+      if (re.test(screen.text)) return;
+      await sleep(250);
+    }
+    throw new Error(`terminal never showed ${re}`);
+  }
+
   async pause(ms: number) {
     await sleep(ms);
   }

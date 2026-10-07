@@ -22,6 +22,7 @@ const ATLAS: Files = {
   "src/trip.ts": "export interface Stop {\n  city: string;\n  nights: number;\n}\n\nexport const nights = (stops: Stop[]) => stops.reduce((n, s) => n + s.nights, 0);\n\nexport function renderTrip(el: Element) {\n  el.textContent = \"Lisbon → Porto → Madrid\";\n}\n",
   "src/api/trips.ts": "export async function listTrips() {\n  return [{ id: 1, name: \"Iberia in May\" }];\n}\n",
   "src/styles.css": ":root { color-scheme: light dark; font: 16px system-ui; }\n",
+  "CLAUDE.md": "# Atlas\n\n- TypeScript, Vite, vitest. Keep functions small; a test with every change.\n- In commands and messages, use paths relative to the repo root.\n",
   "test/trip.test.ts": 'import { expect, it } from "vitest";\nimport { nights } from "../src/trip.ts";\n\nit("adds up the nights", () => {\n  expect(nights([{ city: "Lisbon", nights: 3 }, { city: "Porto", nights: 2 }])).toBe(5);\n});\n',
 };
 

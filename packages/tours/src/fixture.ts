@@ -112,5 +112,6 @@ export function fixtureEnv(f: Fixture, extra: Record<string, string> = {}): Reco
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !LEAKS.test(k)) env[k] = v;
   delete env.ANTHROPIC_API_KEY;
-  return { ...env, ...extra, HOME: f.home, CMD_HOME: f.cmdHome, CMD_TRANSCRIPTS_HOME: f.transcripts, CMD_USAGE_URL: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: "" };
+  // git stops at the fixture's edge, so a repository the fixture happens to sit in never shows.
+  return { ...env, ...extra, GIT_CEILING_DIRECTORIES: path.dirname(f.home), HOME: f.home, CMD_HOME: f.cmdHome, CMD_TRANSCRIPTS_HOME: f.transcripts, CMD_USAGE_URL: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: "" };
 }

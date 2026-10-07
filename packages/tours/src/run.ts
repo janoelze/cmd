@@ -39,13 +39,17 @@ export interface TourModule {
 }
 
 const root = path.resolve(import.meta.dirname, "..", "..", "..");
+/** Where fixtures live while a tour runs (its core's state and logs too: <FIXTURES>/<tour>/logs). */
+export const FIXTURES = "/private/tmp/cmd-tours";
 
 export async function runTour(file: string, out: string, seed = 1) {
   const mod = (await import(pathToFileURL(path.resolve(file)).href)) as TourModule;
   const meta = mod.meta ?? {};
   const name = path.basename(file).replace(/\.tour\.ts$|\.ts$/, "");
   fs.mkdirSync(out, { recursive: true });
-  const fixture = makeFixture(path.join(root, ".cmd-dev", "tours", name), meta.files, meta.settings);
+  // Outside the person's home and any repository: Claude Code prints absolute paths now and
+  // then, and git would find the repository a fixture sits in.
+  const fixture = makeFixture(path.join(FIXTURES, name), meta.files, meta.settings);
   if ((meta.persona ?? "kai") === "kai") applyKai(fixture);
   const ai = meta.ai ? addAiKeys(fixture) : null;
   const helper = Helper.start();
