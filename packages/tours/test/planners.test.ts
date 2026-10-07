@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aimAt, minJerk, moveDuration, planMove } from "../src/motion.ts";
+import { aimAt, minJerk, moveDuration, planMove, taperProfile } from "../src/motion.ts";
 import { rng } from "../src/random.ts";
 import { gestureMs, planScroll } from "../src/scroll.ts";
 import { planTyping, TYPING } from "../src/typing.ts";
@@ -7,7 +7,8 @@ import { planTyping, TYPING } from "../src/typing.ts";
 describe("motion", () => {
   it("times moves by Fitts' law, slowed and clamped", () => {
     expect(moveDuration(800, 40)).toBeCloseTo(1.3 * (130 + 157 * Math.log2(21)), 5);
-    expect(moveDuration(20, 200)).toBe(350);
+    expect(moveDuration(20, 200)).toBeCloseTo(1.3 * (130 + 157 * Math.log2(1.1)), 5);
+    expect(moveDuration(3, 400)).toBeGreaterThanOrEqual(160);
     expect(moveDuration(5000, 2)).toBe(1400);
     expect(moveDuration(1, 10)).toBe(0);
   });
@@ -25,6 +26,25 @@ describe("motion", () => {
     // Slow at the ends, fast in the middle.
     const step = (i: number) => Math.hypot(a[i + 1]!.x - a[i]!.x, a[i + 1]!.y - a[i]!.y);
     expect(step(0)).toBeLessThan(step(Math.floor(a.length / 2)));
+  });
+  it("peaks before halfway and tapers slowly, like people", () => {
+    for (const q of [3.6, 4.6]) {
+      const f = taperProfile(3, q);
+      expect(f(0)).toBe(0);
+      expect(f(1)).toBeCloseTo(1, 6);
+      const speeds = Array.from({ length: 99 }, (_, i) => f((i + 1) / 100) - f(i / 100));
+      const peak = speeds.indexOf(Math.max(...speeds)) / 100;
+      expect(peak).toBeGreaterThan(0.33);
+      expect(peak).toBeLessThan(0.46);
+    }
+  });
+  it("corrects at the end of long moves, short ones go straight there", () => {
+    const long = planMove({ x: 0, y: 0 }, { x: 900, y: 200 }, 30, rng(4));
+    const gaps = long.slice(1).map((s, i) => s.t - long[i]!.t);
+    expect(Math.max(...gaps)).toBeGreaterThan(10); // the pause before the correction
+    expect(long.at(-1)).toMatchObject({ x: 900, y: 200 });
+    const short = planMove({ x: 0, y: 0 }, { x: 60, y: 0 }, 30, rng(4));
+    expect(Math.max(...short.slice(1).map((s, i) => s.t - short[i]!.t))).toBeLessThan(10);
   });
   it("aims inside the target, at the start of wide ones", () => {
     const r = rng(2);

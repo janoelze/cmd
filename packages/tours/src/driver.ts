@@ -152,6 +152,32 @@ export class Tour {
     await sleep(between(this.r, ...PACE.after));
   }
 
+  /**
+   * Chooses an item in the open native menu (a context menu after a right
+   * click, or a menu-bar menu) by its title: the start of it, so "Rename…"
+   * matches "Rename… (F2)". Found through macOS Accessibility.
+   */
+  async menuItem(title: string) {
+    const pid = this.app.process().pid;
+    type Item = { title: string; x: number; y: number; w: number; h: number; enabled: boolean };
+    let item: Item | undefined;
+    for (let i = 0; i < 40 && !item; i++) {
+      const { items } = (await this.helper.call("menu-items", { pid })) as unknown as { items: Item[] };
+      item = items.find((x) => x.title === title) ?? items.find((x) => x.title.startsWith(title));
+      if (!item) await sleep(50);
+    }
+    if (!item) throw new Error(`no open menu item "${title}"`);
+    if (!item.enabled) throw new Error(`menu item "${title}" is disabled`);
+    // Menu rows are wide: aim near the label, like a person would.
+    const at = aimAt({ x: item.x, y: item.y, width: Math.min(item.w, 120), height: item.h }, this.r);
+    await this.moveTo(at, item.h);
+    await sleep(between(this.r, ...PACE.hover));
+    await this.helper.call("down", { ...at, button: "left" });
+    await sleep(between(this.r, ...PACE.hold));
+    await this.helper.call("up", { ...at, button: "left" });
+    await sleep(between(this.r, ...PACE.after));
+  }
+
   /** Types into whatever has focus. */
   async type(text: string, profile: TypingProfile = TYPING.terminal) {
     await this.helper.call("type", { text, delays: planTyping(text, this.r, profile) });

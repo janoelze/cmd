@@ -1,9 +1,12 @@
 // Pointer paths that read well on video: one gentle curve per move (a cubic
 // Bezier bent to one side), timed by Fitts' law and slowed a little so viewers
-// can follow, travelled with a minimum-jerk profile (still at both ends, fastest
-// halfway). No per-step jitter: zoomed in, it reads as tremor.
+// can follow. Speed builds quickly and tapers slowly (peak at ~35–45% of the
+// move, like people; a symmetric minimum-jerk peak at 50% looks mechanical),
+// and long moves come in two parts: a main move that lands a little short or
+// long, then a small correction onto the target (Meyer's submovements). No
+// per-step jitter: zoomed in, it reads as tremor.
 
-import { between, clamp, gaussian, type Rng } from "./random.ts";
+import { between, clamp, gaussian, lognormal, type Rng } from "./random.ts";
 
 export interface Point {
   x: number;
@@ -28,8 +31,18 @@ export const MOTION = {
   fittsB: 157,
   /** Slower than a person, so a viewer can follow. */
   slow: 1.3,
-  minMs: 350,
+  minMs: 160,
   maxMs: 1400,
+  /** Each move's duration varies by this (log-normal sigma). */
+  vary: 0.1,
+  /** Speed profile τ^(p−1)(1−τ)^(q−1): p = 3 keeps the ends smooth, q in this range puts the peak at ~36–44%. */
+  taper: [3.6, 4.6] as [number, number],
+  /** Moves longer than this get a correction at the end, px. */
+  correctFrom: 250,
+  /** Where the main move lands, as a share of the distance past (+) or short of (−) the target. */
+  landing: [-0.06, 0.03] as [number, number],
+  /** The correction's duration, ms. */
+  correctMs: [130, 220] as [number, number],
   /** How far the curve bows out, as a share of the distance, and at most. */
   bend: 0.1,
   maxBend: 120,
@@ -49,6 +62,23 @@ export function moveDuration(d: number, w: number, c: MotionConfig = MOTION): nu
 /** Minimum jerk: position share at time share τ. */
 export const minJerk = (tau: number) => tau * tau * tau * (10 - 15 * tau + 6 * tau * tau);
 
+/** Position share over time share for speed ∝ τ^(p−1)(1−τ)^(q−1) (q > p: fast start, long taper). */
+export function taperProfile(p: number, q: number): (tau: number) => number {
+  const N = 400;
+  const cum = [0];
+  for (let i = 1; i <= N; i++) {
+    const t = (i - 0.5) / N;
+    cum.push(cum[i - 1]! + t ** (p - 1) * (1 - t) ** (q - 1));
+  }
+  const total = cum[N]!;
+  return (tau) => {
+    const x = clamp(tau, 0, 1) * N;
+    const i = Math.floor(x);
+    if (i >= N) return 1;
+    return (cum[i]! + (cum[i + 1]! - cum[i]!) * (x - i)) / total;
+  };
+}
+
 /** The curve's four control points: both inner ones bent to the same side. */
 export function curve(from: Point, to: Point, r: Rng, c: MotionConfig = MOTION): [Point, Point, Point, Point] {
   const d = dist(from, to);
@@ -66,10 +96,28 @@ function bezier([p0, p1, p2, p3]: [Point, Point, Point, Point], s: number): Poin
   return { x: a * p0.x + b * p1.x + c * p2.x + d * p3.x, y: a * p0.y + b * p1.y + c * p2.y + d * p3.y };
 }
 
-/** Samples along the move, evenly in time, travelling the curve by arc length. */
+/** Samples along the move, evenly in time; long moves end with a small correction. */
 export function planMove(from: Point, to: Point, targetWidth: number, r: Rng, c: MotionConfig = MOTION): Sample[] {
-  const T = moveDuration(dist(from, to), targetWidth, c);
+  const d = dist(from, to);
+  const T = moveDuration(d, targetWidth, c) * (d < 2 ? 1 : lognormal(r, 1, c.vary));
   if (T === 0) return [{ ...to, t: 0 }];
+  const profile = taperProfile(3, between(r, ...c.taper));
+  if (d < c.correctFrom) return travel(from, to, T, profile, r, c);
+  // Main move: lands a little short or long, slightly off the line.
+  const along = between(r, ...c.landing);
+  const ux = (to.x - from.x) / d, uy = (to.y - from.y) / d;
+  const side = clamp(0.012 * d * gaussian(r), -12, 12);
+  const land = { x: to.x + ux * along * d - uy * side, y: to.y + uy * along * d + ux * side };
+  const main = travel(from, land, T * 0.88, profile, r, c);
+  const pause = between(r, 15, 45);
+  const fix = travel(land, to, between(r, ...c.correctMs), minJerk, r, { ...c, bend: 0.05 });
+  const t0 = main[main.length - 1]!.t + pause;
+  return [...main, ...fix.map((s) => ({ ...s, t: s.t + t0 }))];
+}
+
+/** One stroke along a bent curve, travelled by arc length with a speed profile. */
+function travel(from: Point, to: Point, T: number, profile: (tau: number) => number, r: Rng, c: MotionConfig): Sample[] {
+  if (dist(from, to) < 0.5) return [{ ...to, t: T }];
   const ctrl = curve(from, to, r, c);
   // Arc-length table, so speed follows the profile and not the curve's parametrisation.
   const N = 200;
@@ -87,7 +135,7 @@ export function planMove(from: Point, to: Point, targetWidth: number, r: Rng, c:
   };
   const out: Sample[] = [];
   const step = 1000 / c.hz;
-  for (let t = step; t < T; t += step) out.push({ ...pointAt(minJerk(t / T)), t });
+  for (let t = step; t < T; t += step) out.push({ ...pointAt(profile(t / T)), t });
   out.push({ ...to, t: T });
   return out;
 }

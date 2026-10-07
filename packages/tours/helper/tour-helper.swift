@@ -13,6 +13,8 @@
 //   {"cmd":"scroll","x":…,"y":…,"steps":[[ms,dy,phase],…]}  trackpad-style, pixel deltas
 //   {"cmd":"type","text":"…","delays":[ms,…]}               characters, layout-independent
 //   {"cmd":"key","key":"Return","mods":["cmd"]}
+//   {"cmd":"menu-items","pid":123} → {"items":[{title,x,y,w,h,enabled}]}: the app's open
+//       native menu (a context menu, or an open menu-bar menu), via Accessibility
 //   {"cmd":"log"} → {"events":[…]} and clears it
 // Moves stop with an error if the pointer isn't where the last move left it:
 // someone moved the mouse, so the run is spoiled and shouldn't fight them.
@@ -204,6 +206,50 @@ let KEYS: [String: CGKeyCode] = [
 ]
 let MODS: [String: CGEventFlags] = ["cmd": .maskCommand, "shift": .maskShift, "alt": .maskAlternate, "ctrl": .maskControl]
 
+// ── native menus (Accessibility) ───────────────────
+
+func ax<T>(_ el: AXUIElement, _ attr: String) -> T? {
+  var v: CFTypeRef?
+  guard AXUIElementCopyAttributeValue(el, attr as CFString, &v) == .success else { return nil }
+  return v as? T
+}
+
+func axFrame(_ el: AXUIElement) -> CGRect? {
+  guard let p: AXValue = ax(el, kAXPositionAttribute), let s: AXValue = ax(el, kAXSizeAttribute) else { return nil }
+  var point = CGPoint.zero, size = CGSize.zero
+  AXValueGetValue(p, .cgPoint, &point)
+  AXValueGetValue(s, .cgSize, &size)
+  return CGRect(origin: point, size: size)
+}
+
+/**
+ * The items of the app's open menu: context menus hang off the app element,
+ * an open menu-bar menu off its menu bar item. Windows aren't searched: their
+ * subtree is the whole web page.
+ */
+func openMenuItems(pid: pid_t) -> [[String: Any]] {
+  var found: [[String: Any]] = []
+  func walk(_ el: AXUIElement, depth: Int) {
+    guard depth < 6, let kids: [AXUIElement] = ax(el, kAXChildrenAttribute) else { return }
+    for k in kids {
+      let role: String = ax(k, kAXRoleAttribute) ?? ""
+      if role == kAXWindowRole { continue }
+      if role == kAXMenuRole {
+        for item in (ax(k, kAXChildrenAttribute) as [AXUIElement]?) ?? [] {
+          guard let f = axFrame(item), f.height > 0 else { continue }
+          let title: String = ax(item, kAXTitleAttribute) ?? ""
+          let enabled: Bool = ax(item, kAXEnabledAttribute) ?? true
+          found.append(["title": title, "x": f.minX, "y": f.minY, "w": f.width, "h": f.height, "enabled": enabled])
+        }
+        continue
+      }
+      walk(k, depth: depth + 1)
+    }
+  }
+  walk(AXUIElementCreateApplication(pid), depth: 0)
+  return found
+}
+
 func key(_ name: String, mods: [String]) throws {
   guard let code = KEYS[name] else { throw NSError(domain: "tour", code: 1, userInfo: [NSLocalizedDescriptionKey: "unknown key \(name)"]) }
   let flags = mods.reduce(CGEventFlags()) { $0.union(MODS[$1] ?? []) }
@@ -299,6 +345,9 @@ func handle(_ msg: [String: Any]) async {
     case "key":
       try key(msg["key"] as? String ?? "", mods: msg["mods"] as? [String] ?? [])
       reply(["ok": true])
+    case "menu-items":
+      guard let pid = msg["pid"] as? Int32 else { return reply(["ok": false, "error": "pid is needed"]) }
+      reply(["ok": true, "items": openMenuItems(pid: pid)])
     case "log":
       reply(["ok": true, "events": events])
       events = []
