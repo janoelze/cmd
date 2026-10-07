@@ -116,7 +116,7 @@ function reopenDataSubs(): void {
   for (const sub of viewSubs) (sub.id = null), void openViewSub(sub);
 }
 
-/** A live query over a view (turns, sessions): rows now (initial), then the rows that change. Made again after a reconnect. */
+/** A live query over a view (turns, sessions): rows now (initial), then the rows that change; initial again when the core resets it. Made again after a reconnect. */
 interface ViewSub {
   query: ViewQuery;
   fn: (rows: (TurnRow | SessionInfo)[], initial: boolean) => void;
@@ -500,7 +500,7 @@ function handle(e: CoreEvent): void {
       dataById.get(e.id)?.fn(e.events, false);
       return;
     case "view.changed":
-      viewById.get(e.id)?.fn(e.rows, false);
+      viewById.get(e.id)?.fn(e.rows, !!e.reset);
       return;
     case "window.focus":
       for (const fn of focusListeners) fn(e.id);

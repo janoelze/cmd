@@ -116,4 +116,39 @@ describe("view subscriptions", () => {
     expect(mine.map((r) => ("index" in r ? `${r.index}:${r.outcome}` : "?"))).toEqual(["1:done"]); // the two saves of turn 1 coalesced
     expect(views.filter((e) => e.id === s.id).flatMap((e) => e.rows).map((r) => ("key" in r ? r.key : "?"))).toEqual(["claude:vs2"]);
   });
+
+  it("keeps a Space's sessions, and starts over when Spaces change or the view is rebuilt", async () => {
+    const proj = fs.realpathSync(fs.mkdtempSync(path.join(dir, "proj-")));
+    fs.mkdirSync(path.join(proj, "sub"));
+    const space = core.spaces.open(proj).space;
+    const views: Extract<CoreEvent, { type: "view.changed" }>[] = [];
+    conn.client.onEvent((e) => {
+      if (e.type === "view.changed") views.push(e);
+    });
+    await conn.client.call("events.subscribe", { types: ["data.changed", "view.changed"] });
+    const session = (key: string, cwd: string, at: number) =>
+      core.sessions.apply(core.data.recordBatch([{ id: `m-${key}`, at, type: "transcript.message", source: "t", sessionId: `claude:${key}`, text: "hi", data: { role: "user", cwd } }]));
+    session("in", path.join(proj, "src"), 1000);
+    session("out", "/elsewhere", 2000);
+    const keys = (rows: unknown[]) => rows.map((r) => (r as { key: string }).key);
+    const s = await conn.client.call("data.subscribeView", { query: { view: "sessions", spaceId: space.id } });
+    expect(keys(s.rows)).toEqual(["claude:in"]);
+    session("nested", path.join(proj, "sub"), 3000);
+    session("out2", "/elsewhere/too", 4000);
+    await settle();
+    expect(keys(views.filter((e) => e.id === s.id).flatMap((e) => e.rows))).toEqual(["claude:nested"]);
+    expect(keys(await conn.client.call("data.view", { query: { view: "sessions", spaceId: space.id } }))).toEqual(["claude:nested", "claude:in"]);
+
+    // A nested Space takes its folder's sessions: the subscription gets the whole list again.
+    views.length = 0;
+    core.spaces.open(path.join(proj, "sub"));
+    await settle();
+    const reset = views.filter((e) => e.id === s.id);
+    expect(reset.map((e) => [e.reset, keys(e.rows)])).toEqual([[true, ["claude:in"]]]);
+
+    views.length = 0;
+    await core.sessions.rebuild();
+    await settle();
+    expect(views.filter((e) => e.id === s.id).map((e) => e.reset)).toEqual([true]);
+  });
 });

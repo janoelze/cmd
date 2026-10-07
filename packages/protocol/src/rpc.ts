@@ -181,6 +181,8 @@ export interface Methods {
   /** On the widgets socket: which widget this connection is (a token issued for its data.ts run); then data.query is allowed. */
   "widget.hello": { params: { token: string }; result: { widgetId: string; spaceId: string | null } };
   "data.unsubscribe": { params: { id: string }; result: null };
+  /** A view's rows now (turns or sessions), newest first for sessions. */
+  "data.view": { params: { query: ViewQuery }; result: (TurnRow | SessionInfo)[] };
   /** A view's rows now (turns or sessions), and from then on a `view.changed` for every row that changes and matches. Unsubscribe with data.unsubscribe. */
   "data.subscribeView": { params: { query: ViewQuery }; result: { id: string; rows: (TurnRow | SessionInfo)[] } };
   /** Deletes a session's, a project's, a time range's or some types' events (all given must match); a forgotten session or project is never recorded again. */
@@ -352,7 +354,6 @@ export interface Methods {
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };
   /** The most recently active past sessions, newest first; `exclude`: session ids to leave out (open ones). */
-  "search.recent": { params: { limit?: number; exclude?: string[]; /** Only sessions whose cwd belongs to this Space. */ spaceId?: SpaceId }; result: SearchHit[] };
   "search.status": { params: {}; result: SearchStatus };
   /** Rebuild the transcript index from scratch; progress arrives as search.status events. Fails when search is off. */
   "search.reindex": { params: {}; result: null };
@@ -461,8 +462,11 @@ export type CoreEvent =
   | { type: "fs.changed"; path: string }
   /** Events recorded or updated since the last one, for a data.subscribe subscription (merge by id). */
   | { type: "data.changed"; id: string; events: DataEvent[] }
-  /** Rows of a view that changed, for a data.subscribeView subscription (turns by agent and index, sessions by key). */
-  | { type: "view.changed"; id: string; view: "turns" | "sessions"; rows: (TurnRow | SessionInfo)[] }
+  /**
+   * Rows of a view that changed, for a data.subscribeView subscription (turns by agent and index, sessions by key).
+   * reset: the rows are the query's whole result and replace what the subscriber has (the view was rebuilt, Spaces changed).
+   */
+  | { type: "view.changed"; id: string; view: "turns" | "sessions"; rows: (TurnRow | SessionInfo)[]; reset?: boolean }
   /** Bring a window to the front (e.g. `open .` in a terminal). */
   | { type: "window.focus"; id: WindowId }
   | { type: "notification"; notification: AppNotification }

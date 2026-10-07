@@ -79,8 +79,8 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
     if (kind !== "space" && kind !== "move") return;
     let live = true;
     void cmd.call("space.list", { closed: true }).then((l) => live && setRecent(l.filter((x) => x.closedAt !== null)), () => {});
-    void cmd.call("search.recent", { limit: 50 }).then(
-      (hits) => live && setFolders([...new Set(hits.map((h) => h.cwd).filter((c): c is string => !!c))]),
+    void cmd.call("data.view", { query: { view: "sessions", limit: 50 } }).then(
+      (rows) => live && setFolders([...new Set(rows.map((r) => r.cwd).filter((c): c is string => !!c))]),
       () => {},
     );
     return () => void (live = false);

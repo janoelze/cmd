@@ -135,7 +135,8 @@ const splitList = (v: string) => v.split(",").map((d) => d.trim()).filter(Boolea
 type Handlers = { [M in Method]: (params: Params<M>) => Result<M> | Promise<Result<M>> };
 
 /** Whether a view row answers a view query. */
-function viewMatches(q: ViewQuery, r: TurnRow | SessionInfo): boolean {
+function viewMatches(q: ViewQuery, r: TurnRow | SessionInfo, spaceOf: (cwd: string | null) => string): boolean {
+  if (q.spaceId && spaceOf(r.cwd) !== q.spaceId) return false;
   if ("key" in r) {
     if (q.sessionId && r.key !== q.sessionId) return false;
     if (q.projectId && r.projectId !== q.projectId) return false;
@@ -297,6 +298,7 @@ export class Core {
     activity.spaceOf = (paneId) => this.panes.get(paneId)?.spaceId ?? null;
     this.sessions = new SessionsView(this.views, this.data);
     this.sessions.onChange((rows) => this.#viewChanged("sessions", rows));
+    this.sessions.onReset(() => this.#viewReset((q) => q.view === "sessions"));
     activity.onTurn((t, cwd) => this.#viewChanged("turns", [{ ...t, cwd }]));
     this.#searchView = new SearchView(this.data, this.sessions);
     this.agents = new AgentTracker(this.panes, {
@@ -333,6 +335,15 @@ export class Core {
     this.spaces = new SpaceManager(this.store, opts.home);
     this.spaces.on("updated", (space) => this.#broadcast({ type: "space.updated", space }));
     this.spaces.on("removed", (id) => this.#broadcast({ type: "space.removed", id }));
+    // A Space opened or closed moves folders between Spaces: live queries by Space start over.
+    let roots = "";
+    const rootsChanged = () => {
+      const now = this.spaces.list().map((s) => s.root).sort().join("\n");
+      if (now !== roots) (roots = now), this.#viewReset((q) => !!q.spaceId);
+    };
+    rootsChanged();
+    this.spaces.on("updated", rootsChanged);
+    this.spaces.on("removed", rootsChanged);
     this.windows = new WindowManager(this.panes, this.store, this.windowTypes, overrides);
     // Windows of a Space that is gone or closed (e.g. the core died mid-close) go Home.
     for (const w of this.windows.others()) {
@@ -565,6 +576,7 @@ export class Core {
     },
     "data.import": (p) => ({ imported: this.data.recordAll(p.events) }),
     "data.subscribe": (p) => ({ id: randomUUID(), events: this.data.query(p.query) }),
+    "data.view": (p) => this.#viewRows(p.query),
     "data.subscribeView": (p) => ({ id: randomUUID(), rows: this.#viewRows(p.query) }),
     "widget.hello": () => {
       throw new Error("widget.hello is for the widgets socket");
@@ -702,7 +714,6 @@ export class Core {
     "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),
     "search.query": (p) => this.#searchView.search(p.text, p.limit),
-    "search.recent": (p) => this.#searchView.recent(Math.min(p.limit ?? 5, 50), p.exclude, p.spaceId ? (row) => this.spaces.of(row.cwd) === p.spaceId : undefined),
     "search.status": () => this.#ingest?.status() ?? NO_SEARCH,
     "search.reindex": () => {
       if (!this.#ingest) throw new Error("transcripts are off (Settings → Data)");
@@ -1341,10 +1352,10 @@ export class Core {
   /** A view's rows for a query: turns oldest first, sessions newest first. */
   #viewRows(q: ViewQuery): (TurnRow | SessionInfo)[] {
     const limit = Math.min(q.limit ?? 50, 1000);
-    if (q.view === "sessions") return this.sessions.list(q);
+    if (q.view === "sessions") return this.sessions.list(q, q.spaceId ? (r) => this.spaces.of(r.cwd) === q.spaceId : undefined);
     const since = q.since ?? Date.now() - 7 * 86400_000;
     const rows = q.agentId && !q.since ? this.agents.activity.turns(q.agentId, limit).map((t) => ({ ...t, cwd: null })) : this.agents.activity.turnsSince(since).map(({ turn, cwd }) => ({ ...turn, cwd }));
-    return rows.filter((r) => viewMatches(q, r)).slice(-limit);
+    return rows.filter((r) => viewMatches(q, r, (cwd) => this.spaces.of(cwd))).slice(-limit);
   }
 
   /** A changed view row against every view subscription; what matches goes out in one view.changed per subscription. */
@@ -1354,7 +1365,7 @@ export class Core {
       for (const [id, q] of subs) {
         if (q.view !== view) continue;
         for (const r of rows) {
-          if (!viewMatches(q, r)) continue;
+          if (!viewMatches(q, r, (cwd) => this.spaces.of(cwd))) continue;
           let pending = this.#viewPending.get(conn);
           if (!pending) this.#viewPending.set(conn, (pending = new Map()));
           let m = pending.get(id);
@@ -1370,16 +1381,30 @@ export class Core {
           for (const [id, m] of pending) {
             const q = this.#viewSubs.get(conn)?.get(id);
             if (!q) continue;
-            const event: CoreEvent = { type: "view.changed", id, view: q.view, rows: [...m.values()] };
-            const line = JSON.stringify({ jsonrpc: "2.0", method: "event", params: event }) + "\n";
-            if (conn.event) conn.event(event, line);
-            else conn.send(line);
+            this.#sendEvent(conn, { type: "view.changed", id, view: q.view, rows: [...m.values()] });
           }
         }
         this.#viewPending.clear();
       }, 50);
       this.#viewFlush.unref?.();
     }
+  }
+
+  /** The view subscriptions `pick` names get their query's whole result again, replacing theirs (view.changed with reset). */
+  #viewReset(pick: (q: ViewQuery) => boolean): void {
+    for (const [conn, subs] of this.#viewSubs) {
+      for (const [id, q] of subs) {
+        if (!pick(q)) continue;
+        this.#viewPending.get(conn)?.delete(id);
+        this.#sendEvent(conn, { type: "view.changed", id, view: q.view, rows: this.#viewRows(q), reset: true });
+      }
+    }
+  }
+
+  #sendEvent(conn: Connection, event: CoreEvent): void {
+    const line = JSON.stringify({ jsonrpc: "2.0", method: "event", params: event }) + "\n";
+    if (conn.event) conn.event(event, line);
+    else conn.send(line);
   }
 
   #broadcast(event: CoreEvent): void {

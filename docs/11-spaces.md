@@ -133,7 +133,7 @@ New and changed methods:
 "window.move":  { params: { id: WindowId; spaceId: SpaceId }; result: AppWindow };
 
 // pane.create, window.open, window.openTarget, agent.spawn, agent.resume gain spaceId?: SpaceId
-// (resolved by the rule above when omitted). search.recent gains under?: string.
+// (resolved by the rule above when omitted). View queries (data.view, data.subscribeView) take spaceId?: SpaceId.
 // events.subscribe's snapshot gains spaces: Space[].
 ```
 

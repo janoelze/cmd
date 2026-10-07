@@ -6,7 +6,7 @@
 
 import { Button, EmptyState, ToolbarSearchField, WindowToolbar } from "@cmd/ui";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { PaneId, SearchHit, SearchStatus, SpaceId } from "@cmd/protocol";
+import type { PaneId, SearchHit, SearchStatus, SessionInfo, SpaceId } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { openSession } from "../actions.ts";
 import { usePersisted, useStoreValue, subscribeView } from "../store.ts";
@@ -92,7 +92,7 @@ function Navigator(p: NavigatorData) {
         .filter((x): x is string => !!x),
     [p.rows],
   );
-  const recent = useRecent(p.spaceId, live, p.search);
+  const recent = useRecent(p.spaceId, live);
   const matches = useMemo(() => (searching ? filterRows(p.rows, query, now) : []), [searching, p.rows, query, now]);
   const hits = useHistorySearch(query);
 
@@ -209,34 +209,51 @@ function Navigator(p: NavigatorData) {
   );
 }
 
-/** The Space's newest past sessions that aren't open; refreshed when the index or the open agents change. */
-function useRecent(spaceId: SpaceId, live: string[], status: SearchStatus | null): SearchHit[] {
+/** The Space's newest past sessions that aren't open: a live query over the sessions view. */
+function useRecent(spaceId: SpaceId, live: string[]): SearchHit[] {
   const limit = useStoreValue((s) => s.settings.settings["ui.sidebarRecent"]);
-  const [hits, setHits] = useState<SearchHit[]>([]);
-  const liveKey = live.join("\n");
-  const indexKey = status ? `${status.sessions}|${status.files}|${status.indexing}` : "";
-  const [tick, setTick] = useState(0);
-  // A live query over the sessions view: refetch when a session changes (a title, new activity), debounced.
+  // Room for the open ones, which are left out below.
+  const want = limit > 0 ? limit + live.length : 0;
+  const [rows, setRows] = useState<SessionInfo[]>([]);
   useEffect(() => {
-    let debounce: ReturnType<typeof setTimeout> | undefined;
-    const off = subscribeView({ view: "sessions", since: Date.now(), limit: 1 }, (_rows, initial) => {
-      if (initial) return;
-      clearTimeout(debounce);
-      debounce = setTimeout(() => setTick((n) => n + 1), 2000);
+    if (want <= 0) return setRows([]);
+    let have = new Map<string, SessionInfo>();
+    const off = subscribeView({ view: "sessions", spaceId, limit: want }, (changed, all) => {
+      if (all) have = new Map();
+      for (const r of changed as SessionInfo[]) have.set(r.key, r);
+      // A session only gets newer, so the oldest past `want` can go.
+      const list = [...have.values()].sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0)).slice(0, want);
+      have = new Map(list.map((r) => [r.key, r]));
+      setRows(list);
     });
-    return () => (clearTimeout(debounce), off());
-  }, []);
-  useEffect(() => {
-    if (limit <= 0) return setHits([]);
-    let stale = false;
-    cmd.call("search.recent", { limit, exclude: live, spaceId }).then(
-      (h) => !stale && setHits(h),
-      () => !stale && setHits([]), // search off, or an older core
-    );
-    return () => void (stale = true);
-  }, [spaceId, liveKey, indexKey, limit, tick]);
-  return hits;
+    return () => (off(), setRows([]));
+  }, [spaceId, want]);
+  const liveKey = live.join("\n");
+  return useMemo(() => {
+    const skip = new Set(live);
+    const out: SearchHit[] = [];
+    for (const r of rows) {
+      if (skip.has(r.id)) continue;
+      skip.add(r.id); // one per session id
+      out.push(hitOf(r));
+      if (out.length === limit) break;
+    }
+    return out;
+  }, [rows, liveKey, limit]);
 }
+
+const hitOf = (r: SessionInfo): SearchHit => ({
+  sessionId: r.id,
+  agent: r.agent as SearchHit["agent"],
+  path: r.path ?? "",
+  env: r.env,
+  cwd: r.cwd,
+  branch: r.branch,
+  title: (r.title ?? r.firstPrompt ?? "").split(/\r?\n/)[0]!.trim().slice(0, 200),
+  updatedAt: r.updated,
+  snippet: null,
+  fuzzy: false,
+});
 
 /** Transcript search for the sidebar field, debounced; from two characters on. */
 function useHistorySearch(query: string): SearchHit[] {

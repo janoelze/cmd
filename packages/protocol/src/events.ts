@@ -275,6 +275,8 @@ export interface SessionInfo {
   id: string;
   agent: string;
   path: string | null;
+  /** Environment the agent needs to resume this session (e.g. CLAUDE_CONFIG_DIR for a profile); null = none. */
+  env: Record<string, string> | null;
   cwd: string | null;
   branch: string | null;
   title: string | null;
@@ -292,6 +294,8 @@ export interface ViewQuery {
   /** "<agent>:<session id>". */
   sessionId?: string;
   projectId?: string;
+  /** Only rows whose folder belongs to this Space (the deepest open root containing it, else Home). */
+  spaceId?: string;
   /** Turns started, or sessions active, since this time (ms). */
   since?: number;
   limit?: number;

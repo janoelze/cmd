@@ -101,17 +101,32 @@ export class SessionsView {
     this.#listeners.push(fn);
   }
   #listeners: ((rows: SessionInfo[]) => void)[] = [];
+  /** Called after a rebuild: every row may have changed or gone. */
+  onReset(fn: () => void): void {
+    this.#resetListeners.push(fn);
+  }
+  #resetListeners: (() => void)[] = [];
   #rebuilding = false;
 
   /** Sessions matching a view query, newest activity first. */
-  list(q: { sessionId?: string; projectId?: string; since?: number; limit?: number }): SessionInfo[] {
+  /** `keep`: a filter SQL can't do (a Space by folder); pages back until full, a few thousand rows at most. */
+  list(q: { sessionId?: string; projectId?: string; since?: number; limit?: number }, keep?: (row: SessionRow) => boolean): SessionInfo[] {
     const where: string[] = ["started IS NOT NULL"];
     const args: (string | number)[] = [];
     if (q.sessionId) where.push("key = ?"), args.push(q.sessionId);
     if (q.projectId) where.push("project_id = ?"), args.push(q.projectId);
     if (q.since) where.push("updated >= ?"), args.push(q.since);
-    const rows = this.#views.db.prepare(`SELECT * FROM sessions WHERE ${where.join(" AND ")} ORDER BY updated DESC LIMIT ?`).all(...args, Math.min(q.limit ?? 50, 1000)) as unknown as SessionRow[];
-    return rows.map(sessionInfo);
+    const limit = Math.min(q.limit ?? 50, 1000);
+    const stmt = this.#views.stmt(`SELECT * FROM sessions WHERE ${where.join(" AND ")} ORDER BY updated DESC LIMIT ? OFFSET ?`);
+    if (!keep) return (stmt.all(...args, limit, 0) as unknown as SessionRow[]).map(sessionInfo);
+    const out: SessionInfo[] = [];
+    const page = Math.max(limit * 4, 200);
+    for (let offset = 0; offset < 5000; offset += page) {
+      const rows = stmt.all(...args, page, offset) as unknown as SessionRow[];
+      for (const r of rows) if (keep(r) && out.push(sessionInfo(r)) === limit) return out;
+      if (rows.length < page) break;
+    }
+    return out;
   }
 
   /**
@@ -171,6 +186,7 @@ export class SessionsView {
       this.#rebuilding = false;
     }
     log.info("sessions rebuilt from events", { events: n, sessions: this.counts().sessions, ms: Date.now() - t0 });
+    for (const fn of this.#resetListeners) fn();
     return n;
   }
 
@@ -188,11 +204,6 @@ export class SessionsView {
     return this.#views.stmt(`SELECT * FROM sessions WHERE updated >= ? AND started IS NOT NULL ORDER BY started`).all(since) as unknown as SessionRow[];
   }
 
-  /** The most recently active, newest first; `offset` pages further back. */
-  recent(limit: number, offset = 0): SessionRow[] {
-    return this.#views.stmt(`SELECT * FROM sessions WHERE started IS NOT NULL ORDER BY updated DESC LIMIT ? OFFSET ?`).all(limit, offset) as unknown as SessionRow[];
-  }
-
   counts(): { sessions: number } {
     return { sessions: (this.#views.stmt(`SELECT COUNT(*) AS n FROM sessions WHERE started IS NOT NULL`).get() as { n: number }).n };
   }
@@ -200,5 +211,5 @@ export class SessionsView {
 
 /** A view row as protocol's SessionInfo. */
 export function sessionInfo(r: SessionRow): SessionInfo {
-  return { key: r.key, id: r.id, agent: r.agent, path: r.path, cwd: r.cwd, branch: r.branch, title: r.title, firstPrompt: r.first_prompt, started: r.started, updated: r.updated, messages: r.messages, projectId: r.project_id };
+  return { key: r.key, id: r.id, agent: r.agent, path: r.path, env: r.env ? (JSON.parse(r.env) as Record<string, string>) : null, cwd: r.cwd, branch: r.branch, title: r.title, firstPrompt: r.first_prompt, started: r.started, updated: r.updated, messages: r.messages, projectId: r.project_id };
 }

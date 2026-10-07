@@ -99,26 +99,6 @@ export class SearchView {
     }
     return out.sort((a, b) => b.score - a.score);
   }
-
-  /** The most recently active sessions, one per session id, minus `exclude` (e.g. open ones), only those `keep` accepts. */
-  recent(limit = 5, exclude: string[] = [], keep: (row: SessionRow) => boolean = () => true): SearchHit[] {
-    const skip = new Set(exclude);
-    const out: SearchHit[] = [];
-    // Pages back until full; a filter may pass few rows, so it stops after a few thousand.
-    const page = limit * 3 + skip.size;
-    for (let offset = 0; offset < 5000; offset += page) {
-      const rows = this.#sessions.recent(page, offset);
-      for (const row of rows) {
-        if (skip.has(row.id)) continue;
-        skip.add(row.id);
-        if (!keep(row)) continue;
-        out.push(toHit(row));
-        if (out.length === limit) return out;
-      }
-      if (rows.length < page) break;
-    }
-    return out;
-  }
 }
 
 /** The words of an event: its message's text when inline, else from the blob, else its line. */

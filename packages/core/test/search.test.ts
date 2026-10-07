@@ -229,17 +229,11 @@ describe("owned transcripts + search", () => {
     expect(searcher.search("transcript")).toEqual([]);
   });
 
-  it("lists recent sessions once each, leaving out excluded ones", () => {
-    const ids = searcher.recent(10).map((h) => h.sessionId);
-    expect(ids.sort()).toEqual(["0198-archived", "0199-codex-thread", "c-1", "q-archived", "q-live", "q-old", "s-sidebar", "s-vpn"]);
-    expect(searcher.recent(10, ["s-vpn"]).map((h) => h.sessionId)).not.toContain("s-vpn");
-    expect(searcher.recent(1)).toHaveLength(1);
-  });
-
-  it("lists recent sessions only from the folders a filter keeps, paging past the rest", () => {
-    const keep = (r: { cwd: string | null }) => r.cwd === "/Users/me/src/c";
-    expect(searcher.recent(1, [], keep).map((h) => h.sessionId)).toEqual(["c-1"]);
-    expect(searcher.recent(5, [], () => false)).toEqual([]);
+  it("lists sessions newest first, through a filter SQL can't do", () => {
+    const updated = sessions.list({ limit: 100 }).map((r) => r.updated ?? 0);
+    expect(updated).toEqual([...updated].sort((a, b) => b - a));
+    expect(sessions.list({ limit: 1 }, (r) => r.cwd === "/Users/me/src/c").map((r) => r.id)).toEqual(["c-1"]);
+    expect(sessions.list({ limit: 5 }, () => false)).toEqual([]);
   });
 
   it("rebuilds the sessions view from the log to what reading built", async () => {
