@@ -282,11 +282,7 @@ async function restartCore(): Promise<void> {
     }
   }
   spawnCore();
-  for (const until = Date.now() + 5000; Date.now() < until; ) {
-    if (await canConnect()) return;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  throw new Error(`core did not start; see ${coreLog()}`);
+  await waitForCore();
 }
 
 const coreLog = () => path.join(logDir(), "core.log");
@@ -329,6 +325,8 @@ function spawnCore(): void {
   });
   fs.closeSync(fd);
   log.info(`started a core, pid ${child.pid}`);
+  const started = { state: "starting" as SpawnState, at: Date.now() };
+  lastSpawn = started;
   // While this app runs, a core that dies without reporting it (killed by a
   // signal, a native crash, Node's own fatal errors) is reported from here.
   // 70: the core's crash handler has recorded it already. SIGTERM/SIGINT: stopped on purpose.
@@ -336,11 +334,21 @@ function spawnCore(): void {
     log.info(`core ${child.pid} exited`, { code, signal });
     const stopped = signal === "SIGTERM" || signal === "SIGINT" || signal === "SIGHUP" || code === 0 || code === 70;
     const output = tailOf(out, 40);
-    if (stopped || output.some((l) => l.includes("already running"))) return;
+    const locked = output.some((l) => l.includes("already running"));
+    started.state = locked ? "locked" : "exited";
+    if (stopped || locked) return;
     recordCrash("core", "exit", signal ? `Core killed by ${signal}` : `Core exited with code ${code}`, output.join("\n") || null, {}, tailOf(coreLog(), 80));
   });
   child.unref();
 }
+
+/** How long a core may take to answer, and how long one that is alive but busy starting. */
+const CORE_START_MS = 5000;
+const CORE_BUSY_MS = 10 * 60_000;
+
+type SpawnState = "starting" | "exited" | "locked";
+/** The last core this app started: still starting (or running), exited, or found another core holding the lock. */
+let lastSpawn: { state: SpawnState; at: number } | null = null;
 
 /** A core process is alive for this state dir (sync check of its pid file). */
 function coreProcessAlive(): boolean {
@@ -360,11 +368,34 @@ let coreSpawned = !coreProcessAlive() && (spawnCore(), true);
 async function ensureCore(): Promise<void> {
   if (!coreSpawned && (await canConnect())) await checkCoreBuild();
   if (!coreSpawned && !(await canConnect())) (spawnCore(), (coreSpawned = true));
-  for (const until = Date.now() + 5000; Date.now() < until; ) {
+  await waitForCore();
+  // The core that kept ours out may be from before an update: now that it answers, restart it if so.
+  if (lastSpawn?.state !== "locked") return;
+  await checkCoreBuild();
+  if (!(await canConnect())) (spawnCore(), await waitForCore());
+}
+
+/**
+ * Until the core answers. A core that is alive but not listening yet is busy
+ * starting (the first launch of a version can migrate data for minutes), so it
+ * gets CORE_BUSY_MS, not CORE_START_MS; the window says "Connecting to core…"
+ * meanwhile. One that holds the lock without a pid file (older cores wrote it
+ * only once listening) shows as our core exiting "already running": start
+ * another now and then, which takes over as soon as the busy one is gone.
+ */
+async function waitForCore(): Promise<void> {
+  let said = false;
+  for (const t0 = Date.now(); ; ) {
     if (await canConnect()) return;
-    await new Promise((r) => setTimeout(r, 10));
+    const waited = Date.now() - t0;
+    if (waited > CORE_START_MS) {
+      const busy = coreProcessAlive() || lastSpawn?.state === "starting" || lastSpawn?.state === "locked";
+      if (!busy || waited > CORE_BUSY_MS) throw new Error(`core did not start; see ${coreLog()}`);
+      if (!said) (said = true), log.info("a core is running but not answering yet (busy starting): waiting for it");
+      if (lastSpawn?.state === "locked" && Date.now() - lastSpawn.at > 10_000) spawnCore();
+    }
+    await new Promise((r) => setTimeout(r, waited < CORE_START_MS ? 10 : 250));
   }
-  throw new Error(`core did not start; see ${coreLog()}`);
 }
 
 /**

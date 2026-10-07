@@ -50,6 +50,10 @@ if (!lock) {
   console.error(`cmd core: a core is already running for ${home}`);
   process.exit(1);
 }
+// Written now, not once listening: restoring and migrating data can take minutes
+// on the first launch of a version, and the app waits for a core it sees alive.
+const pidFile = path.join(home, "core.pid");
+fs.writeFileSync(pidFile, String(process.pid));
 
 // The user's PATH, in the background: launch isn't held up, and commands the core runs wait for it.
 void adoptLoginPath();
@@ -97,10 +101,9 @@ try {
 } catch (err) {
   log.error(`could not listen: ${(err as Error).message}`);
   console.error(`cmd core: ${(err as Error).message}`);
+  fs.rmSync(pidFile, { force: true });
   process.exit(1);
 }
-const pidFile = path.join(home, "core.pid");
-fs.writeFileSync(pidFile, String(process.pid));
 log.info(`pid ${process.pid} listening on ${socketPath}`, { instance: instanceName(), home, version: process.env.CMD_APP_VERSION ?? "source", build, node: process.versions.node, platform: `${process.platform} ${process.arch}` });
 console.log(`cmd core ${process.pid} listening on ${socketPath}`);
 
