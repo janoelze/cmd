@@ -1,6 +1,6 @@
 # Startup phases and the work scheduler
 
-> Status (2026-10-07): **phases, the scheduler and the watchdog built** (branch `scheduler`): the core answers before it rebuilds anything, startup jobs run behind the socket in order and show in the footer ("Starting · indexing sessions"), long jobs yield on a budget, and the watchdog logs every block of the thread over 100 ms with what ran (`[lag] 642 ms in sessions rebuild`), kept in `core.info.stalls` and shown in the core details. Not built: moving one-statement work (index builds, the search vocabulary) to a worker; an e2e check on a large fixture; the app's start wait. Read first: this doc; `packages/core/src/scheduler.ts`; `Core.start()` in `packages/core/src/core.ts`; `apps/desktop/src/main/index.ts` (`waitForCore`). Builds on the data layer ([28](28-data-plan.md)): the views it rebuilds are the ones this schedules.
+> Status (2026-10-07): **phases, the scheduler and the watchdog built** (branch `scheduler`): the core answers before it rebuilds anything, startup jobs run behind the socket in order and show in the footer ("Indexing sessions…"), long jobs yield on a budget, and the watchdog logs every block of the thread over 100 ms with what ran (`[lag] 642 ms in sessions rebuild`), kept in `core.info.stalls` and shown in the core details. Not built: moving one-statement work (index builds, the search vocabulary) to a worker; an e2e check on a large fixture; the app's start wait. Read first: this doc; `packages/core/src/scheduler.ts`; `Core.start()` in `packages/core/src/core.ts`; `apps/desktop/src/main/index.ts` (`waitForCore`). Builds on the data layer ([28](28-data-plan.md)): the views it rebuilds are the ones this schedules.
 
 ## Why
 
@@ -34,7 +34,7 @@ cmd needs both. The frame is "how long the core may go without answering"; the p
 
 Each job starts on its own tick, so requests between them are answered. The views constructed with `deferRebuild` don't rebuild themselves; they say `needsRebuild` and `start()` schedules it. Tests that construct a `Core` without `listen()` call `core.start()` and `await core.scheduler.idle()`.
 
-The phase and the jobs still running are `core.info.startup` and the `core.startup` event. The footer's core status shows the running job ("Starting · indexing sessions") instead of "Core", and its details say "Terminals work meanwhile"; when the list is empty the phase is `ready`.
+The phase and the jobs still running are `core.info.startup` and the `core.startup` event. The footer's core status shows the running job ("Indexing sessions…") instead of "Core", and its details say "Terminals work meanwhile"; when the list is empty the phase is `ready`.
 
 ### The scheduler: a budget for steps
 

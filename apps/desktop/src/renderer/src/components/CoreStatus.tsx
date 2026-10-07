@@ -34,8 +34,8 @@ function summarize(p: Props, h: CoreHealth, restarting: boolean, startup: Startu
   }
   // Connected, still starting up behind the socket: say what it does (the first launch of a version rebuilds its views).
   if (startup?.phase === "starting") {
-    const doing = startup.tasks[0]?.label;
-    return { led: "working", text: doing ? `Starting · ${doing[0]!.toLowerCase()}${doing.slice(1)}` : "Starting…", detail: doing ? `${doing}. Terminals work meanwhile.` : "Finishing startup. Terminals work meanwhile." };
+    const doing = `${startup.tasks[0]?.label ?? "Starting"}…`;
+    return { led: "working", text: doing, detail: `${doing} Terminals work meanwhile.` };
   }
   if (h.unresponsive) return { led: "needs", text: "Core not responding", detail: "The core is connected but didn't answer in time." };
   if (h.outdated) return { led: "needs", text: "Core outdated · restart", detail: "Started from an older version than this app. Restart it to pick up the changes." };
