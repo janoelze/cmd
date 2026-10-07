@@ -1,6 +1,6 @@
 // The top bar (docs/21-sidebars.md): the app window's drag region, full width,
-// over the sidebars and the workspace. The traffic lights, then the Space
-// switcher; the view modes and New… at the right end.
+// over the sidebars and the workspace. The Space switcher in the middle, like a
+// window title; the view modes and New… at the right end.
 
 import { ICON, IconButton, Segmented } from "@cmd/ui";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
@@ -27,7 +27,8 @@ export function TopBar(p: Props) {
   const modes = MODES.map((m) => ({ ...m, shortcut: prettyAccelerator(keys.bindings[`view.${m.value}`]?.[0]) }));
   return (
     <header className="topbar">
-      <div className="topbar-lead">{p.spaceBar}</div>
+      <div className="topbar-lead" />
+      <div className="topbar-center">{p.spaceBar}</div>
       <div className="topbar-trail">
         <Segmented size="sm" iconSize={ICON.bar} label="View" value={p.mode} options={modes} onChange={(m) => p.run(`view.${m}`)} />
         <IconButton variant="default" size="sm" iconSize={ICON.bar} icon="plus" label="New…" onClick={p.onNew} />

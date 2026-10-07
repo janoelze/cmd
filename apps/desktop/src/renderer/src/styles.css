@@ -70,8 +70,13 @@ kbd {
 
 /* ── top bar ────────────────────────────────────────── */
 
+/* Three columns, the outer two equal while there's room: the middle one centres on
+   the window, not on what's left between the traffic lights and the controls.
+   Narrower, the lead keeps the lights' room and the trail its controls, and the
+   middle gives way (the Space name ellipsizes). */
 .topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(var(--lights-w, 0px), 1fr) auto minmax(max-content, 1fr);
   align-items: center;
   min-width: 0;
   padding: 0 var(--pad-x);
@@ -81,11 +86,13 @@ kbd {
   box-shadow: inset 0 -1px 0 var(--separator);
   -webkit-app-region: drag;
 }
-/* Room for the traffic lights (main/index.ts trafficLightPosition). */
-.platform-mac .topbar { padding-left: 80px; }
-.topbar-lead { display: flex; align-items: center; min-width: 0; -webkit-app-region: no-drag; }
-/* Pushed to the right end; the rest of the bar stays a drag region. */
-.topbar-trail { display: flex; align-items: center; gap: 8px; margin-left: auto; -webkit-app-region: no-drag; }
+/* Room for the traffic lights (main/index.ts trafficLightPosition): 80px from the window's edge. */
+.platform-mac .topbar { --lights-w: calc(80px - var(--pad-x)); }
+/* Empty for now: a drag region like the rest of the bar. */
+.topbar-lead { min-width: 0; }
+.topbar-center { display: flex; justify-content: center; min-width: 0; -webkit-app-region: no-drag; }
+/* At the right end; the rest of the bar stays a drag region. */
+.topbar-trail { display: flex; align-items: center; justify-content: flex-end; gap: 8px; -webkit-app-region: no-drag; }
 /* The bar style of the small controls, at full height: room for bar-sized icons. */
 .topbar-trail > .ui-seg[data-size="sm"], .topbar .topbar-trail > .ui-icon-button[data-size="sm"] { --h: var(--control-h); }
 /* On Retina the view-mode symbols' ink sits one device pixel below centre (measured);

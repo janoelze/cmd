@@ -17,15 +17,18 @@ const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" "
 
 export type Placement = "below" | "above";
 
+/** How a popover lines up with its anchor: their left edges, right edges or centres. */
+export type Align = "start" | "center" | "end";
+
 /** Where a popover of this size goes beside its anchor: below unless it only fits above, kept inside the window. */
-export function placePopover(anchor: { left: number; top: number; bottom: number; right: number }, size: { width: number; height: number }, view: { width: number; height: number }, prefer: Placement = "below", align: "start" | "end" = "start", gap = 6) {
+export function placePopover(anchor: { left: number; top: number; bottom: number; right: number }, size: { width: number; height: number }, view: { width: number; height: number }, prefer: Placement = "below", align: Align = "start", gap = 6) {
   const below = anchor.bottom + gap;
   const above = anchor.top - gap - size.height;
   const fitsBelow = below + size.height <= view.height - 8;
   const fitsAbove = above >= 8;
   const side: Placement = prefer === "below" ? (fitsBelow || !fitsAbove ? "below" : "above") : fitsAbove || !fitsBelow ? "above" : "below";
   const top = side === "below" ? below : above;
-  const left = align === "start" ? anchor.left : anchor.right - size.width;
+  const left = align === "start" ? anchor.left : align === "end" ? anchor.right - size.width : Math.round((anchor.left + anchor.right - size.width) / 2);
   return { side, top: Math.max(8, Math.min(top, view.height - size.height - 8)), left: Math.max(8, Math.min(left, view.width - size.width - 8)) };
 }
 
@@ -78,7 +81,7 @@ export function Popover({
   onClose: (why: DismissReason) => void;
   children: ReactNode;
   placement?: Placement;
-  align?: "start" | "end";
+  align?: Align;
   width?: number;
   className?: string;
   role?: "dialog" | "menu";
@@ -167,7 +170,7 @@ export function Menu({
   /** As wide as the anchor (a popup button's menu). */
   matchWidth?: boolean;
   placement?: Placement;
-  align?: "start" | "end";
+  align?: Align;
   label?: string;
   className?: string;
 }) {
