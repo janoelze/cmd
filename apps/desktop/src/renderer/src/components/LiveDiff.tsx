@@ -140,6 +140,10 @@ export function LiveDiff({ win }: WindowViewProps) {
               <div
                 className="ld-file-head"
                 role="button"
+                // Named by its path; the state and the counts change, so they are the description.
+                aria-label={rel}
+                aria-description={[`${st.tip}${file.staged ? ", staged" : ""}`, d?.added ? `+${d.added}` : "", d?.removed ? `−${d.removed}` : ""].filter(Boolean).join(", ")}
+                aria-expanded={open}
                 onClick={() => setToggled((m) => new Map(m).set(rel, !open))}
                 onDoubleClick={() => void openPath(abs)}
                 data-tip="Double-click to open"

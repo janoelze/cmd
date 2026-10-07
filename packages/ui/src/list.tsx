@@ -77,6 +77,9 @@ export function ListHeading({ title, count, open, onToggle, tone }: { title: Rea
       data-tone={tone}
       onClick={onToggle}
       role={collapsible ? "button" : undefined}
+      // Named by the title alone: a count in the name would change under a script looking for it.
+      aria-label={collapsible && typeof title === "string" ? title : undefined}
+      aria-description={collapsible && count !== undefined ? String(count) : undefined}
       aria-expanded={collapsible ? open : undefined}
     >
       <span className="ui-list-heading-title">{title}</span>

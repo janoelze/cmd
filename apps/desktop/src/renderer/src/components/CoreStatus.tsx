@@ -50,7 +50,15 @@ export function CoreStatus(p: Props) {
       <Popover anchor={button} open={open} onClose={() => setOpen(false)} placement="above" width={Math.max(280, button.current?.offsetWidth ?? 0)} className="core-details" label="Core">
         <Details summary={s} health={health} connected={p.connected} restart={restart} />
       </Popover>
-      <button ref={button} className={`core-status-button${open ? " open" : ""}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button
+        ref={button}
+        className={`core-status-button${open ? " open" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        // A steady name; the state and the live numbers are the description.
+        aria-label="Core"
+        aria-description={[s.text, usage].filter(Boolean).join(", ")}
+      >
         <StatusDot state={s.led === "ok" ? "success" : s.led} />
         <Slot className="core-status-text" value={{ text: s.text }} />
         <Slot className="core-status-usage" value={usage ? { text: usage, key: "usage" } : undefined} divider />

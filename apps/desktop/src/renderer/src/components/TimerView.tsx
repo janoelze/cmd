@@ -86,7 +86,15 @@ export function TimerView({ win }: WindowViewProps) {
             }}
           />
         ) : (
-          <button className="tm-time" data-tip={running ? undefined : "Set Time"} disabled={running} onClick={() => setEditing(clock(duration))}>
+          <button
+            className="tm-time"
+            data-tip={running ? undefined : "Set Time"}
+            // A steady name; the time left is its description.
+            aria-label="Set Time"
+            aria-description={clock(remaining)}
+            disabled={running}
+            onClick={() => setEditing(clock(duration))}
+          >
             {clock(remaining)}
           </button>
         )}

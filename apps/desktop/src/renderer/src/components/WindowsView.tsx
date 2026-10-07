@@ -946,6 +946,10 @@ export function WindowsView(p: Props) {
         <StripDots
           scroller={scrollerRef}
           slots={stripDots.map((d) => d.slot)}
+          names={stripDots.map((d) => {
+            const r = p.rows.find((x) => idOf(x) === d.id);
+            return r ? labelOf(r) : d.id;
+          })}
           total={stripTotal}
           viewport={stripW}
           selected={stripDots.findIndex((d) => d.id === selected)}
@@ -1047,6 +1051,8 @@ function Minimap(p: {
 function StripDots(p: {
   scroller: React.RefObject<HTMLDivElement | null>;
   slots: Slot[];
+  /** Each dot's window, by name. */
+  names: string[];
   total: number;
   viewport: number;
   selected: number;
@@ -1077,7 +1083,7 @@ function StripDots(p: {
   if (!shown || !footer) return null;
   return createPortal(
     <div className="strip-dots" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-      <PageDots count={p.slots.length} current={cur} onSelect={p.onGo} size="sm" label="Windows" />
+      <PageDots count={p.slots.length} current={cur} onSelect={p.onGo} size="sm" label="Windows" names={p.names} />
     </div>,
     footer,
   );

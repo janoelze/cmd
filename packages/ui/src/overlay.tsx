@@ -256,6 +256,9 @@ export function Menu({
               key={i}
               data-i={i}
               role={it.checked === undefined ? "menuitem" : "menuitemradio"}
+              // Named by the label alone, not its detail (a path) or shortcut.
+              aria-label={it.text ?? (typeof it.label === "string" ? it.label : undefined)}
+              aria-description={typeof it.detail === "string" ? it.detail : undefined}
               aria-checked={it.checked}
               aria-disabled={it.disabled || undefined}
               className={cls("ui-menu-item", it.className)}
