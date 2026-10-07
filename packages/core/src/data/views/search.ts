@@ -5,7 +5,9 @@
 // tolerates typos through the index's vocabulary, and answers with one hit
 // per session from the sessions view. Replaces search.sqlite's Searcher.
 
+import { Worker } from "node:worker_threads";
 import type { DataEvent, SearchHit } from "@cmd/protocol";
+import { logger } from "@cmd/protocol/node";
 import { SearchQuery, Vocabulary, words } from "../../search/query.ts";
 import { textOf } from "../sources/transcripts.ts";
 import type { DataService } from "../service.ts";
@@ -17,6 +19,8 @@ import type { SessionRow, SessionsView } from "./sessions.ts";
  * Only typo tolerance reads it; words as typed match the index directly.
  */
 const VOCAB_MAX_AGE_MS = 5 * 60_000;
+
+const log = logger("search");
 
 const oneLine = (t: string) => (t.split(/\r?\n/)[0] ?? t).trim().slice(0, 200);
 
@@ -32,6 +36,7 @@ export class SearchView {
   #vocab: Vocabulary | null = null;
   #vocabAt = 0;
   #vocabStale = false;
+  #vocabLoading = false;
 
   constructor(data: DataService, sessions: SessionsView) {
     this.#data = data;
@@ -43,20 +48,45 @@ export class SearchView {
     this.#vocabStale = true;
   }
 
-  #vocabulary(): Vocabulary {
-    if (!this.#vocab || (this.#vocabStale && Date.now() - this.#vocabAt >= VOCAB_MAX_AGE_MS)) {
-      this.#vocab = new Vocabulary(this.#data.store.db.prepare(`SELECT term, doc FROM events_vocab`).all() as { term: string; doc: number }[]);
-      this.#vocabAt = Date.now();
-      this.#vocabStale = false;
+  /**
+   * The vocabulary as it is; null until the first read is done. A log on disk is
+   * read on a worker (vocab-worker.ts: hundreds of ms on a big log, which would
+   * block the core), the old vocabulary serving meanwhile; a log in memory
+   * (tests) is read here.
+   */
+  #vocabulary(): Vocabulary | null {
+    const due = !this.#vocab || (this.#vocabStale && Date.now() - this.#vocabAt >= VOCAB_MAX_AGE_MS);
+    if (due && !this.#vocabLoading) {
+      const file = this.#data.store.file;
+      if (file === ":memory:") this.#loaded(this.#data.store.db.prepare(`SELECT term, doc FROM events_vocab`).all() as { term: string; doc: number }[]);
+      else {
+        this.#vocabLoading = true;
+        const w = new Worker(new URL("./vocab-worker.ts", import.meta.url), { workerData: { file } });
+        w.unref();
+        w.once("message", (m: { terms: string[]; docs: number[] }) => {
+          this.#vocabLoading = false;
+          this.#loaded(m.terms.map((term, i) => ({ term, doc: m.docs[i]! })));
+        });
+        w.once("error", (err) => {
+          this.#vocabLoading = false;
+          log.warn(`could not read the search vocabulary: ${err.message}`);
+        });
+      }
     }
     return this.#vocab;
+  }
+
+  #loaded(rows: { term: string; doc: number }[]): void {
+    this.#vocab = new Vocabulary(rows);
+    this.#vocabAt = Date.now();
+    this.#vocabStale = false;
   }
 
   search(text: string, limit = 60, now = Date.now()): SearchHit[] {
     const q = new SearchQuery(text);
     if (q.isEmpty) return [];
     const vocab = this.#vocabulary();
-    const expansions = q.terms.map((t) => vocab.expansions(t));
+    const expansions = q.terms.map((t) => vocab?.expansions(t) ?? []); // typo tolerance waits for the first read
 
     // Tier 1: every term as typed (prefix). Tier 2: typo-tolerant, only if tier 1 came up short.
     let ranked = this.#match(q.expression(), now);

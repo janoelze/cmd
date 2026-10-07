@@ -26,7 +26,8 @@ export type IngestRequest = { type: "ack" } | { type: "learn"; agent: AgentKind;
 /** Worker → core. */
 export type IngestMessage =
   | { type: "progress"; done: number; total: number }
-  | { type: "file"; file: FoundFile; state: FileState; events: StoreEvent[]; sessionId: string | null }
+  /** A file's events; a big file comes in several messages (`more` on all but the last), each acked, since receiving one blocks the core for its size. */
+  | { type: "file"; file: FoundFile; state: FileState; events: StoreEvent[]; sessionId: string | null; more?: boolean }
   | { type: "removed"; paths: string[] }
   | { type: "pass"; changed: number; removed: number; files: number }
   | { type: "learned"; root: TranscriptRoot }
@@ -41,6 +42,21 @@ const known = new Map<string, FileState>(knownList.map((k) => [k.path, k]));
 
 let ack: (() => void) | null = null;
 const acked = () => new Promise<void>((r) => (ack = r));
+
+/** A message's events hold at most this much text (receiving 134 MB in one took the core 120 ms) or this many events. */
+const CHUNK_CHARS = 4 * 1024 * 1024;
+const CHUNK_EVENTS = 500;
+function chunks(events: StoreEvent[]): StoreEvent[][] {
+  const out: StoreEvent[][] = [[]];
+  let chars = 0;
+  for (const e of events) {
+    const n = (e.content?.length ?? 0) + (e.body?.length ?? 0) + (e.text?.length ?? 0) + 200;
+    if (out.at(-1)!.length && (chars + n > CHUNK_CHARS || out.at(-1)!.length >= CHUNK_EVENTS)) out.push([]), (chars = 0);
+    out.at(-1)!.push(e);
+    chars += n;
+  }
+  return out;
+}
 
 async function pass(): Promise<void> {
   try {
@@ -62,9 +78,12 @@ async function pass(): Promise<void> {
       }
       const state: FileState = { path: f.path, rootDir: f.root.dir, size: f.size, mtime: f.mtime, offset: result.offset, lines: result.lines, agent: result.agent };
       known.set(f.path, state);
-      const wait = acked();
-      post({ type: "file", file: f, state, events: result.events.map(redactEvent), sessionId: result.sessionId });
-      await wait;
+      const parts = chunks(result.events.map(redactEvent));
+      for (const [j, events] of parts.entries()) {
+        const wait = acked();
+        post({ type: "file", file: f, state, events, sessionId: result.sessionId, more: j < parts.length - 1 });
+        await wait;
+      }
       if (changed.length > 10 && (i + 1) % 10 === 0) post({ type: "progress", done: i + 1, total: changed.length });
     }
     post({ type: "pass", changed: changed.length, removed: removed.length, files: files.length });

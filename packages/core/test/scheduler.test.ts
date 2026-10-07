@@ -13,7 +13,7 @@ describe("scheduler", () => {
     // 100 ms of work in 2 ms steps: at a quarter share it needs about 400 ms of wall time.
     for (let i = 0; i < 50; i++) {
       burn(2);
-      await s.yield("job");
+      await s.yield();
     }
     const wall = performance.now() - t0;
     expect(wall).toBeGreaterThan(250);

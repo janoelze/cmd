@@ -31,6 +31,15 @@ export const STALL_MS = 100;
 const TICK_MS = 50;
 const STALLS_KEPT = 20;
 
+/** What a long job needs from the scheduler: a yield between steps and a name for the watchdog. Tests pass `inlinePacer`. */
+export interface Pacer {
+  yield(): Promise<void>;
+  mark(activity: string): () => void;
+}
+
+/** A pacer that only gives the next tick: tests, the lab, views built in memory. */
+export const inlinePacer: Pacer = { yield: () => new Promise<void>((r) => setImmediate(r)), mark: () => () => {} };
+
 export interface SchedulerOptions {
   budgetMs?: number;
   share?: number;
@@ -38,7 +47,7 @@ export interface SchedulerOptions {
   watchdog?: boolean;
 }
 
-export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [Stall] }> {
+export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [Stall] }> implements Pacer {
   #budget: number;
   #share: number;
   /** When the current slice of background work began, or null between slices. */
@@ -83,18 +92,21 @@ export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [
    * else after a pause that keeps background work to its share. Call it every
    * few hundred rows, and at least every few ms of work.
    */
-  async yield(activity?: string): Promise<void> {
+  async yield(): Promise<void> {
     const now = performance.now();
     this.#sliceAt ??= now;
     const used = now - this.#sliceAt;
     if (used < this.#budget) {
       await new Promise<void>((r) => setImmediate(r));
     } else {
+      // The job isn't running while it pauses: a stall then is someone else's.
+      const held = this.#current;
+      this.#current = null;
       const pause = Math.min(MAX_PAUSE_MS, (used * (1 - this.#share)) / this.#share);
       await new Promise<void>((r) => setTimeout(r, pause));
+      this.#current = held;
       this.#sliceAt = performance.now();
     }
-    if (activity) this.mark(activity);
   }
 
   /**

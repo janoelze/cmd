@@ -5,6 +5,7 @@
 
 import type { AgentKind, DataEvent, SessionInfo } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
+import { inlinePacer, type Pacer } from "../../scheduler.ts";
 import type { DataService } from "../service.ts";
 import type { ViewsStore } from "./views.ts";
 
@@ -101,13 +102,13 @@ export class SessionsView {
 
   /** The view's rules changed (or it is new): rebuild() is due. With `deferRebuild` the owner runs it (Core.start). */
   readonly needsRebuild: boolean;
-  /** Between pages of a rebuild (the scheduler's yield; by default the next tick). */
-  #pace: () => Promise<void>;
+  /** Between steps of a rebuild (the scheduler; by default the next tick). */
+  #pace: Pacer;
 
-  constructor(views: ViewsStore, data: DataService, o: { deferRebuild?: boolean; pace?: () => Promise<void> } = {}) {
+  constructor(views: ViewsStore, data: DataService, o: { deferRebuild?: boolean; pace?: Pacer } = {}) {
     this.#views = views;
     this.#data = data;
-    this.#pace = o.pace ?? (() => new Promise<void>((r) => setImmediate(r)));
+    this.#pace = o.pace ?? inlinePacer;
     const { rebuilt } = views.ensure("sessions", VERSION, ["sessions"], SQL);
     this.needsRebuild = rebuilt && !!o.deferRebuild;
     if (rebuilt && !o.deferRebuild && data.store.count({ types: ["transcript."], limit: 1 }) > 0) void this.rebuild();
@@ -256,6 +257,7 @@ export class SessionsView {
     const files = this.#views.db.prepare(`SELECT key, path, env FROM sessions WHERE path IS NOT NULL OR env IS NOT NULL`).all() as { key: string; path: string | null; env: string | null }[];
     this.#views.db.exec(`DELETE FROM sessions`);
     this.#rebuilding = true;
+    const done = this.#pace.mark("sessions rebuild");
     const span = this.#data.store.db.prepare(
       `SELECT seq, type, at, until, session_id AS sessionId, project_id AS projectId, text, json_extract(data, '$.cwd') AS cwd, json_extract(data, '$.gitBranch') AS gitBranch, json_extract(data, '$.role') AS role, json_extract(data, '$.isSidechain') AS isSidechain, json_extract(data, '$.isMeta') AS isMeta
        FROM events WHERE seq > ? AND seq <= ? AND type >= 'transcript.' AND type < 'transcript/' ORDER BY seq`,
@@ -268,7 +270,7 @@ export class SessionsView {
         if (!rows.length) continue;
         this.#applyFolded(rows);
         n += rows.length;
-        await this.#pace();
+        await this.#pace.yield();
       }
       // Names, in the order they were given.
       for (let after = 0; ; ) {
@@ -293,10 +295,11 @@ export class SessionsView {
               if (f) keep.run(f.path, f.env ? JSON.stringify(f.env) : null, m.key);
             }
           });
-          await this.#pace();
+          await this.#pace.yield();
         }
       }
     } finally {
+      done();
       this.#rebuilding = false;
     }
     log.info("sessions rebuilt from events", { events: n, sessions: this.counts().sessions, ms: Date.now() - t0 });

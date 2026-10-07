@@ -26,6 +26,7 @@ import type { CallOptions } from "../ai/service.ts";
 import { digest, eventsHash, type Digest } from "./digest.ts";
 import { gitEvents, gitStamp } from "./git.ts";
 import { JournalStore, type NewJournalEvent } from "./store.ts";
+import { inlinePacer, type Pacer } from "../scheduler.ts";
 import { buildThreads } from "./threads.ts";
 import { SCHEMA, SYSTEM, toDay, type WrittenDay } from "./writer.ts";
 
@@ -71,6 +72,8 @@ export interface JournalServiceOptions {
   agentSpace: (agentId: string) => SpaceId | null;
   ai: JournalAi | null;
   now?: () => number;
+  /** Between steps of a sync (the scheduler; by default the next tick). */
+  pace?: Pacer;
 }
 
 export type WriteMode = "never" | "stale" | "force";
@@ -126,6 +129,16 @@ export class JournalService {
   }
 
   async #sync(): Promise<void> {
+    const pace = this.#o.pace ?? inlinePacer;
+    const done = pace.mark("journal sync");
+    try {
+      await this.#syncGit(pace);
+    } finally {
+      done();
+    }
+  }
+
+  async #syncGit(pace: Pacer): Promise<void> {
     const now = this.#now;
     const since = this.#read.git ? this.#read.git - SYNC_OVERLAP : now - (this.#reread ? REREAD_DAYS : FIRST_SYNC_DAYS) * DAY_MS;
     const t0 = Date.now();
@@ -148,7 +161,11 @@ export class JournalService {
       } catch {
         continue;
       }
-      git += this.store.recordAll(ev.map((e) => ({ ...e, spaceId: this.#spaceOf(e.repo) })));
+      // A first read is thousands of events (90 days of a busy repository): a few hundred per step.
+      for (let i = 0; i < ev.length; i += 200) {
+        git += this.store.recordAll(ev.slice(i, i + 200).map((e) => ({ ...e, spaceId: this.#spaceOf(e.repo) })));
+        await pace.yield();
+      }
       if (stamp !== null) this.#stamps.set(r, stamp);
     }
     this.#read.git = now;

@@ -8,6 +8,7 @@
 import { ACTIVITY_SCHEMA, TURN_FORMAT, type ActivityEvent, type ActivityKind, type AgentCoverage, type AgentId, type AgentKind, type AgentTurn, type DataEvent, type PaneId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
+import { inlinePacer, type Pacer } from "../../scheduler.ts";
 import { capPayload, normalize, type RawEvent } from "../../agents/activity/normalize.ts";
 import { ActivityReducer, type Reduction } from "../../agents/activity/reduce.ts";
 
@@ -63,14 +64,16 @@ export class ActivityView {
 
   /** The view's rules changed (or it is new): rebuild() is due. With `deferRebuild` the owner runs it (Core.start). */
   readonly needsRebuild: boolean;
+  #pace: Pacer;
 
-  constructor(data: DataService, views: ViewsStore, o: { deferRebuild?: boolean } = {}) {
+  constructor(data: DataService, views: ViewsStore, o: { deferRebuild?: boolean; pace?: Pacer } = {}) {
     this.#data = data;
     this.#views = views;
+    this.#pace = o.pace ?? inlinePacer;
     this.recordedBy = data.recordedBy;
     const { rebuilt } = views.ensure("turns", TURN_FORMAT, ["turns"], TURNS_SQL);
     this.needsRebuild = rebuilt && !!o.deferRebuild;
-    if (rebuilt && !o.deferRebuild && this.#data.store.count({ types: TYPES, limit: 1 }) > 0) this.rebuild();
+    if (rebuilt && !o.deferRebuild && this.#data.store.count({ types: TYPES, limit: 1 }) > 0) void this.rebuild();
     data.onPrune((before) => this.prune(before));
   }
 
@@ -193,18 +196,22 @@ export class ActivityView {
   }
 
   /** Turns from the events again, every agent's, with the current rules (TURN_FORMAT changed, or asked to). */
-  rebuild(): { agents: number; turns: number } {
+  /** The view from every agent's events again, an agent per step (readers see it fill; `#rebuilding` keeps listeners quiet). */
+  async rebuild(): Promise<{ agents: number; turns: number }> {
     const t0 = Date.now();
     const agents = this.#data.store.db.prepare(`SELECT DISTINCT agent_id FROM events WHERE type = 'agent.hook' AND agent_id IS NOT NULL`).all() as { agent_id: string }[];
     let turns = 0;
     this.#rebuilding = true;
+    const done = this.#pace.mark("turns rebuild");
     try {
-    this.#views.transaction(() => {
       this.#views.db.exec(`DELETE FROM turns`);
-      for (const { agent_id } of agents) this.replay(agent_id, (t, seq, cwd) => this.saveTurn(t, seq, cwd));
+      for (const { agent_id } of agents) {
+        this.#views.transaction(() => this.replay(agent_id, (t, seq, cwd) => this.saveTurn(t, seq, cwd)));
+        await this.#pace.yield();
+      }
       turns = (this.#views.db.prepare(`SELECT COUNT(*) AS n FROM turns`).get() as { n: number }).n;
-    });
     } finally {
+      done();
       this.#rebuilding = false;
     }
     log.info("turns rebuilt from events", { agents: agents.length, turns, ms: Date.now() - t0 });

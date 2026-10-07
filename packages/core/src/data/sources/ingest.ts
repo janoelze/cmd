@@ -20,6 +20,7 @@ import { planPass, scanFiles, type FileState } from "./ingest-pass.ts";
 import type { IngestMessage, IngestRequest, WorkerInit } from "./ingest-worker.ts";
 import { readTranscript } from "./transcripts.ts";
 import { describeSession } from "../describe.ts";
+import { inlinePacer, type Pacer } from "../../scheduler.ts";
 
 const log = logger("transcripts");
 
@@ -55,8 +56,8 @@ export interface IngestOptions {
   roots: TranscriptRoot[];
   /** Read on this thread, now, instead of in a worker (tests). */
   inline?: boolean;
-  /** Between steps of recording a file (the scheduler's yield; by default the next tick). */
-  pace?: () => Promise<void>;
+  /** Between steps of recording a file (the scheduler; by default the next tick). */
+  pace?: Pacer;
 }
 
 export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; changed: [] }> {
@@ -166,20 +167,27 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
    * thousands of events. Where the file's reading stopped is saved with the last.
    * The worker redacted them already.
    */
-  async #recordInSteps(state: FileState, events: ReturnType<typeof readTranscript>["events"], env: Record<string, string> | null): Promise<void> {
-    let step = STEP;
-    for (let i = 0; ; ) {
-      const n = Math.min(step, events.length - i);
-      const last = i + n >= events.length;
-      const t0 = performance.now();
-      this.#record(last ? state : null, events.slice(i, i + n), env, state, true);
-      if (last) return;
-      i += n;
-      const ms = performance.now() - t0;
-      if (ms > STEP_SLOW_MS) step = Math.max(STEP_MIN, step >> 1);
-      else if (ms < STEP_FAST_MS) step = Math.min(STEP_MAX, step << 1);
-      await (this.#o.pace?.() ?? new Promise<void>((r) => setImmediate(r)));
-      if (this.#closed) return;
+  /** `final`: this is the file's last chunk (the worker sends a big file in several), so its state is saved with the last step. */
+  async #recordInSteps(state: FileState, events: ReturnType<typeof readTranscript>["events"], env: Record<string, string> | null, final = true): Promise<void> {
+    const pace = this.#o.pace ?? inlinePacer;
+    const done = pace.mark("transcripts");
+    try {
+      let step = STEP;
+      for (let i = 0; ; ) {
+        const n = Math.min(step, events.length - i);
+        const last = i + n >= events.length;
+        const t0 = performance.now();
+        this.#record(last && final ? state : null, events.slice(i, i + n), env, state, true);
+        if (last) return;
+        i += n;
+        const ms = performance.now() - t0;
+        if (ms > STEP_SLOW_MS) step = Math.max(STEP_MIN, step >> 1);
+        else if (ms < STEP_FAST_MS) step = Math.min(STEP_MAX, step << 1);
+        await pace.yield();
+        if (this.#closed) return;
+      }
+    } finally {
+      done();
     }
   }
 
@@ -203,7 +211,7 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
         this.#setStatus({ indexing: m.done < m.total, done: m.done, total: m.total });
         break;
       case "file":
-        void this.#recordInSteps(m.state, m.events, m.file.root.env)
+        void this.#recordInSteps(m.state, m.events, m.file.root.env, !m.more)
           .catch((err) => log.error(`recording ${m.file.path} failed`, err))
           .finally(() => this.#send({ type: "ack" }));
         break;

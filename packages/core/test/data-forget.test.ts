@@ -142,7 +142,7 @@ describe("replaying agents with their pane's activity", () => {
     const t0 = Date.now() - 3600_000;
     hook(t0, "UserPromptSubmit", { prompt: "do it" });
     span(t0, t0 + 20_000); // output for 20 s, then nothing (Esc, no event)
-    view.rebuild();
+    await view.rebuild();
     const [t] = view.turns("a1");
     expect(t).toMatchObject({ outcome: "interrupted", endedAt: t0 + 20_000 });
     expect(t!.inferred.join()).toMatch(/quiet for 30 s/);
@@ -163,7 +163,7 @@ describe("replaying agents with their pane's activity", () => {
     const t0 = Date.now() - 3600_000;
     hook(t0, "UserPromptSubmit", { prompt: "do it" });
     hook(t0 + 100_000, "Stop", { last_assistant_message: "Done." });
-    view.rebuild();
+    await view.rebuild();
     expect(view.turns("a1")[0]).toMatchObject({ outcome: "done" });
   });
 
@@ -176,7 +176,7 @@ describe("replaying agents with their pane's activity", () => {
     hook(t0 + 61_000, "UserPromptSubmit", { prompt: "second, after Esc" }); // 55 s of nothing
     hook(t0 + 70_000, "UserPromptSubmit", { prompt: "and also this" }); // while it works
     hook(t0 + 90_000, "Stop", { last_assistant_message: "Done." });
-    view.rebuild();
+    await view.rebuild();
     const turns = view.turns("a1");
     expect(turns.map((t) => [t.prompt, t.outcome])).toEqual([["first", "interrupted"], ["second, after Esc", "done"]]);
     expect(turns[1]!.followUps).toEqual(["and also this"]);
@@ -189,7 +189,7 @@ describe("replaying agents with their pane's activity", () => {
     hook(t0 + 120_000, "Stop", { last_assistant_message: "Thought." });
     hook(t0 + 200_000, "UserPromptSubmit", { prompt: "after the upgrade" });
     span(t0 + 200_000, t0 + 210_000);
-    view.rebuild();
+    await view.rebuild();
     expect(view.turns("a1").map((t) => [t.prompt, t.outcome])).toEqual([["think long", "done"], ["after the upgrade", "interrupted"]]);
   });
 });

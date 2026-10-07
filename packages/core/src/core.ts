@@ -286,12 +286,12 @@ export class Core {
     this.data.on("batch", (events) => this.#dataChanged(events));
     // Views follow what was forgotten or excluded: rebuilt from what's left.
     this.data.on("removed", ({ types }) => {
-      if (types.some((t) => t.startsWith("agent."))) this.agents.activity.rebuild();
+      if (types.some((t) => t.startsWith("agent."))) void this.agents.activity.rebuild();
       if (types.some((t) => t.startsWith("transcript."))) void this.sessions.rebuild().then(() => this.#searchView.invalidate());
     });
-    const activity = new ActivityView(this.data, this.views, { deferRebuild: !!opts.stateDir });
+    const activity = new ActivityView(this.data, this.views, { deferRebuild: !!opts.stateDir, pace: this.scheduler });
     activity.spaceOf = (paneId) => this.panes.get(paneId)?.spaceId ?? null;
-    this.sessions = new SessionsView(this.views, this.data, { deferRebuild: !!opts.stateDir, pace: () => this.scheduler.yield("sessions rebuild") });
+    this.sessions = new SessionsView(this.views, this.data, { deferRebuild: !!opts.stateDir, pace: this.scheduler });
     this.sessions.onChange((rows) => this.#viewChanged("sessions", rows));
     this.sessions.onReset(() => this.#viewReset((q) => q.view === "sessions"));
     activity.onTurn((t, cwd) => this.#viewChanged("turns", [{ ...t, cwd }]));
@@ -404,6 +404,7 @@ export class Core {
           return p ? (this.ai.status().providers[p].models?.smart.name ?? null) : null;
         },
       },
+      pace: this.scheduler,
     });
     recordWindows(this.data, this.windows);
     recordSpaces(this.data, this.spaces);
@@ -501,7 +502,7 @@ export class Core {
       });
     }
     // Views whose rules changed: from the log again (after the import, which they read).
-    if (this.agents.activity.needsRebuild) s.startup("turns", "Rebuilding agent turns", () => void this.agents.activity.rebuild());
+    if (this.agents.activity.needsRebuild) s.startup("turns", "Rebuilding agent turns", async () => void (await this.agents.activity.rebuild()));
     if (this.sessions.needsRebuild) s.startup("sessions", "Indexing sessions", () => this.sessions.rebuild().then(() => this.#searchView.invalidate()));
     // Transcripts are read in a worker and recorded here in paced steps; the reading's own progress is search.status.
     if (o.transcripts || o.transcriptRoots) s.startup("transcripts", "Starting the transcript reader", () => void this.settings.bind(["data.record.transcripts", "search.archiveDirs"], () => this.#restartSearch()));
@@ -619,7 +620,7 @@ export class Core {
     "data.unsubscribe": () => null,
     "data.forget": (p) => ({ events: this.data.forget(p) }),
     "data.applyRules": async () => ({ events: await this.data.applyRules() }),
-    "data.rebuild": async (p) => (p.view === "turns" ? { rows: this.agents.activity.rebuild().turns } : { rows: (await this.sessions.rebuild(), this.sessions.counts().sessions) }),
+    "data.rebuild": async (p) => (p.view === "turns" ? { rows: (await this.agents.activity.rebuild()).turns } : { rows: (await this.sessions.rebuild(), this.sessions.counts().sessions) }),
     "data.entities": (p) => {
       const list = p.id ? [this.data.store.entityOf(p.kind, p.id)].filter((e) => !!e) : this.data.store.entities(p.kind).slice(0, Math.min(p.limit ?? 50, 1000)).map((e) => ({ kind: p.kind, ...e }));
       return list.map((e) => ({ ...e!, links: this.data.store.linksOf(p.kind, e!.id) }));
@@ -895,7 +896,7 @@ export class Core {
       if (s["data.record.transcripts"]) {
         const archives = s["search.archiveDirs"].split(",").map((d) => d.trim()).filter(Boolean);
         const roots = this.#opts.transcriptRoots?.(s) ?? this.transcripts.locate(locateContext(), archives);
-        next = new TranscriptIngest({ data: this.data, views: this.views, sessions: this.sessions, sources: this.transcripts, roots, inline: this.#opts.ingestInline, pace: () => this.scheduler.yield("transcripts") });
+        next = new TranscriptIngest({ data: this.data, views: this.views, sessions: this.sessions, sources: this.transcripts, roots, inline: this.#opts.ingestInline, pace: this.scheduler });
         for (const h of this.homes.all()) next.learnHome(h.agent, h.dir);
         next.on("status", (status) => this.#broadcast({ type: "search.status", status }));
         next.on("changed", () => this.#searchView.invalidate());
