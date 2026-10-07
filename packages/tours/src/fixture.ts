@@ -20,7 +20,8 @@ export function makeFixture(dir: string, files: Record<string, string> = {}, set
   fs.rmSync(dir, { recursive: true, force: true });
   // One home for everything: the app, the shells, and the transcripts (its ~/.claude), as on a real Mac;
   // the core finds agent homes (and their hooks) under the transcripts home.
-  const home = path.join(dir, "home");
+  // Named like the person's home (/Users/kai): a Files window on it is called "kai".
+  const home = path.join(dir, "kai");
   const f: Fixture = { cmdHome: dir, home, transcripts: home };
   for (const d of [path.join(dir, "ui"), home, path.join(home, ".claude", "projects")]) fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(home, ".claude", "settings.json"), "{}\n");
