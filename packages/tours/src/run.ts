@@ -47,10 +47,10 @@ export async function runTour(file: string, out: string, seed = 1) {
   fs.mkdirSync(out, { recursive: true });
   const fixture = makeFixture(path.join(root, ".cmd-dev", "tours", name), meta.files, meta.settings);
   if ((meta.persona ?? "kai") === "kai") applyKai(fixture);
-  const secrets = meta.ai ? addAiKeys(fixture) : null;
+  const ai = meta.ai ? addAiKeys(fixture) : null;
   const helper = Helper.start();
   const require = createRequire(path.join(root, "apps/desktop/package.json"));
-  const app = await electron.launch({ executablePath: require("electron") as unknown as string, args: [path.join(root, "apps/desktop")], env: fixtureEnv(fixture) });
+  const app = await electron.launch({ executablePath: require("electron") as unknown as string, args: [path.join(root, "apps/desktop")], env: fixtureEnv(fixture, ai?.env) });
   let recording = false;
   try {
     const page = await app.firstWindow();
@@ -63,6 +63,8 @@ export async function runTour(file: string, out: string, seed = 1) {
       app.focus({ steal: true });
       win.focus();
     }, [w, h]);
+    // cmd's hook in the fixture's Claude Code, so the sidebar follows its sessions.
+    if (ai?.env.ANTHROPIC_API_KEY) await page.evaluate((file) => (window as unknown as { cmd: { call: (m: string, p: unknown) => Promise<unknown> } }).cmd.call("hooks.install", { file }), path.join(fixture.home, ".claude", "settings.json"));
     const tour = new Tour(app, page, helper, seed);
     await page.waitForTimeout(400);
     if (meta.setup) await meta.setup(tour);
@@ -91,7 +93,7 @@ export async function runTour(file: string, out: string, seed = 1) {
       execFileSync(process.execPath, [path.join(root, "scripts/stop-core.mjs"), "--terminals"], { env: { ...process.env, CMD_HOME: fixture.cmdHome }, stdio: "ignore" });
     } catch {}
     // The key doesn't outlive the run.
-    if (secrets) fs.rmSync(secrets, { force: true });
+    if (ai) fs.rmSync(ai.secrets, { force: true });
   }
 }
 
