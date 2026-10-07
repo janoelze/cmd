@@ -164,7 +164,7 @@ export function render(dir: string, o: PostOptions = {}): string {
   const cmds = path.join(work, "pointer.cmd");
   fs.writeFileSync(cmds, lines.join("\n") + "\n");
 
-  // The graph.
+  // The graph. The looped images never end on their own: -t stops at the recording's length.
   const inputs = ["-loop", "1", "-i", wall, "-loop", "1", "-i", shadow, "-i", path.join(dir, "raw.mov"), "-loop", "1", "-i", mask];
   const g: string[] = [
     `[2:v]fps=${FPS},sendcmd=f='${cmds}',format=rgba[v]`,
@@ -194,7 +194,7 @@ export function render(dir: string, o: PostOptions = {}): string {
   g.push(`[${label}]scale=${outW}:-2:flags=lanczos,format=yuv420p[out]`);
 
   const out = path.join(dir, "tour.mp4");
-  execFileSync("ffmpeg", ["-v", "error", "-y", ...inputs, "-filter_complex", g.join(";"), "-map", "[out]", "-r", String(FPS), "-c:v", "libx264", "-preset", "medium", "-crf", "15", "-movflags", "+faststart", out], { stdio: "inherit" });
+  execFileSync("ffmpeg", ["-v", "error", "-y", ...inputs, "-filter_complex", g.join(";"), "-map", "[out]", "-t", duration.toFixed(3), "-r", String(FPS), "-c:v", "libx264", "-preset", "medium", "-crf", "15", "-movflags", "+faststart", out], { stdio: "inherit" });
   return out;
 }
 
