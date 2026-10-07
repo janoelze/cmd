@@ -54,5 +54,6 @@ export default async function (t: Tour) {
   await p.getByRole("option", { name: "Canvas", exact: true, selected: true }).waitFor();
   await t.pause(300);
   await t.press("Return");
+  await t.away();
   await t.pause(1800);
 }

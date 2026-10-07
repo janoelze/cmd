@@ -204,6 +204,21 @@ export class Tour {
     await this.app.evaluate(({ Menu }, id) => Menu.getApplicationMenu()?.getMenuItemById(id)?.click(), id);
   }
 
+  /**
+   * Moves the pointer off what it rests on, a little way into the window:
+   * after clicking a button, its hover state and tooltip would stay up.
+   */
+  async away() {
+    const b = await this.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getContentBounds());
+    const dx = this.at.x > b.x + b.width / 2 ? -1 : 1;
+    const dy = this.at.y > b.y + b.height / 2 ? -1 : 1;
+    const to = {
+      x: Math.min(Math.max(this.at.x + dx * between(this.r, 120, 220), b.x + 40), b.x + b.width - 40),
+      y: Math.min(Math.max(this.at.y + dy * between(this.r, 80, 160), b.y + 60), b.y + b.height - 60),
+    };
+    await this.moveTo(to, 200);
+  }
+
   async pause(ms: number) {
     await sleep(ms);
   }
