@@ -6,7 +6,7 @@
 
 import { Button, EmptyState, ToolbarSearchField, WindowToolbar } from "@cmd/ui";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { PaneId, SearchHit, SearchStatus } from "@cmd/protocol";
+import type { PaneId, SearchHit, SearchStatus, SpaceId } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { openSession } from "../actions.ts";
 import { usePersisted, useStoreValue, subscribeView } from "../store.ts";
@@ -25,6 +25,7 @@ export interface SidebarRequest {
 
 /** What the Navigator shows and does, from App. */
 export interface NavigatorData {
+  spaceId: SpaceId;
   /** The Space's rows, sidebars left out (they are always in view). */
   rows: SidebarRow[];
   selected: PaneId | null;
@@ -91,7 +92,7 @@ function Navigator(p: NavigatorData) {
         .filter((x): x is string => !!x),
     [p.rows],
   );
-  const recent = useRecent(live, p.search);
+  const recent = useRecent(p.spaceId, live, p.search);
   const matches = useMemo(() => (searching ? filterRows(p.rows, query, now) : []), [searching, p.rows, query, now]);
   const hits = useHistorySearch(query);
 
@@ -208,8 +209,8 @@ function Navigator(p: NavigatorData) {
   );
 }
 
-/** The newest past sessions that aren't open; refreshed when the index or the open agents change. */
-function useRecent(live: string[], status: SearchStatus | null): SearchHit[] {
+/** The Space's newest past sessions that aren't open; refreshed when the index or the open agents change. */
+function useRecent(spaceId: SpaceId, live: string[], status: SearchStatus | null): SearchHit[] {
   const limit = useStoreValue((s) => s.settings.settings["ui.sidebarRecent"]);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const liveKey = live.join("\n");
@@ -228,12 +229,12 @@ function useRecent(live: string[], status: SearchStatus | null): SearchHit[] {
   useEffect(() => {
     if (limit <= 0) return setHits([]);
     let stale = false;
-    cmd.call("search.recent", { limit, exclude: live }).then(
+    cmd.call("search.recent", { limit, exclude: live, spaceId }).then(
       (h) => !stale && setHits(h),
       () => !stale && setHits([]), // search off, or an older core
     );
     return () => void (stale = true);
-  }, [liveKey, indexKey, limit, tick]);
+  }, [spaceId, liveKey, indexKey, limit, tick]);
   return hits;
 }
 

@@ -702,7 +702,7 @@ export class Core {
     "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),
     "search.query": (p) => this.#searchView.search(p.text, p.limit),
-    "search.recent": (p) => this.#searchView.recent(Math.min(p.limit ?? 5, 50), p.exclude),
+    "search.recent": (p) => this.#searchView.recent(Math.min(p.limit ?? 5, 50), p.exclude, p.spaceId ? (row) => this.spaces.of(row.cwd) === p.spaceId : undefined),
     "search.status": () => this.#ingest?.status() ?? NO_SEARCH,
     "search.reindex": () => {
       if (!this.#ingest) throw new Error("transcripts are off (Settings → Data)");

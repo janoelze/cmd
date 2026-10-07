@@ -165,6 +165,17 @@ describe("SpaceManager", () => {
     expect(spaces.match(path.join(proj, "packages", "core", "src")).id).toBe(p.id); // closed Spaces don't match
   });
 
+  it("places an already canonical path, or none, like match", () => {
+    const { home, proj, projOld } = fixture("of");
+    const spaces = new SpaceManager(null, home);
+    const p = spaces.open(proj).space;
+    const core = spaces.open(path.join(proj, "packages", "core")).space;
+    expect(spaces.of(p.root)).toBe(p.id);
+    expect(spaces.of(path.join(core.root, "src"))).toBe(core.id);
+    expect(spaces.of(canonical(projOld))).toBe(HOME_SPACE_ID);
+    expect(spaces.of(null)).toBe(HOME_SPACE_ID);
+  });
+
   it("closes to a recent Space and reopens it with its name and view, at the end of the order", () => {
     const { home, proj, projOld } = fixture("reopen");
     const spaces = new SpaceManager(null, home);

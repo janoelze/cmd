@@ -741,6 +741,7 @@ export function App() {
 
   // Every Navigator window shows this (components/Navigator.tsx).
   const navigatorData: NavigatorData = {
+    spaceId: all.spaceId,
     rows,
     selected,
     onSelect: selectRow,

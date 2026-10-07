@@ -352,7 +352,7 @@ export interface Methods {
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };
   /** The most recently active past sessions, newest first; `exclude`: session ids to leave out (open ones). */
-  "search.recent": { params: { limit?: number; exclude?: string[] }; result: SearchHit[] };
+  "search.recent": { params: { limit?: number; exclude?: string[]; /** Only sessions whose cwd belongs to this Space. */ spaceId?: SpaceId }; result: SearchHit[] };
   "search.status": { params: {}; result: SearchStatus };
   /** Rebuild the transcript index from scratch; progress arrives as search.status events. Fails when search is off. */
   "search.reindex": { params: {}; result: null };

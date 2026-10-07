@@ -188,9 +188,9 @@ export class SessionsView {
     return this.#views.stmt(`SELECT * FROM sessions WHERE updated >= ? AND started IS NOT NULL ORDER BY started`).all(since) as unknown as SessionRow[];
   }
 
-  /** The most recently active, newest first. */
-  recent(limit: number): SessionRow[] {
-    return this.#views.stmt(`SELECT * FROM sessions WHERE started IS NOT NULL ORDER BY updated DESC LIMIT ?`).all(limit) as unknown as SessionRow[];
+  /** The most recently active, newest first; `offset` pages further back. */
+  recent(limit: number, offset = 0): SessionRow[] {
+    return this.#views.stmt(`SELECT * FROM sessions WHERE started IS NOT NULL ORDER BY updated DESC LIMIT ? OFFSET ?`).all(limit, offset) as unknown as SessionRow[];
   }
 
   counts(): { sessions: number } {

@@ -112,6 +112,11 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     return { ...(deepest(this.#open(), c) ?? this.home()) };
   }
 
+  /** The open Space an already canonical path belongs to, as `match` decides, without touching the disk (no path: Home). */
+  of(p: string | null): SpaceId {
+    return (p && deepest(this.#open(), p)?.id) || HOME_SPACE_ID;
+  }
+
   update(id: SpaceId, patch: { name?: string; icon?: string | null; order?: number; view?: Record<string, unknown>; active?: boolean }): Space {
     const s = this.#must(id);
     if (patch.active) s.lastActiveAt = Date.now();

@@ -236,6 +236,12 @@ describe("owned transcripts + search", () => {
     expect(searcher.recent(1)).toHaveLength(1);
   });
 
+  it("lists recent sessions only from the folders a filter keeps, paging past the rest", () => {
+    const keep = (r: { cwd: string | null }) => r.cwd === "/Users/me/src/c";
+    expect(searcher.recent(1, [], keep).map((h) => h.sessionId)).toEqual(["c-1"]);
+    expect(searcher.recent(5, [], () => false)).toEqual([]);
+  });
+
   it("rebuilds the sessions view from the log to what reading built", async () => {
     const before = sessions.list({ limit: 100 });
     expect(before.length).toBeGreaterThan(3);
