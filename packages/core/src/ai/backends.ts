@@ -151,6 +151,8 @@ export interface CompleteRequest {
   prompt: string;
   signal?: AbortSignal;
   maxOutputTokens?: number;
+  /** 0 for answers that should come out the same each time (a name); omitted: the model's default. Reasoning models ignore it. */
+  temperature?: number;
 }
 
 export interface CompleteResult<T> {
@@ -168,6 +170,7 @@ export async function completeText(o: AiBackendOptions, r: CompleteRequest): Pro
     prompt: r.prompt,
     abortSignal: r.signal,
     maxOutputTokens: r.maxOutputTokens ?? 4000,
+    temperature: r.temperature,
     providerOptions: effortOptions(o),
   });
   return { value: res.text, usage: usageOf(res.totalUsage), model: o.model };
@@ -188,6 +191,7 @@ export async function completeObject<T>(o: AiBackendOptions, r: ObjectRequest<T>
     prompt: r.prompt,
     abortSignal: r.signal,
     maxOutputTokens: r.maxOutputTokens ?? 4000,
+    temperature: r.temperature,
     providerOptions: effortOptions(o),
     output: Output.object({ schema: jsonSchema<T>(r.schema as never) }),
   };

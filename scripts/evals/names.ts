@@ -11,7 +11,8 @@
 // $CMD_HOME/evals/names, out of the repo; sessions whose agent title is in
 // docs/32's table get that table's name as their expectation. `run` names each
 // case with the fast tier of the AI provider in Settings, or `claude -p` with
-// --claude, or answers nothing with --dry (to see when it would ask). Real
+// --claude, or answers nothing with --dry (to see when it would ask). A key in
+// ANTHROPIC_API_KEY or OPENAI_API_KEY is used from memory instead of Settings'. Real
 // sessions go to a model only when the person says so.
 
 import { execFileSync } from "node:child_process";
@@ -69,12 +70,13 @@ function turnsOf(data: DataService, key: string): NamerTurn[] {
     if (e.role === "user") {
       const p = cleanClaudePrompt(e.text).trim();
       // Injected messages (task notifications, command output, interruptions) aren't the person.
-      if (!p || p.startsWith("<") || p.startsWith("[Request interrupted")) continue;
+      if (!p || (p.startsWith("<") && !p.startsWith("<pasted_content")) || p.startsWith("[Request interrupted")) continue;
       turns.push({ at: e.at ?? turns.at(-1)?.at ?? 0, prompt: tilde(redact(p)).slice(0, 4000), files: [], final: null });
     } else if (turns.length && e.role === "tool") {
       const m = WRITES.exec(e.text);
       if (m) turns.at(-1)!.files.push(tilde(m[2]!));
-    } else if (turns.length && e.role === "assistant") {
+    } else if (turns.length && e.role === "assistant" && /\s/.test(e.text.trim())) {
+      // (A message that only calls a tool shows as the tool's name: not an answer.)
       turns.at(-1)!.final = tilde(redact(e.text)).slice(0, 1500);
     }
   }
@@ -95,7 +97,7 @@ if (positionals[0] === "corpus") {
     const turns = turnsOf(data, s.key);
     const hand = s.title && s.title in HAND ? HAND[s.title] : undefined;
     if (turns.length < min && hand === undefined) continue;
-    const c: NameCase = { id: s.key, turns, ...(hand !== undefined ? { expect: hand ? { final: hand } : { none: true } } : {}) };
+    const c: NameCase = { id: s.key, turns, project: s.project_id ? path.basename(s.project_id.replace(/^dir:/, "")) : null, ...(hand !== undefined ? { expect: hand ? { final: hand } : { none: true } } : {}) };
     fs.writeFileSync(path.join(casesDir, `${s.key.replace(/[^\w-]/g, "_")}.json`), JSON.stringify(c, null, 2));
     n++;
     console.log(`${s.key.slice(0, 20)}  ${String(turns.length).padStart(4)} turns  ${hand !== undefined ? "★ " : "  "}${(s.title ?? s.first_prompt ?? "").slice(0, 60)}`);
@@ -106,12 +108,17 @@ if (positionals[0] === "corpus") {
   const only = a.only ? new Set(a.only.split(",")) : null;
   const cases = fs.readdirSync(casesDir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(fs.readFileSync(path.join(casesDir, f), "utf8")) as NameCase).filter((c) => !only || [...only].some((o) => c.id.startsWith(o)));
   const system = nameSystem();
-  const ai = a.claude || a.dry ? null : new AiService({ settings: () => DEFAULT_SETTINGS, secrets: new SecretsService(path.join(cmdHome(), "secrets.json")), stateDir: cmdHome() });
+  // A key in the environment (ANTHROPIC_API_KEY, OPENAI_API_KEY) is used from memory, never written; else the one in Settings.
+  const envKeys = { "ai.anthropic.apiKey": process.env.ANTHROPIC_API_KEY, "ai.openai.apiKey": process.env.OPENAI_API_KEY ?? process.env.OPENAI_KEY };
+  const fromEnv = Object.values(envKeys).some(Boolean);
+  const secrets = new SecretsService(fromEnv ? null : path.join(cmdHome(), "secrets.json"));
+  if (fromEnv) for (const [k, v] of Object.entries(envKeys)) if (v) secrets.set(k, v);
+  const ai = a.claude || a.dry ? null : new AiService({ settings: () => DEFAULT_SETTINGS, secrets, stateDir: fromEnv ? null : cmdHome() });
   const ask: Ask = async (input) => {
     if (a.dry) return null;
     const prompt = askText(input);
     try {
-      if (ai) return (await ai.object<NamerAnswer>({ tier: "fast", purpose: "names.eval", system, prompt, schema: NAME_SCHEMA as unknown as Record<string, unknown>, maxOutputTokens: 200, model: a.model })).value;
+      if (ai) return (await ai.object<NamerAnswer>({ tier: "fast", purpose: "names.eval", system, prompt, schema: NAME_SCHEMA as unknown as Record<string, unknown>, maxOutputTokens: 200, temperature: 0, effort: "minimal", model: a.model })).value;
       const out = execFileSync("claude", ["-p", "--model", a.model ?? "haiku"], { input: `${system}\n\nAnswer with only a JSON object {"intent": "continue"|"develop"|"change", "name": string|null}, no prose.\n\n${prompt}`, encoding: "utf8", maxBuffer: 1 << 22, timeout: 90_000 });
       return JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)) as NamerAnswer;
     } catch (err) {

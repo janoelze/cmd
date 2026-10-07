@@ -32,6 +32,8 @@ export interface NamerInput {
   turns: NamerTurn[];
   /** Names of the other live agents in the Space. */
   others: string[];
+  /** The project's folder name ("cmd"): the row shows it, the name mustn't repeat it. */
+  project?: string | null;
 }
 
 export interface NamerAnswer {
@@ -52,17 +54,19 @@ export function nameSystem(language = outputLanguage().name): string {
 - 1 to 3 words, at most 24 characters.
 - Nouns only: the thing worked on, never the activity. No verbs (fix, add, read, check, update, refactor, investigate, review, survey…). An adjective only where it is part of the thing ("Slow release CI", "Broken update").
 - The developer's own words from their prompts and the product's names (Navigator, Spaces, Magic, Tours) over paraphrase. A bug by its symptom.
-- Sentence case. Code names as written (calc.py, ⌘W). No project or repository name, no agent name, no articles, no punctuation, no quotes.
+- Sentence case. Code names as written (calc.py, ⌘W). Never the project's name (<project>), no agent name, no articles, no punctuation, no quotes.
 - Specific enough to tell it from other work: a single generic word (Descriptions, Downloads, Settings, Bugs, Cleanup) isn't a name; say what of ("Episode descriptions").
 - Different from the other agents' names you are given.
 - Written in ${language}.
 - Nothing to name (a greeting, a test, "read a few files", a bare slash command, only a pasted image): name null.
 
-When there is a current name, first classify the newest prompt against it:
+Without a current name (<current>none</current>): name the session from everything given, and answer intent "change". Name null only when there is nothing to name.
+
+With a current name, first classify the newest prompt against it:
 - continue: the same work, a reply, a small next step, a go-ahead.
 - develop: deeper into the same thing (a part of it, a bug in it, its tests or docs).
 - change: a different task than the current name says.
-Propose a name only for change (and when there is no current name); otherwise name null.
+Propose a name only for change; otherwise name null.
 
 Examples (what the session is about → name):
 the data model, then how agent sessions get names → Session names
@@ -80,8 +84,16 @@ a notification showed JSON → JSON in notification
 "hi", "test", "/release", "just read a few files" → null`;
 }
 
+/** Pasted text is often the task itself (an error, a log): its start is kept. */
+const PASTE_CHARS = 200;
 const clip = (s: string | null | undefined, n: number) => {
-  const t = (s ?? "").replace(/<pasted_content[^>]*>[\s\S]*?<\/pasted_content>/g, "[pasted text]").replace(/\s+/g, " ").trim();
+  const t = (s ?? "")
+    .replace(/<pasted_content[^>]*>([\s\S]*?)<\/pasted_content>/g, (_, p: string) => {
+      const one = p.replace(/\s+/g, " ").trim();
+      return `[pasted: ${one.length > PASTE_CHARS ? `${one.slice(0, PASTE_CHARS)}…` : one}]`;
+    })
+    .replace(/\s+/g, " ")
+    .trim();
   return t.length > n ? `${t.slice(0, n)}…` : t;
 };
 
@@ -93,6 +105,7 @@ export function nameInput(o: NamerInput): string {
   return [
     `<current>${o.current ?? "none"}</current>`,
     `<others>${o.others.join(", ") || "none"}</others>`,
+    o.project ? `<project>${o.project}</project>` : "",
     earlier.length ? `<earlier>\n${earlier.map((t) => `- ${clip(t.prompt, 300)}`).join("\n")}\n</earlier>` : "",
     `<newest>${clip(newest?.prompt, 800)}</newest>`,
     files.length ? `<files>${files.join(", ")}</files>` : "",
@@ -107,7 +120,7 @@ export function nameInput(o: NamerInput): string {
 const VERBS = new Set("fix fixes fixing add adds adding read reading check checking update updating remove removing implement implementing refactor refactoring make making create creating debug debugging investigate investigating review reviewing explore exploring find finding improve improving look looking let lets rename renaming help convert converting deploy deploying notarize notarizing publish publishing migrate migrating rewrite rewriting redesign restyle tidy speed".split(" "));
 
 /** Why a proposed name can't be used (null: it can), and the name cleaned. */
-export function checkName(raw: string | null | undefined, others: string[] = []): { name: string | null; problem: string | null } {
+export function checkName(raw: string | null | undefined, others: string[] = [], project?: string | null): { name: string | null; problem: string | null } {
   if (!raw) return { name: null, problem: null };
   const name = raw.replace(/^["“'`]+|["”'`.!]+$/g, "").replace(/\s+/g, " ").trim();
   if (!name || /^null$/i.test(name)) return { name: null, problem: null };
@@ -116,6 +129,7 @@ export function checkName(raw: string | null | undefined, others: string[] = [])
   if (name.length > 24) return { name, problem: "longer than 24 characters" };
   if (VERBS.has(words[0]!.toLowerCase())) return { name, problem: `starts with a verb (${words[0]})` };
   if (/^v?\d[\d.]*$/i.test(name)) return { name, problem: "only a version or a number" };
+  if (project && words.some((w) => nameKey(w) === nameKey(project))) return { name, problem: `has the project's name (${project})` };
   if (others.some((o) => nameKey(o) === nameKey(name))) return { name, problem: "another agent has it" };
   return { name: name[0]!.toUpperCase() + name.slice(1), problem: null };
 }

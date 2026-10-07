@@ -13,6 +13,8 @@ export interface NameCase {
   turns: NamerTurn[];
   /** Names of agents that ran beside it, if known. */
   others?: string[];
+  /** The project's folder name. */
+  project?: string | null;
   expect?: {
     /** Acceptable final names (any one, compared loosely: same words or a shared one). */
     final?: string[];
@@ -46,16 +48,16 @@ export async function replay(c: NameCase, ask: Ask): Promise<{ steps: Step[]; st
     let answer: NamerAnswer | null = null;
     let problem: string | null = null;
     if (why) {
-      const input: NamerInput = { current: s.name, turns, others: c.others ?? [] };
+      const input: NamerInput = { current: s.name, turns, others: c.others ?? [], project: c.project ?? null };
       calls++;
       answer = await ask(input);
-      let checked = checkName(answer?.name, input.others);
+      let checked = checkName(answer?.name, input.others, input.project);
       // One more try with what was wrong, then nothing rather than a bad name.
       if (checked.problem) {
         calls++;
         problem = `${checked.name}: ${checked.problem}`;
         answer = await ask({ ...input, rejected: problem });
-        checked = checkName(answer?.name, input.others);
+        checked = checkName(answer?.name, input.others, input.project);
         if (checked.problem) problem += `; then ${checked.name}: ${checked.problem}`;
       }
       answer = answer ? { ...answer, name: checked.problem ? null : checked.name } : null;

@@ -4,11 +4,13 @@
 // branch both win over a model's. A turn is asked about only when the cheap
 // checks fire; one question per agent at a time; a failed call names nothing.
 
+import path from "node:path";
 import type { Agent, AgentId, AgentTurn, Settings } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { CallOptions } from "../ai/service.ts";
 import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import { buildContext } from "../ai/context.ts";
+import { projectOf } from "../data/project.ts";
 import { askText } from "./names-eval.ts";
 import { checkName, decide, NAME_SCHEMA, nameSystem, NO_NAME, shouldAsk, FIRST_TRIES, type NameState, type NamerAnswer, type NamerTurn } from "./namer.ts";
 
@@ -77,12 +79,12 @@ export class AgentNaming {
     const why = shouldAsk(s, turns);
     if (!why) return void this.#state.set(a.id, { ...s, session });
     const others = this.#o.agents().filter((x) => x.id !== a.id && x.spaceId === a.spaceId && x.name).map((x) => x.name!);
-    const input = { current: s.name, turns, others };
+    const input = { current: s.name, turns, others, project: path.basename(projectOf(a.cwd) ?? "") || null };
     let answer = await this.#ask(askText(input));
-    let checked = checkName(answer?.name, others);
+    let checked = checkName(answer?.name, others, input.project);
     if (checked.problem) {
       answer = await this.#ask(askText({ ...input, rejected: `${checked.name}: ${checked.problem}` }));
-      checked = checkName(answer?.name, others);
+      checked = checkName(answer?.name, others, input.project);
     }
     const next = decide(s, answer ? { ...answer, name: checked.problem ? null : checked.name } : null, turns.at(-1)!.at);
     this.#state.set(a.id, { ...next, session });
@@ -91,7 +93,7 @@ export class AgentNaming {
 
   async #ask(prompt: string): Promise<NamerAnswer | null> {
     const ctx = buildContext({ purpose: "session.name", budget: 6000, parts: [{ name: "session", text: prompt }] });
-    const res = await this.#o.ai.object<NamerAnswer>({ tier: "fast", purpose: "session.name", system: nameSystem(), prompt: ctx.text, schema: NAME_SCHEMA as unknown as Record<string, unknown>, effort: "minimal", maxOutputTokens: 300, context: ctx.record });
+    const res = await this.#o.ai.object<NamerAnswer>({ tier: "fast", purpose: "session.name", system: nameSystem(), prompt: ctx.text, schema: NAME_SCHEMA as unknown as Record<string, unknown>, effort: "minimal", maxOutputTokens: 300, temperature: 0, context: ctx.record });
     return res.value;
   }
 }

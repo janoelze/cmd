@@ -155,17 +155,19 @@ From cmd's own copy of the transcripts, offline:
 
 ### First results (2026-10-07)
 
-The 17 hand-named sessions (2 to 41 turns) through Claude Haiku 4.5 via `claude -p`, after two rounds of tuning:
+The 17 hand-named sessions (2 to 44 turns), first through Claude Haiku 4.5 via `claude -p`, then through the API (`ANTHROPIC_API_KEY` in the environment, used from memory) at temperature 0, which made two runs identical:
 
-| | |
-|---|---|
-| Acceptable final name | 15 of 17 ("Read files" rightly none). Misses: "Shortcut tips" for the hack-the-planet session (which did turn into shortcut tips), and the torrent session, which drifted through five topics |
-| Renames per session | 0 in 15, 1 in the two long sessions that really changed task (icon sizes → address field; torrent search → episode descriptions) |
-| Model calls | 0.39 per turn on short sessions, about 0.5 on long ones |
+| | `claude -p`, default temperature | API, temperature 0 |
+|---|---|---|
+| Acceptable final name | 15 of 17 | 17 of 17 ("Read files" rightly none) |
+| Renames per session | 0 in 15, 1 in two long sessions | 0 in all |
+| Model calls per turn | 0.39–0.5 | 0.39 |
 
-What the first round taught (fixed): two "change" verdicts in a row renamed even when they proposed different names (Missing posters, then Episode posters), so they must now agree; a pause before each prompt of a long session asked every time, so a quiet only lowers the bar for new words; "V0.17.1" and "Notarize once" passed the checks; the verb list rejected "Show posters" (a TV show), so it keeps only words that are verbs whatever follows; one generic word ("Descriptions") was taken as a name, so the prompt asks what of.
+Names at temperature 0: Slow release CI, Recent by Space, Gopher link, Broken update, Notify permission, Session names, Flaky ⌘W test, JSON in notification, Hack the planet, Icon sizes, Widget status lights, Torrent search sources, Accessibility for tours, Production db, Hook outside sessions, Saved data.
 
-Still weak: the match is lenient (a shared word counts: "Saved data" passes for "Journal data"), names of long implementation sessions are vague, and "new folders" fires on most turns of a session that touches many packages. Next: stricter scoring with a person's judgement per name, the other ~200 sessions for renames and cost, real renames as cases (step 5).
+What the runs taught (fixed): with no current name, the model sometimes answered "continue" and no name, so the prompt says plainly that a first name is always asked for; pasted text was left out, which hid the task of sessions that start with a paste (an e2e failure), so its first 200 characters are kept; names repeated the project ("Cmd data model"), so the project is given and refused in a name; answers changed from run to run, so naming asks at temperature 0; two "change" verdicts in a row renamed even when they proposed different names (Missing posters, then Episode posters), so they must now agree; a pause before each prompt of a long session asked every time, so a quiet only lowers the bar for new words; "V0.17.1" and "Notarize once" passed the checks; the verb list rejected "Show posters" (a TV show), so it keeps only words that are verbs whatever follows; one generic word ("Descriptions") was taken as a name, so the prompt asks what of.
+
+Still weak: the match is lenient (a shared word counts: "Saved data" passes for "Journal data"), names of long implementation sessions are vague ("Saved data"), long sessions that drifted keep their first name at temperature 0, and "new folders" fires on most turns of a session that touches many packages. Next: stricter scoring with a person's judgement per name, the other ~200 sessions for renames and cost, real renames as cases (step 5).
 
 ## Plan
 

@@ -19,6 +19,7 @@ describe("checking a proposed name", () => {
     expect(checkName("Notification permission settings UI").problem).toMatch(/3 words/);
     expect(checkName("Tours", ["tours"]).problem).toMatch(/another agent/);
     expect(checkName("V0.17.1").problem).toMatch(/version/);
+    expect(checkName("Cmd data model", [], "cmd").problem).toMatch(/project/);
     expect(checkName("Notarize once").problem).toMatch(/verb/);
     for (const thing of ["Show posters", "Release CI", "Build cache", "Hook design"]) expect(checkName(thing).problem).toBeNull();
   });
@@ -72,14 +73,13 @@ describe("taking a proposed name", () => {
 });
 
 describe("the prompt", () => {
-  it("has the current name, the others, earlier prompts and the newest turn, with pastes left out", () => {
+  it("has the current name, the others, earlier prompts and the newest turn, with the start of pastes", () => {
     const text = nameInput({ current: "Tours", others: ["Icon sizes"], turns: [turn(0, "record tours"), { ...turn(1, "<pasted_content id=x>secret</pasted_content> and fix the cursor", ["/r/packages/tours/cursor.ts"]), final: "Cursor fixed." }] });
     expect(text).toContain("<current>Tours</current>");
     expect(text).toContain("<others>Icon sizes</others>");
     expect(text).toContain("- record tours");
-    expect(text).toContain("<newest>[pasted text] and fix the cursor</newest>");
+    expect(text).toContain("<newest>[pasted: secret] and fix the cursor</newest>");
     expect(text).toContain("<files>cursor.ts</files>");
-    expect(text).not.toContain("secret");
   });
 });
 
