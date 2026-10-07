@@ -1,4 +1,6 @@
 // Runs a tour: node packages/tours/src/run.ts <file.tour.ts> [--out dir] [--seed n]
+//   or every tour in packages/tours/tours: … all [--ai] (tours that need a model only with
+//   --ai: they cost a little; *-probe tours are experiments and never run with all)
 // Launches the built app (pnpm build) in a fixture, places its window, runs the
 // tour's unrecorded setup, then records the window while the tour plays.
 // Writes raw.mov (no cursor), events.json (the input, on the frames' clock) and
@@ -106,15 +108,35 @@ export async function runTour(file: string, out: string, seed = 1): Promise<Tour
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const args = process.argv.slice(2);
-  const file = args.find((a) => !a.startsWith("--"));
-  if (!file) {
-    console.log("usage: node packages/tours/src/run.ts <file.tour.ts> [--out dir] [--seed n]");
-    process.exit(2);
-  }
   const opt = (k: string) => {
     const i = args.indexOf(k);
     return i >= 0 ? args[i + 1] : undefined;
   };
+  const file = args.find((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
+  if (!file) {
+    console.log("usage: node packages/tours/src/run.ts <file.tour.ts | all> [--ai] [--out dir] [--seed n]");
+    process.exit(2);
+  }
+  if (file === "all") {
+    const dir = path.join(import.meta.dirname, "..", "tours");
+    const failed: string[] = [];
+    for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".tour.ts") && !n.includes("-probe")).sort()) {
+      const mod = (await import(pathToFileURL(path.join(dir, f)).href)) as TourModule;
+      if (mod.meta?.ai && !args.includes("--ai")) {
+        console.log(`${f}: skipped (needs a model: --ai)`);
+        continue;
+      }
+      const out = path.join(root, ".cmd-dev", "tours", "out", f.replace(/\.tour\.ts$/, ""));
+      try {
+        const meta = await runTour(path.join(dir, f), out, Number(opt("--seed") ?? 1));
+        console.log(render(out, meta.post));
+      } catch (e) {
+        console.error(`${f}: ${(e as Error).message}`);
+        failed.push(f);
+      }
+    }
+    process.exit(failed.length ? 1 : 0);
+  }
   const out = opt("--out") ?? path.join(root, ".cmd-dev", "tours", "out", path.basename(file).replace(/\.tour\.ts$|\.ts$/, ""));
   try {
     const meta = await runTour(file, path.resolve(out), Number(opt("--seed") ?? 1));

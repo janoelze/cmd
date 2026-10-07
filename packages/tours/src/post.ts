@@ -8,7 +8,7 @@
 //   frame where the log says and in the shape the system showed (arrow,
 //   I-beam, resize…) → 60 fps H.264
 //
-//   node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4]
+//   node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920]
 //
 // No smoothing: the driver's paths are already human; a real recording has none.
 
@@ -240,12 +240,12 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const args = process.argv.slice(2);
   const dir = args.find((a) => !a.startsWith("--"));
   if (!dir) {
-    console.log("usage: node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks]");
+    console.log("usage: node packages/tours/src/post.ts <run dir> [--wallpaper img] [--cursor 1.0] [--clicks] [--idle 4] [--width 1920]");
     process.exit(2);
   }
   const opt = (k: string) => {
     const i = args.indexOf(k);
     return i >= 0 ? args[i + 1] : undefined;
   };
-  console.log(render(path.resolve(dir), { wallpaper: opt("--wallpaper"), cursor: opt("--cursor") ? Number(opt("--cursor")) : undefined, clicks: args.includes("--clicks"), idle: opt("--idle") ? Number(opt("--idle")) : undefined }));
+  console.log(render(path.resolve(dir), { wallpaper: opt("--wallpaper"), cursor: opt("--cursor") ? Number(opt("--cursor")) : undefined, clicks: args.includes("--clicks"), idle: opt("--idle") ? Number(opt("--idle")) : undefined, width: opt("--width") ? Number(opt("--width")) : undefined }));
 }

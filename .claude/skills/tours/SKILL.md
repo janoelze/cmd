@@ -110,7 +110,21 @@ The app runs from its build, so build first after app changes:
 pnpm build
 pnpm tour packages/tours/tours/first.tour.ts            # → .cmd-dev/tours/out/first/
 pnpm tour packages/tours/tours/first.tour.ts --seed 2 --out /some/dir
+pnpm tour all          # every tour in packages/tours/tours (not *-probe); with --ai also the ones that need a model
 ```
+
+The tours (`packages/tours/tours/`), each one kind of story:
+
+| Tour | Shows | Model |
+|---|---|---|
+| `hero` | the strip + a Claude session from New… + Live Diff filling up + a commit; waiting sped up (`post.idle`) | yes |
+| `strip` | swiping the strip, page dots, widening a window by its edge, sidebar and ⌥⌘← jumps, swipe-then-click | yes (a Claude window in setup) |
+| `canvas` | panning, ⌘-scroll zoom, fit, moving a window, flying to one | no |
+| `agents` | Claude Code doing a task in the grid, the sidebar following it, Live Diff, a commit | yes |
+| `showcase` | ⌘K, the editor, a tooltip, dragging a window and a file, scrollback, sidebar search | no |
+| `workspace` | terminal, Files, a native context menu, a Magic build, the palette to the canvas | yes |
+| `first` | the first tour: New…, a command, Files scrolled to a file | no |
+| `agent-probe` | experiment: does Claude Code start clean in the fixture | yes |
 
 **Tell the user before every run** and wait for their go: for the length of the tour their real mouse and keyboard are taken over, a cmd dev window opens on their screen, and they must not touch anything. Moving the mouse stops the run ("the mouse moved…"); a key press would go into the tour. A run that fails mid-way still records up to there.
 
