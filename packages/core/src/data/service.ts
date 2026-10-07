@@ -42,6 +42,12 @@ export interface DataServiceOptions {
   now?: () => number;
   /** Leave the log's indexes to store.ensureIndexes() (the core builds a new one once it answers). */
   deferIndexes?: boolean;
+  /**
+   * WAL checkpoints on a worker (checkpoint-worker.ts): writing the WAL back
+   * into a big log takes hundreds of ms, which a commit on this thread would
+   * pay. The core turns it on; tests and the lab checkpoint as SQLite does.
+   */
+  maintenance?: boolean;
 }
 
 /** What a forget names: everything of a session, of a project, before a time, of some types (all given must match). */
@@ -71,7 +77,15 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
     this.recordedBy = o.recordedBy;
     if (o.file) fs.mkdirSync(path.dirname(o.file), { recursive: true });
     this.store = new DataStore(o.file ?? ":memory:", { recordedBy: o.recordedBy, deferIndexes: o.deferIndexes });
+    if (o.file && o.maintenance) {
+      // This connection checkpoints only if the worker falls far behind (80 MB of WAL).
+      this.store.db.exec(`PRAGMA wal_autocheckpoint = 20000`);
+      this.#maintenance = new Worker(new URL("./checkpoint-worker.ts", import.meta.url), { workerData: { file: o.file } });
+      this.#maintenance.unref();
+      this.#maintenance.on("error", (err) => log.warn(`the checkpoint worker failed: ${err.message}`));
+    }
   }
+  #maintenance: Worker | null = null;
 
   get #now(): number {
     return this.#o.now?.() ?? Date.now();
@@ -101,6 +115,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
     this.#disposed = true;
     if (this.#batch) clearTimeout(this.#batch);
     if (this.#timer) clearInterval(this.#timer);
+    void this.#maintenance?.terminate();
     this.store.close();
   }
 

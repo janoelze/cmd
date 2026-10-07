@@ -17,6 +17,46 @@ const log = logger("data");
 /** A recorder's event plus what the store adds on the way in. */
 export type StoreEvent = NewDataEvent & { v?: number; flags?: number };
 
+/** A stored row's fields record() compares a new copy against. */
+interface Before {
+  seq: number;
+  blob: string | null;
+  at: number;
+  until: number | null;
+  text: string | null;
+  data: string;
+  parent_id: string | null;
+  space_id: string | null;
+  project_id: string | null;
+  session_id: string | null;
+  agent_id: string | null;
+  pane_id: string | null;
+  window_id: string | null;
+  device_id: string | null;
+  flags: number;
+}
+
+/** Whether recording `e` over `b` would change nothing: the span is within, text, data and content equal, no identity or flag filled in. */
+function unchanged(b: Before, e: StoreEvent, data: string, blob: string | null): boolean {
+  if (b.text !== (e.text ?? null) || b.blob !== blob) return false;
+  // json() of the stored JSONB is compact like JSON.stringify; failing that, the same document re-serialised.
+  if (b.data !== data && JSON.stringify(JSON.parse(b.data)) !== data) return false;
+  if (Math.round(e.at) < b.at) return false;
+  if (e.until != null && (b.until === null || Math.round(e.until) > b.until)) return false;
+  if ((b.flags | (e.flags ?? 0)) !== b.flags) return false;
+  const ids: [string | null, string | null | undefined][] = [
+    [b.parent_id, e.parentId],
+    [b.space_id, e.spaceId],
+    [b.project_id, e.projectId],
+    [b.session_id, e.sessionId],
+    [b.agent_id, e.agentId],
+    [b.pane_id, e.paneId],
+    [b.window_id, e.windowId],
+    [b.device_id, e.deviceId],
+  ];
+  return ids.every(([have, want]) => want == null || have !== null);
+}
+
 export interface StoreOptions {
   /** The cmd that records (events.recorded). */
   recordedBy?: string;
@@ -107,7 +147,14 @@ export class DataStore {
   record(e: StoreEvent): { seq: number; inserted: boolean } {
     const blob = e.content != null ? this.putBlob(e.content) : null;
     const data = JSON.stringify(e.data ?? null);
-    const before = this.#stmt(`SELECT seq, blob FROM events WHERE id = ?`).get(e.id) as { seq: number; blob: string | null } | undefined;
+    const before = this.#stmt(`SELECT seq, blob, at, until, text, json(data) AS data, parent_id, space_id, project_id, session_id, agent_id, pane_id, window_id, device_id, flags FROM events WHERE id = ?`).get(e.id) as Before | undefined;
+    // Handed in again with nothing new (a transcript read again, an archived copy): no rewrite, no index churn.
+    // Every row written is a page in the WAL, and a re-read of the whole log checkpointed every few seconds.
+    if (before && unchanged(before, e, data, blob)) {
+      if (blob) this.#unref(blob); // putBlob counted the row's own blob once more
+      return { seq: before.seq, inserted: false };
+    }
+    const sameText = !!before && before.text === (e.text ?? null) && before.blob === blob;
     const r = this.#stmt(
       `INSERT INTO events (id, at, until, type, v, source, recorded, parent_id, space_id, project_id, session_id, agent_id, pane_id, window_id, device_id, text, data, blob, flags)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?)
@@ -130,8 +177,11 @@ export class DataStore {
     ).get(e.id, Math.round(e.at), e.until == null ? null : Math.round(e.until), e.type, e.v ?? EVENT_V[e.type as DataEventType] ?? 1, e.source, this.#o.recordedBy, e.parentId ?? null, e.spaceId ?? null, e.projectId ?? null, e.sessionId ?? null, e.agentId ?? null, e.paneId ?? null, e.windowId ?? null, e.deviceId ?? null, e.text ?? null, data, blob, e.flags ?? 0) as { seq: number };
     // A new blob replaces the old one (the same one: putBlob counted it twice); without one the row keeps its blob.
     if (before?.blob && blob) this.#unref(before.blob);
-    if (before) this.#stmt(`DELETE FROM events_fts WHERE rowid = ?`).run(before.seq);
-    if (e.text || e.body) this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`).run(r.seq, e.text ?? "", (e.body ?? "").slice(0, this.#o.bodyCap));
+    // The index follows text and content; the same words stay indexed as they are.
+    if (!sameText) {
+      if (before) this.#stmt(`DELETE FROM events_fts WHERE rowid = ?`).run(before.seq);
+      if (e.text || e.body) this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`).run(r.seq, e.text ?? "", (e.body ?? "").slice(0, this.#o.bodyCap));
+    }
     return { seq: r.seq, inserted: !before };
   }
 

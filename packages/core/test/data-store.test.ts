@@ -22,6 +22,25 @@ describe("DataStore", () => {
     s.close();
   });
 
+  it("leaves a row it is handed again unchanged alone: no rewrite, no index churn", () => {
+    const s = new DataStore(tmp());
+    const e = { id: "a", at: 10, until: 20, type: "transcript.message" as const, source: "t", sessionId: "claude:s", text: "the flaky test", body: "the flaky test raced", data: { role: "user", n: 1.5 }, content: "x".repeat(5000) };
+    const changes = () => (s.db.prepare(`SELECT total_changes() AS n`).get() as { n: number }).n;
+    const hits = () => (s.db.prepare(`SELECT COUNT(*) AS n FROM events_fts WHERE events_fts MATCH 'flaky'`).get() as { n: number }).n;
+    expect(s.record(e).inserted).toBe(true);
+    const [c0, h0] = [changes(), hits()];
+    expect(s.record({ ...e })).toEqual({ seq: 1, inserted: false });
+    expect(changes() - c0).toBeLessThanOrEqual(2); // the blob counted and uncounted, nothing else
+    expect(hits()).toBe(h0);
+    // Something new: the span grows, an identity fills in, the index follows the text.
+    expect(s.record({ ...e, until: 30, agentId: "ag" })).toEqual({ seq: 1, inserted: false });
+    expect(s.query({})[0]).toMatchObject({ until: 30, agentId: "ag" });
+    s.record({ ...e, text: "the steady test", body: "the steady test raced" });
+    expect(hits()).toBe(0);
+    expect(s.query({ text: "steady" })).toHaveLength(1);
+    s.close();
+  });
+
   it("keeps big content as a deduplicated blob and reads it back", () => {
     const s = new DataStore(tmp());
     const big = "line\n".repeat(5000);

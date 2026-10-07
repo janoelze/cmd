@@ -280,7 +280,7 @@ export class Core {
     });
     // Every event says which cmd recorded it: the app's version, or the checkout's build.
     // A real core opens the log now and builds new indexes, imports and rebuilds views in start(), once it answers.
-    this.data = new DataService({ file: opts.stateDir ? path.join(opts.stateDir, "data", "events.sqlite") : null, recordedBy: process.env.CMD_APP_VERSION || (opts.build ? `source+${opts.build.slice(0, 8)}` : "source"), settings: () => this.settings.settings, deferIndexes: !!opts.stateDir });
+    this.data = new DataService({ file: opts.stateDir ? path.join(opts.stateDir, "data", "events.sqlite") : null, recordedBy: process.env.CMD_APP_VERSION || (opts.build ? `source+${opts.build.slice(0, 8)}` : "source"), settings: () => this.settings.settings, deferIndexes: !!opts.stateDir, maintenance: !!opts.stateDir });
     this.views = new ViewsStore(opts.stateDir ? path.join(opts.stateDir, "data", "views.sqlite") : null);
     this.data.on("recorded", (e) => this.#dataChanged([e]));
     this.data.on("batch", (events) => this.#dataChanged(events));
