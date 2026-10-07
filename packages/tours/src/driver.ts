@@ -269,6 +269,50 @@ export class Tour {
     await this.swipeHere(px, "x");
   }
 
+  /**
+   * Pans the canvas: a two-finger drag of (dx, dy) points over empty canvas
+   * (over a window it would scroll that window instead). Positive dx shows
+   * what's to the right.
+   */
+  async pan(dx: number, dy: number) {
+    await this.moveTo(await this.emptyCanvasPoint());
+    const o = await this.origin();
+    const d = Math.hypot(dx, dy);
+    const steps = planScroll(d * o.zoom);
+    await this.helper.call("scroll", { ...this.at, dir: [dx / d, dy / d], steps: steps.map((s) => [s.t, s.dy, s.phase]) });
+    await sleep(150);
+  }
+
+  /** Zooms the canvas at the pointer with ⌘-scroll: positive zooms in. Over empty canvas unless `at` is given. */
+  async zoom(amount: number, at?: Locator) {
+    if (at) await this.hover(at);
+    else await this.moveTo(await this.emptyCanvasPoint());
+    const o = await this.origin();
+    const steps = planScroll(-amount * o.zoom);
+    await this.helper.call("scroll", { ...this.at, axis: "y", mods: ["cmd"], steps: steps.map((s) => [s.t, s.dy, s.phase]) });
+    await sleep(200);
+  }
+
+  /** A point in the main area with no window under it (nearest the middle), screen points. */
+  private async emptyCanvasPoint(): Promise<Point> {
+    const spot = await this.page.getByRole("main").evaluate((m) => {
+      const b = m.getBoundingClientRect();
+      let best: { x: number; y: number } | null = null;
+      let far = Infinity;
+      for (let i = 1; i < 16; i++)
+        for (let j = 1; j < 10; j++) {
+          const x = b.left + (b.width * i) / 16, y = b.top + (b.height * j) / 10;
+          const hit = document.elementFromPoint(x, y);
+          if (!hit || !m.contains(hit) || hit.closest('[role="group"][aria-label]') || hit.closest("svg")) continue;
+          const d = Math.hypot(x - (b.left + b.width / 2), y - (b.top + b.height / 2));
+          if (d < far) (far = d), (best = { x, y });
+        }
+      return best;
+    });
+    if (!spot) throw new Error("no empty canvas to pan on: every point is a window");
+    return this.onScreen({ x: spot.x, y: spot.y, width: 0, height: 0 }).then((b) => ({ x: b.x, y: b.y }));
+  }
+
   private async swipeHere(px: number, axis: "x" | "y") {
     const o = await this.origin();
     const steps = planScroll(px * o.zoom);

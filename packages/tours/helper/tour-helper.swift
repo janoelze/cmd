@@ -17,7 +17,8 @@
 //   {"cmd":"path","points":[[ms,x,y],…],"button":"left"?}   moves (drags with a button held)
 //   {"cmd":"down"|"up","x":…,"y":…,"button":"left"|"right","clicks":1}
 //   {"cmd":"scroll","x":…,"y":…,"steps":[[ms,d,phase],…],"axis":"y"|"x"}  trackpad-style, pixel deltas
-//       (d > 0 scrolls down the page, or right along it)
+//       (d > 0 scrolls down the page, or right along it); "dir":[ux,uy] instead of axis:
+//       a gesture along that direction (panning a canvas); "mods":["cmd"] held (⌘-scroll zooms)
 //   {"cmd":"type","text":"…","delays":[ms,…]}               characters, layout-independent
 //   {"cmd":"key","key":"Return","mods":["cmd"]}
 //   {"cmd":"menu-items","pid":123} → {"items":[{title,x,y,w,h,enabled}]}: the app's open
@@ -235,21 +236,35 @@ let SCROLL_PHASE: [String: (Int64, Int64)] = [
   "momentum-began": (0, 1), "momentum": (0, 2), "momentum-ended": (0, 3),
 ]
 
-func scroll(at p: CGPoint, _ steps: [[Any]], sideways: Bool = false) throws {
+func scroll(at p: CGPoint, _ steps: [[Any]], sideways: Bool = false, dir: [Double]? = nil, mods: [String] = []) throws {
   try checkPointer()
+  let flags = mods.reduce(CGEventFlags()) { $0.union(MODS[$1] ?? []) }
+  // Along a direction: each step's distance split over both wheels, remainders carried.
+  var carry = (x: 0.0, y: 0.0)
   let start = nowNs()
   for step in steps where step.count == 3 {
     guard let ms = step[0] as? Double, let d = step[1] as? Double, let name = step[2] as? String, let (phase, momentum) = SCROLL_PHASE[name] else { continue }
     waitUntil(start + UInt64(ms * 1e6))
     // Positive d goes down (or right along) the page; a wheel delta goes the other way.
     // wheel1 is vertical, wheel2 sideways (a trackpad swipe railed to one axis).
-    guard let e = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: sideways ? 2 : 1, wheel1: sideways ? 0 : Int32(-d), wheel2: sideways ? Int32(-d) : 0, wheel3: 0) else { continue }
+    var w1 = sideways ? 0 : Int32(-d), w2 = sideways ? Int32(-d) : 0
+    if let dir, dir.count == 2 {
+      carry.x += d * dir[0]
+      carry.y += d * dir[1]
+      let px = carry.x.rounded(.towardZero), py = carry.y.rounded(.towardZero)
+      carry.x -= px
+      carry.y -= py
+      w1 = Int32(-py)
+      w2 = Int32(-px)
+    }
+    guard let e = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2, wheel1: w1, wheel2: w2, wheel3: 0) else { continue }
+    e.flags = flags
     e.location = p
     e.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
     e.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
     e.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum)
     e.post(tap: .cghidEventTap)
-    log("scroll", ["x": p.x, "y": p.y, sideways ? "dx" : "dy": d, "phase": name])
+    log("scroll", ["x": p.x, "y": p.y, "dx": -Double(w2), "dy": -Double(w1), "phase": name, "mods": mods])
   }
 }
 
@@ -438,7 +453,7 @@ func handle(_ msg: [String: Any]) async {
       log(cmd, ["x": p.x, "y": p.y, "button": msg["button"] as? String ?? "left", "clicks": clicks])
       reply(["ok": true])
     case "scroll":
-      try scroll(at: CGPoint(x: msg["x"] as? Double ?? 0, y: msg["y"] as? Double ?? 0), msg["steps"] as? [[Any]] ?? [], sideways: msg["axis"] as? String == "x")
+      try scroll(at: CGPoint(x: msg["x"] as? Double ?? 0, y: msg["y"] as? Double ?? 0), msg["steps"] as? [[Any]] ?? [], sideways: msg["axis"] as? String == "x", dir: msg["dir"] as? [Double], mods: msg["mods"] as? [String] ?? [])
       reply(["ok": true])
     case "type":
       type(msg["text"] as? String ?? "", delays: msg["delays"] as? [Double] ?? [])
