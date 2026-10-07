@@ -4,8 +4,7 @@
 // a function, so tests answer from a script and scripts/evals/names.ts from a
 // real provider. Deterministic given the answers.
 
-import { nameKey } from "@cmd/protocol";
-import { checkName, contentWords, decide, nameInput, NO_NAME, shouldAsk, type NameState, type NamerAnswer, type NamerInput, type NamerTurn } from "./namer.ts";
+import { checkName, decide, nameInput, NO_NAME, sameName, shouldAsk, type NameState, type NamerAnswer, type NamerInput, type NamerTurn } from "./namer.ts";
 
 /** One session to name, and what a good result is. */
 export interface NameCase {
@@ -23,6 +22,8 @@ export interface NameCase {
     maxRenames?: number;
   };
 }
+
+export { sameName };
 
 export type Ask = (input: NamerInput & { rejected?: string }) => Promise<NamerAnswer | null>;
 
@@ -81,13 +82,6 @@ export interface CaseScore {
   /** 1 when the final name is acceptable (or rightly none), 0 when not; null without an expectation. */
   match: number | null;
   issues: string[];
-}
-
-/** Two names mean the same thing: the same words, or one shares a word with the other. */
-export function sameName(a: string, b: string): boolean {
-  if (nameKey(a) === nameKey(b)) return true;
-  const wa = contentWords(a);
-  return [...contentWords(b)].some((w) => wa.has(w));
 }
 
 export function scoreCase(c: NameCase, r: Awaited<ReturnType<typeof replay>>): CaseScore {

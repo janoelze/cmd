@@ -18,6 +18,8 @@ describe("checking a proposed name", () => {
     expect(checkName("Fix icon sizes").problem).toMatch(/verb/);
     expect(checkName("Notification permission settings UI").problem).toMatch(/3 words/);
     expect(checkName("Tours", ["tours"]).problem).toMatch(/another agent/);
+    expect(checkName("V0.17.1").problem).toMatch(/version/);
+    expect(checkName("Notarize once").problem).toMatch(/verb/);
   });
 });
 
@@ -33,11 +35,13 @@ describe("when to ask", () => {
     expect(mightHaveChanged("Slow release CI", ts)).toBeNull();
   });
 
-  it("asks on new words, new folders or after a quiet", () => {
+  it("asks on new words or new folders; after a quiet, fewer new words do", () => {
     const base = [turn(0, "the release CI takes 20 minutes, why?", ["/r/.github/release.yml"])];
     expect(mightHaveChanged("Slow release CI", [...base, turn(5, "now record marketing videos with scripted tours")])).toBe("new words");
     expect(mightHaveChanged("Slow release CI", [...base, turn(5, "release CI again", ["/r/packages/tours/a.ts"])])).toBe("new folders");
-    expect(mightHaveChanged("Slow release CI", [...base, turn(50, "release CI")])).toBe("after a quiet");
+    expect(mightHaveChanged("Slow release CI", [...base, turn(50, "release CI")])).toBeNull();
+    expect(mightHaveChanged("Slow release CI", [...base, turn(50, "torrent posters")])).toBe("new words after a quiet");
+    expect(mightHaveChanged("Slow release CI", [...base, turn(5, "torrent posters")])).toBeNull();
   });
 });
 
@@ -50,6 +54,13 @@ describe("taking a proposed name", () => {
     expect(once).toMatchObject({ name: "Accessibility audit", pending: "Tours" });
     expect(decide(once, change("Tours"), 2)).toMatchObject({ name: "Tours", history: [{ name: "Accessibility audit", until: 2 }] });
     expect(decide(named, change("Tours"), 1, true).name).toBe("Tours");
+  });
+
+  it("waits while two changes in a row disagree on the name", () => {
+    const once = decide(named, change("Missing posters"), 1);
+    const twice = decide(once, change("Downloads"), 2);
+    expect(twice).toMatchObject({ name: "Accessibility audit", pending: "Downloads" });
+    expect(decide(once, change("Poster cleanup"), 2).name).toBe("Poster cleanup");
   });
 
   it("forgets a single change, and never goes back to a name it just left", () => {

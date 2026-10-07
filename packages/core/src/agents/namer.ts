@@ -6,8 +6,9 @@
 // A first name after the first turn that gives something to name. Later, cheap
 // checks decide whether a turn might be a new task; only then is the model
 // asked to classify the newest prompt (continue, develop, change; Def-DTS) and
-// to propose a name for a change, which is taken after two changes in a row or
-// one with a hard signal, never back to a name it had in the last hour.
+// to propose a name for a change, which is taken after two changes in a row that
+// agree on it (or one with a hard signal), never back to a name it had in the
+// last hour.
 
 import path from "node:path";
 import { nameKey, outputLanguage } from "@cmd/protocol";
@@ -101,7 +102,7 @@ export function nameInput(o: NamerInput): string {
 }
 
 /** Words a name may not start with: activities, not things. */
-const VERBS = new Set("fix fixes fixing add adds adding read reading check checking update updating remove removing implement implementing refactor refactoring make create debug debugging investigate investigating review reviewing write writing build building run running survey explore exploring find improve improving look let lets move change rename test testing help show set setup clean cleanup convert merge release deploy".split(" "));
+const VERBS = new Set("fix fixes fixing add adds adding read reading check checking update updating remove removing implement implementing refactor refactoring make create debug debugging investigate investigating review reviewing write writing build building run running survey explore exploring find improve improving look let lets move change rename test testing help show set setup clean cleanup convert merge release deploy notarize sign publish ship polish tune speed migrate port tidy rewrite redesign restyle wire hook".split(" "));
 
 /** Why a proposed name can't be used (null: it can), and the name cleaned. */
 export function checkName(raw: string | null | undefined, others: string[] = []): { name: string | null; problem: string | null } {
@@ -112,6 +113,7 @@ export function checkName(raw: string | null | undefined, others: string[] = [])
   if (words.length > 3) return { name, problem: "more than 3 words" };
   if (name.length > 24) return { name, problem: "longer than 24 characters" };
   if (VERBS.has(words[0]!.toLowerCase())) return { name, problem: `starts with a verb (${words[0]})` };
+  if (/^v?\d[\d.]*$/i.test(name)) return { name, problem: "only a version or a number" };
   if (others.some((o) => nameKey(o) === nameKey(name))) return { name, problem: "another agent has it" };
   return { name: name[0]!.toUpperCase() + name.slice(1), problem: null };
 }
@@ -129,24 +131,24 @@ export function contentWords(s: string): Set<string> {
   );
 }
 
-/** Quiet this long before a prompt makes it worth asking whether the task changed. */
+/** Quiet this long before a prompt makes a shorter prompt with new words worth asking about. */
 export const GAP_MS = 30 * 60_000;
 
 /**
  * Whether a finished turn might be a new task (no model): the prompt shares no
- * words with the name or the last prompts, it writes in folders the session
- * hasn't, or it comes after a long quiet. False: it continues, nothing asked.
+ * words with the name or the last prompts (after a long quiet, a shorter one
+ * counts too), or it writes in folders the session hasn't. Null: it continues,
+ * nothing asked. A quiet alone isn't enough: long sessions pause and go on.
  */
 export function mightHaveChanged(name: string, turns: NamerTurn[]): string | null {
   const newest = turns.at(-1);
   const before = turns.slice(0, -1);
   if (!newest || !before.length) return null;
-  const prev = before.at(-1)!;
-  if (newest.at - (prev.at ?? 0) > GAP_MS) return "after a quiet";
+  const quiet = newest.at - (before.at(-1)!.at ?? 0) > GAP_MS;
   const words = contentWords(newest.prompt);
   const known = contentWords([name, ...before.slice(-3).map((t) => t.prompt)].join(" "));
   // A short reply ("yes", "go on", "merge it") is a step, not a task.
-  if (words.size >= 3 && ![...words].some((w) => known.has(w))) return "new words";
+  if (words.size >= (quiet ? 2 : 3) && ![...words].some((w) => known.has(w))) return quiet ? "new words after a quiet" : "new words";
   const dirs = new Set(before.flatMap((t) => t.files.map((f) => path.dirname(f))));
   if (dirs.size && newest.files.length && newest.files.every((f) => !dirs.has(path.dirname(f)))) return "new folders";
   return null;
@@ -181,8 +183,16 @@ export function decide(s: NameState, answer: NamerAnswer | null, at: number, har
   if (!answer || answer.intent !== "change" || !answer.name || nameKey(answer.name) === nameKey(s.name)) return { ...s, pending: null };
   const left = (n: string) => s.history.some((h) => nameKey(h.name) === nameKey(n) && at - h.until < RECENT_MS);
   if (left(answer.name)) return { ...s, pending: null };
-  if (!hard && !s.pending) return { ...s, pending: answer.name };
+  // Two changes in a row count only if they agree on what the work is now; else the newer one waits.
+  if (!hard && !(s.pending && sameName(s.pending, answer.name))) return { ...s, pending: answer.name };
   return { name: answer.name, pending: null, history: [...s.history, { name: s.name, until: at }].slice(-10), tries: s.tries };
+}
+
+/** Two names mean the same thing: the same words, or one shares a word with the other. */
+export function sameName(a: string, b: string): boolean {
+  if (nameKey(a) === nameKey(b)) return true;
+  const wa = contentWords(a);
+  return [...contentWords(b)].some((w) => wa.has(w));
 }
 
 /** Whether to ask the model about this turn at all, and why. */
