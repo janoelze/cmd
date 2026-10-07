@@ -904,8 +904,10 @@ function ContentPage() {
 
 function OverlaysPage() {
   const menuAnchor = useRef<HTMLButtonElement>(null);
+  const rowMenuAnchor = useRef<HTMLButtonElement>(null);
   const popAnchor = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState(false);
+  const [rowMenu, setRowMenu] = useState(false);
   const [pop, setPop] = useState(false);
   const [dialog, setDialog] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -938,6 +940,29 @@ function OverlaysPage() {
               null,
               { label: "New Space…", icon: "plus", onSelect: () => toast("New Space") },
               { label: "Delete Space", icon: "trash", danger: true, onSelect: () => toast("Deleted", { tone: "danger", action: { label: "Undo", run: () => toast("Restored") } }) },
+            ]}
+          />
+        </Row>
+      </Spec>
+      <Spec title="Menu, one line per item" code='<Menu marks="row" inline items>' note="The current item's row tinted instead of a checkmark; details beside the labels; an accessory before the shortcut.">
+        <Row>
+          <Button ref={rowMenuAnchor} trailing="chevron.down" onClick={() => setRowMenu(!rowMenu)}>
+            {space === "work" ? "Work" : space === "home" ? "Home" : "Side project"}
+          </Button>
+          <Menu
+            anchor={rowMenuAnchor}
+            open={rowMenu}
+            onClose={() => setRowMenu(false)}
+            align="center"
+            marks="row"
+            inline
+            width={280}
+            items={[
+              { label: "Work", detail: "~/src/work", icon: "terminal", checked: space === "work", shortcut: "⌃1", onSelect: () => setSpace("work") },
+              { label: "Home", detail: "~", icon: "house", checked: space === "home", accessory: <StatusDot state="needs" size="sm" />, shortcut: "⌃2", onSelect: () => setSpace("home") },
+              { label: "Side project", detail: "~/src/side-project", icon: "sparkles", checked: space === "side", accessory: <StatusDot state="unseen" size="sm" />, shortcut: "⌃3", onSelect: () => setSpace("side") },
+              null,
+              { label: "Open Space…", icon: "plus", shortcut: "⌘O", onSelect: () => toast("Open Space") },
             ]}
           />
         </Row>

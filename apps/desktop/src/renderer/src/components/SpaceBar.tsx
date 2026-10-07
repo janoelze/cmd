@@ -1,13 +1,13 @@
 // The Space switcher in the top bar (docs/11-spaces.md, 21-sidebars.md): a button
 // with the shown Space's icon and name that drops down a menu of the open Spaces
-// in switcher order (⌃1–9), each with its folder and its icon marked when
+// in switcher order (⌃1–9), one line each: icon, name, folder, and a dot when
 // something in it needs you or finished unseen. The button carries the same mark
 // for the other Spaces, so a background Space that wants you shows without
 // opening the menu.
 
 import { useRef, useState } from "react";
 import { useWholePixelWidth } from "../pixels.ts";
-import { Badge, Menu, type MenuItemProps } from "@cmd/ui";
+import { Badge, Menu, StatusDot, type MenuItemProps } from "@cmd/ui";
 import type { Space, SpaceId } from "@cmd/protocol";
 import { shortPath } from "../model.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
@@ -41,11 +41,13 @@ export function SpaceBar(p: Props) {
     return {
       label: sp.name,
       text: sp.name,
-      detail: `${shortPath(sp.root)}${attn ? (attn === "needs" ? " · needs you" : " · done") : ""}`,
-      icon: <SpaceIcon space={sp} attention={attn} />,
+      // Marked left-to-right: the folder is clipped at its start (styles.css), keeping its end.
+      detail: `\u200e${shortPath(sp.root)}\u200e`,
+      icon: <SpaceIcon space={sp} />,
+      accessory: attn && <StatusDot state={attn} size="sm" label={attn === "needs" ? "Needs you" : "Done"} />,
       checked: on,
       shortcut: i < 9 ? `⌃${i + 1}` : undefined,
-      className: `space-item${attn ? ` attn-${attn}` : ""}`,
+      className: "space-item",
       // ⌘-click: the Space in a new window.
       onSelect: ({ metaKey }) => (sp.id !== p.current || metaKey) && p.onShow(sp.id, metaKey ? { newWindow: true } : undefined),
       onContextMenu: () => p.onMenu(sp),
@@ -90,6 +92,8 @@ export function SpaceBar(p: Props) {
         className="space-menu"
         placement="below"
         align="center"
+        marks="row"
+        inline
         items={[...items, null, { label: "Open Space…", icon: "plus", shortcut: "⌘O", className: "space-item space-item-open", onSelect: p.onPicker }]}
       />
     </div>

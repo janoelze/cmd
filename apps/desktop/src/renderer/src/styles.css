@@ -1086,7 +1086,7 @@ kbd {
 .space-trigger .space-name { flex: 0 1 auto; position: relative; top: -0.5px; } /* capitals centred on the icon and chevron (measured) */
 .space-trigger.pending { color: var(--text-dim); font-weight: 500; }
 .space-trigger.pending:hover { background: transparent; }
-.space-menu { min-width: 260px; }
+.space-menu { min-width: 280px; }
 .space-trigger > .sf { flex: none; color: var(--text-dim); }
 .space-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* SpaceIcon.tsx: the Space's symbol; a dot on its corner when it wants you. */
@@ -1109,8 +1109,8 @@ kbd {
 }
 .space-icon.attn-needs::after { background: var(--state-needs); }
 .space-icon.attn-unseen::after { background: var(--state-done); }
-/* The menu (SpaceBar.tsx) is @cmd/ui's Menu; a Space's attention tints its folder line. */
-.space-item.attn-needs:not([data-active]) .ui-menu-detail { color: var(--warning); }
+/* The menu (SpaceBar.tsx) is @cmd/ui's Menu, one line per Space; a long folder keeps its end. */
+.space-item .ui-menu-detail { direction: rtl; text-align: left; }
 .space-item[data-active] .space-icon { color: inherit; }
 .space-item[data-active] .space-icon::after { box-shadow: 0 0 0 1.5px var(--accent); }
 .space-item-open .ui-menu-icon { color: var(--text-dim); }

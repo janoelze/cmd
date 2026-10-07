@@ -128,7 +128,9 @@ export interface MenuItemProps {
   detail?: ReactNode;
   icon?: string | ReactNode;
   shortcut?: string;
-  /** A checkmark (the current choice). */
+  /** Before the shortcut, at the row's end: a status dot, say. */
+  accessory?: ReactNode;
+  /** The current choice: a checkmark, or a tinted row in a `marks="row"` menu. */
   checked?: boolean;
   danger?: boolean;
   disabled?: boolean;
@@ -158,6 +160,8 @@ export function Menu({
   matchWidth,
   placement,
   align,
+  marks = "check",
+  inline,
   label,
   className,
 }: {
@@ -171,6 +175,10 @@ export function Menu({
   matchWidth?: boolean;
   placement?: Placement;
   align?: Align;
+  /** How the checked item shows: a checkmark column (default), or its row tinted and no column. */
+  marks?: "check" | "row";
+  /** Each detail beside its label, dim, instead of on a second line: one line per item. */
+  inline?: boolean;
   label?: string;
   className?: string;
 }) {
@@ -235,7 +243,7 @@ export function Menu({
       align={align}
       className={cls("ui-menu", className)}
     >
-      <div ref={list} tabIndex={-1} className="ui-menu-list" onKeyDown={keys}>
+      <div ref={list} tabIndex={-1} className="ui-menu-list" data-marks={marks} data-inline={inline || undefined} onKeyDown={keys}>
         {items.map((it, i) =>
           it === null ? (
             <div key={i} className="ui-menu-sep" role="separator" />
@@ -264,12 +272,13 @@ export function Menu({
                 })
               }
             >
-              <span className="ui-menu-check">{it.checked && iconNode("checkmark", ICON.control, "bold")}</span>
+              {marks === "check" && <span className="ui-menu-check">{it.checked && iconNode("checkmark", ICON.control, "bold")}</span>}
               {it.icon != null && <span className="ui-menu-icon">{iconNode(it.icon, ICON.row)}</span>}
               <span className="ui-menu-text">
                 <span className="ui-menu-label">{it.label}</span>
                 {it.detail && <span className="ui-menu-detail">{it.detail}</span>}
               </span>
+              {it.accessory != null && <span className="ui-menu-accessory">{it.accessory}</span>}
               {it.shortcut && (
                 <kbd className="ui-kbd" data-plain>
                   {it.shortcut}

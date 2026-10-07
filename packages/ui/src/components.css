@@ -876,6 +876,15 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-menu-label, .ui-menu-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-menu-detail { font-size: var(--text-sm); color: var(--text-dim); }
 .ui-menu-item[data-active] .ui-menu-detail, .ui-menu-item[data-active] .ui-kbd { color: color-mix(in srgb, var(--on-accent) 75%, transparent); }
+/* marks="row": the checked item's row tinted, no check column (so icons start at the edge). */
+.ui-menu-list[data-marks="row"] .ui-menu-item { padding-left: 6px; }
+.ui-menu-list[data-marks="row"] .ui-menu-item[aria-checked="true"]:not([data-active]) { background: var(--bg-selected); }
+.ui-menu-list[data-marks="row"] .ui-menu-heading { padding-left: 6px; }
+/* inline: label and detail on one line; the label keeps its width, the detail gives way. */
+.ui-menu-list[data-inline] .ui-menu-text { flex-direction: row; align-items: baseline; gap: 8px; }
+.ui-menu-list[data-inline] .ui-menu-label { flex: 0 1 auto; }
+.ui-menu-list[data-inline] .ui-menu-detail { flex: 0 100 auto; min-width: 0; }
+.ui-menu-accessory { flex: none; display: grid; place-items: center; }
 .ui-menu-sep { height: 1px; margin: 4px 6px; background: var(--separator); }
 .ui-menu-heading { padding: 6px 8px 2px 23px; font: 600 var(--text-xs) var(--font-ui); color: var(--text-dim); }
 
