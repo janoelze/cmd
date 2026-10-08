@@ -2,6 +2,26 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.21.0 — 2026-10-08
+
+Browser windows say why a page didn't load, and the sidebar says where each agent works.
+
+### New
+
+- **Pages that don't load say why.** Browser windows say when you're offline, no server answers or the address is wrong. Continue Anyway opens a site whose certificate this Mac doesn't trust, for good.
+
+### Improved
+
+- The sidebar says where an agent or terminal is only when that differs from its Space: a worktree's branch or another project's name.
+- A Space whose folder was removed says so in the switcher and the picker, which shows a project's worktree Spaces together.
+- `cmd ls` and `cmd search` say which folder and branch each agent, terminal and session is in.
+- File search leaves out other checkouts of the same files inside the Space's folder.
+
+### Fixed
+
+- ⌘-clicking a long link that Claude Code broke across rows opens the whole link, not its first row.
+- An agent that starts a subagent in its own worktree keeps its name and place; the subagent's row says where it works.
+
 ## 0.20.1 — 2026-10-08
 
 ### Fixed
