@@ -61,6 +61,11 @@ const HAND: Record<string, string[] | null> = {
   "Read files": null,
 };
 
+/** docs/32's table, for sessions whose title varies: the first prompt → the names a person would accept. */
+const HAND_BY_PROMPT: Record<string, string[] | null> = {
+  "/release": ["Release"],
+};
+
 const WRITES = /^(Edit|Write|MultiEdit|NotebookEdit|apply_patch|str_replace_based_edit_tool): (\S+)/;
 
 /** A session's turns from cmd's copy of its transcript: each prompt, the files it wrote, the last answer. */
@@ -95,7 +100,8 @@ if (positionals[0] === "corpus") {
   let n = 0;
   for (const s of sessions.sessionsSince(since)) {
     const turns = turnsOf(data, s.key);
-    const hand = s.title && s.title in HAND ? HAND[s.title] : undefined;
+    const first = turns[0]?.prompt.trim();
+    const hand = s.title && s.title in HAND ? HAND[s.title] : first && first in HAND_BY_PROMPT ? HAND_BY_PROMPT[first] : undefined;
     if (turns.length < min && hand === undefined) continue;
     const c: NameCase = { id: s.key, turns, project: s.project_id ? path.basename(s.project_id.replace(/^dir:/, "")) : null, ...(hand !== undefined ? { expect: hand ? { final: hand } : { none: true } } : {}) };
     fs.writeFileSync(path.join(casesDir, `${s.key.replace(/[^\w-]/g, "_")}.json`), JSON.stringify(c, null, 2));

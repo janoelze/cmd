@@ -57,14 +57,15 @@ export function nameSystem(language = outputLanguage().name): string {
 - The developer's own words from their prompts and the product's names (Navigator, Spaces, Magic, Tours) over paraphrase. A bug by its symptom.
 - Sentence case. Code names as written (calc.py, ⌘W). Never the project's name (<project>), no agent name, no articles, no punctuation, no quotes.
 - Specific enough to tell it from other work: a single generic word (Descriptions, Downloads, Settings, Bugs, Cleanup) isn't a name; say what of ("Episode descriptions").
+- A session that starts with a slash command that does a task (/release, /triage, /tours) is that task: name it after the command ("Release", "Triage"), even as one word, not after what the command's work touches (a release's changelog lists features; the session is still the release). The same command after other work finishes that work: continue.
 - Different from the other agents' names you are given.
 - Written in ${language}.
-- Nothing to name (a greeting, a test, "read a few files", a bare slash command, only a pasted image): name null.
+- Nothing to name (a greeting, a test, "read a few files", a command that does no task like /clear or /compact, only a pasted image): name null.
 
 Without a current name (<current>none</current>): name the session from everything given, and answer intent "change". Name null only when there is nothing to name.
 
 With a current name, first classify the newest prompt against it:
-- continue: the same work, a reply, a small next step, a go-ahead.
+- continue: the same work, a reply, a small next step, a go-ahead, shipping it (/release, merging).
 - develop: deeper into the same thing (a part of it, a bug in it, its tests or docs).
 - change: a different task than the current name says.
 Propose a name only for change; otherwise name null.
@@ -82,7 +83,8 @@ the "hack the planet" SVG in an empty Space → Hack the planet
 remove the gopher link from the navigation → Gopher link
 the Widget Library ⌘W e2e test is flaky → Flaky ⌘W test
 a notification showed JSON → JSON in notification
-"hi", "test", "/release", "just read a few files" → null`;
+/release, then a changelog whose news is JSON windows → Release
+"hi", "test", "/clear", "just read a few files" → null`;
 }
 
 /** Pasted text is often the task itself (an error, a log): its start is kept. */
