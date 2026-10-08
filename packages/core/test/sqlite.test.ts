@@ -97,6 +97,16 @@ describe("SqliteReader", () => {
     expect(reader.rows({ table: "orders" }).total).toBe(3);
   });
 
+  it("exports a table as CSV: a header, NULL empty, blobs as hex, quotes where needed", () => {
+    const out = path.join(dir, "orders.csv");
+    expect(reader.export("orders", out)).toEqual({ rows: 3, bytes: fs.statSync(out).size });
+    expect(fs.readFileSync(out, "utf8")).toBe("id,customer_id,total,note\n1,1,250.5,0102\n2,2,20,\n3,1,99.99,\n");
+    expect(reader.export("big_orders", out).rows).toBe(1);
+    const quoted = path.join(dir, "q.csv");
+    reader.export("customers", quoted);
+    expect(fs.readFileSync(quoted, "utf8").split("\n")[1]).toBe("1,Ada,London");
+  });
+
   it("cuts long text for transport, keeping its length", () => {
     const long = reader.query({ sql: `SELECT replace(hex(zeroblob(6000)), '0', 'x') AS t` });
     expect(long.rows[0]![0]).toEqual({ text: "x".repeat(10_000), chars: 12_000 });
@@ -112,6 +122,7 @@ describe("SqliteService", () => {
       expect(s.tables.map((t) => t.name)).toEqual(["customers", "orders"]);
       expect((await svc.rows({ path: file, table: "customers", limit: 1 })).rows).toEqual([[1, "Ada", "London"]]);
       expect((await svc.query({ path: file, sql: "SELECT count(*) FROM orders" })).rows).toEqual([[3]]);
+      expect(await svc.export(file, "customers", path.join(dir, "~svc.csv"))).toMatchObject({ rows: 3 });
       expect(svc.open()).toEqual([file]);
       const text = path.join(dir, "notes.db");
       fs.writeFileSync(text, "hello");

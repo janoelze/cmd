@@ -1,11 +1,12 @@
 // SQLite window view (docs/36-sqlite-viewer.md): the database's tables and
-// views down the side; the chosen one as its rows (sorted, filtered, a page at
+// views down the side (a popup in the bar when the window is narrow, see
+// sqlite.css); the chosen one as its rows (sorted, filtered, a page at
 // a time), its structure (columns, keys, indexes, the CREATE statement), or a
 // read-only query over the whole database. Live: the file and its -wal are
 // watched, and what's shown reloads when they change. The core reads the file
 // (sqlite.schema / rows / query) in a worker, read-only; nothing here writes.
 
-import { Button, Callout, CodeBlock, DataGrid, EmptyState, Kbd, KeyValue, ListRow, ListSection, ListValue, Panel, PanelBody, SearchField, Spinner, Tabs, TextArea, type GridCell, type GridColumn, type GridSort } from "@cmd/ui";
+import { Button, Callout, CodeBlock, DataGrid, EmptyState, KeyValue, ListRow, ListSection, ListValue, Panel, PanelBody, SearchField, Select, Spinner, Tabs, TextArea, type GridCell, type GridColumn, type GridSort } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SqliteResult, SqliteSchema, SqliteTable, SqliteValue } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -15,6 +16,7 @@ import { formatBytes } from "../model.ts";
 import { onFsChanged } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { stateStr, type WindowViewProps } from "./registry.ts";
+import { exportTableCsv } from "./sqlite-export.ts";
 import "./sqlite.css";
 
 type Tab = "content" | "structure" | "query";
@@ -135,6 +137,7 @@ export function SqliteView({ win, focused: _focused }: WindowViewProps) {
       { label: "Copy CREATE Statement", enabled: !!t.sql, run: () => copy(t.sql ?? "") },
       "-",
       { label: "Query This Table", run: () => set({ table: t.name, tab: "query", sql: `SELECT * FROM "${t.name.replaceAll('"', '""')}" LIMIT 100` }) },
+      { label: "Export as CSV…", run: () => void exportTableCsv(file, t.name) },
     ]);
 
   if (error && !schema) {
@@ -179,9 +182,17 @@ export function SqliteView({ win, focused: _focused }: WindowViewProps) {
       <div className="sq-main">
         <div className="sq-bar">
           <Tabs value={tab} items={TABS} onChange={(t) => set({ tab: t })} label="Show" />
-          {table && (
-            <span className="sq-bar-name" data-tip={table.kind === "view" ? "A view" : undefined}>
-              {table.name}
+          {/* Narrow windows: the sidebar gives way to this popup. */}
+          {schema && (
+            <span className="sq-pick">
+              <Select
+                size="sm"
+                label="Table"
+                value={picked ?? ""}
+                placeholder={schema.tables.length ? "Pick a table" : "No tables"}
+                options={all.map((t) => ({ value: t.name, icon: t.kind === "view" ? "eye" : "tablecells" }))}
+                onChange={(name) => set({ table: name })}
+              />
             </span>
           )}
         </div>
@@ -406,16 +417,9 @@ function QueryTab({ win, file, version }: { win: WindowViewProps["win"]; file: s
       <div className="sq-query">
         <TextArea ref={area} className="sq-sql" value={sql} onChange={setSql} onSubmit={() => void run()} code rows={4} placeholder="SELECT name, count(*) FROM … GROUP BY name" spellCheck={false} aria-label="SQL" />
         <div className="sq-tools">
-          <Button size="sm" variant="primary" icon="play.fill" busy={busy} disabled={!sql.trim()} onClick={() => void run()}>
+          <Button size="sm" variant="primary" icon="play.fill" busy={busy} disabled={!sql.trim()} data-tip="Run" data-tip-key="⌘↩" onClick={() => void run()}>
             Run
           </Button>
-          <Kbd keys="⌘↩" />
-          <span className="sq-count">{result && `${rowsLabel(result.rows.length)}${result.truncated ? " shown" : ""} · ${result.took || "under 1"} ms`}</span>
-          {result && result.rows.length > 0 && (
-            <Button size="sm" variant="ghost" onClick={() => copy(csvOf(result.columns, result.rows))}>
-              Copy as CSV
-            </Button>
-          )}
         </div>
       </div>
       {error && (
@@ -440,6 +444,16 @@ function QueryTab({ win, file, version }: { win: WindowViewProps["win"]; file: s
           )
         )}
       </div>
+      {result && (
+        <div className="sq-foot">
+          <span className="sq-count">{`${rowsLabel(result.rows.length)}${result.truncated ? " shown" : ""} · ${result.took || "under 1"} ms`}</span>
+          {result.rows.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => copy(csvOf(result.columns, result.rows))}>
+              Copy as CSV
+            </Button>
+          )}
+        </div>
+      )}
     </>
   );
 }

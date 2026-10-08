@@ -6,6 +6,7 @@
 // file is a database, so an error reaches the caller as a plain message.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 import type { SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema } from "@cmd/protocol";
@@ -16,8 +17,9 @@ const log = logger("sqlite");
 
 /** A worker with nothing to do stops after this. */
 const IDLE_MS = 60_000;
-/** A request taking longer ends its worker. */
+/** A request taking longer ends its worker; an export (a whole table to disk) gets longer. */
 const TIMEOUT_MS = 30_000;
+const EXPORT_TIMEOUT_MS = 10 * 60_000;
 
 const MAGIC = "SQLite format 3\0";
 
@@ -77,14 +79,14 @@ class Database {
     this.worker.on("exit", () => this.#fail("The database can't be read right now."));
   }
 
-  ask(req: SqliteOp): Promise<unknown> {
+  ask(req: SqliteOp, timeoutMs = TIMEOUT_MS): Promise<unknown> {
     if (this.idle) clearTimeout(this.idle), (this.idle = null);
     const id = this.#next++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        log.warn(`${path.basename(this.file)}: ${req.op} took over ${TIMEOUT_MS / 1000} s, stopping its reader`);
+        log.warn(`${path.basename(this.file)}: ${req.op} took over ${timeoutMs / 1000} s, stopping its reader`);
         this.#fail("That took too long and was stopped.");
-      }, TIMEOUT_MS);
+      }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       this.worker.postMessage({ id, ...req } as SqliteRequest);
     });
@@ -141,6 +143,11 @@ export class SqliteService {
   async query(q: SqliteQuery): Promise<SqliteResult> {
     const { path: file, ...rest } = q;
     return (await this.#db(file).ask({ op: "query", ...rest })) as SqliteResult;
+  }
+
+  /** A whole table or view to a CSV file. */
+  async export(file: string, table: string, to: string): Promise<{ rows: number; bytes: number }> {
+    return (await this.#db(file).ask({ op: "export", table, file: path.resolve(to.replace(/^~(?=$|\/)/, os.homedir())) }, EXPORT_TIMEOUT_MS)) as { rows: number; bytes: number };
   }
 
   /** Databases with a reader running now. */

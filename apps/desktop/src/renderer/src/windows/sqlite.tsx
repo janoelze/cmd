@@ -6,6 +6,7 @@ import { copy } from "../actions.ts";
 import { shortPath } from "../model.ts";
 import { windowActions } from "../windowActions.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
+import { exportTableCsv } from "./sqlite-export.ts";
 
 const dirOf = (p: string) => p.split("/").slice(0, -1).join("/") || "/";
 
@@ -15,8 +16,10 @@ registerWindowView({
   describe: (w) => ({ place: shortPath(dirOf(stateStr(w, "path") ?? "")) }),
   menu: (w) => {
     const p = stateStr(w, "path");
+    const table = stateStr(w, "table");
     return [
       { label: "Refresh", run: () => windowActions(w.id)?.refresh?.() },
+      { label: table ? `Export ${table} as CSV…` : "Export Table as CSV…", enabled: !!(p && table), run: () => void exportTableCsv(p!, table!) },
       "-",
       ...(p
         ? [

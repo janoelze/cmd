@@ -782,6 +782,7 @@ export class Core {
     "sqlite.schema": (p) => this.sqlite.schema(p.path),
     "sqlite.rows": (p) => this.sqlite.rows(p),
     "sqlite.query": (p) => this.sqlite.query(p),
+    "sqlite.export": (p) => this.sqlite.export(p.path, p.table, p.file),
     // Connection-aware; handled in #serve. These run for in-process callers.
     "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),

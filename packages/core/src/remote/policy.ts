@@ -137,6 +137,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "sqlite.schema": "view",
   "sqlite.rows": "view",
   "sqlite.query": "view",
+  "sqlite.export": "never", // writes a file where it's told to
   "search.query": "never",
   "search.files": "never",
   "search.history": "never",

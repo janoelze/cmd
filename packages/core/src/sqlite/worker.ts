@@ -8,7 +8,7 @@ import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { parentPort, workerData } from "node:worker_threads";
 import type { SqliteColumn, SqliteForeignKey, SqliteIndex, SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema, SqliteTable, SqliteTrigger, SqliteValue } from "@cmd/protocol";
 
-export type SqliteOp = { op: "schema" } | ({ op: "rows" } & Omit<SqliteRowsQuery, "path">) | ({ op: "query" } & Omit<SqliteQuery, "path">);
+export type SqliteOp = { op: "schema" } | ({ op: "rows" } & Omit<SqliteRowsQuery, "path">) | ({ op: "query" } & Omit<SqliteQuery, "path">) | { op: "export"; table: string; file: string };
 export type SqliteRequest = { id: number } & SqliteOp;
 export type SqliteReply = { id: number; result: unknown } | { id: number; error: string };
 
@@ -144,6 +144,35 @@ export class SqliteReader {
     return { columns: page.columns, rows: page.rows, total: null, truncated: page.truncated, took: Math.round(performance.now() - t0) };
   }
 
+  /** The whole table or view as CSV, written as it's read, so a big table never sits in memory. */
+  export(table: string, file: string): { rows: number; bytes: number } {
+    const stmt = this.#db.prepare(`SELECT * FROM ${quote(table)}`);
+    stmt.setReturnArrays(true);
+    const field = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      const s = v instanceof Uint8Array ? Buffer.from(v).toString("hex") : String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+    };
+    const line = (cells: unknown[]) => `${cells.map(field).join(",")}\n`;
+    const fd = fs.openSync(file, "w");
+    let rows = 0;
+    let buf = line(stmt.columns().map((c) => c.name));
+    try {
+      for (const row of stmt.iterate() as Iterable<unknown[]>) {
+        buf += line(row);
+        rows++;
+        if (buf.length > 1 << 16) {
+          fs.writeSync(fd, buf);
+          buf = "";
+        }
+      }
+      fs.writeSync(fd, buf);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return { rows, bytes: fs.statSync(file).size };
+  }
+
   handle(r: SqliteRequest): unknown {
     switch (r.op) {
       case "schema":
@@ -152,6 +181,8 @@ export class SqliteReader {
         return this.rows(r);
       case "query":
         return this.query(r);
+      case "export":
+        return this.export(r.table, r.file);
     }
   }
 }

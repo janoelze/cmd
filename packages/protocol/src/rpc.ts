@@ -372,6 +372,8 @@ export interface Methods {
   "sqlite.rows": { params: SqliteRowsQuery; result: SqliteResult };
   /** One read-only SQL statement's rows; a statement that writes, or a second one, is refused. */
   "sqlite.query": { params: SqliteQuery; result: SqliteResult };
+  /** Write a whole table or view to a CSV file (blobs as hex, NULL empty). Local only. */
+  "sqlite.export": { params: { path: string; table: string; file: string }; result: { rows: number; bytes: number } };
 
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };
