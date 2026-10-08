@@ -66,6 +66,16 @@ if (fs.existsSync(notifications)) {
   throw new Error("apps/desktop/native/build/notifications.node missing; run pnpm install");
 }
 
+// The SF Symbols renderer (macOS; built by postinstall), run by Electron main
+// (src/main/index.ts). Without it icons fall back to resized bitmaps: smaller and soft.
+const sfsymbols = path.join(root, "apps/desktop/native/build/sfsymbols");
+if (fs.existsSync(sfsymbols)) {
+  fs.mkdirSync(path.join(out, "apps/desktop/native/build"), { recursive: true });
+  fs.copyFileSync(sfsymbols, path.join(out, "apps/desktop/native/build/sfsymbols"));
+} else if (process.platform === "darwin") {
+  throw new Error("apps/desktop/native/build/sfsymbols missing; run pnpm install");
+}
+
 /** Node-style lookup of `name` from `dir` upwards; returns the real package dir. */
 function findPackage(dir, name) {
   for (let d = dir; ; d = path.dirname(d)) {
