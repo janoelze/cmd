@@ -9,16 +9,16 @@
 
 import os from "node:os";
 import path from "node:path";
-import type { ActivityEvent } from "@cmd/protocol";
+import type { ActivityEvent, GitPlace } from "@cmd/protocol";
 import { nameFromBranch } from "@cmd/protocol";
-import { checkoutOf } from "../checkout.ts";
+import { checkoutOf, placeOf } from "../checkout.ts";
 
 const CD = /(?:^|&&|;|\|\||\()\s*cd\s+("[^"]+"|'[^']+'|[^\s;&|)]+)/g;
 const GIT_C = /\bgit\s+-C\s+("[^"]+"|'[^']+'|\S+)/g;
 
-/** Folders an event says the agent works in, most telling first: files it writes (`wrote`), then folders it goes to. */
-export function foldersOf(ev: Pick<ActivityEvent, "cwd" | "tool">): { dir: string; wrote: boolean }[] {
-  const out: { dir: string; wrote: boolean }[] = [];
+/** Folders an event says the agent works in, most telling first: files it writes (`wrote`), then folders it goes to, then its cwd (`cwd`). */
+export function foldersOf(ev: Pick<ActivityEvent, "cwd" | "tool">): { dir: string; wrote: boolean; cwd?: true }[] {
+  const out: { dir: string; wrote: boolean; cwd?: true }[] = [];
   const abs = (p: string) => {
     const unq = p.replace(/^["']|["']$/g, "");
     const home = unq === "~" || unq.startsWith("~/") ? path.join(os.homedir(), unq.slice(1)) : unq;
@@ -34,7 +34,7 @@ export function foldersOf(ev: Pick<ActivityEvent, "cwd" | "tool">): { dir: strin
     const a = abs(m[1]!);
     if (a) out.push({ dir: a, wrote: false });
   }
-  if (ev.cwd) out.push({ dir: ev.cwd, wrote: false });
+  if (ev.cwd) out.push({ dir: ev.cwd, wrote: false, cwd: true });
   return out;
 }
 
@@ -46,6 +46,21 @@ export function worktreeName(ev: Pick<ActivityEvent, "cwd" | "tool">): { name: s
     if (!c || c.gitDir === c.common || !c.branch) continue;
     const name = nameFromBranch(c.branch);
     if (name) return { name, top: c.top, branch: c.branch, wrote };
+  }
+  return null;
+}
+
+/**
+ * The checkout an event moves the agent to (docs/35): the first one it writes
+ * in, else the first one it goes to (`cd`, `git -C`). Its cwd alone moves
+ * nothing: agents keep the cwd they started in. null when the event points at
+ * no checkout.
+ */
+export function placeFrom(ev: Pick<ActivityEvent, "cwd" | "tool">): { at: GitPlace; wrote: boolean } | null {
+  for (const { dir, wrote, cwd } of foldersOf(ev)) {
+    if (cwd) break;
+    const at = placeOf(dir);
+    if (at) return { at, wrote };
   }
   return null;
 }

@@ -9,9 +9,17 @@ import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { HOME_SPACE_ID, ICON_NAME, type Space, type SpaceId } from "@cmd/protocol";
 import type { Store } from "../store.ts";
+import { placeOf } from "../checkout.ts";
 import { canonical, deepest, gitRoot, nameFor } from "./paths.ts";
 
 const VIEW_MAX = 256 * 1024;
+
+/** The checkout a Space's root is in, without its branch (docs/35); none for Home, whose rows always say where they are. */
+function gitOf(s: Pick<Space, "root" | "home">): Space["git"] {
+  if (s.home) return null;
+  const at = placeOf(s.root);
+  return at && { project: at.project, top: at.top, linked: at.linked };
+}
 
 export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [SpaceId] }> {
   #spaces = new Map<SpaceId, Space>();
@@ -23,7 +31,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     this.#store = store;
     this.#home = canonical(home, "/", home);
     // Older records: no icon yet, and a hue Spaces no longer have.
-    for (const { hue: _, ...s } of (store?.spaces() ?? []) as (Space & { hue?: number })[]) this.#spaces.set(s.id, { ...s, icon: s.icon ?? null });
+    for (const { hue: _, ...s } of (store?.spaces() ?? []) as (Space & { hue?: number })[]) this.#spaces.set(s.id, { ...s, icon: s.icon ?? null, git: gitOf(s) });
     const h = this.#spaces.get(HOME_SPACE_ID);
     if (!h || h.root !== this.#home || h.closedAt !== null) {
       const now = Date.now();
@@ -38,6 +46,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
         createdAt: h?.createdAt ?? now,
         lastActiveAt: h?.lastActiveAt ?? now,
         view: h?.view ?? {},
+        git: null,
       });
     }
   }
@@ -83,6 +92,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
         existing.order = this.#nextOrder();
       }
       existing.lastActiveAt = now;
+      existing.git = gitOf(existing);
       this.#save(existing);
       return { space: { ...existing }, created: false };
     }
@@ -98,7 +108,9 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
       createdAt: now,
       lastActiveAt: now,
       view: {},
+      git: null,
     };
+    space.git = gitOf(space);
     this.#save(space);
     return { space: { ...space }, created: true };
   }

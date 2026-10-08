@@ -3,41 +3,19 @@
 // find each other before their work collides. Injected by `cmd hook` as context
 // at SessionStart, and again on a prompt when the set of peers changed.
 
-import fs from "node:fs";
 import os from "node:os";
-import path from "node:path";
-import type { Agent } from "@cmd/protocol";
-import { checkoutOf as readCheckout } from "../checkout.ts";
-
-export interface Checkout {
-  /** The repository's shared .git folder: equal for all worktrees of one repo. */
-  repo: string;
-  /** This worktree's top level. */
-  root: string;
-  branch: string | null;
-}
-
-/** The checkout `dir` is in (checkout.ts), keyed by the real path of its shared .git; null outside a repository. */
-export function checkoutOf(dir: string): Checkout | null {
-  const c = readCheckout(dir);
-  if (!c) return null;
-  try {
-    return { repo: fs.realpathSync(c.common), root: c.top, branch: c.branch };
-  } catch {
-    return null;
-  }
-}
+import type { Agent, GitPlace } from "@cmd/protocol";
 
 const tilde = (p: string) => (p.startsWith(os.homedir() + "/") ? "~" + p.slice(os.homedir().length) : p);
 const short = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 const ago = (ms: number) => (ms < 60_000 ? "just now" : ms < 3_600_000 ? `${Math.round(ms / 60_000)}m` : `${Math.round(ms / 3_600_000)}h`);
 
-/** The briefing for `self`, given its peers' checkouts; null when there are none. */
-export function briefing(self: { agent: Agent; at: Checkout }, peers: { agent: Agent; at: Checkout }[], now = Date.now()): string | null {
+/** The briefing for `self`, given where it and its peers work (Agent.git); null when there are no peers. */
+export function briefing(self: { agent: Agent; at: GitPlace }, peers: { agent: Agent; at: GitPlace }[], now = Date.now()): string | null {
   if (!peers.length) return null;
   const label = (a: Agent) => `${a.name ? `${a.name} ` : ""}(${a.kind}, id ${a.id.slice(0, 8)})`;
   const lines = peers.map(({ agent: a, at }) => {
-    const where = at.root === self.at.root ? "same checkout as you" : tilde(at.root);
+    const where = at.top === self.at.top ? "same checkout as you" : tilde(at.top);
     const task = a.lastPrompt ?? a.spawn.prompt;
     return [
       `- ${label(a)}: ${a.state} for ${ago(now - a.stateSince)}, ${where}${at.branch ? ` on ${at.branch}` : ""}`,

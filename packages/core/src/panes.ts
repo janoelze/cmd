@@ -12,6 +12,7 @@ import { EventEmitter } from "node:events";
 import { logger } from "@cmd/protocol/node";
 import type { Attention, Pane, PaneId, PaneUsage, Progress, Settings, SpaceId } from "@cmd/protocol";
 import { usageChanged } from "./resources.ts";
+import { placeOf, samePlace } from "./checkout.ts";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
 import { DEVICE_REPLIES, OscScanner, type OscEvent } from "./osc.ts";
 import { agentVersion, classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
@@ -354,6 +355,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   }
 
   #attach(pane: Pane, term: Term, token: string): Live {
+    pane.git = placeOf(pane.cwd);
     const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, capture: null, saved: "", dirty: true, screenHash: "", polledAt: 0, outputSincePoll: true, progressTimer: null };
     this.#panes.set(pane.id, live);
     term.onData((data) => this.#onData(live, data));
@@ -418,7 +420,15 @@ export class PaneManager extends EventEmitter<PaneEvents> {
         changed = true;
       } else if (ev.type === "cwd" && ev.cwd !== live.pane.cwd) {
         live.pane.cwd = ev.cwd;
+        live.pane.git = placeOf(ev.cwd);
         changed = true;
+      } else if (ev.type === "prompt" && ev.mark === "D") {
+        // A command ended: it may have switched branches (`git switch`) without a cwd change.
+        const git = placeOf(live.pane.cwd);
+        if (!samePlace(git, live.pane.git)) {
+          live.pane.git = git;
+          changed = true;
+        }
       }
       if (changed) this.#changed(live);
       if (ev.type === "prompt" && (ev.mark === "B" || ev.mark === "A")) this.#flushPending(live);

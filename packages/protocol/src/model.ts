@@ -18,6 +18,8 @@ export interface Space {
   name: string;
   /** Canonical path (realpath, on-disk case); unique among Spaces. Home: the home folder. */
   root: string;
+  /** The checkout its root is in, read when it opens; null for Home and outside a repository. */
+  git?: Omit<GitPlace, "branch"> | null;
   home: boolean;
   /** SF Symbol name; null: the default (spaceIcon). */
   icon: string | null;
@@ -31,12 +33,29 @@ export interface Space {
   view: Record<string, unknown>;
 }
 
+/**
+ * The git checkout something is in (docs/35-checkouts.md): what the UI compares
+ * with its Space's to say where it is only when that differs.
+ */
+export interface GitPlace {
+  /** The project: the repository's main worktree (the same for all its worktrees). */
+  project: string;
+  /** The worktree's top level (the project itself for the main checkout). */
+  top: string;
+  /** A linked worktree, not the main checkout. */
+  linked: boolean;
+  /** The checked-out branch; null when HEAD is detached. */
+  branch: string | null;
+}
+
 /** A terminal session owned by the core. Every session is a pane, agent or not. */
 export interface Pane {
   id: PaneId;
   spaceId: SpaceId;
   title: string;
   cwd: string;
+  /** The checkout its cwd is in, branch included; null outside a repository. */
+  git?: GitPlace | null;
   shell: string;
   pid: number;
   /** Name of the foreground process (e.g. "zsh", "claude", "ssh"). */
@@ -179,6 +198,12 @@ export interface Agent {
   nameWas?: string | null;
   namedAt?: number | null;
   cwd: string;
+  /**
+   * The checkout it works in: where it writes files (or goes, before it has
+   * written anywhere), which is often not its cwd (agents start in the main
+   * checkout and move to a worktree). null outside a repository.
+   */
+  git?: GitPlace | null;
 
   parentId: AgentId | null;
   rootId: AgentId;

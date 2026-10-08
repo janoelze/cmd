@@ -10,7 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import type { ActivityEvent, Agent, AgentId, AgentKind, AgentState, AgentTurn, Methods, NameSource, PaneId, Settings, SpaceId } from "@cmd/protocol";
+import type { ActivityEvent, Agent, AgentId, AgentKind, AgentState, AgentTurn, GitPlace, Methods, NameSource, PaneId, Settings, SpaceId } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { Foreground, PaneManager } from "../panes.ts";
@@ -18,8 +18,9 @@ import type { Store } from "../store.ts";
 import { shq } from "../shell.ts";
 import { registerBuiltinSources } from "../search/builtin.ts";
 import { locateContext, TranscriptSources } from "../search/sources.ts";
-import { briefing, checkoutOf } from "./peers.ts";
-import { worktreeName } from "./names.ts";
+import { briefing } from "./peers.ts";
+import { placeFrom, worktreeName } from "./names.ts";
+import { placeOf, samePlace } from "../checkout.ts";
 import { nativeSession, type StateChange } from "./state.ts";
 import { removeStatus, StatusWatcher } from "./statusfiles.ts";
 import { watchTurn, type TurnWatch } from "./activity/fswatch.ts";
@@ -77,6 +78,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #hooked = new Set<AgentId>();
   /** Per agent, the peers it was last briefed about (peerBriefing). */
   #told = new Map<AgentId, string>();
+  /** Agents that wrote a file in a checkout: only another write moves them (docs/35). */
+  #wrote = new Set<AgentId>();
   /** Spawned agents whose process has been seen; until then a shell foreground is expected. */
   #started = new Set<AgentId>();
   #panes: PaneManager;
@@ -151,15 +154,16 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const peers = [...this.#agents.values()]
       .filter((a) => a.id !== id && a.paneId && a.state !== "exited")
       .map((agent) => ({ agent, at: this.#checkout(agent) }))
-      .filter((p): p is { agent: Agent; at: NonNullable<typeof at> } => p.at?.repo === at.repo);
+      .filter((p): p is { agent: Agent; at: GitPlace } => p.at?.project === at.project);
     const key = peers.map((p) => p.agent.id).sort().join(",");
     if (event === "UserPromptSubmit" && key === (this.#told.get(id) ?? "")) return null;
     this.#told.set(id, key);
     return briefing({ agent: self, at }, peers) ?? (event === "SessionStart" ? null : "[cmd] The other agents in this repository have finished; none are working in parallel with you now.");
   }
 
-  #checkout(a: Agent) {
-    return checkoutOf(a.cwd || (a.paneId && this.#panes.get(a.paneId)?.cwd) || "");
+  /** Where an agent works (Agent.git), else its terminal's checkout. */
+  #checkout(a: Agent): GitPlace | null {
+    return a.git ?? placeOf(a.cwd || (a.paneId && this.#panes.get(a.paneId)?.cwd) || "");
   }
 
   // ── detection ──────────────────────────────────────────────
@@ -322,6 +326,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       this.activity.saveTurn(r.turn, ev.id, agent.cwd);
       fields.turn = structuredClone(r.turn);
     }
+    const git = this.#placeAfter(agent, ev);
+    if (git !== undefined) fields.git = git;
     const named = this.#worktreeName(agent, ev);
     if (named) Object.assign(fields, { name: named.name, nameBy: named.nameBy, nameWas: named.nameWas, namedAt: named.namedAt });
     if (ev.home && ev.agent) this.emit("home", ev.agent, ev.home);
@@ -334,6 +340,20 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       if (r.opened) this.#snapStart(agent, r.opened);
       if (r.closed) void this.#snapEnd(agent, red, r.closed);
     }
+  }
+
+  /**
+   * Where the agent works after this event (docs/35), when that changed; undefined
+   * when it didn't. A write moves it; going somewhere only moves an agent that
+   * hasn't written anywhere yet; otherwise its branch is read again.
+   */
+  #placeAfter(agent: Agent, ev: ActivityEvent): GitPlace | null | undefined {
+    const to = placeFrom(ev);
+    let at = agent.git ?? null;
+    if (to && (to.wrote || !this.#wrote.has(agent.id))) at = to.at;
+    else if (at) at = placeOf(at.top);
+    if (to?.wrote) this.#wrote.add(agent.id);
+    return samePlace(at, agent.git) ? undefined : at;
   }
 
   /**
@@ -609,6 +629,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       ...(live ? {} : { state: "starting" as const, stateSince: now, detail: null }),
     };
     this.#agents.set(agent.id, agent);
+    // It had moved to another checkout than its cwd's: by writing there, as far as anyone knows now.
+    if (agent.git && agent.git.top !== placeOf(agent.cwd)?.top) this.#wrote.add(agent.id);
     if (agent.paneId) this.#panes.setAgent(agent.paneId, agent.id);
     if (live) {
       // Its process kept running: return to the shell means it exited.
@@ -725,6 +747,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       name: o.name ?? null,
       nameBy: o.nameBy ?? null,
       cwd: o.cwd ?? pane?.cwd ?? process.cwd(),
+      git: parent?.git ?? placeOf(o.cwd ?? pane?.cwd ?? process.cwd()),
       parentId: parent?.id ?? null,
       rootId: parent?.rootId ?? id,
       depth: parent ? parent.depth + 1 : 0,
@@ -773,6 +796,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     }
     if (change.cwd && change.cwd !== agent.cwd) {
       agent.cwd = change.cwd;
+      // Its cwd moved: so did it, unless it wrote somewhere (#placeAfter).
+      if (!this.#wrote.has(agent.id)) agent.git = placeOf(change.cwd);
       dirty = true;
     }
     if (dirty) this.#emitUpdate(agent);
@@ -793,6 +818,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (!this.#agents.delete(id)) return;
     this.#store?.deleteAgent(id);
     this.#hooked.delete(id);
+    this.#wrote.delete(id);
     this.#started.delete(id);
     this.emit("removed", id);
   }

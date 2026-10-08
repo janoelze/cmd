@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
-import { checkoutOf } from "../src/agents/peers.ts";
 import { AgentTracker } from "../src/agents/tracker.ts";
 import { PaneManager } from "../src/panes.ts";
 import { fakeFactory } from "./fake-pty.ts";
@@ -42,17 +41,6 @@ const start = (cwd: string, prompt?: string) => {
   return { id: a.id, pane: pane.id, briefing: agents.peerBriefing(a.id, "SessionStart") };
 };
 
-describe("checkoutOf", () => {
-  it("gives worktrees of one repository the same repo and their own root and branch", () => {
-    const a = checkoutOf(path.join(main, "src"))!;
-    const b = checkoutOf(tree)!;
-    expect(a).toMatchObject({ root: main, branch: "master" });
-    expect(b).toMatchObject({ root: tree, branch: "topic" });
-    expect(a.repo).toBe(b.repo);
-    expect(checkoutOf(other)).toBeNull();
-  });
-});
-
 describe("peer briefings", () => {
   it("tells an agent about others in any worktree of its repository, not elsewhere", () => {
     const first = start(main, "fix the canvas\nmore detail");
@@ -63,6 +51,27 @@ describe("peer briefings", () => {
     expect(second.briefing).toContain(`${main} on master, working on "fix the canvas"`);
     expect(second.briefing).not.toContain("unrelated");
     expect(second.briefing).toContain("cmd send <id>");
+  });
+
+  it("says where each agent works, not where it started", () => {
+    const first = start(main, "the topic");
+    agents.ingestHook(first.pane, "claude", "PreToolUse", { cwd: main, tool_name: "Write", tool_input: { file_path: path.join(tree, "a.txt"), content: "a" } });
+    expect(agents.get(first.id)!.git).toMatchObject({ top: tree, project: main, linked: true, branch: "topic" });
+    // Going back to look at the main checkout doesn't move an agent that wrote in its worktree.
+    agents.ingestHook(first.pane, "claude", "PreToolUse", { cwd: main, tool_name: "Bash", tool_input: { command: `cd ${main} && git log` } });
+    expect(agents.get(first.id)!.git?.top).toBe(tree);
+    const second = start(main);
+    expect(second.briefing).toContain(`${tree} on topic, working on "the topic"`);
+    expect(second.briefing).not.toContain("same checkout as you");
+  });
+
+  it("moves an agent that hasn't written anywhere to where it goes", () => {
+    const a = start(main);
+    expect(agents.get(a.id)!.git).toMatchObject({ top: main, linked: false, branch: "master" });
+    agents.ingestHook(a.pane, "claude", "PreToolUse", { cwd: main, tool_name: "Bash", tool_input: { command: `cd ${tree} && ls` } });
+    expect(agents.get(a.id)!.git?.top).toBe(tree);
+    agents.ingestHook(a.pane, "claude", "PreToolUse", { cwd: main, tool_name: "Bash", tool_input: { command: `cd ${other} && ls` } });
+    expect(agents.get(a.id)!.git?.top).toBe(tree);
   });
 
   it("says so on a prompt only when the peers changed", () => {

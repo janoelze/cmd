@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { checkoutOf } from "../src/checkout.ts";
+import { checkoutOf, placeOf } from "../src/checkout.ts";
 import { rmTemp } from "./tmp.ts";
 
 const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-checkout-")));
@@ -21,7 +21,7 @@ describe("checkoutOf", () => {
   git(repo, "worktree", "add", "-q", "-b", "feature", wt);
 
   it("finds the main worktree from a file deep inside, with its branch", () => {
-    expect(checkoutOf(path.join(repo, "src", "a.ts"))).toEqual({ top: repo, repo, common: path.join(repo, ".git"), gitDir: path.join(repo, ".git"), branch: "main" });
+    expect(checkoutOf(path.join(repo, "src", "a.ts"))).toEqual({ top: repo, repo, common: path.join(repo, ".git"), gitDir: path.join(repo, ".git"), linked: false, branch: "main" });
   });
 
   it("finds a linked worktree's top, and the repository it shares with the main one", () => {
@@ -34,6 +34,15 @@ describe("checkoutOf", () => {
     expect(checkoutOf(dir)).toBeNull();
     expect(checkoutOf("")).toBeNull();
     expect(checkoutOf(path.join(dir, "missing"))).toBeNull();
+  });
+
+  it("says which project, worktree and branch, and sees a branch switch", () => {
+    expect(placeOf(path.join(repo, "src"))).toEqual({ project: repo, top: repo, linked: false, branch: "main" });
+    expect(placeOf(wt)).toEqual({ project: repo, top: wt, linked: true, branch: "feature" });
+    git(wt, "switch", "-q", "-c", "other");
+    expect(placeOf(wt)?.branch).toBe("other");
+    expect(placeOf(dir)).toBeNull();
+    expect(placeOf("relative")).toBeNull();
   });
 });
 
