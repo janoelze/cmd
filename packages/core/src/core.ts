@@ -520,14 +520,18 @@ export class Core {
   }
 
   /**
-   * Where a Space's files are searched: its folder, but in the Home Space (the
-   * home folder: too big to search as you type) the project of `cwd`, if any.
+   * Where a Space's files are searched: its folder. In the Home Space (the home
+   * folder: too big to search as you type) the folder of `cwd` instead, the
+   * selected window's: its repository's top if it's in one, else the folder
+   * itself; never the home folder or one above it.
    */
   #searchRoot(spaceId: SpaceId | null, cwd: string | null): string | null {
     const space = spaceId ? this.spaces.get(spaceId) : undefined;
     if (space && !space.home) return space.root;
-    const at = cwd && path.isAbsolute(cwd) ? checkoutOf(cwd)?.top ?? null : null;
-    return at && at !== os.homedir() ? at : null;
+    if (!cwd || !path.isAbsolute(cwd)) return null;
+    const at = checkoutOf(cwd)?.top ?? path.resolve(cwd);
+    const home = os.homedir();
+    return at === home || home.startsWith(at.endsWith(path.sep) ? at : at + path.sep) ? null : at;
   }
 
   readonly handlers: Handlers = {
