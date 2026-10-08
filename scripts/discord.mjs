@@ -1,11 +1,19 @@
-// Reads cmd's Discord server (crash reports, feature ideas) through a read-only bot,
-// for agents to triage. REST only, no gateway: it polls when asked.
+// Reads cmd's Discord server (crash reports, feature ideas) for agents to triage, and
+// keeps the triage state on the messages themselves, so every session sees what was
+// reviewed: the bot's reaction is the state, a reply in the message's thread the note.
+// REST only, no gateway: it polls when asked. The routine: .claude/skills/triage/SKILL.md.
 //   node scripts/discord.mjs channels                     every channel the bot can see: id, type, name
 //   node scripts/discord.mjs read <channel> [options]     messages, newest last; threads and forum posts inlined
 //     --since 7d|12h|2026-10-01   default 7d
 //     --limit N                   at most N top-level messages or forum posts (default 200)
 //     --save <dir>                download attachments there (crash logs); otherwise their URLs are printed
 //     --json                      one JSON document instead of text
+//   node scripts/discord.mjs inbox [--channel c] [--since 90d] [--all] [--json]
+//                                                         untriaged and in-progress messages of #crashes and
+//                                                         #feedback, grouped by signature; attachments saved
+//   node scripts/discord.mjs mark <state> <ref>... [--note "…"]
+//                                                         state: wip 👀, done ✅, dup 🔁, wontfix 🚫, open (clears);
+//                                                         ref: <channel>/<message id> as inbox prints it
 // <channel> is an id or a name (without #). The token comes from $CMD_DISCORD_TOKEN,
 // else ~/src/.secrets/cmd-discord-token, else ~/.config/cmd-discord/token.
 import fs from "node:fs";
@@ -14,6 +22,8 @@ import path from "node:path";
 
 const API = "https://discord.com/api/v10";
 const TEXT = 0, ANNOUNCEMENT = 5, FORUM = 15, MEDIA = 16;
+const STATES = { wip: "👀", done: "✅", dup: "🔁", wontfix: "🚫" };
+const TRIAGE = ["crashes", "feedback"];
 const KIND = { 0: "text", 2: "voice", 4: "category", 5: "announcement", 13: "stage", 15: "forum", 16: "media" };
 
 const fail = (msg) => {
@@ -32,19 +42,20 @@ function token() {
 
 const auth = `Bot ${token()}`;
 
-async function api(route, query = {}) {
+async function api(route, query = {}, method = "GET", body) {
   const url = new URL(API + route);
   for (const [k, v] of Object.entries(query)) if (v != null) url.searchParams.set(k, String(v));
+  const headers = { Authorization: auth, ...(body && { "Content-Type": "application/json" }) };
   for (;;) {
-    const res = await fetch(url, { headers: { Authorization: auth } });
+    const res = await fetch(url, { method, headers, body: body && JSON.stringify(body) });
     if (res.status === 429) {
       const body = await res.json().catch(() => ({}));
       await new Promise((r) => setTimeout(r, Math.ceil((body.retry_after ?? 1) * 1000)));
       continue;
     }
     if (res.status === 403) throw Object.assign(new Error(`no access to ${route}`), { forbidden: true });
-    if (!res.ok) throw new Error(`${res.status} on ${route}: ${await res.text()}`);
-    return res.json();
+    if (!res.ok) throw new Error(`${res.status} on ${method} ${route}: ${await res.text()}`);
+    return res.status === 204 ? null : res.json();
   }
 }
 
@@ -131,10 +142,19 @@ async function save(dir, posts) {
   }
 }
 
-async function read(name, opts) {
-  const all = await channels();
+// The triage state: the first of the bot's own reactions that is one of STATES.
+function stateOf(m) {
+  const mine = new Set((m.reactions ?? []).filter((r) => r.me).map((r) => r.emoji.name));
+  return Object.keys(STATES).find((k) => mine.has(STATES[k])) ?? null;
+}
+
+function findChannel(all, name) {
   const ch = all.find((c) => c.id === name) ?? all.find((c) => c.name === name.replace(/^#/, ""));
-  if (!ch) fail(`No channel ${name}. The bot sees: ${all.map((c) => c.name).join(", ")}`);
+  return ch ?? fail(`No channel ${name}. The bot sees: ${all.map((c) => c.name).join(", ")}`);
+}
+
+async function read(name, opts, all) {
+  const ch = findChannel(all ?? (await channels()), name);
   const since = parseSince(opts.since ?? "7d");
   const limit = Number(opts.limit ?? 200);
   let posts;
@@ -148,7 +168,7 @@ async function read(name, opts) {
   } else if (ch.type === TEXT || ch.type === ANNOUNCEMENT) {
     posts = [];
     for (const m of await messages(ch.id, since, limit)) {
-      const p = slim(m);
+      const p = { ...slim(m), state: stateOf(m) };
       if (m.thread) p.replies = (await messages(m.thread.id, 0)).map(slim).filter((r) => r.id !== m.id);
       posts.push(p);
     }
@@ -158,6 +178,71 @@ async function read(name, opts) {
   if (posts.length && posts.every(blank)) console.error("Every message came back blank: turn on Message Content Intent (Developer Portal → Bot).\n");
   if (opts.save) await save(opts.save, posts);
   return { channel: ch, since: new Date(since).toISOString(), posts };
+}
+
+// One line that says what a message is about: code blocks dropped, embed title and text joined.
+const summary = (p) => [p.text, ...p.embeds].join("\n").replace(/```[\s\S]*?```/g, "").split("\n").map((l) => l.trim()).filter(Boolean).join(" · ");
+// Reports of the same problem differ only in ids, hashes and numbers.
+const signature = (p) => summary(p).toLowerCase().replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, "<id>").replace(/\b[0-9a-f]{8,}\b/g, "<hex>").replace(/\d+/g, "N");
+
+async function inbox(opts) {
+  const all = await channels();
+  const out = [];
+  for (const name of opts.channel ? [opts.channel] : TRIAGE) {
+    const save = path.join(os.tmpdir(), "cmd-discord", name);
+    const { channel, posts } = await read(name, { since: opts.since ?? "90d", limit: opts.limit ?? 1000, save }, all);
+    const groups = new Map();
+    for (const p of posts) {
+      if (!opts.all && p.state && p.state !== "wip") continue;
+      const key = signature(p);
+      if (!groups.has(key)) groups.set(key, { summary: summary(p) || "(empty)", reports: [] });
+      groups.get(key).reports.push({ ref: `${channel.name}/${p.id}`, ...p });
+    }
+    out.push({ channel: channel.name, groups: [...groups.values()] });
+  }
+  return out;
+}
+
+function printInbox(channels) {
+  for (const { channel, groups } of channels) {
+    const n = groups.reduce((a, g) => a + g.reports.length, 0);
+    console.log(`#${channel}: ${groups.length ? `${groups.length} open (${n} message${n === 1 ? "" : "s"})` : "nothing open"}\n`);
+    for (const g of groups) {
+      const r = g.reports;
+      const days = [...new Set([r[0].at.slice(0, 10), r.at(-1).at.slice(0, 10)])].join(" → ");
+      console.log(`## ${g.summary}${r.length > 1 ? `  ×${r.length}` : ""}  (${days})`);
+      for (const m of r) {
+        console.log(`   ${m.state ? STATES[m.state] : "  "} ${m.ref}  ${m.at.slice(0, 16).replace("T", " ")}`);
+        for (const a of m.attachments) console.log(`        📎 ${a.file ?? a.url}`);
+        for (const reply of m.replies ?? []) console.log(`        ↳ ${reply.author}: ${reply.text.split("\n").join(" ")}`);
+      }
+      console.log();
+    }
+  }
+}
+
+async function mark(state, refs, note) {
+  if (state !== "open" && !STATES[state]) fail(`state: one of ${Object.keys(STATES).join(", ")}, open`);
+  if (!refs.length) fail("mark: which messages? Pass <channel>/<message id> as inbox prints them");
+  const all = await channels();
+  for (const ref of refs) {
+    const [name, id] = ref.split("/");
+    if (!id) fail(`${ref}: expected <channel>/<message id>`);
+    const ch = findChannel(all, name);
+    const route = `/channels/${ch.id}/messages/${id}`;
+    const m = await api(route);
+    for (const [k, emoji] of Object.entries(STATES)) {
+      const mine = (m.reactions ?? []).some((r) => r.me && r.emoji.name === emoji);
+      if (k === state && !mine) await api(`${route}/reactions/${encodeURIComponent(emoji)}/@me`, {}, "PUT");
+      if (k !== state && mine) await api(`${route}/reactions/${encodeURIComponent(emoji)}/@me`, {}, "DELETE");
+    }
+    if (note) {
+      const name = summary(slim(m)).slice(0, 90) || "triage";
+      const thread = m.thread?.id ?? (await api(`${route}/threads`, {}, "POST", { name })).id;
+      await api(`/channels/${thread}/messages`, {}, "POST", { content: `${STATES[state] ?? "↩️"} ${note}` });
+    }
+    console.log(`${ref}: ${state}${note ? " (noted in its thread)" : ""}`);
+  }
 }
 
 function printText({ channel, since, posts }) {
@@ -180,12 +265,12 @@ const args = process.argv.slice(2);
 const opts = {};
 const pos = [];
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--json") opts.json = true;
+  if (args[i] === "--json" || args[i] === "--all") opts[args[i].slice(2)] = true;
   else if (args[i].startsWith("--")) opts[args[i].slice(2)] = args[++i];
   else pos.push(args[i]);
 }
 
-const [cmd, target] = pos;
+const [cmd, target, ...rest] = pos;
 try {
   if (cmd === "channels") {
     const list = await channels();
@@ -195,8 +280,14 @@ try {
     const result = await read(target, opts);
     if (opts.json) console.log(JSON.stringify(result, null, 2));
     else printText(result);
+  } else if (cmd === "inbox") {
+    const result = await inbox(opts);
+    if (opts.json) console.log(JSON.stringify(result, null, 2));
+    else printInbox(result);
+  } else if (cmd === "mark" && target) {
+    await mark(target, rest, opts.note);
   } else {
-    fail("usage: pnpm discord channels | pnpm discord read <channel> [--since 7d] [--limit N] [--save dir] [--json]");
+    fail("usage: pnpm discord channels | read <channel> [--since 7d] [--limit N] [--save dir] [--json] | inbox [--channel c] [--since 90d] [--all] [--json] | mark <wip|done|dup|wontfix|open> <ref>... [--note …]");
   }
 } catch (e) {
   fail(e.forbidden ? `${e.message}. Give the bot View Channels and Read Message History on that channel (private channels need it added explicitly).` : e.message);
