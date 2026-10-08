@@ -80,6 +80,8 @@ open();
 const api = {
   /** The user's home folder ($HOME counts, so a tour's fixture home is "~" too). */
   homeDir: os.homedir(),
+  /** The system's "Show scroll bars": "always", or "fade" after scrolling (Automatic and When scrolling). */
+  scrollBars: ipcRenderer.sendSync("show-scroll-bars") as "always" | "fade",
   async call<M extends Method>(method: M, params: Params<M>): Promise<Result<M>> {
     const c = conn ?? (await ready);
     return c.client.call(method, params);

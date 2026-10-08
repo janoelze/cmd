@@ -6,6 +6,7 @@ import { Symbol } from "../components/Symbol.tsx";
 import "@cmd/ui/ui.css";
 import "../styles.css";
 import "./workbench.css";
+import { cmd } from "../bridge.ts";
 import { installErrorReporting } from "../errors.ts";
 import { installScrollbars, installTooltips, Toaster, UIProvider } from "@cmd/ui";
 import "@cmd/ui/themes/builtin";
@@ -14,7 +15,7 @@ import { Workbench } from "./Workbench.tsx";
 
 installErrorReporting();
 bootTheme();
-installScrollbars();
+installScrollbars({ always: cmd.scrollBars === "always" });
 installTooltips();
 
 document.documentElement.classList.add(navigator.platform.startsWith("Mac") ? "platform-mac" : "platform-other");

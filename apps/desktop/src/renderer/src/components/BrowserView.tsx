@@ -14,7 +14,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { Button, EmptyState, SCROLLBAR_CSS, ToolbarAddressField, ToolbarButton, ToolbarGroup, WindowToolbar, type FindResults } from "@cmd/ui";
+import { Button, EmptyState, SCROLLBAR_CSS, scrollbarScript, ToolbarAddressField, ToolbarButton, ToolbarGroup, WindowToolbar, type FindResults } from "@cmd/ui";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { useFind } from "../find.tsx";
 import { handleEmbedMessage } from "../embed.ts";
@@ -94,8 +94,11 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       setAddress(e.validatedURL);
     };
     const starting = (e: { isMainFrame: boolean; isInPlace: boolean }) => e.isMainFrame && !e.isInPlace && setFailed(null);
-    // Pages get the app's scrollbars, so every window's look the same.
-    const ready = () => void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
+    // Pages get the app's scrollbars (and their fading), so every window's look the same.
+    const ready = () => {
+      void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
+      void wv.executeJavaScript(scrollbarScript({ always: cmd.scrollBars === "always" })).catch(() => {});
+    };
     // What the page's preload reports (preload/guest.ts): presses, sideways scrolls.
     const reported = (e: { channel: string; args: unknown[] }) => {
       if (e.channel === "cmd-embed") handleEmbedMessage(wv as unknown as HTMLElement, e.args[0]);

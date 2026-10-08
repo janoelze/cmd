@@ -14,7 +14,7 @@ import { SettingsWindow } from "./SettingsWindow.tsx";
 
 installErrorReporting();
 bootTheme();
-installScrollbars();
+installScrollbars({ always: cmd.scrollBars === "always" });
 installTooltips();
 
 // The menu bar sends the edit commands it can't do natively (main/menu.ts); ⌘W closes in main.

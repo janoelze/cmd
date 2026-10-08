@@ -8,6 +8,7 @@ import "./styles.css";
 import "./windows/builtin.tsx"; // built-in window views (browser, files, text)
 import { App } from "./App.tsx";
 import { TOPBAR_HEIGHT } from "../../shared/chrome.ts";
+import { cmd } from "./bridge.ts";
 import { installErrorReporting } from "./errors.ts";
 import { installDrops } from "./drops.ts";
 import { installScrollbars, installTooltips, UIProvider } from "@cmd/ui";
@@ -16,7 +17,7 @@ import { bootTheme } from "@cmd/ui/themes";
 
 installErrorReporting();
 bootTheme();
-installScrollbars();
+installScrollbars({ always: cmd.scrollBars === "always" });
 installTooltips();
 installDrops();
 

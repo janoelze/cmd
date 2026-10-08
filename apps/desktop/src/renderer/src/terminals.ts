@@ -19,7 +19,7 @@ import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { currentTheme, onThemeChange, terminalColors } from "@cmd/ui/themes";
 import { findLinks, logicalLine, type Row } from "./links.ts";
-import type { FindOptions, FindResults } from "@cmd/ui";
+import { scrolled, type FindOptions, type FindResults } from "@cmd/ui";
 import type { FindRequest } from "./find.tsx";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
 import { registerDropTarget } from "./drops.ts";
@@ -365,6 +365,8 @@ class Terminals {
     term.onWriteParsed(scrollable);
     term.buffer.onBufferChange(scrollable);
     term.onResize(scrollable);
+    // xterm scrolls without DOM scroll events: tell the kit, so the bar fades like every other.
+    term.onScroll(() => scrolled(el));
     this.#hosts.set(paneId, h);
     return h;
   }

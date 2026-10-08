@@ -5,7 +5,7 @@
 performance.mark("boot:main-script");
 import { background } from "./background.ts";
 import { servePreviews } from "./preview.ts";
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, webContents, type WebContents } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, systemPreferences, webContents, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { execFile, spawn } from "node:child_process";
@@ -662,6 +662,11 @@ ipcMain.on("set-window-size", (e, width: number, height: number) => {
 });
 // The preload connects where main decided (dev builds use their own core).
 ipcMain.on("core-socket", (e) => (e.returnValue = socketPath));
+// System Settings → Appearance → Show scroll bars; read when a window opens (no change event).
+ipcMain.on("show-scroll-bars", (e) => {
+  const pref = process.platform === "darwin" ? systemPreferences.getUserDefault("AppleShowScrollBars", "string") : "";
+  e.returnValue = pref === "Always" ? "always" : "fade";
+});
 ipcMain.on("reveal-path", (_e, p: string) => shell.showItemInFolder(p));
 ipcMain.handle("trash-path", (_e, p: string) => shell.trashItem(p));
 handleCertificates();
