@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { bucketOf, type Agent } from "@cmd/protocol";
 import { newAgent, selectPane } from "../actions.ts";
 import { cmd } from "../bridge.ts";
-import { fieldsOf, project, type SidebarRow } from "../model.ts";
+import { fieldsOf, whereOf, type SidebarRow } from "../model.ts";
 import { showSpace } from "../spaces.tsx";
 import { useStore } from "../store.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
@@ -75,7 +75,9 @@ export function AgentActivity({ win }: WindowViewProps) {
   const row = (a: Agent, depth: number) => {
     const r: SidebarRow = { key: a.id, pane: a.paneId ? (s.panes.get(a.paneId) ?? null) : null, win: null, agent: a, children: [], urgent: null };
     const f = fieldsOf(r, undefined, now);
-    const space = scope === "all" ? s.spaces.get(a.spaceId)?.name : undefined;
+    const sp = s.spaces.get(a.spaceId);
+    const space = scope === "all" ? sp?.name : undefined;
+    const where = whereOf(a.git, a.cwd, sp);
     return (
       <div key={a.id}>
         <button className="aa-row" data-depth={depth || undefined} data-needs={bucketOf(a) === "needs" || undefined} onClick={() => go(a)}>
@@ -85,7 +87,7 @@ export function AgentActivity({ win }: WindowViewProps) {
             {f.status && <span className="aa-status">{f.status.text}</span>}
           </span>
           <span className="aa-side">
-            <span className="aa-place">{[space, a.cwd ? project(a.cwd) : undefined].filter(Boolean).join(" · ")}</span>
+            <span className="aa-place" data-tip={where?.tip}>{[space, where?.text].filter(Boolean).join(" · ")}</span>
             <span className="aa-time">{shortAgo(a.stateSince, now)}</span>
           </span>
         </button>

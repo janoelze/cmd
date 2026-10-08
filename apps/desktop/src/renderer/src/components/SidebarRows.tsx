@@ -4,11 +4,11 @@
 import { Highlight, IconButton, ListHeading } from "@cmd/ui";
 import type { ReactNode } from "react";
 import type { PaneId, SearchHit } from "@cmd/protocol";
-import { usePersisted } from "../store.ts";
+import { usePersisted, useStoreValue } from "../store.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { DirtyDot, Mark, Slot } from "./Slot.tsx";
 import { useFields } from "./TileTitle.tsx";
-import { ago, labelOf, project, projectHue, shortPath, windowIdOf, type SidebarRow } from "../model.ts";
+import { ago, labelOf, project, shortPath, whereOf, windowIdOf, type SidebarRow } from "../model.ts";
 import { RemoteBadge } from "./Remote.tsx";
 import { countRender } from "../perf.ts";
 
@@ -65,7 +65,10 @@ export function SessionRow(props: {
   // Agents and terminals that want you get a second line for their status;
   // everything else is one line: name, then where it is.
   const tall = !!(f.light || f.tone);
-  const proj = tall && depth === 0 && !row.win ? project(row.agent?.cwd ?? row.pane?.cwd ?? "") : null;
+  const spaceId = row.agent?.spaceId ?? row.pane?.spaceId;
+  const space = useStoreValue((s) => (spaceId ? s.spaces.get(spaceId) : undefined));
+  const item = row.agent ?? row.pane;
+  const where = tall && depth === 0 && !row.win && item ? whereOf(item.git, item.cwd, space) : null;
 
   return (
     <>
@@ -121,9 +124,9 @@ export function SessionRow(props: {
         </div>
         <span className="row-end">
           <RemoteBadge id={winId} compact />
-          {proj && proj !== "~" && (
-            <span className="chip" style={{ ["--hue" as string]: projectHue(proj) }}>
-              {proj}
+          {where && (
+            <span className="chip" style={{ ["--hue" as string]: where.hue }} data-tip={where.tip}>
+              {where.text}
             </span>
           )}
           <span className="row-hover">

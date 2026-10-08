@@ -1,6 +1,6 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, kindLabel, needsAttention, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type PaneId, type SpaceId } from "@cmd/protocol";
+import { bucketOf, kindLabel, needsAttention, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type GitPlace, type PaneId, type Space, type SpaceId } from "@cmd/protocol";
 import type { DotState } from "@cmd/ui";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "./windows/registry.ts";
@@ -255,7 +255,8 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
         ? (a.name ?? (cmdNames ? null : ((!generic ? t : null) ?? a.lastPrompt ?? a.spawn.prompt)) ?? kindLabel(a.kind))
         : (!generic ? t : null) || p?.foreground || "Terminal",
       kind: p?.foreground || a?.kind || "terminal",
-      place: cwd ? shortPath(cwd) : undefined,
+      // An agent's place is where it works: its worktree, when it moved out of its cwd's checkout (docs/35).
+      place: a?.git && !(cwd === a.git.top || cwd?.startsWith(a.git.top + "/")) ? shortPath(a.git.top) : cwd ? shortPath(cwd) : undefined,
       // A terminal's attention marker (a bell, a notification, a finished command;
       // see packages/core/src/notifications.ts) shows like an agent's state until seen.
       status: a ? agentStatus(a, now) : attn ? { text: attn.text, key: `attention:${attn.kind}` } : undefined,
@@ -313,6 +314,27 @@ export function ledOf(a: Agent): Led {
 
 export function project(cwd: string): string {
   return shortPath(cwd).split("/").filter(Boolean).pop() ?? "~";
+}
+
+/**
+ * Where something is, said only where it differs from its Space (docs/35): no
+ * chip in the Space's own checkout; a linked worktree's branch; another
+ * project's name. The hue is always the project's, so a project's worktrees
+ * look alike. Outside a repository: the folder's name, only outside the Space.
+ */
+export function whereOf(git: GitPlace | null | undefined, cwd: string | null | undefined, space: Pick<Space, "root" | "home" | "git"> | undefined): { text: string; hue: number; tip: string } | null {
+  if (!git) {
+    if (!cwd || (space && !space.home && (cwd === space.root || cwd.startsWith(space.root + "/")))) return null;
+    const text = project(cwd);
+    return text === "~" ? null : { text, hue: projectHue(text), tip: shortPath(cwd) };
+  }
+  if (space?.git && git.top === space.git.top) return null;
+  const name = project(git.project);
+  const sameProject = space?.git?.project === git.project;
+  const text = git.linked ? (git.branch ?? project(git.top)) : name;
+  // In the Space's project, its main checkout (from a worktree's Space) is just the project.
+  const tip = git.linked ? `${name} · worktree on ${git.branch ?? "a detached HEAD"} · ${shortPath(git.top)}` : `${name}${sameProject ? " · main checkout" : ""} · ${shortPath(git.top)}`;
+  return { text, hue: projectHue(name), tip };
 }
 
 /** Stable per-project hue (FNV-1a), as in the ghostty-agents fork. */

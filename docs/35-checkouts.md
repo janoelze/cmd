@@ -1,6 +1,6 @@
 # Repositories, worktrees and branches
 
-> Status (2026-10-08): inventory and plan, not built. A user asked for "worktree support" (Discord #feedback, 2026-10-07). Jan: cmd stays unopinionated about workflow; showing worktrees when they're used is fine, managing them is not cmd's job. Read first: this doc, `packages/core/src/checkout.ts`, `apps/desktop/src/renderer/src/model.ts` (`project`, `place`), docs/11 (Spaces), docs/32 (names from branches).
+> Status (2026-10-08): steps 1 and 2 built on branch `checkouts`: `GitPlace` on panes, agents and Spaces (`checkout.ts` `placeOf`; an agent's from where it writes, `tracker.ts#placeAfter`), peer briefings from it, `whereOf` for the sidebar chip, Agent Activity and an agent's place. Not yet: the Commands widget (a `CommandRun` has only its cwd), history rows, steps 3–5. A user asked for "worktree support" (Discord #feedback, 2026-10-07). Jan: cmd stays unopinionated about workflow; showing worktrees when they're used is fine, managing them is not cmd's job. Read first: this doc, `packages/core/src/checkout.ts`, `apps/desktop/src/renderer/src/model.ts` (`project`, `place`), docs/11 (Spaces), docs/32 (names from branches).
 
 **The rule.** cmd shows where something is only where it differs from what you're looking at. A terminal or agent in the Space's own checkout says nothing about it; one in a linked worktree says which branch; one in another project says which project. Someone who never makes a worktree sees no change, except fewer repeated labels.
 
@@ -110,8 +110,11 @@ Nested worktrees: the file search of a Space skips folders that are other worktr
 
 1, 2 and the briefing fix are the bulk and what the user sees: about a day. 3 is half a day. 4 and 5 are small and independent. Each step stands alone; 2 needs 1.
 
-## Open questions
+## Decided (2026-10-08)
 
-1. Should the branch show for the main checkout when it isn't the default branch (someone who works on branches without worktrees)? The rule says no, since it's the Space's own checkout, but a `git switch` in one terminal changes it for all.
-2. In Home, chip by project only, or project and branch?
-3. Is "Folder removed" enough for a Space, or should cmd offer to close every Space of a removed worktree at once? (Leaning: no, that's a workflow.)
+1. **One chip at most, about where, never about git state.** The main checkout gets no chip even off the default branch: a `git switch` in one terminal would change every row, and branch state lives in Files and Live Diff.
+2. **Text says the most specific difference, the hue says the project.** A worktree shows its branch in its project's colour, so in Home `search-design`, `checkouts` and `cmd` read as one project without repeating its name.
+3. **Home follows the same rule:** a worktree's branch, else the project's name.
+4. **The tooltip says the rest:** `cmd · worktree on search-design · ~/src/cmd-search-design`.
+5. **No bulk actions for removed worktrees:** "Folder removed" and Close.
+6. **Where an agent works:** the checkout it last wrote in; before its first write, the last one it went to (`cd`, `git -C`) or its cwd. Going somewhere after writing doesn't move it (that's often a look at another agent's work).
