@@ -15,10 +15,10 @@ foreach ($releases as $r) {
     }
 }
 
-page_start('cmd — terminals and coding agents, side by side', 'A macOS app for running terminals and coding agents side by side, with web and file browsers, an editor and widgets an agent builds live.', '');
+page_start('cmd for macOS — spaces that work', 'A software workbench for macOS. Terminals, coding agents, browser, editor and widgets, side by side in one Space per project, arranged however you work.', '');
 ?>
 <h1>cmd</h1>
-<p class="lede">A macOS app for running terminals and coding agents side by side, with web and file browsers, an editor, and widgets an agent builds live when you ask.</p>
+<p class="lede">A software workbench for macOS. Terminals, coding agents, browser, editor and widgets, side by side in one Space per project, arranged however you work.</p>
 <p class="cta">
 <?php if ($latest): ?>
   <a class="button" href="<?= h($latest['dmg'] ?? $latest['url']) ?>">Download <?= h($latest['tag']) ?></a>
@@ -78,22 +78,35 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
 })();
 </script>
 
+<section class="why">
+<h2>Why I'm building this</h2>
+<div class="cols">
+<p>For better or worse, I'm going to spend the rest of my working life in terminals. That's where my work happens, and it isn't changing soon. What struck me is how little my terminal workflow had kept up: forty tabs with a Claude Code session in each, flipping between them all day, discovering finished sessions only by accident. So I wanted a software workbench that embraces UNIX at its core, shells, pipes, <code>open</code>, the tools I already have, and gives me a more accessible view of what's happening in them.</p>
+<p>cmd is that workbench. A Space per project holds everything I'm working on. Its main view is a strip, inspired by PaperWM: windows side by side in a row I scroll along, which turns out to be a natural way to keep a few terminals, an agent and a browser in sight at once. cmd knows which terminals have an agent in them and what each is doing, and keeps the one that needs me on top.</p>
+<p>Most of what I open stays inside. <code>open</code> a file in a shell and it appears in the Space, in a window that knows the type: text, Markdown, JSON, a URL in the browser.</p>
+<p>With Magic widgets, a built-in agent that makes new widgets as I ask for them, I describe what I want to see: my open merge requests, the depth of a queue, the last CI runs, a calculator. It writes a small widget for it, one that follows whichever theme I switch to, on top of the tools already on my machine, <code>gh</code>, <code>kubectl</code>, <code>curl</code>, a script in the repo.</p>
+<p>This isn't an agent orchestrator. Those come with a workflow of their own, and the workflow tends to go stale with the next model. cmd doesn't assume one. It bets on terminals, and terminals will still be here when the next model arrives. I'm building it for my own day, in the open, hoping it fits yours too.</p>
+</div>
+</section>
+
+<hr>
+
 <div class="features">
-  <div><h3>Layouts</h3><p>Focus on one window, tile them in a grid, scroll through a strip, or place them on an infinite canvas with a minimap.</p></div>
-  <div><h3>Agent detection</h3><p>Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes.</p></div>
-  <div><h3>Waiting agents first</h3><p>Agents waiting for input are listed first, then working, then done. ⌃⌘J jumps to the next one.</p></div>
-  <div><h3>Remote access <span class="pill">Beta</span></h3><p>Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted.</p></div>
-  <div><h3>Terminals keep running</h3><p>A background process owns them, so quitting, reloading or updating the app doesn't end them.</p></div>
-  <div><h3>Session search</h3><p>Full-text search over Claude Code, Codex, Qwen Code and Copilot CLI transcripts. Return resumes a session.</p></div>
-  <div><h3>Magic widgets</h3><p>Describe what to show and an agent builds a live widget for it. Change it by asking. Uses your own API key.</p></div>
-  <div><h3>Web browser</h3><p>Next to your terminals, with phone, tablet and desktop sizes.</p></div>
-  <div><h3>Files and editor</h3><p>A file browser, a text editor and Markdown windows. <code>open</code> in a shell opens files in cmd.</p></div>
-  <div><h3>Notifications</h3><p>Waiting agents, bells and finished commands mark the terminal until you look, and count on the Dock badge.</p></div>
-  <div><h3>Keyboard first</h3><p>⌘K finds windows, commands and past sessions. Every action is in the menu bar, and every shortcut can be remapped.</p></div>
-  <div><h3>CLI</h3><p><code>cmd</code> spawns, messages, waits on and stops agents, so an agent can run other agents.</p></div>
-  <div><h3>A complete terminal</h3><p>Find in scrollback, jump between prompts, inline images, copy from programs over ssh, and a check before risky pastes.</p></div>
-  <div><h3>Themes</h3><p>16 themes, light and dark, following the system or not.</p></div>
-  <div><h3>Updates</h3><p>cmd updates itself in the background and installs the update when you quit.</p></div>
+  <div><h3>Spaces</h3><p>One per project, holding its terminals, agents, browser, editor and widgets. Switch Spaces, and the whole desk comes with you.</p></div>
+  <div><h3>Layouts</h3><p>Focus on one window, tile them in a grid, scroll through a strip, or spread them over an infinite canvas with a minimap.</p></div>
+  <div><h3>Agents, recognised</h3><p>Claude Code, Codex, Gemini, Aider and others are detected in any terminal, behind wrappers and sandboxes, with no setup.</p></div>
+  <div><h3>Needs you, on top</h3><p>Agents waiting for input are listed first, then working, then done. ⌃⌘J jumps to the next one that needs you.</p></div>
+  <div><h3>Terminals outlive the app</h3><p>A background process owns them. Quit, reload or update cmd, and every shell and agent is still there.</p></div>
+  <div><h3>Every session, searchable</h3><p>Full-text search over Claude Code, Codex, Qwen Code and Copilot CLI transcripts. Return resumes the session where it left off.</p></div>
+  <div><h3>Magic widgets</h3><p>Say what you want to see and an agent builds a live widget for it that follows every theme. Change it by asking. Your own API key.</p></div>
+  <div><h3>Remote access <span class="pill">Beta</span></h3><p>Pair a phone or another browser with a QR code and carry your terminals and agents with you, end-to-end encrypted.</p></div>
+  <div><h3>Web browser</h3><p>Next to your terminals, at phone, tablet and desktop sizes, for the thing you're building.</p></div>
+  <div><h3>Files and editor</h3><p>A file browser, a text editor and Markdown windows. <code>open README.md</code> in a shell opens it in the current Space.</p></div>
+  <div><h3>Calm notifications</h3><p>Waiting agents, bells and finished commands mark their window until you look, and count on the Dock badge. Nothing else interrupts.</p></div>
+  <div><h3>Keyboard first</h3><p>⌘K finds windows, commands and past sessions. Every action is a menu item, and every shortcut can be remapped.</p></div>
+  <div><h3>A CLI</h3><p><code>cmd</code> spawns, messages, waits on and stops agents, so an agent can run other agents.</p></div>
+  <div><h3>A complete terminal</h3><p>Find in scrollback, jump between prompts, inline images, copy from programs over ssh, and a check before a risky paste.</p></div>
+  <div><h3>Themes and updates</h3><p>16 themes, light and dark, following the system or not. Updates download in the background and install when you quit.</p></div>
 </div>
 
 <h2>Releases</h2>

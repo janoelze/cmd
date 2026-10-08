@@ -108,13 +108,25 @@ tr:last-child td { border-bottom: 0; }
 .hero-shots { transition: opacity 1.2s ease, translate 1.2s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .hero-shots.loading { opacity: 0; translate: 0 12px; }
 @media (prefers-reduced-motion: reduce) { .hero-shots.loading { translate: none; } }
+hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
+.why { margin-bottom: 0; }
+.why h2 { margin-top: 0; }
+.why .cols { columns: 2; column-gap: 36px; }
+.why p { font-size: var(--fs-lede); color: var(--ink-2); margin: 0 0 14px; orphans: 2; widows: 2; }
 .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px 28px; margin-bottom: 8px; }
 .features h3 { font-size: var(--fs-base); font-weight: 500; margin: 0 0 2px; }
 .features h3 .pill { font-weight: 400; vertical-align: 1px; }
 .features p { font-size: var(--fs-sm); color: var(--ink-2); margin: 0; }
 @media (max-width: 640px) {
-  h1 { margin-top: 18px; }
-  .features { grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+  main, header { padding-inline: 24px; }
+  header { padding-top: 28px; gap: 20px; }
+  h1 { margin-top: 28px; }
+  p.lede { margin-bottom: 22px; }
+  .hero-shots { width: calc(100vw - 48px); margin-inline: calc(50% - (50vw - 24px)); margin-block: 40px; }
+  .why .cols { columns: 1; }
+  hr { margin: 36px 0; }
+  .features { grid-template-columns: 1fr; gap: 20px; }
+  footer { padding: 56px 24px 48px; }
 }
 .button { display: inline-flex; align-items: center; background: var(--accent); color: var(--on-accent); text-decoration: none; padding: 9px 16px; border-radius: 8px; font-weight: 500; }
 .releases { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -134,7 +146,7 @@ p.more { margin: 10px 0 0; font-size: var(--fs-base); }
 p.more a { color: var(--ink-2); text-decoration: none; }
 p.more a:hover { color: var(--link); }
 @media (max-width: 640px) {
-  .releases li { grid-template-columns: 5em 1fr 4.5em auto; gap: 12px; padding: 8px 8px 8px 12px; }
+  .releases li { grid-template-columns: 5em 1fr 4.5em auto; gap: 12px; padding: 10px 10px 10px 14px; }
   .releases time { display: none; }
 }
 </style>
