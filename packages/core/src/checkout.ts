@@ -122,6 +122,24 @@ export function samePlace(a: GitPlace | null | undefined, b: GitPlace | null | u
   return (a ?? null) === (b ?? null) || (!!a && !!b && a.top === b.top && a.branch === b.branch && a.project === b.project && a.linked === b.linked);
 }
 
+/** The tops of a repository's linked worktrees, from the shared git folder (`<common>/worktrees/<name>/gitdir`); missing ones left out. */
+export function worktreesOf(common: string): string[] {
+  const out: string[] = [];
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(path.join(common, "worktrees"));
+  } catch {
+    return out;
+  }
+  for (const n of names) {
+    try {
+      const top = path.dirname(fs.readFileSync(path.join(common, "worktrees", n, "gitdir"), "utf8").trim());
+      if (fs.existsSync(top)) out.push(real(top));
+    } catch {}
+  }
+  return out;
+}
+
 /** The repository's origin URL from its config (credentials in it stripped); null without one. */
 export function remoteOf(common: string): string | null {
   try {

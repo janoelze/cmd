@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import type { FileHit } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
+import { checkoutOf, worktreesOf } from "../checkout.ts";
 
 const log = logger("files");
 
@@ -119,7 +120,9 @@ export class FileSearch {
   }
 
   #excluded(root: string): { skip: boolean; globs: string[] } {
-    const globs: string[] = [];
+    // Worktrees inside the folder (`.claude/worktrees/x`) are other checkouts of the same files: searched in their own Space (docs/35).
+    const c = checkoutOf(root);
+    const globs: string[] = c ? worktreesOf(c.common).filter((t) => t.startsWith(root + path.sep)).map((t) => t.slice(root.length + 1)) : [];
     for (const f of this.#o.excluded()) {
       if (root === f || root.startsWith(f + path.sep)) return { skip: true, globs };
       if (f.startsWith(root + path.sep)) globs.push(f.slice(root.length + 1));

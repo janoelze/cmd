@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -33,6 +34,22 @@ describe("file search", () => {
     expect(lines).toEqual(expect.arrayContaining(["README.md:1", "src/palette.tsx:1"]));
     expect(hits.some((h) => h.path.endsWith(".env") || h.path.includes("/private/"))).toBe(false);
     expect(hits.find((h) => h.path.endsWith("README.md"))!.text).toBe("# \x01Search\x02");
+  });
+
+  it("leaves out worktrees inside the folder: other checkouts of the same files", async () => {
+    const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-files-wt-")));
+    const git = (...a: string[]) => execFileSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...a], { stdio: "ignore" });
+    fs.writeFileSync(path.join(repo, "a.txt"), "needle\n");
+    git("init", "-q", "-b", "main");
+    git("add", ".");
+    git("commit", "-qm", "a");
+    git("worktree", "add", "-q", "-b", "topic", path.join(repo, "trees", "topic"));
+    try {
+      const hits = await new FileSearch({ excluded: () => [] }).search(repo, "needle");
+      expect(hits.filter((h) => h.line !== null).map((h) => path.relative(repo, h.path))).toEqual(["a.txt"]);
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
   });
 
   it("is case-sensitive only with capitals, and finds nothing for nothing", async () => {
