@@ -92,7 +92,7 @@ async function messages(channelId, since, limit = Infinity) {
     const page = await api(`/channels/${channelId}/messages`, { limit: 100, before });
     for (const m of page) {
       if (snowflakeTime(m.id) < since || all.length >= limit) return all.reverse();
-      all.push(m);
+      if (m.type === 0 || m.type === 19) all.push(m); // not "started a thread" (18), thread starters (21) and other system messages
     }
     if (page.length < 100) break;
     before = page.at(-1).id;
