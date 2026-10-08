@@ -149,6 +149,8 @@ const api = {
   revealPath: (p: string) => ipcRenderer.send("reveal-path", p),
   /** Move a file or folder to the Trash (Finder's Put Back works). */
   trashPath: (p: string): Promise<void> => ipcRenderer.invoke("trash-path", p),
+  /** Trust, for good, the certificate a browser window's page was just refused for (main/certificates.ts). */
+  allowCertificate: (url: string): Promise<boolean> => ipcRenderer.invoke("allow-certificate", url),
   /** An uncaught error in this page (renderer/src/errors.ts). */
   reportError: (r: { kind: string; message: string; stack: string | null }) => ipcRenderer.send("renderer-error", r),
   openSettingsFile: (p: string) => ipcRenderer.send("open-settings", p),

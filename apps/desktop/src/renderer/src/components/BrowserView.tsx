@@ -6,13 +6,15 @@
 // (devices.ts, chosen from the window's menu) pins the page to that viewport,
 // scaled down to fit and centred in the window. A new, blank window has no
 // webview yet (about:blank would paint white): it shows a themed empty view and
-// creates the webview with the first address entered.
+// creates the webview with the first address entered. A page that fails to load
+// (offline, no server, a certificate this Mac doesn't trust) shows why over the
+// webview, which would otherwise stay white; certificates: main/certificates.ts.
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { EmptyState, SCROLLBAR_CSS, ToolbarAddressField, ToolbarButton, ToolbarGroup, WindowToolbar, type FindResults } from "@cmd/ui";
+import { Button, EmptyState, SCROLLBAR_CSS, ToolbarAddressField, ToolbarButton, ToolbarGroup, WindowToolbar, type FindResults } from "@cmd/ui";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { useFind } from "../find.tsx";
 import { handleEmbedMessage } from "../embed.ts";
@@ -25,6 +27,12 @@ const CAPTION = 28;
 /** `allowpopups` as a string: React drops a bare `true` on <webview> (Electron's types say boolean). */
 export const POPUPS = "true" as unknown as boolean;
 
+/** A main-frame load that failed: what the browser window shows instead of a white page. */
+type Failure = { url: string; code: number };
+
+/** Chromium's certificate errors (net_error_list.h: -200 to -299). */
+const isCertError = (code: number) => code <= -200 && code > -300;
+
 const isBlank = (u: string | null | undefined): u is null | undefined | "" | "about:blank" =>
   !u || u === "about:blank";
 
@@ -34,6 +42,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   const [address, setAddress] = useState(isBlank(url) ? "" : url);
   const [loading, setLoading] = useState(false);
   const [nav, setNav] = useState({ back: false, forward: false });
+  const [failed, setFailed] = useState<Failure | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const device = deviceById(typeof win.state.device === "string" ? win.state.device : undefined);
   // What the webview was created with (null: not yet, the window is blank); later navigation happens inside it.
@@ -78,6 +87,13 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const titled = (e: { title: string }) => void cmd.call("window.update", { id: win.id, title: e.title }).catch(() => {});
     const start = () => setLoading(true);
     const stop = () => setLoading(false);
+    // ERR_ABORTED (-3) is a load another navigation replaced, or a download: not a failure.
+    const failedLoad = (e: { errorCode: number; validatedURL: string; isMainFrame: boolean }) => {
+      if (!e.isMainFrame || e.errorCode === -3) return;
+      setFailed({ url: e.validatedURL, code: e.errorCode });
+      setAddress(e.validatedURL);
+    };
+    const starting = (e: { isMainFrame: boolean; isInPlace: boolean }) => e.isMainFrame && !e.isInPlace && setFailed(null);
     // Pages get the app's scrollbars, so every window's look the same.
     const ready = () => void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
     // What the page's preload reports (preload/guest.ts): presses, sideways scrolls.
@@ -91,7 +107,11 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     wv.addEventListener("page-title-updated", titled as never);
     wv.addEventListener("did-start-loading", start);
     wv.addEventListener("did-stop-loading", stop);
+    wv.addEventListener("did-fail-load", failedLoad as never);
+    wv.addEventListener("did-start-navigation", starting as never);
     return () => {
+      wv.removeEventListener("did-fail-load", failedLoad as never);
+      wv.removeEventListener("did-start-navigation", starting as never);
       wv.removeEventListener("did-navigate", navigated as never);
       wv.removeEventListener("did-navigate-in-page", navigated as never);
       wv.removeEventListener("page-title-updated", titled as never);
@@ -165,6 +185,11 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   }, [live]);
   useEffect(() => registerWindowActions(win.id, { find: live ? find.request : undefined }), [win.id, live, find.request]);
 
+  const retry = () => failed && ref.current?.loadURL(failed.url).catch(() => {});
+  const proceed = async () => {
+    if (failed && (await cmd.allowCertificate(failed.url))) retry();
+  };
+
   const go = async (text: string) => {
     try {
       const w = await cmd.call("window.update", { id: win.id, state: { url: text } });
@@ -219,10 +244,51 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
             Type a web address, localhost:3000, or a file path
           </EmptyState>
         )}
+        {failed && (
+          <EmptyState
+            className="browser-failed"
+            icon={isCertError(failed.code) ? "lock.slash" : "exclamationmark.triangle.fill"}
+            title={isCertError(failed.code) ? "Connection Not Private" : "Page Didn't Load"}
+            action={
+              <>
+                {isCertError(failed.code) && <Button size="sm" onClick={() => void proceed()}>Continue Anyway</Button>}
+                <Button size="sm" onClick={retry}>Try Again</Button>
+              </>
+            }
+          >
+            {failureText(failed)}
+          </EmptyState>
+        )}
         {device && initial && <div className="device-caption">{caption(device, room)}</div>}
       </div>
     </div>
   );
+}
+
+function failureText(f: Failure): string {
+  let host = f.url;
+  try {
+    host = new URL(f.url).host || f.url;
+  } catch {
+    // not a URL; show it as typed
+  }
+  if (isCertError(f.code)) return `This Mac doesn't trust the certificate of ${host}. Continue only if you know the site, like your company's own servers.`;
+  switch (f.code) {
+    case -105:
+    case -137:
+      return `Couldn't find ${host}. Check the address.`;
+    case -102:
+      return `${host} refused the connection. Is the server running?`;
+    case -106:
+      return "You're offline. Check your connection and try again.";
+    case -7:
+    case -118:
+      return `${host} took too long to respond.`;
+    case -6:
+      return "That file doesn't exist.";
+    default:
+      return `${host} couldn't be reached.`;
+  }
 }
 
 const scaleFor = (d: Device, room: { w: number; h: number }) =>

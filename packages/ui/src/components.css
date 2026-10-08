@@ -770,7 +770,7 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 .ui-empty-text { max-width: 360px; font-size: var(--text-md); line-height: 1.45; text-wrap: pretty; }
 /* Compact (sidebars, widgets): a short, narrow block that reads at a glance. */
 .ui-empty[data-compact] .ui-empty-text { max-width: 240px; font-size: var(--text-sm); }
-.ui-empty-action { margin-top: 8px; }
+.ui-empty-action { margin-top: 8px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 
 /* ── lists: panels, sections, rows (list.tsx) ──
    The Navigator's and the file browser's sidebar look. --list-inset is the rows'

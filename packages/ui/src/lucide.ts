@@ -6,6 +6,7 @@
 // the helper's bitmaps.
 
 import {
+  LockOpen,
   AppWindow,
   Bell,
   BookText,
@@ -100,6 +101,7 @@ const LUCIDE: Record<string, string> = {
   ellipsis: Ellipsis,
   "exclamationmark.triangle.fill": TriangleAlert,
   eye: Eye,
+  "lock.slash": LockOpen,
   "eye.slash": EyeOff,
   folder: Folder,
   "folder.fill": Folder,

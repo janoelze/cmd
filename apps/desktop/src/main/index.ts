@@ -23,6 +23,7 @@ import { appMetrics } from "./metrics.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { setDockIcon, startDockIcon } from "./dock-icon.ts";
 import { SpaceWindows, type Bounds } from "./spaces.ts";
+import { handleCertificates } from "./certificates.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
 import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } from "./feedback.ts";
 import { claimWhatsNew } from "./whats-new.ts";
@@ -663,6 +664,7 @@ ipcMain.on("set-window-size", (e, width: number, height: number) => {
 ipcMain.on("core-socket", (e) => (e.returnValue = socketPath));
 ipcMain.on("reveal-path", (_e, p: string) => shell.showItemInFolder(p));
 ipcMain.handle("trash-path", (_e, p: string) => shell.trashItem(p));
+handleCertificates();
 // A file drag (renderer/src/drags.ts): macOS's own drag of the files, shown with
 // the first one's Finder icon. It has to start while the mouse is still down.
 ipcMain.on("start-file-drag", async (e, paths: unknown) => {

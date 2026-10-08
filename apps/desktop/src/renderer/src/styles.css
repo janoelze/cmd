@@ -756,6 +756,7 @@ kbd {
 .browser-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
 .webview { flex: 1; min-height: 0; background: #fff; }
 .browser-blank.ui-empty { flex: 1; background: var(--well); cursor: text; }
+.browser-failed.ui-empty { position: absolute; inset: 0; background: var(--well); }
 .browser-stage.device .webview { box-shadow: 0 0 0 1px var(--separator), 0 4px 18px rgba(0, 0, 0, 0.18); }
 .device-caption {
   position: absolute;
