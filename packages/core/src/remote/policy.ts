@@ -134,6 +134,9 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "fs.transfer": "control",
   "git.status": "view",
   "git.diff": "view",
+  "sqlite.schema": "view",
+  "sqlite.rows": "view",
+  "sqlite.query": "view",
   "search.query": "never",
   "search.files": "never",
   "search.history": "never",
@@ -263,6 +266,9 @@ const ARGS: { [M in Method]?: Check<M> } = {
     allowedPath(ctx, p.path);
     if (p.file !== undefined) allowedPath(ctx, path.resolve(p.path, p.file));
   },
+  "sqlite.schema": (p, ctx) => allowedPath(ctx, p.path),
+  "sqlite.rows": (p, ctx) => allowedPath(ctx, p.path),
+  "sqlite.query": (p, ctx) => allowedPath(ctx, p.path),
 };
 
 export function scopeAllows(scope: RemoteScope, access: Access): boolean {

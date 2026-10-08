@@ -47,6 +47,7 @@ import { locateContext, TranscriptSources, type LocateContext, type TranscriptRo
 import { listDir, parseOverrides, readText, resolvePaths, registerBuiltins, shellOpenEnv, terminalWindow, WindowManager, WindowTypes, writeText } from "./windows/index.ts";
 import { WatchService } from "./watch.ts";
 import { gitDiff, gitStatus } from "./git.ts";
+import { SqliteService } from "./sqlite/service.ts";
 import { createPath, duplicatePath, renamePath, transferPaths } from "./fileops.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
@@ -207,6 +208,8 @@ export class Core {
   /** Subscribed connections and which events each wants. */
   #subscribers = new Map<Connection, (e: CoreEvent) => boolean>();
   readonly watches = new WatchService();
+  /** SQLite windows' reads, a worker per open database. */
+  readonly sqlite = new SqliteService();
   /** fs.watch subscriptions per connection, released when it closes. */
   #connWatches = new Map<Connection, string[]>();
   /** data.subscribe subscriptions per connection: id → query; events that answer one are sent as data.changed, a few at a time. */
@@ -776,6 +779,9 @@ export class Core {
     "fs.transfer": (p) => transferPaths(p.paths, p.dir, p.op),
     "git.status": (p) => gitStatus(p.path),
     "git.diff": (p) => gitDiff(p.path, p.file),
+    "sqlite.schema": (p) => this.sqlite.schema(p.path),
+    "sqlite.rows": (p) => this.sqlite.rows(p),
+    "sqlite.query": (p) => this.sqlite.query(p),
     // Connection-aware; handled in #serve. These run for in-process callers.
     "fs.watch": (p) => ({ watching: this.watches.watch(p.path) }),
     "fs.unwatch": (p) => (this.watches.unwatch(p.path), null),
@@ -1526,6 +1532,7 @@ export class Core {
     this.resources?.close();
     this.timers.close();
     this.watches.close();
+    this.sqlite.close();
     this.agents.close();
     this.store.close();
     this.settings.close();

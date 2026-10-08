@@ -9,6 +9,7 @@ import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime
 import type { SecretsStatus } from "./secrets.ts";
 import type { ActivityEvent, ActivityExportHeader, AgentCoverage, AgentHome, AgentTurn } from "./activity.ts";
 import type { JournalDay, JournalEvent, JournalEventKind, JournalThread, JournalWeek } from "./journal.ts";
+import type { SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema } from "./sqlite.ts";
 
 export interface CoreInfo {
   pid: number;
@@ -364,6 +365,13 @@ export interface Methods {
   "git.status": { params: { path: string }; result: GitStatus | null };
   /** Uncommitted changes under a folder (or one file of it) against HEAD, as a unified diff; null outside a repository. */
   "git.diff": { params: { path: string; file?: string }; result: { root: string; diff: string; truncated: boolean } | null };
+
+  /** A SQLite database's tables, views, indexes and triggers, for the SQLite window. Read-only, never writes. */
+  "sqlite.schema": { params: { path: string }; result: SqliteSchema };
+  /** A page of a table's or view's rows, sorted and filtered. */
+  "sqlite.rows": { params: SqliteRowsQuery; result: SqliteResult };
+  /** One read-only SQL statement's rows; a statement that writes, or a second one, is refused. */
+  "sqlite.query": { params: SqliteQuery; result: SqliteResult };
 
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };

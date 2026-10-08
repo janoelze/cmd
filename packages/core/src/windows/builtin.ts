@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { WindowType, WindowTypes } from "./types.ts";
+import { databaseOf, isSqliteFile } from "../sqlite/service.ts";
 
 export const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
@@ -232,6 +233,37 @@ export const magicType: WindowType<{ prompt: string; phase: string; widgetId?: s
     const widgetId = str(input.widgetId);
     if (widgetId !== undefined && !/^[\w-]+$/.test(widgetId)) throw new Error(`bad widget id: ${widgetId}`);
     return { state: { prompt: str(input.prompt) ?? "", phase: "empty", ...(widgetId ? { widgetId } : {}) }, title: "Magic Widget" };
+  },
+};
+
+/**
+ * A SQLite database as its tables (docs/36-sqlite-viewer.md): browse rows, see
+ * the schema, run a read-only statement. Opening a `-wal`, `-shm` or `-journal`
+ * sidecar opens the database it belongs to. `table`: the one shown; `tab`: what
+ * of it (content, structure, query); `sql`: the query tab's draft.
+ */
+export const sqliteType: WindowType<{ path: string; table?: string; tab?: string; sql?: string }> = {
+  kind: "sqlite",
+  title: "SQLite",
+  icon: "cylinder.split.1x2",
+  opens: { extensions: ["sqlite", "sqlite3", "db", "db3", "sqlite-wal", "sqlite-shm", "db-wal", "db-shm"], priority: 10 },
+  fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
+  create(input) {
+    const file = databaseOf(path.resolve(expandHome(str(input.path) ?? "")));
+    if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
+    if (!isSqliteFile(file)) throw new Error(`${path.basename(file)} isn't a SQLite database.`);
+    const table = str(input.table);
+    return { state: { path: file, ...(table ? { table } : {}) }, title: path.basename(file) };
+  },
+  update(state, patch) {
+    const next = { ...state };
+    const p = str(patch.path);
+    if (p !== undefined) next.path = path.resolve(expandHome(p));
+    if (patch.table === null) delete next.table;
+    else if (typeof patch.table === "string") next.table = patch.table;
+    if (patch.tab === "content" || patch.tab === "structure" || patch.tab === "query") next.tab = patch.tab;
+    if (typeof patch.sql === "string") next.sql = patch.sql.slice(0, 100_000);
+    return { state: next, title: path.basename(next.path) };
   },
 };
 
@@ -485,6 +517,7 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(markdownType);
   types.register(jsonType);
   types.register(pdfType);
+  types.register(sqliteType);
   types.register(magicType);
   types.register(agentsType);
   types.register(diffType);
