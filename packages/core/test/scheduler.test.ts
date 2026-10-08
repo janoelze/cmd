@@ -16,8 +16,8 @@ describe("scheduler", () => {
       await s.yield();
     }
     const wall = performance.now() - t0;
+    // No upper bound: a busy CI runner stretches wall time arbitrarily (1.8 s seen), which says nothing about the share.
     expect(wall).toBeGreaterThan(250);
-    expect(wall).toBeLessThan(1500);
   });
 
   it("runs startup jobs in order, one per tick, and reports the phase", async () => {
