@@ -34,6 +34,7 @@ import {
   Kbd,
   KeyValue,
   LinkButton,
+  DataGrid,
   ListRow,
   ListSection,
   ListValue,
@@ -797,6 +798,9 @@ function ContentPage() {
           Each change you ask for is kept here, so you can go back.
         </EmptyState>
       </Spec>
+      <Spec title="DataGrid" code="<DataGrid columns rows sort onSort mono numbered footer>" note="Rows of values: a table's rows, a query's result, a list of columns. The header sticks; a click sorts (asc, desc, off). Numbers sit right, NULL and blobs are dim; a cell is one line, the whole value in its tooltip.">
+        <GridSpecimen />
+      </Spec>
       <Spec title="Panel, ListSection, ListRow, Chip" code="<Panel> <PanelHeader title onTitleClick actions> <ListSection title count> <ListRow icon light title detail tone end hover>" note="Lists like the Navigator's and the file browser's sidebar. The header's title opens a menu and its actions show on hover; a row's light takes the icon's place, and its end gives way to its hover actions.">
         <ListSpecimen />
       </Spec>
@@ -1301,6 +1305,37 @@ function PatternsPage() {
         </div>
       </div>
     </>
+  );
+}
+
+function GridSpecimen() {
+  const [sort, setSort] = useState<{ key: string; desc: boolean } | null>({ key: "total", desc: true });
+  const data = [
+    [1, "Ada", "London", 250.5, null],
+    [2, "Grace", "Arlington", 20, { blob: 2 }],
+    [3, "Linus", null, 99.99, null],
+  ] as const;
+  const rows = [...data].sort((a, b) => (sort ? ((a[3] as number) - (b[3] as number)) * (sort.desc ? -1 : 1) : 0));
+  const cell = (v: unknown) =>
+    v === null ? { node: "NULL", kind: "null" as const } : typeof v === "number" ? { node: String(v), kind: "number" as const } : typeof v === "object" ? { node: "2 bytes", kind: "blob" as const } : { node: String(v), tip: String(v) };
+  return (
+    <div style={{ height: 180, display: "flex", borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--separator)" }}>
+      <DataGrid
+        mono
+        numbered
+        sort={sort}
+        onSort={setSort}
+        columns={[
+          { key: "id", label: "id", note: "INTEGER", align: "end" },
+          { key: "name", label: "name", note: "TEXT" },
+          { key: "city", label: "city", note: "TEXT" },
+          { key: "total", label: "total", note: "REAL", align: "end" },
+          { key: "note", label: "note", note: "BLOB" },
+        ]}
+        rows={rows.map((r) => r.map(cell))}
+        footer={<span>3 of 3 rows · 1 ms</span>}
+      />
+    </div>
   );
 }
 

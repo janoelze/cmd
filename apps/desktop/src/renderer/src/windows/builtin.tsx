@@ -25,6 +25,7 @@ import { intervalLabel, refreshChoices } from "../magic.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
 import "./markdown.tsx"; // registers the "markdown" view
 import "./json.tsx"; // registers the "json" view
+import "./sqlite.tsx"; // registers the "sqlite" view
 import { previewFor, togglePreview } from "./preview.ts";
 
 /** Right-click → Device Size: show the page at a phone's, tablet's or desktop's size. */

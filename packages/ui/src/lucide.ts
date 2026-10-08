@@ -7,6 +7,9 @@
 
 import {
   LockOpen,
+  Database,
+  Play,
+  Table,
   AppWindow,
   Bell,
   BookText,
@@ -138,6 +141,9 @@ const LUCIDE: Record<string, string> = {
   "wand.and.stars": WandSparkles,
   xmark: X,
   "xmark.circle.fill": CircleX,
+  "cylinder.split.1x2": Database,
+  tablecells: Table,
+  "play.fill": Play,
 };
 
 /** Lucide's stroke width for an SF Symbol weight (Lucide's default, 2, is about medium). */
