@@ -45,9 +45,13 @@ function setStatus(s: Status): void {
   for (const fn of statusListeners) fn(s);
 }
 
+// Not before main has checked the core's build (and restarted a stale one).
+const checked: Promise<unknown> = ipcRenderer.invoke("core-checked").catch(() => {});
+
 function open(): Promise<Connection> {
   setStatus("connecting");
   ready = (async () => {
+    await checked;
     // The window opens while the core starts (main/index.ts), so the first
     // attempts fail; retry quickly at first, then back off to 500 ms.
     for (let attempt = 0; ; attempt++) {

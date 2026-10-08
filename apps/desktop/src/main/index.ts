@@ -366,6 +366,13 @@ function coreProcessAlive(): boolean {
 // finds nothing to connect to and starts one then.)
 let coreSpawned = !coreProcessAlive() && (spawnCore(), true);
 
+// Settles once ensureCore is done (either way). The preload connects only then: before,
+// the socket may still be served by a core about to be restarted for its build, and calls
+// the page makes on that connection fail when it goes away ("core connection closed").
+let coreChecked!: () => void;
+const coreCheckedP = new Promise<void>((r) => (coreChecked = r));
+ipcMain.handle("core-checked", () => coreCheckedP);
+
 async function ensureCore(): Promise<void> {
   if (!coreSpawned && (await canConnect())) await checkCoreBuild();
   if (!coreSpawned && !(await canConnect())) (spawnCore(), (coreSpawned = true));
@@ -957,14 +964,16 @@ app.whenReady().then(async () => {
     });
   });
   // First: the window loads its bundle while the menu is built and the core is
-  // checked or started; the preload connects as soon as the socket answers.
+  // checked or started; the preload connects once that is done (core-checked).
   if (workbench !== undefined) openWorkbench();
   else spaces.restore();
   // Decoding and setting it takes ~80 ms on this thread: not while the first window starts (dev builds only).
   if (devIcon) setTimeout(() => app.dock?.setIcon(devIcon), 1000);
   else if (!devBuild) setTimeout(() => startDockIcon(dockIcons, savedAppearance().dockIcon ?? null), 1000);
   const coreUp = () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows), servePreviews(socketPath), void countLaunch());
-  ensureCore().then(coreUp, (err: Error) => (log.error("the core did not start", err), void coreFailed(coreUp)));
+  ensureCore()
+    .finally(coreChecked)
+    .then(coreUp, (err: Error) => (log.error("the core did not start", err), void coreFailed(coreUp)));
   followCrashReports(socketPath);
   // Its bundle (about 570 KB) is parsed on this thread; its first check is 30 s away anyway.
   setTimeout(() => void startUpdater(), 5000);
