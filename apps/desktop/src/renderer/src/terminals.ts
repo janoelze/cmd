@@ -237,7 +237,10 @@ class Terminals {
         h.webgl.dispose();
         h.webgl = null;
       } else if (s["terminal.renderer"] === "webgl" && !h.webgl && h.opened) {
-        this.#ensureWebgl(h);
+        // Only into free pool slots. Evicting one terminal to upgrade the next, for every
+        // terminal in turn, recreated contexts on each settings change; past Chromium's
+        // limit of 16 per page it loses live terminals' contexts, which go blank.
+        this.#ensureWebgl(h, false);
       }
       if (s["terminal.images"] !== !!h.images) this.#setImages(h, s["terminal.images"]);
       if (fontChanged || s["font.code"] !== prev["font.code"] || s["font.codeSize"] !== prev["font.codeSize"]) {
@@ -247,10 +250,7 @@ class Terminals {
     }
     // A smaller pool: hand the least recently used terminals back to the DOM renderer.
     const live = [...this.#hosts.values()].filter((h) => h.webgl).sort((a, b) => b.lastUsed - a.lastUsed);
-    for (const h of live.slice(Math.max(0, s["terminal.webglPool"]))) {
-      h.webgl!.dispose();
-      h.webgl = null;
-    }
+    for (const h of live.slice(Math.max(0, s["terminal.webglPool"]))) this.#dropWebgl(h);
   }
 
   #options() {
@@ -323,9 +323,11 @@ class Terminals {
     const host = h;
     if (this.#settings["terminal.images"]) this.#setImages(h, true);
     this.#protocol(host);
-    term.onData((data) => void cmd.call("pane.write", { paneId, data }));
+    // Input and sizes go to the core without waiting. A pane that exited or closed meanwhile
+    // (xterm still fits and sizes it) answers "no such pane": not an error worth a crash report.
+    term.onData((data) => void cmd.call("pane.write", { paneId, data }).catch(() => {}));
     // The desktop's size; not while a device sizes the terminal (that's the device's size).
-    term.onResize(({ cols, rows }) => !this.#overrides.has(paneId) && void cmd.call("pane.resize", { paneId, cols, rows }));
+    term.onResize(({ cols, rows }) => !this.#overrides.has(paneId) && void cmd.call("pane.resize", { paneId, cols, rows }).catch(() => {}));
     // App shortcuts are menu key equivalents (main process); keep them out of the PTY:
     // ⌘-anything on macOS, the bound Ctrl combinations elsewhere (Ctrl+Shift+K…).
     // Except the line-editing keys macOS terminals translate (⌘⌫ ⌘← ⌘→, as Ghostty does).
@@ -335,7 +337,7 @@ class Terminals {
     // ⌘↑ ⌘↓ jump between prompts, ⌘Home ⌘End ⌘PgUp ⌘PgDn scroll (Terminal.app, Ghostty).
     term.attachCustomKeyEventHandler((e) => {
       if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        if (e.type === "keydown") void cmd.call("pane.write", { paneId, data: "\x1b\r" });
+        if (e.type === "keydown") void cmd.call("pane.write", { paneId, data: "\x1b\r" }).catch(() => {});
         return false;
       }
       if (!MAC_KEYMAP) return !isAppShortcut(e);
@@ -347,7 +349,7 @@ class Terminals {
       if (!e.metaKey) return true;
       if (e.type === "keydown" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         const seq = CMD_KEYS[e.key];
-        if (seq) void cmd.call("pane.write", { paneId, data: seq });
+        if (seq) void cmd.call("pane.write", { paneId, data: seq }).catch(() => {});
         else if (e.key === "ArrowUp") this.jumpToPrompt(paneId, -1);
         else if (e.key === "ArrowDown") this.jumpToPrompt(paneId, 1);
         else if (e.key === "Home") term.scrollToTop();
@@ -584,38 +586,51 @@ class Terminals {
     // ("reading 'dimensions'") on every later drag, so end the drag first.
     if (h.opened && h.term.modes.mouseTrackingMode !== "none") document.dispatchEvent(new MouseEvent("mouseup"));
     h.undrop();
-    h.webgl?.dispose();
+    this.#dropWebgl(h);
     h.term.dispose();
     h.el.remove();
     this.#hosts.delete(paneId);
   }
 
-  #ensureWebgl(h: Host): void {
+  /** Draw this terminal with WebGL; with the pool full, in place of the least recently used one (`evict`), else not. */
+  #ensureWebgl(h: Host, evict = true): void {
     const pool = this.#settings["terminal.webglPool"];
     if (h.webgl || pool <= 0 || this.#settings["terminal.renderer"] !== "webgl") return;
     if (!Webgl) {
       webglLoading ??= import("@xterm/addon-webgl").then((m) => void (Webgl = m.WebglAddon));
       // Once loaded, upgrade this terminal unless it was disposed meanwhile.
-      void webglLoading.then(() => [...this.#hosts.values()].includes(h) && this.#ensureWebgl(h));
+      void webglLoading.then(() => [...this.#hosts.values()].includes(h) && this.#ensureWebgl(h, evict));
       return;
     }
     const live = [...this.#hosts.values()].filter((x) => x.webgl);
     if (live.length >= pool) {
+      if (!evict) return;
       // Evict the least recently used terminal back to the DOM renderer.
-      const lru = live.sort((a, b) => a.lastUsed - b.lastUsed)[0]!;
-      lru.webgl!.dispose();
-      lru.webgl = null;
+      this.#dropWebgl(live.sort((a, b) => a.lastUsed - b.lastUsed)[0]!);
     }
     try {
       const addon = new Webgl();
-      addon.onContextLoss(() => {
-        addon.dispose();
-        h.webgl = null;
-      });
+      addon.onContextLoss(() => h.webgl === addon && this.#dropWebgl(h));
       h.term.loadAddon(addon);
       h.webgl = addon;
     } catch {
       h.webgl = null;
+    }
+  }
+
+  /** Back to the DOM renderer, releasing the GL context: the addon's dispose removes its canvas
+   *  but the context lives on until GC, and Chromium counts it towards its limit. */
+  #dropWebgl(h: Host): void {
+    const addon = h.webgl;
+    if (!addon) return;
+    h.webgl = null;
+    const canvases = [...h.el.querySelectorAll("canvas")];
+    addon.dispose();
+    for (const c of canvases) {
+      if (c.isConnected) continue; // another addon's (images)
+      try {
+        c.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext();
+      } catch {}
     }
   }
 
@@ -627,7 +642,7 @@ class Terminals {
   }
 
   #reply(h: Host, data: string): void {
-    void cmd.call("pane.write", { paneId: h.paneId, data });
+    void cmd.call("pane.write", { paneId: h.paneId, data }).catch(() => {});
   }
 
   /**
