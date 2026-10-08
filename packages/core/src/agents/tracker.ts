@@ -326,9 +326,19 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       this.activity.saveTurn(r.turn, ev.id, agent.cwd);
       fields.turn = structuredClone(r.turn);
     }
-    const git = this.#placeAfter(agent, ev);
-    if (git !== undefined) fields.git = git;
-    const named = this.#worktreeName(agent, ev);
+    // A subagent's calls say where it works, not where its host does: an isolated
+    // subagent's worktree neither moves nor names the host (docs/35).
+    if (ev.subagent) {
+      const child = [...this.#agents.values()].find((a) => a.native.claudeAgentId === ev.subagent && a.parentId === agent.id);
+      if (child) {
+        const at = this.#placeAfter(child, ev);
+        this.#update(child, ev.cwd ? { cwd: ev.cwd } : {}, at === undefined ? {} : { git: at });
+      }
+    } else {
+      const git = this.#placeAfter(agent, ev);
+      if (git !== undefined) fields.git = git;
+    }
+    const named = ev.subagent ? null : this.#worktreeName(agent, ev);
     if (named) Object.assign(fields, { name: named.name, nameBy: named.nameBy, nameWas: named.nameWas, namedAt: named.namedAt });
     if (ev.home && ev.agent) this.emit("home", ev.agent, ev.home);
     else if (ev.kind === "session.start" && ev.transcriptPath && ev.agent) this.emit("transcript", ev.agent, ev.transcriptPath);

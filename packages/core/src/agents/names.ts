@@ -15,12 +15,30 @@ import { checkoutOf, placeOf } from "../checkout.ts";
 
 const CD = /(?:^|&&|;|\|\||\()\s*cd\s+("[^"]+"|'[^']+'|[^\s;&|)]+)/g;
 const GIT_C = /\bgit\s+-C\s+("[^"]+"|'[^']+'|\S+)/g;
+/** `NAME=value` set in the command itself (`WT=/tmp/x && cd "$WT"`). */
+const ASSIGN = /(?:^|&&|;|\|\||\(|\s)(?:export\s+)?([A-Za-z_]\w*)=("[^"]*"|'[^']*'|[^\s;&|)]*)/g;
+const VAR = /\$(?:\{(\w+)\}|(\w+))/g;
 
 /** Folders an event says the agent works in, most telling first: files it writes (`wrote`), then folders it goes to, then its cwd (`cwd`). */
 export function foldersOf(ev: Pick<ActivityEvent, "cwd" | "tool">): { dir: string; wrote: boolean; cwd?: true }[] {
   const out: { dir: string; wrote: boolean; cwd?: true }[] = [];
-  const abs = (p: string) => {
-    const unq = p.replace(/^["']|["']$/g, "");
+  const cmd = ev.tool?.command ?? "";
+  const vars = new Map<string, string>([["HOME", os.homedir()]]);
+  // Unknown variables leave the path out rather than guess.
+  const expand = (p: string): string | null => {
+    if (p.startsWith("'")) return p.slice(1, -1);
+    let unknown = false;
+    const out = p.replace(/^"|"$/g, "").replace(VAR, (_, a: string | undefined, b: string | undefined) => vars.get((a ?? b)!) ?? ((unknown = true), ""));
+    return unknown ? null : out;
+  };
+  for (const m of cmd.matchAll(ASSIGN)) {
+    const v = expand(m[2]!);
+    if (v !== null) vars.set(m[1]!, v);
+  }
+  // Tool paths are file names as they are; command arguments are shell words.
+  const abs = (p: string, shell = false) => {
+    const unq = shell ? expand(p) : p.replace(/^["']|["']$/g, "");
+    if (unq === null) return null;
     const home = unq === "~" || unq.startsWith("~/") ? path.join(os.homedir(), unq.slice(1)) : unq;
     if (path.isAbsolute(home)) return home;
     return ev.cwd ? path.join(ev.cwd, home) : null;
@@ -29,9 +47,8 @@ export function foldersOf(ev: Pick<ActivityEvent, "cwd" | "tool">): { dir: strin
     const a = abs(p);
     if (a) out.push({ dir: path.dirname(a), wrote: true });
   }
-  const cmd = ev.tool?.command ?? "";
   for (const re of [CD, GIT_C]) for (const m of cmd.matchAll(re)) {
-    const a = abs(m[1]!);
+    const a = abs(m[1]!, true);
     if (a) out.push({ dir: a, wrote: false });
   }
   if (ev.cwd) out.push({ dir: ev.cwd, wrote: false, cwd: true });

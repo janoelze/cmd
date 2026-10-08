@@ -48,6 +48,13 @@ describe("the worktree an agent works in", () => {
     expect(foldersOf({ cwd: repo, tool: { name: "Bash", label: null, command: `cd ${wt2} && git -C "${wt}" status` } }).map((f) => f.dir)).toEqual([wt2, wt, repo]);
   });
 
+  it("follows variables the command sets, and leaves out ones it doesn't", () => {
+    const dirs = (command: string) => foldersOf({ cwd: repo, tool: { name: "Bash", label: null, command } }).map((f) => f.dir);
+    expect(dirs(`WT=${wt} && git worktree add -q "$WT" main && cd "$WT" && ls`)).toEqual([wt, repo]);
+    expect(dirs(`export D="${dir}"; cd \${D}/cmd-tours`)).toEqual([wt2, repo]);
+    expect(dirs(`cd "$SOMEWHERE" && ls`)).toEqual([repo]);
+  });
+
   it("names from a linked worktree, never the main checkout", () => {
     expect(worktreeName({ cwd: repo, tool: { name: "Edit", label: null, paths: [path.join(wt, "a.txt")] } })).toMatchObject({ name: "Notify permission", wrote: true });
     expect(worktreeName({ cwd: wt2, tool: undefined })).toMatchObject({ name: "Tours", wrote: false });

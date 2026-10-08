@@ -74,6 +74,17 @@ describe("peer briefings", () => {
     expect(agents.get(a.id)!.git?.top).toBe(tree);
   });
 
+  it("puts a subagent where it writes, and leaves its host where it was", () => {
+    const sub = path.join(main, ".claude", "worktrees", "agent-a1b2c3d4");
+    git(main, "worktree", "add", "-q", "-b", "worktree-agent-a1b2c3d4", sub);
+    const host = start(main, "plan");
+    agents.ingestHook(host.pane, "claude", "SubagentStart", { cwd: main, agent_id: "s1", agent_type: "general-purpose" });
+    agents.ingestHook(host.pane, "claude", "PreToolUse", { cwd: sub, agent_id: "s1", tool_name: "Write", tool_input: { file_path: path.join(sub, "y.md"), content: "a" } });
+    expect(agents.get(host.id)).toMatchObject({ name: null, git: { top: main, linked: false } });
+    const child = agents.list().find((a) => a.parentId === host.id)!;
+    expect(child.git).toMatchObject({ top: sub, linked: true, branch: "worktree-agent-a1b2c3d4" });
+  });
+
   it("says so on a prompt only when the peers changed", () => {
     const first = start(main);
     expect(agents.peerBriefing(first.id, "UserPromptSubmit")).toBeNull();

@@ -115,7 +115,8 @@ export class ActivityReducer {
     if (ev.model) this.model = ev.model;
     if (ev.agentVersion && !this.ctx.agentVersion) this.ctx.agentVersion = ev.agentVersion;
     if (ev.sessionId && ev.transcriptPath) r.change.native = { transcriptPath: ev.transcriptPath };
-    if (ev.cwd) r.change.cwd = ev.cwd;
+    // A subagent's cwd is its own (an isolated one works in another worktree).
+    if (ev.cwd && !ev.subagent) r.change.cwd = ev.cwd;
     const cause = `hook ${ev.name}`;
 
     // A new session (resume, /clear) ends whatever was open in the old one.
