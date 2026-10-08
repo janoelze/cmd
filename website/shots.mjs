@@ -3,7 +3,8 @@
 // finds the opaque window inside the shadow and crops to it, keeping the
 // rounded corners' transparency and the colour profile. Plain Node, no
 // dependencies, so deploy.sh runs it on CI. usage: node website/shots.mjs
-// Prints each one's size; the <img> tags in index.php expect 1500×900.
+// Prints each one's size; the <img> tags in index.php expect 1498×898 (a
+// 1500×900 window less its 1px border).
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -14,6 +15,7 @@ const dir = dirname(fileURLToPath(import.meta.url));
 const src = join(dir, "shots");
 const out = join(dir, "public/shots");
 const OPAQUE = 250; // alpha at or above this is the window; the shadow never gets there
+const INSET = 1; // px cut from each side on top: the window's own border
 const SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const KEEP = ["iCCP", "sRGB", "gAMA", "cHRM", "pHYs"]; // colour and scale chunks carried over
 
@@ -111,8 +113,8 @@ function encode({ width, height, px, keep }) {
   ]);
 }
 
-// Bounding box of the opaque pixels: the window's straight edges reach it,
-// its rounded corners and the shadow don't.
+// Bounding box of the opaque pixels, less the inset: the window's straight
+// edges reach it, its rounded corners and the shadow don't.
 function windowBox({ width, height, px }) {
   let x0 = width, y0 = height, x1 = -1, y1 = -1;
   for (let y = 0; y < height; y++)
@@ -123,7 +125,8 @@ function windowBox({ width, height, px }) {
         if (y < y0) y0 = y;
         if (y > y1) y1 = y;
       }
-  return x1 < 0 ? null : { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
+  if (x1 - x0 < 2 * INSET || y1 - y0 < 2 * INSET) return null;
+  return { x: x0 + INSET, y: y0 + INSET, width: x1 - x0 + 1 - 2 * INSET, height: y1 - y0 + 1 - 2 * INSET };
 }
 
 function crop(img, box) {
