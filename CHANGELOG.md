@@ -2,6 +2,13 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.20.1 — 2026-10-08
+
+### Fixed
+
+- Icons show at their full size and stay sharp in the installed app.
+- An agent session that starts with `/release` is named Release, not after its release notes.
+
 ## 0.20.0 — 2026-10-08
 
 JSON files open as a tree you can fold.
