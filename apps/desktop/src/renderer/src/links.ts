@@ -53,3 +53,44 @@ export function findLinks(text: string): LinkMatch[] {
   }
   return out.sort((a, b) => a.start - b.start);
 }
+
+/** A terminal row: its text, each character's cell (1-based, as xterm's), and whether it continues the row above (soft wrap). */
+export interface Row {
+  text: string;
+  cells: { x: number; y: number }[];
+  wrapped: boolean;
+}
+
+// Programs that draw their own screen (Claude Code, other TUIs) wrap a long URL
+// with real line breaks, so the terminal sees separate rows. A row continues a
+// URL from the row above when that row ends inside a URL at the right edge (or
+// a few columns short after a /, - or ?, where wrappers like to break), and it
+// starts, after a little indent, with URL characters (not a new URL).
+const OPEN_URL = /\b(?:https?|file):\/\/\S*$/;
+const CONTINUES = /^ {0,8}(?=[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%])/;
+const BREAK_AFTER = /[/\-?&=#_~+]$/;
+
+function continues(line: Row, next: Row, cols: number): number | null {
+  const text = line.text.trimEnd();
+  if (!OPEN_URL.test(text) || next.wrapped) return null;
+  const gap = cols - line.cells[text.length - 1]!.x;
+  if (gap > 1 && !(gap <= 12 && BREAK_AFTER.test(text))) return null;
+  const indent = next.text.match(CONTINUES)?.[0].length;
+  return indent === undefined || /^[a-z]+:\/\//i.test(next.text.slice(indent)) ? null : indent; // not a URL of its own
+}
+
+/** The logical line holding row `at` (an index into rows): soft-wrapped rows joined, and URLs a program wrapped itself. */
+export function logicalLine(rows: Row[], at: number, cols: number): Row {
+  let line: Row | null = null;
+  for (const [i, row] of rows.entries()) {
+    const indent: number | null = line && i > 0 ? (row.wrapped ? 0 : continues(line, row, cols)) : null;
+    if (line && indent !== null) {
+      const keep = row.wrapped ? line.text.length : line.text.trimEnd().length;
+      line = { text: line.text.slice(0, keep) + row.text.slice(indent), cells: [...line.cells.slice(0, keep), ...row.cells.slice(indent)], wrapped: line.wrapped };
+    } else {
+      if (i > at) break;
+      line = { ...row, cells: [...row.cells] };
+    }
+  }
+  return line ?? { text: "", cells: [], wrapped: false };
+}

@@ -18,7 +18,7 @@ import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { currentTheme, onThemeChange, terminalColors } from "@cmd/ui/themes";
-import { findLinks } from "./links.ts";
+import { findLinks, logicalLine, type Row } from "./links.ts";
 import type { FindOptions, FindResults } from "@cmd/ui";
 import type { FindRequest } from "./find.tsx";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
@@ -97,7 +97,7 @@ function searchOptions(o: FindOptions): ISearchOptions {
 // over a capped line, plus one batched existence check (cached) for path-like
 // tokens. Detection runs on hover either way; ⌘ only decides whether the link
 // is underlined and opens on click (plain clicks stay selection / the app's).
-const LINK_MAX_ROWS = 8; // wrapped rows joined on each side of the hovered one
+const LINK_MAX_ROWS = 8; // rows read on each side of the hovered one
 const LINK_MAX_CHARS = 2000;
 const RESOLVE_TTL = 5000;
 const resolved = new Map<string, { at: number; abs: Promise<string | null> }>();
@@ -133,16 +133,17 @@ async function openTarget(kind: "url" | "path", target: string): Promise<void> {
 function linkProvider(term: Terminal, paneId: PaneId) {
   return {
     provideLinks(y: number, done: (links: ILink[] | undefined) => void): void {
-      // The logical line around row y (1-based): wrapped rows joined, with each
+      // The logical line around row y (1-based), from the rows on either side:
+      // soft wraps and URLs wrapped by the program (logicalLine), with each
       // character's cell, so wide characters and wraps map back exactly.
       const buf = term.buffer.active;
-      let top = y - 1;
-      while (top > y - 1 - LINK_MAX_ROWS && top > 0 && buf.getLine(top)?.isWrapped) top--;
-      let text = "";
-      const cells: IBufferCellPosition[] = [];
-      for (let row = top; row < y + LINK_MAX_ROWS && text.length < LINK_MAX_CHARS; row++) {
+      const rows: Row[] = [];
+      const first = Math.max(0, y - 1 - LINK_MAX_ROWS);
+      for (let row = first; row < y + LINK_MAX_ROWS; row++) {
         const line = buf.getLine(row);
-        if (!line || (row > top && !line.isWrapped)) break;
+        if (!line) break;
+        let text = "";
+        const cells: IBufferCellPosition[] = [];
         const cell = line.getCell(0);
         for (let x = 0; x < line.length; x++) {
           const c = line.getCell(x, cell);
@@ -151,7 +152,10 @@ function linkProvider(term: Terminal, paneId: PaneId) {
           text += ch || " ";
           for (let i = 0; i < (ch.length || 1); i++) cells.push({ x: x + 1, y: row + 1 });
         }
+        rows.push({ text, cells, wrapped: line.isWrapped });
       }
+      const { text: full, cells } = logicalLine(rows, y - 1 - first, term.cols);
+      const text = full.slice(0, LINK_MAX_CHARS);
       const matches = findLinks(text.trimEnd());
       if (!matches.length) return done(undefined);
       const make = (start: number, end: number, open: () => void): ILink => ({
