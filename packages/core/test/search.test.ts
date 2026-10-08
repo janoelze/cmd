@@ -275,7 +275,7 @@ describe("owned transcripts + search", () => {
   });
 
   it("reads the vocabulary again at most every few minutes as the log grows", () => {
-    const s = new SearchView(data, sessions);
+    const s = new SearchView(data, sessions, { eagerTerms: 0 });
     const prepare = vi.spyOn(data.store.db, "prepare");
     const reads = () => prepare.mock.calls.filter(([sql]) => sql.includes("events_vocab")).length;
     try {
@@ -291,6 +291,21 @@ describe("owned transcripts + search", () => {
       expect(reads()).toBe(2); // not stale since
     } finally {
       vi.useRealTimers();
+      prepare.mockRestore();
+    }
+  });
+
+  it("reads a small vocabulary again as soon as the log grows", () => {
+    const s = new SearchView(data, sessions);
+    const prepare = vi.spyOn(data.store.db, "prepare");
+    const reads = () => prepare.mock.calls.filter(([sql]) => sql.includes("events_vocab")).length;
+    try {
+      s.warm();
+      s.invalidate();
+      expect(reads()).toBe(2);
+      s.search("wiregaurd");
+      expect(reads()).toBe(2); // not stale since
+    } finally {
       prepare.mockRestore();
     }
   });

@@ -21,6 +21,9 @@ import type { SessionRow, SessionsView } from "./sessions.ts";
  */
 const VOCAB_MAX_AGE_MS = 5 * 60_000;
 
+/** A vocabulary this small is read again as soon as the log grows: it costs a few ms (a fresh install, whose first pass comes after the startup read). */
+const VOCAB_EAGER_TERMS = 20_000;
+
 const log = logger("search");
 
 const oneLine = (t: string) => (t.split(/\r?\n/)[0] ?? t).trim().slice(0, 200);
@@ -39,16 +42,18 @@ export class SearchView {
   #vocabStale = false;
   #vocabLoading = false;
   #vocabTerms = 0;
+  #eagerTerms: number;
 
-  constructor(data: DataService, sessions: SessionsView) {
+  constructor(data: DataService, sessions: SessionsView, opts: { eagerTerms?: number } = {}) {
     this.#data = data;
     this.#sessions = sessions;
+    this.#eagerTerms = opts.eagerTerms ?? VOCAB_EAGER_TERMS;
   }
 
-  /** Call after the log grew so typo tolerance sees new words (within VOCAB_MAX_AGE_MS; at once while there is none, or an empty one from before the first read). */
+  /** Call after the log grew so typo tolerance sees new words (within VOCAB_MAX_AGE_MS; at once while the vocabulary is small). */
   invalidate(): void {
     this.#vocabStale = true;
-    if (!this.#vocabTerms) this.#vocabulary();
+    if (this.#vocabTerms <= this.#eagerTerms) this.#vocabulary();
   }
 
   /** Starts the first read, so the first search has typo tolerance (Core.start). */
@@ -63,8 +68,9 @@ export class SearchView {
    * (tests) is read here.
    */
   #vocabulary(): Vocabulary | null {
-    const due = !this.#vocab || (this.#vocabStale && (!this.#vocabTerms || Date.now() - this.#vocabAt >= VOCAB_MAX_AGE_MS));
+    const due = !this.#vocab || (this.#vocabStale && (this.#vocabTerms <= this.#eagerTerms || Date.now() - this.#vocabAt >= VOCAB_MAX_AGE_MS));
     if (due && !this.#vocabLoading) {
+      this.#vocabStale = false; // growth from here on, during the read too, makes it stale again
       const file = this.#data.store.file;
       if (file === ":memory:") this.#loaded(this.#data.store.db.prepare(`SELECT term, doc FROM events_vocab`).all() as { term: string; doc: number }[]);
       else {
@@ -88,7 +94,6 @@ export class SearchView {
     this.#vocab = new Vocabulary(rows);
     this.#vocabTerms = rows.length;
     this.#vocabAt = Date.now();
-    this.#vocabStale = false;
     log.debug("vocabulary read", { terms: rows.length });
   }
 
