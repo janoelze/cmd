@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import readline from "node:readline/promises";
-import type { Agent, AgentState, AppWindow, Pane, RemoteDevice, RemotePairRequest, RemoteScope, RemoteStatus, Space } from "@cmd/protocol";
+import type { Agent, AgentState, AppWindow, GitPlace, Pane, RemoteDevice, RemotePairRequest, RemoteScope, RemoteStatus, Space } from "@cmd/protocol";
 import { renderUnicodeCompact } from "uqr";
-import { APPLIES_LABEL, currentKey, currentSecretKey, ENV, isSecretKey, SECRETS, type SecretDef, type SecretKey, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
+import { APPLIES_LABEL, placeAgainst, currentKey, currentSecretKey, ENV, isSecretKey, SECRETS, type SecretDef, type SecretKey, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
 import { magicCommand } from "./magic.ts";
 import { widgetCommand } from "./widget.ts";
@@ -164,9 +164,9 @@ async function main(): Promise<number> {
 async function run({ client, closed }: Connection): Promise<number> {
   switch (cmd) {
     case "ls": {
-      const [panes, agents] = await Promise.all([client.call("pane.list", {}), client.call("agent.list", {})]);
+      const [panes, agents, spaces] = await Promise.all([client.call("pane.list", {}), client.call("agent.list", {}), client.call("space.list", {})]);
       if (opt.json) return out({ panes, agents });
-      printTree(panes, agents);
+      printTree(panes, agents, new Map(spaces.map((s) => [s.id, s])));
       return 0;
     }
     case "hooks": {
@@ -303,7 +303,8 @@ async function run({ client, closed }: Connection): Promise<number> {
       if (opt.json) return out(hits);
       for (const h of hits) {
         const when = h.updatedAt ? new Date(h.updatedAt).toISOString().slice(0, 10) : "";
-        console.log(`${h.sessionId.slice(0, 8)}  ${h.agent.padEnd(6)} ${when}  ${h.title.slice(0, 70)}`);
+        const where = [h.cwd ? tilde(h.cwd) : null, h.branch].filter(Boolean).join(" · ");
+        console.log(`${h.sessionId.slice(0, 8)}  ${h.agent.padEnd(6)} ${when}  ${h.title.slice(0, 70)}${where ? `  (${where})` : ""}`);
         if (h.snippet) console.log(`          ${h.snippet.replace(/\x01/g, process.stdout.isTTY ? "\x1b[1m" : "").replace(/\x02/g, process.stdout.isTTY ? "\x1b[0m" : "").slice(0, 160)}`);
       }
       if (!hits.length) console.log("(no matches)");
@@ -629,18 +630,28 @@ async function findSpace(client: Connection["client"], ref: string | undefined):
 
 const tilde = (p: string) => (process.env.HOME && (p === process.env.HOME || p.startsWith(process.env.HOME + "/")) ? "~" + p.slice(process.env.HOME.length) : p);
 
-function printTree(panes: Pane[], agents: Agent[]): void {
+/** Where an agent or terminal is, where that differs from its Space (docs/35): "on <branch>" for a worktree of its project, "in <project>" elsewhere. */
+function whereText(git: GitPlace | null | undefined, cwd: string, space: Space | undefined): string {
+  const at = placeAgainst(git, cwd, space);
+  if (!at) return "";
+  if ("folder" in at) return `  in ${tilde(at.folder)}`;
+  const branch = at.git.linked && at.git.branch ? ` on ${at.git.branch}` : "";
+  return at.sameProject && branch ? `  ${branch.trim()}` : `  in ${tilde(at.git.top)}${branch}`;
+}
+
+function printTree(panes: Pane[], agents: Agent[], spaces: Map<string, Space>): void {
   const byParent = new Map<string | null, Agent[]>();
   for (const a of agents) byParent.set(a.parentId, [...(byParent.get(a.parentId) ?? []), a]);
   const line = (a: Agent, indent: string) => {
     const name = a.name ? ` ${a.name}` : "";
+    const where = a.depth === 0 ? whereText(a.git, a.cwd, spaces.get(a.spaceId)) : "";
     const detail = a.detail ? `  — ${a.detail}` : "";
-    console.log(`${indent}${short(a.id)} ${a.kind}${name} [${a.state}]${a.paneId ? ` pane ${short(a.paneId)}` : " (virtual)"}${detail}`);
+    console.log(`${indent}${short(a.id)} ${a.kind}${name} [${a.state}]${a.paneId ? ` pane ${short(a.paneId)}` : " (virtual)"}${where}${detail}`);
     for (const c of byParent.get(a.id) ?? []) line(c, indent + "  ");
   };
   const roots = agents.filter((a) => !a.parentId || !agents.some((p) => p.id === a.parentId));
   for (const r of roots) line(r, "");
-  for (const p of panes) if (!p.agentId) console.log(`${short(p.id)} ${p.foreground} — ${p.title}  ${p.cwd}`);
+  for (const p of panes) if (!p.agentId) console.log(`${short(p.id)} ${p.foreground} — ${p.title}${whereText(p.git, p.cwd, spaces.get(p.spaceId)) || `  ${tilde(p.cwd)}`}`);
   if (!panes.length && !agents.length) console.log("(nothing running)");
 }
 

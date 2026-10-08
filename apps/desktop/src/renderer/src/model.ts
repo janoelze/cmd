@@ -1,6 +1,6 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, kindLabel, needsAttention, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type GitPlace, type PaneId, type Space, type SpaceId } from "@cmd/protocol";
+import { bucketOf, kindLabel, needsAttention, placeAgainst, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type GitPlace, type PaneId, type Space, type SpaceId } from "@cmd/protocol";
 import type { DotState } from "@cmd/ui";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "./windows/registry.ts";
@@ -323,17 +323,17 @@ export function project(cwd: string): string {
  * look alike. Outside a repository: the folder's name, only outside the Space.
  */
 export function whereOf(git: GitPlace | null | undefined, cwd: string | null | undefined, space: Pick<Space, "root" | "home" | "git"> | undefined): { text: string; hue: number; tip: string } | null {
-  if (!git) {
-    if (!cwd || (space && !space.home && (cwd === space.root || cwd.startsWith(space.root + "/")))) return null;
-    const text = project(cwd);
-    return text === "~" ? null : { text, hue: projectHue(text), tip: shortPath(cwd) };
+  const at = placeAgainst(git, cwd, space);
+  if (!at) return null;
+  if ("folder" in at) {
+    const text = project(at.folder);
+    return text === "~" ? null : { text, hue: projectHue(text), tip: shortPath(at.folder) };
   }
-  if (space?.git && git.top === space.git.top) return null;
-  const name = project(git.project);
-  const sameProject = space?.git?.project === git.project;
-  const text = git.linked ? (git.branch ?? project(git.top)) : name;
+  const g = at.git;
+  const name = project(g.project);
+  const text = g.linked ? (g.branch ?? project(g.top)) : name;
   // In the Space's project, its main checkout (from a worktree's Space) is just the project.
-  const tip = git.linked ? `${name} · worktree on ${git.branch ?? "a detached HEAD"} · ${shortPath(git.top)}` : `${name}${sameProject ? " · main checkout" : ""} · ${shortPath(git.top)}`;
+  const tip = g.linked ? `${name} · worktree on ${g.branch ?? "a detached HEAD"} · ${shortPath(g.top)}` : `${name}${at.sameProject ? " · main checkout" : ""} · ${shortPath(g.top)}`;
   return { text, hue: projectHue(name), tip };
 }
 

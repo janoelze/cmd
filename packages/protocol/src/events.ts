@@ -7,7 +7,7 @@
 // payload's shape: raise its EVENT_V and add an upcaster in core/src/data/upcast.ts;
 // stored rows keep their `v`, readers see the current shape.
 
-import type { AgentKind, AppNotification, CommandRun, PaneId, SpaceId, WindowId } from "./model.ts";
+import type { AgentKind, AppNotification, CommandRun, GitPlace, PaneId, SpaceId, WindowId } from "./model.ts";
 import type { AgentTurn } from "./activity.ts";
 import type { NameSource } from "./names.ts";
 
@@ -26,7 +26,7 @@ export interface EventPayloads {
   /** Something the core inferred about an agent (an interrupt) or couldn't make sense of (an anomaly). */
   "agent.note": { name: "interrupt" | "anomaly"; agent: AgentKind | null; text: string };
   /** A shell command in a terminal (not an agent's), once it ended. Its output is the blob. */
-  command: { command: string | null; exitCode: number | null; cwd: string; output: { chars: number; cut: boolean } | null };
+  command: { command: string | null; exitCode: number | null; cwd: string; git?: GitPlace | null; output: { chars: number; cut: boolean } | null };
   "git.commit": { hash: string; subject: string; branch: string | null; worktree: string | null; repo: string };
   "git.merge": { branch: string; into: string | null; fastForward: boolean; hash: string; worktree: string | null; repo: string };
   "git.checkout": { from: string; to: string; worktree: string | null; repo: string };
@@ -254,7 +254,7 @@ export function classOf(type: string): DataClass {
 /** A command event as the CommandRun the Commands widget shows (runs are recorded when they start, updated when they end). */
 export function commandRunOf(e: DataEvent): CommandRun {
   const d = e.data as EventPayloads["command"];
-  return { id: e.id.replace(/^command:/, ""), paneId: e.paneId ?? "", spaceId: e.spaceId ?? "", command: d.command, cwd: d.cwd, startedAt: e.at, endedAt: e.until, exitCode: d.exitCode };
+  return { id: e.id.replace(/^command:/, ""), paneId: e.paneId ?? "", spaceId: e.spaceId ?? "", command: d.command, cwd: d.cwd, ...(d.git !== undefined ? { git: d.git } : {}), startedAt: e.at, endedAt: e.until, exitCode: d.exitCode };
 }
 
 /** A notification event as the AppNotification the Notifications widget shows. */

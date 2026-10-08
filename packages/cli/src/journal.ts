@@ -1,7 +1,7 @@
 // `cmd journal …`: what happened, as a work log (docs/23-journal.md). Plain
 // Markdown by default, so an agent asked "what did we do this week?" can read
 // it as is; --json for the data. Inside a cmd terminal it's that Space's
-// journal, else everything (--all, --space, --repo choose).
+// journal, else everything (--all, --space, --project choose).
 
 import type { JournalDay, JournalEvent } from "@cmd/protocol";
 import type { Connection } from "@cmd/protocol/node";
@@ -9,9 +9,9 @@ import { when } from "./data.ts";
 
 type Client = Connection["client"];
 
-export const JOURNAL_HELP = `  journal [--days N] [--all|--space ID|--repo PATH] [--write|--no-write] [--json]
+export const JOURNAL_HELP = `  journal [--days N] [--all|--space ID|--project PATH] [--write|--no-write] [--json]
                                       what happened, day by day: releases, features, investigations
-  journal week [--weeks N] [--all|--space ID|--repo PATH] [--write|--no-write] [--json]
+  journal week [--weeks N] [--all|--space ID|--project PATH] [--write|--no-write] [--json]
                                       the week's main threads of work, rolled up from its days
   journal note TEXT                   write something down (from an agent's terminal: in its session)
   journal threads [--day YYYY-MM-DD]  how cmd grouped a day, before AI: what a model is given
@@ -27,7 +27,9 @@ const OUTCOME: Record<string, string> = { shipped: "shipped", merged: "merged", 
 
 async function scope(client: Client, opt: Record<string, unknown>, paneId: string | undefined): Promise<{ spaceId?: string; scope?: string }> {
   if (opt.all) return { scope: "all" };
-  if (typeof opt.repo === "string") return { scope: `repo:${opt.repo.replace(/^~/, process.env.HOME ?? "~")}` };
+  // --project, as `cmd data` has it; --repo, its older name, still works.
+  const project = opt.project ?? opt.repo;
+  if (typeof project === "string") return { scope: `repo:${project.replace(/^~/, process.env.HOME ?? "~")}` };
   if (typeof opt.space === "string") return { spaceId: opt.space };
   if (paneId) {
     const { pane } = await client.call("identify", { paneId }).catch(() => ({ pane: null }));

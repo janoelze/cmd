@@ -10,7 +10,7 @@ import { commandRunOf } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { copy, newTerminalIn } from "../actions.ts";
 import { showContextMenu } from "../context.ts";
-import { project, projectHue } from "../model.ts";
+import { whereOf } from "../model.ts";
 import { useStore, subscribeData } from "../store.ts";
 import { durationText, goTo, scopeOf, useWidgetStatus } from "../widgets.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
@@ -82,8 +82,9 @@ export function CommandsView({ win }: WindowViewProps) {
       : bad ? `Failed · exit ${r.exitCode} · ${took}`
       : r.exitCode !== null && STOPPED.has(r.exitCode) ? `Stopped · ${took}`
       : took;
-    const proj = project(r.cwd);
-    const space = scope === "all" ? s.spaces.get(r.spaceId)?.name : undefined;
+    const sp = s.spaces.get(r.spaceId);
+    const where = whereOf(r.git, r.cwd, sp);
+    const space = scope === "all" ? sp?.name : undefined;
     return (
       <ListRow
         key={r.id}
@@ -96,7 +97,7 @@ export function CommandsView({ win }: WindowViewProps) {
         tip={r.cwd}
         end={
           <>
-            {proj && proj !== "~" && <Chip hue={projectHue(proj)}>{proj}</Chip>}
+            {where && <Chip hue={where.hue}>{where.text}</Chip>}
             {r.endedAt !== null && <ListValue>{shortAgo(r.endedAt, now)}</ListValue>}
           </>
         }

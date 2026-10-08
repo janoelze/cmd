@@ -73,7 +73,7 @@ What made the difference: git (branches as tasks, merges, tags) and the session 
 | | |
 |---|---|
 | RPC | `journal.days` (scope, count, write: never/stale/force), `journal.day`, `journal.events`, `journal.threads` (threads and digest), `journal.note`, `journal.sync`. Remote: never (prompts, commands, pages). |
-| CLI | `cmd journal [--days N] [--all\|--space\|--repo] [--write\|--no-write] [--json]`, `journal note TEXT`, `journal threads [--day]`, `journal events`, `journal sync`. Inside a cmd terminal, the scope is its Space. |
+| CLI | `cmd journal [--days N] [--all\|--space\|--project] [--write\|--no-write] [--json]`, `journal note TEXT`, `journal threads [--day]`, `journal events`, `journal sync`. Inside a cmd terminal, the scope is its Space. |
 | Widget | `journal` (built-in, This Space / All Spaces): shows what's written at once, then writes what changed under "Writing up what happened…". |
 
 Scopes: a Space is its events, plus events without a Space whose project or folder is under its root. "repo:<path>" is one project. "all" is everything.

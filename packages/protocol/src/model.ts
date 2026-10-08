@@ -139,6 +139,8 @@ export interface CommandRun {
   /** The command line; null if the shell didn't report one (bash without a preexec hook). */
   command: string | null;
   cwd: string;
+  /** The checkout it ran in (docs/35); absent in runs recorded before cmd kept it. */
+  git?: GitPlace | null;
   startedAt: number;
   /** null while it runs. */
   endedAt: number | null;

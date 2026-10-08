@@ -92,7 +92,7 @@ export class CommandLog {
     const pane = this.#panes.get(id);
     if (!pane || pane.agentId) return;
     this.#end(id, null);
-    const run: CommandRun = { id: randomUUID(), paneId: id, spaceId: pane.spaceId, command: null, cwd: pane.cwd, startedAt: Date.now(), endedAt: null, exitCode: null };
+    const run: CommandRun = { id: randomUUID(), paneId: id, spaceId: pane.spaceId, command: null, cwd: pane.cwd, git: pane.git ?? null, startedAt: Date.now(), endedAt: null, exitCode: null };
     this.#running.set(id, run);
     this.#record(run, null);
   }
@@ -121,7 +121,7 @@ export class CommandLog {
       projectId: projectIdOf(run.cwd),
       text: run.command?.split("\n")[0]?.slice(0, 300) ?? null,
       body: commandBody(run.command, output),
-      data: { command: run.command?.slice(0, 4096) ?? null, exitCode: run.exitCode, cwd: run.cwd, output: output ? { chars: output.length, cut: false } : null },
+      data: { command: run.command?.slice(0, 4096) ?? null, exitCode: run.exitCode, cwd: run.cwd, git: run.git ?? null, output: output ? { chars: output.length, cut: false } : null },
       content: output || null,
     });
   }
