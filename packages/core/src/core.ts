@@ -771,7 +771,7 @@ export class Core {
     "search.status": () => this.#ingest?.status() ?? NO_SEARCH,
     "search.files": async (p) => {
       const root = this.#searchRoot(p.spaceId ?? null, p.cwd ?? null);
-      return { root, hits: root ? await this.#fileSearch.search(root, p.text, { limit: p.limit }) : [] };
+      return { root, hits: root ? await this.#fileSearch.search(root, p.text, { limit: p.limit, part: p.part }) : [] };
     },
     "search.history": (p) => this.#searchView.history(p.text, { spaceId: p.spaceId ?? null, limit: p.limit }),
     "search.reindex": () => {

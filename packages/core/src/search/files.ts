@@ -147,8 +147,10 @@ export class FileSearch {
   /**
    * Files under `root` whose path has every word of `text`, then lines that
    * contain `text` (as typed, case-insensitive unless it has capitals). Names first.
+   * `part`: only the names (quick: a cached list) or only the lines, so a caller
+   * can show the names while the lines are still being read.
    */
-  async search(root: string, text: string, o: { limit?: number; perFile?: number; timeoutMs?: number } = {}): Promise<FileHit[]> {
+  async search(root: string, text: string, o: { limit?: number; perFile?: number; timeoutMs?: number; part?: "names" | "lines" } = {}): Promise<FileHit[]> {
     const q = text.trim();
     const tool = this.#which();
     if (!q || !tool || !fs.existsSync(root)) return [];
@@ -158,7 +160,7 @@ export class FileSearch {
     const perFile = o.perFile ?? 3;
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
 
-    const names = this.#files(root, tool, ex.globs).then((files) =>
+    const names = o.part === "lines" ? Promise.resolve([]) : this.#files(root, tool, ex.globs).then((files) =>
       files
         .map((rel) => ({ rel, s: nameScore(rel, words) }))
         .filter((x) => x.s > 0)
@@ -174,7 +176,7 @@ export class FileSearch {
       tool.kind === "rg"
         ? ["--no-heading", "--line-number", "--column", "--color", "never", "--fixed-strings", smart ? "--case-sensitive" : "--ignore-case", "--max-count", String(perFile), "--max-columns", "300", "--max-filesize", "2M", ...[...SECRET_GLOBS, ...ex.globs].flatMap((g) => ["-g", `!${g}`]), "--", q, "."]
         : ["grep", "--untracked", "-n", "--column", "-I", "-F", ...(smart ? [] : ["-i"]), "--max-count", String(perFile), "-e", q];
-    const grep = lines(tool.bin, args, root, o.timeoutMs ?? 1500, (l) => {
+    const grep = o.part === "names" ? Promise.resolve() : lines(tool.bin, args, root, o.timeoutMs ?? 1500, (l) => {
       const m = /^(.+?):(\d+):(\d+):(.*)$/.exec(l);
       if (!m) return true;
       const rel = m[1]!.replace(/^\.\//, "");

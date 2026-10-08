@@ -69,8 +69,8 @@ export function Palette({
   onRun?: (id: string) => void;
   onClose: () => void;
   initialQuery?: string;
-  /** Transcript search for `?query`. */
-  search?: (text: string) => Promise<PaletteItem[]>;
+  /** The search for `?query`: it may `show` what it has so far, as each source answers, before it resolves. */
+  search?: (text: string, show: (items: PaletteItem[]) => void) => Promise<PaletteItem[] | void>;
   /** Groups of `items` that `?query` matches too, listed before what `search` finds (open windows). */
   searchGroups?: string[];
   /** Shown in the footer while searching, e.g. "3,836 sessions indexed". */
@@ -111,7 +111,11 @@ export function Palette({
     setPending(true);
     let live = true;
     const t = setTimeout(() => {
-      void search(searchText).then((r) => live && (setFound(r), setPending(false)));
+      const show = (r: PaletteItem[]) => live && setFound(r);
+      void search(searchText, show).then(
+        (r) => live && (r && setFound(r), setPending(false)),
+        () => live && setPending(false),
+      );
     }, 120);
     return () => {
       live = false;
@@ -153,7 +157,15 @@ export function Palette({
     return [...extra, ...matched, ...(fallback?.(query) ?? [])];
   }, [items, query, recent, searching, searchText, searchGroups, found, dynamic, fallback, groups]);
 
-  useEffect(() => setActive(0), [query]);
+  // The highlighted row: the first for a new query; once moved, the same item while results arrive above it.
+  const moved = useRef<string | null>(null);
+  const pick = (i: number) => (setActive(i), (moved.current = results[i]?.id ?? null));
+  useEffect(() => ((moved.current = null), setActive(0)), [query]);
+  useEffect(() => {
+    if (!moved.current) return;
+    const i = results.findIndex((it) => it.id === moved.current);
+    if (i >= 0) setActive(i);
+  }, [results]);
   // Keep the active row in view as ↑↓ move past the list's edge (not on hover: the list would move under the mouse).
   const byKey = useRef(false);
   useEffect(() => {
@@ -195,8 +207,8 @@ export function Palette({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Escape") onClose();
-            else if (e.key === "ArrowDown") (e.preventDefault(), (byKey.current = true), setActive((a) => Math.min(a + 1, results.length - 1)));
-            else if (e.key === "ArrowUp") (e.preventDefault(), (byKey.current = true), setActive((a) => Math.max(a - 1, 0)));
+            else if (e.key === "ArrowDown") (e.preventDefault(), (byKey.current = true), pick(Math.min(active + 1, results.length - 1)));
+            else if (e.key === "ArrowUp") (e.preventDefault(), (byKey.current = true), pick(Math.max(active - 1, 0)));
             else if (e.key === "Enter") run(results[active], e.metaKey);
           }}
         />
@@ -216,7 +228,7 @@ export function Palette({
               aria-label={it.label}
               aria-description={it.meta ?? it.group}
               className={`${i === active ? "on" : ""} ${it.meta ? "rich" : ""}`}
-              onMouseEnter={() => ((byKey.current = false), setActive(i))}
+              onMouseEnter={() => ((byKey.current = false), pick(i))}
               onClick={(e) => run(it, e.metaKey)}
             >
               {it.meta ? (

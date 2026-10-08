@@ -372,7 +372,7 @@ export interface Methods {
    * The Home Space's folder is the home folder, too big: there `cwd` (the selected
    * window's folder) picks the project instead. `root`: where it looked, null if nowhere.
    */
-  "search.files": { params: { text: string; spaceId?: SpaceId | null; cwd?: string | null; limit?: number }; result: { root: string | null; hits: FileHit[] } };
+  "search.files": { params: { text: string; spaceId?: SpaceId | null; cwd?: string | null; limit?: number; part?: "names" | "lines" }; result: { root: string | null; hits: FileHit[] } };
   /** What happened, by full text: commands (and what they printed), pages and files opened in cmd; newest matches first per kind. */
   "search.history": { params: { text: string; spaceId?: SpaceId | null; limit?: number }; result: HistoryHit[] };
   /** The most recently active past sessions, newest first; `exclude`: session ids to leave out (open ones). */

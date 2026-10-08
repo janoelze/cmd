@@ -729,58 +729,69 @@ export function App() {
   // ?query in the palette (docs/33): the Space's files (live from disk), past
   // agent sessions, commands and what they printed, pages and files opened in cmd.
   // Open windows come from the palette's own items (SEARCH_GROUPS).
-  const searchAll = useCallback(async (text: string): Promise<PaletteItem[]> => {
+  const searchAll = useCallback(async (text: string, show: (items: PaletteItem[]) => void): Promise<PaletteItem[]> => {
     const st = getState();
     const space = st.spaces.get(st.spaceId);
     const now = Date.now();
-    const [sessions, files, history] = await Promise.all([
-      cmd.call("search.query", { text, limit: 8 }).catch(() => []),
-      cmd.call("search.files", { text, spaceId: st.spaceId, cwd: contextCwd() ?? null, limit: 20 }).catch(() => ({ root: null, hits: [] })),
-      // Home holds what happened anywhere; another Space what happened in it.
-      cmd.call("search.history", { text, spaceId: space?.home ? null : st.spaceId, limit: 5 }).catch(() => []),
-    ]);
+    const cwd = contextCwd() ?? null;
     const meta = (...parts: (string | number | null | false | undefined)[]) => parts.filter(Boolean).join(" · ");
     const base = (p: string) => p.slice(p.lastIndexOf("/") + 1);
     const dirIn = (p: string, root: string) => {
       const rel = p.startsWith(root + "/") ? p.slice(root.length + 1) : shortPath(p);
-      return rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : files.root ? base(files.root) : "";
+      return rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : base(root);
     };
-    const shown = new Set(files.hits.map((h) => h.path));
-    return [
-      ...files.hits.map((h): PaletteItem =>
-        h.line === null
-          ? { id: `f-${h.path}`, group: "Files", icon: "doc", label: base(h.path), meta: dirIn(h.path, h.root), run: () => void openPath(h.path) }
-          : { id: `l-${h.path}:${h.line}`, group: "Files", icon: "text.alignleft", label: `${base(h.path)}:${h.line}`, meta: dirIn(h.path, h.root), snippet: h.text, run: () => void openFileAt(h.path, h.line!, h.column, text.trim()) },
+    // Each source shows as soon as it answers, always in this order: file names come
+    // from a cached list, lines from reading the files, history and sessions from the index.
+    const parts: { names: PaletteItem[]; lines: PaletteItem[]; sessions: PaletteItem[]; history: PaletteItem[] } = { names: [], lines: [], sessions: [], history: [] };
+    const named = new Set<string>();
+    // A file found by its name isn't listed again among the files opened in cmd.
+    const all = () => [...parts.names, ...parts.lines, ...parts.sessions, ...parts.history.filter((it) => !(it.id.startsWith("o-") && named.has(it.id.slice(2))))];
+    const part = <T,>(key: keyof typeof parts, p: Promise<T>, map: (r: T) => PaletteItem[]) =>
+      p.then(
+        (r) => ((parts[key] = map(r)), show(all())),
+        () => {},
+      );
+    await Promise.all([
+      part("names", cmd.call("search.files", { text, spaceId: st.spaceId, cwd, limit: 8, part: "names" }), (r) =>
+        r.hits.map((h) => (named.add(h.path), { id: `f-${h.path}`, group: "Files", icon: "doc", label: base(h.path), meta: dirIn(h.path, h.root), run: () => void openPath(h.path) })),
       ),
-      ...sessions.map((h): PaletteItem => ({
-        id: `h-${h.agent}-${h.sessionId}`,
-        group: "Past sessions",
-        icon: "clock.arrow.circlepath",
-        label: h.title || "(untitled session)",
-        meta: meta(h.agent, h.cwd && shortPath(h.cwd), h.branch, h.updatedAt && ago(h.updatedAt, now), h.fuzzy && "~"),
-        snippet: h.snippet,
-        run: () => void openSession(h),
-      })),
-      ...history.flatMap((h): PaletteItem[] => {
-        if (h.kind === "command")
-          return [{
-            id: `c-${h.command}-${h.cwd}`,
-            group: "Commands",
-            icon: "terminal",
-            label: h.command,
-            meta: meta(h.cwd && shortPath(h.cwd), h.exitCode ? `exit ${h.exitCode}` : null, h.runs > 1 && `${h.runs}×`, ago(h.at, now)),
-            snippet: h.snippet,
-            // Its terminal if that is still open, else a new one in its folder.
-            run: () => (h.paneId && getState().panes.has(h.paneId) ? select(h.paneId) : void newTerminalIn(h.cwd ?? "~")),
-          }];
-        if (h.kind === "page") {
-          const host = /^https?:\/\/([^/]+)/.exec(h.url)?.[1] ?? h.url;
-          return [{ id: `p-${h.url}`, group: "Pages", icon: "globe", label: h.title || h.url, meta: meta(host, ago(h.at, now)), run: () => openLink(h.url) }];
-        }
-        if (shown.has(h.path)) return [];
-        return [{ id: `o-${h.path}`, group: "Opened files", icon: "doc", label: base(h.path), meta: meta(shortPath(h.path.slice(0, h.path.lastIndexOf("/"))), ago(h.at, now)), run: () => void openPath(h.path) }];
-      }),
-    ];
+      part("lines", cmd.call("search.files", { text, spaceId: st.spaceId, cwd, limit: 20, part: "lines" }), (r) =>
+        r.hits.map((h) => ({ id: `l-${h.path}:${h.line}`, group: "Files", icon: "text.alignleft", label: `${base(h.path)}:${h.line}`, meta: dirIn(h.path, h.root), snippet: h.text, run: () => void openFileAt(h.path, h.line!, h.column, text.trim()) })),
+      ),
+      part("sessions", cmd.call("search.query", { text, limit: 8 }), (hits) =>
+        hits.map((h) => ({
+          id: `h-${h.agent}-${h.sessionId}`,
+          group: "Past sessions",
+          icon: "clock.arrow.circlepath",
+          label: h.title || "(untitled session)",
+          meta: meta(h.agent, h.cwd && shortPath(h.cwd), h.branch, h.updatedAt && ago(h.updatedAt, now), h.fuzzy && "~"),
+          snippet: h.snippet,
+          run: () => void openSession(h),
+        })),
+      ),
+      // Home holds what happened anywhere; another Space what happened in it.
+      part("history", cmd.call("search.history", { text, spaceId: space?.home ? null : st.spaceId, limit: 5 }), (hits) =>
+        hits.flatMap((h): PaletteItem[] => {
+          if (h.kind === "command")
+            return [{
+              id: `c-${h.command}-${h.cwd}`,
+              group: "Commands",
+              icon: "terminal",
+              label: h.command,
+              meta: meta(h.cwd && shortPath(h.cwd), h.exitCode ? `exit ${h.exitCode}` : null, h.runs > 1 && `${h.runs}×`, ago(h.at, now)),
+              snippet: h.snippet,
+              // Its terminal if that is still open, else a new one in its folder.
+              run: () => (h.paneId && getState().panes.has(h.paneId) ? select(h.paneId) : void newTerminalIn(h.cwd ?? "~")),
+            }];
+          if (h.kind === "page") {
+            const host = /^https?:\/\/([^/]+)/.exec(h.url)?.[1] ?? h.url;
+            return [{ id: `p-${h.url}`, group: "Pages", icon: "globe", label: h.title || h.url, meta: meta(host, ago(h.at, now)), run: () => openLink(h.url) }];
+          }
+          return [{ id: `o-${h.path}`, group: "Opened files", icon: "doc", label: base(h.path), meta: meta(shortPath(h.path.slice(0, h.path.lastIndexOf("/"))), ago(h.at, now)), run: () => void openPath(h.path) }];
+        }),
+      ),
+    ]);
+    return all();
   }, []);
 
   const remember = (id: string) => setRecent((r) => [id, ...r.filter((x) => x !== id)].slice(0, 20));
