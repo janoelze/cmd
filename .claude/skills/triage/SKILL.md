@@ -50,6 +50,8 @@ setup: the header of `scripts/discord.mjs`.
    `git branch`) — and then say so in a note. Groups with ⏳: check whether what they wait for has
    happened (a release went out, a newer report came in); if so, pick them up like a new one.
 2. **Claim before working**: `mark wip <every ref in the group> --note "<what you'll do>, branch <topic>"`.
+   Do it as soon as you start looking into a report, without asking Jan first: the claim is what
+   keeps other agents off it.
    Two agents looking at the same inbox is the normal case.
 3. **Crashes.** Read `report.json`: `context.version`/`build` say which release, `log` the minutes
    before. First check it isn't already fixed: `git log v<version>..master` around the code that
