@@ -882,8 +882,9 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-menu-list[data-marks="row"] .ui-menu-heading { padding-left: 6px; }
 /* inline: label and detail on one line; the label keeps its width, the detail gives way. */
 .ui-menu-list[data-inline] .ui-menu-text { flex-direction: row; align-items: baseline; gap: 8px; }
-.ui-menu-list[data-inline] .ui-menu-label { flex: 0 1 auto; }
-.ui-menu-list[data-inline] .ui-menu-detail { flex: 0 100 auto; min-width: 0; }
+/* Too wide: the detail gives way first; the label only once it alone fills the line. */
+.ui-menu-list[data-inline] .ui-menu-label { flex: none; max-width: 100%; }
+.ui-menu-list[data-inline] .ui-menu-detail { flex: 0 1 auto; min-width: 0; }
 .ui-menu-accessory { flex: none; display: grid; place-items: center; }
 .ui-menu-sep { height: 1px; margin: 4px 6px; background: var(--separator); }
 .ui-menu-heading { padding: 6px 8px 2px 23px; font: 600 var(--text-xs) var(--font-ui); color: var(--text-dim); }

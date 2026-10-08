@@ -72,6 +72,7 @@ export function Popover({
   placement = "below",
   align = "start",
   width,
+  maxWidth,
   className,
   role = "dialog",
   label,
@@ -82,7 +83,9 @@ export function Popover({
   children: ReactNode;
   placement?: Placement;
   align?: Align;
-  width?: number;
+  /** A fixed width, or "content": as wide as its widest line, up to maxWidth (and the window). */
+  width?: number | "content";
+  maxWidth?: number;
   className?: string;
   role?: "dialog" | "menu";
   label?: string;
@@ -95,18 +98,26 @@ export function Popover({
     if (!open || !anchor.current || !el) return;
     const place = () => {
       if (!anchor.current) return;
-      const p = placePopover(anchor.current.getBoundingClientRect(), el.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, placement, align);
-      setPos({ top: p.top, left: p.left, transformOrigin: p.side === "below" ? "top" : "bottom" });
+      // Sized to its content: measured at its natural width each time (its items may have
+      // changed), then rounded up to whole pixels so its right edge and what sits against
+      // it stay crisp. Layout sizes, not the rect: the pop-in animation scales it.
+      if (width === "content") el.style.width = "max-content";
+      const cs = getComputedStyle(el);
+      const size = { width: parseFloat(cs.width), height: parseFloat(cs.height) };
+      if (width === "content") el.style.width = `${Math.ceil(size.width)}px`;
+      const p = placePopover(anchor.current.getBoundingClientRect(), size, { width: innerWidth, height: innerHeight }, placement, align);
+      setPos({ top: p.top, left: p.left, transformOrigin: p.side === "below" ? "top" : "bottom", ...(width === "content" ? { width: Math.ceil(size.width) } : {}) });
     };
     place();
     // Again when its content changes size: one above its anchor would otherwise come loose when it shrinks.
     const ro = new ResizeObserver(place);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [open, placement, align, anchor]);
+  }, [open, placement, align, anchor, width]);
   if (!open) return null;
+  const style: CSSProperties = { ...pos, ...(width !== "content" ? { width } : {}), ...(maxWidth ? { maxWidth: `min(${maxWidth}px, 100vw - 16px)` } : {}) };
   return createPortal(
-    <div ref={ref} className={cls("ui-popover", className)} role={role} aria-label={label} style={{ ...pos, width }}>
+    <div ref={ref} className={cls("ui-popover", className)} role={role} aria-label={label} style={style}>
       {children}
     </div>,
     document.body,
@@ -157,6 +168,7 @@ export function Menu({
   onClose,
   items,
   width = 240,
+  maxWidth,
   matchWidth,
   placement,
   align,
@@ -170,7 +182,9 @@ export function Menu({
   onClose: () => void;
   /** null is a separator; a string is a section heading. */
   items: readonly (MenuItemProps | null | string)[];
-  width?: number;
+  /** A fixed width (240 by default), or "content": as wide as its widest item, up to maxWidth. */
+  width?: number | "content";
+  maxWidth?: number;
   /** As wide as the anchor (a popup button's menu). */
   matchWidth?: boolean;
   placement?: Placement;
@@ -239,6 +253,7 @@ export function Menu({
       role="menu"
       label={label}
       width={matchWidth ? anchor.current?.offsetWidth : width}
+      maxWidth={maxWidth}
       placement={placement}
       align={align}
       className={cls("ui-menu", className)}

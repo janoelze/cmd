@@ -962,7 +962,7 @@ function OverlaysPage() {
           />
         </Row>
       </Spec>
-      <Spec title="Menu, one line per item" code='<Menu marks="row" inline items>' note="The current item's row tinted instead of a checkmark; details beside the labels; an accessory before the shortcut.">
+      <Spec title="Menu, one line per item" code='<Menu marks="row" inline width="content" maxWidth items>' note="The current item's row tinted instead of a checkmark; details beside the labels; an accessory before the shortcut. As wide as its widest item, up to maxWidth: then the detail gives way first.">
         <Row>
           <Button ref={rowMenuAnchor} trailing="chevron.down" onClick={() => setRowMenu(!rowMenu)}>
             {space === "work" ? "Work" : space === "home" ? "Home" : "Side project"}
@@ -974,11 +974,13 @@ function OverlaysPage() {
             align="center"
             marks="row"
             inline
-            width={280}
+            width="content"
+            maxWidth={400}
             items={[
               { label: "Work", detail: "~/src/work", icon: "terminal", checked: space === "work", shortcut: "⌃1", onSelect: () => setSpace("work") },
               { label: "Home", detail: "~", icon: "house", checked: space === "home", accessory: <StatusDot state="needs" size="sm" />, shortcut: "⌃2", onSelect: () => setSpace("home") },
               { label: "Side project", detail: "~/src/side-project", icon: "sparkles", checked: space === "side", accessory: <StatusDot state="unseen" size="sm" />, shortcut: "⌃3", onSelect: () => setSpace("side") },
+              { label: "fl-studio-canonical-store-migration", detail: "~/src/fl-studio-canonical-store-migration · worktree of fl-studio-store", icon: "folder", checked: space === "long", shortcut: "⌃4", onSelect: () => setSpace("long") },
               null,
               { label: "Open Space…", icon: "plus", shortcut: "⌘O", onSelect: () => toast("Open Space") },
             ]}

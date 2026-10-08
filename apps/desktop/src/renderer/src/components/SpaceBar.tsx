@@ -94,6 +94,8 @@ export function SpaceBar(p: Props) {
         align="center"
         marks="row"
         inline
+        width="content"
+        maxWidth={400}
         items={[...items, null, { label: "Open Space…", icon: "plus", shortcut: "⌘O", className: "space-item space-item-open", onSelect: p.onPicker }]}
       />
     </div>

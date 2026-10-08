@@ -1125,7 +1125,7 @@ kbd {
 .space-trigger .space-name { flex: 0 1 auto; position: relative; top: -0.5px; } /* capitals centred on the icon and chevron (measured) */
 .space-trigger.pending { color: var(--text-dim); font-weight: 500; }
 .space-trigger.pending:hover { background: transparent; }
-.space-menu { min-width: 280px; }
+.space-menu { min-width: 280px; } /* sized to its widest Space (SpaceBar.tsx), no wider than 400px */
 .space-trigger > .sf { flex: none; color: var(--text-dim); }
 .space-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* SpaceIcon.tsx: the Space's symbol; a dot on its corner when it wants you. */
