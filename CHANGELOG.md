@@ -2,6 +2,24 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.19.0 — 2026-10-08
+
+Find in every window, and one search over everything in a Space.
+
+### New
+
+- **Find in every window.** ⌘F finds in terminals, text files, PDFs, web pages, Markdown and Files. ⌥⌘F finds and replaces in a text window.
+- **Search.** ⇧⌘F searches the Space's open windows, files, past sessions, commands and what they printed, and pages you opened.
+
+### Improved
+
+- Search ranks what you and your agents wrote above tool output, and a plural also finds the singular.
+- Search results stay on screen while you type, and each kind shows up as soon as it's found.
+
+### Fixed
+
+- Indexing a long history of sessions no longer makes cmd stall.
+
 ## 0.18.0 — 2026-10-07
 
 Agents get short names that tell them apart.
