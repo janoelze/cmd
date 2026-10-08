@@ -123,6 +123,23 @@ describe("SpaceManager", () => {
     expect(spaces.list().map((s) => s.name)).toEqual(["Home", "proj"]);
   });
 
+  it("notes a Space whose folder is gone, and when it's back", () => {
+    const { home, proj } = fixture("gone");
+    const spaces = new SpaceManager(null, home);
+    const { space } = spaces.open(proj);
+    const seen: (boolean | undefined)[] = [];
+    spaces.on("updated", (s) => s.id === space.id && seen.push(s.gone));
+    spaces.check();
+    expect(seen).toEqual([]);
+    fs.rmSync(proj, { recursive: true });
+    spaces.check();
+    spaces.check();
+    expect(spaces.get(space.id)?.gone).toBe(true);
+    fs.mkdirSync(proj);
+    expect(spaces.list(true).find((s) => s.id === space.id)?.gone).toBeUndefined();
+    expect(seen).toEqual([true, undefined]);
+  });
+
   it("only opens existing folders", () => {
     const { home, proj } = fixture("folders");
     fs.writeFileSync(path.join(proj, "README.md"), "");

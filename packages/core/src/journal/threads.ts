@@ -9,7 +9,6 @@
 // written again. Changing a rule changes threads: raise THREADS_FORMAT
 // (docs/24-journal-versions.md).
 
-import path from "node:path";
 import type { JournalEvent, JournalLink, JournalThread, JournalThreadKind } from "@cmd/protocol";
 
 /** Quiet longer than this starts a new burst (terminal, browser, commits on the default branch). */
@@ -100,7 +99,8 @@ export function buildThreads(events: JournalEvent[], o: ThreadOptions): JournalT
     }
   }
 
-  // Where each branch's work happened: worktrees git named, else the sibling folder named after it (<repo>-<branch>).
+  // Where each branch's work happened: the worktree git recorded it in. Never guessed from a folder's name:
+  // where people keep worktrees is theirs to decide (docs/35).
   const worktrees = new Map<string, string>();
   for (const e of all) {
     const d = e.data;
@@ -108,8 +108,7 @@ export function buildThreads(events: JournalEvent[], o: ThreadOptions): JournalT
     const b = d.kind === "git.commit" || d.kind === "git.branch" || d.kind === "git.merge" ? d.branch : null;
     if (b && wt && wt !== e.repo && !DEFAULT_BRANCHES.has(b)) worktrees.set(`${e.repo}#${b}`, wt);
   }
-  const worktreeOf = (repo: string | null, branch: string) =>
-    worktrees.get(`${repo}#${branch}`) ?? (repo ? path.join(path.dirname(repo), `${path.basename(repo)}-${branch}`) : null);
+  const worktreeOf = (repo: string | null, branch: string) => worktrees.get(`${repo}#${branch}`) ?? null;
 
   const threads = new Map<string, JournalThread>();
   for (const [id, events] of groups) threads.set(id, makeThread(id, events));

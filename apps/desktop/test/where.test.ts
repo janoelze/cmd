@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { GitPlace, Space } from "@cmd/protocol";
-import { whereOf } from "../src/renderer/src/model.ts";
+import { byProject, spaceDetail, whereOf } from "../src/renderer/src/model.ts";
 
 const cmd = "/Users/me/src/cmd";
 const wt = "/Users/me/src/cmd-search";
@@ -42,5 +42,17 @@ describe("whereOf", () => {
     expect(whereOf(null, `${cmd}/build`, cmdSpace)).toBeNull();
     expect(whereOf(null, "/Users/me/Downloads/x", cmdSpace)?.text).toBe("x");
     expect(whereOf(null, "/Users/me", home)).toBeNull();
+  });
+});
+
+describe("Spaces of one project", () => {
+  const sp = (id: string, root: string, git: Space["git"], gone?: boolean) => ({ id, root, git, gone, name: id }) as Space;
+  it("come together after the main checkout, everything else in order", () => {
+    const list = [sp("tree", wt, { project: cmd, top: wt, linked: true }), sp("kit", other.top, { project: other.project, top: other.top, linked: false }), sp("cmd", cmd, { project: cmd, top: cmd, linked: false }), sp("notes", "/Users/me/notes", null)];
+    expect(byProject(list).map((s) => s.id)).toEqual(["cmd", "tree", "kit", "notes"]);
+  });
+  it("say whose worktree they are and when the folder is gone", () => {
+    expect(spaceDetail(sp("tree", wt, { project: cmd, top: wt, linked: true }, true))).toBe("~/src/cmd-search · worktree of cmd · folder removed");
+    expect(spaceDetail(sp("cmd", cmd, { project: cmd, top: cmd, linked: false }))).toBe("~/src/cmd");
   });
 });

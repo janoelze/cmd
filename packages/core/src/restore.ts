@@ -23,6 +23,7 @@
 // own: one that fails is logged and left out, and the rest still come back.
 
 import fs from "node:fs";
+import os from "node:os";
 import type { Agent, PaneId, Settings } from "@cmd/protocol";
 import { ENV } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
@@ -106,16 +107,18 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
       if (agent!.parentId) env[ENV.parentId] = agent!.parentId;
     }
     if (prefill) env[RESTORE_COMMAND_ENV] = prefill;
+    // Its folder can be gone (a removed worktree): it starts in the Space's, else the home folder, and says so.
+    const cwd = isDir(rec.cwd) ? rec.cwd : isDir(space.root) ? space.root : os.homedir();
     try {
       panes.create({
         id: rec.id,
         spaceId: space.id,
-        cwd: isDir(rec.cwd) ? rec.cwd : space.root,
+        cwd,
         cols: rec.cols,
         rows: rec.rows,
         env,
         command: auto ? resume! : undefined,
-        replay: restoredText(screen, prefill),
+        replay: restoredText(screen, prefill, cwd === rec.cwd ? null : { was: rec.cwd, now: cwd }),
         restored: rec,
       });
       back.set(rec.id, false);
@@ -161,12 +164,15 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
 }
 
 /** The old screen, then a dim line saying it was restored (and what ran). */
-function restoredText(screen: { data: string; savedAt: number } | null, command: string | null): string {
+function restoredText(screen: { data: string; savedAt: number } | null, command: string | null, moved: { was: string; now: string } | null = null): string {
   const when = screen ? ` · ${new Date(screen.savedAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}` : "";
   const ran = command ? ` · was running: ${command.split("\n")[0]!.slice(0, 200)}` : "";
-  const line = `\x1b[0m\x1b[2m── Restored${when}${ran} ──\x1b[0m\r\n`;
+  const gone = moved ? ` · ${tilde(moved.was)} is gone, started in ${tilde(moved.now)}` : "";
+  const line = `\x1b[0m\x1b[2m── Restored${when}${ran}${gone} ──\x1b[0m\r\n`;
   return screen ? `${screen.data}\x1b[0m\r\n${line}` : line;
 }
+
+const tilde = (p: string) => (p === os.homedir() ? "~" : p.startsWith(os.homedir() + "/") ? "~" + p.slice(os.homedir().length) : p);
 
 function isDir(p: string): boolean {
   try {

@@ -57,6 +57,22 @@ describe("restore after a core restart", () => {
     await b.core.close();
   });
 
+  it("starts a terminal whose folder is gone in its Space's, and says so", async () => {
+    const db = path.join(dir, "gone.sqlite");
+    const tree = path.join(dir, "tree");
+    fs.mkdirSync(tree);
+    const a = start(db);
+    const pane = a.core.panes.create({ cwd: tree, cols: 100, rows: 10 });
+    await a.core.close();
+    fs.rmSync(tree, { recursive: true });
+
+    const b = start(db);
+    b.core.restore();
+    expect(b.ptys[0]!.opts.cwd).toBe(b.core.spaces.home().root);
+    expect((await text(b.core, pane.id)).replace(/\n/g, "")).toContain(`${tree} is gone, started in`);
+    await b.core.close();
+  });
+
   it("offers a command that was running instead of running it", async () => {
     const db = path.join(dir, "b.sqlite");
     const a = start(db);

@@ -337,6 +337,21 @@ export function whereOf(git: GitPlace | null | undefined, cwd: string | null | u
   return { text, hue: projectHue(name), tip };
 }
 
+/** A Space's line under its name (picker, switcher): where it is, whose worktree it is, whether its folder is gone (docs/35). */
+// The folder first: the switcher clips the start of a long detail, and keeps what's after it.
+export const spaceDetail = (sp: Space) => [shortPath(sp.root), sp.git?.linked ? `worktree of ${project(sp.git.project)}` : null, sp.gone ? "folder removed" : null].filter(Boolean).join(" · ");
+
+/** Spaces with a project's worktrees together, after its main checkout; otherwise in the order given. */
+export function byProject(list: Space[]): Space[] {
+  const key = (sp: Space) => sp.git?.project ?? sp.root;
+  const first = new Map<string, number>();
+  list.forEach((sp, i) => first.has(key(sp)) || first.set(key(sp), i));
+  return list
+    .map((sp, i) => ({ sp, i }))
+    .sort((a, b) => first.get(key(a.sp))! - first.get(key(b.sp))! || Number(!!a.sp.git?.linked) - Number(!!b.sp.git?.linked) || a.i - b.i)
+    .map((x) => x.sp);
+}
+
 /** Stable per-project hue (FNV-1a), as in the ghostty-agents fork. */
 export function projectHue(name: string): number {
   let h = 0x811c9dc5;

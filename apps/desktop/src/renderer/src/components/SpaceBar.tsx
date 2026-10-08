@@ -9,9 +9,9 @@ import { useRef, useState } from "react";
 import { useWholePixelWidth } from "../pixels.ts";
 import { Badge, Menu, StatusDot, type MenuItemProps } from "@cmd/ui";
 import type { Space, SpaceId } from "@cmd/protocol";
-import { shortPath } from "../model.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { SpaceIcon } from "./SpaceIcon.tsx";
+import { spaceDetail } from "../model.ts";
 
 type Attention = "needs" | "unseen";
 
@@ -42,7 +42,7 @@ export function SpaceBar(p: Props) {
       label: sp.name,
       text: sp.name,
       // Marked left-to-right: the folder is clipped at its start (styles.css), keeping its end.
-      detail: `\u200e${shortPath(sp.root)}\u200e`,
+      detail: `\u200e${spaceDetail(sp)}\u200e`,
       icon: <SpaceIcon space={sp} />,
       accessory: attn && <StatusDot state={attn} size="sm" label={attn === "needs" ? "Needs you" : "Done"} />,
       checked: on,
@@ -68,7 +68,7 @@ export function SpaceBar(p: Props) {
         className={`space-trigger ${open ? "open" : ""}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        data-tip={shown ? shortPath(shown.root) : undefined}
+        data-tip={shown ? spaceDetail(shown) : undefined}
         onClick={() => setOpen(!open)}
         onContextMenu={(e) => (e.preventDefault(), setOpen(false), shown && p.onMenu(shown))}
         onKeyDown={(e) => {

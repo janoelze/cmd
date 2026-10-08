@@ -195,6 +195,7 @@ export class Core {
   readonly homes: AgentHomes;
   #homesDiscovered = false;
   #homesTimer: NodeJS.Timeout | undefined;
+  #spacesTimer: NodeJS.Timeout | undefined;
   /** Listening servers: one, plus one per time the socket file was put back (the old ones keep their clients). */
   #servers: net.Server[] = [];
   /** Open socket connections, cut on close so a lingering client can't hold it up. */
@@ -516,6 +517,13 @@ export class Core {
     if (o.stateDir && o.statusRoot) s.startup("homes", "Looking for agents", () => this.#discoverHomes());
     if (o.stateDir) s.startup("journal", "Starting the journal", () => this.journal.start());
     if (o.stateDir) s.startup("retention", "Scheduling retention", () => this.data.start());
+    // Spaces whose folder was removed (a worktree after its merge) say so.
+    if (o.stateDir)
+      s.startup("spaces", "Checking Spaces", () => {
+        this.spaces.check();
+        this.#spacesTimer = setInterval(() => this.spaces.check(), 30_000);
+        this.#spacesTimer.unref();
+      });
     s.ready();
   }
 
@@ -1487,6 +1495,7 @@ export class Core {
   async close(): Promise<void> {
     if (this.#libraryTimer) clearTimeout(this.#libraryTimer);
     clearInterval(this.#homesTimer);
+    clearInterval(this.#spacesTimer);
     this.scheduler.dispose(); // a startup job still running fails on the closed stores, quietly
     this.agents.close();
     this.usage.close();

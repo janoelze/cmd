@@ -20,6 +20,8 @@ export interface Space {
   root: string;
   /** The checkout its root is in, read when it opens; null for Home and outside a repository. */
   git?: Omit<GitPlace, "branch"> | null;
+  /** Its folder is gone (a removed worktree, a deleted folder); checked every little while. */
+  gone?: boolean;
   home: boolean;
   /** SF Symbol name; null: the default (spaceIcon). */
   icon: string | null;

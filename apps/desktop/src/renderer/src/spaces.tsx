@@ -7,7 +7,7 @@ import { useEffect, useState, type ComponentProps } from "react";
 import type { Agent, Space, SpaceId } from "@cmd/protocol";
 import { agentName } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
-import { shortPath } from "./model.ts";
+import { byProject, shortPath, spaceDetail } from "./model.ts";
 import { getState, useStoreValue } from "./store.ts";
 import type { Palette, PaletteItem } from "./components/Palette.tsx";
 
@@ -79,7 +79,8 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
   useEffect(() => {
     if (kind !== "space" && kind !== "move") return;
     let live = true;
-    void cmd.call("space.list", { closed: true }).then((l) => live && setRecent(l.filter((x) => x.closedAt !== null)), () => {});
+    // A closed Space whose folder is gone has nothing left to open.
+    void cmd.call("space.list", { closed: true }).then((l) => live && setRecent(l.filter((x) => x.closedAt !== null && !x.gone)), () => {});
     void cmd.call("data.view", { query: { view: "sessions", limit: 50 } }).then(
       (rows) => live && setFolders([...new Set(rows.map((r) => r.cwd).filter((c): c is string => !!c))]),
       () => {},
@@ -88,7 +89,7 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
   }, [kind]);
 
   if (!picker || picker.kind === "icon" || picker.kind === "new") return null; // their own: SpaceIconPicker, NewPicker
-  const open = [...spaces.values()].sort((a, b) => a.order - b.order);
+  const open = byProject([...spaces.values()].sort((a, b) => a.order - b.order));
   const known = new Set([...open, ...recent].map((x) => x.root));
   const typed = (q: string, label: (p: string) => string, run: (p: string) => void): PaletteItem[] =>
     looksLikePath(q) ? [{ id: "typed-path", group: "Folders", label: label(q.trim()), run: () => run(q.trim()) }] : [];
@@ -138,8 +139,8 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
     };
     return {
       items: [
-        ...open.filter((sp) => sp.id !== from).map((sp) => ({ id: `sp-${sp.id}`, group: "Spaces" as const, label: sp.name, meta: shortPath(sp.root), run: () => move(sp.id) })),
-        ...recent.map((sp) => ({ id: `re-${sp.id}`, group: "Recent" as const, label: sp.name, meta: shortPath(sp.root), run: () => void moveToFolder(sp.root) })),
+        ...open.filter((sp) => sp.id !== from).map((sp) => ({ id: `sp-${sp.id}`, group: "Spaces" as const, label: sp.name, meta: spaceDetail(sp), run: () => move(sp.id) })),
+        ...byProject(recent).map((sp) => ({ id: `re-${sp.id}`, group: "Recent" as const, label: sp.name, meta: spaceDetail(sp), run: () => void moveToFolder(sp.root) })),
       ],
       onClose: close,
       placeholder: "Move the window to a Space, or type a folder",
@@ -154,15 +155,15 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
       id: `sp-${sp.id}`,
       group: "Spaces" as const,
       label: sp.id === here ? `${sp.name} (shown)` : sp.name,
-      meta: shortPath(sp.root),
+      meta: spaceDetail(sp),
       run: () => showSpace(sp.id),
       runAlt: () => showSpace(sp.id, { newWindow: true }),
     })),
-    ...recent.map((sp) => ({
+    ...byProject(recent).map((sp) => ({
       id: `re-${sp.id}`,
       group: "Recent" as const,
       label: sp.name,
-      meta: shortPath(sp.root),
+      meta: spaceDetail(sp),
       run: () => void openSpace(sp.root),
       runAlt: () => void openSpace(sp.root, true),
     })),

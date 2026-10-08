@@ -51,6 +51,24 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     }
   }
 
+  /** Notes Spaces whose folder went away or came back (docs/35); a folder that came back gets its checkout read again. */
+  check(): void {
+    for (const s of this.#spaces.values()) {
+      if (s.home) continue;
+      let gone = true;
+      try {
+        gone = !fs.statSync(s.root).isDirectory();
+      } catch {}
+      if (gone === !!s.gone) continue;
+      if (gone) s.gone = true;
+      else {
+        delete s.gone;
+        s.git = gitOf(s);
+      }
+      this.#save(s);
+    }
+  }
+
   get(id: SpaceId): Space | undefined {
     return this.#spaces.get(id);
   }
@@ -61,6 +79,8 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
 
   /** Open Spaces in switcher order; closed: the closed ones too, after them, most recent first. */
   list(closed = false): Space[] {
+    // The picker asks for closed ones too: a good moment to see what's gone.
+    if (closed) this.check();
     const all = [...this.#spaces.values()];
     const open = all.filter((s) => s.closedAt === null).sort((a, b) => a.order - b.order);
     if (!closed) return open.map((s) => ({ ...s }));
@@ -93,6 +113,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
       }
       existing.lastActiveAt = now;
       existing.git = gitOf(existing);
+      delete existing.gone;
       this.#save(existing);
       return { space: { ...existing }, created: false };
     }
