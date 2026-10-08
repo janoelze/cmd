@@ -30,6 +30,7 @@
     "e2e:web": "node --no-warnings e2e/web.mjs",
     "dist": "pnpm build && node scripts/stage-runtime.mjs && pnpm --filter @cmd/desktop dist",
     "release": "node scripts/release.mjs",
+    "discord": "node scripts/discord.mjs",
     "shots": "pnpm build && node scripts/readme-shots/screenshots.mjs"
   },
   "devDependencies": {
