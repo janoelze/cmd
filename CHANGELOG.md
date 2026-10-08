@@ -2,6 +2,22 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.20.0 — 2026-10-08
+
+JSON files open as a tree you can fold.
+
+### New
+
+- **JSON windows.** JSON, JSONC and JSON Lines files open as a tree you fold, search and copy from. ⌘E switches to the editor and back at the same line.
+
+### Improved
+
+- Windows in a sidebar look like the other unselected windows.
+
+### Fixed
+
+- Starting cmd no longer reports "core connection closed" as a crash.
+
 ## 0.19.0 — 2026-10-08
 
 Find in every window, and one search over everything in a Space.
