@@ -199,13 +199,14 @@ kbd {
   -webkit-app-region: drag;
 }
 
-/* The Navigator (components/Navigator.tsx): the old sidebar's content, in a window. */
+/* The Navigator (components/Navigator.tsx): the old sidebar's content, in a window,
+   on the window's background like any other. */
 .navigator {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-sidebar);
+  background: var(--window-bg);
 }
 
 .sb-search.ui-field { flex: none; display: flex; width: auto; margin: 0 var(--sidebar-pad) 6px; }
@@ -428,8 +429,8 @@ kbd {
 /* ui.focusTitleBar: the selected window's title bar takes some of its outline colour. */
 .app.title-tint-subtle .tile.sel .tile-title { background: color-mix(in srgb, var(--ring-color) 8%, var(--bg-sidebar)); }
 .app.title-tint-strong .tile.sel .tile-title { background: color-mix(in srgb, var(--ring-color) 18%, var(--bg-sidebar)); }
-/* Sidebars (Dock.tsx) show no focus ring or title tint, only the attention ring,
-   which wins over selection there. */
+/* Sidebars (Dock.tsx) look like an unselected window: no focus ring or title tint,
+   dimmed like one (below), only the attention ring, which wins over selection there. */
 .dock-tile.sel { border-color: var(--window-edge); }
 .dock-tile.sel > .tile-frame { box-shadow: inset 0 0 0 var(--edge-w) var(--window-edge), var(--drop); }
 .dock-tile.sel.needs { --ring-color: var(--state-needs); border-color: var(--ring-color); }
@@ -582,9 +583,10 @@ kbd {
 
 /* Unfocused windows are dimmed by an overlay (not a filter, which would soften text).
    It stops inside the outline, so outlines match across the workspace and the
-   sidebars, which aren't dimmed. Amount: ui.unfocusedDim (--window-dim-amount, set
-   in App) times the theme's --window-dim. A window that needs you isn't dimmed. */
-.windows-track > .tile > .tile-frame::after {
+   sidebars. Sidebars are always dimmed, selected or not, so they look like an
+   unselected window. Amount: ui.unfocusedDim (--window-dim-amount, set in App) times
+   the theme's --window-dim. A window that needs you isn't dimmed. */
+:is(.windows-track, .dock) > .tile > .tile-frame::after {
   content: "";
   position: absolute;
   inset: var(--edge-w);
@@ -595,7 +597,7 @@ kbd {
 }
 .windows-track > .tile.sel > .tile-frame::after,
 .windows-track > .tile.lifted > .tile-frame::after,
-.windows-track > .tile.needs > .tile-frame::after,
+:is(.windows-track, .dock) > .tile.needs > .tile-frame::after,
 .mode-focus .windows-track > .tile > .tile-frame::after { opacity: 0; }
 
 /* Visual bell (notifications.visualBell): the outline flashes once, as wide as the
