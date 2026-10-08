@@ -23,7 +23,9 @@ import { clearEventStream, eventClasses, EventsView } from "../components/Events
 import { scopeMenu, scopeOf, setWidgetState } from "../widgets.ts";
 import { intervalLabel, refreshChoices } from "../magic.ts";
 import { lazyView, registerWindowView, stateStr } from "./registry.ts";
-import { toggleMarkdownEdit } from "./markdown.tsx"; // registers the "markdown" view
+import "./markdown.tsx"; // registers the "markdown" view
+import "./json.tsx"; // registers the "json" view
+import { previewFor, togglePreview } from "./preview.ts";
 
 /** Right-click → Device Size: show the page at a phone's, tablet's or desktop's size. */
 function deviceMenu(w: AppWindow): MenuEntry {
@@ -113,7 +115,7 @@ registerWindowView({
     const p = stateStr(w, "path");
     return p
       ? [
-          ...(/\.(md|markdown|mdx)$/i.test(p) ? [{ label: "Preview (⌘E)", run: () => toggleMarkdownEdit(w) }] : []),
+          ...(previewFor(p) ? [{ label: "Preview (⌘E)", run: () => togglePreview(w) }] : []),
           { label: "Open with Default App", run: () => cmd.openPath(p) },
           { label: "Copy Path", run: () => copy(p) },
         ]

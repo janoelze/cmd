@@ -168,7 +168,7 @@ The host key and route live in `$CMD_HOME/remote/host.json`, paired devices in S
 - Host API: spawn, send, read, wait, kill (`--tree`)
 - Transcript search (SQLite, indexed in a worker), resume from the palette and sidebar
 - Settings and SQLite persistence
-- UI: sidebar grouped by attention with search and recent sessions, focus, grid, strip and canvas views, browser, file, text and Markdown windows, palette, settings window, themes, notifications, Dock badge
+- UI: sidebar grouped by attention with search and recent sessions, focus, grid, strip and canvas views, browser, file, text, Markdown and JSON windows, palette, settings window, themes, notifications, Dock badge
 - Packaging, CI and GitHub releases
 
 **In progress**

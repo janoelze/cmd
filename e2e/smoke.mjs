@@ -564,6 +564,50 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.waitForSelector(`.tile.kind-markdown[data-pane="${md.id}"] .markdown h1`, { timeout: 3000 });
   check(true, "⌘E switches back to the preview");
 
+  // JSON window: a tree, rows fold, ⌘E opens the editor at the selected row's line and back, live, JSON Lines.
+  const jsonFile = path.join(mdDir, "data.json");
+  fs.writeFileSync(jsonFile, JSON.stringify({ name: "cmd", list: [1, 2, 3], nested: { deep: { value: true } } }, null, 2) + "\n");
+  const js = await win.evaluate((p) => window.cmd.call("window.openTarget", { target: p }), jsonFile);
+  check(js.kind === "json", "data.json opens in a JSON window");
+  await win.evaluate((id) => window.__cmdSelect(id), js.id);
+  const jsonTile = `.tile.kind-json[data-pane="${js.id}"]`;
+  await win.waitForSelector(`${jsonTile} .json-row`);
+  const keys = await win.locator(`${jsonTile} .json-key`).allTextContents();
+  check(keys.join(",") === "name,list,nested,deep", `the JSON tree opens two levels (${keys.join(", ")})`);
+  await win.locator(`${jsonTile} .json-row`, { hasText: "deep" }).locator(".ui-twisty").click();
+  await win.waitForSelector(`${jsonTile} .json-key:text-is("value")`, { timeout: 2000 });
+  check(true, "a row unfolds");
+  await win.locator(`${jsonTile} .json-row`, { hasText: "value" }).click();
+  await menu("view.toggleEdit");
+  await win.waitForSelector(`.tile.kind-text[data-pane="${js.id}"] .cm-content`, { timeout: 3000 });
+  let cursorLine = "";
+  for (let i = 0; i < 30 && !cursorLine.includes("value"); i++) {
+    await win.waitForTimeout(100);
+    cursorLine = await win.evaluate((id) => document.querySelector(`.tile.kind-text[data-pane="${id}"] .cm-activeLine`)?.textContent ?? "", js.id);
+  }
+  check(cursorLine.includes('"value": true'), `⌘E opens the editor at the selected row's line (${cursorLine.trim()})`);
+  await menu("view.toggleEdit");
+  await win.waitForSelector(`${jsonTile} .json-row.sel`, { timeout: 3000 });
+  const back = await win.locator(`${jsonTile} .json-row.sel .json-key`).textContent();
+  check(back === "value", `⌘E back selects the value at the cursor (${back})`);
+  fs.writeFileSync(jsonFile, '{"name": "cmd", "added": 1}\n');
+  await win.waitForSelector(`${jsonTile} .json-key:text-is("added")`, { timeout: 3000 });
+  check(true, "the JSON tree re-renders live");
+  fs.writeFileSync(jsonFile, '{"name": "cmd", "added": ');
+  const banner = await win.waitForSelector(`${jsonTile} .ui-callout`, { timeout: 3000 }).then(() => true, () => false);
+  check(banner && (await win.locator(`${jsonTile} .json-key:text-is("added")`).count()) === 1, "a half-written file keeps the last good tree under a banner");
+  await win.evaluate((id) => window.cmd.call("window.close", { id }), js.id);
+  const linesFile = path.join(mdDir, "events.jsonl");
+  fs.writeFileSync(linesFile, '{"event":"start"}\n{"event":"stop"}\nnot json\n');
+  const jl = await win.evaluate((p) => window.cmd.call("window.openTarget", { target: p }), linesFile);
+  await win.evaluate((id) => window.__cmdSelect(id), jl.id);
+  await win.waitForSelector(`.tile.kind-json[data-pane="${jl.id}"] .json-row`);
+  const lineRows = await win.locator(`.tile.kind-json[data-pane="${jl.id}"] .json-index`).allTextContents();
+  const unreadable = await win.locator(`.tile.kind-json[data-pane="${jl.id}"] .json-invalid`).count();
+  check(jl.kind === "json" && lineRows.slice(0, 3).join(",") === "1,2,3" && unreadable === 1, `JSON Lines: a row per line, bad lines shown (${lineRows.join(", ")})`);
+  await win.screenshot({ path: path.join(shots, "10-json.png") });
+  await win.evaluate((id) => window.cmd.call("window.close", { id }), jl.id);
+
   await menu("view.grid");
   await win.waitForTimeout(800);
   await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });

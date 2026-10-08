@@ -36,4 +36,5 @@ createRoot(document.getElementById("root")!).render(
 setTimeout(() => {
   void import("./components/TextView.tsx");
   void import("./windows/markdown-view.tsx");
+  void import("./windows/json-view.tsx");
 }, 2000);

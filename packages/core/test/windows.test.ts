@@ -54,6 +54,8 @@ describe("window type registry", () => {
     expect(kindFor(file("page.html", "<p>hi</p>"))).toBe("browser");
     expect(kindFor(file("shot.PNG", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0])))).toBe("browser");
     expect(kindFor(file("notes.md", "# hi"))).toBe("markdown");
+    expect(kindFor(file("data.json", "{}"))).toBe("json");
+    expect(kindFor(file("data.json", "{}"), { json: "text" })).toBe("text");
     expect(kindFor(file("paper.PDF", "%PDF-1.7\n"))).toBe("pdf");
     expect(kindFor(file("notes.txt", "hi"))).toBe("text");
     expect(kindFor(file("Makefile", "all:\n\techo"))).toBe("text");
@@ -160,6 +162,18 @@ describe("window manager", () => {
     expect(t).toMatchObject({ id: w.id, kind: "text", state: { path: md } });
     expect(wins.update(w.id, { kind: "markdown" })).toMatchObject({ id: w.id, kind: "markdown" });
     expect(() => wins.update(w.id, { kind: "terminal" })).toThrow();
+  });
+
+  it("opens JSON and JSON Lines as a tree that switches to the editor at a line", () => {
+    const { wins } = make(builtins(), {}, path.join(dir, "json.sqlite"));
+    for (const name of ["data.json", "log.jsonl", "events.ndjson", "tsconfig.jsonc"]) expect(wins.openTarget(file(name, "{}"), space)!.kind).toBe("json");
+    const j = file("package.json", '{"name":"cmd"}');
+    const w = wins.openTarget(j, space)!;
+    expect(w).toMatchObject({ kind: "json", title: "package.json", state: { path: j } });
+    const t = wins.update(w.id, { kind: "text", state: { reveal: { line: 3, column: null, text: null, at: 1 } } });
+    expect(t).toMatchObject({ id: w.id, kind: "text", state: { path: j, reveal: { line: 3 } } });
+    const back = wins.update(w.id, { kind: "json", state: { reveal: { line: 2 } } });
+    expect(back).toMatchObject({ id: w.id, kind: "json", state: { path: j, reveal: { line: 2 } } });
   });
 
   it("opens untitled text windows that keep a draft until saved to a file", () => {

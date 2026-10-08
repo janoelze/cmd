@@ -1,6 +1,6 @@
 # JSON viewer
 
-> Status (2026-10-08): **plan**, nothing built. Branch `json-viewer` (worktree `~/src/cmd-json-viewer`).
+> Status (2026-10-08): **built** on branch `json-viewer`: phases 1–3 plus JSON Lines (moved up from phase 4). Differences from the plan below: the parser is hand-written (`renderer/src/windows/json-parse.ts`), not Lezer, since it needs exact error messages, JSONC and per-line JSON Lines anyway, and parses 40k objects well under the test's budget on the main thread (no worker yet); the line crosses ⌘E through a `line` window action on both sides, and the JSON type takes `reveal: { line }` like the text type; there's no `select` state. Not yet: a filter field, schema hints, find inside unreadable JSON Lines rows.
 
 A window that shows a `.json` file as a collapsible tree, live like the Markdown window, with ⌘E switching the same window to the text editor and back. Read first: this doc; docs/09-window-types.md; the Markdown window it copies (`packages/core/src/windows/builtin.ts` `markdownType`, `apps/desktop/src/renderer/src/windows/markdown.tsx`, `markdown-view.tsx`).
 
@@ -29,7 +29,7 @@ The Markdown window (commit `15ff1ab`) is the template, and almost everything it
 - **Live**: file changes re-parse and re-render; open state and selection kept by path.
 - **Invalid JSON**: show the parse error with line and column in an `EmptyState`/`Callout` and a button "Edit at Line N" that switches to the editor with `reveal` there. While an agent writes a file it can be invalid for a moment: keep the last good tree under a small "Can't read this version" banner rather than flashing an error.
 - **Status**: `340 items · 1.2 MB` (top-level count and size); "Edited" isn't needed, the view is read-only.
-- **JSON Lines** (`.jsonl`, `.ndjson`): later, not phase 1. They stay in the editor until then (each line a top-level row is the obvious shape).
+- **JSON Lines** (`.jsonl`, `.ndjson`): each line is a top-level row, numbered by its line in the file; blank lines are skipped, and a line that doesn't parse is a row with what's wrong and its text, not a failed file. A file over 5 MB shows its first 5 MB of lines.
 
 ## ⌘E: generalise the toggle
 

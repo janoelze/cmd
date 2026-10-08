@@ -983,6 +983,37 @@ kbd {
 .minimap rect.sel { fill: var(--window-highlight); }
 .minimap rect.view { fill: color-mix(in srgb, var(--ink) 4%, transparent); stroke: color-mix(in srgb, var(--ink) 55%, transparent); stroke-width: 1; }
 
+/* ── JSON windows (windows/json-view.tsx) ───────────── */
+
+.json-scroll { flex: 1; min-height: 0; overflow: auto; background: var(--well); outline: none; padding: 6px 0; }
+.json-rows { position: relative; min-width: 100%; }
+/* Fixed height: the view draws only the rows on screen (ROW in json-view.tsx). */
+.json-row {
+  --depth: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 12px 0 calc(8px + var(--depth) * 16px);
+  font: 13px/22px var(--font-code);
+  white-space: nowrap;
+  cursor: default;
+}
+.json-row:hover { background: var(--bg-hover); }
+.json-row.sel { background: var(--bg-selected); }
+.json-twisty { flex: none; display: grid; place-items: center; width: 12px; }
+.json-row > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.json-key { flex: none; color: var(--syn-property); }
+.json-index { flex: none; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.json-punct { flex: none; margin-left: -6px; color: var(--syn-punct); }
+.json-dim { color: var(--text-dim); }
+.json-string { color: var(--syn-string); }
+.json-number, .json-boolean, .json-null { color: var(--syn-number); }
+.json-invalid { flex: none; color: var(--state-needs); font-family: var(--font-ui); }
+.json-value { user-select: text; }
+.json-hit { color: inherit; background: color-mix(in srgb, var(--match) 28%, transparent); border-radius: 2px; }
+.json-hit.current { background: color-mix(in srgb, var(--match) 70%, transparent); color: var(--text); }
+
 /* ── title fields (components/Slot.tsx, docs/10-window-titles.md) ── */
 
 /* A field that stays mounted when empty; its width (set from the content) eases. */

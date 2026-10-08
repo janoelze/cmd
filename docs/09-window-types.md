@@ -43,6 +43,7 @@ registerWindowView({
 - **Routing:** `open notes.md` in a terminal, double-click in the file tree, palette paths and `cmd open notes.md` all route `.md` to the new type. The shell integration's rules come from the registry (`CMD_OPEN_EXTS` and friends), so the shell can't drift.
 - **Programmatic opening:** `cmd open --kind markdown-preview file.md`, `window.open` over RPC, and host agents through the same API.
 - **Live files:** views can use `fs.watch`/`fs.changed`, `fs.read`/`fs.write`, and `setWindowStatus` for title-bar status.
+- **⌘E to the editor:** a type that renders a file (Markdown, JSON) calls `registerPreview(kind, /\.ext$/i)` (`renderer/src/windows/preview.ts`), and ⌘E switches it with the text editor in the same window. A view that registers the `line` window action carries the line you're on across (docs/35-json-viewer.md).
 
 ## Input: pointer, wheel and focus
 

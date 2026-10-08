@@ -40,7 +40,7 @@ import type { Rect } from "./layouts.ts";
 import { useWindowActions, windowActions } from "./windowActions.ts";
 import type { FindRequest } from "./find.tsx";
 import { stateStr, viewFor } from "./windows/registry.ts";
-import { toggleMarkdownEdit } from "./windows/markdown.tsx";
+import { togglePreview } from "./windows/preview.ts";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Feedback } from "./components/Feedback.tsx";
@@ -458,7 +458,7 @@ export function App() {
       const w = selected ? s.windows.get(selected) : undefined;
       const own = windowActions(selected)?.toggleEdit;
       if (own) own();
-      else if (w) toggleMarkdownEdit(w);
+      else if (w) togglePreview(w);
     },
     "view.cycleWidth": () => {
       if (!selected) return;

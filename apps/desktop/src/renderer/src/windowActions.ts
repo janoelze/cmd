@@ -16,6 +16,8 @@ type Actions = {
   stop?: () => void;
   /** ⌘E: a window's other face (Markdown preview / source, a Magic widget's edit view). */
   toggleEdit?: () => void;
+  /** The line the cursor or selection is on (1-based), carried across ⌘E (windows/preview.ts). */
+  line?: () => number | null;
   /** ⌘F / ⌘G / ⇧⌘G / ⌥⌘F, Use Selection for Find (find.tsx). */
   find?: (r: FindRequest) => void;
   /** ⌘+ / ⌘− / ⌘0 zoom the window's content (a PDF) instead of the app's text. */

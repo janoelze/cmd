@@ -49,7 +49,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 - **Session summaries.** Right-click an agent's title bar and choose Summarize Session: a Markdown window fills in with what the session did, ready to edit and paste into a message or ticket. Needs an AI provider (Settings → AI & Agents).
 - **Widgets.** Agent Activity and a Live Diff of your uncommitted changes come built in; with Magic, describe anything else and an agent builds a live widget for it. They live in the Widget Library (⇧⌘L). [More below](#magic-widgets).
 - **Web browser** next to your terminals, with phone, tablet and desktop sizes.
-- **Files and editor.** A file browser, a text editor and Markdown windows. `open README.md` in a shell opens it in cmd.
+- **Files and editor.** A file browser, a text editor, Markdown windows and JSON windows (a tree you fold, JSON Lines too). ⌘E switches a Markdown or JSON window to the editor and back, at the line you're on. `open README.md` in a shell opens it in cmd.
 - **Drag and drop.** Drop files on a terminal to type their paths (agents take images as attachments), on the file browser to move them into a folder (⌥ copies), or anywhere else to open them. Drag rows from the file browser, or a window's title icon, out to Finder or any app.
 - **Notifications.** Waiting agents, bells and finished commands mark the terminal until you look, and count on the Dock badge.
 - **Keyboard first.** ⌘K finds windows, commands and past sessions. Every action is in the menu bar, and every shortcut can be remapped.

@@ -134,6 +134,32 @@ export const markdownType: WindowType<{ path: string }> = {
   },
 };
 
+/**
+ * A JSON or JSON Lines file as a tree, live; ⌘E switches the same window to the
+ * text editor. `reveal` (from the editor's ⌘E): the line whose value to select.
+ */
+export const jsonType: WindowType<{ path: string; reveal?: { line: number; at: number } }> = {
+  kind: "json",
+  title: "JSON",
+  icon: "curlybraces",
+  // Same specificity as text's extension match; priority makes these open here.
+  opens: { extensions: ["json", "jsonc", "jsonl", "ndjson", "geojson", "har", "webmanifest"], priority: 10 },
+  fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
+  create(input) {
+    const file = path.resolve(expandHome(str(input.path) ?? ""));
+    if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
+    return { state: { path: file }, title: path.basename(file) };
+  },
+  update(state, patch) {
+    const r = patch.reveal as { line?: unknown } | null | undefined;
+    if (r && typeof r.line === "number") return { state: { ...state, reveal: { line: r.line, at: Date.now() } } };
+    const p = str(patch.path);
+    if (p === undefined) return { state };
+    const file = path.resolve(expandHome(p));
+    return { state: { path: file }, title: path.basename(file) };
+  },
+};
+
 /** How a PDF is zoomed: to the window's width, its whole page, its real size, or a factor (1 = 100%). */
 export type PdfScale = "page-width" | "page-fit" | "auto" | number;
 const pdfScale = (v: unknown): PdfScale | undefined =>
@@ -457,6 +483,7 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(filesType);
   types.register(textType);
   types.register(markdownType);
+  types.register(jsonType);
   types.register(pdfType);
   types.register(magicType);
   types.register(agentsType);
