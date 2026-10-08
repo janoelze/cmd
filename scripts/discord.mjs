@@ -12,7 +12,7 @@
 //                                                         untriaged and in-progress messages of #crashes and
 //                                                         #feedback, grouped by signature; attachments saved
 //   node scripts/discord.mjs mark <state> <ref>... [--note "…"]
-//                                                         state: wip 👀, done ✅, dup 🔁, wontfix 🚫, open (clears);
+//                                                         state: wip 👀, waiting ⏳, done ✅, dup 🔁, wontfix 🚫, open (clears);
 //                                                         ref: <channel>/<message id> as inbox prints it
 // <channel> is an id or a name (without #). The token comes from $CMD_DISCORD_TOKEN,
 // else ~/src/.secrets/cmd-discord-token, else ~/.config/cmd-discord/token.
@@ -22,7 +22,9 @@ import path from "node:path";
 
 const API = "https://discord.com/api/v10";
 const TEXT = 0, ANNOUNCEMENT = 5, FORUM = 15, MEDIA = 16;
-const STATES = { wip: "👀", done: "✅", dup: "🔁", wontfix: "🚫" };
+const STATES = { wip: "👀", waiting: "⏳", done: "✅", dup: "🔁", wontfix: "🚫" };
+// Still in the inbox: someone is on it, or it waits for something (the thread says what).
+const OPEN = new Set([null, "wip", "waiting"]);
 const TRIAGE = ["crashes", "feedback"];
 const KIND = { 0: "text", 2: "voice", 4: "category", 5: "announcement", 13: "stage", 15: "forum", 16: "media" };
 
@@ -193,7 +195,7 @@ async function inbox(opts) {
     const { channel, posts } = await read(name, { since: opts.since ?? "90d", limit: opts.limit ?? 1000, save }, all);
     const groups = new Map();
     for (const p of posts) {
-      if (!opts.all && p.state && p.state !== "wip") continue;
+      if (!opts.all && !OPEN.has(p.state)) continue;
       const key = signature(p);
       if (!groups.has(key)) groups.set(key, { summary: summary(p) || "(empty)", reports: [] });
       groups.get(key).reports.push({ ref: `${channel.name}/${p.id}`, ...p });
@@ -287,7 +289,7 @@ try {
   } else if (cmd === "mark" && target) {
     await mark(target, rest, opts.note);
   } else {
-    fail("usage: pnpm discord channels | read <channel> [--since 7d] [--limit N] [--save dir] [--json] | inbox [--channel c] [--since 90d] [--all] [--json] | mark <wip|done|dup|wontfix|open> <ref>... [--note …]");
+    fail("usage: pnpm discord channels | read <channel> [--since 7d] [--limit N] [--save dir] [--json] | inbox [--channel c] [--since 90d] [--all] [--json] | mark <wip|waiting|done|dup|wontfix|open> <ref>... [--note …]");
   }
 } catch (e) {
   fail(e.forbidden ? `${e.message}. Give the bot View Channels and Read Message History on that channel (private channels need it added explicitly).` : e.message);
