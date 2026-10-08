@@ -67,7 +67,14 @@ function Player({ id, src, fill }: { id: string; src: string; fill: boolean }) {
     const key = wv.insertCSS(FILL_CSS).catch(() => "");
     return () => {
       void key.then((k) => {
-        if (k) wv.removeInsertedCSS(k).catch(() => {});
+        // On unmount the webview is already detached (its page gone with it) and every
+        // method throws synchronously, which would surface as an unhandled rejection.
+        if (!k || !wv.isConnected) return;
+        try {
+          void wv.removeInsertedCSS(k).catch(() => {});
+        } catch {
+          // Detached or not dom-ready meanwhile: nothing left to remove.
+        }
       });
     };
   }, [fill, loads]);
