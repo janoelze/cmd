@@ -27,6 +27,11 @@ jobs:
         with:
           php-version: "8.3"
 
+      # Crops the screenshots (website/shots.mjs, no dependencies).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: SSH
         env:
           KEY: ${{ secrets.UBERSPACE_SSH_KEY }}

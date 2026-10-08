@@ -17,6 +17,7 @@ URL="https://endtime-instruments.org/cmd"
 
 cd "$(dirname "$0")"
 for f in public/*.php public/_lib/*.php public/usage/*.php; do php -l "$f" >/dev/null; done
+node shots.mjs   # shots/ (window captures with their shadow) → public/shots/ (cropped)
 
 # The first deploys linked the docroot to ~/cmd-website; replace that link.
 ssh "$HOST" "mkdir -p ~/cmd-website-data && chmod 700 ~/cmd-website-data && { [ ! -L $DOCROOT ] || rm $DOCROOT; } && rm -rf ~/cmd-website && mkdir -p $DOCROOT"

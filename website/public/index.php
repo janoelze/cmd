@@ -28,14 +28,19 @@ page_start('cmd — terminals and coding agents, side by side', 'A macOS app for
 </p>
 
 <div class="hero-shots" aria-roledescription="slideshow">
-  <img class="on" src="assets/hero.png" width="1505" height="950" alt="cmd with a usage widget, a Claude Code session finishing a release, and a CI widget side by side; six agents in the sidebar">
-  <img src="assets/theme-slate.png" width="1505" height="950" alt="The strip in a slate theme: a Claude Code session, a CI widget and another session">
-  <img src="assets/grid.png" width="1505" height="950" alt="The grid: twelve windows at once, agents, widgets, a file browser, a shell and the weather">
-  <img src="assets/agents.png" width="1505" height="950" alt="The strip: a Claude Code session, a file browser and a shell, with six agents and recent sessions in the sidebar">
-  <img src="assets/theme-warm.png" width="1505" height="950" alt="The canvas in a warm theme: a shader widget next to top">
-  <img src="assets/widgets.png" width="1505" height="950" alt="A weather widget next to top in the strip">
-  <img src="assets/canvas.png" width="1505" height="950" alt="The canvas: a shader widget next to top">
-  <img src="assets/canvas-pan.png" width="1505" height="950" alt="The canvas, panned across a log, a usage widget and a Claude Code session">
+  <img class="on" src="shots/strip.png" width="1500" height="900" alt="The strip: a Claude Code session, a shader widget, the file browser and a CI widget; four agents in the sidebar">
+  <img src="shots/grid-dark.png" width="1500" height="900" alt="The grid: usage and CI widgets, four Claude Code sessions, a shader, the file browser and a shell">
+  <img src="shots/light-agents.png" width="1500" height="900" alt="A light theme: a Claude Code session, the Agent Activity widget and a CI widget">
+  <img src="shots/usage.png" width="1500" height="900" alt="The usage widget, a Claude Code session and a shader widget in the strip">
+  <img src="shots/search.png" width="1500" height="900" alt="Searching files from the palette: json files and matching lines across the repo">
+  <img src="shots/light-files.png" width="1500" height="900" alt="A light theme: the file browser on the repo next to a CI widget">
+  <img src="shots/canvas-shader.png" width="1500" height="900" alt="The canvas: a shader widget and the file browser">
+  <img src="shots/strip-agents.png" width="1500" height="900" alt="The strip: two Claude Code sessions side by side with a CI widget">
+  <img src="shots/weather.png" width="1500" height="900" alt="A weather widget next to a Claude Code session, in a warm theme">
+  <img src="shots/light-palette.png" width="1500" height="900" alt="The command palette over the canvas, in a light theme">
+  <img src="shots/json.png" width="1500" height="900" alt="A JSON window on package.json next to the Navigator and a CI widget">
+  <img src="shots/search-shader.png" width="1500" height="900" alt="File search over the canvas, with a shader widget behind">
+  <img src="shots/empty.png" width="1500" height="900" alt="An empty workspace: recent sessions in the sidebar and a hint to press ⌘N">
 </div>
 <script>
 // Shuffle the hero screenshots, fade the gallery in once the first has loaded,

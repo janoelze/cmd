@@ -99,7 +99,7 @@ tr:last-child td { border-bottom: 0; }
 .pill { font-size: var(--fs-xs); color: var(--ink-2); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
 .button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-.hero-shots { border-radius: 1.196% / 1.895%; } /* 18px window corners on the 1505×950 screenshots, at any size */
+.hero-shots { border-radius: 1.2% / 2%; } /* 18px window corners on the 1500×900 screenshots, at any size */
 .hero-shots { display: grid; width: min(1400px, 100vw - 32px); margin-block: 48px; margin-inline: calc(50% - min(700px, 50vw - 16px)); } /* wider than main, centred on it */
 .hero-shots > img, .hero-shots::after { grid-area: 1 / 1; } /* stacked in one cell */
 .hero-shots img { display: block; width: 100%; height: auto; border-radius: inherit; opacity: 0; transition: opacity 0.9s ease; }
