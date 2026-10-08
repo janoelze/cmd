@@ -153,6 +153,9 @@ async function read(name, opts) {
       posts.push(p);
     }
   } else fail(`#${ch.name} is a ${ch.kind} channel; only text, announcement and forum channels have messages to read`);
+  // Without the Message Content intent Discord blanks content, embeds and attachments alike.
+  const blank = (m) => !m.text && !m.embeds.length && !m.attachments.length;
+  if (posts.length && posts.every(blank)) console.error("Every message came back blank: turn on Message Content Intent (Developer Portal → Bot).\n");
   if (opts.save) await save(opts.save, posts);
   return { channel: ch, since: new Date(since).toISOString(), posts };
 }
