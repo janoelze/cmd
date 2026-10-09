@@ -81,12 +81,13 @@ export function applyEdits(code: string, edits: Edit[]): string {
 let system: string | null = null;
 /**
  * The system prompt, read once (the files ship with the core): how to answer
- * (prompt.md), what the important sounds are (sounds.md), how to make them
+ * (prompt.md), what the important sounds are (sounds.md) and what every sample
+ * measures as (atlas.md, scripts/livecode-atlas.mjs), how to make them
  * sound good (sound-design.md: mixing rules and patches), genre starting points
  * written for this app (cookbook.md), and every function (reference.md).
  */
 export function changeSystem(): string {
-  system ??= ["prompt.md", "sounds.md", "sound-design.md", "cookbook.md", "reference.md"].map((f) => fs.readFileSync(path.join(DIR, f), "utf8").trim()).join("\n\n");
+  system ??= ["prompt.md", "sounds.md", "atlas.md", "sound-design.md", "cookbook.md", "reference.md"].map((f) => fs.readFileSync(path.join(DIR, f), "utf8").trim()).join("\n\n");
   return system;
 }
 
@@ -114,8 +115,21 @@ export function changePrompt(r: ChangeRequest): string {
         history.map((h, i) => `${i + 1}. "${h.request}" (${h.summary || "changed"}). Before it:\n\`\`\`\n${h.code}\n\`\`\``).join("\n\n"),
     );
   if (r.failed) parts.push(`Your last attempt didn't play:\n\`\`\`\n${r.failed.code}\n\`\`\`\nError: ${r.failed.error}`);
-  if (r.sounds?.length) parts.push(`Loaded sounds (plain names, then banks with their sounds):\n${soundList(r.sounds)}`);
+  // Sounds the window has that the atlas (in the system prompt) doesn't list, if any.
+  const known = atlasNames();
+  const extra = (r.sounds ?? []).filter((x) => !known.has(x.toLowerCase()) && !SYNTHS.has(x.toLowerCase()));
+  if (extra.length) parts.push(`Also loaded:\n${soundList(extra)}`);
   return parts.join("\n\n");
+}
+
+/** Strudel's built-in synths and noises: not samples, so not in the atlas. */
+const SYNTHS = new Set(["sine", "sin", "square", "sqr", "triangle", "tri", "sawtooth", "saw", "supersaw", "pulse", "white", "pink", "brown", "crackle", "bytebeat", "user", "one", "sbd", "zzfx"]);
+
+let atlas: Set<string> | null = null;
+/** The sample names atlas.json measured. */
+function atlasNames(): Set<string> {
+  atlas ??= new Set((JSON.parse(fs.readFileSync(path.join(DIR, "atlas.json"), "utf8")) as { name: string }[]).map((a) => a.name));
+  return atlas;
 }
 
 /** Earlier versions the model sees: enough to step back a few changes. */

@@ -4,9 +4,9 @@
 // and keep everything to listen to and rate.
 //
 //   node scripts/evals/livecode.ts refs                       fetch Strudel's own tunes and measure them (the yardstick)
-//   node scripts/evals/livecode.ts run [--case id] [--repeat N] [--system FILE] [--model M] [--effort E] [--label L]
+//   node scripts/evals/livecode.ts run [--case id] [--repeat N] [--system FILE] [--model M] [--effort E] [--label L] [--audio]
 //   node scripts/evals/livecode.ts report [run]               scores per case, and where they sit among the references
-//   node scripts/evals/livecode.ts rescore [run]              score a run's saved answers again (after changing analyze.ts)
+//   node scripts/evals/livecode.ts rescore [run] [--audio]    score a run's saved answers again (after changing analyze.ts)
 //   node scripts/evals/livecode.ts rate <run> <case> <1-10>   your ear; `report` compares it with the score
 //   node scripts/evals/livecode.ts listen <run> <case>        open an answer as a Live Code window in the running "cmd dev" app
 //   node scripts/evals/livecode.ts show <run> <case>          print an answer's code
@@ -32,7 +32,7 @@ const DIR = path.join(root, ".cmd-dev/evals/livecode");
 const BARS = 16;
 const { values: a, positionals } = parseArgs({
   allowPositionals: true,
-  options: { case: { type: "string" }, repeat: { type: "string" }, system: { type: "string" }, model: { type: "string" }, effort: { type: "string" }, label: { type: "string" } },
+  options: { audio: { type: "boolean" }, case: { type: "string" }, repeat: { type: "string" }, system: { type: "string" }, model: { type: "string" }, effort: { type: "string" }, label: { type: "string" } },
 });
 
 interface Case {
@@ -40,6 +40,17 @@ interface Case {
   request: string;
   genre: GenreName;
   start?: "starter";
+}
+
+/** What the code sounds like when played (audio smoke test). */
+interface Audio {
+  /** Sounds that played nothing. */
+  silent: string[];
+  /** Each sound's level alone (RMS). */
+  parts: Record<string, number>;
+  /** The mix's peak before the app's limiter (over 1 clips), and its share of energy below 150 Hz. */
+  peak: number;
+  lows: number;
 }
 
 interface Result {
@@ -52,6 +63,7 @@ interface Result {
   features?: Features;
   unknown?: string[];
   score?: Score;
+  audio?: Audio;
   rating?: number;
 }
 
@@ -62,6 +74,10 @@ async function strudel() {
   const { chromium } = createRequire(path.join(root, "package.json"))("playwright") as typeof import("playwright");
   const browser = await chromium.launch();
   const page = await browser.newPage();
+  // A secure origin: about:blank isn't one, and without it there are no AudioWorklets
+  // (supersaw, distortion, the ladder filter play silence).
+  await page.route("https://strudel.eval/", (r) => r.fulfill({ contentType: "text/html", body: "<!doctype html><title>eval</title>" }));
+  await page.goto("https://strudel.eval/");
   await page.addScriptTag({ path: path.join(root, "apps/desktop/node_modules/@strudel/web/dist/index.js") });
   // The same sample maps as a Live Code frame (apps/desktop/src/livecode/frame.js), for knowing which sounds exist.
   const maps = fs.readFileSync(path.join(root, "apps/desktop/src/livecode/frame.js"), "utf8");
@@ -72,7 +88,9 @@ async function strudel() {
   await page.evaluate(async (all) => {
     const w = window as unknown as Record<string, any>;
     w.__err = null;
-    await w.initStrudel({ prebake: () => Promise.all(all.map((u: string) => w.samples(u).catch(() => {}))), onEvalError: (e: Error) => (w.__err = String(e?.message ?? e)) });
+    w.repl = await w.initStrudel({ prebake: () => Promise.all(all.map((u: string) => w.samples(u).catch(() => {}))), onEvalError: (e: Error) => (w.__err = String(e?.message ?? e)) });
+    // As the app's frame does (apps/desktop/src/livecode/frame.js): the effect worklets load on a click otherwise.
+    await w.strudel.initAudio().catch(() => {});
   }, all);
   return {
     async run(code: string, bars: number): Promise<{ error?: string; events: Ev[]; unknown: string[] }> {
@@ -116,6 +134,53 @@ async function strudel() {
     },
     /** Every sound the maps loaded, as the app sends them to the model. */
     sounds: () => page.evaluate(() => Object.keys((window as unknown as Record<string, any>).strudel.soundMap.get()).sort()) as Promise<string[]>,
+    /**
+     * Plays the code: each sound alone for `seconds` (is it heard at all?), then
+     * the whole mix (its peak before any limiter, and its share of lows).
+     */
+    async audio(code: string, seconds = 2.5): Promise<Audio> {
+      return page.evaluate(
+        async ({ code, seconds }) => {
+          const w = window as unknown as Record<string, any>;
+          const pattern = await w.strudel.evaluate(code, false);
+          if (!pattern?.queryArc) return { silent: [], parts: {}, peak: 0, lows: 0 };
+          const soundOf = (v: any) => (typeof v?.s === "string" ? (v.bank ? `${String(v.bank).toLowerCase()}_${v.s.toLowerCase()}` : v.s.toLowerCase()) : "");
+          const sounds = [...new Set(pattern.queryArc(0, 4).map((h: any) => soundOf(h.value)).filter(Boolean))] as string[];
+          const listen = async (p: any) => {
+            w.repl.setPattern(p, true);
+            await new Promise((r) => setTimeout(r, 300));
+            const out = w.strudel.getSuperdoughAudioController().output.destinationGain;
+            const a = out.context.createAnalyser();
+            a.fftSize = 2048;
+            out.connect(a);
+            const buf = new Float32Array(2048), spec = new Float32Array(1024);
+            const bin = out.context.sampleRate / 2048;
+            let sum = 0, n = 0, peak = 0, lo = 0, all = 0;
+            const end = Date.now() + seconds * 1000;
+            while (Date.now() < end) {
+              await new Promise((r) => setTimeout(r, 40));
+              a.getFloatTimeDomainData(buf);
+              for (const x of buf) (sum += x * x), n++, (peak = Math.max(peak, Math.abs(x)));
+              a.getFloatFrequencyData(spec);
+              spec.forEach((d, k) => {
+                const p = Math.pow(10, d / 10);
+                all += p;
+                if (k * bin < 150) lo += p;
+              });
+            }
+            out.disconnect(a);
+            w.repl.stop();
+            await new Promise((r) => setTimeout(r, 150));
+            return { rms: Math.sqrt(sum / Math.max(1, n)), peak, lows: all ? lo / all : 0 };
+          };
+          const parts: Record<string, number> = {};
+          for (const sound of sounds) parts[sound] = +(await listen(pattern.filterValues((v: any) => soundOf(v) === sound))).rms.toFixed(4);
+          const mix = await listen(pattern);
+          return { silent: sounds.filter((s) => parts[s]! < 0.002), parts, peak: +mix.peak.toFixed(2), lows: +mix.lows.toFixed(2) };
+        },
+        { code, seconds },
+      );
+    },
     close: () => browser.close(),
   };
 }
@@ -188,13 +253,16 @@ if (cmd === "refs") {
           base.features = analyze(r.events, BARS, bpmOf(answer.code), genre);
           base.unknown = r.unknown;
           base.score = score(base.features, genre, r.unknown.length);
+          // Play it too: a part that makes no sound is a bug the events can't show.
+          if (a.audio) base.audio = await s.audio(answer.code);
         }
       } catch (e) {
         base.ms = Date.now() - t0;
         base.error = (e as Error).message;
       }
       results.push(base);
-      console.log(`${base.score ? String(base.score.total).padStart(3) : "  ✗"}  ${c.id}.${i}  ${(base.ms / 1000).toFixed(1)} s  ${base.error ?? base.score!.checks.filter((x) => x.score < 0.999).map((x) => `${x.name}: ${x.note}`).join(" · ")}`);
+      const heard = base.audio ? `  [audio: peak ${base.audio.peak}, lows ${Math.round(100 * base.audio.lows)}%${base.audio.silent.length ? `, SILENT ${base.audio.silent.join(" ")}` : ""}]` : "";
+      console.log(`${base.score ? String(base.score.total).padStart(3) : "  ✗"}  ${c.id}.${i}  ${(base.ms / 1000).toFixed(1)} s  ${base.error ?? base.score!.checks.filter((x) => x.score < 0.999).map((x) => `${x.name}: ${x.note}`).join(" · ")}${heard}`);
     }
   await s.close();
   fs.writeFileSync(path.join(runDir, "results.json"), JSON.stringify(results, null, 1));
@@ -250,7 +318,9 @@ if (cmd === "refs") {
     r.features = analyze(out.events, BARS, bpmOf(text), genre);
     r.unknown = out.unknown;
     r.score = score(r.features, genre, out.unknown.length);
-    console.log(`${String(r.score.total).padStart(3)}  ${r.case}.${r.i}  ${r.score.checks.filter((x) => x.score < 0.999).map((x) => `${x.name}: ${x.note}`).join(" · ")}`);
+    if (a.audio) r.audio = await s.audio(text);
+    const heard = r.audio ? `  [audio: peak ${r.audio.peak}, lows ${Math.round(100 * r.audio.lows)}%${r.audio.silent.length ? `, SILENT ${r.audio.silent.join(" ")}` : ""}]` : "";
+    console.log(`${String(r.score.total).padStart(3)}  ${r.case}.${r.i}  ${r.score.checks.filter((x) => x.score < 0.999).map((x) => `${x.name}: ${x.note}`).join(" · ")}${heard}`);
   }
   await s.close();
   fs.writeFileSync(file, JSON.stringify(results, null, 1));
@@ -278,6 +348,12 @@ if (cmd === "refs") {
   const w = await client.call("window.open", { kind: "livecode", input: { code } });
   console.log(`opened ${id} in cmd dev (${w.id}): press Play, then rate it: node scripts/evals/livecode.ts rate ${run} ${id} <1-10>`);
   close();
+} else if (cmd === "sound") {
+  // Debugging the audio check: play one piece of code and print what it heard.
+  const s = await strudel();
+  const errors: string[] = [];
+  console.log(JSON.stringify(await s.audio(positionals[1]!), null, 1), errors);
+  await s.close();
 } else if (cmd === "show") {
   const [, run, id] = positionals;
   console.log(fs.readFileSync(path.join(DIR, "runs", run!, `${id!.includes(".") ? id : id + ".0"}.strudel`), "utf8"));

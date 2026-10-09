@@ -1,0 +1,427 @@
+# Sound atlas
+
+Every loaded sample sound, measured from its audio (scripts/livecode-atlas.mjs): `name (samples): what it is`. Lengths are of the first sample; `n` picks another. Drum machines are banks of short hits: `s("bd sd").bank("RolandTR909")`.
+
+## Drum machine banks
+- ajkpercusyn: bd deep, cb(2), ht, sd
+- akailinn: bd deep, cb, cp, cr bright, hh bright, ht, lt, mt, oh bright, rd bright, sd, sh bright, tb bright
+- akaimpc60: bd(2) deep, cp, cr bright, hh bright, ht, lt, misc(2) deep, mt, oh bright, perc(5), rd bright, rim, sd(3)
+- akaixr10: bd(10) deep, cb, cp, cr(3) bright, hh(2) bright, ht, lt(2) deep, misc(4), mt(2), oh bright, perc(15) bright, rd bright, rim(2) bright, sd(10) bright, sh bright, tb bright
+- alesishr16: bd deep, cp, hh bright, ht, lt deep, oh bright, perc(8) bright, rim bright, sd, sh(3) bright
+- alesissr16: bd(13) deep, cb, cp, cr(2) bright, hh(3) bright, misc(3) deep, oh(4) bright, perc(7), rd(3) bright, rim, sd(12), sh bright, tb bright
+- b: bd(14) deep
+- bossdr110: bd deep, cp, cr bright, hh bright, oh bright, rd bright, sd bright
+- bossdr220: bd deep, cp, cr bright, hh bright, ht, lt deep, mt, oh bright, perc, rd bright, sd
+- bossdr55: bd(2) deep, hh(2) bright, rim, sd(8) bright
+- bossdr550: bd(5) deep, cb(2), cp, cr bright, hh(2) bright, ht(3), lt(3) deep, misc(3), mt(2), oh(2) bright, perc(11) bright, rd(2) bright, rim bright, sd(6), sh(2) bright, tb bright
+- c: cb, cp, cr bright
+- casiorz1: bd deep, cb, cp, cr bright, hh bright, ht, lt deep, mt deep, rd(2) bright, rim, sd
+- casiosk1: bd deep, hh bright, ht, mt, oh bright, sd
+- casiovl1: bd, hh, sd bright
+- doepferms404: bd(2) deep, hh deep, lt deep, oh, sd
+- emudrumulator: bd deep, cb, cp, cr bright, hh bright, ht, lt deep, mt deep, oh bright, perc, rim, sd
+- emumodular: bd(2) deep, misc, perc(2) deep
+- emusp12: bd(14) deep, cb, cp, cr bright, hh(2) bright, ht(6), lt(6) deep, misc(7), mt(4), oh bright, perc, rd bright, rim(2), sd(21)
+- h: hh(2) bright, ht(6)
+- korgddm110: bd deep, cp, cr bright, hh bright, ht(2), lt(2) deep, oh bright, rim, sd
+- korgkpr77: bd deep, cp, hh bright, oh bright, sd
+- korgkr55: bd deep, cb, cr bright, hh bright, ht, oh bright, perc(2), rim, sd
+- korgkrz: bd deep, cr, fx(2), hh, ht deep, lt deep, misc, oh bright, rd bright, sd(2) bright
+- korgm1: bd(3) deep, cb, cp, cr bright, hh(2) bright, ht(2), misc(16) bright, mt deep, oh(2) bright, perc(7), rd bright, rim, sd(4), sh bright, tb bright
+- korgminipops: bd(7) deep, hh(4) bright, misc(4), oh(4) bright, sd(13)
+- korgpoly800: bd(4)
+- korgt3: bd(5) deep, cp, hh(2) bright, misc(4), oh(2) bright, perc(4), rim, sd(5) deep, sh(3)
+- l: lt(6) deep
+- linn9000: bd deep, cb(2), cr(2) bright, hh bright, ht(2), lt(2) deep, mt deep, oh bright, perc(3), rd(2) bright, rim, sd, tb bright
+- linndrum: bd deep, cb, cp, cr bright, hh(3) bright, ht(2), lt(2), mt, oh bright, perc(6), rd, rim(3), sd(3), sh bright, tb bright
+- linnlm1: bd(4) deep, cb, cp, hh bright, ht, lt deep, oh bright, perc(3), rim, sd deep, sh bright, tb bright
+- linnlm2: bd(4) deep, cb, cp, cr, hh(2) bright, ht, lt deep, mt deep, oh(2) bright, rd, rim(2), sd(4) deep, sh bright, tb bright
+- m: mt(4)
+- mfb512: bd deep, cp, cr bright, hh bright, ht deep, lt deep, mt deep, oh bright, sd
+- mis: misc(7)
+- moogconcertmatemg1: bd(3) deep, sd(2)
+- mpc1000: bd(5) deep, cp, hh(4) bright, oh bright, perc bright, sd(4) bright, sh bright
+- o: oh bright
+- oberheimdmx: (3), bd(3) deep, cp, cr bright, hh bright, ht, lt, mt, oh bright, rd bright, rim, sd(3), sh bright, tb bright
+- per: perc
+- r: rd bright
+- rhodespolaris: bd(4) deep, misc(4), sd(4) deep
+- rhythmace: bd(3) deep, hh bright, ht, lt deep, oh bright, perc(6), sd(3) bright
+- ri: rim(2)
+- rolandcompurhythm1000: bd deep, cb, cp, cr bright, hh bright, ht, lt deep, mt deep, oh bright, perc(3), rd bright, rim, sd deep
+- rolandcompurhythm78: bd deep, cb, hh(2) bright, misc(4) bright, oh(2) bright, perc(8), sd bright, tb bright
+- rolandcompurhythm8000: bd deep, cb, cp, cr bright, hh bright, ht, lt deep, mt deep, oh bright, perc(2), rim, sd
+- rolandd110: bd deep, cb(2), cr bright, hh bright, lt, oh(2) bright, perc(3), rd bright, rim, sd(3), sh bright, tb bright
+- rolandd70: bd(4) deep, cb, cp, cr bright, hh bright, lt, mt deep, oh bright, perc bright, rd bright, rim, sd(5), sh bright
+- rolandddr30: bd(8) deep, ht(4) deep, lt(4) deep, sd(8) deep
+- rolandjd990: bd(10) deep, cb, cp, cr bright, hh(4) bright, ht, lt(5) deep, misc(12) bright, mt(2), oh(2) bright, perc(6) bright, rd bright, sd(15), tb bright
+- rolandmc202: bd(5) deep, ht(3), perc deep
+- rolandmc303: bd(16) deep, cb(2), cp(8), fx(2) deep, hh(6) bright, ht(5), lt(5), misc(8), mt(6), oh(5) bright, perc(39) bright, rd(2) bright, rim(6), sd(26) bright, sh(7) bright, tb(5) bright
+- rolandmt32: bd deep, cb, cp, cr bright, hh bright, ht, lt deep, mt deep, oh(2) bright, perc(13), rd bright, rim, sd(2), sh(2) bright, tb bright
+- rolandr8: bd(7) deep, cb, cp, cr bright, hh(2) bright, ht(4), lt(4) deep, mt(4), oh bright, perc(8), rd(2) bright, rim(2), sd(12), sh(2) bright, tb bright
+- rolands50: bd(4) deep, cb, cp, cr(2), ht deep, lt(2) deep, misc(6), mt deep, oh bright, perc(14), rd bright, sd(3) deep, sh(4) bright, tb(2) bright
+- rolandsh09: bd(43) deep
+- rolandsystem100: bd(15), hh(2) bright, misc(2), oh(3) bright, perc(19), sd(21) bright
+- rolandtr505: bd deep, cb(2), cp, cr, hh bright, ht, lt deep, mt deep, oh bright, perc(3), rd, rim, sd
+- rolandtr606: bd deep, cr bright, hh bright, ht, lt, oh bright, sd
+- rolandtr626: bd(2) deep, cb, cp, cr(2), hh bright, ht(2), lt(2) deep, mt(2) deep, oh bright, perc(8) bright, rd(2), rim, sd(3), sh bright, tb bright
+- rolandtr707: bd(2) deep, cb, cp, cr bright, hh bright, ht, lt deep, mt, oh bright, rim, sd(2), tb bright
+- rolandtr727: perc(10), sh(2) bright
+- rolandtr808: bd(25) deep, cb(2), cp(5), cr(25) bright, hh bright, ht(5), lt(5) deep, mt(5) deep, oh(5) bright, perc(16), rim, sd(25), sh(2) bright
+- rolandtr909: bd(4) deep, cp(5), cr(5) bright, hh(4) bright, ht(9), lt(9) deep, mt(9), oh(5) bright, rd(5) bright, rim(3), sd(16) bright
+- s: sd(21)
+- sakatadpm48: bd(3) deep, cp, cr bright, hh(2) bright, ht, lt(2) deep, mt, oh bright, perc(2), rd bright, rim, sd(2), sh(2) bright
+- sequentialcircuitsdrumtracks: bd deep, cb, cp, cr bright, hh bright, ht, oh bright, rd bright, rim, sd deep, sh bright, tb bright
+- sequentialcircuitstom: bd deep, cp, cr bright, hh bright, ht(2) deep, oh bright, sd
+- sergemodular: bd deep, misc bright, perc(5) deep
+- simmonssds400: ht(3), lt(6), mt(8), sd(3)
+- simmonssds5: bd(12) deep, hh(5) bright, ht(3), lt(8), mt(6), oh(2) bright, rim(7), sd(21)
+- soundmastersr88: bd deep, cr bright, hh bright, oh bright, sd(2) bright
+- univoxmicrorhythmer12: bd deep, hh bright, oh bright, sd bright
+- viscospacedrum: bd(11) deep, cb, hh(6) bright, ht(7), lt(2) deep, misc(2) bright, mt(2), oh(3) bright, perc(2), rim bright, sd(3) deep
+- xdrumlm8953: bd(3) deep, cr bright, hh(2) bright, ht(2), lt(2) deep, mt(2), oh bright, rd bright, rim(2), sd(5), tb
+- yamaharm50: bd(103) deep, cb(6), cp(2), cr(22) bright, hh(18) bright, ht(25), lt(49) deep, misc(28), mt(34) deep, oh(12) bright, perc(56), rd(13) bright, sd(108), sh(6) bright, tb(3) bright
+- yamaharx21: bd deep, cp, cr, hh bright, ht, lt deep, mt deep, oh bright, sd deep
+- yamaharx5: bd(2) deep, cb, fx, hh bright, lt, oh bright, rim, sd(3), sh bright, tb bright
+- yamahary30: bd(13) deep, cb(2), cp, cr(2) bright, hh(4) bright, ht(3), lt(3) deep, misc(8) bright, mt(2), oh(4) bright, perc(13), rd(3) bright, rim(2), sd(21), sh(2) bright, tb bright
+- yamahatg33: bd(4), cb(3) bright, cp, cr(3), fx, ht(2), lt(2) deep, misc(10), mt(2), oh bright, perc(12), rd(2), rim, sd(5), sh bright, tb bright
+
+## Sounds
+- 808 (6): short hit 1.50s
+- 808bd (25): short hit 0.25s, deep, mostly lows
+- 808cy (25): hit 1.50s, bright, mostly highs
+- 808hc (5): short hit 0.50s, dark
+- 808ht (5): short hit 1.00s, dark
+- 808lc (5): hit 0.50s, dark
+- 808lt (5): hit 1.00s, deep, mostly lows
+- 808mc (5): short hit 0.50s, dark
+- 808mt (5): short hit 1.00s, deep, mostly lows
+- 808oh (5): short hit 0.25s, bright, mostly highs
+- 808sd (25): short hit 0.25s, dark
+- 909 (1): short hit 0.28s, deep, mostly lows, loud
+- ab (12): short hit 0.14s, bright, mostly highs, quiet
+- ade (10): long 9.93s, pitched ~c4, dark, soft attack 4310ms, loud
+- ades2 (9): short hit 0.04s, low end, quiet
+- ades3 (7): short hit 0.17s, low end, dark
+- ades4 (6): short hit 0.03s, loud
+- agogo (5): hit 1.11s, quiet
+- alex (2): phrase or loop 3.20s, 15 hits, low end, dark, loud
+- alphabet (26): hit 0.47s, pitched ~d3
+- amencutup (32): hit 0.27s, low end, dark
+- anvil (9): hit 1.69s, bright, mostly highs, quiet
+- ardha (20): short hit 0.55s
+- armora (7): short hit 0.00s
+- arp (2): phrase or loop 4.28s, 11 hits, deep, mostly lows
+- arpy (11): short hit 0.13s
+- auto (11): short hit 0.30s, low end, dark
+- baa (7): long 4.20s, pitched ~d#5, soft attack 1320ms
+- baa2 (7): long 4.20s, pitched ~d#5, soft attack 1320ms
+- balafon (6): hit 1.05s, pitched ~c5, quiet
+- balafon_hard (6): short hit 1.38s, pitched ~c5, quiet
+- balafon_soft (6): hit 0.94s, pitched ~c5, quiet
+- ballwhistle (2): long 2.05s, soft attack 300ms, quiet
+- bass (4): hit 0.33s, deep, mostly lows, loud
+- bass0 (3): hit 0.25s, deep, mostly lows, loud
+- bass1 (30): phrase or loop 2.04s, 11 hits, deep, mostly lows, loud
+- bass2 (5): hit 1.72s, pitched ~f1, deep, mostly lows, loud
+- bass3 (11): long 1.71s, pitched ~a1, deep, mostly lows
+- bassdm (24): short hit 0.28s, deep, mostly lows, loud
+- bassdrum1 (8): hit 1.60s, pitched ~d2, deep, mostly lows, quiet
+- bassdrum2 (30): phrase or loop 27s, 29 hits, deep, mostly lows
+- bassfoo (3): hit 0.25s, deep, mostly lows, loud
+- battles (2): long 2.39s, pitched ~e3, dark, soft attack 90ms, loud
+- bd (24): short hit 0.28s, deep, mostly lows, loud
+- belltree (6): long 3.55s, bright, mostly highs, quiet
+- bend (4): short hit 0.30s, bright, mostly highs
+- bev (2): long 16s, pitched ~a1, dark, soft attack 12080ms
+- bin (2): short hit 0.82s
+- birds (10): phrase or loop 2.00s, 17 hits, bright, mostly highs
+- birds3 (19): short hit 0.02s
+- bleep (13): short hit 0.13s
+- blip (2): short hit 0.18s, dark
+- blue (2): hit 0.94s, pitched ~f#3, dark, soft attack 150ms
+- bongo (28): hit 0.83s, dark, quiet
+- bottle (13): short hit 0.23s, bright, mostly highs
+- brakedrum (17): long 6.67s, pitched ~c6, soft attack 3540ms, quiet
+- breaks125 (2): loop 1.87s = 1.0 bars at 125 BPM
+- breaks152 (1): loop 4.70s = 3.0 bars at 152 BPM
+- breaks157 (1): loop 1.82s = 1.2 bars at 157 BPM
+- breaks165 (1): loop 1.42s = 1.0 bars at 165 BPM, bright, mostly highs
+- breath (1): hit 0.50s, quiet
+- bubble (8): short hit 0.09s, bright, mostly highs, quiet
+- cabasa (6): short hit 0.81s, bright, mostly highs, quiet
+- cajon (18): short hit 1.26s, low end, quiet
+- can (14): short hit 0.15s
+- casio (3): short hit 0.22s
+- cb (1): hit 0.48s
+- cc (6): long 1.11s, bright, mostly highs, loud
+- chaapu (13): short hit 2.44s, dark
+- chin (4): short hit 0.00s, bright, mostly highs
+- circus (3): hit 0.28s
+- clak (2): short hit 0.17s, bright, mostly highs, quiet
+- clap (10): short hit 0.74s
+- clash (10): long 13s, quiet
+- clash2 (5): long 14s, quiet
+- clave (6): hit 1.13s, quiet
+- clavisynth (19): long 1.96s, pitched ~c6, quiet
+- click (4): short hit 0.11s, deep, mostly lows
+- clubkick (5): short hit 0.23s, deep, mostly lows, loud
+- co (4): hit 0.44s, bright, mostly highs
+- coins (1): short hit 0.16s, bright, mostly highs
+- conga (34): hit 0.67s, deep, mostly lows, quiet
+- control (2): short hit 0.23s
+- cosmicg (15): long 1.86s, loud
+- cowbell (13): short hit 1.13s, quiet
+- cp (2): short hit 0.45s
+- cr (6): long 1.17s, bright, mostly highs
+- crow (4): hit 0.52s
+- d (4): short hit 0.03s, bright, mostly highs, loud
+- dantranh (17): long 5.90s, pitched ~d#4, quiet
+- dantranh_tremolo (16): phrase or loop 13s, 16 hits, pitched ~d#5
+- dantranh_vibrato (16): long 4.38s, pitched ~d#4, dark, quiet
+- darbuka (20): hit 1.07s, pitched ~c#3, deep, mostly lows
+- db (13): short hit 0.10s, bright, mostly highs
+- dhi (7): short hit 0.64s
+- dhin (8): hit 2.00s
+- dhum (7): long 3.84s, pitched ~g#3, dark
+- didgeridoo (12): hit 0.46s
+- diphone (38): hit 1.10s, pitched ~b4, soft attack 450ms
+- diphone2 (12): hit 0.74s, dark
+- dist (16): phrase or loop 2.40s, 6 hits, deep, mostly lows
+- dork2 (4): long 5.40s, dark, quiet
+- dorkbot (2): long 3.04s, pitched ~e5, soft attack 310ms
+- dr (42): short hit 0.06s, bright, mostly highs
+- dr_few (8): hit 0.52s, pitched ~a1, deep, mostly lows, loud
+- dr2 (6): short hit 0.39s, bright, mostly highs
+- dr55 (4): short hit 0.10s, bright, mostly highs
+- drum (6): short hit 0.26s, deep, mostly lows
+- drumtraks (13): short hit 0.10s, bright, mostly highs
+- e (8): short hit 0.01s, low end, dark
+- east (9): short hit 0.35s
+- electro1 (13): hit 0.33s, bright, mostly highs, quiet
+- em2 (6): long 3.28s, pitched ~g#5
+- erk (1): long 2.12s, pitched ~a4
+- f (1): hit 0.57s, pitched ~e4, soft attack 240ms, loud
+- feel (7): short hit 0.19s, deep, mostly lows, loud
+- feelfx (8): long 3.76s, pitched ~b6
+- fest (1): hit 0.75s, pitched ~a3, dark, soft attack 380ms, quiet
+- fingercymbal (1): long 6.34s, pitched ~c2, bright, mostly highs, quiet
+- fire (1): phrase or loop 9.40s, 64 hits, deep, mostly lows
+- flexatone (8): phrase or loop 3.80s, 18 hits, bright, mostly highs, quiet
+- flick (17): long 0.96s, pitched ~c3, deep, mostly lows, loud
+- fm (17): phrase or loop 4.46s, 9 hits
+- fmpiano (22): long 7.42s, pitched ~c4, quiet
+- folkharp (29): long 11s, pitched ~c5, quiet
+- foo (27): phrase or loop 1.58s, 6 hits
+- framedrum (18): hit 1.16s, pitched ~g2, deep, mostly lows, quiet
+- future (17): hit 0.33s, deep, mostly lows, loud
+- gab (10): long 1.60s, pitched ~a1, deep, mostly lows, loud
+- gabba (4): hit 0.25s, deep, mostly lows, loud
+- gabbaloud (4): hit 0.25s, deep, mostly lows, loud
+- gabbalouder (4): hit 0.25s, deep, mostly lows, loud
+- glasstap (3): short hit 0.14s, bright, mostly highs, quiet
+- glitch (8): short hit 0.06s, deep, mostly lows, loud
+- glitch2 (8): short hit 0.06s, deep, mostly lows, loud
+- glockenspiel (7): long 5.28s, quiet
+- gong (7): long 23s, pitched ~d#4, dark, quiet
+- gong2 (6): long 21s, pitched ~c#3, dark, soft attack 390ms
+- gretsch (24): long 1.78s, pitched ~d3, low end, dark
+- gtr (3): long 4.00s, pitched ~c3, low end, dark
+- guiro (5): hit 1.51s, soft attack 150ms, quiet
+- gumki (14): hit 0.69s, dark
+- h (7): hit 0.32s
+- hand (17): phrase or loop 5.62s, 27 hits, deep, mostly lows, quiet
+- handchimes (19): long 8.21s, pitched ~c5, dark
+- hardcore (12): short hit 0.13s, bright, mostly highs, quiet
+- hardkick (6): hit 0.39s, deep, mostly lows, loud
+- harmonica (9): long 5.13s, pitched ~c5, bright, mostly highs, soft attack 190ms
+- harmonica_soft (10): long 5.56s, pitched ~c5, soft attack 2760ms
+- harmonica_vib (10): long 7.06s, pitched ~c5, bright, mostly highs, soft attack 1390ms
+- harp (23): hit 3.90s, pitched ~d6, quiet
+- haw (6): short hit 0.33s, bright, mostly highs, quiet
+- hc (6): short hit 0.04s, bright, mostly highs, loud
+- hh (13): hit 0.87s, bright, mostly highs, quiet
+- hh27 (13): hit 0.96s, bright, mostly highs, quiet
+- hihat (15): short hit 1.34s, bright, mostly highs, quiet
+- hit (6): short hit 0.27s
+- hmm (1): hit 0.71s, pitched ~a3, dark, soft attack 120ms
+- ho (6): short hit 0.25s, bright, mostly highs
+- hoover (6): hit 0.35s, deep, mostly lows, loud
+- house (8): short hit 0.29s, deep, mostly lows, loud
+- ht (16): short hit 0.23s, deep, mostly lows
+- if (5): hit 0.55s, low end, dark
+- ifdrums (3): short hit 0.27s, deep, mostly lows, loud
+- incoming (8): short hit 0.46s, bright, mostly highs
+- industrial (32): hit 0.96s
+- insect (3): short hit 0.13s, bright, mostly highs
+- invaders (18): short hit 0.16s, loud
+- jazz (8): short hit 0.29s, deep, mostly lows, loud
+- jungbass (20): long 1.40s, pitched ~f1, deep, mostly lows, loud
+- jungle (13): short hit 0.25s, bright, mostly highs, quiet
+- juno (12): hit 0.33s, deep, mostly lows, loud
+- jvbass (13): hit 0.45s, deep, mostly lows
+- ka (12): hit 1.92s, pitched ~g#3, dark, quiet
+- ki (7): short hit 0.66s, dark
+- kicklinn (1): short hit 0.20s, deep, mostly lows, loud
+- koy (2): long 3.92s, deep, mostly lows
+- kurt (7): short hit 0.14s, loud
+- latibro (8): hit 0.39s
+- led (1): phrase or loop 8.17s, 16 hits, low end
+- less (4): long 1.26s, pitched ~a1, deep, mostly lows, loud
+- lighter (33): short hit 0.08s, bright, mostly highs
+- linnhats (6): short hit 0.13s, bright, mostly highs
+- lt (16): hit 0.36s, deep, mostly lows, loud
+- made (7): hit 0.50s, pitched ~a1, deep, mostly lows, soft attack 340ms, loud
+- made2 (1): long 4.00s, bright, mostly highs, loud
+- marimba (10): long 3.46s, pitched ~c5, dark, quiet
+- marktrees (6): long 7.76s, bright, mostly highs, soft attack 1340ms, quiet
+- mash (2): hit 0.50s, pitched ~a1, deep, mostly lows, soft attack 340ms, loud
+- mash2 (4): long 2.00s, pitched ~f1, deep, mostly lows, soft attack 1740ms, loud
+- metal (10): hit 0.43s
+- miniyeah (4): short hit 0.01s
+- monsterb (6): hit 0.44s, pitched ~b6, soft attack 330ms, loud
+- moog (7): phrase or loop 5.33s, 11 hits, deep, mostly lows, loud
+- mouth (15): short hit 0.01s
+- mp3 (4): hit 0.57s, bright, mostly highs, loud
+- msg (9): short hit 0.02s, quiet
+- mt (16): short hit 0.22s, deep, mostly lows, loud
+- na (12): hit 2.15s, pitched ~g#3, dark, quiet
+- nam (8): hit 1.76s, dark
+- newnotes (15): short hit 0.15s, dark, loud
+- noise (1): short hit 0.03s, quiet
+- noise2 (8): short hit 0.18s, low end, dark
+- notes (15): short hit 0.15s, dark, loud
+- num (21): hit 0.66s, pitched ~g#3, soft attack 100ms
+- numbers (9): hit 2.02s, pitched ~g#3, soft attack 240ms
+- oc (4): hit 0.40s, bright, mostly highs, soft attack 310ms
+- oceandrum (3): long 38s, soft attack 6660ms, quiet
+- odx (15): short hit 0.21s, deep, mostly lows, loud
+- off (1): short hit 0.23s, deep, mostly lows, loud
+- organ_4inch (27): long 6.53s, pitched ~c6, quiet
+- organ_8inch (27): long 7.18s, pitched ~c5, dark
+- organ_full (27): long 5.67s, pitched ~c5
+- outdoor (6): hit 0.67s
+- pad (3): long 12s, pitched ~e5, soft attack 3280ms
+- padlong (1): long 26s, pitched ~a3, dark, soft attack 6890ms
+- pebbles (1): long 22s
+- perc (6): hit 0.39s, deep, mostly lows, loud
+- peri (15): short hit 0.43s, deep, mostly lows, loud
+- piano (29): long 16s, pitched ~c5, dark, quiet
+- piano1 (22): long 4.84s, pitched ~c5
+- pipeorgan_loud (21): long 12s, pitched ~c6, soft attack 470ms, quiet
+- pipeorgan_loud_pedal (11): long 13s, pitched ~d#4, dark
+- pipeorgan_quiet (21): long 12s, pitched ~c5, soft attack 2330ms, quiet
+- pipeorgan_quiet_pedal (11): long 12s, pitched ~a#3, dark, soft attack 460ms, quiet
+- pluck (17): long 1.88s, pitched ~a2, deep, mostly lows
+- popkick (10): short hit 0.37s, deep, mostly lows
+- print (11): hit 0.59s, pitched ~d6
+- proc (2): long 1.19s, pitched ~f5, loud
+- procshort (8): hit 0.72s, pitched ~g6, loud
+- psr (30): hit 0.58s, pitched ~f4
+- ratchet (8): hit 1.58s, bright, mostly highs, quiet
+- rave (8): long 1.98s, pitched ~g5, soft attack 610ms
+- rave2 (4): short hit 0.19s
+- ravemono (2): long 3.50s, pitched ~a#5, soft attack 400ms
+- realclaps (4): short hit 0.27s
+- recorder_alto_stacc (12): hit 0.43s, pitched ~c5, quiet
+- recorder_alto_sus (12): long 8.20s, pitched ~c5, dark, soft attack 1590ms, quiet
+- recorder_alto_vib (12): long 10s, pitched ~c5, dark, soft attack 5070ms, quiet
+- recorder_bass_stacc (15): hit 0.44s, pitched ~c5, dark, quiet
+- recorder_bass_sus (12): long 6.68s, pitched ~c5, dark, soft attack 370ms
+- recorder_bass_vib (14): long 4.38s, pitched ~c5, dark, soft attack 750ms
+- recorder_soprano_stacc (12): hit 0.51s, pitched ~c5, dark, soft attack 140ms, quiet
+- recorder_soprano_sus (13): long 10s, pitched ~c5, dark, soft attack 430ms, quiet
+- recorder_tenor_stacc (12): hit 0.51s, pitched ~c5, dark, quiet
+- recorder_tenor_sus (13): long 7.87s, pitched ~c5, soft attack 2350ms, quiet
+- recorder_tenor_vib (14): long 5.25s, pitched ~c5, dark, soft attack 1330ms
+- reverbkick (1): hit 1.25s, pitched ~c2, deep, mostly lows, soft attack 100ms, loud
+- rm (2): short hit 0.04s, dark, loud
+- rs (1): short hit 0.05s, dark, loud
+- sax (23): long 10s, pitched ~c5, quiet
+- sax (22): long 4.45s, pitched ~a4, soft attack 1610ms
+- sax_stacc (23): hit 0.55s, pitched ~c5, quiet
+- sax_vib (19): long 5.82s, pitched ~c5, quiet
+- saxello (8): long 5.44s, pitched ~d5, soft attack 110ms
+- saxello_stacc (8): hit 0.60s, pitched ~d5
+- saxello_vib (8): long 6.83s, pitched ~d5
+- sd (2): short hit 0.23s, dark, loud
+- seawolf (3): long 3.50s
+- sequential (8): short hit 0.13s, loud
+- sf (18): hit 0.42s, deep, mostly lows
+- sheffield (1): phrase or loop 19s, 36 hits, deep, mostly lows
+- short (5): short hit 0.08s
+- sid (12): hit 0.49s, pitched ~a1, deep, mostly lows
+- simplesine (6): short hit 0.20s, dark, loud
+- siren (5): long 3.86s, soft attack 210ms, quiet
+- sitar (8): long 7.88s, pitched ~d4, soft attack 3650ms
+- slapstick (5): short hit 0.21s, quiet
+- sleighbells (6): hit 2.50s, bright, mostly highs, quiet
+- slitdrum (6): hit 1.49s, pitched ~d3, dark, quiet
+- sn (52): short hit 0.18s, deep, mostly lows, loud
+- space (18): short hit 0.16s, loud
+- speakspell (12): short hit 0.16s, loud
+- speech (7): hit 0.27s
+- speechless (10): hit 0.52s, deep, mostly lows, soft attack 240ms, quiet
+- speedupdown (9): short hit 0.19s, low end, dark
+- stab (23): hit 0.82s, pitched ~f2, deep, mostly lows
+- stomp (10): short hit 0.20s, deep, mostly lows, loud
+- strumstick (19): hit 1.87s, pitched ~a5, quiet
+- subroc3d (11): long 0.99s
+- sugar (2): phrase or loop 2.52s, 6 hits
+- sundance (6): hit 1.34s, pitched ~a2, deep, mostly lows, quiet
+- super64 (13): long 4.87s, pitched ~c5, soft attack 910ms
+- super64_acc (13): long 3.94s, pitched ~c5
+- super64_vib (13): long 5.97s, pitched ~c5, bright, mostly highs, soft attack 1110ms
+- sus_cymbal (25): long 8.24s, pitched ~a#5, soft attack 1700ms, quiet
+- sus_cymbal2 (23): long 16s, pitched ~f5, soft attack 2940ms, quiet
+- ta (9): short hit 0.63s
+- tabla (26): hit 1.39s, dark
+- tabla2 (46): hit 2.36s, pitched ~f5
+- tablex (3): long 1.44s, pitched ~c#5, soft attack 330ms
+- tacscan (22): phrase or loop 5.72s, 17 hits, deep, mostly lows, loud
+- tambourine (7): hit 1.92s, bright, mostly highs, quiet
+- tambourine2 (7): hit 1.17s, bright, mostly highs, quiet
+- tech (13): short hit 0.05s, bright, mostly highs, quiet
+- techno (7): short hit 0.24s, deep, mostly lows
+- tha (7): short hit 0.80s, dark
+- thom (7): short hit 1.11s, dark
+- timpani (30): long 7.31s, pitched ~f2, deep, mostly lows, quiet
+- timpani_roll (10): phrase or loop 29s, 33 hits, deep, mostly lows, quiet
+- timpani2 (204): long 10s, deep, mostly lows, quiet
+- tink (5): hit 1.09s, bright, mostly highs, quiet
+- tok (4): short hit 0.23s, deep, mostly lows
+- tom_rim (6): short hit 1.47s, quiet
+- tom_stick (8): hit 2.34s, pitched ~a2, deep, mostly lows, quiet
+- tom2_mallet (8): hit 2.26s, pitched ~f2, deep, mostly lows, quiet
+- tom2_rim (6): hit 1.58s, quiet
+- tom2_stick (8): hit 2.33s, pitched ~f2, deep, mostly lows, quiet
+- toys (13): long 2.43s
+- triangles (37): short hit 1.14s, bright, mostly highs, quiet
+- trump (11): hit 0.28s
+- tubularbells (9): long 20s, pitched ~c6, quiet
+- tubularbells2 (11): long 19s, pitched ~g5, quiet
+- ul (10): short hit 0.90s, bright, mostly highs, quiet
+- ulgab (5): hit 0.90s, pitched ~c#3
+- uxay (3): short hit 0.23s, deep, mostly lows
+- v (6): short hit 0.13s, dark
+- vibraphone (11): long 15s, pitched ~d5
+- vibraphone_bowed (6): long 17s, pitched ~e4, dark, soft attack 3240ms, quiet
+- vibraphone_soft (11): long 15s, pitched ~d5
+- vibraslap (4): long 2.88s, bright, mostly highs, quiet
+- voodoo (5): short hit 0.15s, deep, mostly lows, loud
+- wind (10): hit 0.86s, pitched ~c#5, dark
+- wineglass (4): long 21s, pitched ~a#5, soft attack 2380ms, quiet
+- wineglass_slow (4): long 18s, pitched ~a#5, soft attack 11330ms, quiet
+- wobble (1): hit 0.38s, deep, mostly lows, loud
+- woodblock (10): short hit 1.40s, quiet
+- world (3): short hit 0.28s, deep, mostly lows, loud
+- xmas (1): long 1.54s, pitched ~a4, soft attack 500ms
+- xylophone_hard_ff (8): hit 3.01s, pitched ~c5, quiet
+- xylophone_hard_pp (8): hit 2.58s, pitched ~c5, quiet
+- xylophone_medium_ff (8): long 3.37s, pitched ~c5
+- xylophone_medium_pp (8): long 2.20s, pitched ~c5, quiet
+- xylophone_soft_ff (8): long 2.53s, pitched ~c5, dark
+- xylophone_soft_pp (8): long 2.70s, pitched ~c5, dark, quiet
+- yeah (31): short hit 0.01s
+
+Do not use (their samples don't load): handbells, kalimba, kalimba2, kalimba3, kalimba4, kalimba5, kawai, mute, ocarina, ocarina_small, ocarina_small_stacc, ocarina_vib, psaltery_bow, psaltery_pluck, psaltery_spiccato, shaker_large, shaker_small, snare_hi, snare_low, snare_modern, snare_rim, steinway, tom_mallet, trainwhistle.

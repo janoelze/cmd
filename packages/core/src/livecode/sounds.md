@@ -1,6 +1,6 @@
 # Sounds worth knowing
 
-The loaded sounds list has every name; these are the ones that make genres. `s("name")` plays a sound, `s("name:3")` or `.n(3)` picks another sample of it. Drum machines are banks: `s("bd sd hh").bank("RolandTR909")`.
+The sound atlas below measures every sample; these are the ones that make genres. `s("name")` plays a sound, `s("name:3")` or `.n(3)` picks another sample of it. Drum machines are banks: `s("bd sd hh").bank("RolandTR909")`.
 
 ## Breaks (whole drum loops: fit them to the tempo, then chop)
 - One bar long, so `s("breaks165").fit()` plays them in time: `breaks165` (a clean funk break, the best one to chop), `breaks125` (2), `breaks157`.

@@ -30,6 +30,7 @@ describe("livecode change", () => {
     expect(system).toContain("## Drum & bass");
     expect(system).toContain("`breaks165`");
     expect(system).toContain("## Mixing rules");
+    expect(system).toContain("breaks152 (1): loop 4.70s = 3.0 bars at 152 BPM");
     expect(system.length).toBeGreaterThan(50_000);
   });
 
@@ -46,11 +47,13 @@ describe("livecode change", () => {
   });
 
   it("asks with the code, the sounds and the last failure", () => {
-    const p = changePrompt({ code: 's("bd")', request: "more hats", sounds: ["hh"], failed: { code: "x", error: "x is not defined" } });
+    const p = changePrompt({ code: 's("bd")', request: "more hats", sounds: ["hh", "sawtooth", "mysample"], failed: { code: "x", error: "x is not defined" } });
     expect(p).toContain("Request: more hats");
     expect(p).toContain('s("bd")');
     expect(p).toContain("Error: x is not defined");
-    expect(p).toContain("hh");
+    // The atlas (system prompt) has hh, and sawtooth is a synth: only what it lacks is listed.
+    expect(p).toContain("Also loaded:\nmysample");
+    expect(p).not.toContain("hh");
   });
 
   it("returns the model's code without a fence, and its summary", async () => {
