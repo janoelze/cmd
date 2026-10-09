@@ -109,7 +109,6 @@ tr:last-child td { border-bottom: 0; }
 .tag { font-family: var(--mono); }
 .pill { font-size: var(--fs-xs); color: var(--ink-2); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 8px; }
-.button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
 .hero-shots { border-radius: 1.2% / 2%; } /* 18px window corners on the 1498×898 screenshots, at any size */
 .hero-shots { display: grid; width: min(1400px, 100vw - 32px); margin-block: 48px; margin-inline: calc(50% - min(700px, 50vw - 16px)); } /* wider than main, centred on it */
 .hero-shots > img, .hero-shots::after { grid-area: 1 / 1; } /* stacked in one cell */
@@ -151,7 +150,25 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
   .features { grid-template-columns: 1fr; gap: 20px; }
   footer { padding: 56px 24px 48px; }
 }
-.button { display: inline-flex; align-items: center; background: var(--accent); color: var(--on-accent); text-decoration: none; padding: 9px 16px; border-radius: 8px; font-weight: 500; }
+/* Buttons: hover eases in, a press sinks in fast and springs back slow. Primary
+   brightens and glows; secondary fills in behind its edge. */
+.button {
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: inline-flex; align-items: center; justify-content: center; padding: 9px 16px; border-radius: 8px;
+  font-weight: 500; text-decoration: none; color: var(--on-accent); background: var(--accent);
+  box-shadow: 0 0 0 0 transparent, 0 1px 2px rgb(0 0 0 / 0.3);
+  user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s var(--ease), box-shadow 0.25s var(--ease), color 0.2s var(--ease), scale 0.35s var(--ease);
+}
+.button:hover { background: color-mix(in srgb, var(--accent) 86%, white); box-shadow: 0 0 0 0 transparent, 0 4px 18px -4px color-mix(in srgb, var(--accent) 45%, transparent); }
+.button:active { scale: 0.97; background: color-mix(in srgb, var(--accent) 85%, black); box-shadow: 0 0 0 0 transparent, 0 1px 2px rgb(0 0 0 / 0.3); transition-duration: 0.08s; }
+.button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.button.secondary { color: var(--ink); background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.button.secondary:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-3) 70%, transparent); }
+.button.secondary:active { background: color-mix(in srgb, var(--ink) 11%, transparent); box-shadow: inset 0 0 0 1px var(--ink-3); }
+.button.small { padding: 4px 12px; font-size: var(--fs-sm); border-radius: 6px; }
+.button.small:active { scale: 0.96; }
+@media (prefers-reduced-motion: reduce) { .button, .button:active { scale: none; } }
 .releases { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .releases li { display: grid; grid-template-columns: 5.5em 1fr auto 4.5em auto; align-items: center; gap: 16px; padding: 8px 10px 8px 14px; font-size: var(--fs-base); }
 .releases li + li { border-top: 1px solid var(--line); }
@@ -160,8 +177,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
 .releases .tag:hover { color: var(--link); }
 .releases time { color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .releases .size { color: var(--ink-3); font-variant-numeric: tabular-nums; text-align: right; }
-.button.small { padding: 4px 12px; font-size: var(--fs-sm); border-radius: 6px; }
-.button.secondary:hover { box-shadow: inset 0 0 0 1px var(--ink-3); }
 .releases .pill { margin-left: 0; }
 .pill.accent { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
 .pill + .pill { margin-left: 4px; }
