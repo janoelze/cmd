@@ -13,7 +13,12 @@
 //                                                         #feedback, grouped by signature; attachments saved
 //   node scripts/discord.mjs mark <state> <ref>... [--note "…"]
 //                                                         state: wip 👀, waiting ⏳, done ✅, dup 🔁, wontfix 🚫, open (clears);
-//                                                         ref: <channel>/<message id> as inbox prints it
+//                                                         ref: <channel>/<message id> as inbox prints it. Several refs
+//                                                         are one group: the first (oldest) gets the note, the rest a
+//                                                         line pointing to it
+//   node scripts/discord.mjs mark <state> --group "<text>" [--channel c] [--all] [--note "…"]
+//                                                         every message of the inbox group whose title contains <text>
+//                                                         (open ones; --all: any state); refs may be added too
 // <channel> is an id or a name (without #). The token comes from $CMD_DISCORD_TOKEN,
 // else ~/src/.secrets/cmd-discord-token, else ~/.config/cmd-discord/token.
 import fs from "node:fs";
@@ -223,11 +228,23 @@ function printInbox(channels) {
   }
 }
 
-async function mark(state, refs, note) {
+// The refs of the one inbox group whose title contains `text`.
+async function groupRefs(text, opts) {
+  const want = text.toLowerCase();
+  const found = (await inbox(opts)).flatMap((c) => c.groups).filter((g) => g.summary.toLowerCase().includes(want));
+  if (!found.length) fail(`--group: no ${opts.all ? "" : "open "}group matches "${text}"`);
+  if (found.length > 1) fail(`--group: "${text}" matches ${found.length} groups, say more:\n${found.map((g) => `  ${g.summary} ×${g.reports.length}`).join("\n")}`);
+  return found[0].reports.map((r) => r.ref);
+}
+
+async function mark(state, refs, opts) {
   if (state !== "open" && !STATES[state]) fail(`state: one of ${Object.keys(STATES).join(", ")}, open`);
-  if (!refs.length) fail("mark: which messages? Pass <channel>/<message id> as inbox prints them");
+  if (opts.group) refs = [...new Set([...(await groupRefs(opts.group, opts)), ...refs])];
+  if (!refs.length) fail("mark: which messages? Pass <channel>/<message id> as inbox prints them, or --group <text>");
+  // A group is noted once, on its first message; the others point there, rather than 40 copies.
+  const note = (i) => opts.note && (i === 0 ? opts.note : `Same as ${refs[0]}, see its thread.`);
   const all = await channels();
-  for (const ref of refs) {
+  for (const [i, ref] of refs.entries()) {
     const [name, id] = ref.split("/");
     if (!id) fail(`${ref}: expected <channel>/<message id>`);
     const ch = findChannel(all, name);
@@ -238,12 +255,12 @@ async function mark(state, refs, note) {
       if (k === state && !mine) await api(`${route}/reactions/${encodeURIComponent(emoji)}/@me`, {}, "PUT");
       if (k !== state && mine) await api(`${route}/reactions/${encodeURIComponent(emoji)}/@me`, {}, "DELETE");
     }
-    if (note) {
+    if (note(i)) {
       const name = summary(slim(m)).slice(0, 90) || "triage";
       const thread = m.thread?.id ?? (await api(`${route}/threads`, {}, "POST", { name })).id;
-      await api(`/channels/${thread}/messages`, {}, "POST", { content: `${STATES[state] ?? "↩️"} ${note}` });
+      await api(`/channels/${thread}/messages`, {}, "POST", { content: `${STATES[state] ?? "↩️"} ${note(i)}` });
     }
-    console.log(`${ref}: ${state}${note ? " (noted in its thread)" : ""}`);
+    console.log(`${ref}: ${state}${note(i) ? (i === 0 ? " (noted in its thread)" : " (points to the first)") : ""}`);
   }
 }
 
@@ -287,9 +304,9 @@ try {
     if (opts.json) console.log(JSON.stringify(result, null, 2));
     else printInbox(result);
   } else if (cmd === "mark" && target) {
-    await mark(target, rest, opts.note);
+    await mark(target, rest, opts);
   } else {
-    fail("usage: pnpm discord channels | read <channel> [--since 7d] [--limit N] [--save dir] [--json] | inbox [--channel c] [--since 90d] [--all] [--json] | mark <wip|waiting|done|dup|wontfix|open> <ref>... [--note …]");
+    fail("usage: pnpm discord channels | read <channel> [--since 7d] [--limit N] [--save dir] [--json] | inbox [--channel c] [--since 90d] [--all] [--json] | mark <wip|waiting|done|dup|wontfix|open> <ref>... [--group text] [--note …]");
   }
 } catch (e) {
   fail(e.forbidden ? `${e.message}. Give the bot View Channels and Read Message History on that channel (private channels need it added explicitly).` : e.message);

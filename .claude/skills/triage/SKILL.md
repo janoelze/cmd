@@ -36,9 +36,16 @@ Every state change gets a note; a bare reaction says nothing about why.
 ```sh
 pnpm discord inbox                                  # everything open, 👀 or ⏳, grouped by signature
 pnpm discord inbox --channel crashes --all          # include ✅ 🔁 🚫 (to find what a new report duplicates)
-pnpm discord mark wip crashes/<id> crashes/<id> --note "…"   # several refs at once: a whole group
+pnpm discord mark wip --group "no such pane" --note "…"     # every open message of the group whose title has that text
+pnpm discord mark wip crashes/<id> crashes/<id> --note "…"   # or name refs (with --group, they are added to it)
 pnpm discord read crashes --since 30d --json        # raw messages, if inbox isn't enough
 ```
+
+A group is marked as one: the note goes to its first (oldest) message's thread, every other message
+gets a line pointing there, so 40 reports don't mean 40 copies of the note. Write the note for the
+whole group. `--group` takes text from the group's `##` title in `inbox`, and refuses if it matches
+more than one group (open ones only; add `--all` to match marked ones too, which is slow: it reads
+every thread of 90 days). Use refs for a single message or to split a group.
 
 `inbox` saves attachments to `$TMPDIR/cmd-discord/<channel>/` and prints the paths. Token and
 setup: the header of `scripts/discord.mjs`.
@@ -49,7 +56,7 @@ setup: the header of `scripts/discord.mjs`.
    don't take them over unless the note is stale (days old, branch gone: `git worktree list`,
    `git branch`) — and then say so in a note. Groups with ⏳: check whether what they wait for has
    happened (a release went out, a newer report came in); if so, pick them up like a new one.
-2. **Claim before working**: `mark wip <every ref in the group> --note "<what you'll do>, branch <topic>"`.
+2. **Claim before working**: `mark wip --group "<title text>" --note "<what you'll do>, branch <topic>"`.
    Do it as soon as you start looking into a report, without asking Jan first: the claim is what
    keeps other agents off it.
    Two agents looking at the same inbox is the normal case.
