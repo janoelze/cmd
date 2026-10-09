@@ -6,6 +6,7 @@
 // which rewrites the workspace's install state).
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const root = path.resolve(import.meta.dirname, "..");
 const out = path.join(root, "apps/desktop/.runtime");
@@ -51,6 +52,11 @@ const cliModules = path.join(out, "packages/cli/node_modules");
 for (const p of ["package.json", "src"]) copy(`packages/cli/${p}`, `packages/cli/${p}`);
 const cliPkg = JSON.parse(fs.readFileSync(path.join(root, "packages/cli/package.json"), "utf8"));
 for (const name of Object.keys(cliPkg.dependencies)) if (name.startsWith("@cmd/")) stageWorkspacePackage(name, cliModules);
+
+// The phone's web client, served by the core in direct remote access
+// (src/remote/webroot.ts looks for apps/web/dist next to packages/core).
+execFileSync(process.execPath, [path.join(root, "scripts/build-web.mjs")], { stdio: "inherit" });
+copy("apps/web/dist", "apps/web/dist");
 
 // The native helper (macOS; gitignored, built by postinstall). Without it the
 // core falls back to process names (no CPU/memory sampling): the Windows case.
