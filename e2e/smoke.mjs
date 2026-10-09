@@ -88,6 +88,8 @@ const check = (cond, msg) => {
   if (!cond) throw new Error(`FAILED: ${msg}`);
   console.log(`ok - ${msg}`);
 };
+// Overlays and sidebars play out a fade or slide before they leave the DOM: wait for that, not a fixed time.
+const gone = (sel) => win.waitForSelector(sel, { state: "detached", timeout: 2000 }).catch(() => {});
 // Shortcut checks: the macOS keymap, or its Windows translation (docs/10-windows.md).
 const mac = process.platform === "darwin";
 const macOnly = (msg) => console.log(`skip - ${msg} (macOS keymap)`);
@@ -294,6 +296,7 @@ await win.keyboard.type("next");
 await win.waitForTimeout(150);
 await win.screenshot({ path: path.join(shots, "4-palette.png") });
 await menu("file.close"); // ⌘W closes the palette first
+await gone(".palette");
 check((await win.locator(".palette").count()) === 0, "⌘W closes the palette before any terminal");
 { const n = await panes(); check(n === 2, `…and leaves terminals alone (${n})`); }
 
@@ -902,6 +905,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       await win.waitForTimeout(200);
       back = (await call("window.list")).find((x) => x.kind === "magic" && x.title === "Counter" && x.state.phase === "ready");
     }
+    await gone(".widget-library");
     const listed = (await call("widget.list")).find((e) => e.title === "Counter");
     check(!!back && (await win.locator(".widget-library").count()) === 0 && listed?.windows.includes(back.id) && (await win.locator(".sb-widgets").count()) === 1, `a widget comes back from the library, on the workspace and in the Navigator's Widgets (${listed?.windows.length})`);
     await menu("widget.library");
@@ -928,6 +932,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       await win.waitForTimeout(200);
       timer = (await call("window.list")).find((x) => x.kind === "timer");
     }
+    await gone(".palette");
     check(
       offered[0] === "Terminal" && offered.indexOf("Counter") > offered.indexOf("Text Window") && offered.at(-1) === "New Widget with Magic" && !!timer && (await win.locator(".palette").count()) === 0,
       `New… lists windows, then widgets, then Magic, and opens what you type (${offered.join(", ")}; timer ${!!timer}, palette ${await win.locator(".palette").count()})`,
@@ -1354,7 +1359,7 @@ await win.waitForTimeout(800);
   check((await inWorkspace()) === 0 && storedRight === markerPane, "Move to Right Sidebar docks the window, out of the workspace");
   await win.screenshot({ path: path.join(shots, "9-sidebars.png") });
   await menu("view.rightSidebar");
-  await win.waitForTimeout(300);
+  await gone(".dock-right");
   check((await win.locator(".dock-right").count()) === 0 && (await inWorkspace()) === 0, "Show Right Sidebar hides the side; the window stays docked");
   await menu("view.rightSidebar");
   await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
@@ -1375,6 +1380,7 @@ await win.waitForTimeout(800);
   await win.waitForTimeout(300);
   await menu("window.undock");
   await win.waitForSelector(`.windows-track > .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
+  await gone(".dock-right");
   check((await win.locator(".dock-right").count()) === 0 && (await win.locator(".dock-left .navigator").count()) === 1, "Move to Workspace brings it back; the Navigator stays on the left");
 }
 
@@ -1457,6 +1463,7 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   await win.waitForFunction((n) => window.cmd.call("core.info", {}).then((i) => i.connections >= n, () => false), clients, { timeout: 10_000 });
   check((await panes()) === before, `terminals survive Restart Core (${before} → ${await panes()})`);
   await win.keyboard.press("Escape");
+  await gone(".core-details");
   check((await win.locator(".core-details").count()) === 0, "Escape closes the core details");
 }
 
