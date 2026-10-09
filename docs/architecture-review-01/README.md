@@ -1,6 +1,6 @@
 # Architecture review 01
 
-**Overall: 5/10** · 2026-10-10 · reviewed against commit `ddb7832` · 16 systems, 158 issues (2 critical, 36 high, 75 medium, 45 low)
+**Overall: 5/10** · 2026-10-10 · reviewed against commit `ddb7832` · 16 systems plus repo layout, 165 issues (2 critical, 36 high, 80 medium, 47 low)
 
 cmd's foundations hold up: one core that owns all state, a PTY host that outlives it, a typed RPC contract, an event log with views, a token-driven UI kit, and a scheduler with a stall watchdog. A week of shipping on top of them has left three kinds of debt. **The read side has no single policy.** Phones, widgets and model-written code each reach files and the event log through their own checks, and two of those checks leak. **Terminal and event streams have no positions.** Snapshots and live output can't be joined exactly, and nothing pushes back on a fast producer. **Every feature edits the same central files.** `core.ts`, `App.tsx`, `WindowsView.tsx`, `tracker.ts` and five append-only registries absorb every change, and nothing stops them from growing.
 
@@ -33,6 +33,7 @@ None of this needs a rewrite. The fixes are mostly small for the security and da
 | 14 | [Build, packaging, release](14-build-packaging-dependencies-and-release.md) | **6** | 7 | 5 | 6 | 6 | 7 | 6 | 7 | 9 (0/2) |
 | 15 | [Settings, commands, keys, menus](15-settings-commands-keybindings-and-menus.md) | **6** | 6 | 4 | 8 | 7 | 6 | 5 | 7 | 9 (0/1) |
 | 16 | [Feature services](16-feature-services-actions-journal-summaries-notifications.md) | **6** | 7 | 5 | 5 | 5 | 7 | 5 | 7 | 10 (0/3) |
+| 17 | [Repo layout and project structure](17-repo-layout-and-project-structure.md) | **6** | 6 | n/a | n/a | n/a | 6 | 5 | 6 | 7 (0/0) |
 
 The weakest dimensions across the board are **Security** in the systems that face untrusted input (Magic 3, remote 3, Electron main 4) and **Extensibility** (eight systems at 5 or below). Performance is mostly fine. The exceptions are the measured stalls in search and journal sync (themes 5 and 6).
 
@@ -170,6 +171,7 @@ AR1-04-01 + AR1-04-03 in one `HOST_PROTOCOL` bump → AR1-02-02 (offsets on the 
 2. Renderer: AR1-08-05 + AR1-08-03 (pure store, selectors) → AR1-08-02 (split `App.tsx`) with AR1-15-02/03 (commands with `when`, contributed by features).
 3. AR1-07-01 (split `WindowsView`), AR1-05-02 + AR1-05-06 (split the tracker, one reducer), AR1-09-08.
 4. AR1-16-08 as the first feature declared as one contribution, then AR1-07-03 and AR1-07-08 (window type SDK).
+5. Folder moves alongside (doc 17): the layout ratchet AR1-17-01 in wave 1 with the other fitness tests, then rename-only moves AR1-17-02..04, then AR1-17-05 (one folder per feature per side, journal first).
 
 ### Wave 4: one connection, schemas, a smaller runtime
 
@@ -182,7 +184,7 @@ AR1-04-01 + AR1-04-03 in one `HOST_PROTOCOL` bump → AR1-02-02 (offsets on the 
 
 These are the remaining issues of size S (under ½ day), a good first pick for a free agent. Check its **Depends on** line first. Wave 0 above is the urgent subset.
 
-AR1-01-05, AR1-01-08, AR1-01-09, AR1-03-06, AR1-03-09, AR1-03-10, AR1-04-07, AR1-04-09, AR1-05-07, AR1-05-08, AR1-05-09, AR1-05-10, AR1-06-09, AR1-06-10, AR1-06-11, AR1-08-06, AR1-08-09, AR1-08-10, AR1-08-11, AR1-09-09, AR1-10-03, AR1-10-06, AR1-10-07, AR1-10-09, AR1-10-10, AR1-11-09, AR1-11-10, AR1-12-04, AR1-12-05, AR1-12-10, AR1-12-12, AR1-13-07, AR1-13-09, AR1-14-04, AR1-14-06, AR1-14-07, AR1-14-08, AR1-15-06, AR1-15-07, AR1-15-09, AR1-16-04, AR1-16-06, AR1-16-07, AR1-16-09, AR1-16-10.
+AR1-01-05, AR1-01-08, AR1-01-09, AR1-03-06, AR1-03-09, AR1-03-10, AR1-04-07, AR1-04-09, AR1-05-07, AR1-05-08, AR1-05-09, AR1-05-10, AR1-06-09, AR1-06-10, AR1-06-11, AR1-08-06, AR1-08-09, AR1-08-10, AR1-08-11, AR1-09-09, AR1-10-03, AR1-10-06, AR1-10-07, AR1-10-09, AR1-10-10, AR1-11-09, AR1-11-10, AR1-12-04, AR1-12-05, AR1-12-10, AR1-12-12, AR1-13-07, AR1-13-09, AR1-14-04, AR1-14-06, AR1-14-07, AR1-14-08, AR1-15-06, AR1-15-07, AR1-15-09, AR1-16-04, AR1-16-06, AR1-16-07, AR1-16-09, AR1-16-10, AR1-17-01, AR1-17-06, AR1-17-07.
 
 ## Process
 
