@@ -549,22 +549,22 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const md = await win.evaluate((p) => window.cmd.call("window.openTarget", { target: p }), path.join(mdDir, "README.md"));
   check(md.kind === "markdown", "README.md opens in a Markdown window");
   await win.evaluate((id) => window.__cmdSelect(id), md.id);
-  await win.waitForSelector(".tile.kind-markdown .markdown h1");
+  await win.waitForSelector(".tile.kind-markdown .ui-doc h1");
   // Code highlighting waits for the language parser to load on demand.
   await win.waitForSelector(".tile.kind-markdown pre code span[class]", { timeout: 5000 }).catch(() => {});
-  const h1 = await win.locator(".tile.kind-markdown .markdown h1").textContent();
+  const h1 = await win.locator(".tile.kind-markdown .ui-doc h1").textContent();
   const tokens = await win.locator(".tile.kind-markdown pre code span[class]").count();
-  const imgOk = await win.locator(".tile.kind-markdown .markdown img").evaluate((img) => img.complete && img.naturalWidth === 1);
+  const imgOk = await win.locator(".tile.kind-markdown .ui-doc img").evaluate((img) => img.complete && img.naturalWidth === 1);
   check(h1 === "Hello cmd" && tokens > 0, `Markdown renders with highlighted code (${tokens} tokens)`);
   check(imgOk, "relative images load through cmd-file:");
   fs.appendFileSync(path.join(mdDir, "README.md"), "\n## Added live\n");
-  await win.waitForSelector(".tile.kind-markdown .markdown h2", { timeout: 3000 });
+  await win.waitForSelector(".tile.kind-markdown .ui-doc h2", { timeout: 3000 });
   check(true, "Markdown re-renders live when the file changes");
   await menu("view.toggleEdit");
   await win.waitForSelector(`.tile.kind-text[data-pane="${md.id}"] .cm-content`, { timeout: 3000 });
   check(true, "⌘E switches the same window to the editor");
   await menu("view.toggleEdit");
-  await win.waitForSelector(`.tile.kind-markdown[data-pane="${md.id}"] .markdown h1`, { timeout: 3000 });
+  await win.waitForSelector(`.tile.kind-markdown[data-pane="${md.id}"] .ui-doc h1`, { timeout: 3000 });
   check(true, "⌘E switches back to the preview");
 
   // JSON window: a tree, rows fold, ⌘E opens the editor at the selected row's line and back, live, JSON Lines.
@@ -1104,7 +1104,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   for (let i = 0; i < 40 && (await codePx()) !== "16px"; i++) await win.waitForTimeout(50);
   check((await codePx()) === "16px", "the app's file and Markdown windows get the code font size live (--font-code-size)");
   const fonts = await win.evaluate(() =>
-    [".file-row", ".markdown", ".markdown code"].map((sel) => {
+    [".file-row", ".ui-doc", ".ui-doc code"].map((sel) => {
       const el = document.querySelector(sel);
       return el ? [sel, getComputedStyle(el).fontFamily, getComputedStyle(el).fontSize] : null;
     }),
