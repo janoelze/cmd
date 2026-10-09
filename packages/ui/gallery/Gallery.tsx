@@ -367,8 +367,8 @@ function WindowsPage() {
           {(
             [
               { kind: "loading" },
-              { kind: "empty", icon: "checklist", title: "No Runs Yet", text: "Runs show here once workflows start." },
-              { kind: "error", title: "Couldn’t Load Runs", text: "GitHub didn’t answer.", action: <Button icon="arrow.clockwise">Try Again</Button> },
+              { kind: "empty", icon: "checklist", title: "No runs yet", text: "Runs show here once workflows start." },
+              { kind: "error", title: "Couldn’t load runs", text: "GitHub didn’t answer.", action: <Button icon="arrow.clockwise">Try Again</Button> },
             ] as const
           ).map((s) => (
             <Win key={s.kind} name={s.kind} w={240} h={200}>

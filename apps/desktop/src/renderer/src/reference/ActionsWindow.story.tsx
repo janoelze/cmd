@@ -140,5 +140,5 @@ export const Idle = () => <Actions idle />;
 export const Filtered = () => <Actions query="e2e" />;
 export const NoResults = () => <Actions query="deploy prod" />;
 export const Describing = () => <Actions describing />;
-export const Empty = () => <Actions state={{ kind: "empty", icon: "play.rectangle", title: "Nothing to Run Here", text: "Scripts in package.json, a Makefile, a justfile and similar files show up here." }} />;
-export const Failed = () => <Actions state={{ kind: "error", title: "Couldn’t Read This Folder", text: "~/src/cmd isn’t readable. Check its permissions and try again.", action: <Button icon="arrow.clockwise">Try Again</Button> }} />;
+export const Empty = () => <Actions state={{ kind: "empty", icon: "play.rectangle", title: "Nothing to run here", text: "Scripts in package.json, a Makefile, a justfile and similar files show up here." }} />;
+export const Failed = () => <Actions state={{ kind: "error", title: "Couldn’t read this folder", text: "~/src/cmd isn’t readable. Check its permissions and try again.", action: <Button icon="arrow.clockwise">Try Again</Button> }} />;

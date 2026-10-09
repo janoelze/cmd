@@ -17,7 +17,7 @@ function Viewer({ size = "wide", empty }: { size?: SizeName; empty?: boolean }) 
     <RefWindow icon="photo" name={`${pic.label} · Photos`} size={size}>
       <View
         scroll={false}
-        state={empty ? { kind: "empty", icon: "photo.on.rectangle", title: "No Pictures Here", text: "Drop images on this window, or open a folder that has some.", action: <Button>Open Folder…</Button> } : null}
+        state={empty ? { kind: "empty", icon: "photo.on.rectangle", title: "No pictures here", text: "Drop images on this window, or open a folder that has some.", action: <Button>Open Folder…</Button> } : null}
         toolbar={
           <WindowToolbar label="Viewer">
             <ToolbarGroup>

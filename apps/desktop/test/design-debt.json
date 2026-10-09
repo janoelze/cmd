@@ -22,7 +22,7 @@
   "apps/desktop/src/renderer/src/components/widgets.css": {
     "color": 2,
     "fontSize": 1,
-    "spacing": 23
+    "spacing": 17
   },
   "apps/desktop/src/renderer/src/pdf/pdf.css": {
     "color": 3,

@@ -131,6 +131,6 @@ function Runs({ state, size = "wide", initialQuery = "" }: { state?: ViewStateSp
 export const Default = () => <Runs />;
 export const Sizes = () => <AllSizes render={(s) => <Runs size={s} />} />;
 export const Loading = () => <Runs state={{ kind: "loading" }} />;
-export const Empty = () => <Runs state={{ kind: "empty", icon: "checklist", title: "No Runs Yet", text: "Runs show here once this repository's workflows start.", action: <Button>Open Workflows</Button> }} />;
+export const Empty = () => <Runs state={{ kind: "empty", icon: "checklist", title: "No runs yet", text: "Runs show here once this repository's workflows start.", action: <Button>Open Workflows</Button> }} />;
 export const NoResults = () => <Runs initialQuery="deploy" />;
-export const Failed = () => <Runs state={{ kind: "error", title: "Couldn’t Load Runs", text: "GitHub didn’t answer. Check your connection and try again.", action: <Button icon="arrow.clockwise">Try Again</Button> }} />;
+export const Failed = () => <Runs state={{ kind: "error", title: "Couldn’t load runs", text: "GitHub didn’t answer. Check your connection and try again.", action: <Button icon="arrow.clockwise">Try Again</Button> }} />;

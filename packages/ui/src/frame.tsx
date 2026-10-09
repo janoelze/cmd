@@ -74,7 +74,7 @@ export function ViewState({ state }: { state: ViewStateSpec }) {
       </div>
     );
   const icon = state.kind === "empty" ? state.icon : state.kind === "noResults" ? "magnifyingglass" : "exclamationmark.triangle";
-  const title = state.kind === "noResults" ? (state.title ?? "No Results") : state.title;
+  const title = state.kind === "noResults" ? (state.title ?? "No results") : state.title;
   return (
     <div className="ui-viewstate" data-kind={state.kind} role={state.kind === "error" ? "alert" : undefined}>
       {icon && <span className="ui-viewstate-icon">{iconNode(icon, ICON.empty, "light")}</span>}
