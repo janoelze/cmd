@@ -573,13 +573,17 @@ kbd {
   left: 0;
   top: 0;
 }
-/* Windows glide to new positions: pushes while dragging, mode switches, resizes. */
-.windows-track > .tile { transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
-.windows-track > .tile.lifted { z-index: 10; transition: none; border-color: var(--ring-color); }
+/* Windows glide to new places (pushes while dragging, mode switches, ⌘↩, sidebars):
+   TileMotion (motion.ts) moves and sizes them, frame by frame, and marks them. */
+.windows-track > .tile.lifted { z-index: 10; border-color: var(--ring-color); }
 .windows-track > .tile.lifted > .tile-frame { box-shadow: var(--ring), var(--drop); }
-/* A dropped window snaps into place quicker than other moves (WindowsView SETTLE_MS). */
-.windows-track > .tile.settling { transition-duration: 110ms; }
-.windows-track > .tile.hidden-tile { visibility: hidden; pointer-events: none; }
+.windows-track > .tile { transform-origin: 0 0; }
+/* Hidden by focus mode, once faded out. */
+.windows-track > .tile[data-hidden] { visibility: hidden; pointer-events: none; }
+/* The selected window passes over the others while it glides (⌘↩ grows it over them). */
+.windows-track > .tile.sel[data-morphing] { z-index: 5; }
+/* Content held at one size while its window glides (laid out once, clipped by the window). */
+.windows-track > .tile > .tile-body > [data-held] { flex: none; contain: strict; }
 
 /* Unfocused windows are dimmed by an overlay (not a filter, which would soften text).
    It stops inside the outline, so outlines match across the workspace and the
@@ -620,8 +624,6 @@ kbd {
 .app.desaturate .windows-track > .tile .tile-body { transition: filter 160ms ease; }
 .app.desaturate .windows-track > .tile:not(.sel, .lifted) .tile-body { filter: grayscale(var(--window-desaturate)); }
 .app.desaturate .mode-focus .windows-track > .tile .tile-body { filter: none; }
-.main.windows.resizing .windows-track > .tile,
-.main.windows.live-resize .windows-track > .tile,
 .main.windows.live-resize .windows-track > .ghost-slot { transition: none; }
 .main.windows.dragging, .main.windows.dragging .tile-title { cursor: grabbing; }
 .main.windows.dragging .xterm, .main.windows.resizing .xterm { pointer-events: none; }
@@ -634,7 +636,7 @@ kbd {
   border-radius: var(--window-radius);
   background: color-mix(in srgb, var(--ink) 1.5%, transparent);
   pointer-events: none;
-  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform var(--glide-dur) var(--glide);
 }
 .ghost-slot.spare { border-color: color-mix(in srgb, var(--ink) 6%, transparent); }
 /* An unassigned grid cell when nothing is being dragged: quiet and inactive. */
@@ -918,12 +920,8 @@ kbd {
 
 /* Canvas: windows on a pan/zoom plane (see WindowsView, canvas.ts). */
 .mode-canvas .windows-track { transform-origin: 0 0; }
-.main.windows.switching .windows-track { transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .mode-canvas .windows-track > .tile.sel { z-index: 5; }
 .mode-canvas .windows-track > .tile.lifted { z-index: 10; }
-/* Windows stay where they are while the camera moves; only moves/resizes glide. */
-.main.windows.panning .windows-track > .tile,
-.main.windows.sizing .windows-track > .tile { transition: none; }
 .main.windows.panning { cursor: grabbing; }
 .main.windows.panning .xterm, .main.windows.sizing .xterm,
 .main.windows.panning [data-embed], .main.windows.sizing [data-embed] { pointer-events: none; }

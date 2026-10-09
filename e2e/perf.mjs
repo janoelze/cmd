@@ -122,7 +122,7 @@ async function measure(name, { seconds = 10, during } = {}) {
 for (let i = 0; i < 4; i++) await menu("file.newTerminal");
 await sleep(2500);
 const panes = (await call("pane.list", {})).map((p) => p.id);
-const shown = await win.evaluate(() => [...document.querySelectorAll(".tile[data-pane]:not(.hidden-tile)")].map((e) => e.dataset.pane));
+const shown = await win.evaluate(() => [...document.querySelectorAll(".tile[data-pane]:not([data-hidden])")].map((e) => e.dataset.pane));
 const target = shown.find((id) => panes.includes(id)) ?? panes[0];
 console.log(`${panes.length} terminals, flooding ${target.slice(0, 8)}`);
 

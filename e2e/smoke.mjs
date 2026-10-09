@@ -106,7 +106,7 @@ const panes = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((p)
 const homeView = () => win.evaluate(() => window.cmd.call("space.list", {}).then((l) => l.find((s) => s.home).view));
 // Windows in visual order (reading order); the DOM keeps a stable creation order.
 const visualTiles = async () => {
-  const ids = await win.locator(".windows-track > .tile:not(.hidden-tile)").evaluateAll((els) =>
+  const ids = await win.locator(".windows-track > .tile:not([data-hidden])").evaluateAll((els) =>
     els
       .map((e) => ({ id: e.dataset.pane, r: e.getBoundingClientRect() }))
       .sort((a, b) => (Math.abs(a.r.top - b.r.top) > 20 ? a.r.top - b.r.top : a.r.left - b.r.left))
@@ -247,7 +247,7 @@ for (let i = 0; i < 30 && (!Array.isArray(order1) || JSON.stringify(order1) === 
 }
 check(Array.isArray(order1) && order1.length === 2, `dragging a tile onto another reorders the grid (${JSON.stringify(order1?.map((x) => x.slice(0, 4)))})`);
 // Let the windows glide into their new places first: mid-animation, positions (and so the drag target) are stale.
-await win.waitForFunction(() => !document.querySelector(".tile.settling, .tile.lifted"), null, { timeout: 3000 }).catch(() => {});
+await win.waitForFunction(() => !document.querySelector(".tile[data-morphing], .tile.lifted"), null, { timeout: 3000 }).catch(() => {});
 await win.waitForTimeout(400);
 // The order is saved debounced: wait for it to change rather than a fixed time (slow CI runners).
 // A drag that lands while a tile still glides can miss its target: take fresh positions and drag again.

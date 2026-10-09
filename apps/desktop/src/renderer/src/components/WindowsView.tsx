@@ -3,7 +3,9 @@
 // absolutely positioned windows in a stable DOM order and owns the behaviour
 // shared by all modes:
 //
-//  - moves animate with a CSS transition on transform (mode switches too),
+//  - moves glide: TileMotion (../motion.ts) springs each window's position and
+//    size together and holds its content at one size meanwhile (mode switches,
+//    ⌘↩, sidebars, reordering); the track glides on the same curve (--glide),
 //  - drag a window by its title bar: it follows the pointer, the others make
 //    room live (insert-style), ghost outlines show where it can go,
 //  - strip: free horizontal scrolling, reveal-on-select, resize by the right
@@ -58,16 +60,14 @@ import { TileTitle } from "./TileTitle.tsx";
 import { useFooterCentre } from "./StatusBar.tsx";
 import { SlotMotion } from "./Slot.tsx";
 import { countRender } from "../perf.ts";
+import { glide, GLIDE_MS, TileMotion, type TileTarget } from "../motion.ts";
 
 const DRAG_THRESHOLD = 4;
-const SCROLL_ANIM_MS = 260;
 const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scrolls the strip
 const EDGE_SCROLL_MAX = 18; // px per frame
 const OFFSET_SYNC_MS = 100; // the strip's scroll position reaches React this long after it rests
-const CAMERA_ANIM_MS = 280;
 const CAMERA_SAVE_MS = 400; // persist the camera once panning/zooming pauses
 const MOTION_MIN_ZOOM = 0.5; // zoomed out further, title bars change without animating
-const SETTLE_MS = 110; // a dropped window's glide into place (see .tile.settling)
 const LIVE_RESIZE_MS = 150; // viewport changes this close together are a live resize (no gliding)
 
 /** Canvas commands from the menu/palette (see requestCanvas). */
@@ -130,8 +130,6 @@ interface Drag {
   grabY: number;
 }
 
-const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
-
 export function WindowsView(p: Props) {
   countRender("WindowsView");
   const { mode, selected, onSelect } = p;
@@ -154,12 +152,11 @@ export function WindowsView(p: Props) {
   padRef.current = padX;
   const [panning, setPanning] = useState(false);
   const [liveResize, setLiveResize] = useState(false);
+  /** How far the workspace moved on screen since TileMotion last heard (see the ResizeObserver). */
+  const shiftRef = useRef({ x: 0, y: 0 });
   // Until the viewport is measured and holds still, windows take their places
   // without gliding (else at boot they glide out from a zero-size layout).
   const [entering, setEntering] = useState(true);
-  // The window just dropped, while it glides into place (faster than other moves).
-  const [settling, setSettling] = useState<PaneId | null>(null);
-  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── layout ─────────────────────────────────────────────
   const settled = arrangeTiles(
@@ -209,10 +206,6 @@ export function WindowsView(p: Props) {
   const stripOffset = useRef(0);
   // …and which window was selected then: the same one isn't revealed again on return.
   const stripSelected = useRef<string | null>(null);
-  const skipReveal = useRef(false);
-  // Returning to the strip: the track glides to that offset as a transform, then hands it to the scroller.
-  const [gliding, setGliding] = useState(false);
-  const glidingRef = useRef(false);
 
   // ── canvas camera ──────────────────────────────────────
   // The zoom range comes from the canvas.* settings.
@@ -242,6 +235,35 @@ export function WindowsView(p: Props) {
   const onCamera = useRef(p.onCamera);
   onCamera.current = p.onCamera;
 
+  // The track's transform in each mode: screen = (tx, ty) + s × window coordinates.
+  // The strip scrolls natively (its offset is the scroller's), the canvas has its camera.
+  const trackOf = (m: ViewMode) =>
+    m === "canvas"
+      ? { tx: -camRef.current.x * camRef.current.zoom, ty: -camRef.current.y * camRef.current.zoom, s: camRef.current.zoom }
+      : { tx: m === "strip" ? -offsetRef.current : 0, ty: 0, s: 1 };
+  /** Where the track was before it jumps (see the motion effect). */
+  const jumpFrom = useRef<{ tx: number; ty: number; s: number } | null>(null);
+  /** Call before moving the track at once (not a pan or a glide): windows stay put on screen. */
+  const jumpTrack = (m: ViewMode = live.current.mode) => void (jumpFrom.current ??= trackOf(m));
+  // A mode switch is a jump: noted before any other effect moves the scroll or the camera.
+  // Until its glide is done, whatever else moves the track for it (the viewport settling
+  // under the sidebars, revealing the selection) jumps too, so the switch stays one glide.
+  const jumpMode = useRef(mode);
+  const switchingRef = useRef(false);
+  const [switching, setSwitching] = useState(false);
+  useLayoutEffect(() => {
+    if (jumpMode.current === mode) return;
+    jumpTrack(jumpMode.current);
+    jumpMode.current = mode;
+    switchingRef.current = true;
+    setSwitching(true);
+  });
+  useEffect(() => {
+    if (!switching) return;
+    const t = setTimeout(() => ((switchingRef.current = false), setSwitching(false)), GLIDE_MS);
+    return () => clearTimeout(t);
+  }, [switching, mode]);
+
   const setCam = useCallback((c: Camera) => {
     camRef.current = c;
     setCamState(c);
@@ -258,8 +280,8 @@ export function WindowsView(p: Props) {
       const { vp } = live.current;
       const start = performance.now();
       const frame = (now: number) => {
-        const t = Math.min(1, (now - start) / CAMERA_ANIM_MS);
-        setCam(t < 1 ? lerpCamera(from, target, easeOut(t), vp) : target);
+        const t = glide(now - start);
+        setCam(t < 1 ? lerpCamera(from, target, t, vp) : target);
         camAnim.current = t < 1 ? requestAnimationFrame(frame) : null;
       };
       camAnim.current = requestAnimationFrame(frame);
@@ -284,7 +306,8 @@ export function WindowsView(p: Props) {
     if (!arranged?.changed) return;
     const first = Object.keys(p.canvasRects).length === 0;
     p.onCanvasRects({ ...p.canvasRects, ...Object.fromEntries(arranged.rects) });
-    if (first && vp.w) fitAll();
+    // At once, not a second move after the switch's glide.
+    if (first && vp.w) fitAll(true);
   });
   const saveRect = (id: PaneId, r: Rect) => {
     const all = live.current.lay.rects;
@@ -292,17 +315,27 @@ export function WindowsView(p: Props) {
   };
 
   // Selecting a window from outside the canvas (sidebar, keys, a new window)
-  // pans to it; clicking one on the canvas doesn't move the camera.
+  // pans to it; clicking one on the canvas doesn't move the camera. Switching to
+  // the canvas, the camera is put there at once: the switch's own glide brings
+  // the windows (see the motion effect), not a second move after it.
   const clickedSelect = useRef(false);
-  useEffect(() => {
+  const camFor = useRef({ mode, selected, w: vp.w });
+  useLayoutEffect(() => {
+    const was = camFor.current;
+    camFor.current = { mode, selected, w: vp.w };
+    const entering = switchingRef.current;
+    // Only the viewport changed: not a reason to pan, unless it's the switch settling.
+    if (was.mode === mode && was.selected === selected && was.w && !entering) return;
     if (mode !== "canvas" || !selected || !vp.w) return;
     if (clickedSelect.current) return void (clickedSelect.current = false);
     const r = live.current.lay.rects.get(selected);
     if (!r) return;
     const target = reveal(camRef.current, r, vp);
-    if (target !== camRef.current) animateCam(target);
+    if (target === camRef.current) return;
+    if (entering) jumpTrack(), stopCam(), setCam(target);
+    else animateCam(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, selected, vp.w > 0]);
+  }, [mode, selected, vp.w]);
 
   // Menu/palette: frame everything, or the selected window at full size.
   const [request, setRequest] = useState<{ r: CanvasRequest } | null>(null);
@@ -318,31 +351,23 @@ export function WindowsView(p: Props) {
     else if (selected && lay.rects.get(selected)) animateCam(frame(lay.rects.get(selected)!, vp, 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request, mode, vp.w]);
-  const fitAll = () => {
+  const fitAll = (now = false) => {
     const b = bounds([...live.current.lay.rects.values()]);
+    if (!b) return;
     // As far out as it takes to show everything, past the minimum zoom if need be.
-    if (b) animateCam(frame(b, live.current.vp, 1, fitLimits(limRef.current)));
+    const target = frame(b, live.current.vp, 1, fitLimits(limRef.current));
+    if (now) jumpTrack(), stopCam(), setCam(target);
+    else animateCam(target);
   };
 
-  // Mode switches glide the track too (scroll offset ⇄ camera).
-  const [switching, setSwitching] = useState(false);
-  const prevMode = useRef(mode);
-  useEffect(() => {
-    if (prevMode.current === mode) return;
-    prevMode.current = mode;
-    setSwitching(true);
-    const t = setTimeout(() => setSwitching(false), 260);
-    return () => clearTimeout(t);
-  }, [mode]);
-
-  /** Scroll the strip (other modes: glide the track back to 0 after a switch). */
+  /** Scroll the strip. */
   const setOffset = useCallback((o: number) => {
     const { lay, vp, mode } = live.current;
     const max = mode === "strip" ? maxOffset(lay.contentWidth, vp.w) : 0;
     const v = Math.max(0, Math.min(max, o));
     // Kept unrounded: scrollLeft snaps to device pixels and would eat small trackpad deltas.
     offsetRef.current = v;
-    if (mode === "strip" && !glidingRef.current) {
+    if (mode === "strip") {
       const sc = scrollerRef.current!;
       sc.scrollLeft = v;
       // The browser clamps to what it thinks is scrollable (it can lag the layout while
@@ -351,58 +376,37 @@ export function WindowsView(p: Props) {
     } else setOffsetState(v);
   }, []);
 
-  // Leaving the strip: the scroll position moves to the track's transform (no
-  // visible jump), which then glides to 0 with the switch. Coming back glides
-  // the transform to where the strip was, then hands it back to the scroller.
+  // Switching to or from the strip moves its scroll position at once: back to
+  // where it was left, scrolled to show the selection if that changed meanwhile.
+  // TileMotion carries every window from where it was on screen (the motion
+  // effect below), so the switch is one glide, not a glide and then a scroll.
   const prevScrollMode = useRef(mode);
   useLayoutEffect(() => {
     const was = prevScrollMode.current;
     prevScrollMode.current = mode;
     const sc = scrollerRef.current!;
     if (was === mode || (was !== "strip" && mode !== "strip")) return;
-    if (mode === "strip") {
-      // Set now so revealing the selection starts from it; the track follows in
-      // the effect below, with the switch's transition.
-      offsetRef.current = Math.min(stripOffset.current, maxOffset(lay.contentWidth, vp.w));
-      skipReveal.current = selected === stripSelected.current;
-      glidingRef.current = true;
-      setGliding(true);
+    if (mode !== "strip") {
+      stripOffset.current = offsetRef.current;
+      stripSelected.current = selected;
+      sc.scrollLeft = 0;
+      offsetRef.current = 0;
+      setOffsetState(0);
       return;
     }
-    // Not scrollLeft: the track has already lost the strip's width, so the browser may have clamped it.
-    const x = offsetRef.current;
-    glidingRef.current = false;
-    setGliding(false);
-    stripOffset.current = x;
-    stripSelected.current = selected;
-    sc.scrollLeft = 0;
-    offsetRef.current = x;
-    setOffsetState(x);
-  }, [mode]);
-  useEffect(() => {
-    if (!gliding) return;
-    setOffsetState(offsetRef.current);
-    const t = setTimeout(() => setGliding(false), 260); // once the switch is done
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gliding]);
-  useLayoutEffect(() => {
-    if (gliding || !glidingRef.current) return;
-    // Same frame as dropping the transform, so nothing moves. scrollLeft is clamped to
-    // what the browser thinks is scrollable, so first make that the untransformed track:
-    // - without the switch's transition, which would glide the track back from the offset;
-    // - with will-change off for a moment: Chromium keeps a composited track's scrollable
-    //   overflow from while it was transformed (scrollWidth stays short) until it changes.
-    glidingRef.current = false;
-    const sc = scrollerRef.current!;
+    // Revealing the selection, if it changed meanwhile, is the effect below's (with the settled viewport).
+    const o = Math.min(stripOffset.current, maxOffset(lay.contentWidth, vp.w));
+    // scrollLeft is clamped to what the browser thinks is scrollable. Chromium keeps a
+    // composited track's scrollable overflow from while it was transformed (the canvas)
+    // until it changes: will-change off for a moment makes it the untransformed track.
     const track = sc.firstElementChild as HTMLElement;
-    track.style.transition = "none";
     track.style.willChange = "auto";
     void sc.scrollWidth;
-    sc.scrollLeft = offsetRef.current;
-    track.style.transition = "";
+    sc.scrollLeft = o;
     track.style.willChange = "";
-  }, [gliding]);
+    offsetRef.current = Math.abs(sc.scrollLeft - o) > 1 ? sc.scrollLeft : o;
+    setOffsetState(offsetRef.current);
+  }, [mode]);
 
   // Follow the scroller (wheel, embedded pages' bubbled scroll, focus, our own writes).
   useEffect(() => {
@@ -417,8 +421,6 @@ export function WindowsView(p: Props) {
         return;
       }
       if (sc.scrollTop) sc.scrollTop = 0;
-      // Gliding back in, the track's transform holds the offset; the scroller stays at 0 (focus may scroll it).
-      if (glidingRef.current) return void (sc.scrollLeft && (sc.scrollLeft = 0));
       // Not our own write (those leave offsetRef within a pixel): someone else scrolls.
       if (Math.abs(sc.scrollLeft - offsetRef.current) >= 1) {
         offsetRef.current = sc.scrollLeft;
@@ -445,8 +447,8 @@ export function WindowsView(p: Props) {
       if (Math.abs(target - from) < 0.5) return setOffset(target);
       const start = performance.now();
       const frame = (now: number) => {
-        const t = Math.min(1, (now - start) / SCROLL_ANIM_MS);
-        setOffset(from + (target - from) * easeOut(t));
+        const t = glide(now - start);
+        setOffset(from + (target - from) * t);
         anim.current = t < 1 ? requestAnimationFrame(frame) : null;
       };
       anim.current = requestAnimationFrame(frame);
@@ -458,17 +460,30 @@ export function WindowsView(p: Props) {
     performance.mark("boot:tiles"); // first commit of the windows (boot benchmark)
     requestAnimationFrame(() => requestAnimationFrame(() => performance.mark("boot:tiles-painted")));
     const el = rootRef.current!;
-    // A one-off change (sidebar) glides the windows into place; a live resize of
-    // the app window moves them with it, or positions trail behind sizes.
+    // A change inside the app (a sidebar) glides the windows into place; resizing
+    // the app window moves them with it at once, as a Mac app's content does, live
+    // or in one step (a window manager), or they'd trail behind the window's edge.
     let last = 0;
     let done: ReturnType<typeof setTimeout> | null = null;
+    let win = { w: window.innerWidth, h: window.innerHeight };
+    let at = el.getBoundingClientRect();
     const ro = new ResizeObserver(() => {
       const now = performance.now();
-      if (now - last < LIVE_RESIZE_MS) setLiveResize(true);
-      last = now;
+      const resized = window.innerWidth !== win.w || window.innerHeight !== win.h;
+      win = { w: window.innerWidth, h: window.innerHeight };
+      // Where the workspace moved on screen (layout is fresh here, so this costs nothing).
+      const r = el.getBoundingClientRect();
+      shiftRef.current = { x: shiftRef.current.x + at.left - r.left, y: shiftRef.current.y + at.top - r.top };
+      at = r;
       if (done) clearTimeout(done);
       done = setTimeout(() => setLiveResize(false), LIVE_RESIZE_MS);
-      setVp({ w: el.clientWidth, h: el.clientHeight });
+      // Before this frame is painted: the windows take the new size in the same frame
+      // as the workspace (else for a frame they sit at the old place in the new box).
+      flushSync(() => {
+        if (resized || now - last < LIVE_RESIZE_MS) setLiveResize(true);
+        setVp({ w: el.clientWidth, h: el.clientHeight });
+      });
+      last = now;
     });
     ro.observe(el);
     setVp({ w: el.clientWidth, h: el.clientHeight });
@@ -496,8 +511,9 @@ export function WindowsView(p: Props) {
   useLayoutEffect(() => {
     const was = scaledFor.current;
     scaledFor.current = { w: vp.w, content: lay.contentWidth, mode };
-    if (mode !== "strip" || was.mode !== mode || glidingRef.current || !was.w || was.w === vp.w || !was.content) return;
+    if (mode !== "strip" || was.mode !== mode || !was.w || was.w === vp.w || !was.content) return;
     stopScroll();
+    jumpTrack();
     setOffset((offsetRef.current * lay.contentWidth) / was.content);
   });
 
@@ -506,18 +522,24 @@ export function WindowsView(p: Props) {
   const selIdx = ids.indexOf(selected ?? "");
   const selSlot = selIdx >= 0 ? stripSlots[selIdx] : undefined;
   const revealedFor = useRef({ w: 0, mode, selected });
-  useEffect(() => {
+  // A layout effect: a jump must reach TileMotion before the frame is painted.
+  useLayoutEffect(() => {
     // Not while a window is being resized: its width changes every frame, and its left
     // edge scrolls the strip itself.
     if (mode !== "strip" || !selSlot || !vp.w || drag || resizing) return;
     const was = revealedFor.current;
     revealedFor.current = { w: vp.w, mode, selected };
-    if (skipReveal.current) return void (skipReveal.current = false);
+    const entering = switchingRef.current;
+    // Back to the strip with the selection it was left with: exactly where it was.
+    if (entering && selected === stripSelected.current) return;
     // A resized window keeps its scroll; but entering the strip changes the width too
     // (the workspace runs under the sidebars), and that reveal must use the new one.
-    if (was.w && was.w !== vp.w && was.mode === mode && was.selected === selected && !switching) return;
+    if (was.w && was.w !== vp.w && was.mode === mode && was.selected === selected && !entering) return;
     const target = revealOffset(offsetRef.current, selSlot, stripW, padX, stripTotal);
-    if (Math.abs(target - offsetRef.current) > 0.5) animateTo(target);
+    if (Math.abs(target - offsetRef.current) <= 0.5) return;
+    // Entering the strip, part of the switch's one glide; otherwise a scroll of its own.
+    if (entering) stopScroll(), jumpTrack(), setOffset(target), setOffsetState(offsetRef.current);
+    else animateTo(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, selSlot?.x, selSlot?.w, vp.w, lay.contentWidth]);
 
@@ -568,7 +590,6 @@ export function WindowsView(p: Props) {
       if (anim.current) cancelAnimationFrame(anim.current);
       if (camAnim.current) cancelAnimationFrame(camAnim.current);
       if (camSave.current) clearTimeout(camSave.current), onCamera.current(camRef.current);
-      if (settleTimer.current) clearTimeout(settleTimer.current);
     },
     [],
   );
@@ -711,9 +732,6 @@ export function WindowsView(p: Props) {
       }
       setDrag(null);
       setPreview(null);
-      setSettling(id);
-      if (settleTimer.current) clearTimeout(settleTimer.current);
-      settleTimer.current = setTimeout(() => setSettling(null), SETTLE_MS + 50);
     };
     const up = (ev: PointerEvent) => end(ev, true);
     const cancel = (ev: PointerEvent) => end(ev, false);
@@ -801,6 +819,36 @@ export function WindowsView(p: Props) {
   // of every window, and changing it each frame would restyle them all.
   const zVar = { "--z": cam.zoom } as React.CSSProperties;
   const z = cam.zoom;
+  // Where each window goes, filled in while rendering them; TileMotion takes it from there.
+  const targets = new Map<string, TileTarget>();
+  const tileMotion = useRef<TileMotion | null>(null);
+  tileMotion.current ??= new TileMotion();
+  const motionMode = useRef(mode);
+  useLayoutEffect(() => {
+    const els = new Map<string, HTMLElement>();
+    for (const el of rootRef.current!.querySelectorAll<HTMLElement>(":scope .windows-track > .tile[data-pane]")) els.set(el.dataset.pane!, el);
+    const swap = motionMode.current === mode && mode === "focus";
+    motionMode.current = mode;
+    // Following the pointer or the app window's edge: no gliding. Windows pushed aside by a drag still glide.
+    const instant = entering || liveResize || !!resizing || !!sizing || !vp.w;
+    // The track jumped (a mode switch, the camera put somewhere at once) or the workspace
+    // moved on screen (a sidebar): each window goes on from where it was on screen.
+    const from = jumpFrom.current;
+    const to = trackOf(mode);
+    const shift = shiftRef.current;
+    jumpFrom.current = null;
+    shiftRef.current = { x: 0, y: 0 };
+    const moved = from && (from.tx !== to.tx || from.ty !== to.ty || from.s !== to.s);
+    const remap =
+      moved || shift.x || shift.y
+        ? (x: number, y: number, s: number) => {
+            const f = from ?? to;
+            return { x: (f.tx + f.s * x + shift.x - to.tx) / to.s, y: (f.ty + f.s * y + shift.y - to.ty) / to.s, s: (s * f.s) / to.s };
+          }
+        : undefined;
+    tileMotion.current!.update(els, targets, { instant, swap, remap });
+  });
+  useEffect(() => () => tileMotion.current?.dispose(), []);
   return (
     <main
       ref={rootRef}
@@ -815,8 +863,8 @@ export function WindowsView(p: Props) {
           canvas
             ? { transform: `translate(${-cam.x * z}px, ${-cam.y * z}px) scale(${z})` }
             : mode === "strip"
-              ? { width: lay.contentWidth, transform: gliding ? `translateX(${-offset}px)` : undefined }
-              : { transform: `translateX(${-offset}px)` }
+              ? { width: lay.contentWidth }
+              : undefined
         }
       >
         {/* Slots: unassigned cells always show as inactive placeholders; while
@@ -844,6 +892,7 @@ export function WindowsView(p: Props) {
             x = drag.x - drag.grabX - rootRect.left + offset;
             y = drag.y - drag.grabY - rootRect.top;
           }
+          targets.set(id, { rect: { x, y, w: rect.w, h: rect.h }, hidden: lay.hidden.has(id), instant: lifted });
           // Title bars animate state changes only where you can see them: on screen,
           // and on the canvas only while the title is legible (docs/10-window-titles.md).
           const motion =
@@ -872,12 +921,8 @@ export function WindowsView(p: Props) {
               label={labelOf(r)}
               selected={id === selected}
               attention={attention && needsYou(r)}
-              className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${settling === id ? "settling" : ""} ${lay.hidden.has(id) ? "hidden-tile" : ""} ${attention && needsYou(r) ? "needs" : ""}`}
-              style={{
-                transform: `translate(${x}px, ${y}px)`,
-                width: rect.w,
-                height: rect.h,
-              }}
+              className={`tile kind-${r.win?.kind ?? "terminal"} ${id === selected ? "sel" : ""} ${lifted ? "lifted" : ""} ${attention && needsYou(r) ? "needs" : ""}`}
+              // Geometry (transform, width, height, opacity) is TileMotion's: see the layout effect above.
               // Right-clicks an embedded page reports (Magic widgets, embed.ts) open the title bar's menu.
               onContextMenu={(e) => {
                 if (!(e.target instanceof Element && e.target.closest("[data-embed]"))) return;

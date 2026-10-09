@@ -141,6 +141,10 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 120ms;
   --dur: 150ms;
+  /* Moving a window or a view: a critically damped spring (no bounce) sampled for CSS,
+     the curve the app's TileMotion runs in JS (apps/desktop motion.ts, GLIDE_MS). */
+  --glide: linear(0 0%, 0.0016 0.6%, 0.0134 1.9%, 0.0441 3.6%, 0.0979 5.7%, 0.1735 8.1%, 0.2659 10.9%, 0.368 13.9%, 0.4723 17.2%, 0.5723 20.8%, 0.6632 24.6%, 0.7419 28.7%, 0.8074 33%, 0.8599 37.5%, 0.9005 42.2%, 0.931 47.1%, 0.9532 52.3%, 0.969 57.6%, 0.9798 63.1%, 0.9872 68.8%, 0.992 74.7%, 0.9951 80.8%, 0.9971 87%, 0.9983 93.4%, 1 100%);
+  --glide-dur: 382ms;
 }
 
 * { box-sizing: border-box; }
@@ -149,5 +153,5 @@
 ::placeholder { color: var(--input-placeholder); opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur-fast: 0ms; --dur: 0ms; }
+  :root { --dur-fast: 0ms; --dur: 0ms; --glide-dur: 0ms; }
 }
