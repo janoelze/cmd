@@ -114,7 +114,7 @@ tr:last-child td { border-bottom: 0; }
   --glide: linear(0 0%, 0.0016 0.6%, 0.0134 1.9%, 0.0442 3.6%, 0.0979 5.7%, 0.1735 8.1%, 0.2659 10.9%, 0.368 13.9%, 0.4724 17.2%, 0.5724 20.8%, 0.6633 24.6%, 0.742 28.7%, 0.8075 33%, 0.86 37.5%, 0.9006 42.2%, 0.9311 47.1%, 0.9533 52.3%, 0.969 57.6%, 0.9799 63.1%, 0.9872 68.8%, 0.992 74.7%, 0.9951 80.8%, 0.9971 87%, 0.9983 93.4%, 1 100%);
   transition: opacity 1.4s ease, translate 1.6s var(--glide), scale 1.6s var(--glide), filter 1.6s var(--glide);
 }
-.hero-shots.loading { opacity: 0; translate: 0 12px; scale: 0.97; filter: blur(40px) brightness(0.3); }
+.hero-shots.loading { opacity: 0; translate: 0 12px; scale: 0.985; filter: blur(40px) brightness(0.3); }
 .hero-shots.loading, .hero-shots.revealing { will-change: opacity, translate, scale, filter; }
 @media (prefers-reduced-motion: reduce) { .hero-shots.loading { translate: none; scale: none; filter: none; } }
 .reqs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 28px; margin: 0; font-size: var(--fs-sm); }
