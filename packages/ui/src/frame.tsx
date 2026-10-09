@@ -9,7 +9,7 @@
 // a size container, so these adapt to the window, not to the screen.
 
 import type * as React from "react";
-import { forwardRef, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref } from "react";
+import { forwardRef, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { Spinner, type Tone } from "./status.tsx";
 import type { SpaceName, TextSize } from "./tokens.gen.ts";
@@ -99,16 +99,34 @@ export function ViewState({ state }: { state: ViewStateSpec }) {
  * edge to edge (a table, an image, a list with its own row insets). `state`
  * replaces the body.
  */
-export function View({ toolbar, footer, state, inset, scroll = true, focusable, bodyRef, children }: { toolbar?: ReactNode; footer?: ReactNode; state?: ViewStateSpec | null; inset?: boolean; scroll?: boolean; /** The body takes keyboard focus (arrow keys and Page Down scroll it). */ focusable?: boolean; bodyRef?: Ref<HTMLDivElement>; children?: ReactNode }) {
+export function View({ toolbar, footer, state, inset, scroll = true, focusable, bodyRef, onScroll, children }: { toolbar?: ReactNode; footer?: ReactNode; state?: ViewStateSpec | null; inset?: boolean; scroll?: boolean; /** The body takes keyboard focus (arrow keys and Page Down scroll it). */ focusable?: boolean; bodyRef?: Ref<HTMLDivElement>; onScroll?: (e: UIEvent<HTMLDivElement>) => void; children?: ReactNode }) {
   return (
     <div className="ui-view">
       {toolbar}
-      <div ref={bodyRef} className="ui-view-body" tabIndex={focusable ? 0 : undefined} data-inset={(inset && !state) || undefined} data-scroll={scroll || undefined}>
+      <div ref={bodyRef} className="ui-view-body" tabIndex={focusable ? 0 : undefined} data-inset={(inset && !state) || undefined} data-scroll={scroll || undefined} onScroll={onScroll}>
         {state ? <ViewState state={state} /> : children}
       </div>
       {footer && <div className="ui-view-footer">{footer}</div>}
     </div>
   );
+}
+
+/**
+ * The band under the traffic lights in a window of its own (Settings), in place of a
+ * toolbar: the window drags by it. With a title, the page's, large, lined up with the
+ * `Page` under it, and `line` once that page scrolls; without one, a sidebar's top.
+ */
+export function TitleBand({ title, line }: { title?: ReactNode; line?: boolean }) {
+  return (
+    <header className="ui-title-band" data-line={line || undefined}>
+      {title != null && <h1 className="ui-page">{title}</h1>}
+    </header>
+  );
+}
+
+/** A page of settings rows (FormSection) in a padded View: as wide as they read well (--page-w), centred past it. */
+export function Page({ children }: { children: ReactNode }) {
+  return <div className="ui-page">{children}</div>;
 }
 
 /** One line of a footer or status: dim, small, items spaced; `end` sits at the right. */
@@ -219,9 +237,9 @@ export function Filmstrip({ items, selected, onSelect }: { items: readonly { key
 }
 
 /** Text in one of the kit's roles: `dim` for secondary, `mono` for values and IDs, `strong` for a name; `truncate` cuts one line with an ellipsis. */
-export function Text({ tone, size, mono, strong, truncate, children }: { tone?: "dim" | Tone; size?: TextSize; mono?: boolean; strong?: boolean; truncate?: boolean; children: ReactNode }) {
+export function Text({ tone, size, mono, strong, truncate, select, children }: { tone?: "dim" | Tone; size?: TextSize; mono?: boolean; strong?: boolean; truncate?: boolean; /** A value to read and copy (a path, a hash): selectable, a long one breaks anywhere. */ select?: boolean; children: ReactNode }) {
   return (
-    <span className="ui-text" data-tone={tone} data-size={size} data-mono={mono || undefined} data-strong={strong || undefined} data-truncate={truncate || undefined}>
+    <span className="ui-text" data-tone={tone} data-size={size} data-mono={mono || undefined} data-strong={strong || undefined} data-truncate={truncate || undefined} data-select={select || undefined}>
       {children}
     </span>
   );

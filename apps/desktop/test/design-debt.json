@@ -22,11 +22,6 @@
   "apps/desktop/src/renderer/src/pdf/pdf.css": {
     "color": 1
   },
-  "apps/desktop/src/renderer/src/settings/settings.css": {
-    "fontSize": 9,
-    "radius": 3,
-    "spacing": 26
-  },
   "apps/desktop/src/renderer/src/styles.css": {
     "color": 4,
     "fontSize": 28,

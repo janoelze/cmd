@@ -129,6 +129,8 @@ export interface ListRowProps {
   selected?: boolean;
   /** The keyboard's row (search results). */
   active?: boolean;
+  /** Faded: not among what a search found (Settings' pages while searching). */
+  dim?: boolean;
   depth?: number;
   /** Before the mark: a disclosure twisty, or its space. */
   lead?: ReactNode;
@@ -148,6 +150,7 @@ export function ListRow(p: ListRowProps) {
       className={cls("ui-list-row", p.detail != null ? "tall" : "short", p.selected && "sel", p.active && "active", p.className)}
       data-key={p.flipKey}
       data-tone={p.tone}
+      data-dim={p.dim || undefined}
       data-tip={p.tip}
       style={p.depth ? ({ "--depth": p.depth } as CSSProperties) : undefined}
       onClick={p.onClick}

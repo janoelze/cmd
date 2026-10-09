@@ -48,6 +48,8 @@
   --inset: var(--space-lg);
   /* Reading width for prose: a document's column (Measure). */
   --measure: 68ch;
+  /* How wide a page of settings rows grows (the Settings window): rows keep their label and control within reach in a wide window; the page centres past it. */
+  --page-w: 680px;
 
   /* ── size ── */
   /* Small controls: buttons in a row, inline actions. */
@@ -167,6 +169,8 @@
   --sheet-elev: min(6, calc(var(--window-elevation) * 4));
   --sheet-sh: color-mix(in oklab, var(--shadow) 85%, var(--bg));
   --sheet-shadow: 0 calc(0.5px * var(--sheet-elev)) calc(1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 36%, transparent), 0 calc(1px * var(--sheet-elev)) calc(2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 30%, transparent), 0 calc(2px * var(--sheet-elev)) calc(4px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 24%, transparent), 0 calc(4px * var(--sheet-elev)) calc(8px * var(--sheet-elev)) calc(-1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 20%, transparent), 0 calc(8px * var(--sheet-elev)) calc(16px * var(--sheet-elev)) calc(-2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 16%, transparent);
+  /* The title bar's band in a window of its own (Settings): where the traffic lights sit, drawn by the page under them (TitleBand). 28px off macOS (the app's styles.css). */
+  --titlebar-h: 38px;
 
   /* ── motion ── */
   /* (motion.ts MOTION has the same values; a test keeps them equal) exit: something leaving, and quick pops in. change: a state changing (a ring, a size). slow: an indicator (a progress, a dot). glide: something moving (below). */

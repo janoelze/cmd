@@ -1,5 +1,5 @@
-// The Settings window: the pages and sections of layout.ts in a sidebar like the
-// main window's, each section one list of rows generated from SETTINGS_SCHEMA:
+// The Settings window: the pages and sections of layout.ts in a sidebar (Split),
+// each section one list of rows generated from SETTINGS_SCHEMA:
 // the title, a one-line description and an info button for the details on the
 // left, a control chosen from the key's type and display hints on the right.
 // The key itself (what `cmd settings set` takes) is the title's tooltip. Secrets (API keys, SECRETS) are rows too but
@@ -26,11 +26,10 @@ import {
   type SettingsSnapshot,
 } from "@cmd/protocol";
 import { COMMANDS, COMMAND_BY_ID, DEFAULT_KEYBINDINGS, norm, prettyAccelerator, type CommandSpec } from "../../../shared/commands.ts";
-import { ICON, Symbol } from "../components/Symbol.tsx";
 import { IndexRing } from "../components/IndexRing.tsx";
 import { acceleratorOf, usableShortcut, useKeybindings } from "../keybindings.ts";
 import { cmd } from "../bridge.ts";
-import { Button, Callout, EmptyState, FormRow, FormSection, IconButton, NumberField, ResetButton, SearchField, SecretField, Segmented, Select, Spinner, Switch, TextField, Toast } from "@cmd/ui";
+import { Button, Callout, EmptyState, FormActions, FormRow, FormSection, IconButton, Inline, List, ListRow, NumberField, Page, ResetButton, SearchField, SecretField, Segmented, Select, ShortcutField, Spinner, Split, Stack, StatusLine, Switch, TextField, TitleBand, View } from "@cmd/ui";
 import { useSettings } from "./useSettings.ts";
 import { AiKeyRow, AiProviderChoice } from "../ai/Providers.tsx";
 import { useAiStatus } from "../ai/status.ts";
@@ -193,63 +192,70 @@ export function SettingsWindow() {
           if (s.items.some((it) => itemKey(it) === "notifications.needsInput")) return [<NotifyPermission key="macos" />, section];
           return section;
         })}
-        <div className="sw-page-foot">
+        <FormActions>
           <Button disabled={!changed.length} onClick={() => changed.forEach(ctx.reset)}>
             Restore Defaults
           </Button>
-        </div>
+        </FormActions>
       </>
     );
   }
 
   return (
-    <div className="sw">
-      <aside className="sidebar sw-side">
-        <div className="sidebar-titlebar" />
-        <SearchField ref={input} className="sb-search" size="lg" value={query} placeholder="Search settings" onChange={(v) => (setQuery(v), setScrolled(false))} />
-        <nav className="sidebar-scroll sw-nav">
-          {NAV.map((n) => (
-            <button
-              key={n.id}
-              type="button"
-              className={`row short sw-nav-item${!q && n.id === page ? " sel" : ""}${q && !hitPages.has(n.id) ? " dim" : ""}`}
-              onClick={() => (setQuery(""), setPage(n.id), setScrolled(false))}
-            >
-              {/* a fixed-size slot: symbols differ in width, the labels should line up */}
-              <span className="sw-nav-icon">
-                <Symbol name={n.icon} size={ICON.bar} />
-              </span>
-              <span className="sw-nav-label">{n.title}</span>
-            </button>
-          ))}
-        </nav>
-        <button className="sw-side-foot" onClick={() => cmd.openSettingsFile(snap.path)} disabled={!snap.path} data-tip={snap.path}>
-          <Symbol name="curlybraces" size={ICON.row} />
-          Open settings.json
-        </button>
-      </aside>
-      <main className="sw-main">
-        <header className={`sw-bar${scrolled ? " scrolled" : ""}`}>
-          <h1 className="sw-page">{q ? "Search Results" : nav.title}</h1>
-        </header>
-        {/* keyed by page: each page starts at the top */}
-        <div className="sw-scroll" key={q ? "search" : page} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
-          <div className="sw-page">
-            {errors.map((e) => (
-              <Callout key={e} tone="danger">
-                {e}
-              </Callout>
-            ))}
-            {body}
-          </div>
-        </div>
-        {!connected && (
-          <div className="sw-offline">
-            <Toast icon={<Spinner size={11} />}>Connecting to cmd…</Toast>
-          </div>
-        )}
-      </main>
-    </div>
+    <View scroll={false}>
+      <Split
+        width={{ min: 180, ideal: 220, max: 300 }}
+        pane={
+          <Stack gap="none" grow>
+            <TitleBand />
+            <Stack pad="lg">
+              <SearchField ref={input} size="lg" value={query} placeholder="Search settings" onChange={(v) => (setQuery(v), setScrolled(false))} />
+            </Stack>
+            <Stack gap="none" grow>
+              <List>
+                {NAV.map((n) => (
+                  <ListRow key={n.id} icon={n.icon} title={n.title} selected={!q && n.id === page} dim={!!q && !hitPages.has(n.id)} onClick={() => (setQuery(""), setPage(n.id), setScrolled(false))} />
+                ))}
+              </List>
+            </Stack>
+            <Stack pad="lg" align="start">
+              <Button variant="ghost" icon="curlybraces" onClick={() => cmd.openSettingsFile(snap.path)} disabled={!snap.path} data-tip={snap.path}>
+                Open settings.json
+              </Button>
+            </Stack>
+          </Stack>
+        }
+      >
+        <View
+          // keyed by page: each page starts at the top
+          key={q ? "search" : page}
+          inset
+          toolbar={<TitleBand title={q ? "Search Results" : nav.title} line={scrolled} />}
+          onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
+          footer={
+            !connected && (
+              <StatusLine>
+                <Inline gap="sm">
+                  <Spinner size={11} />
+                  Connecting to cmd…
+                </Inline>
+              </StatusLine>
+            )
+          }
+        >
+          <Page>
+            <Stack gap="lg">
+              {errors.map((e) => (
+                <Callout key={e} tone="danger">
+                  {e}
+                </Callout>
+              ))}
+              <div>{body}</div>
+            </Stack>
+          </Page>
+        </View>
+      </Split>
+    </View>
   );
 }
 
@@ -282,7 +288,7 @@ function settingText(k: SettingKey, ctx: RowContext) {
     description: (
       <>
         {prose(def.description)}
-        {def.applies && <span className="sw-applies"> {APPLIES_NOTE[def.applies]}</span>}
+        {def.applies && <i> {APPLIES_NOTE[def.applies]}</i>}
       </>
     ),
     info: def.details && prose(def.details),
@@ -345,13 +351,13 @@ function ModelRow(p: { k: SettingKey; provider: AiProvider; tier: AiTier; value:
   // A refused key says so on its own row.
   const note = st?.state === "rejected" ? null : s.loading && !s.models ? "Loading models…" : s.error;
   return (
-    <FormRow {...settingText(p.k, p.ctx)} note={note && <span className="sw-model-note">{note}</span>} noteTone={!!s.error ? "danger" : "accent"}>
-      <span className="sw-model">
+    <FormRow {...settingText(p.k, p.ctx)} note={note} noteTone={!!s.error ? "danger" : "accent"}>
+      <Inline gap="sm">
         <span data-tip={current?.id}>
           <Select value={value} options={options} labels={labels} onChange={(v) => p.ctx.save(p.k, v)} />
         </span>
         <IconButton variant="default" icon="arrow.clockwise" iconSize={10} label="List the Models Again" disabled={s.loading} onClick={() => s.load(true)} />
-      </span>
+      </Inline>
     </FormRow>
   );
 }
@@ -441,8 +447,7 @@ function Shortcuts({ q }: { q?: string }) {
         <FormSection key={g} title={q ? `Keyboard Shortcuts › ${COMMAND_GROUPS[g] ?? g}` : (COMMAND_GROUPS[g] ?? g)}>
           {cmds.map((c) => {
             const bound = keys.bindings[c.id] ?? [];
-            const slot = rec?.id === c.id ? rec.slot : -1;
-            const recording = <kbd className="recording">Type a shortcut…</kbd>;
+            const slot = rec?.id === c.id ? rec.slot : undefined;
             return (
               <FormRow
                 key={c.id}
@@ -453,43 +458,19 @@ function Shortcuts({ q }: { q?: string }) {
                 title={c.label.replace(/…$/, "")}
                 accessory={changed(c) && <ResetButton label="Restore Default" onClick={() => (setRec(null), save(c.id, null))} />}
               >
-                <span className="sw-keys">
-                  {bound.map((k, i) =>
-                    i === slot ? (
-                      <span key={k}>{recording}</span>
-                    ) : (
-                      <span key={k} className="sw-key">
-                        <kbd data-tip="Click to change" onClick={() => (setNote(null), setRec({ id: c.id, slot: i }))}>
-                          {prettyAccelerator(k)}
-                        </kbd>
-                        <button type="button" className="sw-key-remove" data-tip="Remove" aria-label={`Remove ${prettyAccelerator(k)}`} onClick={() => save(c.id, bound.filter((_, j) => j !== i))}>
-                          <Symbol name="xmark" size={7} weight="bold" />
-                        </button>
-                      </span>
-                    ),
-                  )}
-                  {slot === bound.length ? (
-                    recording
-                  ) : (
-                    <button
-                      type="button"
-                      className="sw-key-add"
-                      data-tip={bound.length ? "Add Another Shortcut" : "Add a Shortcut"}
-                      aria-label={bound.length ? "Add Another Shortcut" : "Add a Shortcut"}
-                      onClick={() => (setNote(null), setRec({ id: c.id, slot: bound.length }))}
-                    >
-                      <Symbol name="plus" size={9} weight="semibold" />
-                    </button>
-                  )}
-                </span>
+                <ShortcutField
+                  keys={bound.map((k) => prettyAccelerator(k) ?? k)}
+                  recording={slot}
+                  onRecord={(i) => (setNote(null), setRec({ id: c.id, slot: i }))}
+                  onRemove={(i) => save(c.id, bound.filter((_, j) => j !== i))}
+                />
               </FormRow>
             );
           })}
         </FormSection>
       ))}
       {!q && (
-        <div className="sw-page-foot">
-          <span className="sw-hint">Click a shortcut to change it, then press the new keys. Esc cancels, ⌫ removes.</span>
+        <FormActions hint="Click a shortcut to change it, then press the new keys. Esc cancels, ⌫ removes.">
           <Button onClick={() => cmd.openKeybindingsFile()}>
             Edit keybindings.json…
           </Button>
@@ -499,7 +480,7 @@ function Shortcuts({ q }: { q?: string }) {
           >
             Restore Defaults
           </Button>
-        </div>
+        </FormActions>
       )}
     </>
   );
@@ -522,10 +503,10 @@ function IndexStatusRow(p: { status: SearchStatus | null; enabled: boolean }) {
     <FormRow
       title="Index"
       description={
-        <span className="sw-index-status">
+        <Inline gap="sm">
           <IndexRing status={s} />
           {text}
-        </span>
+        </Inline>
       }
     >
       <Button

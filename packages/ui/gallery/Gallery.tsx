@@ -29,6 +29,7 @@ import {
   Dialog,
   EmptyState,
   FeatureList,
+  FormActions,
   FormRow,
   FormSection,
   Icon,
@@ -55,6 +56,7 @@ import {
   ResetButton,
   SearchField,
   SecretField,
+  ShortcutField,
   SectionHeading,
   Segmented,
   Select,
@@ -786,6 +788,9 @@ function FieldsPage() {
           <SecretField set={false} live placeholder="Live: paste any key but “bad”" onSave={(v) => new Promise((ok, fail) => setTimeout(() => (v === "bad" ? fail(new Error("refused")) : ok(null)), 800))} />
         </Row>
       </Spec>
+      <Spec title="ShortcutField" code="<ShortcutField keys recording onRecord onRemove>" note="A command's shortcuts, changed in place (Settings → Keyboard Shortcuts). Click a key to record it again, the badge on its corner removes it, + (on row hover) records another. The slot being recorded reads Type a shortcut…; the caller listens for the keys.">
+        <ShortcutDemo />
+      </Spec>
       <Spec title="AiField" code="<AiField value state error onSubmit onStop>" note="Where you ask an AI for something. The field shows where the request is without text, so nothing around it moves: thinking runs a comet along the edge (Send becomes Stop, Esc stops), done fades it out with a check in place of the sparkle, and only an error gets a line, under the field, with an action. Grows with the prompt; ↑ and ↓ go through earlier prompts. sm, md and lg.">
         <AiFieldDemo />
       </Spec>
@@ -931,6 +936,9 @@ function FormsPage() {
           </FormRow>
         ))}
       </FormSection>
+      <FormActions hint="FormActions: buttons under a section, a hint at the left.">
+        <Button>Restore Defaults</Button>
+      </FormActions>
     </>
   );
 }
@@ -1549,6 +1557,21 @@ function ListSpecimen() {
 }
 
 /** Asks nothing: thinks for two seconds, then is done, or fails for prompts with "fail". */
+function ShortcutDemo() {
+  const [keys, setKeys] = useState(["⌘K", "⇧⌘P"]);
+  const [rec, setRec] = useState<number | undefined>(undefined);
+  return (
+    <FormSection>
+      <FormRow title="Command Palette" compact>
+        <ShortcutField keys={keys} recording={rec} onRecord={(i) => setRec(rec === i ? undefined : i)} onRemove={(i) => setKeys(keys.filter((_, j) => j !== i))} />
+      </FormRow>
+      <FormRow title="New Terminal" compact>
+        <ShortcutField keys={[]} onRecord={() => {}} onRemove={() => {}} />
+      </FormRow>
+    </FormSection>
+  );
+}
+
 function AiFieldDemo() {
   const [value, setValue] = useState("");
   const [state, setState] = useState<AiState>("idle");

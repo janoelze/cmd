@@ -263,7 +263,7 @@ function AUDIT() {
         const m = part === "toolbar" ? span(el, el, items) : span(el, el);
         if (!m) continue;
         const problems = [];
-        if (part === "body" && Math.abs(m.left - m.right) > 1 && el.querySelector(".ui-grid, .ui-list, .ui-measure, .ui-media, .ui-split") === null) problems.push(`left ${m.left} ≠ right ${m.right}`);
+        if (part === "body" && Math.abs(m.left - m.right) > 1 && el.querySelector(".ui-grid, .ui-list, .ui-measure, .ui-page, .ui-media, .ui-split") === null) problems.push(`left ${m.left} ≠ right ${m.right}`);
         // Toolbars are reported, not checked: their items sit tighter than the content (6–8px), an open decision (window-design skill).
         if (part === "footer" && Math.abs(m.left - inset) > 1) problems.push(`left ${m.left}, not --inset (${inset})`);
         if (part === "footer" && el.querySelector(".ui-status-line-end") && Math.abs(m.right - inset) > 1) problems.push(`right ${m.right}, not --inset (${inset})`);

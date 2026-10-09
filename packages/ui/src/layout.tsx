@@ -28,6 +28,21 @@ export function FormSection({ title, aside, children, plain }: { title?: ReactNo
   );
 }
 
+/** Buttons for a FormSection, under it at the right (Restore Defaults); a hint at the left. */
+export function FormActions({ hint, children }: { hint?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="ui-form-actions">
+      {hint && <span className="ui-form-actions-hint">{hint}</span>}
+      {children}
+    </div>
+  );
+}
+
+/** A QR code (an SVG's markup) on white, the way a camera reads it in any theme. */
+export function QrCode({ svg }: { svg: string }) {
+  return <div className="ui-qr" dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
 /**
  * One setting: the title and description on the left, the control on the right
  * in a column that lines up down the page whatever the labels.

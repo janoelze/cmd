@@ -1024,14 +1024,14 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await menu("app.settings");
   const sw = await opened;
   sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
-  await sw.waitForSelector(".sw-nav-item");
-  const pages = await sw.locator(".sw-nav-label").allTextContents();
+  await sw.waitForSelector(".ui-split-pane .ui-list-row");
+  const pages = await sw.locator(".ui-split-pane .ui-list-row-name").allTextContents();
   check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "AI & Agents", "Magic Widgets", "Keyboard Shortcuts", "Updates & About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
 
   // AI & Agents: a row per provider, models only once it has a key. Keys typed here are
   // checked with the provider first; this one goes in as `cmd settings secret`
   // does, so the run needs no network. Stored outside settings.json, shown as a hint.
-  await sw.locator(".sw-nav-item", { has: sw.getByText("AI & Agents", { exact: true }) }).click();
+  await sw.locator(".ui-split-pane .ui-list-row", { has: sw.getByText("AI & Agents", { exact: true }) }).click();
   await sw.waitForSelector(".ui-row-title:has-text('Anthropic')");
   const rowTitles = () => sw.locator(".ui-row-name").allTextContents();
   let titles = await rowTitles();
@@ -1049,7 +1049,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(titles.includes("Model") && titles.includes("Fast model"), "a key brings its provider's models");
   await rpc("secrets.set", { key: "ai.openai.apiKey", value: null });
   await sw.screenshot({ path: path.join(shots, "5-settings-terminal.png") });
-  const page = (name) => sw.locator(".sw-nav-item", { has: sw.getByText(name, { exact: true }) }).click();
+  const page = (name) => sw.locator(".ui-split-pane .ui-list-row", { has: sw.getByText(name, { exact: true }) }).click();
   const row = (title) => sw.locator(".ui-row", { has: sw.locator(".ui-row-title", { hasText: title }) });
   const saved = () => JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8").replace(/^\/\/.*$/gm, ""));
   const waitFor = async (fn, what) => {
@@ -1074,12 +1074,12 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await sw.screenshot({ path: path.join(shots, "5-settings-agents.png") });
 
   await page("Updates & About");
-  await sw.waitForSelector(".ui-row:has-text('Status') .sw-value");
-  const status = await row("Status").locator(".sw-value").textContent();
+  await sw.waitForSelector(".ui-row:has-text('Status') .ui-text[data-select]");
+  const status = await row("Status").locator(".ui-text[data-select]").textContent();
   check(/^pid \d+$/.test(status ?? ""), `About shows the running core (${status})`);
 
   await page("Terminal");
-  const tags = await sw.locator(".sw-applies").allTextContents();
+  const tags = await sw.locator(".ui-row-desc i").allTextContents();
   check(tags.filter((t) => t.includes("new terminals")).length === 3, `settings that don't apply live say so (${tags.join(", ")})`);
 
   await page("Windows");
@@ -1130,13 +1130,13 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await row("Line height").locator(".ui-number input").focus();
   await row("Line height").locator(".ui-number input").press("ArrowUp");
   await waitFor(() => Math.abs(saved()["terminal.lineHeight"] - 1.15) < 1e-9, "↑ steps a number field by its step");
-  await sw.locator(".sw-page-foot .ui-button").click();
+  await sw.locator(".ui-form-actions .ui-button").click();
   await waitFor(() => !("terminal.lineHeight" in saved()) && !("terminal.renderer" in saved()), "Restore Defaults resets the page");
 
-  await sw.locator(".sb-search input").fill("zoom");
+  await sw.locator(".ui-split-pane .ui-search input").fill("zoom");
   const found = await sw.locator(".ui-row-name").allTextContents();
   check(["Minimum zoom", "Maximum zoom"].every((t) => found.some((f) => f.startsWith(t))), `search finds settings across pages (${found.join(", ")})`);
-  await sw.locator(".sb-search input").fill("");
+  await sw.locator(".ui-split-pane .ui-search input").fill("");
 
   await page("Keyboard Shortcuts");
   check((await sw.locator(".ui-row[data-compact] kbd").count()) > 10, "keyboard shortcuts are listed");
@@ -1144,7 +1144,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const kbFile = path.join(home, "keybindings.json");
   const lastWorkspace = row("Last Workspace");
   await lastWorkspace.hover();
-  await lastWorkspace.locator(".sw-key-add").click();
+  await lastWorkspace.locator(".ui-shortcut-add").click();
   await waitFor(async () => (await accel("view.palette")) === null, "the menu has no shortcuts while one is recorded");
   await sw.keyboard.press("Control+Alt+L");
   await waitFor(() => fs.existsSync(kbFile) && fs.readFileSync(kbFile, "utf8").includes('"workspace.last": ["Ctrl+Alt+L"]'), "a recorded shortcut is saved to keybindings.json");
@@ -1152,16 +1152,16 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await lastWorkspace.locator(".ui-reset").click();
   await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("workspace.last"), "Restore default removes the shortcut from keybindings.json");
   await lastWorkspace.hover();
-  await lastWorkspace.locator(".sw-key-add").click();
+  await lastWorkspace.locator(".ui-shortcut-add").click();
   await sw.keyboard.press("Control+Alt+L");
   await waitFor(() => fs.readFileSync(kbFile, "utf8").includes("workspace.last"), "a second recording is saved");
-  await sw.locator(".sw-page-foot .ui-button", { hasText: "Restore Defaults" }).click();
+  await sw.locator(".ui-form-actions .ui-button", { hasText: "Restore Defaults" }).click();
   await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("workspace.last"), "Restore Defaults puts every shortcut back");
-  await sw.locator(".sb-search input").fill("palette");
+  await sw.locator(".ui-split-pane .ui-search input").fill("palette");
   await sw.waitForTimeout(100);
   const paletteRows = await sw.locator(".ui-row[data-compact] .ui-row-name").allTextContents();
   check(paletteRows.includes("Command Palette"), `search finds shortcuts (${paletteRows.join(", ")})`);
-  await sw.locator(".sb-search input").fill("");
+  await sw.locator(".ui-split-pane .ui-search input").fill("");
   await sw.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });
   await sw.close();
 }

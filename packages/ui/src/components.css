@@ -571,6 +571,45 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 .ui-kbd[data-plain] { min-width: 0; padding: 0; font-size: var(--text-xs); letter-spacing: 0.04em; color: var(--text-dim); background: none; box-shadow: none; }
 .ui-kbd-group { display: inline-flex; gap: 3px; }
 
+/* ShortcutField: key caps to click and record again, a remove badge on a cap's corner
+   (hover), + for another while the row is hovered. */
+.ui-shortcuts { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-xs); }
+.ui-shortcut { position: relative; display: inline-flex; }
+.ui-shortcuts .ui-kbd { min-width: var(--control-h-sm); padding-inline: var(--space-sm); cursor: default; }
+.ui-shortcuts .ui-kbd:not([data-recording]):hover { box-shadow: inset 0 0 0 1px var(--accent); }
+.ui-shortcuts .ui-kbd[data-recording] { color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); animation: ui-recording 1.2s ease-in-out infinite; }
+@keyframes ui-recording { 50% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 35%, transparent); } }
+.ui-shortcut-remove {
+  position: absolute;
+  top: calc(-1 * var(--space-xs));
+  right: calc(-1 * var(--space-xs));
+  display: none;
+  place-items: center;
+  width: var(--space-lg);
+  height: var(--space-lg);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--bg);
+  background: var(--text-dim);
+}
+.ui-shortcut:hover .ui-shortcut-remove { display: grid; }
+.ui-shortcut-remove:hover { background: var(--state-needs); }
+.ui-shortcut-add {
+  display: grid;
+  place-items: center;
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  background: none;
+  opacity: 0;
+}
+.ui-row:hover .ui-shortcut-add, .ui-shortcut-add:focus-visible { opacity: 1; }
+.ui-shortcut-add:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
 .ui-progress {
   position: relative;
   display: inline-block;
@@ -623,6 +662,12 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 .ui-form-section-head { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 7px; }
 .ui-form-section-title { flex: 1; margin: 0; font: 600 12px var(--font-ui); color: var(--text-dim); }
 .ui-form-section-aside { font-size: var(--text-sm); color: var(--text-dim); }
+.ui-form-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-md); margin-top: var(--space-lg); }
+.ui-form-actions + .ui-form-section { margin-top: var(--space-2xl); }
+.ui-form-actions-hint { margin-right: auto; font-size: var(--text-xs); color: var(--text-dim); }
+/* QrCode: white whatever the theme, so a camera reads it. */
+.ui-qr { flex: none; width: 168px; height: 168px; padding: var(--space-sm); border-radius: var(--radius-lg); background: white; }
+.ui-qr svg { display: block; width: 100%; height: 100%; }
 
 .ui-group { border-radius: calc(var(--radius-md) + 1px); background: var(--group-bg); box-shadow: inset 0 0 0 1px var(--group-edge); }
 
@@ -805,6 +850,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-list-row.tall { min-height: 38px; padding-top: 3px; padding-bottom: 3px; }
 .ui-list-row:hover { background: var(--bg-hover); }
 .ui-list-row.sel { background: var(--bg-selected); }
+.ui-list-row[data-dim] { opacity: var(--disabled-opacity); }
 .ui-list-row.active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent); }
 .ui-list-row-text { flex: 1; min-width: 0; }
 .ui-list-row-title { display: flex; align-items: center; line-height: 18px; font-weight: 500; white-space: nowrap; overflow: hidden; }

@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { CoreInfo } from "@cmd/protocol";
 import type { AppInfo } from "../../../preload/index.ts";
-import { Badge, Button, Callout, FormRow, FormSection, Progress } from "@cmd/ui";
+import { Badge, Button, Callout, FormActions, FormRow, FormSection, Progress, Text } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
 
 const POLL_MS = 2000;
@@ -65,12 +65,20 @@ function debugText(a: AppInfo | null, c: CoreInfo | null): string {
 }
 
 /** A value to read and select, e.g. a path or a hash. */
-const Value = (p: { children: ReactNode }) => <span className="sw-value">{p.children}</span>;
+const Value = (p: { children: ReactNode }) => (
+  <Text size="sm" tone="dim" select>
+    {p.children}
+  </Text>
+);
 
 function PathRow(p: { title: string; path: string | null | undefined }) {
   if (!p.path) return null;
   return (
-    <FormRow title={p.title} description={<span className="sw-path">{p.path}</span>}>
+    <FormRow title={p.title} description={
+        <Text size="xs" mono select>
+          {p.path}
+        </Text>
+      }>
       <Button onClick={() => cmd.revealPath(p.path!)}>
         {REVEAL}
       </Button>
@@ -184,7 +192,7 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode; usageSta
                   : "Not connected. If this lasts, check the log."
             }
           >
-            {core ? <Value>pid {core.pid}</Value> : <span className="sw-none">offline</span>}
+            {core ? <Value>pid {core.pid}</Value> : <Text tone="dim">offline</Text>}
             {outdated && <Badge tone="accent">outdated</Badge>}
           </FormRow>
           {core && (
@@ -207,7 +215,7 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode; usageSta
             </>
           )}
       </FormSection>
-      <div className="sw-page-foot">
+      <FormActions>
         {app && (
           <Button onClick={() => cmd.openPath(app.coreLog)}>
             Open Log
@@ -216,7 +224,7 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode; usageSta
         <Button disabled={restarting} onClick={() => void restart()}>
           {restarting ? "Restarting…" : "Restart Core…"}
         </Button>
-      </div>
+      </FormActions>
 
       <FormSection title="Diagnostics">
           {p.crashReports}
@@ -237,11 +245,11 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode; usageSta
           <PathRow title="Core runs from" path={core?.root} />
           <PathRow title="Socket" path={core?.socket} />
       </FormSection>
-      <div className="sw-page-foot">
+      <FormActions>
         <Button onClick={copy}>
           {copied ? "Copied" : "Copy Debug Info"}
         </Button>
-      </div>
+      </FormActions>
     </>
   );
 }

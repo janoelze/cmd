@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { Symbol } from "../components/Symbol.tsx";
 import "@cmd/ui/ui.css";
 import "../styles.css";
-import "./settings.css";
 import { cmd } from "../bridge.ts";
 import { installErrorReporting } from "../errors.ts";
 import { installScrollbars, installTooltips, UIProvider } from "@cmd/ui";

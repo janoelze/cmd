@@ -75,5 +75,15 @@
     "$extensions": {
       "org.cmd.css": true
     }
+  },
+  "page": {
+    "w": {
+      "$description": "How wide a page of settings rows grows (the Settings window): rows keep their label and control within reach in a wide window; the page centres past it.",
+      "$type": "dimension",
+      "$value": {
+        "value": 680,
+        "unit": "px"
+      }
+    }
   }
 }

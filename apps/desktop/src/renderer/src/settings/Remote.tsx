@@ -9,7 +9,7 @@ import { renderSVG } from "uqr";
 import type { RemoteDevice, RemoteLogEntry, RemoteScope, RemoteStatus, SettingKey } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { PairPrompt, scopeLabel } from "../components/PairPrompt.tsx";
-import { Button, Callout, FormRow, FormSection, Segmented, Switch } from "@cmd/ui";
+import { Button, Callout, FormActions, FormRow, FormSection, Inline, Prose, QrCode, Segmented, Stack, Switch, Text } from "@cmd/ui";
 
 const STATE_LINE: Record<RemoteStatus["state"], string> = {
   off: "Off.",
@@ -67,9 +67,9 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
 
       {request ? (
         <FormSection title="Pair a Device">
-          <div className="rm-card">
+          <Stack pad="xl">
             <PairPrompt request={request} autoFocus={false} />
-          </div>
+          </Stack>
         </FormSection>
       ) : pairing ? (
         <FormSection title="Pair a Device">
@@ -94,14 +94,14 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
           {devices.map((d) => (
             <DeviceRow key={d.id} d={d} />
           ))}
-          {enabled && !pairing && (
-            <div className="rm-actions">
-              <Button onClick={() => setShowPair(true)}>
-                Pair a Device…
-              </Button>
-            </div>
-          )}
         </FormSection>
+      )}
+      {devices.length > 0 && enabled && !pairing && (
+        <FormActions>
+          <Button onClick={() => setShowPair(true)}>
+            Pair a Device…
+          </Button>
+        </FormActions>
       )}
 
       <Activity key={devices.length + sessions.length} />
@@ -143,34 +143,45 @@ function PairCode({ status, onDone }: { status: RemoteStatus | null; onDone?: ()
   }, [online]);
 
   const svg = useMemo(() => (code ? renderSVG(code.url, { ecc: "L", border: 2, pixelSize: 6 }) : null), [code]);
-  if (!online) return <div className="rm-card rm-wait">{STATE_LINE[status?.state ?? "connecting"]}</div>;
+  if (!online)
+    return (
+      <Stack pad="xl">
+        <Text tone="dim">{STATE_LINE[status?.state ?? "connecting"]}</Text>
+      </Stack>
+    );
   if (error) return <Callout tone="danger">{/client/.test(error) ? "Set the web client's address under Connection first." : error}</Callout>;
   const left = code ? Math.max(0, Math.round((code.expiresAt - 60_000 - now) / 1000)) : 0;
   return (
-    <div className="rm-card rm-pair">
-      <div className="rm-qr" dangerouslySetInnerHTML={{ __html: svg ?? "" }} />
-      <div className="rm-steps">
-        <ol>
-          <li>Point your phone's camera at the code.</li>
-          <li>Check that both screens show the same four words.</li>
-          <li>Allow it here, with view-only access or control.</li>
-        </ol>
-        <div className="rm-pair-foot">
-          <Button
-            disabled={!code}
-            onClick={() => code && void navigator.clipboard.writeText(code.url).then(() => (setCopied(true), setTimeout(() => setCopied(false), 1500)))}
-          >
-            {copied ? "Copied" : "Copy Link"}
-          </Button>
-          {onDone && (
-            <Button onClick={onDone}>
-              Done
+    <Stack pad="xl">
+      <Inline gap="xl">
+        <QrCode svg={svg ?? ""} />
+        <Stack gap="md" grow>
+          <Prose>
+            <ol>
+              <li>Point your phone's camera at the code.</li>
+              <li>Check that both screens show the same four words.</li>
+              <li>Allow it here, with view-only access or control.</li>
+            </ol>
+          </Prose>
+          <Inline gap="md">
+            <Button
+              disabled={!code}
+              onClick={() => code && void navigator.clipboard.writeText(code.url).then(() => (setCopied(true), setTimeout(() => setCopied(false), 1500)))}
+            >
+              {copied ? "Copied" : "Copy Link"}
             </Button>
-          )}
-        </div>
-        <div className="rm-dim">Works once. A new code in {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}.</div>
-      </div>
-    </div>
+            {onDone && (
+              <Button onClick={onDone}>
+                Done
+              </Button>
+            )}
+          </Inline>
+          <Text size="sm" tone="dim">
+            Works once. A new code in {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}.
+          </Text>
+        </Stack>
+      </Inline>
+    </Stack>
   );
 }
 
@@ -198,19 +209,21 @@ function Activity() {
   useEffect(() => void cmd.call("remote.log", { limit: all ? 100 : 8 }).then(setLog, () => setLog(null)), [all]);
   if (!log?.length) return null;
   return (
-    <FormSection title="Recent Activity">
-      {log.map((e, i) => (
-        <FormRow key={`${e.at}-${i}`} title={`${LOG_TEXT[e.kind] ?? e.kind}${e.device ? ` · ${e.device}` : ""}`} description={e.detail ?? undefined}>
-          <span className="rm-dim">{new Date(e.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-        </FormRow>
-      ))}
+    <>
+      <FormSection title="Recent Activity">
+        {log.map((e, i) => (
+          <FormRow key={`${e.at}-${i}`} title={`${LOG_TEXT[e.kind] ?? e.kind}${e.device ? ` · ${e.device}` : ""}`} description={e.detail ?? undefined}>
+            <Text size="sm" tone="dim">{new Date(e.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</Text>
+          </FormRow>
+        ))}
+      </FormSection>
       {!all && log.length >= 8 && (
-        <div className="rm-actions">
+        <FormActions>
           <Button onClick={() => setAll(true)}>
             Show More
           </Button>
-        </div>
+        </FormActions>
       )}
-    </FormSection>
+    </>
   );
 }

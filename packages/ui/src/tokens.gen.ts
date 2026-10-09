@@ -378,6 +378,12 @@ export const TOKENS: readonly TokenInfo[] = [
     "description": "Reading width for prose: a document's column (Measure)."
   },
   {
+    "name": "--page-w",
+    "type": "dimension",
+    "value": "680px",
+    "description": "How wide a page of settings rows grows (the Settings window): rows keep their label and control within reach in a wide window; the page centres past it."
+  },
+  {
     "name": "--control-h-sm",
     "type": "dimension",
     "value": "20px",
@@ -777,6 +783,12 @@ export const TOKENS: readonly TokenInfo[] = [
   {
     "name": "--sheet-shadow",
     "value": "0 calc(0.5px * var(--sheet-elev)) calc(1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 36%, transparent), 0 calc(1px * var(--sheet-elev)) calc(2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 30%, transparent), 0 calc(2px * var(--sheet-elev)) calc(4px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 24%, transparent), 0 calc(4px * var(--sheet-elev)) calc(8px * var(--sheet-elev)) calc(-1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 20%, transparent), 0 calc(8px * var(--sheet-elev)) calc(16px * var(--sheet-elev)) calc(-2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 16%, transparent)"
+  },
+  {
+    "name": "--titlebar-h",
+    "type": "dimension",
+    "value": "38px",
+    "description": "The title bar's band in a window of its own (Settings): where the traffic lights sit, drawn by the page under them (TitleBand). 28px off macOS (the app's styles.css)."
   },
   {
     "name": "--ease",

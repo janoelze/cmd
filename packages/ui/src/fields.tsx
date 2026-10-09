@@ -397,3 +397,50 @@ export function SecretField({
     </span>
   );
 }
+
+/**
+ * A command's keyboard shortcuts, to change in place (Settings → Keyboard Shortcuts):
+ * each a key cap; a click records it again, a badge on its corner (on hover) removes
+ * it, and + (shown when the row is hovered) records another. The slot being
+ * recorded reads "Type a shortcut…"; the caller listens for the keys.
+ */
+export function ShortcutField({ keys, recording, onRecord, onRemove }: {
+  /** As shown: "⌘K". */
+  keys: readonly string[];
+  /** The slot being recorded: one of keys, or keys.length for a new one. */
+  recording?: number;
+  onRecord: (slot: number) => void;
+  onRemove: (slot: number) => void;
+}) {
+  const rec = (
+    <kbd className="ui-kbd" data-recording>
+      Type a shortcut…
+    </kbd>
+  );
+  const add = keys.length ? "Add Another Shortcut" : "Add a Shortcut";
+  return (
+    <span className="ui-shortcuts">
+      {keys.map((k, i) =>
+        i === recording ? (
+          <span key={k}>{rec}</span>
+        ) : (
+          <span key={k} className="ui-shortcut">
+            <kbd className="ui-kbd" data-tip="Click to change" onClick={() => onRecord(i)}>
+              {k}
+            </kbd>
+            <button type="button" className="ui-shortcut-remove" data-tip="Remove" aria-label={`Remove ${k}`} onClick={() => onRemove(i)}>
+              <Icon name="xmark" size={7} weight="bold" />
+            </button>
+          </span>
+        ),
+      )}
+      {recording === keys.length ? (
+        rec
+      ) : (
+        <button type="button" className="ui-shortcut-add" data-tip={add} aria-label={add} onClick={() => onRecord(keys.length)}>
+          <Icon name="plus" size={ICON.control} weight="semibold" />
+        </button>
+      )}
+    </span>
+  );
+}

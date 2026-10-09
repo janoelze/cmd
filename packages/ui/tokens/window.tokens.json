@@ -133,5 +133,15 @@
         "org.cmd.css": true
       }
     }
+  },
+  "titlebar": {
+    "h": {
+      "$description": "The title bar's band in a window of its own (Settings): where the traffic lights sit, drawn by the page under them (TitleBand). 28px off macOS (the app's styles.css).",
+      "$type": "dimension",
+      "$value": {
+        "value": 38,
+        "unit": "px"
+      }
+    }
   }
 }
