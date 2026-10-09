@@ -127,6 +127,11 @@ describe("tailscale adapter", () => {
     await expect(adapter.enable(ctx)).rejects.toThrow("Turn on Serve for your tailnet: https://login.tailscale.com/f/serve?node=abc");
   });
 
+  it("asks to be made operator when tailscaled (as root) refuses", async () => {
+    const { adapter, ctx } = fake({ publish: { code: 1, stdout: "", stderr: "Access denied: serve config denied\n", error: null } });
+    await expect(adapter.enable(ctx)).rejects.toThrow(/sudo tailscale set --operator=\$USER/);
+  });
+
   it("reports published and reachable once it's up", async () => {
     const { adapter, ctx, probed } = fake({ serve: ok(ours()) });
     const checks = await adapter.detect(ctx);

@@ -188,6 +188,8 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
         const link = out.match(/https:\/\/login\.tailscale\.com\/\S+/)?.[0];
         if (/serve is not enabled/i.test(out)) throw new Error(`Turn on Serve for your tailnet${link ? `: ${link}` : " in Tailscale's admin console."}`);
         if (/https.*not enabled|enable https/i.test(out)) throw new Error(`Turn on HTTPS for your tailnet${link ? `: ${link}` : " in Tailscale's admin console."}`);
+        // tailscaled running as root (Homebrew) refuses other users unless they're its operator.
+        if (/access denied|permission denied|operator/i.test(out)) throw new Error("Tailscale won't let cmd publish. Run “sudo tailscale set --operator=$USER” in a terminal, then Check Again.");
         throw new Error(`Couldn't publish on your tailnet: ${firstLine(r.stderr || r.stdout) || r.error || `exit ${r.code}`}`);
       }
       ctx.log.info(`tailscale: published ${url(h, port)} → ${target(ctx)}`);
