@@ -31,10 +31,11 @@ const ours = (port = 8443, local = 47391) => ({
 const ok = (stdout: unknown): ExecResult => ({ code: 0, stdout: typeof stdout === "string" ? stdout : JSON.stringify(stdout), stderr: "", error: null });
 
 /** A fake CLI: answers by subcommand, records every call. */
-function fake(o: { status?: ExecResult; serve?: ExecResult; publish?: ExecResult; installed?: boolean; settings?: Partial<Settings> } = {}) {
+function fake(o: { status?: ExecResult; serve?: ExecResult; publish?: ExecResult; installed?: boolean; settings?: Partial<Settings>; selected?: boolean } = {}) {
   const calls: { cmd: string; args: string[]; env?: NodeJS.ProcessEnv }[] = [];
-  const ctx: AdapterContext = {
-    settings: { ...DEFAULT_SETTINGS, "remote.enabled": true, "remote.access": "tailscale", ...o.settings } as Settings,
+  const ctx: AdapterContext & { route: string } = {
+    settings: { ...DEFAULT_SETTINGS, ...o.settings } as Settings,
+    selected: o.selected ?? true,
     port: 47391,
     route: "r".repeat(22),
     log: { info: () => {}, warn: () => {} },
@@ -140,7 +141,7 @@ describe("tailscale adapter", () => {
   });
 
   it("says to turn remote access on when nothing is published yet", async () => {
-    const { adapter, ctx } = fake({ settings: { "remote.enabled": false } });
+    const { adapter, ctx } = fake({ selected: false });
     expect((await adapter.detect(ctx)).at(-2)).toMatchObject({ id: "published", state: "todo", detail: "Turn on remote access through Tailscale to publish it." });
   });
 

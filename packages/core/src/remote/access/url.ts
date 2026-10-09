@@ -4,7 +4,7 @@
 // checks say whether the page and the socket come through.
 
 import { WebSocket } from "ws";
-import type { AccessAdapter, AdapterContext, Check } from "./adapter.ts";
+import type { AccessAdapter, Check } from "./adapter.ts";
 
 /** remote.url as an https origin, or why it isn't one. */
 export function publicOrigin(raw: string): { url: string } | { error: string } {
@@ -43,7 +43,10 @@ export const urlAdapter: AccessAdapter = {
     const page = await probePage(o.url);
     checks.push({ id: "page", title: "Forward the page", state: page ? "error" : "ok", detail: page ?? `Forwards to 127.0.0.1:${ctx.port}` });
     if (page) return [...checks, { id: "socket", title: "Forward WebSockets", state: "todo" }];
-    const socket = await probeSocket(o.url, ctx);
+    // No route until the mode first ran, and checks don't make one. A made-up route
+    // would only get the listener's 403, which a proxy can answer just the same: no proof.
+    if (!ctx.route) return [...checks, { id: "socket", title: "Forward WebSockets", state: "todo", detail: "Turn on remote access through your URL to test this." }];
+    const socket = await probeSocket(o.url, ctx.route);
     checks.push({ id: "socket", title: "Forward WebSockets", state: socket ? "error" : "ok", detail: socket ?? undefined });
     return checks;
   },
@@ -71,9 +74,9 @@ export async function probePage(origin: string): Promise<string | null> {
 }
 
 /** null when a WebSocket to /r/<route> opens through the proxy. */
-function probeSocket(origin: string, ctx: AdapterContext): Promise<string | null> {
+function probeSocket(origin: string, route: string): Promise<string | null> {
   return new Promise((resolve) => {
-    const ws = new WebSocket(`${origin.replace(/^http/, "ws")}/r/${ctx.route}`, { origin, handshakeTimeout: 8000 });
+    const ws = new WebSocket(`${origin.replace(/^http/, "ws")}/r/${route}`, { origin, handshakeTimeout: 8000 });
     const done = (v: string | null) => {
       ws.removeAllListeners();
       ws.on("error", () => {});

@@ -59,6 +59,12 @@ export class HostKeys {
     this.#save();
   }
 
+  /** The route devices dial for a direct access mode, or null before it first ran; never writes (checks use it). */
+  peekDirectRoute(mode: string): string | null {
+    if (!this.#doc) throw new Error("host key not loaded");
+    return this.#doc.direct?.[mode] ?? null;
+  }
+
   /** The route devices dial for a direct access mode (tailscale, url…); made the first time. */
   directRoute(mode: string): string {
     if (!this.#doc) throw new Error("host key not loaded");
