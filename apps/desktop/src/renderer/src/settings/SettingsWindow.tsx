@@ -25,6 +25,7 @@ import {
   type SettingDef,
   type SettingKey,
   type SearchStatus,
+  type Settings,
   type SettingsSnapshot,
 } from "@cmd/protocol";
 import { COMMANDS, COMMAND_BY_ID, DEFAULT_KEYBINDINGS, norm, prettyAccelerator, type CommandSpec } from "../../../shared/commands.ts";
@@ -178,7 +179,7 @@ export function SettingsWindow() {
   } else if (page === "keyboard") {
     body = <Shortcuts />;
   } else if (page === "remote") {
-    body = <Remote key={pairAsk} status={remote} enabled={snap.settings["remote.enabled"]} pair={pairAsk > 0} row={(k) => <ItemRow k={k} ctx={ctx} />} />;
+    body = <Remote key={pairAsk} status={remote} enabled={snap.settings["remote.enabled"]} pair={pairAsk > 0} row={(k) => <ItemRow k={k} ctx={ctx} />} config={remoteConfig(snap.settings)} />;
   } else if (page === "about") {
     body = <About updates={<ItemRow k="updates.mode" ctx={ctx} />} crashReports={<ItemRow k="diagnostics.crashReports" ctx={ctx} />} usageStats={<ItemRow k="diagnostics.usageStats" ctx={ctx} />} />;
   } else {
@@ -392,6 +393,9 @@ function useModels(provider: AiProvider, keySet: boolean | undefined, keyHint: s
   useEffect(() => load(), [provider, keySet, keyHint]); // eslint-disable-line react-hooks/exhaustive-deps
   return { models, error, loading, load };
 }
+
+/** What a direct access mode's checks depend on: they run again when it changes. */
+const remoteConfig = (s: Settings) => [s["remote.access"], s["remote.url"], s["remote.tailscale.port"], s["remote.port"]].join(" ");
 
 /** An error from main without Electron's "Error invoking remote method …" prefix. */
 const ipcMessage = (e: Error) => e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "");

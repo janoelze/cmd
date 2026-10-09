@@ -3,14 +3,15 @@
 // WhatsApp. Below it: who is connected now and what they're watching, the paired
 // devices (access, last seen, unpair), recent activity, and how phones connect
 // (the relay, Tailscale or your own URL, docs/38). A device asking to pair is
-// answered right here as well.
+// answered right here as well. Tailscale and your own URL get a setup checklist
+// (the access adapter's checks, "Check Again"); the code waits until it passes.
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { renderSVG } from "uqr";
-import type { RemoteDevice, RemoteLogEntry, RemoteScope, RemoteStatus, SettingKey } from "@cmd/protocol";
+import type { RemoteAccessCheck, RemoteDevice, RemoteLogEntry, RemoteScope, RemoteStatus, SettingKey } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { PairPrompt, scopeLabel } from "../components/PairPrompt.tsx";
-import { Button, Callout, FormActions, FormRow, FormSection, Inline, Prose, QrCode, Segmented, Stack, Switch, Text } from "@cmd/ui";
+import { Button, Callout, FormActions, FormRow, FormSection, Inline, Prose, QrCode, Segmented, Spinner, Stack, StatusDot, Switch, Text, type DotState } from "@cmd/ui";
 
 const STATE_LINE: Record<RemoteStatus["state"], string> = {
   off: "Off.",
@@ -24,7 +25,7 @@ function stateLine(status: RemoteStatus | null): string {
   const state = status?.state ?? "connecting";
   if (!status || status.access === "relay") return state === "error" && status?.error ? `Can't reach the relay: ${status.error}` : STATE_LINE[state];
   if (state === "error") return status.error ?? "Not reachable yet.";
-  if (state === "connecting") return "Getting ready…";
+  if (state === "connecting") return status.access === "tailscale" ? "Publishing on your tailnet…" : "Getting ready…";
   return status.address ? `Ready on ${new URL(status.address).host}. Paired devices can connect.` : STATE_LINE.online;
 }
 
@@ -53,7 +54,20 @@ function ago(t: number): string {
 }
 const day = (t: number) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric" });
 
-export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | null; enabled: boolean; pair: boolean; row: (k: SettingKey) => ReactNode }) {
+/** The checklist's section title, per direct access mode. */
+const SETUP_TITLE: Record<string, string> = { tailscale: "Set Up Tailscale", url: "Set Up Your URL" };
+const CHECK_DOT: Record<RemoteAccessCheck["state"], DotState> = { ok: "success", todo: "warning", error: "danger" };
+const CHECK_LABEL: Record<RemoteAccessCheck["state"], string> = { ok: "Done", todo: "To do", error: "Failed" };
+
+/** The button for a check's link, named after where it goes. */
+function linkLabel(link: string): string {
+  if (/download/i.test(link)) return "Download";
+  if (/\/admin\b/.test(link)) return "Open Admin Console";
+  if (/login\.tailscale\.com\/a\//.test(link)) return "Log In";
+  return "Open";
+}
+
+export function Remote({ status, enabled, pair, row, config = "" }: { status: RemoteStatus | null; enabled: boolean; pair: boolean; row: (k: SettingKey) => ReactNode; config?: string }) {
   const [showPair, setShowPair] = useState(pair);
   useEffect(() => void (pair && setShowPair(true)), [pair]);
   const devices = status?.devices ?? [];
@@ -62,6 +76,11 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
   const access = status?.access ?? "relay";
   // First run: nobody paired yet, so the code is what you came for.
   const pairing = enabled && (showPair || devices.length === 0);
+  const direct = enabled && access !== "relay";
+  const setup = useChecks(direct ? access : null, status?.state, config);
+  // A direct mode pairs once it's set up: every check passes, or it's online already.
+  const ready = !direct || status?.state === "online" || (!!setup.checks?.length && setup.checks.every((c) => c.state === "ok"));
+  const checklist = direct && <Setup access={access} {...setup} />;
 
   return (
     <>
@@ -84,9 +103,15 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
         </FormSection>
       ) : pairing ? (
         <FormSection title="Pair a Device">
-          <PairCode status={status} onDone={devices.length ? () => setShowPair(false) : undefined} />
+          {ready ? (
+            <PairCode status={status} onDone={devices.length ? () => setShowPair(false) : undefined} />
+          ) : (
+            <div className="rm-card rm-wait">Finish the setup below to get a pairing code.</div>
+          )}
         </FormSection>
       ) : null}
+
+      {!ready && checklist}
 
       {sessions.length > 0 && (
         <FormSection title="Connected Now">
@@ -117,6 +142,8 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
 
       <Activity key={devices.length + sessions.length} />
 
+      {ready && checklist}
+
       <FormSection title="Connection">
         {row("remote.access")}
         {access === "relay" && row("remote.relay")}
@@ -127,6 +154,73 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
         {row("remote.deviceExpiryDays")}
       </FormSection>
     </>
+  );
+}
+
+type ChecksState = { checks: RemoteAccessCheck[] | null; error: string | null; busy: boolean; again: () => void };
+
+/**
+ * The access mode's checklist, fetched when the page shows, the mode or its
+ * settings change, or the status moves on. Checks run the tailscale CLI and probe
+ * HTTPS, so changes are debounced and an answer for an older ask is dropped.
+ */
+function useChecks(access: string | null, state: RemoteStatus["state"] | undefined, config: string): ChecksState {
+  const [checks, setChecks] = useState<RemoteAccessCheck[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const ask = useRef(0);
+  const run = (method: "remote.checks" | "remote.setup", mode: string) => {
+    const n = ++ask.current;
+    setBusy(true);
+    const call = method === "remote.setup" ? cmd.call("remote.setup", {}) : cmd.call("remote.checks", { access: mode });
+    void call.then(
+      (c) => n === ask.current && (setChecks(c), setError(null), setBusy(false)),
+      (err: Error) => n === ask.current && (setError(err.message), setBusy(false)),
+    );
+  };
+  useEffect(() => setChecks(null), [access]);
+  useEffect(() => {
+    if (!access) return void ++ask.current;
+    const timer = setTimeout(() => run("remote.checks", access), 400);
+    return () => clearTimeout(timer);
+  }, [access, state, config]);
+  return { checks, error, busy, again: () => access && run("remote.setup", access) };
+}
+
+/** The setup checklist of a direct access mode (docs/38, "Experience"). */
+function Setup({ access, checks, error, busy, again }: { access: string } & ChecksState) {
+  return (
+    <FormSection title={SETUP_TITLE[access] ?? "Setup"}>
+      {error && !checks ? (
+        <div className="rm-card">
+          <Callout tone="danger">Couldn't check the setup: {error}</Callout>
+        </div>
+      ) : !checks ? (
+        <div className="rm-card rm-wait rm-checking">
+          <Spinner /> Checking…
+        </div>
+      ) : (
+        checks.map((c) => (
+          <FormRow
+            key={c.id}
+            title={
+              <span className="rm-check">
+                <StatusDot state={CHECK_DOT[c.state]} size="sm" label={CHECK_LABEL[c.state]} />
+                {c.title}
+              </span>
+            }
+            description={c.detail}
+          >
+            {c.link && c.state !== "ok" && <Button onClick={() => cmd.openPath(c.link!)}>{linkLabel(c.link)}</Button>}
+          </FormRow>
+        ))
+      )}
+      <div className="rm-actions">
+        <Button busy={busy && !!checks} disabled={busy} onClick={again}>
+          Check Again
+        </Button>
+      </div>
+    </FormSection>
   );
 }
 
