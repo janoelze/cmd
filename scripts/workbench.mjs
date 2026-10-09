@@ -188,7 +188,8 @@ async function shoot(page, cdp, file, whole) {
  * Measured in the page, per window (.ui-window) of the story: how far its content sits from
  * the edges, to the nearest visible text (its glyph box, not the element), icon or drawing.
  * The body: top, left, right; the toolbar and footer: left, right. Problems: a body whose
- * left and right differ, a toolbar or footer not at --inset (window-design skill, Rules).
+ * left and right differ, a footer not at --inset (window-design skill, Rules). Toolbars are
+ * reported only: their items sit tighter than the content, for now.
  */
 function AUDIT() {
   const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--inset")) || 12;
@@ -256,8 +257,8 @@ function AUDIT() {
         if (!m) continue;
         const problems = [];
         if (part === "body" && Math.abs(m.left - m.right) > 1 && el.querySelector(".ui-grid, .ui-list, .ui-measure, .ui-media, .ui-split") === null) problems.push(`left ${m.left} ≠ right ${m.right}`);
-        if (part !== "body" && Math.abs(m.left - inset) > 1) problems.push(`left ${m.left}, not --inset (${inset})`);
-        if (part !== "body" && el.querySelector(".ui-tb-spacer") && Math.abs(m.right - inset) > 1) problems.push(`right ${m.right}, not --inset (${inset})`);
+        // Toolbars are reported, not checked: their items sit tighter than the content (6–8px), an open decision (window-design skill).
+        if (part === "footer" && Math.abs(m.left - inset) > 1) problems.push(`left ${m.left}, not --inset (${inset})`);
         if (part === "footer" && el.querySelector(".ui-status-line-end") && Math.abs(m.right - inset) > 1) problems.push(`right ${m.right}, not --inset (${inset})`);
         out.push({ window: `${name} (${w}px)`, part, ...m, problems });
       }

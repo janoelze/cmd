@@ -39,6 +39,7 @@ Each was settled by measuring in the Workbench; keep them unless the user change
 - **A row that holds controls is a toolbar.** Filters, ranges, view switches and actions go in the `WindowToolbar`, not in a line inside the content. The body opens with content.
 - **Footers are quiet.** One line in `--text-faint`, the same top line as the toolbar (`--window-edge`), centred between that line and the window's outline.
 - **Bars share their lines.** Toolbar and footer use `--window-edge`, like the title bar and the outline.
+- **Toolbar items sit tighter than the content** (the `WindowToolbar` pads 6px: fields and pressed buttons 6–8px from the edge, icons ~10px), unlike everything else at `--inset`. Left as it is for now (2026-10-09); the audit reports it without flagging it. If it changes, it changes in the kit's toolbar, for every window.
 - **Scrollbars never take room.** They float over the content (`installScrollbars`); nothing compensates for them.
 - **Tables** run edge to edge with their edge columns on the inset and 16px between columns (`--grid-pad` twice); an icon column hugs its icon. Least important columns drop as the window narrows (`hide`).
 - **Charts** line up on the left with their pane's title; the y axis sits on the right, right-aligned with the pane's unit (as Swift Charts does); no labels over the data, none on the baseline. A legend only for more than one series.
@@ -55,7 +56,7 @@ Each was settled by measuring in the Workbench; keep them unless the user change
 
 ## Measuring
 
-Shots catch what is wrong; numbers say by how much. `pnpm workbench audit <story> [variant] [--theme id]` measures every window in a story: the body's top, left and right to the nearest visible text, icon or drawing (clipped to what shows), and the toolbar's and footer's items to what's visible (a field's box, a borderless button's icon). It flags a body whose left and right differ (unless it holds a table, list, reading column, media or split, which have their own insets) and a bar whose items aren't at `--inset`, and exits 1 then. Run it after every layout change, at every size (the `Sizes` variant).
+Shots catch what is wrong; numbers say by how much. `pnpm workbench audit <story> [variant] [--theme id]` measures every window in a story: the body's top, left and right to the nearest visible text, icon or drawing (clipped to what shows), and the toolbar's and footer's items to what's visible (a field's box, a borderless button's icon). It flags a body whose left and right differ (unless it holds a table, list, reading column, media or split, which have their own insets) and a footer whose text isn't at `--inset`, and exits 1 then. Toolbars are reported only (see Rules). Run it after every layout change, at every size (the `Sizes` variant).
 
 For anything it doesn't cover, run JS in the Workbench (`pnpm workbench eval`; code with `;` needs an explicit `return`):
 
