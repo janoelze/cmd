@@ -108,7 +108,7 @@ export class DirectListener extends EventEmitter<TransportEvents> implements Tra
     });
     server.on("error", (err: NodeJS.ErrnoException) => {
       this.#listening = false;
-      const msg = err.code === "EADDRINUSE" ? `port ${this.#o.port} is in use; pick another (remote.port)` : err.message;
+      const msg = err.code === "EADDRINUSE" ? `Port ${this.#o.port} is in use. Pick another Local port (remote.port).` : err.message;
       log.warn(`direct listener: ${msg}`);
       this.#update(msg);
     });

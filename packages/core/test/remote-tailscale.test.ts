@@ -77,8 +77,17 @@ describe("tailscale adapter", () => {
     const down = fake({ status: { code: 1, stdout: "", stderr: "failed to connect to local Tailscale service; is Tailscale running?\n", error: null } });
     expect((await down.adapter.detect(down.ctx))[1]).toMatchObject({ id: "running", state: "todo", detail: "Tailscale isn't running. Open it and connect." });
     const login = fake({ status: ok(status({ BackendState: "NeedsLogin", AuthURL: "https://login.tailscale.com/a/abc" })) });
-    expect((await login.adapter.detect(login.ctx))[1]).toMatchObject({ detail: "Open Tailscale and log in.", link: "https://login.tailscale.com/a/abc" });
-    await expect(login.adapter.enable(login.ctx)).rejects.toThrow(/log in/);
+    expect((await login.adapter.detect(login.ctx))[1]).toMatchObject({ detail: "Log in to Tailscale.", link: "https://login.tailscale.com/a/abc" });
+    await expect(login.adapter.enable(login.ctx)).rejects.toThrow(/Log in/);
+    const app = fake({ status: ok(status({ BackendState: "NeedsLogin" })) });
+    expect((await app.adapter.detect(app.ctx))[1]).toMatchObject({ detail: "Open Tailscale and log in." });
+  });
+
+  it("tells a CLI-only install (Homebrew) to run tailscale up", async () => {
+    // Recorded from Homebrew's tailscale 1.104.1, logged out.
+    const { ctx } = fake({ status: ok(status({ BackendState: "NeedsLogin", Self: { DNSName: "", Online: false }, CurrentTailnet: null, CertDomains: null, Health: ["Tailscale is stopped."] })) });
+    const cli = createTailscaleAdapter({ exists: (p) => p === "/opt/homebrew/bin/tailscale", probe: async () => null });
+    expect((await cli.detect(ctx))[1]).toMatchObject({ id: "running", state: "todo", detail: "Run “tailscale up” in a terminal to connect." });
   });
 
   it("asks for MagicDNS, then HTTPS certificates, in the admin console", async () => {
