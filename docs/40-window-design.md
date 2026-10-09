@@ -249,3 +249,52 @@ In order of leverage:
 7. **Enforcement:** the CSS-scanning test for colour, type, radius and spacing, with a reasoned allowlist.
 8. **The window-design skill:** rules, the archetypes, the reference windows, and how to check.
 9. **Migration:** move the built-in windows onto the templates one by one (SQLite, Settings, Task Manager and Journal first).
+
+## Continuing the migration (handoff, 2026-10-10)
+
+For the next agent picking this up. Read the `window-design` skill first (`.claude/skills/window-design/SKILL.md`): it has the system, the rules and the checks. This is where things stand and how the work has been done.
+
+### What exists
+
+- **Tokens**: `packages/ui/tokens/*.tokens.json` (DTCG 2025.10, `cmd.resolver.json`), built by `pnpm tokens` into `packages/ui/src/tokens.css`, `tokens.gen.ts` (scales as types, `LIGHT_VARS`, the `TOKENS` manifest) and Magic's `prompt/tokens.css` and `preview-themes.json`. `tokens.test.ts` keeps them current and fails on any variable the kit's CSS reads that nothing defines.
+- **Window pieces** in `@cmd/ui` (`frame.tsx`, `chart.tsx`, `timeline.tsx`, styles in `frame.css`): `View` (toolbar, body, footer, `state`, `inset`, `focusable`, `bodyRef`), `ViewState`, `StatusLine`, `Split`, `List` (plain, grouped), `ListGroup`, `Panes`/`Pane`, `Stat`, `Chart`/`Sparkline`/`Legend`, `Stack`/`Inline`/`Tiles`/`Hide` (`below`, `above`), `Text`, `Measure`, `Document`, `MediaStage`, `Filmstrip`, `Viewport`, `Picture`, `Ribbon`, `Timeline`/`TimelineEntry`. `DataGrid` has `grow`, `hide`, `icon` columns and selection. The gallery's Windows page shows them.
+- **Reference windows** (`renderer/src/reference/*.story.tsx`): data, chart, content, media, actions, and `States` (every view state, short and long texts, three widths).
+- **Floating scrollbars** in every app window (`installScrollbars` uses the page overlay); nothing compensates for scrollbars any more.
+- **Magic** shares the tokens through kit versions (`KIT_FILES` in `packages/protocol/src/magic.ts`): kit 1 frozen (`prompt/kits/1.css`, hash pinned in `kits.test.ts`), kit 2 current; a widget's manifest pins its kit.
+- **Enforcement**: `design-css.test.ts` counts literal colours, font sizes, radii and spacing per stylesheet against `apps/desktop/test/design-debt.json`; counts only go down (`pnpm design-debt` locks in a lower count, in the same commit). `pnpm workbench audit <story> [variant]` measures where content sits against each window's edges.
+
+### Migrated (merged to master, local, not pushed)
+
+Workspace Actions (`ActionsView`), Resources (sparklines, tables), SQLite (Split sidebar → toolbar menu below 600px), Markdown (`Document`), Journal (`Ribbon`, `Timeline`). On branch **`migrate-media`** in `~/src/cmd-migrate-media`, reviewed by the user and ready to merge: Image (`Viewport`, `Picture`) and PDF (no sidebar any more, pages full width from the top; `pdf.css` keeps only pdf.js's own markup). Merge it first: `git -C ~/src/cmd merge --ff-only migrate-media`, then remove the worktree as CLAUDE.md says. Nothing has been pushed or released.
+
+Design debt went 539 → 485. What's left, by file (`design-debt.json`): the kit's `components.css` 192, the app's `styles.css` 125 (sidebar, tiles, browser and files windows, the palette, remote), `magic.css` 50 (the Magic window's own UI, not widgets), `settings.css` 38, `tasks.css` 24, `widgets.css` 20 (Agent Activity, Live Diff, YouTube, Timer), `library.css` 13, `tooltips.css` 13, small rest.
+
+### Next, in the order agreed with the user
+
+1. **Settings** (`renderer/src/settings/`, its own page `settings.html`) and the **Task Manager** (`renderer/src/tasks/`, `tasks.html`): their own frames (`.sw-bar`, `.tm-bar`), to move onto `View`/`Split` and the data window (Task Manager) and FormSection (Settings, which already uses the kit's forms). Settings once used scrollbar gutters for its margins; that's padding now.
+2. **The remaining widgets** in `widgets.css`: Agent Activity, Live Diff, Timer, YouTube.
+3. **The Files and Browser windows and the sidebar** (most of `styles.css`), then the **Magic window's** chrome (`magic.css`) and the Widget Library (`library.css`).
+4. **The kit's own `components.css`** (192 literals: move its spacing onto the scale) and `tooltips.css`.
+
+### How each migration has gone (keep doing it this way)
+
+1. New worktree per window (`git -C ~/src/cmd worktree add ~/src/cmd-migrate-<name> -b migrate-<name> master`, `pnpm install`), as CLAUDE.md says.
+2. Split the view: the window keeps data and effects; a presentational component (or the same one with injected bits) draws, so a **story** can show every state. Patterns used: `Actions`/`ActionsView`, `Resources`/`ResourcesView`; an optional `update` prop for window state (`SqliteView`); real files through the Workbench's real core (`reference/RepoFile.tsx`: `useRepoFile`, `storyWindow`); the instance's own `cmd.sqlite` as a database (`core.hello` gives `stateDir` and `root`).
+3. Rebuild on the pieces, closest reference window first; delete the view's CSS. A look the kit lacks becomes a kit piece (with tokens, a gallery specimen when it's general), not view CSS. Third-party markup (pdf.js) may keep a small stylesheet on tokens.
+4. Check: `pnpm workbench shot` in a dark and a light theme, `pnpm workbench audit` on every variant (incl. `Sizes`), before/after shots (`git stash push -- packages apps`, shoot, `git stash pop`: the story keeps working against the old component when its props didn't change).
+5. `pnpm design-debt`, `pnpm typecheck && pnpm test`, commit; update the skill when a piece or rule is added. Show the user in the Workbench, iterate, merge when they say so.
+
+### Decisions the user made (keep them)
+
+- One inset (12px) on every side, to the letters; a row of controls is a toolbar (but a single action stays by its heading, as Journal's Write Again); footers quiet (`--text-faint`, the toolbar's line colour); tables edge to edge; chart axes on the right; lists of things to run grouped, indented, no boxes; states centred, balanced, sentence case, small icons in `--text`.
+- Toolbar items stay at their tighter 6–8px inset for now (open; the audit reports, doesn't flag).
+- Keep windows as simple as they were (Markdown); drop what isn't needed (the PDF sidebar). Behaviour stays unless the user asks.
+- Sidebars and inspectors collapse below 600px; window sizes are narrow (< 360), regular (< 600), wide.
+
+### Gotchas
+
+- `pnpm workbench eval '<js>'`: code containing `;` needs an explicit `return`. The user sometimes closes the Workbench window; don't reopen it uninvited (`pnpm workbench <story>` starts it again).
+- The Workbench page now has the app's CSP (`workbench.html`), so `cmd-file:` images, media and PDFs load in stories.
+- `packages/core/test/actions.test.ts` "lists a folder and tells when its files change" fails now and then in the full suite under load (the Workbench running); it passes alone. Not caused by this work; worth a look.
+- The repo isn't formatted by a tool: write code in the surrounding hand-formatted style; no prettier.
+- Other agents work in parallel (`cmd ls`); merges happen only from the main checkout, when the user asks.
