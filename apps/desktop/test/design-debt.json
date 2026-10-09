@@ -1,0 +1,67 @@
+{
+  "apps/desktop/src/renderer/src/components/jam.css": {
+    "radius": 1,
+    "spacing": 1
+  },
+  "apps/desktop/src/renderer/src/components/journal.css": {
+    "color": 4,
+    "radius": 2,
+    "spacing": 19
+  },
+  "apps/desktop/src/renderer/src/components/library.css": {
+    "color": 2,
+    "fontSize": 1,
+    "radius": 1,
+    "spacing": 9
+  },
+  "apps/desktop/src/renderer/src/components/magic.css": {
+    "fontSize": 13,
+    "radius": 7,
+    "spacing": 30
+  },
+  "apps/desktop/src/renderer/src/components/widgets.css": {
+    "color": 2,
+    "fontSize": 1,
+    "spacing": 23
+  },
+  "apps/desktop/src/renderer/src/pdf/pdf.css": {
+    "color": 3,
+    "radius": 1,
+    "spacing": 8
+  },
+  "apps/desktop/src/renderer/src/settings/settings.css": {
+    "fontSize": 9,
+    "radius": 3,
+    "spacing": 26
+  },
+  "apps/desktop/src/renderer/src/styles.css": {
+    "color": 4,
+    "fontSize": 28,
+    "radius": 12,
+    "spacing": 87
+  },
+  "apps/desktop/src/renderer/src/tasks/tasks.css": {
+    "fontSize": 9,
+    "spacing": 15
+  },
+  "apps/desktop/src/renderer/src/windows/sqlite.css": {
+    "spacing": 10
+  },
+  "apps/desktop/src/renderer/src/workbench/workbench.css": {
+    "spacing": 2
+  },
+  "packages/ui/src/components.css": {
+    "color": 5,
+    "fontSize": 19,
+    "radius": 10,
+    "spacing": 158
+  },
+  "packages/ui/src/frame.css": {
+    "radius": 1
+  },
+  "packages/ui/src/tooltips.css": {
+    "fontSize": 4,
+    "radius": 2,
+    "spacing": 7
+  }
+}

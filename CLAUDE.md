@@ -21,6 +21,7 @@ pnpm core                    # run the core directly
 pnpm core:stop               # stop the core of $CMD_HOME, else the dev one; core:stop-all stops every non-release core
 pnpm cmd <args>              # run the CLI from source
 pnpm tokens                  # build packages/ui/tokens/*.tokens.json (DTCG) into tokens.css and tokens.gen.ts; --check fails when stale
+pnpm design-debt             # lower apps/desktop/test/design-debt.json after removing literal colours/sizes from a stylesheet
 pnpm ui                      # the @cmd/ui gallery in a browser (every component, every theme); `pnpm --filter @cmd/ui shots` screenshots it
 pnpm workbench <story>       # one component from a *.story.tsx in the real app, to iterate on with the user (prototype skill)
 pnpm release <ver|patch|minor>  # needs the version's CHANGELOG.md section (changelog skill); bump, tag v<ver>, push; CI publishes the GitHub release
@@ -87,6 +88,7 @@ packages/cli (`cmd`, hook entry point)              ──┼─ newline-delimit
 
 - Settings: add new keys to `SETTINGS_SCHEMA` in `packages/protocol/src/settings.ts` and place it in a page and section of the Settings window in `renderer/src/settings/layout.ts` (a test checks every key is placed once). The window (`renderer/src/settings/`, its own page `settings.html`) generates each row from the schema; `title`, `unit`, `placeholder`, `labels`, `code` and `control` are display hints. Settings must apply live: read them when acting, or, if a core consumer caches something derived from them, subscribe with `SettingsService.bind(keys, fn)`; the renderer gets `settings.updated`. Only when a change can't reach what is already running, set `applies` (`newTerminals`, `firstLaunch`) so the UI and CLI say so.
 - Design tokens live in `packages/ui/tokens/*.tokens.json` (DTCG 2025.10, tied together by `cmd.resolver.json`); `tokens.css` and `tokens.gen.ts` are generated from them (`pnpm tokens`; a test fails when they are stale or when kit CSS reads a variable that is no token). Add or change a token there, with a `$description` that says when to use it.
+- Stylesheets take colours, font sizes, radii and spacing from the tokens. `design-css.test.ts` counts the literals still left per file against `design-debt.json`: a new one fails (use or add a token), and one removed fails until `pnpm design-debt` locks in the lower count.
 - UI: build views from `@cmd/ui` components and tokens, not new controls or literal colours/sizes. A control the kit lacks goes into the kit (with a gallery specimen in `packages/ui/gallery/Gallery.tsx`), not into a view's CSS.
 - Motion: windows move through `TileMotion` (`renderer/src/motion.ts`), overlays leave with `usePresence` and list rows move with `useFlip` (`@cmd/ui`), all on one curve (`--glide`). Never animate a window's geometry from React or with a CSS transition. After changing anything that moves, appears or disappears, run `pnpm e2e:motion` (the `motion` skill; docs/37-motion.md).
 - User-facing text (notifications, toasts, tooltips, menus, settings, errors, CLI messages): follow the `copywriting` skill (`.claude/skills/copywriting/SKILL.md`): friendly and compact.
