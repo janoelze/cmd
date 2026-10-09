@@ -13,7 +13,7 @@ foreach (releases() as $r) $published[$r['tag']] = $r;
 page_start('cmd releases', "What's new in each release of cmd.", 'releases/');
 ?>
 <h1>Releases</h1>
-<p class="lede">What's new in each release of cmd. The app updates itself and shows what changed since your last update.</p>
+<p class="lede">What's new in each release of cmd.</p>
 <?php foreach (changelog() as $i => $c): $tag = 'v' . $c['version']; $r = $published[$tag] ?? null; ?>
 <section class="release" id="<?= h($tag) ?>">
   <div class="head">

@@ -5,6 +5,9 @@
 
 declare(strict_types=1);
 
+/** A section's badge tone, as in What's New (components/WhatsNew.tsx). */
+const KIND_TONES = ['New' => 'accent', 'Improved' => 'success', 'Fixed' => 'warning', 'Removed' => 'neutral'];
+
 /** [{version, date, notes}] newest first, notes as Markdown; [] when the file is missing. */
 function changelog(): array
 {
@@ -16,7 +19,7 @@ function changelog(): array
 
 /**
  * A release's notes as HTML. Covers what CHANGELOG.md uses: paragraphs,
- * "### " headings, "- " lists, **bold**, `code`, [links](url) and shortcuts.
+ * "### " headings (New, Improved… as badges), "- " lists, **bold**, `code`, [links](url) and shortcuts.
  */
 function notes_html(string $md): string
 {
@@ -41,7 +44,8 @@ function notes_html(string $md): string
             $out .= '<li>' . inline($m[1]) . '</li>';
         } elseif (preg_match('/^#{2,4} (.*)$/', $line, $m)) {
             $flush();
-            $out .= '<h3>' . inline($m[1]) . "</h3>\n";
+            $tone = KIND_TONES[$m[1]] ?? null;
+            $out .= '<h3>' . ($tone ? '<span class="badge" data-tone="' . $tone . '">' . h($m[1]) . '</span>' : inline($m[1])) . "</h3>\n";
         } elseif ($line === '') {
             $flush();
         } else {

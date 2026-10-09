@@ -55,7 +55,7 @@ function page_start(string $title, string $description, string $current): void
      the page as windows. Dark only. */
   color-scheme: dark;
   --bg: #050506; --surface: #121314; --ink: #e0e4e8; --ink-2: #a4aab3; --ink-3: #7d838c;
-  --line: #1f2124; --accent: #71bef2; --link: #8ad4f5; --accent-soft: #15283a; --on-accent: #121314;
+  --line: #1f2124; --accent: #71bef2; --success: #a8cc8c; --warning: #eed9a0; --link: #8ad4f5; --accent-soft: #15283a; --on-accent: #121314;
   /* One type scale for the whole site: text at 14-15px, the title a little more. */
   --fs-xs: 12px; --fs-sm: 14px; --fs-base: 14px; --fs-lede: 15px; --fs-h2: 15px; --fs-h1: 20px;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
@@ -177,7 +177,13 @@ p.more a:hover { color: var(--link); }
 .release .head .button { margin-left: auto; }
 .notes { max-width: 68ch; }
 .notes > p:first-child { color: var(--ink-2); font-size: var(--fs-lede); margin: 10px 0 0; }
-.notes h3 { font-size: var(--fs-sm); font-weight: 500; color: var(--ink-3); margin: 18px 0 4px; }
+.notes h3 { font-size: var(--fs-sm); font-weight: 500; color: var(--ink-3); margin: 18px 0 6px; line-height: 1; }
+/* The app's small Badge (packages/ui, .ui-badge[data-size="sm"]), a size up for the page's type. */
+.badge { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; font: 600 var(--fs-xs)/1 var(--sans); color: var(--tone); border-radius: 9px; background: color-mix(in srgb, var(--tone) 14%, transparent); }
+.badge[data-tone="accent"] { --tone: var(--accent); }
+.badge[data-tone="success"] { --tone: var(--success); }
+.badge[data-tone="warning"] { --tone: var(--warning); }
+.badge[data-tone="neutral"] { color: var(--ink-3); background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .notes ul { margin: 0; padding-left: 18px; }
 .notes li { margin: 3px 0; color: var(--ink-2); }
 .notes li::marker { color: var(--ink-3); }
