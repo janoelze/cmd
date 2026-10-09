@@ -6,7 +6,7 @@
 // process.env.PATH. Children spawned later inherit it.
 
 import fs from "node:fs";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { logger } from "@cmd/protocol/node";
 
 const log = logger("path");
@@ -86,4 +86,26 @@ async function adopt(shell: string): Promise<void> {
   process.env.PATH = mergePath(login, before);
   if (login === null) log.warn(`couldn't read PATH from ${shell}; using ${process.env.PATH}`);
   else if (process.env.PATH !== before) log.info(`PATH from ${shell} (${Date.now() - start} ms): ${process.env.PATH}`);
+}
+
+export interface ExecResult {
+  /** Exit code; null when it was killed (timeout) or couldn't start. */
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  /** Why it didn't run to completion: "ENOENT", "timeout"…; null when it exited. */
+  error: string | null;
+}
+
+/** Run a tool on the login PATH and collect its output. Never throws; `error` says what went wrong. */
+export async function exec(cmd: string, args: string[], o: { timeout?: number; env?: NodeJS.ProcessEnv } = {}): Promise<ExecResult> {
+  await pathReady;
+  return new Promise((resolve) => {
+    execFile(cmd, args, { timeout: o.timeout ?? 10_000, env: o.env ? { ...process.env, ...o.env } : process.env, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
+      const e = err as (NodeJS.ErrnoException & { killed?: boolean; code?: number | string }) | null;
+      const code = !e ? 0 : typeof e.code === "number" ? e.code : null;
+      const error = !e || typeof e.code === "number" ? null : e.killed ? "timeout" : String(e.code ?? e.message);
+      resolve({ code, stdout: String(stdout), stderr: String(stderr), error });
+    });
+  });
 }
