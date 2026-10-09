@@ -27,6 +27,9 @@
   --text-xl: 17px;
   --text-display: 20px;
 
+  /* Fainter than --text-dim: what a window's footer says (counts, when it updated). */
+  --text-faint: color-mix(in srgb, var(--text-dim) 70%, transparent);
+
   /* ── surfaces and lines (derived from --ink and --scrim) ── */
   --bg-hover: color-mix(in srgb, var(--ink) 6%, transparent);
   --bg-selected: color-mix(in srgb, var(--ink) 10%, transparent);
