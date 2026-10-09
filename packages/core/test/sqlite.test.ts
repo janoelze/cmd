@@ -114,7 +114,32 @@ describe("SqliteReader", () => {
 });
 
 describe("SqliteService", () => {
-  it("answers through a worker, refuses what isn't a database, and stops idle readers", async () => {
+  it("kills a reader stuck in a runaway query, and the next request gets a fresh one", async () => {
+    const file = makeDb("runaway.sqlite");
+    const svc = new SqliteService({ timeoutMs: 700 });
+    try {
+      const t0 = Date.now();
+      await expect(svc.query({ path: file, sql: "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r) SELECT count(*) FROM r" })).rejects.toThrow(/took too long/);
+      expect(Date.now() - t0).toBeLessThan(5000);
+      expect(svc.open()).toEqual([]);
+      expect((await svc.query({ path: file, sql: "SELECT count(*) FROM customers" })).rows).toEqual([[3]]);
+    } finally {
+      svc.close();
+    }
+  });
+
+  it("says why a file that looks like a database can't be opened", async () => {
+    const bad = path.join(dir, "corrupt.sqlite");
+    fs.writeFileSync(bad, Buffer.concat([Buffer.from("SQLite format 3\0", "latin1"), Buffer.alloc(4000, 7)]));
+    const svc = new SqliteService();
+    try {
+      await expect(svc.schema(bad)).rejects.toThrow(/not a database|corrupt|malformed/i);
+    } finally {
+      svc.close();
+    }
+  });
+
+  it("answers through a reader process, refuses what isn't a database, and stops idle readers", async () => {
     const file = makeDb("svc.sqlite");
     const svc = new SqliteService();
     try {

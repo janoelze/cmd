@@ -1,11 +1,13 @@
-// The SQLite window's reader (docs/36-sqlite-viewer.md): one worker per open
+// The SQLite window's reader (docs/36-sqlite-viewer.md): one process per open
 // database, since node:sqlite is synchronous and a count or a query over a big
-// table would stall the core. The file is opened read-only and query_only is
-// set, so nothing here can write. Requests carry an id; each gets one reply.
+// table would stall the core. A process, not a thread: a thread stuck inside
+// one SQLite step (a runaway query) can't be terminated, a process can be
+// killed. The file is opened read-only and query_only is set, so nothing here
+// can write. Requests carry an id; each gets one reply; id 0 reports that the
+// file couldn't be opened.
 
 import fs from "node:fs";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { parentPort, workerData } from "node:worker_threads";
 import type { SqliteColumn, SqliteForeignKey, SqliteIndex, SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema, SqliteTable, SqliteTrigger, SqliteValue } from "@cmd/protocol";
 
 export type SqliteOp = { op: "schema" } | ({ op: "rows" } & Omit<SqliteRowsQuery, "path">) | ({ op: "query" } & Omit<SqliteQuery, "path">) | { op: "export"; table: string; file: string };
@@ -187,14 +189,22 @@ export class SqliteReader {
   }
 }
 
-if (parentPort) {
-  const port = parentPort;
-  const reader = new SqliteReader((workerData as { path: string }).path);
-  port.on("message", (r: SqliteRequest) => {
+// Started by service.ts: `node worker.ts <database>` with an IPC channel.
+if (process.send && process.argv[2]) {
+  const send = (m: SqliteReply) => process.send!(m);
+  let reader: SqliteReader;
+  try {
+    reader = new SqliteReader(process.argv[2]);
+  } catch (e) {
+    send({ id: 0, error: (e as Error).message });
+    process.exit(1);
+  }
+  process.on("message", (r: SqliteRequest) => {
     try {
-      port.postMessage({ id: r.id, result: reader.handle(r) } satisfies SqliteReply);
+      send({ id: r.id, result: reader.handle(r) });
     } catch (e) {
-      port.postMessage({ id: r.id, error: (e as Error).message } satisfies SqliteReply);
+      send({ id: r.id, error: (e as Error).message });
     }
   });
+  process.on("disconnect", () => process.exit(0));
 }

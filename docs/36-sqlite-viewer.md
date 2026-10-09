@@ -12,7 +12,7 @@ The tools people call minimal converge on the same set, which this window takes 
 
 - **`node:sqlite`** is already how the core stores its own state (`store.ts`): no native module. A `DatabaseSync` opens a file with `readOnly: true`; a statement's `columns()` gives names and declared types; `setReturnArrays(true)` gives rows as arrays; `sourceSQL` says how much of the text `prepare()` compiled, which is how a second statement is caught.
 - **Window types**: a core type with `opens: { extensions }` routes `open shop.db` in a shell, the file tree and the palette to it (`open.handlers` overrides); the renderer registers its view with `registerWindowView` and a `lazyView`. The JSON window shows the whole pattern, including live reload from `fs.watch` + `onFsChanged`.
-- **Workers**: the core runs heavy reads in `worker_threads` (`data/sources/ingest-worker.ts` and others), because the scheduler's watchdog flags any block of the thread over 100 ms.
+- **Workers**: the core runs heavy reads in `worker_threads` (`data/sources/ingest-worker.ts` and others), because the scheduler's watchdog flags any block of the thread over 100 ms; and the PTY host is a child process (`terminals/remote.ts`), the pattern the reader copies.
 - **The kit** had lists (Panel, ListSection, ListRow) and a FindBar but nothing with columns.
 
 ## What it does
@@ -28,9 +28,30 @@ The tools people call minimal converge on the same set, which this window takes 
 ## Under the hood
 
 - **Protocol** (`packages/protocol/src/sqlite.ts`): `sqlite.schema { path }` → tables, views, indexes, triggers, size, page size, encoding, journal mode; `sqlite.rows { path, table, sort?, filter?, offset?, limit? }` and `sqlite.query { path, sql, limit? }` → `{ columns, rows, total, truncated, took }`. Values: number, string, null, `{ blob: bytes }`, `{ text, chars }` for cut text. Remotely these are `view` calls under the same path policy as `fs.read`.
-- **Core** (`packages/core/src/sqlite/`): `SqliteService` keeps a worker per open database (`worker.ts`, `SqliteReader`), started on first use and stopped after a minute idle. The worker opens the file `readOnly` and sets `PRAGMA query_only = ON`, so nothing can write, whatever is typed. A request over 30 s ends its worker (and rejects what waited on it) rather than hang the window; the next request starts a fresh one. The same `SqliteReader` runs in-process in tests.
+- **Core** (`packages/core/src/sqlite/`): `SqliteService` keeps a reader process per open database (`worker.ts`, `SqliteReader`, spawned like the PTY host with the app's node), started on first use and stopped after a minute idle. The reader opens the file `readOnly` and sets `PRAGMA query_only = ON`, so nothing can write, whatever is typed. A request over 30 s kills its reader (and rejects what waited on it) rather than hang the window; the next request starts a fresh one. It is a process, not a worker thread, because a thread stuck inside one SQLite step (`SELECT count(*)` over an endless recursive CTE) can't be terminated: the stress run left such a thread spinning and the process couldn't exit. The same `SqliteReader` runs in-process in tests.
 - **Kit**: `DataGrid` (`packages/ui/src/grid.tsx`): a sticky header, sortable columns, a type under each name, cells as `{ node, kind, tip }`, a numbered column, a footer. In the gallery.
 - **Renderer**: `windows/sqlite.tsx` (registration, menu), `sqlite-view.tsx` (the view, three tabs), `sqlite.css`. The window's state is `{ path, table?, tab?, sql? }`.
+
+## Stress (2026-10-09)
+
+A 383 MB database (3,000,000 events with a JSON payload, 50,000 users, a 120-column table, a GROUP BY view) through the service, main thread watched for stalls (worst: 16 ms, from the test's own loop):
+
+| Call | ms |
+|---|---|
+| schema, counting every table (cold) | 729 |
+| schema (warm) | 15 |
+| first page | 11 |
+| page at offset 2,999,800 | 598 |
+| sort by an unindexed column | 184 |
+| sort by an indexed column | 13 |
+| filter "purchase" (full scan, 500,000 hits) | 975 |
+| filter for one row at the end | 2,399 |
+| the view's first page (GROUP BY over 3M) | 2,526 |
+| query 5,000 rows × 120 columns | 86 |
+| GROUP BY kind | 943 |
+| export 3,000,000 rows (345 MB) | 4,348 |
+
+Known costs: a filter is a full scan over every column as text, and the schema counts every table on every reload (a burst of writes to a huge database keeps the reader busy, though never the core). A runaway query is cut at 30 s.
 
 ## Later
 

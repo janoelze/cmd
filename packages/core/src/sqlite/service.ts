@@ -1,25 +1,34 @@
-// SQLite windows' reads (docs/36-sqlite-viewer.md): a worker per open database
-// (worker.ts), started on first use and stopped after a minute idle, so the
-// core's thread never waits on a file. A request that takes too long ends its
-// worker (and every request waiting on it) rather than hang the window for
-// good; the next request starts a fresh one. Opening is what tells whether a
-// file is a database, so an error reaches the caller as a plain message.
+// SQLite windows' reads (docs/36-sqlite-viewer.md): a reader process per open
+// database (worker.ts), started on first use and stopped after a minute idle,
+// so the core's thread never waits on a file. A request that takes too long
+// kills its reader (and fails every request waiting on it) rather than hang
+// the window for good; the next request starts a fresh one. A process rather
+// than a worker thread because a thread stuck inside one SQLite step can't be
+// stopped. Opening is what tells whether a file is a database, so an error
+// reaches the caller as a plain message.
 
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Worker } from "node:worker_threads";
+import { spawn, type ChildProcess } from "node:child_process";
 import type { SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { SqliteOp, SqliteReply, SqliteRequest } from "./worker.ts";
 
 const log = logger("sqlite");
 
-/** A worker with nothing to do stops after this. */
+/** A reader with nothing to do stops after this. */
 const IDLE_MS = 60_000;
-/** A request taking longer ends its worker; an export (a whole table to disk) gets longer. */
+/** A request taking longer kills its reader; an export (a whole table to disk) gets longer. */
 const TIMEOUT_MS = 30_000;
 const EXPORT_TIMEOUT_MS = 10 * 60_000;
+
+const WORKER = path.join(import.meta.dirname, "worker.ts");
+
+export interface SqliteServiceOptions {
+  /** Tests: a shorter guard. */
+  timeoutMs?: number;
+}
 
 const MAGIC = "SQLite format 3\0";
 
@@ -52,20 +61,25 @@ interface Pending {
 }
 
 class Database {
-  worker: Worker;
+  child: ChildProcess;
   pending = new Map<number, Pending>();
   idle: NodeJS.Timeout | null = null;
-  #next = 1;
-
   readonly file: string;
   #onGone: () => void;
+  #timeoutMs: number;
+  /** Why the reader stopped, if it said (it couldn't open the file). */
+  #reason: string | null = null;
+  #next = 1;
 
-  constructor(file: string, onGone: () => void) {
+  constructor(file: string, timeoutMs: number, onGone: () => void) {
     this.file = file;
+    this.#timeoutMs = timeoutMs;
     this.#onGone = onGone;
-    this.worker = new Worker(new URL("./worker.ts", import.meta.url), { workerData: { path: file } });
-    this.worker.unref();
-    this.worker.on("message", (m: SqliteReply) => {
+    const env = { ...process.env };
+    if (process.versions.electron) env.ELECTRON_RUN_AS_NODE = "1";
+    this.child = spawn(process.execPath, ["--no-warnings", WORKER, file], { stdio: ["ignore", "ignore", "ignore", "ipc"], env });
+    this.child.on("message", (m: SqliteReply) => {
+      if (m.id === 0) return void ("error" in m && (this.#reason = m.error));
       const p = this.pending.get(m.id);
       if (!p) return;
       this.pending.delete(m.id);
@@ -74,12 +88,12 @@ class Database {
       else p.resolve(m.result);
       this.#rest();
     });
-    // The worker died (it couldn't open the file, or crashed): everything waiting fails with why.
-    this.worker.on("error", (err) => this.#fail(err.message));
-    this.worker.on("exit", () => this.#fail("The database can't be read right now."));
+    // The reader died (it couldn't open the file, or crashed): everything waiting fails with why.
+    this.child.on("error", (err) => this.#fail(err.message));
+    this.child.on("exit", () => this.#fail(this.#reason ?? "The database can't be read right now."));
   }
 
-  ask(req: SqliteOp, timeoutMs = TIMEOUT_MS): Promise<unknown> {
+  ask(req: SqliteOp, timeoutMs = this.#timeoutMs): Promise<unknown> {
     if (this.idle) clearTimeout(this.idle), (this.idle = null);
     const id = this.#next++;
     return new Promise((resolve, reject) => {
@@ -88,7 +102,7 @@ class Database {
         this.#fail("That took too long and was stopped.");
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      this.worker.postMessage({ id, ...req } as SqliteRequest);
+      this.child.send({ id, ...req } as SqliteRequest);
     });
   }
 
@@ -110,12 +124,18 @@ class Database {
   close(): void {
     if (this.idle) clearTimeout(this.idle);
     this.#onGone();
-    void this.worker.terminate().catch(() => {});
+    this.child.removeAllListeners("exit");
+    if (this.child.exitCode === null && !this.child.killed) this.child.kill("SIGKILL");
   }
 }
 
 export class SqliteService {
   #open = new Map<string, Database>();
+  #timeoutMs: number;
+
+  constructor(opts: SqliteServiceOptions = {}) {
+    this.#timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
+  }
 
   #db(file: string): Database {
     const abs = path.resolve(file);
@@ -123,7 +143,7 @@ export class SqliteService {
     if (!db) {
       if (!fs.existsSync(abs)) throw new Error(`There's no file at ${abs}.`);
       if (!isSqliteFile(abs)) throw new Error(`${path.basename(abs)} isn't a SQLite database.`);
-      db = new Database(abs, () => {
+      db = new Database(abs, this.#timeoutMs, () => {
         if (this.#open.get(abs) === db) this.#open.delete(abs);
       });
       this.#open.set(abs, db);
@@ -147,7 +167,7 @@ export class SqliteService {
 
   /** A whole table or view to a CSV file. */
   async export(file: string, table: string, to: string): Promise<{ rows: number; bytes: number }> {
-    return (await this.#db(file).ask({ op: "export", table, file: path.resolve(to.replace(/^~(?=$|\/)/, os.homedir())) }, EXPORT_TIMEOUT_MS)) as { rows: number; bytes: number };
+    return (await this.#db(file).ask({ op: "export", table, file: path.resolve(to.replace(/^~(?=$|\/)/, os.homedir())) }, Math.max(EXPORT_TIMEOUT_MS, this.#timeoutMs))) as { rows: number; bytes: number };
   }
 
   /** Databases with a reader running now. */
