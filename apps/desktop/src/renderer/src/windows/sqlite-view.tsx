@@ -1,12 +1,13 @@
-// SQLite window view (docs/36-sqlite-viewer.md): the database's tables and
-// views down the side (a popup in the bar when the window is narrow, see
-// sqlite.css); the chosen one as its rows (sorted, filtered, a page at
+// SQLite window view (docs/36-sqlite-viewer.md), the window-design skill's data
+// window: the database's tables and views down the side (a menu in the toolbar
+// when the window is narrow); the chosen one as its rows (sorted, filtered, a page at
 // a time), its structure (columns, keys, indexes, the CREATE statement), or a
 // read-only query over the whole database. Live: the file and its -wal are
 // watched, and what's shown reloads when they change. The core reads the file
 // (sqlite.schema / rows / query) in a worker, read-only; nothing here writes.
 
-import { Button, Callout, CodeBlock, DataGrid, EmptyState, KeyValue, ListRow, ListSection, ListValue, Panel, PanelBody, SearchField, Select, Spinner, Tabs, TextArea, type GridCell, type GridColumn, type GridSort } from "@cmd/ui";
+import { Button, Callout, CodeBlock, DataGrid, Hide, KeyValue, List, ListRow, ListSection, ListValue, Pane, Panes, Split, Stack, StatusLine, Text, TextArea, ToolbarButton, ToolbarMenu, ToolbarSearchField, ToolbarSegmented, ToolbarSpacer, View, ViewState, WindowToolbar, type GridCell, type GridColumn, type GridSort } from "@cmd/ui";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SqliteResult, SqliteSchema, SqliteTable, SqliteValue } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -17,7 +18,6 @@ import { onFsChanged } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { stateStr, type WindowViewProps } from "./registry.ts";
 import { exportTableCsv } from "./sqlite-export.ts";
-import "./sqlite.css";
 
 type Tab = "content" | "structure" | "query";
 const TABS: { id: Tab; label: string }[] = [
@@ -80,7 +80,8 @@ const friendly = (e: unknown): string => {
   return m.replace(/^SQLITE_\w+: /, "");
 };
 
-export function SqliteView({ win, focused: _focused }: WindowViewProps) {
+/** `update` changes the window's state (its table, tab and query); the real window by default, a stand-in in stories. */
+export function SqliteView({ win, focused: _focused, update }: WindowViewProps & { update?: (state: Record<string, unknown>) => void }) {
   const file = stateStr(win, "path") ?? "";
   const picked = stateStr(win, "table");
   const tab: Tab = win.state.tab === "structure" || win.state.tab === "query" ? win.state.tab : "content";
@@ -89,6 +90,8 @@ export function SqliteView({ win, focused: _focused }: WindowViewProps) {
   const [error, setError] = useState<string | null>(null);
   /** Bumped when the file changes on disk: rows reload. */
   const [version, setVersion] = useState(0);
+  /** What the tab puts in the toolbar and the footer (ContentTab, QueryTab, StructureTab). */
+  const [bar, setBar] = useState<TabBar>({});
 
   const load = useCallback(async () => {
     try {
@@ -127,7 +130,7 @@ export function SqliteView({ win, focused: _focused }: WindowViewProps) {
   }, [win.id, schema]);
   useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
 
-  const set = (state: Record<string, unknown>) => void cmd.call("window.update", { id: win.id, state }).catch(() => {});
+  const set = (state: Record<string, unknown>) => (update ? update(state) : void cmd.call("window.update", { id: win.id, state }).catch(() => {}));
   const all = useMemo(() => (schema ? [...schema.tables, ...schema.views] : []), [schema]);
   const table = all.find((t) => t.name === picked);
 
@@ -139,117 +142,106 @@ export function SqliteView({ win, focused: _focused }: WindowViewProps) {
       { label: "Query This Table", run: () => set({ table: t.name, tab: "query", sql: `SELECT * FROM "${t.name.replaceAll('"', '""')}" LIMIT 100` }) },
       { label: "Export as CSV…", run: () => void exportTableCsv(file, t.name) },
     ]);
+  // Narrow windows: the sidebar gives way to a menu of the tables in the toolbar.
+  const pickMenu = () => void showContextMenu(all.map((t) => ({ label: t.name, checked: t.name === picked, run: () => set({ table: t.name }) })));
 
-  if (error && !schema) {
-    return (
-      <div className="sq">
-        <EmptyState icon="cylinder.split.1x2" title="Couldn't read this database" action={<Button onClick={() => void load()}>Try Again</Button>}>
-          {error}
-        </EmptyState>
-      </div>
-    );
-  }
+  const sidebar = schema && (
+    <List>
+      <ListSection title="Tables" count={schema.tables.length}>
+        {schema.tables.map((t) => (
+          <ListRow key={t.name} icon="tablecells" title={t.name} mono selected={t.name === picked} end={t.rows !== null && <ListValue>{n(t.rows)}</ListValue>} onClick={() => set({ table: t.name })} onContextMenu={() => tableMenu(t)} />
+        ))}
+      </ListSection>
+      {schema.views.length > 0 && (
+        <ListSection title="Views" count={schema.views.length}>
+          {schema.views.map((t) => (
+            <ListRow key={t.name} icon="eye" title={t.name} mono selected={t.name === picked} onClick={() => set({ table: t.name })} onContextMenu={() => tableMenu(t)} />
+          ))}
+        </ListSection>
+      )}
+    </List>
+  );
 
   return (
-    <div className="sq">
-      <aside className="sq-side">
-        <Panel>
-          <PanelBody>
-            {schema && (
-              <>
-                <ListSection title="Tables" count={schema.tables.length}>
-                  {schema.tables.map((t) => (
-                    <ListRow key={t.name} icon="tablecells" title={t.name} mono selected={t.name === picked} end={t.rows !== null && <ListValue>{n(t.rows)}</ListValue>} onClick={() => set({ table: t.name })} onContextMenu={() => tableMenu(t)} />
-                  ))}
-                  {!schema.tables.length && (
-                    <EmptyState compact icon="tablecells" title="No tables yet">
-                      Tables show up here once something creates them.
-                    </EmptyState>
-                  )}
-                </ListSection>
-                {schema.views.length > 0 && (
-                  <ListSection title="Views" count={schema.views.length}>
-                    {schema.views.map((t) => (
-                      <ListRow key={t.name} icon="eye" title={t.name} mono selected={t.name === picked} onClick={() => set({ table: t.name })} onContextMenu={() => tableMenu(t)} />
-                    ))}
-                  </ListSection>
-                )}
-              </>
-            )}
-          </PanelBody>
-        </Panel>
-      </aside>
-      <div className="sq-main">
-        <div className="sq-bar">
-          <Tabs value={tab} items={TABS} onChange={(t) => set({ tab: t })} label="Show" />
-          {/* Narrow windows: the sidebar gives way to this popup. */}
-          {schema && (
-            <span className="sq-pick">
-              <Select
-                size="sm"
-                label="Table"
-                value={picked ?? ""}
-                placeholder={schema.tables.length ? "Pick a table" : "No tables"}
-                options={all.map((t) => ({ value: t.name, icon: t.kind === "view" ? "eye" : "tablecells" }))}
-                onChange={(name) => set({ table: name })}
-              />
-            </span>
+    <View
+      scroll={false}
+      state={!schema ? (error ? { kind: "error", title: "Couldn't read this database", text: error, action: <Button icon="arrow.clockwise" onClick={() => void load()}>Try Again</Button> } : { kind: "loading" }) : null}
+      toolbar={
+        <WindowToolbar label="Database">
+          <ToolbarSegmented label="Show" value={tab} options={TABS.map((t) => ({ value: t.id, label: t.label }))} onChange={(t) => set({ tab: t })} />
+          {schema && all.length > 0 && (
+            <Hide above="regular">
+              <ToolbarMenu label="Table" onClick={pickMenu}>
+                {picked ?? "Pick a Table"}
+              </ToolbarMenu>
+            </Hide>
           )}
-        </div>
+          <ToolbarSpacer />
+          {bar.tools}
+        </WindowToolbar>
+      }
+      footer={bar.status != null ? <StatusLine end={bar.statusEnd}>{bar.status}</StatusLine> : undefined}
+    >
+      <Split side="start" pane={sidebar} width={{ min: 150, ideal: 200, max: 320 }}>
         {error && (
           <Callout tone="warning" banner compact>
             {error}
           </Callout>
         )}
-        {tab === "query" ? (
-          <QueryTab win={win} file={file} version={version} />
-        ) : !schema ? (
-          <div className="sq-wait">
-            <Spinner />
-          </div>
+        {!schema ? null : tab === "query" ? (
+          <QueryTab win={win} file={file} version={version} onBar={setBar} update={set} />
         ) : !table ? (
-          <Overview schema={schema} />
+          <Overview schema={schema} onBar={setBar} />
         ) : tab === "structure" ? (
-          <StructureTab schema={schema} table={table} />
+          <StructureTab schema={schema} table={table} onBar={setBar} />
         ) : (
-          <ContentTab key={table.name} file={file} table={table} version={version} />
+          <ContentTab key={table.name} file={file} table={table} version={version} onBar={setBar} />
         )}
-      </div>
-    </div>
+      </Split>
+    </View>
   );
 }
 
+/** A tab's own toolbar items (after the tabs) and its footer line. */
+interface TabBar {
+  tools?: ReactNode;
+  status?: ReactNode;
+  statusEnd?: ReactNode;
+}
+
 /** With no table chosen: what the file is. */
-function Overview({ schema }: { schema: SqliteSchema }) {
+function Overview({ schema, onBar }: { schema: SqliteSchema; onBar: (b: TabBar) => void }) {
+  useEffect(() => onBar({}), [onBar]);
   return (
-    <div className="sq-scroll sq-pad">
-      <KeyValue
-        items={[
-          ["Size", formatBytes(schema.size)],
-          ["Pages", `${n(schema.pageCount)} × ${formatBytes(schema.pageSize)}`],
-          ["Encoding", schema.encoding],
-          ["Journal", schema.wal ? "Write-ahead log" : "Rollback"],
-          ["User version", String(schema.userVersion)],
-          ["Indexes", String(schema.indexes.length)],
-          ["Triggers", String(schema.triggers.length)],
-        ]}
-      />
-      <EmptyState compact icon="tablecells" title={schema.tables.length ? "Pick a table" : "An empty database"}>
-        {schema.tables.length ? "Its rows, structure and a query over the whole database show here." : "Nothing has made a table in it yet."}
-      </EmptyState>
-    </div>
+    <Stack pad="lg" gap="xl">
+      <Panes>
+        <Pane title="Database">
+          <KeyValue
+            items={[
+              ["Size", formatBytes(schema.size)],
+              ["Pages", `${n(schema.pageCount)} × ${formatBytes(schema.pageSize)}`],
+              ["Encoding", schema.encoding],
+              ["Journal", schema.wal ? "Write-ahead log" : "Rollback"],
+              ["User version", String(schema.userVersion)],
+              ["Indexes", String(schema.indexes.length)],
+              ["Triggers", String(schema.triggers.length)],
+            ]}
+          />
+        </Pane>
+      </Panes>
+      <Text tone="dim">{schema.tables.length ? "Pick a table: its rows, its structure, and a query over the whole database show here." : "An empty database: nothing has made a table in it yet."}</Text>
+    </Stack>
   );
 }
 
 /** A table's rows: sorted by a column, filtered by text, a page at a time. */
-function ContentTab({ file, table, version }: { file: string; table: SqliteTable; version: number }) {
+function ContentTab({ file, table, version, onBar }: { file: string; table: SqliteTable; version: number; onBar: (b: TabBar) => void }) {
   const [sort, setSort] = useState<GridSort | null>(null);
   const [filter, setFilter] = useState("");
   const [applied, setApplied] = useState("");
   const [result, setResult] = useState<SqliteResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const scroller = useRef<HTMLDivElement>(null);
 
   // The filter applies a moment after typing stops.
   useEffect(() => {
@@ -280,47 +272,54 @@ function ContentTab({ file, table, version }: { file: string; table: SqliteTable
   const shown = result?.rows.length ?? 0;
   const total = result?.total ?? null;
 
+  useEffect(
+    () =>
+      onBar({
+        tools: <ToolbarSearchField value={filter} onChange={setFilter} placeholder="Filter rows" minWidth={90} />,
+        status: busy && !result ? "Loading…" : result ? (total !== null && total !== shown ? `${n(shown)} of ${rowsLabel(total)}` : rowsLabel(shown)) : null,
+      }),
+    [filter, busy, result, total, shown, onBar],
+  );
+
   return (
     <>
-      <div className="sq-tools">
-        <SearchField value={filter} onChange={setFilter} placeholder="Filter rows" size="sm" status={busy && <Spinner size={12} />} />
-        <span className="sq-count">{result && (total !== null && total !== shown ? `${n(shown)} of ${rowsLabel(total)}` : rowsLabel(shown))}</span>
-      </div>
       {error && (
         <Callout tone="danger" banner compact>
           {error}
         </Callout>
       )}
-      <div className="sq-scroll" ref={scroller}>
-        {result && !rows.length ? (
-          <EmptyState compact icon="tablecells" title={applied ? "No rows match" : "No rows"}>
-            {applied ? `Nothing in ${table.name} contains “${applied}”.` : `${table.name} is empty.`}
-          </EmptyState>
-        ) : (
-          <DataGrid
-            mono
-            numbered
-            columns={columns}
-            rows={rows}
-            sort={sort}
-            onSort={setSort}
-            onRowContextMenu={(i) => result && rowMenu(result.columns, result.rows[i]!)}
-            footer={
-              result?.truncated ? (
-                <Button size="sm" busy={busy} onClick={() => void fetch(shown)}>
-                  Show More
-                </Button>
-              ) : undefined
-            }
-          />
-        )}
-      </div>
+      {result && !rows.length ? (
+        <ViewState
+          state={
+            applied
+              ? { kind: "noResults", title: "No rows match", text: `Nothing in ${table.name} contains “${applied}”.`, action: <Button onClick={() => setFilter("")}>Clear Filter</Button> }
+              : { kind: "empty", icon: "tablecells", title: "No rows", text: `${table.name} is empty.` }
+          }
+        />
+      ) : (
+        <DataGrid
+          mono
+          numbered
+          columns={columns}
+          rows={rows}
+          sort={sort}
+          onSort={setSort}
+          onRowContextMenu={(i) => result && rowMenu(result.columns, result.rows[i]!)}
+          footer={
+            result?.truncated ? (
+              <Button size="sm" busy={busy} onClick={() => void fetch(shown)}>
+                Show More
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
     </>
   );
 }
 
 /** Columns, keys, indexes, triggers and the CREATE statement. */
-function StructureTab({ schema, table }: { schema: SqliteSchema; table: SqliteTable }) {
+function StructureTab({ schema, table, onBar }: { schema: SqliteSchema; table: SqliteTable; onBar: (b: TabBar) => void }) {
   const indexes = schema.indexes.filter((i) => i.table === table.name);
   const triggers = schema.triggers.filter((t) => t.table === table.name);
   const fk = (name: string) => table.foreignKeys.find((f) => f.from === name);
@@ -329,45 +328,48 @@ function StructureTab({ schema, table }: { schema: SqliteSchema; table: SqliteTa
     const notes = [c.pk ? (table.columns.filter((x) => x.pk).length > 1 ? `primary key ${c.pk}` : "primary key") : "", c.notNull ? "not null" : "", c.default !== null ? `default ${c.default}` : "", f ? `→ ${f.table}${f.to ? `.${f.to}` : ""}` : ""].filter(Boolean);
     return [{ node: c.name, kind: "text" }, c.type ? { node: c.type, kind: "text" } : { node: "any", kind: "null" }, { node: notes.join(" · "), kind: "text" }];
   });
+  useEffect(
+    () => onBar({ status: [`${table.columns.length} ${table.columns.length === 1 ? "column" : "columns"}`, indexes.length ? `${indexes.length} ${indexes.length === 1 ? "index" : "indexes"}` : null, triggers.length ? `${triggers.length} ${triggers.length === 1 ? "trigger" : "triggers"}` : null].filter(Boolean).join(" · ") }),
+    [table, indexes.length, triggers.length, onBar],
+  );
   return (
-    <div className="sq-scroll">
+    <Stack gap="none">
       <DataGrid
         mono
         columns={[
           { key: "name", label: "Column" },
           { key: "type", label: "Type" },
-          { key: "notes", label: "Constraints" },
+          { key: "notes", label: "Constraints", grow: true },
         ]}
         rows={rows}
       />
-      <div className="sq-pad sq-structure">
-        {indexes.length > 0 && (
-          <section>
-            <h3>Indexes</h3>
-            <KeyValue mono items={indexes.map((i) => [i.name, `${i.unique ? "unique · " : ""}${i.columns.join(", ")}`])} />
-          </section>
-        )}
-        {triggers.length > 0 && (
-          <section>
-            <h3>Triggers</h3>
-            {triggers.map((t) => (
-              <CodeBlock key={t.name}>{t.sql ?? t.name}</CodeBlock>
-            ))}
-          </section>
-        )}
-        {table.sql && (
-          <section>
-            <h3>Definition</h3>
-            <CodeBlock maxHeight={400}>{table.sql}</CodeBlock>
-          </section>
-        )}
-      </div>
-    </div>
+      {(indexes.length > 0 || triggers.length > 0 || table.sql) && (
+        <Stack pad="lg" gap="xl">
+          {indexes.length > 0 && (
+            <Pane title="Indexes">
+              <KeyValue mono items={indexes.map((i) => [i.name, `${i.unique ? "unique · " : ""}${i.columns.join(", ")}`])} />
+            </Pane>
+          )}
+          {triggers.length > 0 && (
+            <Pane title="Triggers">
+              {triggers.map((t) => (
+                <CodeBlock key={t.name}>{t.sql ?? t.name}</CodeBlock>
+              ))}
+            </Pane>
+          )}
+          {table.sql && (
+            <Pane title="Definition">
+              <CodeBlock maxHeight={400}>{table.sql}</CodeBlock>
+            </Pane>
+          )}
+        </Stack>
+      )}
+    </Stack>
   );
 }
 
 /** One read-only statement over the database; its draft lives in the window's state. */
-function QueryTab({ win, file, version }: { win: WindowViewProps["win"]; file: string; version: number }) {
+function QueryTab({ win, file, version, onBar, update }: { win: WindowViewProps["win"]; file: string; version: number; onBar: (b: TabBar) => void; update: (state: Record<string, unknown>) => void }) {
   const saved = stateStr(win, "sql") ?? "";
   const [sql, setSql] = useState(saved);
   const [result, setResult] = useState<SqliteResult | null>(null);
@@ -381,9 +383,9 @@ function QueryTab({ win, file, version }: { win: WindowViewProps["win"]; file: s
   // The draft is kept in the window, so it survives a reload and a restart.
   useEffect(() => {
     if (sql === saved) return;
-    const t = setTimeout(() => void cmd.call("window.update", { id: win.id, state: { sql } }).catch(() => {}), 500);
+    const t = setTimeout(() => update({ sql }), 500);
     return () => clearTimeout(t);
-  }, [sql, saved, win.id]);
+  }, [sql, saved, update]);
   useEffect(() => area.current?.focus(), []);
 
   const run = useCallback(
@@ -412,47 +414,38 @@ function QueryTab({ win, file, version }: { win: WindowViewProps["win"]; file: s
   const columns = useMemo(() => gridColumns(result?.columns ?? []), [result?.columns]);
   const rows = useMemo(() => result?.rows.map((r) => r.map(cellOf)) ?? [], [result]);
 
+  useEffect(
+    () =>
+      onBar({
+        tools: (
+          <>
+            {result && result.rows.length > 0 && <ToolbarButton icon="doc.on.doc" label="Copy as CSV" secondary priority={1} onClick={() => copy(csvOf(result.columns, result.rows))} />}
+            <ToolbarButton icon="play.fill" label="Run" showLabel shortcut="⌘↩" disabled={!sql.trim() || busy} onClick={() => void run()} priority={3} />
+          </>
+        ),
+        status: busy ? "Running…" : result ? `${rowsLabel(result.rows.length)}${result.truncated ? " shown" : ""} · ${result.took || "under 1"} ms` : null,
+      }),
+    [result, sql, busy, run, onBar],
+  );
+
   return (
     <>
-      <div className="sq-query">
-        <TextArea ref={area} className="sq-sql" value={sql} onChange={setSql} onSubmit={() => void run()} code rows={4} placeholder="SELECT name, count(*) FROM … GROUP BY name" spellCheck={false} aria-label="SQL" />
-        <div className="sq-tools">
-          <Button size="sm" variant="primary" icon="play.fill" busy={busy} disabled={!sql.trim()} data-tip="Run" data-tip-key="⌘↩" onClick={() => void run()}>
-            Run
-          </Button>
-        </div>
-      </div>
+      <Stack pad="md">
+        <TextArea ref={area} value={sql} onChange={setSql} onSubmit={() => void run()} code rows={4} placeholder="SELECT name, count(*) FROM … GROUP BY name" spellCheck={false} aria-label="SQL" />
+      </Stack>
       {error && (
         <Callout tone="danger" banner compact title="Couldn't run that">
           {error}
         </Callout>
       )}
-      <div className="sq-scroll">
-        {result ? (
-          rows.length ? (
-            <DataGrid mono numbered columns={columns} rows={rows} onRowContextMenu={(i) => rowMenu(result.columns, result.rows[i]!)} />
-          ) : (
-            <EmptyState compact icon="tablecells" title="No rows">
-              The statement ran and returned nothing.
-            </EmptyState>
-          )
+      {result ? (
+        rows.length ? (
+          <DataGrid mono numbered columns={columns} rows={rows} onRowContextMenu={(i) => rowMenu(result.columns, result.rows[i]!)} />
         ) : (
-          !error && (
-            <EmptyState compact icon="play.fill" title="Run a statement">
-              SELECT and WITH work. The database is opened read-only, so nothing here can change it.
-            </EmptyState>
-          )
-        )}
-      </div>
-      {result && (
-        <div className="sq-foot">
-          <span className="sq-count">{`${rowsLabel(result.rows.length)}${result.truncated ? " shown" : ""} · ${result.took || "under 1"} ms`}</span>
-          {result.rows.length > 0 && (
-            <Button size="sm" variant="ghost" onClick={() => copy(csvOf(result.columns, result.rows))}>
-              Copy as CSV
-            </Button>
-          )}
-        </div>
+          <ViewState state={{ kind: "empty", icon: "tablecells", title: "No rows", text: "The statement ran and returned nothing." }} />
+        )
+      ) : (
+        !error && <ViewState state={{ kind: "empty", icon: "play.fill", title: "Run a statement", text: "SELECT and WITH work. The database is opened read-only, so nothing here can change it." }} />
       )}
     </>
   );

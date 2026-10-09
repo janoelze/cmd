@@ -17,11 +17,15 @@
 .ui-inline[data-wrap] { flex-wrap: wrap; }
 .ui-inline > * { min-width: 0; }
 .ui-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(var(--tile-min), 100%), 1fr)); }
+.ui-hide { display: contents; }
 @container (width < 360px) { .ui-hide[data-below="narrow"] { display: none; } }
 @container (width < 600px) { .ui-hide[data-below="regular"] { display: none; } }
+@container (width >= 360px) { .ui-hide[data-above="narrow"] { display: none; } }
+@container (width >= 600px) { .ui-hide[data-above="regular"] { display: none; } }
 
 /* ── the view ── */
-.ui-view { flex: 1; min-height: 0; height: 100%; display: flex; flex-direction: column; background: var(--well); color: var(--text); font: var(--text-md) var(--font-ui); }
+/* The view is a size container too, so its toolbar's items can follow the window's width (Hide). */
+.ui-view { container-type: inline-size; flex: 1; min-height: 0; height: 100%; display: flex; flex-direction: column; background: var(--well); color: var(--text); font: var(--text-md) var(--font-ui); }
 /* Lists in a view: rows' hover pills 4px from the edges, their content at --inset (4 + the row's 8). */
 .ui-view-body { --list-inset: var(--space-xs); flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; container-type: inline-size; }
 .ui-view-body[data-scroll] { overflow: auto; }
@@ -51,7 +55,7 @@
 .ui-split-handle { position: absolute; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 1; }
 .ui-split[data-side="start"] .ui-split-handle { right: -3px; }
 .ui-split[data-side="end"] .ui-split-handle { left: -3px; }
-@container (width < 480px) { .ui-split-pane { display: none; } }
+@container (width < 600px) { .ui-split-pane { display: none; } }
 
 /* ── dashboards ── */
 .ui-panes { display: grid; grid-template-columns: 1fr; gap: var(--space-2xl) var(--space-xl); align-content: start; }

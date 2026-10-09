@@ -48,10 +48,14 @@ export function Tiles({ min = 160, gap = "md", children }: { min?: 96 | 120 | 16
   );
 }
 
-/** Hidden when the window is narrower than `below` (narrow: 360px, regular: 600px). */
-export function Hide({ below, children }: { below: "narrow" | "regular"; children: ReactNode }) {
+/**
+ * Hidden when the window is narrower than `below`, or from `above` on (narrow: 360px,
+ * regular: 600px): what gives way as a window narrows, or what stands in for it (a
+ * table picker in the toolbar once a Split's sidebar is gone). Works in a toolbar too.
+ */
+export function Hide({ below, above, children }: { below?: "narrow" | "regular"; above?: "narrow" | "regular"; children: ReactNode }) {
   return (
-    <div className="ui-hide" data-below={below}>
+    <div className="ui-hide" data-below={below} data-above={above}>
       {children}
     </div>
   );
@@ -118,7 +122,8 @@ export function StatusLine({ children, end }: { children: ReactNode; end?: React
 
 /**
  * A sidebar (side "start") or an inspector (side "end") beside the main content,
- * resizable between `min` and `max`. Hidden when the window is too narrow for both.
+ * resizable between `min` and `max`. Hidden below the regular size (600px); offer what
+ * it held another way there (`<Hide above="regular">` in the toolbar).
  */
 export function Split({ side = "start", pane, open = true, width = { min: 160, ideal: 220, max: 360 }, children }: { side?: "start" | "end"; pane: ReactNode; open?: boolean; width?: { min: number; ideal: number; max: number }; children: ReactNode }) {
   const [w, setW] = useState(width.ideal);

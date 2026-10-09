@@ -44,9 +44,6 @@
     "fontSize": 9,
     "spacing": 15
   },
-  "apps/desktop/src/renderer/src/windows/sqlite.css": {
-    "spacing": 10
-  },
   "apps/desktop/src/renderer/src/workbench/workbench.css": {
     "spacing": 2
   },
