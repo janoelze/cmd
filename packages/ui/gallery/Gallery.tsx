@@ -5,6 +5,8 @@
 
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
+  AiField,
+  type AiState,
   FindBar,
   Highlight,
   NO_FIND_OPTIONS,
@@ -602,6 +604,9 @@ function FieldsPage() {
           <SecretField set={false} placeholder="Any key but “bad”" onSave={(v) => new Promise((ok, fail) => setTimeout(() => (v === "bad" ? fail(new Error("refused")) : ok(null)), 800))} />
           <SecretField set={false} live placeholder="Live: paste any key but “bad”" onSave={(v) => new Promise((ok, fail) => setTimeout(() => (v === "bad" ? fail(new Error("refused")) : ok(null)), 800))} />
         </Row>
+      </Spec>
+      <Spec title="AiField" code="<AiField value state error onSubmit onStop>" note="Where you ask an AI for something. The field shows where the request is without text, so nothing around it moves: thinking runs a comet along the edge (Send becomes Stop, Esc stops), done fades it out with a check in place of the sparkle, and only an error gets a line, under the field, with an action. Grows with the prompt; ↑ and ↓ go through earlier prompts. sm, md and lg.">
+        <AiFieldDemo />
       </Spec>
     </>
   );
@@ -1358,6 +1363,31 @@ function ListSpecimen() {
           </ListSection>
         </PanelBody>
       </Panel>
+    </div>
+  );
+}
+
+/** Asks nothing: thinks for two seconds, then is done, or fails for prompts with "fail". */
+function AiFieldDemo() {
+  const [value, setValue] = useState("");
+  const [state, setState] = useState<AiState>("idle");
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const submit = (p: string) => {
+    setState("thinking");
+    timer.current = setTimeout(() => (setState(/fail/i.test(p) ? "error" : "done"), /fail/i.test(p) || setValue("")), 2000);
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, width: 420 }}>
+      <AiField
+        value={value}
+        onChange={(v) => (setValue(v), state === "error" && setState("idle"))}
+        onSubmit={submit}
+        onStop={() => (clearTimeout(timer.current), setState("idle"))}
+        state={state}
+        error="Couldn't make that play: nope is not defined"
+        placeholder="Ask for something (one with “fail” fails)"
+      />
+      <AiField size="sm" value="the small one, thinking" onChange={() => {}} onSubmit={() => {}} onStop={() => {}} state="thinking" />
     </div>
   );
 }

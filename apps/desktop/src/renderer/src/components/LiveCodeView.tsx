@@ -14,7 +14,7 @@
 //    undone and the last good code plays on.
 //  - The window's sound is a Visualizer source (audio.ts publishLevels).
 
-import { TextField, ToolbarButton, ToolbarGroup, ToolbarSpacer, WindowToolbar } from "@cmd/ui";
+import { AiField, LinkButton, ToolbarButton, type AiState, ToolbarGroup, ToolbarSpacer, WindowToolbar } from "@cmd/ui";
 import { useTheme } from "@cmd/ui/themes";
 import { useEffect, useRef, useState } from "react";
 import { basicSetup } from "codemirror";
@@ -52,10 +52,14 @@ export function LiveCodeView({ win }: WindowViewProps) {
   const settings = useStoreValue((s) => s.settings.settings);
   const dark = useTheme().appearance === "dark";
   const [request, setRequest] = useState("");
-  const [asking, setAsking] = useState(false);
-  /** The prompt bar's line: what the AI did, or why something didn't play. */
-  const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null);
-  const ask = useRef<HTMLInputElement>(null);
+  /** The prompt bar's AI state, and why the last request failed. */
+  const [ai, setAi] = useState<AiState>("idle");
+  const [aiError, setAiError] = useState<string | null>(null);
+  /** Requests so far, newest first (↑ in the prompt bar). */
+  const [asked, setAsked] = useState<string[]>([]);
+  /** Bumped by Stop: a request whose answer comes back after it is dropped. */
+  const run = useRef(0);
+  const ask = useRef<HTMLTextAreaElement>(null);
 
   const post = (m: unknown) => frame.current?.contentWindow?.postMessage(m, "*");
   const sounds = useRef<string[]>([]);
@@ -95,8 +99,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
     const v = view.current;
     if (!v) return;
     const r = await evaluate(v.state.doc.toString());
-    if (r.ok) setNote(null);
-    else setNote({ text: r.error, error: true });
+    if (!r.ok) status(r.error, "error");
   };
   const stop = () => {
     pausing.current = false;
@@ -111,24 +114,28 @@ export function LiveCodeView({ win }: WindowViewProps) {
   };
 
   /** The AI's change, tried until the frame takes it; undone if it never does. */
-  const change = async () => {
+  const change = async (text: string) => {
     const v = view.current;
-    const text = request.trim();
-    if (!v || !text || asking) return;
-    setAsking(true);
-    setNote({ text: "Changing…" });
+    if (!v || !text || ai === "thinking") return;
+    const id = ++run.current;
+    const current = () => run.current === id;
+    setAsked((h) => [text, ...h.filter((x) => x !== text)].slice(0, 50));
+    setAi("thinking");
+    setAiError(null);
     const before = v.state.doc.toString();
     let failed: { code: string; error: string } | undefined;
     try {
       for (let i = 0; i < ATTEMPTS; i++) {
         const answer = await cmd.call("livecode.change", { code: before, request: text, sounds: sounds.current, failed });
-        const now = v.state.doc.toString();
-        const edit = minimalChange(now, answer.code);
+        if (!current()) return;
+        const edit = minimalChange(v.state.doc.toString(), answer.code);
         if (edit) v.dispatch({ changes: edit, userEvent: "input.ai" });
         const r = await evaluate(answer.code);
+        if (!current()) return;
         if (r.ok) {
-          setNote({ text: answer.summary || "Changed" });
+          setAi("done");
           setRequest("");
+          if (answer.summary) status(answer.summary, "ai");
           return;
         }
         failed = { code: answer.code, error: r.error };
@@ -136,12 +143,18 @@ export function LiveCodeView({ win }: WindowViewProps) {
       // Never played: back to what was playing.
       const edit = minimalChange(v.state.doc.toString(), before);
       if (edit) v.dispatch({ changes: edit, userEvent: "input.ai" });
-      setNote({ text: `Couldn't make that play: ${failed?.error ?? "unknown error"}`, error: true });
+      setAi("error");
+      setAiError(`Couldn't make that play: ${failed?.error ?? "unknown error"}`);
     } catch (e) {
-      setNote({ text: (e as Error).message, error: true });
-    } finally {
-      setAsking(false);
+      if (!current()) return;
+      setAi("error");
+      setAiError((e as Error).message);
     }
+  };
+  /** Stop: the answer is dropped when it comes, and the code stays as it is. */
+  const stopAsking = () => {
+    run.current++;
+    setAi("idle");
   };
 
   // The editor, once per window. The code is saved as you type.
@@ -261,25 +274,19 @@ export function LiveCodeView({ win }: WindowViewProps) {
       <div className="lc-editor" ref={host} />
       <iframe ref={frame} className="lc-scope" data-embed sandbox="allow-scripts" src="cmd-livecode://frame/" title="Scope" />
       <div className="lc-ask">
-        <TextField
+        <AiField
           ref={ask}
-          fill
-          icon="sparkles"
           value={request}
-          onChange={setRequest}
+          onChange={(v) => (setRequest(v), ai !== "thinking" && ai !== "idle" && setAi("idle"))}
+          onSubmit={(text) => void latest.current.change(text)}
+          onStop={stopAsking}
+          state={ai}
+          error={aiError}
+          action={<LinkButton onClick={() => void latest.current.change(request.trim() || asked[0] || "")}>Try Again</LinkButton>}
+          history={asked}
           placeholder="Ask for a change: “double-time hats”, “darker bass”"
-          disabled={asking}
           aria-label="Ask for a change"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void latest.current.change();
-            else if (e.key === "Escape") view.current?.focus();
-          }}
         />
-        {note && (
-          <div className="lc-note" data-error={note.error || undefined} title={note.text}>
-            {note.text}
-          </div>
-        )}
       </div>
     </div>
   );

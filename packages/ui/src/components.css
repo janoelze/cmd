@@ -1289,3 +1289,155 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
 ::highlight(find-current) { background-color: color-mix(in srgb, var(--match) 70%, transparent); color: var(--text); }
 /* A match in text (search snippets, results). */
 .ui-match { color: var(--text); background: color-mix(in srgb, var(--match) 25%, transparent); border-radius: 2px; padding: 0 1px; }
+
+/* ── AiField (ai.tsx): a prompt whose edge shows the request's state ─────── */
+.ui-ai {
+  --ai-h: 32px;
+  --ai-pad: 10px;
+  --ai-font: var(--text-md);
+  --ai-send: 22px;
+  /* The comet that runs along the edge while busy (ai.tsx trail): blobs moved
+     along the field's own outline (offset-path) at an even speed. */
+  --ai-lap: 2.4s;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.ui-ai[data-size="sm"] { --ai-h: var(--control-h); --ai-pad: 8px; --ai-font: var(--text-sm); --ai-send: 16px; }
+.ui-ai[data-size="lg"] { --ai-h: 40px; --ai-pad: 12px; --ai-font: var(--text-base); --ai-send: 26px; }
+.ui-ai-field {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-height: var(--ai-h);
+  padding: 0 calc((var(--ai-h) - var(--ai-send)) / 2) 0 var(--ai-pad);
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--field-bg);
+  box-shadow: inset 0 0 0 1px var(--field-edge);
+  cursor: text;
+  transition: box-shadow var(--dur) var(--ease);
+}
+.ui-ai[data-size="sm"] .ui-ai-field { border-radius: var(--radius); gap: 6px; }
+.ui-ai-field:focus-within { box-shadow: var(--input-ring); }
+.ui-ai[data-disabled] .ui-ai-field { opacity: var(--disabled-opacity); cursor: default; }
+/* Icon, text and button share the first line's centre, however tall the field grows. */
+.ui-ai-mark, .ui-ai-send { flex: none; height: var(--ai-h); display: inline-flex; align-items: center; }
+.ui-ai-mark { color: var(--text-dim); transition: color var(--dur) var(--ease); }
+.ui-ai-field:focus-within .ui-ai-mark { color: var(--accent); }
+.ui-ai textarea {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: calc((var(--ai-h) - 1.45em) / 2) 0;
+  font: var(--ai-font) / 1.45 var(--font-ui);
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  user-select: text;
+  -webkit-app-region: no-drag;
+}
+.ui-ai textarea::placeholder { color: var(--text-dim); }
+.ui-ai-send {
+  justify-content: center;
+  align-self: flex-start;
+  margin-top: calc((var(--ai-h) - var(--ai-send)) / 2);
+  width: var(--ai-send);
+  height: var(--ai-send);
+  padding: 0;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.ui-ai-send:active:not(:disabled) { transform: scale(0.92); }
+.ui-ai-send:disabled { color: var(--text-dim); background: var(--control-hover); cursor: default; }
+.ui-ai-send[data-stop] { color: var(--text); background: var(--control-hover); }
+.ui-ai-send[data-stop]:hover { background: color-mix(in srgb, var(--ink) 16%, transparent); }
+.ui-ai-send:focus-visible { outline: none; box-shadow: var(--input-ring); }
+
+/* Busy: the arc runs around the edge, a soft glow of it behind; the prompt reads as sent. */
+.ui-ai-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-slow) var(--ease);
+}
+/* The glow: the same arc, blurred, behind the field (outside the ring's mask). */
+.ui-ai-box { position: relative; }
+.ui-ai-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: calc(var(--radius) + 4px);
+  overflow: hidden;
+  filter: blur(9px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-slow) var(--ease);
+}
+.ui-ai-box > .ui-ai-field { z-index: 1; }
+.ui-ai-edge > i, .ui-ai-glow > i {
+  --d: 14px;
+  --gap: 8px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--d);
+  height: var(--d);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent), transparent);
+  opacity: calc(1 - var(--i) / var(--n));
+  offset-path: border-box;
+  offset-anchor: center;
+  offset-rotate: 0deg;
+}
+.ui-ai-edge > i:first-child { background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 40%, white), var(--accent) 45%, transparent); }
+.ui-ai-glow > i { --d: 30px; --gap: 22px; }
+.ui-ai[data-state="thinking"] .ui-ai-glow { opacity: 0.4; }
+.ui-ai[data-settling] .ui-ai-glow { opacity: 0.4; animation: ui-ai-settle calc(var(--glide-dur) * 2) var(--ease) forwards; }
+.ui-ai:is([data-state="thinking"], [data-settling]) :is(.ui-ai-edge, .ui-ai-glow) > i { animation: ui-ai-orbit var(--ai-lap) linear infinite; }
+.ui-ai[data-state="thinking"] .ui-ai-edge,
+.ui-ai[data-settling] .ui-ai-edge { opacity: 1; }
+.ui-ai[data-settling] .ui-ai-edge { animation: ui-ai-settle calc(var(--glide-dur) * 2) var(--ease) forwards; }
+.ui-ai[data-state="thinking"] .ui-ai-field { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, var(--field-edge)); }
+.ui-ai[data-state="thinking"] textarea { color: var(--text-dim); cursor: default; }
+.ui-ai[data-state="thinking"] .ui-ai-mark { color: var(--accent); animation: ui-ai-breathe var(--ai-lap) ease-in-out infinite; }
+.ui-ai[data-state="error"] .ui-ai-field { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 70%, transparent); }
+@keyframes ui-ai-orbit { from { offset-distance: calc(0% - var(--i) * var(--gap)); } to { offset-distance: calc(100% - var(--i) * var(--gap)); } }
+@keyframes ui-ai-settle { 0% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ui-ai-breathe { 50% { opacity: 0.45; transform: scale(0.88); } }
+
+/* The error, the one state with text: under the field, until the next try. */
+.ui-ai-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+  padding: 0 calc(var(--ai-pad) + 1px);
+  font: var(--text-sm) / 16px var(--font-ui);
+  color: var(--danger);
+  animation: ui-fade-in var(--dur) var(--ease);
+}
+.ui-ai-glyph { flex: none; display: inline-flex; }
+.ui-ai-error-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-ai-action { flex: none; margin-left: auto; display: inline-flex; gap: 8px; }
+.ui-ai[data-state="done"][data-settling] .ui-ai-mark { color: var(--success); animation: ui-pop-in var(--dur-slow) var(--ease); }
+.ui-ai-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .ui-ai-edge, .ui-ai-glow, .ui-ai-edge > i, .ui-ai-glow > i, .ui-ai-mark { animation: none !important; }
+  .ui-ai-glow { display: none; }
+  .ui-ai[data-state="thinking"] .ui-ai-field { box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .ui-ai[data-state="thinking"] .ui-ai-edge { opacity: 0; }
+}
