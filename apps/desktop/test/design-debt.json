@@ -3,11 +3,6 @@
     "radius": 1,
     "spacing": 1
   },
-  "apps/desktop/src/renderer/src/components/journal.css": {
-    "color": 4,
-    "radius": 2,
-    "spacing": 19
-  },
   "apps/desktop/src/renderer/src/components/library.css": {
     "color": 2,
     "fontSize": 1,
@@ -54,6 +49,7 @@
     "spacing": 158
   },
   "packages/ui/src/frame.css": {
+    "color": 4,
     "radius": 1
   },
   "packages/ui/src/tooltips.css": {

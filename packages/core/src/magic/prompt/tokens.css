@@ -125,6 +125,8 @@
   --control-thumb-shadow: 0 1px 2px rgb(0 0 0 / 0.22), inset 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent);
   --switch-off: color-mix(in srgb, var(--ink) 16%, transparent);
   --knob: #ffffff;
+  /* Saturation and lightness of a hue-coloured mark, with hsl(var(--hue) var(--mark)): a timeline's dots, a ribbon's bars (a kind's or a project's colour). */
+  --mark: 62% 58%;
   /* A window's footer bar (View footer): one line of status in --text-faint, the same top line as the toolbar's (--window-edge). */
   --footer-h: 26px;
   /* Windows (window.tsx) and sheets (Dialog): rounded corners and crisp whole-pixel outlines, the selected one in the highlight with a soft glow, and an elevation shadow. An app maps these to its own settings (cmd: the ui.window* settings, look.ts): --window-radius, --window-outline, --window-edge-mix (the outline's contrast), --window-elevation, --focus-outline, --focus-glow (1 = the default halo). What's built from them is declared again on .ui-window, where an app's per-mode values resolve. */

@@ -115,6 +115,8 @@
 .ui-text[data-size="display"] { font-size: var(--text-display); }
 .ui-text[data-mono] { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .ui-text[data-strong] { font-weight: 600; }
+/* Text on its own line in a Stack is a paragraph: room between its lines, wrapped evenly. */
+.ui-stack > .ui-text:not([data-truncate]) { display: block; line-height: 1.45; text-wrap: pretty; }
 .ui-text[data-truncate] { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* Tables drop their least important columns as their space narrows (GridColumn.hide). */
@@ -178,3 +180,24 @@
 .ui-doc th, .ui-doc td { padding: var(--space-sm) var(--space-lg); border: 1px solid var(--separator); }
 .ui-doc th { font-weight: 600; background: var(--bg); }
 .ui-doc tr:nth-child(2n) td { background: var(--group-bg); }
+
+/* ── time (timeline.tsx): a ribbon of hours, a timeline of entries ── */
+.ui-ribbon { --lane: 7px; }
+.ui-ribbon-track { position: relative; height: calc(var(--lanes) * var(--lane)); border-radius: var(--radius-xs); background: var(--bg-hover); }
+.ui-ribbon-bar { position: absolute; height: 5px; margin-top: 1px; padding: 0; border: 0; border-radius: var(--radius-xs); cursor: pointer; background: hsl(var(--hue) var(--mark)); opacity: 0.85; transition: opacity var(--dur-fast) var(--ease); }
+.ui-ribbon-bar:hover, .ui-ribbon-bar[data-picked] { opacity: 1; box-shadow: 0 0 0 1.5px var(--well), 0 0 0 3px hsl(var(--hue) var(--mark)); }
+.ui-ribbon-ticks { position: relative; height: 14px; margin-top: var(--space-2xs); font: var(--text-2xs) var(--font-ui); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.ui-ribbon-ticks span { position: absolute; transform: translateX(-50%); }
+.ui-ribbon-ticks span:first-child { transform: none; }
+.ui-ribbon-ticks span:last-child { transform: translateX(-100%); }
+
+.ui-timeline { display: flex; flex-direction: column; }
+.ui-tl-entry { display: grid; grid-template-columns: 38px 15px 1fr; column-gap: var(--space-sm); }
+.ui-tl-time { position: relative; top: 3px; font-size: var(--text-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; text-align: right; }
+.ui-tl-rail { position: relative; display: flex; justify-content: center; }
+.ui-tl-rail::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--separator); }
+.ui-tl-entry:first-child .ui-tl-rail::before { top: 10px; }
+.ui-tl-entry:last-child .ui-tl-rail::before { bottom: auto; height: 10px; }
+.ui-tl-mark { position: relative; top: 7px; width: 9px; height: 9px; border-radius: 50%; background: hsl(var(--hue) var(--mark)); box-shadow: 0 0 0 3px var(--well); }
+.ui-tl-entry[data-picked] .ui-tl-mark { box-shadow: 0 0 0 3px var(--well), 0 0 0 4.5px hsl(var(--hue) var(--mark)); }
+.ui-tl-body { min-width: 0; padding-bottom: var(--space-xl); }

@@ -3,13 +3,13 @@
 // the hours worked and a few entries ("Released v0.14.4", "Investigated a
 // corrupt database"), which the core writes from what it recorded (agent
 // sessions, commands, commits, pages) with AI. Journal draws days it's given
-// (stories pass made-up ones); JournalView fetches them.
+// (stories pass made-up ones); JournalView fetches them. Drawn with the kit: a View,
+// each day a Ribbon of its hours and a Timeline of its entries (the window-design skill).
 
-import { Badge, Button, Chip, EmptyState, IconButton, Panel, PanelBody, Spinner, type Tone } from "@cmd/ui";
-import { useState, type CSSProperties } from "react";
+import { Badge, Button, Chip, IconButton, Inline, Ribbon, Spinner, Stack, StatusLine, Text, Timeline, TimelineEntry, View, type Tone } from "@cmd/ui";
+import { useState, type ReactNode } from "react";
 import type { JournalDay, JournalEntry, JournalEntryKind, JournalOutcome, JournalWeek } from "@cmd/protocol";
 import { projectHue } from "../model.ts";
-import "./journal.css";
 
 /** Each kind's colour on the rail and the ribbon; the project is the chip. */
 const KIND: Record<JournalEntryKind, { label: string; hue: number }> = {
@@ -67,50 +67,26 @@ const countsText = (c: JournalEntry["counts"]) =>
     .map((k) => `${c[k]} ${COUNT_LABEL[k]![c[k] === 1 ? 0 : 1]}`)
     .join(" · ");
 
-/** The day's hours as a strip: one bar per entry, in its project's colour, on its own lane where entries overlap. */
-function Ribbon({ day, onPick, picked }: { day: JournalDay; onPick: (id: string) => void; picked: string | null }) {
-  // Hours of the work day (04:00 to 04:00) that had work in them.
-  const clip = (t: number) => Math.min(Math.max(t, day.date + DAY_START_H * 3_600_000), day.date + (DAY_START_H + 24) * 3_600_000);
-  const starts = day.entries.map((e) => clip(e.start)), ends = day.entries.map((e) => clip(e.end));
-  const from = Math.floor((Math.min(...starts) - day.date) / 3_600_000);
-  const to = Math.ceil((Math.max(...ends) - day.date) / 3_600_000);
+/** The day's hours as a strip: one bar per entry, in its kind's colour; the work day runs 04:00 to 04:00. */
+function DayRibbon({ day, onPick, picked }: { day: JournalDay; onPick: (id: string) => void; picked: string | null }) {
+  const h = 3_600_000;
+  const clip = (t: number) => Math.min(Math.max(t, day.date + DAY_START_H * h), day.date + (DAY_START_H + 24) * h);
+  // Hours of the work day that had work in them.
+  const from = Math.floor((Math.min(...day.entries.map((e) => clip(e.start))) - day.date) / h);
+  const to = Math.ceil((Math.max(...day.entries.map((e) => clip(e.end))) - day.date) / h);
   const hours = Math.max(1, to - from);
-  const x = (t: number) => (((t - day.date) / 3_600_000 - from) / hours) * 100;
-  // Greedy lanes, so parallel work (two agents at once) shows as such.
-  const lanes: number[] = [];
-  const lane = new Map<string, number>();
-  for (const e of [...day.entries].sort((a, b) => a.start - b.start)) {
-    let i = lanes.findIndex((end) => end <= e.start);
-    if (i < 0) i = lanes.push(0) - 1;
-    lanes[i] = e.end;
-    lane.set(e.id, i);
-  }
-  const ticks = Array.from({ length: hours + 1 }, (_, i) => from + i).filter((h, i) => hours <= 8 || i % 2 === 0);
+  const ticks = Array.from({ length: hours + 1 }, (_, i) => from + i)
+    .filter((_, i) => hours <= 8 || i % 2 === 0)
+    .map((x) => ({ at: day.date + x * h, label: String(x % 24).padStart(2, "0") }));
   return (
-    <div className="journal-ribbon" style={{ "--lanes": lanes.length } as CSSProperties}>
-      <div className="journal-ribbon-track">
-        {day.entries.map((e) => (
-          <button
-            key={e.id}
-            type="button"
-            className="journal-ribbon-bar"
-            data-picked={picked === e.id || undefined}
-            data-tip={`${e.title} · ${time(e.start)}–${time(e.end)}`}
-            aria-label={`${e.title}, ${time(e.start)}–${time(e.end)}`}
-            aria-pressed={picked === e.id}
-            onClick={() => onPick(e.id)}
-            style={{ left: `${x(clip(e.start))}%`, width: `max(4px, ${x(clip(e.end)) - x(clip(e.start))}%)`, top: `calc(${lane.get(e.id)} * var(--lane))`, "--hue": KIND[e.kind].hue } as CSSProperties}
-          />
-        ))}
-      </div>
-      <div className="journal-ribbon-ticks">
-        {ticks.map((h) => (
-          <span key={h} style={{ left: `${((h - from) / hours) * 100}%` }}>
-            {String(h % 24).padStart(2, "0")}
-          </span>
-        ))}
-      </div>
-    </div>
+    <Ribbon
+      items={day.entries.map((e) => ({ id: e.id, start: clip(e.start), end: clip(e.end), hue: KIND[e.kind].hue, label: `${e.title} · ${time(e.start)}–${time(e.end)}` }))}
+      from={day.date + from * h}
+      to={day.date + (from + hours) * h}
+      ticks={ticks}
+      picked={picked}
+      onPick={onPick}
+    />
   );
 }
 
@@ -118,27 +94,46 @@ function Entry({ e, picked, showProject }: { e: JournalEntry; picked: boolean; s
   const k = KIND[e.kind];
   const o = e.outcome && OUTCOME[e.outcome];
   return (
-    <article className="journal-entry" data-picked={picked || undefined} id={`journal-${e.id}`} style={{ "--hue": k.hue } as CSSProperties}>
-      <div className="journal-entry-time">{time(e.start)}</div>
-      <div className="journal-entry-rail">
-        <span className="journal-entry-mark" data-tip={k.label} />
-      </div>
-      <div className="journal-entry-body">
-        <div className="journal-entry-head">
-          <span className="journal-entry-title">{e.title}</span>
+    <TimelineEntry id={`journal-${e.id}`} time={time(e.start)} hue={k.hue} label={k.label} picked={picked}>
+      <Stack gap="xs">
+        <Inline gap="sm">
+          <Text strong size="base">
+            {e.title}
+          </Text>
           {o && (
             <Badge size="sm" tone={o.tone}>
               {o.label}
             </Badge>
           )}
-        </div>
-        <p className="journal-entry-summary">{e.summary}</p>
-        <div className="journal-entry-meta">
+        </Inline>
+        <Text tone="dim">{e.summary}</Text>
+        <Inline gap="md" wrap>
           {showProject && e.repo && <Chip hue={projectHue(base(e.repo))}>{base(e.repo)}</Chip>}
-          <span>{[spanText(e.end - e.start), countsText(e.counts)].join(" · ")}</span>
-        </div>
-      </div>
-    </article>
+          <Text tone="dim" size="xs">
+            {[spanText(e.end - e.start), countsText(e.counts)].join(" · ")}
+          </Text>
+        </Inline>
+      </Stack>
+    </TimelineEntry>
+  );
+}
+
+/** A day's or the week's heading: its name large, a note beside it, an action at the end. */
+function Heading({ title, note, action }: { title: string; note?: string; action?: ReactNode }) {
+  return (
+    <Inline gap="md" align="baseline" justify="between">
+      <Inline gap="md" align="baseline">
+        <Text size="lg" strong>
+          {title}
+        </Text>
+        {note && (
+          <Text tone="dim" size="sm">
+            {note}
+          </Text>
+        )}
+      </Inline>
+      {action}
+    </Inline>
   );
 }
 
@@ -157,7 +152,7 @@ export function Journal({
   now?: number;
   /** Projects as chips (off when the workspace is one project). */
   showProject?: boolean;
-  /** Writing the newest entries: a line at the top. */
+  /** Writing the newest entries: a line in the footer. */
   summarising?: string | null;
   onRefresh?: () => void;
   /** No AI provider: the journal can't be written, and says how to fix that. */
@@ -169,69 +164,55 @@ export function Journal({
     setPicked((p) => (p === id ? null : id));
     document.getElementById(`journal-${id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   };
+  const empty = days.length === 0 && !summarising;
   return (
-    <Panel className="journal">
-      <PanelBody>
-        {summarising && (
-          <div className="journal-writing">
-            <Spinner size={11} />
-            <span>{summarising}</span>
-          </div>
-        )}
-        {days.length === 0 && !summarising && onSetUpAi && (
-          <EmptyState
-            compact
-            icon="sparkles"
-            title="Your journal needs AI"
-            action={
-              <Button size="sm" onClick={onSetUpAi}>
-                Set Up AI…
-              </Button>
-            }
-          >
-            cmd writes up what happened from your agents, terminals and git. Add an API key and it starts with the last few days.
-          </EmptyState>
-        )}
-        {days.length === 0 && !summarising && !onSetUpAi && (
-          <EmptyState compact icon="book" title="Nothing yet">
-            What you and your agents do in this workspace shows up here, a few lines a day.
-          </EmptyState>
-        )}
+    <View
+      inset
+      state={
+        empty && onSetUpAi
+          ? { kind: "empty", icon: "sparkles", title: "Your journal needs AI", text: "cmd writes up what happened from your agents, terminals and git. Add an API key and it starts with the last few days.", action: <Button onClick={onSetUpAi}>Set Up AI…</Button> }
+          : empty
+            ? { kind: "empty", icon: "book", title: "Nothing yet", text: "What you and your agents do in this workspace shows up here, a few lines a day." }
+            : null
+      }
+      footer={
+        summarising ? (
+          <StatusLine>
+            <Spinner size={10} /> {summarising}
+          </StatusLine>
+        ) : undefined
+      }
+    >
+      <Stack gap="2xl">
         {week && week.themes.length > 0 && days.length > 0 && (
-          <section className="journal-day journal-week">
-            <header className="journal-day-head">
-              <h3>This week</h3>
-            </header>
-            <p className="journal-day-headline">{week.headline}</p>
-            <ul className="journal-week-themes">
+          <Stack gap="md">
+            <Heading title="This week" />
+            <Text>{week.headline}</Text>
+            <Stack gap="sm">
               {week.themes.map((t) => (
-                <li key={t.title}>
-                  <span className="journal-entry-title">{t.title}</span>
-                  <p className="journal-entry-summary">{t.summary}</p>
-                </li>
+                <Stack key={t.title} gap="2xs">
+                  <Text strong>{t.title}</Text>
+                  <Text tone="dim">{t.summary}</Text>
+                </Stack>
               ))}
-            </ul>
-          </section>
+            </Stack>
+          </Stack>
         )}
         {days.map((d) => (
-          <section key={d.date} className="journal-day">
-            <header className="journal-day-head">
-              <h3>{dayName(d.date, now)}</h3>
-              <span className="journal-day-span">{d.entries.length > 0 && `${time(Math.min(...d.entries.map((e) => e.start)))}–${time(Math.max(...d.entries.map((e) => e.end)))}`}</span>
-              {onRefresh && d === days[0] && <IconButton size="sm" icon="arrow.clockwise" label="Write Again" onClick={onRefresh} />}
-            </header>
-            <p className="journal-day-headline">{d.headline}</p>
-            {d.entries.length > 0 && <Ribbon day={d} picked={picked} onPick={pick} />}
-            <div className="journal-entries">
+          <Stack key={d.date} gap="md">
+            <Heading title={dayName(d.date, now)} note={d.entries.length > 0 ? `${time(Math.min(...d.entries.map((e) => e.start)))}–${time(Math.max(...d.entries.map((e) => e.end)))}` : undefined} action={onRefresh && d === days[0] ? <IconButton size="sm" icon="arrow.clockwise" label="Write Again" onClick={onRefresh} /> : undefined} />
+            <Text>{d.headline}</Text>
+            {d.entries.length > 0 && <DayRibbon day={d} picked={picked} onPick={pick} />}
+            <Timeline>
               {[...d.entries]
                 .sort((a, b) => b.start - a.start)
                 .map((e) => (
                   <Entry key={e.id} e={e} picked={picked === e.id} showProject={showProject} />
                 ))}
-            </div>
-          </section>
+            </Timeline>
+          </Stack>
         ))}
-      </PanelBody>
-    </Panel>
+      </Stack>
+    </View>
   );
 }

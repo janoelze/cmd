@@ -213,8 +213,8 @@ function AUDIT() {
       if (n.nodeType !== 1) return;
       const cs = getComputedStyle(n);
       if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") return;
-      // Drawn things: SVG, images, fields, icons (masks, as SF Symbols are drawn), and small filled shapes (a status dot's parts).
-      const filled = !n.children.length && !n.textContent.trim() && (cs.maskImage !== "none" || cs.webkitMaskImage !== "none" || cs.backgroundImage !== "none" || (cs.backgroundColor !== "rgba(0, 0, 0, 0)" && n.getBoundingClientRect().width < 40));
+      // Drawn things: SVG, images, fields, icons (masks, as SF Symbols are drawn), and small filled or outlined shapes (a status dot's parts, a spinner).
+      const filled = !n.children.length && !n.textContent.trim() && (cs.maskImage !== "none" || cs.webkitMaskImage !== "none" || cs.backgroundImage !== "none" || ((cs.backgroundColor !== "rgba(0, 0, 0, 0)" || parseFloat(cs.borderTopWidth) > 0) && n.getBoundingClientRect().width < 40));
       if (filled || n instanceof SVGSVGElement || n.tagName === "IMG" || n.tagName === "CANVAS" || n.tagName === "INPUT") {
         const b = clip ? cut(n.getBoundingClientRect(), clip) : n.getBoundingClientRect();
         if (visible(b)) boxes.push(b);

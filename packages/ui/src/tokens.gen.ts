@@ -670,6 +670,11 @@ export const TOKENS: readonly TokenInfo[] = [
     "value": "#ffffff"
   },
   {
+    "name": "--mark",
+    "value": "62% 58%",
+    "description": "Saturation and lightness of a hue-coloured mark, with hsl(var(--hue) var(--mark)): a timeline's dots, a ribbon's bars (a kind's or a project's colour)."
+  },
+  {
     "name": "--footer-h",
     "type": "dimension",
     "value": "26px",
