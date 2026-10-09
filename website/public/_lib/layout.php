@@ -110,9 +110,10 @@ tr:last-child td { border-bottom: 0; }
 .hero-shots { transition: opacity 1.2s ease, translate 1.2s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .hero-shots.loading { opacity: 0; translate: 0 12px; }
 @media (prefers-reduced-motion: reduce) { .hero-shots.loading { translate: none; } }
-.reqs { display: grid; grid-template-columns: max-content 1fr; gap: 2px 20px; margin: 0; font-size: var(--fs-sm); }
+.reqs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 28px; margin: 0; font-size: var(--fs-sm); }
 .reqs dt { color: var(--ink-3); }
-.reqs dd { margin: 0; color: var(--ink-2); }
+.reqs dd { margin: 0; color: var(--ink); }
+@media (max-width: 640px) { .reqs { grid-template-columns: repeat(2, 1fr); } }
 hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
 .why { margin-bottom: 0; }
 .why h2 { margin-top: 0; }

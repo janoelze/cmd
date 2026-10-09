@@ -136,10 +136,10 @@ for (const t of document.querySelectorAll(".releases time")) {
 <?php endif ?>
 <h2>System requirements</h2>
 <dl class="reqs">
-  <dt>Mac</dt><dd>Apple silicon</dd>
-  <dt>macOS</dt><dd>13 or later</dd>
-  <dt>Disk</dt><dd>350 MB</dd>
-  <dt>Optional</dt><dd>Anthropic or OpenAI API key, for AI features</dd>
+  <div><dt>Mac</dt><dd>Apple silicon</dd></div>
+  <div><dt>macOS</dt><dd>13 or later</dd></div>
+  <div><dt>Disk</dt><dd>350 MB</dd></div>
+  <div><dt>Optional</dt><dd>Anthropic or OpenAI API key</dd></div>
 </dl>
 <?php
 page_end();
