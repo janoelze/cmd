@@ -14,12 +14,13 @@ Every window in cmd, built-in or made with Magic, is drawn from one set of desig
   - A new value a view needs becomes a token (with a description), never a literal in the view.
 - **Window pieces** (`packages/ui/src/frame.tsx`, `chart.tsx`, styles in `frame.css`):
   - `View`: a window's content: `toolbar` (a `WindowToolbar`), the body, `footer` (a `StatusLine`), `state` (loading, empty, no results, error; replaces the body). `inset` pads the body; leave it off for content that runs edge to edge (a table, a list, media).
-  - `Split`: a sidebar (`side="start"`) or an inspector (`side="end"`), resizable between min/ideal/max, hidden when the window is too narrow for both.
+  - `Split`: a sidebar (`side="start"`) or an inspector (`side="end"`), resizable between min/ideal/max, hidden below the regular size (600px). Offer what it held another way there: `<Hide above="regular">` around a `ToolbarMenu` in the toolbar (the SQLite window's table menu).
   - `List` (`variant="plain"`: rows edge to edge, as a sidebar; `"grouped"`: indented sections, for things to run or change), with `ListSection`, `ListRow`, `ListGroup`.
   - `Panes` / `Pane`: a dashboard's sections, one column, two from 720px.
   - `DataGrid`: tables. Columns as data: `grow` (takes the leftover width), `align: "end"` (numbers), `hide: "narrow" | "regular"` (dropped as space runs out), `icon` (hugs a dot or icon). `selected` / `onRowClick` for an inspector.
   - `Stat`, `Chart` (line, area, bar), `Sparkline`, `Legend`: series take `--chart-N` in order.
-  - `Stack`, `Inline`, `Tiles`, `Hide`, `Text`, `Measure` (a reading column), `MediaStage`, `Filmstrip`.
+  - `Stack`, `Inline`, `Tiles`, `Text`, `Measure` (a reading column), `MediaStage`, `Filmstrip`.
+  - `Hide below | above="narrow" | "regular"`: what gives way as a window narrows, or what only shows when it's narrow. A window's sizes are narrow (< 360px), regular (< 600px) and wide; everything that follows the width uses these two breakpoints. Works in the toolbar too (a `View` is a size container).
   - Gaps and paddings take only the spacing scale's names (`gap="md"`), checked by the types.
 - **Reference windows** (`apps/desktop/src/renderer/src/reference/*.story.tsx`, `pnpm workbench <story>`): the spec for each kind of window, every state and size included. Start from the closest one:
 
