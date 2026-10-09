@@ -134,6 +134,12 @@ for (const t of document.querySelectorAll(".releases time")) {
 }
 </script>
 <?php endif ?>
-<p class="reqs">Needs a Mac with Apple silicon, macOS 13 or later and about 350 MB. Magic widgets and AI features use your own Anthropic or OpenAI API key.</p>
+<h2>System requirements</h2>
+<dl class="reqs">
+  <dt>Mac</dt><dd>Apple silicon</dd>
+  <dt>macOS</dt><dd>13 or later</dd>
+  <dt>Disk</dt><dd>350 MB</dd>
+  <dt>Optional</dt><dd>Anthropic or OpenAI API key, for AI features</dd>
+</dl>
 <?php
 page_end();
