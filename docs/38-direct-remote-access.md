@@ -1,8 +1,8 @@
 # Direct remote access (Tailscale and your own URL)
 
-> Status (2026-10-09): built, and works on a real tailnet (the Tailscale app's CLI: checks, publish, a phone in control, unpublish). Phases 1–3 are in: the `Transport`, `DirectListener`, the adapter registry with `tailscale` and `url`, the settings, the setup checklist in Settings and `cmd remote setup`, the web client in the runtime. Extends docs/13-remote-access.md, which describes the relay mode this builds on.
+> Status (2026-10-09): built, and works on a real tailnet (the Tailscale app's CLI: checks, publish, a phone in control, unpublish). Phases 1–3 are in: the `Transport`, `DirectListener`, access modes (the relay, `tailscale`, `url`) in one registry, the settings, the setup checklist in Settings and `cmd remote setup`, the web client in the runtime. Extends docs/13-remote-access.md, which describes the relay mode this builds on.
 
-**Goal.** Use remote access without the hosted relay and web client: the phone talks straight to the Mac's core, over a network you control. Tailscale first, with a setup wizard; the way the Mac is made reachable is an **access adapter**, so other ways (your own reverse proxy URL today; Cloudflare Tunnel, ngrok, Funnel later) plug in the same way.
+**Goal.** Use remote access without the hosted relay and web client: the phone talks straight to the Mac's core, over a network you control. Tailscale first, with a setup wizard; every way the Mac is reached is an **access mode**, the relay included, so other ways (your own reverse proxy URL today; Cloudflare Tunnel, ngrok, Funnel later) plug in the same way.
 
 **Unchanged:** Noise end to end, QR pairing approved on the Mac, View/Control scopes enforced in the core, the audit log, the web client's protocol. The hosted relay stays the default for everyone else.
 
@@ -14,7 +14,7 @@
 | Defaults | `remote.access` is `relay` by default; Tailscale and "your own URL" are a choice in Settings → Remote Access |
 | Tailscale integration | A setup wizard that detects, explains and fixes each step, and runs `tailscale serve` itself |
 | Auth over Tailscale | Keep Noise + QR pairing. Tailscale's identity headers are a display hint only, never auth |
-| Plugin or core | The transport in the core; adapters through a registry (below) that a future plugin host can also fill |
+| Plugin or core | The transports in the core; access modes through a registry (below) that a future plugin host can also fill |
 | Transports at once | One. Switching access pairs devices again (a different origin and route) |
 | Tailscale port | A setting, `remote.tailscale.port`, default 8443 (never collides with your own Serve on 443) |
 | Serve lifetime | `tailscale serve --bg`: survives core restarts and reboots; removed when remote access is turned off or switched away from Tailscale |
@@ -68,23 +68,41 @@ interface Transport extends EventEmitter<{ state; open: [channel, ip, hint?]; da
   - Its route is a random id kept in `HostKeys` like a relay's; `endpoint()` comes from the adapter.
 - Pairing (`service.ts` `pair()`) builds the link from `transport.endpoint()`.
 
-### Access adapters
+### Access modes
 
-Every way of reaching the Mac is an adapter, and adapters register through one shared, typed interface, `AccessAdapter` (`packages/core/src/remote/access/adapter.ts`), into a registry in the style of `WindowTypes` and `TranscriptSources` (`register` throws on duplicates, `get`, `all`, `info()` for the UI). The built-ins go through `registerBuiltinAdapters()` with the same `register()` a plugin host will use; `RemoteService` knows adapters only by their id (`remote.access`):
+Every way of reaching the Mac is an **access mode**, the hosted relay included, and every mode registers through one shared, typed interface, `AccessMode` (`packages/core/src/remote/access/mode.ts`), into a registry in the style of `WindowTypes` and `TranscriptSources` (`register` throws on duplicates, `get`, `all`, `info()` for the UI). The built-ins go through `registerBuiltinModes()` with the same `register()` a plugin host will use. `RemoteService` knows modes only by their id (`remote.access`) and has no branch for any of them:
+
+```ts
+interface AccessMode {
+  id: string; title: string; icon: string; description: string;
+  settings: SettingKey[];        // shown under Connection when it's picked; a change restarts it (or config(s))
+  argument?: SettingKey;         // what `cmd remote access <id> VALUE` fills (url: remote.url)
+  connecting: string;            // its status line while it connects
+  missing?(s): string | null;    // why it can't start (the status error)
+  messages?: { offline?(error): string; noAddress?: string };  // what pair() says when it can't make a link
+  detect?(ctx): Promise<Check[]>;   // the checklist; the relay has none
+  setup?(ctx): Promise<Check[]>;    // Check Again: retry, then detect
+  start(ctx): Transport;            // relay: RelayLink; the others: DirectListener + publish
+  stop?(ctx, { restart }): Promise<void>;  // after its transport closed: unpublish, unless it starts again unchanged
+}
+// ModeContext: settings (live), exec on the login PATH (loginpath.ts), the host keys, the web client's dir, log, audit, restart().
+```
+
+- **Relay** (`access/relay.ts`): starts the `RelayLink` on `remote.relay`, reads `remote.client` when a pairing link is made; a route belongs to one relay.
+- **Port publishers** sit underneath the direct modes: an `AccessAdapter` (`access/adapter.ts`) only makes a loopback port reachable and reports a URL; it never sees channels, keys or policy, so a plugin worker could run one later.
 
 ```ts
 interface AccessAdapter {
-  id: string; title: string; icon: string; description: string;
-  /** The wizard: ordered checks, each ok | todo | error, with what to do and an optional link or fix action. */
+  id; title; icon; description; settings; argument?; connecting;
   detect(ctx: AdapterContext): Promise<Check[]>;
-  enable(ctx: AdapterContext, port: number): Promise<{ url: string }>;
-  disable(ctx: AdapterContext): Promise<void>;
-  status(ctx: AdapterContext): Promise<{ url: string | null; state: "ready" | "todo" | "error"; error?: string }>;
+  enable(ctx: AdapterContext): Promise<{ url: string }>;
+  disable(ctx: AdapterContext): Promise<void>;  // only what enable() did
 }
-// AdapterContext: exec(cmd, args, { timeout }) on the login PATH (loginpath.ts), settings, log.
+// AdapterContext: exec, settings (as they were for enable), the loopback port, the route, log.
 ```
 
-An adapter only makes a loopback port reachable and reports a URL; it never sees channels, keys or policy, so a plugin worker could run one later.
+- `publishedMode(adapter)` (`access/published.ts`) turns one into a mode: it runs the `DirectListener` on `remote.port`, publishes alongside it (the listener comes online with the adapter's URL), keeps the publication across a restart with the same settings, unpublishes when the mode is switched away from, turned off or one of its settings changes, and on Check Again restarts a listener that isn't online so the adapter publishes again. `tailscale` and `url` are adapters; `cloudflared`, `ngrok` and `funnel` would be too.
+- **No fixed list.** `remote.access` is a string setting with `control: "access"`: Settings → Remote Access shows a popup of `remote.modes` (the registry's `info()`), then the chosen mode's settings and, when it has `detect`, its checklist. `cmd remote modes` lists them; `cmd remote access` and `cmd remote setup` take any id the core has. A value no mode has stays visible in the popup, marked, and is a status error naming the valid ids.
 
 **`tailscale`:**
 - CLI: `/Applications/Tailscale.app/Contents/MacOS/Tailscale` with `TAILSCALE_BE_CLI=1` (App Store and Standalone), `/usr/local/bin/tailscale`, `/opt/homebrew/bin/tailscale`, then `PATH`.
@@ -106,17 +124,17 @@ An adapter only makes a loopback port reachable and reports a URL; it never sees
 
 | Key | |
 |---|---|
-| `remote.access` | `relay` (default) \| `tailscale` \| `url` |
+| `remote.access` | An access mode's id: `relay` (default), `tailscale`, `url` (`remote.modes`) |
 | `remote.port` | Local port of the listener (default per instance) |
 | `remote.tailscale.port` | HTTPS port on the tailnet, default 8443 |
 | `remote.url` | The public origin for `url` |
-| `remote.relay`, `remote.client` | Relay mode only |
+| `remote.relay`, `remote.client` | The relay mode's |
 
 ## Experience
 
 - Settings → Remote Access: "Connect through" (Hosted relay · Tailscale · Your own URL). Choosing Tailscale shows the checklist with live state, a Fix or Open button per step, and "Check Again". When every check passes, the QR appears as it does today, and the status line names the address ("Ready on mac.tailnet.ts.net").
 - States: "Tailscale isn't running", "Turn on HTTPS for your tailnet", "Publishing on your tailnet…", "Ready", "Can't reach mac.tailnet.ts.net".
-- CLI: `cmd remote setup tailscale` runs the same checks (`--json`), `cmd remote access relay|tailscale|url <URL>` switches, `cmd remote` shows the access and address.
+- CLI: `cmd remote setup tailscale` runs the same checks (`--json`), `cmd remote access <mode> [URL]` switches, `cmd remote modes` lists the modes, `cmd remote` shows the access and address.
 
 ## Packaging
 
