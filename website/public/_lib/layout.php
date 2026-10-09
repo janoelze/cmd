@@ -59,6 +59,8 @@ function page_start(string $title, string $description, string $current): void
   --line: #1f2124; --accent: #71bef2; --success: #a8cc8c; --warning: #eed9a0; --link: #8ad4f5; --accent-soft: #15283a; --on-accent: #121314;
   /* One type scale for the whole site: text at 14-15px, the title a little more. */
   --fs-xs: 12px; --fs-sm: 14px; --fs-base: 14px; --fs-lede: 15px; --fs-h2: 15px; --fs-h1: 20px;
+  /* The app's --glide (packages/ui/src/tokens.css): fast at first, then a long settle. */
+  --glide: linear(0 0%, 0.0016 0.6%, 0.0134 1.9%, 0.0442 3.6%, 0.0979 5.7%, 0.1735 8.1%, 0.2659 10.9%, 0.368 13.9%, 0.4724 17.2%, 0.5724 20.8%, 0.6633 24.6%, 0.742 28.7%, 0.8075 33%, 0.86 37.5%, 0.9006 42.2%, 0.9311 47.1%, 0.9533 52.3%, 0.969 57.6%, 0.9799 63.1%, 0.9872 68.8%, 0.992 74.7%, 0.9951 80.8%, 0.9971 87%, 0.9983 93.4%, 1 100%);
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
 }
@@ -118,8 +120,6 @@ tr:last-child td { border-bottom: 0; }
 /* Revealed from a dark blur: only opacity, translate, scale and filter change, on their own
    layer while it runs (.revealing, dropped after), so it stays on the GPU. */
 .hero-shots {
-  /* The app's --glide (packages/ui/src/tokens.css): fast at first, then a long settle. */
-  --glide: linear(0 0%, 0.0016 0.6%, 0.0134 1.9%, 0.0442 3.6%, 0.0979 5.7%, 0.1735 8.1%, 0.2659 10.9%, 0.368 13.9%, 0.4724 17.2%, 0.5724 20.8%, 0.6633 24.6%, 0.742 28.7%, 0.8075 33%, 0.86 37.5%, 0.9006 42.2%, 0.9311 47.1%, 0.9533 52.3%, 0.969 57.6%, 0.9799 63.1%, 0.9872 68.8%, 0.992 74.7%, 0.9951 80.8%, 0.9971 87%, 0.9983 93.4%, 1 100%);
   transition: opacity 1.4s ease, translate 1.6s var(--glide), scale 1.6s var(--glide), filter 1.6s var(--glide);
 }
 .hero-shots.loading { opacity: 0; translate: 0 12px; scale: 0.985; filter: blur(40px) brightness(0.3); }
@@ -150,17 +150,16 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
   .features { grid-template-columns: 1fr; gap: 20px; }
   footer { padding: 56px 24px 48px; }
 }
-/* Buttons: hover eases in, a press sinks in fast and springs back slow. Primary
+/* Buttons, on the app's --glide: hover eases in, a press sinks in fast and settles back slow. Primary
    brightens; secondary fills in behind its edge. */
 .button {
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   display: inline-flex; align-items: center; justify-content: center; padding: 9px 16px; border-radius: 8px;
   font-weight: 500; text-decoration: none; color: var(--on-accent); background: var(--accent);
   user-select: none; -webkit-tap-highlight-color: transparent;
-  transition: background-color 0.2s var(--ease), box-shadow 0.25s var(--ease), color 0.2s var(--ease), scale 0.35s var(--ease);
+  transition: background-color 0.5s var(--glide), box-shadow 0.5s var(--glide), color 0.5s var(--glide), scale 0.7s var(--glide);
 }
 .button:hover { background: color-mix(in srgb, var(--accent) 86%, white); }
-.button:active { scale: 0.97; background: color-mix(in srgb, var(--accent) 85%, black); transition-duration: 0.08s; }
+.button:active { scale: 0.97; background: color-mix(in srgb, var(--accent) 85%, black); transition-duration: 0.15s; }
 .button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 .button.secondary { color: var(--ink); background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
 .button.secondary:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-3) 70%, transparent); }
