@@ -100,7 +100,7 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
 <p>Enable AI in the settings and cmd starts understanding what's happening across your workspaces. It recognizes terminals running agents, helps you keep track of what they're doing, surfaces sessions that need your attention, and suggests smart actions.</p>
 <p>Most of what I open stays inside cmd, too. Open a file from your shell and it appears in the current Space, whether it's a folder, text or code, Markdown, JSON, a PDF, an image, a SQLite database, a Strudel pattern, or a URL in the browser.</p>
 <p>With Magic Widgets, you can prompt new widgets into existence on the spot: open merge requests, queue depth, recent CI runs, or whatever else you need. The built-in agent builds them on top of tools already on your machine, from <code>gh</code> and <code>kubectl</code> to your own scripts.</p>
-<p>I'm not trying to build another agent orchestrator. Those tend to impose workflows that can become obsolete with the next model or tool. cmd deliberately stays unopinionated. It bets on terminals and the tools you already know, and on the idea that they'll still matter when the next model arrives.</p>
+<p>cmd deliberately stays unopinionated. It bets on terminals and the tools you already know, and on the idea that they'll still matter when the next model arrives.</p>
 <p>I'm building cmd mostly for myself, in the open. But I'm hoping it fits your workflow, too.</p>
 </div>
 </section>
