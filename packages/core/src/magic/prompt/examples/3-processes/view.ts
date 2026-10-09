@@ -16,7 +16,7 @@ cmd.onData<Data>((d) => {
       cpu.textContent = cmd.fmt.pct(p.cpu);
       const bar = document.createElement("td");
       bar.className = "k-hide-narrow";
-      bar.innerHTML = `<div class="k-bar bar"><i style="--v:${Math.min(100, p.cpu)}%;--c:${p.cpu > 80 ? "var(--bad)" : "var(--c1)"}"></i></div>`;
+      bar.innerHTML = `<div class="k-bar bar"><i style="--v:${Math.min(100, p.cpu)}%;--c:${p.cpu > 80 ? "var(--danger)" : "var(--chart-1)"}"></i></div>`;
       const mem = document.createElement("td");
       mem.className = "k-num k-dim";
       mem.textContent = cmd.fmt.bytes(p.rss);

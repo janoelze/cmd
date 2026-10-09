@@ -207,40 +207,27 @@ export type MagicProgress =
   | { type: "done" }
   | { type: "error"; message: string };
 
-/** The part of an app theme the widget tokens come from (structurally the renderer's Theme). */
+/** A theme as a widget's frame needs it: its appearance and the variables it sets on the app's :root (themeVars, light themes' overrides included). */
 export interface ThemeLike {
   appearance: "dark" | "light";
-  colors: { well: string; bgElevated: string; text: string; textDim: string; accent: string; ink: string };
-  terminal: { red: string; green: string; yellow: string; blue: string; magenta: string; cyan: string };
+  vars: Readonly<Record<string, string>>;
 }
 
-/** The widget token vocabulary (the Magic system prompt names exactly these). */
+/**
+ * What the host sets on a widget's :root: the theme's variables, as the app sets them on
+ * its own, and the person's fonts. The frame's tokens.css (generated from the app's
+ * tokens, packages/ui/tokens) derives everything else from them, so widgets share the
+ * app's vocabulary. `--bg` stays the frame's own: inside a widget it is the window's
+ * background (--well), not the board.
+ */
 export function widgetTokens(t: ThemeLike, fonts: { text?: string; mono?: string } = {}): Record<string, string> {
-  const ink = (pct: number) => `color-mix(in srgb, ${t.colors.ink} ${pct}%, transparent)`;
-  return {
-    "color-scheme": t.appearance,
-    "--bg": t.colors.well,
-    "--surface": t.colors.bgElevated,
-    "--text": t.colors.text,
-    "--text-dim": t.colors.textDim,
-    "--accent": t.colors.accent,
-    "--on-accent": "#fff",
-    "--line": ink(t.appearance === "dark" ? 12 : 10),
-    "--fill": ink(t.appearance === "dark" ? 7 : 5),
-    "--good": t.terminal.green,
-    "--warn": t.terminal.yellow,
-    "--bad": t.terminal.red,
-    "--c1": t.terminal.blue,
-    "--c2": t.terminal.green,
-    "--c3": t.terminal.yellow,
-    "--c4": t.terminal.magenta,
-    "--c5": t.terminal.cyan,
-    "--c6": t.terminal.red,
-    // The app passes the font.text / font.code settings; the defaults are theirs.
-    "--font": fonts.text || DEFAULT_SETTINGS["font.text"] || `-apple-system, BlinkMacSystemFont, sans-serif`,
-    "--mono": fonts.mono || DEFAULT_SETTINGS["font.code"],
-    "--radius": "8px",
-  };
+  const out: Record<string, string> = { "color-scheme": t.appearance };
+  for (const [k, v] of Object.entries(t.vars)) if (k !== "--bg") out[k] = v;
+  // The app passes the font.text / font.code settings; the defaults are theirs.
+  const text = fonts.text || DEFAULT_SETTINGS["font.text"];
+  if (text) out["--font-ui"] = text;
+  out["--font-mono"] = fonts.mono || DEFAULT_SETTINGS["font.code"];
+  return out;
 }
 
 /**

@@ -1,9 +1,18 @@
 // Static checks on a widget body, for the prompt lab's metrics and (later) the
 // app's repair loop: things the prompt forbids that are cheap to detect.
 
+import fs from "node:fs";
+
+/** Token names widgets used before they shared the app's, with their replacements (from the frame's generated tokens.css). */
+const DEPRECATED = new Map(
+  [...fs.readFileSync(new URL("./prompt/tokens.css", import.meta.url), "utf8").matchAll(/(--[a-z0-9-]+): [^;]+; \/\* deprecated: Use (--[a-z0-9-]+)\. \*\//g)].map((m) => [m[1]!, m[2]!]),
+);
+
 export interface LintResult {
   /** Literal colours (#hex, rgb(), hsl(), named-ish) outside var(). */
   literalColors: string[];
+  /** Older token names (--line, --c1…), each with the app's name to use instead. */
+  oldTokens: [old: string, use: string][];
   externalResources: string[];
   /** Comments in the body (wasted tokens). */
   comments: number;
@@ -24,5 +33,6 @@ export function lintBody(body: string): LintResult {
   const lastStyle = body.lastIndexOf("<style");
   const lastTagBeforeScript = iScript < 0 ? -1 : body.slice(body.lastIndexOf("</script>") + 9).search(/<[a-z]/i);
   const outOfOrder = (iStyle > 0 && body.slice(0, iStyle).trim().length > 0) || (iScript >= 0 && lastStyle > iScript) || lastTagBeforeScript >= 0;
-  return { literalColors: [...new Set(literalColors)], externalResources, comments, outOfOrder, bytes: Buffer.byteLength(body) };
+  const oldTokens = [...new Set([...body.matchAll(/var\((--[a-z0-9-]+)|["'`](--[a-z0-9-]+)["'`]/g)].map((m) => (m[1] ?? m[2])!))].filter((n) => DEPRECATED.has(n)).map((n) => [n, DEPRECATED.get(n)!] as [string, string]);
+  return { literalColors: [...new Set(literalColors)], oldTokens, externalResources, comments, outOfOrder, bytes: Buffer.byteLength(body) };
 }

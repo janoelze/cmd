@@ -5,6 +5,7 @@
 // an offscreen Electron window (main/preview.ts, through the core); the CLI
 // and a core without an app use Playwright's Chromium.
 
+import fs from "node:fs";
 import { MAGIC_SIZES, WIDGET_MEASURE, widgetCsp, widgetTokens, type ThemeLike } from "@cmd/protocol";
 import { widgetHtml } from "../magic/host.ts";
 import type { WidgetManifest } from "./manifest.ts";
@@ -41,19 +42,8 @@ export interface Previewer {
 /** Evaluated in the page after it settled. */
 export const MEASURE = WIDGET_MEASURE;
 
-/** Two themes to render with (from cmd's default dark and light themes). */
-export const PREVIEW_THEMES: Record<"dark" | "light", ThemeLike> = {
-  dark: {
-    appearance: "dark",
-    colors: { well: "#161618", bgElevated: "#2a2a2c", text: "#ececec", textDim: "#8e8e93", accent: "#0a84ff", ink: "#ffffff" },
-    terminal: { red: "#ff6b5e", green: "#7bd88f", yellow: "#ffd866", blue: "#8f8fff", magenta: "#e08cff", cyan: "#6fe0e8" },
-  },
-  light: {
-    appearance: "light",
-    colors: { well: "#ffffff", bgElevated: "#ffffff", text: "#1d1d1f", textDim: "#6e6e73", accent: "#007aff", ink: "#000000" },
-    terminal: { red: "#d1242f", green: "#1a7f37", yellow: "#9a6700", blue: "#3b5bdb", magenta: "#a626a4", cyan: "#0b7d86" },
-  },
-};
+/** Two themes to render with: cmd's built-in Dark and Light, as `pnpm tokens` snapshots them. */
+export const PREVIEW_THEMES = JSON.parse(fs.readFileSync(new URL("../magic/prompt/preview-themes.json", import.meta.url), "utf8")) as Record<"dark" | "light", ThemeLike>;
 
 export function previewPage(body: string, data: unknown, theme: ThemeLike, media: string[] = []): string {
   const page = widgetHtml({ title: "preview", body, tokens: widgetTokens(theme), data });

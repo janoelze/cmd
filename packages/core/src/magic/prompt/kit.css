@@ -1,13 +1,15 @@
-/* The Magic kit: the classes every widget can use. Colours come only from the
-   theme variables the host sets on :root, so widgets follow the app's theme. */
+/* The Magic kit: the classes every widget can use. Colours, sizes and spacing come
+   only from the app's tokens (tokens.css, generated from packages/ui/tokens), so
+   widgets follow the app's theme and share its design: the same insets, bars, type
+   and controls as cmd's own windows. */
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
-  padding: 12px;
-  background: var(--bg);
+  padding: var(--inset);
+  background: var(--well);
   color: var(--text);
-  font: 13px/1.4 var(--font);
+  font: var(--text-base)/1.4 var(--font-ui);
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
   overflow: auto;
@@ -18,36 +20,37 @@ a { color: var(--accent); text-decoration: none; cursor: default; }
 h1, h2, h3, p { margin: 0; }
 svg { display: block; }
 
-.k-stack { display: flex; flex-direction: column; gap: 8px; }
-.k-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.k-stack { display: flex; flex-direction: column; gap: var(--space-md); }
+.k-row { display: flex; align-items: center; gap: var(--space-md); min-width: 0; }
 .k-wrap { flex-wrap: wrap; }
-.k-between { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.k-between { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); min-width: 0; }
 .k-spacer { flex: 1; }
-.k-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.k-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--space-md); }
 .k-fill { height: 100%; }
 .k-center { display: flex; align-items: center; justify-content: center; text-align: center; }
 /* App layout (prompt.md → Layout): a window-filling column, like a native app.
-   .k-app replaces the body's padding: bars run edge to edge. */
+   .k-app replaces the body's padding: bars run edge to edge, as cmd's window toolbar
+   and footer do (the same heights, inset and line). A row that holds controls is a bar. */
 body:has(> .k-app) { padding: 0; }
 .k-app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .k-toolbar, .k-footer {
-  flex: none; display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 36px; padding: 6px 12px;
+  flex: none; display: flex; align-items: center; gap: var(--space-md); min-width: 0; min-height: var(--toolbar-h); padding: var(--space-xs) var(--inset);
 }
-.k-toolbar { border-bottom: 1px solid var(--line); }
-.k-footer { border-top: 1px solid var(--line); }
-.k-toolbar.k-plain, .k-footer.k-plain { border: 0; }
+.k-toolbar { box-shadow: inset 0 -1px 0 var(--window-edge); }
+.k-footer { box-shadow: inset 0 1px 0 var(--window-edge); }
+.k-toolbar.k-plain, .k-footer.k-plain { box-shadow: none; }
 /* The part that takes the rest of the height; scrolls when it has more. */
-.k-main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.k-main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: var(--space-lg); padding: var(--inset); }
 .k-main.k-flush { padding: 0; gap: 0; }
 /* Edge to edge (prompt.md → Layout): a window-high column whose first child sits at the
    top and last at the bottom (a status line up top, the table down to the bottom edge). */
-.k-edges { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; height: 100%; min-height: 0; }
+.k-edges { display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-lg); height: 100%; min-height: 0; }
 /* A table or list at the bottom goes in a .k-pane: it keeps its height (on the bottom edge)
    and host.js drops the rows that don't fit, like htop. */
 .k-edges > .k-pane { flex: 0 1 auto; min-height: 0; }
 /* The middle of the window for one hero element (a play button, a timer's digits),
    between something at the top and something at the bottom. */
-.k-hero { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; }
+.k-hero { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-lg); text-align: center; }
 /* Inside any column: this element grows into the space left (a chart, a list, a canvas). */
 .k-grow-v { flex: 1 1 0; min-height: 60px; }
 canvas.k-grow-v, .k-grow-v > canvas { display: block; width: 100%; height: 100%; }
@@ -57,109 +60,110 @@ canvas.k-grow-v, .k-grow-v > canvas { display: block; width: 100%; height: 100%;
 /* Panes wrap into rows and grow to fill them, so tables in them always span the
    window: a lone pane (or one left after host.js hides others) takes the whole
    width. A grid with auto-fit columns left empty tracks beside a spanning row. */
-.k-panes { display: flex; flex-wrap: wrap; gap: 16px 24px; align-content: flex-start; }
-.k-pane { flex: 1 1 100%; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.k-panes { display: flex; flex-wrap: wrap; gap: var(--space-2xl) var(--space-xl); align-content: flex-start; }
+.k-pane { flex: 1 1 100%; display: flex; flex-direction: column; gap: var(--space-md); min-width: 0; }
 @media (min-width: 720px) { .k-pane { flex-basis: 300px; } }
 .k-panes > :not(.k-pane) { flex: 1 0 100%; min-width: 0; } /* the status line is a row of its own */
 .k-cut { display: none !important; }
 
-.k-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.k-card { background: var(--group-bg); box-shadow: inset 0 0 0 1px var(--group-edge); border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg); min-width: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
 
-.k-title { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); }
+.k-title { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); }
 .k-dim { color: var(--text-dim); }
-.k-small { font-size: 11px; }
-.k-mono { font-family: var(--mono); }
+.k-small { font-size: var(--text-sm); }
+.k-mono { font-family: var(--font-mono); }
 .k-big { font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -.01em; }
 .k-huge { font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: -.02em; }
 .k-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 a.k-ellipsis, span.k-ellipsis { display: block; }
 
-.k-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.k-stat-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); }
-.k-stat-value { font: 600 15px/1.3 var(--mono); }
-.k-stat-note { font-size: 11px; color: var(--text-dim); }
-.k-unit { font-size: min(.8em, max(12px, .45em)); font-weight: 500; color: var(--text-dim); margin-left: .25em; letter-spacing: 0; }
-.k-delta { font-size: 11px; font-variant-numeric: tabular-nums; }
-.k-up { color: var(--good); }
-.k-down { color: var(--bad); }
+.k-stat { display: flex; flex-direction: column; gap: var(--space-2xs); min-width: 0; }
+.k-stat-label { font-size: var(--text-sm); color: var(--text-dim); }
+.k-stat-value { font: 500 var(--text-lg)/1.3 var(--font-mono); }
+.k-stat-note { font-size: var(--text-sm); color: var(--text-dim); }
+.k-unit { font-size: min(.8em, max(var(--text-sm), .45em)); font-weight: 500; color: var(--text-dim); margin-left: .25em; letter-spacing: 0; }
+.k-delta { font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.k-up { color: var(--success); }
+.k-down { color: var(--danger); }
 
-.k-good { color: var(--good); }
-.k-warn { color: var(--warn); }
-.k-bad { color: var(--bad); }
+.k-good { color: var(--success); }
+.k-warn { color: var(--warning); }
+.k-bad { color: var(--danger); }
 
-.k-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--fill); color: var(--text-dim); white-space: nowrap; }
-.k-badge.k-good { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
-.k-badge.k-warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
-.k-badge.k-bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.k-badge { display: inline-flex; align-items: center; gap: var(--space-xs); padding: 1px 7px; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 600; background: var(--bg-hover); color: var(--text-dim); white-space: nowrap; }
+.k-badge.k-good { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.k-badge.k-warn { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+.k-badge.k-bad { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
 
 .k-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); flex: none; }
-.k-dot.k-good { background: var(--good); }
-.k-dot.k-warn { background: var(--warn); }
-.k-dot.k-bad { background: var(--bad); }
+.k-dot.k-good { background: var(--success); }
+.k-dot.k-warn { background: var(--warning); }
+.k-dot.k-bad { background: var(--danger); }
 
 .k-table { width: 100%; border-collapse: collapse; }
-.k-table td { font-family: var(--mono); font-size: 12px; }
-.k-table td.k-text { font-family: var(--font); font-size: 13px; }
-.k-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text-dim); padding: 0 8px 4px 0; border-bottom: 1px solid var(--line); }
-.k-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.k-table td { font-family: var(--font-mono); font-size: var(--text-sm); }
+.k-table td.k-text { font-family: var(--font-ui); font-size: var(--text-md); }
+.k-table th { text-align: left; font-size: var(--text-xs); font-weight: 600; color: var(--text-dim); padding: 0 var(--space-xl) var(--space-xs) 0; border-bottom: 1px solid var(--separator); }
+.k-table td { padding: var(--space-xs) var(--space-xl) var(--space-xs) 0; border-bottom: 1px solid var(--separator); vertical-align: top; }
 .k-table tr:last-child td { border-bottom: 0; }
-.k-table .k-num, .k-num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.k-table th:last-child, .k-table td:last-child { padding-right: 0; }
+.k-table .k-num, .k-num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .k-table .k-num { white-space: nowrap; }
 /* The column that takes the width left over and truncates (a name, title or path); the others keep their natural width. */
 .k-table .k-grow { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .k-list { list-style: none; margin: 0; padding: 0; }
-.k-list > li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.k-list > li { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-xs) 0; border-bottom: 1px solid var(--separator); min-width: 0; }
 .k-list > li:last-child { border-bottom: 0; }
 
-.k-kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+.k-kv { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-xs) var(--space-lg); margin: 0; }
 .k-kv dt { color: var(--text-dim); }
 .k-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 
-.k-bar { height: 6px; border-radius: 3px; background: var(--fill); overflow: hidden; }
-.k-bar > i { display: block; height: 100%; width: var(--v, 0%); background: var(--c, var(--c1)); border-radius: 3px; transition: width .3s; }
+.k-bar { height: 6px; border-radius: 3px; background: var(--bg-hover); overflow: hidden; }
+.k-bar > i { display: block; height: 100%; width: var(--v, 0%); background: var(--c, var(--chart-1)); border-radius: 3px; transition: width .3s; }
 
-.k-pre { margin: 0; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.k-term { margin: 0; padding: 8px 10px; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); }
-.k-prompt::before { content: "❯ "; color: var(--c2); }
-.k-empty { color: var(--text-dim); text-align: center; padding: 16px; }
+.k-pre { margin: 0; font: var(--text-sm)/1.45 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.k-term { margin: 0; padding: var(--space-md) var(--space-lg); font: var(--text-sm)/1.45 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--well); border: 1px solid var(--separator); border-radius: var(--radius-md); }
+.k-prompt::before { content: "❯ "; color: var(--chart-2); }
+.k-empty { color: var(--text-dim); text-align: center; padding: var(--space-xl); }
 
-/* Controls, like cmd's own (its @cmd/ui kit): 24px high, 6px radius, quiet fills. */
+/* Controls, like cmd's own (its @cmd/ui kit): the same heights, radius and fills. */
 .k-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: none; height: 24px; padding: 0 11px;
-  font: 12.5px/1 var(--font); color: var(--text); white-space: nowrap; border: 0; border-radius: 6px;
-  background: var(--fill); box-shadow: inset 0 0 0 1px var(--line); cursor: default;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); flex: none; height: var(--control-h); padding: 0 11px;
+  font: var(--text-md)/1 var(--font-ui); color: var(--text); white-space: nowrap; border: 0; border-radius: var(--radius);
+  background: var(--control-bg); box-shadow: inset 0 0 0 1px var(--control-edge); cursor: default;
 }
-.k-btn:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
-.k-btn:active, .k-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--text) 14%, transparent); }
-.k-btn:disabled { opacity: .4; }
+.k-btn:hover { background: var(--control-hover); }
+.k-btn:active, .k-btn[aria-pressed="true"] { background: var(--control-active); }
+.k-btn:disabled { opacity: var(--disabled-opacity); }
 .k-btn.k-primary { color: var(--on-accent); background: var(--accent); box-shadow: none; }
 .k-btn.k-primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--text)); }
 .k-btn.k-ghost { background: transparent; box-shadow: none; }
-.k-btn.k-ghost:hover { background: var(--fill); }
-.k-btn.k-sm { height: 20px; padding: 0 8px; font-size: 11.5px; border-radius: 4px; }
-.k-btn.k-lg { height: 28px; padding: 0 14px; font-size: 13px; }
+.k-btn.k-ghost:hover { background: var(--bg-hover); }
+.k-btn.k-sm { height: var(--control-h-sm); padding: 0 var(--space-md); font-size: var(--text-sm); border-radius: var(--radius-sm); }
+.k-btn.k-lg { height: var(--control-h-lg); padding: 0 14px; font-size: var(--text-base); }
 /* Icon-only button: square; .k-round for a transport button (play). */
-.k-btn.k-icon-only { width: 24px; padding: 0; }
-.k-btn.k-lg.k-icon-only { width: 28px; }
-.k-btn.k-round { border-radius: 999px; }
+.k-btn.k-icon-only { width: var(--control-h); padding: 0; }
+.k-btn.k-lg.k-icon-only { width: var(--control-h-lg); }
+.k-btn.k-round { border-radius: var(--radius-pill); }
 /* The hero control of an instrument (a play button): big, round, its icon scaled with it. */
-.k-btn.k-xl { width: clamp(56px, 16vmin, 84px); height: clamp(56px, 16vmin, 84px); padding: 0; border-radius: 999px; }
+.k-btn.k-xl { width: clamp(56px, 16vmin, 84px); height: clamp(56px, 16vmin, 84px); padding: 0; border-radius: var(--radius-pill); }
 .k-btn.k-xl > .k-icon { width: 40%; height: 40%; }
 .k-input, .k-select {
-  height: 24px; font: 12.5px var(--font); color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent);
-  border: 0; box-shadow: inset 0 0 0 1px var(--line); border-radius: 6px; padding: 0 8px; min-width: 0; outline: 0;
+  height: var(--control-h); font: var(--text-md) var(--font-ui); color: var(--text); background: var(--field-bg);
+  border: 0; box-shadow: inset 0 0 0 1px var(--field-edge); border-radius: var(--radius); padding: 0 var(--space-md); min-width: 0; outline: 0;
 }
-.k-input:focus, .k-select:focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, var(--line)), 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent); }
+.k-input:focus, .k-select:focus { box-shadow: var(--input-ring); }
 /* A segmented control: buttons in a .k-seg, the chosen one aria-pressed="true". */
-.k-seg { display: inline-flex; flex: none; padding: 2px; gap: 2px; border-radius: 7px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--line); }
-.k-seg > button { height: 20px; padding: 0 9px; font: 11.5px var(--font); color: var(--text-dim); background: none; border: 0; border-radius: 5px; cursor: default; }
+.k-seg { display: inline-flex; flex: none; padding: var(--space-2xs); gap: var(--space-2xs); border-radius: calc(var(--radius) + var(--space-2xs)); background: var(--control-bg); box-shadow: inset 0 0 0 1px var(--control-edge); }
+.k-seg > button { height: var(--control-h-sm); padding: 0 9px; font: var(--text-sm) var(--font-ui); color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); cursor: default; }
 .k-seg > button:hover { color: var(--text); }
-.k-seg > button[aria-pressed="true"] { color: var(--text); background: color-mix(in srgb, var(--text) 13%, var(--bg)); }
+.k-seg > button[aria-pressed="true"] { color: var(--text); background: var(--control-thumb); box-shadow: var(--control-thumb-shadow); }
 /* A slider (<input type="range" class="k-range">): a thin track, filled up to the value via --v. */
 .k-range { -webkit-appearance: none; appearance: none; flex: 1; min-width: 40px; height: 16px; background: none; margin: 0; cursor: default; --v: 50%; }
-.k-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--v) 100% no-repeat, var(--fill); box-shadow: inset 0 0 0 1px var(--line); }
-.k-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 1px var(--line); }
+.k-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--v) 100% no-repeat, var(--bg-hover); box-shadow: inset 0 0 0 1px var(--separator); }
+.k-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 1px var(--separator); }
 .k-check { accent-color: var(--accent); }
 
 .k-chart { width: 100%; height: 120px; }

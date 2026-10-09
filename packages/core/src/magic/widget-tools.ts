@@ -113,7 +113,9 @@ export async function runWidgetTool(name: string, input: Record<string, unknown>
     case "check": {
       const st = await checkWidget(c);
       const lint = lintBody((c.store.read(c.id, "view.html") ?? "") + (c.store.read(c.id, "view.ts") ?? ""));
-      const notes = lint.literalColors.length ? `\nNote: literal colours ${lint.literalColors.join(" ")}: use the theme variables instead.` : "";
+      const notes =
+        (lint.literalColors.length ? `\nNote: literal colours ${lint.literalColors.join(" ")}: use the theme variables instead.` : "") +
+        (lint.oldTokens.length ? `\nNote: older token names: ${lint.oldTokens.map(([o, u]) => `${o} → ${u}`).join(", ")}.` : "");
       return st.ok ? { output: `OK: manifest valid, types check.${notes}`, isError: false } : err(`${st.problems.join("\n")}${notes}`);
     }
     case "run_data": {

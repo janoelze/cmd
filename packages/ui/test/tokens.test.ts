@@ -22,6 +22,9 @@ describe("tokens", () => {
     const out = build();
     expect(fs.readFileSync(path.join(SRC, "tokens.css"), "utf8")).toBe(out.css);
     expect(fs.readFileSync(path.join(SRC, "tokens.gen.ts"), "utf8")).toBe(out.ts);
+    const magic = path.join(import.meta.dirname, "../../core/src/magic/prompt");
+    expect(fs.readFileSync(path.join(magic, "tokens.css"), "utf8")).toBe(out.widgetCss);
+    expect(fs.readFileSync(path.join(magic, "preview-themes.json"), "utf8")).toBe(out.previewThemes);
   });
 
   it("names are unique and light overrides exist in the base set", () => {

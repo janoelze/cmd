@@ -977,7 +977,7 @@ app.whenReady().then(async () => {
   protocol.handle("cmd-widget", (req) => {
     const dir = path.join(repoRoot, "packages/core/src/magic/prompt");
     const read = (f: string) => fs.readFileSync(path.join(dir, f), "utf8");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${read("kit.css")}</style><script>${read("host.js")}</script></head><body></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${read("tokens.css")}${read("kit.css")}</style><script>${read("host.js")}</script></head><body></body></html>`;
     return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": widgetCsp(widgetFrames.get(new URL(req.url).pathname.slice(1)) ?? []), "cache-control": "no-store" } });
   });
   for (const scheme of FRAME_SCHEMES) protocol.handle(scheme, frameHandler(scheme));

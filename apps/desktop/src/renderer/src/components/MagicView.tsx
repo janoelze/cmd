@@ -15,7 +15,7 @@ import { cmd } from "../bridge.ts";
 import { copy, openLink, selectPane, typeInTerminal } from "../actions.ts";
 import { resetMagic, useMagicLive, type MagicLive } from "../magic.ts";
 import { useStoreValue } from "../store.ts";
-import { useTheme } from "@cmd/ui/themes";
+import { themeVars, useTheme } from "@cmd/ui/themes";
 import { editTitle, registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { ago } from "../model.ts";
 import { handleEmbedMessage } from "../embed.ts";
@@ -377,7 +377,7 @@ function Frame({ win, src, active, html, data, kv, onPainted }: { win: AppWindow
   };
   const theme = useTheme();
   const fonts = useStoreValue((s) => s.settings.settings);
-  const tokens = useMemo(() => widgetTokens(theme, { text: fonts["font.text"], mono: fonts["font.code"] }), [theme, fonts]);
+  const tokens = useMemo(() => widgetTokens({ appearance: theme.appearance, vars: themeVars(theme) }, { text: fonts["font.text"], mono: fonts["font.code"] }), [theme, fonts]);
   const post = (m: unknown) => ref.current?.contentWindow?.postMessage(m, "*");
 
   // cmd.state.set from the widget: kept in the window's state by the core, a moment later (sliders send many).

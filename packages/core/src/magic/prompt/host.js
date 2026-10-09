@@ -120,8 +120,8 @@
     const pts = v.map((x, i) => [(i / (v.length - 1)) * (w - 4) + 2, h - 3 - ((x - min) / span) * (h - 6)]);
     const svg = svgEl("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
     svg.append(
-      svgEl("polyline", { points: pts.map((p) => p.join(",")).join(" "), fill: "none", stroke: o.color || "var(--c1)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round" }),
-      svgEl("circle", { cx: pts.at(-1)[0], cy: pts.at(-1)[1], r: 2.5, fill: o.color || "var(--c1)" }),
+      svgEl("polyline", { points: pts.map((p) => p.join(",")).join(" "), fill: "none", stroke: o.color || "var(--chart-1)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+      svgEl("circle", { cx: pts.at(-1)[0], cy: pts.at(-1)[1], r: 2.5, fill: o.color || "var(--chart-1)" }),
     );
     el.append(svg);
   }
@@ -153,7 +153,7 @@
       series.forEach((s, si) => svg.append(svgEl("circle", { cx: left + pw, cy: y(s.values[0]), r: 2.5, fill: s.color || color(si) })));
     }
     for (const v of [max, min]) {
-      svg.append(svgEl("line", { x1: left, x2: left + pw, y1: y(v), y2: y(v), stroke: "var(--line)" }));
+      svg.append(svgEl("line", { x1: left, x2: left + pw, y1: y(v), y2: y(v), stroke: "var(--separator)" }));
       const t = svgEl("text", { x: w - 2, y: y(v) + 4, "text-anchor": "end", fill: "var(--text-dim)", "font-size": 10 });
       t.textContent = fmtY(v);
       svg.append(t);
@@ -346,11 +346,15 @@
   // (a canvas) re-reads them in cmd.onTheme, called now and on every change.
   const themeListeners = [];
   let lastTokens = "";
+  let applied = [];
   const setTokens = (tokens) => {
     if (!tokens) return;
     const key = JSON.stringify(tokens);
     if (key === lastTokens) return;
     lastTokens = key;
+    // What the last theme set and this one doesn't (a light theme's overrides) goes.
+    for (const k of applied) if (!(k in tokens)) document.documentElement.style.removeProperty(k);
+    applied = Object.keys(tokens).filter((k) => k !== "color-scheme");
     for (const k in tokens) {
       if (k === "color-scheme") document.documentElement.style.colorScheme = tokens[k];
       else document.documentElement.style.setProperty(k, tokens[k]);

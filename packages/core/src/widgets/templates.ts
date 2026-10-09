@@ -1,7 +1,7 @@
 // Widgets cmd makes without a model: the JSON view for pasted JSON (static.json
 // as its data).
 
-export const JSON_VIEW_HTML = `<style>.t{font:12px/1.5 var(--mono)}.t details{padding-left:14px}.t summary{cursor:default;list-style:none;margin-left:-14px}.t summary::before{content:"▸ ";color:var(--text-dim)}.t details[open]>summary::before{content:"▾ "}.k{color:var(--c1)}.s{color:var(--c2)}.n{color:var(--c3)}.b{color:var(--c4)}</style>
+export const JSON_VIEW_HTML = `<style>.t{font:12px/1.5 var(--font-mono)}.t details{padding-left:14px}.t summary{cursor:default;list-style:none;margin-left:-14px}.t summary::before{content:"▸ ";color:var(--text-dim)}.t details[open]>summary::before{content:"▾ "}.k{color:var(--chart-1)}.s{color:var(--chart-2)}.n{color:var(--chart-3)}.b{color:var(--chart-4)}</style>
 <div class="t" id="root"></div>
 `;
 
