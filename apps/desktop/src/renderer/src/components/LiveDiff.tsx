@@ -4,7 +4,7 @@
 // checkout), and by polling while cmd is in front for edits anywhere below. The
 // branch and totals are the title bar's status.
 
-import { Badge, Button, EmptyState } from "@cmd/ui";
+import { Badge, Button, Diff, List, ListRow, Inline, Text, Twisty, View } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GitFile, GitStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -14,8 +14,6 @@ import { shortPath } from "../model.ts";
 import { stateStr, type WindowViewProps } from "../windows/registry.ts";
 import { parseDiff, type FileDiff } from "../diff.ts";
 import { useWidgetStatus } from "../widgets.ts";
-import { Symbol } from "./Symbol.tsx";
-import "./widgets.css";
 
 const POLL_MS = 3000;
 /** More files than this start collapsed. */
@@ -114,68 +112,101 @@ export function LiveDiff({ win }: WindowViewProps) {
     if (p) void cmd.call("window.update", { id: win.id, state: { path: p } }).catch(() => {});
   };
 
-  if (status === undefined) return <div className="ld" />;
-  if (status === null)
-    return (
-      <div className="ld">
-        <EmptyState icon="plusminus" title="Not in a Git repository" action={<Button onClick={() => void choose()}>Choose Folder…</Button>}>
-          {shortPath(dir)}
-        </EmptyState>
-      </div>
-    );
+  const shown: DiffFile[] = files.map(({ abs, rel, file }) => {
+    const d = diffOf(rel, file.state);
+    return {
+      abs,
+      rel,
+      state: file.state,
+      staged: !!file.staged,
+      added: d?.added ?? 0,
+      removed: d?.removed ?? 0,
+      open: isOpen(rel),
+      lines: d && !d.binary ? d.lines : undefined,
+      note: d?.binary ? "Binary file" : !d && file.state !== "untracked" && file.state !== "deleted" ? "No line changes (mode or rename only)" : undefined,
+    };
+  });
   return (
-    <div className="ld">
-      <div className="ld-list">
-        {!files.length && (
-          <EmptyState compact icon="checkmark.circle.fill" title="Nothing uncommitted">
-            {shortPath(dir)}
-          </EmptyState>
-        )}
-        {files.map(({ abs, rel, file }) => {
-          const d = diffOf(rel, file.state);
-          const open = isOpen(rel);
-          const st = STATE[file.state];
+    <LiveDiffView
+      state={status === undefined ? "loading" : status === null ? "noRepo" : "ok"}
+      dir={dir}
+      files={shown}
+      truncated={truncated}
+      onToggle={(rel, open) => setToggled((m) => new Map(m).set(rel, open))}
+      onOpen={(abs) => void openPath(abs)}
+      onChoose={() => void choose()}
+    />
+  );
+}
+
+/** A changed file as the list shows it. */
+export interface DiffFile {
+  abs: string;
+  rel: string;
+  state: GitFile["state"];
+  staged: boolean;
+  added: number;
+  removed: number;
+  open: boolean;
+  /** Its diff's lines, when it has some to show. */
+  lines?: readonly string[];
+  /** In place of lines: binary, or nothing but a mode change. */
+  note?: string;
+}
+
+/** The changes, drawn (LiveDiff.story.tsx shows every state). */
+export function LiveDiffView(p: { state: "loading" | "noRepo" | "ok"; dir: string; files: DiffFile[]; truncated: boolean; onToggle: (rel: string, open: boolean) => void; onOpen: (abs: string) => void; onChoose: () => void }) {
+  return (
+    <View
+      state={
+        p.state === "loading"
+          ? { kind: "loading" }
+          : p.state === "noRepo"
+            ? { kind: "empty", icon: "plusminus", title: "Not in a Git repository", text: shortPath(p.dir), action: <Button onClick={p.onChoose}>Choose Folder…</Button> }
+            : !p.files.length
+              ? { kind: "empty", icon: "checkmark.circle", title: "Nothing uncommitted", text: shortPath(p.dir) }
+              : null
+      }
+    >
+      <List>
+        {p.files.map((f) => {
+          const st = STATE[f.state];
+          const what = `${st.tip}${f.staged ? ", staged" : ""}`;
           return (
-            <section key={abs} className="ld-file">
-              <div
-                className="ld-file-head"
-                role="button"
-                // Named by its path; the state and the counts change, so they are the description.
-                aria-label={rel}
-                aria-description={[`${st.tip}${file.staged ? ", staged" : ""}`, d?.added ? `+${d.added}` : "", d?.removed ? `−${d.removed}` : ""].filter(Boolean).join(", ")}
-                aria-expanded={open}
-                onClick={() => setToggled((m) => new Map(m).set(rel, !open))}
-                onDoubleClick={() => void openPath(abs)}
-                data-tip="Double-click to open"
-              >
-                <span className={`ld-twisty ${open ? "open" : ""}`}>
-                  <Symbol name="chevron.right" size={10} />
-                </span>
-                <Badge size="sm" tone={st.tone} tip={`${st.tip}${file.staged ? ", staged" : ""}`}>
-                  {st.letter}
-                </Badge>
-                <span className="ld-path">{rel}</span>
-                <span className="ld-counts">
-                  {!!d?.added && <span className="ld-plus">+{d.added}</span>}
-                  {!!d?.removed && <span className="ld-minus">−{d.removed}</span>}
-                </span>
-              </div>
-              {open && d && !d.binary && d.lines.length > 0 && (
-                <pre className="ld-hunks">
-                  {d.lines.map((l, i) => (
-                    <div key={i} className="ld-line" data-kind={l.startsWith("@@") ? "hunk" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : undefined}>
-                      {l || " "}
-                    </div>
-                  ))}
-                </pre>
-              )}
-              {open && d?.binary && <div className="ld-note">Binary file</div>}
-              {open && !d && file.state !== "untracked" && file.state !== "deleted" && <div className="ld-note">No line changes (mode or rename only)</div>}
-            </section>
+            <div key={f.abs} role="group" aria-label={f.rel}>
+              <ListRow
+                lead={<Twisty open={f.open} onToggle={() => p.onToggle(f.rel, !f.open)} />}
+                icon={
+                  <Badge size="sm" tone={st.tone} tip={what}>
+                    {st.letter}
+                  </Badge>
+                }
+                title={f.rel.replace(/\/$/, "").split("/").pop()}
+                place={f.rel.includes("/") ? f.rel.replace(/\/?[^/]+\/?$/, "") : undefined}
+                tip={`${f.rel}\nDouble-click to open`}
+                end={
+                  <Inline gap="sm">
+                    {f.added > 0 && (
+                      <Text size="xs" mono tone="success">
+                        +{f.added}
+                      </Text>
+                    )}
+                    {f.removed > 0 && (
+                      <Text size="xs" mono tone="danger">
+                        −{f.removed}
+                      </Text>
+                    )}
+                  </Inline>
+                }
+                onClick={() => p.onToggle(f.rel, !f.open)}
+                onDoubleClick={() => p.onOpen(f.abs)}
+              />
+              {f.open && (f.note ? <Diff note={f.note} /> : f.lines?.length ? <Diff lines={f.lines} /> : null)}
+            </div>
           );
         })}
-        {truncated && <div className="ld-note">The diff is too large to show in full.</div>}
-      </div>
-    </div>
+        {p.truncated && <Diff note="The diff is too large to show in full." />}
+      </List>
+    </View>
   );
 }

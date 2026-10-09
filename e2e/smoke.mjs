@@ -952,12 +952,12 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const ld = await call("widget.add", { ref: "type:diff" });
     await call("window.update", { id: ld.id, state: { path: repo } });
     const ldTile = win.locator(`.tile[data-pane="${ld.id}"]`);
-    for (let i = 0; i < 20 && (await ldTile.locator(".ld-path").count()) < 2; i++) await win.waitForTimeout(200);
-    const ldFiles = await ldTile.locator(".ld-path").allTextContents();
-    const ldLines = await ldTile.locator(".ld-line[data-kind=add]").allTextContents();
+    for (let i = 0; i < 20 && (await ldTile.locator(".ui-list-row-name").count()) < 2; i++) await win.waitForTimeout(200);
+    const ldFiles = await ldTile.locator(".ui-list-row-name").allTextContents();
+    const ldLines = await ldTile.locator(".ui-diff-line[data-kind=add]").allTextContents();
     check(ldFiles.join(",") === "a.txt,b.txt" && ldLines.includes("+two") && ldLines.includes("+new"), `Live Diff shows a repository's changes, untracked files too (${ldFiles.join(", ")})`);
     const aa = await call("widget.add", { ref: "type:agents" });
-    await win.locator(`.tile[data-pane="${aa.id}"] .aa`).waitFor({ timeout: 5000 });
+    await win.locator(`.tile[data-pane="${aa.id}"] .ui-view`).waitFor({ timeout: 5000 });
     // Its scope is the title bar's menu, as in the other list widgets.
     const aaScope = (await win.locator(`.tile[data-pane="${aa.id}"] .tile-menu`).textContent()) ?? "";
     const inWidgets = (await win.locator(".sb-widgets").textContent()) ?? "";

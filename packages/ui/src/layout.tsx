@@ -232,6 +232,25 @@ export function Card({ children, className, padded = true }: { children: ReactNo
   );
 }
 
+
+/**
+ * A file's changed lines, from a unified diff: added and removed lines on a tint of
+ * their git colour, hunk headers dim, each line as it is (no wrapping; the block
+ * scrolls sideways). Under a file's row in a list (Live Diff), indented past its
+ * disclosure. `note` in place of lines: "Binary file".
+ */
+export function Diff({ lines, note }: { lines?: readonly string[]; note?: ReactNode }) {
+  if (note) return <div className="ui-diff-note">{note}</div>;
+  return (
+    <pre className="ui-diff">
+      {lines?.map((l, i) => (
+        <div key={i} className="ui-diff-line" data-kind={l.startsWith("@@") ? "hunk" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : undefined}>
+          {l || " "}
+        </div>
+      ))}
+    </pre>
+  );
+}
 /** Output, errors, a command: mono, wrapped, scrolls past a height. */
 export function CodeBlock({ children, maxHeight = 180, tone }: { children: ReactNode; maxHeight?: number; tone?: "danger" }) {
   return (
