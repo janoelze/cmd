@@ -320,8 +320,12 @@ function spawnCore(): void {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   if (USAGE_KEY) env.CMD_USAGE_KEY = USAGE_KEY;
-  let node = "node";
-  if (app.isPackaged) (node = process.execPath), (env.ELECTRON_RUN_AS_NODE = "1");
+  // Electron's own Node, in development too: the same runtime as the packaged app. (The
+  // system Node 22 resolves the first symlinked package wrong after any stat of a Unix
+  // socket, which the core does every few seconds: lazily loaded pnpm packages like
+  // the AI SDK then can't find their dependencies. Node 24 doesn't.)
+  const node = process.execPath;
+  env.ELECTRON_RUN_AS_NODE = "1";
   // --instance also tells cores apart in `ps` (scripts/stop-core.mjs --all).
   const child = spawn(node, ["--no-warnings", path.join(coreRoot(), "packages/core/src/main.ts"), `--instance=${devBuild ? "dev" : "release"}`], {
     detached: true,
