@@ -1,5 +1,5 @@
 {
-  "//": "The sample maps a Live Code frame loads (frame.js, injected by main/frames.ts, which also allows their origins). Strudel's own maps as strudel.cc loads them, and all of TidalCycles' Dirt-Samples (breaks, jungle, house, techno kits), not just dough's small subset. After changing this: pnpm livecode build (the atlas).",
+  "//": "The sample maps a Jam frame loads (frame.js, injected by main/frames.ts, which also allows their origins). Strudel's own maps as strudel.cc loads them, and all of TidalCycles' Dirt-Samples (breaks, jungle, house, techno kits), not just dough's small subset. After changing this: pnpm livecode build (the atlas).",
   "maps": [
     { "name": "tidal-drum-machines", "url": "https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json" },
     { "name": "piano", "url": "https://raw.githubusercontent.com/felixroos/dough-samples/main/piano.json" },

@@ -90,7 +90,7 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // video, images) load from origins the person allowed for that window. Tokens
 // come from the renderer's "widget-frame" call and can't be guessed, so a widget
 // can't navigate itself to a page with a looser CSP.
-// cmd-visualizer://frame/, cmd-livecode://frame/ — the pages Visualizer and Live Code windows run in (./frames.ts).
+// cmd-visualizer://frame/, cmd-livecode://frame/ — the pages Visualizer and Jam windows run in (./frames.ts).
 protocol.registerSchemesAsPrivileged([
   // corsEnabled: the app's page (file://) fetches PDFs from it.
   { scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
@@ -470,7 +470,7 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     },
   });
   if (b.maximized) win.maximize();
-  // Subframes are Magic widgets, Visualizers and Live Code: they stay on their own page. host.js turns
+  // Subframes are Magic widgets, Visualizers and Jam: they stay on their own page. host.js turns
   // link clicks into open-url; a widget that sets location itself gets a browser too.
   win.webContents.on("will-frame-navigate", (e) => {
     if (e.isMainFrame || e.url.startsWith("cmd-widget:") || isFramePage(e.url)) return;
@@ -972,7 +972,7 @@ app.whenReady().then(async () => {
     if (!req.frame || req.frame.url.startsWith("cmd-widget:") || fromFrame(req.frame.url)) return done({});
     done({ video: req.frame, audio: "loopback" });
   });
-  // Magic widgets and frame pages (Visualizer, Live Code) may not leave their page, open anything, or ask for permissions.
+  // Magic widgets and frame pages (Visualizer, Jam) may not leave their page, open anything, or ask for permissions.
   session.defaultSession.setPermissionRequestHandler((wc, _permission, done, details) => {
     done(!/^cmd-widget:/.test(details.requestingUrl ?? "") && !fromFrame(details.requestingUrl));
   });

@@ -314,7 +314,7 @@ export interface Methods {
   /** Ask the agent to fix what is wrong (the data's last error, the checks' problems). */
   "magic.fix": { params: { id: WindowId }; result: null };
   /**
-   * Live Code's AI: the new code for a request about the code playing now. `sounds`: what the
+   * Jam's AI: the new code for a request about the code playing now. `sounds`: what the
    * window has loaded; `history`: the code before each earlier change, newest first (for "undo
    * that"); `failed`: the last attempt and why it didn't play (the window retries).
    */

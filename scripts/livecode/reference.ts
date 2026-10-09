@@ -1,7 +1,7 @@
-// Strudel's function reference for Live Code's AI (pnpm livecode build): writes
+// Strudel's function reference for Jam's AI (pnpm livecode build): writes
 // packages/core/src/livecode/reference.md from @strudel/reference (generated from
 // Strudel's JSDoc), as compact Markdown that core livecode/change.ts puts in the
-// system prompt. Only what plays in a Live Code frame (@strudel/web): no MIDI, OSC,
+// system prompt. Only what plays in a Jam frame (@strudel/web): no MIDI, OSC,
 // Csound, drawing, device motion or the supradough engine. One example per function.
 
 import fs from "node:fs";

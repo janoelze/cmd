@@ -1,7 +1,12 @@
 // Live Code's core parts: the window type (its code is its state) and the AI
 // request (livecode/change.ts): what the model is sent and what comes back.
 
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { Core } from "../src/core.ts";
+import { fakeFactory } from "./fake-pty.ts";
 import { applyEdits, changeCode, changePrompt, changeSystem, soundList } from "../src/livecode/change.ts";
 import { LIVECODE_STARTER, livecodeType } from "../src/windows/builtin.ts";
 
@@ -9,8 +14,8 @@ describe("livecode window", () => {
   it("starts with code that plays, and keeps what it's given", () => {
     expect(livecodeType.create({}).state.code).toBe(LIVECODE_STARTER);
     const { state } = livecodeType.create({ code: 's("bd")' });
-    expect(livecodeType.update!(state, { code: 's("sd")' }).state).toEqual({ code: 's("sd")', versions: [] });
-    expect(livecodeType.update!(state, { code: 3 }).state).toEqual({ code: 's("bd")', versions: [] });
+    expect(livecodeType.update!(state, { code: 's("sd")' }).state).toEqual({ code: 's("sd")', path: "", versions: [] });
+    expect(livecodeType.update!(state, { code: 3 }).state).toEqual({ code: 's("bd")', path: "", versions: [] });
   });
 
   it("keeps its last ten versions, well-formed ones only", () => {
@@ -19,6 +24,24 @@ describe("livecode window", () => {
     const next = livecodeType.update!(state, { versions: [...Array.from({ length: 12 }, (_, i) => v(i)), { code: 1 }] }).state;
     expect(next.versions).toHaveLength(10);
     expect(next.versions[0]).toEqual({ code: 's("bd*0")', request: "r0", summary: "s0" });
+  });
+});
+
+describe("jam files", () => {
+  it("opens a .strudel file as a Jam named after it, and becomes the file it is saved to", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-jam-"));
+    const file = path.join(dir, "night drive.strudel");
+    fs.writeFileSync(file, 's("bd*4")');
+    const core = new Core({ socketPath: path.join(dir, "s.sock"), dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0 });
+    try {
+      const w = await core.call("window.openTarget", { target: file });
+      expect(w).toMatchObject({ kind: "livecode", title: "night drive.strudel", state: { path: file } });
+      const { state } = livecodeType.create({});
+      expect(livecodeType.update!(state, { path: path.join(dir, "saved.strudel") })).toMatchObject({ state: { path: path.join(dir, "saved.strudel") }, title: "saved.strudel" });
+    } finally {
+      await core.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

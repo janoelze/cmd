@@ -1,4 +1,4 @@
-// Strudel in headless Chromium, for the Live Code tooling (pnpm livecode): the
+// Strudel in headless Chromium, for the Jam tooling (pnpm livecode): the
 // same @strudel/web as the app's frame, with the same sample maps
 // (apps/desktop/src/livecode/sample-maps.json). It evaluates code into events
 // (the evals score them), plays code and listens (the audio check), lists the
@@ -11,7 +11,7 @@ import type { Ev } from "../../packages/core/src/livecode/analyze.ts";
 
 export const root = path.resolve(import.meta.dirname, "../..");
 
-/** The sample maps the app's Live Code frame loads. */
+/** The sample maps the app's Jam frame loads. */
 export const SAMPLE_MAPS = (JSON.parse(fs.readFileSync(path.join(root, "apps/desktop/src/livecode/sample-maps.json"), "utf8")) as { maps: { name: string; url: string }[] }).maps;
 
 /** What the code sounds like when played (audio check). */
@@ -40,7 +40,7 @@ export async function openStrudel() {
   await page.route("https://strudel.eval/", (r) => r.fulfill({ contentType: "text/html", body: "<!doctype html><title>eval</title>" }));
   await page.goto("https://strudel.eval/");
   await page.addScriptTag({ path: path.join(root, "apps/desktop/node_modules/@strudel/web/dist/index.js") });
-  // The same sample maps as a Live Code frame, for knowing which sounds exist.
+  // The same sample maps as a Jam frame, for knowing which sounds exist.
   const all = SAMPLE_MAPS.map((m) => m.url);
   await page.evaluate(async (all) => {
     const w = window as unknown as Record<string, any>;

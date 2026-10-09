@@ -3,7 +3,7 @@
 //   "none"        silence
 //   "mic"         the default input (macOS asks once; NSMicrophoneUsageDescription)
 //   "system"      what the Mac plays (getDisplayMedia with loopback audio, main/index.ts)
-//   "window:<id>" a window that makes sound (Live Code) and publishes its levels here
+//   "window:<id>" a window that makes sound (Jam) and publishes its levels here
 // Microphone and system audio are opened once, while a Visualizer listens, and
 // never played back. A tap reads 1024 samples per channel each frame, the
 // shape butterchurn's audioLevels takes. A window's sound is made in its own

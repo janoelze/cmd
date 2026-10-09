@@ -26,7 +26,7 @@ export const CYCLES = [0, 15, 30, 60, 120];
 const sourceOf = (w: AppWindow) => (typeof w.state.source === "string" ? w.state.source : "none");
 const cycleOf = (w: AppWindow) => (typeof w.state.cycle === "number" ? w.state.cycle : 30);
 
-/** "Microphone", "System Audio", a Live Code window's name. */
+/** "Microphone", "System Audio", a Jam window's name. */
 export function sourceLabel(source: string): string {
   if (source === "mic") return "Microphone";
   if (source === "system") return "System Audio";

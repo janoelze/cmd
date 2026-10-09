@@ -1,4 +1,4 @@
-// Live Code's AI (docs/17-ai.md): turns a request ("drop the bass for a bar",
+// Jam's AI (docs/17-ai.md): turns a request ("drop the bass for a bar",
 // "more swing") into the window's new code. The system prompt is prompt.md, a
 // sound guide, a genre cookbook and Strudel's function reference (reference.md,
 // scripts/livecode-reference.mjs), the same on every call so providers cache it;

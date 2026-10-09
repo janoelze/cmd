@@ -430,7 +430,7 @@ export const timerType: WindowType<TimerState> = {
 
 /**
  * MilkDrop presets (butterchurn) moving to sound. `preset` is the one showing
- * (null: a random one), `source` what it listens to ("none", "mic"; Live Code
+ * (null: a random one), `source` what it listens to ("none", "mic"; Jam
  * windows later), `cycle` the seconds between presets (0: stay on one).
  */
 export interface VisualizerState extends Record<string, unknown> {
@@ -465,8 +465,8 @@ export const visualizerType: WindowType<VisualizerState> = {
   },
 };
 
-/** What a new Live Code window starts with: something that plays, to change. */
-export const LIVECODE_STARTER = `// Ctrl+Enter or ⌘R plays, ⌘. stops, ⌘L asks for a change.
+/** What a new Jam starts with: something that plays, to change. */
+export const LIVECODE_STARTER = `// Ctrl+Enter or ⌘R plays, ⌘. stops, ⌘L asks for a change, ⌘S saves.
 setcpm(120 / 4)
 
 stack(
@@ -477,14 +477,14 @@ stack(
 )
 `;
 
-/** An earlier version of a Live Code window's code: what it was before a change, the request that changed it, and what changed. */
+/** An earlier version of a Jam's code: what it was before a change, the request that changed it, and what changed. */
 export interface LivecodeVersion {
   code: string;
   request: string;
   summary: string;
 }
 
-/** How many earlier versions a Live Code window keeps (newest first). */
+/** How many earlier versions a Jam keeps (newest first). */
 export const LIVECODE_VERSIONS = 10;
 
 const versionsOf = (v: unknown): LivecodeVersion[] =>
@@ -494,24 +494,34 @@ const versionsOf = (v: unknown): LivecodeVersion[] =>
     .map(({ code, request, summary }) => ({ code, request, summary }));
 
 /**
- * Music as code: a Strudel pattern (renderer components/LiveCodeView.tsx) that
- * plays as it changes. `versions`: the code before each AI change, newest first,
- * which the AI sees, so "undo that" and "go back to before the pad" restore real code.
+ * Jam: music as code, a Strudel pattern (renderer components/LiveCodeView.tsx)
+ * that plays as it changes. Untitled, its code is `code`; opened from a .strudel
+ * file, `path` (the view reads and saves the file, ⌘S). `versions`: the code before
+ * each AI change, newest first, which the AI sees, so "undo that" and "go back to
+ * before the pad" restore real code.
  */
-export const livecodeType: WindowType<{ code: string; versions: LivecodeVersion[] }> = {
+export const livecodeType: WindowType<{ code: string; path: string; versions: LivecodeVersion[] }> = {
   kind: "livecode",
-  title: "Live Code",
+  title: "Jam",
   icon: "music.note",
   role: "widget",
-  description: "Make music with code, and ask for changes as it plays.",
+  description: "Make music with code, and ask the AI for changes as it plays.",
+  opens: { extensions: ["strudel"], priority: 10 },
+  fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
   create(input) {
-    return { state: { code: typeof input.code === "string" ? input.code : LIVECODE_STARTER, versions: [] }, title: "Live Code" };
+    const p = str(input.path);
+    if (!p) return { state: { code: typeof input.code === "string" ? input.code : LIVECODE_STARTER, path: "", versions: [] }, title: "Jam" };
+    const file = path.resolve(expandHome(p));
+    if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
+    return { state: { code: "", path: file, versions: [] }, title: path.basename(file) };
   },
-  /** Patches: { code }, { versions }. */
+  /** Patches: { code }, { versions }, { path } (saved as a file). */
   update(state, patch) {
-    const next = { ...state, versions: versionsOf(state.versions) };
+    const next = { ...state, path: typeof state.path === "string" ? state.path : "", versions: versionsOf(state.versions) };
     if (typeof patch.code === "string") next.code = patch.code;
     if (patch.versions !== undefined) next.versions = versionsOf(patch.versions);
+    const p = str(patch.path);
+    if (p) return { state: { ...next, path: path.resolve(expandHome(p)) }, title: path.basename(p) };
     return { state: next };
   },
 };

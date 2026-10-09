@@ -1,4 +1,4 @@
-// Live Code evals (pnpm livecode eval): send requests through the AI change (core
+// Jam evals (pnpm livecode eval): send requests through the AI change (core
 // livecode/change.ts), query what the answers do in Strudel (headless Chromium,
 // the same @strudel/web as the app), score that as music (core livecode/analyze.ts),
 // optionally play them (--audio), and keep everything to listen to and rate.
@@ -8,7 +8,7 @@
 //   report [run]               scores per case, and where they sit among the references
 //   rescore [run] [--audio]    score a run's saved answers again (after changing analyze.ts)
 //   rate <run> <case> <1-10>   your ear; report compares it with the score
-//   listen <run> <case>        open an answer as a Live Code window in the running "cmd dev" app
+//   listen <run> <case>        open an answer as a Jam window in the running "cmd dev" app
 //   show <run> <case>          print an answer's code
 //   sound <code>               play one piece of code and print what the audio check hears
 //

@@ -1,4 +1,4 @@
-// Live Code, a built-in widget: music as code. A Strudel pattern in an editor,
+// Jam, a built-in widget: music as code. A Strudel pattern in an editor,
 // played by an invisible sandboxed frame (main/frames.ts, livecode/frame.js), and
 // a prompt bar under it that asks the AI for a change (core livecode/change.ts)
 // while the music keeps playing.
@@ -97,7 +97,44 @@ export function LiveCodeView({ win }: WindowViewProps) {
     return r;
   };
 
-  const status = (label: string, key: string) => setWindowStatus(win.id, { label, key });
+  // The file it was opened from or saved to (.strudel); untitled, the code lives in the window's state.
+  const file = typeof win.state.path === "string" ? win.state.path : "";
+  const fileRef = useRef(file);
+  fileRef.current = file;
+  /** The file's text as last read or saved; the editor differs from it while there are unsaved changes. */
+  const savedText = useRef<string | null>(null);
+  const unsaved = useRef(false);
+  const lastStatus = useRef<{ label: string; key: string }>({ label: "Stopped", key: "stopped" });
+  const status = (label: string, key: string) => {
+    lastStatus.current = { label, key };
+    setWindowStatus(win.id, { label, key, dirty: unsaved.current });
+  };
+  const markUnsaved = (text: string) => {
+    const now = !!fileRef.current && savedText.current !== null && text !== savedText.current;
+    if (now === unsaved.current) return;
+    unsaved.current = now;
+    status(lastStatus.current.label, lastStatus.current.key);
+  };
+
+  /** ⌘S: to its file, or, untitled, to one the save panel asks for (it becomes the window's). */
+  const save = async () => {
+    const v = view.current;
+    if (!v) return;
+    const target = fileRef.current || (await cmd.chooseSavePath("~/Untitled.strudel"));
+    if (!target) return;
+    const text = v.state.doc.toString();
+    try {
+      await cmd.call("fs.write", { path: target, text });
+      savedText.current = text;
+      if (!fileRef.current) {
+        fileRef.current = target;
+        await cmd.call("window.update", { id: win.id, state: { path: target } });
+      }
+      markUnsaved(v.state.doc.toString());
+    } catch (e) {
+      status(`Couldn't save: ${(e as Error).message}`, "error");
+    }
+  };
 
   const play = async () => {
     const v = view.current;
@@ -186,7 +223,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
     const v = new EditorView({
       parent: host.current!,
       state: EditorState.create({
-        doc: typeof win.state.code === "string" ? win.state.code : "",
+        doc: !file && typeof win.state.code === "string" ? win.state.code : "",
         extensions: [
           Prec.highest(
             keymap.of([
@@ -199,14 +236,17 @@ export function LiveCodeView({ win }: WindowViewProps) {
           keymap.of([indentWithTab]),
           javascript(),
           flashChanges,
-          EditorView.contentAttributes.of({ "aria-label": "Live code" }),
+          EditorView.contentAttributes.of({ "aria-label": "Jam code" }),
           syntaxHighlighting(syntax),
           theme.of(appTheme(settings["font.code"], settings["font.codeSize"], dark)),
           EditorView.updateListener.of((u) => {
             if (!u.docChanged) return;
-            setDirty(played.current !== null && u.state.doc.toString() !== played.current);
+            const text = u.state.doc.toString();
+            setDirty(played.current !== null && text !== played.current);
+            // A file is saved with ⌘S; untitled, the code is kept in the window's state as you type.
+            if (fileRef.current) return markUnsaved(text);
             clearTimeout(persist);
-            persist = setTimeout(() => void cmd.call("window.update", { id: win.id, state: { code: u.state.doc.toString() } }).catch(() => {}), 500);
+            persist = setTimeout(() => void cmd.call("window.update", { id: win.id, state: { code: text } }).catch(() => {}), 500);
           }),
         ],
       }),
@@ -223,11 +263,25 @@ export function LiveCodeView({ win }: WindowViewProps) {
     view.current?.dispatch({ effects: theme.reconfigure(appTheme(settings["font.code"], settings["font.codeSize"], dark)) });
   }, [settings, dark]);
 
-  // Code changed from elsewhere (the CLI, another view): merged in place.
+  // Opened from a file: read it into the editor.
+  useEffect(() => {
+    if (!file || savedText.current !== null) return;
+    void cmd.call("fs.read", { path: file }).then(
+      (r) => {
+        const v = view.current;
+        if (!v || savedText.current !== null) return;
+        savedText.current = r.text;
+        v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: r.text } });
+      },
+      (e: Error) => status(`Couldn't open: ${e.message}`, "error"),
+    );
+  }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Untitled code changed from elsewhere (the CLI, another view): merged in place.
   useEffect(() => {
     const v = view.current;
     const code = typeof win.state.code === "string" ? win.state.code : null;
-    if (!v || code === null) return;
+    if (!v || code === null || fileRef.current) return;
     const edit = minimalChange(v.state.doc.toString(), code);
     if (edit && !v.hasFocus) v.dispatch({ changes: edit });
   }, [win.state.code]);
@@ -261,13 +315,13 @@ export function LiveCodeView({ win }: WindowViewProps) {
   }, [win.id]);
 
   // Menu, commands (⌘R plays, ⌘. stops, ⌘L asks), and the window's sound for Visualizers.
-  const latest = useRef({ play, stop, change });
-  latest.current = { play, stop, change };
+  const latest = useRef({ play, stop, change, save });
+  latest.current = { play, stop, change, save };
   useEffect(() => {
     const focusAsk = () => ask.current?.focus();
-    const c = { play: () => void latest.current.play(), stop: () => latest.current.stop(), ask: focusAsk };
+    const c = { play: () => void latest.current.play(), stop: () => latest.current.stop(), ask: focusAsk, save: () => void latest.current.save() };
     controls.set(win.id, c);
-    const offActions = registerWindowActions(win.id, { refresh: c.play, stop: c.stop, change: focusAsk });
+    const offActions = registerWindowActions(win.id, { refresh: c.play, stop: c.stop, change: focusAsk, save: c.save });
     const offLevels = publishLevels(win.id, win.title, { read: () => (started.current ? levels.current : null), listen: (on) => post({ type: "listen", on }) });
     return () => {
       controls.delete(win.id);

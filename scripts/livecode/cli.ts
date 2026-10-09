@@ -1,4 +1,4 @@
-// pnpm livecode: everything Live Code's AI knows, and how well it does, in one place.
+// pnpm livecode: everything Jam's AI knows, and how well it does, in one place.
 //
 //   pnpm livecode build [reference|atlas]   regenerate the knowledge in packages/core/src/livecode:
 //                                           reference.md (Strudel's functions, from @strudel/reference)

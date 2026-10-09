@@ -6,7 +6,7 @@
 //
 // - cmd-visualizer: Visualizer windows (visualizer/frame.js). MilkDrop presets
 //   are code that butterchurn compiles at runtime. No network.
-// - cmd-livecode: Live Code windows (livecode/frame.js). Strudel evaluates the
+// - cmd-livecode: Jam windows (livecode/frame.js). Strudel evaluates the
 //   window's code and plays it; its audio worklets load from data: URLs and its
 //   samples from Strudel's sample maps on GitHub, the only network it gets.
 
@@ -23,7 +23,7 @@ interface FramePage {
 }
 
 /**
- * Where a Live Code frame may fetch samples from: the origins of its sample maps
+ * Where a Jam frame may fetch samples from: the origins of its sample maps
  * (livecode/sample-maps.json) and of the samples they list, all on GitHub today.
  */
 const SAMPLE_ORIGINS = [...new Set(sampleMaps.maps.map((m) => new URL(m.url).origin))].join(" ");

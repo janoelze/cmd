@@ -1,4 +1,4 @@
-// Checks the hand-written knowledge Live Code's AI gets (pnpm livecode check): every
+// Checks the hand-written knowledge Jam's AI gets (pnpm livecode check): every
 // code block in the cookbook and the sound-design guide must evaluate in Strudel,
 // produce events, and use only sounds the sample maps load. With --audio each block
 // is also played, and a sound that makes no sound fails it. Exits 1 on a failure.

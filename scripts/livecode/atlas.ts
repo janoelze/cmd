@@ -1,5 +1,5 @@
-// The sound atlas (pnpm livecode build): what every sample sound a Live Code frame
-// loads actually is, measured from its audio, for Live Code's AI (core
+// The sound atlas (pnpm livecode build): what every sample sound a Jam frame
+// loads actually is, measured from its audio, for Jam's AI (core
 // livecode/change.ts puts atlas.md in its system prompt) and its evals (atlas.json).
 // The names alone say little: "breaks152" is three bars long, "jvbass" is a synth
 // bass, "arpy" is a tone.
