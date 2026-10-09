@@ -38,7 +38,6 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
   <a class="button" href="<?= h($latest['dmg'] ?? $latest['url']) ?>">Download <?= h($latest['tag']) ?></a>
 <?php endif ?>
   <a class="button secondary" href="https://github.com/janoelze/cmd">View on GitHub</a>
-  <span class="muted">For Macs with Apple silicon</span>
 </p>
 
 <div class="hero-shots" aria-roledescription="slideshow">
@@ -110,6 +109,14 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
   <div><h3><?= h($f['title']) ?><?php if (isset($f['badge'])): ?> <span class="pill"><?= h($f['badge']) ?></span><?php endif ?></h3><p><?= rich($f['text']) ?></p></div>
 <?php endforeach ?>
 </div>
+
+<h2>System requirements</h2>
+<dl class="reqs">
+  <dt>Mac</dt><dd>Apple silicon (M1 or later)</dd>
+  <dt>macOS</dt><dd>13 Ventura or later</dd>
+  <dt>Disk</dt><dd>About 350 MB</dd>
+  <dt>Optional</dt><dd>An Anthropic or OpenAI API key for Magic widgets and AI features, and the agents you use (Claude Code, Codex…)</dd>
+</dl>
 
 <h2>Releases</h2>
 <?php if (!$releases): ?>
