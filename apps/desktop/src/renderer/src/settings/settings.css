@@ -83,7 +83,7 @@ body.settings-window { background: var(--bg); }
   overflow: hidden;
   scrollbar-gutter: stable both-edges;
   box-shadow: 0 1px 0 transparent;
-  transition: box-shadow 0.15s;
+  transition: box-shadow var(--dur) var(--ease);
   -webkit-app-region: drag;
 }
 .sw-bar.scrolled { box-shadow: 0 1px 0 var(--separator); }

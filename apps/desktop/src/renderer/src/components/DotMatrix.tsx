@@ -4,6 +4,7 @@
 // text colour at low opacity (re-read now and then so theme changes apply).
 // Static under prefers-reduced-motion.
 
+import { reducedMotion } from "@cmd/ui";
 import { useEffect, useRef } from "react";
 
 const PITCH = 16; // CSS px between dots
@@ -26,7 +27,7 @@ export function DotMatrix({ className }: { className?: string }) {
   useEffect(() => {
     const c = ref.current!;
     const ctx = c.getContext("2d")!;
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const still = reducedMotion();
     let w = 0;
     let h = 0;
     let color = "";

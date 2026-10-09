@@ -105,7 +105,7 @@ export function useFind(findable: Findable, o: { floating?: boolean; placeholder
   // popover; one in the window's toolbar area opens and closes its height.
   const { present, closing } = usePresence(open);
   const bar = present ? (
-    <div className={`find-in${o.floating ? " floating" : ""}`} data-closing={closing || undefined} inert={closing || undefined}>
+    <div className={`find-in${o.floating ? " floating" : ""}`} data-motion={o.floating ? "pop" : "reveal"} data-closing={closing || undefined} inert={closing || undefined}>
     <FindBar
       ref={handle}
       query={query}

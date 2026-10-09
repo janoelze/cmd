@@ -1,55 +1,15 @@
-// Window motion (docs/37-motion.md). One curve for everything that moves a
-// window: a critically damped spring (no bounce), the same one the CSS token
-// --glide samples. TileMotion owns every workspace window's geometry: React says
-// where each window should be, and TileMotion glides position and size together,
-// one frame at a time, from wherever the window is now (a move that's
-// interrupted carries its velocity into the next). While a window glides, its
-// content keeps one size, the larger of before and after, clipped by the
-// window: a terminal is refit once, not every frame, and nothing reflows inside
-// a moving window. Windows hidden by focus mode fade out where they are rather
-// than jump to the focused window's rect.
+// Window motion (docs/37-motion.md): how the workspace's windows move, on the
+// kit's glide (@cmd/ui motion.ts: the curve, its clock, the timings). TileMotion
+// owns every workspace window's geometry: React says where each window should be,
+// and TileMotion glides position and size together, one frame at a time, from
+// wherever the window is now (a move that's interrupted carries its velocity into
+// the next). While a window glides, its content is held at the size it's going to
+// have, clipped by the window: a terminal is refit once, not every frame, and a
+// move ends without a reflow. Windows hidden by focus mode fade out where they are
+// rather than jump to the focused window's rect. Below it: windows moving between
+// the workspace and the sidebars, and closed windows fading out (ghosts).
 
-/** Seconds for the spring to (nearly) get there. 0.26 s: quick, and calm at the end. */
-const RESPONSE = 0.26;
-const OMEGA = (2 * Math.PI) / RESPONSE;
-/** ms until 99.9% of the way: CSS transitions on the same curve last this long (tokens.css --glide-dur). */
-export const GLIDE_MS = Math.round((9.23 / OMEGA) * 1000);
-
-/** The spring's offset from its target and velocity, t seconds after (x0, v0). */
-function spring(x0: number, v0: number, t: number): [number, number] {
-  const e = Math.exp(-OMEGA * t);
-  const b = v0 + OMEGA * x0;
-  return [(x0 + b * t) * e, (v0 - OMEGA * b * t) * e];
-}
-
-/** How far along (0…1) a glide is after `ms`: for tweens (scrolling, the canvas camera). */
-export const glide = (ms: number): number => (ms >= GLIDE_MS ? 1 : 1 - spring(1, 0, ms / 1000)[0]);
-
-/** The glide as a CSS easing (Web Animations), sampled densely early where it moves fast: tokens.css --glide. */
-export const GLIDE_EASING = `linear(${Array.from({ length: 25 }, (_, i) => {
-  const at = (i / 24) ** 1.6;
-  return `${i === 24 ? 1 : +glide(at * GLIDE_MS).toFixed(4)} ${+(at * 100).toFixed(1)}%`;
-}).join(", ")})`;
-
-/**
- * Slide an element in from (or out to) `offset` (a CSS translate) on the glide; turning
- * back halfway reverses the slide under way. Out leaves it there (fill forwards).
- */
-export function slide(el: HTMLElement, offset: string, dir: "in" | "out"): Animation | null {
-  const running = el.getAnimations().find((a) => a.id === "slide" && a.playState === "running");
-  if (running) {
-    running.reverse();
-    return running;
-  }
-  if (reducedMotion()) return null;
-  const off = { transform: `translate(${offset})` };
-  const on = { transform: "none" };
-  const a = el.animate(dir === "in" ? [off, on] : [on, off], { duration: GLIDE_MS, easing: GLIDE_EASING, fill: dir === "out" ? "forwards" : "none" });
-  a.id = "slide";
-  return a;
-}
-
-export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+import { glideNow, reducedMotion, spring, timing } from "@cmd/ui";
 
 export interface Rect {
   x: number;
@@ -111,21 +71,6 @@ const geo = (r: Rect, o: number): Geo => ({ x: r.x, y: r.y, w: r.w, h: r.h, s: 1
 /** Rest when every key is within half a pixel (opacity within 1%, scale within 0.1%). */
 const EPS: Geo = { x: 0.5, y: 0.5, w: 0.5, h: 0.5, s: 0.001, o: 0.01 };
 const resting = (x: Geo, v: Geo) => KEYS.every((k) => Math.abs(x[k]) < EPS[k] && Math.abs(v[k]) < EPS[k] * 40);
-/** The longest step the glides' clock takes between two looks at it: a stalled frame pauses a glide rather than skipping it. */
-const MAX_STEP_MS = 34;
-let clock = 0;
-let real = performance.now();
-/**
- * The clock every glide runs on (ms): real time, except that it never jumps more than
- * MAX_STEP_MS. Shared, so moves that make one change (a window growing and the strip
- * scrolling to show it) stay together through a stalled frame.
- */
-export function glideNow(): number {
-  const r = performance.now();
-  clock += Math.min(MAX_STEP_MS, Math.max(0, r - real));
-  real = r;
-  return clock;
-}
 /** A retarget this soon after the last belongs to the same change (see update). */
 const SETTLED_MS = 34;
 
@@ -424,7 +369,7 @@ export function ghost(el: HTMLElement, parent: Element): void {
       { opacity: 1, transform: base },
       { opacity: 0, transform: `${base} translate(1.5%, 1.5%) scale(0.97)` },
     ],
-    { duration: 160, easing: "cubic-bezier(0.4, 0, 1, 1)", fill: "forwards" },
+    timing("exit", { fill: "forwards" }),
   );
   a.onfinish = a.oncancel = () => g.remove();
 }

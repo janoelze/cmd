@@ -136,11 +136,14 @@
     0 calc(8px * var(--sheet-elev)) calc(16px * var(--sheet-elev)) calc(-2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 16%, transparent);
   --radius-pill: 999px;
 
-  /* ── motion ── */
-  /* Window moves, title-bar slots and controls share this curve. */
+  /* ── motion ── (motion.ts MOTION has the same values; a test keeps them equal)
+     exit: something leaving, and quick pops in. change: a state changing (a ring, a size).
+     slow: an indicator (a progress, a dot). glide: something moving (below). */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --dur-fast: 120ms;
   --dur: 150ms;
+  --dur-slow: 240ms;
   /* Moving a window or a view: a critically damped spring (no bounce) sampled for CSS,
      the curve the app's TileMotion runs in JS (apps/desktop motion.ts, GLIDE_MS). */
   --glide: linear(0 0%, 0.0016 0.6%, 0.0134 1.9%, 0.0442 3.6%, 0.0979 5.7%, 0.1735 8.1%, 0.2659 10.9%, 0.368 13.9%, 0.4724 17.2%, 0.5724 20.8%, 0.6633 24.6%, 0.742 28.7%, 0.8075 33%, 0.86 37.5%, 0.9006 42.2%, 0.9311 47.1%, 0.9533 52.3%, 0.969 57.6%, 0.9799 63.1%, 0.9872 68.8%, 0.992 74.7%, 0.9951 80.8%, 0.9971 87%, 0.9983 93.4%, 1 100%);
@@ -153,7 +156,7 @@
 ::placeholder { color: var(--input-placeholder); opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur-fast: 0ms; --dur: 0ms; --glide-dur: 0ms; }
+  :root { --dur-fast: 0ms; --dur: 0ms; --dur-slow: 0ms; --glide-dur: 0ms; }
   /* Nothing loops or scrolls smoothly: spinners and pulses run once, scrolls jump. */
   *, ::before, ::after { animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }

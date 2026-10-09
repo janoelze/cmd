@@ -21,7 +21,7 @@
 
 /* working: a dot matrix over the whole window, the current step in the
    middle (Stop is in .magic-controls); over a dimmed widget while a refinement runs */
-.magic-frame { transition: opacity .18s; }
+.magic-frame { transition: opacity var(--dur) var(--ease); }
 .magic-frame.unpainted { opacity: 0; transition: none; }
 .magic-progress { position: absolute; inset: 0; z-index: 3; overflow: hidden; background: var(--well); }
 .magic-progress.overlay { background: color-mix(in srgb, var(--well) 80%, transparent); }
@@ -32,7 +32,7 @@
 }
 .magic-status span {
   min-width: 0; padding: 2px 8px; border-radius: 5px; background: color-mix(in srgb, var(--well) 75%, transparent);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: magic-in .25s ease-out;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: magic-in var(--dur-slow) var(--ease);
 }
 @keyframes magic-in { from { opacity: 0; transform: translateY(3px); } }
 

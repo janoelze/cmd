@@ -492,7 +492,7 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 .ui-dot > i {
   border-radius: 1px;
   background: var(--tone);
-  transition: opacity 240ms ease, background-color 240ms ease;
+  transition: opacity var(--dur-slow) var(--ease), background-color var(--dur-slow) var(--ease);
 }
 .ui-dot[data-state="needs"] { --tone: var(--state-needs); }
 .ui-dot:is([data-state="unseen"], [data-state="done"]) { --tone: var(--state-done); }
@@ -581,7 +581,7 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
   border-radius: 2px;
   background: color-mix(in srgb, var(--ink) 10%, transparent);
 }
-.ui-progress > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--tone); transition: width 0.3s var(--ease); }
+.ui-progress > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--tone); transition: width var(--dur-slow) var(--ease); }
 .ui-progress[data-indeterminate] > span { width: 35%; animation: ui-progress 1.2s var(--ease) infinite; }
 @keyframes ui-progress { from { left: -35%; } to { left: 100%; } }
 
@@ -615,7 +615,7 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 
 .ui-ring { flex: none; display: block; }
 .ui-ring-track { fill: none; stroke: color-mix(in srgb, var(--text-dim) 35%, transparent); stroke-width: 2; }
-.ui-ring-fill { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
+.ui-ring-fill { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray var(--dur-slow) var(--ease); }
 
 /* ── forms ── */
 
@@ -796,7 +796,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-list-heading[data-tone="needs"] { color: var(--state-needs); }
 .ui-list-heading[data-tone="danger"] { color: var(--danger); }
 .ui-list-heading[data-tone] .ui-list-count { opacity: 1; }
-.ui-list-heading .ui-twisty { margin-left: auto; opacity: 0; transition: opacity 120ms, transform 120ms; }
+.ui-list-heading .ui-twisty { margin-left: auto; opacity: 0; transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
 .ui-list-heading.collapsible:hover .ui-twisty, .ui-list-heading[aria-expanded="false"] .ui-twisty { opacity: 1; }
 .ui-list-heading.collapsible:hover { color: var(--text); }
 
@@ -823,7 +823,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 
 /* 16px box so icon canvases and the 8px light centre on whole pixels; they cross-fade. */
 .ui-mark { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; }
-.ui-mark > * { grid-area: 1 / 1; display: inline-grid; place-items: center; transition: opacity 140ms ease, transform 140ms var(--ease); }
+.ui-mark > * { grid-area: 1 / 1; display: inline-grid; place-items: center; transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
 .ui-mark-icon { color: var(--icon); }
 .ui-mark-light { opacity: 0; transform: scale(0.6); }
 .ui-mark.has-light .ui-mark-light { opacity: 1; transform: none; }
@@ -857,6 +857,33 @@ button.ui-grid-sort:hover { color: var(--text); }
 td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
 .ui-grid-footer { display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: var(--text-sm); color: var(--text-dim); }
 
+/* ── coming and going (motion.ts) ──
+   An element says how it comes and goes in data-motion; leaving ([data-closing], set by
+   usePresence) plays it out, a little faster, and it stops taking input meanwhile.
+     pop     overlays: popovers, menus, sheets, the palette, a floating find bar
+     fade    backdrops (a sheet's scrim)
+     reveal  opens to its height and closes, moving what's below along (an in-flow bar)
+     rise    up from below (toasts) */
+:root { interpolate-size: allow-keywords; }
+[data-motion] { animation-duration: var(--dur-fast); animation-timing-function: var(--ease); }
+[data-motion][data-closing] { animation-timing-function: var(--ease-exit); animation-fill-mode: forwards; pointer-events: none; }
+[data-motion="pop"] { animation-name: ui-pop-in; }
+[data-motion="pop"][data-closing] { animation-name: ui-pop-out; }
+[data-motion="fade"] { animation-name: ui-fade-in; }
+[data-motion="fade"][data-closing] { animation-name: ui-fade-out; }
+[data-motion="reveal"] { overflow: hidden; animation-name: ui-reveal-in; }
+[data-motion="reveal"][data-closing] { animation-name: ui-reveal-out; }
+[data-motion="rise"] { animation-name: ui-rise-in; animation-duration: var(--dur); }
+[data-motion="rise"][data-closing] { animation-name: ui-rise-out; animation-duration: var(--dur-fast); }
+@keyframes ui-pop-in { from { opacity: 0; transform: scale(0.97); } }
+@keyframes ui-pop-out { to { opacity: 0; transform: scale(0.98); } }
+@keyframes ui-fade-in { from { opacity: 0; } }
+@keyframes ui-fade-out { to { opacity: 0; } }
+@keyframes ui-reveal-in { from { height: 0; opacity: 0; } }
+@keyframes ui-reveal-out { to { height: 0; opacity: 0; } }
+@keyframes ui-rise-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes ui-rise-out { to { opacity: 0; transform: translateY(4px) scale(0.98); } }
+
 /* ── floating: popover, menu, dialog, toast ── */
 
 .ui-popover {
@@ -871,15 +898,7 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
   border-radius: var(--radius-lg);
   background: var(--popover-bg);
   box-shadow: var(--popover-shadow);
-  animation: ui-pop-in var(--dur-fast) ease-out;
 }
-@keyframes ui-pop-in { from { opacity: 0; transform: scale(0.97); } }
-/* Closing (usePresence, motion.ts): out a little faster than in, and no longer taking input. */
-.ui-popover[data-closing], .ui-dialog:is(.ui-scrim[data-closing] > *) { animation: ui-pop-out var(--dur-fast) ease-in forwards; }
-.ui-scrim[data-closing] { animation: ui-fade-out var(--dur-fast) ease-in forwards; }
-.ui-scrim[data-closing][data-clear] { animation: none; }
-@keyframes ui-pop-out { to { opacity: 0; transform: scale(0.98); } }
-@keyframes ui-fade-out { to { opacity: 0; } }
 
 .ui-menu-list { padding: 5px; outline: none; }
 .ui-menu-item {
@@ -926,11 +945,9 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
   align-items: flex-start;
   padding: 14vh 16px 16px;
   background: color-mix(in srgb, var(--scrim) 30%, transparent);
-  animation: ui-fade-in var(--dur) ease-out;
 }
 .ui-scrim[data-position="center"] { align-items: center; padding-top: 16px; }
-.ui-scrim[data-clear] { background: transparent; animation: none; }
-@keyframes ui-fade-in { from { opacity: 0; } }
+.ui-scrim[data-clear] { background: transparent; }
 .ui-dialog {
   display: flex;
   flex-direction: column;
@@ -944,7 +961,6 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
   background: var(--popover-bg);
   box-shadow: var(--sheet-shadow);
   outline: none;
-  animation: ui-pop-in var(--dur) var(--ease);
 }
 /* One inset for the title row, the body and the footer, so every sheet lines up the same way. */
 .ui-dialog { --dialog-pad: 20px; }
@@ -1031,11 +1047,7 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
   background: var(--popover-bg);
   box-shadow: 0 4px 16px var(--shadow);
   pointer-events: auto;
-  animation: ui-toast-in var(--dur) var(--ease);
 }
-@keyframes ui-toast-in { from { opacity: 0; transform: translateY(6px); } }
-.ui-toast[data-closing] { animation: ui-toast-out 150ms ease-in forwards; pointer-events: none; }
-@keyframes ui-toast-out { to { opacity: 0; transform: translateY(4px) scale(0.98); } }
 .ui-toast-icon { flex: none; display: flex; color: var(--tone); }
 .ui-toast[data-tone="neutral"] .ui-toast-icon { color: var(--icon); }
 .ui-toast-text { flex: 1; min-width: 0; }

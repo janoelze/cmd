@@ -22,7 +22,7 @@
 // Windows are never remounted or reordered in the DOM, so terminals keep
 // running and pointer capture is never lost.
 
-import { EmptyState, PageDots, Window, WindowBody, WindowFrame } from "@cmd/ui";
+import { EmptyState, GLIDE_MS, PageDots, tween, Window, WindowBody, WindowFrame } from "@cmd/ui";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
@@ -60,7 +60,7 @@ import { TileTitle } from "./TileTitle.tsx";
 import { useFooterCentre } from "./StatusBar.tsx";
 import { SlotMotion } from "./Slot.tsx";
 import { countRender } from "../perf.ts";
-import { arrived, departed, ghost, glide, GLIDE_MS, glideNow, settledElsewhere, TileMotion, type TileTarget } from "../motion.ts";
+import { arrived, departed, ghost, settledElsewhere, TileMotion, type TileTarget } from "../motion.ts";
 
 const DRAG_THRESHOLD = 4;
 const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scrolls the strip
@@ -243,7 +243,12 @@ export function WindowsView(p: Props) {
       : { tx: m === "strip" ? -offsetRef.current : 0, ty: 0, s: 1 };
   /** Where the track was before it jumps (see the motion effect). */
   const jumpFrom = useRef<{ tx: number; ty: number; s: number } | null>(null);
-  /** Call before moving the track at once (not a pan or a glide): windows stay put on screen. */
+  /**
+   * Note where the track is before it moves at once (not a pan or a glide), so windows
+   * stay put on screen and glide on from there. Every instant move of the scroll or the
+   * camera goes through jumpScroll / jumpCamera, which call this; a mode switch calls it
+   * itself (below). Moving the track without it makes every window jump.
+   */
   const jumpTrack = (m: ViewMode = live.current.mode) => void (jumpFrom.current ??= trackOf(m));
   // A mode switch is a jump: noted before any other effect moves the scroll or the camera.
   // Until its glide is done, whatever else moves the track for it (the viewport settling
@@ -273,22 +278,17 @@ export function WindowsView(p: Props) {
   const stopCam = () => {
     if (camAnim.current) cancelAnimationFrame(camAnim.current), (camAnim.current = null);
   };
+  // On the glides' clock, with the windows: a stalled frame pauses it with them.
   const animateCam = useCallback(
     (target: Camera) => {
-      stopCam();
       const from = camRef.current;
       const { vp } = live.current;
-      // On the glides' clock, with the windows: a stalled frame pauses it with them.
-      const start = glideNow();
-      const frame = () => {
-        const t = glide(glideNow() - start);
-        setCam(t < 1 ? lerpCamera(from, target, t, vp) : target);
-        camAnim.current = t < 1 ? requestAnimationFrame(frame) : null;
-      };
-      camAnim.current = requestAnimationFrame(frame);
+      tween(camAnim, (t) => setCam(t < 1 ? lerpCamera(from, target, t, vp) : target));
     },
     [setCam],
   );
+  /** Put the camera somewhere at once: windows stay where they are on screen and glide on (see jumpTrack). */
+  const jumpCamera = (c: Camera) => (jumpTrack(), stopCam(), setCam(c));
   // Changed limits pull the camera back into range, around the viewport centre.
   useEffect(() => {
     const c = camRef.current;
@@ -333,7 +333,7 @@ export function WindowsView(p: Props) {
     if (!r) return;
     const target = reveal(camRef.current, r, vp);
     if (target === camRef.current) return;
-    if (entering) jumpTrack(), stopCam(), setCam(target);
+    if (entering) jumpCamera(target);
     else animateCam(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, vp.w]);
@@ -357,7 +357,7 @@ export function WindowsView(p: Props) {
     if (!b) return;
     // As far out as it takes to show everything, past the minimum zoom if need be.
     const target = frame(b, live.current.vp, 1, fitLimits(limRef.current));
-    if (now) jumpTrack(), stopCam(), setCam(target);
+    if (now) jumpCamera(target);
     else animateCam(target);
   };
 
@@ -445,19 +445,22 @@ export function WindowsView(p: Props) {
   };
   const animateTo = useCallback(
     (target: number) => {
-      if (anim.current) cancelAnimationFrame(anim.current);
       const from = offsetRef.current;
-      if (Math.abs(target - from) < 0.5) return setOffset(target);
-      const start = glideNow();
-      const frame = () => {
-        const t = glide(glideNow() - start);
-        setOffset(from + (target - from) * t);
-        anim.current = t < 1 ? requestAnimationFrame(frame) : null;
-      };
-      anim.current = requestAnimationFrame(frame);
+      if (Math.abs(target - from) < 0.5) return stopScroll(), setOffset(target);
+      tween(anim, (t) => setOffset(from + (target - from) * t));
     },
     [setOffset],
   );
+  /**
+   * Scroll the strip at once: windows stay where they are on screen and glide on (see
+   * jumpTrack); rendered now, so TileMotion hears of it before the frame is painted.
+   */
+  const jumpScroll = (o: number) => {
+    jumpTrack();
+    stopScroll();
+    setOffset(o);
+    setOffsetState(offsetRef.current);
+  };
 
   useLayoutEffect(() => {
     performance.mark("boot:tiles"); // first commit of the windows (boot benchmark)
@@ -520,9 +523,7 @@ export function WindowsView(p: Props) {
     const was = scaledFor.current;
     scaledFor.current = { w: vp.w, content: lay.contentWidth, mode };
     if (mode !== "strip" || was.mode !== mode || !was.w || was.w === vp.w || !was.content) return;
-    stopScroll();
-    jumpTrack();
-    setOffset((offsetRef.current * lay.contentWidth) / was.content);
+    jumpScroll((offsetRef.current * lay.contentWidth) / was.content);
   });
 
   // Strip: selecting a window scrolls just enough to show it. Not when only the
@@ -546,7 +547,7 @@ export function WindowsView(p: Props) {
     const target = revealOffset(offsetRef.current, selSlot, stripW, padX, stripTotal);
     if (Math.abs(target - offsetRef.current) <= 0.5) return;
     // Entering the strip, part of the switch's one glide; otherwise a scroll of its own.
-    if (entering) stopScroll(), jumpTrack(), setOffset(target), setOffsetState(offsetRef.current);
+    if (entering) jumpScroll(target);
     else animateTo(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, selSlot?.x, selSlot?.w, vp.w, lay.contentWidth]);

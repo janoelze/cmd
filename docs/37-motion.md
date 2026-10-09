@@ -2,7 +2,9 @@
 
 How windows, sidebars and Spaces move, why, and how it's measured. The engine is
 `apps/desktop/src/renderer/src/motion.ts`; the harness is `e2e/motion.mjs`
-(`pnpm e2e:motion`).
+(`pnpm e2e:motion`). The vocabulary (curves, named timings, presence, FLIP) is the kit's,
+`packages/ui/src/motion.ts`, with the same values as tokens for CSS; a test
+(`apps/desktop/test/motion-css.test.ts`) keeps the stylesheets on them.
 
 ## Rules
 

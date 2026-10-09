@@ -6,14 +6,14 @@
 
 import { useLayoutEffect, useRef } from "react";
 import type { PaneId } from "@cmd/protocol";
-import { Window, WindowBody, WindowFrame } from "@cmd/ui";
+import { slide, Window, WindowBody, WindowFrame } from "@cmd/ui";
 import { labelOf, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
 import { DOCK_WIDTH, type Side } from "../docks.ts";
 import { PlacementContext } from "../windows/registry.ts";
 import { TerminalView } from "./TerminalView.tsx";
 import { TileTitle } from "./TileTitle.tsx";
 import { WindowContent } from "./WindowsView.tsx";
-import { arrived, departed, slide, TileMotion } from "../motion.ts";
+import { arrived, departed, TileMotion } from "../motion.ts";
 
 interface Props {
   side: Side;

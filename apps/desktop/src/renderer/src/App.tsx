@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GLIDE_MS } from "./motion.ts";
-import { Toaster, toast, usePresentValue } from "@cmd/ui";
+import { GLIDE_MS, Toaster, toast, usePresentValue } from "@cmd/ui";
 import type { PaneId, Space, SpaceId } from "@cmd/protocol";
 import type { WebviewTag } from "electron";
 import { bucketOf, needsAttention } from "@cmd/protocol";

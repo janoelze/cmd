@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, StartupStatus, WidgetEntry, WindowId, DataEvent, DataQuery, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
+import { reducedMotion } from "@cmd/ui";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
 import { applyFonts } from "./fonts.ts";
@@ -341,7 +342,7 @@ function switchSpace(from: SpaceId, to: SpaceId, update: () => void): void {
   const stage = document.querySelector<HTMLElement & { startViewTransition?: (o: { update: () => void; types?: string[] }) => unknown }>(".stage");
   const a = state.spaces.get(from);
   const b = state.spaces.get(to);
-  if (!stage?.startViewTransition || !a || !b || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
+  if (!stage?.startViewTransition || !a || !b || reducedMotion()) return update();
   stage.startViewTransition({ update: () => flushSync(update), types: [b.order > a.order ? "space-next" : "space-prev"] });
 }
 

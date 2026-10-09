@@ -7,7 +7,7 @@
   top: 0;
   z-index: 1000;
   pointer-events: none;
-  transition: transform 120ms var(--ease);
+  transition: transform var(--dur-fast) var(--ease);
 }
 .tip {
   --tip-from: translateY(3px);
@@ -27,7 +27,7 @@
   opacity: 0;
   transform: var(--tip-from) scale(0.96);
   /* Out: quick and plain. In (data-shown): a little longer, eased. */
-  transition: opacity 90ms ease-in, transform 90ms ease-in;
+  transition: opacity var(--dur-fast) var(--ease-exit), transform var(--dur-fast) var(--ease-exit);
 }
 .tip[data-side="bottom"] { --tip-from: translateY(-3px); }
 .tip[data-side="left"] { --tip-from: translateX(3px); }
@@ -35,7 +35,7 @@
 .tip[data-shown] {
   opacity: 1;
   transform: none;
-  transition: opacity 120ms var(--ease), transform 160ms var(--ease);
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur) var(--ease);
 }
 .tip-key { flex: none; color: var(--text-dim); font: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
 /* Rich tips: a card, like the popovers. */

@@ -74,7 +74,7 @@ body.tasks-window { background: var(--bg); }
   font-size: 10px;
   color: var(--text-dim);
   text-align: center;
-  transition: transform 0.12s var(--ease);
+  transition: transform var(--dur-fast) var(--ease);
 }
 .tm-disclosure.open { transform: rotate(90deg); }
 .tm-disclosure.none { visibility: hidden; }

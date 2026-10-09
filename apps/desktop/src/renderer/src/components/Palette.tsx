@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SearchStatus } from "@cmd/protocol";
-import { Highlight, ICON, iconNode, reducedMotion } from "@cmd/ui";
+import { Highlight, ICON, iconNode, reducedMotion, timing } from "@cmd/ui";
 import { IndexRing } from "./IndexRing.tsx";
 
 export interface PaletteItem {
@@ -214,12 +214,12 @@ export function Palette({
     const was = shown ? { w: shown.width, h: shown.height } : size.current;
     size.current = now;
     if (!was || (Math.abs(was.w - now.w) < 1 && Math.abs(was.h - now.h) < 1) || reducedMotion()) return;
-    el.animate([{ width: `${was.w}px`, height: `${was.h}px` }, { width: `${now.w}px`, height: `${now.h}px` }], { duration: 150, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", id: "resize" } as KeyframeAnimationOptions);
+    el.animate([{ width: `${was.w}px`, height: `${was.h}px` }, { width: `${now.w}px`, height: `${now.h}px` }], timing("change", { id: "resize" }));
   });
   const optionId = (i: number) => `${id}-${i}`;
   return (
-    <div className="palette-backdrop" onMouseDown={onClose} data-closing={closing || undefined} inert={closing || undefined}>
-      <div ref={box} className={`palette ${searching ? "searching" : ""}`} role="dialog" aria-label={label ?? placeholder} onMouseDown={(e) => e.stopPropagation()}>
+    <div className="palette-backdrop" onMouseDown={onClose} inert={closing || undefined}>
+      <div ref={box} className={`palette ${searching ? "searching" : ""}`} data-motion="pop" data-closing={closing || undefined} role="dialog" aria-label={label ?? placeholder} onMouseDown={(e) => e.stopPropagation()}>
         <input
           ref={input}
           className="palette-input"

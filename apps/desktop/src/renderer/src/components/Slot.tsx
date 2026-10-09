@@ -10,15 +10,15 @@
 // Mark is an agent's status light or a window's icon (tinted by its tone), cross-fading between them.
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { StatusDot, type DotState } from "@cmd/ui";
+import { StatusDot, type DotState, MOTION } from "@cmd/ui";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { countRender } from "../perf.ts";
 
 const DWELL = 600;
 const DELAY = 200;
 const GRACE = 250;
-/** The width transition (styles.css, .slot) plus a frame. */
-const MOVE_MS = 200;
+/** The width transition (styles.css, .slot: --dur) plus a frame. */
+const MOVE_MS = MOTION.change.ms + 20;
 /** Narrower than this and narrower than its value, a divided slot hides (just a gap and "…" otherwise). */
 const SLIVER = 28;
 

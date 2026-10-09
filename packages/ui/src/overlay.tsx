@@ -10,7 +10,7 @@ import { ICON, iconNode } from "./icon.tsx";
 import { Button, IconButton } from "./button.tsx";
 import type { Tone } from "./status.tsx";
 import { WindowBar } from "./window.tsx";
-import { useFlip, usePresence } from "./motion.ts";
+import { MOTION, useFlip, usePresence } from "./motion.ts";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -120,7 +120,7 @@ export function Popover({
   if (!present) return null;
   const style: CSSProperties = { ...pos, ...(width !== "content" ? { width } : {}), ...(maxWidth ? { maxWidth: `min(${maxWidth}px, 100vw - 16px)` } : {}) };
   return createPortal(
-    <div ref={ref} className={cls("ui-popover", className)} role={role} aria-label={label} style={style} data-closing={closing || undefined} inert={closing || undefined}>
+    <div ref={ref} className={cls("ui-popover", className)} role={role} aria-label={label} style={style} data-motion="pop" data-closing={closing || undefined} inert={closing || undefined}>
       {children}
     </div>,
     document.body,
@@ -384,6 +384,7 @@ export function Dialog({
   return createPortal(
     <div
       className="ui-scrim"
+      data-motion={scrim ? "fade" : undefined}
       data-closing={closing || undefined}
       inert={closing || undefined}
       data-position={position}
@@ -396,7 +397,7 @@ export function Dialog({
         }
       }}
     >
-      <div ref={ref} className={cls("ui-dialog", className)} data-divided={divided || undefined} data-window={win ? true : undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : win?.name)} tabIndex={-1} style={{ width, height }}>
+      <div ref={ref} className={cls("ui-dialog", className)} data-motion="pop" data-closing={closing || undefined} data-divided={divided || undefined} data-window={win ? true : undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : win?.name)} tabIndex={-1} style={{ width, height }}>
         {win && (
           <WindowBar icon={win.icon} name={win.name}>
             {dismissable && win.close !== false && <IconButton icon="xmark" size="sm" label="Close" onClick={onClose} />}
@@ -485,8 +486,6 @@ let nextId = 1;
 const toastListeners = new Set<() => void>();
 const emit = () => toastListeners.forEach((fn) => fn());
 
-/** How long a dismissed toast takes to fade out (components.css ui-toast-out). */
-const TOAST_OUT_MS = 150;
 
 export function dismissToast(id: number): void {
   if (!toasts.some((t) => t.id === id && !t.leaving)) return;
@@ -495,7 +494,7 @@ export function dismissToast(id: number): void {
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);
     emit();
-  }, TOAST_OUT_MS);
+  }, MOTION.exit.ms);
 }
 
 /** Show a short message at the bottom of the window; returns its id. Needs a <Toaster/> mounted. */
@@ -552,7 +551,7 @@ export function Toast({
   leaving?: boolean;
 }) {
   return (
-    <div className={cls("ui-toast", className)} data-key={flipKey} data-closing={leaving || undefined} data-tone={tone} role={tone === "danger" ? "alert" : "status"}>
+    <div className={cls("ui-toast", className)} data-key={flipKey} data-motion="rise" data-closing={leaving || undefined} data-tone={tone} role={tone === "danger" ? "alert" : "status"}>
       {icon != null && <span className="ui-toast-icon">{iconNode(icon, ICON.row)}</span>}
       <span className="ui-toast-text">{children}</span>
       {action && (
