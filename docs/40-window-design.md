@@ -265,14 +265,14 @@ For the next agent picking this up. Read the `window-design` skill first (`.clau
 
 ### Migrated (merged to master, local, not pushed)
 
-Workspace Actions (`ActionsView`), Resources (sparklines, tables), SQLite (Split sidebar → toolbar menu below 600px), Markdown (`Document`), Journal (`Ribbon`, `Timeline`), Image (`Viewport`, `Picture`) and PDF (no sidebar any more, pages full width from the top; `pdf.css` keeps only pdf.js's own markup). The **Task Manager** is no longer its own Electron window but a sheet in the app window, drawn like Send Feedback and What's New (`components/TaskManager.tsx`), on `View` and `DataGrid` (`rowInfo`: section headings with totals, terminals that expand to their processes); the user preferred that over a separate window with a title-bar toolbar. **Settings**, still its own window, is on `View`, `Split`, `List`, `TitleBand`, `Page`, `FormActions`, `ShortcutField`, `QrCode`; `settings.css` and the old sidebar rules in `styles.css` are gone. Nothing has been pushed or released.
+Workspace Actions (`ActionsView`), Resources (sparklines, tables), SQLite (Split sidebar → toolbar menu below 600px), Markdown (`Document`), Journal (`Ribbon`, `Timeline`), Image (`Viewport`, `Picture`) and PDF (no sidebar any more, pages full width from the top; `pdf.css` keeps only pdf.js's own markup). The **Task Manager** is no longer its own Electron window but a sheet in the app window, drawn like Send Feedback and What's New (`components/TaskManager.tsx`), on `View` and `DataGrid` (`rowInfo`: section headings with totals, terminals that expand to their processes); the user preferred that over a separate window with a title-bar toolbar. **Settings**, still its own window, is on `View`, `Split`, `List`, `TitleBand`, `Page`, `FormActions`, `ShortcutField`, `QrCode`; `settings.css` and the old sidebar rules in `styles.css` are gone. On branch **`migrate-widgets`** (`~/src/cmd-migrate-widgets`): **Agent Activity** (`ListRow`s), **Live Diff** (`ListRow` + `Diff`), the **Timer** (redesigned with the user: presets and Start/Pause/Reset in the toolbar, the time in a `Dial`), **YouTube** and the **Visualizer** (`Stage`); `widgets.css` is gone. Nothing has been pushed or released.
 
-Design debt went 539 → 423. What's left, by file (`design-debt.json`): the kit's `components.css` 192, the app's `styles.css` 125 (tiles, browser and files windows, the palette, remote), `magic.css` 50 (the Magic window's own UI, not widgets), `widgets.css` 20 (Agent Activity, Live Diff, YouTube, Timer), `library.css` 13, `tooltips.css` 13, small rest.
+Design debt went 539 → 403. What's left, by file (`design-debt.json`): the kit's `components.css` 192, the app's `styles.css` 125 (tiles, browser and files windows, the palette, remote), `magic.css` 50 (the Magic window's own UI, not widgets), `library.css` 13, `tooltips.css` 13, small rest.
 
 ### Next, in the order agreed with the user
 
 1. ~~Settings and the Task Manager~~ (merged, above).
-2. **The remaining widgets** in `widgets.css`: Agent Activity, Live Diff, Timer, YouTube.
+2. ~~The remaining widgets~~ (on their branch, above).
 3. **The Files and Browser windows and the sidebar** (most of `styles.css`), then the **Magic window's** chrome (`magic.css`) and the Widget Library (`library.css`).
 4. **The kit's own `components.css`** (192 literals: move its spacing onto the scale) and `tooltips.css`.
 
