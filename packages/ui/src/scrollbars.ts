@@ -1,6 +1,5 @@
 // One scrollbar look for every window: lists, editors, Markdown, terminals and the
-// pages inside browser windows (BrowserView injects SCROLLBAR_CSS and SCROLLBAR_JS
-// into each page). Minimal: no track, a thin, faint thumb that thickens and brightens
+// pages inside browser windows. Minimal: no track, a thin, faint thumb that thickens and brightens
 // under the pointer. The hit area stays 10px wide; a transparent border narrows what's
 // drawn. Gray reads on dark panes and white pages.
 //
@@ -10,10 +9,17 @@
 // when the scroller's :hover changes, and pseudo-scrollbars don't transition. What does
 // work is a class toggled from a scroll listener driving a registered custom property,
 // which the thumb takes its colour from: that repaints, and the property animates.
+//
+// Pages draw theirs differently. Styling a page's ::-webkit-scrollbar turns macOS's
+// overlay scrollbars into classic ones, which take 10px off every scrolling page, so
+// BrowserView hides the page's scrollbars (PAGE_SCROLLBAR_CSS) and runs pageScrollbars
+// in it, which floats the same thumb over each scroller, light on dark pages.
 
 const THUMB = "rgb(128 128 128 / 0.34)";
 const THUMB_HOVER = "rgb(128 128 128 / 0.62)";
 const THUMB_ACTIVE = "rgb(128 128 128 / 0.8)";
+/** On dark pages, where the gray barely shows. */
+const THUMB_ON_DARK: Tones = ["rgb(255 255 255 / 0.34)", "rgb(255 255 255 / 0.55)", "rgb(255 255 255 / 0.7)"];
 
 /** How long after the last scroll the thumb stays, in ms. */
 export const SCROLLBAR_HOLD = 1000;
@@ -147,11 +153,238 @@ export type ScrollbarsOptions = {
   always?: boolean;
 };
 
-/** The behaviour as a script for a page (BrowserView runs it in each page it shows). */
+/** For pages: hides their own scrollbars, which pageScrollbars draws instead. */
+export const PAGE_SCROLLBAR_CSS = `* { scrollbar-width: none !important; }`;
+
+/** Where a scroller's thumb goes along its track, in px: offset and length. */
+export function thumbSpan(track: number, view: number, size: number, scroll: number): { offset: number; length: number } {
+  const length = Math.min(track, Math.max(32, (track * view) / size));
+  const max = size - view;
+  const at = max > 0 ? Math.min(1, Math.max(0, scroll / max)) : 0;
+  return { offset: (track - length) * at, length };
+}
+
+type Tones = [thumb: string, hover: string, active: string];
+type PageScrollbarsOptions = { hold: number; always: boolean; light: Tones; dark: Tones };
+
+/**
+ * Floats a thumb over each scroller of a page (its own are hidden by PAGE_SCROLLBAR_CSS),
+ * drawn like SCROLLBAR_CSS's: shown while it scrolls and for `hold` ms after, kept while
+ * the pointer rests on it, draggable, a click on its track pages. Thumbs live in a closed
+ * shadow root over the page, styled through a constructed sheet, which pages' CSS and CSP
+ * don't reach. Self-contained (only its arguments), so BrowserView can stringify it.
+ */
+export function pageScrollbars(doc: Document, o: PageScrollbarsOptions, span: typeof thumbSpan): void {
+  const win = doc.defaultView as (Window & typeof globalThis & { __cmdScrollbars?: boolean }) | null;
+  if (!win || win.__cmdScrollbars) return;
+  win.__cmdScrollbars = true;
+  const HIT = 10;
+  const host = doc.createElement("cmd-scrollbars");
+  const fixed = { all: "initial", position: "fixed", inset: "0", "pointer-events": "none", "z-index": "2147483647" };
+  for (const [k, v] of Object.entries(fixed)) {
+    host.style.setProperty(k, v, "important");
+  }
+  const shadow = host.attachShadow({ mode: "closed" });
+  const sheet = new win.CSSStyleSheet();
+  sheet.replaceSync(`
+    .bar { position: fixed; pointer-events: none; opacity: 0; transition: opacity 350ms ease-out; }
+    .bar.on { opacity: 1; pointer-events: auto; transition-duration: 100ms; }
+    .thumb { position: absolute; }
+    .thumb::before { content: ""; position: absolute; inset: 3px; border-radius: 2px; background: var(--thumb); }
+    .thumb:hover::before, .held .thumb::before { inset: 2px; border-radius: 3px; background: var(--hover); }
+    .held .thumb::before { background: var(--active); }
+  `);
+  shadow.adoptedStyleSheets = [sheet];
+
+  type Axis = "x" | "y";
+  type Bar = { el: HTMLElement; thumb: HTMLElement; track: number; offset: number; length: number };
+  type State = { bars: Partial<Record<Axis, Bar>>; on: boolean; hovered: boolean; held: boolean; timer?: ReturnType<typeof setTimeout> };
+  const states = new Map<Element, State>();
+  const root = () => doc.scrollingElement ?? doc.documentElement;
+  const metrics = (el: Element, axis: Axis) =>
+    axis === "y" ? { view: el.clientHeight, size: el.scrollHeight, scroll: el.scrollTop } : { view: el.clientWidth, size: el.scrollWidth, scroll: el.scrollLeft };
+  // The scroller's visible box: the viewport for the page itself, else its padding box.
+  const box = (el: Element) => {
+    if (el === root()) return { left: 0, top: 0, width: el.clientWidth, height: el.clientHeight };
+    const r = el.getBoundingClientRect();
+    return { left: r.left + el.clientLeft, top: r.top + el.clientTop, width: el.clientWidth, height: el.clientHeight };
+  };
+
+  // Light thumbs on dark backgrounds: the first opaque one behind the scroller decides.
+  const paint = doc.createElement("canvas").getContext("2d");
+  const dark = (el: Element) => {
+    for (let at: Element | null = el === root() ? (doc.body ?? el) : el; at; at = at.parentElement) {
+      const bg = win.getComputedStyle(at).backgroundColor;
+      if (!paint) break;
+      paint.fillStyle = "#000";
+      paint.fillStyle = bg;
+      const c = String(paint.fillStyle);
+      const m = c.match(/^#(..)(..)(..)$/);
+      const n = m ? m.slice(1).map((h) => parseInt(h, 16)) : c.startsWith("rgb") ? (c.match(/[\d.]+/g) ?? []).map(Number) : [];
+      const [r = 0, g = 0, b = 0, alpha = 1] = n;
+      if (n.length < 3 || alpha < 0.5) continue;
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
+    }
+    const scheme = win.getComputedStyle(doc.documentElement).colorScheme;
+    return /dark/.test(scheme) && !/light/.test(scheme);
+  };
+
+  const bar = (el: Element, s: State, axis: Axis): Bar => {
+    const existing = s.bars[axis];
+    if (existing) return existing;
+    const b: Bar = { el: doc.createElement("div"), thumb: doc.createElement("div"), track: 0, offset: 0, length: 0 };
+    b.el.className = `bar ${axis}`;
+    b.thumb.className = "thumb";
+    b.el.append(b.thumb);
+    shadow.append(b.el);
+    b.el.addEventListener("pointerenter", () => (s.hovered = true));
+    b.el.addEventListener("pointerleave", () => {
+      s.hovered = false;
+      if (!s.held) keep(el);
+    });
+    // The bar sits over the scroller, so scroll it rather than whatever is under the host.
+    b.el.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      el.scrollBy(e.deltaX, e.deltaY);
+    }, { passive: false });
+    b.el.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const r = b.el.getBoundingClientRect();
+      const at = axis === "y" ? e.clientY - r.top : e.clientX - r.left;
+      const m = metrics(el, axis);
+      if (at < b.offset || at > b.offset + b.length) {
+        // On the track: a page towards the pointer.
+        const page = Math.sign(at - b.offset) * m.view * 0.9;
+        el.scrollBy(axis === "y" ? { top: page } : { left: page });
+        return;
+      }
+      s.held = true;
+      b.el.classList.add("held");
+      b.el.setPointerCapture(e.pointerId);
+      const from = axis === "y" ? e.clientY : e.clientX;
+      const start = m.scroll;
+      const ratio = (m.size - m.view) / Math.max(1, b.track - b.length);
+      const move = (e: PointerEvent) => {
+        const to = start + ((axis === "y" ? e.clientY : e.clientX) - from) * ratio;
+        if (axis === "y") el.scrollTop = to;
+        else el.scrollLeft = to;
+      };
+      const up = () => {
+        s.held = false;
+        b.el.classList.remove("held");
+        b.el.removeEventListener("pointermove", move);
+        b.el.removeEventListener("pointerup", up);
+        b.el.removeEventListener("pointercancel", up);
+        keep(el);
+      };
+      b.el.addEventListener("pointermove", move);
+      b.el.addEventListener("pointerup", up);
+      b.el.addEventListener("pointercancel", up);
+    });
+    s.bars[axis] = b;
+    return b;
+  };
+
+  const place = (el: Element, s: State) => {
+    if (!el.isConnected) {
+      for (const b of Object.values(s.bars)) b?.el.remove();
+      clearTimeout(s.timer);
+      states.delete(el);
+      return;
+    }
+    const v = box(el);
+    for (const axis of ["y", "x"] as const) {
+      const m = metrics(el, axis);
+      const scrolls = m.size > m.view + 1;
+      if (!scrolls && !s.bars[axis]) continue;
+      const b = bar(el, s, axis);
+      b.el.classList.toggle("on", s.on && scrolls);
+      if (!scrolls) continue;
+      b.track = axis === "y" ? v.height : v.width;
+      const t = span(b.track, m.view, m.size, m.scroll);
+      b.offset = t.offset;
+      b.length = t.length;
+      const px = (n: number) => `${n}px`;
+      if (axis === "y") {
+        Object.assign(b.el.style, { left: px(v.left + v.width - HIT), top: px(v.top), width: px(HIT), height: px(v.height) });
+        Object.assign(b.thumb.style, { left: "0", right: "0", top: px(t.offset), height: px(t.length) });
+      } else {
+        Object.assign(b.el.style, { left: px(v.left), top: px(v.top + v.height - HIT), width: px(v.width), height: px(HIT) });
+        Object.assign(b.thumb.style, { top: "0", bottom: "0", left: px(t.offset), width: px(t.length) });
+      }
+    }
+  };
+
+  let frame = 0;
+  const placeAll = () => {
+    frame = 0;
+    if (!host.isConnected) doc.documentElement.append(host);
+    for (const [el, s] of states) if (s.on) place(el, s);
+  };
+  const soon = () => (frame ||= win.requestAnimationFrame(placeAll));
+
+  const hide = (el: Element, s: State) => {
+    s.on = false;
+    for (const b of Object.values(s.bars)) b?.el.classList.remove("on");
+  };
+  function keep(el: Element) {
+    let s = states.get(el);
+    if (!s) {
+      s = { bars: {}, on: false, hovered: false, held: false };
+      states.set(el, s);
+    }
+    if (!s.on) {
+      const tones = dark(el) ? o.dark : o.light;
+      s.on = true;
+      place(el, s);
+      for (const b of Object.values(s.bars)) {
+        b?.el.style.setProperty("--thumb", tones[0]);
+        b?.el.style.setProperty("--hover", tones[1]);
+        b?.el.style.setProperty("--active", tones[2]);
+      }
+    }
+    soon();
+    clearTimeout(s.timer);
+    if (o.always) return;
+    const st = s;
+    st.timer = setTimeout(() => (st.hovered || st.held ? keep(el) : hide(el, st)), o.hold);
+  }
+
+  doc.documentElement.append(host);
+  doc.addEventListener(
+    "scroll",
+    (e) => {
+      const t = e.target === doc ? root() : e.target;
+      if (t instanceof win.Element) keep(t);
+      soon(); // others move with it
+    },
+    { capture: true, passive: true },
+  );
+  win.addEventListener("resize", soon, { passive: true });
+  if (doc.body) new win.ResizeObserver(soon).observe(doc.body);
+  if (o.always) {
+    // Shown from the start: the page itself, and whatever scrolls under the pointer.
+    const r = root();
+    if (r.scrollHeight > r.clientHeight + 1 || r.scrollWidth > r.clientWidth + 1) keep(r);
+    doc.addEventListener(
+      "pointerover",
+      (e) => {
+        for (let at = e.target instanceof win.Element ? e.target : null; at && at !== r; at = at.parentElement) {
+          if (states.has(at)) break;
+          const cs = win.getComputedStyle(at);
+          if ((/auto|scroll/.test(cs.overflowY) && at.scrollHeight > at.clientHeight + 1) || (/auto|scroll/.test(cs.overflowX) && at.scrollWidth > at.clientWidth + 1)) keep(at);
+        }
+      },
+      { capture: true, passive: true },
+    );
+  }
+}
+
+/** The page side as a script for a page (BrowserView runs it in each page it shows). */
 export function scrollbarScript(o: ScrollbarsOptions = {}): string {
-  return o.always
-    ? `document.documentElement.classList.add("cmd-scrollbars-always");`
-    : `(${watchScrollbars.toString()})(document, ${SCROLLBAR_HOLD});`;
+  const options: PageScrollbarsOptions = { hold: SCROLLBAR_HOLD, always: !!o.always, light: [THUMB, THUMB_HOVER, THUMB_ACTIVE], dark: THUMB_ON_DARK };
+  return `(${pageScrollbars.toString()})(document, ${JSON.stringify(options)}, ${thumbSpan.toString()});`;
 }
 
 export function installScrollbars(o: ScrollbarsOptions = {}): void {

@@ -1,7 +1,8 @@
 // watchScrollbars against a fake document: what scrolls is marked, unmarked after the
-// hold, and kept while the pointer rests on its scrollbar or holds the thumb.
+// hold, and kept while the pointer rests on its scrollbar or holds the thumb. The page
+// side (pageScrollbars) draws, so it's checked in a real browser, not here.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { scrollbarScript, SCROLLBAR_CSS, watchScrollbars } from "../src/scrollbars.ts";
+import { scrollbarScript, SCROLLBAR_CSS, thumbSpan, watchScrollbars } from "../src/scrollbars.ts";
 
 type Handler = (e: unknown) => void;
 
@@ -85,15 +86,26 @@ describe("watchScrollbars", () => {
   });
 });
 
-describe("scrollbarScript", () => {
-  it("is the watcher, self-contained, for a page", () => {
-    const js = scrollbarScript();
-    expect(js).toContain("cmd-scrolling");
-    expect(js).toMatch(/\(document, \d+\);$/);
-    expect(() => new Function(js.replace("(document,", "(({ addEventListener() {}, documentElement: {} }),"))()).not.toThrow();
+describe("thumbSpan", () => {
+  it("sizes the thumb to the share in view and moves it with the scroll", () => {
+    expect(thumbSpan(300, 300, 3000, 0)).toEqual({ offset: 0, length: 32 }); // never shorter than 32px
+    expect(thumbSpan(300, 300, 600, 0)).toEqual({ offset: 0, length: 150 });
+    expect(thumbSpan(300, 300, 600, 150)).toEqual({ offset: 75, length: 150 });
+    expect(thumbSpan(300, 300, 600, 300)).toEqual({ offset: 150, length: 150 });
+    expect(thumbSpan(300, 300, 600, 400).offset).toBe(150); // rubber-banding past the end
   });
-  it("only marks the page when scrollbars always show", () => {
-    expect(scrollbarScript({ always: true })).toContain("cmd-scrollbars-always");
+});
+
+describe("scrollbarScript", () => {
+  it("is the page's thumbs, self-contained", () => {
+    const js = scrollbarScript();
+    expect(js).toMatch(/^\(function pageScrollbars/);
+    expect(js).toContain('"always":false');
+    // Runs where there is no window (the guard), so nothing outside its arguments is needed.
+    expect(() => new Function("document", js)({ defaultView: null })).not.toThrow();
+  });
+  it("keeps thumbs shown when scrollbars always show", () => {
+    expect(scrollbarScript({ always: true })).toContain('"always":true');
     expect(SCROLLBAR_CSS).toContain("cmd-scrollbars-always");
   });
 });
