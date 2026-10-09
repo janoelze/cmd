@@ -19,6 +19,9 @@ Every window in cmd, built-in or made with Magic, is drawn from one set of desig
   - `Panes` / `Pane`: a dashboard's sections, one column, two from 720px.
   - `DataGrid`: tables. Columns as data: `grow` (takes the leftover width), `align: "end"` (numbers), `hide: "narrow" | "regular"` (dropped as space runs out), `icon` (hugs a dot or icon). `selected` / `onRowClick` for an inspector.
   - `Stat`, `Chart` (line, area, bar), `Sparkline`, `Legend`: series take `--chart-N` in order.
+  - `Document`: a reading column for rendered Markdown or HTML, in the person's text and code fonts (the Markdown window).
+  - `Ribbon` (bars between two times on lanes, hour ticks) and `Timeline` / `TimelineEntry` (a time, a mark on a rail, the entry), marks in a hue with `--mark` (the Journal).
+  - `Text` alone on a line in a `Stack` is a paragraph (line height 1.45, even wrapping); in an `Inline` it is a run of text.
   - `Stack`, `Inline`, `Tiles`, `Text`, `Measure` (a reading column), `MediaStage`, `Filmstrip`.
   - `Hide below | above="narrow" | "regular"`: what gives way as a window narrows, or what only shows when it's narrow. A window's sizes are narrow (< 360px), regular (< 600px) and wide; everything that follows the width uses these two breakpoints. Works in the toolbar too (a `View` is a size container).
   - Gaps and paddings take only the spacing scale's names (`gap="md"`), checked by the types.
