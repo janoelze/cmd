@@ -29,13 +29,20 @@
     pending = null;
   };
 
-  const ready = initStrudel({
+  // initStrudel loads Strudel's audio worklets (distortion, the ladder filter, …) only on the
+  // first click in the page, and this frame is never clicked: without them those effects
+  // play silence. Load them once Strudel is up.
+  const started = initStrudel({
     prebake: () => Promise.all(BANKS.map((url) => S.samples(url).catch((err) => console.warn(`samples ${url}:`, msg(err))))),
     // A pattern that throws when queried would play silence and log on every tick: refuse it here.
     editPattern: (pattern) => (pattern.queryArc(0, 2), pattern),
     afterEval: () => settle(true),
     onEvalError: (err) => settle(false, msg(err)),
     onUpdateState: (s) => post({ type: "state", started: !!s.started, error: s.schedulerError ? msg(s.schedulerError) : null }),
+  });
+  const ready = started.then(async (repl) => {
+    await S.initAudio().catch((err) => console.warn("audio worklets:", msg(err)));
+    return repl;
   });
 
   const run = async (id, code) => {
@@ -69,8 +76,32 @@
     return taps;
   };
 
+  // A limiter before the speakers: parts that each sit well can still add up past full
+  // scale, and that clips. Strudel rebuilds its output node now and then, so this checks.
+  const limited = new WeakSet();
+  const limit = () => {
+    const out = S.getSuperdoughAudioController?.()?.output?.destinationGain;
+    if (!out || limited.has(out)) return;
+    limited.add(out);
+    const ctx = out.context;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -6;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.12;
+    try {
+      out.disconnect(ctx.destination);
+    } catch {
+      return; // not wired straight to the speakers: leave it as Strudel built it
+    }
+    out.connect(limiter).connect(ctx.destination);
+  };
+  void ready.then(limit);
+
   // Timers, not animation frames: they keep running while the window is out of view.
   setInterval(() => {
+    limit();
     const t = listening && tapOutput();
     if (!t) return;
     t.mono.getByteTimeDomainData(levels.t);
