@@ -1428,7 +1428,8 @@ export class Core {
 
   /** What remote/policy.ts checks arguments against. */
   get #policy(): PolicyContext {
-    return { panes: this.panes, agents: this.agents, workspaces: this.workspaces, windows: this.windows, home: this.#opts.home };
+    const priv = () => [...this.homes.all().map((h) => h.dir), ...(this.#ingest?.roots() ?? []).map((r) => r.dir)];
+    return { panes: this.panes, agents: this.agents, workspaces: this.workspaces, windows: this.windows, home: this.#opts.home, private: priv };
   }
 
   /** Widget previews: the app (offscreen Electron windows) when one is connected, else Playwright, else none. */

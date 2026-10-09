@@ -7,49 +7,12 @@
 
 import os from "node:os";
 import path from "node:path";
+import { DEFAULT_DENY_PATHS, isDeniedPath } from "../paths-deny.ts";
+
+// The private paths moved to paths-deny.ts (shared with remote access); kept here for Magic's imports.
+export { DEFAULT_DENY_PATHS, expandPath, isDeniedPath } from "../paths-deny.ts";
 
 export type Verdict = { level: "allow" | "ask" | "deny"; reason: string };
-
-/** Paths whose contents must never reach a model provider. `~` is the home folder. */
-export const DEFAULT_DENY_PATHS = [
-  "~/.ssh",
-  "~/.aws",
-  "~/.azure",
-  "~/.config/gcloud",
-  "~/.kube",
-  "~/.gnupg",
-  "~/.netrc",
-  "~/.npmrc",
-  "~/.pypirc",
-  "~/.git-credentials",
-  "~/.docker/config.json",
-  "~/.password-store",
-  "~/.config/op",
-  "~/Library/Keychains",
-  "~/Library/Cookies",
-  "~/Library/Safari",
-  "~/Library/Messages",
-  "~/Library/Mail",
-  "~/Library/Application Support/Google/Chrome",
-  "~/Library/Application Support/Chromium",
-  "~/Library/Application Support/Firefox",
-  "~/Library/Application Support/BraveSoftware",
-  "~/Library/Application Support/Arc",
-];
-
-export function expandPath(p: string, home = os.homedir()): string {
-  return p === "~" ? home : p.startsWith("~/") ? path.join(home, p.slice(2)) : p;
-}
-
-/** Is `p` (absolute) inside a denied path, or a .env file? */
-export function isDeniedPath(p: string, deny: string[], home = os.homedir(), cwd = home): boolean {
-  const abs = path.resolve(cwd, expandPath(p, home));
-  if (/^\.env(\..*)?$/.test(path.basename(abs))) return true;
-  return deny.some((d) => {
-    const root = path.resolve(expandPath(d, home));
-    return abs === root || abs.startsWith(root + path.sep);
-  });
-}
 
 // ── tokenizer ─────────────────────────────────────────────
 

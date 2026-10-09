@@ -2,14 +2,16 @@
 // table"). Fail-closed: every RPC method has an explicit entry (tsc refuses a new
 // method until someone decides), anything not allowed is denied, and arguments
 // are checked too: panes, agents and windows must belong to an open workspace, paths
-// must resolve (symlinks followed) inside an open workspace's root and off the
-// deny-list of private files. Events go through an allowlist as well.
+// must resolve (symlinks followed) inside the root of an open workspace other than
+// Home (which is the whole home folder) and off the private paths (paths-deny.ts:
+// credentials, cmd's own state, agents' transcripts). Events go through an
+// allowlist as well.
 
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { CoreEvent, Method, Params, RemoteScope } from "@cmd/protocol";
-import { DEFAULT_DENY_PATHS, isDeniedPath } from "../magic/policy.ts";
+import { expandPath, inCmdInstance, isDeniedPath, remotePrivatePaths } from "../paths-deny.ts";
 import type { AgentTracker } from "../agents/tracker.ts";
 import type { PaneManager } from "../panes.ts";
 import type { WorkspaceManager } from "../workspaces/manager.ts";
@@ -174,6 +176,8 @@ export interface PolicyContext {
   workspaces: WorkspaceManager;
   windows: WindowManager;
   home?: string;
+  /** Private paths only the core knows (agent homes and transcript folders it found), on top of remotePrivatePaths(). */
+  private?: () => readonly string[];
 }
 
 /** Writes and messages from a phone. */
@@ -326,7 +330,8 @@ function magicWidget(ctx: PolicyContext, id: unknown): void {
 
 /**
  * The real path (symlinks resolved; for a file that doesn't exist yet, its
- * folder's) must be inside an open workspace's root and not a private file.
+ * folder's) must be inside an open workspace's root, Home's excepted, and not a
+ * private file.
  */
 export function allowedPath(ctx: PolicyContext, p: unknown): string {
   if (typeof p !== "string" || !p || p.includes("\0")) throw new RemoteDenied("bad path");
@@ -334,9 +339,18 @@ export function allowedPath(ctx: PolicyContext, p: unknown): string {
   const home = ctx.home ?? os.homedir();
   const abs = path.resolve(p.startsWith("~") ? path.join(home, p.slice(1)) : p);
   const real = realpath(abs);
-  const roots = ctx.workspaces.list().map((s) => realpath(s.root));
+  const roots = ctx.workspaces
+    .list()
+    .filter((s) => !s.home)
+    .map((s) => realpath(s.root));
   if (!roots.some((r) => real === r || real.startsWith(r.endsWith(path.sep) ? r : r + path.sep))) throw new RemoteDenied("outside your workspaces");
-  if (isDeniedPath(real, DEFAULT_DENY_PATHS, realpath(home)) || isDeniedPath(abs, DEFAULT_DENY_PATHS, home)) throw new RemoteDenied("a private file");
+  // Each private path as written and as its real path (CMD_HOME under /var is /private/var).
+  const deny = [...remotePrivatePaths(), ...(ctx.private?.() ?? [])].flatMap((d) => {
+    const e = path.resolve(expandPath(d, home));
+    const r = realpath(e);
+    return r === e ? [e] : [e, r];
+  });
+  if (isDeniedPath(real, deny, home) || isDeniedPath(abs, deny, home) || inCmdInstance(real) || inCmdInstance(abs)) throw new RemoteDenied("a private file");
   return real;
 }
 
