@@ -3,6 +3,8 @@
 .wb { display: flex; flex-direction: column; height: 100vh; background: var(--bg); }
 .wb-bar { position: relative; z-index: 100; flex: none; height: 44px; padding: 0 10px 0 84px; -webkit-app-region: drag; background: var(--bg-raised, var(--bg)); }
 .wb-bar > * { -webkit-app-region: no-drag; }
-.wb-stage { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.wb-stage { flex: 1; min-height: 0; overflow: auto; display: flex; padding: 24px; }
+/* Centred by its margins, not justify/align: wider or taller than the stage, it scrolls from its start instead of overflowing off the left and top. */
+.wb-stage > * { margin: auto; flex: none; }
 /* A dialog's scrim covers the stage, not the toolbar: a tall sheet fits under it instead of sliding behind it. */
 .wb ~ .ui-scrim, body:has(.wb) > .ui-scrim { top: 44px; }
