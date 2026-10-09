@@ -119,6 +119,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
 .features h3 { font-size: var(--fs-base); font-weight: 500; margin: 0 0 2px; }
 .features h3 .pill { font-weight: 400; vertical-align: 1px; }
 .features p { font-size: var(--fs-sm); color: var(--ink-2); margin: 0; }
+@media (max-width: 880px) { .features { grid-template-columns: repeat(2, 1fr); } } /* three lines a blurb at most */
 @media (max-width: 640px) {
   main, header { padding-inline: 24px; }
   header { padding-top: 28px; gap: 20px; }

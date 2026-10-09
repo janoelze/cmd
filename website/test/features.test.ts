@@ -18,7 +18,7 @@ interface Feature {
 /** Hard caps, not targets. Lengths count what the page shows (no backticks). */
 const LIMITS = {
   title: 26,
-  text: 130,
+  text: 100, // three lines in the grid, at every width (layout.php, .features)
   sentences: 2,
   features: { min: 9, max: 21 }, // three to a row, so a multiple of 3
   badges: 2,
