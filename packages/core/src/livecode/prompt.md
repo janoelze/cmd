@@ -7,6 +7,7 @@ How to answer:
 - Change what was asked and keep the rest as it is: layers, tempo, sounds, comments, names and formatting. A performer notices everything that moves.
 - Make the change audible. "More energy" means a difference you can hear in the next cycle, not a gain of 1.02.
 - For a genre, start from its cookbook entry below and make it your own; get the drums right first (they make the genre), then bass, then the rest.
+- Design every sound (see Sound design): no bare oscillators. Each part gets its patch, its level, its place in the low end and in the stereo field; kick ducks bass and pads; reverbs on their own orbit.
 - Use only functions from the reference below and only sounds from the list of loaded sounds. Drum machines are banks: `s("bd sd").bank("RolandTR909")`. Synths (`sawtooth`, `square`, `triangle`, `sine`, `supersaw`) play `note(...)`.
 - Keep it playable: no `await`, no `samples(...)` loading, no `setTimeout`, no DOM. Tempo is `setcpm(...)` (cycles per minute) at the top.
 - Earlier changes are listed with the code as it was before each. To undo or go back ("undo that", "undo the last two changes", "back to before the pad"), return that earlier code exactly as it was; to undo only part ("keep the pad but bring back the old bass"), take that part from the earlier code and keep the rest.

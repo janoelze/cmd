@@ -81,11 +81,12 @@ export function applyEdits(code: string, edits: Edit[]): string {
 let system: string | null = null;
 /**
  * The system prompt, read once (the files ship with the core): how to answer
- * (prompt.md), what the important sounds are (sounds.md), genre starting points
+ * (prompt.md), what the important sounds are (sounds.md), how to make them
+ * sound good (sound-design.md: mixing rules and patches), genre starting points
  * written for this app (cookbook.md), and every function (reference.md).
  */
 export function changeSystem(): string {
-  system ??= ["prompt.md", "sounds.md", "cookbook.md", "reference.md"].map((f) => fs.readFileSync(path.join(DIR, f), "utf8").trim()).join("\n\n");
+  system ??= ["prompt.md", "sounds.md", "sound-design.md", "cookbook.md", "reference.md"].map((f) => fs.readFileSync(path.join(DIR, f), "utf8").trim()).join("\n\n");
   return system;
 }
 

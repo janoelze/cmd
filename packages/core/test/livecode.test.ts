@@ -29,6 +29,7 @@ describe("livecode change", () => {
     expect(system).toContain("## lpf(frequency) [cutoff, ctf, lp]");
     expect(system).toContain("## Drum & bass");
     expect(system).toContain("`breaks165`");
+    expect(system).toContain("## Mixing rules");
     expect(system.length).toBeGreaterThan(50_000);
   });
 

@@ -5,21 +5,31 @@ Starting points written for this app (each one plays as it is). Borrow the idiom
 Mini-notation traps: `"a b c d"` spreads four steps over one cycle (one bar); `"<a b>"` plays ONE of them per cycle (a over bar 1, b over bar 2), so `"<~ sd ~ sd>"` is a snare every other bar, not a backbeat; `"a ~ b ~"` is a sequence with rests; write sixteenths as 16 steps or `[...]` groups.
 
 ## Drum & bass (172-176 BPM)
-The two-step: kick on 1 and the "and" of 3, snare on 2 and 4, over a chopped break; a sub or reese bass in long notes; pads above.
+The two-step: kick on 1 and the "and" of 3, snare on 2 and 4, over a chopped break; a reese or sub bass in long notes, ducked by the kick; pads and stabs above, coming in over the bars. A full mix with designed sounds (see Sound design):
 ```
 setcpm(174 / 4)
 
 stack(
-  // two-step kick and snare
-  s("bd ~ ~ ~ ~ ~ bd ~ ~ ~ bd ~ ~ ~ ~ ~, ~ ~ ~ ~ sd ~ ~ ~ ~ ~ ~ ~ sd ~ ~ ~").bank("RolandTR909").gain(.9),
-  // the amen, chopped and rearranged
-  s("breaks152").fit().slice(16, "0 1 2 3 4 5 6 7 8 9 <10 2> 11 12 <13 13*2> 14 15").cut(1).gain(.7).hpf(200),
-  // reese bass: detuned saws, filtered low
-  note("<d1 d1 bb0 c1>").s("supersaw").detune(.35).lpf(500).lpq(4).distort(.5).gain(.7),
-  // sub under it
-  note("<d1 d1 bb0 c1>").s("sine").gain(.6),
-  // pad, every other bar
-  note("<[d3,f3,a3,c4] ~ [bb2,d3,f3,a3] ~>").s("supersaw").attack(.5).release(2).lpf(1500).room(.6).gain(.15),
+  // kick: 909 with a pitched sine for weight; ducks orbits 2 (bass) and 3 (pads)
+  s("bd ~ ~ ~ ~ ~ bd ~ ~ ~ bd ~ ~ ~ ~ ~").bank("RolandTR909").distort(.3).gain(1)
+    .duckorbit("2:3").duckattack(.12).duckdepth(.7),
+  note("c1 ~ ~ ~ ~ ~ c1 ~ ~ ~ c1 ~ ~ ~ ~ ~").s("sine").penv(24).pdecay(.04).decay(.2).sustain(0).gain(.6),
+  // snare on 2 and 4, with a little room
+  s("~ ~ ~ ~ sd ~ ~ ~ ~ ~ ~ ~ sd ~ ~ ~").bank("RolandTR909").room(.2).gain(.85),
+  // the amen, sliced, high-passed under the kick, glued
+  s("breaks152").fit().slice(16, "0 1 2 3 4 5 6 7 8 9 <10 2> 11 12 <13 13*2> 14 15").cut(1)
+    .sometimesBy(.15, x => x.ply(2)).hpf(250).compressor("-20:4:6:.003:.08").distort(.2).gain(.7),
+  // hats, from bar 3
+  s("hh*16").bank("RolandTR909").gain(".4 .2 .3 .2").pan(sine.range(.35, .65).fast(2)).hpf(6000).mask("<0 0 1 1>/2"),
+  // reese bass and sub, ducked
+  note("<d1 d1 bb0 c1>").s("supersaw").unison(7).detune(.6).ftype("ladder").lpf(sine.range(250, 900).slow(8)).lpq(3).distort(.7).hpf(60).gain(.5).orbit(2),
+  note("<d1 d1 bb0 c1>").s("sine").gain(.55).orbit(2),
+  // pad: wide, slow, its own reverb, ducked
+  note("<[d3,f3,a3,c4] [d3,f3,a3,c4] [bb2,d3,f3,a3] [c3,e3,g3,bb3]>").s("supersaw").unison(5).spread(.9).detune(.25)
+    .attack(.8).release(3).lpf(1400).hpf(250).room(.7).roomsize(6).gain(.18).orbit(3),
+  // pluck stabs with delay, from bar 5
+  note("~ ~ a4 ~ ~ f4 ~ ~ ~ ~ d5 ~ ~ ~ c5 ~").s("sawtooth").lpf(400).lpenv(5).lpdecay(.12).lpsustain(0).decay(.3).sustain(0)
+    .delay(.4).delaytime(3/16).delayfeedback(.45).hpf(300).gain(.3).mask("<0 1>/4"),
 )
 ```
 
