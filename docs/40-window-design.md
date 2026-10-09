@@ -1,6 +1,6 @@
 # Window design: one language for every window
 
-> Status (2026-10-09): **research**, branch `window-design`. Next: layout primitives and spacing tokens in `@cmd/ui`, then reference windows (content, media, data, chart) as Workbench stories, then a window-design skill. Nothing built yet.
+> Status (2026-10-09): **in progress**, branch `window-design`. Built: the token system (`packages/ui/tokens/*.tokens.json`, DTCG 2025.10 with a resolver for light themes and reduced motion; `pnpm tokens` generates `tokens.css` and `tokens.gen.ts`; a test keeps them current and checks every variable the kit's CSS reads); draft window pieces in the kit (`frame.tsx`, `chart.tsx`: View, Split, List, Panes, Stat, Chart, Text…); five reference windows as Workbench stories (`renderer/src/reference/`: data, chart, media, content, actions); scrollbars that float over the app's own windows. Next: promote the draft pieces, the window-design skill, an audit command, Magic's kit from the same tokens, migrating the built-in windows.
 
 cmd has a kit (`@cmd/ui`) with good colour discipline and solid controls, but the windows built from it don't share a layout language: each picks its own paddings, bar heights, row heights and empty states. And there are two kits: the app's `@cmd/ui` and Magic's `kit.css`, which has the better layout vocabulary and a written guide, but different token names. Soon AI will build windows with the kit too, so the patterns have to be easy to follow and hard to get wrong.
 

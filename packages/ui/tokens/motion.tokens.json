@@ -1,0 +1,62 @@
+{
+  "ease": {
+    "$root": {
+      "$description": "(motion.ts MOTION has the same values; a test keeps them equal) exit: something leaving, and quick pops in. change: a state changing (a ring, a size). slow: an indicator (a progress, a dot). glide: something moving (below).",
+      "$type": "cubicBezier",
+      "$value": [
+        0.2,
+        0.8,
+        0.2,
+        1.0
+      ]
+    },
+    "exit": {
+      "$type": "cubicBezier",
+      "$value": [
+        0.4,
+        0.0,
+        1.0,
+        1.0
+      ]
+    }
+  },
+  "dur": {
+    "fast": {
+      "$type": "duration",
+      "$value": {
+        "value": 120,
+        "unit": "ms"
+      }
+    },
+    "$root": {
+      "$type": "duration",
+      "$value": {
+        "value": 150,
+        "unit": "ms"
+      }
+    },
+    "slow": {
+      "$type": "duration",
+      "$value": {
+        "value": 240,
+        "unit": "ms"
+      }
+    }
+  },
+  "glide": {
+    "$root": {
+      "$description": "Moving a window or a view: a critically damped spring (no bounce) sampled for CSS, the curve the app's TileMotion runs in JS (apps/desktop motion.ts, GLIDE_MS).",
+      "$value": "linear(0 0%, 0.0016 0.6%, 0.0134 1.9%, 0.0442 3.6%, 0.0979 5.7%, 0.1735 8.1%, 0.2659 10.9%, 0.368 13.9%, 0.4724 17.2%, 0.5724 20.8%, 0.6633 24.6%, 0.742 28.7%, 0.8075 33%, 0.86 37.5%, 0.9006 42.2%, 0.9311 47.1%, 0.9533 52.3%, 0.969 57.6%, 0.9799 63.1%, 0.9872 68.8%, 0.992 74.7%, 0.9951 80.8%, 0.9971 87%, 0.9983 93.4%, 1 100%)",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    },
+    "dur": {
+      "$type": "duration",
+      "$value": {
+        "value": 382,
+        "unit": "ms"
+      }
+    }
+  }
+}

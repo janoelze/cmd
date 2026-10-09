@@ -1,0 +1,607 @@
+{
+  "$description": "Set by the active theme at runtime (themes/registry.ts themeVars), not by tokens.css. Values here are the built-in Dark theme's, for reference. Everything else derives from these.",
+  "bg": {
+    "$root": {
+      "$description": "The board and toolbars.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.1176,
+          0.1176,
+          0.1176
+        ],
+        "hex": "#1e1e1e"
+      },
+      "$extensions": {
+        "org.cmd.theme": "colors.bg"
+      }
+    },
+    "sidebar": {
+      "$description": "Sidebars and title bars.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.1451,
+          0.1451,
+          0.1529
+        ],
+        "hex": "#252527"
+      },
+      "$extensions": {
+        "org.cmd.theme": "colors.bgSidebar"
+      }
+    },
+    "elevated": {
+      "$description": "The palette, popovers, menus.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.1647,
+          0.1647,
+          0.1725
+        ],
+        "hex": "#2a2a2c"
+      },
+      "$extensions": {
+        "org.cmd.theme": "colors.bgElevated"
+      }
+    }
+  },
+  "well": {
+    "$description": "Window content: terminals, editors, lists, tables. A window's body.",
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        0.0863,
+        0.0863,
+        0.0941
+      ],
+      "hex": "#161618"
+    },
+    "$extensions": {
+      "org.cmd.theme": "colors.well"
+    }
+  },
+  "text": {
+    "$root": {
+      "$description": "Primary text.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.9255,
+          0.9255,
+          0.9255
+        ],
+        "hex": "#ececec"
+      },
+      "$extensions": {
+        "org.cmd.theme": "colors.text"
+      }
+    },
+    "dim": {
+      "$description": "Secondary text: descriptions, labels, values that support the main one.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.5569,
+          0.5569,
+          0.5765
+        ],
+        "hex": "#8e8e93"
+      },
+      "$extensions": {
+        "org.cmd.theme": "colors.textDim"
+      }
+    }
+  },
+  "icon": {
+    "$description": "Icons at rest.",
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        0.7059,
+        0.7059,
+        0.7255
+      ],
+      "hex": "#b4b4b9"
+    },
+    "$extensions": {
+      "org.cmd.theme": "colors.icon"
+    }
+  },
+  "accent": {
+    "$description": "The one highlight colour: the selected window, the primary button, focus.",
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        0.0392,
+        0.5176,
+        1.0
+      ],
+      "hex": "#0a84ff"
+    },
+    "$extensions": {
+      "org.cmd.theme": "colors.accent"
+    }
+  },
+  "link": {
+    "$description": "Links and folders.",
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        0.3686,
+        0.6588,
+        1.0
+      ],
+      "hex": "#5ea8ff"
+    },
+    "$extensions": {
+      "org.cmd.theme": "colors.link"
+    }
+  },
+  "match": {
+    "$description": "Search matches (used translucent).",
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        1.0,
+        0.8392,
+        0.0392
+      ],
+      "hex": "#ffd60a"
+    },
+    "$extensions": {
+      "org.cmd.theme": "colors.match"
+    }
+  },
+  "ink": {
+    "$description": "What hover, selection, separators and outlines are mixed from: white on dark themes, black on light ones.",
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "hex": "#ffffff"
+    },
+    "$extensions": {
+      "org.cmd.theme": "colors.ink"
+    }
+  },
+  "scrim": {
+    "$description": "Dimming overlays and recessed areas: usually black.",
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hex": "#000000"
+    },
+    "$extensions": {
+      "org.cmd.theme": "colors.scrim"
+    }
+  },
+  "state": {
+    "needs": {
+      "$description": "An agent or task needs you (amber).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1.0,
+          0.6235,
+          0.0392
+        ],
+        "hex": "#ff9f0a"
+      },
+      "$extensions": {
+        "org.cmd.theme": "colors.stateNeeds"
+      }
+    },
+    "done": {
+      "$description": "Done, good, passing (green).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.1882,
+          0.8196,
+          0.3451
+        ],
+        "hex": "#30d158"
+      },
+      "$extensions": {
+        "org.cmd.theme": "colors.stateDone"
+      }
+    },
+    "working": {
+      "$description": "Working, running (blue).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.0392,
+          0.5176,
+          1.0
+        ],
+        "hex": "#0a84ff"
+      },
+      "$extensions": {
+        "org.cmd.theme": "colors.stateWorking"
+      }
+    },
+    "idle": {
+      "$description": "Idle, off (grey).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.3882,
+          0.3882,
+          0.4
+        ],
+        "hex": "#636366"
+      },
+      "$extensions": {
+        "org.cmd.theme": "colors.stateIdle"
+      }
+    }
+  },
+  "syn": {
+    "keyword": {
+      "$description": "Editor and Markdown syntax: keyword (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.8784,
+          0.549,
+          1.0
+        ],
+        "hex": "#e08cff"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.keyword"
+      }
+    },
+    "string": {
+      "$description": "Editor and Markdown syntax: string (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.4824,
+          0.8471,
+          0.5608
+        ],
+        "hex": "#7bd88f"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.string"
+      }
+    },
+    "number": {
+      "$description": "Editor and Markdown syntax: number (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1.0,
+          0.8471,
+          0.4
+        ],
+        "hex": "#ffd866"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.number"
+      }
+    },
+    "comment": {
+      "$description": "Editor and Markdown syntax: comment (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.4235,
+          0.4235,
+          0.4706
+        ],
+        "hex": "#6c6c78"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.comment"
+      }
+    },
+    "function": {
+      "$description": "Editor and Markdown syntax: function (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.5608,
+          0.5608,
+          1.0
+        ],
+        "hex": "#8f8fff"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.function"
+      }
+    },
+    "type": {
+      "$description": "Editor and Markdown syntax: type (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.4353,
+          0.8784,
+          0.9098
+        ],
+        "hex": "#6fe0e8"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.type"
+      }
+    },
+    "property": {
+      "$description": "Editor and Markdown syntax: property (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.6902,
+          0.6902,
+          1.0
+        ],
+        "hex": "#b0b0ff"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.property"
+      }
+    },
+    "heading": {
+      "$description": "Editor and Markdown syntax: heading (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.9255,
+          0.9255,
+          0.9255
+        ],
+        "hex": "#ececec"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.heading"
+      }
+    },
+    "punct": {
+      "$description": "Editor and Markdown syntax: punct (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.6039,
+          0.6039,
+          0.651
+        ],
+        "hex": "#9a9aa6"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.punct"
+      }
+    },
+    "cursor": {
+      "$description": "Editor and Markdown syntax: cursor (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.6157,
+          0.6157,
+          1.0
+        ],
+        "hex": "#9d9dff"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.cursor"
+      }
+    },
+    "selection": {
+      "$description": "Editor and Markdown syntax: selection (the theme's, else from its terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.2275,
+          0.2275,
+          0.4314
+        ],
+        "hex": "#3a3a6e"
+      },
+      "$extensions": {
+        "org.cmd.theme": "syntax.selection"
+      }
+    }
+  },
+  "git": {
+    "added": {
+      "$description": "A file that is added in git (from the terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.4824,
+          0.8471,
+          0.5608
+        ],
+        "hex": "#7bd88f"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal (git added)"
+      }
+    },
+    "modified": {
+      "$description": "A file that is modified in git (from the terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1.0,
+          0.8471,
+          0.4
+        ],
+        "hex": "#ffd866"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal (git modified)"
+      }
+    },
+    "deleted": {
+      "$description": "A file that is deleted in git (from the terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1.0,
+          0.4196,
+          0.3686
+        ],
+        "hex": "#ff6b5e"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal (git deleted)"
+      }
+    },
+    "conflict": {
+      "$description": "A file that is conflict in git (from the terminal colours).",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.8784,
+          0.549,
+          1.0
+        ],
+        "hex": "#e08cff"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal (git conflict)"
+      }
+    }
+  },
+  "chart": {
+    "1": {
+      "$description": "Chart series 1, used in order (Chart, Sparkline). The terminal's blue, as Magic's --c1.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.5608,
+          0.5608,
+          1.0
+        ],
+        "hex": "#8f8fff"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal.blue"
+      }
+    },
+    "2": {
+      "$description": "Chart series 2, used in order (Chart, Sparkline). The terminal's green, as Magic's --c2.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.4824,
+          0.8471,
+          0.5608
+        ],
+        "hex": "#7bd88f"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal.green"
+      }
+    },
+    "3": {
+      "$description": "Chart series 3, used in order (Chart, Sparkline). The terminal's yellow, as Magic's --c3.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1.0,
+          0.8471,
+          0.4
+        ],
+        "hex": "#ffd866"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal.yellow"
+      }
+    },
+    "4": {
+      "$description": "Chart series 4, used in order (Chart, Sparkline). The terminal's magenta, as Magic's --c4.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.8784,
+          0.549,
+          1.0
+        ],
+        "hex": "#e08cff"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal.magenta"
+      }
+    },
+    "5": {
+      "$description": "Chart series 5, used in order (Chart, Sparkline). The terminal's cyan, as Magic's --c5.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.4353,
+          0.8784,
+          0.9098
+        ],
+        "hex": "#6fe0e8"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal.cyan"
+      }
+    },
+    "6": {
+      "$description": "Chart series 6, used in order (Chart, Sparkline). The terminal's red, as Magic's --c6.",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1.0,
+          0.4196,
+          0.3686
+        ],
+        "hex": "#ff6b5e"
+      },
+      "$extensions": {
+        "org.cmd.theme": "terminal.red"
+      }
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "space": {
+    "2xs": {
+      "$description": "2px: a value and its unit, a label and its value in a Stat.",
+      "$type": "dimension",
+      "$value": {
+        "value": 2,
+        "unit": "px"
+      }
+    },
+    "xs": {
+      "$description": "4px: lines in a group (a title and its detail); a list's padding above and below.",
+      "$type": "dimension",
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      }
+    },
+    "sm": {
+      "$description": "6px: items in a row (an icon and its label, a dot and its word).",
+      "$type": "dimension",
+      "$value": {
+        "value": 6,
+        "unit": "px"
+      }
+    },
+    "md": {
+      "$description": "8px: an icon and a row's text; controls side by side; the default Stack gap.",
+      "$type": "dimension",
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "lg": {
+      "$description": "12px: the window inset (--inset); between groups of a toolbar or status line.",
+      "$type": "dimension",
+      "$value": {
+        "value": 12,
+        "unit": "px"
+      }
+    },
+    "xl": {
+      "$description": "16px: between sections of a list or inspector; between columns of a table (2 × 8).",
+      "$type": "dimension",
+      "$value": {
+        "value": 16,
+        "unit": "px"
+      }
+    },
+    "2xl": {
+      "$description": "24px: between a dashboard's panes; above a document's column.",
+      "$type": "dimension",
+      "$value": {
+        "value": 24,
+        "unit": "px"
+      }
+    },
+    "3xl": {
+      "$description": "32px: below a document's column. Rarely anything else.",
+      "$type": "dimension",
+      "$value": {
+        "value": 32,
+        "unit": "px"
+      }
+    }
+  },
+  "inset": {
+    "$description": "A window's content inset, on every side, measured to the letters: a padded body, the first and last table column, list rows' content, footer text. One value for every window.",
+    "$value": "{space.lg}"
+  },
+  "measure": {
+    "$description": "Reading width for prose: a document's column (Measure).",
+    "$value": "68ch",
+    "$extensions": {
+      "org.cmd.css": true
+    }
+  }
+}

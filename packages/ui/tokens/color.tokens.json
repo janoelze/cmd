@@ -1,0 +1,382 @@
+{
+  "text": {
+    "faint": {
+      "$description": "Fainter than --text-dim: what a window's footer says (counts, when it updated).",
+      "$type": "color",
+      "$value": "{text.dim}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.7,
+          "with": "transparent"
+        }
+      }
+    }
+  },
+  "bg": {
+    "hover": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.06,
+          "with": "transparent"
+        }
+      }
+    },
+    "selected": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.1,
+          "with": "transparent"
+        }
+      }
+    }
+  },
+  "separator": {
+    "$type": "color",
+    "$value": "{ink}",
+    "$extensions": {
+      "org.cmd.mix": {
+        "space": "srgb",
+        "amount": 0.09,
+        "with": "transparent"
+      }
+    }
+  },
+  "on": {
+    "accent": {
+      "$description": "text on an accent background",
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1,
+          1,
+          1
+        ],
+        "hex": "#ffffff"
+      }
+    }
+  },
+  "folder": {
+    "$value": "{link}"
+  },
+  "shadow": {
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "alpha": 0.5
+    }
+  },
+  "field": {
+    "$root": {
+      "$description": "Recessed fields (settings window) and project chips (lightness for hsl(var(--hue) …)).",
+      "$type": "color",
+      "$value": "{scrim}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.28,
+          "with": "transparent"
+        }
+      }
+    },
+    "bg": {
+      "$value": "{well}"
+    },
+    "edge": {
+      "$description": "Text fields' edge: stronger than a button's, since the well is darker than the surface around it. Opaque (mixed over the field's own fill, which every theme sets as a solid colour), so where two edges meet, as in a joined SecretField, they don't add up darker.",
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.24,
+          "with": "{field.bg}"
+        }
+      }
+    }
+  },
+  "pane": {
+    "edge": {
+      "$description": "Dividers between a window's panes (the Settings window's sidebar and bar).",
+      "$type": "color",
+      "$value": "{scrim}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.5,
+          "with": "transparent"
+        }
+      }
+    }
+  },
+  "recess": {
+    "$root": {
+      "$description": "Recessed areas: unassigned grid cells.",
+      "$type": "color",
+      "$value": "{scrim}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.22,
+          "with": "transparent"
+        }
+      }
+    },
+    "edge": {
+      "$type": "color",
+      "$value": "{scrim}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.35,
+          "with": "transparent"
+        }
+      }
+    }
+  },
+  "chip": {
+    "fg": {
+      "$value": "70% 78%",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    },
+    "bg": {
+      "$value": "30% 22% / 0.8",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    }
+  },
+  "avatar": {
+    "$description": "Avatars (the Widget Library's cards): saturation and lightness of a full-colour tile, with hsl(var(--hue) …).",
+    "$value": "58% 52%",
+    "$extensions": {
+      "org.cmd.css": true
+    }
+  },
+  "group": {
+    "bg": {
+      "$description": "Grouped lists (a Settings section): a faint fill and hairline.",
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.035,
+          "with": "transparent"
+        }
+      }
+    },
+    "edge": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.06,
+          "with": "transparent"
+        }
+      }
+    }
+  },
+  "popover": {
+    "bg": {
+      "$description": "Floating surfaces: menus, popovers, dialogs, tooltips.",
+      "$value": "{bg.elevated}"
+    },
+    "edge": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.12,
+          "with": "transparent"
+        }
+      }
+    },
+    "shadow": {
+      "$value": "0 10px 30px var(--shadow)",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    }
+  },
+  "code": {
+    "bg": {
+      "$description": "Code and output blocks.",
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.05,
+          "with": "transparent"
+        }
+      }
+    }
+  },
+  "danger": {
+    "$value": "var(--git-deleted, #ff453a)",
+    "$extensions": {
+      "org.cmd.css": true
+    }
+  },
+  "warning": {
+    "$value": "{state.needs}"
+  },
+  "success": {
+    "$value": "{state.done}"
+  },
+  "info": {
+    "$value": "{accent}"
+  },
+  "input": {
+    "bg": {
+      "$description": "Text inputs, system style: a faint fill and hairline edge; on focus the edge takes some accent and a soft halo surrounds it, rather than a hard accent line.",
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.05,
+          "with": "transparent"
+        }
+      }
+    },
+    "edge": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.1,
+          "with": "transparent"
+        }
+      }
+    },
+    "focus": {
+      "edge": {
+        "$description": "opaque, like the field edge it replaces",
+        "$type": "color",
+        "$value": "{accent}",
+        "$extensions": {
+          "org.cmd.mix": {
+            "space": "srgb",
+            "amount": 0.5,
+            "with": "{field.edge}"
+          }
+        }
+      }
+    },
+    "glow": {
+      "$type": "color",
+      "$value": "{accent}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.2,
+          "with": "transparent"
+        }
+      }
+    },
+    "ring": {
+      "$value": "inset 0 0 0 1px var(--input-focus-edge), 0 0 0 3px var(--input-glow)",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    },
+    "placeholder": {
+      "$value": "{text.dim}"
+    }
+  },
+  "control": {
+    "bg": {
+      "$description": "Buttons, popups, segmented controls share a fill; text fields sit in the well.",
+      "$value": "{input.bg}"
+    },
+    "edge": {
+      "$value": "{input.edge}"
+    },
+    "hover": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.1,
+          "with": "transparent"
+        }
+      }
+    },
+    "active": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.14,
+          "with": "transparent"
+        }
+      }
+    },
+    "thumb": {
+      "$root": {
+        "$description": "The chosen segment: a lift over the track, so it shows on any surface (a window, a dialog).",
+        "$type": "color",
+        "$value": "{ink}",
+        "$extensions": {
+          "org.cmd.mix": {
+            "space": "srgb",
+            "amount": 0.16,
+            "with": "transparent"
+          }
+        }
+      },
+      "shadow": {
+        "$value": "0 1px 2px rgb(0 0 0 / 0.22), inset 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent)",
+        "$extensions": {
+          "org.cmd.css": true
+        }
+      }
+    }
+  },
+  "switch": {
+    "off": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.16,
+          "with": "transparent"
+        }
+      }
+    }
+  },
+  "knob": {
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        1,
+        1,
+        1
+      ],
+      "hex": "#ffffff"
+    }
+  }
+}

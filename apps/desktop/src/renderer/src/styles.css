@@ -20,7 +20,6 @@
   --gutter: 8px; /* between windows */
   --pad-x: 8px; /* to the left and right edges */
   --pad-y: 8px; /* to the top and bottom edges */
-  --window-dim: 1; /* theme factor on ui.unfocusedDim (darkening of unfocused windows) */
 }
 /* Outside macOS the window has its own frame: no traffic-light area to keep free. */
 .platform-other { --titlebar-h: 28px; --topbar-h: 36px; }

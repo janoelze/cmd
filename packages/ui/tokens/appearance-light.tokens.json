@@ -1,0 +1,99 @@
+{
+  "$description": "What light themes override (LIGHT_VARS): the derived values above are tuned for dark. A theme's own vars still win.",
+  "shadow": {
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "alpha": 0.18
+    }
+  },
+  "field": {
+    "$value": "{well}"
+  },
+  "recess": {
+    "$root": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.035,
+          "with": "transparent"
+        }
+      }
+    },
+    "edge": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.08,
+          "with": "transparent"
+        }
+      }
+    }
+  },
+  "pane": {
+    "edge": {
+      "$type": "color",
+      "$value": "{ink}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "srgb",
+          "amount": 0.1,
+          "with": "transparent"
+        }
+      }
+    }
+  },
+  "chip": {
+    "fg": {
+      "$value": "55% 38%",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    },
+    "bg": {
+      "$value": "60% 92%",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    }
+  },
+  "avatar": {
+    "$value": "62% 56%",
+    "$extensions": {
+      "org.cmd.css": true
+    }
+  },
+  "control": {
+    "thumb": {
+      "$root": {
+        "$description": "The chosen segment is raised and white, as in macOS; towards white, so it stands off tinted tracks too (Solarized, Gruvbox, Latte).",
+        "$value": "color-mix(in srgb, #fff 65%, var(--bg-elevated))",
+        "$extensions": {
+          "org.cmd.css": true
+        }
+      },
+      "shadow": {
+        "$value": "0 1px 2px rgb(0 0 0 / 0.16), 0 0 0 0.5px rgb(0 0 0 / 0.14)",
+        "$extensions": {
+          "org.cmd.css": true
+        }
+      }
+    }
+  },
+  "window": {
+    "dim": {
+      "$description": "Light windows need far less darkening to read as unfocused.",
+      "$type": "number",
+      "$value": 0.25
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "$description": "prefers-reduced-motion: nothing animates its timing.",
+  "dur": {
+    "fast": {
+      "$type": "duration",
+      "$value": {
+        "value": 0,
+        "unit": "ms"
+      }
+    },
+    "$root": {
+      "$type": "duration",
+      "$value": {
+        "value": 0,
+        "unit": "ms"
+      }
+    },
+    "slow": {
+      "$type": "duration",
+      "$value": {
+        "value": 0,
+        "unit": "ms"
+      }
+    }
+  },
+  "glide": {
+    "dur": {
+      "$type": "duration",
+      "$value": {
+        "value": 0,
+        "unit": "ms"
+      }
+    }
+  }
+}

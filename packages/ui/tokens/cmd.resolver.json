@@ -1,0 +1,70 @@
+{
+  "name": "cmd",
+  "version": "2025-10-01",
+  "description": "cmd's design tokens (DTCG 2025.10). The base set, then a light appearance (light themes) and reduced motion. pnpm tokens builds packages/ui/src/tokens.css and tokens.gen.ts from them.",
+  "sets": {
+    "base": {
+      "description": "Everything, tuned for dark themes. theme.tokens.json documents what each theme sets at runtime.",
+      "sources": [
+        {
+          "$ref": "theme.tokens.json"
+        },
+        {
+          "$ref": "type.tokens.json"
+        },
+        {
+          "$ref": "space.tokens.json"
+        },
+        {
+          "$ref": "size.tokens.json"
+        },
+        {
+          "$ref": "color.tokens.json"
+        },
+        {
+          "$ref": "window.tokens.json"
+        },
+        {
+          "$ref": "motion.tokens.json"
+        }
+      ]
+    }
+  },
+  "modifiers": {
+    "appearance": {
+      "description": "The active theme's appearance; applied at runtime (themeVars).",
+      "contexts": {
+        "dark": [],
+        "light": [
+          {
+            "$ref": "appearance-light.tokens.json"
+          }
+        ]
+      },
+      "default": "dark"
+    },
+    "motion": {
+      "description": "prefers-reduced-motion; emitted as a media query.",
+      "contexts": {
+        "full": [],
+        "reduced": [
+          {
+            "$ref": "motion-reduced.tokens.json"
+          }
+        ]
+      },
+      "default": "full"
+    }
+  },
+  "resolutionOrder": [
+    {
+      "$ref": "#/sets/base"
+    },
+    {
+      "$ref": "#/modifiers/appearance"
+    },
+    {
+      "$ref": "#/modifiers/motion"
+    }
+  ]
+}

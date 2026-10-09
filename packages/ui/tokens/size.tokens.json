@@ -1,0 +1,123 @@
+{
+  "control": {
+    "h": {
+      "sm": {
+        "$description": "Small controls: buttons in a row, inline actions.",
+        "$type": "dimension",
+        "$value": {
+          "value": 20,
+          "unit": "px"
+        }
+      },
+      "$root": {
+        "$description": "Controls: buttons, fields, popups. Every control in a row shares one height, so they line up.",
+        "$type": "dimension",
+        "$value": {
+          "value": 24,
+          "unit": "px"
+        }
+      },
+      "lg": {
+        "$description": "Large controls: a sheet's primary action.",
+        "$type": "dimension",
+        "$value": {
+          "value": 28,
+          "unit": "px"
+        }
+      }
+    }
+  },
+  "disabled": {
+    "opacity": {
+      "$description": "A disabled control.",
+      "$type": "number",
+      "$value": 0.4
+    }
+  },
+  "row": {
+    "h": {
+      "sm": {
+        "$description": "Compact rows: dense trees.",
+        "$type": "dimension",
+        "$value": {
+          "value": 22,
+          "unit": "px"
+        }
+      },
+      "$root": {
+        "$description": "Table rows (DataGrid) and one-line list rows.",
+        "$type": "dimension",
+        "$value": {
+          "value": 24,
+          "unit": "px"
+        }
+      },
+      "lg": {
+        "$description": "Sidebar rows.",
+        "$type": "dimension",
+        "$value": {
+          "value": 28,
+          "unit": "px"
+        }
+      }
+    }
+  },
+  "radius": {
+    "xs": {
+      "$description": "Inner shapes: a filmstrip thumbnail, an image on a stage.",
+      "$type": "dimension",
+      "$value": {
+        "value": 3,
+        "unit": "px"
+      }
+    },
+    "sm": {
+      "$description": "Small controls inside others: a toolbar item, a chip.",
+      "$type": "dimension",
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      }
+    },
+    "$root": {
+      "$description": "Controls and rows (hover pills). Inner shapes in padding are concentric: radius − padding.",
+      "$type": "dimension",
+      "$value": {
+        "value": 6,
+        "unit": "px"
+      }
+    },
+    "md": {
+      "$description": "Cards, callouts, group boxes.",
+      "$type": "dimension",
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "lg": {
+      "$description": "Menus, popovers.",
+      "$type": "dimension",
+      "$value": {
+        "value": 10,
+        "unit": "px"
+      }
+    },
+    "xl": {
+      "$description": "Dialogs, the palette.",
+      "$type": "dimension",
+      "$value": {
+        "value": 12,
+        "unit": "px"
+      }
+    },
+    "pill": {
+      "$description": "Badges, pills.",
+      "$type": "dimension",
+      "$value": {
+        "value": 999,
+        "unit": "px"
+      }
+    }
+  }
+}

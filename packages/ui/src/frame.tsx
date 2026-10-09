@@ -11,11 +11,12 @@
 import { useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { Spinner, type Tone } from "./status.tsx";
+import type { SpaceName, TextSize } from "./tokens.gen.ts";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
-/** The spacing scale (tokens.css --space-*). */
-export type Space = "none" | "2xs" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
+/** The spacing scale (--space-*, tokens/space.tokens.json), or none. */
+export type Space = "none" | SpaceName;
 const sp = (s: Space | undefined) => (s === undefined ? undefined : s === "none" ? "0" : `var(--space-${s})`);
 
 type Align = "start" | "center" | "end" | "stretch" | "baseline";
@@ -209,7 +210,7 @@ export function Filmstrip({ items, selected, onSelect }: { items: readonly { key
 }
 
 /** Text in one of the kit's roles: `dim` for secondary, `mono` for values and IDs, `strong` for a name; `truncate` cuts one line with an ellipsis. */
-export function Text({ tone, size, mono, strong, truncate, children }: { tone?: "dim" | Tone; size?: "xs" | "sm" | "md" | "base" | "lg" | "xl"; mono?: boolean; strong?: boolean; truncate?: boolean; children: ReactNode }) {
+export function Text({ tone, size, mono, strong, truncate, children }: { tone?: "dim" | Tone; size?: TextSize; mono?: boolean; strong?: boolean; truncate?: boolean; children: ReactNode }) {
   return (
     <span className="ui-text" data-tone={tone} data-size={size} data-mono={mono || undefined} data-strong={strong || undefined} data-truncate={truncate || undefined}>
       {children}

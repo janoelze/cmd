@@ -1,0 +1,11 @@
+/* The few rules every page of the kit needs that aren't tokens (tokens.css is generated). */
+
+* { box-sizing: border-box; }
+
+/* Every input's placeholder, so no field falls back to the browser's grey. */
+::placeholder { color: var(--input-placeholder); opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Nothing loops or scrolls smoothly: spinners and pulses run once, scrolls jump. (Durations: tokens.css.) */
+  *, ::before, ::after { animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}

@@ -1,0 +1,90 @@
+{
+  "font": {
+    "ui": {
+      "$description": "Labels, controls, sentences.",
+      "$type": "fontFamily",
+      "$value": [
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "SF Pro Text",
+        "system-ui",
+        "sans-serif"
+      ]
+    },
+    "mono": {
+      "$description": "Values, numbers, IDs, paths, commands, code: anything that is data rather than a label.",
+      "$type": "fontFamily",
+      "$value": [
+        "SF Mono",
+        "Menlo",
+        "monospace"
+      ]
+    }
+  },
+  "text": {
+    "2xs": {
+      "$description": "Chart ticks and the smallest notes. Never for something you read.",
+      "$type": "dimension",
+      "$value": {
+        "value": 10,
+        "unit": "px"
+      }
+    },
+    "xs": {
+      "$description": "Section headings (caps), badges.",
+      "$type": "dimension",
+      "$value": {
+        "value": 10.5,
+        "unit": "px"
+      }
+    },
+    "sm": {
+      "$description": "Descriptions, a row's second line, footers and status lines.",
+      "$type": "dimension",
+      "$value": {
+        "value": 11.5,
+        "unit": "px"
+      }
+    },
+    "md": {
+      "$description": "Controls, list rows, tables: the default in windows.",
+      "$type": "dimension",
+      "$value": {
+        "value": 12.5,
+        "unit": "px"
+      }
+    },
+    "base": {
+      "$description": "Body copy: prose, a dialog's text.",
+      "$type": "dimension",
+      "$value": {
+        "value": 13,
+        "unit": "px"
+      }
+    },
+    "lg": {
+      "$description": "A metric's value (Stat); an empty state's title.",
+      "$type": "dimension",
+      "$value": {
+        "value": 15,
+        "unit": "px"
+      }
+    },
+    "xl": {
+      "$description": "A document's title. At most one per window.",
+      "$type": "dimension",
+      "$value": {
+        "value": 17,
+        "unit": "px"
+      }
+    },
+    "display": {
+      "$description": "A sheet's greeting (SheetHeader), once per screen.",
+      "$type": "dimension",
+      "$value": {
+        "value": 20,
+        "unit": "px"
+      }
+    }
+  }
+}

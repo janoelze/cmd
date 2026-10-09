@@ -6,6 +6,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { SyntaxColors, TerminalColors, Theme } from "./types.ts";
+import { LIGHT_VARS } from "../tokens.gen.ts";
 
 const themes = new Map<string, Theme>();
 
@@ -46,29 +47,6 @@ function syntaxColors(t: Theme): SyntaxColors {
     ...t.syntax,
   };
 }
-
-const ink = (pct: number) => `color-mix(in srgb, var(--ink) ${pct}%, transparent)`;
-
-/**
- * What every light theme overrides in styles.css (whose derived values are tuned
- * for dark); a theme's own `vars` still win.
- */
-const LIGHT_VARS: Readonly<Record<string, string>> = {
-  // Light windows need far less darkening to read as unfocused.
-  "window-dim": "0.25",
-  "shadow": "rgb(0 0 0 / 0.18)",
-  "field": "var(--well)",
-  "recess": ink(3.5),
-  "recess-edge": ink(8),
-  "pane-edge": ink(10),
-  "chip-fg": "55% 38%",
-  "chip-bg": "60% 92%",
-  "avatar": "62% 56%",
-  // The chosen segment is raised and white, as in macOS.
-  // Towards white, so the chosen segment stands off tinted tracks too (Solarized, Gruvbox, Latte).
-  "control-thumb": "color-mix(in srgb, #fff 65%, var(--bg-elevated))",
-  "control-thumb-shadow": "0 1px 2px rgb(0 0 0 / 0.16), 0 0 0 0.5px rgb(0 0 0 / 0.14)",
-};
 
 /** Every CSS custom property a theme sets, name → value. */
 export function themeVars(t: Theme): Record<string, string> {

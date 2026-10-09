@@ -1,0 +1,137 @@
+{
+  "footer": {
+    "h": {
+      "$description": "A window's footer bar (View footer): one line of status in --text-faint, the same top line as the toolbar's (--window-edge).",
+      "$type": "dimension",
+      "$value": {
+        "value": 26,
+        "unit": "px"
+      }
+    }
+  },
+  "window": {
+    "radius": {
+      "$description": "Windows (window.tsx) and sheets (Dialog): rounded corners and crisp whole-pixel outlines, the selected one in the highlight with a soft glow, and an elevation shadow. An app maps these to its own settings (cmd: the ui.window* settings, look.ts): --window-radius, --window-outline, --window-edge-mix (the outline's contrast), --window-elevation, --focus-outline, --focus-glow (1 = the default halo). What's built from them is declared again on .ui-window, where an app's per-mode values resolve.",
+      "$type": "dimension",
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "outline": {
+      "$type": "dimension",
+      "$value": {
+        "value": 1,
+        "unit": "px"
+      }
+    },
+    "elevation": {
+      "$type": "number",
+      "$value": 0.5
+    },
+    "edge": {
+      "$description": "The outline and the line under the title bar: one opaque colour (the separator over the title bar), so both look the same over any background.",
+      "$value": "color-mix(in srgb, var(--ink) var(--window-edge-mix, 9%), var(--bg-sidebar))",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    },
+    "highlight": {
+      "$value": "{accent}"
+    },
+    "bg": {
+      "$value": "{well}"
+    },
+    "bar": {
+      "h": {
+        "$description": "The title bar.",
+        "$type": "dimension",
+        "$value": {
+          "value": 26,
+          "unit": "px"
+        }
+      },
+      "bg": {
+        "$value": "{bg.sidebar}"
+      }
+    },
+    "dim": {
+      "$description": "How much this theme darkens unfocused windows: a factor on the ui.unfocusedDim setting.",
+      "$type": "number",
+      "$value": 1
+    }
+  },
+  "focus": {
+    "outline": {
+      "$type": "dimension",
+      "$value": {
+        "value": 1,
+        "unit": "px"
+      }
+    },
+    "glow": {
+      "$type": "number",
+      "$value": 1
+    }
+  },
+  "toolbar": {
+    "h": {
+      "$description": "The window toolbar (WindowToolbar), with its 1px line. A row that holds controls is a toolbar, not part of the body.",
+      "$type": "dimension",
+      "$value": {
+        "value": 31,
+        "unit": "px"
+      }
+    },
+    "item": {
+      "h": {
+        "$description": "Items in the window toolbar.",
+        "$type": "dimension",
+        "$value": {
+          "value": 22,
+          "unit": "px"
+        }
+      }
+    },
+    "bg": {
+      "$value": "{bg.$root}"
+    }
+  },
+  "sheet": {
+    "radius": {
+      "$description": "Sheets look like windows: their corners, outline and the same shadow, higher (4× the windows' elevation, at most 6).",
+      "$value": "{window.radius}"
+    },
+    "edge": {
+      "width": {
+        "$value": "{window.outline}"
+      },
+      "$root": {
+        "$value": "{window.edge.$root}"
+      }
+    },
+    "elev": {
+      "$value": "min(6, calc(var(--window-elevation) * 4))",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    },
+    "sh": {
+      "$type": "color",
+      "$value": "{shadow}",
+      "$extensions": {
+        "org.cmd.mix": {
+          "space": "oklab",
+          "amount": 0.85,
+          "with": "{bg.$root}"
+        }
+      }
+    },
+    "shadow": {
+      "$value": "0 calc(0.5px * var(--sheet-elev)) calc(1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 36%, transparent), 0 calc(1px * var(--sheet-elev)) calc(2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 30%, transparent), 0 calc(2px * var(--sheet-elev)) calc(4px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 24%, transparent), 0 calc(4px * var(--sheet-elev)) calc(8px * var(--sheet-elev)) calc(-1px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 20%, transparent), 0 calc(8px * var(--sheet-elev)) calc(16px * var(--sheet-elev)) calc(-2px * var(--sheet-elev)) color-mix(in srgb, var(--sheet-sh) 16%, transparent)",
+      "$extensions": {
+        "org.cmd.css": true
+      }
+    }
+  }
+}

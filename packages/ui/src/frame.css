@@ -99,12 +99,14 @@
 .ui-text[data-tone="success"] { color: var(--success); }
 .ui-text[data-tone="warning"] { color: var(--warning); }
 .ui-text[data-tone="danger"] { color: var(--danger); }
+.ui-text[data-size="2xs"] { font-size: var(--text-2xs); }
 .ui-text[data-size="xs"] { font-size: var(--text-xs); }
 .ui-text[data-size="sm"] { font-size: var(--text-sm); }
 .ui-text[data-size="md"] { font-size: var(--text-md); }
 .ui-text[data-size="base"] { font-size: var(--text-base); }
 .ui-text[data-size="lg"] { font-size: var(--text-lg); }
 .ui-text[data-size="xl"] { font-size: var(--text-xl); }
+.ui-text[data-size="display"] { font-size: var(--text-display); }
 .ui-text[data-mono] { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .ui-text[data-strong] { font-weight: 600; }
 .ui-text[data-truncate] { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

@@ -17,6 +17,7 @@
     "web": "pnpm --filter @cmd/web dev",
     "ui": "pnpm --filter @cmd/ui gallery",
     "workbench": "node scripts/workbench.mjs",
+    "tokens": "node packages/ui/tokens/build.ts",
     "remote:device": "node --no-warnings packages/cli/src/remote-device.ts",
     "dev": "pnpm --filter @cmd/desktop dev",
     "test": "vitest run",
