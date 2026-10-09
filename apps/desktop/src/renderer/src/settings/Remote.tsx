@@ -106,7 +106,7 @@ export function Remote({ status, enabled, pair, row, config = "" }: { status: Re
           {ready ? (
             <PairCode status={status} onDone={devices.length ? () => setShowPair(false) : undefined} />
           ) : (
-            <div className="rm-card rm-wait">Finish the setup below to get a pairing code.</div>
+            <SetupWait />
           )}
         </FormSection>
       ) : null}
@@ -157,7 +157,7 @@ export function Remote({ status, enabled, pair, row, config = "" }: { status: Re
   );
 }
 
-type ChecksState = { checks: RemoteAccessCheck[] | null; error: string | null; busy: boolean; again: () => void };
+export type ChecksState = { checks: RemoteAccessCheck[] | null; error: string | null; busy: boolean; again: () => void };
 
 /**
  * The access mode's checklist, fetched when the page shows, the mode or its
@@ -187,8 +187,13 @@ function useChecks(access: string | null, state: RemoteStatus["state"] | undefin
   return { checks, error, busy, again: () => access && run("remote.setup", access) };
 }
 
-/** The setup checklist of a direct access mode (docs/38, "Experience"). */
-function Setup({ access, checks, error, busy, again }: { access: string } & ChecksState) {
+/** Where the pairing code goes while a direct mode isn't set up yet. */
+export function SetupWait() {
+  return <div className="rm-card rm-wait">Finish the setup below to get a pairing code.</div>;
+}
+
+/** The setup checklist of a direct access mode (docs/38, "Experience"); stories in Remote.story.tsx. */
+export function Setup({ access, checks, error, busy, again }: { access: string } & ChecksState) {
   return (
     <FormSection title={SETUP_TITLE[access] ?? "Setup"}>
       {error && !checks ? (
