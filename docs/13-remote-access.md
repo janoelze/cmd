@@ -188,7 +188,7 @@ Use **Noise**, not a home-made handshake. It is specified, has test vectors, and
 
 **Pairing (Phase 1):**
 1. On the Mac, Settings → Remote → "Pair a device" (or `cmd remote pair`) shows a QR code and a link:
-   `https://CLIENT/pair#v1.<relay URL>.<route id>.<host pubkey>.<psk>`, every field base64url (the relay URL too, since it contains dots). Everything after `#` stays in the browser, so no server logs, proxies or analytics ever see it.
+   `https://CLIENT/pair#v1.<socket URL>.<route id>.<host pubkey>.<psk>`, every field base64url (the socket URL too, since it contains dots). The socket is the relay, or the Mac itself in a direct mode (docs/38). Everything after `#` stays in the browser, so no server logs, proxies or analytics ever see it.
 2. The browser generates its device key and connects to `wss://RELAY/r/<route id>`. It sends Noise IKpsk1 message 1, which carries the device static key (encrypted) and a payload `{name: "Safari on iPhone", ua}`.
 3. The core checks the PSK and TTL and marks the PSK used. It then asks the person **on the Mac**: notification + sheet "Allow 'Safari on iPhone' to *view* / *control*? Fingerprint: four words".
    - The same four words show on the phone, so a QR that a second device grabbed is caught.

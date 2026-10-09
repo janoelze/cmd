@@ -1,6 +1,6 @@
-// The session with the Mac: a WebSocket to the relay, the Noise handshake
-// (@cmd/remote-crypto), then JSON-RPC over it with the same RpcClient the
-// desktop uses. Reconnects with backoff, and right away when the page comes back
+// The session with the Mac: a WebSocket to the relay or to the Mac itself, the
+// Noise handshake (@cmd/remote-crypto), then JSON-RPC over it with the same
+// RpcClient the desktop uses. Reconnects with backoff, and right away when the page comes back
 // (iOS freezes WebSockets in the background), then bootstraps again.
 
 import { RpcClient, type CoreEvent, type Result } from "@cmd/protocol";
@@ -75,7 +75,7 @@ export class Connection {
   async #connect(): Promise<void> {
     if (this.#closed || this.#ws) return;
     if (this.phase.kind !== "online" && this.phase.kind !== "offline") this.#set({ kind: "connecting" });
-    const { ws, opened, session } = open(this.#id.relay, this.#id.route, { hostKey: this.#id.hostKey, device: this.#id.device });
+    const { ws, opened, session } = open(this.#id.socket, this.#id.route, { hostKey: this.#id.hostKey, device: this.#id.device });
     this.#ws = ws;
     let established = false;
     ws.addEventListener("close", async (e) => {
@@ -104,16 +104,16 @@ export class Connection {
   }
 }
 
-/** A relay channel and a device session on it; the handshake starts once the socket is open. */
-function open(relay: string, route: string, o: { hostKey: Bytes; device: KeyPair; psk?: Bytes; onFingerprint?: (w: string[]) => void }) {
-  const ws = new WebSocket(`${relay.replace(/\/+$/, "")}/r/${route}`);
+/** A channel to the Mac (through the relay or straight to it) and a device session on it; the handshake starts once the socket is open. */
+function open(socket: string, route: string, o: { hostKey: Bytes; device: KeyPair; psk?: Bytes; onFingerprint?: (w: string[]) => void }) {
+  const ws = new WebSocket(`${socket.replace(/\/+$/, "")}/r/${route}`);
   ws.binaryType = "arraybuffer";
   const opened = new Promise<boolean>((resolve) => {
     ws.addEventListener("open", () => resolve(true), { once: true });
     ws.addEventListener("close", () => resolve(false), { once: true });
   });
   const session = opened.then((ok) => {
-    if (!ok) throw new Error("can't reach the relay");
+    if (!ok) throw new Error("can't reach the Mac");
     const d = openDeviceSession({
       socket: { send: (b) => ws.readyState === WebSocket.OPEN && ws.send(b), close: () => ws.close() },
       hostKey: o.hostKey,
@@ -138,12 +138,12 @@ function open(relay: string, route: string, o: { hostKey: Bytes; device: KeyPair
 export async function pair(fragment: string, onWords: (w: string[]) => void): Promise<Identity> {
   const link = decodePairing(fragment);
   const device = await generateKeyPair(false);
-  const { ws, session } = open(link.relay, link.route, { hostKey: link.hostKey, device, psk: link.psk, onFingerprint: onWords });
+  const { ws, session } = open(link.socket, link.route, { hostKey: link.hostKey, device, psk: link.psk, onFingerprint: onWords });
   const s = await session.catch(() => {
     throw new Error("The Mac didn't allow this browser, or the code expired. Make a new one on your Mac.");
   });
   ws.close();
-  const id: Identity = { device, hostKey: link.hostKey, relay: link.relay, route: link.route, deviceId: String(s.host.deviceId) };
+  const id: Identity = { device, hostKey: link.hostKey, socket: link.socket, route: link.route, deviceId: String(s.host.deviceId) };
   await saveIdentity(id);
   return id;
 }

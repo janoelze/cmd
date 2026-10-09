@@ -86,7 +86,7 @@ try {
   // The phone: a fresh link (the page's code is replaced, as a rotation would).
   const { url } = await win.evaluate(() => window.cmd.call("remote.pair", {}));
   const link = decodePairing(new URL(url).hash);
-  ws = new WebSocket(`${link.relay}/r/${link.route}`);
+  ws = new WebSocket(`${link.socket}/r/${link.route}`);
   ws.binaryType = "arraybuffer";
   await new Promise((r) => (ws.onopen = r));
   let words = [];

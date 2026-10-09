@@ -1,14 +1,16 @@
 // This browser's pairing with one Mac, kept in IndexedDB: the device's X25519
 // key as a non-extractable CryptoKey (script can use it, never read it), the
 // Mac's public key, and where to reach it. Nothing secret is ever in a URL
-// after pairing.
+// after pairing. Pairings saved before direct modes keep the socket as `relay`;
+// loading reads it as `socket`, so those phones stay paired.
 
 import type { KeyPair } from "@cmd/remote-crypto";
 
 export interface Identity {
   device: KeyPair;
   hostKey: Uint8Array<ArrayBuffer>;
-  relay: string;
+  /** The WebSocket base it dials (Pairing.socket): the relay, or the Mac's own address. */
+  socket: string;
   route: string;
   deviceId: string;
 }
@@ -35,7 +37,12 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
   });
 }
 
-export const loadIdentity = () => tx<Identity | undefined>("readonly", (s) => s.get(KEY));
+export const loadIdentity = () =>
+  tx<(Omit<Identity, "socket"> & { socket?: string; relay?: string }) | undefined>("readonly", (s) => s.get(KEY)).then((d): Identity | undefined => {
+    if (!d) return undefined;
+    const { relay, socket, ...rest } = d;
+    return { ...rest, socket: socket ?? relay ?? "" };
+  });
 export const saveIdentity = (id: Identity) => tx("readwrite", (s) => s.put(id, KEY)).then(() => {});
 export const forgetIdentity = () => tx("readwrite", (s) => s.delete(KEY)).then(() => {});
 
