@@ -369,6 +369,7 @@ export class MagicService {
         refresh: s.refreshByUser && extra.refresh === undefined ? s.refresh : m.refresh,
         hasData: m.kind === "widget" && this.store.read(widgetId, "data.ts") !== null,
         media: m.media,
+        kit: m.kit,
         error: undefined,
         ...extra,
       },

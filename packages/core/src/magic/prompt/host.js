@@ -356,7 +356,7 @@
     for (const k of applied) if (!(k in tokens)) document.documentElement.style.removeProperty(k);
     applied = Object.keys(tokens).filter((k) => k !== "color-scheme");
     for (const k in tokens) {
-      if (k === "color-scheme") document.documentElement.style.colorScheme = tokens[k];
+      if (k === "color-scheme") (document.documentElement.style.colorScheme = tokens[k]), (document.documentElement.dataset.appearance = tokens[k]);
       else document.documentElement.style.setProperty(k, tokens[k]);
     }
     for (const fn of themeListeners) call(fn, tokens["color-scheme"]);

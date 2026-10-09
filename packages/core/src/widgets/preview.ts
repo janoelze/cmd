@@ -45,8 +45,8 @@ export const MEASURE = WIDGET_MEASURE;
 /** Two themes to render with: cmd's built-in Dark and Light, as `pnpm tokens` snapshots them. */
 export const PREVIEW_THEMES = JSON.parse(fs.readFileSync(new URL("../magic/prompt/preview-themes.json", import.meta.url), "utf8")) as Record<"dark" | "light", ThemeLike>;
 
-export function previewPage(body: string, data: unknown, theme: ThemeLike, media: string[] = []): string {
-  const page = widgetHtml({ title: "preview", body, tokens: widgetTokens(theme), data });
+export function previewPage(body: string, data: unknown, theme: ThemeLike, media: string[] = [], kit?: number): string {
+  const page = widgetHtml({ title: "preview", body, tokens: widgetTokens(theme), data, kit });
   return page.replace("<head>", `<head><meta http-equiv="Content-Security-Policy" content="${widgetCsp(media)}">`);
 }
 
@@ -119,7 +119,7 @@ export function layoutIssues(box: PreviewShot["box"], w: number, h: number): { p
 
 export async function preview(previewer: Previewer | null, body: string, m: WidgetManifest, cases: PreviewCase[]): Promise<PreviewReport> {
   if (!previewer) return { ok: true, problems: [], warnings: ["not rendered: no previewer (open the cmd app, or install Playwright for the CLI)"], skipped: true };
-  const shots = await previewer.render(cases.map((c) => ({ page: previewPage(body, c.data, PREVIEW_THEMES[c.theme], m.media), width: c.size[0], height: c.size[1], shot: c.shot })));
+  const shots = await previewer.render(cases.map((c) => ({ page: previewPage(body, c.data, PREVIEW_THEMES[c.theme], m.media, m.kit), width: c.size[0], height: c.size[1], shot: c.shot })));
   const problems: string[] = [];
   const warnings: string[] = [];
   const pngs: string[] = [];

@@ -121,6 +121,8 @@ export interface MagicState {
   kv?: Record<string, unknown>;
   /** Origins the view plays audio/video or shows images from (manifest media). */
   media?: string[];
+  /** The kit version its frame loads (manifest kit; KIT_FILES). */
+  kit?: number;
   /** Media origins the person allowed for this window; the frame's CSP opens only these. */
   mediaAllowed?: string[];
   /** Media origins the person declined (not asked again). */
@@ -207,6 +209,25 @@ export type MagicProgress =
   | { type: "done" }
   | { type: "error"; message: string };
 
+/**
+ * Kit versions (docs/40-window-design.md). A widget's manifest pins the kit it was
+ * made with ("kit"; absent: 1), so a change to the kit never changes a widget nobody
+ * asked to change. Each version is the CSS its frame loads, from packages/core/src/
+ * magic/prompt: 1 is Magic's kit before widgets shared the app's tokens, frozen;
+ * 2 is the app's generated tokens and the current kit. New widgets get CURRENT_KIT.
+ */
+export const KIT_FILES: Readonly<Record<number, readonly string[]>> = { 1: ["kits/1.css"], 2: ["tokens.css", "kit.css"] };
+export const CURRENT_KIT = 2;
+/** A known kit version, else 1 (what widgets had before kits were versioned). */
+export const kitVersion = (v: unknown): number => (typeof v === "number" && v in KIT_FILES ? v : 1);
+/** Kit 1's names and what the current kit calls them: what moving a widget up renames. */
+export const KIT1_RENAMES: Readonly<Record<string, string>> = {
+  "--bg": "--well", "--surface": "--bg-elevated", "--line": "--separator", "--fill": "--bg-hover",
+  "--good": "--success", "--warn": "--warning", "--bad": "--danger",
+  "--c1": "--chart-1", "--c2": "--chart-2", "--c3": "--chart-3", "--c4": "--chart-4", "--c5": "--chart-5", "--c6": "--chart-6",
+  "--font": "--font-ui", "--mono": "--font-mono",
+};
+
 /** A theme as a widget's frame needs it: its appearance and the variables it sets on the app's :root (themeVars, light themes' overrides included). */
 export interface ThemeLike {
   appearance: "dark" | "light";
@@ -223,6 +244,7 @@ export interface ThemeLike {
 export function widgetTokens(t: ThemeLike, fonts: { text?: string; mono?: string } = {}): Record<string, string> {
   const out: Record<string, string> = { "color-scheme": t.appearance };
   for (const [k, v] of Object.entries(t.vars)) if (k !== "--bg") out[k] = v;
+  // Kit 1 draws some lines stronger in dark themes (kits/1.css, :root[data-appearance]).
   // The app passes the font.text / font.code settings; the defaults are theirs.
   const text = fonts.text || DEFAULT_SETTINGS["font.text"];
   if (text) out["--font-ui"] = text;

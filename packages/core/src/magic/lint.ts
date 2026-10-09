@@ -1,17 +1,12 @@
 // Static checks on a widget body, for the prompt lab's metrics and (later) the
 // app's repair loop: things the prompt forbids that are cheap to detect.
 
-import fs from "node:fs";
-
-/** Token names widgets used before they shared the app's, with their replacements (from the frame's generated tokens.css). */
-const DEPRECATED = new Map(
-  [...fs.readFileSync(new URL("./prompt/tokens.css", import.meta.url), "utf8").matchAll(/(--[a-z0-9-]+): [^;]+; \/\* deprecated: Use (--[a-z0-9-]+)\. \*\//g)].map((m) => [m[1]!, m[2]!]),
-);
+import { CURRENT_KIT, KIT1_RENAMES } from "@cmd/protocol";
 
 export interface LintResult {
   /** Literal colours (#hex, rgb(), hsl(), named-ish) outside var(). */
   literalColors: string[];
-  /** Older token names (--line, --c1…), each with the app's name to use instead. */
+  /** Kit 1's names (--line, --c1…) in a widget on a later kit, each with the name to use instead. */
   oldTokens: [old: string, use: string][];
   externalResources: string[];
   /** Comments in the body (wasted tokens). */
@@ -21,7 +16,7 @@ export interface LintResult {
   bytes: number;
 }
 
-export function lintBody(body: string): LintResult {
+export function lintBody(body: string, kit = CURRENT_KIT): LintResult {
   // A hex colour sits after ":" (CSS) or inside a quote/paren (JS, attributes); "#id" selectors don't.
   const hex = [...body.matchAll(/(?::\s*|["'`(,]\s*)(#[0-9a-fA-F]{3,8})\b/g)].map((m) => m[1]!);
   const fns = [...body.matchAll(/\b(?:rgba?|hsla?|oklch|lab|lch)\(/g)].map((m) => m[0]);
@@ -33,6 +28,6 @@ export function lintBody(body: string): LintResult {
   const lastStyle = body.lastIndexOf("<style");
   const lastTagBeforeScript = iScript < 0 ? -1 : body.slice(body.lastIndexOf("</script>") + 9).search(/<[a-z]/i);
   const outOfOrder = (iStyle > 0 && body.slice(0, iStyle).trim().length > 0) || (iScript >= 0 && lastStyle > iScript) || lastTagBeforeScript >= 0;
-  const oldTokens = [...new Set([...body.matchAll(/var\((--[a-z0-9-]+)|["'`](--[a-z0-9-]+)["'`]/g)].map((m) => (m[1] ?? m[2])!))].filter((n) => DEPRECATED.has(n)).map((n) => [n, DEPRECATED.get(n)!] as [string, string]);
+  const oldTokens = [...new Set([...body.matchAll(/var\((--[a-z0-9-]+)|["'`](--[a-z0-9-]+)["'`]/g)].map((m) => (m[1] ?? m[2])!))].filter((n) => kit > 1 && n in KIT1_RENAMES).map((n) => [n, KIT1_RENAMES[n]!] as [string, string]);
   return { literalColors: [...new Set(literalColors)], oldTokens, externalResources, comments, outOfOrder, bytes: Buffer.byteLength(body) };
 }

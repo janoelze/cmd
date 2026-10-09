@@ -228,7 +228,7 @@ const api = {
   /** Native sheet with only OK: something couldn't be done, and why. */
   alert: (o: { message: string; detail?: string }): Promise<void> => ipcRenderer.invoke("alert", o),
   /** The URL of a Magic widget frame whose CSP allows media from these origins (cmd-widget://, main process). */
-  widgetFrame: (media: string[]): Promise<string> => ipcRenderer.invoke("widget-frame", media),
+  widgetFrame: (media: string[], kit?: number): Promise<string> => ipcRenderer.invoke("widget-frame", media, kit),
   /** Put text on the clipboard, also while the app isn't focused (navigator.clipboard needs focus): OSC 52 from a background terminal. */
   writeClipboard: (text: string) => ipcRenderer.send("clipboard-write", text),
   /** The path of a file dropped from Finder ("" for one that isn't on disk). */

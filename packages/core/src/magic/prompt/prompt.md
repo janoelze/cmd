@@ -23,7 +23,7 @@ All in the widget folder; write them with `write_file` (or `edit_file` for small
 
 - **manifest.json**: what it is and what its data.ts may touch.
   ```json
-  {"cmd": 2, "kind": "widget", "title": "Weather · Lisbon", "icon": "cloud.sun", "size": "m", "refresh": 900,
+  {"cmd": 2, "kit": 2, "kind": "widget", "title": "Weather · Lisbon", "icon": "cloud.sun", "size": "m", "refresh": 900,
    "permissions": {"net": ["api.open-meteo.com"], "run": [], "env": [], "read": []},
    "config": [{"key": "city", "title": "City", "type": "string", "default": "Lisbon"}],
    "media": []}

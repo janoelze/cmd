@@ -35,6 +35,7 @@ dir defaults to the current folder.`;
 const TEMPLATE: Record<string, string> = {
   "manifest.json": `{
   "cmd": 2,
+  "kit": 2,
   "kind": "widget",
   "title": "My widget",
   "size": "m",
@@ -220,7 +221,7 @@ export async function widgetCommand(argv: string[]): Promise<number> {
     const live = ctx.store.fixtures(ctx.id).find((f) => f.name === "live")?.data ?? ctx.store.staticData(ctx.id);
     const cases = previewCases(st.manifest, live, ctx.store.fixtures(ctx.id)).map((c) => ({ ...c, shot: true }));
     const m = st.manifest;
-    const shots = await ctx.previewer.render(cases.map((c) => ({ page: previewPage(st.html, c.data, PREVIEW_THEMES[c.theme], m.media), width: c.size[0], height: c.size[1], shot: true })));
+    const shots = await ctx.previewer.render(cases.map((c) => ({ page: previewPage(st.html, c.data, PREVIEW_THEMES[c.theme], m.media, m.kit), width: c.size[0], height: c.size[1], shot: true })));
     const files: string[] = [];
     shots.forEach((s, i) => {
       if (!s.png) return;

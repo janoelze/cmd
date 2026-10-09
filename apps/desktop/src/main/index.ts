@@ -13,7 +13,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { SETTINGS_TEMPLATE, SYSTEM_SOUNDS, mediaOrigin, widgetCsp } from "@cmd/protocol";
+import { KIT_FILES, SETTINGS_TEMPLATE, SYSTEM_SOUNDS, kitVersion, mediaOrigin, widgetCsp } from "@cmd/protocol";
 import { cmdHome, connect, coreSocketPath, enterInstance, initLog, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { SETTINGS_TITLEBAR_HEIGHT, TOPBAR_HEIGHT, trafficLights } from "../shared/chrome.ts";
@@ -859,13 +859,15 @@ ipcMain.handle("confirm", async (e, o: { message: string; detail?: string; confi
 });
 
 const widgetFrames = new Map<string, string[]>(); // token → allowed media origins
-ipcMain.handle("widget-frame", (_e, media: unknown) => {
+/** A widget frame's URL: cmd-widget://frame/<kit>/<token>; the kit picks its CSS, the token its CSP. */
+ipcMain.handle("widget-frame", (_e, media: unknown, kit: unknown) => {
+  const base = `cmd-widget://frame/${kitVersion(kit)}/`;
   const origins = [...new Set((Array.isArray(media) ? media : []).map(mediaOrigin).filter((o): o is string => !!o))].sort();
-  if (!origins.length) return "cmd-widget://frame/";
+  if (!origins.length) return base;
   const key = origins.join(" ");
   let token = [...widgetFrames].find(([, v]) => v.join(" ") === key)?.[0];
   if (!token) widgetFrames.set((token = randomUUID()), origins);
-  return `cmd-widget://frame/${token}`;
+  return base + token;
 });
 
 ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
@@ -977,8 +979,10 @@ app.whenReady().then(async () => {
   protocol.handle("cmd-widget", (req) => {
     const dir = path.join(repoRoot, "packages/core/src/magic/prompt");
     const read = (f: string) => fs.readFileSync(path.join(dir, f), "utf8");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${read("tokens.css")}${read("kit.css")}</style><script>${read("host.js")}</script></head><body></body></html>`;
-    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": widgetCsp(widgetFrames.get(new URL(req.url).pathname.slice(1)) ?? []), "cache-control": "no-store" } });
+    const [kit, token = ""] = new URL(req.url).pathname.split("/").filter(Boolean);
+    const css = KIT_FILES[kitVersion(Number(kit))]!.map(read).join("\n");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style><script>${read("host.js")}</script></head><body></body></html>`;
+    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": widgetCsp(widgetFrames.get(token) ?? []), "cache-control": "no-store" } });
   });
   for (const scheme of FRAME_SCHEMES) protocol.handle(scheme, frameHandler(scheme));
   // The Visualizer's System Audio source (renderer/src/audio.ts): getDisplayMedia from the app's

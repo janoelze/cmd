@@ -21,6 +21,7 @@ import { runTool, toolsFor, type ToolContext, type ToolOutput } from "./tools.ts
 import { runWidgetTool, WIDGET_TOOL_SPECS, type WidgetToolState } from "./widget-tools.ts";
 import { verdictText, verifyWidget, type Verdict, type VerifyContext } from "../widgets/verify.ts";
 import { JSON_VIEW_HTML, JSON_VIEW_TS } from "../widgets/templates.ts";
+import { CURRENT_KIT } from "@cmd/protocol";
 
 export interface BuildOptions {
   /** The request (for a refinement: built by refineRequest, with the earlier requests). */
@@ -118,12 +119,12 @@ export async function buildWidget(o: BuildOptions): Promise<BuildResult> {
     if (fast) {
       emit({ type: "route", route: fast.route, at: at() });
       if (fast.route === "json") {
-        w.store.write(w.id, "manifest.json", JSON.stringify({ cmd: 2, kind: "widget", title: "JSON", icon: "curlybraces", size: "m", refresh: 0 }, null, 2) + "\n");
+        w.store.write(w.id, "manifest.json", JSON.stringify({ cmd: 2, kit: CURRENT_KIT, kind: "widget", title: "JSON", icon: "curlybraces", size: "m", refresh: 0 }, null, 2) + "\n");
         w.store.write(w.id, "static.json", JSON.stringify(fast.data, null, 1) + "\n");
         w.store.write(w.id, "view.html", JSON_VIEW_HTML);
         w.store.write(w.id, "view.ts", JSON_VIEW_TS);
       } else {
-        w.store.write(w.id, "manifest.json", JSON.stringify({ cmd: 2, kind: "terminal", title: fast.command.split(/\s+/)[0], icon: "terminal", size: "m", refresh: 0, command: fast.command }, null, 2) + "\n");
+        w.store.write(w.id, "manifest.json", JSON.stringify({ cmd: 2, kit: CURRENT_KIT, kind: "terminal", title: fast.command.split(/\s+/)[0], icon: "terminal", size: "m", refresh: 0, command: fast.command }, null, 2) + "\n");
       }
       const verdict = await verifyWidget({ ...w, deno: fast.route === "json" ? null : w.deno, previewer: fast.route === "json" ? null : w.previewer });
       return { ...base, route: fast.route, ok: verdict.usable, verdict: { ...verdict, ok: verdict.usable }, timings: { done: at() } };

@@ -2,6 +2,8 @@
 // starts, how often its data runs, what its data.ts may touch, and the settings
 // a person can change. The same file a widget store would publish.
 
+import { KIT_FILES, kitVersion } from "@cmd/protocol";
+
 export type WidgetSize = "s" | "m" | "l" | "wide";
 
 export interface ConfigField {
@@ -41,6 +43,8 @@ export interface WidgetManifest {
   /** https origins the view plays audio/video or shows images from (asked once per window). */
   media: string[];
   config: ConfigField[];
+  /** The kit version its view is drawn with (KIT_FILES in @cmd/protocol); absent in the file: 1. */
+  kit: number;
 }
 
 /** Programs that would give data.ts everything: running them is never declared away. */
@@ -93,6 +97,7 @@ export function parseManifest(v: unknown): { ok: true; manifest: WidgetManifest 
     if (typeof f.description === "string") field.description = f.description;
     config.push(field);
   }
+  if (m.kit !== undefined && !(typeof m.kit === "number" && m.kit in KIT_FILES)) errors.push(`kit: ${JSON.stringify(m.kit)} is not a kit version (${Object.keys(KIT_FILES).join(", ")})`);
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -108,6 +113,7 @@ export function parseManifest(v: unknown): { ok: true; manifest: WidgetManifest 
       permissions: { net, run, env, read },
       media: media.map((o) => o.replace(/\/$/, "")),
       config,
+      kit: kitVersion(m.kit),
     },
   };
 }

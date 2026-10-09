@@ -10,7 +10,7 @@
 
 import { Button, Callout, LinkButton, Toast } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
-import { requestedMedia, SYSTEM_SOUNDS, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
+import { kitVersion, requestedMedia, SYSTEM_SOUNDS, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { copy, openLink, selectPane, typeInTerminal } from "../actions.ts";
 import { resetMagic, useMagicLive, type MagicLive } from "../magic.ts";
@@ -145,7 +145,7 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
       {s.kind === "terminal" && !building ? (
         <TerminalOffer win={win} command={s.command ?? ""} />
       ) : widget ? (
-        <WidgetFrame win={win} active={focused} html={s.html!} data={live.data?.data ?? s.lastData?.data} kv={s.kv} media={allowed} onPainted={setPainted} />
+        <WidgetFrame win={win} active={focused} html={s.html!} data={live.data?.data ?? s.lastData?.data} kv={s.kv} media={allowed} kit={s.kit} onPainted={setPainted} />
       ) : null}
       {building && <Progress live={live} showSteps={showSteps} overlay={widget} />}
       {asking && <MediaRequest origins={pending} onAnswer={(allow) => void cmd.call("magic.media", { id: win.id, allow })} />}
@@ -343,18 +343,20 @@ function MediaRequest({ origins, onAnswer }: { origins: string[]; onAnswer: (all
   );
 }
 
-/** The frame's URL decides its CSP (main process), so a new set of allowed origins loads a new frame.
+/** The frame's URL decides its CSP and its kit version (main process), so a new set of allowed origins, or a kit, loads a new frame.
  *  So does new HTML: its scripts run at the page's top level, and a second set in the same page
  *  would collide with the first's let/const (and leave its timers and listeners running). */
-export function WidgetFrame({ media, ...props }: { win: AppWindow; active: boolean; html: string; data: unknown; kv?: Record<string, unknown>; media: string[]; onPainted?: (html: string) => void }) {
-  const [src, setSrc] = useState<string | null>(media.length ? null : "cmd-widget://frame/");
+export function WidgetFrame({ media, kit: kitRaw, ...props }: { win: AppWindow; active: boolean; html: string; data: unknown; kv?: Record<string, unknown>; media: string[]; kit?: number; onPainted?: (html: string) => void }) {
+  const kit = kitVersion(kitRaw);
+  const plain = `cmd-widget://frame/${kit}/`;
+  const [src, setSrc] = useState<string | null>(media.length ? null : plain);
   const key = media.join(" ");
   useEffect(() => {
     let live = true;
-    if (!key) setSrc("cmd-widget://frame/");
-    else void cmd.widgetFrame(key.split(" ")).then((u) => live && setSrc(u));
+    if (!key) setSrc(plain);
+    else void cmd.widgetFrame(key.split(" "), kit).then((u) => live && setSrc(u));
     return () => void (live = false);
-  }, [key]);
+  }, [key, kit, plain]);
   return src ? <Frame key={`${src}\n${props.html}`} src={src} {...props} /> : <div className="magic-frame" />;
 }
 

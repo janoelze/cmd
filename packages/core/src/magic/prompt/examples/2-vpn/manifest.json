@@ -1,5 +1,6 @@
 {
   "cmd": 2,
+  "kit": 2,
   "kind": "widget",
   "title": "VPN",
   "icon": "lock.shield",

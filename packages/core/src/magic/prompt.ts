@@ -8,6 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { CURRENT_KIT, KIT1_RENAMES, kitVersion } from "@cmd/protocol";
 
 export const PROMPT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "prompt");
 
@@ -67,6 +68,21 @@ export interface RequestContext {
   files?: Record<string, string>;
 }
 
+/** The kit a widget's manifest.json pins (absent or unreadable: 1). */
+function kitOfFiles(files: Record<string, string>): number {
+  try {
+    return kitVersion(JSON.parse(files["manifest.json"] ?? "{}").kit);
+  } catch {
+    return 1;
+  }
+}
+
+/** A widget on kit 1 moves to the current kit when it is changed: what that takes. */
+function kitMove(): string {
+  const renames = Object.entries(KIT1_RENAMES).map(([o, n]) => `${o} → ${n}`).join(", ");
+  return `This widget was made with kit 1, an older version of the kit. Move it to the current kit as part of this change: set "kit": ${CURRENT_KIT} in manifest.json, rename the variables it uses (${renames}), and lay it out by the current rules.`;
+}
+
 /** The user message: the request plus where (machine, folder, the window's workspace) and when it was made. */
 export function buildRequest(prompt: string, c: RequestContext): string {
   const now = c.now ?? new Date();
@@ -91,6 +107,7 @@ export function buildRequest(prompt: string, c: RequestContext): string {
   if (files.length) {
     lines.push("", "The widget's files now (change what the request asks for, keep the rest working):");
     for (const [f, text] of files) lines.push("", `--- ${f} ---`, text.trim());
+    if (kitOfFiles(c.files!) === 1) lines.push("", kitMove());
   } else if (c.widgetDir) lines.push("The widget has no files yet.");
   return lines.join("\n");
 }

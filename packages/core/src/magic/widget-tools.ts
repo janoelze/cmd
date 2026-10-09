@@ -8,6 +8,7 @@ import { checkWidget, previewWidget, runWidgetData, type VerifyContext } from ".
 import type { ToolOutput, ToolSpec } from "./tools.ts";
 import { lintBody } from "./lint.ts";
 import { WIDGET_FILES } from "../widgets/store.ts";
+import { CURRENT_KIT, kitVersion } from "@cmd/protocol";
 
 const why = { type: "string", description: 'A few words for the person saying what this step does, e.g. "Writing the view".' };
 const obj = (props: Record<string, unknown>, required: string[]) => ({ type: "object", properties: { why, ...props }, required: ["why", ...required], additionalProperties: false });
@@ -75,7 +76,7 @@ export async function runWidgetTool(name: string, input: Record<string, unknown>
       const content = str(input.content);
       if (!p || content === undefined) return err("path and content are required");
       try {
-        c.store.write(c.id, p, content);
+        c.store.write(c.id, p, keepKit(c, p, content));
       } catch (e) {
         return err((e as Error).message);
       }
@@ -96,7 +97,7 @@ export async function runWidgetTool(name: string, input: Record<string, unknown>
       if (text === null) return err(`${p} doesn't exist; use write_file`);
       const n = text.split(old).length - 1;
       if (n !== 1) return err(n === 0 ? `the text to replace isn't in ${p} (read_file it first)` : `the text to replace occurs ${n} times in ${p}; include more around it`);
-      c.store.write(c.id, p, text.replace(old, () => nu));
+      c.store.write(c.id, p, keepKit(c, p, text.replace(old, () => nu)));
       state.dirty = true;
       return { output: `Edited ${p}.${afterWrite(c, p, state)}`, isError: false };
     }
@@ -112,10 +113,10 @@ export async function runWidgetTool(name: string, input: Record<string, unknown>
     }
     case "check": {
       const st = await checkWidget(c);
-      const lint = lintBody((c.store.read(c.id, "view.html") ?? "") + (c.store.read(c.id, "view.ts") ?? ""));
+      const lint = lintBody((c.store.read(c.id, "view.html") ?? "") + (c.store.read(c.id, "view.ts") ?? ""), st.manifest?.kit);
       const notes =
         (lint.literalColors.length ? `\nNote: literal colours ${lint.literalColors.join(" ")}: use the theme variables instead.` : "") +
-        (lint.oldTokens.length ? `\nNote: older token names: ${lint.oldTokens.map(([o, u]) => `${o} → ${u}`).join(", ")}.` : "");
+        (lint.oldTokens.length ? `\nNote: kit 1's token names in a kit ${st.manifest?.kit} widget: ${lint.oldTokens.map(([o, u]) => `${o} → ${u}`).join(", ")}.` : "");
       return st.ok ? { output: `OK: manifest valid, types check.${notes}`, isError: false } : err(`${st.problems.join("\n")}${notes}`);
     }
     case "run_data": {
@@ -145,6 +146,32 @@ export async function runWidgetTool(name: string, input: Record<string, unknown>
     }
   }
   return null;
+}
+
+/**
+ * A manifest.json written without "kit" keeps the widget's: the one it had (1 for a
+ * widget made before kits were versioned), or for a new widget the current kit. So
+ * rewriting a manifest never moves a widget to another kit by leaving the field out.
+ */
+export function keepKit(c: VerifyContext, p: string, content: string): string {
+  if (p !== "manifest.json") return content;
+  let next: unknown;
+  try {
+    next = JSON.parse(content);
+  } catch {
+    return content;
+  }
+  if (!next || typeof next !== "object" || Array.isArray(next) || "kit" in next) return content;
+  const before = c.store.read(c.id, "manifest.json");
+  let kit = CURRENT_KIT;
+  if (before !== null) {
+    try {
+      kit = kitVersion((JSON.parse(before) as { kit?: unknown }).kit);
+    } catch {
+      kit = 1;
+    }
+  }
+  return JSON.stringify({ ...next, kit }, null, 2) + "\n";
 }
 
 /** After a write: say at once when manifest.json is broken, and report its title and icon. */

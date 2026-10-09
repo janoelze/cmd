@@ -12,6 +12,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const read = (f: string) => fs.readFileSync(path.join(here, "prompt", f), "utf8");
 
 export { widgetTokens, type ThemeLike, MAGIC_SIZES as SIZES } from "@cmd/protocol";
+import { CURRENT_KIT, KIT_FILES } from "@cmd/protocol";
+
+/** The CSS of a kit version (KIT_FILES). */
+export const kitCss = (kit: number = CURRENT_KIT): string => (KIT_FILES[kit] ?? KIT_FILES[1]!).map(read).join("\n");
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
@@ -21,6 +25,8 @@ export interface WidgetPage {
   tokens: Record<string, string>;
   /** Inline this data (standalone pages). Omitted: the host posts it. */
   data?: unknown;
+  /** The kit version (the widget's manifest); default the current one. */
+  kit?: number;
 }
 
 export function widgetHtml(p: WidgetPage): string {
@@ -30,11 +36,10 @@ export function widgetHtml(p: WidgetPage): string {
   // </script> inside JSON would end the script element.
   const data = p.data === undefined ? "" : `<script>window.__CMD_DATA__ = ${JSON.stringify(p.data).replace(/</g, "\\u003c")};</script>`;
   return `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<html data-appearance="${p.tokens["color-scheme"] === "light" ? "light" : "dark"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>${esc(p.title)}</title>
-<style>${read("tokens.css")}
-:root { ${vars} }
-${read("kit.css")}</style>
+<style>${kitCss(p.kit)}
+:root { ${vars} }</style>
 <script>${read("host.js")}</script>
 ${data}
 </head><body>
