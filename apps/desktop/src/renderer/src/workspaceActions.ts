@@ -2,10 +2,10 @@
 // palette's Actions group and Run Last Action Again all go through runAction, so
 // each runs in the same terminal the same way and the last one is remembered.
 
-import type { ActionsList, SpaceId, WorkspaceAction } from "@cmd/protocol";
+import type { ActionsList, AppWindow, GitPlace, SpaceId, WindowId, WorkspaceAction } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { addWidget, selectPane } from "./actions.ts";
-import { getState } from "./store.ts";
+import { getSpaceView, getState } from "./store.ts";
 import { goTo } from "./widgets.ts";
 
 /** The last action run, for Run Last Action Again; never a risky one (that asks each time). */
@@ -41,6 +41,39 @@ export function spaceRoot(spaceId: SpaceId): string | null {
   return sp && !sp.home ? sp.root : null;
 }
 
+/** Where a terminal's work is: its agent's checkout (agents move into worktrees), else the terminal's own. */
+function placeOfPane(id: string): GitPlace | null {
+  const st = getState();
+  const pane = st.panes.get(id);
+  if (!pane) return null;
+  const agent = pane.agentId ? st.agents.get(pane.agentId) : undefined;
+  return agent?.git ?? pane.git ?? null;
+}
+
+/**
+ * The checkout of the terminal or agent selected last in a Space, when it is
+ * one of the Space's repository's (a worktree another agent works in): parallel
+ * agents each in their own checkout, and the actions follow the one you look at.
+ */
+export function followedRoot(spaceId: SpaceId): string | null {
+  const sp = getState().spaces.get(spaceId);
+  if (!sp?.git) return null;
+  for (const id of getSpaceView<string[]>(spaceId, "selection.history", [])) {
+    const place = placeOfPane(id);
+    if (place) return place.project === sp.git.project ? place.top : null;
+  }
+  return null;
+}
+
+/** The folder an actions widget is about: the one picked in its menu, else the followed checkout, else its Space's root. */
+export function actionsRootOf(win: Pick<AppWindow, "state" | "spaceId">): string | null {
+  if (typeof win.state.path === "string") return win.state.path;
+  return (win.state.follow !== false ? followedRoot(win.spaceId) : null) ?? getState().spaces.get(win.spaceId)?.root ?? null;
+}
+
+/** Each widget's last list, for its title bar menu (the worktrees to switch to). */
+export const lastLists = new Map<WindowId, ActionsList>();
+
 /** Show this Space's Workspace Actions widget, putting one on the workspace if there is none. */
 export async function showActions(): Promise<void> {
   const st = getState();
@@ -51,6 +84,6 @@ export async function showActions(): Promise<void> {
 
 /** The current Space's actions, for the palette (read when it opens). */
 export function listActions(spaceId: SpaceId): Promise<ActionsList | null> {
-  const root = spaceRoot(spaceId);
+  const root = followedRoot(spaceId) ?? spaceRoot(spaceId);
   return root ? cmd.call("actions.list", { path: root }).catch(() => null) : Promise.resolve(null);
 }

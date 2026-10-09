@@ -12,6 +12,7 @@ import { logger } from "@cmd/protocol/node";
 import { WatchService } from "../watch.ts";
 import type { PaneManager } from "../panes.ts";
 import { scan, type Scan } from "./catalog.ts";
+import { checkoutOf, placeOf, worktreesOf } from "../checkout.ts";
 import { classify } from "./classify.ts";
 import { rank, type Ran, type Ranked } from "./history.ts";
 import { applyDescribed, describe, DescribedCache, inputOf, type DescribeAi, type Described } from "./describe.ts";
@@ -28,6 +29,8 @@ export interface ActionsOptions {
   describeOn: () => boolean;
   roots: () => string[];
   createPane: (o: { cwd: string; command: string; spaceId: SpaceId }) => Pane;
+  /** Live agents working in a checkout (its top), for the worktree list. */
+  agentsIn?: (top: string) => number;
   /** How the person starts an agent (agents.<kind>.command), for its skills; null: the agent's name. */
   agentCommand?: (agent: string) => string | null;
   /** ms before a changed folder is read again, and before the model is asked. */
@@ -108,7 +111,7 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
       const url = findUrl(t.tail);
       if (url) {
         t.run.url = url;
-        this.emit("changed", t.root);
+        this.#runChanged(t.root);
         this.emit("url", id, url);
       }
     });
@@ -116,7 +119,7 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
       const t = this.#runs.get(id);
       if (!t) return;
       this.#runs.delete(id);
-      this.emit("changed", t.root);
+      this.#runChanged(t.root);
     });
     this.#sweep = setInterval(() => this.#drop(), 60_000);
     this.#sweep.unref();
@@ -151,8 +154,26 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
       primary: this.#primary(actions, d),
       sources: [...new Set(c.scan.actions.map((a) => sourceFile(a.source.file)))].map((file): { file: string; error?: string } => ({ file })).concat(c.scan.errors),
       runs: [...this.#runs.values()].filter((t) => t.root === root).map((t) => ({ ...t.run })),
+      ...this.#worktrees(root),
       describing: describedOn && c.describing,
     };
+  }
+
+  /** The folder's checkout, its repository's worktrees, and what runs in the others (parallel agents each in their own). */
+  #worktrees(root: string): Pick<ActionsList, "checkout" | "worktrees" | "elsewhere"> {
+    const place = placeOf(root);
+    const c = place ? checkoutOf(root) : null;
+    if (!place || !c) return { checkout: null, worktrees: [], elsewhere: [] };
+    const tops = [place.project, ...worktreesOf(c.common).filter((t) => t !== place.project)];
+    const live = [...this.#runs.values()].filter((t) => t.run.endedAt === null);
+    const worktrees = tops.map((top) => {
+      const p = top === place.top ? place : placeOf(top);
+      return { top, branch: p?.branch ?? null, linked: top !== place.project, running: live.filter((t) => t.root === top).length, agents: this.#o.agentsIn?.(top) ?? 0 };
+    });
+    // The same action (ids are relative: "npm:package.json:dev") running in another checkout of this repository.
+    const others = new Map(worktrees.filter((w) => w.top !== root).map((w) => [w.top, w.branch]));
+    const elsewhere = [...this.#runs.values()].filter((t) => others.has(t.root)).map((t) => ({ ...t.run, root: t.root, branch: others.get(t.root) ?? null }));
+    return { checkout: place, worktrees, elsewhere };
   }
 
   /**
@@ -333,11 +354,19 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
     return out;
   }
 
+  /** A run changed in `root`: its catalog, and every open catalog of the same repository (their worktree lists and "elsewhere"). */
+  #runChanged(root: string): void {
+    const project = placeOf(root)?.project;
+    this.emit("changed", root);
+    if (!project) return;
+    for (const c of this.#catalogs.values()) if (c.root !== root && placeOf(c.root)?.project === project) this.emit("changed", c.root);
+  }
+
   #track(paneId: PaneId, root: string, a: WorkspaceAction): void {
     this.#runs.set(paneId, { root, command: a.command, started: false, restart: false, tail: "", run: { actionId: a.id, paneId, startedAt: Date.now(), endedAt: null, exitCode: null, url: null } });
     const c = this.#catalogs.get(root);
     if (c) c.ranked = undefined;
-    this.emit("changed", root);
+    this.#runChanged(root);
   }
 
   #ended(paneId: PaneId, t: Tracked, exitCode: number | null): void {
@@ -350,7 +379,7 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
       this.#runs.set(paneId, next);
       this.#o.panes.write(paneId, t.command + "\r");
     }
-    this.emit("changed", t.root);
+    this.#runChanged(t.root);
   }
 
   /** Let go of folders nobody shows or asked about lately. */

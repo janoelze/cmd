@@ -5,11 +5,11 @@
 // a dev server's address opens in a browser window. The core finds, ranks,
 // describes and runs them (core/actions/); this only shows and asks.
 
-import { Button, Callout, CodeBlock, ConfirmDialog, EmptyState, IconButton, LinkButton, ListRow, ListSection, ListValue, Panel, PanelBody, SearchField } from "@cmd/ui";
+import { Button, Callout, Icon, CodeBlock, ConfirmDialog, EmptyState, IconButton, LinkButton, ListRow, ListSection, ListValue, Panel, PanelBody, SearchField } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type ActionKind, type ActionRun, type ActionsList, type SpaceId, type WorkspaceAction } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { runAction } from "../workspaceActions.ts";
+import { actionsRootOf, lastLists, runAction } from "../workspaceActions.ts";
 import { copy, newBrowser, openFileAt, openLink } from "../actions.ts";
 import { showContextMenu } from "../context.ts";
 import { useAiStatus } from "../ai/status.ts";
@@ -41,12 +41,6 @@ const failed = (r: ActionRun | undefined) => !!r && r.endedAt !== null && r.exit
 const running = (r: ActionRun | undefined) => !!r && r.endedAt === null;
 /** "localhost:5173" for a chip. */
 const shortUrl = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/$/, "");
-const basename = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
-
-/** The folder a widget is about: the path it was given, else its Space's root. */
-export function actionsRoot(state: Record<string, unknown>, spaceRoot: string | undefined): string | null {
-  return typeof state.path === "string" ? state.path : (spaceRoot ?? null);
-}
 
 /** actions.list for a folder, again whenever the core says it changed or the connection comes back. */
 function useActions(root: string | null): { list: ActionsList | null; error: string | null } {
@@ -85,8 +79,12 @@ function useActions(root: string | null): { list: ActionsList | null; error: str
 
 export function ActionsView({ win }: WindowViewProps) {
   const s = useStore();
-  const root = actionsRoot(win.state, s.spaces.get(win.spaceId)?.root);
+  const root = actionsRootOf(win);
   const { list, error } = useActions(root);
+  useEffect(() => {
+    if (list) lastLists.set(win.id, list);
+  }, [list, win.id]);
+  useEffect(() => () => void lastLists.delete(win.id), [win.id]);
   const ai = useAiStatus();
   const [query, setQuery] = useState("");
   const [confirm, setConfirm] = useState<{ a: WorkspaceAction; restart?: boolean } | null>(null);
@@ -125,6 +123,7 @@ export function ActionsView({ win }: WindowViewProps) {
       ...(on ? [{ label: "Restart", run: () => void run(a, { restart: true }) }, { label: "Stop", run: () => stop(a) }] : []),
       ...(r && !on && s.panes.has(r.paneId) ? [{ label: "Show Terminal", run: () => goTo(r.paneId, spaceId) }] : []),
       ...(r?.url || a.url ? [{ label: `Open ${shortUrl((r?.url ?? a.url)!)}`, run: () => openUrl((r?.url ?? a.url)!) }] : []),
+      ...(list?.elsewhere ?? []).filter((x) => x.actionId === a.id && x.endedAt === null).map((x) => ({ label: `Show It in ${x.branch ?? x.root.split("/").pop()}`, run: () => goTo(x.paneId, spaceId) })),
       "-",
       { label: a.pinned ? "Unpin" : "Pin to Top", run: () => pin(a) },
       { label: "Copy Command", run: () => copy(a.command) },
@@ -135,6 +134,8 @@ export function ActionsView({ win }: WindowViewProps) {
   const row = (a: WorkspaceAction, big = false) => {
     const r = runs.get(a.id);
     const on = running(r);
+    // Running in another worktree of this repository (another agent's checkout).
+    const away = on ? [] : (list?.elsewhere ?? []).filter((x) => x.actionId === a.id && x.endedAt === null);
     const bad = failed(r);
     const url = r?.url ?? null;
     const state =
@@ -161,6 +162,12 @@ export function ActionsView({ win }: WindowViewProps) {
               </LinkButton>
             )}
             {state && <ListValue>{state}</ListValue>}
+            {away.map((x) => (
+              <LinkButton key={x.paneId} tone="dim" onClick={(e) => (e.stopPropagation(), goTo(x.paneId, spaceId))} data-tip={`Running in ${shortPath(x.root)}${x.url ? ` at ${x.url}` : ""}. Show its terminal`}>
+                in {x.branch ?? x.root.split("/").pop()}
+                {x.url ? ` · ${shortUrl(x.url)}` : ""}
+              </LinkButton>
+            ))}
             {big && !on && (
               <Button size="sm" variant="primary" icon="play.fill" onClick={(e) => (e.stopPropagation(), void run(a))}>
                 Run
@@ -217,6 +224,11 @@ export function ActionsView({ win }: WindowViewProps) {
             <SearchField size="sm" fill value={query} onChange={setQuery} placeholder="Filter actions" onKeyDown={(k) => k.key === "Enter" && matches[0] && void run(matches[0])} />
           </div>
         )}
+        {list.checkout && (list.checkout.linked || list.root !== s.spaces.get(win.spaceId)?.root) && (
+          <div className="wa-where" data-tip={`Actions of ${shortPath(list.root)}: they run there`}>
+            <Icon name="arrow.triangle.branch" size={12} /> {list.checkout.branch ?? "detached"} · {shortPath(list.root)}
+          </div>
+        )}
         {errors.map((e) => (
           <Callout key={e.file} tone="danger" title={`${e.file} can't be read`}>
             {e.error} Showing what it had before.
@@ -226,7 +238,8 @@ export function ActionsView({ win }: WindowViewProps) {
           matches.length ? <ListSection title="Matches" count={matches.length}>{matches.map((a) => row(a))}</ListSection> : <EmptyState compact icon="magnifyingglass" title="No matches">Nothing here is called “{query}”.</EmptyState>
         ) : (
           <>
-            {primary && <ListSection title={basename(list.root)}>{row(primary, true)}</ListSection>}
+            {/* The main action (usually dev), on its own above the sections: the title bar already names the folder. */}
+            {primary && <div className="wa-primary">{row(primary, true)}</div>}
             {section("pinned", "Pinned", rest.filter((a) => a.pinned))}
             {ORDER.filter((k) => k !== "agent").map((k) => section(`kind:${k}`, KIND[k].title, rootRows.filter((a) => a.kind === k)))}
             {[...new Set(rootRows.filter((a) => a.kind === "agent").map((a) => a.agent ?? ""))].map((ag) => section(`agent:${ag}`, `${AGENT_TITLE[ag] ?? "Agent"} Skills`, rootRows.filter((a) => a.kind === "agent" && (a.agent ?? "") === ag)))}

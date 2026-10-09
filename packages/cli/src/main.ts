@@ -340,6 +340,11 @@ async function run({ client, closed }: Connection): Promise<number> {
         console.log("\nsuggested from the docs");
         for (const s of list.suggested) console.log(`      ${s.command}${s.description ? `  ${s.description}` : ""}`);
       }
+      const away = list.elsewhere.filter((r) => r.endedAt === null);
+      if (away.length) {
+        console.log("\nrunning in other worktrees");
+        for (const r of away) console.log(`      ${list.actions.find((a) => a.id === r.actionId)?.name ?? r.actionId}  in ${r.branch ?? tilde(r.root)} (${tilde(r.root)})${r.url ? `  ${r.url}` : ""}`);
+      }
       for (const e of list.sources.filter((x) => x.error)) console.error(`\n${e.file} can't be read: ${e.error}`);
       if (!shown.length) console.log(`no scripts found in ${tilde(list.root)}`);
       return 0;

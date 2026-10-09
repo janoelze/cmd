@@ -357,6 +357,32 @@ describe("service", () => {
     await vi.waitFor(() => expect(ptys.at(-1)!.written.join("")).toContain("claude --model opus /triage"));
   });
 
+  it("knows the repository's worktrees and what runs in the others", async () => {
+    // A repository at main/ with a linked worktree at wt/ on branch "feature", laid out as git does.
+    const main = path.join(dir, "main");
+    const wt = path.join(dir, "wt");
+    const pkg = JSON.stringify({ scripts: { dev: "vite" } });
+    fs.mkdirSync(path.join(main, ".git", "worktrees", "wt"), { recursive: true });
+    fs.mkdirSync(wt);
+    fs.writeFileSync(path.join(main, ".git", "HEAD"), "ref: refs/heads/master\n");
+    fs.writeFileSync(path.join(main, ".git", "worktrees", "wt", "HEAD"), "ref: refs/heads/feature\n");
+    fs.writeFileSync(path.join(main, ".git", "worktrees", "wt", "commondir"), "../..\n");
+    fs.writeFileSync(path.join(main, ".git", "worktrees", "wt", "gitdir"), path.join(wt, ".git") + "\n");
+    fs.writeFileSync(path.join(wt, ".git"), `gitdir: ${path.join(main, ".git", "worktrees", "wt")}\n`);
+    fs.writeFileSync(path.join(main, "package.json"), pkg);
+    fs.writeFileSync(path.join(wt, "package.json"), pkg);
+    const at = (root: string) => core.handlers["actions.list"]({ path: root }) as ReturnType<Core["actions"]["list"]>;
+    expect(at(wt).checkout).toMatchObject({ top: wt, branch: "feature", linked: true, project: main });
+    core.actions.run(wt, "npm:package.json:dev", core.spaces.home().id);
+    ptys.at(-1)!.output("\x1b]133;C\x07Local: http://localhost:5174/\r\n");
+    expect(at(main).worktrees).toEqual([
+      { top: main, branch: "master", linked: false, running: 0, agents: 0 },
+      { top: wt, branch: "feature", linked: true, running: 1, agents: 0 },
+    ]);
+    expect(at(main).runs).toEqual([]);
+    expect(at(main).elsewhere).toMatchObject([{ actionId: "npm:package.json:dev", root: wt, branch: "feature", url: "http://localhost:5174/", endedAt: null }]);
+  });
+
   it("pins an action to the top and keeps a pinned command from history", () => {
     write({ "package.json": JSON.stringify({ scripts: { a: "x", b: "y" } }) });
     core.actions.pin(dir, "npm:package.json:b", true);

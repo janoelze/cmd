@@ -2,7 +2,7 @@
 // in a folder, found in its own files (package.json, Makefile, justfile…), with
 // what they do, how often they ran and whether one is running now.
 
-import type { PaneId } from "./model.ts";
+import type { GitPlace, PaneId } from "./model.ts";
 
 /** What the widget, the library and the palette call it; one place to rename. */
 export const ACTIONS_TITLE = "Workspace Actions";
@@ -76,6 +76,15 @@ export interface ActionsList {
   /** Files read, and an error for one that couldn't be (its last good actions are kept). */
   sources: { file: string; error?: string }[];
   runs: ActionRun[];
+  /** The checkout the folder is in; null outside a repository. */
+  checkout: GitPlace | null;
+  /**
+   * Every checkout of the folder's repository (the main one first, then linked
+   * worktrees): its branch, how many of its actions are running and how many agents work in it.
+   */
+  worktrees: { top: string; branch: string | null; linked: boolean; running: number; agents: number }[];
+  /** Runs of these same actions in the repository's other worktrees (dev in another branch's checkout). */
+  elsewhere: (ActionRun & { root: string; branch: string | null })[];
   /** The model is writing descriptions. */
   describing: boolean;
 }

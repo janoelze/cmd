@@ -550,9 +550,10 @@ export const diffType: WindowType<{ path: string }> = {
 
 /**
  * Workspace Actions (docs/39): how to run the project in a folder. `path` unset:
- * the Space's root, so the widget follows its Space.
+ * the checkout of the terminal selected last in the Space (a worktree), else the
+ * Space's root (`follow: false`: always the root). The app resolves which.
  */
-export const actionsType: WindowType<{ path?: string; toggled?: string[] }> = {
+export const actionsType: WindowType<{ path?: string; follow?: boolean; toggled?: string[] }> = {
   kind: "actions",
   title: ACTIONS_TITLE,
   icon: "play.rectangle",
@@ -566,6 +567,8 @@ export const actionsType: WindowType<{ path?: string; toggled?: string[] }> = {
     const next = { ...state };
     if (patch.path === null) delete next.path;
     else if (typeof patch.path === "string") next.path = path.resolve(expandHome(patch.path));
+    // Without a path: follow the selected terminal's checkout (default), or stay on the Space's folder.
+    if (typeof patch.follow === "boolean") next.follow = patch.follow;
     // Sections opened or closed against their default.
     if (Array.isArray(patch.toggled)) next.toggled = patch.toggled.filter((x): x is string => typeof x === "string").slice(0, 100);
     return { state: next };

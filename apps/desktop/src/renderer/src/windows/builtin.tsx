@@ -15,7 +15,8 @@ import { LiveDiff } from "../components/LiveDiff.tsx";
 import { watchUrl, YouTubeView } from "../components/YouTubeView.tsx";
 import { NavigatorView } from "../components/Navigator.tsx";
 import { CommandsView } from "../components/CommandsView.tsx";
-import { ActionsView, actionsRoot } from "../components/ActionsView.tsx";
+import { ActionsView } from "../components/ActionsView.tsx";
+import { actionsRootOf, lastLists } from "../workspaceActions.ts";
 import { getState } from "../store.ts";
 import { JournalView } from "../components/JournalView.tsx";
 import { NotificationsView } from "../components/NotificationsView.tsx";
@@ -249,16 +250,31 @@ registerWindowView({
   menu: commandsMenu,
 });
 
-// Workspace Actions: the title bar names the folder; its menu has where they come from and the settings.
+// Workspace Actions: the title bar names the folder (or worktree) they're for; its
+// menu follows the selected terminal's checkout or picks one of the repository's.
 const actionsMenu = (w: AppWindow): MenuEntry[] => {
-  const st = getState();
-  const settings = st.settings.settings;
+  const settings = getState().settings.settings;
   const set = (key: "actions.describe" | "actions.openBrowser", value: boolean) => void cmd.call("settings.set", { key, value }).catch(() => {});
+  const root = actionsRootOf(w);
+  const pinned = typeof w.state.path === "string";
+  const follow = !pinned && w.state.follow !== false;
+  const trees = lastLists.get(w.id)?.worktrees ?? [];
   return [
+    { label: "Follow Selected Terminal", checked: follow, run: () => setWidgetState(w.id, { path: null, follow: true }) },
+    ...(trees.length > 1
+      ? [
+          "-" as const,
+          ...trees.map((t) => ({
+            label: `${t.branch ?? shortPath(t.top)}${t.running ? ` · ${t.running} running` : ""}${t.agents ? ` · ${t.agents} ${t.agents === 1 ? "agent" : "agents"}` : ""}`,
+            checked: !follow && t.top === root,
+            run: () => setWidgetState(w.id, { path: t.top }),
+          })),
+        ]
+      : []),
+    { label: "Use the Space's Folder", checked: !pinned && !follow, run: () => setWidgetState(w.id, { path: null, follow: false }) },
+    "-",
     { label: "Describe with AI", checked: settings["actions.describe"], run: () => set("actions.describe", !settings["actions.describe"]) },
     { label: "Open Dev Servers in a Browser", checked: settings["actions.openBrowser"], run: () => set("actions.openBrowser", !settings["actions.openBrowser"]) },
-    "-",
-    { label: "Use the Space's Folder", checked: typeof w.state.path !== "string", enabled: typeof w.state.path === "string", run: () => setWidgetState(w.id, { path: null }) },
   ];
 };
 
@@ -267,8 +283,10 @@ registerWindowView({
   View: ActionsView,
   describe: () => ({ kind: null }),
   titleMenu: (w) => {
-    const root = actionsRoot(w.state, getState().spaces.get(w.spaceId)?.root);
-    return { label: root ? root.replace(/\/+$/, "").split("/").pop() || root : ACTIONS_TITLE, entries: actionsMenu(w) };
+    const root = actionsRootOf(w);
+    const branch = lastLists.get(w.id)?.checkout;
+    const name = root ? root.replace(/\/+$/, "").split("/").pop() || root : ACTIONS_TITLE;
+    return { label: branch?.linked && branch.branch ? `${name} · ${branch.branch}` : name, entries: actionsMenu(w) };
   },
   menu: actionsMenu,
 });

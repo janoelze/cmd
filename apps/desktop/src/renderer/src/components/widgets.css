@@ -59,4 +59,6 @@ button.tm-time:not(:disabled):hover { background: var(--bg-hover); }
 
 /* ── Workspace Actions ── */
 .wa-search { padding: 6px 10px 2px; }
+.wa-where { display: flex; align-items: center; gap: 5px; padding: 6px 10px 2px; color: var(--text-dim); font-size: var(--text-xs); }
+.wa-primary { padding: 4px 0; border-bottom: 1px solid var(--separator); margin-bottom: 4px; }
 .wa-note { padding: 6px 10px; color: var(--text-dim); font-size: var(--text-xs); }

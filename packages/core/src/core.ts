@@ -458,6 +458,7 @@ export class Core {
       ai: { object: (o) => this.ai.object(o), ready: () => this.ai.status().ready },
       describeOn: () => this.settings.settings["actions.describe"],
       roots: () => this.windows.list().flatMap((w) => (w.kind === "actions" ? [this.#actionsRoot(w.state.path as string | undefined, w.spaceId)] : [])),
+      agentsIn: (top) => this.agents.list().filter((a) => a.git?.top === top && a.state !== "exited").length,
       agentCommand: (agent) => {
         const v = (this.settings.settings as Record<string, unknown>)[`agents.${agent}.command`];
         return typeof v === "string" && v.trim() ? v.trim() : null;
