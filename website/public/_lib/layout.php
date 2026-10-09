@@ -1,5 +1,5 @@
 <?php
-// Page chrome shared by the product page and the usage page: head, nav
+// Page chrome shared by the product, releases and usage pages: head, nav
 // and the stylesheet (dark only, see :root).
 
 declare(strict_types=1);
@@ -12,9 +12,16 @@ function h(string $s): string
     return htmlspecialchars($s, ENT_QUOTES);
 }
 
+/** Escapes $s and renders its `code` spans as <code> and shortcuts (⇧⌘F, ⌘-click) as <kbd>. */
+function rich(string $s): string
+{
+    $s = preg_replace('/`([^`]+)`/', '<code>$1</code>', h($s));
+    return preg_replace('/[⌃⌥⇧⌘]+(?:[A-Z0-9,↩↑↓←→]|(?=-))/u', '<kbd>$0</kbd>', $s);
+}
+
 function page_start(string $title, string $description, string $current): void
 {
-    $nav = ['' => 'cmd', 'usage/' => 'Usage'];
+    $nav = ['' => 'cmd', 'releases/' => 'Releases', 'usage/' => 'Usage'];
     $GLOBALS['site_root'] = str_repeat('../', substr_count($current, '/')); // relative, so it works under /cmd/ and locally
     $url = SITE_URL . $current;
     ?><!doctype html>
@@ -159,7 +166,24 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
 p.more { margin: 10px 0 0; font-size: var(--fs-base); }
 p.more a { color: var(--ink-2); text-decoration: none; }
 p.more a:hover { color: var(--link); }
+/* The releases page: one entry per release, its notes from CHANGELOG.md. */
+.release { padding: 4px 0 28px; border-bottom: 1px solid var(--line); scroll-margin-top: 16px; }
+.release + .release { padding-top: 24px; }
+.release:last-of-type { border-bottom: 0; }
+.release .head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.release .head h2 { margin: 0; font-family: var(--mono); }
+.release .head h2 a { color: inherit; text-decoration: none; }
+.release .head time { color: var(--ink-3); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.release .head .button { margin-left: auto; }
+.notes { max-width: 68ch; }
+.notes > p:first-child { color: var(--ink-2); font-size: var(--fs-lede); margin: 10px 0 0; }
+.notes h3 { font-size: var(--fs-sm); font-weight: 500; color: var(--ink-3); margin: 18px 0 4px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.notes li { margin: 3px 0; color: var(--ink-2); }
+.notes li::marker { color: var(--ink-3); }
+.notes strong { color: var(--ink); font-weight: 500; }
 @media (max-width: 640px) {
+  .release .head .button { margin-left: 0; }
   .releases li { grid-template-columns: 5em 1fr 4.5em auto; gap: 12px; padding: 10px 10px 10px 14px; }
   .releases time { display: none; }
 }

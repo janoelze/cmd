@@ -13,13 +13,6 @@ function features(): array
     return json_decode((string) file_get_contents(__DIR__ . '/_lib/features.json'), true, 8, JSON_THROW_ON_ERROR)['features'];
 }
 
-/** Escapes $s and renders its `code` spans as <code> and shortcuts (⇧⌘F, ⌘-click) as <kbd>. */
-function rich(string $s): string
-{
-    $s = preg_replace('/`([^`]+)`/', '<code>$1</code>', h($s));
-    return preg_replace('/[⌃⌥⇧⌘]+(?:[A-Z0-9,↩↑↓←→]|(?=-))/u', '<kbd>$0</kbd>', $s);
-}
-
 $releases = releases();
 $latest = null;
 foreach ($releases as $r) {
@@ -130,7 +123,7 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
   </li>
 <?php endforeach ?>
 </ol>
-<p class="more"><a href="https://github.com/janoelze/cmd/releases">All <?= count($releases) ?> releases on GitHub →</a></p>
+<p class="more"><a href="releases/">What's new in every release →</a></p>
 <script>
 // Release times in the reader's time zone ("Oct 4, 22:58").
 for (const t of document.querySelectorAll(".releases time")) {

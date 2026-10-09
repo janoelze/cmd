@@ -1,11 +1,11 @@
 <?php
-// cmd's GitHub releases for the product page, cached in the data dir for an
+// cmd's GitHub releases for the product and releases pages, cached in the data dir for an
 // hour (a stale copy is used when GitHub doesn't answer).
 
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 
-const RELEASES_URL = 'https://api.github.com/repos/janoelze/cmd/releases?per_page=30';
+const RELEASES_URL = 'https://api.github.com/repos/janoelze/cmd/releases?per_page=100';
 
 /** [{tag, name, date, published, url, dmg, size, prerelease}], newest first; [] when unknown. */
 function releases(): array
@@ -51,3 +51,4 @@ function releases(): array
     }
     return $out;
 }
+

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploys the website (product page, releases, public usage stats) to the
+# Deploys the website (product page, releases and their notes, public usage stats) to the
 # Uberspace host: public/ goes to the docroot as
 # https://endtime-instruments.org/cmd (Apache serves it directly; plain PHP, no
 # service; _lib/ is denied to the web), and the data (usage.sqlite, releases
@@ -16,13 +16,14 @@ DOCROOT="/var/www/virtual/janoelze/endtime-instruments.org/cmd"
 URL="https://endtime-instruments.org/cmd"
 
 cd "$(dirname "$0")"
-for f in public/*.php public/_lib/*.php public/usage/*.php; do php -l "$f" >/dev/null; done
+for f in public/*.php public/_lib/*.php public/usage/*.php public/releases/*.php; do php -l "$f" >/dev/null; done
+cp ../CHANGELOG.md public/_lib/   # the releases page's notes (_lib/changelog.php)
 node shots.mjs   # shots/ (window captures with their shadow) → public/shots/ (cropped)
 
 # The first deploys linked the docroot to ~/cmd-website; replace that link.
 ssh "$HOST" "mkdir -p ~/cmd-website-data && chmod 700 ~/cmd-website-data && { [ ! -L $DOCROOT ] || rm $DOCROOT; } && rm -rf ~/cmd-website && mkdir -p $DOCROOT"
 rsync -az --delete public/ "$HOST:$DOCROOT/"
 
-curl -fsS -o /dev/null "$URL/" && curl -fsS -o /dev/null "$URL/usage/" && echo "website: ok"
+curl -fsS -o /dev/null "$URL/" && curl -fsS -o /dev/null "$URL/usage/" && curl -fsS -o /dev/null "$URL/releases/" && echo "website: ok"
 code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/_lib/db.php")
 [ "$code" = 403 ] || { echo "website: _lib is served (HTTP $code)" >&2; exit 1; }

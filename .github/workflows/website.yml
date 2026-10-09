@@ -8,6 +8,7 @@ on:
     branches: [master]
     paths:
       - website/**
+      - CHANGELOG.md # the releases page
       - .github/workflows/website.yml
   workflow_dispatch:
 

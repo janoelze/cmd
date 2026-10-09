@@ -11,3 +11,5 @@ packages/core/native/build/
 apps/desktop/native/build/
 # cropped by website/shots.mjs on deploy
 website/public/shots/
+# Copied in by website/deploy.sh
+website/public/_lib/CHANGELOG.md
