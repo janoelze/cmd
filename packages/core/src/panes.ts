@@ -18,6 +18,7 @@ import { DEVICE_REPLIES, OscScanner, type OscEvent } from "./osc.ts";
 import { agentVersion, classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
 import type { Store } from "./store.ts";
 import { integrate, shellName } from "./shells.ts";
+import { ptysExhausted } from "./terminals/ptys.ts";
 import { LocalBackend } from "./terminals/local.ts";
 import type { PtyFactory } from "./terminals/pty.ts";
 import type { Term, TermBackend } from "./terminals/types.ts";
@@ -135,6 +136,8 @@ export interface PaneEvents {
   exec: [paneId: PaneId, command: string];
   /** What a command printed, when it ended (before its D mark is emitted as `osc`); bounded. */
   captured: [paneId: PaneId, output: string];
+  /** The shell couldn't be started (the pane is gone); `ptys`: the Mac has no pseudo-terminal left. */
+  failed: [paneId: PaneId, shell: string, message: string, cause: "ptys" | null];
 }
 
 export interface PaneManagerOptions {
@@ -157,6 +160,8 @@ export interface PaneManagerOptions {
   store?: Store | null;
   /** Folder for each pane's own shell history (zsh and bash integration), kept for restoring; null: none. */
   historyDir?: string | null;
+  /** Whether a shell failed to start for want of a pseudo-terminal (tests inject it). */
+  ptysExhausted?: () => boolean;
 }
 
 export interface CreatePaneOptions {
@@ -187,6 +192,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
   #rulesFile: string | null;
   #store: Store | null;
   #historyDir: string | null;
+  #ptysExhausted: () => boolean;
   #poll: NodeJS.Timeout | undefined;
   #polling = false;
   #screens: NodeJS.Timeout | undefined;
@@ -203,6 +209,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     this.#rulesFile = o.rulesFile ?? null;
     this.#store = o.store ?? null;
     this.#historyDir = o.historyDir ?? null;
+    this.#ptysExhausted = o.ptysExhausted ?? ptysExhausted;
     const pollMs = o.pollMs ?? 500;
     if (pollMs > 0) {
       this.#poll = setInterval(() => this.pollForeground(), pollMs);
@@ -292,7 +299,13 @@ export class PaneManager extends EventEmitter<PaneEvents> {
 
     // The headless copy only needs what is ever read back from it: a UI's snapshot and the saved screen.
     const kept = Math.min(cfg["terminal.scrollback"], Math.max(SNAPSHOT_SCROLLBACK, cfg["restore.scrollback"]));
-    const term = this.#backend.spawn({ id, shell, args, cwd, cols, rows, env, scrollback: kept, replay: opts.replay });
+    let term: Term;
+    try {
+      term = this.#backend.spawn({ id, shell, args, cwd, cols, rows, env, scrollback: kept, replay: opts.replay });
+    } catch (err) {
+      this.#startFailed(id, shell, err as Error);
+      throw err;
+    }
     const now = Date.now();
     const pane: Pane = {
       id,
@@ -367,11 +380,17 @@ export class PaneManager extends EventEmitter<PaneEvents> {
         this.#changed(live);
       },
       (err: Error) => {
-        log.error(`pane ${pane.id.slice(0, 8)} could not start: ${err.message}`);
+        this.#startFailed(pane.id, pane.shell, err);
         this.#exited(live, null);
       },
     );
     return live;
+  }
+
+  #startFailed(id: PaneId, shell: string, err: Error): void {
+    const cause = this.#ptysExhausted() ? "ptys" : null;
+    log.error(`pane ${id.slice(0, 8)} could not start: ${err.message}`, { cause });
+    this.emit("failed", id, shell, err.message, cause);
   }
 
   /**

@@ -28,6 +28,32 @@ const setForeground = async (pty: FakePty, name: string) => {
   await panes.pollForeground();
 };
 
+describe("a shell that couldn't start", () => {
+  const failing = () => {
+    throw new Error("posix_spawnp failed.");
+  };
+  const setup = (ptysExhausted: boolean) => {
+    panes = new PaneManager(failing, { socketPath: "/tmp/test.sock", pollMs: 0, settings: () => cfg, ptysExhausted: () => ptysExhausted });
+    const center = new NotificationCenter(panes, new AgentTracker(panes), () => cfg);
+    sent = [];
+    center.on("notification", (n) => sent.push(n));
+  };
+
+  it("says the Mac is out of pseudo-terminals, once per burst", () => {
+    setup(true);
+    expect(() => panes.create()).toThrow("posix_spawnp failed.");
+    expect(() => panes.create()).toThrow();
+    expect(sent).toMatchObject([{ source: "terminal", paneId: null, title: "Terminals can't start", alert: true, urgent: true }]);
+    expect(sent[0]!.body).toContain("511");
+  });
+
+  it("otherwise names the shell and the reason", () => {
+    setup(false);
+    expect(() => panes.create()).toThrow();
+    expect(sent).toMatchObject([{ title: "Terminal couldn't start", body: "zsh didn't start: posix_spawnp failed." }]);
+  });
+});
+
 describe("bells", () => {
   it("mark the terminal and flash, but only notify when asked to", () => {
     const pane = panes.create();

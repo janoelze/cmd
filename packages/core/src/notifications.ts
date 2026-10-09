@@ -17,6 +17,7 @@
 import { EventEmitter } from "node:events";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import type { Agent, AppNotification, Attention, Pane, PaneId, Settings, SpaceId, WindowId } from "@cmd/protocol";
 import type { OscEvent } from "./osc.ts";
 import type { PaneManager } from "./panes.ts";
@@ -31,6 +32,9 @@ export const AI_WAIT_MS = { needs: 1500, done: 2500, stopped: 2500 } as const;
 
 /** A turn you prompted that finished quicker than this: you're still there, no "done". */
 export const QUICK_TURN_MS = 20_000;
+
+/** Shells that fail to start in a burst (several new terminals, a restore) get one notification. */
+export const START_FAILURE_MS = 30_000;
 /** Bells closer together than this in one terminal count as one (a held key, a noisy script). */
 const BELL_EVERY_MS = 2000;
 /** Exit status of a command stopped with ⌃C: you were there, no need to tell you. */
@@ -63,6 +67,8 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
   #settings: () => Settings;
   #agentStates = new Map<string, Agent["state"]>();
   #lastBell = new Map<PaneId, number>();
+  /** The last "couldn't start" notification: one per burst (opening several terminals, restoring). */
+  #lastStartFailure = 0;
   #running = new Map<PaneId, Running>();
 
   #writer: NoticeWriter | null;
@@ -85,6 +91,7 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
       this.#lastBell.delete(id);
       this.#running.delete(id);
     });
+    panes.on("failed", (_id, shell, message, cause) => this.#startFailed(shell, message, cause));
     agents.on("updated", (a) => this.#onAgent(a));
     // An agent that needed you before a core restart was already announced.
     agents.on("restored", (a) => this.#agentStates.set(a.id, a.state));
@@ -100,6 +107,18 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
     }
     this.#mark(pane, { kind: "notify", text: body || title || "Notification", urgent: true });
     this.#emit({ source: "cli", paneId: pane.id, title: title || label(pane), body, alert: !pane.muted, urgent: true });
+  }
+
+  /** A shell that couldn't start, once per START_FAILURE_MS: the window is gone, so this says why. */
+  #startFailed(shell: string, message: string, cause: "ptys" | null): void {
+    const now = Date.now();
+    if (now - this.#lastStartFailure < START_FAILURE_MS) return;
+    this.#lastStartFailure = now;
+    const body =
+      cause === "ptys"
+        ? "macOS has no free pseudo-terminal left (it allows 511). Close terminals or sessions you no longer need."
+        : `${path.basename(shell)} didn't start: ${message}`;
+    this.#emit({ source: "terminal", paneId: null, title: cause === "ptys" ? "Terminals can't start" : "Terminal couldn't start", body, alert: true, urgent: true });
   }
 
   /** Something cmd did by itself that the user should know about (not urgent, no terminal). */
