@@ -16,7 +16,8 @@ function h(string $s): string
 function rich(string $s): string
 {
     $s = preg_replace('/`([^`]+)`/', '<code>$1</code>', h($s));
-    return preg_replace('/[⌃⌥⇧⌘]+(?:[A-Z0-9,↩↑↓←→]|(?=-))/u', '<kbd>$0</kbd>', $s);
+    $s = preg_replace('/[⌃⌥⇧⌘]+(?:[A-Z0-9,↩↑↓←→]|(?=-))/u', '<kbd>$0</kbd>', $s);
+    return preg_replace('/\(<kbd>[^<]*<\/kbd>\)/u', '<span class="nowrap">$0</span>', $s); // "(⇧⌘N)" never breaks after "("
 }
 
 function page_start(string $title, string $description, string $current): void
@@ -80,6 +81,7 @@ code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
 /* A shortcut: a plain solid key, readable on the page and on a card. */
 kbd { display: inline-block; min-width: 1.6em; padding: 0 0.4em; font: 0.92em/1.5 var(--sans); letter-spacing: 0.04em; text-align: center; color: var(--ink); background: color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 4px; }
 .muted { color: var(--ink-3); }
+.nowrap { white-space: nowrap; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
 .card.scroll { overflow-x: auto; }
 .note { margin-top: 24px; }
@@ -178,7 +180,7 @@ p.more a:hover { color: var(--link); }
 .release .head time { color: var(--ink-3); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .release .head .button { margin-left: auto; }
 .notes { max-width: 68ch; }
-.notes > p:first-child { color: var(--ink-2); font-size: var(--fs-lede); margin: 10px 0 0; }
+.notes > p:first-child { color: var(--ink-2); font-size: var(--fs-lede); margin: 10px 0 0; text-wrap: balance; } /* a summary breaks evenly, no one-word last line */
 .notes h3 { font-size: var(--fs-sm); font-weight: 500; color: var(--ink-3); margin: 18px 0 6px; line-height: 1; }
 /* The app's small Badge (packages/ui, .ui-badge[data-size="sm"]), a size up for the page's type. */
 .badge { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; font: 600 var(--fs-xs)/1 var(--sans); color: var(--tone); border-radius: 9px; background: color-mix(in srgb, var(--tone) 14%, transparent); }
@@ -187,7 +189,7 @@ p.more a:hover { color: var(--link); }
 .badge[data-tone="warning"] { --tone: var(--warning); }
 .badge[data-tone="neutral"] { color: var(--ink-3); background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .notes ul { margin: 0; padding-left: 18px; }
-.notes li { margin: 3px 0; color: var(--ink-2); }
+.notes li { margin: 3px 0; color: var(--ink-2); text-wrap: pretty; }
 .notes li::marker { color: var(--ink-3); }
 .notes strong { color: var(--ink); font-weight: 500; }
 @media (max-width: 640px) {
