@@ -29,7 +29,7 @@ foreach ($releases as $r) {
     }
 }
 
-page_start('cmd for macOS — spaces that work', 'A software workbench for macOS. Terminals, coding agents, browser, editor and widgets, side by side in one Space per project, arranged however you work.', '');
+page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, browser, editor and widgets, side by side in one Space per project, arranged however you work.', '');
 ?>
 <h1>cmd</h1>
 <p class="lede">A software workbench for macOS. Terminals, coding agents, browser, editor and widgets, side by side in one Space per project, arranged however you work.</p>
