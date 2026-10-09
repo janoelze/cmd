@@ -315,10 +315,11 @@ export interface Methods {
   "magic.fix": { params: { id: WindowId }; result: null };
   /**
    * Live Code's AI: the new code for a request about the code playing now. `sounds`: what the
-   * window has loaded; `failed`: the last attempt and why it didn't play (the window retries).
+   * window has loaded; `history`: the code before each earlier change, newest first (for "undo
+   * that"); `failed`: the last attempt and why it didn't play (the window retries).
    */
   "livecode.change": {
-    params: { code: string; request: string; sounds?: string[]; failed?: { code: string; error: string } };
+    params: { code: string; request: string; sounds?: string[]; history?: { code: string; request: string; summary: string }[]; failed?: { code: string; error: string } };
     result: { code: string; summary: string };
   };
   /** Mute a widget: its notifications only mark the window, without a system notification or sound. */

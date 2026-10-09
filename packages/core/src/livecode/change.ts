@@ -17,6 +17,8 @@ export interface ChangeRequest {
   request: string;
   /** Sound names the window has loaded (its frame's soundMap). */
   sounds?: string[];
+  /** The code before each earlier change, newest first, with the request and what changed. */
+  history?: { code: string; request: string; summary: string }[];
   /** The last attempt at this request, and why it didn't play. */
   failed?: { code: string; error: string };
 }
@@ -60,10 +62,19 @@ export function soundList(sounds: string[]): string {
 
 export function changePrompt(r: ChangeRequest): string {
   const parts = [`Request: ${r.request.trim()}`, `Code now playing:\n\`\`\`\n${r.code}\n\`\`\``];
+  const history = (r.history ?? []).slice(0, HISTORY);
+  if (history.length)
+    parts.push(
+      `Earlier changes, newest first. Each shows the code as it was before that change:\n\n` +
+        history.map((h, i) => `${i + 1}. "${h.request}" (${h.summary || "changed"}). Before it:\n\`\`\`\n${h.code}\n\`\`\``).join("\n\n"),
+    );
   if (r.failed) parts.push(`Your last attempt didn't play:\n\`\`\`\n${r.failed.code}\n\`\`\`\nError: ${r.failed.error}`);
   if (r.sounds?.length) parts.push(`Loaded sounds (plain names, then banks with their sounds):\n${soundList(r.sounds)}`);
   return parts.join("\n\n");
 }
+
+/** Earlier versions the model sees: enough to step back a few changes. */
+const HISTORY = 5;
 
 type ObjectCall = <T>(o: CallOptions & ObjectRequest<T>) => Promise<CompleteResult<T>>;
 

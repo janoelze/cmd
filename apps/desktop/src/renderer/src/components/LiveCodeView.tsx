@@ -33,6 +33,14 @@ import type { WindowViewProps } from "../windows/registry.ts";
 import { livecodeControls as controls } from "../windows/livecode.tsx";
 import "./livecode.css";
 
+/** "undo", "undo that", "undo the last 2 changes", "go back": restored at once, without the AI. */
+const UNDO = /^(?:undo|revert|go back)(?:\s+(?:that|it|this|(?:the\s+)?(?:last\s+)?(\d+|one|two|three|four|five)?\s*changes?))?[\s.!]*$/i;
+const COUNTS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5 };
+
+/** Earlier versions kept (core windows/builtin.ts LIVECODE_VERSIONS), newest first. */
+type Version = { code: string; request: string; summary: string };
+const versionsOf = (v: unknown): Version[] => (Array.isArray(v) ? (v as Version[]) : []);
+
 /** Attempts at one request before the edit is undone. */
 const ATTEMPTS = 3;
 
@@ -53,6 +61,8 @@ export function LiveCodeView({ win }: WindowViewProps) {
   /** Bumped by Stop: a request whose answer comes back after it is dropped. */
   const run = useRef(0);
   const ask = useRef<HTMLTextAreaElement>(null);
+  const winRef = useRef(win);
+  winRef.current = win;
 
   const post = (m: unknown) => frame.current?.contentWindow?.postMessage(m, "*");
   const sounds = useRef<string[]>([]);
@@ -113,13 +123,33 @@ export function LiveCodeView({ win }: WindowViewProps) {
     const id = ++run.current;
     const current = () => run.current === id;
     setAsked((h) => [text, ...h.filter((x) => x !== text)].slice(0, 50));
-    setAi("thinking");
     setAiError(null);
     const before = v.state.doc.toString();
+    const versions = versionsOf(winRef.current.state.versions);
+    const saveVersions = (next: Version[]) => void cmd.call("window.update", { id: win.id, state: { versions: next.slice(0, 10), code: v.state.doc.toString() } }).catch(() => {});
+
+    // Plain undo: the version before the last change(s), at once.
+    const undo = UNDO.exec(text);
+    if (undo) {
+      const n = Math.max(1, Number(undo[1]) || COUNTS[undo[1]?.toLowerCase() ?? ""] || 1);
+      const target = versions[n - 1];
+      if (!target) return setAi("error"), setAiError(versions.length ? `Only ${versions.length} change${versions.length === 1 ? "" : "s"} to undo` : "Nothing to undo yet");
+      const edit = minimalChange(before, target.code);
+      if (edit) v.dispatch({ changes: edit, userEvent: "input.ai" });
+      const r = await evaluate(target.code);
+      if (!r.ok) return setAi("error"), setAiError(r.error);
+      saveVersions(versions.slice(n));
+      setAi("done");
+      setRequest("");
+      status(n === 1 ? `Undid “${target.request}”` : `Undid ${n} changes`, "ai");
+      return;
+    }
+
+    setAi("thinking");
     let failed: { code: string; error: string } | undefined;
     try {
       for (let i = 0; i < ATTEMPTS; i++) {
-        const answer = await cmd.call("livecode.change", { code: before, request: text, sounds: sounds.current, failed });
+        const answer = await cmd.call("livecode.change", { code: before, request: text, sounds: sounds.current, history: versions, failed });
         if (!current()) return;
         const edit = minimalChange(v.state.doc.toString(), answer.code);
         if (edit) v.dispatch({ changes: edit, userEvent: "input.ai" });
@@ -129,6 +159,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
           setAi("done");
           setRequest("");
           if (answer.summary) status(answer.summary, "ai");
+          saveVersions([{ code: before, request: text, summary: answer.summary }, ...versions]);
           return;
         }
         failed = { code: answer.code, error: r.error };

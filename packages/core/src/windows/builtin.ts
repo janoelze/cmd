@@ -477,19 +477,42 @@ stack(
 )
 `;
 
-/** Music as code: a Strudel pattern (renderer components/LiveCodeView.tsx) that plays as it changes. */
-export const livecodeType: WindowType<{ code: string }> = {
+/** An earlier version of a Live Code window's code: what it was before a change, the request that changed it, and what changed. */
+export interface LivecodeVersion {
+  code: string;
+  request: string;
+  summary: string;
+}
+
+/** How many earlier versions a Live Code window keeps (newest first). */
+export const LIVECODE_VERSIONS = 10;
+
+const versionsOf = (v: unknown): LivecodeVersion[] =>
+  (Array.isArray(v) ? v : [])
+    .filter((x): x is LivecodeVersion => !!x && typeof x.code === "string" && typeof x.request === "string" && typeof x.summary === "string")
+    .slice(0, LIVECODE_VERSIONS)
+    .map(({ code, request, summary }) => ({ code, request, summary }));
+
+/**
+ * Music as code: a Strudel pattern (renderer components/LiveCodeView.tsx) that
+ * plays as it changes. `versions`: the code before each AI change, newest first,
+ * which the AI sees, so "undo that" and "go back to before the pad" restore real code.
+ */
+export const livecodeType: WindowType<{ code: string; versions: LivecodeVersion[] }> = {
   kind: "livecode",
   title: "Live Code",
   icon: "music.note",
   role: "widget",
   description: "Make music with code, and ask for changes as it plays.",
   create(input) {
-    return { state: { code: typeof input.code === "string" ? input.code : LIVECODE_STARTER }, title: "Live Code" };
+    return { state: { code: typeof input.code === "string" ? input.code : LIVECODE_STARTER, versions: [] }, title: "Live Code" };
   },
-  /** Patches: { code }. */
+  /** Patches: { code }, { versions }. */
   update(state, patch) {
-    return { state: typeof patch.code === "string" ? { ...state, code: patch.code } : state };
+    const next = { ...state, versions: versionsOf(state.versions) };
+    if (typeof patch.code === "string") next.code = patch.code;
+    if (patch.versions !== undefined) next.versions = versionsOf(patch.versions);
+    return { state: next };
   },
 };
 

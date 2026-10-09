@@ -9,8 +9,16 @@ describe("livecode window", () => {
   it("starts with code that plays, and keeps what it's given", () => {
     expect(livecodeType.create({}).state.code).toBe(LIVECODE_STARTER);
     const { state } = livecodeType.create({ code: 's("bd")' });
-    expect(livecodeType.update!(state, { code: 's("sd")' }).state).toEqual({ code: 's("sd")' });
-    expect(livecodeType.update!(state, { code: 3 }).state).toEqual({ code: 's("bd")' });
+    expect(livecodeType.update!(state, { code: 's("sd")' }).state).toEqual({ code: 's("sd")', versions: [] });
+    expect(livecodeType.update!(state, { code: 3 }).state).toEqual({ code: 's("bd")', versions: [] });
+  });
+
+  it("keeps its last ten versions, well-formed ones only", () => {
+    const { state } = livecodeType.create({});
+    const v = (i: number) => ({ code: `s("bd*${i}")`, request: `r${i}`, summary: `s${i}`, extra: 1 });
+    const next = livecodeType.update!(state, { versions: [...Array.from({ length: 12 }, (_, i) => v(i)), { code: 1 }] }).state;
+    expect(next.versions).toHaveLength(10);
+    expect(next.versions[0]).toEqual({ code: 's("bd*0")', request: "r0", summary: "s0" });
   });
 });
 
@@ -24,6 +32,14 @@ describe("livecode change", () => {
 
   it("lists sounds by bank", () => {
     expect(soundList(["sawtooth", "piano", "RolandTR909_bd", "RolandTR909_hh", "bd"])).toBe("sawtooth piano bd\nRolandTR909: bd hh");
+  });
+
+  it("shows the model earlier versions, newest first, for undo", () => {
+    const history = Array.from({ length: 7 }, (_, i) => ({ code: `v${i}`, request: `req${i}`, summary: `sum${i}` }));
+    const p = changePrompt({ code: "now", request: "undo the last two changes", history });
+    expect(p).toContain('1. "req0" (sum0). Before it:\n```\nv0\n```');
+    expect(p).toContain('5. "req4"');
+    expect(p).not.toContain("req5");
   });
 
   it("asks with the code, the sounds and the last failure", () => {
