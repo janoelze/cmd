@@ -1152,6 +1152,7 @@ kbd {
 .workspace-trigger.pending:hover { background: transparent; }
 .workspace-menu { min-width: 280px; } /* sized to its widest workspace (WorkspaceBar.tsx), no wider than 400px */
 .workspace-trigger > .sf { flex: none; color: var(--text-dim); }
+.workspace-trigger .workspace-icon { color: inherit; } /* the same colour as the name */
 .workspace-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* WorkspaceIcon.tsx: the workspace's symbol; a dot on its corner when it wants you. */
 .workspace-icon {
