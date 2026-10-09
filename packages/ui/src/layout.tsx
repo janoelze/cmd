@@ -4,7 +4,7 @@
 
 import { useId, type MouseEvent, type ReactNode } from "react";
 import { RowLabels } from "./labels.ts";
-import { ICON, iconNode } from "./icon.tsx";
+import { ICON, Icon, iconNode } from "./icon.tsx";
 import { IconButton } from "./button.tsx";
 import { useTooltip } from "./tooltips.tsx";
 import type { Tone } from "./status.tsx";
@@ -152,6 +152,53 @@ export function FeatureList({ items }: { items: readonly { icon: string | ReactN
         </li>
       ))}
     </ul>
+  );
+}
+
+export type StepState = "done" | "todo" | "failed";
+export interface Step {
+  title: ReactNode;
+  state: StepState;
+  /** What's there (a done step, on its line) or what to do (the step that needs you). */
+  detail?: ReactNode;
+  /** What fixes it: a button, shown on the step that needs you and on failed ones. */
+  action?: ReactNode;
+}
+
+const STEP_ICON: Record<StepState, string> = { done: "checkmark.circle.fill", failed: "xmark.circle.fill", todo: "circle" };
+const STEP_LABEL: Record<StepState, string> = { done: "Done", failed: "Failed", todo: "To do" };
+
+/**
+ * A setup checklist: steps in order, titled as things to do. Done steps are one
+ * compact line; the first that isn't done is the current one, with what to do
+ * and its fix; the steps after it wait, dimmed. `footer` (Check Again) sits in
+ * the last row, lined up with the steps' buttons.
+ */
+export function Checklist({ steps, footer }: { steps: readonly Step[]; footer?: ReactNode }) {
+  const current = steps.findIndex((s) => s.state !== "done");
+  return (
+    <div className="ui-group">
+      <ol className="ui-checklist">
+        {steps.map((s, i) => {
+          const at = i === current ? "current" : current >= 0 && i > current ? "later" : "past";
+          const open = at !== "later" && s.state !== "done";
+          return (
+            <li key={i} className="ui-row ui-step" data-state={s.state} data-at={at} data-compact={open ? undefined : ""} aria-current={at === "current" ? "step" : undefined}>
+              <span className="ui-step-mark" role="img" aria-label={STEP_LABEL[s.state]}>
+                <Icon name={STEP_ICON[s.state]} size={ICON.row + 2} />
+              </span>
+              <div className="ui-row-text">
+                <div className="ui-row-title">{s.title}</div>
+                {open && s.detail && <div className="ui-row-desc">{s.detail}</div>}
+              </div>
+              {s.state === "done" && s.detail && <span className="ui-step-value">{s.detail}</span>}
+              {open && s.action && <div className="ui-row-control">{s.action}</div>}
+            </li>
+          );
+        })}
+        {footer && <li className="ui-row ui-step-footer" data-compact="">{footer}</li>}
+      </ol>
+    </div>
   );
 }
 

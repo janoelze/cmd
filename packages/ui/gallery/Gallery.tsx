@@ -28,6 +28,7 @@ import {
   ConfirmDialog,
   Dialog,
   EmptyState,
+  Checklist,
   ErrorBoundary,
   FeatureList,
   FormActions,
@@ -1026,6 +1027,17 @@ function ContentPage() {
       </Spec>
       <Spec title="Panel, ListSection, ListRow, Chip" code="<Panel> <PanelHeader title onTitleClick actions> <ListSection title count> <ListRow icon light title detail tone end hover>" note="Lists like the Navigator's and the file browser's sidebar. The header's title opens a menu and its actions show on hover; a row's light takes the icon's place, and its end gives way to its hover actions.">
         <ListSpecimen />
+      </Spec>
+      <Spec title="Checklist" code="<Checklist steps={[{ title, state: done | todo | failed, detail, action }]} footer>" note="A setup's steps, titled as things to do. Done steps are one line with their value; the first that isn't done shows what to do and its fix; the rest wait, dimmed. The footer (Check Again) lines up with the steps' buttons.">
+        <Checklist
+          steps={[
+            { title: "Install Tailscale", state: "done" },
+            { title: "Connect to your tailnet", state: "done", detail: "lukas@github" },
+            { title: "Turn on HTTPS certificates", state: "todo", detail: "In Tailscale's admin console, under DNS.", action: <Button>Open Admin Console</Button> },
+            { title: "Publish on your tailnet", state: "todo" },
+          ]}
+          footer={<Button>Check Again</Button>}
+        />
       </Spec>
       <Spec
         title="SheetHeader, FeatureList, Prose"

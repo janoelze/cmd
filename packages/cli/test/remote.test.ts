@@ -33,7 +33,7 @@ describe("cmd remote status line", () => {
       "  https://login.tailscale.com/admin/dns",
     ]);
     expect(checkLines({ id: "a", title: "Tailscale is running", state: "ok" })).toEqual(["✓ Tailscale is running"]);
-    expect(checkLines({ id: "b", title: "The page loads", state: "error" })[0]).toBe("✗ The page loads");
+    expect(checkLines({ id: "b", title: "Forward the page", state: "error" })[0]).toBe("✗ Forward the page");
   });
 });
 
