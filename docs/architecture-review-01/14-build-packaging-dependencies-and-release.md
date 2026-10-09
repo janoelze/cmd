@@ -228,6 +228,23 @@ Then: declare `playwright` as an optional peer dependency of core (`peerDependen
 - [ ] `CI=1 node scripts/postinstall.mjs` with `/usr/bin/clang` unavailable exits non-zero.
 - [ ] `grep -n "set this to" pnpm-workspace.yaml` returns nothing.
 
+### AR1-14-10 · Make `check-runtime.mjs` talk only to the core it started
+
+- **Status:** open
+- **Severity:** low
+- **Effort:** S (< ½ day)
+- **Where:** `scripts/check-runtime.mjs:15-35`, `packages/protocol/src/instance.ts:132`
+
+**Problem.** The script starts the staged core with a throwaway `CMD_HOME` and then calls `connect()`, which prefers `$CMD_SOCKET`. Run from a cmd terminal (where every pane has `CMD_SOCKET`), it talks to the installed app's core, so it passes even when the staged core crashed at start. Found while reviewing AR1-15-01, whose author had to run it with `env -u CMD_SOCKET` to get a real answer.
+
+**Evidence.** `instance.ts:132`: "Where a client connects: $CMD_SOCKET (the pane's own core), else this instance's core". `check-runtime.mjs` sets `CMD_HOME` but leaves `CMD_SOCKET`, and passes `process.env` to the spawned core too.
+
+**Proposal.** `delete process.env.CMD_SOCKET` (and the other pane-context variables `enterInstance` drops) before importing `node.ts`, connect to the socket path derived from the throwaway home explicitly, and assert `core.hello.pid` equals the spawned child's pid.
+
+**Success criteria.**
+- [ ] With `CMD_SOCKET` pointing at a live core and the staged `main.ts` made to throw, the script exits non-zero.
+- [ ] The script checks `hello.pid === core.pid`.
+
 ## Course corrections
 
 1. **One Node, and a release that fails closed** (AR1-14-01, AR1-14-02). Both are small, and both remove a way the shipped app or the dev loop silently differs from what was tested.
@@ -237,4 +254,4 @@ Then: declare `playwright` as an optional peer dependency of core (`peerDependen
 
 ## Quick wins
 
-AR1-14-01, AR1-14-02, AR1-14-04, AR1-14-06, AR1-14-07, AR1-14-08, and the `pnpm-workspace.yaml` placeholder from AR1-14-09.
+AR1-14-01, AR1-14-02, AR1-14-04, AR1-14-06, AR1-14-07, AR1-14-08, AR1-14-10, and the `pnpm-workspace.yaml` placeholder from AR1-14-09.

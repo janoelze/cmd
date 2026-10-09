@@ -31,10 +31,12 @@ Reconciliation, as built: an agent record is created by whichever source speaks 
 
 ### AR1-05-01 · Keep another agent kind's hook events out of the pane's agent
 
-- **Status:** open
+- **Status:** done (1df00ec7)
 - **Severity:** high
 - **Effort:** S
 - **Where:** `packages/core/src/agents/tracker.ts:176-194`, `packages/core/src/agents/tracker.ts:273-279`, `packages/core/src/agents/hooks.ts:53`
+
+**Outcome.** Done as the skip (one anomaly per nested session); the virtual child agent is left for AR1-05-02. The comparison moved into `#foreign()`, so the literal grep in the last box no longer matches.
 
 **Problem.** A pane has one agent record, found by `#byPane`, and every hook event in that pane's spool is reduced into it. When Claude runs `codex exec …` or `gemini -p …` from its Bash tool (the pane's `CMD_PANE_ID` is inherited), the nested agent's hooks spool into the same folder: the tracker notes an anomaly and then applies the event anyway, so Codex's `SessionStart` (a new `session_id`) closes Claude's open turn as "interrupted: new session before the turn ended" and its `Stop` marks Claude "done". The same happens when a person starts a second agent from a shell inside the first. Only headless Claude is filtered, in the script. Foreground detection has the same blind spot: once `current` exists, `fg.class.agent` is never compared with `current.kind`, so a Codex that takes the foreground of a Claude pane updates Claude's `version` to Codex's.
 
@@ -52,10 +54,10 @@ try { this.#applyReduction(agent, red, red.apply(ev), ev, live.has(ev.id)); }
 **Proposal.** Reduce by `(pane, agent kind)`, not by pane: in `#ingest`, an event whose `ev.agent` differs from the agent's kind is noted and **skipped** (not reduced). Better: give nested agents a record of their own, as docs/08 already models for Claude subagents: a hook event of kind B in a pane whose agent is kind A creates a virtual child `{kind: B, paneId: null, parentId: A, source: "detected"}` keyed by `(pane, kind, session_id)`, and its events reduce into that child. In `#onForeground`, a foreground agent of a different kind than `current` becomes that child while it is in front, and `current` keeps its version. In the hook script, also stay quiet for Codex and Gemini headless runs when the parent env says so (`CODEX_SANDBOX`/`GEMINI_CLI` equivalents of `CLAUDE_CODE_ENTRYPOINT`; record which variables exist in docs/18).
 
 **Success criteria.**
-- [ ] A test in `activity.test.ts`: a Claude session with a nested `codex exec` (SessionStart/Stop of kind codex mid-turn) leaves Claude's turn `working` and `done` only on Claude's own Stop.
-- [ ] The nested run appears as a child agent (or is dropped with one anomaly), never as a state change of the host; `cmd agents events <host>` shows no codex events reduced into it.
-- [ ] `#onForeground` with a foreground agent of another kind than `current` does not change `current.version` (test in `detection.test.ts`).
-- [ ] `grep -n 'ev.agent !== agent.kind' tracker.ts` is followed by a `continue`/skip, not by `applyReduction`.
+- [x] A test in `activity.test.ts`: a Claude session with a nested `codex exec` (SessionStart/Stop of kind codex mid-turn) leaves Claude's turn `working` and `done` only on Claude's own Stop.
+- [x] The nested run appears as a child agent (or is dropped with one anomaly), never as a state change of the host; `cmd agents events <host>` shows no codex events reduced into it.
+- [x] `#onForeground` with a foreground agent of another kind than `current` does not change `current.version` (test in `detection.test.ts`).
+- [x] `grep -n 'ev.agent !== agent.kind' tracker.ts` is followed by a `continue`/skip, not by `applyReduction`.
 
 ### AR1-05-02 · Split `tracker.ts` into the five things it is
 

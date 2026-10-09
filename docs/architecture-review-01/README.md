@@ -1,6 +1,6 @@
 # Architecture review 01
 
-**Overall: 5/10** · 2026-10-10 · reviewed against commit `ddb7832` · 16 systems plus repo layout, 165 issues (2 critical, 36 high, 80 medium, 47 low)
+**Overall: 5/10** · 2026-10-10 · reviewed against commit `ddb7832` · 16 systems plus repo layout, 169 issues (2 critical, 37 high, 80 medium, 50 low; 5 done)
 
 cmd's foundations hold up: one core that owns all state, a PTY host that outlives it, a typed RPC contract, an event log with views, a token-driven UI kit, and a scheduler with a stall watchdog. A week of shipping on top of them has left three kinds of debt. **The read side has no single policy.** Phones, widgets and model-written code each reach files and the event log through their own checks, and two of those checks leak. **Terminal and event streams have no positions.** Snapshots and live output can't be joined exactly, and nothing pushes back on a fast producer. **Every feature edits the same central files.** `core.ts`, `App.tsx`, `WindowsView.tsx`, `tracker.ts` and five append-only registries absorb every change, and nothing stops them from growing.
 
@@ -22,17 +22,17 @@ None of this needs a rewrite. The fixes are mostly small for the security and da
 | 03 | [Core composition and services](03-core-composition-and-services.md) | **5** | 4 | 7 | 8 | 6 | 6 | 5 | 5 | 10 (0/2) |
 | 04 | [Terminals and PTYs](04-terminals-and-ptys.md) | **6** | 7 | 5 | 6 | 7 | 6 | 6 | 7 | 9 (0/2) |
 | 05 | [Agents: detection, hooks, activity](05-agents-detection-hooks-and-activity.md) | **5** | 5 | 6 | 7 | 6 | 7 | 4 | 6 | 10 (0/3) |
-| 06 | [Data: event log, views, search](06-data-event-log-views-and-search.md) | **6** | 6 | 5 | 6 | 5 | 6 | 6 | 6 | 11 (0/5) |
+| 06 | [Data: event log, views, search](06-data-event-log-views-and-search.md) | **6** | 6 | 5 | 6 | 5 | 6 | 6 | 6 | 12 (0/5) |
 | 07 | [Windows, workspaces, layout](07-windows-workspaces-and-layout.md) | **6** | 6 | 6 | 7 | 7 | 5 | 5 | 6 | 8 (0/1) |
 | 08 | [Renderer state and app shell](08-renderer-state-and-app-shell.md) | **5** | 4 | 5 | 6 | n/a | 5 | 5 | 6 | 12 (0/2) |
 | 09 | [Electron main, IPC, security](09-electron-main-ipc-and-security.md) | **5** | 5 | 7 | 7 | 4 | 4 | 5 | 6 | 9 (0/4) |
 | 10 | [UI kit, tokens, styling](10-ui-kit-tokens-and-styling.md) | **7** | 7 | 5 | 8 | n/a | 4 | 7 | 8 | 10 (0/1) |
-| 11 | [Magic widgets, sandbox, AI](11-magic-widgets-sandbox-and-ai.md) | **4** | 6 | 7 | 6 | 3 | 6 | 6 | 6 | 10 (1/3) |
+| 11 | [Magic widgets, sandbox, AI](11-magic-widgets-sandbox-and-ai.md) | **4** | 6 | 7 | 6 | 3 | 6 | 6 | 6 | 11 (1/4) |
 | 12 | [Remote access, relay, web client](12-remote-access-relay-and-web.md) | **4** | 7 | 5 | 6 | 3 | 6 | 6 | 8 | 12 (1/2) |
 | 13 | [Testing, quality gates, CI](13-testing-quality-gates-and-ci.md) | **5** | 5 | 5 | 8 | 5 | 5 | 6 | 6 | 9 (0/2) |
-| 14 | [Build, packaging, release](14-build-packaging-dependencies-and-release.md) | **6** | 7 | 5 | 6 | 6 | 7 | 6 | 7 | 9 (0/2) |
+| 14 | [Build, packaging, release](14-build-packaging-dependencies-and-release.md) | **6** | 7 | 5 | 6 | 6 | 7 | 6 | 7 | 10 (0/2) |
 | 15 | [Settings, commands, keys, menus](15-settings-commands-keybindings-and-menus.md) | **6** | 6 | 4 | 8 | 7 | 6 | 5 | 7 | 9 (0/1) |
-| 16 | [Feature services](16-feature-services-actions-journal-summaries-notifications.md) | **6** | 7 | 5 | 5 | 5 | 7 | 5 | 7 | 10 (0/3) |
+| 16 | [Feature services](16-feature-services-actions-journal-summaries-notifications.md) | **6** | 7 | 5 | 5 | 5 | 7 | 5 | 7 | 11 (0/3) |
 | 17 | [Repo layout and project structure](17-repo-layout-and-project-structure.md) | **6** | 6 | n/a | n/a | n/a | 6 | 5 | 6 | 7 (0/0) |
 
 The weakest dimensions across the board are **Security** in the systems that face untrusted input (Magic 3, remote 3, Electron main 4) and **Extensibility** (eight systems at 5 or below). Performance is mostly fine. The exceptions are the measured stalls in search and journal sync (themes 5 and 6).
@@ -140,17 +140,18 @@ This is the recommended order. Each wave can run in parallel worktrees; within a
 
 | Issue | What |
 |---|---|
-| AR1-12-01 | Home is not a remote root; deny cmd's own dirs |
-| AR1-12-02 | Block `ATTACH` in remote SQLite |
-| AR1-15-01 | Never write settings.json from a failed parse |
-| AR1-06-04 | Key-aware secret redaction |
+| AR1-12-01 | ~~Home is not a remote root; deny cmd's own dirs~~ done |
+| AR1-12-02 | ~~Block `ATTACH` in remote SQLite~~ done |
+| AR1-15-01 | ~~Never write settings.json from a failed parse~~ done |
+| AR1-06-04 | ~~Key-aware secret redaction~~ done |
+| AR1-11-11 | Magic's tools can't read cmd's secrets (follow-up to AR1-12-01) |
 | AR1-06-05 | Widget data policy (interim, before theme 1 lands) |
 | AR1-11-04 | Pin, verify and ask before installing Deno |
 | AR1-09-01, AR1-09-02 | Browser permission policy; navigation guards on app windows |
 | AR1-08-01 | Error boundaries, so one view can't blank a window |
 | AR1-14-02 | A tag build without signing fails instead of publishing |
 | AR1-14-01 | One Node major for dev, CI and release |
-| AR1-05-01 | Another agent kind's hooks stay out of the pane's agent |
+| AR1-05-01 | ~~Another agent kind's hooks stay out of the pane's agent~~ done |
 | AR1-10-01 | Dialogs trap focus |
 | AR1-04-04, AR1-04-05 | Spurious bell on long OSC; zsh OSC 7 encoding |
 | AR1-16-01 (M) | Stop rewriting past journal days with the expensive tier |
@@ -184,7 +185,7 @@ AR1-04-01 + AR1-04-03 in one `HOST_PROTOCOL` bump → AR1-02-02 (offsets on the 
 
 These are the remaining issues of size S (under ½ day), a good first pick for a free agent. Check its **Depends on** line first. Wave 0 above is the urgent subset.
 
-AR1-01-05, AR1-01-08, AR1-01-09, AR1-03-06, AR1-03-09, AR1-03-10, AR1-04-07, AR1-04-09, AR1-05-07, AR1-05-08, AR1-05-09, AR1-05-10, AR1-06-09, AR1-06-10, AR1-06-11, AR1-08-06, AR1-08-09, AR1-08-10, AR1-08-11, AR1-09-09, AR1-10-03, AR1-10-06, AR1-10-07, AR1-10-09, AR1-10-10, AR1-11-09, AR1-11-10, AR1-12-04, AR1-12-05, AR1-12-10, AR1-12-12, AR1-13-07, AR1-13-09, AR1-14-04, AR1-14-06, AR1-14-07, AR1-14-08, AR1-15-06, AR1-15-07, AR1-15-09, AR1-16-04, AR1-16-06, AR1-16-07, AR1-16-09, AR1-16-10, AR1-17-01, AR1-17-06, AR1-17-07.
+AR1-01-05, AR1-01-08, AR1-01-09, AR1-03-06, AR1-03-09, AR1-03-10, AR1-04-07, AR1-04-09, AR1-05-07, AR1-05-08, AR1-05-09, AR1-05-10, AR1-06-09, AR1-06-10, AR1-06-11, AR1-08-06, AR1-08-09, AR1-08-10, AR1-08-11, AR1-09-09, AR1-10-03, AR1-10-06, AR1-10-07, AR1-10-09, AR1-10-10, AR1-11-09, AR1-11-10, AR1-12-04, AR1-12-05, AR1-12-10, AR1-12-12, AR1-13-07, AR1-13-09, AR1-14-04, AR1-14-06, AR1-14-07, AR1-14-08, AR1-15-06, AR1-15-07, AR1-15-09, AR1-16-04, AR1-16-06, AR1-16-07, AR1-16-09, AR1-16-10, AR1-17-01, AR1-17-06, AR1-17-07, AR1-06-12, AR1-14-10, AR1-16-11.
 
 ## Process
 

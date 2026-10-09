@@ -217,6 +217,24 @@ A Magic widget is a folder under `$CMD_HOME/widgets/<id>/` (`widgets/store.ts`, 
 - [ ] `ls packages/core/src/jam/analyze.ts` fails; `pnpm vitest run` still passes its tests from their new place.
 - [ ] The staged runtime contains no `atlas.json`.
 
+### AR1-11-11 · Keep cmd's own secrets out of reach of Magic's tools
+
+- **Status:** open
+- **Severity:** high
+- **Effort:** S (< ½ day)
+- **Where:** `packages/core/src/paths-deny.ts`, `packages/core/src/magic/tools.ts:104,129`, `packages/core/src/magic/sandbox.ts`
+
+**Problem.** AR1-12-01 (done in 81ec82c2) moved the private paths into `paths-deny.ts` and denies cmd's state and config dirs to remote devices, but not to Magic, because Magic's widgets, their fixtures and Deno itself live under `$CMD_HOME`. So the build agent's `read`/`list`/`run` tools can still read `$CMD_HOME/secrets.json` (the Anthropic/OpenAI keys), `remote/host.json` (the host's private key and relay secret), `widgets/*/secrets` and `~/.config/cmd`. With AR1-11-03's open network, a prompt-injected build can send them anywhere.
+
+**Evidence.** `DEFAULT_DENY_PATHS` has no entry under `~/Library/Application Support/cmd*` or `~/.config/cmd`; `cmdPrivatePaths()` is used only by `remotePrivatePaths()`. Magic's tools check `ctx.deny`, built from `DEFAULT_DENY_PATHS`.
+
+**Proposal.** Deny files, not the folder: add a `magicPrivatePaths()` listing `secrets.json`, `remote/`, `settings.json`, `cmd.sqlite*`, `data/`, `widgets/*/secrets*` and the logs under every instance dir (`cmdPrivatePaths()`), plus `~/.config/cmd`, and use it for the tools and the sandbox profile. Widgets, fixtures, the Deno runtime and its cache stay readable.
+
+**Success criteria.**
+- [ ] A test: Magic's `read` tool on `$CMD_HOME/secrets.json` and `$CMD_HOME/remote/host.json` returns "private"; on a widget's `data.ts` it succeeds.
+- [ ] The sandbox profile denies the same files (test where `sandbox-exec` is available).
+- [ ] `widgets.test.ts` (with Deno) still passes.
+
 Not issues here: API keys in `secrets.json` rather than the Keychain: see doc 03 (AR1-03-08). The renderer that hosts widget frames running unsandboxed: see doc 09 (AR1-09-07). The event log's policy table as a whole, and `ai` retention: see doc 06.
 
 ## Course corrections
@@ -229,4 +247,4 @@ Not issues here: API keys in `secrets.json` rather than the Keychain: see doc 03
 
 ## Quick wins
 
-AR1-11-04 (pin and hash Deno), AR1-11-09 (wait for `rendered`), AR1-11-10 (move eval code out). Of AR1-11-05, the renderer-side `active` and rate check for `open-url` alone takes about an hour. Of AR1-11-02, revoking the token when the run ends, and issuing one only when the manifest declares `events`, together take under half a day.
+AR1-11-11 (deny cmd's secrets to the tools), AR1-11-04 (pin and hash Deno), AR1-11-09 (wait for `rendered`), AR1-11-10 (move eval code out). Of AR1-11-05, the renderer-side `active` and rate check for `open-url` alone takes about an hour. Of AR1-11-02, revoking the token when the run ends, and issuing one only when the manifest declares `events`, together take under half a day.

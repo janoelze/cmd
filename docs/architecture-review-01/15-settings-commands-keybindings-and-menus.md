@@ -36,10 +36,12 @@ Design docs: docs/07-ui-vision.md (palette prefixes), docs/39-workspace-actions.
 
 ### AR1-15-01 · Never write settings.json from a failed parse, and edit it in place
 
-- **Status:** open
+- **Status:** done (7e25ce90)
 - **Severity:** high
 - **Effort:** S (< ½ day)
 - **Where:** `packages/core/src/settings.ts:107-124`, `packages/core/src/settings.ts:126-142`, `packages/protocol/src/settings.ts:550-572`
+
+**Outcome.** `scripts/stage-runtime.mjs` now stages workspace packages' own dependencies (jsonc-parser).
 
 **Problem.** When settings.json doesn't parse (a missing comma while someone edits it by hand), `#load` sets `#raw = {}`, and every setting jumps to its default while the file is broken: fonts, theme and paddings change under the user. If anything then calls `settings.set` (a toggle in the Settings window, `cmd settings set`, `remote.enable`, which writes `remote.enabled`), `#write` builds the new file from that empty `#raw` and atomically replaces the user's file. Every other setting and every comment is gone. Comments are also lost on every ordinary write (the code says so at line 126). Separately, the trailing-comma regex in `parseJsonc` runs over string contents too, so a value containing `, ]` or `, }` is silently changed.
 
@@ -48,11 +50,11 @@ Design docs: docs/07-ui-vision.md (palette prefixes), docs/39-workspace-actions.
 **Proposal.** (1) On a parse failure, keep the last good `#raw` and snapshot and add the error, so values don't jump. (2) Make `set`/`reset` refuse to write while the file doesn't parse, with the same wording keybindings already use ("settings.json: … Fix it first."). The UI already shows `settings.set` errors as a callout. (3) Replace `parseJsonc` and the rewrite with `jsonc-parser` (VS Code's own: `parse` with `allowTrailingComma`, and `modify` + `applyEdits` to change one key in the text). Comments, order and formatting then survive every write, and both the comment in `settings.ts:126` and the one in `keybindings.ts:62` go away. Use the same helper for keybindings.json.
 
 **Success criteria.**
-- [ ] A test writes a valid file, breaks it, calls `set`: the call throws, and the file's bytes are unchanged.
-- [ ] A test breaks the file and checks `settings` still holds the last good values and `errors` names the parse error.
-- [ ] A test sets a key in a file with comments and a trailing comma: the comments and the other keys' lines are unchanged.
-- [ ] `parseJsonc` (or its replacement) returns `"a, ]b"` for that string value.
-- [ ] `grep -n "drops comments" packages/core/src/settings.ts apps/desktop/src/main/keybindings.ts` returns nothing.
+- [x] A test writes a valid file, breaks it, calls `set`: the call throws, and the file's bytes are unchanged.
+- [x] A test breaks the file and checks `settings` still holds the last good values and `errors` names the parse error.
+- [x] A test sets a key in a file with comments and a trailing comma: the comments and the other keys' lines are unchanged.
+- [x] `parseJsonc` (or its replacement) returns `"a, ]b"` for that string value.
+- [x] `grep -n "drops comments" packages/core/src/settings.ts apps/desktop/src/main/keybindings.ts` returns nothing.
 
 ### AR1-15-02 · Give commands a `when` and derive menu, palette and context-menu state from it
 

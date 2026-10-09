@@ -39,10 +39,12 @@ Policy measurement: 142 methods in `REMOTE_ACCESS`: 98 `never`, 23 `view`, 21 `c
 
 ### AR1-12-01 · Stop treating the Home workspace as a root a phone may read
 
-- **Status:** open
+- **Status:** done (81ec82c2)
 - **Severity:** critical
 - **Effort:** S
 - **Where:** `packages/core/src/remote/policy.ts:331-341`, `packages/core/src/workspaces/manager.ts:3`, `packages/core/src/workspaces/manager.ts:36-49`, `packages/core/src/magic/policy.ts:14-38`
+
+**Outcome.** The deny list is shared in `paths-deny.ts`; cmd's state and agent homes are denied for remote only, since Magic's widgets and Deno live in the state dir (see AR1-11-11).
 
 **Problem.** `allowedPath` allows any path inside "an open workspace's root". Home is a workspace rooted at `$HOME` that "always exists" and is never closed, so for a remote device "inside your workspaces" means "anywhere in the home folder" minus a 23-entry deny-list. A **view-only** device can `fs.read`/`fs.list`/`fs.watch` cmd's own state and the usual credential files the deny-list doesn't name: `~/Library/Application Support/cmd/remote/host.json` (the host's private key **and** relay secret, which let an attacker replace the Mac on the relay and impersonate it to every paired phone), `~/.config/cmd` (settings and secrets), `~/.zsh_history`, `~/.config/gh/hosts.yml`, `~/.claude/` transcripts, browser profiles other than the five listed. This is a defect against doc 13 ("Read … secrets: must not") and the scope's own promise.
 
@@ -51,17 +53,19 @@ Policy measurement: 142 methods in `REMOTE_ACCESS`: 98 `never`, 23 `view`, 21 `c
 **Proposal.** Remote roots are the open workspaces **other than Home** (`!s.home`); a phone that wants a file in a project opens it through a workspace the Mac opened. Then add cmd's own directories (`cmdHome()` and `configDir()` for every instance, the transcript roots from `search/sources.ts`) and the common token files to the deny-list, and move it to the shared `core/src/paths-deny.ts` doc 13 planned (`docs/13-remote-access.md:525`) so Magic gets the same fix. Longer term, prefer an allow-list per workspace (doc 13's own "default deny" applied to paths) over a growing deny-list.
 
 **Success criteria.**
-- [ ] A test with only Home open: `fs.read`, `fs.list`, `git.status`, `sqlite.schema` on `${home}/x` are denied for both scopes.
-- [ ] `remote-policy.test.ts` asserts `host.json`, `settings.json` and `secrets.json` under the instance dirs are denied even when an open workspace's root contains them.
-- [ ] `DEFAULT_DENY_PATHS` lives in one shared module imported by `magic/policy.ts` and `remote/policy.ts`.
-- [ ] The test at `remote-policy.test.ts:52` opens `proj` as a workspace before asserting reads are allowed.
+- [x] A test with only Home open: `fs.read`, `fs.list`, `git.status`, `sqlite.schema` on `${home}/x` are denied for both scopes.
+- [x] `remote-policy.test.ts` asserts `host.json`, `settings.json` and `secrets.json` under the instance dirs are denied even when an open workspace's root contains them.
+- [x] `DEFAULT_DENY_PATHS` lives in one shared module imported by `magic/policy.ts` and `remote/policy.ts`.
+- [x] The test at `remote-policy.test.ts:52` opens `proj` as a workspace before asserting reads are allowed.
 
 ### AR1-12-02 · Block `ATTACH` in remote SQLite queries
 
-- **Status:** open
+- **Status:** done (daf42e4b)
 - **Severity:** high
 - **Effort:** S
 - **Where:** `packages/core/src/remote/policy.ts:142-144`, `packages/core/src/remote/policy.ts:275-277`, `packages/core/src/sqlite/worker.ts:54-58`, `packages/core/src/sqlite/worker.ts:137-147`
+
+**Outcome.** `sqlite.query` stays `view`: the worker and the remote policy both refuse ATTACH/DETACH/VACUUM, and a connection with another database attached is reopened. `setAuthorizer` is used where Node has it (not on 22).
 
 **Problem.** `sqlite.query` is `view` scope and its only check is that `p.path` is an allowed path. The worker keeps one read-only connection per database open across calls and runs any single statement. `ATTACH '<any path>' AS x` is a single statement, is allowed under `readOnly` + `query_only`, and persists on the cached connection, so the next `SELECT * FROM x.…` reads any SQLite file the core can open: cmd's own `cmd.sqlite` (the event log the policy marks `never` because it "holds prompts, commands, pages and output"), browser history and cookie DBs, other apps' stores. Even after AR1-12-01, one `.db` anywhere in a workspace is enough.
 
@@ -70,9 +74,9 @@ Policy measurement: 142 methods in `REMOTE_ACCESS`: 98 `never`, 23 `view`, 21 `c
 **Proposal.** Quick: make `sqlite.query` `never` for remote until fixed (rows and schema are enough for the phone). Then in the worker: refuse `ATTACH`/`DETACH`/`VACUUM INTO` (after stripping comments) or, better, set an authorizer that denies `SQLITE_ATTACH` if the Node in use exposes one (`DatabaseSync#setAuthorizer`), and set the attached-database limit to 0 where available. Both local and remote callers benefit: the local SQLite window has no reason to attach either.
 
 **Success criteria.**
-- [ ] A worker test: `ATTACH` (any case, with leading comments) fails with a clear error; a following `SELECT` on the alias fails.
-- [ ] A remote policy test: `sqlite.query` with an ATTACH statement from a view device is denied or errors without reading the target.
-- [ ] `grep -n '"sqlite.query": "view"' packages/core/src/remote/policy.ts` returns nothing until the worker test exists.
+- [x] A worker test: `ATTACH` (any case, with leading comments) fails with a clear error; a following `SELECT` on the alias fails.
+- [x] A remote policy test: `sqlite.query` with an ATTACH statement from a view device is denied or errors without reading the target.
+- [x] `grep -n '"sqlite.query": "view"' packages/core/src/remote/policy.ts` returns nothing until the worker test exists.
 
 ### AR1-12-03 · Serve the web client from somewhere the relay operator can't, as the design requires
 

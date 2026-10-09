@@ -270,6 +270,23 @@ interface Feature<O> {
 - [ ] A test: summarise twice with no new messages. The fake AI is called once.
 - [ ] A `summary` event is in the log after a summary is written.
 
+### AR1-16-11 · Use the shared JSONC parser in Workspace Actions
+
+- **Status:** open
+- **Severity:** low
+- **Effort:** S (< ½ day)
+- **Where:** `packages/core/src/actions/sources.ts:118-137`, `packages/protocol/src/jsonc.ts`
+
+**Problem.** `actions/sources.ts` has its own `parseJsonc` (for tsconfig, `.vscode/tasks.json`, `deno.jsonc`). It skips strings while stripping comments, but its final trailing-comma regex runs over the whole text, strings included, so a task whose command or label contains `, ]` or `, }` is silently changed. AR1-15-01 (done in 7e25ce90) fixed the same bug for settings with `jsonc-parser` in `@cmd/protocol/src/jsonc.ts`.
+
+**Evidence.** `parseJsonc('{ "a": "x, ]y" , }')` from `actions/sources.ts` returns `{"a":"x ]y"}` (checked on master after 7e25ce90).
+
+**Proposal.** Delete the local parser and import `parseJsonc` from `@cmd/protocol`; it throws with a position on malformed input, so keep the callers' existing catch (a source that throws keeps its last good actions).
+
+**Success criteria.**
+- [ ] `grep -n "function parseJsonc" packages/core/src/actions/sources.ts` returns nothing.
+- [ ] An actions test reads a `tasks.json` whose command contains `, ]` and gets it unchanged.
+
 ## Course corrections
 
 1. **Stop the journal's silent spending and stalls** (AR1-16-01, AR1-16-03). One is a cost defect that grows with session length, the other a measured half-second block every five minutes. Both sit in the journal's read and sync paths and want the same thing: change-driven work from a log cursor (doc 06's AR1-06-02) instead of recomputing days and rescanning repositories.
@@ -280,4 +297,4 @@ interface Feature<O> {
 
 ## Quick wins
 
-AR1-16-04, AR1-16-06, AR1-16-07, AR1-16-09, AR1-16-10.
+AR1-16-04, AR1-16-06, AR1-16-07, AR1-16-09, AR1-16-10, AR1-16-11.

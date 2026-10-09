@@ -99,10 +99,12 @@ Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscr
 
 ### AR1-06-04 · Redact secrets held under a key name inside structured payloads
 
-- **Status:** open
+- **Status:** done (34d12c85)
 - **Severity:** high
 - **Effort:** S
 - **Where:** `packages/core/src/redact.ts:81-90`, `packages/core/src/data/views/activity.ts:93-117`, `packages/core/src/data/sources/transcripts.ts:133-141`
+
+**Outcome.** An `Authorization` value keeps its scheme (`Basic [redacted]`), as the text rule already did.
 
 **Problem.** `redactDeep` walks a JSON value and redacts each string on its own. It never looks at the key the string sits under. The `NAMED` rule only fires when the name and the value are in the same string (`API_TOKEN=…`), so `{ "password": "correcthorsebattery" }` and `{ "env": { "API_TOKEN": "abcd1234efgh5678" } }` pass through untouched. That is the shape of hook payloads' `tool_input` and of transcript lines under 2 KB, which are kept whole in `data.message` (`INLINE_LINE`). Both go to the log and from there to models via the context builder. The same line over 2 KB is stored as a string blob, where `redact` does catch the secret. So one secret is redacted or kept depending on how long the line around it is.
 
@@ -111,9 +113,9 @@ Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscr
 **Proposal.** Give `redactDeep` the key. When the key matches `SECRET_WORD` (anchored the same way as `NAMED`, so `author` and `tokenize` stay) and the value is a string of 8 or more characters that fails `PLACEHOLDER`, replace it with `[redacted]`. Recurse with the key into objects, so `env` maps work. Basic-auth header values also need a rule. Add one test per shape above, using real hook payload fixtures from `packages/core/test/fixtures`. The `redacted` flag then also covers this case.
 
 **Success criteria.**
-- [ ] `redactDeep` of the three shapes in the evidence returns `[redacted]` for each value, with tests in `redact.test.ts`.
-- [ ] `redactDeep({ author: "Jan Oelze", maxOutputTokens: 4096, tokenize: "words" })` is unchanged (no new false positives).
-- [ ] A transcript line under 2 KB and the same line padded over 2 KB store the same redacted secret (test via `claudeLine` + `redactEvent`).
+- [x] `redactDeep` of the three shapes in the evidence returns `[redacted]` for each value, with tests in `redact.test.ts`.
+- [x] `redactDeep({ author: "Jan Oelze", maxOutputTokens: 4096, tokenize: "words" })` is unchanged (no new false positives).
+- [x] A transcript line under 2 KB and the same line padded over 2 KB store the same redacted secret (test via `claudeLine` + `redactEvent`).
 
 ### AR1-06-05 · Enforce the widget data policy that docs/28 §4 describes
 
@@ -271,6 +273,23 @@ Per event, the cost is O(connections × subscriptions) in-memory matches. That i
 - [ ] `node --no-warnings scripts/perf/index-mem.ts --help` (or the file's absence) gives no import error.
 - [ ] `pnpm vitest run packages/core/test/search.test.ts packages/core/test/summaries.test.ts` passes.
 
+### AR1-06-12 · Flag imported events as redacted when the worker redacted them
+
+- **Status:** open
+- **Severity:** low
+- **Effort:** S (< ½ day)
+- **Where:** `packages/core/src/data/service.ts:174-190`, `packages/core/src/data/sources/ingest-worker.ts:81`
+
+**Problem.** `DataService.record` sets `DATA_FLAGS.redacted` when redaction changed an event, but `recordBatch` never does. Transcript events are redacted in the ingest worker (`result.events.map(redactEvent)`) and recorded with `{ redacted: true }`, which skips redaction in the core and also skips the flag. So every imported transcript event that had a secret removed carries no sign of it, and `cmd data explain` / anything filtering on the flag undercounts. Found while reviewing AR1-06-04 (already the case before that fix).
+
+**Evidence.** `service.ts:144` computes the flag in `record`; `recordBatch` (`:174-190`) starts from `DATA_FLAGS.imported` and adds only `cut`. `ingest-worker.ts:81` redacts before posting.
+
+**Proposal.** Have the worker return, per event, whether `redactEvent` changed it (compare as `record` does, off the core thread) and carry it as a field on the posted event; `recordBatch` ORs `DATA_FLAGS.redacted` from it. When `recordBatch` redacts itself (`o.redacted` false), compare there as `record` does.
+
+**Success criteria.**
+- [ ] A test records a transcript chunk through `TranscriptIngest` containing a secret and finds the stored event's flags include `redacted`; one without a secret doesn't.
+- [ ] `recordBatch` without `o.redacted` sets the flag the same way `record` does (test).
+
 ## Course corrections
 
 1. **Privacy first, all small:** AR1-06-04 (key-aware redaction) and AR1-06-05 (widget policy). These are the two places where data the person expects to be protected leaks today.
@@ -281,4 +300,4 @@ Per event, the cost is O(connections × subscriptions) in-memory matches. That i
 
 ## Quick wins
 
-AR1-06-04, AR1-06-05, AR1-06-09, AR1-06-10, AR1-06-11.
+AR1-06-05, AR1-06-09, AR1-06-10, AR1-06-11, AR1-06-12. Done: AR1-06-04.
