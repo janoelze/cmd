@@ -201,7 +201,7 @@ The host key and route live in `$CMD_HOME/remote/host.json`, paired devices in S
 - Packaging, CI and GitHub releases
 
 **In progress**
-- Remote access (docs/13): crypto, relay, core gateway, policy, `cmd remote`, and in the app the Remote Access settings page, the approval sheet and the status bar indicator are in; the web client is a prototype (pair, Now, a terminal with key row and compose bar); next are hosting it, push, and fit-to-phone; direct access over Tailscale or your own URL (docs/38) is built, still to be tried on a real tailnet
+- Remote access (docs/13): crypto, relay, core gateway, policy, `cmd remote`, and in the app the Remote Access settings page, the approval sheet and the status bar indicator are in; the web client is a prototype (pair, Now, a terminal with key row and compose bar); next are hosting it, push, and fit-to-phone; direct access over Tailscale or your own URL (docs/38) is built and works on a real tailnet
 
 **Next**
 - Plugin host (routines and monitors in the core)

@@ -1,6 +1,6 @@
 # Direct remote access (Tailscale and your own URL)
 
-> Status (2026-10-09): built, not yet tried against a real tailnet. Phases 1–3 are in: the `Transport`, `DirectListener`, the adapter registry with `tailscale` and `url`, the settings, the setup checklist in Settings and `cmd remote setup`, the web client in the runtime. Extends docs/13-remote-access.md, which describes the relay mode this builds on.
+> Status (2026-10-09): built, and works on a real tailnet (the Tailscale app's CLI: checks, publish, a phone in control, unpublish). Phases 1–3 are in: the `Transport`, `DirectListener`, the adapter registry with `tailscale` and `url`, the settings, the setup checklist in Settings and `cmd remote setup`, the web client in the runtime. Extends docs/13-remote-access.md, which describes the relay mode this builds on.
 
 **Goal.** Use remote access without the hosted relay and web client: the phone talks straight to the Mac's core, over a network you control. Tailscale first, with a setup wizard; the way the Mac is made reachable is an **access adapter**, so other ways (your own reverse proxy URL today; Cloudflare Tunnel, ngrok, Funnel later) plug in the same way.
 
@@ -96,7 +96,7 @@ An adapter only makes a loopback port reachable and reports a URL; it never sees
   5. Published: `serve status --json` has `TCP[port].HTTPS` and a `Web["<host>:<port>"]` handler proxying to our loopback port.
   6. Reachable: a probe of `https://<Self.DNSName without the dot>:<port>/` answers (the first certificate takes a few seconds).
 - Enable: `tailscale serve --bg --yes --https=<port> http://127.0.0.1:<local port>`; "Serve is not enabled on your tailnet" on stderr maps to check 4.
-- Disable: `tailscale serve --yes --https=<port> off`, only if the handler still proxies to our port. Never `serve reset`; never touch other entries. (To confirm against a real tailnet: the exact `off` form, and what `serve --bg` prints when Serve or HTTPS is off for the tailnet.)
+- Disable: `tailscale serve --yes --https=<port> off`, only if the handler still proxies to our port. Never `serve reset`; never touch other entries. (Confirmed on a real tailnet, 2026-10-09. Not yet seen for real: what `serve --bg` prints when Serve is off for the tailnet; the adapter falls back to Tailscale's own message.)
 
 **`url` (your own):** a public `https://` origin (Caddy, nginx, Cloudflare Tunnel, ngrok…) in front of the loopback port. Checks: HTTPS, the page loads, a WebSocket upgrade to `/r/<route>` works. `http://localhost` and `http://127.0.0.1` are accepted too (browsers treat loopback as secure), for testing on the Mac (`pnpm e2e:web:direct`). The proxy must run on the Mac itself, since the listener is loopback only; a proxy on another machine needs a tunnel to it (`ssh -R`).
 
