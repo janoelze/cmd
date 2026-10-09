@@ -105,7 +105,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
               {r.map((c, j) => {
                 const spec = isSpec(c) ? c : { node: c };
                 return (
-                  <td key={j} data-kind={spec.kind} data-align={spec.align ?? columns[j]?.align} data-hide={columns[j]?.hide} data-icon={columns[j]?.icon || undefined} data-tip={spec.tip}>
+                  <td key={j} data-kind={spec.kind} data-align={spec.align ?? columns[j]?.align} data-hide={columns[j]?.hide} data-icon={columns[j]?.icon || undefined} data-grow={columns[j]?.grow || undefined} data-tip={spec.tip}>
                     {spec.node}
                   </td>
                 );

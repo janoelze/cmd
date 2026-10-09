@@ -855,6 +855,8 @@ button.ui-grid-sort:hover { color: var(--text); }
 .ui-grid tbody tr:hover td { background: var(--bg-hover); }
 .ui-grid tbody tr[aria-selected] td { background: var(--bg-selected); }
 .ui-grid th[data-grow] { width: 100%; }
+/* The grow column's cells truncate their content rather than widening the table (max-width: 0 lets a table cell shrink). */
+.ui-grid td[data-grow] { width: 100%; max-width: 0; }
 /* The first and last columns line up with the window's inset (the toolbar, the footer); inside content that is
    already inset (a Pane), with its edge. Between columns, twice --grid-pad. An icon column hugs its icon. */
 .ui-grid tr > :first-child { padding-left: var(--grid-edge); }
