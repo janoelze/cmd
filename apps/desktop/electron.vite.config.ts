@@ -88,7 +88,7 @@ export default defineConfig({
     },
   },
   // electron-vite leaves minification off; the renderer bundle is parsed on every launch.
-  // Three pages: the app (index.html), the Settings window (settings.html) and the Task Manager (tasks.html).
+  // Two pages: the app (index.html) and the Settings window (settings.html).
   // The app's version for What's New (CI's release tags have bumped package.json).
   renderer: {
     define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(resolve(import.meta.dirname, "package.json"), "utf8")).version) },
@@ -97,9 +97,7 @@ export default defineConfig({
     build: {
       minify: true,
       rollupOptions: {
-        input: { index: resolve(import.meta.dirname, "src/renderer/index.html"), settings: resolve(import.meta.dirname, "src/renderer/settings.html"),
-          tasks: resolve(import.meta.dirname, "src/renderer/tasks.html"),
-        },
+        input: { index: resolve(import.meta.dirname, "src/renderer/index.html"), settings: resolve(import.meta.dirname, "src/renderer/settings.html") },
       },
     },
   },

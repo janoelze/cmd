@@ -45,6 +45,7 @@ import { togglePreview } from "./windows/preview.ts";
 import { MainView, type ViewMode } from "./components/MainView.tsx";
 import { requestCanvas } from "./components/WindowsView.tsx";
 import { Feedback } from "./components/Feedback.tsx";
+import { TaskManager } from "./components/TaskManager.tsx";
 import { WidgetLibrary } from "./components/WidgetLibrary.tsx";
 import { NewPicker } from "./components/NewPicker.tsx";
 import { openItems } from "./newItems.ts";
@@ -144,6 +145,7 @@ export function App() {
     return () => void (live = false);
   }, [palette === false]);
   const [feedback, setFeedback] = useState(false);
+  const [taskManager, setTaskManager] = useState(false);
   /** The Widget Library sheet (docs/16-widgets.md). */
   const [library, setLibrary] = useState(false);
   /** The releases the What's New sheet shows, when it's open. */
@@ -435,6 +437,7 @@ export function App() {
     "file.close": () => {
       // ⌘W closes the frontmost thing: the palette, then the terminal, then the window.
       if (feedback) setFeedback(false);
+      else if (taskManager) setTaskManager(false);
       else if (setup) endSetup();
       else if (library) setLibrary(false);
       else if (whatsNew) setWhatsNew(null);
@@ -532,6 +535,7 @@ export function App() {
     ) as Record<`workspace.select${number}`, () => void>),
     "help.docs": () => cmd.openDocs(),
     "help.feedback": () => (setPalette(false), setFeedback(true)),
+    "app.taskManager": () => (setPalette(false), setTaskManager(true)),
     "help.whatsNew": () => (setPalette(false), setWhatsNew(RELEASES.filter((r) => compareVersions(r.version, APP_VERSION) <= 0))),
   };
   /** View → Show Left/Right Sidebar: hide or show a side; an empty left side gets a Navigator. */
@@ -952,6 +956,7 @@ export function App() {
       {library && <WidgetLibrary onClose={() => setLibrary(false)} />}
       <Toaster />
       {feedback && <Feedback onClose={() => setFeedback(false)} />}
+      {taskManager && <TaskManager onClose={() => setTaskManager(false)} />}
       {setup && <Onboarding key={setup.join()} ids={setup} onClose={endSetup} />}
       {whatsNew && <WhatsNew releases={whatsNew} onClose={() => setWhatsNew(null)} onLink={(url) => (setWhatsNew(null), openLink(url))} />}
       {all.pairRequests[0] && <PairSheet key={all.pairRequests[0].requestId} request={all.pairRequests[0]} />}

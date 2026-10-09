@@ -3,8 +3,11 @@
 // sorts by it (asc, then desc, then off) when the caller takes onSort; cells
 // are one line each, cut with an ellipsis, the whole value in the tooltip.
 // Numbers sit to the right, NULL and blobs are dim. Rows take a context menu.
+// `rowInfo` makes a row a section's heading (its totals in the value columns),
+// or nests it under the one before it, which a disclosure opens (a process
+// tree: the Task Manager).
 
-import type { MouseEvent, ReactNode } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import { ICON, Icon } from "./icon.tsx";
 
 const cls = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -32,6 +35,17 @@ export interface GridSort {
   desc: boolean;
 }
 
+/** How a row sits, beyond its cells. */
+export interface GridRowInfo {
+  /** A section's heading: bold and dim, not selectable; its cells are the section's name and totals. */
+  heading?: boolean;
+  /** Nested this deep under the row before it (1: a child), indented in the grow column. */
+  depth?: number;
+  /** Has rows nested under it: a disclosure before its name, open or not. */
+  expanded?: boolean;
+  onToggle?: () => void;
+}
+
 export interface DataGridProps {
   columns: readonly GridColumn[];
   rows: readonly (readonly GridCell[])[];
@@ -43,6 +57,9 @@ export interface DataGridProps {
   onRowContextMenu?: (index: number, e: MouseEvent<HTMLTableRowElement>) => void;
   /** A click selects a row (an inspector shows it). */
   onRowClick?: (index: number, e: MouseEvent<HTMLTableRowElement>) => void;
+  onRowDoubleClick?: (index: number, e: MouseEvent<HTMLTableRowElement>) => void;
+  /** Headings, nesting and disclosures, by row. */
+  rowInfo?: (index: number) => GridRowInfo | undefined;
   /** The selected row's index. */
   selected?: number | null;
   /** Values in the code font (data, not labels). */
@@ -56,7 +73,9 @@ export interface DataGridProps {
 
 const isSpec = (c: GridCell): c is Exclude<GridCell, ReactNode> => typeof c === "object" && c !== null && "node" in c && !("$$typeof" in (c as object));
 
-export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu, onRowClick, selected, mono, numbered, footer, className }: DataGridProps) {
+export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu, onRowClick, onRowDoubleClick, rowInfo, selected, mono, numbered, footer, className }: DataGridProps) {
+  // The column a row's disclosure and indent go in: the one that grows, else the first.
+  const tree = Math.max(0, columns.findIndex((c) => c.grow));
   const next = (key: string): GridSort | null => (sort?.key !== key ? { key, desc: false } : sort.desc ? null : { key, desc: true });
   return (
     <div className={cls("ui-grid", className)} data-mono={mono || undefined}>
@@ -64,7 +83,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
         <thead>
           <tr>
             {numbered && <th className="ui-grid-num" aria-label="Row" />}
-            {columns.map((c) => {
+            {columns.map((c, j) => {
               const sorted = sort?.key === c.key ? (sort.desc ? "descending" : "ascending") : undefined;
               const head = (
                 <>
@@ -73,7 +92,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
                 </>
               );
               return (
-                <th key={c.key} data-align={c.align} data-grow={c.grow || undefined} data-hide={c.hide} data-icon={c.icon || undefined} aria-sort={sorted}>
+                <th key={c.key} data-align={c.align} data-grow={c.grow || undefined} data-hide={c.hide} data-icon={c.icon || undefined} data-tree={(rowInfo && j === tree) || undefined} aria-sort={sorted}>
                   {onSort ? (
                     <button type="button" className="ui-grid-sort" onClick={() => onSort(next(c.key))}>
                       {head}
@@ -88,30 +107,51 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr
-              key={rowKey ? rowKey(r, i) : i}
-              aria-selected={selected === i || undefined}
-              onClick={onRowClick && ((e) => onRowClick(i, e))}
-              onContextMenu={
-                onRowContextMenu &&
-                ((e) => {
-                  e.preventDefault();
-                  onRowContextMenu(i, e);
-                })
-              }
-            >
-              {numbered && <td className="ui-grid-num">{i + 1}</td>}
-              {r.map((c, j) => {
-                const spec = isSpec(c) ? c : { node: c };
-                return (
-                  <td key={j} data-kind={spec.kind} data-align={spec.align ?? columns[j]?.align} data-hide={columns[j]?.hide} data-icon={columns[j]?.icon || undefined} data-grow={columns[j]?.grow || undefined} data-tip={spec.tip}>
-                    {spec.node}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
+          {rows.map((r, i) => {
+            const info = rowInfo?.(i);
+            return (
+              <tr
+                key={rowKey ? rowKey(r, i) : i}
+                data-heading={info?.heading || undefined}
+                aria-selected={selected === i || undefined}
+                aria-expanded={info?.expanded}
+                onClick={onRowClick && !info?.heading ? (e) => onRowClick(i, e) : undefined}
+                onDoubleClick={onRowDoubleClick && !info?.heading ? (e) => onRowDoubleClick(i, e) : undefined}
+                onContextMenu={
+                  onRowContextMenu && !info?.heading
+                    ? (e) => {
+                        e.preventDefault();
+                        onRowContextMenu(i, e);
+                      }
+                    : undefined
+                }
+              >
+                {numbered && <td className="ui-grid-num">{i + 1}</td>}
+                {r.map((c, j) => {
+                  const spec = isSpec(c) ? c : { node: c };
+                  return (
+                    <td key={j} data-kind={spec.kind} data-align={spec.align ?? columns[j]?.align} data-hide={columns[j]?.hide} data-icon={columns[j]?.icon || undefined} data-grow={columns[j]?.grow || undefined} data-tip={spec.tip}>
+                      {rowInfo && j === tree ? (
+                        <span className="ui-grid-tree" style={{ "--depth": info?.depth ?? 0 } as CSSProperties}>
+                          <span
+                            className={cls("ui-twisty", info?.expanded && "open")}
+                            data-none={info?.expanded === undefined || undefined}
+                            onClick={info?.onToggle}
+                            onDoubleClick={(e) => e.stopPropagation()}
+                          >
+                            <Icon name="chevron.right" size={ICON.disclosure} />
+                          </span>
+                          <span className="ui-grid-label">{spec.node}</span>
+                        </span>
+                      ) : (
+                        spec.node
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {footer != null && <div className="ui-grid-footer">{footer}</div>}

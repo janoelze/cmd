@@ -217,9 +217,8 @@ export function applyMenuState(state: MenuState): void {
 /** Sends a command to the focused window, creating one if needed. */
 interface UtilityWindows {
   openSettings: (page?: string) => void;
-  openTaskManager: () => void;
   checkForUpdates: () => void;
-  /** Settings or the Task Manager. */
+  /** Settings (or the Workbench). */
   isUtility: (w: BrowserWindow | null) => boolean;
   appWindows: () => BrowserWindow[];
 }
@@ -230,7 +229,6 @@ const UTILITY_COMMANDS = new Set(["edit.copy", "edit.selectAll"]);
 export function commandSender(createWindow: () => BrowserWindow, s: UtilityWindows): Send {
   return (id) => {
     if (id === "app.settings") return s.openSettings();
-    if (id === "app.taskManager") return s.openTaskManager();
     if (id === "app.remoteAccess") return s.openSettings("remote");
     if (id === "app.pairDevice") return s.openSettings("remote/pair");
     if (id === "app.checkUpdates") return s.checkForUpdates();

@@ -33,10 +33,6 @@
     "radius": 9,
     "spacing": 84
   },
-  "apps/desktop/src/renderer/src/tasks/tasks.css": {
-    "fontSize": 9,
-    "spacing": 15
-  },
   "apps/desktop/src/renderer/src/workbench/workbench.css": {
     "spacing": 2
   },

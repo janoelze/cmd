@@ -865,6 +865,11 @@ button.ui-grid-sort:hover { color: var(--text); }
 .ui-grid [data-icon] { width: 1px; padding-right: 0; }
 .ui-grid-num { width: 1px; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
 td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
+.ui-grid-tree { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; padding-left: calc(var(--depth) * var(--space-xl)); }
+.ui-grid th[data-tree] .ui-grid-sort { padding-left: calc(var(--space-lg) + var(--space-sm)); } /* past the disclosure (.ui-twisty) and its gap */
+.ui-grid-tree .ui-twisty[data-none] { visibility: hidden; }
+.ui-grid tr[data-heading] td { font-weight: 600; font-size: var(--text-sm); color: var(--text-dim); }
+.ui-grid tbody tr[data-heading]:hover td { background: none; }
 .ui-grid-footer { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md) var(--grid-edge); font-size: var(--text-sm); color: var(--text-dim); }
 
 /* ── coming and going (motion.ts) ──

@@ -495,13 +495,13 @@ const workspaces = new WorkspaceWindows(createWindow);
 
 // ── utility windows ─────────────────────────────────────
 // One native Settings window (⌘,), like a macOS app's: a sidebar of categories,
-// drawn like the main window's. And one Task Manager (Window menu): what cmd's
-// processes use. Each has its own page and bundle (renderer/<page>.html).
+// drawn like the main window's; in dev builds, the Workbench. Each has its own
+// page and bundle (renderer/<page>.html).
 
-type UtilityPage = "settings" | "tasks" | "workbench";
+type UtilityPage = "settings" | "workbench";
 const utility = new Map<UtilityPage, BrowserWindow>();
 const isSettings = (w: BrowserWindow | null | undefined) => !!w && w === utility.get("settings");
-/** Settings or the Task Manager: not an app window. */
+/** Settings or the Workbench: not an app window. */
 const isUtility = (w: BrowserWindow | null | undefined) => !!w && [...utility.values()].includes(w);
 
 /** at: a page inside the window to show (Settings: "remote", "remote/pair"). */
@@ -535,12 +535,11 @@ function openUtility(page: UtilityPage, o: { title: string; width: number; heigh
 }
 
 const openSettings = (at?: string) => openUtility("settings", { title: "Settings", width: 860, height: 620, minWidth: 700, minHeight: 440 }, at);
-const openTaskManager = () => openUtility("tasks", { title: "Task Manager", width: 720, height: 520, minWidth: 520, minHeight: 300 });
 /** Dev only: `pnpm workbench [story]` (scripts/workbench.mjs) sets CMD_WORKBENCH and gets this window instead of the app's. */
 const workbench = process.env.ELECTRON_RENDERER_URL ? process.env.CMD_WORKBENCH : undefined;
 const openWorkbench = () => openUtility("workbench", { title: "Workbench", width: 1100, height: 760, minWidth: 600, minHeight: 400 }, workbench || undefined);
 
-/** App windows, not Settings or the Task Manager. */
+/** App windows, not Settings or the Workbench. */
 const appWindows = () => BrowserWindow.getAllWindows().filter((w) => !isUtility(w));
 
 // ── IPC ─────────────────────────────────────────────────
@@ -670,7 +669,8 @@ ipcMain.on("settings-window", (_e, page?: string) => void openSettings(typeof pa
 ipcMain.on("check-updates", () => checkForUpdates());
 // The Task Manager: Electron's own processes, and showing a terminal in the app window of its workspace.
 ipcMain.handle("app-metrics", () => appMetrics());
-ipcMain.on("task-manager", () => openTaskManager());
+// The Task Manager is a sheet in the app window it was asked from (the Resources widget, the core's status).
+ipcMain.on("task-manager", (e) => e.sender.send("command", "app.taskManager"));
 ipcMain.on("show-pane", (_e, workspaceId: string, paneId: string) => workspaces.show(workspaceId, { select: paneId }, appWindows()[0] ?? null));
 ipcMain.on("install-update", () => void updater().then((u) => u.installUpdate()));
 ipcMain.handle("restart-core", () => restartCore());
@@ -711,7 +711,7 @@ ipcMain.on("renderer-error", (e, r: { kind: string; message: string; stack: stri
   if (rendererErrors.has(key)) return;
   rendererErrors.add(key);
   const from = BrowserWindow.fromWebContents(e.sender);
-  const page = isSettings(from) ? "settings" : from && from === utility.get("workbench") ? "workbench" : isUtility(from) ? "tasks" : "app";
+  const page = isSettings(from) ? "settings" : from && from === utility.get("workbench") ? "workbench" : "app";
   recordCrash("renderer", r.kind, r.message, r.stack, { page });
 });
 /** Settings → Updates & About: the app's side of the diagnostics (core.info is the core's). */
@@ -1019,7 +1019,7 @@ app.whenReady().then(async () => {
   followCrashReports(socketPath);
   // Its bundle (about 570 KB) is parsed on this thread; its first check is 30 s away anyway.
   setTimeout(() => void startUpdater(), 5000);
-  const send = commandSender(() => workspaces.reopen(), { openSettings, openTaskManager, checkForUpdates, isUtility, appWindows });
+  const send = commandSender(() => workspaces.reopen(), { openSettings, checkForUpdates, isUtility, appWindows });
   refreshMenu = () => buildMenu(send, recordingShortcut ? {} : keybindings.bindings);
   refreshMenu();
   watchKeybindings((next) => {

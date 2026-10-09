@@ -14,7 +14,7 @@ export { FindBar, findCount, Glyph, Highlight, NO_FIND_OPTIONS, type FindBarHand
 export { Chart, Legend, Sparkline, type Series } from "./chart.tsx";
 export { Document, Filmstrip, Hide, Picture, Viewport, Inline, List, ListGroup, Measure, MediaStage, Pane, Panes, Split, Stack, Stat, StatusLine, Text, Tiles, View, ViewState, type Space, type ViewStateSpec } from "./frame.tsx";
 export { Ribbon, Timeline, TimelineEntry, type RibbonItem } from "./timeline.tsx";
-export { DataGrid, type DataGridProps, type GridCell, type GridColumn, type GridSort } from "./grid.tsx";
+export { DataGrid, type DataGridProps, type GridCell, type GridColumn, type GridSort, type GridRowInfo } from "./grid.tsx";
 export { Chip, ListHeading, ListMark, ListRow, ListSection, ListValue, Panel, PanelBody, PanelHeader, PanelSummary, Twisty, type ListRowProps } from "./list.tsx";
 export { ICON, Icon, UIProvider, iconNode, type IconProps, type IconWeight } from "./icon.tsx";
 export { Callout, Card, CodeBlock, EmptyState, FeatureList, FormRow, FormSection, Group, InfoButton, KeyValue, Prose, ResetButton, SectionHeading, Separator, SheetHeader, Spacer, Toolbar } from "./layout.tsx";
