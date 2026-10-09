@@ -22,6 +22,7 @@
     "ai": "^7.0.127",
     "node-pty": "1.2.0-beta.15",
     "smol-toml": "^1.9.0",
+    "ws": "^8.18.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
@@ -29,6 +30,7 @@
     "@strudel/mini": "1.2.6",
     "@strudel/reference": "1.2.2",
     "@strudel/tonal": "1.2.6",
-    "@strudel/transpiler": "1.2.6"
+    "@strudel/transpiler": "1.2.6",
+    "@types/ws": "^8.5.12"
   }
 }
