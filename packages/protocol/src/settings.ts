@@ -199,6 +199,12 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: "Show changes and the branch in file windows.",
   },
+  "files.showHidden": {
+    title: "Show hidden files",
+    type: "boolean",
+    default: true,
+    description: "Dotfiles in file windows. The eye button switches them.",
+  },
   "ui.showResources": {
     title: "Show resource usage",
     type: "boolean",

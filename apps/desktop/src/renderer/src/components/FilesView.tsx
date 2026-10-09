@@ -102,7 +102,9 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   const [rootParent, setRootParent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = usePersisted<string[]>(`files.expanded.${win.id}`, []);
-  const [showHidden, setShowHidden] = useState(false);
+  const hiddenOn = useStoreValue((s) => s.settings.settings["files.showHidden"]) !== false;
+  const [showHidden, setShowHidden] = useState(hiddenOn);
+  useEffect(() => setShowHidden(hiddenOn), [hiddenOn]);
   const [sel, setSel] = useState<string | null>(null);
   const gitOn = useStoreValue((s) => s.settings.settings["files.git"]);
   const [git, setGit] = useState<GitStatus | null>(null);
