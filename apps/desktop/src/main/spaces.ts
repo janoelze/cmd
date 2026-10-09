@@ -16,7 +16,8 @@ import { HOME_SPACE_ID } from "@cmd/protocol";
 import { cmdHome, connect, logger } from "@cmd/protocol/node";
 import { parsePlacements, placementFor, record, setupKey, touch, type Placements } from "./displays.ts";
 
-export interface Bounds { x?: number; y?: number; width: number; height: number; maximized?: boolean }
+/** fullscreen: only in the saved windows of the last session, which reopen so (x… are the windowed frame). */
+export interface Bounds { x?: number; y?: number; width: number; height: number; maximized?: boolean; fullscreen?: boolean }
 
 const DEFAULT_BOUNDS: Bounds = { width: 1400, height: 900 };
 const file = () => path.join(cmdHome(), "windows.json");
@@ -48,6 +49,7 @@ export class SpaceWindows {
   #create: (spaceId: string, bounds: Bounds) => BrowserWindow;
   #shown = new Map<BrowserWindow, string>();
   #bounds = new Map<BrowserWindow, Bounds>();
+  #fullscreen = new Set<BrowserWindow>();
   /** The Space of the most recently focused window: reopened when the last window was closed. */
   #last = HOME_SPACE_ID;
   #quitting = false;
@@ -85,7 +87,9 @@ export class SpaceWindows {
     for (const w of saved) {
       if (typeof w.spaceId !== "string" || seen.has(w.spaceId)) continue;
       seen.add(w.spaceId);
-      this.#open(w.spaceId, onScreen(this.#placed(w.spaceId) ?? w.bounds ?? DEFAULT_BOUNDS));
+      const win = this.#open(w.spaceId, onScreen(this.#placed(w.spaceId) ?? w.bounds ?? DEFAULT_BOUNDS));
+      // Fullscreen (a macOS Space of its own) once shown; its frame stays the windowed one.
+      if (w.bounds?.fullscreen) win.once("ready-to-show", () => win.setFullScreen(true));
     }
     if (seen.size === 0) this.#open(HOME_SPACE_ID, this.#placed(HOME_SPACE_ID) ?? DEFAULT_BOUNDS);
     const changed = () => this.#displaysChanged();
@@ -203,11 +207,14 @@ export class SpaceWindows {
     win.on("resize", track);
     win.on("move", track);
     win.on("focus", () => (this.#last = this.#shown.get(win) ?? this.#last));
+    win.on("enter-full-screen", () => (this.#fullscreen.add(win), this.#saveSoon()));
+    win.on("leave-full-screen", () => (this.#fullscreen.delete(win), this.#saveSoon()));
     win.on("closed", () => {
       // Quitting closes every window; keep them for the next launch.
       if (this.#quitting) return;
       this.#shown.delete(win);
       this.#bounds.delete(win);
+      this.#fullscreen.delete(win);
       // The last window stays saved, so the next launch reopens its Space.
       if (this.#shown.size > 0) this.#save();
     });
@@ -244,7 +251,7 @@ export class SpaceWindows {
   #save(): void {
     clearTimeout(this.#saveTimer);
     if (this.#quitting) return;
-    const windows = [...this.#shown].filter(([w]) => !w.isDestroyed()).map(([w, spaceId]) => ({ spaceId, bounds: this.#bounds.get(w) }));
+    const windows = [...this.#shown].filter(([w]) => !w.isDestroyed()).map(([w, spaceId]) => ({ spaceId, bounds: this.#fullscreen.has(w) ? { ...this.#bounds.get(w)!, fullscreen: true } : this.#bounds.get(w) }));
     try {
       fs.mkdirSync(cmdHome(), { recursive: true });
       fs.writeFileSync(file(), JSON.stringify({ windows, placements: this.#placements }));

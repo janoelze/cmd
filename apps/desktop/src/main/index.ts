@@ -1019,6 +1019,8 @@ app.whenReady().then(async () => {
   });
   app.dock?.setMenu(
     Menu.buildFromTemplate([
+      // Its picker needs the app in front; macOS lists the open windows above these.
+      { label: "New Window…", click: () => (app.focus({ steal: true }), send("file.newWindow")) },
       { label: "New Terminal", click: () => send("file.newTerminal") },
       { label: "New Claude Session", click: () => send("file.newClaude") },
     ]),
