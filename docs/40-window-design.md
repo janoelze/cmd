@@ -1,0 +1,209 @@
+# Window design: one language for every window
+
+> Status (2026-10-09): **research**, branch `window-design`. Next: layout primitives and spacing tokens in `@cmd/ui`, then reference windows (content, media, data, chart) as Workbench stories, then a window-design skill. Nothing built yet.
+
+cmd has a kit (`@cmd/ui`) with good colour discipline and solid controls, but the windows built from it don't share a layout language: each picks its own paddings, bar heights, row heights and empty states. And there are two kits: the app's `@cmd/ui` and Magic's `kit.css`, which has the better layout vocabulary and a written guide, but different token names. Soon AI will build windows with the kit too, so the patterns have to be easy to follow and hard to get wrong.
+
+This doc is what other design systems do about that, what cmd has today, and what's missing.
+
+## What cmd has today
+
+**Strong:**
+- **Colour.** Every colour comes from a theme. Renderer CSS has ~9 literal colours, all behind webviews, players and PDF pages. `themes.test.ts` checks contrast.
+- **Window shell.** `Window`/`WindowBody`/`WindowFrame`/`WindowBar` draw every tile and dock.
+- **Toolbar.** `WindowToolbar` has overflow into ⋯ and secondary items. Browser, Files, PDF, Image, Navigator, Events, Magic and Jam use it.
+- **Lists and states.** `Panel`/`ListRow` (Commands, Actions, Notifications, Resources, Events) and `EmptyState` (25 files).
+- **Motion.** One vocabulary of tokens, and `motion-css.test.ts` enforces it.
+
+**Missing:**
+1. **No spacing scale.** `tokens.css` has scales for type, radius, control height and motion, but not for space. The only spacing variable is `--dialog-pad`. Kit CSS alone uses 13 different px values for padding and gap (2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 18, 20, 22). Window insets differ by view:
+
+   | View | Inset |
+   |---|---|
+   | SQLite `.sq-pad` | 12/14 |
+   | Magic edit | 14/16/24 |
+   | Settings `.sw-scroll` | 6/20/28 |
+   | Markdown | 28/32/64 |
+   | PDF | 16/24 |
+   | Journal | 10/14 |
+   | Agent Activity rows | 5/10 |
+
+2. **No layout primitives.** There is no Stack, Inline, Columns, Box or ScrollArea, so every view writes `display: flex; gap: Npx` itself. Magic's `kit.css` has `k-stack`, `k-row`, `k-grid`, `k-edges` and `k-panes`; the app kit has none of these.
+3. **No metrics for bars and rows:**
+   - Bars: toolbar 31, SQLite bars 34/32/28, panel head 28, window bar 26, task manager head 26, status bar 34.
+   - List rows: 22 (JSON), 24 (Files, Task Manager), 28 (sidebar), 38.
+4. **No window frame.** Nothing fixes the order of toolbar, banner, scrolling body, footer and status bar, so SQLite, Settings, Task Manager and Journal each build their own (`.sq-bar`, `.sw-bar`, `.tm-bar`).
+5. **No split pane, sidebar or inspector.** The PDF thumbnails, the SQLite table list and Settings' sidebar are each custom.
+6. **No loading or error state.** Spinner is placed ad hoc in six views. Magic's error is its own (`magic-error-inline`). The lazy-load fallback is a grey div.
+7. **No charts and no series colours** in the app. Magic has `--c1…--c6` and `cmd.chart`; Resources has no chart.
+8. **No container-query convention.** Files, Timer, SQLite and the toolbar search each pick their own breakpoints, while Magic has `k-hide-narrow` at 320px.
+9. **Two token vocabularies.** In Magic, `--bg` is the app's `--well`, and `--radius` is 8 against the app's 6. Magic has `--surface`/`--line`/`--fill`/`--good`/`--warn`/`--bad` where the app has `--group-bg`/`--separator`/`--success`/`--warning`/`--danger`.
+10. **Off-scale type.** Renderer CSS has 61 literal font sizes against 33 `var(--text-*)`. Some aren't on the scale at all: 11, 12, 14, 16. Radii: 32 literal, 12 tokens.
+11. **No enforcement.** There are no lint rules for spacing, sizes or font sizes. The rules exist only as prose in CLAUDE.md, the prototype skill and the `tokens.css` header. `magic/lint.ts` checks Magic widgets for literal colours only.
+12. **References cover components, not windows.** The gallery's Patterns page has one pattern, and the Workbench has 9 stories, none of them a whole window.
+
+**The surprise:** Magic's prompt (`packages/core/src/magic/prompt/prompt.md`, "Layout" and "How cmd looks") is the best written guide to cmd's window design in the repo:
+- cover the window edge to edge, never a block floating in the middle;
+- a status line, not tiles;
+- sections are panes that drop the last first when space runs out;
+- no boxes in the box;
+- one text size;
+- archetypes (status + table, feed, player, tool, value + context, dashboard) drawn as ASCII.
+
+It applies to the built-in windows just as well, and none of them follow it on purpose.
+
+## What other systems do
+
+### 1. Layout primitives own all spacing
+
+- **Braid (SEEK):** "components never provide their own surrounding white space."
+  - `Box` pads; `Stack`, `Inline`, `Columns`, `Spread` and `Tiles` space their children.
+  - `Bleed` undoes a parent's inset and can't go further.
+  - The space scale is named (`xxsmall`…`xxxlarge`), and a separate `gutter` is used only for insets.
+- **Atlassian:** primitives (Box, Stack, Inline, Flex, Grid, Text, Pressable, Bleed) backed by tokens. Their styling library calls itself "bounded".
+- **Every Layout:** *intrinsic* primitives (Stack, Cluster, Sidebar, Switcher, Cover, Grid) that adapt to the space they're given, not to the viewport.
+- **Radix Themes** has the same primitives but accepts any CSS value and margin props. That freedom is what an LLM misuses.
+- **SwiftUI:** `VStack`/`HStack` with `spacing:`. Spacing lives in the container, not on the children.
+
+**For cmd:**
+- Add `Stack`, `Inline`, `Columns`, `Spread` and `Tiles` to `@cmd/ui`. Their `gap`/`pad` props take only names from a spacing scale, typed as a union, so `gap={13}` doesn't compile.
+- No margin props, and no kit component has an outer margin.
+
+Sources: [Braid layout](https://seek-oss.github.io/braid-design-system/foundations/layout), [Atlassian primitives](https://atlassian.design/components/primitives/overview), [Every Layout](https://every-layout.dev/layouts).
+
+### 2. Windows come from a few templates with named regions
+
+- **Primer:** `PageLayout` and `SplitPageLayout` have Header, Content, Pane and Footer regions. Panes take width presets (min/default/max), are resizable or sticky, and scroll on their own.
+- **SwiftUI:** `NavigationSplitView` (sidebar, content, detail) and `.inspector` (a trailing panel with `inspectorColumnWidth(min:ideal:max:)`, which becomes a sheet when space is short). The template owns how it adapts.
+- **VS Code UX guidelines:** a closed set of containers and items (views, view toolbars, welcome views, panels, status bar). Every contribution says where it goes.
+- **Raycast**, the strongest case: extensions build UI only from `List`, `Grid`, `Detail` and `Form`, plus an `ActionPanel`. "There isn't any HTML or CSS involved." The first actions get ↵ and ⌘↵ for free. Thousands of third-party extensions look native because there is no escape hatch.
+- **Polaris:** `Page` (title, primary and secondary actions) → `Layout.Section` → `Card`, plus page templates like the resource index.
+
+**For cmd:**
+- A small set of **window templates**, each with named slots, on top of the window shell. Each owns its toolbar slot, scroll regions, pane widths and empty/loading/error states. The archetypes Magic already names map onto them:
+  - `Document` (toolbar + scrolling body, optionally a footer)
+  - `Split` (sidebar + content, resizable, min/ideal/max)
+  - `Inspector` (trailing panel)
+  - `Edges` (status at the top, the bulk to the bottom edge)
+  - `Panes` (dashboard sections that drop the last first)
+  - `Hero` (one centred control between top and bottom)
+- Actions feed the command palette and shortcuts, as every app command already does.
+
+Sources: [Primer PageLayout](https://primer.style/product/components/page-layout), [WWDC23 Inspectors](https://developer.apple.com/videos/play/wwdc2023/10161/), [VS Code UX](https://code.visualstudio.com/api/ux-guidelines/overview), [Raycast UI API](https://developers.raycast.com/api-reference/user-interface).
+
+### 3. Responsive to the panel, not the screen
+
+- **Container queries** are baseline in every engine, Electron included. Use media queries for app structure and `@container` for components, with container breakpoints as tokens so everything switches at the same widths.
+- **Intrinsic layouts** avoid most breakpoints: Braid's `collapseBelow`, `auto-fit`/`minmax` grids, Every Layout's Sidebar and Switcher.
+- **Atlassian lints `no-container-queries`** in product code. Responsiveness belongs to the primitives, not to views.
+- **Density:**
+  - Cloudscape has comfortable and compact modes, switched globally; compact takes 4px steps off padding and gaps everywhere.
+  - JetBrains has Compact Mode.
+  - Primer's DataTable takes `cellPadding` condensed/normal/spacious.
+
+**For cmd:**
+- Every window body is a container (`container-type: inline-size`).
+- Three or four container-size tokens: narrow, regular, wide.
+- Primitives take responsive values (`<Columns collapseBelow="narrow">`, `<Hide below="narrow">`), and views write no `@container` or `@media` of their own.
+- A `data-density` attribute rescales the spacing tokens, so a data-heavy window is compact without one-off CSS.
+
+Sources: [Cloudscape density](https://cloudscape.design/foundation/visual-foundation/content-density/), [Every Layout Sidebar](https://every-layout.dev/layouts/sidebar/).
+
+### 4. Data and charts
+
+- **Tables:**
+  - Primer's DataTable declares columns as data: field, header, `align: "end"` for numbers, width `grow`/`auto`/min/max, and sort.
+  - A sortable table has a default sort.
+  - Row actions go in a last, header-less column, at most one shown, the rest in a menu.
+  - Polaris' IndexTable gives the UI for selection, sort, filter and paging, while the app owns the logic; filters live in a bar above the table.
+- **Empty states** (Carbon), in three kinds:
+  - first use (no data yet);
+  - no results (after a filter or search);
+  - error (plain words, no codes, a way forward).
+
+  The empty state *replaces* the element (an empty table loses its header), and there is one focus per state.
+- **Chart colour:**
+  - Carbon: an ordered 14-colour categorical palette applied in order, and sequential palettes that flip in dark themes.
+  - Atlassian: `color.chart.*` tokens, used in order, with `chart.neutral` to de-emphasise.
+  - Primer: a legend only for more than one series, and marks at 3:1 contrast with the background.
+- **Polaris Viz is deprecated.** Shopify now says to build charts with a library and keep the design system for the rest. Owning a chart library is expensive.
+
+**For cmd:**
+- Grow `DataGrid` toward this:
+  - column widths (`grow`/`auto`);
+  - density;
+  - a toolbar slot for filters;
+  - built-in empty, no-results and error states.
+- One `ViewState` (loading, empty, no results, error with Retry) that every template uses, so no view places its own spinner.
+- Chart tokens in every theme: `--chart-1…6` (the theme's ANSI colours, as Magic already does), `--chart-axis`, `--chart-grid`, `--chart-neutral`.
+- A thin `Chart` (line, area, bar, sparkline) that reads only those tokens. Magic's `cmd.chart` is the starting point.
+
+Sources: [Primer DataTable](https://primer.style/product/components/data-table), [Polaris IndexTable](https://polaris.shopify.com/components/index-table), [Carbon empty states](https://carbondesignsystem.com/patterns/empty-states-pattern/), [Carbon palettes](https://carbondesignsystem.com/data-visualization/color-palettes/), [Primer data viz](https://primer.style/product/ui-patterns/data-visualization).
+
+### 5. Enforcement
+
+- **Atlassian:**
+  - `ensure-design-token-usage` flags `padding: '16px'` and `color: 'red'`, configured per domain (color, spacing, shape).
+  - The UI Styling Standard bans `className` on components, dynamic styles, nested selectors, `!important`, global styles and container queries in product code. Its premise: styles must be "static and locally analyzable".
+  - Codemods migrate old code.
+- **Shopify `stylelint-polaris`:**
+  - Groups rules by domain so coverage can be *measured*.
+  - A disable needs a written reason.
+  - A migrator inserts disable comments into legacy code, so the rule can be switched on today and the debt paid down.
+- **Primer** deprecated its `sx` escape hatch and is removing it component by component. Stylelint has `primer/spacing` and `primer/colors`.
+- **Visual regression:** every story, every theme, diffed in CI.
+
+**For cmd:**
+- No linter setup is needed. `motion-css.test.ts` already shows how: a test that scans the CSS. Extend it to colours, font sizes, radii and (once there is a scale) spacing.
+- An allowlist with a reason per line counts the remaining debt; the number only goes down.
+- Diff the gallery shots (`pnpm --filter @cmd/ui shots`) across themes.
+
+Sources: [ensure-design-token-usage](https://atlassian.design/components/eslint-plugin-design-system/ensure-design-token-usage), [UI Styling Standard](https://atlassian.design/components/eslint-plugin-ui-styling-standard/overview), [stylelint-polaris](https://polaris.shopify.com/tools/stylelint-polaris/rules), [Primer sx migration](https://primer.style/product/primitives/migrating/).
+
+### 6. For AI
+
+- **Atlassian** publishes `llms.txt`: an index of tokens, primitives, components, lint rules and an MCP server. It says plainly which package is legacy.
+- **Primer's MCP** offers:
+  - `list_components` and `get_pattern`;
+  - `find_tokens` by intent;
+  - `lint_css`, so the agent checks its own CSS against the rules;
+  - coding guidelines.
+- **Storybook MCP** builds a component manifest (props plus the first stories) because agents otherwise produce "wrong props, hallucinated states".
+- **shadcn** has a registry of *blocks*: whole vetted compositions that an agent installs instead of assembling primitives.
+- Docs written as rules ("Use X. Never Y.") with one canonical example beat prose.
+
+**For cmd:**
+- The window-design skill holds the rules and the reference windows.
+- A manifest of `@cmd/ui` is generated from the source: components, props, allowed values, one example each.
+- A check an agent can run on its own work (`cmd ui lint`, or the CSS test) closes the loop, as `magic/lint.ts` already does for colours.
+
+Sources: [Atlassian llms.txt](https://atlassian.design/llms.txt), [Primer MCP](https://primer.style/product/getting-started/foundations/mcp), [Storybook MCP](https://storybook.js.org/docs/ai/mcp/overview), [shadcn MCP](https://ui.shadcn.com/docs/mcp).
+
+## Plan
+
+In order of leverage:
+
+1. **Spacing and metrics tokens.**
+   - A spacing scale on a 4px base: `--space-1` 2, `-2` 4, `-3` 6, `-4` 8, `-5` 12, `-6` 16, `-7` 24, `-8` 32.
+   - One window inset (`--inset`).
+   - Row heights (`--row-h-sm` 22, `--row-h` 24, `--row-h-lg` 28).
+   - Bar heights settled to two: the toolbar and a footer/status bar.
+   - Map the kit's own 13 values onto the scale.
+2. **Layout primitives** in `@cmd/ui`:
+   - `Stack`, `Inline`, `Columns`, `Spread`, `Tiles`, `Scroll`;
+   - `gap`/`pad` take only scale names;
+   - no margins;
+   - responsive props keyed by container size.
+3. **Window templates:** `WindowView` (toolbar, banner, body, footer, status slots, and `state` for loading/empty/error), `Split`/`Inspector`, `Edges`, `Panes`, `Hero`. These carry over Magic's archetypes.
+4. **Reference windows** as Workbench stories, one per kind, built only from the kit with no view CSS:
+   - **content:** a document or article reader with an outline sidebar;
+   - **media:** an image or video viewer with a filmstrip and an inspector;
+   - **data:** a table with a filter bar, a selection inspector and every state;
+   - **charts:** a dashboard of panes with a line, bars, sparklines and stats.
+
+   Every gap they hit becomes a kit change.
+5. **Chart tokens and `Chart`.**
+6. **One vocabulary.** Magic's `kit.css` uses the same token names as `@cmd/ui`, ideally generated from it, so widgets and windows can't drift apart.
+7. **Enforcement:** the CSS-scanning test for colour, type, radius and spacing, with a reasoned allowlist.
+8. **The window-design skill:** rules, the archetypes, the reference windows, and how to check.
+9. **Migration:** move the built-in windows onto the templates one by one (SQLite, Settings, Task Manager and Journal first).
