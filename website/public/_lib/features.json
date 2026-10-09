@@ -7,7 +7,7 @@
     { "title": "Needs you, on top", "text": "Waiting agents first, then working, then done. ⌃⌘J jumps to the next one that needs you." },
     { "title": "Terminals outlive the app", "text": "A background process owns them: quit or update cmd and nothing ends. After a reboot, agents resume." },
     { "title": "Search everything", "text": "⇧⌘F searches windows, files, past sessions, commands and their output. Return resumes a session." },
-    { "title": "Your history, kept", "text": "Every agent session, command and commit, on this Mac with secrets redacted. You pick what's saved." },
+    { "title": "Your history, kept", "text": "Every agent session, command and commit, on your Mac with secrets redacted. You pick what's saved." },
     { "title": "Session summaries", "text": "Right-click an agent for what you asked, what was done and what changed, in Markdown." },
     { "title": "Magic widgets", "text": "Say what you want and an agent builds a live widget for it, in your theme. Ask to change it." },
     { "title": "Built-in widgets", "text": "Agent Activity, a Live Diff, Resources, a Timer and more, in the Widget Library (⇧⌘L)." },
