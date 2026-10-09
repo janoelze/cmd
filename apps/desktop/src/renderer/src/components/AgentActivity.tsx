@@ -4,8 +4,8 @@
 // the two never disagree; a click goes to the agent's terminal. The counts are
 // the title bar's status, and its menu switches the scope.
 
-import { Button, EmptyState, useFlip } from "@cmd/ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, List, ListRow, Stack, Text, View, useFlip, type DotState } from "@cmd/ui";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { bucketOf, type Agent } from "@cmd/protocol";
 import { newAgent, selectPane } from "../actions.ts";
 import { cmd } from "../bridge.ts";
@@ -14,9 +14,7 @@ import { showWorkspace } from "../workspaces.tsx";
 import { useStore } from "../store.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
 import { useWidgetStatus } from "../widgets.ts";
-import { Mark } from "./Slot.tsx";
 import { shortAgo } from "./SidebarRows.tsx";
-import "./widgets.css";
 
 /** Waiting for you, then working, then the rest; most recent first within each. */
 const RANK = { needs: 0, working: 1, unseen: 2, rest: 3 } as const;
@@ -75,41 +73,87 @@ export function AgentActivity({ win }: WindowViewProps) {
     void cmd.call("agent.markSeen", { agentId: a.id }).catch(() => {});
   };
 
-  const row = (a: Agent, depth: number) => {
+  const lines: ActivityLine[] = [];
+  const add = (a: Agent, depth: number) => {
     const r: SidebarRow = { key: a.id, pane: a.paneId ? (s.panes.get(a.paneId) ?? null) : null, win: null, agent: a, children: [], urgent: null };
     const f = fieldsOf(r, undefined, now);
     const sp = s.workspaces.get(a.workspaceId);
-    const workspace = scope === "all" ? sp?.name : undefined;
     const where = whereOf(a.git, a.cwd, sp);
-    return (
-      <div key={a.id} data-key={a.id}>
-        <button className="aa-row" data-depth={depth || undefined} data-needs={bucketOf(a) === "needs" || undefined} onClick={() => go(a)}>
-          <Mark light={f.light} icon={f.icon} />
-          <span className="aa-main">
-            <span className="aa-name">{f.name}</span>
-            {f.status && <span className="aa-status">{f.status.text}</span>}
-          </span>
-          <span className="aa-side">
-            <span className="aa-place" data-tip={where?.tip}>{[workspace, where?.text].filter(Boolean).join(" · ")}</span>
-            <span className="aa-time">{shortAgo(a.stateSince, now)}</span>
-          </span>
-        </button>
-        {children.get(a.id)?.map((c) => row(c, depth + 1))}
-      </div>
-    );
+    lines.push({
+      key: a.id,
+      depth,
+      icon: f.icon,
+      light: f.light,
+      name: f.name,
+      status: f.status?.text,
+      place: [scope === "all" ? sp?.name : undefined, where?.text].filter(Boolean).join(" · "),
+      placeTip: where?.tip,
+      time: shortAgo(a.stateSince, now),
+      needs: bucketOf(a) === "needs",
+      onClick: () => go(a),
+    });
+    for (const c of children.get(a.id) ?? []) add(c, depth + 1);
   };
+  for (const a of roots) add(a, 0);
 
+  return <AgentActivityView lines={lines} scope={scope} listRef={listRef} onNew={() => void newAgent("claude")} />;
+}
+
+/** One agent's row: what the sidebar says about it (fieldsOf), where it works, since when. */
+export interface ActivityLine {
+  key: string;
+  /** Subagents sit under their host. */
+  depth: number;
+  icon: string;
+  light?: DotState;
+  name: ReactNode;
+  status?: ReactNode;
+  place: string;
+  placeTip?: string;
+  time: string;
+  /** Waiting for you: its status in the needs tone. */
+  needs: boolean;
+  onClick: () => void;
+}
+
+/** The list, drawn (AgentActivity.story.tsx shows every state). */
+export function AgentActivityView({ lines, scope, listRef, onNew }: { lines: ActivityLine[]; scope: "all" | "workspace"; listRef?: Ref<HTMLDivElement>; onNew: () => void }) {
   return (
-    <div className="aa">
-      <div className="aa-list" ref={listRef}>
-        {roots.length ? (
-          roots.map((a) => row(a, 0))
-        ) : (
-          <EmptyState compact icon="person.2" title={scope === "all" ? "No agents running" : "No agents in this workspace"} action={<Button onClick={() => void newAgent("claude")}>New Claude Session</Button>}>
-            Agents you start show up here as they work.
-          </EmptyState>
-        )}
-      </div>
-    </div>
+    <View
+      bodyRef={listRef}
+      state={
+        lines.length
+          ? null
+          : { kind: "empty", icon: "person.2", title: scope === "all" ? "No agents running" : "No agents in this workspace", text: "Agents you start show up here as they work.", action: <Button onClick={onNew}>New Claude Session</Button> }
+      }
+    >
+      <List>
+        {lines.map((l) => (
+          <ListRow
+            key={l.key}
+            flipKey={l.key}
+            depth={l.depth}
+            icon={l.icon}
+            light={l.light}
+            title={l.name}
+            tone={l.needs ? "needs" : undefined}
+            detail={l.status}
+            end={
+              <Stack gap="none" align="end">
+                <span data-tip={l.placeTip}>
+                  <Text size="xs" tone="dim" truncate>
+                    {l.place}
+                  </Text>
+                </span>
+                <Text size="xs" tone="dim">
+                  {l.time}
+                </Text>
+              </Stack>
+            }
+            onClick={l.onClick}
+          />
+        ))}
+      </List>
+    </View>
   );
 }

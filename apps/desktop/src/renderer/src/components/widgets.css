@@ -1,20 +1,9 @@
-/* Built-in widgets (docs/16-widgets.md): Agent Activity (aa-), Live Diff (ld-), YouTube (yt-), Timer (tm-) (Workspace Actions and Resources are built from the kit's window pieces alone). The list widgets are @cmd/ui Panels. */
+/* Built-in widgets (docs/16-widgets.md): Live Diff (ld-), YouTube (yt-), Timer (tm-) (Agent Activity, Workspace Actions and Resources are built from the kit's window pieces alone). The list widgets are @cmd/ui Panels. */
 
-.aa, .ld { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); font: var(--text-sm) var(--font-ui); color: var(--text); }
-.aa-list, .ld-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 0; display: flex; flex-direction: column; }
-.aa-list > *, .ld-list > * { flex: none; }
-.aa-list > .ui-empty, .ld-list > .ui-empty { flex: 1; min-height: max-content; }
-
-/* ── Agent Activity ── */
-.aa-row { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: default; }
-.aa-row:hover { background: var(--bg-hover); }
-.aa-row[data-depth] { padding-left: 30px; }
-.aa-row[data-needs] .aa-name { font-weight: 600; }
-.aa-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.aa-name, .aa-status, .aa-place { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aa-status { color: var(--text-dim); font-size: var(--text-xs); }
-.aa-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; max-width: 40%; color: var(--text-dim); font-size: var(--text-xs); }
-.aa-place { max-width: 100%; }
+.ld { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); font: var(--text-sm) var(--font-ui); color: var(--text); }
+.ld-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 0; display: flex; flex-direction: column; }
+.ld-list > * { flex: none; }
+.ld-list > .ui-empty { flex: 1; min-height: max-content; }
 
 /* ── Live Diff ── */
 .ld-plus { color: var(--git-added); }
