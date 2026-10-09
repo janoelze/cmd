@@ -157,7 +157,7 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
         const detail =
           who === "taken"
             ? `Port ${port} on your tailnet already serves something else. Pick another one (remote.tailscale.port).`
-            : !ctx.settings["remote.enabled"] || ctx.settings["remote.access"] !== "tailscale"
+            : !ctx.selected
               ? "Turn on remote access through Tailscale to publish it."
               : "Not published yet.";
         return rest({ id: "published", title: "Publish on your tailnet", state: who === "taken" ? "error" : "todo", detail });

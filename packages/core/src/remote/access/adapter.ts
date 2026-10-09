@@ -5,9 +5,9 @@
 // worker could run one. publishedMode() (published.ts) turns one into an
 // AccessMode (mode.ts), with the listener, the publishing and its undoing.
 
-import type { SettingKey, Settings } from "@cmd/protocol";
+import type { Settings } from "@cmd/protocol";
 import type { ExecResult } from "../../loginpath.ts";
-import type { Check } from "./mode.ts";
+import type { AccessModeInfo, Check } from "./mode.ts";
 
 export type { Check };
 
@@ -15,30 +15,21 @@ export interface AdapterContext {
   /** A tool on the login PATH (loginpath.ts exec; a fake in tests). */
   exec(cmd: string, args: string[], o?: { timeout?: number; env?: NodeJS.ProcessEnv }): Promise<ExecResult>;
   readonly settings: Settings;
+  /** This mode is the one in use and remote access is on (so a missing publication is still to come). */
+  selected: boolean;
   /** The listener's loopback port. */
   port: number;
-  /** The route devices dial, for probes of /r/<route>. */
-  route: string;
+  /** The route devices dial, for probes of /r/<route>; null before the mode first ran (checks never make one). */
+  route: string | null;
   log: { info(msg: string): void; warn(msg: string): void };
 }
 
-export interface AccessAdapter {
-  /** The id of the mode it becomes (remote.access). */
-  id: string;
-  title: string;
-  /** SF Symbol name. */
-  icon: string;
-  description: string;
-  /** Its own settings, shown under Connection (remote.port is added for every adapter). A change unpublishes first. */
-  settings: readonly SettingKey[];
-  /** The setting `cmd remote access <id> VALUE` fills. */
-  argument?: SettingKey;
-  /** Its status line while it publishes. */
-  connecting: string;
-  /** The setup checklist, in order; each ok, todo or error, with what to do. */
+/** id: the mode it becomes; settings: its own, shown under Connection (remote.port is added for every adapter), a change unpublishes first; connecting: its status line while it publishes. */
+export interface AccessAdapter extends AccessModeInfo {
+  /** The setup checklist, in order; each ok, todo or error, with what to do. Reads, never changes anything. */
   detect(ctx: AdapterContext): Promise<Check[]>;
   /** Make the port reachable; resolves to the public origin, or throws why not. */
-  enable(ctx: AdapterContext): Promise<{ url: string }>;
+  enable(ctx: AdapterContext & { route: string }): Promise<{ url: string }>;
   /** Undo enable, leaving anything that isn't ours alone. */
   disable(ctx: AdapterContext): Promise<void>;
 }

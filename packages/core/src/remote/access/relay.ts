@@ -27,13 +27,14 @@ export function relayMode(): AccessMode {
       const known = ctx.keys.relayRoute();
       const same = known.relay === relay;
       ctx.audit("enabled", relay);
-      return new RelayLink({
+      const transport = new RelayLink({
         relay,
         client: () => ctx.settings["remote.client"],
         route: same ? known.route : null,
         secret: same ? known.secret : null,
         onRegistered: (route, secret) => ctx.keys.setRoute(relay, route, secret),
       });
+      return { transport, stop: async () => null };
     },
   };
 }

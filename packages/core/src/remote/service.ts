@@ -17,7 +17,7 @@ import type { SettingsService } from "../settings.ts";
 import type { RemoteDeviceRecord, Store } from "../store.ts";
 import { exec as loginExec } from "../loginpath.ts";
 import { registerBuiltinModes } from "./access/builtin.ts";
-import { AccessModes, unknownMode, type AccessMode, type Check, type ModeContext } from "./access/mode.ts";
+import { AccessModes, unknownMode, type AccessMode, type AccessRun, type Check, type ModeContext } from "./access/mode.ts";
 import { HostKeys } from "./keys.ts";
 import { webClientDir } from "./webroot.ts";
 import type { Transport } from "./transport.ts";
@@ -55,8 +55,9 @@ export class RemoteService {
   #keys: HostKeys;
   #key: KeyPair | null = null;
   #transport: Transport | null = null;
-  /** The mode that made the running transport. */
+  /** The mode that made the running transport, and its run. */
   #mode: AccessMode | null = null;
+  #run: AccessRun | null = null;
   /** The settings the running transport was made from, to skip restarts that change nothing. */
   #config = "";
   #modes: AccessModes;
@@ -70,16 +71,23 @@ export class RemoteService {
   #inputAt = new Map<string, number>();
   #applying: Promise<void> = Promise.resolve();
   #closed = false;
-  #unbind: () => void;
+  #unbind = () => {};
+  #unwatchModes: () => void;
 
   constructor(o: RemoteServiceOptions) {
     this.#o = o;
     this.#keys = new HostKeys(o.stateDir ? path.join(o.stateDir, "remote") : null);
     this.#modes = o.modes ?? builtinModes();
-    // Every mode's settings: a change to the running one's may restart it.
+    this.#unwatchModes = this.#modes.onChange(() => this.#bind());
+    this.#bind();
+  }
+
+  /** Follow every mode's settings (a change to the running one's may restart it); again when a mode is registered. */
+  #bind(): void {
     const keys = new Set<SettingKey>(["remote.enabled", "remote.access"]);
     for (const m of this.#modes.all()) for (const k of m.settings) keys.add(k);
-    this.#unbind = o.settings.bind([...keys], (s) => this.#apply(s));
+    this.#unbind();
+    this.#unbind = this.#o.settings.bind([...keys], (s) => this.#apply(s));
   }
 
   get modes(): AccessModes {
@@ -92,23 +100,28 @@ export class RemoteService {
   }
 
   /** Settings changed: start, restart or stop the transport (serialized). */
-  #apply(s: Settings, force = false): Promise<void> {
+  #apply(s: Settings): Promise<void> {
     return (this.#applying = this.#applying.then(async () => {
       const mode = this.#modes.get(s["remote.access"]) ?? null;
       const on = s["remote.enabled"] && !this.#closed && !!mode && !mode.missing?.(s);
       const config = on ? JSON.stringify([mode.id, mode.config ? mode.config(s) : mode.settings.map((k) => s[k])]) : "";
-      if (!force && config === this.#config && (this.#transport || !config)) return;
+      if (config === this.#config && (this.#transport || !config)) return;
       this.#config = config;
       const prev = this.#mode;
+      const run = this.#run;
       this.#stop();
-      if (prev) await prev.stop?.(this.#context(), { restart: prev === mode && on });
+      // The same mode again: the old run hands over what still fits (a publication).
+      const restart = prev === mode && on;
+      const carried = run ? await run.stop({ restart }) : null;
       if (!on) return this.#changed();
       try {
         const id = await this.#keys.load();
         if (this.#closed) return;
         this.#key = id.key;
+        const next = mode.start(this.#context(mode.id), restart ? carried : null);
         this.#mode = mode;
-        this.#use(mode.start(this.#context()));
+        this.#run = next;
+        this.#use(next.transport);
       } catch (err) {
         log.error(`remote access could not start: ${(err as Error).message}`);
       }
@@ -116,27 +129,32 @@ export class RemoteService {
     }));
   }
 
-  #context(): ModeContext {
+  /** For mode `id`: selected while it's the one in use and remote access is on. */
+  #context(id: string): ModeContext {
     const o = this.#o;
     return {
       get settings() {
         return o.settings.settings;
+      },
+      get selected() {
+        const s = o.settings.settings;
+        return s["remote.enabled"] && s["remote.access"] === id;
       },
       exec: o.exec ?? loginExec,
       keys: this.#keys,
       webDir: o.webDir === undefined ? webClientDir() : o.webDir,
       log: { info: (m) => log.info(m), warn: (m) => log.warn(m) },
       audit: (kind, detail) => this.audit(kind, null, detail),
-      restart: () => this.#apply(o.settings.settings, true),
     };
   }
 
-  /** "Check Again": the current mode retries what failed (a direct mode publishes again); then its checklist. */
+  /** "Check Again": the running mode retries what failed (a published mode publishes again); then its checklist. */
   async setup(): Promise<Check[]> {
     const mode = this.#modeOrThrow(this.#o.settings.settings["remote.access"]);
+    await this.#applying;
     await this.#keys.load();
-    const ctx = this.#context();
-    return mode.setup ? mode.setup(ctx) : (mode.detect?.(ctx) ?? []);
+    if (this.#mode === mode) await this.#run?.retry?.();
+    return (await mode.detect?.(this.#context(mode.id))) ?? [];
   }
 
   /** The setup checklist of an access mode (default: the current one); empty when it has nothing to set up. */
@@ -144,7 +162,7 @@ export class RemoteService {
     const mode = this.#modeOrThrow(access);
     if (!mode.detect) return [];
     await this.#keys.load();
-    return mode.detect(this.#context());
+    return mode.detect(this.#context(mode.id));
   }
 
   #modeOrThrow(id: string): AccessMode {
@@ -168,6 +186,7 @@ export class RemoteService {
     this.#transport.close();
     this.#transport = null;
     this.#mode = null;
+    this.#run = null;
     this.#pairing = null;
     for (const r of this.#requests.values()) r.resolve(null);
     this.audit("disabled", null, null);
@@ -309,6 +328,7 @@ export class RemoteService {
   close(): void {
     this.#closed = true;
     this.#unbind();
+    this.#unwatchModes();
     this.#stop();
   }
 

@@ -5,8 +5,9 @@
 // the mode makes the Transport, runs its own setup checks and says what's
 // missing in its own words. Modes that publish the loopback listener are built
 // from a narrower AccessAdapter (adapter.ts) by publishedMode() (published.ts).
-// A mode holds the state of its run, so each RemoteService gets its own
-// (registerBuiltinModes makes fresh ones).
+// A mode is a stateless descriptor, shared freely (even by several services):
+// start() returns an AccessRun that holds the state of that run, and what must
+// outlive it (a publication) is handed to the next run explicitly.
 
 import type { RemoteAccessCheck, RemoteAccessMode, SettingKey, Settings } from "@cmd/protocol";
 import type { ExecResult } from "../../loginpath.ts";
@@ -18,6 +19,8 @@ export type Check = RemoteAccessCheck;
 export interface ModeContext {
   /** The settings now (read when acting: they change while a mode runs). */
   readonly settings: Settings;
+  /** This mode is the one in use and remote access is on. */
+  readonly selected: boolean;
   /** A tool on the login PATH (loginpath.ts exec; a fake in tests). */
   exec(cmd: string, args: string[], o?: { timeout?: number; env?: NodeJS.ProcessEnv }): Promise<ExecResult>;
   /** The host's key and routes, loaded. */
@@ -27,11 +30,10 @@ export interface ModeContext {
   log: { info(msg: string): void; warn(msg: string): void };
   /** An entry in the remote access audit log. */
   audit(kind: string, detail: string | null): void;
-  /** Stop and start this mode's transport again, resolved once it has started. */
-  restart(): Promise<void>;
 }
 
-export interface AccessMode {
+/** What a mode is, as Settings and the CLI show it; shared by modes and port publishers (adapter.ts). */
+export interface AccessModeInfo {
   /** The remote.access value that picks it. */
   id: string;
   title: string;
@@ -42,30 +44,47 @@ export interface AccessMode {
   settings: readonly SettingKey[];
   /** The setting `cmd remote access <id> VALUE` fills (url: remote.url). */
   argument?: SettingKey;
+  /** Its status line while it connects ("Publishing on your tailnet…"). */
+  connecting: string;
+}
+
+/** One run of a mode, from start() until the service stops it. H: what it hands to the next run. */
+export interface AccessRun<H = unknown> {
+  /** The transport; the service starts it. */
+  transport: Transport;
+  /** "Check Again": retry what failed (publish again), resolved when that settled. */
+  retry?(): Promise<void>;
+  /** After its transport closed. restart: the same mode starts again next; what it returns goes to that start. */
+  stop(o: { restart: boolean }): Promise<H | null>;
+}
+
+export interface AccessMode<H = unknown> extends AccessModeInfo {
   /** What the running transport depends on: another value restarts it. Default: its settings' values. */
   config?(s: Settings): unknown;
   /** Why it can't start with these settings (the status error), or null. */
   missing?(s: Settings): string | null;
-  /** Its status line while the transport connects ("Publishing on your tailnet…"). */
-  connecting: string;
   /** What a pairing link needs that isn't there yet: the transport is offline, or has no address. */
   messages?: { offline?(error: string | null): string; noAddress?: string };
-  /** The setup checklist, in order; none: nothing to set up. */
+  /** The setup checklist, in order; none: nothing to set up. Reads, never changes anything. */
   detect?(ctx: ModeContext): Promise<Check[]>;
-  /** "Check Again": retry what failed, then the checklist. Default: detect. */
-  setup?(ctx: ModeContext): Promise<Check[]>;
-  /** The transport; the service starts it. */
-  start(ctx: ModeContext): Transport;
-  /** After its transport closed. restart: the same mode starts again next (keep what still fits). */
-  stop?(ctx: ModeContext, o: { restart: boolean }): Promise<void>;
+  /** A run. carried: what the previous run of this mode handed over when it stopped to restart, else null. */
+  start(ctx: ModeContext, carried: H | null): AccessRun<H>;
 }
 
 export class AccessModes {
   #modes = new Map<string, AccessMode>();
+  #listeners = new Set<() => void>();
 
   register(m: AccessMode): void {
     if (this.#modes.has(m.id)) throw new Error(`access mode already registered: ${m.id}`);
     this.#modes.set(m.id, m);
+    for (const fn of this.#listeners) fn();
+  }
+
+  /** Call fn after each register(). Returns an unsubscribe. */
+  onChange(fn: () => void): () => void {
+    this.#listeners.add(fn);
+    return () => this.#listeners.delete(fn);
   }
 
   get(id: string): AccessMode | undefined {

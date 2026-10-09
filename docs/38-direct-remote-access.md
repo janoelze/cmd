@@ -73,35 +73,39 @@ interface Transport extends EventEmitter<{ state; open: [channel, ip, hint?]; da
 Every way of reaching the Mac is an **access mode**, the hosted relay included, and every mode registers through one shared, typed interface, `AccessMode` (`packages/core/src/remote/access/mode.ts`), into a registry in the style of `WindowTypes` and `TranscriptSources` (`register` throws on duplicates, `get`, `all`, `info()` for the UI). The built-ins go through `registerBuiltinModes()` with the same `register()` a plugin host will use. `RemoteService` knows modes only by their id (`remote.access`) and has no branch for any of them:
 
 ```ts
-interface AccessMode {
+interface AccessModeInfo {       // shared with port publishers
   id: string; title: string; icon: string; description: string;
   settings: SettingKey[];        // shown under Connection when it's picked; a change restarts it (or config(s))
   argument?: SettingKey;         // what `cmd remote access <id> VALUE` fills (url: remote.url)
   connecting: string;            // its status line while it connects
+}
+interface AccessMode<H> extends AccessModeInfo {   // stateless: shared freely
   missing?(s): string | null;    // why it can't start (the status error)
   messages?: { offline?(error): string; noAddress?: string };  // what pair() says when it can't make a link
-  detect?(ctx): Promise<Check[]>;   // the checklist; the relay has none
-  setup?(ctx): Promise<Check[]>;    // Check Again: retry, then detect
-  start(ctx): Transport;            // relay: RelayLink; the others: DirectListener + publish
-  stop?(ctx, { restart }): Promise<void>;  // after its transport closed: unpublish, unless it starts again unchanged
+  detect?(ctx): Promise<Check[]>;   // the checklist (read-only); the relay has none
+  start(ctx, carried: H | null): AccessRun<H>;   // carried: what the previous run handed over on a restart
 }
-// ModeContext: settings (live), exec on the login PATH (loginpath.ts), the host keys, the web client's dir, log, audit, restart().
+interface AccessRun<H> {
+  transport: Transport;             // relay: RelayLink; the others: DirectListener + publish
+  retry?(): Promise<void>;          // Check Again, before detect: publish again
+  stop({ restart }): Promise<H | null>;  // after its transport closed: unpublish, or hand the publication to the next run
+}
+// ModeContext: settings (live), selected (in use and on), exec on the login PATH (loginpath.ts), the host keys, the web client's dir, log, audit.
 ```
 
 - **Relay** (`access/relay.ts`): starts the `RelayLink` on `remote.relay`, reads `remote.client` when a pairing link is made; a route belongs to one relay.
 - **Port publishers** sit underneath the direct modes: an `AccessAdapter` (`access/adapter.ts`) only makes a loopback port reachable and reports a URL; it never sees channels, keys or policy, so a plugin worker could run one later.
 
 ```ts
-interface AccessAdapter {
-  id; title; icon; description; settings; argument?; connecting;
+interface AccessAdapter extends AccessModeInfo {
   detect(ctx: AdapterContext): Promise<Check[]>;
   enable(ctx: AdapterContext): Promise<{ url: string }>;
   disable(ctx: AdapterContext): Promise<void>;  // only what enable() did
 }
-// AdapterContext: exec, settings (as they were for enable), the loopback port, the route, log.
+// AdapterContext: exec, settings (as they were for enable), selected, the loopback port, the route (null in checks before the first run), log.
 ```
 
-- `publishedMode(adapter)` (`access/published.ts`) turns one into a mode: it runs the `DirectListener` on `remote.port`, publishes alongside it (the listener comes online with the adapter's URL), keeps the publication across a restart with the same settings, unpublishes when the mode is switched away from, turned off or one of its settings changes, and on Check Again restarts a listener that isn't online so the adapter publishes again. `tailscale` and `url` are adapters; `cloudflared`, `ngrok` and `funnel` would be too.
+- `publishedMode(adapter)` (`access/published.ts`) turns one into a mode: it runs the `DirectListener` on `remote.port`, publishes alongside it (the listener comes online with the adapter's URL), hands the publication to the next run on a restart with the same settings (the service passes what `stop({ restart: true })` returned to the next `start`), unpublishes when the mode is switched away from, turned off or one of its settings changes, and on Check Again (`retry`) publishes again on a listener that isn't online, listening again first if its port was taken. `tailscale` and `url` are adapters; `cloudflared`, `ngrok` and `funnel` would be too.
 - **No fixed list.** `remote.access` is a string setting with `control: "access"`: Settings → Remote Access shows a popup of `remote.modes` (the registry's `info()`), then the chosen mode's settings and, when it has `detect`, its checklist. `cmd remote modes` lists them; `cmd remote access` and `cmd remote setup` take any id the core has. A value no mode has stays visible in the popup, marked, and is a status error naming the valid ids.
 
 **`tailscale`:**
