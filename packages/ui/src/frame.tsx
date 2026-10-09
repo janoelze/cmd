@@ -216,3 +216,8 @@ export function Text({ tone, size, mono, strong, truncate, children }: { tone?: 
     </span>
   );
 }
+
+/** Rows to act on or pick from (ListSection, ListRow) in a View without an inset: the rows' content at the window's inset. */
+export function List({ children }: { children: ReactNode }) {
+  return <div className="ui-list">{children}</div>;
+}
