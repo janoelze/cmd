@@ -9,7 +9,7 @@ import { Icon, Sheet } from "./ui.tsx";
 
 export function Settings({ conn, phase, model, onClose }: { conn: Connection; phase: Phase; model: Model; onClose: () => void }) {
   const [confirm, setConfirm] = useState(false);
-  const relay = conn.identity.relay.replace(/^wss?:\/\//, "");
+  const address = conn.identity.socket.replace(/^wss?:\/\//, "");
   const status = phase.kind === "online" ? "Connected" : phase.kind === "offline" ? "Offline" : "Connecting…";
   return (
     <Sheet title={model.host} onClose={onClose}>
@@ -17,9 +17,9 @@ export function Settings({ conn, phase, model, onClose }: { conn: Connection; ph
         <Fact label="Status" value={status} />
         <Fact label="This device" value={deviceName()} />
         <Fact label="Access" value={model.scope === "control" ? "Control: can type and change files" : "View only"} />
-        <Fact label="Relay" value={relay} />
+        <Fact label="Address" value={address} />
         <div className="fact-note">
-          <Icon name="lock" size={13} /> End-to-end encrypted. The relay only forwards scrambled bytes; your Mac decides who gets in.
+          <Icon name="lock" size={13} /> End-to-end encrypted. Anything in between sees only scrambled bytes; your Mac decides who gets in.
         </div>
       </div>
       <div className="sheet-list">

@@ -143,12 +143,18 @@ describe("device session", () => {
 
 describe("pairing link", () => {
   it("round-trips and rejects junk", async () => {
-    const p = { relay: "wss://relay.example.com", route: toBase64Url(randomBytes(16)), hostKey: randomBytes(32), psk: randomBytes(32) };
+    const p = { socket: "wss://relay.example.com", route: toBase64Url(randomBytes(16)), hostKey: randomBytes(32), psk: randomBytes(32) };
     const back = decodePairing("#" + encodePairing(p));
-    expect(back.relay).toBe(p.relay);
+    expect(back.socket).toBe(p.socket);
     expect(toHex(back.psk)).toBe(toHex(p.psk));
     expect(() => decodePairing("v1.a.b.c")).toThrow();
-    expect(() => decodePairing(encodePairing({ ...p, relay: "https://x" }))).toThrow();
+    expect(() => decodePairing(encodePairing({ ...p, socket: "https://x" }))).toThrow();
+  });
+
+  it("keeps the positional format links made before `relay` became `socket` use", () => {
+    const [route, hostKey, psk] = [randomBytes(16), randomBytes(32), randomBytes(32)].map(toBase64Url);
+    const old = `v1.${toBase64Url(new TextEncoder().encode("wss://relay.example.com"))}.${route}.${hostKey}.${psk}`;
+    expect(decodePairing(old)).toMatchObject({ socket: "wss://relay.example.com", route });
   });
 
   it("has 256 distinct words", () => {

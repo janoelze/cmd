@@ -1,12 +1,13 @@
 // A pretend phone for developing remote access before the web client exists:
-// pairs from a pairing link and calls the core through the relay, end-to-end
-// encrypted, exactly as a browser would.
+// pairs from a pairing link and calls the core through the relay (or straight to
+// the Mac in a direct mode), end-to-end encrypted, exactly as a browser would.
 //
 //   pnpm remote:device pair '<pairing url>' [name]
 //   pnpm remote:device call <method> ['<params json>']
 //   pnpm remote:device watch      # bootstrap, then print events
 //
-// Its identity lives in $CMD_HOME/remote-device.json (default ./.cmd-dev).
+// Its identity lives in $CMD_HOME/remote-device.json (default ./.cmd-dev); one
+// saved before direct modes has the socket as `relay`.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -18,15 +19,17 @@ const [cmd, ...args] = process.argv.slice(2);
 
 interface Saved {
   key: JsonWebKey;
-  relay: string;
+  socket?: string;
+  /** What `socket` was called before. */
+  relay?: string;
   route: string;
   hostKey: string;
 }
 
-async function open(o: { relay: string; route: string; hostKey: Bytes; device: KeyPair; psk?: Bytes; name?: string }) {
-  const ws = new WebSocket(`${o.relay.replace(/\/+$/, "")}/r/${o.route}`);
+async function open(o: { socket: string; route: string; hostKey: Bytes; device: KeyPair; psk?: Bytes; name?: string }) {
+  const ws = new WebSocket(`${o.socket.replace(/\/+$/, "")}/r/${o.route}`);
   ws.binaryType = "arraybuffer";
-  await new Promise((resolve, reject) => ((ws.onopen = resolve), (ws.onerror = () => reject(new Error("can't reach the relay")))));
+  await new Promise((resolve, reject) => ((ws.onopen = resolve), (ws.onerror = () => reject(new Error("can't reach the Mac")))));
   const { receive, closed, session } = openDeviceSession({
     socket: { send: (b) => ws.send(b), close: () => ws.close() },
     hostKey: o.hostKey,
@@ -51,7 +54,7 @@ async function open(o: { relay: string; route: string; hostKey: Bytes; device: K
 
 async function saved() {
   const d = JSON.parse(fs.readFileSync(file, "utf8")) as Saved;
-  return open({ relay: d.relay, route: d.route, hostKey: fromBase64Url(d.hostKey), device: await importKeyPair(d.key) });
+  return open({ socket: d.socket ?? d.relay!, route: d.route, hostKey: fromBase64Url(d.hostKey), device: await importKeyPair(d.key) });
 }
 
 if (cmd === "pair") {
@@ -59,7 +62,7 @@ if (cmd === "pair") {
   const device = await generateKeyPair(true);
   const { s, ws } = await open({ ...link, device, name: args[1] });
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const doc: Saved = { key: await exportKeyPair(device), relay: link.relay, route: link.route, hostKey: toBase64Url(link.hostKey) };
+  const doc: Saved = { key: await exportKeyPair(device), socket: link.socket, route: link.route, hostKey: toBase64Url(link.hostKey) };
   fs.writeFileSync(file, JSON.stringify(doc), { mode: 0o600 });
   console.log(`paired: ${JSON.stringify(s.host)}`);
   ws.close();
