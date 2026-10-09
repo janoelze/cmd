@@ -138,12 +138,15 @@ export interface ListRowProps {
   onDoubleClick?: (e: MouseEvent<HTMLDivElement>) => void;
   onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
   tip?: string;
+  /** Its identity across renders, for a list that moves its rows (useFlip). */
+  flipKey?: string;
 }
 
 export function ListRow(p: ListRowProps) {
   return (
     <div
       className={cls("ui-list-row", p.detail != null ? "tall" : "short", p.selected && "sel", p.active && "active", p.className)}
+      data-key={p.flipKey}
       data-tone={p.tone}
       data-tip={p.tip}
       style={p.depth ? ({ "--depth": p.depth } as CSSProperties) : undefined}

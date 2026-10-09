@@ -154,4 +154,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   :root { --dur-fast: 0ms; --dur: 0ms; --glide-dur: 0ms; }
+  /* Nothing loops or scrolls smoothly: spinners and pulses run once, scrolls jump. */
+  *, ::before, ::after { animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }

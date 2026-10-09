@@ -4,7 +4,7 @@
 // macOS's find pasteboard: ⌘E and every search set them, ⌘G in any window uses them.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { FindBar, NO_FIND_OPTIONS, type FindBarHandle, type FindOptions, type FindResults } from "@cmd/ui";
+import { FindBar, NO_FIND_OPTIONS, usePresence, type FindBarHandle, type FindOptions, type FindResults } from "@cmd/ui";
 
 export type FindRequest = "open" | "next" | "prev" | "selection" | "replace" | "close";
 
@@ -101,7 +101,11 @@ export function useFind(findable: Findable, o: { floating?: boolean; placeholder
   );
 
   const rep = findable.replace;
-  const bar = open ? (
+  // Shown and hidden with motion (styles.css .find-in): a floating bar pops like a
+  // popover; one in the window's toolbar area opens and closes its height.
+  const { present, closing } = usePresence(open);
+  const bar = present ? (
+    <div className={`find-in${o.floating ? " floating" : ""}`} data-closing={closing || undefined} inert={closing || undefined}>
     <FindBar
       ref={handle}
       query={query}
@@ -124,6 +128,7 @@ export function useFind(findable: Findable, o: { floating?: boolean; placeholder
         }
       }
     />
+    </div>
   ) : null;
   return { open, request, bar };
 }

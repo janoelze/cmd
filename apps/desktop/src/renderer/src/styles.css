@@ -337,7 +337,7 @@ kbd {
   border: 0;
   background: none;
   color: var(--text-dim);
-  transition: transform 120ms;
+  transition: transform var(--dur-fast) var(--ease);
 }
 .twisty.open { transform: rotate(90deg); }
 
@@ -417,6 +417,15 @@ kbd {
 /* The terminal's find bar: a floating WindowToolbar in the top right corner. */
 .find-bar { position: absolute; top: 6px; right: 14px; left: 14px; z-index: 5; display: flex; justify-content: flex-end; pointer-events: none; }
 .find-bar > * { pointer-events: auto; }
+/* Find bars come and go (find.tsx): over a terminal it pops in and out like a popover; in a
+   window's toolbar area it opens to its height and closes, moving what's under it along. */
+:root { interpolate-size: allow-keywords; }
+.find-in { flex: none; overflow: hidden; animation: find-open var(--dur-fast) var(--ease); }
+.find-in[data-closing] { animation: find-close var(--dur-fast) ease-in forwards; }
+.find-in.floating { overflow: visible; transform-origin: top right; animation-name: ui-pop-in; }
+.find-in.floating[data-closing] { animation-name: ui-pop-out; }
+@keyframes find-open { from { height: 0; opacity: 0; } }
+@keyframes find-close { to { height: 0; opacity: 0; } }
 .xterm-host.typing, .xterm-host.typing * { cursor: none !important; }
 /* OSC 9;4 progress, along the terminal's top edge. */
 .term-progress { position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 4; pointer-events: none; overflow: hidden; }
@@ -520,7 +529,10 @@ kbd {
   border-radius: 12px;
   box-shadow: 0 20px 60px var(--shadow);
   overflow: hidden;
+  animation: ui-pop-in var(--dur-fast) ease-out;
 }
+/* Closing: fades out a little faster than it came (App, usePresentValue). */
+.palette-backdrop[data-closing] > .palette { animation: ui-pop-out var(--dur-fast) ease-in forwards; }
 .palette-input {
   padding: 14px 16px;
   font: 16px var(--font-ui);
@@ -530,7 +542,10 @@ kbd {
   border-bottom: 1px solid var(--separator);
   outline: none;
 }
-.palette-list { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+/* The list takes whatever height the palette has while it glides to a new size (Palette),
+   so the footer rides its bottom edge instead of jumping ahead of it. */
+.palette-list { flex: 1 1 auto; min-height: 0; list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+.palette > :not(.palette-list) { flex: none; }
 .palette-list li {
   display: flex;
   align-items: center;
@@ -610,7 +625,7 @@ kbd {
   background: var(--scrim);
   opacity: min(1, calc(var(--window-dim) * var(--window-dim-amount, 0.1)));
   border-radius: max(0px, calc(var(--window-radius) - var(--edge-w)));
-  transition: opacity 160ms ease;
+  transition: opacity var(--dur) var(--ease);
 }
 .windows-track > .tile.sel > .tile-frame::after,
 .windows-track > .tile.lifted > .tile-frame::after,
@@ -634,7 +649,11 @@ kbd {
 /* ui.unfocusedDesaturation: unfocused windows lose their colour. This one has to
    be a filter (on the content, not the outline); it's only set when the setting
    is on, since any filter makes the window a compositing layer. */
-.app.desaturate .windows-track > .tile .tile-body { transition: filter 160ms ease; }
+.app.desaturate .windows-track > .tile .tile-body { transition: filter var(--dur) var(--ease); }
+/* Selecting a window: its ring and outline change with the dimming, not a snap beside a
+   fade. Not on the canvas, whose zoom restyles the ring every frame (--z). */
+:is(.main.windows:not(.mode-canvas) .windows-track, .dock) > .tile { transition: border-color var(--dur) var(--ease); }
+:is(.main.windows:not(.mode-canvas) .windows-track, .dock) > .tile > .tile-frame { transition: box-shadow var(--dur) var(--ease); }
 .app.desaturate .windows-track > .tile:not(.sel, .lifted) .tile-body { filter: grayscale(var(--window-desaturate)); }
 .app.desaturate .mode-focus .windows-track > .tile .tile-body { filter: none; }
 .main.windows.live-resize .windows-track > .ghost-slot { transition: none; }
@@ -768,7 +787,10 @@ kbd {
   flex-direction: column;
   background: var(--well);
 }
-.browser-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
+.browser-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; background: var(--well); }
+/* Until its page is ready (BrowserView): the well, not a white flash, then a fade. */
+.webview { transition: opacity var(--dur) var(--ease); }
+.webview:not([data-painted]) { opacity: 0; }
 .webview { flex: 1; min-height: 0; background: #fff; }
 .browser-blank.ui-empty { flex: 1; background: var(--well); cursor: text; }
 .browser-failed.ui-empty { position: absolute; inset: 0; background: var(--well); }

@@ -5,8 +5,8 @@
 // every Space's; those about nothing in particular show in every Space. A click
 // goes to the terminal or window it is about.
 
-import { EmptyState, ListRow, ListSection, ListValue, Panel, PanelBody } from "@cmd/ui";
-import { useEffect, useMemo, useState } from "react";
+import { EmptyState, ListRow, ListSection, ListValue, Panel, PanelBody, useFlip } from "@cmd/ui";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { notificationOf, type AppNotification } from "@cmd/protocol";
 import { copy } from "../actions.ts";
 import { showContextMenu } from "../context.ts";
@@ -56,6 +56,9 @@ const startOfToday = () => new Date(new Date().setHours(0, 0, 0, 0)).getTime();
 export function NotificationsView({ win }: WindowViewProps) {
   const s = useStore();
   const all = useNotifications();
+  // New ones arrive at the top: the rest glide down, the new one fades in.
+  const listRef = useRef<HTMLDivElement>(null);
+  useFlip(listRef, { selector: "[data-key]" });
   const scope = scopeOf(win.state.scope);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -89,11 +92,13 @@ export function NotificationsView({ win }: WindowViewProps) {
   return (
     <Panel>
       <PanelBody>
+        <div ref={listRef}>
         {groups.map((g) => (
           <ListSection key={g.title} title={g.title} count={g.items.length}>
             {g.items.map((n) => (
               <ListRow
                 key={n.id}
+                flipKey={n.id}
                 icon={ICONS[n.source] ?? "bell"}
                 title={n.title}
                 detail={n.body || " "}
@@ -111,6 +116,7 @@ export function NotificationsView({ win }: WindowViewProps) {
             When an agent needs you or a long command finishes, it shows up here, even if you missed it.
           </EmptyState>
         )}
+        </div>
       </PanelBody>
     </Panel>
   );

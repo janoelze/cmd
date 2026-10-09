@@ -152,6 +152,12 @@ await win.evaluate(() => {
         o: cs.visibility === "hidden" ? 0 : +cs.opacity,
       };
     }
+    frame.chrome = {};
+    for (const sel of CHROME)
+      document.querySelectorAll(sel).forEach((el, i) => {
+        const r = el.getBoundingClientRect();
+        if (r.width || r.height) frame.chrome[`${sel}#${i}`] = { r: [r.left, r.top, r.width, r.height], o: opacityOf(el) };
+      });
     // Closed windows fading out where they were (motion.ts ghost).
     frame.ghosts = document.querySelectorAll(".ghost-tile").length;
     // The workspace under a View Transition (switching Spaces): what's seen is its crossfade, not the DOM.
@@ -171,10 +177,53 @@ await win.evaluate(() => {
       render: Math.round(e.renderStart ? e.startTime + e.duration - e.renderStart : 0),
     })))).observe({ type: "long-animation-frame" });
   } catch {}
+  // Layout shifts anywhere (Layout Instability API): an element whose box moved without
+  // a transform. Moves of windows that glide (their content resizing with them), ghosts
+  // and sidebars sliding are the motion system's own, so they're left out.
+  const desc = (el) => {
+    const parts = [];
+    for (let e = el; e && parts.length < 3 && e !== document.body; e = e.parentElement) {
+      const c = [...e.classList].filter((x) => !/^(sel|needs|lifted|open|on|active|idle|in|out)$/.test(x)).slice(0, 2);
+      parts.unshift(c.length ? `${e.tagName.toLowerCase()}.${c.join(".")}` : e.tagName.toLowerCase());
+    }
+    return parts.join(" > ");
+  };
+  let shifts = [];
+  try {
+    new PerformanceObserver((l) => {
+      if (!rec) return;
+      for (const e of l.getEntries())
+        for (const src of e.sources ?? []) {
+          const el = src.node?.nodeType === 1 ? src.node : src.node?.parentElement;
+          if (!el || el.closest("[data-morphing], .ghost-tile, .dock.leaving, .tip-layer")) continue;
+          // Containers whose content the motion system keeps in place (the workspace and its
+          // track, whose windows are carried on screen), and the top bar's columns, which
+          // resize around the Space's name while their content stays put.
+          if (el.matches(".main, .windows-scroller, .windows-track, .topbar-center, .topbar-trail, .topbar-lead")) continue;
+          if (el.closest(".dock")?.getAnimations().length) continue;
+          const a = src.previousRect;
+          const b = src.currentRect;
+          const d = Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.width - b.width), Math.abs(a.height - b.height));
+          if (d > 2) shifts.push({ t: e.startTime, el: desc(el), d: Math.round(d), dy: Math.round(b.y - a.y), dh: Math.round(b.height - a.height) });
+        }
+    }).observe({ type: "layout-shift" });
+  } catch {}
+  // Overlays and chrome that come and go: sheets, popovers, toasts, the palette, tooltips, find bars.
+  const CHROME = [".ui-dialog", ".ui-scrim", ".ui-popover", ".ui-toast", ".palette", ".palette-list", ".ui-find", ".tip-pos .tip"];
+  const opacityOf = (el) => {
+    let o = 1;
+    for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.visibility === "hidden" || cs.display === "none") return 0;
+      o *= +cs.opacity;
+    }
+    return o;
+  };
   w.__motion = {
     start() {
       loaf = [];
-      rec = { frames: [], reflows: {}, loaf };
+      shifts = [];
+      rec = { frames: [], reflows: {}, loaf, get shifts() { return shifts; } };
       // Content resizes from before the move are reported on the next frame: ignore that first batch.
       for (const t of document.querySelectorAll(".windows-track > .tile[data-pane]")) {
         const c = contentOf(t);
@@ -188,6 +237,7 @@ await win.evaluate(() => {
     stop() {
       const r = rec;
       rec = null;
+      if (r) r.shifts = shifts;
       return r;
     },
   };
@@ -204,7 +254,8 @@ function analyse(rec, { expect = "glide", reversals: allowed = 0 } = {}) {
   const frames = rec.frames;
   const ids = [...new Set(frames.flatMap((f) => Object.keys(f.tiles)))];
   const issues = [];
-  const add = (kind, id, detail) => issues.push({ kind, id: id.slice(-6), detail });
+  // Windows by the end of their id; chrome and shifted elements by their selector.
+  const add = (kind, id, detail) => issues.push({ kind, id: /^[\w-]{36}$/.test(id) ? id.slice(-6) : id, detail });
   let moving = 0;
   let lastMove = 0;
   for (const id of ids) {
@@ -293,6 +344,38 @@ function analyse(rec, { expect = "glide", reversals: allowed = 0 } = {}) {
     const n = rec.reflows[id] ?? 0;
     if (n > 1) add("reflows", id, `content resized ${n}×`);
   }
+  // Chrome: appearing or vanishing at once (no fade or scale), or jumping in size.
+  const chromeIds = [...new Set(frames.flatMap((f) => Object.keys(f.chrome ?? {})))];
+  for (const id of chromeIds) {
+    const at = frames.findIndex((f) => f.chrome?.[id]);
+    const gone = frames.findLastIndex((f) => f.chrome?.[id]);
+    const first = frames[at].chrome[id];
+    const last = frames[gone].chrome[id];
+    if (at > 0 && first.o > 0.5) add("pop", id, `appeared at once (opacity ${first.o.toFixed(2)})`);
+    if (gone < frames.length - 1 && last.o > 0.5) add("pop", id, `vanished at once (opacity ${last.o.toFixed(2)})`);
+    // A change of size in one frame, rather than over a few (as with windows: most of it at once).
+    for (const [k, name] of [[3, "height"], [2, "width"]]) {
+      const v = frames.slice(at, gone + 1).map((f) => f.chrome?.[id]?.r[k]).filter((x) => x !== undefined);
+      const steps = v.slice(1).map((x, i) => x - v[i]);
+      const path = steps.reduce((a, d) => a + Math.abs(d), 0);
+      const max = Math.max(0, ...steps.map(Math.abs));
+      if (max > STEP_MIN && max > 0.5 * path) add("instant", id, `${name}: ${Math.round(max)} of ${Math.round(path)} px in one frame`);
+    }
+  }
+  // Layout shifts outside the motion system, by element.
+  const byEl = new Map();
+  for (const sh of rec.shifts ?? []) {
+    if (sh.t < frames[0].t) continue;
+    const x = byEl.get(sh.el) ?? { n: 0, d: 0, dy: 0, dh: 0, path: 0 };
+    x.n++;
+    x.path += sh.d;
+    if (sh.d > x.d) Object.assign(x, { d: sh.d, dy: sh.dy, dh: sh.dh });
+    byEl.set(sh.el, x);
+  }
+  // A shift spread over many frames is something gliding by layout (a sheet's size, a slot's
+  // width): only one frame doing most of an element's move is a jump.
+  // Resizing the app window moves the chrome with it: expected.
+  if (expect !== "follow") for (const [el, x] of byEl) if (x.n < 4 || x.d > 0.5 * x.path) add("shift", el, `moved ${x.d} px${x.dy ? ` (y ${x.dy > 0 ? "+" : ""}${x.dy})` : ""}${x.dh ? ` (h ${x.dh > 0 ? "+" : ""}${x.dh})` : ""}${x.n > 1 ? `, ${x.n} times` : ""}`);
   const iv = frames.slice(1).map((f, i) => f.t - frames[i].t);
   const busy = iv.slice(0, Math.max(1, Math.ceil(lastMove / 16.7) + 2));
   const count = (k) => issues.filter((i) => i.kind === k).length;
@@ -311,6 +394,7 @@ function analyse(rec, { expect = "glide", reversals: allowed = 0 } = {}) {
     drift: count("drift"),
     pops: count("pop"),
     lag: count("lag"),
+    shifts: count("shift"),
     issues,
   };
 }
@@ -352,11 +436,12 @@ async function scenario(name, act, { settle = 700, ...expect } = {}) {
   const a = analyse(rec, expect);
   if (process.argv.includes("--dump")) fs.writeFileSync(path.join(outDir, `frames-${name.replace(/[^a-z0-9]+/gi, "-")}.json`), JSON.stringify(rec));
   results.push({ name, ...a });
-  const flag = a.instant + a.snap + a.desync + a.wobble + a.drift + a.pops + a.lag ? "✗" : "✓";
+  const flag = a.instant + a.snap + a.desync + a.wobble + a.drift + a.pops + a.lag + a.shifts ? "✗" : "✓";
   console.log(`${flag} ${name}`);
-  for (const i of a.issues.slice(0, 8)) console.log(`    ${i.kind.padEnd(8)} ${i.id}  ${i.detail}`);
+  for (const i of a.issues.filter((i) => i.kind !== "reflows").slice(0, 10)) console.log(`    ${i.kind.padEnd(8)} ${i.id}  ${i.detail}`);
   for (const l of rec.loaf.filter((l) => l.start >= rec.frames[0]?.t)) console.log(`    loaf     ${Math.round(l.dur)} ms (work ${l.work}, render ${l.render}, style+layout ${l.layout} ms) ${l.scripts.join(" · ")}`);
-  if (a.issues.length > 8) console.log(`    … ${a.issues.length - 8} more`);
+  const shown = a.issues.filter((i) => i.kind !== "reflows").length;
+  if (shown > 10) console.log(`    … ${shown - 10} more`);
 }
 
 // A workspace of four windows: a terminal when terminals can start here, else a text window,
@@ -440,13 +525,48 @@ await sleep(300);
 await scenario("⌥⌘+ wider window (from grid)", () => menu("view.widen"));
 await menu("view.grid");
 await sleep(700);
+
+// Chrome: the palette, find bars, a Markdown window's preview and editor, a command
+// running in a terminal, a notification, the Space menu, a tooltip.
+await scenario("palette: open", () => menu("view.palette"));
+await scenario("palette: type to filter", () => win.keyboard.type("zzq", { delay: 60 }), { settle: 500 });
+await scenario("palette: clear the filter", async () => { for (let i = 0; i < 3; i++) await win.keyboard.press("Backspace"), await sleep(60); }, { settle: 500 });
+await scenario("palette: close", () => win.keyboard.press("Escape"));
+await terminal();
+await sleep(300);
+await scenario("find bar: open (terminal)", () => menu("edit.find"));
+await scenario("find bar: close", () => win.keyboard.press("Escape"));
+const md = await win.evaluate(() => document.querySelector(".tile.kind-markdown[data-pane]")?.dataset.pane);
+if (md) {
+  await win.evaluate((id) => window.__cmdSelect(id), md);
+  await sleep(300);
+  await scenario("markdown: to the editor", () => menu("view.toggleEdit"));
+  await scenario("markdown: back to the preview", () => menu("view.toggleEdit"));
+}
+const pane = (await call("pane.list"))[0];
+if (pane) {
+  await scenario("terminal: a command runs", () => call("pane.write", { paneId: pane.id, data: "sleep 0.3; echo done\r" }), { settle: 1200 });
+  await scenario("notification", () => call("notify.send", { paneId: pane.id, title: "Build", body: "done" }), { settle: 1200 });
+}
+await scenario("space menu: open", () => win.locator(".space-trigger").first().click());
+await scenario("space menu: close", () => win.keyboard.press("Escape"));
+const tipAt = await win.evaluate(() => {
+  const r = document.querySelector(".topbar [data-tip]")?.getBoundingClientRect();
+  return r && { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+});
+if (tipAt) {
+  await scenario("tooltip: show", () => win.mouse.move(tipAt.x, tipAt.y), { settle: 1500 });
+  await scenario("tooltip: hide", () => win.mouse.move(tipAt.x, tipAt.y + 300), { settle: 600 });
+}
+await menu("view.grid");
+await sleep(700);
 await call("space.open", { path: space2, show: false });
 await sleep(300);
 await scenario("next Space", () => menu("space.next"), { settle: 900 });
 await scenario("previous Space", () => menu("space.prev"), { settle: 900 });
 
 // ── report ───────────────────────────────────────────────
-const cols = ["motion ms", "dropped", "worst frame", "loaf", "instant", "snap", "desync", "wobble", "reflows", "drift", "pops", "lag"];
+const cols = ["motion ms", "dropped", "worst frame", "loaf", "instant", "snap", "desync", "wobble", "reflows", "drift", "pops", "lag", "shifts"];
 console.log(`\nmotion${label ? ` (${label})` : ""}`);
 console.table(Object.fromEntries(results.map((r) => [r.name, Object.fromEntries(cols.map((c) => [c, r[c]]))])));
 const total = (k) => results.reduce((a, r) => a + r[k], 0);

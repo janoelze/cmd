@@ -96,6 +96,9 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const starting = (e: { isMainFrame: boolean; isInPlace: boolean }) => e.isMainFrame && !e.isInPlace && setFailed(null);
     // Pages get the app's scrollbars (and their fading), so every window's look the same.
     const ready = () => {
+      // Shown once it has something to show: it fades in over the window's well instead of
+      // flashing white (styles.css .webview).
+      wv.setAttribute("data-painted", "");
       void wv.insertCSS(SCROLLBAR_CSS).catch(() => {});
       void wv.executeJavaScript(scrollbarScript({ always: cmd.scrollBars === "always" })).catch(() => {});
     };

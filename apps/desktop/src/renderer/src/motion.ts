@@ -139,6 +139,8 @@ export class TileMotion {
     this.opts = opts;
   }
   private tiles = new Map<string, Tile>();
+  /** Around each held content element, the room its window's chrome takes (see freeze). */
+  private room = new WeakMap<HTMLElement, { w: number; h: number }>();
   private raf = 0;
   private booted = false;
   /** Frames painted while gliding: counted by a task each frame posts, which runs after it's painted. */
@@ -319,31 +321,33 @@ export class TileMotion {
   }
 
   /**
-   * Hold the content (everything in the body but the title bar) at the larger of
-   * its size now and its size at the target, so it's laid out once for the whole
-   * glide; the window clips it. Released at rest, when it takes the final size.
+   * Hold the content (everything in the body but the title bar) at its size at the
+   * target, so it's laid out once for the whole glide; the window clips it. Released
+   * at rest, when it's already the size it takes.
    */
   private freeze(tile: Tile) {
     const body = tile.el.querySelector<HTMLElement>(":scope > .tile-body");
     if (!body) return;
     const box = tile.el.getBoundingClientRect();
     const scale = box.width / Math.max(1, tile.el.offsetWidth) || 1; // the canvas zooms the track
-    const dw = tile.target.w - tile.el.offsetWidth;
-    const dh = tile.target.h - tile.el.offsetHeight;
     for (const c of body.children) {
       if (!(c instanceof HTMLElement) || c.classList.contains("tile-title")) continue;
-      const r = c.getBoundingClientRect();
-      const w = r.width / scale;
-      const h = r.height / scale;
-      if (!w || !h) continue;
-      // Already held (interrupted): keep the size it holds if that's larger.
-      const held = tile.frozen.includes(c);
-      const hw = held ? parseFloat(c.style.width) : 0;
-      const hh = held ? parseFloat(c.style.height) : 0;
-      c.style.width = `${Math.max(w + Math.max(0, dw), hw)}px`;
-      c.style.height = `${Math.max(h + Math.max(0, dh), hh)}px`;
+      // What the window's chrome takes around it, measured while it still follows the window
+      // (held already, after an interruption, it doesn't).
+      let room = this.room.get(c);
+      if (!tile.frozen.includes(c)) {
+        const r = c.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        room = { w: tile.el.offsetWidth - r.width / scale, h: tile.el.offsetHeight - r.height / scale };
+        this.room.set(c, room);
+        tile.frozen.push(c);
+      }
+      if (!room) continue;
+      // At its size there: laid out once, as the move starts (when it's least seen), and
+      // the window opens onto it or closes in on it; the move ends without a reflow.
+      c.style.width = `${Math.max(0, tile.target.w - room.w)}px`;
+      c.style.height = `${Math.max(0, tile.target.h - room.h)}px`;
       c.setAttribute("data-held", "");
-      if (!held) tile.frozen.push(c);
     }
   }
 

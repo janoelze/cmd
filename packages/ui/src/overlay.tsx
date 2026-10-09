@@ -10,6 +10,7 @@ import { ICON, iconNode } from "./icon.tsx";
 import { Button, IconButton } from "./button.tsx";
 import type { Tone } from "./status.tsx";
 import { WindowBar } from "./window.tsx";
+import { useFlip, usePresence } from "./motion.ts";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -92,6 +93,8 @@ export function Popover({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<CSSProperties>({ visibility: "hidden" });
+  // Closed, it fades out where it is (motion.ts).
+  const { present, closing } = usePresence(open);
   useDismiss(open, onClose, [ref, anchor]);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -114,10 +117,10 @@ export function Popover({
     ro.observe(el);
     return () => ro.disconnect();
   }, [open, placement, align, anchor, width]);
-  if (!open) return null;
+  if (!present) return null;
   const style: CSSProperties = { ...pos, ...(width !== "content" ? { width } : {}), ...(maxWidth ? { maxWidth: `min(${maxWidth}px, 100vw - 16px)` } : {}) };
   return createPortal(
-    <div ref={ref} className={cls("ui-popover", className)} role={role} aria-label={label} style={style}>
+    <div ref={ref} className={cls("ui-popover", className)} role={role} aria-label={label} style={style} data-closing={closing || undefined} inert={closing || undefined}>
       {children}
     </div>,
     document.body,
@@ -364,6 +367,8 @@ export function Dialog({
   window?: { icon?: string | ReactNode; name: string; close?: boolean };
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Closed, the sheet and its scrim fade out (motion.ts).
+  const { present, closing } = usePresence(open);
   useEffect(() => {
     if (!open) return;
     const before = document.activeElement as HTMLElement | null;
@@ -375,10 +380,12 @@ export function Dialog({
     }
     return () => before?.focus?.();
   }, [open]);
-  if (!open) return null;
+  if (!present) return null;
   return createPortal(
     <div
       className="ui-scrim"
+      data-closing={closing || undefined}
+      inert={closing || undefined}
       data-position={position}
       data-clear={scrim ? undefined : true}
       onPointerDown={(e) => e.target === e.currentTarget && dismissable && onClose()}
@@ -469,6 +476,8 @@ export interface ToastOptions {
 interface ToastEntry extends ToastOptions {
   id: number;
   message: ReactNode;
+  /** Fading out, then gone. */
+  leaving?: boolean;
 }
 
 let toasts: ToastEntry[] = [];
@@ -476,15 +485,25 @@ let nextId = 1;
 const toastListeners = new Set<() => void>();
 const emit = () => toastListeners.forEach((fn) => fn());
 
+/** How long a dismissed toast takes to fade out (components.css ui-toast-out). */
+const TOAST_OUT_MS = 150;
+
 export function dismissToast(id: number): void {
-  toasts = toasts.filter((t) => t.id !== id);
+  if (!toasts.some((t) => t.id === id && !t.leaving)) return;
+  toasts = toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t));
   emit();
+  setTimeout(() => {
+    toasts = toasts.filter((t) => t.id !== id);
+    emit();
+  }, TOAST_OUT_MS);
 }
 
 /** Show a short message at the bottom of the window; returns its id. Needs a <Toaster/> mounted. */
 export function toast(message: ReactNode, opts: ToastOptions = {}): number {
   const id = nextId++;
-  toasts = [...toasts.slice(-3), { id, message, ...opts }];
+  // At most four: the oldest beyond that leaves.
+  for (const t of toasts.filter((t) => !t.leaving).slice(0, -3)) dismissToast(t.id);
+  toasts = [...toasts, { id, message, ...opts }];
   emit();
   const ms = opts.duration ?? 4000;
   if (ms > 0) setTimeout(() => dismissToast(id), ms);
@@ -496,10 +515,13 @@ export function Toaster() {
     (fn) => (toastListeners.add(fn), () => toastListeners.delete(fn)),
     () => toasts,
   );
+  // The others glide up or down as one comes or goes.
+  const ref = useRef<HTMLDivElement>(null);
+  useFlip(ref, { selector: ".ui-toast", enter: false });
   return createPortal(
-    <div className="ui-toaster" aria-live="polite">
+    <div className="ui-toaster" aria-live="polite" ref={ref}>
       {list.map((t) => (
-        <Toast key={t.id} tone={t.tone} icon={t.icon} action={t.action && { label: t.action.label, run: () => (dismissToast(t.id), t.action!.run()) }} onDismiss={() => dismissToast(t.id)}>
+        <Toast key={t.id} flipKey={String(t.id)} leaving={t.leaving} tone={t.tone} icon={t.icon} action={t.action && { label: t.action.label, run: () => (dismissToast(t.id), t.action!.run()) }} onDismiss={() => dismissToast(t.id)}>
           {t.message}
         </Toast>
       ))}
@@ -516,6 +538,8 @@ export function Toast({
   action,
   onDismiss,
   className,
+  flipKey,
+  leaving,
 }: {
   tone?: Tone;
   icon?: string | ReactNode;
@@ -524,9 +548,11 @@ export function Toast({
   onDismiss?: () => void;
   /** Placing it yourself (in place, not in the Toaster). */
   className?: string;
+  flipKey?: string;
+  leaving?: boolean;
 }) {
   return (
-    <div className={cls("ui-toast", className)} data-tone={tone} role={tone === "danger" ? "alert" : "status"}>
+    <div className={cls("ui-toast", className)} data-key={flipKey} data-closing={leaving || undefined} data-tone={tone} role={tone === "danger" ? "alert" : "status"}>
       {icon != null && <span className="ui-toast-icon">{iconNode(icon, ICON.row)}</span>}
       <span className="ui-toast-text">{children}</span>
       {action && (

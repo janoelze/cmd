@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SearchStatus } from "@cmd/protocol";
-import { Highlight, ICON, iconNode } from "@cmd/ui";
+import { Highlight, ICON, iconNode, reducedMotion } from "@cmd/ui";
 import { IndexRing } from "./IndexRing.tsx";
 
 export interface PaletteItem {
@@ -51,6 +51,7 @@ export function Palette({
   recent = [],
   onRun,
   onClose,
+  closing,
   initialQuery = "",
   search,
   searchGroups = [],
@@ -68,6 +69,8 @@ export function Palette({
   recent?: string[];
   onRun?: (id: string) => void;
   onClose: () => void;
+  /** On its way out (fading, no longer taking input). */
+  closing?: boolean;
   initialQuery?: string;
   /** The search for `?query`: it may `show` what it has so far, as each source answers, before it resolves. */
   search?: (text: string, show: (items: PaletteItem[]) => void) => Promise<PaletteItem[] | void>;
@@ -101,6 +104,12 @@ export function Palette({
   const searchText = searching ? query.slice(1).trim() : "";
 
   useEffect(() => input.current?.focus(), []);
+  // Leaving, it gives focus back at once (it's no longer taking input while it fades).
+  const before = useRef(document.activeElement as HTMLElement | null);
+  useLayoutEffect(() => {
+    const at = document.activeElement;
+    if (closing && (!at || at === document.body || box.current?.contains(at))) before.current?.focus?.();
+  }, [closing]);
 
   // Debounced transcript search; stale responses are dropped. The last results stay
   // until the next ones arrive, so the list doesn't collapse with every key.
@@ -190,10 +199,27 @@ export function Palette({
 
   // A combobox over a listbox: scripts and VoiceOver find `option "New Terminal"`, and the highlighted one is selected.
   const id = useId();
+  // Its size changes (results filtered, search's width) glide instead of snapping: from
+  // the size it shows now (a change under way included) to the one it's laid out at.
+  const box = useRef<HTMLDivElement>(null);
+  const size = useRef<{ w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    // A change under way: what it shows now (the animation sets the size); else the size it had.
+    const running = el.getAnimations().filter((a) => a.id === "resize");
+    const shown = running.length ? el.getBoundingClientRect() : null;
+    running.forEach((a) => a.cancel());
+    const now = { w: el.offsetWidth, h: el.offsetHeight };
+    const was = shown ? { w: shown.width, h: shown.height } : size.current;
+    size.current = now;
+    if (!was || (Math.abs(was.w - now.w) < 1 && Math.abs(was.h - now.h) < 1) || reducedMotion()) return;
+    el.animate([{ width: `${was.w}px`, height: `${was.h}px` }, { width: `${now.w}px`, height: `${now.h}px` }], { duration: 150, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", id: "resize" } as KeyframeAnimationOptions);
+  });
   const optionId = (i: number) => `${id}-${i}`;
   return (
-    <div className="palette-backdrop" onMouseDown={onClose}>
-      <div className={`palette ${searching ? "searching" : ""}`} role="dialog" aria-label={label ?? placeholder} onMouseDown={(e) => e.stopPropagation()}>
+    <div className="palette-backdrop" onMouseDown={onClose} data-closing={closing || undefined} inert={closing || undefined}>
+      <div ref={box} className={`palette ${searching ? "searching" : ""}`} role="dialog" aria-label={label ?? placeholder} onMouseDown={(e) => e.stopPropagation()}>
         <input
           ref={input}
           className="palette-input"

@@ -874,6 +874,12 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
   animation: ui-pop-in var(--dur-fast) ease-out;
 }
 @keyframes ui-pop-in { from { opacity: 0; transform: scale(0.97); } }
+/* Closing (usePresence, motion.ts): out a little faster than in, and no longer taking input. */
+.ui-popover[data-closing], .ui-dialog:is(.ui-scrim[data-closing] > *) { animation: ui-pop-out var(--dur-fast) ease-in forwards; }
+.ui-scrim[data-closing] { animation: ui-fade-out var(--dur-fast) ease-in forwards; }
+.ui-scrim[data-closing][data-clear] { animation: none; }
+@keyframes ui-pop-out { to { opacity: 0; transform: scale(0.98); } }
+@keyframes ui-fade-out { to { opacity: 0; } }
 
 .ui-menu-list { padding: 5px; outline: none; }
 .ui-menu-item {
@@ -1028,6 +1034,8 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
   animation: ui-toast-in var(--dur) var(--ease);
 }
 @keyframes ui-toast-in { from { opacity: 0; transform: translateY(6px); } }
+.ui-toast[data-closing] { animation: ui-toast-out 150ms ease-in forwards; pointer-events: none; }
+@keyframes ui-toast-out { to { opacity: 0; transform: translateY(4px) scale(0.98); } }
 .ui-toast-icon { flex: none; display: flex; color: var(--tone); }
 .ui-toast[data-tone="neutral"] .ui-toast-icon { color: var(--icon); }
 .ui-toast-text { flex: 1; min-width: 0; }

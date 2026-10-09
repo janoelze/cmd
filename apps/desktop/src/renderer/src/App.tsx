@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GLIDE_MS } from "./motion.ts";
-import { Toaster, toast } from "@cmd/ui";
+import { Toaster, toast, usePresentValue } from "@cmd/ui";
 import type { PaneId, Space, SpaceId } from "@cmd/protocol";
 import type { WebviewTag } from "electron";
 import { bucketOf, needsAttention } from "@cmd/protocol";
@@ -704,6 +704,9 @@ export function App() {
     />
   );
   const pickerProps = usePickers(picker, () => setPicker(null));
+  // The palette and pickers fade out when they close (the last query and items stay meanwhile).
+  const shownPalette = usePresentValue(palette, palette !== false);
+  const shownPicker = usePresentValue(pickerProps && picker ? { kind: picker.kind, props: pickerProps } : null, !!(pickerProps && picker));
 
   /** Per-terminal mute: no system notifications from it (its marker still shows). */
   const muteEntry = (paneId: PaneId) => {
@@ -904,8 +907,9 @@ export function App() {
         </div>
       </NavigatorContext.Provider>
       <StatusBar pane={current} run={run} connected={s.connected} error={s.error} />
-      {palette !== false && (
+      {shownPalette.value !== undefined && shownPalette.value !== false && (
         <Palette
+          closing={shownPalette.closing}
           label="Command Palette"
           items={paletteItems}
           // Typing a URL or a path offers to open it in a window.
@@ -913,14 +917,14 @@ export function App() {
           recent={recent}
           onRun={remember}
           onClose={() => setPalette(false)}
-          key={palette === SEARCH ? "search" : "commands"}
-          initialQuery={palette}
+          key={shownPalette.value === SEARCH ? "search" : "commands"}
+          initialQuery={shownPalette.value}
           search={searchAll}
           searchGroups={SEARCH_GROUPS}
           searchStatus={s.search}
         />
       )}
-      {pickerProps && picker && <Palette key={picker.kind} {...pickerProps} />}
+      {shownPicker.value && <Palette key={shownPicker.value.kind} {...shownPicker.value.props} closing={shownPicker.closing} />}
       {picker?.kind === "new" && <NewPicker run={run} onClose={() => setPicker(null)} />}
       {picker?.kind === "icon" && <SpaceIconPicker space={all.spaces.get(picker.space.id) ?? picker.space} onClose={() => setPicker(null)} />}
       {library && <WidgetLibrary onClose={() => setLibrary(false)} />}

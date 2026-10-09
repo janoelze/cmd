@@ -4,8 +4,8 @@
 // the two never disagree; a click goes to the agent's terminal. The counts are
 // the title bar's status, and its menu switches the scope.
 
-import { Button, EmptyState } from "@cmd/ui";
-import { useEffect, useMemo, useState } from "react";
+import { Button, EmptyState, useFlip } from "@cmd/ui";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { bucketOf, type Agent } from "@cmd/protocol";
 import { newAgent, selectPane } from "../actions.ts";
 import { cmd } from "../bridge.ts";
@@ -36,6 +36,9 @@ export function AgentActivity({ win }: WindowViewProps) {
     return () => clearInterval(t);
   }, []);
 
+  // Agents re-sort as their state changes: they glide to their new place.
+  const listRef = useRef<HTMLDivElement>(null);
+  useFlip(listRef, { selector: "[data-key]" });
   const { roots, children } = useMemo(() => {
     const shown = [...s.agents.values()].filter((a) => scope === "all" || a.spaceId === win.spaceId);
     const ids = new Set(shown.map((a) => a.id));
@@ -79,7 +82,7 @@ export function AgentActivity({ win }: WindowViewProps) {
     const space = scope === "all" ? sp?.name : undefined;
     const where = whereOf(a.git, a.cwd, sp);
     return (
-      <div key={a.id}>
+      <div key={a.id} data-key={a.id}>
         <button className="aa-row" data-depth={depth || undefined} data-needs={bucketOf(a) === "needs" || undefined} onClick={() => go(a)}>
           <Mark light={f.light} icon={f.icon} />
           <span className="aa-main">
@@ -98,7 +101,7 @@ export function AgentActivity({ win }: WindowViewProps) {
 
   return (
     <div className="aa">
-      <div className="aa-list">
+      <div className="aa-list" ref={listRef}>
         {roots.length ? (
           roots.map((a) => row(a, 0))
         ) : (

@@ -18,5 +18,6 @@ export { ConfirmDialog, Dialog, Menu, Popover, Toast, Toaster, dismissToast, pla
 export { Badge, Kbd, PageDots, Progress, ProgressRing, Spinner, StatusDot, type DotState, type Tone } from "./status.tsx";
 export { installScrollbars, scrollbarScript, scrolled, watchScrollbars, SCROLLBAR_CSS, SCROLLBAR_HOLD, type ScrollbarsOptions } from "./scrollbars.ts";
 export { displayAddress, ToolbarAddressField, ToolbarButton, ToolbarField, ToolbarSearchField, ToolbarGroup, ToolbarMenu, ToolbarPath, ToolbarSegmented, ToolbarSeparator, ToolbarSpacer, ToolbarText, WindowToolbar, type ToolbarButtonProps, type ToolbarFieldProps } from "./toolbar.tsx";
+export { EXIT_MS, glideTiming, reducedMotion, useFlip, usePresence, usePresentValue } from "./motion.ts";
 export { Window, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "./window.tsx";
 export { installTooltips, placeTip, useTooltip, type TipSide } from "./tooltips.tsx";
