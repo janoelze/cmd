@@ -48,7 +48,8 @@ export function ImageView({ win, focused }: WindowViewProps) {
 
   const scroll = useRef<HTMLDivElement>(null);
   const imgEl = useRef<HTMLImageElement>(null);
-  const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
+  /** The loaded picture's pixel size, and which file it was measured for (a file change leaves no stale status behind). */
+  const [measured, setMeasured] = useState<{ w: number; h: number; src: string } | null>(null);
   const [view, setView] = useState({ w: 0, h: 0 });
   const [error, setError] = useState(false);
   const [stamp, setStamp] = useState(0);
@@ -59,7 +60,8 @@ export function ImageView({ win, focused }: WindowViewProps) {
   const [siblings, setSiblings] = useState<FileEntry[]>([]);
 
   const src = useMemo(() => fileUrl(file), [file, stamp]);
-  useEffect(() => void (setNat(null), setError(false)), [file]);
+  const nat = measured?.src === src ? measured : null;
+  useEffect(() => setError(false), [file]);
 
   // Live: shown again when the file changes.
   useEffect(() => {
@@ -252,7 +254,7 @@ export function ImageView({ win, focused }: WindowViewProps) {
               draggable={false}
               data-crisp={scale / density >= CRISP_FROM || undefined}
               style={nat ? { width, height } : { opacity: 0 }}
-              onLoad={(e) => setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+              onLoad={(e) => setMeasured({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight, src })}
               onError={() => setError(true)}
               onDoubleClick={(e) => zoomTo(zoom === 1 ? "fit" : 1, e)}
             />
