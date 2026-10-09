@@ -2,6 +2,17 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.21.1 — 2026-10-09
+
+### Improved
+
+- Scrollbars show while you scroll and fade out a second later, like macOS, staying while the pointer rests on them.
+- The Space menu grows to fit its widest Space name, so long names show in full.
+
+### Fixed
+
+- Closing a YouTube window no longer reports a crash.
+
 ## 0.21.0 — 2026-10-08
 
 Browser windows say why a page didn't load, and the sidebar says where each agent works.
