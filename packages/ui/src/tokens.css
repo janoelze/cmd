@@ -91,6 +91,25 @@
   --control-h-lg: 28px;
   --disabled-opacity: 0.4;
 
+  /* ── space ── (draft, docs/40: settled in the Workbench, then moved to *.tokens.json)
+     The only gaps and paddings: layout primitives (frame.tsx) take these names.
+     --inset is a window's content inset; --row-h* the heights of list and table rows. */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 8px;
+  --space-lg: 12px;
+  --space-xl: 16px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+  --inset: var(--space-lg);
+  --row-h-sm: 22px;
+  --row-h: 24px;
+  --row-h-lg: 28px;
+  --footer-h: 26px;
+  /* Reading width for prose (a document's column). */
+  --measure: 68ch;
+
   /* ── shape ── */
   --radius-xs: 3px;
   --radius-sm: 4px;

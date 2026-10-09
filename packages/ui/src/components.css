@@ -853,6 +853,8 @@ button.ui-grid-sort:hover { color: var(--text); }
 .ui-grid td[data-kind="number"] { text-align: right; }
 .ui-grid td[data-kind="null"], .ui-grid td[data-kind="blob"] { color: var(--text-dim); font-style: italic; }
 .ui-grid tbody tr:hover td { background: var(--bg-hover); }
+.ui-grid tbody tr[aria-selected] td { background: var(--bg-selected); }
+.ui-grid th[data-grow] { width: 100%; }
 .ui-grid-num { width: 1px; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
 td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
 .ui-grid-footer { display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: var(--text-sm); color: var(--text-dim); }

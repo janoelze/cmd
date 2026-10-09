@@ -16,6 +16,10 @@ export interface GridColumn {
   note?: ReactNode;
   /** Values sit to the right (numbers). */
   align?: "start" | "end";
+  /** Takes the width left over (the name or title column); the others keep their natural width. */
+  grow?: boolean;
+  /** Dropped when the space it sits in is narrower than this (narrow: 360px, regular: 600px): the columns that matter least. */
+  hide?: "narrow" | "regular";
 }
 
 /** A cell: a node, or a value with how to show it. */
@@ -35,6 +39,10 @@ export interface DataGridProps {
   /** Header clicks sort: asc, then desc, then off (null). */
   onSort?: (sort: GridSort | null) => void;
   onRowContextMenu?: (index: number, e: MouseEvent<HTMLTableRowElement>) => void;
+  /** A click selects a row (an inspector shows it). */
+  onRowClick?: (index: number, e: MouseEvent<HTMLTableRowElement>) => void;
+  /** The selected row's index. */
+  selected?: number | null;
   /** Values in the code font (data, not labels). */
   mono?: boolean;
   /** A row number before each row. */
@@ -46,7 +54,7 @@ export interface DataGridProps {
 
 const isSpec = (c: GridCell): c is Exclude<GridCell, ReactNode> => typeof c === "object" && c !== null && "node" in c && !("$$typeof" in (c as object));
 
-export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu, mono, numbered, footer, className }: DataGridProps) {
+export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu, onRowClick, selected, mono, numbered, footer, className }: DataGridProps) {
   const next = (key: string): GridSort | null => (sort?.key !== key ? { key, desc: false } : sort.desc ? null : { key, desc: true });
   return (
     <div className={cls("ui-grid", className)} data-mono={mono || undefined}>
@@ -63,7 +71,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
                 </>
               );
               return (
-                <th key={c.key} data-align={c.align} aria-sort={sorted}>
+                <th key={c.key} data-align={c.align} data-grow={c.grow || undefined} data-hide={c.hide} aria-sort={sorted}>
                   {onSort ? (
                     <button type="button" className="ui-grid-sort" onClick={() => onSort(next(c.key))}>
                       {head}
@@ -81,6 +89,8 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
           {rows.map((r, i) => (
             <tr
               key={rowKey ? rowKey(r, i) : i}
+              aria-selected={selected === i || undefined}
+              onClick={onRowClick && ((e) => onRowClick(i, e))}
               onContextMenu={
                 onRowContextMenu &&
                 ((e) => {
@@ -93,7 +103,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
               {r.map((c, j) => {
                 const spec = isSpec(c) ? c : { node: c };
                 return (
-                  <td key={j} data-kind={spec.kind} data-align={spec.align ?? columns[j]?.align} data-tip={spec.tip}>
+                  <td key={j} data-kind={spec.kind} data-align={spec.align ?? columns[j]?.align} data-hide={columns[j]?.hide} data-tip={spec.tip}>
                     {spec.node}
                   </td>
                 );
