@@ -113,6 +113,19 @@ const EPS: Geo = { x: 0.5, y: 0.5, w: 0.5, h: 0.5, s: 0.001, o: 0.01 };
 const resting = (x: Geo, v: Geo) => KEYS.every((k) => Math.abs(x[k]) < EPS[k] && Math.abs(v[k]) < EPS[k] * 40);
 /** The longest step the glides' clock takes between two looks at it: a stalled frame pauses a glide rather than skipping it. */
 const MAX_STEP_MS = 34;
+let clock = 0;
+let real = performance.now();
+/**
+ * The clock every glide runs on (ms): real time, except that it never jumps more than
+ * MAX_STEP_MS. Shared, so moves that make one change (a window growing and the strip
+ * scrolling to show it) stay together through a stalled frame.
+ */
+export function glideNow(): number {
+  const r = performance.now();
+  clock += Math.min(MAX_STEP_MS, Math.max(0, r - real));
+  real = r;
+  return clock;
+}
 /** A retarget this soon after the last belongs to the same change (see update). */
 const SETTLED_MS = 34;
 
@@ -128,9 +141,6 @@ export class TileMotion {
   private tiles = new Map<string, Tile>();
   private raf = 0;
   private booted = false;
-  /** The glides' clock (ms): real time, except that it never jumps more than MAX_STEP_MS. */
-  private clock = 0;
-  private real = performance.now();
   /** Frames painted while gliding: counted by a task each frame posts, which runs after it's painted. */
   private painted = 0;
   private afterPaint = (() => {
@@ -250,10 +260,7 @@ export class TileMotion {
   }
 
   private now(): number {
-    const real = performance.now();
-    this.clock += Math.min(MAX_STEP_MS, Math.max(0, real - this.real));
-    this.real = real;
-    return this.clock;
+    return glideNow();
   }
 
   private schedule() {

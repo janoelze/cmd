@@ -60,7 +60,7 @@ import { TileTitle } from "./TileTitle.tsx";
 import { useFooterCentre } from "./StatusBar.tsx";
 import { SlotMotion } from "./Slot.tsx";
 import { countRender } from "../perf.ts";
-import { arrived, departed, ghost, glide, GLIDE_MS, settledElsewhere, TileMotion, type TileTarget } from "../motion.ts";
+import { arrived, departed, ghost, glide, GLIDE_MS, glideNow, settledElsewhere, TileMotion, type TileTarget } from "../motion.ts";
 
 const DRAG_THRESHOLD = 4;
 const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scrolls the strip
@@ -278,9 +278,10 @@ export function WindowsView(p: Props) {
       stopCam();
       const from = camRef.current;
       const { vp } = live.current;
-      const start = performance.now();
-      const frame = (now: number) => {
-        const t = glide(now - start);
+      // On the glides' clock, with the windows: a stalled frame pauses it with them.
+      const start = glideNow();
+      const frame = () => {
+        const t = glide(glideNow() - start);
         setCam(t < 1 ? lerpCamera(from, target, t, vp) : target);
         camAnim.current = t < 1 ? requestAnimationFrame(frame) : null;
       };
@@ -363,7 +364,9 @@ export function WindowsView(p: Props) {
   /** Scroll the strip. */
   const setOffset = useCallback((o: number) => {
     const { lay, vp, mode } = live.current;
-    const max = mode === "strip" ? maxOffset(lay.contentWidth, vp.w) : 0;
+    // Never past the end, unless it's already there: gliding back from where a strip
+    // that got shorter still holds it.
+    const max = mode === "strip" ? Math.max(maxOffset(lay.contentWidth, vp.w), offsetRef.current) : 0;
     const v = Math.max(0, Math.min(max, o));
     // Kept unrounded: scrollLeft snaps to device pixels and would eat small trackpad deltas.
     offsetRef.current = v;
@@ -445,9 +448,9 @@ export function WindowsView(p: Props) {
       if (anim.current) cancelAnimationFrame(anim.current);
       const from = offsetRef.current;
       if (Math.abs(target - from) < 0.5) return setOffset(target);
-      const start = performance.now();
-      const frame = (now: number) => {
-        const t = glide(now - start);
+      const start = glideNow();
+      const frame = () => {
+        const t = glide(glideNow() - start);
         setOffset(from + (target - from) * t);
         anim.current = t < 1 ? requestAnimationFrame(frame) : null;
       };
@@ -499,11 +502,16 @@ export function WindowsView(p: Props) {
     return () => clearTimeout(t);
   }, [entering, vp.w, vp.h]);
 
-  // Keep the offset valid (other modes don't scroll; the strip may have shrunk).
+  // Keep the offset valid (other modes don't scroll; the strip may have shrunk). A
+  // strip that got shorter (a window narrower, or closed) while scrolled near its end
+  // keeps the room to hold its scroll (the track's width below), and the scroll glides
+  // back with the windows: else the browser clamps it and everything jumps at once.
   const maxOff = mode === "strip" ? maxOffset(lay.contentWidth, vp.w) : 0;
-  useEffect(() => {
-    if (offsetRef.current > maxOff) setOffset(maxOff);
-  }, [maxOff, setOffset]);
+  useLayoutEffect(() => {
+    if (offsetRef.current <= maxOff + 0.5) return;
+    if (mode === "strip" && !liveResize && !resizing) animateTo(maxOff);
+    else setOffset(maxOff);
+  }, [maxOff, setOffset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Strip: resizing the app window scales the windows with it; the offset scales
   // too, so the same part of the strip stays in view (and the start stays at 0).
@@ -889,7 +897,7 @@ export function WindowsView(p: Props) {
           canvas
             ? { transform: `translate(${-cam.x * z}px, ${-cam.y * z}px) scale(${z})` }
             : mode === "strip"
-              ? { width: lay.contentWidth }
+              ? { width: Math.max(lay.contentWidth, offsetRef.current + vp.w) }
               : undefined
         }
       >

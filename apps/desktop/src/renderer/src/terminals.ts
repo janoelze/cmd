@@ -51,6 +51,9 @@ interface Host {
   /** When it was last fitted, and a pending trailing fit (see resized). */
   fittedAt: number;
   fitTimer: ReturnType<typeof setTimeout> | null;
+  /** The PTY's size, told at most every FIT_INTERVAL ms: when it was last told, and a size waiting. */
+  ptyAt: number;
+  ptyTimer: ReturnType<typeof setTimeout> | null;
   /** Removes its drop target (drops.ts). */
   undrop: () => void;
 }
@@ -318,6 +321,8 @@ class Terminals {
       lastUsed: Date.now(),
       fittedAt: 0,
       fitTimer: null,
+      ptyAt: 0,
+      ptyTimer: null,
       undrop: () => {},
     };
     const host = h;
@@ -327,7 +332,21 @@ class Terminals {
     // (xterm still fits and sizes it) answers "no such pane": not an error worth a crash report.
     term.onData((data) => void cmd.call("pane.write", { paneId, data }).catch(() => {}));
     // The desktop's size; not while a device sizes the terminal (that's the device's size).
-    term.onResize(({ cols, rows }) => !this.#overrides.has(paneId) && void cmd.call("pane.resize", { paneId, cols, rows }).catch(() => {}));
+    // A resize of the PTY makes its program redraw (a TUI all of it), so while the terminal
+    // keeps changing size (rows follow the app window every frame, see resized) the PTY
+    // hears at most every FIT_INTERVAL ms, the last size always.
+    term.onResize(() => {
+      const h = this.#hosts.get(paneId);
+      if (!h || this.#overrides.has(paneId) || h.ptyTimer) return;
+      const send = () => {
+        h.ptyTimer = null;
+        h.ptyAt = performance.now();
+        if (!this.#overrides.has(paneId)) void cmd.call("pane.resize", { paneId, cols: h.term.cols, rows: h.term.rows }).catch(() => {});
+      };
+      const wait = h.ptyAt + FIT_INTERVAL - performance.now();
+      if (wait <= 0) send();
+      else h.ptyTimer = setTimeout(send, wait);
+    });
     // App shortcuts are menu key equivalents (main process); keep them out of the PTY:
     // ⌘-anything on macOS, the bound Ctrl combinations elsewhere (Ctrl+Shift+K…).
     // Except the line-editing keys macOS terminals translate (⌘⌫ ⌘← ⌘→, as Ghostty does).
@@ -417,14 +436,21 @@ class Terminals {
   }
 
   /**
-   * The terminal's element changed size. A single change (sidebar, mode switch)
-   * fits right away; a continuous one fits every FIT_INTERVAL ms and once at the
-   * end. Each fit reflows the scrollback and resizes the PTY, whose program then
-   * redraws, so fitting on every frame of a window resize makes it lag.
+   * The terminal's element changed size. Its rows follow at once (no reflow; the PTY
+   * hears as often as onResize lets it), so a terminal grows and shrinks with its
+   * window in step. Its width: a single change (sidebar, mode switch) fits
+   * right away; a continuous one fits every FIT_INTERVAL ms and once at the end. A new
+   * width reflows the scrollback, so fitting on every frame of a window resize makes it lag.
    */
   resized(paneId: PaneId): void {
     const h = this.#hosts.get(paneId);
-    if (!h || h.fitTimer) return;
+    if (!h) return;
+    if (h.opened && h.el.isConnected && !this.#overrides.has(paneId)) {
+      const d = h.fit.proposeDimensions();
+      // Rows never wait for columns: a new width is the throttled fit's below.
+      if (d && d.rows > 0 && d.rows !== h.term.rows) h.term.resize(h.term.cols, d.rows);
+    }
+    if (h.fitTimer) return;
     const wait = h.fittedAt + FIT_INTERVAL - performance.now();
     if (wait <= 0) return this.fit(paneId);
     h.fitTimer = setTimeout(() => this.fit(paneId), wait);
@@ -580,6 +606,7 @@ class Terminals {
     const h = this.#hosts.get(paneId);
     if (!h) return;
     if (h.fitTimer) clearTimeout(h.fitTimer);
+    if (h.ptyTimer) clearTimeout(h.ptyTimer);
     // With mouse reporting on (Claude Code, vim), a mousedown adds mousemove/mouseup
     // listeners on the document that only a mouseup removes, and dispose doesn't.
     // Closing the pane mid-drag would leave them calling into the disposed renderer

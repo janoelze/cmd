@@ -138,7 +138,11 @@ await win.evaluate(() => {
       const cr = c?.getBoundingClientRect();
       if (c && !observed.has(c)) observed.add(c), ro.observe(c);
       const cs = getComputedStyle(t);
+      // A terminal's screen inside its content: where its text is drawn.
+      const scr = t.querySelector(".xterm-screen")?.getBoundingClientRect();
+      const vpEl = t.querySelector(".xterm-viewport");
       frame.tiles[key] = {
+        x: scr ? [scr.left, scr.top, scr.width, scr.height, vpEl?.scrollTop ?? 0] : null,
         r: [r.left, r.top, r.width, r.height],
         // Screen px per CSS px (a zoomed canvas, a window scaled while it glides).
         k: r.width / Math.max(1, t.offsetWidth),
@@ -225,7 +229,8 @@ function analyse(rec, { expect = "glide", reversals: allowed = 0 } = {}) {
       let reversals = 0;
       let dir = 0;
       for (const d of steps) {
-        if (Math.abs(d) < 0.5) continue;
+        // Under a pixel is rounding (two glides adding up), not a change of direction.
+        if (Math.abs(d) < 1) continue;
         const s = Math.sign(d);
         if (dir && s !== dir) reversals++;
         dir = s;
@@ -394,6 +399,47 @@ await scenario("app window: one step smaller", () => setSize(1200, 800), { expec
 await scenario("app window: live resize", async () => {
   for (let i = 1; i <= 20; i++) await setSize(1200 + i * 12, 800 + i * 5), await sleep(16);
 }, { expect: "follow" });
+// Font size (⌘+ / ⌘−) with a terminal selected, in the workspace and then in a sidebar.
+const terminal = async () => win.evaluate(() => {
+  const t = document.querySelector(".tile.kind-terminal[data-pane]");
+  window.__cmdSelect(t.dataset.pane);
+  return t.dataset.pane;
+});
+await terminal();
+await sleep(300);
+await scenario("⌘+ bigger text", () => menu("view.zoomIn"));
+await scenario("⌘− smaller text", () => menu("view.zoomOut"));
+await menu("window.dockRight");
+await sleep(600);
+await terminal();
+await sleep(300);
+await scenario("⌘+ bigger text (terminal in a sidebar)", () => menu("view.zoomIn"));
+await scenario("⌘− smaller text (terminal in a sidebar)", () => menu("view.zoomOut"));
+await menu("window.undock");
+await sleep(600);
+// The same, and a window made wider or narrower (⌥⌘+ / ⌥⌘−), in the strip and on the canvas.
+for (const mode of ["strip", "canvas"]) {
+  await menu(`view.${mode}`);
+  await sleep(700);
+  await terminal();
+  await sleep(500);
+  await scenario(`⌘+ bigger text (${mode})`, () => menu("view.zoomIn"));
+  await scenario(`⌘− smaller text (${mode})`, () => menu("view.zoomOut"));
+  if (mode === "strip") {
+    await scenario("⌥⌘+ wider window (strip)", () => menu("view.widen"));
+    await scenario("⌥⌘− narrower window (strip)", () => menu("view.narrow"));
+    // Interrupted: the scroll turns back to show the window as it keeps growing (one change of direction).
+    await scenario("⌥⌘+ wider, twice quickly (strip)", async () => (await menu("view.widen"), await sleep(80), await menu("view.widen")), { reversals: 1 });
+    await scenario("⌥⌘− narrower, twice quickly (strip)", async () => (await menu("view.narrow"), await sleep(80), await menu("view.narrow")), { reversals: 1 });
+  }
+}
+await menu("view.grid");
+await sleep(700);
+await terminal();
+await sleep(300);
+await scenario("⌥⌘+ wider window (from grid)", () => menu("view.widen"));
+await menu("view.grid");
+await sleep(700);
 await call("space.open", { path: space2, show: false });
 await sleep(300);
 await scenario("next Space", () => menu("space.next"), { settle: 900 });
