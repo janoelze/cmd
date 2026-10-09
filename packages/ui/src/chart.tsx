@@ -54,14 +54,16 @@ export function Chart({ kind = "area", series, labels, height = 140, format = St
   const [ref, w] = useWidth<HTMLDivElement>();
   const n = Math.max(...series.map((s) => s.values.length));
   const max = fixedMax ?? nice(Math.max(...series.flatMap((s) => s.values)));
-  // The y labels sit inside the plot, on their grid lines at its left edge, so the plot and
-  // its labels line up with whatever is above the chart (a Pane's title).
-  const pad = { l: 0, r: 0, t: 14, b: labels ? 18 : 2 };
+  // The y axis is on the trailing edge, as in Swift Charts: the plot starts at the left edge,
+  // in line with what's above it (a Pane's title), and the labels right-align with the
+  // Pane's aside (its unit). Their column is as wide as the longest label.
+  const grid = [0, 0.5, 1].map((f) => f * max);
+  const axis = Math.max(...grid.map((g) => format(g).length)) * 6.2 + 8;
+  const pad = { l: 0, r: axis, t: 6, b: labels ? 18 : 4 };
   const iw = Math.max(0, w - pad.l - pad.r);
   const ih = height - pad.t - pad.b;
   const x = (i: number) => pad.l + (n <= 1 ? 0 : (i / (n - 1)) * iw);
   const y = (v: number) => pad.t + ih - (v / max) * ih;
-  const grid = [0, 0.5, 1].map((f) => f * max);
   const band = iw / n;
   const bw = Math.max(2, Math.min(18, (band * 0.7) / series.length));
   return (
@@ -73,6 +75,9 @@ export function Chart({ kind = "area", series, labels, height = 140, format = St
             {grid.map((g) => (
               <g key={g}>
                 <line className="ui-chart-grid" x1={pad.l} x2={w - pad.r} y1={Math.round(y(g)) + 0.5} y2={Math.round(y(g)) + 0.5} />
+                <text className="ui-chart-tick" x={w} y={y(g)} textAnchor="end" dominantBaseline="middle">
+                  {format(g)}
+                </text>
               </g>
             ))}
             {kind === "bar"
@@ -91,11 +96,6 @@ export function Chart({ kind = "area", series, labels, height = 140, format = St
                     </g>
                   );
                 })}
-            {grid.slice(1).map((g) => (
-              <text key={g} className="ui-chart-tick ui-chart-ytick" x={pad.l + 3} y={Math.round(y(g)) - 3}>
-                {format(g)}
-              </text>
-            ))}
             {labels && labels.length > 0 && (
               <>
                 <text className="ui-chart-tick" x={pad.l} y={height - 4}>
