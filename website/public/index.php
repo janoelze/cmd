@@ -60,7 +60,7 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
   <img src="shots/empty.png" width="1498" height="898" alt="An empty workspace: recent sessions in the sidebar and a hint to press ⌘N">
 </div>
 <script>
-// Shuffle the hero screenshots, fade the gallery in once the first has loaded,
+// Shuffle the hero screenshots, fade the gallery in from a blur once the first has loaded,
 // then crossfade through them; reduced motion shows one at random. Without
 // script the first one shows.
 (() => {
@@ -72,14 +72,16 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
   }
   for (const s of shots) { s.classList.remove("on"); box.append(s); }
   shots[0].classList.add("on");
-  // Hidden until the first screenshot has loaded, then faded in; the
+  // Hidden until the first screenshot has loaded, then faded in from a blur; the
   // crossfade starts from there.
   const cycle = shots.length > 1 && !matchMedia("(prefers-reduced-motion: reduce)").matches;
   let shown = false;
   const reveal = () => {
     if (shown) return;
     shown = true;
+    box.classList.add("revealing");
     box.classList.remove("loading");
+    setTimeout(() => box.classList.remove("revealing"), 2600); // after the 2.4 s transition
     if (!cycle) return;
     let i = 0;
     setInterval(() => {
