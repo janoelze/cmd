@@ -43,7 +43,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 - **Workspaces.** A workspace is a folder you work in, with its own terminals, agents and windows. `cmd .` or ⌘O opens one; switch in place, or give each workspace its own app window (⇧⌘N, or Settings → Windows → Open each workspace in its own window). cmd reopens every window where it was, per display setup: laptop alone, or at the desk.
 - **Agent detection.** Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes.
 - **Waiting agents first.** Agents waiting for input are listed first, then working, then done. ⌃⌘J jumps to the next one.
-- **Remote access (beta).** Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted.
+- **Remote access (beta).** Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted. Through the hosted relay, or straight to your Mac over Tailscale or your own HTTPS address (Settings → Remote Access, `cmd remote setup`).
 - **Terminals keep running.** A background process owns them, so quitting, reloading or updating the app doesn't end them.
 - **Session search.** Full-text search over Claude Code, Codex, Qwen Code and Copilot CLI transcripts. Return resumes a session.
 - **Your history, kept.** cmd keeps its own copy of every agent session, with the commands you ran and what they printed, commits, pages and files: searchable, a year by default, on this Mac only. Credentials are redacted before anything is stored. Settings → Data says what's kept, for how long, and what never to record; `cmd data forget` deletes a session or a project for good.

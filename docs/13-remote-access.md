@@ -164,7 +164,9 @@ Now answers "what is running and does anything need me?" from structured data on
 - The policy wraps handlers in-process. A sidecar would talk to the Unix socket with full rights, so it would have to re-implement and re-check the policy at a second trust boundary.
 - Remote connections never touch the Unix socket.
 
-**The Mac only connects out.** The core opens one WebSocket to the relay (Node ≥ 22 has a global `WebSocket` client, so no dependency) and multiplexes every device over it. There is no inbound port, no tunnel and no Tailscale requirement.
+**In relay mode, the Mac only connects out.** The core opens one WebSocket to the relay (Node ≥ 22 has a global `WebSocket` client) and multiplexes every device over it. There is no inbound port, no tunnel and no Tailscale requirement. Relay mode is the default (`remote.access` = `relay`).
+
+**Direct modes** (`tailscale`, `url`; docs/38-direct-remote-access.md): the core serves the web client and takes device WebSockets itself, on a loopback port, and an access adapter (Tailscale Serve, or your own proxy) puts HTTPS in front. Both are a `Transport` (`remote/transport.ts`): `RelayLink` and `DirectListener` carry each device's channel as opaque Noise bytes, so pairing, sessions, scopes and the audit log are the same in every mode.
 
 ## Cryptographic protocol
 
