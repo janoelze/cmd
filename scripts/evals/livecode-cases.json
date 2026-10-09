@@ -1,0 +1,12 @@
+[
+  { "id": "dnb", "request": "build a new dnb track that changes over time", "genre": "dnb" },
+  { "id": "jungle", "request": "a jungle track with chopped amen breaks and a deep sub", "genre": "jungle" },
+  { "id": "house", "request": "make a deep house groove with warm chords", "genre": "house" },
+  { "id": "techno", "request": "dark hypnotic techno that slowly builds", "genre": "techno" },
+  { "id": "hiphop", "request": "a lofi hip hop beat with jazzy keys", "genre": "hiphop" },
+  { "id": "acid", "request": "an acid track with a squelchy 303 line", "genre": "acid" },
+  { "id": "ambient", "request": "an ambient piece with slow evolving pads", "genre": "ambient" },
+  { "id": "edit-energy", "request": "more energy", "start": "starter", "genre": "any" },
+  { "id": "edit-melody", "request": "add a melody that fits", "start": "starter", "genre": "any" },
+  { "id": "edit-bass", "request": "fatter, darker bass", "start": "starter", "genre": "any" }
+]

@@ -123,21 +123,30 @@ const HISTORY = 5;
 
 type ObjectCall = <T>(o: CallOptions & ObjectRequest<T>) => Promise<CompleteResult<T>>;
 
+/** What the eval varies (scripts/evals/livecode.ts): another system prompt, model or effort. */
+export interface ChangeOptions {
+  system?: string;
+  model?: string;
+  effort?: "minimal" | "low" | "medium" | "high";
+  signal?: AbortSignal;
+}
+
 /** Asks for the change; edits that don't apply are sent back once with the reason. */
-export async function changeCode(object: ObjectCall, r: ChangeRequest, signal?: AbortSignal): Promise<ChangeAnswer> {
+export async function changeCode(object: ObjectCall, r: ChangeRequest, o: ChangeOptions = {}): Promise<ChangeAnswer> {
   if (!r.request.trim()) throw new Error("Say what to change");
   let req = r;
   for (let attempt = 0; ; attempt++) {
     const res = await object<ModelAnswer>({
       tier: "smart",
       purpose: "livecode.change",
-      system: changeSystem(),
+      system: o.system ?? changeSystem(),
       cacheSystem: true,
       prompt: changePrompt(req),
       schema: SCHEMA,
-      effort: "low",
+      effort: o.effort ?? "low",
       maxOutputTokens: 6000,
-      signal,
+      ...(o.model ? { model: o.model } : {}),
+      signal: o.signal,
     });
     const { summary, edits, code } = res.value;
     if (code.trim()) return { code: code.replace(/^```\w*\n([\s\S]*?)\n?```\s*$/, "$1"), summary: summary.trim() };
