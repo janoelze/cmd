@@ -1,9 +1,9 @@
 // Remote access in the core (docs/13-remote-access.md): follows the remote.*
-// settings, keeps the relay link, issues pairing links, asks the Mac to approve
-// new devices, keeps the device list, and runs one HostChannel per connected
-// device. Sessions are served by the core like socket clients, held to
-// policy.ts. Every pairing, session, revoke, denied call and failed handshake is
-// logged (scope "remote") and kept in the remote_log table.
+// settings, keeps one Transport (today the relay link), issues pairing links,
+// asks the Mac to approve new devices, keeps the device list, and runs one
+// HostChannel per connected device. Sessions are served by the core like socket
+// clients, held to policy.ts. Every pairing, session, revoke, denied call and
+// failed handshake is logged (scope "remote") and kept in the remote_log table.
 
 import crypto from "node:crypto";
 import path from "node:path";
@@ -15,6 +15,7 @@ import type { SettingsService } from "../settings.ts";
 import type { RemoteDeviceRecord, Store } from "../store.ts";
 import { HostKeys } from "./keys.ts";
 import { RelayLink } from "./link.ts";
+import type { Transport } from "./transport.ts";
 import { HostChannel, type ChannelHost } from "./session.ts";
 
 const log = logger("remote");
@@ -42,7 +43,7 @@ export class RemoteService {
   #o: RemoteServiceOptions;
   #keys: HostKeys;
   #key: KeyPair | null = null;
-  #link: RelayLink | null = null;
+  #transport: Transport | null = null;
   #channels = new Map<number, HostChannel>();
   #pairing: { psk: Bytes; scope: RemoteScope; expiresAt: number } | null = null;
   #requests = new Map<string, { request: RemotePairRequest; resolve: (scope: RemoteScope | null) => void }>();
@@ -61,7 +62,7 @@ export class RemoteService {
     this.#unbind = o.settings.bind(["remote.enabled", "remote.relay"], (s) => this.#apply(s));
   }
 
-  /** Settings changed: start, restart or stop the relay link (serialized). */
+  /** Settings changed: start, restart or stop the transport (serialized). */
   #apply(s: Settings): void {
     this.#applying = this.#applying.then(async () => {
       this.#stop();
@@ -76,16 +77,12 @@ export class RemoteService {
         const same = id.relay === relay;
         const link = new RelayLink({
           relay,
+          client: () => this.#o.settings.settings["remote.client"],
           route: same ? id.route : null,
           secret: same ? id.secret : null,
           onRegistered: (route, secret) => this.#keys.setRoute(relay, route, secret),
         });
-        this.#link = link;
-        link.on("state", () => this.#changed());
-        link.on("open", (ch, ip) => this.#openChannel(link, ch, ip));
-        link.on("data", (ch, b) => this.#channels.get(ch)?.receive(b));
-        link.on("close", (ch) => this.#channels.get(ch)?.close());
-        link.start();
+        this.#use(link);
         this.audit("enabled", null, relay);
       } catch (err) {
         log.error(`remote access could not start: ${(err as Error).message}`);
@@ -94,11 +91,20 @@ export class RemoteService {
     });
   }
 
+  #use(t: Transport): void {
+    this.#transport = t;
+    t.on("state", () => this.#changed());
+    t.on("open", (ch, ip) => this.#openChannel(t, ch, ip));
+    t.on("data", (ch, b) => this.#channels.get(ch)?.receive(b));
+    t.on("close", (ch) => this.#channels.get(ch)?.close());
+    t.start();
+  }
+
   #stop(): void {
-    if (!this.#link) return;
+    if (!this.#transport) return;
     for (const c of this.#channels.values()) c.close();
-    this.#link.close();
-    this.#link = null;
+    this.#transport.close();
+    this.#transport = null;
     this.#pairing = null;
     for (const r of this.#requests.values()) r.resolve(null);
     this.audit("disabled", null, null);
@@ -114,8 +120,8 @@ export class RemoteService {
     const noRelay = s["remote.enabled"] && !s["remote.relay"].trim();
     return {
       enabled: s["remote.enabled"],
-      state: this.#link ? this.#link.state : noRelay ? "error" : s["remote.enabled"] ? "connecting" : "off",
-      error: this.#link ? this.#link.error : noRelay ? "set a relay (remote.relay)" : null,
+      state: this.#transport ? this.#transport.state : noRelay ? "error" : s["remote.enabled"] ? "connecting" : "off",
+      error: this.#transport ? this.#transport.error : noRelay ? "set a relay (remote.relay)" : null,
       relay: s["remote.relay"],
       devices: this.devices(),
       sessions: this.sessions(),
@@ -184,16 +190,16 @@ export class RemoteService {
 
   /** A one-time pairing link; replaces any earlier one. */
   pair(scope: RemoteScope): { url: string; expiresAt: number } {
-    const s = this.#o.settings.settings;
-    const route = this.#link?.route;
-    if (!this.#link || this.#link.state !== "online" || !route || !this.#key) throw new Error("remote access isn't connected to its relay");
-    const client = s["remote.client"].trim().replace(/\/+$/, "");
-    if (!client) throw new Error("set the web client's URL first (remote.client)");
+    const t = this.#transport;
+    const route = t?.route;
+    if (!t || t.state !== "online" || !route || !this.#key) throw new Error("remote access isn't connected to its relay");
+    const at = t.endpoint();
+    if (!at) throw new Error("set the web client's URL first (remote.client)");
     const psk = randomBytes(32);
     const expiresAt = Date.now() + PAIRING_TTL_MS;
     this.#pairing = { psk, scope, expiresAt };
     this.audit("pair-link", null, scope);
-    return { url: `${client}/pair#${encodePairing({ relay: s["remote.relay"].trim(), route, hostKey: this.#key.publicKey, psk })}`, expiresAt };
+    return { url: `${at.client}/pair#${encodePairing({ relay: at.socket, route, hostKey: this.#key.publicKey, psk })}`, expiresAt };
   }
 
   approve(requestId: string, allow: boolean, scope?: RemoteScope): void {
@@ -254,19 +260,19 @@ export class RemoteService {
     }
   }
 
-  #openChannel(link: RelayLink, channel: number, ip: string): void {
+  #openChannel(t: Transport, channel: number, ip: string): void {
     const now = Date.now();
     this.#failures = this.#failures.filter((t) => now - t < 60_000);
-    if (this.#failures.length >= MAX_FAILURES || !this.#key) return link.closeChannel(channel);
+    if (this.#failures.length >= MAX_FAILURES || !this.#key) return t.closeChannel(channel);
     const session = new HostChannel({
       channel,
       ip,
       host: this.#channelHost(this.#key),
-      send: (b) => link.send(channel, b),
+      send: (b) => t.send(channel, b),
       drop: () => {
         if (this.#channels.get(channel) !== session) return;
         this.#channels.delete(channel);
-        link.closeChannel(channel);
+        t.closeChannel(channel);
         if (session.deviceId) {
           this.audit("session-end", session.deviceId, ip);
           this.#changed();
