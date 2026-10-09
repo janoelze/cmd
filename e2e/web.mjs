@@ -4,13 +4,16 @@
 // `cmd remote pair` does. Pairs, opens a terminal from Now, types from the key
 // row and the compose bar, checks the text reached the PTY and that the Mac's
 // terminal is sized for the phone while it shows it, then has the Mac unpair it. Screenshots in .cmd-dev/shots/web-*.png. `pnpm e2e:web`;
-// E2E_HOSTED=1 runs it against the deployed relay and client instead.
+// E2E_HOSTED=1 runs it against the deployed relay and client instead;
+// E2E_DIRECT=1 has the core serve the built client and take the phone's socket
+// itself (docs/38, "Your own URL" on loopback, which browsers treat as secure).
 
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { chromium, devices } from "playwright";
 import { pathToFileURL } from "node:url";
+import net from "node:net";
 import { stopCore } from "../scripts/stop-core.mjs";
 import { startRelay } from "../apps/relay/src/relay.ts";
 import { connect } from "../packages/protocol/src/node.ts";
@@ -40,11 +43,21 @@ const until = async (fn, msg, ms = 10_000) => {
 
 // E2E_HOSTED=1: the deployed relay and client, with the core on its default settings.
 const hosted = !!process.env.E2E_HOSTED;
-const relay = hosted ? null : await startRelay({ log: () => {} });
-const web = hosted ? null : await createServer({ root: path.join(root, "apps/web"), configFile: path.join(root, "apps/web/vite.config.ts"), server: { port: 0 }, logLevel: "error" });
+const direct = !hosted && !!process.env.E2E_DIRECT;
+const freePort = () => new Promise((resolve) => { const s = net.createServer().listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => resolve(p)); }); });
+const port = direct ? await freePort() : 0;
+// Direct: the client as it ships, so build it (Vite is quick).
+if (direct) execFileSync(process.execPath, [path.join(root, "scripts/build-web.mjs")], { stdio: "ignore" });
+const relay = hosted || direct ? null : await startRelay({ log: () => {} });
+const web = hosted || direct ? null : await createServer({ root: path.join(root, "apps/web"), configFile: path.join(root, "apps/web/vite.config.ts"), server: { port: 0 }, logLevel: "error" });
 await web?.listen();
-const client = hosted ? "https://cmd.endtime-instruments.org" : web.resolvedUrls.local[0].replace(/\/$/, "");
-fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify(hosted ? { "remote.enabled": true } : { "remote.enabled": true, "remote.relay": relay.url, "remote.client": client }));
+const client = hosted ? "https://cmd.endtime-instruments.org" : direct ? `http://127.0.0.1:${port}` : web.resolvedUrls.local[0].replace(/\/$/, "");
+const settings = hosted
+  ? { "remote.enabled": true }
+  : direct
+    ? { "remote.enabled": true, "remote.access": "url", "remote.url": client, "remote.port": port }
+    : { "remote.enabled": true, "remote.relay": relay.url, "remote.client": client };
+fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify(settings));
 const core = spawn(process.execPath, ["--no-warnings", path.join(root, "packages/core/src/main.ts"), "--instance=dev"], { env: { ...process.env, CMD_HOME: home }, stdio: "ignore", detached: true });
 core.unref();
 
@@ -55,7 +68,7 @@ try {
   await until(async () => fs.existsSync(sock), "the core starts");
   mac = await connect(sock);
   const call = (m, p = {}) => mac.client.call(m, p);
-  await until(async () => (await call("remote.status")).state === "online", "the core reaches the relay");
+  await until(async () => (await call("remote.status")).state === "online", direct ? "the core listens" : "the core reaches the relay");
   const requests = [];
   mac.client.onEvent((e) => e.type === "remote.pairRequest" && requests.push(e.request));
   await call("events.subscribe", { types: ["remote.pairRequest"] });
@@ -63,7 +76,7 @@ try {
   const phone = await browser.newContext({ ...devices["iPhone 15"] });
   const page = await phone.newPage();
   page.on("pageerror", (e) => console.log("pageerror:", e.message));
-  const shot = (name) => page.screenshot({ path: path.join(shots, `web-${name}.png`) });
+  const shot = (name) => page.screenshot({ path: path.join(shots, `web${direct ? "-direct" : ""}-${name}.png`) });
 
   await page.goto(client);
   await page.getByText("Not paired yet").waitFor();
@@ -184,7 +197,7 @@ try {
   await page.getByText("Not paired anymore").waitFor();
   check(true, "an unpaired phone says so");
   await shot("4-revoked");
-  console.log(`screenshots: ${shots}/web-*.png`);
+  console.log(`screenshots: ${shots}/web${direct ? "-direct" : ""}-*.png`);
 } catch (err) {
   console.log(err.message);
   process.exitCode = 1;
