@@ -107,10 +107,10 @@ tr:last-child td { border-bottom: 0; }
 .hero-shots img { display: block; width: 100%; height: auto; border-radius: inherit; opacity: 0; transition: opacity 0.9s ease; }
 .hero-shots::after { content: ""; z-index: 1; border-radius: inherit; border: 1px solid rgb(255 255 255 / 0.16); pointer-events: none; } /* lightens the screenshot's own edge, whatever its colour */
 .hero-shots img.on { opacity: 1; }
-/* Revealed from a blur: only opacity, translate and filter change, on their own
+/* Revealed from a dark blur: only opacity, translate and filter change, on their own
    layer while it runs (.revealing, dropped after), so it stays on the GPU. */
 .hero-shots { --ease: cubic-bezier(0.2, 0.7, 0.2, 1); transition: opacity 1.4s ease, translate 1.6s var(--ease), filter 1.6s var(--ease); }
-.hero-shots.loading { opacity: 0; translate: 0 12px; filter: blur(40px); }
+.hero-shots.loading { opacity: 0; translate: 0 12px; filter: blur(40px) brightness(0.3); }
 .hero-shots.loading, .hero-shots.revealing { will-change: opacity, translate, filter; }
 @media (prefers-reduced-motion: reduce) { .hero-shots.loading { translate: none; filter: none; } }
 .reqs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 28px; margin: 0; font-size: var(--fs-sm); }
