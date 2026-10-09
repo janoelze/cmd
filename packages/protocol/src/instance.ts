@@ -44,6 +44,7 @@ export const PANE_ENV: readonly string[] = [
   "CMD_OPEN_EXTS",
   "CMD_OPEN_HANDLES_FOLDERS",
   "CMD_OPEN_HANDLES_TEXT",
+  "CMD_OPEN_PACKAGES",
   "CMD_RESTORE_COMMAND",
   "CMD_PANE_HISTFILE",
 ];

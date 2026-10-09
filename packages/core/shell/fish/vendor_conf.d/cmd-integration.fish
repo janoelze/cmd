@@ -72,7 +72,8 @@ if set -q CMD_RESTORE_COMMAND
 end
 
 # Would cmd open this itself? The rules come from cmd's settings and window type
-# registry: CMD_OPEN_FOLDERS/FILES/URLS, CMD_OPEN_EXTS, CMD_OPEN_HANDLES_FOLDERS/TEXT.
+# registry: CMD_OPEN_FOLDERS/FILES/URLS, CMD_OPEN_EXTS, CMD_OPEN_HANDLES_FOLDERS/TEXT,
+# CMD_OPEN_PACKAGES.
 # They start in the environment; cmd keeps $CMD_OPEN_RULES current as settings
 # change (as NAME='value' lines), and `open` re-reads it on every call.
 function _cmd_read_rules
@@ -86,6 +87,9 @@ end
 function _cmd_handles
     set -l p $argv[1]
     if test -d $p
+        # Foo.app: the system's
+        set -l pkg (string lower -- (string match -r -g '\.([^./]+)/*$' -- $p))
+        test -n "$pkg"; and contains -- $pkg (string split ' ' -- "$CMD_OPEN_PACKAGES"); and return 1
         test "$CMD_OPEN_FOLDERS" = 1 -a "$CMD_OPEN_HANDLES_FOLDERS" = 1
         return
     end

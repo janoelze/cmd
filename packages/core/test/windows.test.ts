@@ -64,6 +64,12 @@ describe("window type registry", () => {
     expect(kindFor("https://example.com")).toBe("browser");
   });
 
+  it("leaves app bundles and other packages to the system", () => {
+    fs.mkdirSync(path.join(dir, "cmd dev.app", "Contents"), { recursive: true });
+    expect(kindFor(path.join(dir, "cmd dev.app"))).toBeNull();
+    expect(kindFor(path.join(dir, "cmd dev.app", "Contents"))).toBe("files");
+  });
+
   it("keeps a PDF window's place: page, zoom, sidebar, dark pages", () => {
     const pdf = types.get("pdf")!;
     const f = file("doc.pdf", "%PDF-1.7\n");

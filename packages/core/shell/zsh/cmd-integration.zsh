@@ -84,12 +84,17 @@ if [[ -n $CMD_RESTORE_COMMAND ]]; then
 fi
 
 # Would cmd open this itself? The rules come from cmd's settings and window type
-# registry: CMD_OPEN_FOLDERS/FILES/URLS, CMD_OPEN_EXTS, CMD_OPEN_HANDLES_FOLDERS/TEXT.
+# registry: CMD_OPEN_FOLDERS/FILES/URLS, CMD_OPEN_EXTS, CMD_OPEN_HANDLES_FOLDERS/TEXT,
+# CMD_OPEN_PACKAGES.
 # They start in the environment; cmd keeps $CMD_OPEN_RULES current as settings
 # change, and `open` re-reads it on every call.
 _cmd_handles() {
   local p=$1
-  if [[ -d $p ]]; then [[ "$CMD_OPEN_FOLDERS" == 1 && "$CMD_OPEN_HANDLES_FOLDERS" == 1 ]]; return; fi
+  if [[ -d $p ]]; then
+    local pkg=${${p%/}:e:l}
+    [[ -n $pkg && " $CMD_OPEN_PACKAGES " == *" $pkg "* ]] && return 1   # Foo.app: the system's
+    [[ "$CMD_OPEN_FOLDERS" == 1 && "$CMD_OPEN_HANDLES_FOLDERS" == 1 ]]; return
+  fi
   [[ "$CMD_OPEN_FILES" == 1 && -f $p ]] || return 1
   local name=${${p:t}:l}
   local ext=${name:e}

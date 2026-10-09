@@ -33,7 +33,18 @@ export function extOf(p: string): string {
   return base.includes(".") ? base.split(".").pop()! : base;
 }
 
-/** null when the path doesn't exist or isn't a file/folder. */
+/**
+ * Folders macOS shows as one item (apps, bundles, documents): `open` hands them to
+ * the system (launches the app) instead of browsing them in a files window.
+ */
+export const PACKAGE_EXTENSIONS = ["app", "appex", "bundle", "kext", "plugin", "prefpane", "qlgenerator", "saver", "xpc", "pkg", "mpkg", "rtfd", "pages", "numbers", "key", "photoslibrary", "xcarchive", "xcodeproj", "xcworkspace", "playground", "scptd", "workflow"];
+
+/** A folder macOS treats as a single item. */
+export function isPackage(p: string): boolean {
+  return PACKAGE_EXTENSIONS.includes(extOf(p));
+}
+
+/** null when the path doesn't exist, isn't a file/folder, or is a package (the default app's). */
 export function targetFor(input: string): OpenTarget | null {
   const m = /^([a-z][\w+.-]*):/i.exec(input);
   if (m && !/^[a-z]:[\\/]/i.test(input) && m[1]!.length > 1) {
@@ -47,6 +58,7 @@ export function targetFor(input: string): OpenTarget | null {
     return null;
   }
   if (!st.isDirectory() && !st.isFile()) return null;
+  if (st.isDirectory() && isPackage(abs)) return null;
   return {
     type: "path",
     path: abs,
@@ -70,5 +82,6 @@ export function shellOpenEnv(types: WindowTypes, overrides: Record<string, strin
     CMD_OPEN_EXTS: [...exts].sort().join(" "),
     CMD_OPEN_HANDLES_FOLDERS: folders ? "1" : "0",
     CMD_OPEN_HANDLES_TEXT: text ? "1" : "0",
+    CMD_OPEN_PACKAGES: PACKAGE_EXTENSIONS.join(" "),
   };
 }
