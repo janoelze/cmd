@@ -115,7 +115,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
 .why h2 { margin-top: 0; }
 .why .cols { columns: 2; column-gap: 36px; }
 .why p { font-size: var(--fs-lede); color: var(--ink-2); margin: 0 0 14px; orphans: 2; widows: 2; }
-.why strong { color: var(--ink); font-weight: 500; } /* the point of each paragraph, a step brighter */
+.why strong { font-weight: inherit; text-decoration: underline 1px color-mix(in srgb, var(--ink-3) 45%, transparent); text-underline-offset: 4px; } /* the point of each paragraph, underlined faintly */
 .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px 28px; margin-bottom: 8px; }
 .features h3 { font-size: var(--fs-base); font-weight: 500; margin: 0 0 2px; }
 .features h3 .pill { font-weight: 400; vertical-align: 1px; }
