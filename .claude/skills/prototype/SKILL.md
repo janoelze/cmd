@@ -93,6 +93,8 @@ Zoom into joins and edges with `Image.NEAREST` upscaling when the question is ab
 
 ## Where changes go
 
+- **A window's inside** (its layout, toolbar, footer, table, chart, list, states) follows the **window-design** skill: its pieces, reference windows and rules. Start from the closest reference window.
+
 - **The kit first.** A control or a look that a view lacks goes into `@cmd/ui` (with a gallery specimen in `packages/ui/gallery/Gallery.tsx`), not into the view's CSS. The goal for a view is no view CSS at all. Kit changes reach every screen, so after one, look at the other places it shows up (Settings, the palette, other dialogs) before handing back.
 - **App-wide settings go on `:root`**, not on `.app`: dialogs are portalled to `<body>`, and the Settings window and the Workbench have no `.app` (see `look.ts`).
 - **Core event subscriptions are per connection, and the last call wins.** A page that subscribes to a few event types cuts off the others; the Workbench subscribes to all of them so stories get `ai.updated` and the rest.
