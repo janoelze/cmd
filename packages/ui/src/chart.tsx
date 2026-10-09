@@ -92,7 +92,7 @@ export function Chart({ kind = "area", series, labels, height = 140, format = St
                   );
                 })}
             {grid.slice(1).map((g) => (
-              <text key={g} className="ui-chart-tick ui-chart-ytick" x={pad.l} y={Math.round(y(g)) - 3}>
+              <text key={g} className="ui-chart-tick ui-chart-ytick" x={pad.l + 3} y={Math.round(y(g)) - 3}>
                 {format(g)}
               </text>
             ))}
