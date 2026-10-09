@@ -1,36 +1,32 @@
 // The core's one connection to the relay (protocol: @cmd/protocol relay.ts).
 // Outbound only, over Node's built-in WebSocket client. Registers a route the
 // first time, then authenticates with it; reconnects with backoff; multiplexes
-// every device's channel.
+// every device's channel. The relay mode's Transport.
 
 import { EventEmitter } from "node:events";
 import { decodeRelayFrame, encodeRelayFrame, RelayFrameType } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
+import type { Endpoint, Transport, TransportEvents, TransportState } from "./transport.ts";
 
 const log = logger("remote");
 
-export type LinkState = "connecting" | "online" | "error";
-
 export interface RelayLinkOptions {
   relay: string;
+  /** The web client's origin (remote.client), read when a pairing link is made; empty: none. */
+  client: () => string;
   route: string | null;
   secret: string | null;
   /** The relay gave this host a route: keep it. */
   onRegistered: (route: string, secret: string) => void;
 }
 
-export class RelayLink extends EventEmitter<{
-  state: [LinkState, string | null];
-  open: [channel: number, ip: string];
-  data: [channel: number, bytes: Uint8Array<ArrayBuffer>];
-  close: [channel: number];
-}> {
+export class RelayLink extends EventEmitter<TransportEvents> implements Transport {
   #o: RelayLinkOptions;
   #ws: WebSocket | null = null;
   #closed = false;
   #retry = 0;
   #timer: ReturnType<typeof setTimeout> | null = null;
-  state: LinkState = "connecting";
+  state: TransportState = "connecting";
   error: string | null = null;
 
   constructor(o: RelayLinkOptions) {
@@ -40,6 +36,11 @@ export class RelayLink extends EventEmitter<{
 
   get route(): string | null {
     return this.#o.route;
+  }
+
+  endpoint(): Endpoint | null {
+    const client = this.#o.client().trim().replace(/\/+$/, "");
+    return client ? { socket: this.#o.relay.trim(), client } : null;
   }
 
   start(): void {
@@ -61,7 +62,7 @@ export class RelayLink extends EventEmitter<{
     this.#ws = null;
   }
 
-  #setState(s: LinkState, error: string | null = null): void {
+  #setState(s: TransportState, error: string | null = null): void {
     if (s === this.state && error === this.error) return;
     this.state = s;
     this.error = error;
