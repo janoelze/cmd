@@ -23,7 +23,7 @@ type Align = "start" | "center" | "end" | "stretch" | "baseline";
 /** Children in a column, `gap` apart. */
 export function Stack({ gap = "md", pad, align, grow, children }: { gap?: Space; pad?: Space; align?: Align; grow?: boolean; children: ReactNode }) {
   return (
-    <div className="ui-stack" data-align={align} data-grow={grow || undefined} style={{ gap: sp(gap), padding: sp(pad) }}>
+    <div className="ui-stack" data-align={align} data-grow={grow || undefined} data-pad={pad && pad !== "none" ? pad : undefined} style={{ gap: sp(gap), padding: sp(pad) }}>
       {children}
     </div>
   );
