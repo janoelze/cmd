@@ -395,8 +395,10 @@ export interface RemoteSession {
   name: string;
   scope: RemoteScope;
   since: number;
-  /** As the relay reports it; informational only. */
+  /** As the relay or proxy reports it; informational only. */
   ip: string;
+  /** Who Tailscale says is on the other end (Tailscale-User-Login); a hint, never auth. */
+  user?: string | null;
   /** The windows it is looking at (window.follow). */
   watching: WindowId[];
 }

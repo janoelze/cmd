@@ -891,6 +891,7 @@ export class Core {
     "remote.disconnect": (p) => (this.remote.disconnect(p.id), null),
     "remote.log": (p) => this.remote.log(p.limit),
     "remote.checks": (p) => this.remote.checks(p.access),
+    "remote.setup": () => this.remote.setup(),
     "remote.revoke": (p) => (this.remote.revoke(p.id), null),
     "remote.setScope": (p) => this.remote.setScope(p.id, p.scope),
     // Connection-aware (the session's device, follows); handled in serve. These run for in-process callers.

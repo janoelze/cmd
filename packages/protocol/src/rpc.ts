@@ -450,6 +450,8 @@ export interface Methods {
   "remote.log": { params: { limit?: number }; result: RemoteLogEntry[] };
   /** The setup checklist of an access mode (default: remote.access); empty for the relay. */
   "remote.checks": { params: { access?: string }; result: RemoteAccessCheck[] };
+  /** "Check Again": publish the current access mode again if it isn't, then its checklist. */
+  "remote.setup": { params: {}; result: RemoteAccessCheck[] };
   /** Unpair a device and close its sessions. */
   "remote.revoke": { params: { id: string }; result: null };
   /** Change a device's scope; its sessions reconnect with it. */

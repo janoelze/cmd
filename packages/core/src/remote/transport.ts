@@ -9,7 +9,8 @@ export type TransportState = "connecting" | "online" | "error";
 
 export interface TransportEvents {
   state: [TransportState, string | null];
-  open: [channel: number, ip: string];
+  /** user: who the proxy says it is (Tailscale-User-Login), a display hint only. */
+  open: [channel: number, ip: string, user?: string | null];
   data: [channel: number, bytes: Uint8Array<ArrayBuffer>];
   close: [channel: number];
 }

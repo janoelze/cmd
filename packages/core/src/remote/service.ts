@@ -62,7 +62,9 @@ export class RemoteService {
   /** The settings the running transport was made from, to skip restarts that change nothing. */
   #config = "";
   /** The adapter that published the direct listener, and its context, to undo it when switching away. */
-  #published: { adapter: AccessAdapter; ctx: AdapterContext } | null = null;
+  #published: { adapter: AccessAdapter; ctx: AdapterContext; key: string } | null = null;
+  /** The adapter's enable() of the running listener, settled. */
+  #enabling: Promise<void> = Promise.resolve();
   #adapters: AccessAdapters;
   #channels = new Map<number, HostChannel>();
   #pairing: { psk: Bytes; scope: RemoteScope; expiresAt: number } | null = null;
@@ -95,7 +97,7 @@ export class RemoteService {
       if (config === this.#config && (this.#transport || !config)) return;
       this.#config = config;
       this.#stop();
-      if (this.#published && (!config || access !== this.#published.adapter.id || this.#localPort(s) !== this.#published.ctx.port)) await this.#unpublish();
+      if (this.#published && (!config || this.#published.key !== publishKey(s, this.#localPort(s)))) await this.#unpublish();
       if (!config) return this.#changed();
       try {
         const id = await this.#keys.load();
@@ -136,10 +138,11 @@ export class RemoteService {
     this.#use(listener);
     this.audit("enabled", null, `${access} on 127.0.0.1:${port}`);
     const ctx = this.#context(port, route);
-    adapter.enable(ctx).then(
+    const key = publishKey(s, port);
+    this.#enabling = adapter.enable(ctx).then(
       ({ url }) => {
         if (this.#transport === listener) {
-          this.#published = { adapter, ctx };
+          this.#published = { adapter, ctx, key };
           listener.setOrigin(url);
         } else if (!this.#config) {
           // Turned off while it was publishing.
@@ -177,6 +180,18 @@ export class RemoteService {
     };
   }
 
+  /** "Check Again": a direct mode that isn't online publishes again; then its checklist. */
+  async setup(): Promise<Check[]> {
+    const s = this.#o.settings.settings;
+    if (s["remote.enabled"] && s["remote.access"] !== "relay" && this.#transport?.state !== "online") {
+      this.#config = ""; // forces a restart
+      this.#apply(s);
+      await this.#applying;
+      await this.#enabling;
+    }
+    return this.checks();
+  }
+
   /** The setup checklist of an access mode (default: the current one); the relay has none. */
   async checks(access: string = this.#o.settings.settings["remote.access"]): Promise<Check[]> {
     if (access === "relay") return [];
@@ -189,7 +204,7 @@ export class RemoteService {
   #use(t: Transport): void {
     this.#transport = t;
     t.on("state", () => this.#changed());
-    t.on("open", (ch, ip) => this.#openChannel(t, ch, ip));
+    t.on("open", (ch, ip, user) => this.#openChannel(t, ch, ip, user ?? null));
     t.on("data", (ch, b) => this.#channels.get(ch)?.receive(b));
     t.on("close", (ch) => this.#channels.get(ch)?.close());
     t.start();
@@ -231,7 +246,7 @@ export class RemoteService {
     const names = new Map(this.#o.store.remoteDevices().map((d) => [d.id, d.name]));
     return [...this.#channels.values()]
       .filter((c) => c.open && c.deviceId)
-      .map((c) => ({ id: String(c.channel), deviceId: c.deviceId!, name: names.get(c.deviceId!) ?? "Unknown", scope: c.scope!, since: c.since, ip: c.ip, watching: c.watching }));
+      .map((c) => ({ id: String(c.channel), deviceId: c.deviceId!, name: names.get(c.deviceId!) ?? "Unknown", scope: c.scope!, since: c.since, ip: c.ip, user: c.user, watching: c.watching }));
   }
 
   /** Close live sessions, one device's or all, without unpairing. */
@@ -359,13 +374,14 @@ export class RemoteService {
     }
   }
 
-  #openChannel(t: Transport, channel: number, ip: string): void {
+  #openChannel(t: Transport, channel: number, ip: string, user: string | null): void {
     const now = Date.now();
     this.#failures = this.#failures.filter((t) => now - t < 60_000);
     if (this.#failures.length >= MAX_FAILURES || !this.#key) return t.closeChannel(channel);
     const session = new HostChannel({
       channel,
       ip,
+      user,
       host: this.#channelHost(this.#key),
       send: (b) => t.send(channel, b),
       drop: () => {
@@ -452,3 +468,6 @@ function builtinAdapters(): AccessAdapters {
   registerBuiltinAdapters(a);
   return a;
 }
+
+/** What an adapter published depends on: another value means unpublishing first. */
+const publishKey = (s: Settings, port: number) => JSON.stringify([s["remote.access"], port, s["remote.tailscale.port"]]);
