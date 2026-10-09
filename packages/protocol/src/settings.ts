@@ -31,8 +31,9 @@ type Def = Common &
          * font: previews itself in that font. theme: a popup of the UI's registered
          * themes of `appearance`. model: a popup of `provider`'s models that the
          * user's API key can use (ai.models), with Auto first, for `tier`.
+         * access: a popup of the core's access modes (remote.modes).
          */
-        control?: "font" | "theme" | "model";
+        control?: "font" | "theme" | "model" | "access";
         appearance?: "dark" | "light";
         provider?: "anthropic" | "openai";
         tier?: "smart" | "fast";
@@ -322,10 +323,9 @@ export const SETTINGS_SCHEMA = {
   },
   "remote.access": {
     title: "Connect through",
-    type: "enum",
+    type: "string",
+    control: "access",
     default: "relay",
-    options: ["relay", "tailscale", "url"],
-    labels: { relay: "Hosted relay", tailscale: "Tailscale", url: "Your own URL" },
     description: "How phones reach this Mac.",
     details: "The hosted relay forwards encrypted traffic and serves the web page. With Tailscale or your own URL, phones talk to this Mac directly and it serves the page itself. Switching means pairing devices again.",
   },

@@ -116,6 +116,8 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
     title: "Tailscale",
     icon: "network",
     description: "Your tailnet, with HTTPS from Tailscale.",
+    settings: ["remote.tailscale.port"],
+    connecting: "Publishing on your tailnet…",
 
     async detect(ctx) {
       const titles: [string, string][] = [

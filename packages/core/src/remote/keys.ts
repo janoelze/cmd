@@ -47,6 +47,12 @@ export class HostKeys {
     return { key: await importKeyPair(d.key), route: d.route ?? null, secret: d.secret ?? null, relay: d.relay ?? null };
   }
 
+  /** The relay route, once loaded: null until a relay registered this host. */
+  relayRoute(): { relay: string | null; route: string | null; secret: string | null } {
+    if (!this.#doc) throw new Error("host key not loaded");
+    return { relay: this.#doc.relay ?? null, route: this.#doc.route ?? null, secret: this.#doc.secret ?? null };
+  }
+
   setRoute(relay: string, route: string, secret: string): void {
     if (!this.#doc) throw new Error("host key not loaded");
     this.#doc = { ...this.#doc, relay, route, secret };

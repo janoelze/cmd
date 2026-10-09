@@ -1,9 +1,9 @@
 // `cmd remote …`: remote access from a phone or browser (docs/13-remote-access.md,
 // docs/38-direct-remote-access.md). Status, pairing, devices, and how phones reach
-// this Mac: the hosted relay, Tailscale or your own URL, with each mode's setup checks.
+// this Mac: the access modes the core has (remote.modes), with each mode's setup checks.
 
 import readline from "node:readline/promises";
-import type { AppWindow, RemoteAccessCheck, RemoteDevice, RemotePairRequest, RemoteScope, RemoteSession, RemoteStatus } from "@cmd/protocol";
+import type { AppWindow, RemoteAccessCheck, RemoteAccessMode, RemoteDevice, RemotePairRequest, RemoteScope, RemoteSession, RemoteStatus } from "@cmd/protocol";
 import { SETTINGS_SCHEMA } from "@cmd/protocol";
 import type { Connection } from "@cmd/protocol/node";
 import { renderUnicodeCompact } from "uqr";
@@ -12,26 +12,23 @@ type Client = Connection["client"];
 
 export const REMOTE_HELP = `  remote [status|on|off]              remote access from a phone or browser (end-to-end encrypted):
                                       how phones reach this Mac, who is connected and what they're watching
-  remote access relay|tailscale|url [URL]
-                                      how phones reach this Mac: the hosted relay, Tailscale or your own URL
-  remote setup [tailscale|url] [--json]
-                                      check what that mode needs (default: the one in use)
+  remote modes                        the ways phones can reach this Mac: hosted relay, Tailscale, your own URL…
+  remote access [MODE [VALUE]]        how phones reach this Mac (a URL for url)
+  remote setup [MODE] [--json]        check what that mode needs (default: the one in use)
   remote pair                         a one-time QR code; approve the device here
   remote devices | log                paired devices | recent activity
   remote disconnect [DEVICE]          close live sessions (devices stay paired)
   remote revoke DEVICE | scope DEVICE view|control
                                       unpair a device | change what it may do`;
 
-export const ACCESS_MODES = SETTINGS_SCHEMA["remote.access"].options as readonly string[];
-const ACCESS_LABELS: Record<string, string> = SETTINGS_SCHEMA["remote.access"].labels ?? {};
-/** "Hosted relay", "Tailscale", "Your own URL". */
-export const accessLabel = (mode: string) => ACCESS_LABELS[mode] ?? mode;
+/** A mode's title ("Hosted relay", "Tailscale", "Your own URL"), or its id when the core doesn't have it. */
+export const modeTitle = (modes: RemoteAccessMode[], id: string) => modes.find((m) => m.id === id)?.title ?? id;
 
 const REMOTE_STATE: Record<RemoteStatus["state"], string> = { off: "off", connecting: "connecting…", online: "ready", error: "can't connect" };
 
-/** The first line of `cmd remote`: state, then how phones reach this Mac (the relay only in relay mode). */
-export function statusLine(st: RemoteStatus): string {
-  const where = (st.access ?? "relay") === "relay" ? `${accessLabel("relay")} ${st.relay}` : [accessLabel(st.access), st.address].filter(Boolean).join("  ·  ");
+/** The first line of `cmd remote`: state, then how phones reach this Mac (the relay's URL in relay mode). */
+export function statusLine(st: RemoteStatus, modes: RemoteAccessMode[]): string {
+  const where = st.access === "relay" ? `${modeTitle(modes, "relay")} ${st.relay}` : [modeTitle(modes, st.access), st.address].filter(Boolean).join("  ·  ");
   return `Remote access: ${REMOTE_STATE[st.state]}${st.error ? ` (${st.error})` : ""}  ·  ${where}`;
 }
 
@@ -48,18 +45,26 @@ export function checkLines(c: RemoteAccessCheck): string[] {
   return [`${MARK[c.state]} ${c.title}`, ...(c.detail ? [`  ${c.detail}`] : []), ...(c.link ? [`  ${c.link}`] : [])];
 }
 
+const usage = (modes: RemoteAccessMode[]) => `usage: cmd remote access ${modes.map((m) => m.id).join("|")} [VALUE]`;
+
 /**
- * `remote access MODE [URL]` → the settings to write. A URL is only for `url`; `url`
- * without one keeps the saved `remote.url`, and errors when there is none.
+ * `remote access MODE [VALUE]` → the settings to write. A value is only for a mode
+ * with an argument (url: remote.url); without one it keeps the saved value, and
+ * errors when there is none. Whether the value works is the setup checks' to say.
  */
-export function parseAccess(args: string[], savedUrl: string): { access: string; url?: string } | { error: string } {
-  const [mode, url] = args;
-  if (!mode || !ACCESS_MODES.includes(mode)) return { error: "usage: cmd remote access relay|tailscale|url [URL]" };
-  if (mode !== "url") return url ? { error: `only Your own URL takes an address (cmd remote access url ${url})` } : { access: mode };
-  if (!url) return savedUrl ? { access: mode } : { error: "Your own URL needs an address: cmd remote access url https://mac.example.com" };
-  // The rest (HTTPS, no path) is the setup checks' to say.
-  if (!URL.canParse(url)) return { error: `${url} isn't a URL. Try one like https://mac.example.com` };
-  return { access: mode, url: url.trim() };
+export function parseAccess(args: string[], modes: RemoteAccessMode[], saved: (key: string) => string): { access: string; set?: { key: string; value: string } } | { error: string } {
+  const [id, value] = args;
+  const mode = modes.find((m) => m.id === id);
+  if (!mode) return { error: id ? `no access mode "${id}" (${usage(modes)})` : usage(modes) };
+  const arg = mode.argument;
+  if (!arg) {
+    const takes = modes.find((m) => m.argument);
+    return value ? { error: `${mode.title} takes nothing more${takes ? ` (cmd remote access ${takes.id} ${value})` : ""}` } : { access: mode.id };
+  }
+  if (value?.trim()) return { access: mode.id, set: { key: arg, value: value.trim() } };
+  const example = SETTINGS_SCHEMA[arg as keyof typeof SETTINGS_SCHEMA];
+  const placeholder = example && "placeholder" in example ? example.placeholder : "VALUE";
+  return saved(arg) ? { access: mode.id } : { error: `${mode.title} needs an address: cmd remote access ${mode.id} ${placeholder}` };
 }
 
 export async function remoteCommand(client: Client, pos: string[], opt: Record<string, unknown>): Promise<number> {
@@ -77,10 +82,19 @@ export async function remoteCommand(client: Client, pos: string[], opt: Record<s
       const before = sub === "off" ? (await client.call("remote.status", {})).sessions.length : 0;
       const st = await client.call(sub === "on" ? "remote.enable" : sub === "off" ? "remote.disable" : "remote.status", {});
       if (opt.json) return out(st);
-      printRemote(st, await client.call("window.list", {}));
+      printRemote(st, await client.call("remote.modes", {}), await client.call("window.list", {}));
       if (sub === "off" && before) console.log(`\nclosed ${before} session${before === 1 ? "" : "s"}`);
-      if (sub === "on" && st.state !== "online" && (st.access ?? "relay") !== "relay") console.log("\nnext: cmd remote setup");
+      const mode = (await client.call("remote.modes", {})).find((m) => m.id === st.access);
+      if (sub === "on" && st.state !== "online" && mode?.setup) console.log("\nnext: cmd remote setup");
       else if (sub === "on" && st.state !== "error" && !st.devices.length) console.log("\nnext: cmd remote pair");
+      return 0;
+    }
+    case "modes": {
+      const modes = await client.call("remote.modes", {});
+      if (opt.json) return out(modes);
+      const { access } = await client.call("remote.status", {});
+      const w = Math.max(...modes.map((m) => m.id.length));
+      for (const m of modes) console.log(`${m.id === access ? "*" : " "} ${m.id.padEnd(w)}  ${m.title}: ${m.description}`);
       return 0;
     }
     case "access":
@@ -125,36 +139,43 @@ export async function remoteCommand(client: Client, pos: string[], opt: Record<s
 
 /** Switch how phones reach this Mac. Devices paired over another mode pair again (another origin and route). */
 async function access(client: Client, args: string[]): Promise<number> {
+  const modes = await client.call("remote.modes", {});
   const { settings } = await client.call("settings.get", {});
-  const was = String(settings["remote.access"]);
-  const savedUrl = String(settings["remote.url"] ?? "");
-  if (!args.length) return out(`${accessLabel(was)}${was === "url" && savedUrl ? `  ·  ${savedUrl}` : ""}`);
-  const want = parseAccess(args, savedUrl);
+  const saved = (k: string) => String(settings[k as keyof typeof settings] ?? "");
+  const was = saved("remote.access");
+  /** "Your own URL  ·  https://mac.example.com": the title, and the mode's value when it has one. */
+  const describe = (id: string, value?: string) => {
+    const arg = modes.find((m) => m.id === id)?.argument;
+    const v = value ?? (arg ? saved(arg) : "");
+    return `${modeTitle(modes, id)}${arg && v ? `  ·  ${v}` : ""}`;
+  };
+  if (!args.length) return out(describe(was));
+  const want = parseAccess(args, modes, saved);
   if ("error" in want) return fail(want.error);
-  if (want.access === was && (want.url === undefined || want.url === savedUrl)) return out(`already using ${accessLabel(was)}`);
-  if (want.url !== undefined) await client.call("settings.set", { key: "remote.url", value: want.url });
+  if (want.access === was && (!want.set || want.set.value === saved(want.set.key))) return out(`already using ${modeTitle(modes, was)}`);
+  if (want.set) await client.call("settings.set", { key: want.set.key, value: want.set.value });
   if (want.access !== was) await client.call("settings.set", { key: "remote.access", value: want.access });
-  const url = want.url ?? savedUrl;
-  console.log(`${accessLabel(want.access)}${want.access === "url" ? `  ·  ${url}` : ""}${want.access !== was ? ` (was ${accessLabel(was)})` : ""}`);
+  console.log(`${describe(want.access, want.set?.value)}${want.access !== was ? ` (was ${modeTitle(modes, was)})` : ""}`);
   const st = await client.call("remote.status", {});
   if (want.access !== was && st.devices.length) console.log("Devices paired before need to pair again (cmd remote pair).");
-  if (want.access !== "relay") console.log("\nnext: cmd remote setup");
+  if (modes.find((m) => m.id === want.access)?.setup) console.log("\nnext: cmd remote setup");
   return 0;
 }
 
 /** The checklist of an access mode: the one in use is retried (remote.setup), another is only checked. */
-async function setup(client: Client, mode: string | undefined, json: boolean): Promise<number> {
-  if (mode !== undefined && !ACCESS_MODES.includes(mode)) return fail("usage: cmd remote setup [tailscale|url] [--json]");
+async function setup(client: Client, id: string | undefined, json: boolean): Promise<number> {
+  const modes = await client.call("remote.modes", {});
+  if (id !== undefined && !modes.some((m) => m.id === id)) return fail(`no access mode "${id}" (usage: cmd remote setup [${modes.map((m) => m.id).join("|")}] [--json])`);
   const st = await client.call("remote.status", {});
-  const current = mode === undefined || mode === st.access;
-  const which = mode ?? st.access;
+  const current = id === undefined || id === st.access;
+  const which = id ?? st.access;
   const checks = current ? await client.call("remote.setup", {}) : await client.call("remote.checks", { access: which });
   const ready = checks.every((c) => c.state === "ok");
   if (json) {
     console.log(JSON.stringify(checks, null, 2));
     return ready ? 0 : 1;
   }
-  if (!checks.length) return out(`${accessLabel(which)}: nothing to set up`);
+  if (!checks.length) return out(`${modeTitle(modes, which)}: nothing to set up`);
   for (const c of checks) for (const l of checkLines(c)) console.log(l);
   if (ready && !current) console.log(`\nnext: cmd remote access ${which}`);
   else if (ready && !st.enabled) console.log("\nnext: cmd remote on");
@@ -192,9 +213,9 @@ async function remotePair(client: Client, scope: RemoteScope, json: boolean): Pr
   return fail("the pairing link expired (cmd remote pair for a new one)");
 }
 
-function printRemote(st: RemoteStatus, windows: AppWindow[]): void {
+function printRemote(st: RemoteStatus, modes: RemoteAccessMode[], windows: AppWindow[]): void {
   const title = (id: string) => windows.find((w) => w.id === id)?.title ?? short(id);
-  console.log(statusLine(st));
+  console.log(statusLine(st, modes));
   if (st.sessions.length) {
     console.log("\nConnected now");
     for (const s of st.sessions) console.log(`  ${sessionLine(s, title)}`);

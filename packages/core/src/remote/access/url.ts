@@ -28,6 +28,9 @@ export const urlAdapter: AccessAdapter = {
   title: "Your own URL",
   icon: "link",
   description: "A proxy or tunnel you run, in front of this Mac.",
+  settings: ["remote.url"],
+  argument: "remote.url",
+  connecting: "Getting ready…",
 
   async detect(ctx) {
     const o = publicOrigin(ctx.settings["remote.url"]);

@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, CommandRun, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteAccessCheck, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Workspace, WorkspaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, CommandRun, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteAccessCheck, RemoteAccessMode, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Workspace, WorkspaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
 import type { DataClassInfo, DataEvent, DataQuery, DataStats, NewDataEvent, SessionInfo, TurnRow, ViewQuery } from "./events.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
@@ -448,7 +448,9 @@ export interface Methods {
   "remote.disconnect": { params: { id?: string }; result: null };
   /** Recent activity, newest first. */
   "remote.log": { params: { limit?: number }; result: RemoteLogEntry[] };
-  /** The setup checklist of an access mode (default: remote.access); empty for the relay. */
+  /** The access modes this core has, the choices for remote.access. */
+  "remote.modes": { params: {}; result: RemoteAccessMode[] };
+  /** The setup checklist of an access mode (default: remote.access); empty when it has nothing to set up. */
   "remote.checks": { params: { access?: string }; result: RemoteAccessCheck[] };
   /** "Check Again": publish the current access mode again if it isn't, then its checklist. */
   "remote.setup": { params: {}; result: RemoteAccessCheck[] };

@@ -2,6 +2,7 @@
 
 import type { AgentTurn } from "./activity.ts";
 import type { NameSource } from "./names.ts";
+import type { SettingKey } from "./settings.ts";
 
 export type PaneId = string;
 export type AgentId = string;
@@ -409,7 +410,7 @@ export interface RemoteStatus {
   state: "off" | "connecting" | "online" | "error";
   error: string | null;
   relay: string;
-  /** How phones reach this Mac (remote.access): relay, tailscale, url. */
+  /** How phones reach this Mac (remote.access): an access mode's id (remote.modes). */
   access: string;
   /** Where phones open cmd: the web client's origin; null until it's known. */
   address: string | null;
@@ -417,6 +418,24 @@ export interface RemoteStatus {
   sessions: RemoteSession[];
   /** Pairing requests waiting for an answer (an app that opens later still asks). */
   requests: RemotePairRequest[];
+}
+
+/** A way of reaching this Mac (remote.modes): the hosted relay, Tailscale, your own URL… */
+export interface RemoteAccessMode {
+  /** Its remote.access value. */
+  id: string;
+  title: string;
+  /** SF Symbol name. */
+  icon: string;
+  description: string;
+  /** The settings it uses, in the order Settings shows them. */
+  settings: SettingKey[];
+  /** The setting `cmd remote access <id> VALUE` fills; null: it takes none. */
+  argument: SettingKey | null;
+  /** Whether it has a setup checklist (remote.checks). */
+  setup: boolean;
+  /** Its status line while it connects. */
+  connecting: string;
 }
 
 /** A step of an access mode's setup (Settings → Remote Access, `cmd remote setup`). */

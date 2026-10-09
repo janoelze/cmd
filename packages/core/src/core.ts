@@ -890,6 +890,7 @@ export class Core {
     "remote.devices": () => this.remote.devices(),
     "remote.disconnect": (p) => (this.remote.disconnect(p.id), null),
     "remote.log": (p) => this.remote.log(p.limit),
+    "remote.modes": () => this.remote.modeList(),
     "remote.checks": (p) => this.remote.checks(p.access),
     "remote.setup": () => this.remote.setup(),
     "remote.revoke": (p) => (this.remote.revoke(p.id), null),

@@ -1,25 +1,24 @@
 // Remote access in the core (docs/13-remote-access.md): follows the remote.*
-// settings, keeps one Transport (the relay link, or the direct listener behind
-// an access adapter, docs/38), issues pairing links,
-// asks the Mac to approve new devices, keeps the device list, and runs one
-// HostChannel per connected device. Sessions are served by the core like socket
-// clients, held to policy.ts. Every pairing, session, revoke, denied call and
-// failed handshake is logged (scope "remote") and kept in the remote_log table.
+// settings, keeps one Transport, made by the access mode that remote.access
+// names (the relay, Tailscale, your own URL…, docs/38; access/mode.ts), issues
+// pairing links, asks the Mac to approve new devices, keeps the device list,
+// and runs one HostChannel per connected device. It knows modes only through
+// the registry. Sessions are served by the core like socket clients, held to
+// policy.ts. Every pairing, session, revoke, denied call and failed handshake is
+// logged (scope "remote") and kept in the remote_log table.
 
 import crypto from "node:crypto";
 import path from "node:path";
-import type { CoreEvent, PaneId, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteSession, RemoteStatus, Settings } from "@cmd/protocol";
+import type { CoreEvent, PaneId, RemoteAccessMode, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteSession, RemoteStatus, SettingKey, Settings } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { encodePairing, equal, fromBase64Url, randomBytes, toBase64Url, type Bytes, type KeyPair } from "@cmd/remote-crypto";
 import type { Connection, Served } from "../connection.ts";
 import type { SettingsService } from "../settings.ts";
 import type { RemoteDeviceRecord, Store } from "../store.ts";
 import { exec as loginExec } from "../loginpath.ts";
-import { AccessAdapters, type AccessAdapter, type AdapterContext, type Check } from "./access/adapter.ts";
-import { registerBuiltinAdapters } from "./access/builtin.ts";
-import { defaultDirectPort, DirectListener } from "./direct.ts";
+import { registerBuiltinModes } from "./access/builtin.ts";
+import { AccessModes, unknownMode, type AccessMode, type Check, type ModeContext } from "./access/mode.ts";
 import { HostKeys } from "./keys.ts";
-import { RelayLink } from "./link.ts";
 import { webClientDir } from "./webroot.ts";
 import type { Transport } from "./transport.ts";
 import { HostChannel, type ChannelHost } from "./session.ts";
@@ -41,16 +40,13 @@ export interface RemoteServiceOptions {
   stateDir: string | null;
   serve: (conn: Connection) => Served;
   broadcast: (e: CoreEvent) => void;
-  /** Access adapters for direct modes; default: the built-ins. */
-  adapters?: AccessAdapters;
-  /** How adapters run tools (tests fake it); default: loginpath.ts exec. */
-  exec?: AdapterContext["exec"];
+  /** The access modes; default: the built-ins. */
+  modes?: AccessModes;
+  /** How modes run tools (tests fake it); default: loginpath.ts exec. */
+  exec?: ModeContext["exec"];
   /** The built web client the direct listener serves; default: webroot.ts. */
   webDir?: string | null;
 }
-
-/** The settings that pick and shape the transport. */
-const KEYS = ["remote.enabled", "remote.access", "remote.relay", "remote.url", "remote.port", "remote.tailscale.port"] as const;
 
 export class RemoteService {
   /** The audit log without an event log (tests). */
@@ -59,13 +55,11 @@ export class RemoteService {
   #keys: HostKeys;
   #key: KeyPair | null = null;
   #transport: Transport | null = null;
+  /** The mode that made the running transport. */
+  #mode: AccessMode | null = null;
   /** The settings the running transport was made from, to skip restarts that change nothing. */
   #config = "";
-  /** The adapter that published the direct listener, and its context, to undo it when switching away. */
-  #published: { adapter: AccessAdapter; ctx: AdapterContext; key: string } | null = null;
-  /** The adapter's enable() of the running listener, settled. */
-  #enabling: Promise<void> = Promise.resolve();
-  #adapters: AccessAdapters;
+  #modes: AccessModes;
   #channels = new Map<number, HostChannel>();
   #pairing: { psk: Bytes; scope: RemoteScope; expiresAt: number } | null = null;
   #requests = new Map<string, { request: RemotePairRequest; resolve: (scope: RemoteScope | null) => void }>();
@@ -81,124 +75,82 @@ export class RemoteService {
   constructor(o: RemoteServiceOptions) {
     this.#o = o;
     this.#keys = new HostKeys(o.stateDir ? path.join(o.stateDir, "remote") : null);
-    this.#adapters = o.adapters ?? builtinAdapters();
-    this.#unbind = o.settings.bind([...KEYS], (s) => this.#apply(s));
+    this.#modes = o.modes ?? builtinModes();
+    // Every mode's settings: a change to the running one's may restart it.
+    const keys = new Set<SettingKey>(["remote.enabled", "remote.access"]);
+    for (const m of this.#modes.all()) for (const k of m.settings) keys.add(k);
+    this.#unbind = o.settings.bind([...keys], (s) => this.#apply(s));
   }
 
-  get adapters(): AccessAdapters {
-    return this.#adapters;
+  get modes(): AccessModes {
+    return this.#modes;
+  }
+
+  /** The access modes, for Settings and the CLI (remote.modes). */
+  modeList(): RemoteAccessMode[] {
+    return this.#modes.info();
   }
 
   /** Settings changed: start, restart or stop the transport (serialized). */
-  #apply(s: Settings): void {
-    this.#applying = this.#applying.then(async () => {
-      const access = s["remote.access"];
-      const config = !s["remote.enabled"] || this.#closed ? "" : JSON.stringify(access === "relay" ? [access, s["remote.relay"].trim()] : KEYS.map((k) => s[k]));
-      if (config === this.#config && (this.#transport || !config)) return;
+  #apply(s: Settings, force = false): Promise<void> {
+    return (this.#applying = this.#applying.then(async () => {
+      const mode = this.#modes.get(s["remote.access"]) ?? null;
+      const on = s["remote.enabled"] && !this.#closed && !!mode && !mode.missing?.(s);
+      const config = on ? JSON.stringify([mode.id, mode.config ? mode.config(s) : mode.settings.map((k) => s[k])]) : "";
+      if (!force && config === this.#config && (this.#transport || !config)) return;
       this.#config = config;
+      const prev = this.#mode;
       this.#stop();
-      if (this.#published && (!config || this.#published.key !== publishKey(s, this.#localPort(s)))) await this.#unpublish();
-      if (!config) return this.#changed();
+      if (prev) await prev.stop?.(this.#context(), { restart: prev === mode && on });
+      if (!on) return this.#changed();
       try {
         const id = await this.#keys.load();
         if (this.#closed) return;
         this.#key = id.key;
-        if (access === "relay") this.#startRelay(s, id);
-        else this.#startDirect(s, access);
+        this.#mode = mode;
+        this.#use(mode.start(this.#context()));
       } catch (err) {
         log.error(`remote access could not start: ${(err as Error).message}`);
       }
       this.#changed();
-    });
+    }));
   }
 
-  #startRelay(s: Settings, id: { route: string | null; secret: string | null; relay: string | null }): void {
-    const relay = s["remote.relay"].trim();
-    if (!relay) return;
-    // A route belongs to one relay: switching relays registers a new one.
-    const same = id.relay === relay;
-    const link = new RelayLink({
-      relay,
-      client: () => this.#o.settings.settings["remote.client"],
-      route: same ? id.route : null,
-      secret: same ? id.secret : null,
-      onRegistered: (route, secret) => this.#keys.setRoute(relay, route, secret),
-    });
-    this.#use(link);
-    this.audit("enabled", null, relay);
-  }
-
-  /** The loopback listener, published by the access adapter. */
-  #startDirect(s: Settings, access: string): void {
-    const adapter = this.#adapters.get(access);
-    if (!adapter) throw new Error(`no access adapter "${access}"`);
-    const port = this.#localPort(s);
-    const route = this.#keys.directRoute(access);
-    const listener = new DirectListener({ port, route, webDir: this.#o.webDir === undefined ? webClientDir() : this.#o.webDir });
-    this.#use(listener);
-    this.audit("enabled", null, `${access} on 127.0.0.1:${port}`);
-    const ctx = this.#context(port, route);
-    const key = publishKey(s, port);
-    this.#enabling = adapter.enable(ctx).then(
-      ({ url }) => {
-        if (this.#transport === listener) {
-          this.#published = { adapter, ctx, key };
-          listener.setOrigin(url);
-        } else if (!this.#config) {
-          // Turned off while it was publishing.
-          void adapter.disable(ctx).catch(() => {});
-        }
-      },
-      (err: Error) => {
-        log.warn(`${access}: ${err.message}`);
-        if (this.#transport === listener) listener.setOrigin(null, err.message);
-      },
-    );
-  }
-
-  async #unpublish(): Promise<void> {
-    const p = this.#published;
-    this.#published = null;
-    try {
-      await p?.adapter.disable(p.ctx);
-    } catch (err) {
-      log.warn(`${p?.adapter.id}: couldn't unpublish: ${(err as Error).message}`);
-    }
-  }
-
-  #localPort(s: Settings): number {
-    return s["remote.port"] || defaultDirectPort();
-  }
-
-  #context(port: number, route: string): AdapterContext {
+  #context(): ModeContext {
+    const o = this.#o;
     return {
-      exec: this.#o.exec ?? loginExec,
-      settings: this.#o.settings.settings,
-      port,
-      route,
+      get settings() {
+        return o.settings.settings;
+      },
+      exec: o.exec ?? loginExec,
+      keys: this.#keys,
+      webDir: o.webDir === undefined ? webClientDir() : o.webDir,
       log: { info: (m) => log.info(m), warn: (m) => log.warn(m) },
+      audit: (kind, detail) => this.audit(kind, null, detail),
+      restart: () => this.#apply(o.settings.settings, true),
     };
   }
 
-  /** "Check Again": a direct mode that isn't online publishes again; then its checklist. */
+  /** "Check Again": the current mode retries what failed (a direct mode publishes again); then its checklist. */
   async setup(): Promise<Check[]> {
-    const s = this.#o.settings.settings;
-    if (s["remote.enabled"] && s["remote.access"] !== "relay" && this.#transport?.state !== "online") {
-      this.#config = ""; // forces a restart
-      this.#apply(s);
-      await this.#applying;
-      await this.#enabling;
-    }
-    return this.checks();
+    const mode = this.#modeOrThrow(this.#o.settings.settings["remote.access"]);
+    await this.#keys.load();
+    const ctx = this.#context();
+    return mode.setup ? mode.setup(ctx) : (mode.detect?.(ctx) ?? []);
   }
 
-  /** The setup checklist of an access mode (default: the current one); the relay has none. */
+  /** The setup checklist of an access mode (default: the current one); empty when it has nothing to set up. */
   async checks(access: string = this.#o.settings.settings["remote.access"]): Promise<Check[]> {
-    if (access === "relay") return [];
-    const adapter = this.#adapters.get(access);
-    if (!adapter) throw new Error(`no access mode "${access}" (try ${this.#adapters.all().map((a) => a.id).join(", ")} or relay)`);
+    const mode = this.#modeOrThrow(access);
+    if (!mode.detect) return [];
     await this.#keys.load();
-    return adapter.detect(this.#context(this.#localPort(this.#o.settings.settings), this.#keys.directRoute(access)));
+    return mode.detect(this.#context());
+  }
+
+  #modeOrThrow(id: string): AccessMode {
+    const mode = this.#modes.get(id);
+    if (!mode) throw new Error(unknownMode(id, this.#modes));
+    return mode;
   }
 
   #use(t: Transport): void {
@@ -215,6 +167,7 @@ export class RemoteService {
     for (const c of this.#channels.values()) c.close();
     this.#transport.close();
     this.#transport = null;
+    this.#mode = null;
     this.#pairing = null;
     for (const r of this.#requests.values()) r.resolve(null);
     this.audit("disabled", null, null);
@@ -227,8 +180,8 @@ export class RemoteService {
 
   status(): RemoteStatus {
     const s = this.#o.settings.settings;
-    const relay = s["remote.access"] === "relay";
-    const missing = !s["remote.enabled"] ? null : relay ? (s["remote.relay"].trim() ? null : "set a relay (remote.relay)") : this.#adapters.get(s["remote.access"]) ? null : `${s["remote.access"]} isn't available in this version`;
+    const mode = this.#modes.get(s["remote.access"]);
+    const missing = !s["remote.enabled"] ? null : mode ? (mode.missing?.(s) ?? null) : unknownMode(s["remote.access"], this.#modes);
     return {
       enabled: s["remote.enabled"],
       state: this.#transport ? this.#transport.state : missing ? "error" : s["remote.enabled"] ? "connecting" : "off",
@@ -305,10 +258,13 @@ export class RemoteService {
   pair(scope: RemoteScope): { url: string; expiresAt: number } {
     const t = this.#transport;
     const route = t?.route;
-    const relay = this.#o.settings.settings["remote.access"] === "relay";
-    if (!t || t.state !== "online" || !route || !this.#key) throw new Error(relay ? "remote access isn't connected to its relay" : `remote access isn't ready${t?.error ? `: ${t.error}` : ""}`);
+    const m = this.#mode?.messages;
+    if (!t || t.state !== "online" || !route || !this.#key) {
+      const error = t?.error ?? this.status().error;
+      throw new Error(m?.offline?.(error) ?? `Remote access isn't ready${error ? `: ${error}` : "."}`);
+    }
     const at = t.endpoint();
-    if (!at) throw new Error(relay ? "set the web client's URL first (remote.client)" : "remote access has no address yet");
+    if (!at) throw new Error(m?.noAddress ?? "Remote access has no address yet.");
     const psk = randomBytes(32);
     const expiresAt = Date.now() + PAIRING_TTL_MS;
     this.#pairing = { psk, scope, expiresAt };
@@ -463,11 +419,8 @@ export class RemoteService {
   }
 }
 
-function builtinAdapters(): AccessAdapters {
-  const a = new AccessAdapters();
-  registerBuiltinAdapters(a);
-  return a;
+function builtinModes(): AccessModes {
+  const m = new AccessModes();
+  registerBuiltinModes(m);
+  return m;
 }
-
-/** What an adapter published depends on: another value means unpublishing first. */
-const publishKey = (s: Settings, port: number) => JSON.stringify([s["remote.access"], port, s["remote.tailscale.port"]]);
