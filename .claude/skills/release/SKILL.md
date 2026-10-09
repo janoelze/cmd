@@ -36,6 +36,18 @@ DEVELOPMENT.md ("Packaging and releases") has the background. This skill is the 
    ```
    You can't skip this. `pnpm release` refuses a version without a clean section, CI's tag build
    fails on it before notarizing, and `pnpm test` lints the whole file. Prereleases are exempt.
+5. **Update the website's feature grid**, `website/public/_lib/features.json` (the product page's
+   "what it does", three to a row). Read it against the new changelog section: add a feature a
+   user would choose cmd for, fold a smaller one into the blurb it belongs to, fix blurbs and
+   numbers the release made wrong (theme count, supported agents, shortcuts), drop what was
+   removed, and take a `Beta` badge off once the feature is out of beta. Not every release
+   changes it. Keep the page's voice (`docs/15-positioning.md`): a short title, one or two plain
+   sentences. The limits (lengths, sentences, entries a multiple of 3, at most 2 badges, `Beta`
+   or `New` only) are in `website/test/features.test.ts`:
+   ```sh
+   pnpm vitest run website/test
+   ```
+   Commit it with the changelog. It deploys with the next push to master (`.github/workflows/website.yml`).
 
 ## 2. Tag
 

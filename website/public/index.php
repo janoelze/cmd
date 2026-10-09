@@ -1,10 +1,23 @@
 <?php
 // endtime-instruments.org/cmd: the product page and the list of releases from
-// GitHub (lib/releases.php). Copy follows docs/15-positioning.md.
+// GitHub (lib/releases.php). Copy follows docs/15-positioning.md; the feature
+// grid comes from _lib/features.json, which the release skill keeps current.
 
 declare(strict_types=1);
 require __DIR__ . '/_lib/releases.php';
 require __DIR__ . '/_lib/layout.php';
+
+/** The feature grid: [{title, text, badge?}]. */
+function features(): array
+{
+    return json_decode((string) file_get_contents(__DIR__ . '/_lib/features.json'), true, 8, JSON_THROW_ON_ERROR)['features'];
+}
+
+/** Escapes $s and renders its `code` spans as <code>. */
+function with_code(string $s): string
+{
+    return preg_replace('/`([^`]+)`/', '<code>$1</code>', h($s));
+}
 
 $releases = releases();
 $latest = null;
@@ -92,21 +105,9 @@ page_start('cmd for macOS — spaces that work', 'A software workbench for macOS
 <hr>
 
 <div class="features">
-  <div><h3>Spaces</h3><p>One per project, holding its terminals, agents, browser, editor and widgets. Switch Spaces, and the whole desk comes with you.</p></div>
-  <div><h3>Layouts</h3><p>Focus on one window, tile them in a grid, scroll through a strip, or spread them over an infinite canvas with a minimap.</p></div>
-  <div><h3>Agents, recognised</h3><p>Claude Code, Codex, Gemini, Aider and others are detected in any terminal, behind wrappers and sandboxes, with no setup.</p></div>
-  <div><h3>Needs you, on top</h3><p>Agents waiting for input are listed first, then working, then done. ⌃⌘J jumps to the next one that needs you.</p></div>
-  <div><h3>Terminals outlive the app</h3><p>A background process owns them. Quit, reload or update cmd, and every shell and agent is still there.</p></div>
-  <div><h3>Every session, searchable</h3><p>Full-text search over Claude Code, Codex, Qwen Code and Copilot CLI transcripts. Return resumes the session where it left off.</p></div>
-  <div><h3>Magic widgets</h3><p>Say what you want to see and an agent builds a live widget for it that follows every theme. Change it by asking. Your own API key.</p></div>
-  <div><h3>Remote access <span class="pill">Beta</span></h3><p>Pair a phone or another browser with a QR code and carry your terminals and agents with you, end-to-end encrypted.</p></div>
-  <div><h3>Web browser</h3><p>Next to your terminals, at phone, tablet and desktop sizes, for the thing you're building.</p></div>
-  <div><h3>Files and editor</h3><p>A file browser, a text editor and Markdown windows. <code>open README.md</code> in a shell opens it in the current Space.</p></div>
-  <div><h3>Calm notifications</h3><p>Waiting agents, bells and finished commands mark their window until you look, and count on the Dock badge. Nothing else interrupts.</p></div>
-  <div><h3>Keyboard first</h3><p>⌘K finds windows, commands and past sessions. Every action is a menu item, and every shortcut can be remapped.</p></div>
-  <div><h3>A CLI</h3><p><code>cmd</code> spawns, messages, waits on and stops agents, so an agent can run other agents.</p></div>
-  <div><h3>A complete terminal</h3><p>Find in scrollback, jump between prompts, inline images, copy from programs over ssh, and a check before a risky paste.</p></div>
-  <div><h3>Themes and updates</h3><p>16 themes, light and dark, following the system or not. Updates download in the background and install when you quit.</p></div>
+<?php foreach (features() as $f): ?>
+  <div><h3><?= h($f['title']) ?><?php if (isset($f['badge'])): ?> <span class="pill"><?= h($f['badge']) ?></span><?php endif ?></h3><p><?= with_code($f['text']) ?></p></div>
+<?php endforeach ?>
 </div>
 
 <h2>Releases</h2>

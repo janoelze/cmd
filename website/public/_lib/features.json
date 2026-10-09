@@ -1,0 +1,26 @@
+{
+  "$comment": "The feature grid on the product page (website/public/index.php), three to a row. Keep it in step with the app: the release skill updates it with each release, and website/test/features.test.ts holds the limits (title, text, badges). `code` in text renders as <code>.",
+  "features": [
+    { "title": "Spaces", "text": "One per project, holding its terminals, agents, browser, editor and widgets. Switch Spaces and the whole desk comes with you." },
+    { "title": "Layouts", "text": "Focus on one window, tile a grid, scroll a strip or spread out on an infinite canvas. Dock any window as a sidebar." },
+    { "title": "Agents, recognised", "text": "Claude Code, Codex, Gemini, Aider, OpenCode and more, in any terminal, even behind wrappers. Each is named after its work." },
+    { "title": "Needs you, on top", "text": "Agents waiting for input are listed first, then working, then done. ⌃⌘J jumps to the next one that needs you." },
+    { "title": "Terminals outlive the app", "text": "A background process owns them, so quitting or updating cmd ends nothing. After a reboot, agent sessions resume." },
+    { "title": "Search everything", "text": "⇧⌘F searches open windows, files, past sessions, commands and what they printed. Return resumes a session." },
+    { "title": "Your history, kept", "text": "Every agent session, command and commit, kept on this Mac with credentials redacted. You choose what's recorded." },
+    { "title": "Journal", "text": "A log of each day and week, written from your agents, commits and commands. Agents can read it with `cmd journal`." },
+    { "title": "Session summaries", "text": "Right-click an agent's title for what you asked, what was done and what changed, as Markdown to edit and paste." },
+    { "title": "Magic widgets", "text": "Say what you want to see and an agent builds a live widget for it, in your theme. Change it by asking." },
+    { "title": "Built-in widgets", "text": "Agent Activity, a Live Diff of your changes, Resources, a Timer and more, waiting in the Widget Library (⇧⌘L)." },
+    { "title": "Remote access", "badge": "Beta", "text": "Pair a phone or another browser with a QR code and take your terminals and agents with you, end-to-end encrypted." },
+    { "title": "Web browser", "text": "Next to your terminals, at phone, tablet and desktop sizes. Pages that don't load say why." },
+    { "title": "Files and editor", "text": "A file browser with git status and bookmarks, and a text editor. `open README.md` in a shell opens it in the Space." },
+    { "title": "Viewers for your files", "text": "Markdown, JSON, PDFs and SQLite databases open in windows made for them, and follow the file as it changes." },
+    { "title": "Drag and drop", "text": "Drop files on a terminal to type their paths, or anywhere else to open them. Drag files out to Finder or any app." },
+    { "title": "Calm notifications", "text": "Waiting agents, bells and finished commands mark their window until you look. One line says what an agent wants." },
+    { "title": "Keyboard first", "text": "⌘K finds windows, commands and past sessions, ⌘F finds in any window. Every shortcut is a menu item you can remap." },
+    { "title": "A CLI", "text": "`cmd` spawns, messages, waits on and stops agents, so an agent can run other agents." },
+    { "title": "A complete terminal", "text": "Find in scrollback, jump between prompts, ⌘-click paths and links, inline images, and a check before a risky paste." },
+    { "title": "Themes and updates", "text": "29 themes, light and dark, following the system or not. Updates download in the background and install when you quit." }
+  ]
+}
