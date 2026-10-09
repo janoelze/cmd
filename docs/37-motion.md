@@ -41,7 +41,16 @@ How windows, sidebars and Spaces move, why, and how it's measured. The engine is
    new one rises from the bottom; the previous Space comes the other way. It's one
    element-scoped View Transition on the stage: the old Space is a snapshot, the
    new one stays live, and the top bar and footer stay put.
-9. **Reduced motion** (macOS Reduce Motion) makes all of it instant.
+9. **Chrome comes and goes too.** Sheets, popovers, menus, toasts, the palette and its
+   pickers fade out (`usePresence` in `@cmd/ui`) and the palette glides between
+   sizes. Find bars open and close. List rows that move (the Navigator, Agent
+   Activity, notifications, toasts) glide there (`useFlip`), and new ones fade in.
+   The selection ring changes with the dimming. Browser windows fade in over the
+   well instead of flashing white.
+10. **Content is laid out once, at its final size, as a move starts**, so moves end
+   without a reflow. Terminal rows follow the window every frame; columns and the
+   PTY's size follow at most every 100 ms.
+11. **Reduced motion** (macOS Reduce Motion) makes all of it instant, and nothing loops.
 
 ## Why not View Transitions for everything
 
@@ -52,6 +61,9 @@ interrupted (⌘↩ twice) or following the pointer, and it can't hold a termina
 size through a move. Those use TileMotion, frame by frame.
 
 ## The harness
+
+How to work with it (running, reading, adding scenarios, the shapes problems take):
+the `motion` skill (`.claude/skills/motion/SKILL.md`).
 
 `e2e/motion.mjs` launches the built app on a throwaway core and sets up four
 windows (a terminal, a text window, a file browser, a Markdown preview). It then
@@ -70,6 +82,7 @@ and long animation frames. It scores:
 | drift    | content slid inside its window |
 | pops     | a window on screen appeared or vanished in one frame |
 | lag      | while the app window was resized, a window moved a frame after it did |
+| shifts   | the Layout Instability API saw an element jump outside the motion system |
 | reflows  | content resizes (informational: one or two per move is the design) |
 
 `--only a,b` runs some scenarios, `--dump` saves raw frames, and `--film` saves a
