@@ -36,7 +36,7 @@ const PAGES: Record<string, FramePage> = {
   },
   "cmd-livecode": {
     csp: `default-src 'none'; script-src cmd-livecode: data: 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; connect-src ${SAMPLE_ORIGINS}; media-src ${SAMPLE_ORIGINS} data: blob:`,
-    style: "html,body{margin:0;height:100%;overflow:hidden;background:transparent}canvas{display:block;width:100%;height:100%}",
+    style: "html,body{margin:0}",
     libs: { "strudel.js": () => import("@strudel/web/dist/index.js?raw") },
     script: livecodeJs,
   },

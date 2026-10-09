@@ -1,5 +1,6 @@
-/* Live Code: the editor, the scope strip (the frame that plays) and the prompt bar, top to bottom */
-.lc { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); }
+/* Live Code: the editor and the prompt bar; the frame that plays is there but takes no room */
+.lc { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); }
 .lc-editor { flex: 1; min-height: 0; overflow: hidden; }
-.lc-scope { flex: none; display: block; width: 100%; height: 36px; border: 0; border-top: 1px solid var(--separator); background: var(--well); }
+/* Not display: none: a hidden frame can be throttled, and this one keeps time. */
+.lc-frame { position: absolute; width: 0; height: 0; border: 0; }
 .lc-ask { flex: none; padding: 8px; border-top: 1px solid var(--separator); background: var(--bg); }

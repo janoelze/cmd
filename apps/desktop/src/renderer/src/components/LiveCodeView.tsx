@@ -1,7 +1,7 @@
 // Live Code, a built-in widget: music as code. A Strudel pattern in an editor,
-// played by a sandboxed frame (main/frames.ts, livecode/frame.js) that also
-// draws a scope of what it plays, and a prompt bar under it that asks the AI for
-// a change (core livecode/change.ts) while the music keeps playing.
+// played by an invisible sandboxed frame (main/frames.ts, livecode/frame.js), and
+// a prompt bar under it that asks the AI for a change (core livecode/change.ts)
+// while the music keeps playing.
 //
 //  - The toolbar: Play/Pause, Stop, Update (plays the code as it is now; also
 //    Ctrl+Enter and ⌘R; marked while there are edits that aren't playing), and
@@ -27,7 +27,6 @@ import { publishLevels, type Levels } from "../audio.ts";
 import { cmd } from "../bridge.ts";
 import { appTheme, minimalChange } from "../editor/theme.ts";
 import { syntax } from "../editor/syntax.ts";
-import { handleEmbedMessage } from "../embed.ts";
 import { useStoreValue } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
@@ -36,12 +35,6 @@ import "./livecode.css";
 
 /** Attempts at one request before the edit is undone. */
 const ATTEMPTS = 3;
-
-/** The scope's colours, from the app's theme (the frame can't read them). */
-function colors() {
-  const css = getComputedStyle(document.documentElement);
-  return { type: "colors", line: css.getPropertyValue("--accent").trim() || "#888", bg: css.getPropertyValue("--well").trim() || "#000" };
-}
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -197,7 +190,6 @@ export function LiveCodeView({ win }: WindowViewProps) {
 
   useEffect(() => {
     view.current?.dispatch({ effects: theme.reconfigure(appTheme(settings["font.code"], settings["font.codeSize"], dark)) });
-    post(colors());
   }, [settings, dark]);
 
   // Code changed from elsewhere (the CLI, another view): merged in place.
@@ -217,7 +209,6 @@ export function LiveCodeView({ win }: WindowViewProps) {
       if (m.type === "levels" && m.t && m.l && m.r) levels.current = { t: m.t, l: m.l, r: m.r };
       else if (m.type === "ready") {
         if (Array.isArray(m.sounds)) sounds.current = m.sounds.filter((s): s is string => typeof s === "string");
-        post(colors());
         markReady.current();
       } else if (m.type === "evaluated" && typeof m.id === "number") {
         evals.current.get(m.id)?.(m.ok ? { ok: true } : { ok: false, error: m.error ?? "Didn't play" });
@@ -229,7 +220,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
         setMode(next);
         if (m.error) status(m.error, "error");
         else status(next === "playing" ? "Playing" : next === "paused" ? "Paused" : "Stopped", next);
-      } else handleEmbedMessage(frame.current!, m);
+      }
     };
     window.addEventListener("message", onMessage);
     return () => {
@@ -272,7 +263,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
         />
       </WindowToolbar>
       <div className="lc-editor" ref={host} />
-      <iframe ref={frame} className="lc-scope" data-embed sandbox="allow-scripts" src="cmd-livecode://frame/" title="Scope" />
+      <iframe ref={frame} className="lc-frame" sandbox="allow-scripts" src="cmd-livecode://frame/" title="Player" aria-hidden tabIndex={-1} />
       <div className="lc-ask">
         <AiField
           ref={ask}
