@@ -9,6 +9,7 @@ A bare `.s("sawtooth")` sounds like a test tone. Every part should be a designed
 - Space: reverb and delay on pads, chords, leads, stabs and percussion, not on kick or sub. Give long reverbs their own orbit (`.orbit(3).room(.7).roomsize(6)`), so the drums stay dry.
 - Width: hats and percussion `.pan(sine.range(.3, .7).fast(2))` or `.jux(rev)`; pads `.spread(.8)` with `supersaw`; leads `.chorus(.4)`.
 - Glue: drums together through `.compressor("-18:4:6:.005:.1")`; a touch of `.distort(.2)`-`.distort(.6)` on bass and drums adds weight; `.coarse(4)` or `.crush(6)` for lo-fi grit.
+- A moving value (`sine`, `saw`, `perlin`) is read once per note, when it starts: on a note that lasts a bar the filter jumps once a bar. For a smooth sweep, use shorter notes (`*8`) or an envelope (`lpenv`, `lpattack`).
 - Movement: filters that move (`.lpf(sine.range(400, 2000).slow(8))`, `.lpenv(2)`), velocity variety on hats (`.gain(".5 .3 .4 .3")`), occasional variations (`.sometimesBy(.15, x => x.ply(2))`).
 
 ## Patches
@@ -70,7 +71,7 @@ A break as the whole drum kit: one bar, fitted, sliced in order with one variati
 s("breaks165").fit().slice(8, "0 1 2 3 4 5 <6 2> 7").cut(1).hpf(120).compressor("-20:4:6:.003:.08").distort(.2).gain(.8)
 ```
 
-Riser and impact for transitions: filtered noise that opens over four bars.
+Riser for transitions: noise in short notes, so its filter and level climb smoothly over four bars (a moving value is read once per note: one long note would only step once a bar).
 ```
-s("white").lpf(saw.range(200, 8000).slow(4)).hpf(400).decay(4).sustain(1).gain(saw.range(0, .25).slow(4)).room(.6)
+s("white*8").lpf(saw.range(300, 8000).slow(4)).hpf(250).decay(.3).sustain(1).gain(saw.range(.05, .3).slow(4)).room(.6)
 ```

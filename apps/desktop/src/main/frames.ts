@@ -12,6 +12,7 @@
 
 import visualizerJs from "../visualizer/frame.js?raw";
 import livecodeJs from "../livecode/frame.js?raw";
+import sampleMaps from "../livecode/sample-maps.json" with { type: "json" };
 
 interface FramePage {
   csp: string;
@@ -21,8 +22,11 @@ interface FramePage {
   script: string;
 }
 
-/** Where a Live Code frame may fetch samples from (livecode/frame.js prebake). */
-const SAMPLE_ORIGINS = "https://raw.githubusercontent.com";
+/**
+ * Where a Live Code frame may fetch samples from: the origins of its sample maps
+ * (livecode/sample-maps.json) and of the samples they list, all on GitHub today.
+ */
+const SAMPLE_ORIGINS = [...new Set(sampleMaps.maps.map((m) => new URL(m.url).origin))].join(" ");
 
 const PAGES: Record<string, FramePage> = {
   "cmd-visualizer": {
@@ -38,7 +42,7 @@ const PAGES: Record<string, FramePage> = {
     csp: `default-src 'none'; script-src cmd-livecode: data: 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; connect-src ${SAMPLE_ORIGINS}; media-src ${SAMPLE_ORIGINS} data: blob:`,
     style: "html,body{margin:0}",
     libs: { "strudel.js": () => import("@strudel/web/dist/index.js?raw") },
-    script: livecodeJs,
+    script: `window.SAMPLE_MAPS = ${JSON.stringify(sampleMaps.maps)};\n${livecodeJs}`,
   },
 };
 

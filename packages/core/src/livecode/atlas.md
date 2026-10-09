@@ -1,6 +1,6 @@
 # Sound atlas
 
-Every loaded sample sound, measured from its audio (scripts/livecode-atlas.mjs): `name (samples): what it is`. Lengths are of the first sample; `n` picks another. Drum machines are banks of short hits: `s("bd sd").bank("RolandTR909")`.
+Every loaded sample sound, measured from its audio (pnpm livecode build): `name (samples): what it is`. Lengths are of the first sample; `n` picks another. Drum machines are banks of short hits: `s("bd sd").bank("RolandTR909")`.
 
 ## Drum machine banks
 - ajkpercusyn: bd deep, cb(2), ht, sd
