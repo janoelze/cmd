@@ -171,10 +171,9 @@ const STEP_LABEL: Record<StepState, string> = { done: "Done", failed: "Failed", 
 /**
  * A setup checklist: steps in order, titled as things to do. Done steps are one
  * compact line; the first that isn't done is the current one, with what to do
- * and its fix; the steps after it wait, dimmed. `footer` (Check Again) sits in
- * the last row, lined up with the steps' buttons.
+ * and its fix (and a way to check it again); the steps after it wait, dimmed.
  */
-export function Checklist({ steps, footer }: { steps: readonly Step[]; footer?: ReactNode }) {
+export function Checklist({ steps }: { steps: readonly Step[] }) {
   const current = steps.findIndex((s) => s.state !== "done");
   return (
     <div className="ui-group">
@@ -196,7 +195,6 @@ export function Checklist({ steps, footer }: { steps: readonly Step[]; footer?: 
             </li>
           );
         })}
-        {footer && <li className="ui-row ui-step-footer" data-compact="">{footer}</li>}
       </ol>
     </div>
   );

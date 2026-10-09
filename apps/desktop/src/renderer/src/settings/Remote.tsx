@@ -178,6 +178,13 @@ function useChecks(access: string | null, state: RemoteStatus["state"] | undefin
     );
   };
   useEffect(() => setChecks(null), [access]);
+  // Back from the browser (an admin console, a download): look again.
+  useEffect(() => {
+    if (!access) return;
+    const look = () => run("remote.checks", access);
+    window.addEventListener("focus", look);
+    return () => window.removeEventListener("focus", look);
+  }, [access]);
   useEffect(() => {
     if (!access) return void ++ask.current;
     const timer = setTimeout(() => run("remote.checks", access), 400);
@@ -193,9 +200,11 @@ export function SetupWait() {
 
 /** The setup checklist of a direct access mode (docs/38, "Experience"); stories in Remote.story.tsx. */
 export function Setup({ access, checks, error, busy, again }: { access: string } & ChecksState) {
-  const footer = (
-    <Button busy={busy && !!checks} disabled={busy} onClick={again}>
-      Check Again
+  const current = checks?.findIndex((c) => c.state !== "ok") ?? -1;
+  /** On the step that needs you: what checking again does there. */
+  const againButton = (c: RemoteAccessCheck, label = c.id === "published" && c.state === "todo" ? "Publish" : c.state === "error" ? "Try Again" : "Check Again") => (
+    <Button variant={c.link ? "ghost" : "default"} busy={busy} disabled={busy} onClick={again}>
+      {label}
     </Button>
   );
   return (
@@ -205,7 +214,11 @@ export function Setup({ access, checks, error, busy, again }: { access: string }
           <div className="rm-card">
             <Callout tone="danger">Couldn't check the setup: {error}</Callout>
           </div>
-          <div className="rm-actions">{footer}</div>
+          <div className="rm-actions">
+            <Button busy={busy} disabled={busy} onClick={again}>
+              Check Again
+            </Button>
+          </div>
         </>
       ) : !checks ? (
         <div className="rm-card rm-wait rm-checking">
@@ -213,12 +226,16 @@ export function Setup({ access, checks, error, busy, again }: { access: string }
         </div>
       ) : (
         <Checklist
-          footer={footer}
-          steps={checks.map((c) => ({
+          steps={checks.map((c, i) => ({
             title: c.title,
             state: STEP_STATE[c.state],
             detail: c.detail,
-            action: c.link ? <Button onClick={() => cmd.openPath(c.link!)}>{linkLabel(c.link)}</Button> : undefined,
+            action: (c.link || i === current) && (
+              <>
+                {c.link && <Button onClick={() => cmd.openPath(c.link!)}>{linkLabel(c.link)}</Button>}
+                {i === current && againButton(c)}
+              </>
+            ),
           }))}
         />
       )}

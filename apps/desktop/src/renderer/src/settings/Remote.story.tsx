@@ -75,7 +75,7 @@ export const PortTaken = () => (
 
 export const CheckingAgain = () => (
   <Page>
-    <Setup access="tailscale" {...state(tailscale({ id: "published", detail: "Not published yet. Check Again to retry." }), { busy: true })} />
+    <Setup access="tailscale" {...state(tailscale({ id: "published", detail: "Not published yet." }), { busy: true })} />
   </Page>
 );
 
