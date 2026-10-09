@@ -2,6 +2,7 @@
 // status --json` as the CLI prints them (trimmed to the fields it reads),
 // through a fake exec: which checks it reports, what it runs to publish, and
 // that it never touches what isn't its own.
+import type http from "node:http";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, type Settings } from "@cmd/protocol";
 import type { ExecResult } from "../src/loginpath.ts";
@@ -64,7 +65,7 @@ describe("tailscale adapter", () => {
     const { adapter, ctx } = fake({ installed: false });
     const checks = await adapter.detect(ctx);
     expect(states(checks)).toEqual(["installed:todo", "running:todo", "magicdns:todo", "https:todo", "published:todo", "reachable:todo"]);
-    expect(checks[0]).toMatchObject({ link: DOWNLOAD_URL });
+    expect(checks[0]).toMatchObject({ link: DOWNLOAD_URL, linkLabel: "Download" });
     await expect(adapter.enable(ctx)).rejects.toThrow(/Install Tailscale/);
   });
 
@@ -78,7 +79,7 @@ describe("tailscale adapter", () => {
     const down = fake({ status: { code: 1, stdout: "", stderr: "failed to connect to local Tailscale service; is Tailscale running?\n", error: null } });
     expect((await down.adapter.detect(down.ctx))[1]).toMatchObject({ id: "running", state: "todo", detail: "Tailscale isn't running. Open it and connect." });
     const login = fake({ status: ok(status({ BackendState: "NeedsLogin", AuthURL: "https://login.tailscale.com/a/abc" })) });
-    expect((await login.adapter.detect(login.ctx))[1]).toMatchObject({ detail: "Log in to Tailscale.", link: "https://login.tailscale.com/a/abc" });
+    expect((await login.adapter.detect(login.ctx))[1]).toMatchObject({ detail: "Log in to Tailscale.", link: "https://login.tailscale.com/a/abc", linkLabel: "Log In" });
     await expect(login.adapter.enable(login.ctx)).rejects.toThrow(/Log in/);
     const app = fake({ status: ok(status({ BackendState: "NeedsLogin" })) });
     expect((await app.adapter.detect(app.ctx))[1]).toMatchObject({ detail: "Open Tailscale and log in." });
@@ -97,7 +98,7 @@ describe("tailscale adapter", () => {
     const certs = fake({ status: ok(status({ CertDomains: null })) });
     const checks = await certs.adapter.detect(certs.ctx);
     expect(states(checks).slice(0, 4)).toEqual(["installed:ok", "running:ok", "magicdns:ok", "https:todo"]);
-    expect(checks[3]!.link).toMatch(/admin\/dns/);
+    expect(checks[3]).toMatchObject({ link: expect.stringMatching(/admin\/dns/), linkLabel: "Open Admin Console" });
     await expect(certs.adapter.enable(certs.ctx)).rejects.toThrow(/Turn on HTTPS/);
   });
 
@@ -142,7 +143,21 @@ describe("tailscale adapter", () => {
 
   it("says to turn remote access on when nothing is published yet", async () => {
     const { adapter, ctx } = fake({ selected: false });
-    expect((await adapter.detect(ctx)).at(-2)).toMatchObject({ id: "published", state: "todo", detail: "Turn on remote access through Tailscale to publish it." });
+    const published = (await adapter.detect(ctx)).at(-2);
+    expect(published).toMatchObject({ id: "published", state: "todo", detail: "Turn on remote access through Tailscale to publish it." });
+    expect(published).not.toHaveProperty("action");
+  });
+
+  it("names the retry Publish while it's the mode in use and not published", async () => {
+    const { adapter, ctx } = fake();
+    expect((await adapter.detect(ctx)).at(-2)).toMatchObject({ id: "published", state: "todo", detail: "Not published yet.", action: "Publish" });
+  });
+
+  it("says who's connecting from the header Serve sets", () => {
+    const { adapter } = fake();
+    const req = (headers: Record<string, string>) => ({ headers }) as unknown as http.IncomingMessage;
+    expect(adapter.identify!(req({ "tailscale-user-login": "lukas@github" }))).toBe("lukas@github");
+    expect(adapter.identify!(req({}))).toBeNull();
   });
 
   it("unpublishes only its own entry, with off, never reset", async () => {

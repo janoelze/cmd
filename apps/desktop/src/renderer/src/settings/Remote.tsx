@@ -60,14 +60,6 @@ const day = (t: number) => new Date(t).toLocaleDateString([], { month: "short", 
 
 const STEP_STATE: Record<RemoteAccessCheck["state"], StepState> = { ok: "done", todo: "todo", error: "failed" };
 
-/** The button for a check's link, named after where it goes. */
-function linkLabel(link: string): string {
-  if (/download/i.test(link)) return "Download";
-  if (/\/admin\b/.test(link)) return "Open Admin Console";
-  if (/login\.tailscale\.com\/a\//.test(link)) return "Log In";
-  return "Open";
-}
-
 export function Remote({ status, settings, pair, row }: { status: RemoteStatus | null; settings: Settings; pair: boolean; row: (k: SettingKey) => ReactNode }) {
   const enabled = settings["remote.enabled"];
   const [showPair, setShowPair] = useState(pair);
@@ -205,10 +197,10 @@ export function SetupWait() {
 /** The setup checklist of an access mode (docs/38, "Experience"), titled after it; stories in Remote.story.tsx. */
 export function Setup({ title, checks, error, busy, again }: { title: string } & ChecksState) {
   const current = checks?.findIndex((c) => c.state !== "ok") ?? -1;
-  /** On the step that needs you: what checking again does there. */
-  const againButton = (c: RemoteAccessCheck, label = c.id === "published" && c.state === "todo" ? "Publish" : c.state === "error" ? "Try Again" : "Check Again") => (
+  /** On the step that needs you: what checking again does there, in the check's words. */
+  const againButton = (c: RemoteAccessCheck) => (
     <Button variant={c.link ? "ghost" : "default"} busy={busy} disabled={busy} onClick={again}>
-      {label}
+      {c.action ?? (c.state === "error" ? "Try Again" : "Check Again")}
     </Button>
   );
   return (
@@ -236,7 +228,7 @@ export function Setup({ title, checks, error, busy, again }: { title: string } &
             detail: c.detail,
             action: (c.link || i === current) && (
               <>
-                {c.link && <Button onClick={() => cmd.openPath(c.link!)}>{linkLabel(c.link)}</Button>}
+                {c.link && <Button onClick={() => cmd.openPath(c.link!)}>{c.linkLabel ?? "Open"}</Button>}
                 {i === current && againButton(c)}
               </>
             ),
@@ -281,7 +273,7 @@ function PairCode({ status, line, onDone }: { status: RemoteStatus | null; line:
         <Text tone="dim">{line}</Text>
       </Stack>
     );
-  if (error) return <Callout tone="danger">{/client/.test(error) ? "Set the web client's address under Connection first." : error}</Callout>;
+  if (error) return <Callout tone="danger">{error}</Callout>;
   const left = code ? Math.max(0, Math.round((code.expiresAt - 60_000 - now) / 1000)) : 0;
   return (
     <Stack pad="xl">

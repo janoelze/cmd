@@ -48,7 +48,7 @@ export const Checking = () => (
 
 export const NotInstalled = () => (
   <Page>
-    <Setup title="Tailscale" {...state(tailscale({ id: "installed", detail: "Get the Mac app from tailscale.com.", link: "https://tailscale.com/download/mac" }))} />
+    <Setup title="Tailscale" {...state(tailscale({ id: "installed", detail: "Get the Mac app from tailscale.com.", link: "https://tailscale.com/download/mac", linkLabel: "Download" }))} />
   </Page>
 );
 
@@ -62,7 +62,7 @@ export const HttpsOff = () => (
   <Page>
     <Setup
       title="Tailscale"
-      {...state(tailscale({ id: "https", detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS }))}
+      {...state(tailscale({ id: "https", detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS, linkLabel: "Open Admin Console" }))}
     />
   </Page>
 );
@@ -75,7 +75,7 @@ export const PortTaken = () => (
 
 export const CheckingAgain = () => (
   <Page>
-    <Setup title="Tailscale" {...state(tailscale({ id: "published", detail: "Not published yet." }), { busy: true })} />
+    <Setup title="Tailscale" {...state(tailscale({ id: "published", detail: "Not published yet.", action: "Publish" }), { busy: true })} />
   </Page>
 );
 
@@ -122,6 +122,6 @@ export const BeforeSetup = () => (
     <FormSection title="Pair a Device">
       <SetupWait />
     </FormSection>
-    <Setup title="Tailscale" {...state(tailscale({ id: "https", detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS }))} />
+    <Setup title="Tailscale" {...state(tailscale({ id: "https", detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS, linkLabel: "Open Admin Console" }))} />
   </Page>
 );

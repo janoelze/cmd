@@ -51,7 +51,7 @@ export function publishedMode(a: AccessAdapter): AccessMode<Publication> {
     start(ctx, carried): AccessRun<Publication> {
       const port = localPort(ctx.settings);
       const route = ctx.keys.directRoute(a.id);
-      const l = new DirectListener({ port, route, webDir: ctx.webDir });
+      const l = new DirectListener({ port, route, webDir: ctx.webDir, identify: a.identify?.bind(a) });
       ctx.audit("enabled", `${a.id} on 127.0.0.1:${port}`);
       const actx = context(ctx, port, route);
       const key = publishKey(ctx.settings);

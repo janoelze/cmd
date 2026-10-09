@@ -45,7 +45,7 @@ export const urlAdapter: AccessAdapter = {
     if (page) return [...checks, { id: "socket", title: "Forward WebSockets", state: "todo" }];
     // No route until the mode first ran, and checks don't make one. A made-up route
     // would only get the listener's 403, which a proxy can answer just the same: no proof.
-    if (!ctx.route) return [...checks, { id: "socket", title: "Forward WebSockets", state: "todo", detail: "Turn on remote access through your URL to test this." }];
+    if (!ctx.route) return [...checks, { id: "socket", title: "Forward WebSockets", state: "todo", detail: "Turn on remote access through this URL to test it." }];
     const socket = await probeSocket(o.url, ctx.route);
     checks.push({ id: "socket", title: "Forward WebSockets", state: socket ? "error" : "ok", detail: socket ?? undefined });
     return checks;

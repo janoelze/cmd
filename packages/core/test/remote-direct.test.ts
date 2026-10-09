@@ -1,6 +1,7 @@
 // Direct remote access end to end (docs/38): a core with remote.access "url",
 // its loopback listener serving a stand-in web client, and a device speaking
-// Noise over a real WebSocket to it, as a proxy in front would pass it on.
+// Noise over a real WebSocket to it, as a proxy in front would pass it on; and
+// in tailscale mode (a faked CLI), who Serve says is connecting.
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -13,6 +14,10 @@ import { decodePairing, generateKeyPair, openDeviceSession, type Bytes, type Key
 import { publicOrigin } from "../src/remote/access/url.ts";
 import { defaultDirectPort, DirectListener, type DirectListenerOptions } from "../src/remote/direct.ts";
 import { Core } from "../src/core.ts";
+import type { ModeContext } from "../src/remote/access/mode.ts";
+import { RemoteService } from "../src/remote/service.ts";
+import { SettingsService } from "../src/settings.ts";
+import { Store } from "../src/store.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
 
@@ -57,13 +62,13 @@ afterAll(async () => {
   rmTemp(dir);
 });
 
-/** A device's WebSocket as the proxy forwards it: Origin and X-Forwarded-For set. */
-function socket(route: string, origin = ORIGIN): WebSocket {
-  return new WebSocket(`ws://127.0.0.1:${port}/r/${route}`, { origin, headers: { "x-forwarded-for": "100.64.0.7" } });
+/** A device's WebSocket as the proxy forwards it: Origin and X-Forwarded-For set, and a Tailscale header it didn't strip. */
+function socket(route: string, origin = ORIGIN, p = port): WebSocket {
+  return new WebSocket(`ws://127.0.0.1:${p}/r/${route}`, { origin, headers: { "x-forwarded-for": "100.64.0.7", "tailscale-user-login": "me@example.com" } });
 }
 
-async function connect(route: string, o: { hostKey: Bytes; device: KeyPair; psk?: Bytes }) {
-  const ws = socket(route);
+async function connect(route: string, o: { hostKey: Bytes; device: KeyPair; psk?: Bytes }, origin = ORIGIN, p = port) {
+  const ws = socket(route, origin, p);
   ws.binaryType = "arraybuffer";
   let closed = false;
   await new Promise((r, j) => (ws.once("open", r), ws.once("error", j)));
@@ -109,7 +114,7 @@ describe("direct remote access", () => {
     const url = new URL((await core.call("remote.pair", { scope: "control" })).url);
     expect(url.origin).toBe(ORIGIN);
     const link = decodePairing(url.hash);
-    expect(link.relay).toBe("wss://mac.example.test");
+    expect(link.socket).toBe("wss://mac.example.test");
     ({ hostKey, route } = link);
     device = await generateKeyPair();
     const c = await connect(route, { hostKey, device, psk: link.psk });
@@ -128,7 +133,8 @@ describe("direct remote access", () => {
     expect((await client.call("remote.bootstrap", {})).device).toMatchObject({ scope: "control" });
     const pane = await client.call("pane.create", {});
     expect(core.panes.get(pane.id)).toBeTruthy();
-    expect(core.remote.status().sessions).toMatchObject([{ name: "Tailnet Phone", ip: "100.64.0.7" }]);
+    // Only a mode whose publisher sets the header says who it is: not your own URL.
+    expect(core.remote.status().sessions).toMatchObject([{ name: "Tailnet Phone", ip: "100.64.0.7", user: null }]);
     c.ws.close();
     await expect.poll(() => core.remote.status().sessions).toEqual([]);
   });
@@ -158,6 +164,50 @@ describe("direct remote access", () => {
     expect((await core.call("remote.checks", { access: "url" })).map((c) => `${c.id}:${c.state}`)).toEqual(["url:todo", "page:todo", "socket:todo"]);
     expect(await core.call("remote.checks", { access: "relay" })).toEqual([]);
     await expect(core.call("remote.checks", { access: "nope" })).rejects.toThrow("No access mode “nope”. Pick one of relay, tailscale, url.");
+  });
+});
+
+describe("who's connecting, in tailscale mode", () => {
+  const HOST = "mac.tail1234.ts.net";
+  let svc: RemoteService;
+  const asks: RemotePairRequest[] = [];
+
+  afterAll(() => svc?.close());
+
+  it("comes from the Tailscale-User-Login header Serve sets", async () => {
+    const local = await freePort();
+    const ok = (v: unknown) => ({ code: 0, stdout: JSON.stringify(v), stderr: "", error: null });
+    const settings = new SettingsService(null);
+    settings.set("remote.access", "tailscale");
+    settings.set("remote.port", local);
+    // Tailscale is up, and our entry is already published: enable() only reads.
+    const exec: ModeContext["exec"] = async (_cmd, args) =>
+      args.join(" ") === "status --json"
+        ? ok({ BackendState: "Running", Self: { DNSName: `${HOST}.` }, CurrentTailnet: { MagicDNSEnabled: true }, CertDomains: [HOST] })
+        : args.join(" ") === "serve status --json"
+          ? ok({ TCP: { 8443: { HTTPS: true } }, Web: { [`${HOST}:8443`]: { Handlers: { "/": { Proxy: `http://127.0.0.1:${local}` } } } } })
+          : ok({});
+    svc = new RemoteService({
+      store: new Store(":memory:"),
+      settings,
+      stateDir: null,
+      serve: () => ({ receive: () => {}, closed: () => {} }),
+      broadcast: (e) => void (e.type === "remote.pairRequest" && asks.push(e.request)),
+      exec,
+      webDir: null,
+    });
+    settings.set("remote.enabled", true);
+    await svc.ready();
+    await expect.poll(() => svc.status().state).toBe("online");
+    const origin = `https://${HOST}:8443`;
+    expect(svc.status().address).toBe(origin);
+    const link = decodePairing(new URL(svc.pair("view").url).hash);
+    const c = await connect(link.route, { hostKey: link.hostKey, device: await generateKeyPair(), psk: link.psk }, origin, local);
+    await expect.poll(() => asks.length).toBe(1);
+    svc.approve(asks[0]!.requestId, true);
+    await c.session;
+    await expect.poll(() => svc.sessions()).toMatchObject([{ user: "me@example.com", ip: "100.64.0.7" }]);
+    c.ws.close();
   });
 });
 

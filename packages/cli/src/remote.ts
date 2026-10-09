@@ -13,7 +13,7 @@ type Client = Connection["client"];
 export const REMOTE_HELP = `  remote [status|on|off]              remote access from a phone or browser (end-to-end encrypted):
                                       how phones reach this Mac, who is connected and what they're watching
   remote modes                        the ways phones can reach this Mac: hosted relay, Tailscale, your own URL…
-  remote access [MODE [VALUE]]        how phones reach this Mac (a URL for url)
+  remote access [MODE [VALUE]]        how phones reach this Mac (VALUE: the address a mode asks for)
   remote setup [MODE] [--json]        check what that mode needs (default: the one in use)
   remote pair                         a one-time QR code; approve the device here
   remote devices | log                paired devices | recent activity
@@ -26,9 +26,9 @@ export const modeTitle = (modes: RemoteAccessMode[], id: string) => modes.find((
 
 const REMOTE_STATE: Record<RemoteStatus["state"], string> = { off: "off", connecting: "connecting…", online: "ready", error: "can't connect" };
 
-/** The first line of `cmd remote`: state, then how phones reach this Mac (the relay's URL in relay mode). */
+/** The first line of `cmd remote`: state, then how phones reach this Mac: the mode, and where they open cmd once that's known. */
 export function statusLine(st: RemoteStatus, modes: RemoteAccessMode[]): string {
-  const where = st.access === "relay" ? `${modeTitle(modes, "relay")} ${st.relay}` : [modeTitle(modes, st.access), st.address].filter(Boolean).join("  ·  ");
+  const where = [modeTitle(modes, st.access), st.address].filter(Boolean).join("  ·  ");
   return `Remote access: ${REMOTE_STATE[st.state]}${st.error ? ` (${st.error})` : ""}  ·  ${where}`;
 }
 
