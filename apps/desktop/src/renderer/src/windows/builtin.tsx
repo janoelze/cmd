@@ -27,6 +27,7 @@ import "./markdown.tsx"; // registers the "markdown" view
 import "./json.tsx"; // registers the "json" view
 import "./sqlite.tsx"; // registers the "sqlite" view
 import "./visualizer.tsx"; // registers the "visualizer" view
+import "./image.tsx"; // registers the "image" view
 import { previewFor, togglePreview } from "./preview.ts";
 
 /** Right-click → Device Size: show the page at a phone's, tablet's or desktop's size. */

@@ -236,6 +236,43 @@ export const magicType: WindowType<{ prompt: string; phase: string; widgetId?: s
   },
 };
 
+/** What the Image window shows; the Browser keeps them too, for `open.handlers` ("png: browser"). */
+export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "ico", "svg"];
+
+/**
+ * An image (docs/38-image-viewer.md): fit to the window or zoomed, with the
+ * folder's other images a key away. `zoom`: "fit", or device pixels per image
+ * pixel (1 = actual size).
+ */
+export const imageType: WindowType<{ path: string; zoom?: "fit" | number }> = {
+  kind: "image",
+  title: "Image",
+  icon: "photo",
+  // The browser matches the same extensions; priority makes images open here.
+  opens: { extensions: IMAGE_EXTENSIONS, priority: 10 },
+  fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
+  create(input) {
+    const file = path.resolve(expandHome(str(input.path) ?? ""));
+    if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
+    const zoom = imageZoom(input.zoom);
+    return { state: { path: file, ...(zoom !== undefined ? { zoom } : {}) }, title: path.basename(file) };
+  },
+  update(state, patch) {
+    const next = { ...state };
+    const p = str(patch.path);
+    if (p !== undefined) {
+      const file = path.resolve(expandHome(p));
+      if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
+      next.path = file;
+    }
+    const zoom = imageZoom(patch.zoom);
+    if (zoom !== undefined) next.zoom = zoom;
+    return { state: next, title: path.basename(next.path) };
+  },
+};
+/** "fit", or a scale from 1% to 6400%. */
+const imageZoom = (v: unknown): "fit" | number | undefined => (v === "fit" ? "fit" : typeof v === "number" && Number.isFinite(v) ? Math.min(64, Math.max(0.01, v)) : undefined);
+
 /**
  * A SQLite database as its tables (docs/36-sqlite-viewer.md): browse rows, see
  * the schema, run a read-only statement. Opening a `-wal`, `-shm` or `-journal`
@@ -555,6 +592,7 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(jsonType);
   types.register(pdfType);
   types.register(sqliteType);
+  types.register(imageType);
   types.register(magicType);
   types.register(agentsType);
   types.register(diffType);

@@ -26,7 +26,8 @@ export function isPreview(kind: string): boolean {
 /** ⌘E: preview ⇄ text editor, same window. False: not a window that switches. */
 export function togglePreview(win: { id: string; kind: string; state: Record<string, unknown> }): boolean {
   const p = typeof win.state.path === "string" ? win.state.path : "";
-  const target = isPreview(win.kind) ? "text" : win.kind === "text" && p ? previewFor(p) : undefined;
+  // A preview flips to text only for a file it previews (an Image window on a .png has no text side).
+  const target = isPreview(win.kind) ? (previewFor(p) === win.kind ? "text" : undefined) : win.kind === "text" && p ? previewFor(p) : undefined;
   if (!target) return false;
   const line = windowActions(win.id)?.line?.();
   const reveal = line ? { line, column: null, text: null, at: Date.now() } : undefined;

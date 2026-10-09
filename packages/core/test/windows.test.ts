@@ -52,7 +52,8 @@ describe("window type registry", () => {
   it("routes folders, web/images, PDFs, text and URLs to the built-in types", () => {
     expect(kindFor(dir)).toBe("files");
     expect(kindFor(file("page.html", "<p>hi</p>"))).toBe("browser");
-    expect(kindFor(file("shot.PNG", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0])))).toBe("browser");
+    expect(kindFor(file("shot.PNG", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0])))).toBe("image");
+    expect(kindFor(path.join(dir, "shot.PNG"), { png: "browser" })).toBe("browser");
     expect(kindFor(file("notes.md", "# hi"))).toBe("markdown");
     expect(kindFor(file("data.json", "{}"))).toBe("json");
     expect(kindFor(file("data.json", "{}"), { json: "text" })).toBe("text");
