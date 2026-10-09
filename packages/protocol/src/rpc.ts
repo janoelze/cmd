@@ -313,6 +313,14 @@ export interface Methods {
   "magic.state": { params: { id: WindowId; key: string; value: unknown }; result: null };
   /** Ask the agent to fix what is wrong (the data's last error, the checks' problems). */
   "magic.fix": { params: { id: WindowId }; result: null };
+  /**
+   * Live Code's AI: the new code for a request about the code playing now. `sounds`: what the
+   * window has loaded; `failed`: the last attempt and why it didn't play (the window retries).
+   */
+  "livecode.change": {
+    params: { code: string; request: string; sounds?: string[]; failed?: { code: string; error: string } };
+    result: { code: string; summary: string };
+  };
   /** Mute a widget: its notifications only mark the window, without a system notification or sound. */
   "magic.mute": { params: { id: WindowId; muted: boolean }; result: null };
   /** What widgets run on: Deno, the sandbox, the previewer. */

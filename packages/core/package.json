@@ -21,5 +21,8 @@
     "@xterm/headless": "^6.0.0",
     "ai": "^7.0.127",
     "node-pty": "1.2.0-beta.15"
+  },
+  "devDependencies": {
+    "@strudel/reference": "1.2.2"
   }
 }

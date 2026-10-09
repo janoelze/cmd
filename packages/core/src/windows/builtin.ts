@@ -465,6 +465,34 @@ export const visualizerType: WindowType<VisualizerState> = {
   },
 };
 
+/** What a new Live Code window starts with: something that plays, to change. */
+export const LIVECODE_STARTER = `// Ctrl+Enter or ⌘R plays, ⌘. stops, ⌘L asks for a change.
+setcpm(120 / 4)
+
+stack(
+  s("bd*4").bank("RolandTR909"),
+  s("~ cp").bank("RolandTR909"),
+  s("hh*8").bank("RolandTR909").gain(.5),
+  note("<c2 c2 eb2 g1>*8").s("sawtooth").lpf(700).decay(.15).sustain(0),
+)
+`;
+
+/** Music as code: a Strudel pattern (renderer components/LiveCodeView.tsx) that plays as it changes. */
+export const livecodeType: WindowType<{ code: string }> = {
+  kind: "livecode",
+  title: "Live Code",
+  icon: "music.note",
+  role: "widget",
+  description: "Make music with code, and ask for changes as it plays.",
+  create(input) {
+    return { state: { code: typeof input.code === "string" ? input.code : LIVECODE_STARTER }, title: "Live Code" };
+  },
+  /** Patches: { code }. */
+  update(state, patch) {
+    return { state: typeof patch.code === "string" ? { ...state, code: patch.code } : state };
+  },
+};
+
 /** What changed in a repository, under a folder (default: the Space's root), as it changes. */
 export const diffType: WindowType<{ path: string }> = {
   kind: "diff",
@@ -605,4 +633,5 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(eventsType);
   types.register(timerType);
   types.register(visualizerType);
+  types.register(livecodeType);
 }

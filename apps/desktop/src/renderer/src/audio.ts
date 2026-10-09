@@ -3,10 +3,12 @@
 //   "none"        silence
 //   "mic"         the default input (macOS asks once; NSMicrophoneUsageDescription)
 //   "system"      what the Mac plays (getDisplayMedia with loopback audio, main/index.ts)
-//   "window:<id>" a window that makes sound (Live Code) and publishes its output here
+//   "window:<id>" a window that makes sound (Live Code) and publishes its levels here
 // Microphone and system audio are opened once, while a Visualizer listens, and
 // never played back. A tap reads 1024 samples per channel each frame, the
-// shape butterchurn's audioLevels takes. Windows in other Spaces are other
+// shape butterchurn's audioLevels takes. A window's sound is made in its own
+// sandboxed frame, so it publishes those samples, not an audio node, and is
+// told when someone listens (it only sends them then). Windows in other Spaces are other
 // pages: their sound can't be tapped from here.
 
 export const FFT_SIZE = 1024;
@@ -25,7 +27,13 @@ export function audioContext(): AudioContext {
 
 // ── sources windows publish ─────────────────────────────
 
-const published = new Map<string, { label: string; node: AudioNode }>();
+/** A window's sound: its latest samples, and whether anyone wants them. */
+export interface LevelsSource {
+  read(): Levels | null;
+  listen(on: boolean): void;
+}
+
+const published = new Map<string, { label: string; source: LevelsSource; listeners: number }>();
 const listeners = new Set<() => void>();
 let snapshot: AudioSource[] = [];
 const changed = () => {
@@ -33,13 +41,13 @@ const changed = () => {
   for (const l of listeners) l();
 };
 
-/** A window offers its output (a node in audioContext()) as "window:<id>"; the returned function withdraws it. */
-export function publishAudio(windowId: string, label: string, node: AudioNode): () => void {
+/** A window offers its sound as "window:<id>"; the returned function withdraws it. */
+export function publishLevels(windowId: string, label: string, source: LevelsSource): () => void {
   const id = `window:${windowId}`;
-  published.set(id, { label, node });
+  published.set(id, { label, source, listeners: 0 });
   changed();
   return () => {
-    if (published.get(id)?.node !== node) return;
+    if (published.get(id)?.source !== source) return;
     published.delete(id);
     changed();
   };
@@ -94,6 +102,27 @@ export interface Levels {
  * `onError` hears why a source can't be opened (permission denied, …).
  */
 export function tap(source: string, onError: (err: Error) => void): { read(): Levels; close(): void } {
+  if (source.startsWith("window:")) {
+    // Follow the window as it comes and goes, and tell it while we listen.
+    let entry: { source: LevelsSource; listeners: number } | undefined;
+    const silence = { t: new Uint8Array(FFT_SIZE).fill(128), l: new Uint8Array(FFT_SIZE).fill(128), r: new Uint8Array(FFT_SIZE).fill(128) };
+    const follow = () => {
+      const next = published.get(source);
+      if (next === entry) return;
+      if (entry && --entry.listeners === 0) entry.source.listen(false);
+      entry = next;
+      if (entry && entry.listeners++ === 0) entry.source.listen(true);
+    };
+    listeners.add(follow);
+    const unlisten = () => {
+      listeners.delete(follow);
+      if (entry && --entry.listeners === 0) entry.source.listen(false);
+      entry = undefined;
+    };
+    follow();
+    return { read: () => entry?.source.read() ?? silence, close: unlisten };
+  }
+
   const c = audioContext();
   const analyser = (n: AudioNode) => {
     const a = c.createAnalyser();
@@ -125,14 +154,8 @@ export function tap(source: string, onError: (err: Error) => void): { read(): Le
     if (n) n.connect(input);
   };
 
-  let unlisten = () => {};
   if (source === "mic" || source === "system") {
     openStream(source).then((n) => !closed && attach(n), (err: Error) => !closed && onError(err));
-  } else if (source.startsWith("window:")) {
-    const follow = () => attach(published.get(source)?.node ?? null);
-    listeners.add(follow);
-    unlisten = () => listeners.delete(follow);
-    follow();
   }
 
   return {
@@ -144,7 +167,6 @@ export function tap(source: string, onError: (err: Error) => void): { read(): Le
     },
     close() {
       closed = true;
-      unlisten();
       attach(null);
       input.disconnect();
       if (source === "mic" || source === "system") closeStream(source);

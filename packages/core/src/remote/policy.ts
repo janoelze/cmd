@@ -102,6 +102,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "space.close": "never",
   "space.forget": "never",
   "magic.run": "control", // spends API keys, runs the exploring agent
+  "livecode.change": "control", // spends API keys; returns code, runs nothing
   "magic.cancel": "control",
   "magic.refresh": "view", // re-runs an already approved, read-only source
   "magic.setRefresh": "never",

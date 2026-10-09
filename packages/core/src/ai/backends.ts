@@ -153,7 +153,12 @@ export interface CompleteRequest {
   maxOutputTokens?: number;
   /** 0 for answers that should come out the same each time (a name); omitted: the model's default. Reasoning models ignore it. */
   temperature?: number;
+  /** A long system prompt that repeats across calls (a reference): cached by providers that need asking (Anthropic). */
+  cacheSystem?: boolean;
 }
+
+const instructionsOf = (r: CompleteRequest) =>
+  r.cacheSystem && r.system ? [{ role: "system" as const, content: r.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" as const } } } }] : r.system;
 
 export interface CompleteResult<T> {
   value: T;
@@ -166,7 +171,7 @@ export async function completeText(o: AiBackendOptions, r: CompleteRequest): Pro
   const { generateText } = await import("ai");
   const res = await generateText({
     model: await languageModel(o),
-    instructions: r.system,
+    instructions: instructionsOf(r),
     prompt: r.prompt,
     abortSignal: r.signal,
     maxOutputTokens: r.maxOutputTokens ?? 4000,
@@ -187,7 +192,7 @@ export async function completeObject<T>(o: AiBackendOptions, r: ObjectRequest<T>
   const { generateText, streamText, jsonSchema, Output } = await import("ai");
   const call = {
     model: await languageModel(o),
-    instructions: r.system,
+    instructions: instructionsOf(r),
     prompt: r.prompt,
     abortSignal: r.signal,
     maxOutputTokens: r.maxOutputTokens ?? 4000,

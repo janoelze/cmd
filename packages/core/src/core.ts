@@ -63,6 +63,7 @@ import { checkRemoteCall, RemoteDenied, remoteEventVisible, type PolicyContext }
 import { RemoteService } from "./remote/service.ts";
 import { SummaryService } from "./summaries/service.ts";
 import { UsageStats } from "./usage.ts";
+import { changeCode } from "./livecode/change.ts";
 
 export const VERSION = "0.0.1";
 
@@ -751,6 +752,7 @@ export class Core {
     "magic.state": (p) => (this.magic.setState(p.id, p.key, p.value), null),
     "magic.fix": (p) => (this.magic.fix(p.id), null),
     "magic.mute": (p) => (this.magic.setMuted(p.id, p.muted), null),
+    "livecode.change": (p) => changeCode((o) => this.ai.object(o), p),
     "magic.runtime": () => this.magic.runtime(),
     "magic.installRuntime": () => this.magic.installRuntime(),
     // Connection-aware (#afterCall): the caller becomes a previewer.
