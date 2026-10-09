@@ -1,4 +1,4 @@
-/* Draft (docs/40-window-design.md): frame.tsx and chart.tsx. Window sizes are
+/* The window pieces: frame.tsx and chart.tsx (docs/40-window-design.md). Window sizes are
    container sizes: narrow below 360px, regular below 600px, wide from 720px. */
 
 /* ── primitives ── */
@@ -114,7 +114,7 @@
 /* Tables drop their least important columns as their space narrows (GridColumn.hide). */
 .ui-split-main { container-type: inline-size; }
 @container (width < 360px) { .ui-grid [data-hide="narrow"] { display: none; } }
-@container (width < 600px) { .ui-grid [data-hide="regular"], .ui-grid [data-hide="narrow"] { display: none; } }
+@container (width < 600px) { .ui-grid [data-hide="regular"] { display: none; } }
 
 /* A body that opens with a line of text (a status line): trim the text's leading, so the
    letters sit --inset from the top as they do from the left, not --inset plus half a line. */

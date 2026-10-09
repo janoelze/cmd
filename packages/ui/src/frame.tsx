@@ -1,4 +1,4 @@
-// Draft (docs/40-window-design.md): laying out a window's content. Spacing
+// Laying out a window's content (docs/40-window-design.md, the window-design skill). Spacing
 // belongs to these and nothing else: Stack, Inline and Tiles space their
 // children, View pads a window's body, and kit components have no outer
 // margins. Gaps and paddings take only the names of the --space-* scale.

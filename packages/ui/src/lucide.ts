@@ -6,6 +6,10 @@
 // the helper's bitmaps.
 
 import {
+  Hammer,
+  ListChecks,
+  PanelRight,
+  SquarePlay,
   LockOpen,
   Database,
   Play,
@@ -76,6 +80,14 @@ import {
 
 /** SF Symbol name → Lucide SVG. Unknown names render nothing, as on macOS. */
 const LUCIDE: Record<string, string> = {
+  // The window pieces and reference windows (frame.tsx, the gallery's Windows page).
+  "checkmark.circle": CircleCheck,
+  checklist: ListChecks,
+  "exclamationmark.triangle": TriangleAlert,
+  hammer: Hammer,
+  "macwindow.on.rectangle": AppWindow,
+  "play.rectangle": SquarePlay,
+  "sidebar.right": PanelRight,
   "arrow.clockwise": RotateCw,
   "arrow.counterclockwise": RotateCcw,
   "arrow.up.forward.app": SquareArrowOutUpRight,

@@ -69,6 +69,19 @@ import {
   TextField,
   Toast,
   Toolbar,
+  Chart,
+  Inline,
+  List,
+  Pane,
+  Panes,
+  Sparkline,
+  Split,
+  Stack,
+  Stat,
+  StatusLine,
+  Text,
+  Tiles,
+  View,
   Window,
   WindowBar,
   WindowBarMenu,
@@ -78,11 +91,13 @@ import {
   type DotState,
 } from "../src/index.ts";
 import { allThemes, applyTheme, currentTheme, themeFor, themeVars, useTheme } from "../src/themes/registry.ts";
+import { SPACE, TOKENS } from "../src/tokens.gen.ts";
 
-type PageId = "tokens" | "themes" | "buttons" | "choices" | "fields" | "status" | "forms" | "content" | "overlays" | "patterns";
+type PageId = "tokens" | "themes" | "windows" | "buttons" | "choices" | "fields" | "status" | "forms" | "content" | "overlays" | "patterns";
 const PAGES: { id: PageId; title: string; icon: string }[] = [
   { id: "tokens", title: "Tokens", icon: "paintpalette" },
   { id: "themes", title: "Themes", icon: "square.grid.2x2" },
+  { id: "windows", title: "Windows", icon: "macwindow.on.rectangle" },
   { id: "buttons", title: "Buttons", icon: "rectangle" },
   { id: "choices", title: "Choices", icon: "checkmark" },
   { id: "fields", title: "Fields", icon: "textformat" },
@@ -190,6 +205,7 @@ function Row({ label, children }: { label?: string; children: ReactNode }) {
 const PAGE: Record<PageId, () => ReactNode> = {
   tokens: () => <TokensPage />,
   themes: () => <ThemesPage />,
+  windows: () => <WindowsPage />,
   buttons: () => <ButtonsPage />,
   choices: () => <ChoicesPage />,
   fields: () => <FieldsPage />,
@@ -244,6 +260,19 @@ function TokensPage() {
           <span style={{ font: "var(--text-md) var(--font-mono)" }}>~/src/cmd $ pnpm ui</span>
         </div>
       </Spec>
+      <Spec title="Spacing" code="space.tokens.json" note="The only gaps and paddings. Stack, Inline and Tiles take these names (gap=&quot;md&quot;); --inset is a window's content inset on every side.">
+        <div className="g-type">
+          {SPACE.map((s) => (
+            <Fragment key={s}>
+              <code>--space-{s}</code>
+              <span style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
+                <span style={{ width: `var(--space-${s})`, height: 12, background: "var(--accent)", borderRadius: 2 }} />
+                <span className="g-dim">{TOKENS.find((t) => t.name === `--space-${s}`)?.description}</span>
+              </span>
+            </Fragment>
+          ))}
+        </div>
+      </Spec>
       <Spec title="Control heights and radii">
         <div className="g-boxes">
           {(["control-h-sm", "control-h", "control-h-lg"] as const).map((h) => (
@@ -260,6 +289,158 @@ function TokensPage() {
             </div>
           ))}
         </div>
+      </Spec>
+      <Spec title="Every token" code="pnpm tokens → tokens.gen.ts TOKENS" note="From packages/ui/tokens (DTCG). The description is the rule for when to use it; theme: is set by the active theme." plain>
+        <DataGrid
+          columns={[
+            { key: "name", label: "Token" },
+            { key: "value", label: "Value" },
+            { key: "light", label: "Light themes", hide: "regular" },
+            { key: "description", label: "When", grow: true },
+          ]}
+          rows={TOKENS.map((t) => [{ node: t.name, kind: "text" }, { node: t.value, tip: t.value }, t.light ?? "", { node: t.description ?? "", tip: t.description }])}
+          mono
+        />
+      </Spec>
+    </>
+  );
+}
+
+// ── windows ────────────────────────────────────────────
+
+/** A window frame for a specimen, at a size. */
+function Win({ name, icon = "macwindow", w = 420, h = 260, children }: { name: string; icon?: string; w?: number; h?: number; children: ReactNode }) {
+  return (
+    <Window selected style={{ width: w, height: h, position: "relative", flex: "none" }}>
+      <WindowBody style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <WindowBar icon={icon} name={name} />
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{children}</div>
+      </WindowBody>
+      <WindowFrame />
+    </Window>
+  );
+}
+
+const ROWS = [
+  { name: "Build and test", branch: "master", took: "40s", light: "done" },
+  { name: "E2E smoke", branch: "window-design", took: "3m 54s", light: "danger" },
+  { name: "Typecheck", branch: "sqlite-viewer", took: "12s", light: "done" },
+  { name: "Release", branch: "master", took: "8m 45s", light: "working" },
+] as const;
+const WAVE = Array.from({ length: 40 }, (_, i) => 20 + 12 * Math.sin(i / 4) + (i % 7));
+
+function WindowsPage() {
+  const [sel, setSel] = useState<number | null>(1);
+  return (
+    <>
+      <h1>Windows</h1>
+      <p className="g-lede">
+        A window's content is built from these (<code>frame.tsx</code>, <code>chart.tsx</code>), never from a view's own CSS. The reference windows in the app
+        (<code>pnpm workbench datawindow</code>, chartwindow, contentwindow, mediawindow, actionswindow) put them together; the window-design skill has the rules.
+      </p>
+      <Spec title="View" code="<View toolbar footer state inset>" note="Toolbar, body, footer. A row with controls goes in the toolbar; the footer is one quiet line; state replaces the body." plain>
+        <div className="g-row" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+          <Win name="Runs">
+            <View
+              inset
+              toolbar={
+                <WindowToolbar label="Runs">
+                  <ToolbarSearchField value="" onChange={() => {}} placeholder="Filter runs" />
+                  <ToolbarSpacer />
+                  <ToolbarButton icon="arrow.clockwise" label="Refresh" />
+                </WindowToolbar>
+              }
+              footer={<StatusLine end="Updated 12s ago">4 runs · 1 failed</StatusLine>}
+            >
+              <Stack gap="xs">
+                <Inline gap="sm">
+                  <StatusDot state="done" />
+                  <Text>Healthy</Text>
+                  <Text tone="dim">· 4 runs today</Text>
+                </Inline>
+                <Text tone="dim" size="sm">
+                  The body opens at the inset, measured to the letters.
+                </Text>
+              </Stack>
+            </View>
+          </Win>
+          {(
+            [
+              { kind: "loading" },
+              { kind: "empty", icon: "checklist", title: "No Runs Yet", text: "Runs show here once workflows start." },
+              { kind: "error", title: "Couldn’t Load Runs", text: "GitHub didn’t answer.", action: <Button icon="arrow.clockwise">Try Again</Button> },
+            ] as const
+          ).map((s) => (
+            <Win key={s.kind} name={s.kind} w={240} h={200}>
+              <View state={s} />
+            </Win>
+          ))}
+        </div>
+      </Spec>
+      <Spec title="DataGrid and Split" code="columns: grow, align, hide, icon · <Split side=&quot;end&quot;>" note="Edge columns on the inset; the least important columns drop as the window narrows; an inspector beside it." plain>
+        <Win name="CI Runs" w={640} h={240}>
+          <View scroll={false}>
+            <Split side="end" open={sel !== null} pane={sel !== null && <Stack pad="lg" gap="xs"><Text strong>{ROWS[sel]!.name}</Text><Text tone="dim" mono size="sm">{ROWS[sel]!.branch}</Text></Stack>} width={{ min: 160, ideal: 200, max: 280 }}>
+              <DataGrid
+                columns={[
+                  { key: "s", label: "", icon: true },
+                  { key: "name", label: "Workflow", grow: true },
+                  { key: "branch", label: "Branch", hide: "narrow" },
+                  { key: "took", label: "Took", align: "end" },
+                ]}
+                rows={ROWS.map((r) => [<StatusDot key="d" state={r.light as DotState} />, r.name, r.branch, { node: r.took, kind: "number" }])}
+                selected={sel}
+                onRowClick={setSel}
+              />
+            </Split>
+          </View>
+        </Win>
+      </Spec>
+      <Spec title="List" code='<List variant="plain" | "grouped">' note="Plain for navigation (a sidebar), grouped for things to run or change: indented, no boxes." plain>
+        <div className="g-row" style={{ alignItems: "flex-start" }}>
+          {(["plain", "grouped"] as const).map((v) => (
+            <Win key={v} name={v} w={300} h={250}>
+              <View inset={v === "grouped"}>
+                <List variant={v}>
+                  <ListSection title="Test" count={2}>
+                    <ListRow icon="checkmark.circle" title="test" detail="Vitest, all packages" end={<ListValue>38s</ListValue>} />
+                    <ListRow icon="checkmark.circle" light="danger" tone="danger" title="e2e" detail="Failed · exit 1" />
+                  </ListSection>
+                  <ListSection title="Build" count={1}>
+                    <ListRow icon="hammer" title="build" detail="Bundle the desktop app" />
+                  </ListSection>
+                </List>
+              </View>
+            </Win>
+          ))}
+        </div>
+      </Spec>
+      <Spec title="Panes, Stat and Chart" code="<Panes><Pane title aside>" note="Sections without boxes, two columns from 720px. Charts line up with their pane's title; the axis is on the right, under the unit." plain>
+        <Win name="Resources" w={760} h={330}>
+          <View inset>
+            <Panes>
+              <Pane wide>
+                <Tiles min={120} gap="xl">
+                  <Stat label="CPU" value="24.1" unit="%" delta="▲ 4%" deltaTone="warning">
+                    <Sparkline values={WAVE} />
+                  </Stat>
+                  <Stat label="Memory" value="6.6" unit="GB">
+                    <Sparkline values={WAVE.map((v) => 60 - v)} series={1} />
+                  </Stat>
+                  <Stat label="Network" value="12.1" unit="MB/s">
+                    <Sparkline values={WAVE.map((v, i) => v + (i % 5))} series={3} />
+                  </Stat>
+                </Tiles>
+              </Pane>
+              <Pane title="CPU and GPU" aside="%">
+                <Chart series={[{ name: "CPU", values: WAVE }, { name: "GPU", values: WAVE.map((v) => v * 0.6) }]} labels={["40m", "now"]} height={110} />
+              </Pane>
+              <Pane title="Network" aside="MB/s">
+                <Chart kind="bar" series={[{ name: "Network", values: WAVE.slice(0, 20) }]} labels={["20m", "now"]} height={110} />
+              </Pane>
+            </Panes>
+          </View>
+        </Win>
       </Spec>
     </>
   );

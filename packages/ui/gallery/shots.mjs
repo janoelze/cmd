@@ -11,7 +11,7 @@ const here = import.meta.dirname;
 const out = path.resolve(here, "../../../.cmd-dev/shots/ui");
 mkdirSync(out, { recursive: true });
 const themes = process.argv.slice(2).length ? process.argv.slice(2) : ["dark", "light", "solarized-light", "dracula"];
-const pages = ["tokens", "themes", "buttons", "choices", "fields", "status", "forms", "content", "overlays", "patterns"];
+const pages = ["tokens", "themes", "windows", "buttons", "choices", "fields", "status", "forms", "content", "overlays", "patterns"];
 
 const server = await createServer({ configFile: path.join(here, "vite.config.ts"), server: { port: 0 }, logLevel: "error" });
 await server.listen();

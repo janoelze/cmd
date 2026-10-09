@@ -1,4 +1,4 @@
-// Draft (docs/40-window-design.md): charts. Series take the --chart-N colours
+// Charts (docs/40-window-design.md). Series take the --chart-N colours
 // in order (the theme's terminal colours), never their own. Thin lines with a
 // soft area, thin bars, a few grid lines and labels; a legend only for more
 // than one series. Charts are as wide as their container and redraw on resize,

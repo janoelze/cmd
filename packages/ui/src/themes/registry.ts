@@ -57,7 +57,7 @@ export function themeVars(t: Theme): Record<string, string> {
   // Git states in file windows, from the terminal palette.
   const p = t.terminal;
   for (const [k, v] of Object.entries({ added: p.green, modified: p.yellow, deleted: p.red, conflict: p.magenta })) vars[`--git-${k}`] = v;
-  // Chart series, in order (draft, docs/40): the terminal's colours, as Magic's --c1…--c6.
+  // Chart series, in order (--chart-N, theme.tokens.json): the terminal's colours.
   [p.blue, p.green, p.yellow, p.magenta, p.cyan, p.red].forEach((c, i) => (vars[`--chart-${i + 1}`] = c));
   for (const [k, v] of Object.entries(t.vars ?? {})) vars[`--${k}`] = v;
   return vars;
