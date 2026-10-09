@@ -103,7 +103,8 @@ export class DirectListener extends EventEmitter<TransportEvents> implements Tra
         socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n", () => socket.destroy());
         return;
       }
-      wss.handleUpgrade(req, socket, head, (ws) => this.#device(ws, ip));
+      const user = String(req.headers["tailscale-user-login"] ?? "") || null;
+      wss.handleUpgrade(req, socket, head, (ws) => this.#device(ws, ip, user));
     });
     server.on("error", (err: NodeJS.ErrnoException) => {
       this.#listening = false;
@@ -158,7 +159,7 @@ export class DirectListener extends EventEmitter<TransportEvents> implements Tra
     return recent.length > this.#limits.connectsPerIpPerMinute;
   }
 
-  #device(ws: WebSocket, ip: string): void {
+  #device(ws: WebSocket, ip: string, user: string | null): void {
     if (this.#channels.size >= this.#limits.channelsPerRoute) return ws.close(RelayClose.busy);
     const channel = this.#next++;
     this.#channels.set(channel, ws);
@@ -175,7 +176,7 @@ export class DirectListener extends EventEmitter<TransportEvents> implements Tra
       this.emit("close", channel);
     });
     ws.on("error", () => {});
-    this.emit("open", channel, ip);
+    this.emit("open", channel, ip, user);
   }
 
   #sweep(): void {

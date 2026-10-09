@@ -34,6 +34,7 @@ export interface ChannelHost {
 export class HostChannel {
   readonly channel: number;
   readonly ip: string;
+  readonly user: string | null;
   deviceId: string | null = null;
   scope: RemoteScope | null = null;
   since = 0;
@@ -48,9 +49,10 @@ export class HostChannel {
   #in: Promise<void> = Promise.resolve();
   #gone = new AbortController();
 
-  constructor(o: { channel: number; ip: string; host: ChannelHost; send: (b: Bytes) => void; drop: () => void }) {
+  constructor(o: { channel: number; ip: string; user?: string | null; host: ChannelHost; send: (b: Bytes) => void; drop: () => void }) {
     this.channel = o.channel;
     this.ip = o.ip;
+    this.user = o.user ?? null;
     this.#host = o.host;
     this.#send = o.send;
     this.#drop = o.drop;

@@ -166,6 +166,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "remote.disconnect": "never",
   "remote.log": "never",
   "remote.checks": "never",
+  "remote.setup": "never",
   "remote.revoke": "never",
   "remote.setScope": "never",
   "remote.bootstrap": "view",
