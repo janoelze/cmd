@@ -391,6 +391,43 @@ export const timerType: WindowType<TimerState> = {
   },
 };
 
+/**
+ * MilkDrop presets (butterchurn) moving to sound. `preset` is the one showing
+ * (null: a random one), `source` what it listens to ("none", "mic"; Live Code
+ * windows later), `cycle` the seconds between presets (0: stay on one).
+ */
+export interface VisualizerState extends Record<string, unknown> {
+  preset: string | null;
+  source: string;
+  cycle: number;
+}
+
+const clampCycle = (n: unknown, fallback: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(3600, Math.max(0, Math.round(n))) : fallback);
+
+export const visualizerType: WindowType<VisualizerState> = {
+  kind: "visualizer",
+  title: "Visualizer",
+  icon: "waveform",
+  role: "widget",
+  description: "MilkDrop visuals that move to the music.",
+  create(input) {
+    const state: VisualizerState = {
+      preset: typeof input.preset === "string" ? input.preset : null,
+      source: typeof input.source === "string" ? input.source : "none",
+      cycle: clampCycle(input.cycle, 30),
+    };
+    return { state, title: "Visualizer" };
+  },
+  /** Patches: { preset }, { source }, { cycle }. */
+  update(state, patch) {
+    const s: VisualizerState = { ...state };
+    if (patch.preset === null || typeof patch.preset === "string") s.preset = patch.preset;
+    if (typeof patch.source === "string") s.source = patch.source;
+    if (patch.cycle !== undefined) s.cycle = clampCycle(patch.cycle, s.cycle);
+    return { state: s };
+  },
+};
+
 /** What changed in a repository, under a folder (default: the Space's root), as it changes. */
 export const diffType: WindowType<{ path: string }> = {
   kind: "diff",
@@ -529,4 +566,5 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(resourcesType);
   types.register(eventsType);
   types.register(timerType);
+  types.register(visualizerType);
 }

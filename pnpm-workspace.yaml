@@ -7,3 +7,4 @@ allowBuilds:
   esbuild: true
   electron-winstaller: false
   '@vscode/ripgrep': set this to true or false
+  core-js: false

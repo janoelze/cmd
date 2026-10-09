@@ -1,13 +1,13 @@
 // The built-in widgets' core parts (docs/16-widgets.md): the command log behind
 // Commands, the notification log behind Notifications, the Timer's state and
-// the alarms that ring it.
+// the alarms that ring it, and the Visualizer's state.
 
 import fs from "node:fs";
 import os from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { commandRunOf, notificationOf, type AppNotification } from "@cmd/protocol";
 import { Core } from "../src/core.ts";
-import { durationLabel, timerType, type TimerState } from "../src/windows/builtin.ts";
+import { durationLabel, timerType, visualizerType, type TimerState } from "../src/windows/builtin.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 
 let core: Core;
@@ -172,5 +172,19 @@ describe("timer", () => {
     await core.call("window.close", { id: b.id });
     vi.advanceTimersByTime(60_000);
     expect(sent).toEqual([]);
+  });
+});
+
+describe("visualizer", () => {
+  it("starts on a random preset, silent, changing every 30 s", () => {
+    expect(visualizerType.create({})).toEqual({ state: { preset: null, source: "none", cycle: 30 }, title: "Visualizer" });
+  });
+
+  it("keeps its preset, source and cycle through the core", async () => {
+    const w = await core.call("window.open", { kind: "visualizer", input: {} });
+    await core.call("window.update", { id: w.id, state: { preset: "Flexi - mindblob", source: "mic", cycle: 9999 } });
+    expect(core.windows.list().find((x) => x.id === w.id)!.state).toEqual({ preset: "Flexi - mindblob", source: "mic", cycle: 3600 });
+    await core.call("window.update", { id: w.id, state: { preset: null, cycle: -1 } });
+    expect(core.windows.list().find((x) => x.id === w.id)!.state).toEqual({ preset: null, source: "mic", cycle: 0 });
   });
 });

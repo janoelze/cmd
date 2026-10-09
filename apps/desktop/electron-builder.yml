@@ -31,6 +31,9 @@ mac:
       to: dock-icons
   extendInfo:
     CFBundleIconName: Icon
+    # Visualizer sources (renderer/src/audio.ts). Without the second, system audio comes back silent.
+    NSMicrophoneUsageDescription: A Visualizer can move to what your microphone hears.
+    NSAudioCaptureUsageDescription: A Visualizer can move to the audio your Mac is playing.
   target:
     - dmg
     - zip

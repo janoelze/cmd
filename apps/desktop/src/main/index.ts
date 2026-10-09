@@ -29,6 +29,7 @@ import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } fro
 import { claimWhatsNew } from "./whats-new.ts";
 import { notifyPermission, openNotifySettings, requestNotifyPermission } from "./notify-permission.ts";
 import { claimOnboarding, recordOnboarding } from "./onboarding.ts";
+import { serveVisualizer, VISUALIZER_SCHEME } from "./visualizer.ts";
 import { ensureKeybindingsFile, loadKeybindings, resetKeybindings, watchKeybindings, writeKeybinding, type KeybindingsSnapshot } from "./keybindings.ts";
 
 // Loaded after launch: the updater isn't needed to show the first window.
@@ -89,10 +90,12 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // video, images) load from origins the person allowed for that window. Tokens
 // come from the renderer's "widget-frame" call and can't be guessed, so a widget
 // can't navigate itself to a page with a looser CSP.
+// cmd-visualizer://frame/ — the page Visualizer windows draw MilkDrop presets in (./visualizer.ts).
 protocol.registerSchemesAsPrivileged([
   // corsEnabled: the app's page (file://) fetches PDFs from it.
   { scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
   { scheme: "cmd-widget", privileges: { standard: true, secure: true } },
+  { scheme: VISUALIZER_SCHEME, privileges: { standard: true, secure: true } },
 ]);
 const CMD_FILE_TYPES = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico|mp4|webm|mov|mp3|m4a|wav|pdf)$/i;
 
@@ -463,10 +466,10 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
     },
   });
   if (b.maximized) win.maximize();
-  // Subframes are Magic widgets: they stay on their own page. host.js turns link
-  // clicks into open-url; a widget that sets location itself gets a browser too.
+  // Subframes are Magic widgets and Visualizers: they stay on their own page. host.js turns
+  // link clicks into open-url; a widget that sets location itself gets a browser too.
   win.webContents.on("will-frame-navigate", (e) => {
-    if (e.isMainFrame || e.url.startsWith("cmd-widget:")) return;
+    if (e.isMainFrame || e.url.startsWith("cmd-widget:") || e.url === "cmd-visualizer://frame/") return;
     e.preventDefault();
     if (/^https?:/i.test(e.url)) win.webContents.send("open-url", e.url);
   });
@@ -957,9 +960,17 @@ app.whenReady().then(async () => {
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>${read("kit.css")}</style><script>${read("host.js")}</script></head><body></body></html>`;
     return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": widgetCsp(widgetFrames.get(new URL(req.url).pathname.slice(1)) ?? []), "cache-control": "no-store" } });
   });
-  // Magic widgets may not leave their page, open anything, or ask for permissions.
+  protocol.handle(VISUALIZER_SCHEME, serveVisualizer);
+  // The Visualizer's System Audio source (renderer/src/audio.ts): getDisplayMedia from the app's
+  // own page gets the Mac's output (a Core Audio tap, macOS 14.2+). The video it must come with
+  // is that page itself, so no screen is captured and macOS doesn't ask for Screen Recording.
+  session.defaultSession.setDisplayMediaRequestHandler((req, done) => {
+    if (!req.frame || /^cmd-(widget|visualizer):/.test(req.frame.url)) return done({});
+    done({ video: req.frame, audio: "loopback" });
+  });
+  // Magic widgets and Visualizer frames may not leave their page, open anything, or ask for permissions.
   session.defaultSession.setPermissionRequestHandler((wc, _permission, done, details) => {
-    done(!/^cmd-widget:/.test(details.requestingUrl ?? ""));
+    done(!/^cmd-(widget|visualizer):/.test(details.requestingUrl ?? ""));
   });
   protocol.handle("cmd-file", (req) => {
     const file = new URL(req.url).searchParams.get("path") ?? "";
