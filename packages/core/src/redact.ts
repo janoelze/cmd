@@ -12,6 +12,10 @@
 // `maxOutputTokens`, while it missed `Bearer …`, `*_PASS="…"` and a bot token
 // in a shell default. Hence: the secret word must end the name, separators are
 // `:` or `=`, flags need their dash. Add a case to redact.test.ts for each new shape.
+//
+// Structured payloads (hook tool_input, transcript lines kept whole) hold the
+// name as a key and the value as its own string, so redactDeep checks the key
+// by the same rule: { password: "…" } and env maps go the way PASSWORD=… does.
 
 /** Replaced whole. */
 const TOKENS: RegExp[] = [
@@ -38,6 +42,9 @@ const TOKENS: RegExp[] = [
 /** Authorization headers: the scheme stays, the credential goes. */
 const BEARER = /\bBearer\s+(?!\$|\[redacted\])[A-Za-z0-9._~+/=-]{16,}/g;
 const BASIC = /\b(Authorization["']?\s*[:=]\s*["']?Basic\s+)[A-Za-z0-9+/]{16,}={0,2}/gi;
+/** `Basic …` without its header name (a header map's value): only when it decodes to user:password, so "Basic internationalization" stays. */
+const BASIC_VALUE = /\b(Basic\s+)([A-Za-z0-9+/]{16,}={0,2})(?![A-Za-z0-9+/=])/g;
+const isUserPass = (b64: string) => /^[\x20-\x7e]+:[\x20-\x7e]*$/.test(Buffer.from(b64, "base64").toString("latin1"));
 
 /** user:password@ in URLs: only the password goes. */
 const URL_PASSWORD = /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:(?!\$|\[redacted\])([^\s@/]{3,})@/gi;
@@ -50,6 +57,7 @@ const URL_PARAM = /([?&](?:token|access_token|api_key|apikey|secret|password|aut
  * word. Not a name inside a selector or a path (.ui-secret, --secret-edge, a.token).
  */
 const SECRET_WORD = "(?:api[_-]?key|(?:secret|access|private|signing|encryption)[_-]?key|secret|token|passw(?:or)?d|pass|pwd|credentials?|authorization|cookie)";
+const SECRET_KEY = new RegExp(`^(?:[A-Za-z_][A-Za-z0-9_-]*?)?${SECRET_WORD}$`, "i");
 const NAMED = new RegExp(`(?<![\\w.#$-])((?:[A-Za-z_][A-Za-z0-9_-]*?)?${SECRET_WORD})(["']?[ \\t]*[:=][ \\t]*["']?)(?!\\[redacted\\]|:)([^\\s"'\`,;<>(){}\\[\\]]{8,})(?=$|[\\s"'\`,;<>){}\\]])`, "gi");
 /** "pass" alone is a verb and a test result ("--- PASS: TestX"); it names a secret only as DB_PASS or PASS=. */
 const BARE_PASS = /^pass$/i;
@@ -71,19 +79,28 @@ export function redact(text: string): string {
   for (const p of TOKENS) r = r.replace(p, "[redacted]");
   r = r.replace(BEARER, "Bearer [redacted]");
   r = r.replace(BASIC, "$1[redacted]");
+  r = r.replace(BASIC_VALUE, (m, scheme: string, b64: string) => (isUserPass(b64) ? `${scheme}[redacted]` : m));
   r = r.replace(URL_PASSWORD, (m, pw: string) => m.slice(0, m.length - pw.length - 1) + "[redacted]@");
   r = r.replace(URL_PARAM, "$1[redacted]");
   r = r.replace(FLAG, (m, flag: string, value: string) => (PLACEHOLDER.test(value) || WORD.test(value) ? m : `${flag}[redacted]`));
   return r.replace(NAMED, (m, name: string, sep: string, value: string) => (PLACEHOLDER.test(value) || (BARE_PASS.test(name) && !(name === "PASS" && sep.includes("="))) || WORD_AFTER_COLON(sep, value) ? m : `${name}${sep}[redacted]`));
 }
 
-/** Every string inside a JSON value, redacted; structure kept. */
-export function redactDeep<T>(v: T): T {
-  if (typeof v === "string") return redact(v) as T;
-  if (Array.isArray(v)) return v.map(redactDeep) as T;
+/** Whether a key names a secret: the secret word ends it, as in NAMED (`author`, `tokenize`, `maxOutputTokens` don't). */
+export function secretKey(key: string): boolean {
+  return SECRET_KEY.test(key) && !BARE_PASS.test(key);
+}
+
+/** An Authorization value's scheme, kept as BEARER and BASIC keep it in text. */
+const SCHEME = /^(?:Basic|Bearer|Token|Digest)\s+/i;
+
+/** Every string inside a JSON value, redacted; structure kept. A string under a key that names a secret goes whole (an array's items count as under its key). */
+export function redactDeep<T>(v: T, key?: string): T {
+  if (typeof v === "string") return (key && v.length >= 8 && secretKey(key) && !PLACEHOLDER.test(v) ? `${SCHEME.exec(v)?.[0] ?? ""}[redacted]` : redact(v)) as T;
+  if (Array.isArray(v)) return v.map((x) => redactDeep(x, key)) as T;
   if (v && typeof v === "object") {
     const out: Record<string, unknown> = {};
-    for (const [k, x] of Object.entries(v as Record<string, unknown>)) out[k] = redactDeep(x);
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) out[k] = redactDeep(x, k);
     return out as T;
   }
   return v;
