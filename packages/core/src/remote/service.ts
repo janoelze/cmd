@@ -212,11 +212,12 @@ export class RemoteService {
 
   status(): RemoteStatus {
     const s = this.#o.settings.settings;
-    const noRelay = s["remote.enabled"] && s["remote.access"] === "relay" && !s["remote.relay"].trim();
+    const relay = s["remote.access"] === "relay";
+    const missing = !s["remote.enabled"] ? null : relay ? (s["remote.relay"].trim() ? null : "set a relay (remote.relay)") : this.#adapters.get(s["remote.access"]) ? null : `${s["remote.access"]} isn't available in this version`;
     return {
       enabled: s["remote.enabled"],
-      state: this.#transport ? this.#transport.state : noRelay ? "error" : s["remote.enabled"] ? "connecting" : "off",
-      error: this.#transport ? this.#transport.error : noRelay ? "set a relay (remote.relay)" : null,
+      state: this.#transport ? this.#transport.state : missing ? "error" : s["remote.enabled"] ? "connecting" : "off",
+      error: this.#transport ? this.#transport.error : missing,
       relay: s["remote.relay"],
       access: s["remote.access"],
       address: this.#transport?.endpoint()?.client ?? null,
