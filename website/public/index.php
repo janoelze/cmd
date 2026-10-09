@@ -92,7 +92,7 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
 <section class="why">
 <h2>Why I'm building this</h2>
 <div class="cols">
-<p>For better or worse, I'm going to spend the rest of my working life in terminals. That's where most of my work happens, and I don't see that changing anytime soon. What's increasingly silly is how ineffective my workflow around them has become.</p>
+<p>For better or worse, I'm going to spend the rest of my working life in terminals. That's where most of my work happens, and it won't change anytime soon. What's increasingly silly is how ineffective my workflow around them has become.</p>
 <p>I'm an engineer and designer with 15 years of experience, and yet I found myself shortcut-switching between tabs like a lunatic, trying to remember which session was doing what. Occasionally, I'd stumble across one that had been waiting for my feedback for 30 minutes. I know my way around complex tools, but I didn't feel like a power user.</p>
 <p>Looking at newer releases in the terminal manager space didn't help much either. Agent orchestrators often impose their own workflows, with crazy levels of engineering and UI complexity. I didn't want another system to manage my work. I wanted a better way to work with the tools I already use.</p>
 <p>So I started building cmd, a software workbench that embraces UNIX at its core and brings my tools together in one place.</p>
