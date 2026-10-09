@@ -114,3 +114,8 @@
 .ui-split-main { container-type: inline-size; }
 @container (width < 360px) { .ui-grid [data-hide="narrow"] { display: none; } }
 @container (width < 600px) { .ui-grid [data-hide="regular"], .ui-grid [data-hide="narrow"] { display: none; } }
+
+/* A body that opens with a line of text (a status line): trim the text's leading, so the
+   letters sit --inset from the top as they do from the left, not --inset plus half a line. */
+.ui-view-body[data-inset] > .ui-stack:first-child > .ui-text:first-child,
+.ui-view-body[data-inset] > .ui-stack:first-child > .ui-inline:first-child > .ui-text { text-box: trim-start cap alphabetic; }

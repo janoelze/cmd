@@ -3,7 +3,7 @@
 // sparklines, a chart over time, a breakdown, a short table. The spec for
 // Resources, Agent Activity and any widget that watches numbers.
 
-import { Chart, DataGrid, Inline, Pane, Panes, Progress, Segmented, Sparkline, Stack, Stat, StatusDot, Text, Tiles, View } from "@cmd/ui";
+import { Chart, DataGrid, Inline, Pane, Panes, Progress, Sparkline, Stack, Stat, StatusDot, Text, Tiles, ToolbarButton, ToolbarSegmented, ToolbarSpacer, View, WindowToolbar } from "@cmd/ui";
 import { useState } from "react";
 import { AllSizes, RefWindow, series, type SizeName } from "./RefWindow.tsx";
 
@@ -26,24 +26,32 @@ function Dashboard({ size = "wide" }: { size?: SizeName }) {
   const top = Math.max(...PROCS.map((p) => p.mem));
   return (
     <RefWindow icon="gauge.with.dots.needle.33percent" name="Resources" size={size}>
-      <View inset>
-        <Stack gap="2xl">
-          <Inline justify="between" gap="md" wrap>
-            <Inline gap="sm">
-              <StatusDot state="done" />
-              <Text>Healthy</Text>
-              <Text tone="dim">· 4 agents · 23 processes · up 3d 4h</Text>
-            </Inline>
-            <Segmented
-              size="sm"
+      <View
+        inset
+        toolbar={
+          <WindowToolbar label="Resources">
+            <ToolbarSegmented
+              label="Range"
               value={range}
               onChange={setRange}
               options={[
-                { value: "1h", label: "1h" },
-                { value: "24h", label: "24h" },
-                { value: "7d", label: "7d" },
+                { value: "1h", label: "Hour" },
+                { value: "24h", label: "Day" },
+                { value: "7d", label: "Week" },
               ]}
             />
+            <ToolbarSpacer />
+            <ToolbarButton icon="pause" label="Pause" showLabel secondary priority={1} />
+          </WindowToolbar>
+        }
+      >
+        <Stack gap="2xl">
+          <Inline gap="sm">
+            <StatusDot state="done" />
+            <Text>Healthy</Text>
+            <Text tone="dim" truncate>
+              · 4 agents · 23 processes · up 3d 4h
+            </Text>
           </Inline>
           <Panes>
             <Pane wide>
