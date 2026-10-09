@@ -35,7 +35,7 @@ export default async function (t: Tour) {
   await t.press("k", "cmd");
   await p.getByRole("combobox").waitFor();
   await t.type("new text", TYPING.field);
-  await p.getByRole("option", { name: "New Text Window", selected: true }).waitFor();
+  await p.getByRole("option", { name: "New Text Editor", selected: true }).waitFor();
   await t.press("Return");
   await main.getByRole("textbox", { name: "Text editor" }).waitFor();
   await t.pause(400);

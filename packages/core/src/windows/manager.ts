@@ -207,7 +207,7 @@ export function writeText(file: string, text: string, expectMtime?: number): { s
   if (expectMtime !== undefined && fs.existsSync(abs) && Math.abs(fs.statSync(abs).mtimeMs - expectMtime) > 1) {
     throw new Error("The file changed on disk since it was opened.");
   }
-  if (Buffer.byteLength(text) > TEXT_MAX_BYTES) throw new Error("Too large for a text window.");
+  if (Buffer.byteLength(text) > TEXT_MAX_BYTES) throw new Error("Too large for the text editor.");
   fs.writeFileSync(abs, text);
   const st = fs.statSync(abs);
   return { size: st.size, mtime: st.mtimeMs };
