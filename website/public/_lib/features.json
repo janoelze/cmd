@@ -8,7 +8,6 @@
     { "title": "Terminals outlive the app", "text": "A background process owns them, so quitting or updating cmd ends nothing. After a reboot, agent sessions resume." },
     { "title": "Search everything", "text": "⇧⌘F searches open windows, files, past sessions, commands and what they printed. Return resumes a session." },
     { "title": "Your history, kept", "text": "Every agent session, command and commit, kept on this Mac with credentials redacted. You choose what's recorded." },
-    { "title": "Journal", "text": "A log of each day and week, written from your agents, commits and commands. Agents can read it with `cmd journal`." },
     { "title": "Session summaries", "text": "Right-click an agent's title for what you asked, what was done and what changed, as Markdown to edit and paste." },
     { "title": "Magic widgets", "text": "Say what you want to see and an agent builds a live widget for it, in your theme. Change it by asking." },
     { "title": "Built-in widgets", "text": "Agent Activity, a Live Diff of your changes, Resources, a Timer and more, waiting in the Widget Library (⇧⌘L)." },
@@ -19,8 +18,6 @@
     { "title": "Drag and drop", "text": "Drop files on a terminal to type their paths, or anywhere else to open them. Drag files out to Finder or any app." },
     { "title": "Calm notifications", "text": "Waiting agents, bells and finished commands mark their window until you look. One line says what an agent wants." },
     { "title": "Keyboard first", "text": "⌘K finds windows, commands and past sessions, ⌘F finds in any window. Every shortcut is a menu item you can remap." },
-    { "title": "A CLI", "text": "`cmd` spawns, messages, waits on and stops agents, so an agent can run other agents." },
-    { "title": "A complete terminal", "text": "Find in scrollback, jump between prompts, ⌘-click paths and links, inline images, and a check before a risky paste." },
     { "title": "Themes and updates", "text": "29 themes, light and dark, following the system or not. Updates download in the background and install when you quit." }
   ]
 }
