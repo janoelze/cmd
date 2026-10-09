@@ -18,20 +18,20 @@ Kick with weight: a drum machine kick with a pitched sine under it.
 ```
 stack(
   s("bd*4").bank("RolandTR909").gain(1).distort(.3),
-  note("c1*4").s("sine").penv(24).pdecay(.04).decay(.25).sustain(0).gain(.7),
+  note("a1*4").s("sine").penv(24).pdecay(.04).decay(.25).sustain(0).gain(.7),
 )
 ```
 
 808 bass: a sine that drops in pitch and rings, with saturation so it is heard on small speakers.
 ```
-note("c1 ~ ~ c1 ~ ~ eb1 ~").s("sine").penv(12).pdecay(.05).decay(1.2).sustain(0).distort(.5).gain(.75)
+note("c2 ~ ~ c2 ~ ~ eb2 ~").s("sine").penv(12).pdecay(.05).decay(1.2).sustain(0).distort(.5).gain(.75)
 ```
 
 Reese bass (DnB, dubstep): many detuned saws through a ladder filter, with a sine sub below.
 ```
 stack(
-  note("<d1 d1 bb0 c1>").s("supersaw").unison(7).detune(.6).ftype("ladder").lpf(sine.range(250, 900).slow(8)).lpq(3).distort(.7).hpf(60).gain(.55).orbit(2),
-  note("<d1 d1 bb0 c1>").s("sine").gain(.6).orbit(2),
+  note("<d2 d2 bb1 c2>").s("supersaw").unison(7).detune(.6).ftype("ladder").lpf(sine.range(250, 900).slow(8)).lpq(3).distort(.7).hpf(60).gain(.55).orbit(2),
+  note("<d2 d2 bb1 c2>").s("sine").gain(.6).orbit(2),
 )
 ```
 

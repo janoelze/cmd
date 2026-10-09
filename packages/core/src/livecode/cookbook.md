@@ -13,17 +13,17 @@ stack(
   // kick: 909 with a pitched sine for weight; ducks orbits 2 (bass) and 3 (pads)
   s("bd ~ ~ ~ ~ ~ bd ~ ~ ~ bd ~ ~ ~ ~ ~").bank("RolandTR909").distort(.3).gain(1)
     .duckorbit("2:3").duckattack(.12).duckdepth(.7),
-  note("c1 ~ ~ ~ ~ ~ c1 ~ ~ ~ c1 ~ ~ ~ ~ ~").s("sine").penv(24).pdecay(.04).decay(.2).sustain(0).gain(.6),
+  note("a1 ~ ~ ~ ~ ~ a1 ~ ~ ~ a1 ~ ~ ~ ~ ~").s("sine").penv(24).pdecay(.04).decay(.2).sustain(0).gain(.6),
   // snare on 2 and 4, with a little room
   s("~ ~ ~ ~ sd ~ ~ ~ ~ ~ ~ ~ sd ~ ~ ~").bank("RolandTR909").room(.2).gain(.85),
   // the amen, sliced, high-passed under the kick, glued
   s("breaks152").fit().slice(16, "0 1 2 3 4 5 6 7 8 9 <10 2> 11 12 <13 13*2> 14 15").cut(1)
     .sometimesBy(.15, x => x.ply(2)).hpf(250).compressor("-20:4:6:.003:.08").distort(.2).gain(.7),
   // hats, from bar 3
-  s("hh*16").bank("RolandTR909").gain(".4 .2 .3 .2").pan(sine.range(.35, .65).fast(2)).hpf(6000).mask("<0 0 1 1>/2"),
+  s("hh*8").bank("RolandTR909").gain(".4 .25 .35 .25").pan(sine.range(.35, .65).fast(2)).hpf(6000).mask("<0 0 1 1>/2"),
   // reese bass and sub, ducked
-  note("<d1 d1 bb0 c1>").s("supersaw").unison(7).detune(.6).ftype("ladder").lpf(sine.range(250, 900).slow(8)).lpq(3).distort(.7).hpf(60).gain(.5).orbit(2),
-  note("<d1 d1 bb0 c1>").s("sine").gain(.55).orbit(2),
+  note("<d2 d2 bb1 c2>").s("supersaw").unison(7).detune(.6).ftype("ladder").lpf(sine.range(250, 900).slow(8)).lpq(3).distort(.7).hpf(60).gain(.5).orbit(2),
+  note("<d2 d2 bb1 c2>").s("sine").gain(.55).orbit(2),
   // pad: wide, slow, its own reverb, ducked
   note("<[d3,f3,a3,c4] [d3,f3,a3,c4] [bb2,d3,f3,a3] [c3,e3,g3,bb3]>").s("supersaw").unison(5).spread(.9).detune(.25)
     .attack(.8).release(3).lpf(1400).hpf(250).room(.7).roomsize(6).gain(.18).orbit(3),
@@ -70,7 +70,7 @@ stack(
   s("bd*4, ~ cp ~ cp").bank("RolandTR909"),
   s("[~ hh]*4").bank("RolandTR909").gain(".6 .4"),
   note("<[a3,c4,e4,g4] [d3,f3,a3,c4]>").s("piano").struct("~ x ~ x ~ ~ x ~").room(.4).gain(.6),
-  note("<a1 d2>").struct("~ x ~ x x ~ x ~").s("sawtooth").lpf(800).decay(.2).sustain(0),
+  note("<a2 d2>").struct("~ x ~ x x ~ x ~").s("sawtooth").lpf(800).decay(.2).sustain(0),
 )
 ```
 
@@ -82,7 +82,7 @@ setcpm(128 / 4)
 stack(
   s("breaks125").fit().cut(1).gain(.8),
   s("bd ~ ~ bd ~ ~ bd ~").bank("RolandTR808").gain(1.1),
-  note("e1 ~ e2 e1 ~ g1 ~ a1").s("sawtooth").lpf(600).lpq(12).decay(.2).sustain(0).distort(.6),
+  note("e2 ~ e3 e2 ~ g2 ~ a2").s("sawtooth").lpf(600).lpq(12).decay(.2).sustain(0).distort(.6),
 )
 ```
 
@@ -95,7 +95,7 @@ stack(
   s("bd ~ ~ bd ~ ~ bd ~, ~ ~ sd ~ ~ ~ sd ~").bank("AkaiMPC60"),
   s("hh*8").bank("AkaiMPC60").gain(".5 .3").swingBy(1/6, 4),
   note("<[e3,g3,b3,d4] [a2,c3,e3,g3]>").s("piano").slow(1).room(.5).lpf(2500).gain(.5),
-  note("<e1 a1>").s("sine").gain(.7),
+  note("<e2 a1>").s("sine").gain(.7),
 )
 ```
 

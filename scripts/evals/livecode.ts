@@ -8,7 +8,8 @@
 //   node scripts/evals/livecode.ts report [run]               scores per case, and where they sit among the references
 //   node scripts/evals/livecode.ts rescore [run]              score a run's saved answers again (after changing analyze.ts)
 //   node scripts/evals/livecode.ts rate <run> <case> <1-10>   your ear; `report` compares it with the score
-//   node scripts/evals/livecode.ts show <run> <case>          print an answer's code (paste it into a Live Code window)
+//   node scripts/evals/livecode.ts listen <run> <case>        open an answer as a Live Code window in the running "cmd dev" app
+//   node scripts/evals/livecode.ts show <run> <case>          print an answer's code
 //
 // Data lives in .cmd-dev/evals/livecode (gitignored). The reference tunes are
 // Strudel's (CC BY-NC-SA, and its FAQ asks that tunes not be used for AI): they
@@ -265,6 +266,18 @@ if (cmd === "refs") {
   r.rating = Number(n);
   fs.writeFileSync(file, JSON.stringify(results, null, 1));
   console.log(`${id}: ${n}/10`);
+} else if (cmd === "listen") {
+  const [, run, id] = positionals;
+  const code = fs.readFileSync(path.join(DIR, "runs", run!, `${id!.includes(".") ? id : id + ".0"}.strudel`), "utf8");
+  // The dev app's core (not this checkout's CMD_HOME): where you listen.
+  const { connect } = await import("../../packages/protocol/src/node.ts");
+  const { enterInstance, coreSocketPath } = await import("../../packages/protocol/src/instance.ts");
+  delete process.env.CMD_HOME;
+  enterInstance("dev");
+  const { client, close } = await connect(process.env.CMD_SOCKET || coreSocketPath());
+  const w = await client.call("window.open", { kind: "livecode", input: { code } });
+  console.log(`opened ${id} in cmd dev (${w.id}): press Play, then rate it: node scripts/evals/livecode.ts rate ${run} ${id} <1-10>`);
+  close();
 } else if (cmd === "show") {
   const [, run, id] = positionals;
   console.log(fs.readFileSync(path.join(DIR, "runs", run!, `${id!.includes(".") ? id : id + ".0"}.strudel`), "utf8"));
