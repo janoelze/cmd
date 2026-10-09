@@ -110,8 +110,6 @@
   --row-h: 24px;
   --row-h-lg: 28px;
   --footer-h: 26px;
-  /* The width a scrollbar takes (scrollbars.ts SCROLLBAR_CSS styles them, which makes them take space). */
-  --scrollbar-size: 10px;
   /* Reading width for prose (a document's column). */
   --measure: 68ch;
 

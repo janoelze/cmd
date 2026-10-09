@@ -1,5 +1,5 @@
 // One scrollbar look for every window: lists, editors, Markdown, terminals and the
-// pages inside browser windows. Minimal: no track, a thin, faint thumb that thickens and brightens
+// pages inside browser windows. Except in terminals, they float over the content. Minimal: no track, a thin, faint thumb that thickens and brightens
 // under the pointer. The hit area stays 10px wide; a transparent border narrows what's
 // drawn. Gray reads on dark panes and white pages.
 //
@@ -387,11 +387,16 @@ export function scrollbarScript(o: ScrollbarsOptions = {}): string {
   return `(${pageScrollbars.toString()})(document, ${JSON.stringify(options)}, ${thumbSpan.toString()});`;
 }
 
+/**
+ * The app's own windows draw their scrollbars like pages do: native ones hidden, the
+ * thumb floated over each scroller (pageScrollbars), so a scrollbar never takes room
+ * from the content and nothing moves when one appears. Terminals keep xterm's, styled.
+ */
 export function installScrollbars(o: ScrollbarsOptions = {}): void {
   const style = document.createElement("style");
   style.dataset.cmd = "scrollbars";
-  style.textContent = SCROLLBAR_CSS + XTERM_CSS;
+  style.textContent = PAGE_SCROLLBAR_CSS + XTERM_CSS;
   document.head.appendChild(style);
   if (o.always) document.documentElement.classList.add("cmd-scrollbars-always");
-  else watchScrollbars(document, SCROLLBAR_HOLD);
+  pageScrollbars(document, { hold: SCROLLBAR_HOLD, always: !!o.always, light: [THUMB, THUMB_HOVER, THUMB_ACTIVE], dark: THUMB_ON_DARK }, thumbSpan);
 }
