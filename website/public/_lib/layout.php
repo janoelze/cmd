@@ -70,6 +70,8 @@ h1 { font-size: var(--fs-h1); line-height: 1.3; margin: 24px 0 6px; }
 h2 { font-size: var(--fs-h2); margin: 36px 0 12px; }
 p.lede { color: var(--ink-2); font-size: var(--fs-lede); margin: 0 0 18px; max-width: 60ch; }
 code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
+/* A keycap, like the app's Kbd (packages/ui, .ui-kbd). */
+kbd { display: inline-block; min-width: 1.6em; padding: 0 0.4em; font: 0.92em/1.5 var(--sans); letter-spacing: 0.04em; text-align: center; color: var(--ink); background: var(--surface); border-radius: 4px; box-shadow: inset 0 0 0 1px var(--kbd-edge), inset 0 -1px 0 var(--kbd-edge); --kbd-edge: color-mix(in srgb, var(--ink-3) 40%, transparent); }
 .muted { color: var(--ink-3); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
 .card.scroll { overflow-x: auto; }

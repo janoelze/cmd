@@ -13,10 +13,11 @@ function features(): array
     return json_decode((string) file_get_contents(__DIR__ . '/_lib/features.json'), true, 8, JSON_THROW_ON_ERROR)['features'];
 }
 
-/** Escapes $s and renders its `code` spans as <code>. */
-function with_code(string $s): string
+/** Escapes $s and renders its `code` spans as <code> and shortcuts (⇧⌘F, ⌘-click) as <kbd>. */
+function rich(string $s): string
 {
-    return preg_replace('/`([^`]+)`/', '<code>$1</code>', h($s));
+    $s = preg_replace('/`([^`]+)`/', '<code>$1</code>', h($s));
+    return preg_replace('/[⌃⌥⇧⌘]+(?:[A-Z0-9,↩↑↓←→]|(?=-))/u', '<kbd>$0</kbd>', $s);
 }
 
 $releases = releases();
@@ -106,7 +107,7 @@ page_start('cmd for macOS — spaces that work', 'A software workbench for macOS
 
 <div class="features">
 <?php foreach (features() as $f): ?>
-  <div><h3><?= h($f['title']) ?><?php if (isset($f['badge'])): ?> <span class="pill"><?= h($f['badge']) ?></span><?php endif ?></h3><p><?= with_code($f['text']) ?></p></div>
+  <div><h3><?= h($f['title']) ?><?php if (isset($f['badge'])): ?> <span class="pill"><?= h($f['badge']) ?></span><?php endif ?></h3><p><?= rich($f['text']) ?></p></div>
 <?php endforeach ?>
 </div>
 
