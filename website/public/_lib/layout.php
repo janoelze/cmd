@@ -193,7 +193,11 @@ p.more a:hover { color: var(--link); }
 .notes li::marker { color: var(--ink-3); }
 .notes strong { color: var(--ink); font-weight: 500; }
 @media (max-width: 640px) {
-  .release.latest .head .button { order: 1; flex-basis: 100%; justify-content: center; margin: 8px 0 2px; } /* the one to get: full width, under its version */
+  /* The one to get: full width at the bottom of its card, after its notes. */
+  .release.latest { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; }
+  .release.latest .head { display: contents; }
+  .release.latest .notes { flex-basis: 100%; }
+  .release.latest .head .button { order: 1; flex-basis: 100%; justify-content: center; margin-top: 20px; }
   .release.latest { margin-inline: -12px; padding-inline: 12px; }
   .releases li { grid-template-columns: 5em 1fr 4.5em auto; gap: 12px; padding: 10px 10px 10px 14px; }
   .releases time { display: none; }
