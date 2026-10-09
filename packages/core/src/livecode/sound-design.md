@@ -65,9 +65,9 @@ Hats with life: velocity and stereo movement.
 s("hh*16").bank("RolandTR909").gain(".45 .25 .35 .25").pan(sine.range(.35, .65).fast(2)).hpf(6000).sometimesBy(.1, x => x.ply(2))
 ```
 
-A break that sits in the mix: fitted, sliced, high-passed under the kick, glued.
+A break as the whole drum kit: one bar, fitted, sliced in order with one variation, glued (no other kick or snare on top).
 ```
-s("breaks152").fit().slice(16, "0 1 2 3 4 5 6 7 8 9 <10 2> 11 12 <13 13*2> 14 15").cut(1).hpf(250).compressor("-20:4:6:.003:.08").distort(.2).gain(.75)
+s("breaks165").fit().slice(8, "0 1 2 3 4 5 <6 2> 7").cut(1).hpf(120).compressor("-20:4:6:.003:.08").distort(.2).gain(.8)
 ```
 
 Riser and impact for transitions: filtered noise that opens over four bars.

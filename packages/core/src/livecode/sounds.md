@@ -3,9 +3,11 @@
 The loaded sounds list has every name; these are the ones that make genres. `s("name")` plays a sound, `s("name:3")` or `.n(3)` picks another sample of it. Drum machines are banks: `s("bd sd hh").bank("RolandTR909")`.
 
 ## Breaks (whole drum loops: fit them to the tempo, then chop)
-- `breaks165`: a full break at 165 BPM. `breaks152`: the amen break at 152 BPM. `breaks157`: a funk break at 157 BPM. `breaks125` (2 samples): slower breaks.
-- Play one in time: `s("breaks165").fit()` stretches it to a cycle; `.chop(16)` or `.slice(8, "0 1 2 3 ...")` cuts it into hits to rearrange; `.splice(8, "...")` slices and keeps the pitch; `.cut(1)` stops each slice when the next starts.
-- `amencutup` (32 samples): the amen break cut into single hits, `n("0 .. 31")` picks them: `n("0 1 2 3 4 5 6 7").s("amencutup")`.
+- One bar long, so `s("breaks165").fit()` plays them in time: `breaks165` (a clean funk break, the best one to chop), `breaks125` (2), `breaks157`.
+- `breaks152` is the amen break and is THREE bars long: `s("breaks152").slow(3).fit()`. Plain `.fit()` squeezes three bars into one and it plays three times too fast.
+- Rearrange a one-bar break: `.slice(8, "0 1 2 3 4 5 6 7")` (8 eighths; reorder the numbers), `.chop(16)` for sixteenths, `.splice(8, "...")` to keep the pitch, `.cut(1)` so a slice stops when the next starts. Keep the order mostly intact: a break is a groove, not a random shuffle.
+- `amencutup` (32 samples): the amen cut into single hits for building your own pattern, `n("0 2 4 6").s("amencutup")`.
+- A break IS the drum kit. Do not lay another kick-and-snare pattern over a full break: they fight. Either the break alone (a kick or sub on its own downbeats at most), or your own kit with the break high-passed hard to keep only its hats and ghost notes: `.hpf(700).gain(.45)`.
 
 ## Drums
 - Jungle and DnB: `jungle` (13: kicks, snares, hats, rides), `amencutup`, the breaks above, `hardkick`, `realclaps`.
