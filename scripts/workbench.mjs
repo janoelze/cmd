@@ -10,6 +10,8 @@
 // always 2x: the window is emulated at 2x for the shot (SF Symbols re-render), then restored.
 //   pnpm workbench matrix <story> [--themes a,b,c]   every variant × themes, into .cmd-dev/shots/wb
 //   pnpm workbench eval '<js>'                    run JS in the window (await works), print the result
+//   pnpm workbench audit [story] [variant] [--theme id]   where each window's content sits against its
+//                                                 edges (window-design skill); exits 1 on a problem
 //   pnpm workbench stop                           quit it, its core and PTY host
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -45,7 +47,7 @@ const freePort = () =>
     });
   });
 
-const commands = { goto, shot, matrix, eval: evaluate, stop };
+const commands = { goto, shot, matrix, eval: evaluate, audit, stop };
 await (commands[args[0]] ?? start)(
   ...(commands[args[0]] ? args.slice(1) : args),
 );
@@ -180,6 +182,108 @@ async function shoot(page, cdp, file, whole) {
     clip: { ...clip, scale: 1 },
   });
   fs.writeFileSync(file, Buffer.from(data, "base64"));
+}
+
+/**
+ * Measured in the page, per window (.ui-window) of the story: how far its content sits from
+ * the edges, to the nearest visible text (its glyph box, not the element), icon or drawing.
+ * The body: top, left, right; the toolbar and footer: left, right. Problems: a body whose
+ * left and right differ, a toolbar or footer not at --inset (window-design skill, Rules).
+ */
+function AUDIT() {
+  const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--inset")) || 12;
+  const visible = (r) => r.width >= 1 && r.height >= 1;
+  /** The boxes of what shows inside el: text runs, icons, images, drawings. */
+  const ink = (el) => {
+    const boxes = [];
+    const walk = (n) => {
+      if (n.nodeType === 3) {
+        if (!n.textContent.trim()) return;
+        const r = document.createRange();
+        r.selectNodeContents(n);
+        for (const b of r.getClientRects()) if (visible(b)) boxes.push(b);
+        return;
+      }
+      if (n.nodeType !== 1) return;
+      const cs = getComputedStyle(n);
+      if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") return;
+      // Drawn things: SVG, images, fields, icons (masks, as SF Symbols are drawn), and small filled shapes (a status dot's parts).
+      const filled = !n.children.length && !n.textContent.trim() && (cs.maskImage !== "none" || cs.webkitMaskImage !== "none" || cs.backgroundImage !== "none" || (cs.backgroundColor !== "rgba(0, 0, 0, 0)" && n.getBoundingClientRect().width < 40));
+      if (filled || n instanceof SVGSVGElement || n.tagName === "IMG" || n.tagName === "CANVAS" || n.tagName === "INPUT") {
+        const b = n.getBoundingClientRect();
+        if (visible(b)) boxes.push(b);
+        return;
+      }
+      for (const c of n.childNodes) walk(c);
+    };
+    walk(el);
+    return boxes;
+  };
+  const span = (el, frame, boxesOf = ink) => {
+    const f = frame.getBoundingClientRect();
+    // What shows: clipped to the part (content scrolled out of view doesn't count).
+    const boxes = boxesOf(el)
+      .map((b) => ({ top: Math.max(b.top, f.top), left: Math.max(b.left, f.left), right: Math.min(b.right, f.right), bottom: Math.min(b.bottom, f.bottom) }))
+      .filter((b) => b.right - b.left >= 1 && b.bottom - b.top >= 1);
+    if (!boxes.length) return null;
+    const r = (n) => Math.round(n);
+    return {
+      top: r(Math.min(...boxes.map((b) => b.top)) - f.top),
+      left: r(Math.min(...boxes.map((b) => b.left)) - f.left),
+      right: r(f.right - Math.max(...boxes.map((b) => b.right))),
+    };
+  };
+  const out = [];
+  for (const win of document.querySelectorAll(".ui-window")) {
+    const name = win.querySelector(".ui-window-bar-name")?.textContent?.trim() || "window";
+    const w = Math.round(win.getBoundingClientRect().width);
+    for (const view of win.querySelectorAll(".ui-view")) {
+      const parts = [
+        ["toolbar", view.querySelector(":scope > .ui-tb")],
+        ["body", view.querySelector(":scope > .ui-view-body")],
+        ["footer", view.querySelector(":scope > .ui-view-footer")],
+      ];
+      for (const [part, el] of parts) {
+        if (!el) continue;
+        // Bars are measured to their items' boxes (a field's edge, not its placeholder); bodies to their ink.
+        // An item with a visible fill or edge (a field, a pressed button) shows its box; a borderless one, its icon or label.
+        const shows = (c) => {
+          const cs = getComputedStyle(c);
+          return cs.backgroundColor !== "rgba(0, 0, 0, 0)" || cs.boxShadow !== "none" || parseFloat(cs.borderLeftWidth) > 0;
+        };
+        const items = (bar) => [...bar.querySelectorAll(":scope > :not(.ui-tb-spacer):not(.ui-tb-group), :scope > .ui-tb-group > *")].flatMap((c) => (shows(c) || [...c.querySelectorAll("*")].some((d) => d.matches("input") && shows(c.firstElementChild ?? c)) ? [c.getBoundingClientRect()] : ink(c))).filter(visible);
+        const m = part === "toolbar" ? span(el, el, items) : span(el, el);
+        if (!m) continue;
+        const problems = [];
+        if (part === "body" && Math.abs(m.left - m.right) > 1 && el.querySelector(".ui-grid, .ui-list, .ui-measure, .ui-media, .ui-split") === null) problems.push(`left ${m.left} ≠ right ${m.right}`);
+        if (part !== "body" && Math.abs(m.left - inset) > 1) problems.push(`left ${m.left}, not --inset (${inset})`);
+        if (part !== "body" && el.querySelector(".ui-tb-spacer") && Math.abs(m.right - inset) > 1) problems.push(`right ${m.right}, not --inset (${inset})`);
+        if (part === "footer" && el.querySelector(".ui-status-line-end") && Math.abs(m.right - inset) > 1) problems.push(`right ${m.right}, not --inset (${inset})`);
+        out.push({ window: `${name} (${w}px)`, part, ...m, problems });
+      }
+    }
+  }
+  return { inset, rows: out };
+}
+
+async function audit(story, variant) {
+  const { browser, page } = await connect();
+  if (story) console.log(await show(page, { story, variant, theme: flag("theme") }));
+  const { inset, rows } = await page.evaluate(`(${AUDIT.toString()})()`);
+  await browser.close();
+  if (!rows.length) {
+    console.log("No View in this story: nothing to measure.");
+    return;
+  }
+  const pad = (v, n) => String(v).padEnd(n);
+  const wn = Math.max(...rows.map((r) => r.window.length));
+  console.log(`--inset ${inset}px. Distances to the nearest text, icon or drawing:`);
+  for (const r of rows) console.log(`${pad(r.window, wn)}  ${pad(r.part, 8)} ${r.part === "body" ? `top ${pad(r.top, 4)}` : "        "} left ${pad(r.left, 4)} right ${pad(r.right, 4)} ${r.problems.length ? "✗ " + r.problems.join("; ") : ""}`);
+  const bad = rows.filter((r) => r.problems.length).length;
+  if (bad) {
+    console.log(`${bad} problem${bad > 1 ? "s" : ""}.`);
+    process.exitCode = 1;
+  } else console.log("No problems.");
 }
 
 async function goto(story, variant) {

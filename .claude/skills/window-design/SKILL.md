@@ -55,7 +55,9 @@ Each was settled by measuring in the Workbench; keep them unless the user change
 
 ## Measuring
 
-Shots catch what is wrong; numbers say by how much. Run JS in the Workbench (`pnpm workbench eval`; code with `;` needs an explicit `return`):
+Shots catch what is wrong; numbers say by how much. `pnpm workbench audit <story> [variant] [--theme id]` measures every window in a story: the body's top, left and right to the nearest visible text, icon or drawing (clipped to what shows), and the toolbar's and footer's items to what's visible (a field's box, a borderless button's icon). It flags a body whose left and right differ (unless it holds a table, list, reading column, media or split, which have their own insets) and a bar whose items aren't at `--inset`, and exits 1 then. Run it after every layout change, at every size (the `Sizes` variant).
+
+For anything it doesn't cover, run JS in the Workbench (`pnpm workbench eval`; code with `;` needs an explicit `return`):
 
 ```js
 // The insets of each window body in the current story: to the nearest visible element on each side.

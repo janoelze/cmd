@@ -61,6 +61,7 @@ pnpm workbench goto <story> [variant] [--theme id]
 pnpm workbench shot [story] [variant] [--theme id] [--out file.png] [--window]
 pnpm workbench matrix <story> [--themes a,b,c]   # every variant × themes → .cmd-dev/shots/wb
 pnpm workbench eval '<js>'                        # run JS in the window, print the result
+pnpm workbench audit [story] [variant] [--theme id] # where each window's content sits against its edges; exits 1 on a problem
 pnpm workbench stop
 ```
 
