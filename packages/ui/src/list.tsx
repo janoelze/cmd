@@ -94,7 +94,7 @@ export function ListSection(p: { title: ReactNode; count?: number; open?: boolea
   return (
     <section className="ui-list-section">
       <ListHeading title={p.title} count={p.count} open={p.open} onToggle={p.onToggle} tone={p.tone} />
-      {p.open !== false && p.children}
+      {p.open !== false && <div className="ui-list-rows">{p.children}</div>}
     </section>
   );
 }

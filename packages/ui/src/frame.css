@@ -26,10 +26,6 @@
 .ui-view-body { --list-inset: var(--space-xs); flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; container-type: inline-size; }
 .ui-view-body[data-scroll] { overflow: auto; }
 .ui-view-body[data-inset] { padding: var(--inset); }
-/* A scrolling body keeps the scrollbar's room on both sides and takes it out of the
-   inset, so content sits --inset from both edges and doesn't move when it starts to scroll. */
-.ui-view-body[data-scroll][data-inset] { scrollbar-gutter: stable both-edges; }
-.ui-view-body[data-scroll][data-inset] { padding-inline: max(0px, calc(var(--inset) - var(--scrollbar-size))); }
 /* The window's outline covers the footer's bottom edge, so its text is centred between the
    separator and the outline (padding-bottom), not in the bar's full height. */
 .ui-view-footer { flex: none; display: flex; align-items: center; height: var(--footer-h); padding: 0 var(--inset) var(--window-outline); box-shadow: inset 0 1px 0 var(--window-edge); }
@@ -127,12 +123,13 @@
 .ui-stack[data-pad] > .ui-stack:first-child > .ui-text:first-child,
 .ui-stack[data-pad] > .ui-stack:first-child > .ui-inline:first-child > .ui-text { text-box: trim-start cap alphabetic; }
 
-/* A table that runs to the window's edges keeps room for its scrollbar and takes it out of
-   the last column's padding, so that column ends --inset from the edge, scrolling or not. */
-.ui-grid { scrollbar-gutter: stable; }
-.ui-grid tr > :last-child { padding-right: max(0px, calc(var(--grid-edge) - var(--scrollbar-size))); }
-.ui-pane .ui-grid { scrollbar-gutter: auto; }
-.ui-pane .ui-grid tr > :last-child { padding-right: 0; }
-
 /* Rows in a view (ListSection, ListRow): a little room above and below; the sides are the rows' own. */
 .ui-list { display: flex; flex-direction: column; padding: var(--space-xs) 0; }
+.ui-list-rows { display: contents; }
+/* Grouped: sections apart, each one's rows in a group box (Settings' look), the heading over it
+   in line with the rows' text. Rows are pills inside the box, concentric with its corners. */
+.ui-list[data-variant="grouped"] { --list-inset: 0px; gap: var(--space-xl); padding: 0; }
+.ui-list[data-variant="grouped"] .ui-list-section + .ui-list-section { margin-top: 0; }
+.ui-list[data-variant="grouped"] .ui-list-heading { height: 20px; margin-bottom: var(--space-xs); padding: 0 calc(var(--space-xs) + 8px); }
+.ui-list[data-variant="grouped"] .ui-list-row { gap: var(--space-md); }
+.ui-list[data-variant="grouped"] .ui-list-rows { display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-xs); border-radius: calc(var(--radius) + var(--space-xs)); background: var(--group-bg); box-shadow: inset 0 0 0 1px var(--group-edge); }

@@ -3,7 +3,7 @@
 // ones marked, the filter in the toolbar and where they run in the footer. The
 // spec for Workspace Actions, Commands and any list you act on.
 
-import { Button, Icon, IconButton, LinkButton, List, ListRow, ListSection, ListValue, Separator, Spinner, StatusLine, ToolbarButton, ToolbarSearchField, ToolbarSpacer, View, WindowToolbar, type ViewStateSpec } from "@cmd/ui";
+import { Button, Icon, IconButton, LinkButton, List, ListGroup, ListRow, ListSection, ListValue, Spinner, StatusLine, ToolbarButton, ToolbarSearchField, ToolbarSpacer, View, WindowToolbar, type ViewStateSpec } from "@cmd/ui";
 import { useState } from "react";
 import { AllSizes, RefWindow, type SizeName } from "./RefWindow.tsx";
 
@@ -62,7 +62,7 @@ function Row({ a, big }: { a: Act; big?: boolean }) {
   );
 }
 
-function Actions({ size = "regular", query: q0 = "", state, describing, idle }: { size?: SizeName; query?: string; state?: ViewStateSpec; describing?: boolean; idle?: boolean }) {
+function Actions({ size = "regular", query: q0 = "", state, describing, idle, variant = "grouped" }: { size?: SizeName; query?: string; state?: ViewStateSpec; describing?: boolean; idle?: boolean; variant?: "plain" | "grouped" }) {
   const [q, setQ] = useState(q0);
   const primary = idle ? { ...PRIMARY, running: undefined, url: undefined } : PRIMARY;
   const all = [primary, ...ACTS];
@@ -73,6 +73,7 @@ function Actions({ size = "regular", query: q0 = "", state, describing, idle }: 
   return (
     <RefWindow icon="play.rectangle" name="Workspace Actions · cmd" size={size}>
       <View
+        inset={variant === "grouped"}
         state={body}
         toolbar={
           <WindowToolbar label="Actions">
@@ -102,7 +103,7 @@ function Actions({ size = "regular", query: q0 = "", state, describing, idle }: 
           </StatusLine>
         }
       >
-        <List>
+        <List variant={variant}>
           {q ? (
             <ListSection title="Matches" count={matches.length}>
               {matches.map((a) => (
@@ -111,8 +112,9 @@ function Actions({ size = "regular", query: q0 = "", state, describing, idle }: 
             </ListSection>
           ) : (
             <>
-              <Row a={primary} big />
-              <Separator />
+              <ListGroup>
+                <Row a={primary} big />
+              </ListGroup>
               {KINDS.map((k) => {
                 const rows = ACTS.filter((a) => a.kind === k);
                 return (
@@ -132,6 +134,7 @@ function Actions({ size = "regular", query: q0 = "", state, describing, idle }: 
 }
 
 export const Default = () => <Actions />;
+export const Plain = () => <Actions variant="plain" />;
 export const Sizes = () => <AllSizes render={(s) => <Actions size={s} />} />;
 export const Idle = () => <Actions idle />;
 export const Filtered = () => <Actions query="e2e" />;

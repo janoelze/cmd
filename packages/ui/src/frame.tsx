@@ -217,7 +217,21 @@ export function Text({ tone, size, mono, strong, truncate, children }: { tone?: 
   );
 }
 
-/** Rows to act on or pick from (ListSection, ListRow) in a View without an inset: the rows' content at the window's inset. */
-export function List({ children }: { children: ReactNode }) {
-  return <div className="ui-list">{children}</div>;
+/**
+ * Rows to act on or pick from (ListSection, ListRow, ListGroup). Plain: rows run edge to
+ * edge in a View without an inset, their content at the window's inset, as in a sidebar.
+ * Grouped: each section's rows in a box, in a View with `inset`, as in System Settings;
+ * for lists of things to run or change rather than records.
+ */
+export function List({ variant = "plain", children }: { variant?: "plain" | "grouped"; children: ReactNode }) {
+  return (
+    <div className="ui-list" data-variant={variant}>
+      {children}
+    </div>
+  );
+}
+
+/** Rows in a box without a heading (a grouped List's main action). */
+export function ListGroup({ children }: { children: ReactNode }) {
+  return <div className="ui-list-rows">{children}</div>;
 }
