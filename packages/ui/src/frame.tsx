@@ -8,7 +8,7 @@
 // an inspector beside it; Panes and Pane are a dashboard's sections. The body is
 // a size container, so these adapt to the window, not to the screen.
 
-import { useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { forwardRef, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { Spinner, type Tone } from "./status.tsx";
 import type { SpaceName, TextSize } from "./tokens.gen.ts";
@@ -98,11 +98,11 @@ export function ViewState({ state }: { state: ViewStateSpec }) {
  * edge to edge (a table, an image, a list with its own row insets). `state`
  * replaces the body.
  */
-export function View({ toolbar, footer, state, inset, scroll = true, children }: { toolbar?: ReactNode; footer?: ReactNode; state?: ViewStateSpec | null; inset?: boolean; scroll?: boolean; children?: ReactNode }) {
+export function View({ toolbar, footer, state, inset, scroll = true, focusable, bodyRef, children }: { toolbar?: ReactNode; footer?: ReactNode; state?: ViewStateSpec | null; inset?: boolean; scroll?: boolean; /** The body takes keyboard focus (arrow keys and Page Down scroll it). */ focusable?: boolean; bodyRef?: Ref<HTMLDivElement>; children?: ReactNode }) {
   return (
     <div className="ui-view">
       {toolbar}
-      <div className="ui-view-body" data-inset={(inset && !state) || undefined} data-scroll={scroll || undefined}>
+      <div ref={bodyRef} className="ui-view-body" tabIndex={focusable ? 0 : undefined} data-inset={(inset && !state) || undefined} data-scroll={scroll || undefined}>
         {state ? <ViewState state={state} /> : children}
       </div>
       {footer && <div className="ui-view-footer">{footer}</div>}
@@ -244,3 +244,12 @@ export function List({ variant = "plain", children }: { variant?: "plain" | "gro
 export function ListGroup({ children }: { children: ReactNode }) {
   return <div className="ui-list-rows">{children}</div>;
 }
+
+/**
+ * A document to read: rendered Markdown or HTML (headings, lists, code, tables,
+ * quotes) in a reading column, set in the person's text font (the font.text
+ * setting, --font-text) and code font. Children, or innerHTML through its ref.
+ */
+export const Document = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>(function Document({ className, ...rest }, ref) {
+  return <article ref={ref} className={className ? `ui-doc ${className}` : "ui-doc"} {...rest} />;
+});

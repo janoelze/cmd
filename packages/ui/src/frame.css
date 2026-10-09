@@ -29,6 +29,7 @@
 /* Lists in a view: rows' hover pills 4px from the edges, their content at --inset (4 + the row's 8). */
 .ui-view-body { --list-inset: var(--space-xs); flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; container-type: inline-size; }
 .ui-view-body[data-scroll] { overflow: auto; }
+.ui-view-body[tabindex] { outline: none; }
 .ui-view-body[data-inset] { padding: var(--inset); }
 /* The window's outline covers the footer's bottom edge, so its text is centred between the
    separator and the outline (padding-bottom), not in the bar's full height. */
@@ -141,3 +142,39 @@
 .ui-list[data-variant="grouped"] .ui-list-heading { height: 20px; margin-bottom: var(--space-xs); padding: 0 var(--space-md); }
 .ui-list[data-variant="grouped"] .ui-list-row { gap: var(--space-md); }
 .ui-list[data-variant="grouped"] .ui-list-rows { display: flex; flex-direction: column; gap: var(--space-2xs); }
+
+/* ── a document to read (Document): rendered Markdown, in the person's text font ── */
+.ui-doc {
+  width: 100%;
+  max-width: var(--measure);
+  margin-inline: auto;
+  padding: var(--space-2xl) var(--space-xl) var(--space-3xl);
+  font: var(--font-text-size, var(--text-base)) / 1.65 var(--font-text, var(--font-ui));
+  color: var(--text);
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+.ui-doc > :first-child { margin-top: 0; }
+.ui-doc h1, .ui-doc h2, .ui-doc h3, .ui-doc h4 { line-height: 1.25; margin: 1.6em 0 0.6em; font-weight: 600; scroll-margin-top: var(--space-xl); }
+.ui-doc h1 { font-size: 2em; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+.ui-doc h2 { font-size: 1.43em; padding-bottom: 0.3em; border-bottom: 1px solid var(--separator); }
+.ui-doc h3 { font-size: 1.14em; }
+.ui-doc h4 { font-size: 1em; color: var(--text-dim); }
+.ui-doc p, .ui-doc ul, .ui-doc ol, .ui-doc blockquote, .ui-doc table, .ui-doc pre { margin: 0 0 1em; }
+.ui-doc ul, .ui-doc ol { padding-left: 1.6em; }
+.ui-doc li + li { margin-top: 0.25em; }
+.ui-doc li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
+.ui-doc input[type="checkbox"] { accent-color: var(--accent); margin-right: 0.5em; }
+.ui-doc a { color: var(--link); text-decoration: none; cursor: pointer; }
+.ui-doc a:hover { text-decoration: underline; }
+.ui-doc strong { font-weight: 600; }
+.ui-doc hr { border: 0; border-top: 1px solid var(--separator); margin: 2em 0; }
+.ui-doc blockquote { padding: 0.1em 1em; color: var(--text-dim); border-left: 3px solid var(--separator); }
+.ui-doc img { max-width: 100%; border-radius: var(--radius-sm); }
+.ui-doc code { font: 0.88em var(--font-code, var(--font-mono)); padding: 0.15em 0.35em; border-radius: var(--radius-sm); background: var(--bg-selected); }
+.ui-doc pre { padding: var(--space-lg); overflow-x: auto; border: 1px solid var(--separator); border-radius: var(--radius); background: var(--bg); }
+.ui-doc pre code { padding: 0; background: none; font-size: calc(var(--font-code-size, var(--text-base)) * 0.9); line-height: 1.5; }
+.ui-doc table { border-collapse: collapse; display: block; overflow-x: auto; }
+.ui-doc th, .ui-doc td { padding: var(--space-sm) var(--space-lg); border: 1px solid var(--separator); }
+.ui-doc th { font-weight: 600; background: var(--bg); }
+.ui-doc tr:nth-child(2n) td { background: var(--group-bg); }

@@ -4,9 +4,10 @@
 // Links: http(s) → cmd browser window, other .md files → this window, #anchors
 // scroll, other paths → whatever window type handles them. Relative images load
 // through the app's read-only cmd-file: protocol. Loaded lazily (see markdown.tsx):
-// marked, DOMPurify and the highlighters stay out of the startup bundle.
+// marked, DOMPurify and the highlighters stay out of the startup bundle. Drawn with
+// the kit: a View whose body is a Document (the window-design skill).
 
-import { EmptyState } from "@cmd/ui";
+import { Document, View } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -83,7 +84,7 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
   const file = stateStr(win, "path") ?? "";
   const base = dirOf(file);
   const scroller = useRef<HTMLDivElement>(null);
-  const body = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLElement>(null);
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -163,11 +164,8 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
   );
 
   return (
-    <>
-      {find.bar}
-      <div className="markdown-scroll" ref={scroller} tabIndex={0} onClick={onClick}>
-        {error ? <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState> : <article className="markdown" ref={body} />}
-      </div>
-    </>
+    <View toolbar={find.bar} bodyRef={scroller} focusable state={error ? { kind: "error", title: "Couldn't open this file", text: error } : null}>
+      <Document ref={body} onClick={onClick} />
+    </View>
   );
 }

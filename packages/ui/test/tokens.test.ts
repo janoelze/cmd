@@ -15,6 +15,10 @@ const SRC = path.join(import.meta.dirname, "../src");
 const FROM_APP: Record<string, string> = {
   "--window-edge-mix": "the outline contrast setting (ui.windowOutline, look.ts)",
   "--z": "the board's zoom (WindowsView), so outlines stay whole pixels",
+  "--font-text": "the font.text setting (fonts.ts): a Document's prose",
+  "--font-text-size": "the font.textSize setting (fonts.ts)",
+  "--font-code": "the font.code setting (fonts.ts): a Document's code",
+  "--font-code-size": "the font.codeSize setting (fonts.ts)",
 };
 
 describe("tokens", () => {

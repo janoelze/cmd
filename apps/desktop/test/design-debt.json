@@ -37,8 +37,8 @@
   "apps/desktop/src/renderer/src/styles.css": {
     "color": 4,
     "fontSize": 28,
-    "radius": 12,
-    "spacing": 87
+    "radius": 9,
+    "spacing": 84
   },
   "apps/desktop/src/renderer/src/tasks/tasks.css": {
     "fontSize": 9,

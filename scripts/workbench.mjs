@@ -197,12 +197,17 @@ function AUDIT() {
   /** The boxes of what shows inside el: text runs, icons, images, drawings. */
   const ink = (el) => {
     const boxes = [];
-    const walk = (n) => {
+    // What shows is clipped by every box that scrolls or clips its content (a code block that scrolls sideways).
+    const cut = (b, c) => ({ top: Math.max(b.top, c.top), left: Math.max(b.left, c.left), right: Math.min(b.right, c.right), bottom: Math.min(b.bottom, c.bottom), get width() { return this.right - this.left; }, get height() { return this.bottom - this.top; } });
+    const walk = (n, clip) => {
       if (n.nodeType === 3) {
         if (!n.textContent.trim()) return;
         const r = document.createRange();
         r.selectNodeContents(n);
-        for (const b of r.getClientRects()) if (visible(b)) boxes.push(b);
+        for (const b of r.getClientRects()) {
+          const c = clip ? cut(b, clip) : b;
+          if (visible(c)) boxes.push(c);
+        }
         return;
       }
       if (n.nodeType !== 1) return;
@@ -211,13 +216,15 @@ function AUDIT() {
       // Drawn things: SVG, images, fields, icons (masks, as SF Symbols are drawn), and small filled shapes (a status dot's parts).
       const filled = !n.children.length && !n.textContent.trim() && (cs.maskImage !== "none" || cs.webkitMaskImage !== "none" || cs.backgroundImage !== "none" || (cs.backgroundColor !== "rgba(0, 0, 0, 0)" && n.getBoundingClientRect().width < 40));
       if (filled || n instanceof SVGSVGElement || n.tagName === "IMG" || n.tagName === "CANVAS" || n.tagName === "INPUT") {
-        const b = n.getBoundingClientRect();
+        const b = clip ? cut(n.getBoundingClientRect(), clip) : n.getBoundingClientRect();
         if (visible(b)) boxes.push(b);
         return;
       }
-      for (const c of n.childNodes) walk(c);
+      const clips = n !== el && (cs.overflowX !== "visible" || cs.overflowY !== "visible");
+      const inner = clips ? (clip ? cut(n.getBoundingClientRect(), clip) : n.getBoundingClientRect()) : clip;
+      for (const c of n.childNodes) walk(c, inner);
     };
-    walk(el);
+    walk(el, null);
     return boxes;
   };
   const span = (el, frame, boxesOf = ink) => {
