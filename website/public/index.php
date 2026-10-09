@@ -53,6 +53,7 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
   <img src="shots/light-palette.png" width="1498" height="898" alt="The command palette over the canvas, in a light theme">
   <img src="shots/json.png" width="1498" height="898" alt="A JSON window on package.json next to the Navigator and a CI widget">
   <img src="shots/search-shader.png" width="1498" height="898" alt="File search over the canvas, with a shader widget behind">
+  <img src="shots/maps.png" width="1498" height="898" alt="The strip: Google Maps in a browser window between the Navigator and a CI widget">
   <img src="shots/empty.png" width="1498" height="898" alt="An empty workspace: recent sessions in the sidebar and a hint to press ⌘N">
 </div>
 <script>
