@@ -107,7 +107,7 @@ function Runs({ state, size = "wide", initialQuery = "" }: { state?: ViewStateSp
           ) : (
             <DataGrid
               columns={[
-                { key: "status", label: "" },
+                { key: "status", label: "", icon: true },
                 { key: "name", label: "Workflow", grow: true },
                 { key: "branch", label: "Branch", hide: "narrow" },
                 { key: "duration", label: "Duration", align: "end", hide: "regular" },

@@ -20,6 +20,8 @@ export interface GridColumn {
   grow?: boolean;
   /** Dropped when the space it sits in is narrower than this (narrow: 360px, regular: 600px): the columns that matter least. */
   hide?: "narrow" | "regular";
+  /** Holds only an icon or a status dot: as narrow as it, with no label. */
+  icon?: boolean;
 }
 
 /** A cell: a node, or a value with how to show it. */
@@ -71,7 +73,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
                 </>
               );
               return (
-                <th key={c.key} data-align={c.align} data-grow={c.grow || undefined} data-hide={c.hide} aria-sort={sorted}>
+                <th key={c.key} data-align={c.align} data-grow={c.grow || undefined} data-hide={c.hide} data-icon={c.icon || undefined} aria-sort={sorted}>
                   {onSort ? (
                     <button type="button" className="ui-grid-sort" onClick={() => onSort(next(c.key))}>
                       {head}
@@ -103,7 +105,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
               {r.map((c, j) => {
                 const spec = isSpec(c) ? c : { node: c };
                 return (
-                  <td key={j} data-kind={spec.kind} data-align={spec.align ?? columns[j]?.align} data-hide={columns[j]?.hide} data-tip={spec.tip}>
+                  <td key={j} data-kind={spec.kind} data-align={spec.align ?? columns[j]?.align} data-hide={columns[j]?.hide} data-icon={columns[j]?.icon || undefined} data-tip={spec.tip}>
                     {spec.node}
                   </td>
                 );
