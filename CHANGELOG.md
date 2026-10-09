@@ -2,6 +2,26 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.22.0 — 2026-10-09
+
+SQLite files open in their own window, and windows glide instead of jumping.
+
+### New
+
+- **SQLite windows.** Open a .sqlite or .db file to browse its tables, sort and filter rows, and run read-only queries with ⌘↩. Export a table as CSV.
+
+### Improved
+
+- Windows glide into place as one when they move, resize or switch views, and sidebars slide in from their edge.
+- Sheets, menus, popovers and toasts fade out instead of vanishing, and list rows glide when they re-sort.
+- Windows go back where they were when you dock or undock your Mac.
+- A terminal that can't start sends a notification saying why.
+
+### Fixed
+
+- Terminals no longer use up the Mac's supply over time; updating restarts them once to give back what they held.
+- Changing an appearance setting no longer blanks terminals.
+
 ## 0.21.1 — 2026-10-09
 
 ### Improved
