@@ -1,31 +1,14 @@
-/* The PDF window (components/PdfView.tsx): pdf.js's pages on the window's well,
-   with a gap and a soft shadow, cmd's toolbar, find bar and sidebar around them. */
+/* The PDF window (components/PdfView.tsx): what pdf.js draws, which isn't the kit's.
+   Everything around it (toolbar, find bar, sidebar, thumbnails, outline, states) is
+   the kit's window pieces. pdf.js wants its container absolutely positioned. */
 
-.pdf { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); }
-
-.pdf-main { flex: 1; min-height: 0; display: flex; }
-.pdf-stage { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; }
-.pdf-stage > .ui-empty { flex: 1; }
-.pdf-cover { position: absolute; inset: 0; display: grid; place-items: center; }
-.pdf-password.ui-field { width: 220px; margin: 10px auto 0; }
-
-/* pdf.js wants its container absolutely positioned. */
+.pdf-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
 .pdf-scroll { position: absolute; inset: 0; overflow: auto; outline: none; }
 .pdf-scroll[hidden] { display: none; }
-.pdf-scroll .pdfViewer { padding: 16px 0 24px; }
-.pdf-scroll .pdfViewer .page { margin: 0 auto 14px; border: 0; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent), 0 2px 10px rgba(0, 0, 0, 0.16); }
+.pdf-scroll .pdfViewer { padding: var(--space-xl) 0 var(--space-2xl); }
+.pdf-scroll .pdfViewer .page { margin: 0 auto var(--space-lg); border: 0; box-shadow: 0 0 0 1px var(--bg-selected), 0 2px 10px color-mix(in srgb, var(--shadow) 32%, transparent); }
 /* Find: the kit's match colour, the current match stronger. */
 .pdf-scroll .textLayer .highlight { --highlight-bg-color: color-mix(in srgb, var(--match) 45%, transparent); --highlight-selected-bg-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 /* Dark Pages: inverted, hues kept (photos look odd, text reads well). */
 .pdf-dark .page canvas, .pdf-dark .page img { filter: invert(0.9) hue-rotate(180deg); }
 .pdf-dark .pdfViewer .page { background: #1c1c1c; }
-
-.pdf-sidebar { flex: none; width: 168px; display: flex; flex-direction: column; border-right: 1px solid var(--separator); background: var(--bg-sidebar); }
-.pdf-sidebar-tabs { flex: none; display: flex; justify-content: center; padding: 8px 8px 4px; }
-.pdf-thumbs { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0 16px; }
-.pdf-thumb { all: unset; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: default; }
-.pdf-thumb canvas { display: block; background: #fff; border-radius: 2px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent); }
-.pdf-thumb.current canvas { box-shadow: 0 0 0 2px var(--accent); }
-.pdf-thumb-n { font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.pdf-thumb.current .pdf-thumb-n { color: var(--text); font-weight: 600; }
-.pdf-outline { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 12px; --list-inset: 6px; }

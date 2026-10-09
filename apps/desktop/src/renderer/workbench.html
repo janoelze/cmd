@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <title>Workbench</title>
     <meta http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'" />
+      content="default-src 'self'; connect-src 'self' cmd-file:; img-src 'self' data: cmd-file: https:; media-src 'self' cmd-file:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'wasm-unsafe-eval'; frame-src cmd-widget: cmd-visualizer: cmd-jam:" />
   </head>
   <body class="workbench-window">
     <div id="root"></div>

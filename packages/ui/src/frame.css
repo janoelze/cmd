@@ -201,3 +201,21 @@
 .ui-tl-mark { position: relative; top: 7px; width: 9px; height: 9px; border-radius: 50%; background: hsl(var(--hue) var(--mark)); box-shadow: 0 0 0 3px var(--well); }
 .ui-tl-entry[data-picked] .ui-tl-mark { box-shadow: 0 0 0 3px var(--well), 0 0 0 4.5px hsl(var(--hue) var(--mark)); }
 .ui-tl-body { min-width: 0; padding-bottom: var(--space-xl); }
+
+/* ── a picture to pan and zoom (Viewport, Picture: the Image window) ── */
+.ui-viewport { flex: 1; min-height: 0; position: relative; overflow: auto; outline: none; }
+.ui-viewport[data-pan] { cursor: grab; }
+.ui-viewport[data-panning] { cursor: grabbing; user-select: none; }
+.ui-viewport-stage { min-width: 100%; min-height: 100%; display: grid; place-items: center; }
+.ui-viewport-cover { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+/* A checkerboard behind the picture only, in fixed cells that don't swim with the zoom. */
+.ui-picture { display: block; background: conic-gradient(var(--bg-hover) 25%, transparent 0 50%, var(--bg-hover) 0 75%, transparent 0) 0 0 / 16px 16px; }
+.ui-picture[data-crisp] { image-rendering: pixelated; }
+
+/* ── pages down a sidebar (Thumbs, Thumb: the PDF window) ── */
+.ui-thumbs { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-md); padding: var(--space-md) 0 var(--space-xl); }
+.ui-thumb { all: unset; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); cursor: default; }
+.ui-thumb-media > * { display: block; background: var(--bg-selected); border-radius: var(--radius-xs); box-shadow: 0 0 0 1px var(--bg-selected); }
+.ui-thumb[aria-current] .ui-thumb-media > * { box-shadow: 0 0 0 2px var(--accent); }
+.ui-thumb-label { font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.ui-thumb[aria-current] .ui-thumb-label { color: var(--text); font-weight: 600; }

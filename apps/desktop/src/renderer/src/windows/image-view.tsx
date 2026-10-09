@@ -5,8 +5,9 @@
 // pixel, so a screenshot is sharp on a Retina display; past 200% pixels are
 // drawn crisp, not smoothed. Chromium honours EXIF orientation and colour
 // profiles on its own. The file is watched and shown again when it changes.
+// Drawn with the kit: a View around a Viewport and a Picture (the window-design skill).
 
-import { EmptyState, Button, Spinner, ToolbarButton, ToolbarMenu, ToolbarSeparator, ToolbarSpacer, ToolbarText, WindowToolbar } from "@cmd/ui";
+import { Button, Picture, ToolbarButton, ToolbarMenu, ToolbarSeparator, ToolbarSpacer, ToolbarText, View, ViewState, Viewport, WindowToolbar } from "@cmd/ui";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FileEntry } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -18,7 +19,6 @@ import { fileUrl } from "../pdf/lib.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { stateStr, type WindowViewProps } from "./registry.ts";
 import { copyImageFile } from "./image.tsx";
-import "./image.css";
 
 type Zoom = "fit" | number;
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg)$/i;
@@ -224,48 +224,43 @@ export function ImageView({ win, focused }: WindowViewProps) {
     ]);
 
   return (
-    <div className="im">
-      <WindowToolbar label="Image">
-        <ToolbarButton icon="chevron.left" label="Previous Image" shortcut="←" disabled={index <= 0} onClick={() => go(index - 1)} priority={2} />
-        <ToolbarButton icon="chevron.right" label="Next Image" shortcut="→" disabled={index < 0 || index >= siblings.length - 1} onClick={() => go(index + 1)} priority={2} />
-        {siblings.length > 1 && index >= 0 && <ToolbarText>{`${index + 1} of ${siblings.length}`}</ToolbarText>}
-        <ToolbarSpacer />
-        <ToolbarSeparator />
-        <ToolbarButton icon="minus.magnifyingglass" label="Zoom Out" shortcut="⌘−" disabled={!nat} onClick={() => step(-1)} priority={1} />
-        <ToolbarMenu label="Zoom" disabled={!nat} onClick={zoomMenu} priority={3}>
-          {zoom === "fit" ? "Fit" : pct(zoom)}
-        </ToolbarMenu>
-        <ToolbarButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" disabled={!nat} onClick={() => step(1)} priority={1} />
-      </WindowToolbar>
-      <div ref={scroll} className="im-scroll" tabIndex={-1} data-pan={pannable || undefined} data-panning={panning || undefined} onMouseDown={onMouseDown} onKeyDown={onKeyDown} onContextMenu={(e) => (e.preventDefault(), imageMenu())}>
+    <View
+      scroll={false}
+      toolbar={
+        <WindowToolbar label="Image">
+          <ToolbarButton icon="chevron.left" label="Previous Image" shortcut="←" disabled={index <= 0} onClick={() => go(index - 1)} priority={2} />
+          <ToolbarButton icon="chevron.right" label="Next Image" shortcut="→" disabled={index < 0 || index >= siblings.length - 1} onClick={() => go(index + 1)} priority={2} />
+          {siblings.length > 1 && index >= 0 && <ToolbarText>{`${index + 1} of ${siblings.length}`}</ToolbarText>}
+          <ToolbarSpacer />
+          <ToolbarSeparator />
+          <ToolbarButton icon="minus.magnifyingglass" label="Zoom Out" shortcut="⌘−" disabled={!nat} onClick={() => step(-1)} priority={1} />
+          <ToolbarMenu label="Zoom" disabled={!nat} onClick={zoomMenu} priority={3}>
+            {zoom === "fit" ? "Fit" : pct(zoom)}
+          </ToolbarMenu>
+          <ToolbarButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" disabled={!nat} onClick={() => step(1)} priority={1} />
+        </WindowToolbar>
+      }
+    >
+      {/* The error shows inside the Viewport, which stays mounted: its size and pinch listeners are set up once. */}
+      <Viewport ref={scroll} pannable={pannable} panning={panning} loading={!nat && !error} onMouseDown={onMouseDown} onKeyDown={onKeyDown} onContextMenu={(e) => (e.preventDefault(), imageMenu())}>
         {error ? (
-          <EmptyState icon="photo" title="Couldn't show this image" action={<Button onClick={() => cmd.openPath(file)}>Open with Default App</Button>}>
-            It's a format that can't be shown here, like HEIC or TIFF, or the file is damaged or too large to decode.
-          </EmptyState>
+          <ViewState state={{ kind: "error", title: "Couldn't show this image", text: "It's a format that can't be shown here, like HEIC or TIFF, or the file is damaged or too large to decode.", action: <Button onClick={() => cmd.openPath(file)}>Open with Default App</Button> }} />
         ) : (
-          <div className="im-stage">
-            <img
-              ref={imgEl}
-              key={src}
-              className="im-img"
-              src={src}
-              crossOrigin="anonymous"
-              alt=""
-              draggable={false}
-              data-crisp={scale / density >= CRISP_FROM || undefined}
-              style={nat ? { width, height } : { opacity: 0 }}
-              onLoad={(e) => setMeasured({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight, src })}
-              onError={() => setError(true)}
-              onDoubleClick={(e) => zoomTo(zoom === 1 ? "fit" : 1, e)}
-            />
-            {!nat && (
-              <div className="im-wait">
-                <Spinner />
-              </div>
-            )}
-          </div>
+          <Picture
+            ref={imgEl}
+            key={src}
+            src={src}
+            crossOrigin="anonymous"
+            alt=""
+            draggable={false}
+            crisp={scale / density >= CRISP_FROM}
+            style={nat ? { width, height } : { opacity: 0 }}
+            onLoad={(e) => setMeasured({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight, src })}
+            onError={() => setError(true)}
+            onDoubleClick={(e) => zoomTo(zoom === 1 ? "fit" : 1, e)}
+          />
         )}
-      </div>
-    </div>
+      </Viewport>
+    </View>
   );
 }

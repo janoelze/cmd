@@ -5,7 +5,7 @@
 // changes (LaTeX, an agent writing it) it reloads where you were. Where you are
 // (page, zoom, sidebar) is kept in the window's state. Loaded lazily with pdf.js.
 
-import { Button, EmptyState, ListRow, Segmented, Spinner, TextField, ToolbarButton, ToolbarField, ToolbarGroup, ToolbarMenu, ToolbarSeparator, ToolbarSpacer, ToolbarText, Twisty, WindowToolbar, type FindOptions, type FindResults } from "@cmd/ui";
+import { Button, Inline, List, ListRow, Segmented, Split, Stack, TextField, Thumb, Thumbs, View, ViewState, ToolbarButton, ToolbarField, ToolbarGroup, ToolbarMenu, ToolbarSeparator, ToolbarSpacer, ToolbarText, Twisty, WindowToolbar, type FindOptions, type FindResults } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { cmd } from "../bridge.ts";
@@ -269,80 +269,86 @@ export function PdfView({ win, focused }: WindowViewProps) {
   const goToPage = (n: number) => parts.current && pages && (parts.current.viewer.currentPageNumber = Math.max(1, Math.min(pages, n)));
 
   return (
-    <div className="pdf">
-      <WindowToolbar label="PDF">
-        <ToolbarButton icon="sidebar.left" label={sidebar ? "Hide Sidebar" : "Show Sidebar"} pressed={!!sidebar} onClick={() => patch({ sidebar: sidebar ? null : "pages" })} priority={2} />
-        <ToolbarField
-          aria-label="Page"
-          align="center"
-          minWidth={36}
-          maxWidth={44}
-          value={pageDraft ?? String(page)}
-          disabled={!pages}
-          onChange={(e) => setPageDraft(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          onBlur={() => setPageDraft(null)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              const n = Number(pageDraft);
-              if (Number.isFinite(n)) goToPage(n);
-              setPageDraft(null);
-              container.current?.focus();
-            } else if (e.key === "Escape") (setPageDraft(null), container.current?.focus());
-          }}
-        />
-        <ToolbarText priority={0}>of {pages || "–"}</ToolbarText>
-        <ToolbarSpacer />
-        <ToolbarGroup>
-          <ToolbarButton icon="minus.magnifyingglass" label="Zoom Out" shortcut="⌘−" disabled={!pages} onClick={() => zoomBy(-1)} priority={1} />
-          <ToolbarMenu label="Zoom" disabled={!pages} onClick={zoomMenu} priority={3}>
-            {zoomLabel(zoom.scale, zoom.preset)}
-          </ToolbarMenu>
-          <ToolbarButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" disabled={!pages} onClick={() => zoomBy(1)} priority={1} />
-        </ToolbarGroup>
-        <ToolbarSeparator />
-        <ToolbarButton icon="magnifyingglass" label="Find" shortcut="⌘F" disabled={!pages} pressed={finding} onClick={() => find.request(finding ? "close" : "open")} />
-      </WindowToolbar>
-      {find.bar}
-      <div className="pdf-main">
-        {sidebar && doc && phase.kind === "ready" && (
-          <PdfSidebar doc={doc} tab={sidebar} page={page} onTab={(t) => patch({ sidebar: t })} onPage={goToPage} onDest={(d) => void parts.current?.links.goToDestination(d as string)} />
-        )}
+    <View
+      scroll={false}
+      toolbar={
+        <>
+          <WindowToolbar label="PDF">
+            <ToolbarButton icon="sidebar.left" label={sidebar ? "Hide Sidebar" : "Show Sidebar"} pressed={!!sidebar} onClick={() => patch({ sidebar: sidebar ? null : "pages" })} priority={2} />
+            <ToolbarField
+              aria-label="Page"
+              align="center"
+              minWidth={36}
+              maxWidth={44}
+              value={pageDraft ?? String(page)}
+              disabled={!pages}
+              onChange={(e) => setPageDraft(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              onBlur={() => setPageDraft(null)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const n = Number(pageDraft);
+                  if (Number.isFinite(n)) goToPage(n);
+                  setPageDraft(null);
+                  container.current?.focus();
+                } else if (e.key === "Escape") (setPageDraft(null), container.current?.focus());
+              }}
+            />
+            <ToolbarText priority={0}>of {pages || "–"}</ToolbarText>
+            <ToolbarSpacer />
+            <ToolbarGroup>
+              <ToolbarButton icon="minus.magnifyingglass" label="Zoom Out" shortcut="⌘−" disabled={!pages} onClick={() => zoomBy(-1)} priority={1} />
+              <ToolbarMenu label="Zoom" disabled={!pages} onClick={zoomMenu} priority={3}>
+                {zoomLabel(zoom.scale, zoom.preset)}
+              </ToolbarMenu>
+              <ToolbarButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" disabled={!pages} onClick={() => zoomBy(1)} priority={1} />
+            </ToolbarGroup>
+            <ToolbarSeparator />
+            <ToolbarButton icon="magnifyingglass" label="Find" shortcut="⌘F" disabled={!pages} pressed={finding} onClick={() => find.request(finding ? "close" : "open")} />
+          </WindowToolbar>
+          {find.bar}
+        </>
+      }
+    >
+      <Split
+        side="start"
+        open={!!sidebar && !!doc && phase.kind === "ready"}
+        width={{ min: 140, ideal: 168, max: 260 }}
+        pane={doc && sidebar && <PdfSidebar doc={doc} tab={sidebar} page={page} onTab={(t) => patch({ sidebar: t })} onPage={goToPage} onDest={(d) => void parts.current?.links.goToDestination(d as string)} />}
+      >
+        {/* pdf.js draws into its own container (pdf.css); the states show instead of it. */}
         <div className="pdf-stage">
           <div ref={container} className={`pdf-scroll${dark ? " pdf-dark" : ""}`} tabIndex={-1} hidden={phase.kind !== "ready"}>
             <div ref={viewerEl} className="pdfViewer" />
           </div>
-          {phase.kind === "loading" && (
-            <div className="pdf-cover">
-              <Spinner />
-            </div>
-          )}
-          {phase.kind === "error" && (
-            <EmptyState icon="doc.richtext" title="Couldn't show this PDF" action={<Button onClick={() => cmd.openPath(file)}>Open with Default App</Button>}>
-              {phase.message}
-            </EmptyState>
-          )}
+          {phase.kind === "loading" && <ViewState state={{ kind: "loading" }} />}
+          {phase.kind === "error" && <ViewState state={{ kind: "error", title: "Couldn't show this PDF", text: phase.message, action: <Button onClick={() => cmd.openPath(file)}>Open with Default App</Button> }} />}
           {phase.kind === "password" && <PasswordPrompt wrong={phase.wrong} onSubmit={(p) => (setPhase({ kind: "loading" }), password.current?.(p))} />}
         </div>
-      </div>
-    </div>
+      </Split>
+    </View>
   );
 }
 
 function PasswordPrompt({ wrong, onSubmit }: { wrong: boolean; onSubmit: (p: string) => void }) {
   const [text, setText] = useState("");
   return (
-    <EmptyState icon="lock" title="This PDF is locked" action={<Button variant="primary" disabled={!text} onClick={() => onSubmit(text)}>Open</Button>}>
-      {wrong ? "That password didn't work. Try again." : "Enter its password to open it."}
-      <TextField
-        className="pdf-password"
-        type="password"
-        autoFocus
-        value={text}
-        onChange={setText}
-        onKeyDown={(e) => e.key === "Enter" && text && onSubmit(text)}
-      />
-    </EmptyState>
+    <ViewState
+      state={{
+        kind: "empty",
+        icon: "lock",
+        title: "This PDF is locked",
+        text: wrong ? "That password didn't work. Try again." : "Enter its password to open it.",
+        action: (
+          <Inline gap="sm">
+            <TextField type="password" autoFocus value={text} onChange={setText} onKeyDown={(e) => e.key === "Enter" && text && onSubmit(text)} aria-label="Password" />
+            <Button variant="primary" disabled={!text} onClick={() => onSubmit(text)}>
+              Open
+            </Button>
+          </Inline>
+        ),
+      }}
+    />
   );
 }
 
@@ -360,14 +366,14 @@ function PdfSidebar(p: { doc: PDFDocumentProxy; tab: "pages" | "outline"; page: 
   const hasOutline = !!outline?.length;
   const tab = hasOutline ? p.tab : "pages";
   return (
-    <div className="pdf-sidebar">
+    <>
       {hasOutline && (
-        <div className="pdf-sidebar-tabs">
+        <Stack pad="sm" align="center">
           <Segmented size="sm" value={tab} options={[{ value: "pages", label: "Pages" }, { value: "outline", label: "Outline" }]} onChange={p.onTab} />
-        </div>
+        </Stack>
       )}
       {tab === "pages" ? <Thumbnails doc={p.doc} page={p.page} onPage={p.onPage} /> : <Outline items={outline ?? []} onDest={p.onDest} />}
-    </div>
+    </>
   );
 }
 
@@ -386,11 +392,11 @@ function Thumbnails({ doc, page, onPage }: { doc: PDFDocumentProxy; page: number
     list.current?.querySelector(`[data-page="${page}"]`)?.scrollIntoView({ block: "nearest" });
   }, [page]);
   return (
-    <div className="pdf-thumbs" ref={list}>
+    <Thumbs ref={list}>
       {numbers.map((n) => (
         <Thumbnail key={n} doc={doc} n={n} ratio={ratio} current={n === page} root={list} onClick={() => onPage(n)} />
       ))}
-    </div>
+    </Thumbs>
   );
 }
 
@@ -418,20 +424,19 @@ function Thumbnail({ doc, n, ratio, current, root, onClick }: { doc: PDFDocument
     return () => (io.disconnect(), task?.cancel());
   }, [doc, n, root]);
   return (
-    <button className={`pdf-thumb${current ? " current" : ""}`} data-page={n} aria-label={`Page ${n}`} aria-current={current || undefined} onClick={onClick}>
+    <Thumb current={current} label={n} data-page={n} aria-label={`Page ${n}`} onClick={onClick}>
       <canvas ref={canvas} style={{ width: THUMB_WIDTH, height: drawn ? undefined : THUMB_WIDTH * ratio }} />
-      <span className="pdf-thumb-n">{n}</span>
-    </button>
+    </Thumb>
   );
 }
 
 function Outline({ items, onDest }: { items: OutlineItem[]; onDest: (d: unknown) => void }) {
   return (
-    <div className="pdf-outline">
+    <List>
       {items.map((it, i) => (
         <OutlineRow key={i} item={it} depth={0} onDest={onDest} />
       ))}
-    </div>
+    </List>
   );
 }
 

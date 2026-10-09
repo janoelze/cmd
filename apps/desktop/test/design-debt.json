@@ -20,9 +20,7 @@
     "spacing": 17
   },
   "apps/desktop/src/renderer/src/pdf/pdf.css": {
-    "color": 3,
-    "radius": 1,
-    "spacing": 8
+    "color": 1
   },
   "apps/desktop/src/renderer/src/settings/settings.css": {
     "fontSize": 9,

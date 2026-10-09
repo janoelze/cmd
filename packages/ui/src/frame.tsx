@@ -8,6 +8,7 @@
 // an inspector beside it; Panes and Pane are a dashboard's sections. The body is
 // a size container, so these adapt to the window, not to the screen.
 
+import type * as React from "react";
 import { forwardRef, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { Spinner, type Tone } from "./status.tsx";
@@ -253,3 +254,45 @@ export function ListGroup({ children }: { children: ReactNode }) {
 export const Document = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>(function Document({ className, ...rest }, ref) {
   return <article ref={ref} className={className ? `ui-doc ${className}` : "ui-doc"} {...rest} />;
 });
+
+/**
+ * A picture you pan and zoom: scrolls when what it holds is larger, centred when it's
+ * smaller; `pannable` shows the grab cursor, `panning` the grabbing one; `loading`
+ * covers it with a spinner. The view does the zooming (its ref is the scroller).
+ */
+export const Viewport = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { pannable?: boolean; panning?: boolean; loading?: boolean }>(function Viewport({ pannable, panning, loading, children, ...rest }, ref) {
+  return (
+    <div ref={ref} className="ui-viewport" tabIndex={-1} data-pan={pannable || undefined} data-panning={panning || undefined} {...rest}>
+      <div className="ui-viewport-stage">{children}</div>
+      {loading && (
+        <div className="ui-viewport-cover">
+          <Spinner />
+        </div>
+      )}
+    </div>
+  );
+});
+
+/** An image in a Viewport: a checkerboard behind its transparent parts, its pixels drawn as squares when `crisp` (zoomed far in). */
+export const Picture = forwardRef<HTMLImageElement, React.ImgHTMLAttributes<HTMLImageElement> & { crisp?: boolean }>(function Picture({ crisp, ...rest }, ref) {
+  return <img ref={ref} className="ui-picture" data-crisp={crisp || undefined} {...rest} />;
+});
+
+/** Pages or slides down a sidebar, each a picture (an img or a canvas) and its label. */
+export const Thumbs = forwardRef<HTMLDivElement, { children: ReactNode }>(function Thumbs({ children }, ref) {
+  return (
+    <div ref={ref} className="ui-thumbs">
+      {children}
+    </div>
+  );
+});
+
+/** One of Thumbs: `current` rings it and its label. Extra props (data-*) go on its button. */
+export function Thumb({ current, label, children, ...rest }: { current?: boolean; label: ReactNode; children: ReactNode } & Omit<HTMLAttributes<HTMLButtonElement>, "children">) {
+  return (
+    <button type="button" className="ui-thumb" aria-current={current || undefined} {...rest}>
+      <span className="ui-thumb-media">{children}</span>
+      <span className="ui-thumb-label">{label}</span>
+    </button>
+  );
+}
