@@ -40,6 +40,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 ## Features
 
 - **Layouts.** Focus on one window, tile them in a grid, scroll through a strip inspired by [PaperWM](https://github.com/paperwm/PaperWM), or place them on an infinite canvas with a minimap.
+- **Spaces.** A Space is a folder you work in, with its own terminals, agents and windows. `cmd .` or ⌘O opens one; switch in place, or give each Space its own app window (⇧⌘N, or Settings → Windows → Open each Space in its own window). cmd reopens every window where it was, per display setup: laptop alone, or at the desk.
 - **Agent detection.** Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes.
 - **Waiting agents first.** Agents waiting for input are listed first, then working, then done. ⌃⌘J jumps to the next one.
 - **Remote access (beta).** Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted.
@@ -83,6 +84,7 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 | ⌥⌘N | new Claude session |
 | ⇧⌘M | new widget with Magic; in one, ⌘L changes it, ⌘E edits it, ⌘R refreshes it |
 | ⇧⌘L | Widget Library: your widgets, to put back on the workspace |
+| ⌘O / ⇧⌘N | open a Space here / in a new window |
 | ⌘K | command palette: `>` commands, `@` sessions, `?` past sessions |
 | ⌥⌘1 / 2 / 3 / 4 | focus / grid / strip / canvas |
 | ⌘↩ | focus on the selected window, and back |

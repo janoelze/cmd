@@ -617,7 +617,17 @@ ipcMain.on("appearance", (_e, a: Appearance) => {
   setDockIcon(a.dockIcon ?? null);
   for (const w of appWindows()) w.setBackgroundColor(a.background);
 });
-ipcMain.on("menu-state", (_e, state: MenuState) => applyMenuState(state));
+// Each app window reports what its menu items are; the menu bar shows the focused one's.
+const menuStates = new WeakMap<BrowserWindow, MenuState>();
+ipcMain.on("menu-state", (e, state: MenuState) => {
+  const win = winOf(e);
+  if (win) menuStates.set(win, state);
+  if (!win || win === BrowserWindow.getFocusedWindow()) applyMenuState(state);
+});
+app.on("browser-window-focus", (_e, win) => {
+  const state = menuStates.get(win);
+  if (state) applyMenuState(state);
+});
 ipcMain.on("space-show", (e, spaceId: string, o: { select?: string; newWindow?: boolean }) => spaces.show(spaceId, o ?? {}, winOf(e)));
 ipcMain.on("space-lost", (e) => {
   const win = winOf(e);

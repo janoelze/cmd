@@ -5,7 +5,9 @@
 // Which window shows what (and where it sits) is kept in windows.json, so all
 // windows come back on launch. The core's space.show events (`cmd .`) arrive here too.
 // Placement is also kept per display setup (displays.ts): docking or undocking
-// puts each window back where it last sat with those displays.
+// puts each window back where it last sat with those displays. With the
+// spaces.ownWindow setting, every Space gets a window of its own: showing one
+// that no window shows opens a new window instead of switching in place.
 
 import { app, autoUpdater, BrowserWindow, screen } from "electron";
 import fs from "node:fs";
@@ -55,6 +57,8 @@ export class SpaceWindows {
   #setup = "";
   /** Set from a display change until its replay has landed: moves then are macOS's, not the user's. */
   #settling: NodeJS.Timeout | undefined;
+  /** The spaces.ownWindow setting, followed from the core. */
+  #ownWindow = false;
 
   constructor(create: (spaceId: string, bounds: Bounds) => BrowserWindow) {
     this.#create = create;
@@ -149,11 +153,13 @@ export class SpaceWindows {
 
   /**
    * Show a Space: in the window that already shows it, else in `from` (the
-   * asking window), else (newWindow, or no window to ask) in a new window.
+   * asking window), else (newWindow, spaces.ownWindow, or no window to ask) in
+   * a new window. here: in `from` even with spaces.ownWindow.
    */
-  show(spaceId: string, o: { select?: string; newWindow?: boolean }, from: BrowserWindow | null): void {
+  show(spaceId: string, o: { select?: string; newWindow?: boolean; here?: boolean }, from: BrowserWindow | null): void {
     const owner = this.#owner(spaceId);
-    const target = owner ?? (o.newWindow || !from || from.isDestroyed() ? null : from);
+    const apart = o.newWindow || (this.#ownWindow && !o.here);
+    const target = owner ?? (apart || !from || from.isDestroyed() ? null : from);
     if (!target) {
       const win = this.#open(spaceId, this.#nextBounds(spaceId));
       if (o.select) win.webContents.once("did-finish-load", () => win.webContents.send("space-show", { spaceId, select: o.select }));
@@ -171,10 +177,16 @@ export class SpaceWindows {
     focus(target);
   }
 
-  /** The window's Space was closed: show Home there, or close the window if another one shows Home. */
+  /**
+   * The window's Space was closed: show Home there, or close the window if
+   * another one shows Home (with spaces.ownWindow: if any other window is open,
+   * since the window belonged to that Space).
+   */
   lost(win: BrowserWindow): void {
-    if (this.#owner(HOME_SPACE_ID) && this.#owner(HOME_SPACE_ID) !== win) win.close();
-    else this.show(HOME_SPACE_ID, {}, win);
+    const home = this.#owner(HOME_SPACE_ID);
+    const others = [...this.#shown.keys()].some((w) => w !== win && !w.isDestroyed());
+    if ((home && home !== win) || (this.#ownWindow && others)) win.close();
+    else this.show(HOME_SPACE_ID, { here: true }, win);
   }
 
   #open(spaceId: string, bounds: Bounds): BrowserWindow {
@@ -208,15 +220,20 @@ export class SpaceWindows {
 
   /**
    * Where the Space last sat with these displays; else a new window cascades
-   * from the focused one, like macOS document windows.
+   * from the focused one, like macOS document windows. A window that showed the
+   * Space before and shows another one now still sits there: then cascade too,
+   * rather than open exactly on top of it.
    */
   #nextBounds(spaceId: string): Bounds {
     const placed = this.#placed(spaceId);
-    if (placed) return onScreen(placed);
+    const taken = (b: Bounds) => [...this.#bounds.values()].some((o) => o.x === b.x && o.y === b.y);
+    if (placed && !taken(placed)) return onScreen(placed);
     const from = BrowserWindow.getFocusedWindow();
-    const b = (from && this.#bounds.get(from)) ?? [...this.#bounds.values()].at(-1);
+    let b = (from && this.#bounds.get(from)) ?? [...this.#bounds.values()].at(-1);
     if (!b) return DEFAULT_BOUNDS;
-    return onScreen({ width: b.width, height: b.height, x: b.x === undefined ? undefined : b.x + 24, y: b.y === undefined ? undefined : b.y + 24 });
+    do b = { width: b.width, height: b.height, x: b.x === undefined ? undefined : b.x + 24, y: b.y === undefined ? undefined : b.y + 24 };
+    while (b.x !== undefined && taken(b));
+    return onScreen(b);
   }
 
   #saveSoon(): void {
@@ -236,20 +253,23 @@ export class SpaceWindows {
 
   /**
    * Follow the core's space.show events (`cmd .` in any shell): bring the app
-   * forward and show the Space in the frontmost window. Reconnects with the core.
+   * forward and show the Space in the frontmost window. Also follows the
+   * spaces.ownWindow setting. Reconnects with the core.
    */
   followCore(socketPath: string, appWindows: () => BrowserWindow[]): void {
     const attach = async () => {
       try {
         const conn = await connect(socketPath);
         conn.client.onEvent((e) => {
+          if (e.type === "settings.updated") this.#ownWindow = e.snapshot.settings["spaces.ownWindow"];
           if (e.type !== "space.show") return;
           app.focus({ steal: true });
           const focused = BrowserWindow.getFocusedWindow();
           const from = (focused && this.#shown.has(focused) ? focused : null) ?? appWindows().find((w) => this.#shown.get(w) === this.#last) ?? null;
           this.show(e.spaceId, { newWindow: e.newWindow }, from);
         });
-        await conn.client.call("events.subscribe", { types: ["space.show"] });
+        await conn.client.call("events.subscribe", { types: ["space.show", "settings.updated"] });
+        this.#ownWindow = (await conn.client.call("settings.get", {})).settings["spaces.ownWindow"];
         // Soon after a restart (Restart Core), or `cmd .` goes unheard meanwhile.
         conn.closed.then(() => setTimeout(attach, 250));
       } catch {

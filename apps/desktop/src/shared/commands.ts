@@ -37,6 +37,7 @@ export const COMMANDS = spec([
   { id: "file.newFiles", label: "New File Browser", keys: ["Shift+Cmd+O"] },
   { id: "file.newText", label: "New Text Window", keys: ["Shift+Cmd+E"] },
   { id: "file.openSpace", label: "Open Space…", keys: ["Cmd+O"] },
+  { id: "file.newWindow", label: "New Window…", keys: ["Shift+Cmd+N"] },
   // Widgets (docs/16-widgets.md). Ids keep their old names: keybindings.json uses them.
   { id: "widget.library", label: "Widget Library…", keys: ["Shift+Cmd+L"] },
   { id: "file.newMagic", label: "New Widget with Magic…", keys: ["Shift+Cmd+M"] },

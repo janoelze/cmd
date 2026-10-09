@@ -11,7 +11,8 @@ import { byProject, shortPath, spaceDetail } from "./model.ts";
 import { getState, useStoreValue } from "./store.ts";
 import type { Palette, PaletteItem } from "./components/Palette.tsx";
 
-export type Picker = { kind: "new" } | { kind: "space" } | { kind: "move"; windowId: string } | { kind: "rename"; space: Space } | { kind: "renameAgent"; agent: Agent } | { kind: "icon"; space: Space };
+/** space: ⌘O; with newWindow (New Window…), ↵ opens the Space in a window of its own. */
+export type Picker = { kind: "new" } | { kind: "space"; newWindow?: boolean } | { kind: "move"; windowId: string } | { kind: "rename"; space: Space } | { kind: "renameAgent"; agent: Agent } | { kind: "icon"; space: Space };
 
 /** Show a Space here, or in the window that already shows it (newWindow: in a new one). */
 export function showSpace(id: SpaceId, o: { select?: string; newWindow?: boolean } = {}): void {
@@ -150,21 +151,25 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
     };
   }
 
+  // New Window…: ↵ does what ⌘↵ does in ⌘O; the Space shown here has its window already.
+  const apart = !!picker.newWindow;
   const items: PaletteItem[] = [
-    ...open.map((sp) => ({
-      id: `sp-${sp.id}`,
-      group: "Spaces" as const,
-      label: sp.id === here ? `${sp.name} (shown)` : sp.name,
-      meta: spaceDetail(sp),
-      run: () => showSpace(sp.id),
-      runAlt: () => showSpace(sp.id, { newWindow: true }),
-    })),
+    ...open
+      .filter((sp) => !apart || sp.id !== here)
+      .map((sp) => ({
+        id: `sp-${sp.id}`,
+        group: "Spaces" as const,
+        label: sp.id === here ? `${sp.name} (shown)` : sp.name,
+        meta: spaceDetail(sp),
+        run: () => showSpace(sp.id, { newWindow: apart }),
+        runAlt: () => showSpace(sp.id, { newWindow: true }),
+      })),
     ...byProject(recent).map((sp) => ({
       id: `re-${sp.id}`,
       group: "Recent" as const,
       label: sp.name,
       meta: spaceDetail(sp),
-      run: () => void openSpace(sp.root),
+      run: () => void openSpace(sp.root, apart),
       runAlt: () => void openSpace(sp.root, true),
     })),
     ...folders
@@ -174,17 +179,22 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
         group: "Folders" as const,
         label: f.split(/[\\/]/).filter(Boolean).pop() ?? f,
         meta: `${shortPath(f)} · recent session`,
-        run: () => void openSpace(f),
+        run: () => void openSpace(f, apart),
         runAlt: () => void openSpace(f, true),
       })),
-    { id: "browse", group: "Commands", label: "Browse for a Folder…", run: () => void browse(), runAlt: () => void browse(true) },
+    { id: "browse", group: "Commands", label: "Browse for a Folder…", run: () => void browse(apart), runAlt: () => void browse(true) },
   ];
   return {
     items,
     onClose: close,
-    placeholder: "Switch to a Space, or open a folder (~/src/…)",
+    placeholder: apart ? "Open a Space in a new window, or type a folder" : "Switch to a Space, or open a folder (~/src/…)",
     emptyText: "Nothing matches. Type a path to open a folder.",
-    footer: (
+    footer: apart ? (
+      <>
+        <span><kbd>↵</kbd> open in a new window</span>
+        <span>type a path to open a folder</span>
+      </>
+    ) : (
       <>
         <span><kbd>↵</kbd> show</span>
         <span><kbd>⌘↵</kbd> in a new window</span>
@@ -193,7 +203,7 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
     ),
     dynamic: (q) =>
       looksLikePath(q)
-        ? [{ id: "typed-path", group: "Folders", label: `Open ${q.trim()}`, run: () => void openSpace(q.trim()), runAlt: () => void openSpace(q.trim(), true) }]
+        ? [{ id: "typed-path", group: "Folders", label: `Open ${q.trim()}`, run: () => void openSpace(q.trim(), apart), runAlt: () => void openSpace(q.trim(), true) }]
         : [],
   };
 }

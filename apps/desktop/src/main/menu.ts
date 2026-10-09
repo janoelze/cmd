@@ -74,6 +74,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("file.newText"),
         sep,
         ...i("file.openSpace"),
+        ...i("file.newWindow"),
         sep,
         ...i("file.save"),
         sep,

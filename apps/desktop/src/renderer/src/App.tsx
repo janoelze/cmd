@@ -507,6 +507,7 @@ export function App() {
       [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`session.select${n}`, () => withPane[n - 1] && selectRow(withPane[n - 1]!)]),
     ) as Record<`session.select${number}`, () => void>),
     "file.openSpace": () => setPicker({ kind: "space" }),
+    "file.newWindow": () => setPicker({ kind: "space", newWindow: true }),
     "space.next": () => stepSpace(1),
     "space.prev": () => stepSpace(-1),
     "space.last": () => lastSpace.current && all.spaces.has(lastSpace.current) && showSpace(lastSpace.current),
