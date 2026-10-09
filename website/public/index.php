@@ -110,14 +110,6 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
 <?php endforeach ?>
 </div>
 
-<h2>System requirements</h2>
-<dl class="reqs">
-  <dt>Mac</dt><dd>Apple silicon (M1 or later)</dd>
-  <dt>macOS</dt><dd>13 Ventura or later</dd>
-  <dt>Disk</dt><dd>About 350 MB</dd>
-  <dt>Optional</dt><dd>An Anthropic or OpenAI API key for Magic widgets and AI features, and the agents you use (Claude Code, Codex…)</dd>
-</dl>
-
 <h2>Releases</h2>
 <?php if (!$releases): ?>
 <p class="muted">The release list is unavailable right now. See <a href="https://github.com/janoelze/cmd/releases">GitHub</a>.</p>
@@ -142,5 +134,6 @@ for (const t of document.querySelectorAll(".releases time")) {
 }
 </script>
 <?php endif ?>
+<p class="reqs">Needs a Mac with Apple silicon, macOS 13 or later and about 350 MB. Magic widgets and AI features use your own Anthropic or OpenAI API key.</p>
 <?php
 page_end();
