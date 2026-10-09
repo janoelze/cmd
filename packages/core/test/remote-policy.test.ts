@@ -154,6 +154,27 @@ describe("remote policy table", () => {
     }
   });
 
+  it("refuses ATTACH, DETACH and VACUUM in SQLite queries", () => {
+    const dir = path.join(home, "db");
+    fs.mkdirSync(dir);
+    const ws = core.workspaces.open(dir, { gitRoot: false }).workspace;
+    const db = path.join(dir, "a.db");
+    try {
+      expect(denied("sqlite.query", { path: db, sql: "SELECT 1" }, "view")).toBeNull();
+      for (const sql of [
+        `ATTACH '${path.join(home, "secret.db")}' AS x`,
+        `attach database '/x.db' as x`,
+        `  -- hi\n/* there */ ;AtTaCh '/x.db' AS x`,
+        "DETACH x",
+        "VACUUM INTO '/tmp/copy.db'",
+      ]) {
+        for (const scope of ["view", "control"] as const) expect(denied("sqlite.query", { path: db, sql }, scope), sql).toMatch(/isn't allowed/);
+      }
+    } finally {
+      core.workspaces.markClosed(ws.id);
+    }
+  });
+
   it("filters events", () => {
     const out: CoreEvent = { type: "pane.output", paneId: "p1", data: "x" };
     expect(remoteEventVisible(out, new Set(), [])).toBe(false);

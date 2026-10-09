@@ -3,11 +3,14 @@
 // table would stall the core. A process, not a thread: a thread stuck inside
 // one SQLite step (a runaway query) can't be terminated, a process can be
 // killed. The file is opened read-only and query_only is set, so nothing here
-// can write. Requests carry an id; each gets one reply; id 0 reports that the
+// can write, and nothing reads another file: ATTACH is refused (statements.ts,
+// plus an authorizer where node:sqlite has one), and a connection that ends up
+// with another database attached anyway is reopened. Requests carry an id; each gets one reply; id 0 reports that the
 // file couldn't be opened.
 
 import fs from "node:fs";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { refusedStatement } from "./statements.ts";
 import type { SqliteColumn, SqliteForeignKey, SqliteIndex, SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema, SqliteTable, SqliteTrigger, SqliteValue } from "@cmd/protocol";
 
 export type SqliteOp = { op: "schema" } | ({ op: "rows" } & Omit<SqliteRowsQuery, "path">) | ({ op: "query" } & Omit<SqliteQuery, "path">) | { op: "export"; table: string; file: string };
@@ -48,18 +51,42 @@ function take(stmt: StatementSync, args: unknown[], limit: number): { columns: s
   return { columns, rows, truncated };
 }
 
+// sqlite3.h: authorizer action codes and results.
+const SQLITE_OK = 0;
+const SQLITE_DENY = 1;
+const SQLITE_ATTACH = 24;
+const SQLITE_DETACH = 25;
+
+type Authorizer = (action: number, ...args: unknown[]) => number;
+
+function open(file: string): DatabaseSync {
+  const db = new DatabaseSync(file, { readOnly: true, timeout: 2000 });
+  // Node 24.10+; on older Nodes refusedStatement and the attached check below do it alone.
+  const auth = (db as unknown as { setAuthorizer?: (fn: Authorizer | null) => void }).setAuthorizer;
+  auth?.call(db, (action) => (action === SQLITE_ATTACH || action === SQLITE_DETACH ? SQLITE_DENY : SQLITE_OK));
+  db.exec("PRAGMA query_only = ON");
+  return db;
+}
+
 export class SqliteReader {
   #db: DatabaseSync;
   #path: string;
 
   constructor(path: string) {
     this.#path = path;
-    this.#db = new DatabaseSync(path, { readOnly: true, timeout: 2000 });
-    this.#db.exec("PRAGMA query_only = ON");
+    this.#db = open(path);
   }
 
   close(): void {
     this.#db.close();
+  }
+
+  /** Should another database be attached after all, start over on a fresh connection, so its alias can't be read. */
+  #onlyOwn(): void {
+    const names = this.#all<{ name: string }>("PRAGMA database_list").map((d) => d.name);
+    if (names.every((n) => n === "main" || n === "temp")) return;
+    this.#db.close();
+    this.#db = open(this.#path);
   }
 
   #one<T>(sql: string, ...args: unknown[]): T {
@@ -139,10 +166,17 @@ export class SqliteReader {
     const limit = Math.min(QUERY_MAX, Math.max(1, q.limit ?? QUERY_DEFAULT));
     const sql = q.sql.trim();
     if (!sql) throw new Error("Type a statement to run.");
-    const stmt = this.#db.prepare(sql);
-    // prepare() compiles the first statement and ignores the rest: say so instead of running half.
-    if (stmt.sourceSQL.trim().replace(/;$/, "") !== sql.replace(/;$/, "")) throw new Error("Run one statement at a time.");
-    const page = take(stmt, [], limit);
+    const refused = refusedStatement(sql);
+    if (refused) throw new Error(refused);
+    let page: ReturnType<typeof take>;
+    try {
+      const stmt = this.#db.prepare(sql);
+      // prepare() compiles the first statement and ignores the rest: say so instead of running half.
+      if (stmt.sourceSQL.trim().replace(/;$/, "") !== sql.replace(/;$/, "")) throw new Error("Run one statement at a time.");
+      page = take(stmt, [], limit);
+    } finally {
+      this.#onlyOwn();
+    }
     return { columns: page.columns, rows: page.rows, total: null, truncated: page.truncated, took: Math.round(performance.now() - t0) };
   }
 

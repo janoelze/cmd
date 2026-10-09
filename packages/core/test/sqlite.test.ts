@@ -8,6 +8,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, describe, expect, it } from "vitest";
 import { SqliteReader } from "../src/sqlite/worker.ts";
+import { refusedStatement, stripLeading } from "../src/sqlite/statements.ts";
 import { databaseOf, isSqliteFile, SqliteService } from "../src/sqlite/service.ts";
 import { registerBuiltins, sqliteType, targetFor, WindowTypes } from "../src/windows/index.ts";
 
@@ -97,6 +98,33 @@ describe("SqliteReader", () => {
     expect(reader.rows({ table: "orders" }).total).toBe(3);
   });
 
+  it("refuses ATTACH, DETACH and VACUUM in any case and behind comments, so no other file is read", () => {
+    const secret = path.join(dir, "secret.db");
+    const db = new DatabaseSync(secret);
+    db.exec("CREATE TABLE s (v TEXT); INSERT INTO s VALUES ('TOPSECRET')");
+    db.close();
+    for (const sql of [
+      `ATTACH '${secret}' AS x`,
+      `attach database '${secret}' as x`,
+      `-- a comment\n  /* and another */ AtTaCh '${secret}' AS x;`,
+      `;; ATTACH '${secret}' AS x`,
+      `EXPLAIN ATTACH '${secret}' AS x`,
+      "DETACH x",
+      `VACUUM INTO '${path.join(dir, "copy.db")}'`,
+      "vacuum",
+    ]) {
+      expect(() => reader.query({ sql }), sql).toThrow(/isn't allowed: this window reads only the database it opened/);
+      expect(() => reader.query({ sql: "SELECT * FROM x.s" }), sql).toThrow(/no such table: x.s/);
+    }
+    expect(fs.existsSync(path.join(dir, "copy.db"))).toBe(false);
+    expect(reader.query({ sql: "SELECT * FROM pragma_database_list" }).rows.map((r) => r[1])).toEqual(["main"]);
+    expect(reader.query({ sql: "/* still fine */ SELECT count(*) FROM orders" }).rows).toEqual([[3]]);
+    expect(stripLeading(" -- x\n /* y */ ;\n SELECT 1")).toBe("SELECT 1");
+    expect(refusedStatement("SELECT 'ATTACH'")).toBeNull();
+    expect(refusedStatement("SELECT * FROM attachments")).toBeNull();
+    expect(refusedStatement("/* unterminated ATTACH")).toBeNull();
+  });
+
   it("exports a table as CSV: a header, NULL empty, blobs as hex, quotes where needed", () => {
     const out = path.join(dir, "orders.csv");
     expect(reader.export("orders", out)).toEqual({ rows: 3, bytes: fs.statSync(out).size });
@@ -147,6 +175,9 @@ describe("SqliteService", () => {
       expect(s.tables.map((t) => t.name)).toEqual(["customers", "orders"]);
       expect((await svc.rows({ path: file, table: "customers", limit: 1 })).rows).toEqual([[1, "Ada", "London"]]);
       expect((await svc.query({ path: file, sql: "SELECT count(*) FROM orders" })).rows).toEqual([[3]]);
+      // The reader process keeps its connection: an alias must not outlive a refused ATTACH.
+      await expect(svc.query({ path: file, sql: `ATTACH '${makeDb("other.sqlite")}' AS x` })).rejects.toThrow(/ATTACH isn't allowed/);
+      await expect(svc.query({ path: file, sql: "SELECT * FROM x.customers" })).rejects.toThrow(/no such table/);
       expect(await svc.export(file, "customers", path.join(dir, "~svc.csv"))).toMatchObject({ rows: 3 });
       expect(svc.open()).toEqual([file]);
       const text = path.join(dir, "notes.db");

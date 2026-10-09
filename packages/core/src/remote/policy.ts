@@ -11,6 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { CoreEvent, Method, Params, RemoteScope } from "@cmd/protocol";
+import { refusedStatement } from "../sqlite/statements.ts";
 import { expandPath, inCmdInstance, isDeniedPath, remotePrivatePaths } from "../paths-deny.ts";
 import type { AgentTracker } from "../agents/tracker.ts";
 import type { PaneManager } from "../panes.ts";
@@ -278,7 +279,12 @@ const ARGS: { [M in Method]?: Check<M> } = {
   },
   "sqlite.schema": (p, ctx) => allowedPath(ctx, p.path),
   "sqlite.rows": (p, ctx) => allowedPath(ctx, p.path),
-  "sqlite.query": (p, ctx) => allowedPath(ctx, p.path),
+  "sqlite.query": (p, ctx) => {
+    allowedPath(ctx, p.path);
+    text(p.sql);
+    const refused = refusedStatement(p.sql); // the worker refuses these too
+    if (refused) throw new RemoteDenied(refused);
+  },
 };
 
 export function scopeAllows(scope: RemoteScope, access: Access): boolean {
