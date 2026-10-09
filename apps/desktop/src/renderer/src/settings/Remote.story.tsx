@@ -11,12 +11,12 @@ const DNS = "https://login.tailscale.com/admin/dns";
 const HOST = "silverboi2.tail79ddb.ts.net";
 
 const TITLES: [string, string][] = [
-  ["installed", "Tailscale is installed"],
-  ["running", "Connected to your tailnet"],
-  ["magicdns", "MagicDNS is on"],
-  ["https", "HTTPS certificates are on"],
-  ["published", "Published on your tailnet"],
-  ["reachable", "Phones can reach it"],
+  ["installed", "Install Tailscale"],
+  ["running", "Connect to your tailnet"],
+  ["magicdns", "Turn on MagicDNS"],
+  ["https", "Turn on HTTPS certificates"],
+  ["published", "Publish on your tailnet"],
+  ["reachable", "Test the address"],
 ];
 
 /** The six Tailscale checks: ok up to the one given, then todo, as the adapter reports them. */
@@ -48,7 +48,7 @@ export const Checking = () => (
 
 export const NotInstalled = () => (
   <Page>
-    <Setup access="tailscale" {...state(tailscale({ id: "installed", detail: "Install Tailscale on this Mac.", link: "https://tailscale.com/download/mac" }))} />
+    <Setup access="tailscale" {...state(tailscale({ id: "installed", detail: "Get the Mac app from tailscale.com.", link: "https://tailscale.com/download/mac" }))} />
   </Page>
 );
 
@@ -62,7 +62,7 @@ export const HttpsOff = () => (
   <Page>
     <Setup
       access="tailscale"
-      {...state(tailscale({ id: "https", detail: "Turn on HTTPS in Tailscale's admin console. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS }))}
+      {...state(tailscale({ id: "https", detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS }))}
     />
   </Page>
 );
@@ -91,7 +91,7 @@ export const Unreachable = () => (
       access="tailscale"
       {...state([
         ...tailscale().slice(0, 5),
-        { id: "reachable", title: "Phones can reach it", state: "error", detail: `Couldn't reach https://${HOST}:8443 (fetch failed). The first certificate can take a minute.` },
+        { id: "reachable", title: "Test the address", state: "error", detail: `Couldn't reach https://${HOST}:8443 (fetch failed). The first certificate can take a minute.` },
       ])}
     />
   </Page>
@@ -108,9 +108,9 @@ export const OwnUrl = () => (
     <Setup
       access="url"
       {...state([
-        { id: "url", title: "An HTTPS address", state: "ok", detail: "https://mac.example.com" },
-        { id: "page", title: "The page loads", state: "error", detail: "Couldn't reach https://mac.example.com (getaddrinfo ENOTFOUND mac.example.com)." },
-        { id: "socket", title: "Phones can connect", state: "todo" },
+        { id: "url", title: "Add an HTTPS address", state: "ok", detail: "https://mac.example.com" },
+        { id: "page", title: "Forward the page", state: "error", detail: "Couldn't reach https://mac.example.com (getaddrinfo ENOTFOUND mac.example.com)." },
+        { id: "socket", title: "Forward WebSockets", state: "todo" },
       ])}
     />
   </Page>
@@ -122,6 +122,6 @@ export const BeforeSetup = () => (
     <FormSection title="Pair a Device">
       <SetupWait />
     </FormSection>
-    <Setup access="tailscale" {...state(tailscale({ id: "https", detail: "Turn on HTTPS in Tailscale's admin console. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS }))} />
+    <Setup access="tailscale" {...state(tailscale({ id: "https", detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS }))} />
   </Page>
 );

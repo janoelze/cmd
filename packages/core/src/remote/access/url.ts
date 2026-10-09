@@ -33,15 +33,15 @@ export const urlAdapter: AccessAdapter = {
     const o = publicOrigin(ctx.settings["remote.url"]);
     const checks: Check[] = [
       "error" in o
-        ? { id: "url", title: "An HTTPS address", state: "todo", detail: o.error }
-        : { id: "url", title: "An HTTPS address", state: "ok", detail: o.url },
+        ? { id: "url", title: "Add an HTTPS address", state: "todo", detail: o.error }
+        : { id: "url", title: "Add an HTTPS address", state: "ok", detail: o.url },
     ];
-    if ("error" in o) return [...checks, { id: "page", title: "The page loads", state: "todo" }, { id: "socket", title: "Phones can connect", state: "todo" }];
+    if ("error" in o) return [...checks, { id: "page", title: "Forward the page", state: "todo" }, { id: "socket", title: "Forward WebSockets", state: "todo" }];
     const page = await probePage(o.url);
-    checks.push({ id: "page", title: "The page loads", state: page ? "error" : "ok", detail: page ?? `Forwards to 127.0.0.1:${ctx.port}` });
-    if (page) return [...checks, { id: "socket", title: "Phones can connect", state: "todo" }];
+    checks.push({ id: "page", title: "Forward the page", state: page ? "error" : "ok", detail: page ?? `Forwards to 127.0.0.1:${ctx.port}` });
+    if (page) return [...checks, { id: "socket", title: "Forward WebSockets", state: "todo" }];
     const socket = await probeSocket(o.url, ctx);
-    checks.push({ id: "socket", title: "Phones can connect", state: socket ? "error" : "ok", detail: socket ?? undefined });
+    checks.push({ id: "socket", title: "Forward WebSockets", state: socket ? "error" : "ok", detail: socket ?? undefined });
     return checks;
   },
 

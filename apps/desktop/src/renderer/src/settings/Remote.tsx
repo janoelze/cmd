@@ -11,7 +11,7 @@ import { renderSVG } from "uqr";
 import type { RemoteAccessCheck, RemoteDevice, RemoteLogEntry, RemoteScope, RemoteStatus, SettingKey } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { PairPrompt, scopeLabel } from "../components/PairPrompt.tsx";
-import { Button, Callout, FormActions, FormRow, FormSection, Inline, Prose, QrCode, Segmented, Spinner, Stack, StatusDot, Switch, Text, type DotState } from "@cmd/ui";
+import { Button, Callout, Checklist, FormActions, FormRow, FormSection, Inline, Prose, QrCode, Segmented, Spinner, Stack, Switch, Text, type StepState } from "@cmd/ui";
 
 const STATE_LINE: Record<RemoteStatus["state"], string> = {
   off: "Off.",
@@ -56,8 +56,7 @@ const day = (t: number) => new Date(t).toLocaleDateString([], { month: "short", 
 
 /** The checklist's section title, per direct access mode. */
 const SETUP_TITLE: Record<string, string> = { tailscale: "Set Up Tailscale", url: "Set Up Your URL" };
-const CHECK_DOT: Record<RemoteAccessCheck["state"], DotState> = { ok: "success", todo: "warning", error: "danger" };
-const CHECK_LABEL: Record<RemoteAccessCheck["state"], string> = { ok: "Done", todo: "To do", error: "Failed" };
+const STEP_STATE: Record<RemoteAccessCheck["state"], StepState> = { ok: "done", todo: "todo", error: "failed" };
 
 /** The button for a check's link, named after where it goes. */
 function linkLabel(link: string): string {
@@ -194,37 +193,35 @@ export function SetupWait() {
 
 /** The setup checklist of a direct access mode (docs/38, "Experience"); stories in Remote.story.tsx. */
 export function Setup({ access, checks, error, busy, again }: { access: string } & ChecksState) {
+  const footer = (
+    <Button busy={busy && !!checks} disabled={busy} onClick={again}>
+      Check Again
+    </Button>
+  );
   return (
-    <FormSection title={SETUP_TITLE[access] ?? "Setup"}>
+    <FormSection title={SETUP_TITLE[access] ?? "Setup"} plain>
       {error && !checks ? (
-        <div className="rm-card">
-          <Callout tone="danger">Couldn't check the setup: {error}</Callout>
-        </div>
+        <>
+          <div className="rm-card">
+            <Callout tone="danger">Couldn't check the setup: {error}</Callout>
+          </div>
+          <div className="rm-actions">{footer}</div>
+        </>
       ) : !checks ? (
         <div className="rm-card rm-wait rm-checking">
           <Spinner /> Checking…
         </div>
       ) : (
-        checks.map((c) => (
-          <FormRow
-            key={c.id}
-            title={
-              <span className="rm-check">
-                <StatusDot state={CHECK_DOT[c.state]} size="sm" label={CHECK_LABEL[c.state]} />
-                {c.title}
-              </span>
-            }
-            description={c.detail}
-          >
-            {c.link && c.state !== "ok" && <Button onClick={() => cmd.openPath(c.link!)}>{linkLabel(c.link)}</Button>}
-          </FormRow>
-        ))
+        <Checklist
+          footer={footer}
+          steps={checks.map((c) => ({
+            title: c.title,
+            state: STEP_STATE[c.state],
+            detail: c.detail,
+            action: c.link ? <Button onClick={() => cmd.openPath(c.link!)}>{linkLabel(c.link)}</Button> : undefined,
+          }))}
+        />
       )}
-      <div className="rm-actions">
-        <Button busy={busy && !!checks} disabled={busy} onClick={again}>
-          Check Again
-        </Button>
-      </div>
     </FormSection>
   );
 }

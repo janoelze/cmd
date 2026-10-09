@@ -700,6 +700,19 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
   background: var(--separator);
 }
 .ui-row[data-compact] { min-height: 34px; padding-top: var(--space-sm); padding-bottom: var(--space-sm); }
+.ui-checklist { margin: 0; padding: 0; list-style: none; }
+.ui-step { gap: 10px; }
+.ui-step[data-compact] { min-height: 36px; }
+.ui-step-mark { flex: none; display: flex; align-self: flex-start; padding-top: 1px; color: var(--text-dim); }
+.ui-step[data-compact] .ui-step-mark { align-self: center; padding-top: 0; }
+.ui-step[data-state="done"] .ui-step-mark { color: var(--success); }
+.ui-step[data-state="failed"] .ui-step-mark { color: var(--danger); }
+.ui-step[data-at="current"][data-state="todo"] .ui-step-mark { color: var(--accent); }
+.ui-step[data-at="current"] .ui-row-title { font-weight: 600; }
+.ui-step[data-at="later"] .ui-row-title { color: var(--text-dim); }
+.ui-step[data-at="later"] .ui-step-mark { opacity: 0.6; }
+.ui-step-value { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); color: var(--text-dim); }
+.ui-step-footer { justify-content: flex-end; }
 .ui-row[data-stacked] { flex-direction: column; align-items: stretch; gap: var(--space-md); }
 .ui-row[data-stacked] .ui-row-control { max-width: none; justify-content: flex-start; }
 .ui-row[data-stacked] > .ui-row-note { margin-top: -2px; }
