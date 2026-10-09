@@ -1,5 +1,6 @@
 // Remote access in the core (docs/13-remote-access.md): follows the remote.*
-// settings, keeps one Transport (today the relay link), issues pairing links,
+// settings, keeps one Transport (the relay link, or the direct listener behind
+// an access adapter, docs/38), issues pairing links,
 // asks the Mac to approve new devices, keeps the device list, and runs one
 // HostChannel per connected device. Sessions are served by the core like socket
 // clients, held to policy.ts. Every pairing, session, revoke, denied call and
@@ -13,8 +14,13 @@ import { encodePairing, equal, fromBase64Url, randomBytes, toBase64Url, type Byt
 import type { Connection, Served } from "../connection.ts";
 import type { SettingsService } from "../settings.ts";
 import type { RemoteDeviceRecord, Store } from "../store.ts";
+import { exec as loginExec } from "../loginpath.ts";
+import { AccessAdapters, type AccessAdapter, type AdapterContext, type Check } from "./access/adapter.ts";
+import { registerBuiltinAdapters } from "./access/builtin.ts";
+import { defaultDirectPort, DirectListener } from "./direct.ts";
 import { HostKeys } from "./keys.ts";
 import { RelayLink } from "./link.ts";
+import { webClientDir } from "./webroot.ts";
 import type { Transport } from "./transport.ts";
 import { HostChannel, type ChannelHost } from "./session.ts";
 
@@ -35,7 +41,16 @@ export interface RemoteServiceOptions {
   stateDir: string | null;
   serve: (conn: Connection) => Served;
   broadcast: (e: CoreEvent) => void;
+  /** Access adapters for direct modes; default: the built-ins. */
+  adapters?: AccessAdapters;
+  /** How adapters run tools (tests fake it); default: loginpath.ts exec. */
+  exec?: AdapterContext["exec"];
+  /** The built web client the direct listener serves; default: webroot.ts. */
+  webDir?: string | null;
 }
+
+/** The settings that pick and shape the transport. */
+const KEYS = ["remote.enabled", "remote.access", "remote.relay", "remote.url", "remote.port", "remote.tailscale.port"] as const;
 
 export class RemoteService {
   /** The audit log without an event log (tests). */
@@ -44,6 +59,11 @@ export class RemoteService {
   #keys: HostKeys;
   #key: KeyPair | null = null;
   #transport: Transport | null = null;
+  /** The settings the running transport was made from, to skip restarts that change nothing. */
+  #config = "";
+  /** The adapter that published the direct listener, and its context, to undo it when switching away. */
+  #published: { adapter: AccessAdapter; ctx: AdapterContext } | null = null;
+  #adapters: AccessAdapters;
   #channels = new Map<number, HostChannel>();
   #pairing: { psk: Bytes; scope: RemoteScope; expiresAt: number } | null = null;
   #requests = new Map<string, { request: RemotePairRequest; resolve: (scope: RemoteScope | null) => void }>();
@@ -59,36 +79,111 @@ export class RemoteService {
   constructor(o: RemoteServiceOptions) {
     this.#o = o;
     this.#keys = new HostKeys(o.stateDir ? path.join(o.stateDir, "remote") : null);
-    this.#unbind = o.settings.bind(["remote.enabled", "remote.relay"], (s) => this.#apply(s));
+    this.#adapters = o.adapters ?? builtinAdapters();
+    this.#unbind = o.settings.bind([...KEYS], (s) => this.#apply(s));
+  }
+
+  get adapters(): AccessAdapters {
+    return this.#adapters;
   }
 
   /** Settings changed: start, restart or stop the transport (serialized). */
   #apply(s: Settings): void {
     this.#applying = this.#applying.then(async () => {
+      const access = s["remote.access"];
+      const config = !s["remote.enabled"] || this.#closed ? "" : JSON.stringify(access === "relay" ? [access, s["remote.relay"].trim()] : KEYS.map((k) => s[k]));
+      if (config === this.#config && (this.#transport || !config)) return;
+      this.#config = config;
       this.#stop();
-      if (this.#closed || !s["remote.enabled"]) return this.#changed();
-      const relay = s["remote.relay"].trim();
-      if (!relay) return this.#changed();
+      if (this.#published && (!config || access !== this.#published.adapter.id || this.#localPort(s) !== this.#published.ctx.port)) await this.#unpublish();
+      if (!config) return this.#changed();
       try {
         const id = await this.#keys.load();
         if (this.#closed) return;
         this.#key = id.key;
-        // A route belongs to one relay: switching relays registers a new one.
-        const same = id.relay === relay;
-        const link = new RelayLink({
-          relay,
-          client: () => this.#o.settings.settings["remote.client"],
-          route: same ? id.route : null,
-          secret: same ? id.secret : null,
-          onRegistered: (route, secret) => this.#keys.setRoute(relay, route, secret),
-        });
-        this.#use(link);
-        this.audit("enabled", null, relay);
+        if (access === "relay") this.#startRelay(s, id);
+        else this.#startDirect(s, access);
       } catch (err) {
         log.error(`remote access could not start: ${(err as Error).message}`);
       }
       this.#changed();
     });
+  }
+
+  #startRelay(s: Settings, id: { route: string | null; secret: string | null; relay: string | null }): void {
+    const relay = s["remote.relay"].trim();
+    if (!relay) return;
+    // A route belongs to one relay: switching relays registers a new one.
+    const same = id.relay === relay;
+    const link = new RelayLink({
+      relay,
+      client: () => this.#o.settings.settings["remote.client"],
+      route: same ? id.route : null,
+      secret: same ? id.secret : null,
+      onRegistered: (route, secret) => this.#keys.setRoute(relay, route, secret),
+    });
+    this.#use(link);
+    this.audit("enabled", null, relay);
+  }
+
+  /** The loopback listener, published by the access adapter. */
+  #startDirect(s: Settings, access: string): void {
+    const adapter = this.#adapters.get(access);
+    if (!adapter) throw new Error(`no access adapter "${access}"`);
+    const port = this.#localPort(s);
+    const route = this.#keys.directRoute(access);
+    const listener = new DirectListener({ port, route, webDir: this.#o.webDir === undefined ? webClientDir() : this.#o.webDir });
+    this.#use(listener);
+    this.audit("enabled", null, `${access} on 127.0.0.1:${port}`);
+    const ctx = this.#context(port, route);
+    adapter.enable(ctx).then(
+      ({ url }) => {
+        if (this.#transport === listener) {
+          this.#published = { adapter, ctx };
+          listener.setOrigin(url);
+        } else if (!this.#config) {
+          // Turned off while it was publishing.
+          void adapter.disable(ctx).catch(() => {});
+        }
+      },
+      (err: Error) => {
+        log.warn(`${access}: ${err.message}`);
+        if (this.#transport === listener) listener.setOrigin(null, err.message);
+      },
+    );
+  }
+
+  async #unpublish(): Promise<void> {
+    const p = this.#published;
+    this.#published = null;
+    try {
+      await p?.adapter.disable(p.ctx);
+    } catch (err) {
+      log.warn(`${p?.adapter.id}: couldn't unpublish: ${(err as Error).message}`);
+    }
+  }
+
+  #localPort(s: Settings): number {
+    return s["remote.port"] || defaultDirectPort();
+  }
+
+  #context(port: number, route: string): AdapterContext {
+    return {
+      exec: this.#o.exec ?? loginExec,
+      settings: this.#o.settings.settings,
+      port,
+      route,
+      log: { info: (m) => log.info(m), warn: (m) => log.warn(m) },
+    };
+  }
+
+  /** The setup checklist of an access mode (default: the current one); the relay has none. */
+  async checks(access: string = this.#o.settings.settings["remote.access"]): Promise<Check[]> {
+    if (access === "relay") return [];
+    const adapter = this.#adapters.get(access);
+    if (!adapter) throw new Error(`no access mode "${access}" (try ${this.#adapters.all().map((a) => a.id).join(", ")} or relay)`);
+    await this.#keys.load();
+    return adapter.detect(this.#context(this.#localPort(this.#o.settings.settings), this.#keys.directRoute(access)));
   }
 
   #use(t: Transport): void {
@@ -117,12 +212,14 @@ export class RemoteService {
 
   status(): RemoteStatus {
     const s = this.#o.settings.settings;
-    const noRelay = s["remote.enabled"] && !s["remote.relay"].trim();
+    const noRelay = s["remote.enabled"] && s["remote.access"] === "relay" && !s["remote.relay"].trim();
     return {
       enabled: s["remote.enabled"],
       state: this.#transport ? this.#transport.state : noRelay ? "error" : s["remote.enabled"] ? "connecting" : "off",
       error: this.#transport ? this.#transport.error : noRelay ? "set a relay (remote.relay)" : null,
       relay: s["remote.relay"],
+      access: s["remote.access"],
+      address: this.#transport?.endpoint()?.client ?? null,
       devices: this.devices(),
       sessions: this.sessions(),
       requests: [...this.#requests.values()].map((r) => r.request),
@@ -192,9 +289,10 @@ export class RemoteService {
   pair(scope: RemoteScope): { url: string; expiresAt: number } {
     const t = this.#transport;
     const route = t?.route;
-    if (!t || t.state !== "online" || !route || !this.#key) throw new Error("remote access isn't connected to its relay");
+    const relay = this.#o.settings.settings["remote.access"] === "relay";
+    if (!t || t.state !== "online" || !route || !this.#key) throw new Error(relay ? "remote access isn't connected to its relay" : `remote access isn't ready${t?.error ? `: ${t.error}` : ""}`);
     const at = t.endpoint();
-    if (!at) throw new Error("set the web client's URL first (remote.client)");
+    if (!at) throw new Error(relay ? "set the web client's URL first (remote.client)" : "remote access has no address yet");
     const psk = randomBytes(32);
     const expiresAt = Date.now() + PAIRING_TTL_MS;
     this.#pairing = { psk, scope, expiresAt };
@@ -346,4 +444,10 @@ export class RemoteService {
       this.#changed();
     });
   }
+}
+
+function builtinAdapters(): AccessAdapters {
+  const a = new AccessAdapters();
+  registerBuiltinAdapters(a);
+  return a;
 }

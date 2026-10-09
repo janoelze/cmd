@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, CommandRun, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Workspace, WorkspaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, CommandRun, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteAccessCheck, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Workspace, WorkspaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
 import type { DataClassInfo, DataEvent, DataQuery, DataStats, NewDataEvent, SessionInfo, TurnRow, ViewQuery } from "./events.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
@@ -448,6 +448,8 @@ export interface Methods {
   "remote.disconnect": { params: { id?: string }; result: null };
   /** Recent activity, newest first. */
   "remote.log": { params: { limit?: number }; result: RemoteLogEntry[] };
+  /** The setup checklist of an access mode (default: remote.access); empty for the relay. */
+  "remote.checks": { params: { access?: string }; result: RemoteAccessCheck[] };
   /** Unpair a device and close its sessions. */
   "remote.revoke": { params: { id: string }; result: null };
   /** Change a device's scope; its sessions reconnect with it. */

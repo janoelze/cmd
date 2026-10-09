@@ -1,9 +1,11 @@
 // The host's identity for remote access: its static X25519 key (devices pin it
-// at pairing) and its route on the relay. Kept in $CMD_HOME/remote/host.json,
+// at pairing) and its routes: one on the relay, one per direct access mode
+// (docs/38), so switching modes doesn't reuse a route on another origin. Kept in $CMD_HOME/remote/host.json,
 // mode 0600 like secrets.json, so dev and release instances have separate keys
 // and devices. TODO: the login Keychain (`security add-generic-password`) first,
 // this file as the fallback.
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { exportKeyPair, generateKeyPair, importKeyPair, type KeyPair } from "@cmd/remote-crypto";
@@ -22,6 +24,8 @@ interface File {
   route?: string;
   secret?: string;
   relay?: string;
+  /** Direct access mode → its route. */
+  direct?: Record<string, string>;
 }
 
 export class HostKeys {
@@ -47,6 +51,17 @@ export class HostKeys {
     if (!this.#doc) throw new Error("host key not loaded");
     this.#doc = { ...this.#doc, relay, route, secret };
     this.#save();
+  }
+
+  /** The route devices dial for a direct access mode (tailscale, url…); made the first time. */
+  directRoute(mode: string): string {
+    if (!this.#doc) throw new Error("host key not loaded");
+    const known = this.#doc.direct?.[mode];
+    if (known) return known;
+    const route = crypto.randomBytes(16).toString("base64url");
+    this.#doc = { ...this.#doc, direct: { ...this.#doc.direct, [mode]: route } };
+    this.#save();
+    return route;
   }
 
   #save(): void {

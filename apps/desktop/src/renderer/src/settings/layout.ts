@@ -117,7 +117,7 @@ export const SETTINGS_PAGES: Page[] = [
     icon: "iphone",
     sections: [
       { items: ["remote.enabled"] },
-      { title: "Connection", items: ["remote.relay", "remote.client"] },
+      { title: "Connection", items: ["remote.access", "remote.relay", "remote.client", "remote.tailscale.port", "remote.url", "remote.port"] },
       { title: "Devices", items: ["remote.deviceExpiryDays"] },
     ],
   },

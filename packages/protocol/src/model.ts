@@ -407,10 +407,25 @@ export interface RemoteStatus {
   state: "off" | "connecting" | "online" | "error";
   error: string | null;
   relay: string;
+  /** How phones reach this Mac (remote.access): relay, tailscale, url. */
+  access: string;
+  /** Where phones open cmd: the web client's origin; null until it's known. */
+  address: string | null;
   devices: RemoteDevice[];
   sessions: RemoteSession[];
   /** Pairing requests waiting for an answer (an app that opens later still asks). */
   requests: RemotePairRequest[];
+}
+
+/** A step of an access mode's setup (Settings → Remote Access, `cmd remote setup`). */
+export interface RemoteAccessCheck {
+  id: string;
+  title: string;
+  state: "ok" | "todo" | "error";
+  /** What's there, or what to do. */
+  detail?: string;
+  /** A page that helps (a download, an admin console). */
+  link?: string;
 }
 
 /** An entry of the remote access audit log (Settings → Remote Access → Recent activity, `cmd remote log`). */
