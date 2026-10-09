@@ -28,6 +28,8 @@ export interface ActionsOptions {
   describeOn: () => boolean;
   roots: () => string[];
   createPane: (o: { cwd: string; command: string; spaceId: SpaceId }) => Pane;
+  /** How the person starts an agent (agents.<kind>.command), for its skills; null: the agent's name. */
+  agentCommand?: (agent: string) => string | null;
   /** ms before a changed folder is read again, and before the model is asked. */
   debounce?: { scan: number; describe: number };
 }
@@ -76,7 +78,7 @@ export function findUrl(text: string): string | null {
 /** A source's file as listed: a folder of scripts once ("scripts/"), not each script. */
 const sourceFile = (f: string) => (/^(scripts|bin|mise-tasks|\.mise-tasks|\.mise\/tasks|\.github\/workflows)\//.test(f) ? f.slice(0, f.lastIndexOf("/") + 1) : f);
 
-export class ActionsService extends EventEmitter<{ changed: [root: string] }> {
+export class ActionsService extends EventEmitter<{ changed: [root: string]; url: [paneId: PaneId, url: string] }> {
   #o: ActionsOptions;
   #catalogs = new Map<string, Catalog>();
   #watch = new WatchService();
@@ -107,6 +109,7 @@ export class ActionsService extends EventEmitter<{ changed: [root: string] }> {
       if (url) {
         t.run.url = url;
         this.emit("changed", t.root);
+        this.emit("url", id, url);
       }
     });
     o.panes.on("removed", (id) => {
@@ -159,8 +162,11 @@ export class ActionsService extends EventEmitter<{ changed: [root: string] }> {
    */
   run(root: string, actionId: string, spaceId: SpaceId, o: { restart?: boolean; fresh?: boolean } = {}): { paneId: PaneId; started: boolean } {
     const list = this.list(root);
-    const a = [...list.actions, ...list.history, ...list.suggested].find((x) => x.id === actionId);
-    if (!a) throw new Error(`no action ${actionId} in ${root}`);
+    const found = [...list.actions, ...list.history, ...list.suggested].find((x) => x.id === actionId);
+    if (!found) throw new Error(`no action ${actionId} in ${root}`);
+    // An agent skill starts the agent the way the person has set it up ("claude --model opus /triage").
+    const own = found.agent ? this.#o.agentCommand?.(found.agent) : null;
+    const a = own ? { ...found, command: found.command.replace(/^\S+/, () => own) } : found;
     const prev = o.fresh ? undefined : [...this.#runs.entries()].filter(([, t]) => t.root === root && t.run.actionId === actionId).sort((x, y) => y[1].run.startedAt - x[1].run.startedAt)[0];
     if (prev && this.#o.panes.get(prev[0])) {
       const [paneId, t] = prev;

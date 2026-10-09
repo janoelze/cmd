@@ -1,4 +1,4 @@
-/* Built-in widgets (docs/16-widgets.md): Agent Activity (aa-), Live Diff (ld-), YouTube (yt-), Resources (rs-) and Timer (tm-). The list widgets are @cmd/ui Panels. */
+/* Built-in widgets (docs/16-widgets.md): Agent Activity (aa-), Live Diff (ld-), YouTube (yt-), Resources (rs-), Timer (tm-) and Workspace Actions (wa-). The list widgets are @cmd/ui Panels. */
 
 .aa, .ld { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); font: var(--text-sm) var(--font-ui); color: var(--text); }
 .aa-list, .ld-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 0; display: flex; flex-direction: column; }
@@ -56,3 +56,7 @@ button.tm-time:not(:disabled):hover { background: var(--bg-hover); }
 
 /* Visualizer: the frame fills the window; black while the first preset loads */
 .visualizer-frame { flex: 1; width: 100%; min-height: 0; border: 0; display: block; background: #000; }
+
+/* ── Workspace Actions ── */
+.wa-search { padding: 6px 10px 2px; }
+.wa-note { padding: 6px 10px; color: var(--text-dim); font-size: var(--text-xs); }

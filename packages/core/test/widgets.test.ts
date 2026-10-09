@@ -597,7 +597,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(all().slice(0, 3)).toEqual([
       expect.objectContaining({ ref: "type:agents", source: "builtin", title: "Agent Activity", windows: [] }),
       expect.objectContaining({ ref: "type:diff", source: "builtin", title: "Live Diff", windows: [] }),
-      expect.objectContaining({ ref: "type:youtube", source: "builtin", title: "YouTube", windows: [] }),
+      expect.objectContaining({ ref: "type:actions", source: "builtin", title: "Workspace Actions", windows: [] }),
     ]);
     const activity = core.handlers["widget.add"]({ ref: "type:agents" }) as unknown as { id: string; kind: string; state: { scope: string } };
     expect(activity).toMatchObject({ kind: "agents", state: { scope: "space" } });

@@ -7,7 +7,8 @@ import type { PaneId } from "./model.ts";
 /** What the widget, the library and the palette call it; one place to rename. */
 export const ACTIONS_TITLE = "Workspace Actions";
 
-export const ACTION_KINDS = ["dev", "test", "build", "check", "deploy", "setup", "clean", "run"] as const;
+/** "agent": an agent skill or command (.claude/skills), run as a new agent session. */
+export const ACTION_KINDS = ["dev", "test", "build", "check", "deploy", "setup", "clean", "run", "agent"] as const;
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
 export interface WorkspaceAction {
@@ -37,6 +38,8 @@ export interface WorkspaceAction {
   args?: boolean;
   /** A local server's address known before it runs (a compose service's port). */
   url?: string;
+  /** An agent skill's or command's agent: "claude", "codex", "gemini", "qwen", "copilot". */
+  agent?: string;
   /** Lifecycle scripts and the like: listed under More. */
   hidden?: boolean;
   /** How often it ran here lately (decayed: last week counts more than last year); 0 if never. */

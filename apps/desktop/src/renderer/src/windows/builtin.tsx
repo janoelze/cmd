@@ -1,6 +1,6 @@
 // Built-in window views. Each uses the same registration a plugin would.
 
-import type { AppWindow } from "@cmd/protocol";
+import { ACTIONS_TITLE, type AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import type { MenuEntry } from "../context.ts";
 import { copy } from "../actions.ts";
@@ -15,6 +15,8 @@ import { LiveDiff } from "../components/LiveDiff.tsx";
 import { watchUrl, YouTubeView } from "../components/YouTubeView.tsx";
 import { NavigatorView } from "../components/Navigator.tsx";
 import { CommandsView } from "../components/CommandsView.tsx";
+import { ActionsView, actionsRoot } from "../components/ActionsView.tsx";
+import { getState } from "../store.ts";
 import { JournalView } from "../components/JournalView.tsx";
 import { NotificationsView } from "../components/NotificationsView.tsx";
 import { ResourcesView } from "../components/ResourcesView.tsx";
@@ -245,6 +247,30 @@ registerWindowView({
   describe: () => ({ kind: null }),
   titleMenu: (w) => ({ label: scopeLabel(w), entries: commandsMenu(w) }),
   menu: commandsMenu,
+});
+
+// Workspace Actions: the title bar names the folder; its menu has where they come from and the settings.
+const actionsMenu = (w: AppWindow): MenuEntry[] => {
+  const st = getState();
+  const settings = st.settings.settings;
+  const set = (key: "actions.describe" | "actions.openBrowser", value: boolean) => void cmd.call("settings.set", { key, value }).catch(() => {});
+  return [
+    { label: "Describe with AI", checked: settings["actions.describe"], run: () => set("actions.describe", !settings["actions.describe"]) },
+    { label: "Open Dev Servers in a Browser", checked: settings["actions.openBrowser"], run: () => set("actions.openBrowser", !settings["actions.openBrowser"]) },
+    "-",
+    { label: "Use the Space's Folder", checked: typeof w.state.path !== "string", enabled: typeof w.state.path === "string", run: () => setWidgetState(w.id, { path: null }) },
+  ];
+};
+
+registerWindowView({
+  kind: "actions",
+  View: ActionsView,
+  describe: () => ({ kind: null }),
+  titleMenu: (w) => {
+    const root = actionsRoot(w.state, getState().spaces.get(w.spaceId)?.root);
+    return { label: root ? root.replace(/\/+$/, "").split("/").pop() || root : ACTIONS_TITLE, entries: actionsMenu(w) };
+  },
+  menu: actionsMenu,
 });
 
 registerWindowView({

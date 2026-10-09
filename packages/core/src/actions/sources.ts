@@ -29,6 +29,8 @@ export interface Found {
   risky?: boolean;
   kind?: string;
   url?: string;
+  /** The coding agent an agent skill is for ("claude", "codex"…). */
+  agent?: string;
   /** What it runs when that isn't `command` (a package.json script's text), for the rules. */
   script?: string;
 }
@@ -617,5 +619,94 @@ export const githubSource: ActionSource = {
   },
 };
 
+// ── Agent skills and commands ───────────────────────────────────────────────
+
+/** A Markdown file's front matter (YAML, else key: value lines), {} if none. */
+export function frontMatter(text: string): Record<string, unknown> {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+  if (!m) return {};
+  try {
+    const v = YAML.parse(m[1]!) as unknown;
+    if (isObj(v)) return v;
+  } catch {}
+  // Not YAML ("description: Write copy: menus, toasts…"): agents read it as one key per line, so do the same.
+  const out: Record<string, unknown> = {};
+  for (const line of m[1]!.split(/\r?\n/)) {
+    const kv = /^([\w-]+):\s*(.*)$/.exec(line);
+    if (kv) out[kv[1]!] = kv[2]!.replace(/^(["'])(.*)\1$/, "$2");
+  }
+  return out;
+}
+
+/**
+ * Where coding agents keep a project's skills and commands, and how each is
+ * started with one. Skills are folders with a SKILL.md (the Agent Skills format);
+ * commands are files (Markdown for Claude, TOML for Gemini and Qwen, "a/b.toml"
+ * is /a:b). `.agents/skills` is the shared folder Codex reads (Gemini and Copilot too).
+ */
+const AGENT_PLACES: { agent: string; folder: string; type: "skills" | "commands-md" | "commands-toml"; start: (name: string) => string }[] = [
+  { agent: "claude", folder: ".claude/skills", type: "skills", start: (n) => `claude ${quote(`/${n}`)}` },
+  { agent: "claude", folder: ".claude/commands", type: "commands-md", start: (n) => `claude ${quote(`/${n}`)}` },
+  { agent: "codex", folder: ".agents/skills", type: "skills", start: (n) => `codex ${quote(`$${n}`)}` },
+  { agent: "codex", folder: ".codex/skills", type: "skills", start: (n) => `codex ${quote(`$${n}`)}` },
+  { agent: "gemini", folder: ".gemini/commands", type: "commands-toml", start: (n) => `gemini -i ${quote(`/${n}`)}` },
+  // Gemini and Copilot pick a skill by its description; asking for it by name starts it.
+  { agent: "gemini", folder: ".gemini/skills", type: "skills", start: (n) => `gemini -i ${quote(`Use the ${n} skill.`)}` },
+  { agent: "qwen", folder: ".qwen/commands", type: "commands-toml", start: (n) => `qwen -i ${quote(`/${n}`)}` },
+  { agent: "copilot", folder: ".github/skills", type: "skills", start: (n) => `copilot -i ${quote(`Use the ${n} skill.`)}` },
+];
+
+/** How a skill is named where its agent starts it: /triage in Claude, $triage in Codex. */
+const SKILL_LABEL: Record<string, (n: string) => string> = { codex: (n) => `$${n}`, gemini: (n) => `/${n}`, qwen: (n) => `/${n}`, claude: (n) => `/${n}`, copilot: (n) => n };
+
+/**
+ * The project's agent skills and commands: each runs as a new session of its
+ * agent started with it. Skills a person can't start (user-invocable: false) are left out.
+ */
+export const skillsSource: ActionSource = {
+  id: "skills",
+  folders: [...new Set(AGENT_PLACES.flatMap((p) => [p.folder]))],
+  find(dir) {
+    const out: Found[] = [];
+    for (const place of AGENT_PLACES) {
+      const add = (name: string, rel: string, description: string | undefined, hint?: string) =>
+        out.push({ name: SKILL_LABEL[place.agent]!(name), command: place.start(name), cwd: dir.path, file: dir.file(rel), description, describedBy: description ? "author" : undefined, kind: "agent", long: true, risky: false, agent: place.agent, ...(hint ? { script: `${SKILL_LABEL[place.agent]!(name)} ${hint}` } : {}) });
+      if (place.type === "skills") {
+        for (const e of dir.list(place.folder).sort((a, b) => a.name.localeCompare(b.name))) {
+          if (!e.isDirectory() && !e.isSymbolicLink()) continue;
+          const rel = path.join(place.folder, e.name, "SKILL.md");
+          const text = dir.read(rel);
+          if (text === null) continue;
+          const fm = frontMatter(text);
+          if (fm["user-invocable"] === false) continue;
+          add(str(fm.name) ?? e.name, rel, firstLine(str(fm.description)), str(fm["argument-hint"]));
+        }
+        continue;
+      }
+      // Commands, one level of folders for namespaces (git/commit.toml → git:commit).
+      const ext = place.type === "commands-md" ? ".md" : ".toml";
+      const files = dir.list(place.folder).flatMap((e) => (e.isDirectory() ? dir.list(path.join(place.folder, e.name)).filter((f) => f.isFile()).map((f) => `${e.name}/${f.name}`) : e.isFile() ? [e.name] : []));
+      for (const f of files.filter((x) => x.endsWith(ext)).sort()) {
+        const rel = path.join(place.folder, f);
+        const text = dir.read(rel) ?? "";
+        const name = f.slice(0, -ext.length).replace("/", ":");
+        let description: string | undefined;
+        let hint: string | undefined;
+        if (place.type === "commands-md") {
+          const fm = frontMatter(text);
+          description = firstLine(str(fm.description));
+          hint = str(fm["argument-hint"]);
+        } else {
+          try {
+            description = firstLine(str((parseToml(text) as { description?: unknown }).description));
+          } catch {}
+        }
+        add(name, rel, description, hint);
+      }
+    }
+    return out;
+  },
+};
+
 /** In the order they're listed when nothing else orders them. */
-export const SOURCES: ActionSource[] = [npmSource, justSource, taskSource, makeSource, miseSource, denoSource, composerSource, pythonSource, cargoSource, procfileSource, composeSource, vscodeSource, scriptsSource, githubSource];
+export const SOURCES: ActionSource[] = [npmSource, justSource, taskSource, makeSource, miseSource, denoSource, composerSource, pythonSource, cargoSource, procfileSource, composeSource, vscodeSource, scriptsSource, githubSource, skillsSource];

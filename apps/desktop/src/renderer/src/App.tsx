@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GLIDE_MS, Toaster, toast, usePresentValue } from "@cmd/ui";
-import type { PaneId, Space, SpaceId } from "@cmd/protocol";
+import type { ActionsList, PaneId, Space, SpaceId } from "@cmd/protocol";
+import { listActions, rerunLastAction, runAction, showActions } from "./workspaceActions.ts";
 import type { WebviewTag } from "electron";
 import { bucketOf, needsAttention } from "@cmd/protocol";
 import { COMMANDS, prettyAccelerator, type CommandId } from "../../shared/commands.ts";
@@ -134,6 +135,14 @@ export function App() {
   // Transient: sheets don't reopen on launch.
   /** Palette open, with an optional initial query ("?" for session search). */
   const [palette, setPalette] = useState<false | string>(false);
+  // The Space's Workspace Actions, read when the palette opens (its Actions group).
+  const [paletteActions, setPaletteActions] = useState<ActionsList | null>(null);
+  useEffect(() => {
+    if (palette === false) return;
+    let live = true;
+    void listActions(getState().spaceId).then((l) => live && setPaletteActions(l));
+    return () => void (live = false);
+  }, [palette === false]);
   const [feedback, setFeedback] = useState(false);
   /** The Widget Library sheet (docs/16-widgets.md). */
   const [library, setLibrary] = useState(false);
@@ -415,6 +424,8 @@ export function App() {
     "file.newText": () => void newText(),
     "file.newMagic": () => (setLibrary(false), void newMagic()),
     "widget.library": () => (setPalette(false), setLibrary((l) => !l)),
+    "actions.show": () => (setPalette(false), void showActions()),
+    "actions.rerun": () => void rerunLastAction().then((ran) => void (ran || showActions())),
     "widget.remove": () => {
       if (selected && isWidget(s.windows.get(selected))) void closePane(selected);
     },
@@ -825,6 +836,17 @@ export function App() {
       hint: prettyAccelerator(keys.bindings[c.id]?.[0]),
       run: () => run(c.id, "palette"),
     })),
+    // Risky ones (deploys) are left to the widget, which asks first.
+    ...(paletteActions && paletteActions.root === getState().spaces.get(getState().spaceId)?.root ? [...paletteActions.actions.filter((a) => !a.hidden), ...paletteActions.history] : [])
+      .filter((a) => !a.risky)
+      .map((a) => ({
+        id: `a-${a.id}`,
+        group: "Actions",
+        icon: "play",
+        label: a.package ? `${a.name} (${a.package})` : a.name,
+        meta: a.description ?? a.command,
+        run: () => void runAction(paletteActions!.root, a, getState().spaceId).catch(() => {}),
+      })),
     ...withPane.map((r) => {
       const f = fieldsOf(r, undefined, Date.now());
       return {

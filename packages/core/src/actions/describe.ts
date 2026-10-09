@@ -79,7 +79,7 @@ const SYSTEM = `You label the ways to run a software project for a quick-launch 
 
 Every action gets a description. For each one, write it (if the author wrote one, shorten it to this form) of 2 to 6 words, a verb first, saying what it does for the developer, plain and specific: "Start the dev server", "Run unit tests once", "Ship a signed release", "Build the macOS app". Never repeat the action's name as its description, don't use "Runs"/"This", no full stop. If you can't tell, say what the command does literally ("Run scripts/stress.mjs").
 
-kind: dev (servers, watchers, the app), test, build, check (lint, types, format), deploy (release, publish), setup (install, migrate, seed), clean, run (anything else).
+kind: dev (servers, watchers, the app), test, build, check (lint, types, format), deploy (release, publish), setup (install, migrate, seed), clean, run (anything else), agent (only for agent skills and commands, which start a coding agent; keep it).
 long: true only if it keeps running until someone stops it: a server, a watcher, an app window. A CLI, a build or a script that does its job and exits is false. Judge from what it runs, not its name.
 risky: true if it publishes, deploys, pushes, or deletes or overwrites data.
 
@@ -184,9 +184,9 @@ export function applyDescribed(actions: WorkspaceAction[], d: Described | null):
       ...a,
       ...(own ? {} : { description: m.description, describedBy: "model" as const }),
       // The model knows what `node scripts/x.mjs` does better than a name rule; a source that set it knows best.
-      kind: a.source.kind === "compose" || a.source.kind === "github" ? a.kind : m.kind,
-      long: a.source.kind === "procfile" || a.source.kind === "compose" ? a.long : m.long,
-      risky: a.risky || m.risky,
+      kind: a.source.kind === "compose" || a.source.kind === "github" || a.kind === "agent" ? a.kind : m.kind === "agent" ? a.kind : m.kind,
+      long: a.source.kind === "procfile" || a.source.kind === "compose" || a.kind === "agent" ? a.long : m.long,
+      risky: a.kind === "agent" ? false : a.risky || m.risky,
     };
   });
 }

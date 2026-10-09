@@ -97,6 +97,9 @@ export const COMMANDS = spec([
   { id: "session.rename", label: "Rename Agent…" },
   { id: "session.summarize", label: "Summarize Session" },
   { id: "session.reveal", label: "Show Folder in Finder", keys: ["Alt+Cmd+R"] },
+  // Workspace Actions (docs/39).
+  { id: "actions.show", label: "Workspace Actions" },
+  { id: "actions.rerun", label: "Run Last Action Again", keys: ["Shift+Cmd+R"] },
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
     id: `session.select${n}`,
     label: `Select Session ${n}`,

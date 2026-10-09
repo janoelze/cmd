@@ -552,7 +552,7 @@ export const diffType: WindowType<{ path: string }> = {
  * Workspace Actions (docs/39): how to run the project in a folder. `path` unset:
  * the Space's root, so the widget follows its Space.
  */
-export const actionsType: WindowType<{ path?: string; collapsed?: string[] }> = {
+export const actionsType: WindowType<{ path?: string; toggled?: string[] }> = {
   kind: "actions",
   title: ACTIONS_TITLE,
   icon: "play.rectangle",
@@ -566,7 +566,8 @@ export const actionsType: WindowType<{ path?: string; collapsed?: string[] }> = 
     const next = { ...state };
     if (patch.path === null) delete next.path;
     else if (typeof patch.path === "string") next.path = path.resolve(expandHome(patch.path));
-    if (Array.isArray(patch.collapsed)) next.collapsed = patch.collapsed.filter((x): x is string => typeof x === "string").slice(0, 100);
+    // Sections opened or closed against their default.
+    if (Array.isArray(patch.toggled)) next.toggled = patch.toggled.filter((x): x is string => typeof x === "string").slice(0, 100);
     return { state: next };
   },
 };

@@ -458,6 +458,10 @@ export class Core {
       ai: { object: (o) => this.ai.object(o), ready: () => this.ai.status().ready },
       describeOn: () => this.settings.settings["actions.describe"],
       roots: () => this.windows.list().flatMap((w) => (w.kind === "actions" ? [this.#actionsRoot(w.state.path as string | undefined, w.spaceId)] : [])),
+      agentCommand: (agent) => {
+        const v = (this.settings.settings as Record<string, unknown>)[`agents.${agent}.command`];
+        return typeof v === "string" && v.trim() ? v.trim() : null;
+      },
       createPane: (o) => {
         const pane = this.panes.create({ cwd: o.cwd, command: o.command, spaceId: this.spaces.mustOpen(o.spaceId).id });
         this.usage.window("terminal");
@@ -465,6 +469,13 @@ export class Core {
       },
     });
     this.actions.on("changed", (root) => this.#broadcast({ type: "actions.changed", root }));
+    // A dev server said where it listens: open it beside its terminal, once, if asked to.
+    this.actions.on("url", (paneId, url) => {
+      const pane = this.panes.get(paneId);
+      if (!pane || !this.settings.settings["actions.openBrowser"]) return;
+      if (this.windows.list().some((w) => w.kind === "browser" && w.spaceId === pane.spaceId && typeof w.state.url === "string" && w.state.url.startsWith(url.replace(/\/$/, "")))) return;
+      this.#opened(this.windows.open("browser", { url }, this.spaces.mustOpen(pane.spaceId)));
+    });
     this.settings.bind(["actions.describe"], () => this.actions.aiChanged());
     this.ai.on("updated", () => this.actions.aiChanged());
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));

@@ -66,6 +66,7 @@ const inputTimers = new Map<PaneId, ReturnType<typeof setTimeout>>();
 const listeners = new Set<() => void>();
 const focusListeners = new Set<(id: WindowId) => void>();
 const fsListeners = new Set<(path: string) => void>();
+const actionsListeners = new Set<(root: string) => void>();
 const notificationListeners = new Set<(n: AppNotification) => void>();
 
 /** A notification from the core (packages/core/src/notifications.ts); the UI decides whether to show it. */
@@ -160,6 +161,12 @@ export function subscribeView(query: ViewQuery, fn: (rows: (TurnRow | SessionInf
 export function onFsChanged(fn: (path: string) => void): () => void {
   fsListeners.add(fn);
   return () => fsListeners.delete(fn);
+}
+
+/** A folder's Workspace Actions changed (actions.list again). */
+export function onActionsChanged(fn: (root: string) => void): () => void {
+  actionsListeners.add(fn);
+  return () => actionsListeners.delete(fn);
 }
 
 /** The core asks to bring a window forward (e.g. `open .` in a terminal). */
@@ -470,6 +477,9 @@ function handle(e: CoreEvent): void {
       return;
     case "fs.changed":
       for (const fn of fsListeners) fn(e.path);
+      return;
+    case "actions.changed":
+      for (const fn of actionsListeners) fn(e.root);
       return;
     case "widget.library":
       set({ library: e.entries });

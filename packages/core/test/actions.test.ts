@@ -149,6 +149,30 @@ describe("sources", () => {
     expect(all.some((a) => a.source.file.endsWith("ci.yml"))).toBe(false);
   });
 
+  it("agent skills and commands, each started by its agent", () => {
+    write({
+      ".claude/skills/triage/SKILL.md": "---\nname: triage\ndescription: Triage crash reports: group, claim, fix.\n---\n# Triage",
+      ".claude/skills/internal/SKILL.md": "---\nname: internal\ndescription: x\nuser-invocable: false\n---\n",
+      ".claude/commands/review.md": "---\ndescription: Review the diff\nargument-hint: [pr]\n---\nReview it",
+      ".agents/skills/deploy-docs/SKILL.md": "---\nname: deploy-docs\ndescription: Publish the docs site\n---\n",
+      ".gemini/commands/git/commit.toml": 'description = "Write a commit message"\nprompt = "…"\n',
+      ".qwen/commands/plan.toml": 'prompt = "…"\n',
+      ".github/skills/webapp-testing/SKILL.md": "---\nname: webapp-testing\ndescription: Test the web app\n---\n",
+    });
+    const all = scan(dir, null).actions.filter((a) => a.kind === "agent");
+    expect(all.map((a) => [a.agent, a.name, a.command])).toEqual([
+      ["claude", "/triage", "claude /triage"],
+      ["claude", "/review", "claude /review"],
+      ["codex", "$deploy-docs", "codex '$deploy-docs'"],
+      ["gemini", "/git:commit", "gemini -i /git:commit"],
+      ["qwen", "/plan", "qwen -i /plan"],
+      ["copilot", "webapp-testing", "copilot -i 'Use the webapp-testing skill.'"],
+    ]);
+    // Not YAML (a colon in the value), read the way agents read it; a skill is never "risky" by its name.
+    expect(all[0]).toMatchObject({ description: "Triage crash reports: group, claim, fix.", long: true, risky: false });
+    expect(all.find((a) => a.name === "$deploy-docs")!.risky).toBe(false);
+  });
+
   it("a file that can't be parsed keeps its last good actions and says so", () => {
     write({ "package.json": JSON.stringify({ scripts: { dev: "vite" } }) });
     const first = scan(dir, null);
@@ -322,6 +346,15 @@ describe("service", () => {
     pty.output("\x1b]133;D;130\x07");
     expect(pty.written.at(-1)).toBe("npm run dev\r");
     expect(list().runs[0]).toMatchObject({ endedAt: null, url: null });
+  });
+
+  it("starts an agent skill with the person's own agent command", async () => {
+    write({ ".claude/skills/triage/SKILL.md": "---\nname: triage\ndescription: Triage\n---\n" });
+    core.settings.set("agents.claude.command", "claude --model opus");
+    core.actions.run(dir, list().actions[0]!.id, core.spaces.home().id);
+    // The shell's first prompt: the command is typed then.
+    ptys.at(-1)!.output("\x1b]133;A\x07\x1b]133;B\x07");
+    await vi.waitFor(() => expect(ptys.at(-1)!.written.join("")).toContain("claude --model opus /triage"));
   });
 
   it("pins an action to the top and keeps a pinned command from history", () => {

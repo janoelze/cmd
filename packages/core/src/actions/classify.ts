@@ -38,6 +38,8 @@ export function classify(f: Found): { kind: ActionKind; long: boolean; risky: bo
   const ws = words(f.name);
   const script = f.script ?? f.command;
   let kind = (f.kind as ActionKind | undefined) ?? null;
+  // Agent skills are what they are, whatever they're called ("/release" asks the agent; the skill decides).
+  if (kind === "agent") return { kind, long: true, risky: false };
   // The first word decides ("test:watch" is a test), then the others ("db:migrate" is setup).
   for (const w of ws) {
     if (kind) break;
