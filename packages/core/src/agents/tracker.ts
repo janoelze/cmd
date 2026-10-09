@@ -82,6 +82,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #wrote = new Set<AgentId>();
   /** Spawned agents whose process has been seen; until then a shell foreground is expected. */
   #started = new Set<AgentId>();
+  /** Per agent, the nested runs of another kind (`codex:<session>`) already noted: their events are kept out of it. */
+  #nested = new Map<AgentId, Set<string>>();
   #panes: PaneManager;
   #store: Store | null;
   #settings: () => Settings;
@@ -177,6 +179,12 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const current = this.#byPane(paneId);
     if (fg.class.kind === "agent") {
       let a = current;
+      // Another kind in front of the pane's agent runs inside it (`codex exec` from Claude's shell): its version isn't the host's.
+      if (a && a.kind !== fg.class.agent) {
+        this.#started.add(a.id);
+        this.applyStatus(paneId);
+        return;
+      }
       if (a) {
         this.#started.add(a.id);
         if (a.state === "starting") this.#update(a, { state: "idle" });
@@ -246,7 +254,9 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const agent = this.#byPane(paneId);
     for (const b of bad) this.emit("activity", this.activity.note("anomaly", `unreadable hook event file ${b}`, Date.now(), paneId, agent?.id ?? null, agent?.kind ?? null));
     return events.map((raw) => {
-      const ev = this.activity.insert(raw, paneId, agent?.id ?? null, agent?.version ?? null);
+      // Another kind's events (a nested run) stay unclaimed: they are not the pane agent's.
+      const own = agent && (!raw.agent || raw.agent === agent.kind) ? agent : null;
+      const ev = this.activity.insert(raw, paneId, own?.id ?? null, own?.version ?? null);
       this.emit("activity", ev);
       return { raw, ev };
     });
@@ -260,20 +270,18 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #ingest(paneId: PaneId, fresh: { raw: RawEvent; ev: ActivityEvent }[], agent: Agent | null): boolean {
     if (!agent) return false;
     let red = this.#reducers.get(agent.id);
-    let events = fresh.map((f) => f.ev);
+    let events = fresh.map((f) => f.ev).filter((ev) => !this.#foreign(agent, ev, paneId));
     const live = new Set(events.map((e) => e.id));
     if (!red) {
       const fg = this.#panes.foreground(paneId);
       const notBefore = fg?.startedAt ? fg.startedAt - 500 : agent.createdAt - 5000;
-      const claimed = this.activity.claim(paneId, agent.id, notBefore, agent.version ?? null);
+      const claimed = this.activity.claim(paneId, agent.id, agent.kind, notBefore, agent.version ?? null);
       if (!claimed.length) return false;
       red = this.#reducerFor(agent);
       events = claimed.filter((e) => e.id > red!.replayedTo);
     }
     for (const ev of events) {
-      if (ev.agent && ev.agent !== agent.kind && ev.source === "hook") {
-        this.emit("activity", this.activity.note("anomaly", `${ev.agent} hook event in a pane whose agent is ${agent.kind}`, ev.at, paneId, agent.id, agent.kind));
-      }
+      if (this.#foreign(agent, ev, paneId)) continue; // never reduced into it (claim leaves them out already)
       this.#hooked.add(agent.id);
       try {
         this.#applyReduction(agent, red, red.apply(ev), ev, live.has(ev.id));
@@ -284,6 +292,23 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
         break;
       }
       if (!this.#agents.has(agent.id)) break; // exited
+    }
+    return true;
+  }
+
+  /**
+   * Whether a hook event is another kind's than the agent's: a nested run in its
+   * pane (Claude's Bash running `codex exec`, a second agent started from its
+   * shell) inherits CMD_PANE_ID and spools here. Noted once per nested session.
+   */
+  #foreign(agent: Agent, ev: ActivityEvent, paneId: PaneId): boolean {
+    if (!ev.agent || ev.agent === agent.kind || ev.source !== "hook") return false;
+    const key = `${ev.agent}:${ev.sessionId ?? "-"}`;
+    let seen = this.#nested.get(agent.id);
+    if (!seen) this.#nested.set(agent.id, (seen = new Set()));
+    if (!seen.has(key)) {
+      seen.add(key);
+      this.emit("activity", this.activity.note("anomaly", `${ev.agent} hook events in a pane whose agent is ${agent.kind}: a nested run, not counted`, ev.at, paneId, agent.id, agent.kind));
     }
     return true;
   }
@@ -479,7 +504,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       agent = this.#create({ kind, paneId, source: "detected" });
     }
     this.#started.add(agent.id);
-    const ev = this.activity.insert({ at: Date.now(), agent: kind, name: event, payload }, paneId, agent.id, agent.version ?? null);
+    const own = kind === agent.kind;
+    const ev = this.activity.insert({ at: Date.now(), agent: kind, name: event, payload }, paneId, own ? agent.id : null, own ? (agent.version ?? null) : null);
     this.emit("activity", ev);
     this.#ingest(paneId, [{ raw: { at: ev.at, agent: kind, name: event, payload }, ev }], agent);
     return this.#agents.has(agent.id) ? this.get(agent.id) : null;
@@ -721,6 +747,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     this.#agents.clear();
     this.#reducers.clear();
     this.#hooked.clear();
+    this.#nested.clear();
     this.#started.clear();
   }
 
@@ -828,6 +855,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (!this.#agents.delete(id)) return;
     this.#store?.deleteAgent(id);
     this.#hooked.delete(id);
+    this.#nested.delete(id);
     this.#wrote.delete(id);
     this.#started.delete(id);
     this.emit("removed", id);

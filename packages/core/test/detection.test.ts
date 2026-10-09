@@ -94,6 +94,34 @@ describe("tracker + the hook spool", () => {
   });
 });
 
+describe("another agent kind in front of the pane's agent", () => {
+  it("leaves the pane's agent as it is (codex run from Claude's shell)", async () => {
+    const f = fakeFactory();
+    let fg = { pid: 10, startedAt: 1, path: "/Users/me/.local/share/claude/versions/2.1.300", argv: ["2.1.300"] };
+    const panes = new PaneManager(f.factory, { socketPath: "/tmp/t.sock", pollMs: 0, inspector: async () => fg });
+    const agents = new AgentTracker(panes);
+    const pane = panes.create();
+    await panes.pollForeground();
+    const a = agents.list()[0]!;
+    expect(a).toMatchObject({ kind: "claude", version: "2.1.300", paneId: pane.id });
+    const changed: unknown[] = [];
+    agents.on("updated", (u) => changed.push(u));
+    fg = { pid: 11, startedAt: 2, path: "/opt/homebrew/lib/node_modules/@openai/codex-0.144.5/bin/codex", argv: ["codex", "exec", "fix it"] };
+    f.ptys[0]!.output("x");
+    await panes.pollForeground();
+    expect(panes.foreground(pane.id)).toMatchObject({ class: { kind: "agent", agent: "codex" }, version: "0.144.5" });
+    expect(agents.list()).toEqual([a]);
+    expect(changed).toEqual([]);
+    // Back to Claude: still the same agent, never exited.
+    fg = { pid: 10, startedAt: 1, path: "/Users/me/.local/share/claude/versions/2.1.300", argv: ["2.1.300"] };
+    f.ptys[0]!.output("x");
+    await panes.pollForeground();
+    expect(agents.list()).toEqual([a]);
+    agents.close();
+    panes.dispose();
+  });
+});
+
 describe("foreground polling", () => {
   it("checks quiet terminals only now and then, and right after output", async () => {
     const f = fakeFactory();

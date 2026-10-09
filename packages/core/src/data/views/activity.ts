@@ -136,11 +136,14 @@ export class ActivityView {
     return toActivity(ev, false);
   }
 
-  /** Gives a pane's unclaimed events since `notBefore` to the agent now running there; returns them. */
-  claim(paneId: PaneId, agentId: AgentId, notBefore: number, agentVersion: string | null = null): ActivityEvent[] {
+  /**
+   * Gives a pane's unclaimed events since `notBefore` to the agent now running
+   * there; returns them. Only its kind's: another kind's (a run nested in it) stay unclaimed.
+   */
+  claim(paneId: PaneId, agentId: AgentId, kind: AgentKind, notBefore: number, agentVersion: string | null = null): ActivityEvent[] {
     this.#data.store.db
-      .prepare(`UPDATE events SET agent_id = ?, data = CASE WHEN ? IS NOT NULL AND json_extract(data, '$.agentVersion') IS NULL THEN jsonb_set(data, '$.agentVersion', ?) ELSE data END WHERE pane_id = ? AND agent_id IS NULL AND at >= ? AND (type = 'agent.hook' OR type = 'agent.note')`)
-      .run(agentId, agentVersion, agentVersion, paneId, notBefore);
+      .prepare(`UPDATE events SET agent_id = ?, data = CASE WHEN ? IS NOT NULL AND json_extract(data, '$.agentVersion') IS NULL THEN jsonb_set(data, '$.agentVersion', ?) ELSE data END WHERE pane_id = ? AND agent_id IS NULL AND at >= ? AND (type = 'agent.hook' OR type = 'agent.note') AND coalesce(json_extract(data, '$.agent'), ?) = ?`)
+      .run(agentId, agentVersion, agentVersion, paneId, notBefore, kind, kind);
     return this.events({ agentId });
   }
 
@@ -229,8 +232,10 @@ export class ActivityView {
    * rules allow ends when the next prompt comes, as it most likely did live.
    */
   replay(agentId: AgentId, save?: (t: AgentTurn, lastSeq: number, cwd: string | null) => void, until = Date.now()): { turn: AgentTurn | null; state: string | null; cause: string | null; turns: number } {
-    const events = this.events({ agentId, oldest: true, limit: 1_000_000 });
-    const kind = events.find((e) => e.agent)?.agent ?? "unknown";
+    const all = this.events({ agentId, oldest: true, limit: 1_000_000 });
+    // Its kind is its first event's: older cores gave an agent a nested run's events too (another kind's, later), which aren't replayed.
+    const kind = all.find((e) => e.agent)?.agent ?? "unknown";
+    const events = all.filter((e) => e.source !== "hook" || !e.agent || e.agent === kind);
     const version = events.find((e) => e.agentVersion)?.agentVersion ?? null;
     const cwd = events.find((e) => e.cwd)?.cwd ?? null;
     const red = new ActivityReducer(agentId, 0, { agentKind: kind, agentVersion: version, derivedBy: this.recordedBy });

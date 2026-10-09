@@ -534,6 +534,64 @@ describe("tracker: spooled events", () => {
     again.close();
   });
 
+  /** Claude's edit-and-bash session with a `codex exec` run from its Bash tool (Codex's recorded session) in the middle of its turn. */
+  function nested() {
+    const claude = fixture("claude-2.1.289/edit-and-bash.jsonl").slice(0, -1); // no SessionEnd: the process is still there
+    const cut = 7; // after the PreToolUse of the Bash call that runs codex
+    const codex = fixture("codex-0.144.5/edit-and-bash.jsonl").map((r) => ({ ...r, at: r.at + 5000 }));
+    const after = claude.slice(cut).map((r) => ({ ...r, at: r.at + 12_000 }));
+    return { before: claude.slice(0, cut), codex, after };
+  }
+
+  it("keeps a nested agent's events (codex exec from Claude's shell) out of the pane's agent", async () => {
+    const pane = panes.create();
+    const { before, codex, after } = nested();
+    spool(pane.id, before);
+    ptys[0]!.process = "claude";
+    await panes.pollForeground();
+    const a = agents.list()[0]!;
+    expect(a).toMatchObject({ kind: "claude", state: "working" });
+    const changes: string[] = [];
+    agents.on("updated", (u) => u.id === a.id && changes.push(u.state));
+    // Codex's SessionStart would end Claude's turn ("new session"), its Stop would make Claude done.
+    spool(pane.id, codex);
+    agents.applyStatus(pane.id);
+    expect(agents.get(a.id)).toMatchObject({ state: "working", turn: { index: 0, outcome: "working" } });
+    expect(changes).toEqual([]);
+    expect(agents.list()).toHaveLength(1);
+    // Noted once, kept in the pane's log, never claimed by Claude.
+    const notes = activity.events({ agentId: a.id }).filter((e) => e.kind === "anomaly");
+    expect(notes.map((n) => n.text)).toEqual([expect.stringMatching(/^codex hook events in a pane whose agent is claude/)]);
+    expect(activity.events({ agentId: a.id }).filter((e) => e.agent === "codex")).toEqual([]);
+    expect(activity.events({ paneId: pane.id }).filter((e) => e.agent === "codex")).toHaveLength(codex.length);
+    // Only Claude's own Stop ends its turn.
+    spool(pane.id, after);
+    agents.applyStatus(pane.id);
+    expect(agents.get(a.id)).toMatchObject({ state: "done", stateCause: "hook Stop", turn: { index: 0, outcome: "done", inferred: [] } });
+    expect(activity.turns(a.id).map((t) => [t.index, t.outcome])).toEqual([[0, "done"]]);
+    expect(activity.replay(a.id)).toMatchObject({ state: "done", turns: 1 });
+  });
+
+  it("leaves a nested agent's events unclaimed when they came before the pane's agent was seen", async () => {
+    const pane = panes.create();
+    const { before, codex, after } = nested();
+    spool(pane.id, [...before, ...codex, ...after]);
+    ptys[0]!.process = "claude";
+    await panes.pollForeground();
+    const a = agents.list()[0]!;
+    expect(a).toMatchObject({ kind: "claude", state: "done", turn: { index: 0, outcome: "done", inferred: [] } });
+    expect(activity.events({ agentId: a.id }).filter((e) => e.agent === "codex")).toEqual([]);
+    expect(activity.events({ agentId: a.id }).filter((e) => e.kind === "anomaly")).toHaveLength(1);
+  });
+
+  it("replays turns without the nested run's events an older core gave the agent", () => {
+    const { before, codex, after } = nested();
+    for (const r of [...before, ...codex, ...after]) activity.insert(r, "p1", "host");
+    const turns: [number, string | null][] = [];
+    expect(activity.replay("host", (t) => turns.push([t.index, t.outcome]))).toMatchObject({ state: "done", turns: 1 });
+    expect(turns.at(-1)).toEqual([0, "done"]);
+  });
+
   it("notes events that don't fit and reports what each agent's events carried", async () => {
     const pane = panes.create();
     ptys[0]!.process = "codex";

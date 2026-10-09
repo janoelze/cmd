@@ -124,6 +124,19 @@ describe("hooks", () => {
     expect(t.get(host.id)).toBeTruthy();
   });
 
+  it("keeps another kind's hooks in the pane (a nested gemini -p) out of its agent", async () => {
+    const pane = panes.create();
+    const host = agents.ingestHook(pane.id, "claude", "UserPromptSubmit", { session_id: "s1", prompt: "ask gemini" })!;
+    agents.ingestHook(pane.id, "claude", "PreToolUse", { session_id: "s1", tool_name: "Bash", tool_input: { command: "gemini -p 'review'" } });
+    for (const e of ["SessionStart", "BeforeAgent", "AfterAgent", "SessionEnd"]) agents.ingestHook(pane.id, "gemini", e, { session_id: "g1", hook_event_name: e });
+    expect(agents.list()).toEqual([expect.objectContaining({ id: host.id, kind: "claude", state: "working", detail: "gemini -p 'review'", native: { claudeSessionId: "s1" } })]);
+    const notes = agents.activity.events({ agentId: host.id }).filter((e) => e.kind === "anomaly");
+    expect(notes).toHaveLength(1);
+    expect(agents.activity.events({ agentId: host.id }).some((e) => e.agent === "gemini")).toBe(false);
+    agents.ingestHook(pane.id, "claude", "Stop", { session_id: "s1", last_assistant_message: "gemini agrees" });
+    expect(agents.get(host.id)).toMatchObject({ state: "done", lastMessage: "gemini agrees", turn: { index: 0, outcome: "done" } });
+  });
+
   it("removes a subagent on request", async () => {
     const pane = panes.create();
     const host = agents.ingestHook(pane.id, "claude", "UserPromptSubmit", {})!;
