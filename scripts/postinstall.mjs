@@ -1,5 +1,6 @@
-// node-pty 1.1.0 ships its macOS spawn-helper prebuild without the exec bit,
-// which makes every pty.spawn fail with "posix_spawnp failed".
+// node-pty 1.1.0 shipped its macOS spawn-helper prebuild without the exec bit,
+// which made every pty.spawn fail with "posix_spawnp failed". Kept in case a
+// release does it again.
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";

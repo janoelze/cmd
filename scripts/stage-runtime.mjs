@@ -118,7 +118,7 @@ const pty = path.join(modules, "node-pty");
 for (const p of ["deps", "third_party", "src", "scripts", "binding.gyp", "typings"]) fs.rmSync(path.join(pty, p), { recursive: true, force: true });
 for (const p of fs.readdirSync(path.join(pty, "prebuilds"))) {
   if (!p.startsWith(`${process.platform}-`)) fs.rmSync(path.join(pty, "prebuilds", p), { recursive: true });
-  // node-pty 1.1.0 ships spawn-helper without the exec bit (see postinstall.mjs).
+  // spawn-helper needs its exec bit (see postinstall.mjs).
   else if (fs.existsSync(path.join(pty, "prebuilds", p, "spawn-helper"))) fs.chmodSync(path.join(pty, "prebuilds", p, "spawn-helper"), 0o755);
 }
 

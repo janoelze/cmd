@@ -20,8 +20,12 @@ import { LocalBackend, type LocalTerm } from "./local.ts";
 import type { PtyFactory } from "./pty.ts";
 import type { TermSpawn } from "./types.ts";
 
-/** Bump on any change to the messages; a core never talks to a host of another version. */
-export const HOST_PROTOCOL = 1;
+/**
+ * Bump on any change to the messages; a core never talks to a host of another
+ * version, it replaces it. Also bumped to replace hosts running a broken build:
+ * 2 retires node-pty 1.1.0, which leaked a pseudo-terminal per shell on macOS.
+ */
+export const HOST_PROTOCOL = 2;
 
 export interface HostHello {
   protocol: number;
