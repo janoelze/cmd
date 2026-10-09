@@ -277,22 +277,3 @@ export const Viewport = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement
 export const Picture = forwardRef<HTMLImageElement, React.ImgHTMLAttributes<HTMLImageElement> & { crisp?: boolean }>(function Picture({ crisp, ...rest }, ref) {
   return <img ref={ref} className="ui-picture" data-crisp={crisp || undefined} {...rest} />;
 });
-
-/** Pages or slides down a sidebar, each a picture (an img or a canvas) and its label. */
-export const Thumbs = forwardRef<HTMLDivElement, { children: ReactNode }>(function Thumbs({ children }, ref) {
-  return (
-    <div ref={ref} className="ui-thumbs">
-      {children}
-    </div>
-  );
-});
-
-/** One of Thumbs: `current` rings it and its label. Extra props (data-*) go on its button. */
-export function Thumb({ current, label, children, ...rest }: { current?: boolean; label: ReactNode; children: ReactNode } & Omit<HTMLAttributes<HTMLButtonElement>, "children">) {
-  return (
-    <button type="button" className="ui-thumb" aria-current={current || undefined} {...rest}>
-      <span className="ui-thumb-media">{children}</span>
-      <span className="ui-thumb-label">{label}</span>
-    </button>
-  );
-}

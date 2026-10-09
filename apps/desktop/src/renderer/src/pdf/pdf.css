@@ -5,7 +5,7 @@
 .pdf-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
 .pdf-scroll { position: absolute; inset: 0; overflow: auto; outline: none; }
 .pdf-scroll[hidden] { display: none; }
-.pdf-scroll .pdfViewer { padding: var(--space-xl) 0 var(--space-2xl); }
+.pdf-scroll .pdfViewer { padding: 0 0 var(--space-2xl); }
 .pdf-scroll .pdfViewer .page { margin: 0 auto var(--space-lg); border: 0; box-shadow: 0 0 0 1px var(--bg-selected), 0 2px 10px color-mix(in srgb, var(--shadow) 32%, transparent); }
 /* Find: the kit's match colour, the current match stronger. */
 .pdf-scroll .textLayer .highlight { --highlight-bg-color: color-mix(in srgb, var(--match) 45%, transparent); --highlight-selected-bg-color: color-mix(in srgb, var(--accent) 55%, transparent); }

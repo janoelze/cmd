@@ -1,6 +1,6 @@
 // Workbench stories (pnpm workbench pdfview): the PDF window on a real file (a
-// six-page fixture with an outline), read by the real core: pages, the thumbnails
-// sidebar, the outline, dark pages, a file that isn't a PDF, and every size.
+// fixture of several pages), read by the real core: its pages, dark pages, a file
+// that isn't a PDF, and every size.
 
 import { AllSizes, RefWindow, type SizeName } from "../reference/RefWindow.tsx";
 import { storyWindow, useRepoFile } from "../reference/RepoFile.tsx";
@@ -18,8 +18,6 @@ function Pdf({ rel = FIXTURE, size = "wide", state = {} }: { rel?: string; size?
 }
 
 export const Pages = () => <Pdf />;
-export const Thumbnails = () => <Pdf state={{ sidebar: "pages" }} />;
-export const Outline = () => <Pdf state={{ sidebar: "outline" }} />;
 export const DarkPages = () => <Pdf state={{ dark: true }} />;
 export const NotAPdf = () => <Pdf rel="README.md" />;
-export const Sizes = () => <AllSizes render={(s) => <Pdf size={s} state={{ sidebar: "pages" }} />} />;
+export const Sizes = () => <AllSizes render={(s) => <Pdf size={s} />} />;

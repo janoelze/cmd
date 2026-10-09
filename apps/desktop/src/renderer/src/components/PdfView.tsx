@@ -1,12 +1,12 @@
 // The PDF window (core windows/builtin.ts pdfType): pdf.js's viewer components
 // (continuous pages, selectable text, links, find) inside cmd's own chrome. A
-// toolbar (sidebar, page, zoom), a find bar (⌘F), a sidebar of page thumbnails
-// or the outline, the page in the title bar. The file is watched: when it
-// changes (LaTeX, an agent writing it) it reloads where you were. Where you are
-// (page, zoom, sidebar) is kept in the window's state. Loaded lazily with pdf.js.
+// toolbar (page, zoom, find), a find bar (⌘F), the pages full width, the page in
+// the title bar. The file is watched: when it changes (LaTeX, an agent writing it)
+// it reloads where you were. Where you are (page, zoom) is kept in the window's
+// state. Loaded lazily with pdf.js.
 
-import { Button, Inline, List, ListRow, Segmented, Split, Stack, TextField, Thumb, Thumbs, View, ViewState, ToolbarButton, ToolbarField, ToolbarGroup, ToolbarMenu, ToolbarSeparator, ToolbarSpacer, ToolbarText, Twisty, WindowToolbar, type FindOptions, type FindResults } from "@cmd/ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Inline, TextField, View, ViewState, ToolbarButton, ToolbarField, ToolbarGroup, ToolbarMenu, ToolbarSeparator, ToolbarSpacer, ToolbarText, WindowToolbar, type FindOptions, type FindResults } from "@cmd/ui";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { cmd } from "../bridge.ts";
 import { openPath } from "../actions.ts";
@@ -25,17 +25,9 @@ const zoomLabel = (scale: number, preset: Scale) =>
 
 type Phase = { kind: "loading" } | { kind: "ready" } | { kind: "password"; wrong: boolean } | { kind: "error"; message: string };
 
-interface OutlineItem {
-  title: string;
-  dest: string | unknown[] | null;
-  url: string | null;
-  items: OutlineItem[];
-}
-
 export function PdfView({ win, focused }: WindowViewProps) {
   const file = typeof win.state.path === "string" ? win.state.path : "";
   const saved = useRef({ page: typeof win.state.page === "number" ? win.state.page : 1, scale: (win.state.scale as Scale | undefined) ?? "auto" });
-  const sidebar = win.state.sidebar === "pages" || win.state.sidebar === "outline" ? win.state.sidebar : null;
   const dark = win.state.dark === true;
   const patch = useCallback((state: Record<string, unknown>) => void cmd.call("window.update", { id: win.id, state }).catch(() => {}), [win.id]);
 
@@ -181,7 +173,7 @@ export function PdfView({ win, focused }: WindowViewProps) {
     el.addEventListener("wheel", wheel, { passive: false });
     return () => el.removeEventListener("wheel", wheel);
   }, []);
-  // Fit Width / Fit Page / Auto follow the space they have: the window, the sidebar opening.
+  // Fit Width / Fit Page / Auto follow the space they have: the window's.
   useEffect(() => {
     const el = container.current!;
     let last = el.clientWidth;
@@ -274,7 +266,6 @@ export function PdfView({ win, focused }: WindowViewProps) {
       toolbar={
         <>
           <WindowToolbar label="PDF">
-            <ToolbarButton icon="sidebar.left" label={sidebar ? "Hide Sidebar" : "Show Sidebar"} pressed={!!sidebar} onClick={() => patch({ sidebar: sidebar ? null : "pages" })} priority={2} />
             <ToolbarField
               aria-label="Page"
               align="center"
@@ -310,22 +301,15 @@ export function PdfView({ win, focused }: WindowViewProps) {
         </>
       }
     >
-      <Split
-        side="start"
-        open={!!sidebar && !!doc && phase.kind === "ready"}
-        width={{ min: 140, ideal: 168, max: 260 }}
-        pane={doc && sidebar && <PdfSidebar doc={doc} tab={sidebar} page={page} onTab={(t) => patch({ sidebar: t })} onPage={goToPage} onDest={(d) => void parts.current?.links.goToDestination(d as string)} />}
-      >
-        {/* pdf.js draws into its own container (pdf.css); the states show instead of it. */}
-        <div className="pdf-stage">
-          <div ref={container} className={`pdf-scroll${dark ? " pdf-dark" : ""}`} tabIndex={-1} hidden={phase.kind !== "ready"}>
-            <div ref={viewerEl} className="pdfViewer" />
-          </div>
-          {phase.kind === "loading" && <ViewState state={{ kind: "loading" }} />}
-          {phase.kind === "error" && <ViewState state={{ kind: "error", title: "Couldn't show this PDF", text: phase.message, action: <Button onClick={() => cmd.openPath(file)}>Open with Default App</Button> }} />}
-          {phase.kind === "password" && <PasswordPrompt wrong={phase.wrong} onSubmit={(p) => (setPhase({ kind: "loading" }), password.current?.(p))} />}
+      {/* pdf.js draws into its own container (pdf.css); the states show instead of it. */}
+      <div className="pdf-stage">
+        <div ref={container} className={`pdf-scroll${dark ? " pdf-dark" : ""}`} tabIndex={-1} hidden={phase.kind !== "ready"}>
+          <div ref={viewerEl} className="pdfViewer" />
         </div>
-      </Split>
+        {phase.kind === "loading" && <ViewState state={{ kind: "loading" }} />}
+        {phase.kind === "error" && <ViewState state={{ kind: "error", title: "Couldn't show this PDF", text: phase.message, action: <Button onClick={() => cmd.openPath(file)}>Open with Default App</Button> }} />}
+        {phase.kind === "password" && <PasswordPrompt wrong={phase.wrong} onSubmit={(p) => (setPhase({ kind: "loading" }), password.current?.(p))} />}
+      </div>
     </View>
   );
 }
@@ -349,111 +333,6 @@ function PasswordPrompt({ wrong, onSubmit }: { wrong: boolean; onSubmit: (p: str
         ),
       }}
     />
-  );
-}
-
-// ── sidebar: page thumbnails, the outline ─────────────────
-
-const THUMB_WIDTH = 120;
-
-function PdfSidebar(p: { doc: PDFDocumentProxy; tab: "pages" | "outline"; page: number; onTab: (t: "pages" | "outline") => void; onPage: (n: number) => void; onDest: (d: unknown) => void }) {
-  const [outline, setOutline] = useState<OutlineItem[] | null>(null);
-  useEffect(() => {
-    let stale = false;
-    p.doc.getOutline().then((o) => !stale && setOutline((o as OutlineItem[] | null) ?? []), () => !stale && setOutline([]));
-    return () => void (stale = true);
-  }, [p.doc]);
-  const hasOutline = !!outline?.length;
-  const tab = hasOutline ? p.tab : "pages";
-  return (
-    <>
-      {hasOutline && (
-        <Stack pad="sm" align="center">
-          <Segmented size="sm" value={tab} options={[{ value: "pages", label: "Pages" }, { value: "outline", label: "Outline" }]} onChange={p.onTab} />
-        </Stack>
-      )}
-      {tab === "pages" ? <Thumbnails doc={p.doc} page={p.page} onPage={p.onPage} /> : <Outline items={outline ?? []} onDest={p.onDest} />}
-    </>
-  );
-}
-
-function Thumbnails({ doc, page, onPage }: { doc: PDFDocumentProxy; page: number; onPage: (n: number) => void }) {
-  const list = useRef<HTMLDivElement>(null);
-  const numbers = useMemo(() => Array.from({ length: doc.numPages }, (_, i) => i + 1), [doc]);
-  // The first page's shape stands in for every page until each is drawn.
-  const [ratio, setRatio] = useState(1.294);
-  useEffect(() => {
-    void doc.getPage(1).then((pg) => {
-      const v = pg.getViewport({ scale: 1 });
-      setRatio(v.height / v.width);
-    });
-  }, [doc]);
-  useEffect(() => {
-    list.current?.querySelector(`[data-page="${page}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [page]);
-  return (
-    <Thumbs ref={list}>
-      {numbers.map((n) => (
-        <Thumbnail key={n} doc={doc} n={n} ratio={ratio} current={n === page} root={list} onClick={() => onPage(n)} />
-      ))}
-    </Thumbs>
-  );
-}
-
-function Thumbnail({ doc, n, ratio, current, root, onClick }: { doc: PDFDocumentProxy; n: number; ratio: number; current: boolean; root: React.RefObject<HTMLDivElement | null>; onClick: () => void }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const [drawn, setDrawn] = useState(false);
-  useEffect(() => {
-    const el = canvas.current!;
-    let task: { cancel(): void; promise: Promise<void> } | null = null;
-    const io = new IntersectionObserver(
-      async ([e]) => {
-        if (!e?.isIntersecting || task) return;
-        io.disconnect();
-        const pg = await doc.getPage(n);
-        const dpr = window.devicePixelRatio || 1;
-        const viewport = pg.getViewport({ scale: (THUMB_WIDTH * dpr) / pg.getViewport({ scale: 1 }).width });
-        el.width = Math.floor(viewport.width);
-        el.height = Math.floor(viewport.height);
-        task = pg.render({ canvas: el, viewport });
-        task.promise.then(() => setDrawn(true), () => {});
-      },
-      { root: root.current, rootMargin: "300px" },
-    );
-    io.observe(el);
-    return () => (io.disconnect(), task?.cancel());
-  }, [doc, n, root]);
-  return (
-    <Thumb current={current} label={n} data-page={n} aria-label={`Page ${n}`} onClick={onClick}>
-      <canvas ref={canvas} style={{ width: THUMB_WIDTH, height: drawn ? undefined : THUMB_WIDTH * ratio }} />
-    </Thumb>
-  );
-}
-
-function Outline({ items, onDest }: { items: OutlineItem[]; onDest: (d: unknown) => void }) {
-  return (
-    <List>
-      {items.map((it, i) => (
-        <OutlineRow key={i} item={it} depth={0} onDest={onDest} />
-      ))}
-    </List>
-  );
-}
-
-function OutlineRow({ item, depth, onDest }: { item: OutlineItem; depth: number; onDest: (d: unknown) => void }) {
-  const [open, setOpen] = useState(depth === 0 && item.items.length > 0 && item.items.length <= 12);
-  const kids = item.items.length > 0;
-  return (
-    <>
-      <ListRow
-        depth={depth}
-        lead={kids ? <Twisty open={open} onToggle={() => setOpen(!open)} /> : <span className="ui-twisty" />}
-        title={item.title}
-        tip={item.title.length > 30 ? item.title : undefined}
-        onClick={() => (item.url ? void openPath(item.url) : item.dest && onDest(item.dest))}
-      />
-      {open && item.items.map((c, i) => <OutlineRow key={i} item={c} depth={depth + 1} onDest={onDest} />)}
-    </>
   );
 }
 

@@ -20,7 +20,7 @@ Every window in cmd, built-in or made with Magic, is drawn from one set of desig
   - `DataGrid`: tables. Columns as data: `grow` (takes the leftover width), `align: "end"` (numbers), `hide: "narrow" | "regular"` (dropped as space runs out), `icon` (hugs a dot or icon). `selected` / `onRowClick` for an inspector.
   - `Stat`, `Chart` (line, area, bar), `Sparkline`, `Legend`: series take `--chart-N` in order.
   - `Document`: a reading column for rendered Markdown or HTML, in the person's text and code fonts (the Markdown window).
-  - `Viewport` (pan and zoom a picture: grab cursors, a loading cover; the view zooms) and `Picture` (a checkerboard behind transparency, crisp pixels far in): the Image window. `Thumbs` / `Thumb`: page pictures down a sidebar, the current one ringed (the PDF window). Third-party markup (pdf.js) keeps a small stylesheet of its own, on tokens.
+  - `Viewport` (pan and zoom a picture: grab cursors, a loading cover; the view zooms) and `Picture` (a checkerboard behind transparency, crisp pixels far in): the Image window. Third-party markup (pdf.js) keeps a small stylesheet of its own, on tokens.
   - `Ribbon` (bars between two times on lanes, hour ticks) and `Timeline` / `TimelineEntry` (a time, a mark on a rail, the entry), marks in a hue with `--mark` (the Journal).
   - `Text` alone on a line in a `Stack` is a paragraph (line height 1.45, even wrapping); in an `Inline` it is a run of text.
   - `Stack`, `Inline`, `Tiles`, `Text`, `Measure` (a reading column), `MediaStage`, `Filmstrip`.
