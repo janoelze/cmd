@@ -205,7 +205,6 @@ export class RemoteService {
       enabled: s["remote.enabled"],
       state: this.#transport ? this.#transport.state : missing ? "error" : s["remote.enabled"] ? "connecting" : "off",
       error: this.#transport ? this.#transport.error : missing,
-      relay: s["remote.relay"],
       access: s["remote.access"],
       address: this.#transport?.endpoint()?.client ?? null,
       devices: this.devices(),
@@ -288,7 +287,7 @@ export class RemoteService {
     const expiresAt = Date.now() + PAIRING_TTL_MS;
     this.#pairing = { psk, scope, expiresAt };
     this.audit("pair-link", null, scope);
-    return { url: `${at.client}/pair#${encodePairing({ relay: at.socket, route, hostKey: this.#key.publicKey, psk })}`, expiresAt };
+    return { url: `${at.client}/pair#${encodePairing({ socket: at.socket, route, hostKey: this.#key.publicKey, psk })}`, expiresAt };
   }
 
   approve(requestId: string, allow: boolean, scope?: RemoteScope): void {

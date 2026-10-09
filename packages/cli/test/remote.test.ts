@@ -18,11 +18,13 @@ registerBuiltinModes(registry);
 /** What remote.modes answers. */
 const modes = registry.info();
 
-const base: RemoteStatus = { enabled: true, state: "online", error: null, relay: "wss://relay.example", access: "relay", address: null, devices: [], sessions: [], requests: [] };
+const base: RemoteStatus = { enabled: true, state: "online", error: null, access: "relay", address: "https://cmd.example", devices: [], sessions: [], requests: [] };
 
 describe("cmd remote status line", () => {
-  it("names the relay only in relay mode", () => {
-    expect(statusLine(base, modes)).toBe("Remote access: ready  ·  Hosted relay wss://relay.example");
+  it("names the mode, then where phones open cmd, the same in every mode", () => {
+    expect(statusLine(base, modes)).toBe("Remote access: ready  ·  Hosted relay  ·  https://cmd.example");
+    expect(statusLine({ ...base, state: "off", enabled: false, address: null }, modes)).toBe("Remote access: off  ·  Hosted relay");
+    expect(statusLine({ ...base, access: "plugin", address: "https://x.example" }, modes)).toBe("Remote access: ready  ·  plugin  ·  https://x.example");
     expect(statusLine({ ...base, access: "tailscale", address: "https://mac.tailnet.ts.net:8443" }, modes)).toBe("Remote access: ready  ·  Tailscale  ·  https://mac.tailnet.ts.net:8443");
     expect(statusLine({ ...base, access: "url", state: "error", error: "Add your HTTPS address (remote.url).", address: null }, modes)).toBe("Remote access: can't connect (Add your HTTPS address (remote.url).)  ·  Your own URL");
   });

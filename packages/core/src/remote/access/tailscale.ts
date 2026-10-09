@@ -25,6 +25,7 @@ const CANDIDATES: Cli[] = [
 
 export const DOWNLOAD_URL = "https://tailscale.com/download/mac";
 export const DNS_ADMIN_URL = "https://login.tailscale.com/admin/dns";
+const ADMIN = "Open Admin Console";
 
 /** The parts of `tailscale status --json` (ipnstate.Status) this reads. */
 interface Status {
@@ -84,9 +85,9 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
     if (s.BackendState !== "Running") {
       const login = s.BackendState === "NeedsLogin" || s.BackendState === "NeedsMachineAuth";
       const detail = s.AuthURL ? "Log in to Tailscale." : app ? (login ? "Open Tailscale and log in." : "Open Tailscale and connect.") : "Run “tailscale up” in a terminal to connect.";
-      return { id: "running", title: "Connect to your tailnet", state: "todo", detail, link: s.AuthURL || undefined };
+      return { id: "running", title: "Connect to your tailnet", state: "todo", detail, ...(s.AuthURL ? { link: s.AuthURL, linkLabel: "Log In" } : {}) };
     }
-    if (!s.CurrentTailnet?.MagicDNSEnabled) return { id: "magicdns", title: "Turn on MagicDNS", state: "todo", detail: "In Tailscale's admin console, under DNS.", link: DNS_ADMIN_URL };
+    if (!s.CurrentTailnet?.MagicDNSEnabled) return { id: "magicdns", title: "Turn on MagicDNS", state: "todo", detail: "In Tailscale's admin console, under DNS.", link: DNS_ADMIN_URL, linkLabel: ADMIN };
     if (!s.CertDomains?.length || !host(s))
       return {
         id: "https",
@@ -94,6 +95,7 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
         state: "todo",
         detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.",
         link: DNS_ADMIN_URL,
+        linkLabel: ADMIN,
       };
     return null;
   }
@@ -139,7 +141,7 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
       };
 
       const cli = await findCli(ctx);
-      if (!cli) return rest({ id: "installed", title: "Install Tailscale", state: "todo", detail: "Get the Mac app from tailscale.com.", link: DOWNLOAD_URL });
+      if (!cli) return rest({ id: "installed", title: "Install Tailscale", state: "todo", detail: "Get the Mac app from tailscale.com.", link: DOWNLOAD_URL, linkLabel: "Download" });
       checks.push({ id: "installed", title: "Install Tailscale", state: "ok" });
       const st = await json<Status>(ctx, cli, ["status", "--json"]);
       const b = blocker(st, cli);
@@ -160,7 +162,7 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
             : !ctx.selected
               ? "Turn on remote access through Tailscale to publish it."
               : "Not published yet.";
-        return rest({ id: "published", title: "Publish on your tailnet", state: who === "taken" ? "error" : "todo", detail });
+        return rest({ id: "published", title: "Publish on your tailnet", state: who === "taken" ? "error" : "todo", detail, ...(who === "free" && ctx.selected ? { action: "Publish" } : {}) });
       }
       checks.push({ id: "published", title: "Publish on your tailnet", state: "ok", detail: `${url(h, port)} → 127.0.0.1:${ctx.port}` });
       const unreachable = await probe(url(h, port));
@@ -210,6 +212,12 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
       const r = await run(ctx, cli, ["serve", "--yes", `--https=${tsPort(ctx)}`, "off"]);
       if (r.code !== 0) throw new Error(firstLine(r.stderr || r.stdout) || r.error || `exit ${r.code}`);
       ctx.log.info(`tailscale: unpublished port ${tsPort(ctx)}`);
+    },
+
+    // Serve sets this for tailnet clients and strips it from what they send.
+    identify: (req) => {
+      const v = req.headers["tailscale-user-login"];
+      return (Array.isArray(v) ? v[0] : v)?.trim() || null;
     },
   };
 }

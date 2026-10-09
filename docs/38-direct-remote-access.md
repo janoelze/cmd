@@ -42,7 +42,7 @@ Phone ──https/wss──▶ adapter (tailscale serve: TLS on *.ts.net:8443) �
 
 - **HTTPS is required.** The client runs Noise on WebCrypto, which only works in a secure context; `http://100.x.y.z` is not one. The listener binds to loopback only and an adapter puts TLS in front.
 - **The client comes from the Mac.** docs/13's main client risk (another server serving malicious JS) goes away: the JS is served by the core it talks to.
-- **The client needs no protocol change.** It dials `${relay}/r/${route}` and speaks Noise; the pairing link carries `wss://<mac>.<tailnet>.ts.net:8443` as its relay. Its identity is per origin (IndexedDB), so a phone paired with the hosted client and with the Mac directly holds two separate pairings.
+- **The client needs no protocol change.** It dials `${socket}/r/${route}` and speaks Noise; the pairing link carries `wss://<mac>.<tailnet>.ts.net:8443` where it carried the relay. The link is positional (`v1.<socket>.<route>.<host key>.<psk>`), so renaming `Pairing.relay` to `socket` changed no link; the web client reads a pairing it saved under the old name (`relay`) as `socket`, so phones stay paired. Its identity is per origin (IndexedDB), so a phone paired with the hosted client and with the Mac directly holds two separate pairings.
 - **Loopback is reachable by any local process.** That is fine: everything past the handshake needs a paired device key, as on the relay.
 
 ### Transports (core)
@@ -50,7 +50,7 @@ Phone ──https/wss──▶ adapter (tailscale serve: TLS on *.ts.net:8443) �
 `RemoteService` opens channels from a `Transport`, not from `RelayLink`:
 
 ```ts
-interface Transport extends EventEmitter<{ state; open: [channel, ip, hint?]; data: [channel, bytes]; close: [channel] }> {
+interface Transport extends EventEmitter<{ state; open: [channel, ip, user?]; data: [channel, bytes]; close: [channel] }> {
   state: "connecting" | "online" | "error"; error: string | null;
   /** What a pairing link carries: where the device's socket goes, and where the client is. */
   endpoint(): { socket: string; client: string } | null;
@@ -64,7 +64,7 @@ interface Transport extends EventEmitter<{ state; open: [channel, ip, hint?]; da
   - `node:http` + `ws` on `127.0.0.1:remote.port` (a fixed default per instance, so release and dev don't collide and a persisted Serve config stays valid).
   - Serves the web client's static build with the headers from `apps/web/public/.htaccess`, `connect-src 'self'`; every non-file path is `index.html`.
   - Upgrades `/r/<route>` only, only with `Origin` equal to the adapter's public origin; same limits as the relay (`RELAY_LIMITS`: frame size, channels, connects per minute, pings, idle close).
-  - IP from `X-Forwarded-For`; `Tailscale-User-Login` kept as a hint on the session ("iPhone · lukas@").
+  - IP from the rightmost `X-Forwarded-For` entry; who's connecting from the adapter's `identify(req)` (Tailscale: `Tailscale-User-Login`, which Serve sets and strips from clients), kept as a hint on the session (`RemoteSession.user`), never auth.
   - Its route is a random id kept in `HostKeys` like a relay's; `endpoint()` comes from the adapter.
 - Pairing (`service.ts` `pair()`) builds the link from `transport.endpoint()`.
 
@@ -91,6 +91,14 @@ interface AccessRun<H> {
   stop({ restart }): Promise<H | null>;  // after its transport closed: unpublish, or hand the publication to the next run
 }
 // ModeContext: settings (live), selected (in use and on), exec on the login PATH (loginpath.ts), the host keys, the web client's dir, log, audit.
+
+// What Settings and the CLI get (packages/protocol model.ts); they render these and know no mode by name.
+interface RemoteStatus { enabled; state; error; access: string; address: string | null; /* where phones open cmd, in every mode */ devices; sessions; requests }
+interface RemoteAccessCheck {
+  id: string; title: string; state: "ok" | "todo" | "error"; detail?: string;
+  link?: string; linkLabel?: string;  // a page that helps, and its button ("Download"; default "Open")
+  action?: string;                    // the retry button on the step that needs you ("Publish"; default Try Again / Check Again)
+}
 ```
 
 - **Relay** (`access/relay.ts`): starts the `RelayLink` on `remote.relay`, reads `remote.client` when a pairing link is made; a route belongs to one relay.
@@ -101,6 +109,7 @@ interface AccessAdapter extends AccessModeInfo {
   detect(ctx: AdapterContext): Promise<Check[]>;
   enable(ctx: AdapterContext): Promise<{ url: string }>;
   disable(ctx: AdapterContext): Promise<void>;  // only what enable() did
+  identify?(req: http.IncomingMessage): string | null;  // who's connecting, from a header only the publisher sets (tailscale)
 }
 // AdapterContext: exec, settings (as they were for enable), selected, the loopback port, the route (null in checks before the first run), log.
 ```
@@ -118,7 +127,7 @@ interface AccessAdapter extends AccessModeInfo {
   5. Published: `serve status --json` has `TCP[port].HTTPS` and a `Web["<host>:<port>"]` handler proxying to our loopback port.
   6. Reachable: a probe of `https://<Self.DNSName without the dot>:<port>/` answers (the first certificate takes a few seconds).
 - Enable: `tailscale serve --bg --yes --https=<port> http://127.0.0.1:<local port>`; "Serve is not enabled on your tailnet" on stderr maps to check 4.
-- Disable: `tailscale serve --yes --https=<port> off`, only if the handler still proxies to our port. Never `serve reset`; never touch other entries. (Confirmed on a real tailnet, 2026-10-09. Not yet seen for real: what `serve --bg` prints when Serve is off for the tailnet; the adapter falls back to Tailscale's own message.)
+- Disable: `tailscale serve --yes --https=<port> off`, only if the handler still proxies to our port. Never `serve reset`; never touch other entries. Quitting the core deliberately leaves the publication in place (`--bg` persists), so a restart doesn't publish again; while the core is down the loopback port is closed, so it serves nothing. (Confirmed on a real tailnet, 2026-10-09. Not yet seen for real: what `serve --bg` prints when Serve is off for the tailnet; the adapter falls back to Tailscale's own message.)
 
 **`url` (your own):** a public `https://` origin (Caddy, nginx, Cloudflare Tunnel, ngrok…) in front of the loopback port. Checks: HTTPS, the page loads, a WebSocket upgrade to `/r/<route>` works. `http://localhost` and `http://127.0.0.1` are accepted too (browsers treat loopback as secure), for testing on the Mac (`pnpm e2e:web:direct`). The proxy must run on the Mac itself, since the listener is loopback only; a proxy on another machine needs a tunnel to it (`ssh -R`).
 
@@ -138,7 +147,7 @@ interface AccessAdapter extends AccessModeInfo {
 
 - Settings → Remote Access: "Connect through" (Hosted relay · Tailscale · Your own URL). Choosing Tailscale shows the checklist with live state, a Fix or Open button per step, and "Check Again". When every check passes, the QR appears as it does today, and the status line names the address ("Ready on mac.tailnet.ts.net").
 - States: "Tailscale isn't running", "Turn on HTTPS for your tailnet", "Publishing on your tailnet…", "Ready", "Can't reach mac.tailnet.ts.net".
-- CLI: `cmd remote setup tailscale` runs the same checks (`--json`), `cmd remote access <mode> [URL]` switches, `cmd remote modes` lists the modes, `cmd remote` shows the access and address.
+- CLI: `cmd remote setup tailscale` runs the same checks (`--json`), `cmd remote access <mode> [URL]` switches, `cmd remote modes` lists the modes, `cmd remote` shows the mode and `address` (the web client's origin in every mode: the relay's client, the tailnet address, your URL).
 
 ## Packaging
 

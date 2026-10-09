@@ -409,10 +409,9 @@ export interface RemoteStatus {
   /** off: disabled; connecting: to the relay; online: devices can reach this Mac; error: see `error`. */
   state: "off" | "connecting" | "online" | "error";
   error: string | null;
-  relay: string;
   /** How phones reach this Mac (remote.access): an access mode's id (remote.modes). */
   access: string;
-  /** Where phones open cmd: the web client's origin; null until it's known. */
+  /** Where phones open cmd, in every mode: the web client's origin (the relay's web client, the tailnet or your URL); null while off or not known yet. */
   address: string | null;
   devices: RemoteDevice[];
   sessions: RemoteSession[];
@@ -447,6 +446,10 @@ export interface RemoteAccessCheck {
   detail?: string;
   /** A page that helps (a download, an admin console). */
   link?: string;
+  /** The button that opens `link` ("Download", "Open Admin Console"); default "Open". */
+  linkLabel?: string;
+  /** The retry button while this is the step that needs you ("Publish"); default "Try Again" on an error, else "Check Again". */
+  action?: string;
 }
 
 /** An entry of the remote access audit log (Settings → Remote Access → Recent activity, `cmd remote log`). */
