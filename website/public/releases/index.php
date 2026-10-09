@@ -18,7 +18,6 @@ page_start('cmd releases', "What's new in each release of cmd.", 'releases/');
 <section class="release<?= $i === 0 && $r ? ' latest' : '' ?>" id="<?= h($tag) ?>">
   <div class="head">
     <h2><a href="#<?= h($tag) ?>"><?= h($c['version']) ?></a></h2>
-    <?= $i === 0 && $r ? '<span class="pill accent">Latest</span>' : '' ?>
     <time datetime="<?= h($c['date']) ?>"><?= h($c['date']) ?></time>
     <?php if ($r && $r['dmg']): ?><a class="button<?= $i === 0 ? '' : ' secondary small' ?>" href="<?= h($r['dmg']) ?>">Download</a><?php endif ?>
   </div>
