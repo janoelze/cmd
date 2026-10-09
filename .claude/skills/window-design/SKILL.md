@@ -45,7 +45,7 @@ Each was settled by measuring in the Workbench; keep them unless the user change
 - **Charts** line up on the left with their pane's title; the y axis sits on the right, right-aligned with the pane's unit (as Swift Charts does); no labels over the data, none on the baseline. A legend only for more than one series.
 - **Lists of things to run** are grouped: sections apart, rows indented, no boxes around them; rows highlight as pills on hover. Lists that are navigation (a sidebar) stay plain.
 - **No boxes in the box.** The window is the frame: don't wrap a section, list or table in a card.
-- **States replace the body**: `View state={…}`: loading, empty (with what to do), no results (with a way back), error (plain words and Try Again). Never a spinner placed by hand.
+- **States replace the body**: `View state={…}`: loading, empty (with what to do), no results (with a way back), error (plain words and Try Again). Never a spinner placed by hand. Their titles and texts are centred and wrap balanced (`text-wrap: balance`, a width in characters), titles in sentence case; the icon is small (`ICON.empty`, 20px) in `--text`, the error's too. `States.story.tsx` shows them, short and long, at three widths.
 
 ## Building or changing a window
 
