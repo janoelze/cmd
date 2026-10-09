@@ -27,6 +27,9 @@ export function terminalWindow(p: Pane): AppWindow {
   };
 }
 
+/** Window types that were renamed: old kind → new (stored windows are moved over on load). */
+const RENAMED_KINDS: Readonly<Record<string, string>> = { livecode: "jam" };
+
 /**
  * Windows: everything the main pane lays out. Terminal windows are the panes
  * (window id = pane id); other windows are created by their WindowType and
@@ -45,7 +48,12 @@ export class WindowManager extends EventEmitter<{ updated: [AppWindow]; removed:
     this.#store = store;
     this.types = types;
     this.#overrides = overrides;
-    for (const w of store?.windows() ?? []) this.#windows.set(w.id, w);
+    for (const w of store?.windows() ?? []) {
+      // A window type that was renamed: its stored windows carry on under the new name.
+      const renamed = RENAMED_KINDS[w.kind];
+      if (renamed) (w.kind = renamed), store?.saveWindow(w);
+      this.#windows.set(w.id, w);
+    }
   }
 
   /** Non-terminal windows. */

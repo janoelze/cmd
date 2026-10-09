@@ -1,14 +1,14 @@
-// pnpm livecode: everything Jam's AI knows, and how well it does, in one place.
+// pnpm jam: everything Jam's AI knows, and how well it does, in one place.
 //
-//   pnpm livecode build [reference|atlas]   regenerate the knowledge in packages/core/src/livecode:
+//   pnpm jam build [reference|atlas]   regenerate the knowledge in packages/core/src/jam:
 //                                           reference.md (Strudel's functions, from @strudel/reference)
 //                                           and atlas.json + atlas.md (every sample, measured)
-//   pnpm livecode check [--audio]           the hand-written examples (cookbook.md, sound-design.md)
+//   pnpm jam check [--audio]           the hand-written examples (cookbook.md, sound-design.md)
 //                                           evaluate and use sounds that load (--audio: and are heard)
-//   pnpm livecode eval <command>            the evals: pnpm livecode eval help
+//   pnpm jam eval <command>            the evals: pnpm jam eval help
 //
 // When to run what: `build` after bumping @strudel/web or changing the sample maps
-// (apps/desktop/src/livecode/sample-maps.json); `check` after editing the cookbook
+// (apps/desktop/src/jam/sample-maps.json); `check` after editing the cookbook
 // or the sound-design guide; `eval run` before and after changing the prompt.
 // Everything runs Strudel in headless Chromium (Playwright's), no app needed.
 
@@ -27,6 +27,6 @@ if (cmd === "build") {
 } else if (cmd === "eval") {
   await evalCommand(rest);
 } else {
-  console.log("usage: pnpm livecode build [reference|atlas] | check [--audio] | eval <refs|run|report|rescore|rate|listen|show|sound> …");
+  console.log("usage: pnpm jam build [reference|atlas] | check [--audio] | eval <refs|run|report|rescore|rate|listen|show|sound> …");
   process.exitCode = cmd ? 1 : 0;
 }

@@ -1,9 +1,9 @@
 // Jam's AI (docs/17-ai.md): turns a request ("drop the bass for a bar",
 // "more swing") into the window's new code. The system prompt is prompt.md, a
 // sound guide, a genre cookbook and Strudel's function reference (reference.md,
-// scripts/livecode-reference.mjs), the same on every call so providers cache it;
+// scripts/jam-reference.mjs), the same on every call so providers cache it;
 // the request carries the code, the sounds the window has loaded, and the last attempt's error when the
-// window's frame refused it (renderer components/LiveCodeView.tsx retries).
+// window's frame refused it (renderer components/JamView.tsx retries).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -82,7 +82,7 @@ let system: string | null = null;
 /**
  * The system prompt, read once (the files ship with the core): how to answer
  * (prompt.md), what the important sounds are (sounds.md) and what every sample
- * measures as (atlas.md, scripts/livecode-atlas.mjs), how to make them
+ * measures as (atlas.md, scripts/jam-atlas.mjs), how to make them
  * sound good (sound-design.md: mixing rules and patches), genre starting points
  * written for this app (cookbook.md), and every function (reference.md).
  */
@@ -137,7 +137,7 @@ const HISTORY = 5;
 
 type ObjectCall = <T>(o: CallOptions & ObjectRequest<T>) => Promise<CompleteResult<T>>;
 
-/** What the eval varies (scripts/evals/livecode.ts): another system prompt, model or effort. */
+/** What the eval varies (scripts/jam/eval.ts): another system prompt, model or effort. */
 export interface ChangeOptions {
   system?: string;
   model?: string;
@@ -152,7 +152,7 @@ export async function changeCode(object: ObjectCall, r: ChangeRequest, o: Change
   for (let attempt = 0; ; attempt++) {
     const res = await object<ModelAnswer>({
       tier: "smart",
-      purpose: "livecode.change",
+      purpose: "jam.change",
       system: o.system ?? changeSystem(),
       cacheSystem: true,
       prompt: changePrompt(req),

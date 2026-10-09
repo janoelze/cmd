@@ -1,6 +1,6 @@
 // Changes made to an editor from outside (Jam's AI), applied line by line
 // and shown for a moment: the lines that changed light up and fade (the class
-// names are styled where the editor is used, livecode.css), the characters that
+// names are styled where the editor is used, jam.css), the characters that
 // changed within a line a little stronger. Only what changed moves; the cursor
 // and the rest of the text stay where they are.
 

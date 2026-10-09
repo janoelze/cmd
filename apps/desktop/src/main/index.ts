@@ -90,7 +90,7 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // video, images) load from origins the person allowed for that window. Tokens
 // come from the renderer's "widget-frame" call and can't be guessed, so a widget
 // can't navigate itself to a page with a looser CSP.
-// cmd-visualizer://frame/, cmd-livecode://frame/ — the pages Visualizer and Jam windows run in (./frames.ts).
+// cmd-visualizer://frame/, cmd-jam://frame/ — the pages Visualizer and Jam windows run in (./frames.ts).
 protocol.registerSchemesAsPrivileged([
   // corsEnabled: the app's page (file://) fetches PDFs from it.
   { scheme: "cmd-file", privileges: { secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },

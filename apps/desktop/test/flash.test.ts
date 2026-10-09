@@ -1,4 +1,4 @@
-// Live Code's edit marks (renderer editor/flash.ts): changes come in line by line,
+// Jam's edit marks (renderer editor/flash.ts): changes come in line by line,
 // so only what changed moves and is marked.
 import { ChangeSet, Text } from "@codemirror/state";
 import { describe, expect, it } from "vitest";

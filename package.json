@@ -11,7 +11,7 @@
     "core": "node --no-warnings packages/core/src/main.ts --instance=dev",
     "core:stop": "node scripts/stop-core.mjs",
     "core:stop-all": "node scripts/stop-core.mjs --all",
-    "livecode": "node --no-warnings scripts/livecode/cli.ts",
+    "jam": "node --no-warnings scripts/jam/cli.ts",
     "cmd": "node --no-warnings packages/cli/src/main.ts",
     "relay": "node --no-warnings apps/relay/src/main.ts",
     "web": "pnpm --filter @cmd/web dev",

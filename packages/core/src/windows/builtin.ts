@@ -466,7 +466,7 @@ export const visualizerType: WindowType<VisualizerState> = {
 };
 
 /** What a new Jam starts with: something that plays, to change. */
-export const LIVECODE_STARTER = `// Ctrl+Enter or ⌘R plays, ⌘. stops, ⌘L asks for a change, ⌘S saves.
+export const JAM_STARTER = `// Ctrl+Enter or ⌘R plays, ⌘. stops, ⌘L asks for a change, ⌘S saves.
 setcpm(120 / 4)
 
 stack(
@@ -478,30 +478,30 @@ stack(
 `;
 
 /** An earlier version of a Jam's code: what it was before a change, the request that changed it, and what changed. */
-export interface LivecodeVersion {
+export interface JamVersion {
   code: string;
   request: string;
   summary: string;
 }
 
 /** How many earlier versions a Jam keeps (newest first). */
-export const LIVECODE_VERSIONS = 10;
+export const JAM_VERSIONS = 10;
 
-const versionsOf = (v: unknown): LivecodeVersion[] =>
+const versionsOf = (v: unknown): JamVersion[] =>
   (Array.isArray(v) ? v : [])
-    .filter((x): x is LivecodeVersion => !!x && typeof x.code === "string" && typeof x.request === "string" && typeof x.summary === "string")
-    .slice(0, LIVECODE_VERSIONS)
+    .filter((x): x is JamVersion => !!x && typeof x.code === "string" && typeof x.request === "string" && typeof x.summary === "string")
+    .slice(0, JAM_VERSIONS)
     .map(({ code, request, summary }) => ({ code, request, summary }));
 
 /**
- * Jam: music as code, a Strudel pattern (renderer components/LiveCodeView.tsx)
+ * Jam: music as code, a Strudel pattern (renderer components/JamView.tsx)
  * that plays as it changes. Untitled, its code is `code`; opened from a .strudel
  * file, `path` (the view reads and saves the file, ⌘S). `versions`: the code before
  * each AI change, newest first, which the AI sees, so "undo that" and "go back to
  * before the pad" restore real code.
  */
-export const livecodeType: WindowType<{ code: string; path: string; versions: LivecodeVersion[] }> = {
-  kind: "livecode",
+export const jamType: WindowType<{ code: string; path: string; versions: JamVersion[] }> = {
+  kind: "jam",
   title: "Jam",
   icon: "music.note",
   role: "widget",
@@ -510,7 +510,7 @@ export const livecodeType: WindowType<{ code: string; path: string; versions: Li
   fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
   create(input) {
     const p = str(input.path);
-    if (!p) return { state: { code: typeof input.code === "string" ? input.code : LIVECODE_STARTER, path: "", versions: [] }, title: "Jam" };
+    if (!p) return { state: { code: typeof input.code === "string" ? input.code : JAM_STARTER, path: "", versions: [] }, title: "Jam" };
     const file = path.resolve(expandHome(p));
     if (!fs.statSync(file).isFile()) throw new Error(`not a file: ${file}`);
     return { state: { code: "", path: file, versions: [] }, title: path.basename(file) };
@@ -666,5 +666,5 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(eventsType);
   types.register(timerType);
   types.register(visualizerType);
-  types.register(livecodeType);
+  types.register(jamType);
 }

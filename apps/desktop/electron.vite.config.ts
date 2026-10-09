@@ -64,7 +64,7 @@ const bundleWorkspace = { externalizeDeps: { exclude: ["@cmd/protocol"] } };
 
 export default defineConfig({
   // The packaged app ships no node_modules for main: Lucide's icons (@cmd/ui/lucide),
-  // electron-updater, and the Visualizer's and Live Code's libraries (as text, main/frames.ts) are bundled too.
+  // electron-updater, and the Visualizer's and Jam's libraries (as text, main/frames.ts) are bundled too.
   // The crash report and feedback webhooks (main/crash.ts, main/feedback.ts) and the
   // usage stats key come from the environment at build time (CI secrets), so they
   // aren't in the repository.

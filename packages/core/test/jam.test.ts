@@ -1,29 +1,47 @@
-// Live Code's core parts: the window type (its code is its state) and the AI
-// request (livecode/change.ts): what the model is sent and what comes back.
+// Jam's core parts: the window type (its code is its state) and the AI
+// request (jam/change.ts): what the model is sent and what comes back.
 
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { Core } from "../src/core.ts";
+import type { PaneManager } from "../src/panes.ts";
+import type { Store } from "../src/store.ts";
+import { registerBuiltins } from "../src/windows/builtin.ts";
+import { WindowManager } from "../src/windows/manager.ts";
+import { WindowTypes } from "../src/windows/types.ts";
 import { fakeFactory } from "./fake-pty.ts";
-import { applyEdits, changeCode, changePrompt, changeSystem, soundList } from "../src/livecode/change.ts";
-import { LIVECODE_STARTER, livecodeType } from "../src/windows/builtin.ts";
+import { applyEdits, changeCode, changePrompt, changeSystem, soundList } from "../src/jam/change.ts";
+import { JAM_STARTER, jamType } from "../src/windows/builtin.ts";
 
-describe("livecode window", () => {
+describe("jam window", () => {
   it("starts with code that plays, and keeps what it's given", () => {
-    expect(livecodeType.create({}).state.code).toBe(LIVECODE_STARTER);
-    const { state } = livecodeType.create({ code: 's("bd")' });
-    expect(livecodeType.update!(state, { code: 's("sd")' }).state).toEqual({ code: 's("sd")', path: "", versions: [] });
-    expect(livecodeType.update!(state, { code: 3 }).state).toEqual({ code: 's("bd")', path: "", versions: [] });
+    expect(jamType.create({}).state.code).toBe(JAM_STARTER);
+    const { state } = jamType.create({ code: 's("bd")' });
+    expect(jamType.update!(state, { code: 's("sd")' }).state).toEqual({ code: 's("sd")', path: "", versions: [] });
+    expect(jamType.update!(state, { code: 3 }).state).toEqual({ code: 's("bd")', path: "", versions: [] });
   });
 
   it("keeps its last ten versions, well-formed ones only", () => {
-    const { state } = livecodeType.create({});
+    const { state } = jamType.create({});
     const v = (i: number) => ({ code: `s("bd*${i}")`, request: `r${i}`, summary: `s${i}`, extra: 1 });
-    const next = livecodeType.update!(state, { versions: [...Array.from({ length: 12 }, (_, i) => v(i)), { code: 1 }] }).state;
+    const next = jamType.update!(state, { versions: [...Array.from({ length: 12 }, (_, i) => v(i)), { code: 1 }] }).state;
     expect(next.versions).toHaveLength(10);
     expect(next.versions[0]).toEqual({ code: 's("bd*0")', request: "r0", summary: "s0" });
+  });
+});
+
+describe("jam window migration", () => {
+  it("moves windows stored under the old kind (livecode) to jam, and saves them so", () => {
+    const saved: { kind: string }[] = [];
+    const old = { id: "w1", spaceId: "home", kind: "livecode", title: "Jam", createdAt: 0, updatedAt: 0, state: { code: 's("bd")' } };
+    const store = { windows: () => [old], saveWindow: (w: { kind: string }) => saved.push({ ...w }) } as unknown as Store;
+    const types = new WindowTypes();
+    registerBuiltins(types);
+    const windows = new WindowManager({ list: () => [] } as unknown as PaneManager, store, types);
+    expect(windows.others()[0]).toMatchObject({ id: "w1", kind: "jam", state: { code: 's("bd")' } });
+    expect(saved).toEqual([expect.objectContaining({ id: "w1", kind: "jam" })]);
   });
 });
 
@@ -35,9 +53,9 @@ describe("jam files", () => {
     const core = new Core({ socketPath: path.join(dir, "s.sock"), dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     try {
       const w = await core.call("window.openTarget", { target: file });
-      expect(w).toMatchObject({ kind: "livecode", title: "night drive.strudel", state: { path: file } });
-      const { state } = livecodeType.create({});
-      expect(livecodeType.update!(state, { path: path.join(dir, "saved.strudel") })).toMatchObject({ state: { path: path.join(dir, "saved.strudel") }, title: "saved.strudel" });
+      expect(w).toMatchObject({ kind: "jam", title: "night drive.strudel", state: { path: file } });
+      const { state } = jamType.create({});
+      expect(jamType.update!(state, { path: path.join(dir, "saved.strudel") })).toMatchObject({ state: { path: path.join(dir, "saved.strudel") }, title: "saved.strudel" });
     } finally {
       await core.close();
       fs.rmSync(dir, { recursive: true, force: true });
@@ -45,7 +63,7 @@ describe("jam files", () => {
   });
 });
 
-describe("livecode change", () => {
+describe("jam change", () => {
   it("sends the prompt and Strudel's reference as one cached system prompt", () => {
     const system = changeSystem();
     expect(system).toContain("You change the code of a live-coded piece of music");
@@ -86,7 +104,7 @@ describe("livecode change", () => {
       return { value: { code: '```js\ns("bd*2")\n```', summary: " Doubled the kick " }, usage: { input: 0, output: 0 }, model: "m" };
     }) as never;
     expect(await changeCode(object, { code: 's("bd")', request: "double the kick" })).toEqual({ code: 's("bd*2")', summary: "Doubled the kick" });
-    expect(calls[0]).toMatchObject({ purpose: "livecode.change", cacheSystem: true });
+    expect(calls[0]).toMatchObject({ purpose: "jam.change", cacheSystem: true });
   });
 
   it("applies edits, and says which one doesn't fit", () => {

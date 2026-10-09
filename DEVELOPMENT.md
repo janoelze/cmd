@@ -60,15 +60,15 @@ Inside the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
 ## Jam's AI
 
-What Jam's AI knows lives in `packages/core/src/livecode`: `prompt.md`, `sounds.md`, `sound-design.md` and `cookbook.md` are written by hand; `reference.md` (Strudel's functions) and `atlas.json`/`atlas.md` (every sample, measured from its audio) are generated. The sample maps a Jam frame loads are `apps/desktop/src/livecode/sample-maps.json`. One command, Strudel in headless Chromium, no app needed:
+What Jam's AI knows lives in `packages/core/src/jam`: `prompt.md`, `sounds.md`, `sound-design.md` and `cookbook.md` are written by hand; `reference.md` (Strudel's functions) and `atlas.json`/`atlas.md` (every sample, measured from its audio) are generated. The sample maps a Jam frame loads are `apps/desktop/src/jam/sample-maps.json`. One command, Strudel in headless Chromium, no app needed:
 
 ```sh
-pnpm livecode build              # regenerate reference.md and the atlas (after bumping @strudel/web or changing the sample maps)
-pnpm livecode check [--audio]    # every cookbook and sound-design example evaluates, uses sounds that load (and is heard)
-pnpm livecode eval run --audio   # requests through the AI, scored as music and played; report, rate, listen, rescore: pnpm livecode eval help
+pnpm jam build              # regenerate reference.md and the atlas (after bumping @strudel/web or changing the sample maps)
+pnpm jam check [--audio]    # every cookbook and sound-design example evaluates, uses sounds that load (and is heard)
+pnpm jam eval run --audio   # requests through the AI, scored as music and played; report, rate, listen, rescore: pnpm jam eval help
 ```
 
-Run `check` after editing the hand-written files and `eval run` before and after changing the prompt. Eval data stays in `.cmd-dev/livecode`.
+Run `check` after editing the hand-written files and `eval run` before and after changing the prompt. Eval data stays in `.cmd-dev/jam`.
 
 ## README screenshots
 

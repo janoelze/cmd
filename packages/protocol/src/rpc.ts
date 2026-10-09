@@ -318,7 +318,7 @@ export interface Methods {
    * window has loaded; `history`: the code before each earlier change, newest first (for "undo
    * that"); `failed`: the last attempt and why it didn't play (the window retries).
    */
-  "livecode.change": {
+  "jam.change": {
     params: { code: string; request: string; sounds?: string[]; history?: { code: string; request: string; summary: string }[]; failed?: { code: string; error: string } };
     result: { code: string; summary: string };
   };

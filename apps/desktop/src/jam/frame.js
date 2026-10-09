@@ -1,4 +1,4 @@
-// The page a Jam window plays in (cmd-livecode://frame/, main/frames.ts):
+// The page a Jam window plays in (cmd-jam://frame/, main/frames.ts):
 // Strudel (@strudel/web) evaluating the window's code and playing it. The frame
 // shows nothing (it is 0×0 in the window); while a Visualizer listens it sends
 // what it plays as levels. The code is the person's or the AI's, so this runs sandboxed in its own opaque

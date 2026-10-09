@@ -1,6 +1,6 @@
-// Strudel's function reference for Jam's AI (pnpm livecode build): writes
-// packages/core/src/livecode/reference.md from @strudel/reference (generated from
-// Strudel's JSDoc), as compact Markdown that core livecode/change.ts puts in the
+// Strudel's function reference for Jam's AI (pnpm jam build): writes
+// packages/core/src/jam/reference.md from @strudel/reference (generated from
+// Strudel's JSDoc), as compact Markdown that core jam/change.ts puts in the
 // system prompt. Only what plays in a Jam frame (@strudel/web): no MIDI, OSC,
 // Csound, drawing, device motion or the supradough engine. One example per function.
 
@@ -64,7 +64,7 @@ export async function buildReference(): Promise<void> {
     lines.push("");
   }
 
-  const out = path.join(root, "packages/core/src/livecode/reference.md");
+  const out = path.join(root, "packages/core/src/jam/reference.md");
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, lines.join("\n"));
   console.log(`reference: ${entries.length} functions from @strudel/reference ${version} → ${path.relative(root, out)} (${Math.round(fs.statSync(out).size / 1024)} KB)`);

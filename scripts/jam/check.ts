@@ -1,4 +1,4 @@
-// Checks the hand-written knowledge Jam's AI gets (pnpm livecode check): every
+// Checks the hand-written knowledge Jam's AI gets (pnpm jam check): every
 // code block in the cookbook and the sound-design guide must evaluate in Strudel,
 // produce events, and use only sounds the sample maps load. With --audio each block
 // is also played, and a sound that makes no sound fails it. Exits 1 on a failure.
@@ -8,7 +8,7 @@ import path from "node:path";
 import { openStrudel, root } from "./browser.ts";
 
 /** The files whose code blocks are examples the AI copies. */
-const FILES = ["cookbook.md", "sound-design.md"].map((f) => path.join(root, "packages/core/src/livecode", f));
+const FILES = ["cookbook.md", "sound-design.md"].map((f) => path.join(root, "packages/core/src/jam", f));
 
 export async function check({ audio = false } = {}): Promise<boolean> {
   const strudel = await openStrudel();

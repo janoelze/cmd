@@ -1,12 +1,12 @@
 // Jam, a built-in widget: music as code. A Strudel pattern in an editor,
-// played by an invisible sandboxed frame (main/frames.ts, livecode/frame.js), and
-// a prompt bar under it that asks the AI for a change (core livecode/change.ts)
+// played by an invisible sandboxed frame (main/frames.ts, jam/frame.js), and
+// a prompt bar under it that asks the AI for a change (core jam/change.ts)
 // while the music keeps playing.
 //
 //  - The toolbar: Play/Pause, Stop, Update (plays the code as it is now; also
 //    Ctrl+Enter and ⌘R; marked while there are edits that aren't playing), and
 //    a Visualizer listening to this window. ⌘. stops; ⌘L goes to the prompt.
-//  - The code is the window's state (core windows/builtin.ts livecodeType),
+//  - The code is the window's state (core windows/builtin.ts jamType),
 //    saved as you type.
 //  - An AI change lands in the editor line by line, the changed lines lit up for
 //    a moment (editor/flash.ts; ⌘Z undoes it), and plays at once. If the frame refuses it (it doesn't evaluate, or throws when
@@ -31,14 +31,14 @@ import { syntax } from "../editor/syntax.ts";
 import { useStoreValue } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
-import { livecodeControls as controls } from "../windows/livecode.tsx";
-import "./livecode.css";
+import { jamControls as controls } from "../windows/jam.tsx";
+import "./jam.css";
 
 /** "undo", "undo that", "undo the last 2 changes", "go back": restored at once, without the AI. */
 const UNDO = /^(?:undo|revert|go back)(?:\s+(?:that|it|this|(?:the\s+)?(?:last\s+)?(\d+|one|two|three|four|five)?\s*changes?))?[\s.!]*$/i;
 const COUNTS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5 };
 
-/** Earlier versions kept (core windows/builtin.ts LIVECODE_VERSIONS), newest first. */
+/** Earlier versions kept (core windows/builtin.ts JAM_VERSIONS), newest first. */
 type Version = { code: string; request: string; summary: string };
 const versionsOf = (v: unknown): Version[] => (Array.isArray(v) ? (v as Version[]) : []);
 
@@ -47,7 +47,7 @@ const ATTEMPTS = 3;
 
 type Result = { ok: true } | { ok: false; error: string };
 
-export function LiveCodeView({ win }: WindowViewProps) {
+export function JamView({ win }: WindowViewProps) {
   const host = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -186,7 +186,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
     let failed: { code: string; error: string } | undefined;
     try {
       for (let i = 0; i < ATTEMPTS; i++) {
-        const answer = await cmd.call("livecode.change", { code: before, request: text, sounds: sounds.current, history: versions, failed });
+        const answer = await cmd.call("jam.change", { code: before, request: text, sounds: sounds.current, history: versions, failed });
         if (!current()) return;
         applyAndFlash(v, answer.code);
         const r = await evaluate(answer.code);
@@ -332,7 +332,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
   }, [win.id, win.title]);
 
   return (
-    <div className="lc">
+    <div className="jam">
       <WindowToolbar>
         <ToolbarGroup>
           <ToolbarButton icon={mode === "playing" ? "pause.fill" : "play.fill"} label={mode === "playing" ? "Pause" : "Play"} showLabel onClick={togglePlay} />
@@ -347,9 +347,9 @@ export function LiveCodeView({ win }: WindowViewProps) {
           onClick={() => void cmd.call("window.open", { kind: "visualizer", input: { source: `window:${win.id}` }, spaceId: win.spaceId }).catch(() => {})}
         />
       </WindowToolbar>
-      <div className="lc-editor" ref={host} />
-      <iframe ref={frame} className="lc-frame" sandbox="allow-scripts" src="cmd-livecode://frame/" title="Player" aria-hidden tabIndex={-1} />
-      <div className="lc-ask">
+      <div className="jam-editor" ref={host} />
+      <iframe ref={frame} className="jam-frame" sandbox="allow-scripts" src="cmd-jam://frame/" title="Player" aria-hidden tabIndex={-1} />
+      <div className="jam-ask">
         <AiField
           ref={ask}
           value={request}

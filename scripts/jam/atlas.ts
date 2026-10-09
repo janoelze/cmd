@@ -1,22 +1,22 @@
-// The sound atlas (pnpm livecode build): what every sample sound a Jam frame
+// The sound atlas (pnpm jam build): what every sample sound a Jam frame
 // loads actually is, measured from its audio, for Jam's AI (core
-// livecode/change.ts puts atlas.md in its system prompt) and its evals (atlas.json).
+// jam/change.ts puts atlas.md in its system prompt) and its evals (atlas.json).
 // The names alone say little: "breaks152" is three bars long, "jvbass" is a synth
 // bass, "arpy" is a tone.
 //
-// For each sound name in the sample maps (apps/desktop/src/livecode/sample-maps.json)
+// For each sound name in the sample maps (apps/desktop/src/jam/sample-maps.json)
 // it measures the first sample (the middle one for pitched maps like the piano):
 // length, loudness, where its energy sits (lows, mids, highs, brightness), its
 // pitch if it has one, its attack, and how many hits it has (a single hit, a
 // phrase, or a loop of bars). Samples aren't kept; measurements are cached in
-// .cmd-dev/livecode/atlas-cache.json, so a rebuild only fetches what changed.
+// .cmd-dev/jam/atlas-cache.json, so a rebuild only fetches what changed.
 
 import fs from "node:fs";
 import path from "node:path";
 import { openStrudel, root, SAMPLE_MAPS, type Measure } from "./browser.ts";
 
-const OUT = path.join(root, "packages/core/src/livecode");
-const CACHE = path.join(root, ".cmd-dev/livecode/atlas-cache.json");
+const OUT = path.join(root, "packages/core/src/jam");
+const CACHE = path.join(root, ".cmd-dev/jam/atlas-cache.json");
 const BANK_MAPS = new Set(["tidal-drum-machines", "EmuSP12"]);
 
 interface Sound {
@@ -109,7 +109,7 @@ export async function buildAtlas(): Promise<void> {
   const lines = [
     "# Sound atlas",
     "",
-    'Every loaded sample sound, measured from its audio (pnpm livecode build): `name (samples): what it is`. Lengths are of the first sample; `n` picks another. Drum machines are banks of short hits: `s("bd sd").bank("RolandTR909")`.',
+    'Every loaded sample sound, measured from its audio (pnpm jam build): `name (samples): what it is`. Lengths are of the first sample; `n` picks another. Drum machines are banks of short hits: `s("bd sd").bank("RolandTR909")`.',
     "",
     "## Drum machine banks",
   ];

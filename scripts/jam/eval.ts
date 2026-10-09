@@ -1,6 +1,6 @@
-// Jam evals (pnpm livecode eval): send requests through the AI change (core
-// livecode/change.ts), query what the answers do in Strudel (headless Chromium,
-// the same @strudel/web as the app), score that as music (core livecode/analyze.ts),
+// Jam evals (pnpm jam eval): send requests through the AI change (core
+// jam/change.ts), query what the answers do in Strudel (headless Chromium,
+// the same @strudel/web as the app), score that as music (core jam/analyze.ts),
 // optionally play them (--audio), and keep everything to listen to and rate.
 //
 //   refs                       measure Strudel's own tunes (the yardstick)
@@ -12,7 +12,7 @@
 //   show <run> <case>          print an answer's code
 //   sound <code>               play one piece of code and print what the audio check hears
 //
-// Data lives in .cmd-dev/livecode/evals (gitignored). The reference tunes are
+// Data lives in .cmd-dev/jam/evals (gitignored). The reference tunes are
 // Strudel's (CC BY-NC-SA, and its FAQ asks that tunes not be used for AI): they
 // are only measured here, never committed and never sent to a model.
 
@@ -23,12 +23,12 @@ import { DEFAULT_SETTINGS } from "../../packages/protocol/src/index.ts";
 import { AiService } from "../../packages/core/src/ai/service.ts";
 import { SecretsService } from "../../packages/core/src/secrets.ts";
 import { devKeys } from "../../packages/core/src/dev-keys.ts";
-import { changeCode } from "../../packages/core/src/livecode/change.ts";
-import { analyze, GENRES, score, type Features, type GenreName, type Score } from "../../packages/core/src/livecode/analyze.ts";
-import { LIVECODE_STARTER } from "../../packages/core/src/windows/builtin.ts";
+import { changeCode } from "../../packages/core/src/jam/change.ts";
+import { analyze, GENRES, score, type Features, type GenreName, type Score } from "../../packages/core/src/jam/analyze.ts";
+import { JAM_STARTER } from "../../packages/core/src/windows/builtin.ts";
 import { bpmOf, openStrudel, root, type Audio } from "./browser.ts";
 
-const DIR = path.join(root, ".cmd-dev/livecode/evals");
+const DIR = path.join(root, ".cmd-dev/jam/evals");
 const BARS = 16;
 
 interface Case {
@@ -101,7 +101,7 @@ export async function evalCommand(argv: string[]): Promise<void> {
         const t0 = Date.now();
         const base: Result = { case: c.id, i, request: c.request, ms: 0 };
         try {
-          const answer = await changeCode((o) => ai.object(o), { code: c.start === "starter" ? LIVECODE_STARTER : "", request: c.request, sounds }, { system, model: a.model, effort: a.effort as never });
+          const answer = await changeCode((o) => ai.object(o), { code: c.start === "starter" ? JAM_STARTER : "", request: c.request, sounds }, { system, model: a.model, effort: a.effort as never });
           base.ms = Date.now() - t0;
           base.summary = answer.summary;
           fs.writeFileSync(path.join(runDir, `${c.id}.${i}.strudel`), answer.code);
@@ -204,8 +204,8 @@ export async function evalCommand(argv: string[]): Promise<void> {
     delete process.env.CMD_HOME;
     enterInstance("dev");
     const { client, close } = await connect(process.env.CMD_SOCKET || coreSocketPath());
-    const w = await client.call("window.open", { kind: "livecode", input: { code } });
-    console.log(`opened ${id} in cmd dev (${w.id}): press Play, then rate it: pnpm livecode eval rate ${run} ${id} <1-10>`);
+    const w = await client.call("window.open", { kind: "jam", input: { code } });
+    console.log(`opened ${id} in cmd dev (${w.id}): press Play, then rate it: pnpm jam eval rate ${run} ${id} <1-10>`);
     close();
   } else if (cmd === "sound") {
     // Debugging the audio check: play one piece of code and print what it heard.
@@ -217,6 +217,6 @@ export async function evalCommand(argv: string[]): Promise<void> {
     const [, run, id] = positionals;
     console.log(fs.readFileSync(path.join(DIR, "runs", run!, `${id!.includes(".") ? id : id + ".0"}.strudel`), "utf8"));
   } else {
-    console.log("usage: pnpm livecode eval refs | run [--case id] [--repeat N] [--system FILE] [--model M] [--effort E] [--label L] [--audio] | report [run] | rescore [run] [--audio] | rate <run> <case> <1-10> | listen <run> <case> | show <run> <case> | sound <code>");
+    console.log("usage: pnpm jam eval refs | run [--case id] [--repeat N] [--system FILE] [--model M] [--effort E] [--label L] [--audio] | report [run] | rescore [run] [--audio] | rate <run> <case> <1-10> | listen <run> <case> | show <run> <case> | sound <code>");
   }
 }

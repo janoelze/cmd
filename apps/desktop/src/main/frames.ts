@@ -6,13 +6,13 @@
 //
 // - cmd-visualizer: Visualizer windows (visualizer/frame.js). MilkDrop presets
 //   are code that butterchurn compiles at runtime. No network.
-// - cmd-livecode: Jam windows (livecode/frame.js). Strudel evaluates the
+// - cmd-jam: Jam windows (jam/frame.js). Strudel evaluates the
 //   window's code and plays it; its audio worklets load from data: URLs and its
 //   samples from Strudel's sample maps on GitHub, the only network it gets.
 
 import visualizerJs from "../visualizer/frame.js?raw";
-import livecodeJs from "../livecode/frame.js?raw";
-import sampleMaps from "../livecode/sample-maps.json" with { type: "json" };
+import jamJs from "../jam/frame.js?raw";
+import sampleMaps from "../jam/sample-maps.json" with { type: "json" };
 
 interface FramePage {
   csp: string;
@@ -24,7 +24,7 @@ interface FramePage {
 
 /**
  * Where a Jam frame may fetch samples from: the origins of its sample maps
- * (livecode/sample-maps.json) and of the samples they list, all on GitHub today.
+ * (jam/sample-maps.json) and of the samples they list, all on GitHub today.
  */
 const SAMPLE_ORIGINS = [...new Set(sampleMaps.maps.map((m) => new URL(m.url).origin))].join(" ");
 
@@ -38,11 +38,11 @@ const PAGES: Record<string, FramePage> = {
     },
     script: visualizerJs,
   },
-  "cmd-livecode": {
-    csp: `default-src 'none'; script-src cmd-livecode: data: 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; connect-src ${SAMPLE_ORIGINS}; media-src ${SAMPLE_ORIGINS} data: blob:`,
+  "cmd-jam": {
+    csp: `default-src 'none'; script-src cmd-jam: data: 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; connect-src ${SAMPLE_ORIGINS}; media-src ${SAMPLE_ORIGINS} data: blob:`,
     style: "html,body{margin:0}",
     libs: { "strudel.js": () => import("@strudel/web/dist/index.js?raw") },
-    script: `window.SAMPLE_MAPS = ${JSON.stringify(sampleMaps.maps)};\n${livecodeJs}`,
+    script: `window.SAMPLE_MAPS = ${JSON.stringify(sampleMaps.maps)};\n${jamJs}`,
   },
 };
 

@@ -1,6 +1,6 @@
-// Live Code's music features (livecode/analyze.ts) on events built by hand.
+// Jam's music features (jam/analyze.ts) on events built by hand.
 import { describe, expect, it } from "vitest";
-import { analyze, GENRES, score, type Ev } from "../src/livecode/analyze.ts";
+import { analyze, GENRES, score, type Ev } from "../src/jam/analyze.ts";
 
 /** Events at 16th steps over `bars` bars: `at(bar)` lists [step, sound, midi?]. */
 function make(bars: number, at: (bar: number) => [number, string, number?][]): Ev[] {

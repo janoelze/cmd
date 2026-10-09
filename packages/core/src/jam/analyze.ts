@@ -1,4 +1,4 @@
-// What a Jam pattern does, as music (scripts/evals/livecode.ts): features
+// What a Jam pattern does, as music (scripts/jam/eval.ts): features
 // read from its events over a number of bars (a cycle is a bar), not from its
 // code, and a score from them. The events come from Strudel itself (queried in a
 // browser by the eval); this file only reads them, so it stays testable.
