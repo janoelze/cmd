@@ -44,6 +44,9 @@ ${JOURNAL_HELP}
 ${DATA_HELP}
   open <path|url> [--kind K] [--types] open in a cmd window (folder, text, browser, …);
                                       --types lists window types
+  actions [PATH] [--all] [--json]     how to run the project here: its scripts, make targets, …
+                                      (Workspace Actions; --all: hidden ones and history too)
+  actions run NAME [PATH] [--restart] run one in a terminal of the folder's Space
   search <query…> [--json] [--limit N]  search past agent sessions
   resume <session-id> [--agent claude|codex|…] [--fork]
   magic <request…> [--help]          build a widget (or a terminal command) from a request
@@ -64,7 +67,7 @@ ${DATA_HELP}
 
 env: ${ENV.socket} (default ${defaultSocketPath()})`;
 
-const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "journal", "data", "open", "search", "resume", "settings", "space", "remote", "help"]);
+const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "journal", "data", "open", "actions", "search", "resume", "settings", "space", "remote", "help"]);
 
 /**
  * `cmd .`, `cmd ~/src/x`, `cmd ../y`: a folder to open as a Space. A command name
@@ -136,6 +139,7 @@ const { values: opt, positionals: pos } = parseArgs({
     day: { type: "string" },
     write: { type: "boolean" },
     "no-write": { type: "boolean" },
+    restart: { type: "boolean" },
   },
 });
 
@@ -293,6 +297,53 @@ async function run({ client, closed }: Connection): Promise<number> {
       return space(client);
     case "remote":
       return remote(client);
+    case "actions": {
+      const running = pos[0] === "run";
+      const args = pos[0] === "run" || pos[0] === "ls" ? pos.slice(1) : pos;
+      const name = running ? args[0] : undefined;
+      if (running && !name) return fail("usage: cmd actions run NAME [PATH]");
+      const dir = path.resolve(str(running ? args[1] : args[0]) ?? process.cwd());
+      const list = await client.call("actions.list", { path: dir });
+      if (running) {
+        const all = [...list.actions, ...list.history, ...list.suggested];
+        // An id, else a name: the root's before a package's.
+        const hits = all.filter((a) => a.id === name).length ? all.filter((a) => a.id === name) : all.filter((a) => a.name === name);
+        const a = hits.find((h) => !h.package) ?? (hits.length === 1 ? hits[0] : undefined);
+        if (!a) return fail(hits.length ? `"${name}" is in several packages: ${hits.map((h) => h.id).join(", ")}` : `no action "${name}" in ${tilde(dir)} (cmd actions ${tilde(dir)} lists them)`);
+        const r = await client.call("actions.run", { root: list.root, actionId: a.id, restart: !!opt.restart });
+        if (opt.json) return out({ ...r, action: a });
+        console.log(r.started ? `${a.command}  (pane ${r.paneId})` : `already running in pane ${r.paneId} (--restart to run it again)`);
+        return 0;
+      }
+      if (opt.json) return out(list);
+      // The root's, then each package's, in the core's order within each.
+      const packages = [undefined, ...new Set(list.actions.map((a) => a.package).filter(Boolean))];
+      const shown = list.actions.filter((a) => opt.all || !a.hidden).sort((a, b) => packages.indexOf(a.package) - packages.indexOf(b.package));
+      const runs = new Map(list.runs.map((r) => [r.actionId, r]));
+      const w = Math.min(28, Math.max(4, ...shown.map((a) => a.name.length)));
+      let pkg: string | undefined = "\0";
+      for (const a of shown) {
+        if (a.package !== pkg) {
+          pkg = a.package;
+          console.log(`\n${a.package ?? tilde(list.root)}`);
+        }
+        const r = runs.get(a.id);
+        const state = r ? (r.endedAt === null ? ` ● running${r.url ? ` ${r.url}` : ""}` : r.exitCode === 0 ? " ✓" : r.exitCode !== null ? ` ✕ ${r.exitCode}` : "") : "";
+        const flags = `${a.long ? "∞" : " "}${a.risky ? "!" : " "}${a.pinned ? "★" : " "}`;
+        console.log(`  ${flags} ${a.name.padEnd(w)}  ${a.command.padEnd(Math.min(36, a.command.length + 2))}${a.description ? `  ${a.description}` : ""}${state}`);
+      }
+      if (opt.all && list.history.length) {
+        console.log("\nfrom your history");
+        for (const h of list.history) console.log(`      ${h.command}  (${h.history?.runs ?? 0}×)`);
+      }
+      if (list.suggested.length) {
+        console.log("\nsuggested from the docs");
+        for (const s of list.suggested) console.log(`      ${s.command}${s.description ? `  ${s.description}` : ""}`);
+      }
+      for (const e of list.sources.filter((x) => x.error)) console.error(`\n${e.file} can't be read: ${e.error}`);
+      if (!shown.length) console.log(`no scripts found in ${tilde(list.root)}`);
+      return 0;
+    }
     case "search": {
       const text = pos.join(" ");
       if (!text) {

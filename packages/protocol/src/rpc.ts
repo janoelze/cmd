@@ -10,6 +10,7 @@ import type { SecretsStatus } from "./secrets.ts";
 import type { ActivityEvent, ActivityExportHeader, AgentCoverage, AgentHome, AgentTurn } from "./activity.ts";
 import type { JournalDay, JournalEvent, JournalEventKind, JournalThread, JournalWeek } from "./journal.ts";
 import type { SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema } from "./sqlite.ts";
+import type { ActionsList } from "./actions.ts";
 
 export interface CoreInfo {
   pid: number;
@@ -370,6 +371,20 @@ export interface Methods {
    * same disk and copies from another, like Finder. A taken name gets " 2"… Returns where each one ended up.
    */
   "fs.transfer": { params: { paths: string[]; dir: string; op: "copy" | "move" | "auto" }; result: string[] };
+  /**
+   * Workspace Actions (docs/39): the ways to run the project in a folder (`path`,
+   * else the Space's root), ranked, described, and their runs. Changes arrive as actions.changed.
+   */
+  "actions.list": { params: { path?: string; spaceId?: SpaceId }; result: ActionsList };
+  /**
+   * Run an action in its terminal when that is back at its prompt, else in a new one in the Space.
+   * A server still running isn't started twice: `started` false and its pane. `restart`: ⌃C, then run it again; `fresh`: always a new terminal.
+   */
+  "actions.run": { params: { root: string; actionId: string; spaceId?: SpaceId; restart?: boolean; fresh?: boolean }; result: { paneId: PaneId; started: boolean } };
+  /** ⌃C to an action's running terminal. */
+  "actions.stop": { params: { root: string; actionId: string }; result: null };
+  /** Pin an action to the top of its folder's list; a command from history or the README is kept as one. */
+  "actions.pin": { params: { root: string; actionId: string; pinned: boolean }; result: null };
   /** Git state of the repository a folder is in, limited to that folder; null outside a work tree or without git. */
   "git.status": { params: { path: string }; result: GitStatus | null };
   /** Uncommitted changes under a folder (or one file of it) against HEAD, as a unified diff; null outside a repository. */
@@ -501,6 +516,8 @@ export type CoreEvent =
   | { type: "magic.previewRequest"; reqId: string; requests: MagicPreviewRequest[] }
   /** The Widget Library changed (a widget made, changed, renamed, deleted, put in or taken out of a Space). */
   | { type: "widget.library"; entries: WidgetEntry[] }
+  /** A folder's Workspace Actions changed: its files, a run, the model's descriptions (actions.list again). */
+  | { type: "actions.changed"; root: string }
   /** A watched file or folder changed on disk (see fs.watch). */
   | { type: "fs.changed"; path: string }
   /** Events recorded or updated since the last one, for a data.subscribe subscription (merge by id). */

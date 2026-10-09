@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { ACTIONS_TITLE } from "@cmd/protocol";
 import type { WindowType, WindowTypes } from "./types.ts";
 import { databaseOf, isSqliteFile } from "../sqlite/service.ts";
 
@@ -547,6 +548,29 @@ export const diffType: WindowType<{ path: string }> = {
   },
 };
 
+/**
+ * Workspace Actions (docs/39): how to run the project in a folder. `path` unset:
+ * the Space's root, so the widget follows its Space.
+ */
+export const actionsType: WindowType<{ path?: string; collapsed?: string[] }> = {
+  kind: "actions",
+  title: ACTIONS_TITLE,
+  icon: "play.rectangle",
+  role: "widget",
+  description: "The project's scripts and commands, one click away: dev servers, tests, builds and deploys.",
+  create(input) {
+    const p = str(input.path);
+    return { state: p ? { path: path.resolve(expandHome(p)) } : {}, title: ACTIONS_TITLE };
+  },
+  update(state, patch) {
+    const next = { ...state };
+    if (patch.path === null) delete next.path;
+    else if (typeof patch.path === "string") next.path = path.resolve(expandHome(patch.path));
+    if (Array.isArray(patch.collapsed)) next.collapsed = patch.collapsed.filter((x): x is string => typeof x === "string").slice(0, 100);
+    return { state: next };
+  },
+};
+
 /** A YouTube video and/or playlist, and where to start (seconds). */
 export type YouTubeRef = {
   video?: string;
@@ -657,6 +681,7 @@ export function registerBuiltins(types: WindowTypes): void {
   types.register(magicType);
   types.register(agentsType);
   types.register(diffType);
+  types.register(actionsType);
   types.register(youtubeType);
   types.register(navigatorType);
   types.register(commandsType);

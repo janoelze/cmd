@@ -65,6 +65,8 @@ import { SummaryService } from "./summaries/service.ts";
 import { UsageStats } from "./usage.ts";
 import { changeCode } from "./jam/change.ts";
 import type { DevKeys } from "./secrets.ts";
+import { ActionsService } from "./actions/service.ts";
+import { expandHome } from "./windows/builtin.ts";
 
 export const VERSION = "0.0.1";
 
@@ -191,6 +193,8 @@ export class Core {
   readonly journal: JournalService;
   readonly remote: RemoteService;
   readonly usage: UsageStats;
+  /** Workspace Actions: how to run the project in a folder (docs/39). */
+  readonly actions: ActionsService;
   /** Agents already counted for usage stats. */
   #countedAgents = new Set<AgentId>();
   #startedAt = Date.now();
@@ -440,6 +444,29 @@ export class Core {
         return sp && !sp.home ? { name: sp.name, root: sp.root } : null;
       },
     });
+    this.actions = new ActionsService({
+      panes: this.panes,
+      db: this.store.db,
+      commands: (root, since) => {
+        const projectId = projectIdOf(root);
+        if (!projectId) return [];
+        return this.data.query({ types: ["command"], projectId, at: [since, Date.now() + 1], by: "time", order: "desc", limit: 5000 }).flatMap((e) => {
+          const d = e.data as { command?: string | null; cwd?: string; exitCode?: number | null };
+          return d.command && d.cwd ? [{ command: d.command, cwd: d.cwd, at: e.at, exitCode: d.exitCode ?? null }] : [];
+        });
+      },
+      ai: { object: (o) => this.ai.object(o), ready: () => this.ai.status().ready },
+      describeOn: () => this.settings.settings["actions.describe"],
+      roots: () => this.windows.list().flatMap((w) => (w.kind === "actions" ? [this.#actionsRoot(w.state.path as string | undefined, w.spaceId)] : [])),
+      createPane: (o) => {
+        const pane = this.panes.create({ cwd: o.cwd, command: o.command, spaceId: this.spaces.mustOpen(o.spaceId).id });
+        this.usage.window("terminal");
+        return pane;
+      },
+    });
+    this.actions.on("changed", (root) => this.#broadcast({ type: "actions.changed", root }));
+    this.settings.bind(["actions.describe"], () => this.actions.aiChanged());
+    this.ai.on("updated", () => this.actions.aiChanged());
     this.panes.on("request", (paneId, action, arg) => this.#onShellRequest(paneId, action, arg));
     this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
@@ -782,6 +809,10 @@ export class Core {
     "fs.duplicate": (p) => duplicatePath(p.path),
     "fs.create": (p) => createPath(p.dir, p.kind),
     "fs.transfer": (p) => transferPaths(p.paths, p.dir, p.op),
+    "actions.list": (p) => this.actions.list(this.#actionsRoot(p.path, p.spaceId)),
+    "actions.run": (p) => this.actions.run(p.root, p.actionId, this.#place({ spaceId: p.spaceId }, { path: p.root }).id, { restart: p.restart, fresh: p.fresh }),
+    "actions.stop": (p) => (this.actions.stop(p.root, p.actionId), null),
+    "actions.pin": (p) => (this.actions.pin(p.root, p.actionId, p.pinned), null),
     "git.status": (p) => gitStatus(p.path),
     "git.diff": (p) => gitDiff(p.path, p.file),
     "sqlite.schema": (p) => this.sqlite.schema(p.path),
@@ -959,6 +990,12 @@ export class Core {
    * pane's, the parent agent's, the open Space whose root most deeply contains
    * the path, else Home.
    */
+  /** The folder Workspace Actions are for: a path given, else the Space's root. */
+  #actionsRoot(p: string | undefined, spaceId: SpaceId | undefined): string {
+    if (p) return path.resolve(expandHome(p));
+    return (spaceId ? this.spaces.get(spaceId)?.root : undefined) ?? this.spaces.home().root;
+  }
+
   #place(p: Placement, o: { parentId?: AgentId | null; path?: string } = {}): Space {
     if (p.spaceId) return this.spaces.mustOpen(p.spaceId);
     const caller = p.callerPaneId ? this.panes.get(p.callerPaneId) : null;
@@ -1537,6 +1574,7 @@ export class Core {
     } catch {}
     this.resources?.close();
     this.timers.close();
+    this.actions.dispose();
     this.watches.close();
     this.sqlite.close();
     this.agents.close();

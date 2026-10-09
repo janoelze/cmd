@@ -135,6 +135,10 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "fs.transfer": "control",
   "git.status": "view",
   "git.diff": "view",
+  "actions.list": "never", // Workspace Actions are the Mac's for now (docs/39)
+  "actions.run": "never",
+  "actions.stop": "never",
+  "actions.pin": "never",
   "sqlite.schema": "view",
   "sqlite.rows": "view",
   "sqlite.query": "view",
@@ -385,6 +389,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "remote.pairEnded":
     case "remote.input":
     case "widget.library":
+    case "actions.changed":
     case "data.changed": // to its subscriber only, and data.* is never remote
     case "view.changed":
     case "magic.previewRequest": // sent to the app's previewer only, never broadcast

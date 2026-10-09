@@ -246,6 +246,8 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: "Your AI provider sums up what the agent did.",
   },
+  "actions.describe": { title: "Describe actions with AI", type: "boolean", default: true, description: "Workspace Actions asks the fast model for a few words on what each script does.", details: "Only the scripts' names and commands and the shell commands in the README go to the model. Descriptions written in the files are always kept." },
+  "actions.openBrowser": { title: "Open dev servers in a browser", type: "boolean", default: false, description: "When an action prints a local address, open it in a browser window in the same Space." },
   "widgets.developer": { title: "Developer widgets", type: "boolean", default: false, description: "Offer widgets that show what cmd records and does.", details: "Like the Event Stream. Safe to use; mostly useful when working on cmd or reporting a problem." },
   "notifications.widgets": { title: "Widgets report something", type: "boolean", default: true, description: "When a Magic widget reports news." },
   "notifications.dockBadge": { title: "Badge the Dock icon", type: "boolean", default: true, description: "Show the attention count on the Dock icon." },
