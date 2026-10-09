@@ -10,6 +10,7 @@
     "url": "https://github.com/janoelze/cmd.git"
   },
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {

@@ -134,3 +134,9 @@ Settings live in `~/.config/cmd/settings.json`. Change them in the Settings wind
 ## How it works
 
 An Electron app in front of a separate core process that owns the terminals, agents, settings and the event log (everything cmd records, in `data/events.sqlite`; what's derived from it, like the search index, in `data/views.sqlite`). The app, the CLI and agent hooks talk to the core over a Unix socket. Design notes are in [`docs/`](docs/00-overview.md), building and contributing in [DEVELOPMENT.md](DEVELOPMENT.md).
+
+## License
+
+cmd is © 2026 Jan Oelze, licensed under the [GNU AGPL v3](LICENSE) (AGPL-3.0-only). To use it under other terms, for example in a closed-source product, ask about a commercial license.
+
+Contributions are accepted only under a contributor license agreement that lets cmd keep offering both licenses.

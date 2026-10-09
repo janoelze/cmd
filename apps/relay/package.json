@@ -1,6 +1,7 @@
 {
   "name": "@cmd/relay",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "start": "node --no-warnings src/main.ts",
