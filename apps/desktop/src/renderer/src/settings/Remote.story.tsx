@@ -42,26 +42,26 @@ const Page = ({ children }: { children: ReactNode }) => <div className="sw-page"
 
 export const Checking = () => (
   <Page>
-    <Setup access="tailscale" {...state(null, { busy: true })} />
+    <Setup title="Tailscale" {...state(null, { busy: true })} />
   </Page>
 );
 
 export const NotInstalled = () => (
   <Page>
-    <Setup access="tailscale" {...state(tailscale({ id: "installed", detail: "Get the Mac app from tailscale.com.", link: "https://tailscale.com/download/mac" }))} />
+    <Setup title="Tailscale" {...state(tailscale({ id: "installed", detail: "Get the Mac app from tailscale.com.", link: "https://tailscale.com/download/mac" }))} />
   </Page>
 );
 
 export const LoggedOut = () => (
   <Page>
-    <Setup access="tailscale" {...state(tailscale({ id: "running", detail: "Open Tailscale and log in." }))} />
+    <Setup title="Tailscale" {...state(tailscale({ id: "running", detail: "Open Tailscale and log in." }))} />
   </Page>
 );
 
 export const HttpsOff = () => (
   <Page>
     <Setup
-      access="tailscale"
+      title="Tailscale"
       {...state(tailscale({ id: "https", detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS }))}
     />
   </Page>
@@ -69,26 +69,26 @@ export const HttpsOff = () => (
 
 export const PortTaken = () => (
   <Page>
-    <Setup access="tailscale" {...state(tailscale({ id: "published", state: "error", detail: "Port 8443 on your tailnet already serves something else. Pick another one (remote.tailscale.port)." }))} />
+    <Setup title="Tailscale" {...state(tailscale({ id: "published", state: "error", detail: "Port 8443 on your tailnet already serves something else. Pick another one (remote.tailscale.port)." }))} />
   </Page>
 );
 
 export const CheckingAgain = () => (
   <Page>
-    <Setup access="tailscale" {...state(tailscale({ id: "published", detail: "Not published yet." }), { busy: true })} />
+    <Setup title="Tailscale" {...state(tailscale({ id: "published", detail: "Not published yet." }), { busy: true })} />
   </Page>
 );
 
 export const Ready = () => (
   <Page>
-    <Setup access="tailscale" {...state(tailscale())} />
+    <Setup title="Tailscale" {...state(tailscale())} />
   </Page>
 );
 
 export const Unreachable = () => (
   <Page>
     <Setup
-      access="tailscale"
+      title="Tailscale"
       {...state([
         ...tailscale().slice(0, 5),
         { id: "reachable", title: "Test the address", state: "error", detail: `Couldn't reach https://${HOST}:8443 (fetch failed). The first certificate can take a minute.` },
@@ -99,14 +99,14 @@ export const Unreachable = () => (
 
 export const Failed = () => (
   <Page>
-    <Setup access="tailscale" {...state(null, { error: "the core isn't answering" })} />
+    <Setup title="Tailscale" {...state(null, { error: "the core isn't answering" })} />
   </Page>
 );
 
 export const OwnUrl = () => (
   <Page>
     <Setup
-      access="url"
+      title="Your Own URL"
       {...state([
         { id: "url", title: "Add an HTTPS address", state: "ok", detail: "https://mac.example.com" },
         { id: "page", title: "Forward the page", state: "error", detail: "Couldn't reach https://mac.example.com (getaddrinfo ENOTFOUND mac.example.com)." },
@@ -122,6 +122,6 @@ export const BeforeSetup = () => (
     <FormSection title="Pair a Device">
       <SetupWait />
     </FormSection>
-    <Setup access="tailscale" {...state(tailscale({ id: "https", detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS }))} />
+    <Setup title="Tailscale" {...state(tailscale({ id: "https", detail: "In Tailscale's admin console, under DNS. Your Mac's and tailnet's names then appear in public certificate logs.", link: DNS }))} />
   </Page>
 );
