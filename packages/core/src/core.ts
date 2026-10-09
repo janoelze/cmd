@@ -64,6 +64,7 @@ import { RemoteService } from "./remote/service.ts";
 import { SummaryService } from "./summaries/service.ts";
 import { UsageStats } from "./usage.ts";
 import { changeCode } from "./livecode/change.ts";
+import type { DevKeys } from "./secrets.ts";
 
 export const VERSION = "0.0.1";
 
@@ -78,6 +79,8 @@ export interface CoreOptions {
   settingsPath?: string | null;
   /** API keys (secrets.ts), or null for in-memory (tests). */
   secretsPath?: string | null;
+  /** Development builds: API keys from .env for keys not set in Settings (dev-keys.ts). */
+  devKeys?: DevKeys;
   /** Where terminals run: the PTY host (main.ts), or a PtyFactory for in-process terminals (tests). */
   terminals: TermBackend | PtyFactory;
   /** A new backend when the PTY host died (its terminals are then resurrected); none: they are lost. */
@@ -358,7 +361,7 @@ export class Core {
       this.#broadcast({ type: "window.removed", id });
       this.#libraryChanged();
     });
-    this.secrets = new SecretsService(opts.secretsPath ?? null);
+    this.secrets = new SecretsService(opts.secretsPath ?? null, opts.devKeys);
     this.secrets.on("updated", (status) => this.#broadcast({ type: "secrets.updated", status }));
     this.ai = new AiService({
       settings,

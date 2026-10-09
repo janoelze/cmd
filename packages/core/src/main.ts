@@ -12,6 +12,7 @@ import { nodePtyFactory } from "./panes.ts";
 import { adoptLoginPath } from "./loginpath.ts";
 import { ProcInfo } from "./agents/procinfo.ts";
 import { statusRoot } from "./agents/statusfiles.ts";
+import { devKeys } from "./dev-keys.ts";
 import { locateContext } from "./search/sources.ts";
 import { connectHost } from "./terminals/remote.ts";
 import type { TermBackend } from "./terminals/types.ts";
@@ -74,6 +75,7 @@ const core = new Core({
   dbPath: path.join(home, "cmd.sqlite"),
   settingsPath: path.join(configDir(), "settings.json"),
   secretsPath: path.join(home, "secrets.json"),
+  devKeys: instanceName() === "dev" ? devKeys(path.resolve(import.meta.dirname, "../../..")) : undefined,
   shellRulesFile: path.join(home, "shell-open.zsh"),
   terminals,
   reconnectTerminals: host,

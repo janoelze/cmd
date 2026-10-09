@@ -14,6 +14,10 @@ const modules = path.join(core, "node_modules");
 
 fs.rmSync(out, { recursive: true, force: true });
 const copy = (from, to) => fs.cpSync(path.join(root, from), path.join(out, to), { recursive: true, dereference: true });
+// The checkout this was built from: a development build ("cmd dev") looks there for API keys
+// in .env (packages/core/src/dev-keys.ts). The path only, never a key.
+fs.mkdirSync(out, { recursive: true });
+fs.writeFileSync(path.join(out, ".checkout"), root + "\n");
 // widget-runtime: the Deno side of Magic widgets (cmd.ts, runner.ts), run by Deno from there.
 for (const p of ["package.json", "src", "shell", "widget-runtime"]) copy(`packages/core/${p}`, `packages/core/${p}`);
 // Workspace packages the core imports (@cmd/protocol, @cmd/remote-crypto): their

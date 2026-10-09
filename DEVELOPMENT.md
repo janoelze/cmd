@@ -43,6 +43,13 @@ pnpm core:stop                    # stop the core of $CMD_HOME (without it: the 
 pnpm core:stop --terminals        # … and its PTY host: its terminals close (they come back on the next start)
 ```
 
+AI in development builds (`pnpm dev`, `pnpm dist`'s "cmd dev"): put the keys in a `.env` at the root of the main checkout (gitignored; worktrees and test builds read that one too), or export them. A key set in Settings wins; release builds never read them (`packages/core/src/dev-keys.ts`).
+
+```sh
+ANTHROPIC_API_KEY=sk-ant-…
+OPENAI_API_KEY=sk-…
+```
+
 Cores are detached and outlive the app, and their terminals run in a PTY host (`packages/core/src/terminals/host.ts`) that outlives the core, so stopping or restarting a core keeps the terminals: the next core takes them over. A host exits by itself once it has neither a core nor terminals. After dev sessions hosts can pile up with their terminals' PTYs (macOS allows 511 in total). `pnpm core:stop-all` stops every dev and test core and host on the machine; the installed app's only with `-- --include-release`. `pnpm e2e` cleans up its own.
 
 ### Restore

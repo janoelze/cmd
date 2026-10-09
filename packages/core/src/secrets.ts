@@ -1,7 +1,8 @@
 // Secrets (API keys, see @cmd/protocol secrets.ts): kept out of settings.json,
 // in $CMD_HOME/secrets.json with mode 0600. Values never leave the core: clients
 // get status() (set or not, last four characters) and `secrets.updated` events.
-// Nothing is read from the environment; a key is used only once the user sets it.
+// Nothing is read from the environment, except in development builds, whose
+// main.ts passes keys from .env as a fallback (dev-keys.ts): a key set here wins.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -25,13 +26,22 @@ export function readSecrets(file: string): Partial<Record<SecretKey, string>> {
   }
 }
 
+export interface DevKeys {
+  values: Partial<Record<SecretKey, string>>;
+  from: Partial<Record<SecretKey, string>>;
+}
+
 export class SecretsService extends EventEmitter<{ updated: [SecretsStatus] }> {
   readonly path: string;
   #values: Partial<Record<SecretKey, string>>;
 
+  /** Development builds' keys from .env (dev-keys.ts), for keys not set here, and where each came from. */
+  #fallback: DevKeys;
+
   /** file = null keeps secrets in memory only (tests). */
-  constructor(file: string | null) {
+  constructor(file: string | null, fallback: DevKeys = { values: {}, from: {} }) {
     super();
+    this.#fallback = fallback;
     this.path = file ?? "";
     this.#values = file ? readSecrets(file) : {};
     if (file) this.#migrate(file);
@@ -55,14 +65,17 @@ export class SecretsService extends EventEmitter<{ updated: [SecretsStatus] }> {
   }
 
   get(key: SecretKey): string | undefined {
-    return this.#values[key];
+    return this.#values[key] ?? this.#fallback.values[key];
   }
 
   status(): SecretsStatus {
     return Object.fromEntries(
       (Object.keys(SECRETS) as SecretKey[]).map((k) => {
-        const v = this.#values[k];
-        return [k, v ? { set: true, hint: v.length > 8 ? `…${v.slice(-4)}` : undefined } : { set: false }];
+        const own = this.#values[k];
+        const v = own ?? this.#fallback.values[k];
+        const hint = v && v.length > 8 ? `…${v.slice(-4)}` : undefined;
+        const from = own ? undefined : this.#fallback.from[k];
+        return [k, v ? { set: true, hint: from ? `${hint ?? "set"} from ${path.basename(from) === ".env" ? ".env" : from}` : hint } : { set: false }];
       }),
     ) as SecretsStatus;
   }

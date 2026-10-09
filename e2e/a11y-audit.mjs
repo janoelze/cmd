@@ -49,7 +49,7 @@ const require = createRequire(path.join(root, "apps/desktop/package.json"));
 const app = await electron.launch({
   executablePath: require("electron"),
   args: [path.join(root, "apps/desktop")],
-  env: { ...process.env, HOME: fakeHome, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: path.join(home, "transcripts") },
+  env: { ...process.env, HOME: fakeHome, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: path.join(home, "transcripts") },
 });
 const win = await app.firstWindow();
 win.setDefaultTimeout(10_000);
