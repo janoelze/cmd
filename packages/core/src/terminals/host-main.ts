@@ -11,7 +11,7 @@ import { nodePtyFactory } from "./pty.ts";
 // Started by a packaged core (Electron as Node): shells must not inherit that.
 delete process.env.ELECTRON_RUN_AS_NODE;
 const flag = process.argv.find((a) => a.startsWith("--instance="))?.slice("--instance=".length);
-enterInstance(flag === "dev" ? "dev" : "release");
+enterInstance(flag === "dev" ? "dev" : "release", path.resolve(import.meta.dirname, "../../../.."));
 initLog("ptyhost", { level: instanceName() === "dev" ? "debug" : "info" });
 installCrashHandlers("ptyhost", { exitOnException: true });
 const log = logger("ptyhost");

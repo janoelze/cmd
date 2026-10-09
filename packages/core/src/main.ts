@@ -27,7 +27,7 @@ delete process.env.CMD_USAGE_KEY;
 // Started from a pane, the core must not take over that pane's core socket or
 // hand its agent ids on to its own shells.
 const flag = process.argv.find((a) => a.startsWith("--instance="))?.slice("--instance=".length);
-enterInstance(flag === "dev" || (!flag && process.env.CMD_INSTANCE === "dev") ? "dev" : "release");
+enterInstance(flag === "dev" || (!flag && process.env.CMD_INSTANCE === "dev") ? "dev" : "release", path.resolve(import.meta.dirname, "../../.."));
 
 // Logs to logDir()/core.log; stdout and stderr (where the app points them) only
 // get what bypasses the logger, e.g. Node's own fatal errors.

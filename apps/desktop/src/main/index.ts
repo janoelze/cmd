@@ -45,7 +45,8 @@ const checkForUpdates = () => void startUpdater().then(() => updater()).then((u)
  * state and logs (the "dev" instance, see protocol/instance.ts), so they never
  * attach to (and offer to restart) the core your real terminals run in, even
  * when started from one of them. Settings and keybindings stay shared. $CMD_HOME
- * relocates either instance.
+ * relocates either instance; a build run from a linked git worktree defaults it
+ * to <worktree>/.cmd-dev, so worktrees never share a core.
  */
 const devBuild = !app.isPackaged || app.getName() === "cmd dev";
 /** Signs usage stats batches (core/usage.ts); baked in at build time, release builds only. */
@@ -55,7 +56,8 @@ if (devBuild) app.setName("cmd dev");
 // Pages see plain Chrome: Electron's UA names the app and Electron, which
 // Google's sign-in refuses ("this browser may not be secure") and other sites flag as a bot.
 app.userAgentFallback = app.userAgentFallback.replace(/\s(?:Electron|cmd[\w-]*)\/\S+/g, "");
-enterInstance(devBuild ? "dev" : "release");
+// A checkout's build; in a linked worktree that makes it its own instance (instance.ts).
+enterInstance(devBuild ? "dev" : "release", app.isPackaged ? undefined : path.resolve(import.meta.dirname, "../../../.."));
 
 // Logs: main.log, renderer.log and (from the core) core.log in logDir(), see
 // protocol/log.ts. The core learns the app's version from this and its instance
@@ -155,7 +157,9 @@ function ownCore(hello: { pid: number; stateDir?: string }): boolean {
 /**
  * A core outlives the app on purpose, so after pulling or editing core code (or
  * an update) an old core may still be serving. Restart it: its terminals keep
- * running in the PTY host, and the new core takes them over.
+ * running in the PTY host, and the new core takes them over. Also one with the
+ * same code run from another folder: a worktree's core, merged and then removed,
+ * would otherwise keep serving from a checkout that is gone.
  */
 async function checkCoreBuild(): Promise<void> {
   const conn = await connect(socketPath);
@@ -163,8 +167,10 @@ async function checkCoreBuild(): Promise<void> {
     const hello = await conn.client.call("core.hello", {});
     if (!ownCore(hello)) return;
     const current = sourceBuildId(repoRoot);
-    if (hello.build === current) return;
-    log.info(`core ${hello.pid} runs build ${hello.build}, this app ships ${current}: restarting it`);
+    const root = coreRoot();
+    if (hello.build === current && (!hello.root || path.resolve(hello.root) === path.resolve(root))) return;
+    if (hello.build !== current) log.info(`core ${hello.pid} runs build ${hello.build}, this app ships ${current}: restarting it`);
+    else log.info(`core ${hello.pid} runs from ${hello.root}, this app from ${root}: restarting it`);
     conn.close(); // the core closes only once its clients are gone
     await stopCore(hello.pid);
   } catch {

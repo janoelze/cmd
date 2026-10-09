@@ -1,12 +1,13 @@
 // The PTY host keeps terminals running while the core restarts (terminals/host.ts,
 // remote.ts, restore.ts). The host runs in-process here, over a real socket.
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Core } from "../src/core.ts";
-import { PtyHost } from "../src/terminals/host.ts";
+import { HOST_PROTOCOL, PtyHost } from "../src/terminals/host.ts";
 import { HostMismatch, RemoteBackend } from "../src/terminals/remote.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
@@ -131,6 +132,41 @@ describe("PTY host", () => {
     await new Promise<void>((r) => old.listen(sock, r));
     await expect(RemoteBackend.connect(sock)).rejects.toBeInstanceOf(HostMismatch);
     old.close();
+  });
+
+  it("won't use a host whose code folder is gone (a removed worktree)", async () => {
+    const sock = path.join(dir, "gone.sock");
+    const hello = { protocol: HOST_PROTOCOL, instance: "dev", pid: 1, startedAt: 0, root: path.join(dir, "removed-worktree"), terms: [] };
+    const gone = net.createServer((c) => c.on("data", () => c.write(JSON.stringify({ id: 0, r: hello }) + "\n")));
+    await new Promise<void>((r) => gone.listen(sock, r));
+    await expect(RemoteBackend.connect(sock)).rejects.toBeInstanceOf(HostMismatch);
+    gone.close();
+  });
+
+  it("stops a host whose code folder went away once it can't start a shell", async () => {
+    const root = path.join(dir, "worktree");
+    fs.mkdirSync(path.join(root, "packages/core/src/terminals"), { recursive: true });
+    fs.writeFileSync(path.join(root, "packages/core/src/terminals/host-main.ts"), "");
+    const proc = spawn("sleep", ["30"]); // stands in for the host process
+    const exited = new Promise((r) => proc.once("exit", r));
+    const sock = path.join(dir, "fake.sock");
+    const fake = net.createServer((c) =>
+      c.on("data", (d) => {
+        for (const line of String(d).split("\n").filter(Boolean)) {
+          const m = JSON.parse(line) as { id: number; m: string };
+          const reply = m.m === "hello" ? { id: m.id, r: { protocol: HOST_PROTOCOL, instance: "dev", pid: proc.pid, startedAt: 0, root, terms: [] } } : { id: m.id, e: "posix_spawn failed: No such file or directory" };
+          c.write(JSON.stringify(reply) + "\n");
+        }
+      }),
+    );
+    await new Promise<void>((r) => fake.listen(sock, r));
+    const b = await RemoteBackend.connect(sock);
+    fs.rmSync(root, { recursive: true });
+    const t = b.spawn({ id: "p1", shell: "zsh", args: [], cwd: dir, cols: 80, rows: 24, env: {}, scrollback: 100 });
+    await expect(t.ready).rejects.toThrow("posix_spawn");
+    await exited;
+    b.dispose();
+    fake.close();
   });
 
   it("hands the host to the core that says hello last", async () => {

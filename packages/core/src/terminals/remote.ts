@@ -91,7 +91,7 @@ export class RemoteBackend implements TermBackend {
     this.#attached = hello.terms.map((t) => this.#add(new RemoteTerm(this, t.id, t.pid, () => Promise.resolve())));
   }
 
-  /** Connect and say hello (taking the host over from a previous core). Rejects a host of another protocol. */
+  /** Connect and say hello (taking the host over from a previous core). Rejects a host of another protocol, or whose code is gone. */
   static connect(socketPath: string): Promise<RemoteBackend> {
     return new Promise((resolve, reject) => {
       const sock = net.createConnection(ipcPath(socketPath));
@@ -106,7 +106,7 @@ export class RemoteBackend implements TermBackend {
           const msg = JSON.parse(line) as { id?: number; r?: HostHello; e?: string };
           if (msg.id !== 0) return void early.push(line);
           if (msg.e || !msg.r) return (sock.destroy(), reject(new Error(msg.e ?? "no hello")));
-          if (msg.r.protocol !== HOST_PROTOCOL) {
+          if (msg.r.protocol !== HOST_PROTOCOL || hostCodeGone(msg.r.root)) {
             sock.destroy();
             return reject(new HostMismatch(msg.r));
           }
@@ -137,10 +137,32 @@ export class RemoteBackend implements TermBackend {
   spawn(o: TermSpawn): Term {
     return this.#add(
       new RemoteTerm(this, o.id, 0, async (t) => {
-        const r = (await this.request("spawn", { ...o })) as { pid: number };
-        t.pid = r.pid;
+        try {
+          const r = (await this.request("spawn", { ...o })) as { pid: number };
+          t.pid = r.pid;
+        } catch (err) {
+          this.#retireIfCodeGone();
+          throw err;
+        }
       }),
     );
+  }
+
+  #retiring = false;
+
+  /**
+   * A host whose code folder went away while it ran (a dev checkout or worktree
+   * removed) can't start shells any more: node-pty's helper went with it. Stop
+   * it; the core hears "bye", starts a host from its own code and resurrects
+   * the terminals (Core.#backendLost).
+   */
+  #retireIfCodeGone(): void {
+    if (this.#retiring || !hostCodeGone(this.hello.root)) return;
+    this.#retiring = true;
+    log.warn(`the PTY host (pid ${this.pid}) runs from ${this.hello.root}, which is gone: replacing it`);
+    try {
+      process.kill(this.pid, "SIGTERM");
+    } catch {}
   }
 
   attached(): Term[] {
@@ -228,10 +250,23 @@ export class RemoteBackend implements TermBackend {
   }
 }
 
+/**
+ * Whether the folder a host runs from is gone (a removed worktree): it then
+ * can't start shells, though the ones it has keep running.
+ */
+export function hostCodeGone(root: string | undefined): boolean {
+  return !!root && !fs.existsSync(path.join(root, "packages/core/src/terminals/host-main.ts"));
+}
+
+/** A host this core can't use: another protocol, or its code is gone. */
 export class HostMismatch extends Error {
   readonly hello: HostHello;
   constructor(hello: HostHello) {
-    super(`the PTY host (pid ${hello.pid}) speaks protocol ${hello.protocol}, this core ${HOST_PROTOCOL}`);
+    super(
+      hello.protocol !== HOST_PROTOCOL
+        ? `the PTY host (pid ${hello.pid}) speaks protocol ${hello.protocol}, this core ${HOST_PROTOCOL}`
+        : `the PTY host (pid ${hello.pid}) runs from ${hello.root}, which is gone`,
+    );
     this.hello = hello;
   }
 }
@@ -249,7 +284,8 @@ export interface HostOptions {
 
 /**
  * The PTY host of this instance: connect, or start one and connect. A host of
- * another protocol is stopped first (its terminals die; restore.ts resurrects them).
+ * another protocol, or run from a folder that is gone, is stopped first (its
+ * terminals die; restore.ts resurrects them).
  */
 export async function connectHost(o: HostOptions): Promise<RemoteBackend> {
   try {

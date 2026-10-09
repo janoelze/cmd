@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { PANE_ENV, cmdHome, configDir, coreSocketPath, defaultSocketPath, enterInstance, isOwnCore, logDir } from "@cmd/protocol/node";
+import { PANE_ENV, cmdHome, configDir, coreSocketPath, defaultSocketPath, enterInstance, isOwnCore, logDir, worktreeHome } from "@cmd/protocol/node";
 import { Core } from "../src/core.ts";
 import { fakeFactory } from "./fake-pty.ts";
 
@@ -46,6 +46,34 @@ describe("instances", () => {
     expect(defaultSocketPath()).toBe("/other/core.sock"); // clients still talk to their pane's core
     expect(cmdHome()).toBe("/state");
     expect(configDir()).toBe("/state");
+  });
+
+  it("a development build in a linked worktree is its own instance", () => {
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-wt-")));
+    const main = path.join(base, "cmd");
+    const wt = path.join(base, "cmd-topic");
+    fs.mkdirSync(path.join(main, ".git"), { recursive: true });
+    fs.mkdirSync(wt);
+    fs.writeFileSync(path.join(wt, ".git"), `gitdir: ${main}/.git/worktrees/cmd-topic\n`);
+    expect(worktreeHome(main)).toBeNull();
+    expect(worktreeHome(wt)).toBe(path.join(wt, ".cmd-dev"));
+    expect(worktreeHome(path.join(base, "nowhere"))).toBeNull(); // a packaged runtime: no .git
+
+    clean();
+    enterInstance("dev", wt);
+    expect(cmdHome()).toBe(path.join(wt, ".cmd-dev"));
+    expect(coreSocketPath()).toBe(path.join(wt, ".cmd-dev", "core.sock"));
+    clean();
+    enterInstance("dev", main);
+    expect(path.basename(cmdHome())).toBe("cmd-dev"); // the main checkout keeps the dev instance
+    clean();
+    process.env.CMD_HOME = "/state";
+    enterInstance("dev", wt);
+    expect(cmdHome()).toBe("/state"); // an explicit one wins
+    clean();
+    enterInstance("release", wt);
+    expect(process.env.CMD_HOME).toBeUndefined();
+    fs.rmSync(base, { recursive: true, force: true });
   });
 
   it("tells its own core from another instance's", () => {

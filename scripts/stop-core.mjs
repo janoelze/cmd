@@ -3,7 +3,7 @@
 // the core too (packages/core/src/terminals/host.ts): stopping a core keeps them,
 // --terminals stops its host as well. The installed app's core is only stopped
 // when asked for, so this is safe to run in its terminals.
-//   node scripts/stop-core.mjs                        the core of $CMD_HOME, else the dev instance's
+//   node scripts/stop-core.mjs                        the core of $CMD_HOME, else the dev instance's (a worktree's own)
 //   node scripts/stop-core.mjs --terminals            … and its PTY host (its terminals close)
 //   node scripts/stop-core.mjs --release              the installed app's core
 //   node scripts/stop-core.mjs --all                  every dev and test core and PTY host on this machine
@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { cmdHome } from "../packages/protocol/src/node.ts";
+import { cmdHome, enterInstance } from "../packages/protocol/src/node.ts";
 
 const alive = (pid) => {
   try {
@@ -84,8 +84,9 @@ function allCores(release) {
 
 if (path.resolve(process.argv[1] ?? "") === import.meta.filename) {
   const args = process.argv.slice(2);
-  // $CMD_INSTANCE may be inherited from a pane; the flags decide.
-  process.env.CMD_INSTANCE = args.includes("--release") ? "release" : "dev";
+  // $CMD_INSTANCE may be inherited from a pane; the flags decide. In a linked
+  // worktree the dev instance is the worktree's own (instance.ts, worktreeHome).
+  enterInstance(args.includes("--release") ? "release" : "dev", path.resolve(import.meta.dirname, ".."));
   if (args.includes("--all")) {
     const pids = allCores(args.includes("--include-release")).filter((p) => p !== process.pid);
     for (const pid of pids) await stopPid(pid);

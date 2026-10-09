@@ -589,7 +589,7 @@ export class Core {
   }
 
   readonly handlers: Handlers = {
-    "core.hello": () => ({ version: VERSION, pid: process.pid, socket: this.#opts.socketPath, build: this.#opts.build ?? "", stateDir: this.#opts.stateDir }),
+    "core.hello": () => ({ version: VERSION, pid: process.pid, socket: this.#opts.socketPath, build: this.#opts.build ?? "", stateDir: this.#opts.stateDir, root: path.resolve(import.meta.dirname, "../../..") }),
     "core.info": async () => {
       const mem = process.memoryUsage();
       const cpu = process.cpuUsage();

@@ -50,11 +50,31 @@ export const PANE_ENV: readonly string[] = [
 
 /**
  * For processes that are an instance (Electron main, the core): drop the pane
- * context they may have inherited and settle on `name`.
+ * context they may have inherited and settle on `name`. `checkout`: the repo a
+ * development build runs from, for worktreeHome().
  */
-export function enterInstance(name: InstanceName): void {
+export function enterInstance(name: InstanceName, checkout?: string): void {
   for (const k of PANE_ENV) delete process.env[k];
   process.env.CMD_INSTANCE = name;
+  const own = name === "dev" && !process.env.CMD_HOME && checkout ? worktreeHome(checkout) : null;
+  if (own) process.env.CMD_HOME = own;
+}
+
+/**
+ * The state dir of a development build run from a linked git worktree:
+ * <worktree>/.cmd-dev, so it is its own instance (core, PTY host, socket,
+ * state) unless $CMD_HOME says otherwise. Worktrees sharing the dev instance
+ * restarted each other's cores and left a core or PTY host running from a
+ * worktree that was then removed. Null in the main checkout, which keeps the
+ * dev instance, and outside a checkout (packaged builds).
+ */
+export function worktreeHome(checkout: string): string | null {
+  try {
+    // .git is a file ("gitdir: …") only in a linked worktree; a folder can't be read as one.
+    return fs.readFileSync(path.join(checkout, ".git"), "utf8").startsWith("gitdir:") ? path.join(checkout, ".cmd-dev") : null;
+  } catch {
+    return null;
+  }
 }
 
 /** State dir: $CMD_HOME, else ~/Library/Application Support/cmd (or cmd-dev). */

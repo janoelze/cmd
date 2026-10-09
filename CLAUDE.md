@@ -36,12 +36,12 @@ Several agents build cmd at once. Nobody edits the main checkout (`~/src/cmd`): 
 ```sh
 git -C ~/src/cmd worktree add ~/src/cmd-<topic> -b <topic> master
 cd ~/src/cmd-<topic> && pnpm install   # node_modules and native helpers are per checkout; the pnpm store makes it quick
-export CMD_HOME=$PWD/.cmd-dev           # before any pnpm dev / core / cmd / e2e, see below
+export CMD_HOME=$PWD/.cmd-dev           # the worktree's own instance; pnpm dev/core/core:stop default to it, pnpm cmd needs it
 git worktree list                       # what is in flight
 ```
 
 - Started in the main checkout with a code change to make? Create a worktree and work there (absolute paths), unless the user says otherwise.
-- **Always set `CMD_HOME` in a worktree.** Without it every checkout's `pnpm dev` is the same dev instance (one socket, one SQLite), and each app restarts a core running another build, so worktrees kill each other's core. With it each worktree has its own core, PTY host, state, logs and settings (settings start at defaults, since `configDir()` follows `CMD_HOME`). `pnpm core:stop` then stops only yours. Never run `pnpm core:stop-all`: it stops every agent's cores.
+- **A worktree is its own instance.** `pnpm dev`, `pnpm core` and `pnpm core:stop` run from a linked worktree default `CMD_HOME` to `<worktree>/.cmd-dev` (`worktreeHome()` in `instance.ts`), so each worktree has its own core, PTY host, state, logs and settings (settings start at defaults, since `configDir()` follows `CMD_HOME`), and never touches the main checkout's dev instance. Still `export CMD_HOME` for `pnpm cmd` (the CLI otherwise talks to the core of the pane it runs in). Never run `pnpm core:stop-all`: it stops every agent's cores.
 - Commit on your branch as you go. Before handing back: `git rebase master` (worktrees share refs, no fetch needed), then `pnpm typecheck && pnpm test`.
 - Append-only registries conflict most: `Methods` in `rpc.ts`, `Handlers` in `core.ts`, `SETTINGS_SCHEMA`, `settings/layout.ts`, `shared/commands.ts`. On rebase keep both sides' entries.
 - Merging, pushing and releasing happen only when the user asks, from the main checkout: `git merge --ff-only <topic>`, `pnpm release` there on `master`.

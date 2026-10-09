@@ -72,8 +72,11 @@ export interface Placement {
 }
 
 export interface Methods {
-  /** stateDir: the core's $CMD_HOME, so an app can tell its own core from another instance's (older cores omit it). */
-  "core.hello": { params: {}; result: { version: string; pid: number; socket: string; build: string; stateDir?: string } };
+  /**
+   * stateDir: the core's $CMD_HOME, so an app can tell its own core from another instance's (older cores omit it).
+   * root: the code folder it runs from, so an app restarts a core of another checkout even when the code is the same.
+   */
+  "core.hello": { params: {}; result: { version: string; pid: number; socket: string; build: string; stateDir?: string; root?: string } };
   /** Diagnostics for the Settings window's Updates & About page. */
   "core.info": { params: {}; result: CoreInfo };
   /** The core's and PTY host's own usage (Task Manager); CPU% is since the previous call. Null where unknown. */
