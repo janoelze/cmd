@@ -1,8 +1,9 @@
 // Settings → Remote Access (docs/13-remote-access.md, "Experience"): one switch,
 // then a pairing code right away, the way linked devices work in Signal and
 // WhatsApp. Below it: who is connected now and what they're watching, the paired
-// devices (access, last seen, unpair), recent activity, and the relay and client
-// addresses. A device asking to pair is answered right here as well.
+// devices (access, last seen, unpair), recent activity, and how phones connect
+// (the relay, Tailscale or your own URL, docs/38). A device asking to pair is
+// answered right here as well.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { renderSVG } from "uqr";
@@ -17,6 +18,15 @@ const STATE_LINE: Record<RemoteStatus["state"], string> = {
   online: "Ready. Paired devices can connect.",
   error: "Can't reach the relay. Retrying…",
 };
+
+/** The status line, for the relay or a direct access mode (docs/38). */
+function stateLine(status: RemoteStatus | null): string {
+  const state = status?.state ?? "connecting";
+  if (!status || status.access === "relay") return state === "error" && status?.error ? `Can't reach the relay: ${status.error}` : STATE_LINE[state];
+  if (state === "error") return status.error ?? "Not reachable yet.";
+  if (state === "connecting") return "Getting ready…";
+  return status.address ? `Ready on ${new URL(status.address).host}. Paired devices can connect.` : STATE_LINE.online;
+}
 
 const LOG_TEXT: Record<string, string> = {
   enabled: "Turned on",
@@ -49,6 +59,7 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
   const devices = status?.devices ?? [];
   const sessions = status?.sessions ?? [];
   const request = status?.requests[0];
+  const access = status?.access ?? "relay";
   // First run: nobody paired yet, so the code is what you came for.
   const pairing = enabled && (showPair || devices.length === 0);
 
@@ -58,7 +69,7 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
         <FormRow
           title="Remote access"
           description="Use your terminals and agents from your phone, end-to-end encrypted."
-          note={enabled ? (status?.error && status.state === "error" ? `Can't reach the relay: ${status.error}` : STATE_LINE[status?.state ?? "connecting"]) : undefined}
+          note={enabled ? stateLine(status) : undefined}
           noteTone={status?.state === "error" ? "danger" : "accent"}
         >
           <Switch checked={enabled} label="Remote access" onChange={(v) => void cmd.call(v ? "remote.enable" : "remote.disable", {})} />
@@ -107,8 +118,12 @@ export function Remote({ status, enabled, pair, row }: { status: RemoteStatus | 
       <Activity key={devices.length + sessions.length} />
 
       <FormSection title="Connection">
-        {row("remote.relay")}
-        {row("remote.client")}
+        {row("remote.access")}
+        {access === "relay" && row("remote.relay")}
+        {access === "relay" && row("remote.client")}
+        {access === "url" && row("remote.url")}
+        {access === "tailscale" && row("remote.tailscale.port")}
+        {access !== "relay" && row("remote.port")}
         {row("remote.deviceExpiryDays")}
       </FormSection>
     </>
@@ -146,7 +161,7 @@ function PairCode({ status, onDone }: { status: RemoteStatus | null; onDone?: ()
   if (!online)
     return (
       <Stack pad="xl">
-        <Text tone="dim">{STATE_LINE[status?.state ?? "connecting"]}</Text>
+        <Text tone="dim">{stateLine(status)}</Text>
       </Stack>
     );
   if (error) return <Callout tone="danger">{/client/.test(error) ? "Set the web client's address under Connection first." : error}</Callout>;
