@@ -14,10 +14,6 @@
     "radius": 7,
     "spacing": 30
   },
-  "apps/desktop/src/renderer/src/components/widgets.css": {
-    "color": 2,
-    "spacing": 2
-  },
   "apps/desktop/src/renderer/src/pdf/pdf.css": {
     "color": 1
   },

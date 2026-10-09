@@ -8,12 +8,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { WebviewTag } from "electron";
-import { EmptyState, TextField } from "@cmd/ui";
+import { Stack, Stage, Text, TextField, View } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
 import { handleEmbedMessage } from "../embed.ts";
 import { POPUPS } from "./BrowserView.tsx";
 import type { WindowViewProps } from "../windows/registry.ts";
-import "./widgets.css";
 
 /** Who the player is embedded by, as YouTube asks of embeds. */
 const REFERRER = "https://github.com/janoelze/cmd";
@@ -103,9 +102,9 @@ function Player({ id, src, fill }: { id: string; src: string; fill: boolean }) {
     };
   }, [id]);
   return (
-    <div className="yt">
-      <webview ref={ref as never} className="yt-player" data-embed src={src} httpreferrer={REFERRER} partition="persist:cmd-browser" allowpopups={POPUPS} />
-    </div>
+    <Stage>
+      <webview ref={ref as never} data-embed src={src} httpreferrer={REFERRER} partition="persist:cmd-browser" allowpopups={POPUPS} />
+    </Stage>
   );
 }
 
@@ -122,22 +121,31 @@ function Ask({ id, focused }: { id: string; focused: boolean }) {
     cmd.call("window.update", { id, state: { input: v } }).catch(() => setError("That isn't a YouTube link, video id or embed code."));
   };
   return (
-    <div className="yt yt-ask">
-      <EmptyState icon="play.rectangle" title="YouTube">
-        <div className="yt-field">
-          <TextField
-            ref={input}
-            fill
-            value={text}
-            invalid={!!error}
-            placeholder="Paste a link, video id or embed code"
-            onChange={(v) => (setText(v), setError(null))}
-            onKeyDown={(e) => e.key === "Enter" && submit(text)}
-            onPaste={(e) => submit(e.clipboardData.getData("text"))}
-          />
-          {error && <div className="yt-error">{error}</div>}
-        </div>
-      </EmptyState>
-    </div>
+    <View
+      state={{
+        kind: "empty",
+        icon: "play.rectangle",
+        title: "YouTube",
+        action: (
+          <Stack gap="xs">
+            <TextField
+              ref={input}
+              fill
+              value={text}
+              invalid={!!error}
+              placeholder="Paste a link, video id or embed code"
+              onChange={(v) => (setText(v), setError(null))}
+              onKeyDown={(e) => e.key === "Enter" && submit(text)}
+              onPaste={(e) => submit(e.clipboardData.getData("text"))}
+            />
+            {error && (
+              <Text size="xs" tone="danger">
+                {error}
+              </Text>
+            )}
+          </Stack>
+        ),
+      }}
+    />
   );
 }

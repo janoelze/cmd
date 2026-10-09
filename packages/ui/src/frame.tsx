@@ -280,6 +280,11 @@ export function Dial({ progress, tone, value, caption, label, onEdit, edit }: {
   );
 }
 
+/** Media that fills the view on the scrim (black in most themes): a video player, a visualizer. Its one child (a webview, an iframe, a canvas) fills it. */
+export function Stage({ children }: { children: ReactNode }) {
+  return <div className="ui-stage">{children}</div>;
+}
+
 /** A row of thumbnails along a window's edge; the selected one ringed. Scrolls sideways. */
 export function Filmstrip({ items, selected, onSelect }: { items: readonly { key: string; src: string; label: string }[]; selected?: string; onSelect?: (key: string) => void }) {
   return (

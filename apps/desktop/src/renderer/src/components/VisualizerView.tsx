@@ -13,7 +13,7 @@ import { handleEmbedMessage } from "../embed.ts";
 import { setWidgetState } from "../widgets.ts";
 import { setWindowStatus } from "../windowActions.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
-import "./widgets.css";
+import { Stage } from "@cmd/ui";
 
 /** The pack's preset names, once a frame has said them (the same in every frame). */
 let presetNames: string[] = [];
@@ -150,5 +150,9 @@ export function VisualizerView({ win }: WindowViewProps) {
     };
   }, [win.id, source]);
 
-  return <iframe ref={ref} className="visualizer-frame" data-embed sandbox="allow-scripts" src="cmd-visualizer://frame/" title={win.title} />;
+  return (
+    <Stage>
+      <iframe ref={ref} data-embed sandbox="allow-scripts" src="cmd-visualizer://frame/" title={win.title} />
+    </Stage>
+  );
 }

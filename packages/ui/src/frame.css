@@ -51,6 +51,9 @@
 .ui-viewstate-title { max-width: min(32ch, 100%); font: 600 var(--text-base) var(--font-ui); color: var(--text); text-wrap: balance; }
 .ui-viewstate-text { max-width: min(44ch, 100%); font-size: var(--text-md); line-height: 1.45; text-wrap: balance; overflow-wrap: break-word; }
 .ui-viewstate-action { display: flex; gap: var(--space-md); padding-top: var(--space-xs); }
+/* A field as the action (paste a link): as wide as the text above it. */
+.ui-viewstate-action > .ui-stack { width: min(44ch, 100%); text-align: start; }
+.ui-viewstate-action:has(> .ui-stack) { align-self: stretch; justify-content: center; }
 
 /* ── split: sidebar or inspector ── */
 .ui-split { flex: 1; min-height: 0; display: flex; container-type: inline-size; }
@@ -113,6 +116,8 @@ button.ui-dial-value:not(:disabled):hover { background: var(--bg-hover); }
 .ui-dial-value[data-editing] { background: var(--input-bg); box-shadow: 0 0 0 1px var(--input-focus-edge); user-select: text; }
 .ui-dial-caption { font-size: max(var(--text-sm), min(3.6cqw, 3.6cqh)); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 @container (max-height: 120px) { .ui-dial-caption { display: none; } }
+.ui-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--scrim); }
+.ui-stage > * { flex: 1; min-height: 0; width: 100%; border: 0; display: block; }
 .ui-media { flex: 1; min-height: 0; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); padding: var(--space-xl); background: var(--scrim); }
 .ui-media-img { flex: 1; min-height: 0; max-width: 100%; object-fit: contain; border-radius: var(--radius-xs); }
 .ui-media-caption { font-size: var(--text-sm); color: var(--text-dim); }
