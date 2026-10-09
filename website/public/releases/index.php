@@ -15,7 +15,7 @@ page_start('cmd releases', "What's new in each release of cmd.", 'releases/');
 <h1>Releases</h1>
 <p class="lede">What's new in each release of cmd.</p>
 <?php foreach (changelog() as $i => $c): $tag = 'v' . $c['version']; $r = $published[$tag] ?? null; ?>
-<section class="release" id="<?= h($tag) ?>">
+<section class="release<?= $i === 0 && $r ? ' latest' : '' ?>" id="<?= h($tag) ?>">
   <div class="head">
     <h2><a href="#<?= h($tag) ?>"><?= h($c['version']) ?></a></h2>
     <?= $i === 0 && $r ? '<span class="pill accent">Latest</span>' : '' ?>

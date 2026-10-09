@@ -170,6 +170,8 @@ p.more a:hover { color: var(--link); }
 .release { padding: 4px 0 28px; border-bottom: 1px solid var(--line); scroll-margin-top: 16px; }
 .release + .release { padding-top: 24px; }
 .release:last-of-type { border-bottom: 0; }
+.release.latest { margin: 8px -20px 0; padding: 20px 20px 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.release.latest + .release { padding-top: 32px; }
 .release .head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .release .head h2 { margin: 0; font-family: var(--mono); }
 .release .head h2 a { color: inherit; text-decoration: none; }
@@ -190,6 +192,7 @@ p.more a:hover { color: var(--link); }
 .notes strong { color: var(--ink); font-weight: 500; }
 @media (max-width: 640px) {
   .release .head .button { margin-left: 0; }
+  .release.latest { margin-inline: -12px; padding-inline: 12px; }
   .releases li { grid-template-columns: 5em 1fr 4.5em auto; gap: 12px; padding: 10px 10px 10px 14px; }
   .releases time { display: none; }
 }
