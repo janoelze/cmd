@@ -165,6 +165,7 @@ describe("publicOrigin", () => {
     expect(publicOrigin("https://mac.example.com:8443")).toEqual({ url: "https://mac.example.com:8443" });
     expect(publicOrigin("")).toHaveProperty("error");
     expect(publicOrigin("http://mac.example.com")).toHaveProperty("error");
+    expect(publicOrigin("http://127.0.0.1:47392")).toEqual({ url: "http://127.0.0.1:47392" });
     expect(publicOrigin("https://mac.example.com/cmd")).toHaveProperty("error");
     expect(publicOrigin("mac")).toHaveProperty("error");
   });

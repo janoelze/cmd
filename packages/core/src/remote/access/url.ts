@@ -16,7 +16,9 @@ export function publicOrigin(raw: string): { url: string } | { error: string } {
   } catch {
     return { error: `“${s}” isn't a URL.` };
   }
-  if (u.protocol !== "https:") return { error: "The address needs HTTPS: phones only encrypt on secure pages." };
+  // Browsers treat loopback as secure too: testing on this Mac (e2e/web.mjs).
+  const loopback = u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+  if (u.protocol !== "https:" && !loopback) return { error: "The address needs HTTPS: phones only encrypt on secure pages." };
   if (u.pathname !== "/" || u.search || u.hash) return { error: "Use the address without a path, like https://mac.example.com." };
   return { url: u.origin };
 }
