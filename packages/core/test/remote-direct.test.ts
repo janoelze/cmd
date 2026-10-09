@@ -155,7 +155,7 @@ describe("direct remote access", () => {
     core.settings.set("remote.url", "http://mac.example.test");
     expect((await core.call("remote.checks", { access: "url" })).map((c) => `${c.id}:${c.state}`)).toEqual(["url:todo", "page:todo", "socket:todo"]);
     expect(await core.call("remote.checks", { access: "relay" })).toEqual([]);
-    await expect(core.call("remote.checks", { access: "nope" })).rejects.toThrow(/no access mode/);
+    await expect(core.call("remote.checks", { access: "nope" })).rejects.toThrow("No access mode “nope”. Pick one of relay, tailscale, url.");
   });
 });
 

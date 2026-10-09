@@ -1,12 +1,16 @@
-// The access adapters that ship with cmd, registered through the same
-// AccessAdapter interface a plugin would use. The hosted relay isn't one: it's
-// a transport of its own (link.ts).
+// The access modes that ship with cmd, registered through the same AccessMode
+// interface a plugin would use: the hosted relay, and the port publishers
+// (Tailscale, your own URL) wrapped by publishedMode(). Fresh modes per
+// registry: a mode holds the state of its run.
 
-import type { AccessAdapters } from "./adapter.ts";
+import type { AccessModes } from "./mode.ts";
+import { publishedMode } from "./published.ts";
+import { relayMode } from "./relay.ts";
 import { tailscaleAdapter } from "./tailscale.ts";
 import { urlAdapter } from "./url.ts";
 
-export function registerBuiltinAdapters(adapters: AccessAdapters): void {
-  adapters.register(tailscaleAdapter);
-  adapters.register(urlAdapter);
+export function registerBuiltinModes(modes: AccessModes): void {
+  modes.register(relayMode());
+  modes.register(publishedMode(tailscaleAdapter));
+  modes.register(publishedMode(urlAdapter));
 }

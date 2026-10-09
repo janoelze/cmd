@@ -9,15 +9,22 @@ import type { RemoteStatus } from "@cmd/protocol";
 import { connect, type Connection } from "@cmd/protocol/node";
 import { Core } from "../../core/src/core.ts";
 import { fakeFactory } from "../../core/test/fake-pty.ts";
+import { AccessModes } from "../../core/src/remote/access/mode.ts";
+import { registerBuiltinModes } from "../../core/src/remote/access/builtin.ts";
 import { checkLines, parseAccess, remoteCommand, sessionLine, statusLine } from "../src/remote.ts";
+
+const registry = new AccessModes();
+registerBuiltinModes(registry);
+/** What remote.modes answers. */
+const modes = registry.info();
 
 const base: RemoteStatus = { enabled: true, state: "online", error: null, relay: "wss://relay.example", access: "relay", address: null, devices: [], sessions: [], requests: [] };
 
 describe("cmd remote status line", () => {
   it("names the relay only in relay mode", () => {
-    expect(statusLine(base)).toBe("Remote access: ready  ·  Hosted relay wss://relay.example");
-    expect(statusLine({ ...base, access: "tailscale", address: "https://mac.tailnet.ts.net:8443" })).toBe("Remote access: ready  ·  Tailscale  ·  https://mac.tailnet.ts.net:8443");
-    expect(statusLine({ ...base, access: "url", state: "error", error: "Add your HTTPS address (remote.url).", address: null })).toBe("Remote access: can't connect (Add your HTTPS address (remote.url).)  ·  Your own URL");
+    expect(statusLine(base, modes)).toBe("Remote access: ready  ·  Hosted relay wss://relay.example");
+    expect(statusLine({ ...base, access: "tailscale", address: "https://mac.tailnet.ts.net:8443" }, modes)).toBe("Remote access: ready  ·  Tailscale  ·  https://mac.tailnet.ts.net:8443");
+    expect(statusLine({ ...base, access: "url", state: "error", error: "Add your HTTPS address (remote.url).", address: null }, modes)).toBe("Remote access: can't connect (Add your HTTPS address (remote.url).)  ·  Your own URL");
   });
 
   it("shows Tailscale's user login when a session has one", () => {
@@ -38,14 +45,20 @@ describe("cmd remote status line", () => {
 });
 
 describe("cmd remote access arguments", () => {
-  it("takes a mode, and a URL only for url", () => {
-    expect(parseAccess(["tailscale"], "")).toEqual({ access: "tailscale" });
-    expect(parseAccess(["url", "https://mac.example.com"], "")).toEqual({ access: "url", url: "https://mac.example.com" });
-    expect(parseAccess(["url"], "https://saved.example")).toEqual({ access: "url" });
-    expect(parseAccess(["url"], "")).toHaveProperty("error", expect.stringMatching(/needs an address/));
-    expect(parseAccess(["url", "not a url"], "")).toHaveProperty("error", expect.stringMatching(/isn't a URL/));
-    expect(parseAccess(["relay", "https://x.example"], "")).toHaveProperty("error");
-    expect(parseAccess(["ngrok"], "")).toHaveProperty("error", expect.stringMatching(/^usage/));
+  const none = () => "";
+  it("takes a mode, and a value only for a mode with an argument", () => {
+    expect(parseAccess(["tailscale"], modes, none)).toEqual({ access: "tailscale" });
+    expect(parseAccess(["url", "https://mac.example.com"], modes, none)).toEqual({ access: "url", set: { key: "remote.url", value: "https://mac.example.com" } });
+    expect(parseAccess(["url"], modes, (k) => (k === "remote.url" ? "https://saved.example" : ""))).toEqual({ access: "url" });
+    expect(parseAccess(["url"], modes, none)).toHaveProperty("error", "Your own URL needs an address: cmd remote access url https://mac.example.com");
+    expect(parseAccess(["relay", "https://x.example"], modes, none)).toHaveProperty("error", "Hosted relay takes nothing more (cmd remote access url https://x.example)");
+  });
+
+  it("names the modes the core has when it doesn't know one", () => {
+    expect(parseAccess(["ngrok"], modes, none)).toHaveProperty("error", 'no access mode "ngrok" (usage: cmd remote access relay|tailscale|url [VALUE])');
+    expect(parseAccess([], modes, none)).toHaveProperty("error", "usage: cmd remote access relay|tailscale|url [VALUE]");
+    // A mode the core registers later is a choice too: nothing here lists them.
+    expect(parseAccess(["ngrok"], [...modes, { ...modes[0]!, id: "ngrok", title: "ngrok" }], none)).toEqual({ access: "ngrok" });
   });
 });
 
@@ -112,7 +125,24 @@ describe("cmd remote against a core", () => {
     expect((await run([])).out[0]).toMatch(/^Remote access: off {2}· {2}Your own URL/);
   });
 
+  it("lists the core's modes, marking the one in use", async () => {
+    const { out } = await run(["modes"]);
+    expect(out.map((l) => l.split(":")[0])).toEqual(["  relay      Hosted relay", "  tailscale  Tailscale", "* url        Your own URL"]);
+  });
+
   it("rejects a mode it doesn't know", async () => {
-    expect((await run(["setup", "ngrok"])).code).toBe(1);
+    const r = await run(["setup", "ngrok"]);
+    expect(r.code).toBe(1);
+    expect(r.err[0]).toMatch(/no access mode "ngrok".*relay\|tailscale\|url/);
+  });
+
+  it("says which modes there are when remote.access names none of them", async () => {
+    core.settings.set("remote.access", "ngrok");
+    core.settings.set("remote.enabled", true);
+    await core.remote.ready();
+    expect(core.remote.status()).toMatchObject({ state: "error", error: "No access mode “ngrok”. Pick one of relay, tailscale, url." });
+    expect((await run([])).out[0]).toBe("Remote access: can't connect (No access mode “ngrok”. Pick one of relay, tailscale, url.)  ·  ngrok");
+    await expect(core.call("remote.pair", {})).rejects.toThrow("Remote access isn't ready: No access mode “ngrok”.");
+    core.settings.set("remote.enabled", false);
   });
 });
