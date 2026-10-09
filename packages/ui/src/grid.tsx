@@ -37,7 +37,8 @@ export interface GridSort {
 
 /** How a row sits, beyond its cells. */
 export interface GridRowInfo {
-  /** A section's heading: bold and dim, not selectable; its cells are the section's name and totals. */
+  /** A section's heading: bold and dim, not selectable; its cells are the section's name and totals.
+   *  It sits at the edge, with no disclosure slot, so the rows under it read as indented. */
   heading?: boolean;
   /** Nested this deep under the row before it (1: a child), indented in the grow column. */
   depth?: number;
@@ -76,6 +77,9 @@ const isSpec = (c: GridCell): c is Exclude<GridCell, ReactNode> => typeof c === 
 export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu, onRowClick, onRowDoubleClick, rowInfo, selected, mono, numbered, footer, className }: DataGridProps) {
   // The column a row's disclosure and indent go in: the one that grows, else the first.
   const tree = Math.max(0, columns.findIndex((c) => c.grow));
+  // Its header lines up with the outermost text: section headings sit at the edge, else names
+  // sit past the disclosure.
+  const headed = !!rowInfo && rows.some((_, i) => rowInfo(i)?.heading);
   const next = (key: string): GridSort | null => (sort?.key !== key ? { key, desc: false } : sort.desc ? null : { key, desc: true });
   return (
     <div className={cls("ui-grid", className)} data-mono={mono || undefined}>
@@ -92,7 +96,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
                 </>
               );
               return (
-                <th key={c.key} data-align={c.align} data-grow={c.grow || undefined} data-hide={c.hide} data-icon={c.icon || undefined} data-tree={(rowInfo && j === tree) || undefined} aria-sort={sorted}>
+                <th key={c.key} data-align={c.align} data-grow={c.grow || undefined} data-hide={c.hide} data-icon={c.icon || undefined} data-tree={(rowInfo && !headed && j === tree) || undefined} aria-sort={sorted}>
                   {onSort ? (
                     <button type="button" className="ui-grid-sort" onClick={() => onSort(next(c.key))}>
                       {head}
@@ -133,14 +137,16 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
                     <td key={j} data-kind={spec.kind} data-align={spec.align ?? columns[j]?.align} data-hide={columns[j]?.hide} data-icon={columns[j]?.icon || undefined} data-grow={columns[j]?.grow || undefined} data-tip={spec.tip}>
                       {rowInfo && j === tree ? (
                         <span className="ui-grid-tree" style={{ "--depth": info?.depth ?? 0 } as CSSProperties}>
-                          <span
-                            className={cls("ui-twisty", info?.expanded && "open")}
-                            data-none={info?.expanded === undefined || undefined}
-                            onClick={info?.onToggle}
-                            onDoubleClick={(e) => e.stopPropagation()}
-                          >
-                            <Icon name="chevron.right" size={ICON.disclosure} />
-                          </span>
+                          {!info?.heading && (
+                            <span
+                              className={cls("ui-twisty", info?.expanded && "open")}
+                              data-none={info?.expanded === undefined || undefined}
+                              onClick={info?.onToggle}
+                              onDoubleClick={(e) => e.stopPropagation()}
+                            >
+                              <Icon name="chevron.right" size={ICON.disclosure} />
+                            </span>
+                          )}
                           <span className="ui-grid-label">{spec.node}</span>
                         </span>
                       ) : (
