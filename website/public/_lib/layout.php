@@ -109,7 +109,7 @@ tr:last-child td { border-bottom: 0; }
 .hero-shots img.on { opacity: 1; }
 /* Revealed from a blur: only opacity, translate and filter change, on their own
    layer while it runs (.revealing, dropped after), so it stays on the GPU. */
-.hero-shots { --ease: cubic-bezier(0.2, 0.7, 0.2, 1); transition: opacity 2s ease, translate 2.4s var(--ease), filter 2.4s var(--ease); }
+.hero-shots { --ease: cubic-bezier(0.2, 0.7, 0.2, 1); transition: opacity 1.4s ease, translate 1.6s var(--ease), filter 1.6s var(--ease); }
 .hero-shots.loading { opacity: 0; translate: 0 12px; filter: blur(40px); }
 .hero-shots.loading, .hero-shots.revealing { will-change: opacity, translate, filter; }
 @media (prefers-reduced-motion: reduce) { .hero-shots.loading { translate: none; filter: none; } }

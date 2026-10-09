@@ -81,7 +81,7 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
     shown = true;
     box.classList.add("revealing");
     box.classList.remove("loading");
-    setTimeout(() => box.classList.remove("revealing"), 2600); // after the 2.4 s transition
+    setTimeout(() => box.classList.remove("revealing"), 1800); // after the 1.6 s transition
     if (!cycle) return;
     let i = 0;
     setInterval(() => {
