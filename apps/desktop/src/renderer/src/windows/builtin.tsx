@@ -286,7 +286,9 @@ registerWindowView({
     const root = actionsRootOf(w);
     const branch = lastLists.get(w.id)?.checkout;
     const name = root ? root.replace(/\/+$/, "").split("/").pop() || root : ACTIONS_TITLE;
-    return { label: branch?.linked && branch.branch ? `${name} · ${branch.branch}` : name, entries: actionsMenu(w) };
+    // A worktree's branch, unless its folder already says it (cmd-workspace-actions on workspace-actions).
+    const showBranch = branch?.linked && branch.branch && !name.endsWith(branch.branch);
+    return { label: showBranch ? `${name} · ${branch!.branch}` : name, entries: actionsMenu(w) };
   },
   menu: actionsMenu,
 });
