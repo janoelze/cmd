@@ -40,7 +40,7 @@ export const MIN_H = 8 * DOT;
 /** Spacing between placed windows, and the grid moves/resizes snap to. */
 export const GAP = DOT;
 export const SNAP = DOT;
-/** Space kept around windows when framing them. */
+/** Workspace kept around windows when framing them. */
 export const FRAME_PAD = 48;
 
 export const DEFAULT_CAMERA: Camera = { x: -FRAME_PAD, y: -FRAME_PAD, zoom: 1 };

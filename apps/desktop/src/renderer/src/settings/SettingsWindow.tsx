@@ -46,7 +46,7 @@ type Nav = { id: string; title: string; icon: string };
 const NAV: Nav[] = [...PAGES, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard" }, { id: "about", title: "Updates & About", icon: "info.circle" }];
 
 const APPLIES_NOTE = { newTerminals: "Applies to new terminals.", firstLaunch: "Applies on first launch." } as const;
-const COMMAND_GROUPS: Record<string, string> = { app: "App", file: "File", edit: "Edit", view: "View", session: "Sessions", space: "Spaces", help: "Help" };
+const COMMAND_GROUPS: Record<string, string> = { app: "App", file: "File", edit: "Edit", view: "View", session: "Sessions", workspace: "Workspaces", help: "Help" };
 
 const PAGE_KEY = "settings.page";
 /** Opened at a page (main's openSettings): "remote", or "remote/pair" to show a pairing code. */

@@ -1,11 +1,11 @@
-// Mirror of core state (panes, agents, windows, Spaces) plus the Space this app
+// Mirror of core state (panes, agents, windows, workspaces) plus the workspace this app
 // window shows. Terminal output bypasses this store and goes straight to the
 // xterm instances (see terminals.ts).
 
 import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Space, SpaceId, StartupStatus, WidgetEntry, WindowId, DataEvent, DataQuery, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
-import { DEFAULT_SETTINGS, HOME_SPACE_ID } from "@cmd/protocol";
+import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Workspace, WorkspaceId, StartupStatus, WidgetEntry, WindowId, DataEvent, DataQuery, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, HOME_WORKSPACE_ID } from "@cmd/protocol";
 import { reducedMotion } from "@cmd/ui";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -32,10 +32,10 @@ export interface State {
   startup: StartupStatus | null;
   /** Persisted UI state (see usePersisted). Loaded with the first snapshot. */
   ui: Record<string, unknown>;
-  /** Open Spaces (docs/11-spaces.md). */
-  spaces: Map<SpaceId, Space>;
-  /** The Space this app window shows; main decides (see main/spaces.ts). */
-  spaceId: SpaceId;
+  /** Open workspaces (docs/11-workspaces.md). */
+  workspaces: Map<WorkspaceId, Workspace>;
+  /** The workspace this app window shows; main decides (see main/workspaces.ts). */
+  workspaceId: WorkspaceId;
   /** Remote access (docs/13-remote-access.md): who is connected and what they watch. */
   remote: RemoteStatus | null;
   /** Devices waiting for the person at this Mac to allow them. */
@@ -55,8 +55,8 @@ let state: State = {
   ui: {},
   search: null,
   startup: null,
-  spaces: new Map(),
-  spaceId: new URLSearchParams(location.search).get("space") || HOME_SPACE_ID,
+  workspaces: new Map(),
+  workspaceId: new URLSearchParams(location.search).get("workspace") || HOME_WORKSPACE_ID,
   remote: null,
   pairRequests: [],
   remoteInput: new Map(),
@@ -232,23 +232,23 @@ export function flushUi(): void {
   }
   pendingUi.clear();
 }
-window.addEventListener("beforeunload", () => (flushUi(), flushSpaceViews()));
+window.addEventListener("beforeunload", () => (flushUi(), flushWorkspaceViews()));
 
-// ── per-Space view state ─────────────────────────────────
-// Layout and selection live in Space.view in the core. Writes apply locally at
+// ── per-workspace view state ─────────────────────────────────
+// Layout and selection live in workspace.view in the core. Writes apply locally at
 // once and reach the core debounced; until the core echoes a value back, it is
-// re-applied over incoming Space updates so an older echo can't undo it.
+// re-applied over incoming workspace updates so an older echo can't undo it.
 
-const pendingView = new Map<SpaceId, Map<string, unknown>>();
-const viewTimers = new Map<SpaceId, ReturnType<typeof setTimeout>>();
+const pendingView = new Map<WorkspaceId, Map<string, unknown>>();
+const viewTimers = new Map<WorkspaceId, ReturnType<typeof setTimeout>>();
 
 /**
- * A Space from the core, as the UI should hold it: values still waiting to be
+ * A workspace from the core, as the UI should hold it: values still waiting to be
  * echoed stay, and values equal to what we have keep their identity. The core
  * sends the whole view on every change; without this, one key's echo would hand
  * every consumer of every other key a "new" value (re-layout mid-drag).
  */
-const withPending = (s: Space, prev?: Space): Space => {
+const withPending = (s: Workspace, prev?: Workspace): Workspace => {
   const p = pendingView.get(s.id);
   if (p) for (const [k, v] of p) if (JSON.stringify(s.view[k] ?? null) === JSON.stringify(v ?? null)) p.delete(k);
   const view: Record<string, unknown> = { ...s.view, ...(p?.size ? Object.fromEntries(p) : {}) };
@@ -257,7 +257,7 @@ const withPending = (s: Space, prev?: Space): Space => {
 };
 
 /** Equal fields, and view values identical (withPending keeps unchanged ones identical). */
-function sameSpace(a: Space, b: Space): boolean {
+function sameWorkspace(a: Workspace, b: Workspace): boolean {
   const keys = Object.keys(b.view);
   return (
     a.name === b.name && a.root === b.root && a.order === b.order && a.icon === b.icon && a.closedAt === b.closedAt && a.lastActiveAt === b.lastActiveAt &&
@@ -265,97 +265,97 @@ function sameSpace(a: Space, b: Space): boolean {
   );
 }
 
-function sendView(spaceId: SpaceId): void {
-  clearTimeout(viewTimers.get(spaceId));
-  viewTimers.delete(spaceId);
-  const p = pendingView.get(spaceId);
+function sendView(workspaceId: WorkspaceId): void {
+  clearTimeout(viewTimers.get(workspaceId));
+  viewTimers.delete(workspaceId);
+  const p = pendingView.get(workspaceId);
   if (!p?.size) return;
-  void cmd.call("space.update", { id: spaceId, view: Object.fromEntries([...p].map(([k, v]) => [k, v ?? null])) }).catch(() => {});
+  void cmd.call("workspace.update", { id: workspaceId, view: Object.fromEntries([...p].map(([k, v]) => [k, v ?? null])) }).catch(() => {});
 }
 
-function flushSpaceViews(): void {
+function flushWorkspaceViews(): void {
   for (const id of [...viewTimers.keys()]) sendView(id);
 }
 
-/** Set a view key of a Space (any Space, not only this window's). */
-export function setSpaceView(spaceId: SpaceId, key: string, value: unknown): void {
-  const space = state.spaces.get(spaceId);
-  if (!space || JSON.stringify(space.view[key]) === JSON.stringify(value)) return;
-  if (!pendingView.has(spaceId)) pendingView.set(spaceId, new Map());
-  pendingView.get(spaceId)!.set(key, value);
-  const spaces = new Map(state.spaces);
-  spaces.set(spaceId, { ...space, view: { ...space.view, [key]: value } });
-  set({ spaces });
-  clearTimeout(viewTimers.get(spaceId));
-  viewTimers.set(spaceId, setTimeout(() => sendView(spaceId), 250));
+/** Set a view key of a workspace (any workspace, not only this window's). */
+export function setWorkspaceView(workspaceId: WorkspaceId, key: string, value: unknown): void {
+  const workspace = state.workspaces.get(workspaceId);
+  if (!workspace || JSON.stringify(workspace.view[key]) === JSON.stringify(value)) return;
+  if (!pendingView.has(workspaceId)) pendingView.set(workspaceId, new Map());
+  pendingView.get(workspaceId)!.set(key, value);
+  const workspaces = new Map(state.workspaces);
+  workspaces.set(workspaceId, { ...workspace, view: { ...workspace.view, [key]: value } });
+  set({ workspaces });
+  clearTimeout(viewTimers.get(workspaceId));
+  viewTimers.set(workspaceId, setTimeout(() => sendView(workspaceId), 250));
 }
 
-export function getSpaceView<T>(spaceId: SpaceId, key: string, fallback: T): T {
-  const v = state.spaces.get(spaceId)?.view[key];
+export function getWorkspaceView<T>(workspaceId: WorkspaceId, key: string, fallback: T): T {
+  const v = state.workspaces.get(workspaceId)?.view[key];
   return v === undefined ? fallback : (v as T);
 }
 
 /**
- * Like usePersisted, for the shown Space's layout and selection. The setter
- * writes to the Space shown when it is called, so callbacks stay correct after a switch.
+ * Like usePersisted, for the shown workspace's layout and selection. The setter
+ * writes to the workspace shown when it is called, so callbacks stay correct after a switch.
  */
-export function useSpaceView<T>(key: string, fallback: T): [T, (v: T | ((prev: T) => T)) => void] {
+export function useWorkspaceView<T>(key: string, fallback: T): [T, (v: T | ((prev: T) => T)) => void] {
   const stored = useStoreValue((s) => {
-    const view = s.spaces.get(s.spaceId)?.view;
+    const view = s.workspaces.get(s.workspaceId)?.view;
     return view && key in view ? view[key] : MISSING;
   });
   const value = (stored === MISSING ? fallback : stored) as T;
   const setter = (v: T | ((prev: T) => T)) => {
-    const spaceId = state.spaceId;
-    const prev = getSpaceView(spaceId, key, fallback);
-    setSpaceView(spaceId, key, typeof v === "function" ? (v as (p: T) => T)(prev) : v);
+    const workspaceId = state.workspaceId;
+    const prev = getWorkspaceView(workspaceId, key, fallback);
+    setWorkspaceView(workspaceId, key, typeof v === "function" ? (v as (p: T) => T)(prev) : v);
   };
   return [value, setter];
 }
 
-/** The window (terminal or other) a selection id stands for lives in which Space? */
-export function spaceOfWindow(id: string): SpaceId | null {
-  return state.panes.get(id)?.spaceId ?? state.windows.get(id)?.spaceId ?? null;
+/** The window (terminal or other) a selection id stands for lives in which workspace? */
+export function workspaceOfWindow(id: string): WorkspaceId | null {
+  return state.panes.get(id)?.workspaceId ?? state.windows.get(id)?.workspaceId ?? null;
 }
 
-/** Main says which Space this window shows (and maybe what to select there). */
-cmd.onShowSpace(({ spaceId, select }) => {
+/** Main says which workspace this window shows (and maybe what to select there). */
+cmd.onShowWorkspace(({ workspaceId, select }) => {
   const show = () => {
-    if (spaceId !== state.spaceId) set({ spaceId });
+    if (workspaceId !== state.workspaceId) set({ workspaceId });
     if (select) {
-      setSpaceView(spaceId, "selection.pane", select);
-      const history = getSpaceView<string[]>(spaceId, "selection.history", []);
-      setSpaceView(spaceId, "selection.history", [select, ...history.filter((x) => x !== select)].slice(0, 50));
+      setWorkspaceView(workspaceId, "selection.pane", select);
+      const history = getWorkspaceView<string[]>(workspaceId, "selection.history", []);
+      setWorkspaceView(workspaceId, "selection.history", [select, ...history.filter((x) => x !== select)].slice(0, 50));
     }
   };
-  if (spaceId === state.spaceId) show();
-  else switchSpace(state.spaceId, spaceId, show);
-  // A reload (⌘R) loads the URL again: keep it naming the Space shown now.
+  if (workspaceId === state.workspaceId) show();
+  else switchWorkspace(state.workspaceId, workspaceId, show);
+  // A reload (⌘R) loads the URL again: keep it naming the workspace shown now.
   const url = new URL(location.href);
-  url.searchParams.set("space", spaceId);
+  url.searchParams.set("workspace", workspaceId);
   history.replaceState(history.state, "", url);
-  void cmd.call("space.update", { id: spaceId, active: true }).catch(() => {});
+  void cmd.call("workspace.update", { id: workspaceId, active: true }).catch(() => {});
 });
 
 /**
- * Switching Spaces moves through a vertical stack of them: everything in the old
- * Space (sidebars, windows, widgets) leaves out the top while the next one's rises
- * from the bottom; the previous Space comes the other way (styles.css). One
+ * Switching workspaces moves through a vertical stack of them: everything in the old
+ * Workspace (sidebars, windows, widgets) leaves out the top while the next one's rises
+ * from the bottom; the previous workspace comes the other way (styles.css). One
  * element-scoped View Transition on the stage, so the top bar and footer stay put,
  * the new side stays live, and the slide runs on the compositor while the view
  * re-lays out. `update` must commit synchronously.
  */
-function switchSpace(from: SpaceId, to: SpaceId, update: () => void): void {
+function switchWorkspace(from: WorkspaceId, to: WorkspaceId, update: () => void): void {
   const stage = document.querySelector<HTMLElement & { startViewTransition?: (o: { update: () => void; types?: string[] }) => unknown }>(".stage");
-  const a = state.spaces.get(from);
-  const b = state.spaces.get(to);
+  const a = state.workspaces.get(from);
+  const b = state.workspaces.get(to);
   if (!stage?.startViewTransition || !a || !b || reducedMotion()) return update();
-  stage.startViewTransition({ update: () => flushSync(update), types: [b.order > a.order ? "space-next" : "space-prev"] });
+  stage.startViewTransition({ update: () => flushSync(update), types: [b.order > a.order ? "workspace-next" : "workspace-prev"] });
 }
 
-/** This window's Space was closed or forgotten (here or elsewhere). */
-function checkSpace(): void {
-  if (state.connected && !state.spaces.has(state.spaceId)) cmd.spaceLost();
+/** This window's workspace was closed or forgotten (here or elsewhere). */
+function checkWorkspace(): void {
+  if (state.connected && !state.workspaces.has(state.workspaceId)) cmd.workspaceLost();
 }
 
 /** The pane whose resource usage this window shows (the selected one; see setUsageShown). */
@@ -452,23 +452,23 @@ function handle(e: CoreEvent): void {
       set({ windows });
       return;
     }
-    case "space.updated": {
-      const prev = state.spaces.get(e.space.id);
-      const next = e.space.closedAt === null ? withPending(e.space, prev) : null;
+    case "workspace.updated": {
+      const prev = state.workspaces.get(e.workspace.id);
+      const next = e.workspace.closedAt === null ? withPending(e.workspace, prev) : null;
       // Most updates are echoes of our own view writes: nothing new, no re-render.
-      if (prev && next && sameSpace(prev, next)) return;
-      const spaces = new Map(state.spaces);
-      if (next) spaces.set(e.space.id, next);
-      else spaces.delete(e.space.id);
-      set({ spaces });
-      checkSpace();
+      if (prev && next && sameWorkspace(prev, next)) return;
+      const workspaces = new Map(state.workspaces);
+      if (next) workspaces.set(e.workspace.id, next);
+      else workspaces.delete(e.workspace.id);
+      set({ workspaces });
+      checkWorkspace();
       return;
     }
-    case "space.removed": {
-      const spaces = new Map(state.spaces);
-      spaces.delete(e.id);
-      set({ spaces });
-      checkSpace();
+    case "workspace.removed": {
+      const workspaces = new Map(state.workspaces);
+      workspaces.delete(e.id);
+      set({ workspaces });
+      checkWorkspace();
       return;
     }
     case "magic.stream":
@@ -572,18 +572,18 @@ cmd.onStatus(async (status) => {
     panes: new Map(snap.panes.map((p) => [p.id, p])),
     agents: new Map(snap.agents.map((a) => [a.id, a])),
     windows: new Map((snap.windows ?? []).map((w) => [w.id, w])),
-    spaces: new Map((snap.spaces ?? []).map((sp) => [sp.id, withPending(sp, state.spaces.get(sp.id))])),
+    workspaces: new Map((snap.workspaces ?? []).map((sp) => [sp.id, withPending(sp, state.workspaces.get(sp.id))])),
   });
-  checkSpace();
+  checkWorkspace();
   void cmd.call("search.status", {}).then((search) => set({ search }), () => {});
   void cmd.call("widget.list", {}).then((library) => set({ library }), () => {});
   // An older core has no remote access: leave it null.
   void cmd.call("remote.status", {}).then((remote) => set({ remote, pairRequests: remote.requests ?? [] }), () => {});
   // The windows show now; each terminal opens once its content is written (hold).
   // Answers come back in the order asked (one socket): the selected terminal first,
-  // then the rest of this window's Space, then other Spaces.
-  const selected = state.spaces.get(state.spaceId)?.view?.["selection.pane"];
-  const rank = (p: Pane) => (p.id === selected ? 0 : p.spaceId === state.spaceId ? 1 : 2);
+  // then the rest of this window's workspace, then other workspaces.
+  const selected = state.workspaces.get(state.workspaceId)?.view?.["selection.pane"];
+  const rank = (p: Pane) => (p.id === selected ? 0 : p.workspaceId === state.workspaceId ? 1 : 2);
   await Promise.allSettled(
     [...snap.panes].sort((a, b) => rank(a) - rank(b)).map(async (p) => {
       try {

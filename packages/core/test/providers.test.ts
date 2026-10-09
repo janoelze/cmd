@@ -260,12 +260,12 @@ describe("the window's workspace", () => {
     fs.mkdirSync(path.join(root, ".git"));
     fs.writeFileSync(path.join(root, "package.json"), "{}");
     const text = buildRequest("open pull requests", { cwd: root, workspace: { name: "shop", root }, explore: true });
-    expect(text).toContain(`Workspace: this window belongs to the Space "shop" at ${root} (a git repository with package.json).`);
+    expect(text).toContain(`Workspace: this window belongs to the workspace "shop" at ${root} (a git repository with package.json).`);
     expect(text).toMatch(/"this project", "the repo".*mean this folder/);
     expect(buildRequest("a timer", { cwd: root, workspace: null, explore: true })).not.toContain("Workspace:");
   });
 
-  it("is the window's Space, not Home", async () => {
+  it("is the window's workspace, not Home", async () => {
     const { Core } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
     const home = fs.realpathSync(tmp());
@@ -284,16 +284,16 @@ describe("the window's workspace", () => {
       },
     };
     const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, home, magicBackend: () => backend as never });
-    const sp = (await core.call("space.open", { path: proj })).space;
-    const inSpace = core.handlers["window.open"]({ kind: "magic", input: {}, spaceId: sp.id }) as unknown as { id: string };
+    const sp = (await core.call("workspace.open", { path: proj })).workspace;
+    const inWorkspace = core.handlers["window.open"]({ kind: "magic", input: {}, workspaceId: sp.id }) as unknown as { id: string };
     const inHome = core.handlers["window.open"]({ kind: "magic", input: {} }) as unknown as { id: string };
-    core.handlers["magic.run"]({ id: inSpace.id, prompt: "what changed today" });
+    core.handlers["magic.run"]({ id: inWorkspace.id, prompt: "what changed today" });
     core.handlers["magic.run"]({ id: inHome.id, prompt: "what changed today" });
     const end = Date.now() + 3000;
     while (seen.length < 2 && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
     // The path may be shortened to ~ (Windows keeps temp folders in the home folder).
-    expect(seen.find((t) => t.includes("Workspace:"))).toMatch(/the Space "shop" at \S*shop \(/);
-    // Each window's request (its repair turns resend it): only the Space's names a workspace.
+    expect(seen.find((t) => t.includes("Workspace:"))).toMatch(/the workspace "shop" at \S*shop \(/);
+    // Each window's request (its repair turns resend it): only the workspace's names a workspace.
     expect(new Set(seen.filter((t) => t.includes("Workspace:"))).size).toBe(1);
     expect(seen.some((t) => !t.includes("Workspace:"))).toBe(true);
     await core.close();

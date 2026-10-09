@@ -1,6 +1,6 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, kindLabel, needsAttention, placeAgainst, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type GitPlace, type PaneId, type Space, type SpaceId } from "@cmd/protocol";
+import { bucketOf, kindLabel, needsAttention, placeAgainst, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type GitPlace, type PaneId, type Workspace, type WorkspaceId } from "@cmd/protocol";
 import type { DotState } from "@cmd/ui";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "./windows/registry.ts";
@@ -37,23 +37,23 @@ const TONE_LIGHT: Record<NonNullable<MagicStatus["tone"]>, DotState> = { good: "
 
 const RANK = { needs: 0, unseen: 1, rest: 2 } as const;
 
-/** The state as one Space sees it: only its terminals, agents and windows. */
-export function inSpace(s: State, spaceId: SpaceId = s.spaceId): State {
-  const only = <K, V extends { spaceId: SpaceId }>(m: Map<K, V>) => new Map([...m].filter(([, v]) => v.spaceId === spaceId));
+/** The state as one workspace sees it: only its terminals, agents and windows. */
+export function inWorkspace(s: State, workspaceId: WorkspaceId = s.workspaceId): State {
+  const only = <K, V extends { workspaceId: WorkspaceId }>(m: Map<K, V>) => new Map([...m].filter(([, v]) => v.workspaceId === workspaceId));
   return { ...s, panes: only(s.panes), agents: only(s.agents), windows: only(s.windows) };
 }
 
-/** What waits in each Space: something needing you, or done and unseen (for the Space switcher). */
-export function spaceAttention(s: State): Map<SpaceId, "needs" | "unseen"> {
-  const out = new Map<SpaceId, "needs" | "unseen">();
-  const mark = (id: SpaceId, v: "needs" | "unseen") => out.get(id) !== "needs" && out.set(id, v);
+/** What waits in each workspace: something needing you, or done and unseen (for the workspace switcher). */
+export function workspaceAttention(s: State): Map<WorkspaceId, "needs" | "unseen"> {
+  const out = new Map<WorkspaceId, "needs" | "unseen">();
+  const mark = (id: WorkspaceId, v: "needs" | "unseen") => out.get(id) !== "needs" && out.set(id, v);
   for (const a of s.agents.values()) {
-    if (needsAttention(a)) mark(a.spaceId, bucketOf(a) === "needs" ? "needs" : "unseen");
+    if (needsAttention(a)) mark(a.workspaceId, bucketOf(a) === "needs" ? "needs" : "unseen");
   }
-  for (const p of s.panes.values()) if (p.attention && !p.agentId) mark(p.spaceId, p.attention.urgent ? "needs" : "unseen");
+  for (const p of s.panes.values()) if (p.attention && !p.agentId) mark(p.workspaceId, p.attention.urgent ? "needs" : "unseen");
   for (const w of s.windows.values()) {
     const a = windowAttention(w);
-    if (a) mark(w.spaceId, a.urgent ? "needs" : "unseen");
+    if (a) mark(w.workspaceId, a.urgent ? "needs" : "unseen");
   }
   return out;
 }
@@ -317,13 +317,13 @@ export function project(cwd: string): string {
 }
 
 /**
- * Where something is, said only where it differs from its Space (docs/35): no
- * chip in the Space's own checkout; a linked worktree's branch; another
+ * Where something is, said only where it differs from its workspace (docs/35): no
+ * chip in the workspace's own checkout; a linked worktree's branch; another
  * project's name. The hue is always the project's, so a project's worktrees
- * look alike. Outside a repository: the folder's name, only outside the Space.
+ * look alike. Outside a repository: the folder's name, only outside the workspace.
  */
-export function whereOf(git: GitPlace | null | undefined, cwd: string | null | undefined, space: Pick<Space, "root" | "home" | "git"> | undefined): { text: string; hue: number; tip: string } | null {
-  const at = placeAgainst(git, cwd, space);
+export function whereOf(git: GitPlace | null | undefined, cwd: string | null | undefined, workspace: Pick<Workspace, "root" | "home" | "git"> | undefined): { text: string; hue: number; tip: string } | null {
+  const at = placeAgainst(git, cwd, workspace);
   if (!at) return null;
   if ("folder" in at) {
     const text = project(at.folder);
@@ -332,18 +332,18 @@ export function whereOf(git: GitPlace | null | undefined, cwd: string | null | u
   const g = at.git;
   const name = project(g.project);
   const text = g.linked ? (g.branch ?? project(g.top)) : name;
-  // In the Space's project, its main checkout (from a worktree's Space) is just the project.
+  // In the workspace's project, its main checkout (from a worktree's workspace) is just the project.
   const tip = g.linked ? `${name} · worktree on ${g.branch ?? "a detached HEAD"} · ${shortPath(g.top)}` : `${name}${at.sameProject ? " · main checkout" : ""} · ${shortPath(g.top)}`;
   return { text, hue: projectHue(name), tip };
 }
 
-/** A Space's line under its name (picker, switcher): where it is, whose worktree it is, whether its folder is gone (docs/35). */
+/** A workspace's line under its name (picker, switcher): where it is, whose worktree it is, whether its folder is gone (docs/35). */
 // The folder first: the switcher clips the start of a long detail, and keeps what's after it.
-export const spaceDetail = (sp: Space) => [shortPath(sp.root), sp.git?.linked ? `worktree of ${project(sp.git.project)}` : null, sp.gone ? "folder removed" : null].filter(Boolean).join(" · ");
+export const workspaceDetail = (sp: Workspace) => [shortPath(sp.root), sp.git?.linked ? `worktree of ${project(sp.git.project)}` : null, sp.gone ? "folder removed" : null].filter(Boolean).join(" · ");
 
-/** Spaces with a project's worktrees together, after its main checkout; otherwise in the order given. */
-export function byProject(list: Space[]): Space[] {
-  const key = (sp: Space) => sp.git?.project ?? sp.root;
+/** Workspaces with a project's worktrees together, after its main checkout; otherwise in the order given. */
+export function byProject(list: Workspace[]): Workspace[] {
+  const key = (sp: Workspace) => sp.git?.project ?? sp.root;
   const first = new Map<string, number>();
   list.forEach((sp, i) => first.has(key(sp)) || first.set(key(sp), i));
   return list

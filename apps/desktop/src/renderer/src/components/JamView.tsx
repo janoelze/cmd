@@ -344,7 +344,7 @@ export function JamView({ win }: WindowViewProps) {
           icon="waveform"
           label="Open Visualizer"
           priority={1}
-          onClick={() => void cmd.call("window.open", { kind: "visualizer", input: { source: `window:${win.id}` }, spaceId: win.spaceId }).catch(() => {})}
+          onClick={() => void cmd.call("window.open", { kind: "visualizer", input: { source: `window:${win.id}` }, workspaceId: win.workspaceId }).catch(() => {})}
         />
       </WindowToolbar>
       <div className="jam-editor" ref={host} />

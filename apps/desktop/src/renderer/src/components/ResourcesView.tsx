@@ -1,5 +1,5 @@
 // Resources, a built-in widget (docs/16-widgets.md): what each terminal of this
-// Space (or every Space) uses, CPU and memory of its whole process tree
+// Workspace (or every workspace) uses, CPU and memory of its whole process tree
 // (Pane.usage, sampled by the core while a UI is connected), busiest first; a
 // terminal expands to its largest processes. Then cmd itself. Polled every 2 s,
 // as the Task Manager (Window → Task Manager) is, which has the full detail.
@@ -55,7 +55,7 @@ export function ResourcesView({ win }: WindowViewProps) {
   const toggle = (id: string) => setOpen((o) => (o.has(id) ? new Set([...o].filter((x) => x !== id)) : new Set([...o, id])));
 
   const panes = (sample?.panes ?? [])
-    .filter((p) => p.exitCode === null && p.usage && (scope === "all" || p.spaceId === win.spaceId))
+    .filter((p) => p.exitCode === null && p.usage && (scope === "all" || p.workspaceId === win.workspaceId))
     .sort((a, b) => b.usage!.cpu - a.usage!.cpu || b.usage!.memory - a.usage!.memory);
   const total = panes.reduce((t, p) => ({ cpu: t.cpu + p.usage!.cpu, memory: t.memory + p.usage!.memory }), { cpu: 0, memory: 0 });
   const now = Date.now();
@@ -76,7 +76,7 @@ export function ResourcesView({ win }: WindowViewProps) {
     const agent = live.agentId ? (s.agents.get(live.agentId) ?? null) : null;
     const f = fieldsOf({ key: p.id, pane: live, win: null, agent, children: [], urgent: null }, undefined, now);
     const top = u.top.slice(0, 3).map((t) => t.name);
-    const space = scope === "all" ? s.spaces.get(p.spaceId)?.name : undefined;
+    const workspace = scope === "all" ? s.workspaces.get(p.workspaceId)?.name : undefined;
     const isOpen = open.has(p.id);
     return (
       <div key={p.id}>
@@ -85,9 +85,9 @@ export function ResourcesView({ win }: WindowViewProps) {
           icon={f.icon}
           light={u.cpu >= HOT_CPU ? "working" : undefined}
           title={f.name}
-          detail={[top.join(", "), u.processes > 1 ? `${u.processes} processes` : null, space].filter(Boolean).join(" · ")}
+          detail={[top.join(", "), u.processes > 1 ? `${u.processes} processes` : null, workspace].filter(Boolean).join(" · ")}
           end={values(u.cpu, u.memory)}
-          onClick={() => goTo(p.id, p.spaceId)}
+          onClick={() => goTo(p.id, p.workspaceId)}
         />
         {isOpen &&
           u.top.map((t) => (
@@ -107,7 +107,7 @@ export function ResourcesView({ win }: WindowViewProps) {
         )}
         {sample && panes.length === 0 && (
           <EmptyState compact icon="gauge.with.dots.needle.33percent" title="Nothing running">
-            {scope === "all" ? "Open a terminal and what runs in it shows up here." : "Open a terminal in this Space and what runs in it shows up here."}
+            {scope === "all" ? "Open a terminal and what runs in it shows up here." : "Open a terminal in this workspace and what runs in it shows up here."}
           </EmptyState>
         )}
         {sample && (

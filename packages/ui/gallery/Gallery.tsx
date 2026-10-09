@@ -461,7 +461,7 @@ function ChoicesPage() {
           onChange={setRadio}
           options={["tab", "window", "split"]}
           labels={{ tab: "In a new tab", window: "In a new window", split: "Beside the current one" }}
-          descriptions={{ window: "Uses the window layout of the current Space." }}
+          descriptions={{ window: "Uses the window layout of the current workspace." }}
         />
       </Spec>
       <Spec title="Segmented" code="<Segmented options labels size>">
@@ -820,7 +820,7 @@ function ContentPage() {
         <Card>
           <FeatureList
             items={[
-              { icon: "rectangle.3.group", title: "A Space per project", description: "Terminals, agents, a browser and an editor as windows." },
+              { icon: "rectangle.3.group", title: "A workspace per project", description: "Terminals, agents, a browser and an editor as windows." },
               { icon: "terminal", title: "Agents in your terminals", description: "The one that needs you is on top." },
             ]}
           />
@@ -941,7 +941,7 @@ function OverlaysPage() {
   const [divided, setDivided] = useState(false);
   const [welcome, setWelcome] = useState(false);
   const [library, setLibraryOpen] = useState(false);
-  const [space, setSpace] = useState("work");
+  const [workspace, setWorkspace] = useState("work");
   const [msg, setMsg] = useState("");
   return (
     <>
@@ -953,20 +953,20 @@ function OverlaysPage() {
       <Spec title="Menu" code="<Menu anchor items>" note="Arrow keys, Enter, type to jump. null is a separator, a string a heading.">
         <Row>
           <Button ref={menuAnchor} trailing="chevron.up.chevron.down" onClick={() => setMenu(!menu)}>
-            {space === "work" ? "Work" : space === "home" ? "Home" : "Side project"}
+            {workspace === "work" ? "Work" : workspace === "home" ? "Home" : "Side project"}
           </Button>
           <Menu
             anchor={menuAnchor}
             open={menu}
             onClose={() => setMenu(false)}
             items={[
-              "Spaces",
-              { label: "Work", detail: "4 windows · 2 agents", icon: "terminal", checked: space === "work", shortcut: "⌃1", onSelect: () => setSpace("work") },
-              { label: "Home", detail: "1 window", icon: "house", checked: space === "home", shortcut: "⌃2", onSelect: () => setSpace("home") },
-              { label: "Side project", icon: "sparkles", checked: space === "side", shortcut: "⌃3", onSelect: () => setSpace("side") },
+              "Workspaces",
+              { label: "Work", detail: "4 windows · 2 agents", icon: "terminal", checked: workspace === "work", shortcut: "⌃1", onSelect: () => setWorkspace("work") },
+              { label: "Home", detail: "1 window", icon: "house", checked: workspace === "home", shortcut: "⌃2", onSelect: () => setWorkspace("home") },
+              { label: "Side project", icon: "sparkles", checked: workspace === "side", shortcut: "⌃3", onSelect: () => setWorkspace("side") },
               null,
-              { label: "New Space…", icon: "plus", onSelect: () => toast("New Space") },
-              { label: "Delete Space", icon: "trash", danger: true, onSelect: () => toast("Deleted", { tone: "danger", action: { label: "Undo", run: () => toast("Restored") } }) },
+              { label: "New Workspace…", icon: "plus", onSelect: () => toast("New Workspace") },
+              { label: "Delete Workspace", icon: "trash", danger: true, onSelect: () => toast("Deleted", { tone: "danger", action: { label: "Undo", run: () => toast("Restored") } }) },
             ]}
           />
         </Row>
@@ -974,7 +974,7 @@ function OverlaysPage() {
       <Spec title="Menu, one line per item" code='<Menu marks="row" inline width="content" maxWidth items>' note="The current item's row tinted instead of a checkmark; details beside the labels; an accessory before the shortcut. As wide as its widest item, up to maxWidth: then the detail gives way first.">
         <Row>
           <Button ref={rowMenuAnchor} trailing="chevron.down" onClick={() => setRowMenu(!rowMenu)}>
-            {space === "work" ? "Work" : space === "home" ? "Home" : "Side project"}
+            {workspace === "work" ? "Work" : workspace === "home" ? "Home" : "Side project"}
           </Button>
           <Menu
             anchor={rowMenuAnchor}
@@ -986,12 +986,12 @@ function OverlaysPage() {
             width="content"
             maxWidth={400}
             items={[
-              { label: "Work", detail: "~/src/work", icon: "terminal", checked: space === "work", shortcut: "⌃1", onSelect: () => setSpace("work") },
-              { label: "Home", detail: "~", icon: "house", checked: space === "home", accessory: <StatusDot state="needs" size="sm" />, shortcut: "⌃2", onSelect: () => setSpace("home") },
-              { label: "Side project", detail: "~/src/side-project", icon: "sparkles", checked: space === "side", accessory: <StatusDot state="unseen" size="sm" />, shortcut: "⌃3", onSelect: () => setSpace("side") },
-              { label: "fl-studio-canonical-store-migration", detail: "~/src/fl-studio-canonical-store-migration · worktree of fl-studio-store", icon: "folder", checked: space === "long", shortcut: "⌃4", onSelect: () => setSpace("long") },
+              { label: "Work", detail: "~/src/work", icon: "terminal", checked: workspace === "work", shortcut: "⌃1", onSelect: () => setWorkspace("work") },
+              { label: "Home", detail: "~", icon: "house", checked: workspace === "home", accessory: <StatusDot state="needs" size="sm" />, shortcut: "⌃2", onSelect: () => setWorkspace("home") },
+              { label: "Side project", detail: "~/src/side-project", icon: "sparkles", checked: workspace === "side", accessory: <StatusDot state="unseen" size="sm" />, shortcut: "⌃3", onSelect: () => setWorkspace("side") },
+              { label: "fl-studio-canonical-store-migration", detail: "~/src/fl-studio-canonical-store-migration · worktree of fl-studio-store", icon: "folder", checked: workspace === "long", shortcut: "⌃4", onSelect: () => setWorkspace("long") },
               null,
-              { label: "Open Space…", icon: "plus", shortcut: "⌘O", onSelect: () => toast("Open Space") },
+              { label: "Open Workspace…", icon: "plus", shortcut: "⌘O", onSelect: () => toast("Open Workspace") },
             ]}
           />
         </Row>
@@ -1045,7 +1045,7 @@ function OverlaysPage() {
         <Row>
           <Button onClick={() => setDialog(true)}>Send Feedback…</Button>
           <Button variant="danger" onClick={() => setConfirm(true)}>
-            Delete Space…
+            Delete Workspace…
           </Button>
           <Button onClick={() => setDivided(true)}>What's New</Button>
           <Button onClick={() => setWelcome(true)}>Welcome</Button>
@@ -1125,7 +1125,7 @@ function OverlaysPage() {
           <SheetHeader icon="command.square.fill" title="Welcome to cmd" subtitle="Terminals and coding agents, side by side." />
           <FeatureList
             items={[
-              { icon: "rectangle.3.group", title: "A Space per project", description: "Terminals, agents, a browser and an editor as windows." },
+              { icon: "rectangle.3.group", title: "A workspace per project", description: "Terminals, agents, a browser and an editor as windows." },
               { icon: "wand.and.stars", title: "Magic widgets", description: "Ask for a window and an agent builds it." },
             ]}
           />
@@ -1159,7 +1159,7 @@ function OverlaysPage() {
           title="Delete “Side project”?"
           confirm="Delete"
           onCancel={() => setConfirm(false)}
-          onConfirm={() => (setConfirm(false), toast("Space deleted", { tone: "danger" }))}
+          onConfirm={() => (setConfirm(false), toast("Workspace deleted", { tone: "danger" }))}
         >
           Its 3 windows close. Terminals in it are ended.
         </ConfirmDialog>

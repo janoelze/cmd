@@ -8,7 +8,7 @@ import { agentNotice, cleanAiBody, gist, noticeContext, plain, subjectOf } from 
 import { newTurn } from "../src/agents/activity/reduce.ts";
 
 const agent = (o: Partial<Agent> = {}, turn: Partial<AgentTurn> = {}): Agent => ({
-  id: "a1", paneId: "p1", spaceId: "home", kind: "claude", name: "Agent activity", cwd: "/nowhere/cmd-agent-activity",
+  id: "a1", paneId: "p1", workspaceId: "home", kind: "claude", name: "Agent activity", cwd: "/nowhere/cmd-agent-activity",
   parentId: null, rootId: "a1", depth: 0, spawn: { source: "detected" }, native: {}, state: "done", stateSince: 0,
   detail: null, lastMessage: null, lastPrompt: null, seenAt: null, createdAt: 0,
   turn: { ...newTurn("a1", 0, 0, undefined, { agentKind: "claude" }), ...turn },

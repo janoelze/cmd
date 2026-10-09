@@ -81,8 +81,8 @@ export class ActivityView {
     return ACTIVITY_SCHEMA;
   }
 
-  /** The Space a pane is in, for agent events (set by the core; tests leave it). */
-  spaceOf: (paneId: PaneId) => string | null = () => null;
+  /** The workspace a pane is in, for agent events (set by the core; tests leave it). */
+  workspaceOf: (paneId: PaneId) => string | null = () => null;
 
   /**
    * Stores an event an agent's hook reported; returns it normalised. The row
@@ -108,7 +108,7 @@ export class ActivityView {
       sessionId: sessionId ? `${r.agent ?? "agent"}:${sessionId}` : null,
       agentId,
       paneId,
-      spaceId: paneId ? this.spaceOf(paneId) : null,
+      workspaceId: paneId ? this.workspaceOf(paneId) : null,
       projectId: projectIdOf(typeof r.payload.cwd === "string" ? r.payload.cwd : null),
       text,
       body,
@@ -131,7 +131,7 @@ export class ActivityView {
 
   /** Stores something the core inferred or noticed (interrupt, anomaly). */
   note(kind: "interrupt" | "anomaly", text: string, at: number, paneId: PaneId | null, agentId: AgentId | null, agent: AgentKind | null): ActivityEvent {
-    const ev = this.#data.record({ id: `note:${paneId ?? "-"}:${Math.round(at * 1000)}:${kind}:${this.#n++}`, at, type: "agent.note", source: `cmd:${this.recordedBy ?? "?"}`, agentId, paneId, spaceId: paneId ? this.spaceOf(paneId) : null, text, data: { name: kind, agent, text } });
+    const ev = this.#data.record({ id: `note:${paneId ?? "-"}:${Math.round(at * 1000)}:${kind}:${this.#n++}`, at, type: "agent.note", source: `cmd:${this.recordedBy ?? "?"}`, agentId, paneId, workspaceId: paneId ? this.workspaceOf(paneId) : null, text, data: { name: kind, agent, text } });
     if (!ev) throw new Error("agent notes are always recorded");
     return toActivity(ev, false);
   }

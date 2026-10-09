@@ -7,7 +7,7 @@
 // payload's shape: raise its EVENT_V and add an upcaster in core/src/data/upcast.ts;
 // stored rows keep their `v`, readers see the current shape.
 
-import type { AgentKind, AppNotification, CommandRun, GitPlace, PaneId, SpaceId, WindowId } from "./model.ts";
+import type { AgentKind, AppNotification, CommandRun, GitPlace, PaneId, WorkspaceId, WindowId } from "./model.ts";
 import type { AgentTurn } from "./activity.ts";
 import type { NameSource } from "./names.ts";
 
@@ -40,8 +40,8 @@ export interface EventPayloads {
   "file.open": { path: string; windowKind: string };
   "window.open": { kind: string; title: string };
   "window.close": { kind: string; title: string };
-  "space.open": { name: string; root: string };
-  "space.close": { name: string; root: string };
+  "workspace.open": { name: string; root: string };
+  "workspace.close": { name: string; root: string };
   /** The person looked at an agent (its "unseen" mark cleared). */
   "user.look": { agentId: string };
   /** An app command ran (palette, menu, shortcut, CLI). */
@@ -104,8 +104,8 @@ export const EVENT_V: Record<DataEventType, number> = {
   "file.open": 1,
   "window.open": 1,
   "window.close": 1,
-  "space.open": 1,
-  "space.close": 1,
+  "workspace.open": 1,
+  "workspace.close": 1,
   "user.look": 1,
   "user.command": 1,
   "user.focus": 1,
@@ -144,7 +144,7 @@ export interface DataEvent<T extends DataEventType = DataEventType> {
   /** The cmd that wrote it. */
   recorded: string;
   parentId: string | null;
-  spaceId: SpaceId | null;
+  workspaceId: WorkspaceId | null;
   projectId: string | null;
   sessionId: string | null;
   agentId: string | null;
@@ -170,7 +170,7 @@ export interface NewDataEvent<T extends DataEventType = DataEventType> {
   type: T;
   source: string;
   parentId?: string | null;
-  spaceId?: SpaceId | null;
+  workspaceId?: WorkspaceId | null;
   projectId?: string | null;
   sessionId?: string | null;
   agentId?: string | null;
@@ -190,7 +190,7 @@ export interface DataQuery {
   types?: string[];
   /** [from, to) in ms. */
   at?: [number, number];
-  spaceId?: SpaceId;
+  workspaceId?: WorkspaceId;
   projectId?: string;
   sessionId?: string;
   agentId?: string;
@@ -235,7 +235,7 @@ export const DATA_CLASSES: Record<DataClass, Omit<DataClassInfo, "class" | "keep
   transcripts: { title: "Transcripts", description: "cmd's copy of each agent session: messages, tool calls and results.", types: ["transcript."], keepDays: "setting", cap: 64_000, setting: "data.record.transcripts", leaves: "Only to a model you set up, when a feature asks." },
   output: { title: "Command output", description: "What commands printed in your terminals, after they ended.", types: ["command", "agent.output"], keepDays: 90, cap: 256_000, setting: "data.record.output", leaves: "Only to a model you set up, when a feature asks." },
   browsing: { title: "Pages and files", description: "Addresses and titles of pages in cmd's browser windows (not other browsers), paths of files opened in cmd.", types: ["browser.", "file.", "window."], keepDays: "setting", cap: null, setting: "data.record.browsing", leaves: "Only to a model you set up, when a feature asks." },
-  actions: { title: "Your actions", description: "What you focused, opened, closed and ran in cmd.", types: ["user.", "space."], keepDays: "setting", cap: null, setting: "data.record.actions", leaves: null },
+  actions: { title: "Your actions", description: "What you focused, opened, closed and ran in cmd.", types: ["user.", "workspace."], keepDays: "setting", cap: null, setting: "data.record.actions", leaves: null },
   ai: { title: "Model calls", description: "Each call cmd made to a model: purpose, model, tokens, what was sent and what came back.", types: ["ai."], keepDays: "setting", cap: 1_000_000, setting: null, leaves: "The call itself goes to the provider; the record stays here." },
   git: { title: "Git", description: "Commits, merges, branches and tags in your projects.", types: ["git."], keepDays: null, cap: null, setting: null, leaves: null },
   notes: { title: "Notes and notifications", description: "Notes you or agents wrote down; notifications shown.", types: ["note", "notification", "notification.clear"], keepDays: null, cap: null, setting: null, leaves: null },
@@ -254,13 +254,13 @@ export function classOf(type: string): DataClass {
 /** A command event as the CommandRun the Commands widget shows (runs are recorded when they start, updated when they end). */
 export function commandRunOf(e: DataEvent): CommandRun {
   const d = e.data as EventPayloads["command"];
-  return { id: e.id.replace(/^command:/, ""), paneId: e.paneId ?? "", spaceId: e.spaceId ?? "", command: d.command, cwd: d.cwd, ...(d.git !== undefined ? { git: d.git } : {}), startedAt: e.at, endedAt: e.until, exitCode: d.exitCode };
+  return { id: e.id.replace(/^command:/, ""), paneId: e.paneId ?? "", workspaceId: e.workspaceId ?? "", command: d.command, cwd: d.cwd, ...(d.git !== undefined ? { git: d.git } : {}), startedAt: e.at, endedAt: e.until, exitCode: d.exitCode };
 }
 
 /** A notification event as the AppNotification the Notifications widget shows. */
 export function notificationOf(e: DataEvent): AppNotification {
   const d = e.data as EventPayloads["notification"];
-  return { id: e.id.replace(/^notification:/, ""), source: d.source as AppNotification["source"], paneId: e.paneId, windowId: e.windowId, spaceId: e.spaceId, title: d.title, body: d.body, alert: d.alert ?? true, urgent: d.urgent, at: e.at };
+  return { id: e.id.replace(/^notification:/, ""), source: d.source as AppNotification["source"], paneId: e.paneId, windowId: e.windowId, workspaceId: e.workspaceId, title: d.title, body: d.body, alert: d.alert ?? true, urgent: d.urgent, at: e.at };
 }
 
 export interface DataStats {
@@ -306,8 +306,8 @@ export interface ViewQuery {
   /** "<agent>:<session id>". */
   sessionId?: string;
   projectId?: string;
-  /** Only rows whose folder belongs to this Space (the deepest open root containing it, else Home). */
-  spaceId?: string;
+  /** Only rows whose folder belongs to this workspace (the deepest open root containing it, else Home). */
+  workspaceId?: string;
   /** Turns started, or sessions active, since this time (ms). */
   since?: number;
   limit?: number;

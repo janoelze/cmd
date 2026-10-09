@@ -1,6 +1,6 @@
 # Session names
 
-> Status (2026-10-07): **steps 1–4 built** (branch `session-names`), the model's prompt not yet tuned on real sessions. Step 1: names from the worktree an agent writes in, Rename… on the title bar and sidebar row (and Rename Agent… in the palette), `cmd agents rename`, `session.name` events and names in the sessions view, notifications titled by the name else the kind, names as `cmd send`/`wait`/`kill` targets, `outputLanguage()`, the two body fixes. Step 2: `core/src/agents/names-eval.ts` (replay and score) and `scripts/evals/names.ts corpus|run`. Steps 3–4: `namer.ts` (prompt, checks, change detection, hysteresis) run live by `naming.ts` with the fast tier, behind `agents.names.ai`; a done notification waits for a name being decided. An agent without a name shows its kind ("Claude") until cmd's arrives, so its row changes once, not with every terminal title and prompt on the way; only without AI naming (off, or no provider) does it fall back to the terminal title and the last prompt. Notifications use the kind. Step 5 not built. cmd gives every agent session a name of its own: 1–3 nouns, in the person's words, that tell the agents in a Space apart in a notification, a sidebar row, Recent and the Journal, and that follow the work when it changes. Read first: this doc; `packages/core/src/agents/notice.ts` (the notification subject); `apps/desktop/src/renderer/src/model.ts` (a terminal's name); `packages/core/src/data/views/sessions.ts`; the copywriting skill's Notifications. Builds on the event log ([28](28-data-plan.md)) and the context builder.
+> Status (2026-10-07): **steps 1–4 built** (branch `session-names`), the model's prompt not yet tuned on real sessions. Step 1: names from the worktree an agent writes in, Rename… on the title bar and sidebar row (and Rename Agent… in the palette), `cmd agents rename`, `session.name` events and names in the sessions view, notifications titled by the name else the kind, names as `cmd send`/`wait`/`kill` targets, `outputLanguage()`, the two body fixes. Step 2: `core/src/agents/names-eval.ts` (replay and score) and `scripts/evals/names.ts corpus|run`. Steps 3–4: `namer.ts` (prompt, checks, change detection, hysteresis) run live by `naming.ts` with the fast tier, behind `agents.names.ai`; a done notification waits for a name being decided. An agent without a name shows its kind ("Claude") until cmd's arrives, so its row changes once, not with every terminal title and prompt on the way; only without AI naming (off, or no provider) does it fall back to the terminal title and the last prompt. Notifications use the kind. Step 5 not built. cmd gives every agent session a name of its own: 1–3 nouns, in the person's words, that tell the agents in a workspace apart in a notification, a sidebar row, Recent and the Journal, and that follow the work when it changes. Read first: this doc; `packages/core/src/agents/notice.ts` (the notification subject); `apps/desktop/src/renderer/src/model.ts` (a terminal's name); `packages/core/src/data/views/sessions.ts`; the copywriting skill's Notifications. Builds on the event log ([28](28-data-plan.md)) and the context builder.
 
 ## Why
 
@@ -10,7 +10,7 @@ The agents' own titles (Claude Code writes `ai-title` lines from Haiku, `custom-
 
 - **Summaries, not handles**: "Marketing videos and UI accessibility survey", "Icon sizing audit and retina support". Too long for a title, and they name the activity as much as the thing.
 - **Written early, never revised**: a session that moved from an accessibility audit to tours keeps a title about both.
-- **Not distinct**: nothing makes two agents in one Space read differently.
+- **Not distinct**: nothing makes two agents in one workspace read differently.
 - **The model's words**: "Workspace-übergreifende notifications", "Empty Space placeholder graphic" where the person said "hack the planet".
 
 ## What a name is for
@@ -30,8 +30,8 @@ It is not a summary: the detail line, the status, the turn and the session summa
 
 1. **Short**: 1–3 words, at most ~20 characters, so "Name · done, 2 tasks still running" fits a macOS notification title.
 2. **Nouns only**: the thing worked on, never the activity ("Icon sizes", not "Fix icon sizes"; "Slow release CI", not "Speed up CI"). The state already says what the agent is doing. Adjectives are fine where they make the thing ("Slow release CI", "Broken update").
-3. **The person's words**: a name is recognised instantly only in one's own vocabulary. Prefer words from the person's prompts and the product's nouns (Navigator, Spaces, Magic, Tours) over the model's paraphrase.
-4. **Distinct among the live ones**: unique among the agents in the same Space now, not across history. On a clash the newer one becomes more specific ("Notifications" → "Notify permission").
+3. **The person's words**: a name is recognised instantly only in one's own vocabulary. Prefer words from the person's prompts and the product's nouns (Navigator, workspaces, Magic, Tours) over the model's paraphrase.
+4. **Distinct among the live ones**: unique among the agents in the same workspace now, not across history. On a clash the newer one becomes more specific ("Notifications" → "Notify permission").
 5. **Current, but stable**: it names what the agent does now, changes only when the task changes (rarely, never back and forth), and keeps it when a follow-up goes deeper on the same thing.
 6. **None rather than wrong**: "hi", "test", "/release", a pasted image or "just read a few files" give nothing to name; the agent is called by its kind ("Claude") until a turn does.
 7. **English**, through one language variable (below), so names, like all of cmd's text, can follow a UI language later.
@@ -47,7 +47,7 @@ The eval set's first cases (sessions on the author's Mac, 2026-10-01 to 07):
 | Data model changes and agent sessions | **Session names** (was *Data model*) | the work moved |
 | Marketing videos and UI accessibility survey | **Tours** (was *Accessibility audit*) | two tasks: the current one |
 | Workspace-übergreifende notifications | **Notify permission** | the worktree the person named; English |
-| Navigator recent agent sessions filtering | **Recent by Space** | the thing |
+| Navigator recent agent sessions filtering | **Recent by workspace** | the thing |
 | Magic widgets status indicator refactoring | **Widget status lights** | the thing |
 | Latest prod update doesn't start | **Broken update** | the symptom, as nouns |
 | Icon sizing audit and retina support | **Icon sizes** | |
@@ -98,7 +98,7 @@ The name belongs to the **session**: it outlives the agent (Recent, the Journal,
 
 ### Renaming
 
-- **Rename Agent…** on the agent's title bar and sidebar row context menus, and in the palette (a command in `shared/commands.ts`, like Rename Space…). The field opens with the current name selected; empty hands naming back to cmd.
+- **Rename Agent…** on the agent's title bar and sidebar row context menus, and in the palette (a command in `shared/commands.ts`, like Rename Workspace…). The field opens with the current name selected; empty hands naming back to cmd.
 - `cmd agents rename <id> [name]` (no name: back to cmd).
 - **cmd owns the name** (decided 2026-10-07): the agents' own titles (`ai-title`, `custom-title` from Claude's `/rename`) are neither read as names nor written to. A rename in cmd is the only way to name an agent by hand; the agent never learns its cmd name.
 - Every rename is a labelled case: what cmd called it, what the person wanted, at that point of the session. Kept locally for the eval like the journal's real days, never sent to a model without the person's say-so.
@@ -107,9 +107,9 @@ The name belongs to the **session**: it outlives the agent (Recent, the Journal,
 
 Names are how agents and the person address agents (decided 2026-10-07): `cmd ls` shows each agent's name, and `cmd send`, `cmd agents wait|kill` and the rest take a name wherever they take an id.
 
-- **Resolved in the caller's Space first** (where names are kept distinct), then across all Spaces if only one agent there has it; an id or id prefix still works and wins over a name.
+- **Resolved in the caller's workspace first** (where names are kept distinct), then across all workspaces if only one agent there has it; an id or id prefix still works and wins over a name.
 - **Matched loosely**: case, spaces and dashes ignored, so `cmd send notify-permission "…"` and `cmd send "Notify permission" "…"` reach the same agent; a unique prefix of a word is enough (`cmd send tours`).
-- **Ambiguous is an error** that lists the candidates with their ids and Spaces, never a guess: a message to the wrong agent is worse than none.
+- **Ambiguous is an error** that lists the candidates with their ids and workspaces, never a guess: a message to the wrong agent is worse than none.
 - **A renamed agent still answers to its old name** for an hour, if no live agent has taken it, so a message written before the rename arrives.
 - Only live agents are addressed; a past session's name finds it in `cmd data entities` and Recent, not in `cmd send`.
 
@@ -125,7 +125,7 @@ Without a provider set up: 1 and 2, else the kind. No name from cutting prompts 
 
 ### The model's part
 
-**First name**, as soon as a prompt arrives (from the prompt alone), and if that gives nothing ("read X", a pasted image) again when the turn ends, with the files and the answer: input the first prompts, the files touched, the agent's final message's first lines, the names of the other live agents in the Space (to stay distinct); output one name or `none`. Examples in the prompt (the table above) do more for length than instructions do; the output is checked (1–3 words, no verb from a stoplist, ≤ 24 characters, not a clash) and asked again once, else `none`.
+**First name**, as soon as a prompt arrives (from the prompt alone), and if that gives nothing ("read X", a pasted image) again when the turn ends, with the files and the answer: input the first prompts, the files touched, the agent's final message's first lines, the names of the other live agents in the workspace (to stay distinct); output one name or `none`. Examples in the prompt (the table above) do more for length than instructions do; the output is checked (1–3 words, no verb from a stoplist, ≤ 24 characters, not a clash) and asked again once, else `none`.
 
 **Change of task**, at each later turn end, in two steps so most turns cost nothing:
 
@@ -140,7 +140,7 @@ A single `outputLanguage()` (protocol, `"en"` for now) that every AI writer pass
 
 ## Storage
 
-- A `session.name` event: `{ name: string | null, by: "user" | "agent" | "worktree" | "model", lang: string, verdict?: "change", was?: string }`, with `sessionId`, `agentId`, `paneId`, `spaceId`, `projectId`. `name: null` by `user` hands naming back. In the `agents` class (a year), `text` = the name (search finds sessions by it).
+- A `session.name` event: `{ name: string | null, by: "user" | "agent" | "worktree" | "model", lang: string, verdict?: "change", was?: string }`, with `sessionId`, `agentId`, `paneId`, `workspaceId`, `projectId`. `name: null` by `user` hands naming back. In the `agents` class (a year), `text` = the name (search finds sessions by it).
 - The sessions view gets `name` and `name_by` (the newest event's); it is rebuilt from the log like the rest, so names survive `cmd data rebuild sessions`. `data.forget` takes them with the session.
 - `Agent.name` is cmd's name, with `nameBy`, `nameWas` and `namedAt` (persisted with the agent; restore keeps them). `subjectOf` reads it: the name, else the kind. The sidebar falls back to the terminal title and the last prompt until step 3, then to the kind only (the terminal title stays for agents without hooks).
 - `agent.rename { agentId, name: string | null }` in `Methods`; the handler records the event.
@@ -150,7 +150,7 @@ A single `outputLanguage()` (protocol, `"en"` for now) that every AI writer pass
 From cmd's own copy of the transcripts, offline:
 
 - **Replay**: each real session's turns, in order, through the namer (cheap checks, classification, hysteresis), as it would have run live. Per session: names given, renames, when.
-- **Measures**: renames per session (aim 0–2; long sessions like the 1,900-message journal one are the test), names over 3 words or with a verb, clashes among agents live at the same time in a Space, renames that a worktree change would have given anyway, agreement with the hand-named table and later with real renames.
+- **Measures**: renames per session (aim 0–2; long sessions like the 1,900-message journal one are the test), names over 3 words or with a verb, clashes among agents live at the same time in a workspace, renames that a worktree change would have given anyway, agreement with the hand-named table and later with real renames.
 - `scripts/evals/names.ts corpus|run`, like the journal's; real sessions stay in `$CMD_HOME/evals/names`, out of the repo, and go to a model only with the person's say-so.
 
 ### First results (2026-10-07)
@@ -163,7 +163,7 @@ The 17 hand-named sessions (2 to 44 turns), first through Claude Haiku 4.5 via `
 | Renames per session | 0 in 15, 1 in two long sessions | 0 in all |
 | Model calls per turn | 0.39–0.5 | 0.39 |
 
-Names at temperature 0: Slow release CI, Recent by Space, Gopher link, Broken update, Notify permission, Session names, Flaky ⌘W test, JSON in notification, Hack the planet, Icon sizes, Widget status lights, Torrent search sources, Accessibility for tours, Production db, Hook outside sessions, Saved data.
+Names at temperature 0: Slow release CI, Recent by workspace, Gopher link, Broken update, Notify permission, Session names, Flaky ⌘W test, JSON in notification, Hack the planet, Icon sizes, Widget status lights, Torrent search sources, Accessibility for tours, Production db, Hook outside sessions, Saved data.
 
 What the runs taught (fixed): with no current name, the model sometimes answered "continue" and no name, so the prompt says plainly that a first name is always asked for; pasted text was left out, which hid the task of sessions that start with a paste (an e2e failure), so its first 200 characters are kept; names repeated the project ("Cmd data model"), so the project is given and refused in a name; answers changed from run to run, so naming asks at temperature 0; two "change" verdicts in a row renamed even when they proposed different names (Missing posters, then Episode posters), so they must now agree; a pause before each prompt of a long session asked every time, so a quiet only lowers the bar for new words; "V0.17.1" and "Notarize once" passed the checks; the verb list rejected "Show posters" (a TV show), so it keeps only words that are verbs whatever follows; one generic word ("Descriptions") was taken as a name, so the prompt asks what of.
 

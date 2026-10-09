@@ -216,7 +216,7 @@ export class SessionsView {
   #rebuilding = false;
 
   /** Sessions matching a view query, newest activity first. */
-  /** `keep`: a filter SQL can't do (a Space by folder); pages back until full, a few thousand rows at most. */
+  /** `keep`: a filter SQL can't do (a workspace by folder); pages back until full, a few thousand rows at most. */
   list(q: { sessionId?: string; projectId?: string; since?: number; limit?: number }, keep?: (row: SessionRow) => boolean): SessionInfo[] {
     const where: string[] = ["started IS NOT NULL"];
     const args: (string | number)[] = [];

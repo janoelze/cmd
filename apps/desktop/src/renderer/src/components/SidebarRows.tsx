@@ -65,10 +65,10 @@ export function SessionRow(props: {
   // Agents and terminals that want you get a second line for their status;
   // everything else is one line: name, then where it is.
   const tall = !!(f.light || f.tone);
-  const spaceId = row.agent?.spaceId ?? row.pane?.spaceId;
-  const space = useStoreValue((s) => (spaceId ? s.spaces.get(spaceId) : undefined));
+  const workspaceId = row.agent?.workspaceId ?? row.pane?.workspaceId;
+  const workspace = useStoreValue((s) => (workspaceId ? s.workspaces.get(workspaceId) : undefined));
   const item = row.agent ?? row.pane;
-  const where = tall && depth === 0 && !row.win && item ? whereOf(item.git, item.cwd, space) : null;
+  const where = tall && depth === 0 && !row.win && item ? whereOf(item.git, item.cwd, workspace) : null;
 
   return (
     <>

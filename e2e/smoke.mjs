@@ -104,8 +104,8 @@ const menu = (id) => (
 );
 const accel = (id) => app.evaluate(({ Menu }, id) => Menu.getApplicationMenu()?.getMenuItemById(id)?.accelerator ?? null, id);
 const panes = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.length));
-// Layout and selection live in the shown Space's view (docs/11-spaces.md); these checks run in Home.
-const homeView = () => win.evaluate(() => window.cmd.call("space.list", {}).then((l) => l.find((s) => s.home).view));
+// Layout and selection live in the shown workspace's view (docs/11-workspaces.md); these checks run in Home.
+const homeView = () => win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((s) => s.home).view));
 // Windows in visual order (reading order); the DOM keeps a stable creation order.
 const visualTiles = async () => {
   const ids = await win.locator(".windows-track > .tile:not([data-hidden])").evaluateAll((els) =>
@@ -147,12 +147,12 @@ await win.screenshot({ path: path.join(shots, "1-empty.png") });
   check(right.x === 0 && Math.abs(right.width - vw) < 0.5 && core.x < 40 && right.height >= btn.height,
     `the footer spans the window with the core's health on the left (${right.width} / ${vw}, core at ${core.x})`);
   check(right.height === 34, `the footer keeps its 34 px height (${right.height})`);
-  // Every Space starts with the Navigator docked left, under the top bar.
+  // Every workspace starts with the Navigator docked left, under the top bar.
   await win.waitForSelector(".dock-left .tile.kind-navigator .navigator");
   const nav = await win.locator(".dock-left").boundingBox();
   const top = await win.locator(".topbar").boundingBox();
-  check(nav.x === 0 && nav.y >= top.y + top.height - 0.5 && (await win.locator(".topbar .space-trigger").count()) === 1,
-    `the Navigator is the left sidebar, the Space switcher in the top bar (${nav.x}, ${nav.y})`);
+  check(nav.x === 0 && nav.y >= top.y + top.height - 0.5 && (await win.locator(".topbar .workspace-trigger").count()) === 1,
+    `the Navigator is the left sidebar, the workspace switcher in the top bar (${nav.x}, ${nav.y})`);
   // Icons sit on whole pixels, exactly centred in their buttons.
   const offsets = await win.locator(".statusbar :is(.ui-icon-button, .ui-seg button)").evaluateAll((btns) =>
     btns.map((b) => {
@@ -177,7 +177,7 @@ if (mac) {
 }
 
 await menu("file.newTerminal");
-await win.locator(".xterm:visible").first().waitFor(); // hidden ones exist too (other Spaces, previews)
+await win.locator(".xterm:visible").first().waitFor(); // hidden ones exist too (other workspaces, previews)
 await win.waitForTimeout(1500); // let the login shell finish starting
 await win.keyboard.type("echo hello from cmd");
 await win.keyboard.press("Enter");
@@ -961,7 +961,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     // Its scope is the title bar's menu, as in the other list widgets.
     const aaScope = (await win.locator(`.tile[data-pane="${aa.id}"] .tile-menu`).textContent()) ?? "";
     const inWidgets = (await win.locator(".sb-widgets").textContent()) ?? "";
-    check(inWidgets.includes("Agent Activity") && inWidgets.includes("Changes · diff-repo") && aaScope.includes("This Space"), `Agent Activity and Live Diff are listed under the sidebar's Widgets, Agent Activity's scope in its title bar (${aaScope})`);
+    check(inWidgets.includes("Agent Activity") && inWidgets.includes("Changes · diff-repo") && aaScope.includes("This Workspace"), `Agent Activity and Live Diff are listed under the sidebar's Widgets, Agent Activity's scope in its title bar (${aaScope})`);
     await call("window.close", { id: ld.id });
     await call("window.close", { id: aa.id });
 
@@ -1142,21 +1142,21 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check((await sw.locator(".ui-row[data-compact] kbd").count()) > 10, "keyboard shortcuts are listed");
   // Recording a shortcut: the menu lets go of its keys meanwhile; it's saved to keybindings.json.
   const kbFile = path.join(home, "keybindings.json");
-  const lastSpace = row("Last Space");
-  await lastSpace.hover();
-  await lastSpace.locator(".sw-key-add").click();
+  const lastWorkspace = row("Last Workspace");
+  await lastWorkspace.hover();
+  await lastWorkspace.locator(".sw-key-add").click();
   await waitFor(async () => (await accel("view.palette")) === null, "the menu has no shortcuts while one is recorded");
   await sw.keyboard.press("Control+Alt+L");
-  await waitFor(() => fs.existsSync(kbFile) && fs.readFileSync(kbFile, "utf8").includes('"space.last": ["Ctrl+Alt+L"]'), "a recorded shortcut is saved to keybindings.json");
-  await waitFor(async () => (await accel("space.last")) === "Ctrl+Alt+L" && (await accel("view.palette")) !== null, "the menu takes the new shortcut and its others back");
-  await lastSpace.locator(".ui-reset").click();
-  await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("space.last"), "Restore default removes the shortcut from keybindings.json");
-  await lastSpace.hover();
-  await lastSpace.locator(".sw-key-add").click();
+  await waitFor(() => fs.existsSync(kbFile) && fs.readFileSync(kbFile, "utf8").includes('"workspace.last": ["Ctrl+Alt+L"]'), "a recorded shortcut is saved to keybindings.json");
+  await waitFor(async () => (await accel("workspace.last")) === "Ctrl+Alt+L" && (await accel("view.palette")) !== null, "the menu takes the new shortcut and its others back");
+  await lastWorkspace.locator(".ui-reset").click();
+  await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("workspace.last"), "Restore default removes the shortcut from keybindings.json");
+  await lastWorkspace.hover();
+  await lastWorkspace.locator(".sw-key-add").click();
   await sw.keyboard.press("Control+Alt+L");
-  await waitFor(() => fs.readFileSync(kbFile, "utf8").includes("space.last"), "a second recording is saved");
+  await waitFor(() => fs.readFileSync(kbFile, "utf8").includes("workspace.last"), "a second recording is saved");
   await sw.locator(".sw-page-foot .ui-button", { hasText: "Restore Defaults" }).click();
-  await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("space.last"), "Restore Defaults puts every shortcut back");
+  await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("workspace.last"), "Restore Defaults puts every shortcut back");
   await sw.locator(".sb-search input").fill("palette");
   await sw.waitForTimeout(100);
   const paletteRows = await sw.locator(".ui-row[data-compact] .ui-row-name").allTextContents();
@@ -1353,7 +1353,7 @@ await win.waitForTimeout(800);
   const onBoard = () => win.locator(`.windows-track > .tile[data-pane="${markerPane}"]`).count();
   await menu("window.dockRight");
   await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
-  // The Space's layout is saved debounced.
+  // The workspace's layout is saved debounced.
   let storedRight = null;
   for (let i = 0; i < 20 && storedRight !== markerPane; i++) (await win.waitForTimeout(100), (storedRight = (await homeView()).docks?.right?.id));
   check((await onBoard()) === 0 && storedRight === markerPane, "Move to Right Sidebar docks the window, out of the board");
@@ -1390,7 +1390,7 @@ await win.click(".sb-windows .ui-list-heading"); // collapse a Navigator section
 await menu("view.zoomIn");
 await menu("view.zoomIn");
 {
-  // Drag the left sidebar's inner edge; the width is the Space's layout.
+  // Drag the left sidebar's inner edge; the width is the workspace's layout.
   const edge = await win.locator(".dock-left .dock-resize").boundingBox();
   await win.mouse.move(edge.x + edge.width / 2, 300);
   await win.mouse.down();
@@ -1459,7 +1459,7 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   // A call can land while the old core shuts down and reject; that's "not yet".
   await win.waitForFunction((pid) => window.cmd.call("core.hello", {}).then((h) => h.pid !== pid, () => false), pidBefore, { timeout: 15_000 });
   await win.waitForFunction(() => document.querySelector(".core-status-button .ui-dot[data-state=\"success\"]") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 15_000 });
-  // Every client (this window, main's space.show listener) is back before going on.
+  // Every client (this window, main's workspace.show listener) is back before going on.
   await win.waitForFunction((n) => window.cmd.call("core.info", {}).then((i) => i.connections >= n, () => false), clients, { timeout: 10_000 });
   check((await panes()) === before, `terminals survive Restart Core (${before} → ${await panes()})`);
   await win.keyboard.press("Escape");
@@ -1467,54 +1467,54 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   check((await win.locator(".core-details").count()) === 0, "Escape closes the core details");
 }
 
-// Spaces: `cmd .` (space.open with show) switches the window to a new, empty
-// Space; new terminals start at its root; ⌃⌘[ goes back; closing ends its terminals.
+// Workspaces: `cmd .` (workspace.open with show) switches the window to a new, empty
+// Workspace; new terminals start at its root; ⌃⌘[ goes back; closing ends its terminals.
 {
   const proj = path.join(home, "proj");
   fs.mkdirSync(proj, { recursive: true });
   const tilesInHome = await win.locator(".windows-track > .tile").count();
-  const chip = () => win.locator(".space-trigger .space-name").textContent();
-  const sp = await win.evaluate((p) => window.cmd.call("space.open", { path: p, show: true }).then((r) => r.space), proj);
+  const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
+  const sp = await win.evaluate((p) => window.cmd.call("workspace.open", { path: p, show: true }).then((r) => r.workspace), proj);
   await win.waitForTimeout(700);
-  check((await chip()) === "proj", "space.open shows the new Space in the switcher");
-  check((await win.locator(".windows-track > .tile").count()) === 0, "a new Space starts empty");
+  check((await chip()) === "proj", "workspace.open shows the new workspace in the switcher");
+  check((await win.locator(".windows-track > .tile").count()) === 0, "a new workspace starts empty");
   await menu("file.newTerminal");
   await win.waitForTimeout(800);
-  const inSpace = () => win.evaluate((id) => window.cmd.call("pane.list", {}).then((l) => l.filter((x) => x.spaceId === id)), sp.id);
-  const p = await inSpace();
-  check(p.length === 1 && p[0].cwd === fs.realpathSync.native(proj), `new terminals start at the Space's root (${p[0]?.cwd})`);
-  check((await win.title()) === "proj", "the app window is titled after its Space");
-  await win.screenshot({ path: path.join(shots, "8-space.png") });
-  await menu("space.prev");
+  const inWorkspace = () => win.evaluate((id) => window.cmd.call("pane.list", {}).then((l) => l.filter((x) => x.workspaceId === id)), sp.id);
+  const p = await inWorkspace();
+  check(p.length === 1 && p[0].cwd === fs.realpathSync.native(proj), `new terminals start at the workspace's root (${p[0]?.cwd})`);
+  check((await win.title()) === "proj", "the app window is titled after its workspace");
+  await win.screenshot({ path: path.join(shots, "8-workspace.png") });
+  await menu("workspace.prev");
   await win.waitForTimeout(600);
   const backTiles = await win.locator(".windows-track > .tile").count();
   check((await chip()) === "Home" && backTiles === tilesInHome, `⌃⌘[ switches back to Home and its windows (${await chip()}, ${backTiles}/${tilesInHome})`);
-  const again = await win.evaluate((p) => window.cmd.call("space.open", { path: p + "/" }), proj);
-  check(again.created === false && again.space.id === sp.id, "opening the folder again returns the same Space");
-  await win.locator(".space-trigger").click();
-  await win.locator(".space-menu").waitFor();
-  const listed = await win.locator(".space-menu .space-item:not(.space-item-open)").count();
-  check(listed === 2, `the switcher's menu lists both Spaces (${listed})`);
-  await win.screenshot({ path: path.join(shots, "8-space-menu.png") });
+  const again = await win.evaluate((p) => window.cmd.call("workspace.open", { path: p + "/" }), proj);
+  check(again.created === false && again.workspace.id === sp.id, "opening the folder again returns the same workspace");
+  await win.locator(".workspace-trigger").click();
+  await win.locator(".workspace-menu").waitFor();
+  const listed = await win.locator(".workspace-menu .workspace-item:not(.workspace-item-open)").count();
+  check(listed === 2, `the switcher's menu lists both workspaces (${listed})`);
+  await win.screenshot({ path: path.join(shots, "8-workspace-menu.png") });
   await win.keyboard.press("Escape");
-  // Change Icon…: the grid picker sets an SF Symbol on the Space, shown in the switcher.
-  await win.evaluate((id) => window.cmd.call("space.update", { id, icon: null }), "home");
-  await menu("space.icon");
+  // Change Icon…: the grid picker sets an SF Symbol on the workspace, shown in the switcher.
+  await win.evaluate((id) => window.cmd.call("workspace.update", { id, icon: null }), "home");
+  await menu("workspace.icon");
   await win.locator(".icon-picker").waitFor();
   await win.keyboard.type("leaf");
-  await win.screenshot({ path: path.join(shots, "8-space-icon.png") });
+  await win.screenshot({ path: path.join(shots, "8-workspace-icon.png") });
   await win.keyboard.press("Enter");
   await win.waitForTimeout(400);
-  const icon = await win.evaluate(() => window.cmd.call("space.list", {}).then((l) => l.find((x) => x.home).icon));
-  check(icon === "leaf", `Change Space Icon… sets the Space's icon (${icon})`);
-  await win.evaluate((id) => window.cmd.call("space.close", { id }), sp.id);
+  const icon = await win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((x) => x.home).icon));
+  check(icon === "leaf", `Change Workspace Icon… sets the workspace's icon (${icon})`);
+  await win.evaluate((id) => window.cmd.call("workspace.close", { id }), sp.id);
   await win.waitForTimeout(500);
-  await win.locator(".space-trigger").click();
-  await win.locator(".space-menu").waitFor();
-  const left = await win.locator(".space-menu .space-item:not(.space-item-open)").count();
+  await win.locator(".workspace-trigger").click();
+  await win.locator(".workspace-menu").waitFor();
+  const left = await win.locator(".workspace-menu .workspace-item:not(.workspace-item-open)").count();
   await win.keyboard.press("Escape");
-  const still = (await inSpace()).length;
-  check(still === 0 && left === 1, `closing a Space ends its terminals and leaves the switcher (${still} terminals, ${left} Spaces)`);
+  const still = (await inWorkspace()).length;
+  check(still === 0 && left === 1, `closing a workspace ends its terminals and leaves the switcher (${still} terminals, ${left} Workspaces)`);
 }
 
 await closeApp();

@@ -31,7 +31,7 @@ export interface WindowView {
   actions?(win: AppWindow): MenuEntry[];
   /**
    * A menu button at the right end of the title bar, labelled with the current
-   * choice ("This Space ▾"): a widget's scope and options. Not shown on sidebars.
+   * choice ("This Workspace ▾"): a widget's scope and options. Not shown on sidebars.
    */
   titleMenu?(win: AppWindow): { label: string; entries: MenuEntry[] };
 }

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import readline from "node:readline/promises";
-import type { Agent, AgentState, AppWindow, GitPlace, Pane, RemoteDevice, RemotePairRequest, RemoteScope, RemoteStatus, Space } from "@cmd/protocol";
+import type { Agent, AgentState, AppWindow, GitPlace, Pane, RemoteDevice, RemotePairRequest, RemoteScope, RemoteStatus, Workspace } from "@cmd/protocol";
 import { renderUnicodeCompact } from "uqr";
 import { APPLIES_LABEL, placeAgainst, currentKey, currentSecretKey, ENV, isSecretKey, SECRETS, type SecretDef, type SecretKey, SETTINGS_SCHEMA, isSettingKey, parseSettingValue, type SettingDef, type SettingKey } from "@cmd/protocol";
 import { connect, defaultSocketPath, type Connection } from "@cmd/protocol/node";
@@ -18,12 +18,12 @@ const HELP = `cmd — terminal + agent workbench
 
 usage: cmd <command> [options]
 
-  . | <dir> [-n] [--git-root]         open the folder as a Space (or return to it);
+  . | <dir> [-n] [--git-root]         open the folder as a workspace (or return to it);
                                       -n: in a new app window, --git-root: the repository's root
-  space [ls] [--all] [--json]         open Spaces (--all: recent ones too)
-  space which [PATH]                  the Space a path belongs to
-  space close|rename|forget [SPACE] [NAME]
-  space icon [SPACE] SYMBOL           its icon: an SF Symbol name (- for the default)
+  workspace [ls] [--all] [--json]         open workspaces (--all: recent ones too)
+  workspace which [PATH]                  the workspace a path belongs to
+  workspace close|rename|forget [WORKSPACE] [NAME]
+  workspace icon [WORKSPACE] SYMBOL           its icon: an SF Symbol name (- for the default)
                                       SPACE: id prefix, name or folder; default: this terminal's
   ls [--json]                         panes and their agents (tree)
   identify [--json]                   this pane and agent (inside cmd)
@@ -46,12 +46,12 @@ ${DATA_HELP}
                                       --types lists window types
   actions [PATH] [--all] [--json]     how to run the project here: its scripts, make targets, …
                                       (Workspace Actions; --all: hidden ones and history too)
-  actions run NAME [PATH] [--restart] run one in a terminal of the folder's Space
+  actions run NAME [PATH] [--restart] run one in a terminal of the folder's workspace
   search <query…> [--json] [--limit N]  search past agent sessions
   resume <session-id> [--agent claude|codex|…] [--fork]
   magic <request…> [--help]          build a widget (or a terminal command) from a request
                                       (runs here, no core needed; see cmd magic --help)
-  widget list | add <widget>          the Widget Library; put a widget in a Space
+  widget list | add <widget>          the Widget Library; put a widget in a workspace
   widget new|check|run|preview [dir]  make and check Magic widget folders (cmd widget --help)
   settings [get KEY | set KEY VALUE | reset KEY | path] [--json]
                                       list or change settings (applies live)
@@ -67,10 +67,10 @@ ${DATA_HELP}
 
 env: ${ENV.socket} (default ${defaultSocketPath()})`;
 
-const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "journal", "data", "open", "actions", "search", "resume", "settings", "space", "remote", "help"]);
+const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "journal", "data", "open", "actions", "search", "resume", "settings", "workspace", "remote", "help"]);
 
 /**
- * `cmd .`, `cmd ~/src/x`, `cmd ../y`: a folder to open as a Space. A command name
+ * `cmd .`, `cmd ~/src/x`, `cmd ../y`: a folder to open as a workspace. A command name
  * always wins (`cmd ./ls` for a folder called ls); a bare word must be an existing folder.
  */
 function isFolderArg(a: string | undefined): a is string {
@@ -83,10 +83,11 @@ function isFolderArg(a: string | undefined): a is string {
   }
 }
 
-const rawArgv = process.argv.slice(2);
-const argv = isFolderArg(rawArgv[0]) ? ["space", "open", ...rawArgv] : rawArgv;
+// Before 0.24 workspaces were Spaces: `cmd space …` and `--space` still work.
+const rawArgv = process.argv.slice(2).map((a, i) => (i === 0 && a === "space" ? "workspace" : a === "--space" ? "--workspace" : a.startsWith("--space=") ? `--workspace=${a.slice(8)}` : a));
+const argv = isFolderArg(rawArgv[0]) ? ["workspace", "open", ...rawArgv] : rawArgv;
 const cmd = argv[0];
-/** The terminal this runs in, if inside cmd: new things go to its Space. */
+/** The terminal this runs in, if inside cmd: new things go to its workspace. */
 const callerPaneId = process.env[ENV.paneId] || undefined;
 
 const { values: opt, positionals: pos } = parseArgs({
@@ -134,7 +135,7 @@ const { values: opt, positionals: pos } = parseArgs({
     anonymize: { type: "boolean" },
     out: { type: "string" },
     open: { type: "boolean" },
-    space: { type: "string" },
+    workspace: { type: "string" },
     repo: { type: "string" },
     day: { type: "string" },
     write: { type: "boolean" },
@@ -168,9 +169,9 @@ async function main(): Promise<number> {
 async function run({ client, closed }: Connection): Promise<number> {
   switch (cmd) {
     case "ls": {
-      const [panes, agents, spaces] = await Promise.all([client.call("pane.list", {}), client.call("agent.list", {}), client.call("space.list", {})]);
+      const [panes, agents, workspaces] = await Promise.all([client.call("pane.list", {}), client.call("agent.list", {}), client.call("workspace.list", {})]);
       if (opt.json) return out({ panes, agents });
-      printTree(panes, agents, new Map(spaces.map((s) => [s.id, s])));
+      printTree(panes, agents, new Map(workspaces.map((s) => [s.id, s])));
       return 0;
     }
     case "hooks": {
@@ -293,8 +294,8 @@ async function run({ client, closed }: Connection): Promise<number> {
       if (!w) return fail(`no cmd window type opens ${target} (try: open ${target})`);
       return out(opt.json ? w : w.id);
     }
-    case "space":
-      return space(client);
+    case "workspace":
+      return workspace(client);
     case "remote":
       return remote(client);
     case "actions": {
@@ -492,57 +493,57 @@ async function resolvePane(client: Connection["client"], prefix: string): Promis
   throw new Error(`no such pane or agent: ${prefix}`);
 }
 
-async function space(client: Connection["client"]): Promise<number> {
+async function workspace(client: Connection["client"]): Promise<number> {
   const [sub = "ls", ...rest] = pos;
-  const label = (s: Space) => `${s.home ? "home    " : short(s.id)}  ${s.name.padEnd(20)} ${tilde(s.root)}${s.closedAt ? "  (closed)" : ""}`;
+  const label = (s: Workspace) => `${s.home ? "home    " : short(s.id)}  ${s.name.padEnd(20)} ${tilde(s.root)}${s.closedAt ? "  (closed)" : ""}`;
   switch (sub) {
     case "ls": {
-      const spaces = await client.call("space.list", { closed: !!opt.all });
-      if (opt.json) return out(spaces);
-      for (const s of spaces) console.log(label(s));
+      const workspaces = await client.call("workspace.list", { closed: !!opt.all });
+      if (opt.json) return out(workspaces);
+      for (const s of workspaces) console.log(label(s));
       return 0;
     }
     case "open": {
       const target = rest[0] ?? ".";
-      const { space, created } = await client.call("space.open", {
+      const { workspace, created } = await client.call("workspace.open", {
         path: target,
         cwd: process.cwd(),
         gitRoot: !!opt["git-root"],
         show: true,
         newWindow: !!opt["new-window"],
       });
-      if (opt.json) return out({ space, created });
-      return out(`${created ? "new Space" : "Space"} ${space.name}  ${tilde(space.root)}`);
+      if (opt.json) return out({ workspace, created });
+      return out(`${created ? "new workspace" : "workspace"} ${workspace.name}  ${tilde(workspace.root)}`);
     }
     case "which": {
-      const s = await client.call("space.match", { path: rest[0] ?? ".", cwd: process.cwd() });
+      const s = await client.call("workspace.match", { path: rest[0] ?? ".", cwd: process.cwd() });
       return out(opt.json ? s : label(s));
     }
     case "close":
     case "forget": {
-      const s = await findSpace(client, rest[0]);
-      await client.call(sub === "close" ? "space.close" : "space.forget", { id: s.id });
+      const s = await findWorkspace(client, rest[0]);
+      await client.call(sub === "close" ? "workspace.close" : "workspace.forget", { id: s.id });
       return out(`${sub === "close" ? "closed" : "forgot"} ${s.name}`);
     }
     case "rename": {
-      // `rename NAME` renames this terminal's Space; `rename SPACE NAME` another one.
+      // `rename NAME` renames this terminal's workspace; `rename SPACE NAME` another one.
       const [a, b] = rest;
-      if (!a) return fail("usage: cmd space rename [SPACE] NAME");
-      const s = await findSpace(client, b === undefined ? undefined : a);
-      const next = await client.call("space.update", { id: s.id, name: b ?? a });
+      if (!a) return fail("usage: cmd workspace rename [WORKSPACE] NAME");
+      const s = await findWorkspace(client, b === undefined ? undefined : a);
+      const next = await client.call("workspace.update", { id: s.id, name: b ?? a });
       return out(`renamed to ${next.name}`);
     }
     case "icon": {
-      // `icon SYMBOL` sets this terminal's Space's icon; `icon SPACE SYMBOL` another's; `-` resets it.
+      // `icon SYMBOL` sets this terminal's workspace's icon; `icon SPACE SYMBOL` another's; `-` resets it.
       const [a, b] = rest;
-      if (!a) return fail("usage: cmd space icon [SPACE] SYMBOL");
-      const s = await findSpace(client, b === undefined ? undefined : a);
+      if (!a) return fail("usage: cmd workspace icon [WORKSPACE] SYMBOL");
+      const s = await findWorkspace(client, b === undefined ? undefined : a);
       const symbol = b ?? a;
-      const next = await client.call("space.update", { id: s.id, icon: symbol === "-" ? null : symbol });
+      const next = await client.call("workspace.update", { id: s.id, icon: symbol === "-" ? null : symbol });
       return out(`${next.name}: ${next.icon ?? "default icon"}`);
     }
     default:
-      return fail(`unknown space command: ${sub}\n\n${HELP}`);
+      return fail(`unknown workspace command: ${sub}\n\n${HELP}`);
   }
 }
 
@@ -662,52 +663,52 @@ function ago(t: number): string {
   return `${Math.floor(s / 86400)} days ago`;
 }
 
-/** A Space by id prefix, name or folder; none given: this terminal's. */
-async function findSpace(client: Connection["client"], ref: string | undefined): Promise<Space> {
-  const spaces = await client.call("space.list", { closed: true });
+/** A workspace by id prefix, name or folder; none given: this terminal's. */
+async function findWorkspace(client: Connection["client"], ref: string | undefined): Promise<Workspace> {
+  const workspaces = await client.call("workspace.list", { closed: true });
   if (ref === undefined) {
-    if (!callerPaneId) throw new Error("not inside cmd: name the Space (id, name or folder)");
+    if (!callerPaneId) throw new Error("not inside cmd: name the workspace (id, name or folder)");
     const me = await client.call("identify", { paneId: callerPaneId });
-    const s = spaces.find((x) => x.id === me.pane?.spaceId);
-    if (!s) throw new Error("this terminal's Space is gone");
+    const s = workspaces.find((x) => x.id === me.pane?.workspaceId);
+    if (!s) throw new Error("this terminal's workspace is gone");
     return s;
   }
-  const hits = spaces.filter((s) => s.id.startsWith(ref) || s.name === ref);
+  const hits = workspaces.filter((s) => s.id.startsWith(ref) || s.name === ref);
   if (hits.length === 1) return hits[0]!;
-  if (hits.length > 1) throw new Error(`ambiguous Space: ${ref}`);
-  // A folder: the Space rooted exactly there (open or closed).
+  if (hits.length > 1) throw new Error(`ambiguous workspace: ${ref}`);
+  // A folder: the workspace rooted exactly there (open or closed).
   try {
     const root = fs.realpathSync.native(path.resolve(ref.replace(/^~(?=$|\/)/, process.env.HOME ?? "~")));
-    const s = spaces.find((x) => x.root === root);
+    const s = workspaces.find((x) => x.root === root);
     if (s) return s;
   } catch {}
-  throw new Error(`no such Space: ${ref}`);
+  throw new Error(`no such workspace: ${ref}`);
 }
 
 const tilde = (p: string) => (process.env.HOME && (p === process.env.HOME || p.startsWith(process.env.HOME + "/")) ? "~" + p.slice(process.env.HOME.length) : p);
 
-/** Where an agent or terminal is, where that differs from its Space (docs/35): "on <branch>" for a worktree of its project, "in <project>" elsewhere. */
-function whereText(git: GitPlace | null | undefined, cwd: string, space: Space | undefined): string {
-  const at = placeAgainst(git, cwd, space);
+/** Where an agent or terminal is, where that differs from its workspace (docs/35): "on <branch>" for a worktree of its project, "in <project>" elsewhere. */
+function whereText(git: GitPlace | null | undefined, cwd: string, workspace: Workspace | undefined): string {
+  const at = placeAgainst(git, cwd, workspace);
   if (!at) return "";
   if ("folder" in at) return `  in ${tilde(at.folder)}`;
   const branch = at.git.linked && at.git.branch ? ` on ${at.git.branch}` : "";
   return at.sameProject && branch ? `  ${branch.trim()}` : `  in ${tilde(at.git.top)}${branch}`;
 }
 
-function printTree(panes: Pane[], agents: Agent[], spaces: Map<string, Space>): void {
+function printTree(panes: Pane[], agents: Agent[], workspaces: Map<string, Workspace>): void {
   const byParent = new Map<string | null, Agent[]>();
   for (const a of agents) byParent.set(a.parentId, [...(byParent.get(a.parentId) ?? []), a]);
   const line = (a: Agent, indent: string) => {
     const name = a.name ? ` ${a.name}` : "";
-    const where = a.depth === 0 ? whereText(a.git, a.cwd, spaces.get(a.spaceId)) : "";
+    const where = a.depth === 0 ? whereText(a.git, a.cwd, workspaces.get(a.workspaceId)) : "";
     const detail = a.detail ? `  — ${a.detail}` : "";
     console.log(`${indent}${short(a.id)} ${a.kind}${name} [${a.state}]${a.paneId ? ` pane ${short(a.paneId)}` : " (virtual)"}${where}${detail}`);
     for (const c of byParent.get(a.id) ?? []) line(c, indent + "  ");
   };
   const roots = agents.filter((a) => !a.parentId || !agents.some((p) => p.id === a.parentId));
   for (const r of roots) line(r, "");
-  for (const p of panes) if (!p.agentId) console.log(`${short(p.id)} ${p.foreground} — ${p.title}${whereText(p.git, p.cwd, spaces.get(p.spaceId)) || `  ${tilde(p.cwd)}`}`);
+  for (const p of panes) if (!p.agentId) console.log(`${short(p.id)} ${p.foreground} — ${p.title}${whereText(p.git, p.cwd, workspaces.get(p.workspaceId)) || `  ${tilde(p.cwd)}`}`);
   if (!panes.length && !agents.length) console.log("(nothing running)");
 }
 

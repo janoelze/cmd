@@ -140,7 +140,7 @@ export interface DataResult {
 }
 
 export interface RunDataOptions extends DenoEnv {
-  /** Where run() starts by default (the window's Space). */
+  /** Where run() starts by default (the window's workspace). */
   cwd: string;
   /** The core's widgets socket and this run's token, for `events()` in data.ts (docs/28 §4). */
   socket?: { path: string; token: string } | null;

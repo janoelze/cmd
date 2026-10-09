@@ -1,9 +1,9 @@
 // Agent names (docs/32-session-names.md): 1–3 nouns cmd owns, that tell the
-// agents in a Space apart in notifications, rows and `cmd send`. Where a name
+// agents in a workspace apart in notifications, rows and `cmd send`. Where a name
 // comes from, how a branch becomes one, and how a typed reference finds an
 // agent by id or name. Pure, shared by the core, the CLI and the renderer.
 
-import type { Agent, AgentKind, SpaceId } from "./model.ts";
+import type { Agent, AgentKind, WorkspaceId } from "./model.ts";
 
 /** Who gave an agent its name: the person, its worktree's branch, a model. */
 export type NameSource = "user" | "worktree" | "model";
@@ -60,11 +60,11 @@ export const FORMER_NAME_MS = 60 * 60_000;
 
 /**
  * The live agents a typed reference means: an id or id prefix first, then a
- * name (loosely, or the start of one of its words), in the caller's Space
+ * name (loosely, or the start of one of its words), in the caller's workspace
  * before the others, then a name an agent had in the last hour. More than one
  * means ambiguous: the caller lists them, never picks.
  */
-export function matchAgents<A extends Pick<Agent, "id" | "name" | "spaceId"> & { nameWas?: string | null; namedAt?: number | null }>(agents: A[], ref: string, o: { spaceId?: SpaceId | null; now?: number } = {}): A[] {
+export function matchAgents<A extends Pick<Agent, "id" | "name" | "workspaceId"> & { nameWas?: string | null; namedAt?: number | null }>(agents: A[], ref: string, o: { workspaceId?: WorkspaceId | null; now?: number } = {}): A[] {
   if (!ref) return [];
   const byId = agents.filter((a) => a.id === ref);
   if (byId.length) return byId;
@@ -77,9 +77,9 @@ export function matchAgents<A extends Pick<Agent, "id" | "name" | "spaceId"> & {
   const start = (a: A) => !!a.name && (nameKey(a.name).startsWith(key) || words(a.name).some((w) => w.startsWith(ref.toLowerCase())));
   const now = o.now ?? Date.now();
   const former = (a: A) => !!a.nameWas && nameKey(a.nameWas) === key && now - (a.namedAt ?? 0) < FORMER_NAME_MS && !agents.some((b) => exact(b));
-  const inSpace = (a: A) => !o.spaceId || a.spaceId === o.spaceId;
+  const inWorkspace = (a: A) => !o.workspaceId || a.workspaceId === o.workspaceId;
   for (const rule of [exact, start, former]) {
-    const here = agents.filter((a) => inSpace(a) && rule(a));
+    const here = agents.filter((a) => inWorkspace(a) && rule(a));
     if (here.length) return here;
     const all = agents.filter(rule);
     if (all.length) return all;

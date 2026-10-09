@@ -1,5 +1,5 @@
 // The journal over the event log (docs/23, docs/28): what it reads as events is
-// assembled from the log (commands, git, pages, files, notes, Spaces), the
+// assembled from the log (commands, git, pages, files, notes, workspaces), the
 // turns view (agent.turn) and the transcript index's sessions (agent.session);
 // nothing is copied into a journal table any more. What the journal owns is
 // the days a model wrote and their history (journal_days, journal_days_history),
@@ -10,7 +10,7 @@
 // become events; THREADS_FORMAT and WRITER_FORMAT the layers above.
 
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { DATA_FLAGS, DEFAULT_SETTINGS, JOURNAL_SCHEMA, type AgentTurn, type DataEvent, type DataEventType, type JournalData, type JournalDay, type JournalEvent, type JournalEventKind, type JournalWeek, type NewDataEvent, type SpaceId } from "@cmd/protocol";
+import { DATA_FLAGS, DEFAULT_SETTINGS, JOURNAL_SCHEMA, type AgentTurn, type DataEvent, type DataEventType, type JournalData, type JournalDay, type JournalEvent, type JournalEventKind, type JournalWeek, type NewDataEvent, type WorkspaceId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { DataService } from "../data/service.ts";
 import { projectOf } from "../data/project.ts";
@@ -32,7 +32,7 @@ const FORMAT_1 = { schema: 1, threads: 1, writer: 1 };
 const SPAN_MS = 3 * 86400_000;
 
 /** The journal kinds that are events in the log, by their type there. */
-const FACT_KINDS: JournalEventKind[] = ["command", "git.commit", "git.merge", "git.checkout", "git.branch", "git.tag", "git.rebase", "git.reset", "browser.visit", "file.open", "note", "space.open", "space.close"];
+const FACT_KINDS: JournalEventKind[] = ["command", "git.commit", "git.merge", "git.checkout", "git.branch", "git.tag", "git.rebase", "git.reset", "browser.visit", "file.open", "note", "workspace.open", "workspace.close"];
 
 /** What a recorder hands in: an event without its row id. */
 export type NewJournalEvent = Omit<JournalEvent, "id" | "source"> & { source?: JournalEvent["source"] };
@@ -40,8 +40,8 @@ export type NewJournalEvent = Omit<JournalEvent, "id" | "source"> & { source?: J
 export interface EventQuery {
   since?: number;
   until?: number;
-  spaceId?: SpaceId;
-  /** Events of this repository (the project), whichever Space they were in. */
+  workspaceId?: WorkspaceId;
+  /** Events of this repository (the project), whichever workspace they were in. */
   repo?: string;
   kinds?: JournalEventKind[];
   limit?: number;
@@ -89,7 +89,27 @@ export class JournalStore {
       CREATE TABLE IF NOT EXISTS journal_weeks (scope TEXT NOT NULL, start INTEGER NOT NULL, doc TEXT NOT NULL, PRIMARY KEY (scope, start));
       CREATE TABLE IF NOT EXISTS schema_versions (name TEXT PRIMARY KEY, version INTEGER NOT NULL, updated_at INTEGER NOT NULL);
     `);
+    this.#renameSpaces();
     this.#upgrade();
+  }
+
+  /** Before 0.24 workspaces were Spaces: scopes were "space:<id>", and days and weeks said spaceId. Once per database. */
+  #renameSpaces(): void {
+    if (this.meta("workspaces")) return;
+    this.#db.exec("BEGIN");
+    try {
+      for (const t of ["journal_days", "journal_days_history", "journal_weeks"])
+        this.#db.exec(
+          `UPDATE ${t} SET scope = CASE WHEN scope LIKE 'space:%' THEN 'workspace:' || substr(scope, 7) ELSE scope END,
+             doc = replace(replace(doc, '"spaceId":', '"workspaceId":'), '"space.', '"workspace.')
+           WHERE scope LIKE 'space:%' OR doc LIKE '%"spaceId":%' OR doc LIKE '%"space.%'`,
+        );
+      this.setMeta("workspaces", "1");
+      this.#db.exec("COMMIT");
+    } catch (err) {
+      this.#db.exec("ROLLBACK");
+      throw err;
+    }
   }
 
   /** Runs the data upgrades from the database's schema to this cmd's. A database from a newer cmd is read as it is. */
@@ -158,12 +178,12 @@ export class JournalStore {
   events(q: EventQuery = {}): JournalEvent[] {
     const want = (k: JournalEventKind) => !q.kinds?.length || q.kinds.includes(k);
     const inRange = (e: JournalEvent) => (q.since === undefined || (e.until ?? e.at) >= q.since) && (q.until === undefined || e.at < q.until);
-    const inScope = (e: JournalEvent) => (!q.spaceId || e.spaceId === q.spaceId) && (!q.repo || e.repo === q.repo);
+    const inScope = (e: JournalEvent) => (!q.workspaceId || e.workspaceId === q.workspaceId) && (!q.repo || e.repo === q.repo);
     const out: JournalEvent[] = [];
     const types = FACT_KINDS.filter(want) as DataEventType[];
     if (types.length) {
       const at: [number, number] | undefined = q.since !== undefined || q.until !== undefined ? [q.since !== undefined ? q.since - SPAN_MS : 0, q.until ?? Number.MAX_SAFE_INTEGER] : undefined;
-      for (const d of this.data.query({ types, at, spaceId: q.spaceId, projectId: q.repo ? `dir:${q.repo}` : undefined, limit: 100_000 })) {
+      for (const d of this.data.query({ types, at, workspaceId: q.workspaceId, projectId: q.repo ? `dir:${q.repo}` : undefined, limit: 100_000 })) {
         const e = toJournal(d);
         if (e && inRange(e)) out.push(e);
       }
@@ -262,7 +282,7 @@ export function toData(e: NewJournalEvent): NewDataEvent {
     until: e.until,
     type: kind as DataEventType,
     source: kind.startsWith("git.") ? "git" : e.source === "backfill" ? "import:journal" : "journal",
-    spaceId: e.spaceId,
+    workspaceId: e.workspaceId,
     projectId: repo ? `dir:${repo}` : null,
     paneId: typeof (e.data as { paneId?: unknown }).paneId === "string" ? ((e.data as { paneId: string }).paneId as string) : null,
     windowId: typeof (e.data as { windowId?: unknown }).windowId === "string" ? ((e.data as { windowId: string }).windowId as string) : null,
@@ -291,7 +311,7 @@ export function toJournal(d: DataEvent): JournalEvent | null {
     until: d.until,
     kind,
     key: d.id,
-    spaceId: d.spaceId,
+    workspaceId: d.workspaceId,
     repo,
     cwd,
     thread,

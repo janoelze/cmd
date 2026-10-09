@@ -82,7 +82,7 @@ export class PaneOutputRecorder {
   #save(id: PaneId, s: Stretch): void {
     const pane = this.#panes.get(id);
     s.saved = s.last;
-    this.#data.record({ id: s.id, at: s.at, until: s.last, type: "pane.activity", source: "pty", paneId: id, agentId: pane?.agentId ?? null, spaceId: pane?.spaceId ?? null, data: {} });
+    this.#data.record({ id: s.id, at: s.at, until: s.last, type: "pane.activity", source: "pty", paneId: id, agentId: pane?.agentId ?? null, workspaceId: pane?.workspaceId ?? null, data: {} });
   }
 
   #close(id: PaneId): void {
@@ -117,7 +117,7 @@ export class PaneOutputRecorder {
     const text = turnScreen(screen, t.prompt);
     if (!text || this.#disposed) return;
     const pane = this.#panes.get(paneId);
-    this.#data.record({ id: `output:${t.agentId}:${t.index}`, at: t.startedAt, until: t.endedAt, type: "agent.output", source: "pty", paneId, agentId: t.agentId, spaceId: pane?.spaceId ?? null, sessionId: t.sessionId ? `${t.agentKind}:${t.sessionId}` : null, text: `turn ${t.index}: ${text.length} characters`, data: { turn: t.index, chars: text.length, cut: text.length > 256_000 }, content: text });
+    this.#data.record({ id: `output:${t.agentId}:${t.index}`, at: t.startedAt, until: t.endedAt, type: "agent.output", source: "pty", paneId, agentId: t.agentId, workspaceId: pane?.workspaceId ?? null, sessionId: t.sessionId ? `${t.agentKind}:${t.sessionId}` : null, text: `turn ${t.index}: ${text.length} characters`, data: { turn: t.index, chars: text.length, cut: text.length > 256_000 }, content: text });
   }
 }
 

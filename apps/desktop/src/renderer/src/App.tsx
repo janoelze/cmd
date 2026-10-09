@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GLIDE_MS, Toaster, toast, usePresentValue } from "@cmd/ui";
-import type { ActionsList, PaneId, Space, SpaceId } from "@cmd/protocol";
+import type { ActionsList, PaneId, Workspace, WorkspaceId } from "@cmd/protocol";
 import { listActions, rerunLastAction, runAction, showActions } from "./workspaceActions.ts";
 import type { WebviewTag } from "electron";
 import { bucketOf, needsAttention } from "@cmd/protocol";
@@ -31,8 +31,8 @@ import {
 import { aiStatus, useAiStatus } from "./ai/status.ts";
 import { showContextMenu, type MenuEntry } from "./context.ts";
 import { useKeybindings } from "./keybindings.ts";
-import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inSpace, isWidget, nextAfterClose, pushHistory, setCmdNames, shortPath, spaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
-import { getSpaceView, getState, onNotification, onWindowFocus, setSpaceView, setUsageShown, spaceOfWindow, usePersisted, useSpaceView, useStore } from "./store.ts";
+import { ago, arrangeTiles, buildRows, flatten, fieldsOf, inWorkspace, isWidget, nextAfterClose, pushHistory, setCmdNames, shortPath, workspaceAttention, wantsYou, windowAttention, windowIdOf, type SidebarRow } from "./model.ts";
+import { getWorkspaceView, getState, onNotification, onWindowFocus, setWorkspaceView, setUsageShown, workspaceOfWindow, usePersisted, useWorkspaceView, useStore } from "./store.ts";
 import { terminals } from "./terminals.ts";
 import { DoneBatch, Looks } from "./notify.ts";
 import { DEFAULT_FRACTION, MIN_WIDTH, nextPreset, stepFraction, withWidth } from "./strip.ts";
@@ -56,10 +56,10 @@ import { Palette, SEARCH_PREFIX as SEARCH, type PaletteItem } from "./components
 import { NavigatorContext, type NavigatorData } from "./components/Navigator.tsx";
 import { Dock } from "./components/Dock.tsx";
 import { TopBar } from "./components/TopBar.tsx";
-import { dock, dockedIds, dockWidths, DOCK_WIDTH, liveDocks, MIN_WORKSPACE, readDocks, sideOf, SIDES, undock, type Docks, type Side } from "./docks.ts";
-import { SpaceBar } from "./components/SpaceBar.tsx";
-import { SpaceIconPicker } from "./components/SpaceIcon.tsx";
-import { closeSpace, showSpace, usePickers, type Picker } from "./spaces.tsx";
+import { dock, dockedIds, dockWidths, DOCK_WIDTH, liveDocks, MIN_BOARD, readDocks, sideOf, SIDES, undock, type Docks, type Side } from "./docks.ts";
+import { WorkspaceBar } from "./components/WorkspaceBar.tsx";
+import { WorkspaceIconPicker } from "./components/WorkspaceIcon.tsx";
+import { closeWorkspace, showWorkspace, usePickers, type Picker } from "./workspaces.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { countRender } from "./perf.ts";
 
@@ -97,50 +97,50 @@ function flashWindow(paneId: PaneId): void {
 
 export function App() {
   countRender("App");
-  /** Everything, every Space: attention, the Dock badge, cross-Space jumps. */
+  /** Everything, every workspace: attention, the Dock badge, cross-workspace jumps. */
   const all = useStore();
   // Before any row is drawn: whether an unnamed agent waits for cmd's name (model.ts).
   const naming = !!useAiStatus()?.ready;
   setCmdNames(naming && all.settings.settings["agents.names.ai"]);
-  /** What this app window shows: its Space's terminals, agents and windows. */
-  const s = useMemo(() => inSpace(all), [all]);
+  /** What this app window shows: its workspace's terminals, agents and windows. */
+  const s = useMemo(() => inWorkspace(all), [all]);
   useRemoteNotifications();
-  const space = all.spaces.get(all.spaceId);
+  const workspace = all.workspaces.get(all.workspaceId);
   const keys = useKeybindings();
   const cfg = s.settings.settings;
-  // Per Space, remembered across restarts (stored in the core, see useSpaceView).
-  const [selected, setSelected] = useSpaceView<PaneId | null>("selection.pane", null);
+  // Per workspace, remembered across restarts (stored in the core, see useWorkspaceView).
+  const [selected, setSelected] = useWorkspaceView<PaneId | null>("selection.pane", null);
   // Most recently used terminals, for picking what to focus after one closes.
-  const [history, setHistory] = useSpaceView<PaneId[]>("selection.history", []);
-  const [mode, setMode] = useSpaceView<ViewMode>("view.mode", cfg["ui.defaultView"]);
+  const [history, setHistory] = useWorkspaceView<PaneId[]>("selection.history", []);
+  const [mode, setMode] = useWorkspaceView<ViewMode>("view.mode", cfg["ui.defaultView"]);
   // The layout Toggle Focus returns to: the last mode other than focus, however focus was entered.
-  const [layoutMode, setLayoutMode] = useSpaceView<ViewMode>("view.layoutMode", "grid");
+  const [layoutMode, setLayoutMode] = useWorkspaceView<ViewMode>("view.layoutMode", "grid");
   useEffect(() => {
     if (mode !== "focus" && mode !== layoutMode) setLayoutMode(mode);
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
-  // The sidebar before sidebars were windows: carried over into each Space's first Navigator.
+  // The sidebar before sidebars were windows: carried over into each workspace's first Navigator.
   const [sidebarOpen] = usePersisted("sidebar.open", true);
   const [sidebarWidth] = usePersisted<number | null>("sidebar.width", null);
   const [zoom, setZoom] = usePersisted("terminal.zoom", 0);
   const [recent, setRecent] = usePersisted<string[]>("palette.recent", []);
   // One spatial order shared by grid and strip.
-  const [gridOrder, setGridOrder] = useSpaceView<PaneId[]>("grid.order", []);
+  const [gridOrder, setGridOrder] = useWorkspaceView<PaneId[]>("grid.order", []);
   // Strip widths as fractions of the pane (see strip.ts).
-  const [stripWidths, setStripWidths] = useSpaceView<Record<PaneId, number>>("strip.widths", {});
+  const [stripWidths, setStripWidths] = useWorkspaceView<Record<PaneId, number>>("strip.widths", {});
   // Canvas: where each window sits (world px) and the camera (see canvas.ts).
-  const [canvasRects, setCanvasRects] = useSpaceView<Record<PaneId, Rect>>("canvas.rects", {});
-  const [camera, setCamera] = useSpaceView<Camera>("canvas.camera", DEFAULT_CAMERA);
+  const [canvasRects, setCanvasRects] = useWorkspaceView<Record<PaneId, Rect>>("canvas.rects", {});
+  const [camera, setCamera] = useWorkspaceView<Camera>("canvas.camera", DEFAULT_CAMERA);
   const setStripWidth = (id: PaneId, fraction: number) =>
     setStripWidths((w) => withWidth(w, id, fraction, getState()));
   // Transient: sheets don't reopen on launch.
   /** Palette open, with an optional initial query ("?" for session search). */
   const [palette, setPalette] = useState<false | string>(false);
-  // The Space's Workspace Actions, read when the palette opens (its Actions group).
+  // The workspace's Workspace Actions, read when the palette opens (its Actions group).
   const [paletteActions, setPaletteActions] = useState<ActionsList | null>(null);
   useEffect(() => {
     if (palette === false) return;
     let live = true;
-    void listActions(getState().spaceId).then((l) => live && setPaletteActions(l));
+    void listActions(getState().workspaceId).then((l) => live && setPaletteActions(l));
     return () => void (live = false);
   }, [palette === false]);
   const [feedback, setFeedback] = useState(false);
@@ -155,43 +155,43 @@ export function App() {
     closeSetup();
     if (whatsNewLater.current) setWhatsNew(whatsNewLater.current), (whatsNewLater.current = null);
   };
-  /** Space pickers (open/switch, move a window, rename); see spaces.tsx. */
+  /** Workspace pickers (open/switch, move a window, rename); see workspaces.tsx. */
   const [picker, setPicker] = useState<Picker | null>(null);
   /** Sidebars sliding in or out after View → Show Sidebar (one hidden is kept until it's out of sight). */
   const [sliding, setSliding] = useState<Partial<Record<Side, { dir: "in" | "out"; row?: SidebarRow; width?: number }>>>({});
   const slideTimers = useRef<Partial<Record<Side, ReturnType<typeof setTimeout>>>>({});
 
-  // Spaces: the switcher's order, what waits in each, and the one shown before (Last Space).
-  const openSpaces = useMemo(() => [...all.spaces.values()].sort((a, b) => a.order - b.order), [all.spaces]);
-  const waiting = useMemo(() => spaceAttention(all), [all.agents, all.panes]);
-  const lastSpace = useRef<SpaceId | null>(null);
-  const shownSpace = useRef(all.spaceId);
+  // Workspaces: the switcher's order, what waits in each, and the one shown before (Last Workspace).
+  const openWorkspaces = useMemo(() => [...all.workspaces.values()].sort((a, b) => a.order - b.order), [all.workspaces]);
+  const waiting = useMemo(() => workspaceAttention(all), [all.agents, all.panes]);
+  const lastWorkspace = useRef<WorkspaceId | null>(null);
+  const shownWorkspace = useRef(all.workspaceId);
   useEffect(() => {
-    if (shownSpace.current !== all.spaceId) lastSpace.current = shownSpace.current;
-    shownSpace.current = all.spaceId;
-  }, [all.spaceId]);
-  useEffect(() => void (document.title = space?.name ?? "cmd"), [space?.name]);
+    if (shownWorkspace.current !== all.workspaceId) lastWorkspace.current = shownWorkspace.current;
+    shownWorkspace.current = all.workspaceId;
+  }, [all.workspaceId]);
+  useEffect(() => void (document.title = workspace?.name ?? "cmd"), [workspace?.name]);
 
   useEffect(() => terminals.setZoom(zoom), [zoom]);
 
-  // Sidebars (docs/21-sidebars.md): docked windows, per Space. Unset until the
-  // Space's first Navigator is made (below); sides whose window is gone are empty.
-  const [storedDocks, setStoredDocks] = useSpaceView<Docks | null>("docks", null);
+  // Sidebars (docs/21-sidebars.md): docked windows, per workspace. Unset until the
+  // Workspace's first Navigator is made (below); sides whose window is gone are empty.
+  const [storedDocks, setStoredDocks] = useWorkspaceView<Docks | null>("docks", null);
   const docks = useMemo(
     () => liveDocks(readDocks(storedDocks), (id) => s.panes.has(id) || s.windows.has(id)),
     [storedDocks, s.panes, s.windows],
   );
   const docked = useMemo(() => dockedIds(docks), [docks]);
-  /** Change this Space's sidebars (from what's live, so stale ids drop out). */
+  /** Change this workspace's sidebars (from what's live, so stale ids drop out). */
   const setDocks = (f: (d: Docks) => Docks) => setStoredDocks(f(docks));
-  useFirstNavigator(all.spaceId, !!space && s.connected, storedDocks === null, { hidden: !sidebarOpen, width: sidebarWidth });
+  useFirstNavigator(all.workspaceId, !!workspace && s.connected, storedDocks === null, { hidden: !sidebarOpen, width: sidebarWidth });
   const winWidth = useWindowWidth();
   const widths = dockWidths(docks, winWidth);
 
-  // Every row of the Space (the Navigator's, Dock badge…), and the board's: without sidebars.
+  // Every row of the workspace (the Navigator's, Dock badge…), and the board's: without sidebars.
   const allRows = useMemo(() => buildRows(s), [s]);
-  // A Space's first Navigator is docked once its window.open returns, which can be a
-  // render after the window itself arrives: until the Space has sidebars, a Navigator
+  // A workspace's first Navigator is docked once its window.open returns, which can be a
+  // render after the window itself arrives: until the workspace has sidebars, a Navigator
   // isn't a board window (it would show full size for a frame, then jump left).
   const unsetDocks = storedDocks === null;
   const rows = useMemo(
@@ -213,9 +213,9 @@ export function App() {
   }, []);
 
   const select = useCallback((paneId: PaneId) => {
-    // In another Space: main shows that Space (here or in the window showing it) and selects it there.
-    const target = spaceOfWindow(paneId);
-    if (target && target !== getState().spaceId) return showSpace(target, { select: paneId });
+    // In another workspace: main shows that workspace (here or in the window showing it) and selects it there.
+    const target = workspaceOfWindow(paneId);
+    if (target && target !== getState().workspaceId) return showWorkspace(target, { select: paneId });
     deselected.current = false;
     setSelected(paneId);
     setHistory((h) => pushHistory(h, paneId));
@@ -295,7 +295,7 @@ export function App() {
     cmd.closeNotification(selected);
   }, [selected, appFocused, selectedUnseen, selectedAttention, selectedWindowAttention]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Dock badge: agents, terminals and other windows (widgets) waiting for you, in every Space.
+  // Dock badge: agents, terminals and other windows (widgets) waiting for you, in every workspace.
   const attention = useMemo(
     () =>
       [...all.agents.values()].filter(needsAttention).length +
@@ -387,10 +387,10 @@ export function App() {
   };
 
   /** ⌃⌘[ / ⌃⌘]: the switcher's order, wrapping around. */
-  const stepSpace = (d: number) => {
-    const i = openSpaces.findIndex((x) => x.id === all.spaceId);
-    const next = openSpaces[(i + d + openSpaces.length) % openSpaces.length];
-    if (next && next.id !== all.spaceId) showSpace(next.id);
+  const stepWorkspace = (d: number) => {
+    const i = openWorkspaces.findIndex((x) => x.id === all.workspaceId);
+    const next = openWorkspaces[(i + d + openWorkspaces.length) % openWorkspaces.length];
+    if (next && next.id !== all.workspaceId) showWorkspace(next.id);
   };
 
   // ── commands ───────────────────────────────────────────
@@ -501,7 +501,7 @@ export function App() {
     "session.next": () => step(1),
     "session.prev": () => step(-1),
     "session.nextAttention": () => {
-      // This Space first, then the others (select switches Space).
+      // This workspace first, then the others (select switches workspace).
       const target = allFlat.find(wantsYou) ?? flatten(buildRows(all)).find(wantsYou);
       const id = target && windowIdOf(target);
       if (id) select(id);
@@ -517,19 +517,19 @@ export function App() {
     ...(Object.fromEntries(
       [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`session.select${n}`, () => withPane[n - 1] && selectRow(withPane[n - 1]!)]),
     ) as Record<`session.select${number}`, () => void>),
-    "file.openSpace": () => setPicker({ kind: "space" }),
-    "file.newWindow": () => setPicker({ kind: "space", newWindow: true }),
-    "space.next": () => stepSpace(1),
-    "space.prev": () => stepSpace(-1),
-    "space.last": () => lastSpace.current && all.spaces.has(lastSpace.current) && showSpace(lastSpace.current),
-    "space.moveWindow": () => selected && setPicker({ kind: "move", windowId: selected }),
-    "space.rename": () => space && setPicker({ kind: "rename", space }),
-    "space.icon": () => space && setPicker({ kind: "icon", space }),
-    "space.reveal": () => space && cmd.openPath(space.root),
-    "space.close": () => space && void closeSpace(space),
+    "file.openWorkspace": () => setPicker({ kind: "workspace" }),
+    "file.newWindow": () => setPicker({ kind: "workspace", newWindow: true }),
+    "workspace.next": () => stepWorkspace(1),
+    "workspace.prev": () => stepWorkspace(-1),
+    "workspace.last": () => lastWorkspace.current && all.workspaces.has(lastWorkspace.current) && showWorkspace(lastWorkspace.current),
+    "workspace.moveWindow": () => selected && setPicker({ kind: "move", windowId: selected }),
+    "workspace.rename": () => workspace && setPicker({ kind: "rename", workspace }),
+    "workspace.icon": () => workspace && setPicker({ kind: "icon", workspace }),
+    "workspace.reveal": () => workspace && cmd.openPath(workspace.root),
+    "workspace.close": () => workspace && void closeWorkspace(workspace),
     ...(Object.fromEntries(
-      [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`space.select${n}`, () => openSpaces[n - 1] && showSpace(openSpaces[n - 1]!.id)]),
-    ) as Record<`space.select${number}`, () => void>),
+      [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`workspace.select${n}`, () => openWorkspaces[n - 1] && showWorkspace(openWorkspaces[n - 1]!.id)]),
+    ) as Record<`workspace.select${number}`, () => void>),
     "help.docs": () => cmd.openDocs(),
     "help.feedback": () => (setPalette(false), setFeedback(true)),
     "help.whatsNew": () => (setPalette(false), setWhatsNew(RELEASES.filter((r) => compareVersions(r.version, APP_VERSION) <= 0))),
@@ -545,7 +545,7 @@ export function App() {
       clearTimeout(slideTimers.current[side]);
       slideTimers.current[side] = setTimeout(() => setSliding(({ [side]: _, ...m }) => m), GLIDE_MS);
       setDocks((d) => ({ ...d, [side]: { ...d[side], hidden: !d[side].hidden } }));
-    } else if (side === "left") void openNavigator(all.spaceId, "left");
+    } else if (side === "left") void openNavigator(all.workspaceId, "left");
   }
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
@@ -566,8 +566,8 @@ export function App() {
       else if (since?.length) setWhatsNew(since);
     });
   }, []);
-  // `open` in a terminal: follow it, unless it came from another Space while this window is in the background.
-  useEffect(() => onWindowFocus((id) => (document.hasFocus() || spaceOfWindow(id) === getState().spaceId) && select(id)), [select]);
+  // `open` in a terminal: follow it, unless it came from another workspace while this window is in the background.
+  useEffect(() => onWindowFocus((id) => (document.hasFocus() || workspaceOfWindow(id) === getState().workspaceId) && select(id)), [select]);
 
   // Tell the menu bar what is checked/enabled (only when that changes: it's IPC and native menu work).
   const selectedIsPane = !!selected && s.panes.has(selected);
@@ -607,12 +607,12 @@ export function App() {
         "session.summarize": hasSession && aiReady,
         "session.reveal": hasPane,
         "session.nextAttention": attention > 0,
-        "space.next": openSpaces.length > 1,
-        "space.prev": openSpaces.length > 1,
-        "space.moveWindow": hasPane && openSpaces.length > 1,
-        "space.close": !!space && !space.home,
-        "space.rename": !!space,
-        "space.icon": !!space,
+        "workspace.next": openWorkspaces.length > 1,
+        "workspace.prev": openWorkspaces.length > 1,
+        "workspace.moveWindow": hasPane && openWorkspaces.length > 1,
+        "workspace.close": !!workspace && !workspace.home,
+        "workspace.rename": !!workspace,
+        "workspace.icon": !!workspace,
         "widget.remove": selectedIsWidget,
         "view.rightSidebar": !!docks.right.id,
         "window.dockLeft": hasPane && selectedSide !== "left",
@@ -620,7 +620,7 @@ export function App() {
         "window.undock": !!selectedSide,
       },
     });
-  }, [mode, docks, selectedSide, selected, selectedIsPane, canFind, selectedIsWidget, withPane.length, hasSession, aiReady, attention > 0, openSpaces.length, !!space, !!space?.home, !!currentAgent]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, docks, selectedSide, selected, selectedIsPane, canFind, selectedIsWidget, withPane.length, hasSession, aiReady, attention > 0, openWorkspaces.length, !!workspace, !!workspace?.home, !!currentAgent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── context menus ──────────────────────────────────────
 
@@ -637,7 +637,7 @@ export function App() {
             { label: "Show", run: () => select(windowIdOf(r)!) },
             ...(r.pane ? [muteEntry(r.pane.id)] : []),
             ...sidebarEntries(windowIdOf(r)!),
-            { label: "Move to Space…", run: () => setPicker({ kind: "move", windowId: windowIdOf(r)! }), enabled: openSpaces.length > 1 },
+            { label: "Move to Workspace…", run: () => setPicker({ kind: "move", windowId: windowIdOf(r)! }), enabled: openWorkspaces.length > 1 },
             { label: r.pane ? "Close Terminal" : "Close Window", run: () => void closePane(windowIdOf(r)!) },
             "-" as const,
           ]
@@ -690,28 +690,28 @@ export function App() {
     ];
   };
 
-  /** Right-click on a Space in the switcher. */
-  const spaceMenu = (sp: Space) =>
+  /** Right-click on a workspace in the switcher. */
+  const workspaceMenu = (sp: Workspace) =>
     void showContextMenu([
-      { label: "Show", run: () => showSpace(sp.id), enabled: sp.id !== all.spaceId },
-      { label: "Open in New Window", run: () => showSpace(sp.id, { newWindow: true }), enabled: sp.id !== all.spaceId },
+      { label: "Show", run: () => showWorkspace(sp.id), enabled: sp.id !== all.workspaceId },
+      { label: "Open in New Window", run: () => showWorkspace(sp.id, { newWindow: true }), enabled: sp.id !== all.workspaceId },
       "-",
-      { label: "Rename…", run: () => setPicker({ kind: "rename", space: sp }) },
-      { label: "Change Icon…", run: () => setPicker({ kind: "icon", space: sp }) },
+      { label: "Rename…", run: () => setPicker({ kind: "rename", workspace: sp }) },
+      { label: "Change Icon…", run: () => setPicker({ kind: "icon", workspace: sp }) },
       { label: "Show Folder in Finder", run: () => cmd.openPath(sp.root) },
       { label: "Copy Path", run: () => copy(sp.root) },
       "-",
-      { label: "Close Space…", run: () => void closeSpace(sp), enabled: !sp.home },
+      { label: "Close Workspace…", run: () => void closeWorkspace(sp), enabled: !sp.home },
     ]);
 
-  const spaceBar = (
-    <SpaceBar
-      spaces={openSpaces}
-      current={all.spaceId}
+  const workspaceBar = (
+    <WorkspaceBar
+      workspaces={openWorkspaces}
+      current={all.workspaceId}
       attention={waiting}
-      onShow={(id, opts) => showSpace(id, opts)}
-      onMenu={spaceMenu}
-      onPicker={() => setPicker({ kind: "space" })}
+      onShow={(id, opts) => showWorkspace(id, opts)}
+      onMenu={workspaceMenu}
+      onPicker={() => setPicker({ kind: "workspace" })}
     />
   );
   const pickerProps = usePickers(picker, () => setPicker(null));
@@ -759,12 +759,12 @@ export function App() {
 
   // ── palette ────────────────────────────────────────────
 
-  // ?query in the palette (docs/33): the Space's files (live from disk), past
+  // ?query in the palette (docs/33): the workspace's files (live from disk), past
   // agent sessions, commands and what they printed, pages and files opened in cmd.
   // Open windows come from the palette's own items (SEARCH_GROUPS).
   const searchAll = useCallback(async (text: string, show: (items: PaletteItem[]) => void): Promise<PaletteItem[]> => {
     const st = getState();
-    const space = st.spaces.get(st.spaceId);
+    const workspace = st.workspaces.get(st.workspaceId);
     const now = Date.now();
     const cwd = contextCwd() ?? null;
     const meta = (...parts: (string | number | null | false | undefined)[]) => parts.filter(Boolean).join(" · ");
@@ -785,10 +785,10 @@ export function App() {
         () => {},
       );
     await Promise.all([
-      part("names", cmd.call("search.files", { text, spaceId: st.spaceId, cwd, limit: 8, part: "names" }), (r) =>
+      part("names", cmd.call("search.files", { text, workspaceId: st.workspaceId, cwd, limit: 8, part: "names" }), (r) =>
         r.hits.map((h) => (named.add(h.path), { id: `f-${h.path}`, group: "Files", icon: "doc", label: base(h.path), meta: dirIn(h.path, h.root), run: () => void openPath(h.path) })),
       ),
-      part("lines", cmd.call("search.files", { text, spaceId: st.spaceId, cwd, limit: 20, part: "lines" }), (r) =>
+      part("lines", cmd.call("search.files", { text, workspaceId: st.workspaceId, cwd, limit: 20, part: "lines" }), (r) =>
         r.hits.map((h) => ({ id: `l-${h.path}:${h.line}`, group: "Files", icon: "text.alignleft", label: `${base(h.path)}:${h.line}`, meta: dirIn(h.path, h.root), snippet: h.text, run: () => void openFileAt(h.path, h.line!, h.column, text.trim()) })),
       ),
       part("sessions", cmd.call("search.query", { text, limit: 8 }), (hits) =>
@@ -802,8 +802,8 @@ export function App() {
           run: () => void openSession(h),
         })),
       ),
-      // Home holds what happened anywhere; another Space what happened in it.
-      part("history", cmd.call("search.history", { text, spaceId: space?.home ? null : st.spaceId, limit: 5 }), (hits) =>
+      // Home holds what happened anywhere; another workspace what happened in it.
+      part("history", cmd.call("search.history", { text, workspaceId: workspace?.home ? null : st.workspaceId, limit: 5 }), (hits) =>
         hits.flatMap((h): PaletteItem[] => {
           if (h.kind === "command")
             return [{
@@ -837,7 +837,7 @@ export function App() {
       run: () => run(c.id, "palette"),
     })),
     // Risky ones (deploys) are left to the widget, which asks first.
-    ...(paletteActions && paletteActions.root === getState().spaces.get(getState().spaceId)?.root ? [...paletteActions.actions.filter((a) => !a.hidden), ...paletteActions.history] : [])
+    ...(paletteActions && paletteActions.root === getState().workspaces.get(getState().workspaceId)?.root ? [...paletteActions.actions.filter((a) => !a.hidden), ...paletteActions.history] : [])
       .filter((a) => !a.risky)
       .map((a) => ({
         id: `a-${a.id}`,
@@ -845,7 +845,7 @@ export function App() {
         icon: "play",
         label: a.package ? `${a.name} (${a.package})` : a.name,
         meta: a.description ?? a.command,
-        run: () => void runAction(paletteActions!.root, a, getState().spaceId).catch(() => {}),
+        run: () => void runAction(paletteActions!.root, a, getState().workspaceId).catch(() => {}),
       })),
     ...withPane.map((r) => {
       const f = fieldsOf(r, undefined, Date.now());
@@ -860,7 +860,7 @@ export function App() {
 
   // Every Navigator window shows this (components/Navigator.tsx).
   const navigatorData: NavigatorData = {
-    spaceId: all.spaceId,
+    workspaceId: all.workspaceId,
     rows,
     selected,
     onSelect: selectRow,
@@ -882,7 +882,7 @@ export function App() {
         ["--window-desaturate" as string]: `${cfg["ui.unfocusedDesaturation"] / 100}`,
       }}
     >
-      <TopBar spaceBar={spaceBar} mode={mode} run={run} onNew={() => run("file.new")} />
+      <TopBar workspaceBar={workspaceBar} mode={mode} run={run} onNew={() => run("file.new")} />
       <NavigatorContext.Provider value={navigatorData}>
         {/* Canvas and strip run under the sidebars (docs/21-sidebars.md). */}
         <div className={`stage${mode === "canvas" || mode === "strip" ? " under" : ""}`}>
@@ -898,7 +898,7 @@ export function App() {
                 row={row}
                 sliding={leaving ? "out" : slide?.dir === "in" ? "in" : undefined}
                 width={leaving?.width ?? widths[side]}
-                maxWidth={Math.max(DOCK_WIDTH.min, Math.min(DOCK_WIDTH.max, winWidth - MIN_WORKSPACE - widths[side === "left" ? "right" : "left"]))}
+                maxWidth={Math.max(DOCK_WIDTH.min, Math.min(DOCK_WIDTH.max, winWidth - MIN_BOARD - widths[side === "left" ? "right" : "left"]))}
                 selected={selected === docks[side].id}
                 attention={attention > 0}
                 onSelect={select}
@@ -948,7 +948,7 @@ export function App() {
       )}
       {shownPicker.value && <Palette key={shownPicker.value.kind} {...shownPicker.value.props} closing={shownPicker.closing} />}
       {picker?.kind === "new" && <NewPicker run={run} onClose={() => setPicker(null)} />}
-      {picker?.kind === "icon" && <SpaceIconPicker space={all.spaces.get(picker.space.id) ?? picker.space} onClose={() => setPicker(null)} />}
+      {picker?.kind === "icon" && <WorkspaceIconPicker workspace={all.workspaces.get(picker.workspace.id) ?? picker.workspace} onClose={() => setPicker(null)} />}
       {library && <WidgetLibrary onClose={() => setLibrary(false)} />}
       <Toaster />
       {feedback && <Feedback onClose={() => setFeedback(false)} />}
@@ -959,31 +959,31 @@ export function App() {
   );
 }
 
-/** A Navigator docked to `side` of a Space (docs/21-sidebars.md); `carry` is the side's earlier width and visibility. */
-async function openNavigator(spaceId: SpaceId, side: Side, carry?: { hidden: boolean; width: number | null }): Promise<void> {
-  const w = await cmd.call("window.open", { kind: "navigator", spaceId });
-  const d = readDocks(getSpaceView(spaceId, "docks", null));
+/** A Navigator docked to `side` of a workspace (docs/21-sidebars.md); `carry` is the side's earlier width and visibility. */
+async function openNavigator(workspaceId: WorkspaceId, side: Side, carry?: { hidden: boolean; width: number | null }): Promise<void> {
+  const w = await cmd.call("window.open", { kind: "navigator", workspaceId });
+  const d = readDocks(getWorkspaceView(workspaceId, "docks", null));
   const next = dock(d, w.id, side);
-  setSpaceView(spaceId, "docks", carry ? { ...next, [side]: { ...next[side], ...carry } } : next);
+  setWorkspaceView(workspaceId, "docks", carry ? { ...next, [side]: { ...next[side], ...carry } } : next);
 }
 
-/** Spaces being given their first Navigator, so a re-render doesn't make two. */
-const making = new Set<SpaceId>();
+/** Workspaces being given their first Navigator, so a re-render doesn't make two. */
+const making = new Set<WorkspaceId>();
 
 /**
- * Every Space starts with a Navigator docked left, which is also the migration
+ * Every workspace starts with a Navigator docked left, which is also the migration
  * from the old sidebar (its width and whether it was shown carry over). Once
- * a Space has sidebars (even none), it's left alone.
+ * a workspace has sidebars (even none), it's left alone.
  */
-function useFirstNavigator(spaceId: SpaceId, ready: boolean, unset: boolean, carry: { hidden: boolean; width: number | null }): void {
+function useFirstNavigator(workspaceId: WorkspaceId, ready: boolean, unset: boolean, carry: { hidden: boolean; width: number | null }): void {
   useEffect(() => {
-    if (!ready || !unset || making.has(spaceId)) return;
-    making.add(spaceId);
-    openNavigator(spaceId, "left", carry).catch(() => {
+    if (!ready || !unset || making.has(workspaceId)) return;
+    making.add(workspaceId);
+    openNavigator(workspaceId, "left", carry).catch(() => {
       // An older core without the Navigator type: no sidebars rather than asking again.
-      setSpaceView(spaceId, "docks", {});
+      setWorkspaceView(workspaceId, "docks", {});
     });
-  }, [spaceId, ready, unset]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspaceId, ready, unset]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** The app window's width, for fitting the sidebars. */

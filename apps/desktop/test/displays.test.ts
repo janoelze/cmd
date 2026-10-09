@@ -17,7 +17,7 @@ describe("display setups", () => {
     expect(setupKey([laptop, right])).not.toBe(setupKey([laptop, left]));
   });
 
-  it("remembers each Space's window per setup", () => {
+  it("remembers each workspace's window per setup", () => {
     const docked = setupKey([laptop, right]);
     const alone = setupKey([laptop]);
     let p = record({}, docked, "home", { x: 1600, y: 0, width: 1400, height: 900 });

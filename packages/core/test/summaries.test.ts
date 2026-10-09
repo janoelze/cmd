@@ -230,7 +230,7 @@ describe("SummaryService", () => {
         { type: "assistant", timestamp: "2026-10-05T10:05:00Z", message: { role: "assistant", content: [{ type: "text", text: "Done." }] } },
       ),
     );
-    const agent = { id: "a1", kind: "claude", cwd: "/src/cmd", spaceId: "s1", native: { claudeSessionId: "sess-1234-abcd", transcriptPath: transcript } } as unknown as Agent;
+    const agent = { id: "a1", kind: "claude", cwd: "/src/cmd", workspaceId: "s1", native: { claudeSessionId: "sess-1234-abcd", transcriptPath: transcript } } as unknown as Agent;
     const turns = [{ sessionId: "sess-1234-abcd", startedAt: 1, endedAt: 2, files: [{ path: "/src/cmd/README.md", change: "M", via: ["git"] }] }] as unknown as AgentTurn[];
     const shown: string[] = [];
     const notes: string[] = [];

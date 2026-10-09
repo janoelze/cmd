@@ -120,7 +120,7 @@ export class FileSearch {
   }
 
   #excluded(root: string): { skip: boolean; globs: string[] } {
-    // Worktrees inside the folder (`.claude/worktrees/x`) are other checkouts of the same files: searched in their own Space (docs/35).
+    // Worktrees inside the folder (`.claude/worktrees/x`) are other checkouts of the same files: searched in their own workspace (docs/35).
     const c = checkoutOf(root);
     const globs: string[] = c ? worktreesOf(c.common).filter((t) => t.startsWith(root + path.sep)).map((t) => t.slice(root.length + 1)) : [];
     for (const f of this.#o.excluded()) {

@@ -1,5 +1,5 @@
 // Rings Timer widgets (windows/builtin.ts timerType) from the core, so a timer
-// ends on time whether or not its Space is on screen or the app is open: one
+// ends on time whether or not its workspace is on screen or the app is open: one
 // setTimeout per running timer, set again whenever its window changes. When it
 // fires, the window is marked rung and a notification goes out.
 

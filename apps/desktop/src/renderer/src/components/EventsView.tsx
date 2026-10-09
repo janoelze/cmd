@@ -160,7 +160,7 @@ export function EventsView({ win }: WindowViewProps) {
       { label: "Copy ID", run: () => copy(e.id) },
       "-",
       { label: `Only ${e.type}`, run: () => setQuery(e.type) },
-      ...(e.paneId ? [{ label: "Show Terminal", run: () => goTo(e.paneId!, e.spaceId ?? undefined) }] : []),
+      ...(e.paneId ? [{ label: "Show Terminal", run: () => goTo(e.paneId!, e.workspaceId ?? undefined) }] : []),
     ]);
 
   const row = ({ e, updates }: Row) => {

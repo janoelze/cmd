@@ -1,12 +1,12 @@
 // The Navigator (docs/21-sidebars.md): what the app's sidebar used to be, now a
-// built-in widget, docked left in every Space by default. A search field over
+// built-in widget, docked left in every workspace by default. A search field over
 // open windows and the transcript index, then sections (Needs you, Agents,
 // Windows, Widgets, Recent past sessions). It reads App's rows and callbacks
 // through NavigatorContext, so every Navigator window shows the same.
 
 import { Button, EmptyState, ToolbarSearchField, useFlip, WindowToolbar } from "@cmd/ui";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { PaneId, SearchHit, SearchStatus, SessionInfo, SpaceId } from "@cmd/protocol";
+import type { PaneId, SearchHit, SearchStatus, SessionInfo, WorkspaceId } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { openSession } from "../actions.ts";
 import { usePersisted, useStoreValue, subscribeView } from "../store.ts";
@@ -19,8 +19,8 @@ import type { WindowViewProps } from "../windows/registry.ts";
 
 /** What the Navigator shows and does, from App. */
 export interface NavigatorData {
-  spaceId: SpaceId;
-  /** The Space's rows, sidebars left out (they are always in view). */
+  workspaceId: WorkspaceId;
+  /** The workspace's rows, sidebars left out (they are always in view). */
   rows: SidebarRow[];
   selected: PaneId | null;
   onSelect: (row: SidebarRow) => void;
@@ -84,7 +84,7 @@ function Navigator(p: NavigatorData) {
         .filter((x): x is string => !!x),
     [p.rows],
   );
-  const recent = useRecent(p.spaceId, live);
+  const recent = useRecent(p.workspaceId, live);
   const matches = useMemo(() => (searching ? filterRows(p.rows, query, now) : []), [searching, p.rows, query, now]);
   const hits = useHistorySearch(query);
 
@@ -201,8 +201,8 @@ function Navigator(p: NavigatorData) {
   );
 }
 
-/** The Space's newest past sessions that aren't open: a live query over the sessions view. */
-function useRecent(spaceId: SpaceId, live: string[]): SearchHit[] {
+/** The workspace's newest past sessions that aren't open: a live query over the sessions view. */
+function useRecent(workspaceId: WorkspaceId, live: string[]): SearchHit[] {
   const limit = useStoreValue((s) => s.settings.settings["ui.sidebarRecent"]);
   // Room for the open ones, which are left out below.
   const want = limit > 0 ? limit + live.length : 0;
@@ -210,7 +210,7 @@ function useRecent(spaceId: SpaceId, live: string[]): SearchHit[] {
   useEffect(() => {
     if (want <= 0) return setRows([]);
     let have = new Map<string, SessionInfo>();
-    const off = subscribeView({ view: "sessions", spaceId, limit: want }, (changed, all) => {
+    const off = subscribeView({ view: "sessions", workspaceId, limit: want }, (changed, all) => {
       if (all) have = new Map();
       for (const r of changed as SessionInfo[]) have.set(r.key, r);
       // A session only gets newer, so the oldest past `want` can go.
@@ -219,7 +219,7 @@ function useRecent(spaceId: SpaceId, live: string[]): SearchHit[] {
       setRows(list);
     });
     return () => (off(), setRows([]));
-  }, [spaceId, want]);
+  }, [workspaceId, want]);
   const liveKey = live.join("\n");
   return useMemo(() => {
     const skip = new Set(live);

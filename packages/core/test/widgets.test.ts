@@ -192,7 +192,7 @@ export default async function data(): Promise<Data> {
   return { notes: evs.length, first: evs[0]?.text ?? "" };
 }`,
       });
-      const token = core.widgetTokens.issue({ widgetId: "w", spaceId: null });
+      const token = core.widgetTokens.issue({ widgetId: "w", workspaceId: null });
       const r = await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {}, socket: { path: widgetsSocketPath(path.join(sockDir, "core.sock")), token } });
       if (!r.ok) console.error("events() run failed:", r.error, "\n", r.stderr);
       expect(r).toMatchObject({ ok: true, data: { notes: 1, first: "a note" } });
@@ -543,7 +543,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(copyState()).toMatchObject({ phase: "ready", widgetId, revision: 1, prompt: "count", history: ["count"], hasData: true });
     expect(copyState().html).toBe(state().html);
     expect(core.magic.library()[0]!.windows.sort()).toEqual([id, copy.id].sort());
-    expect(() => core.magic.deleteWidget(widgetId)).toThrow(/in a Space/);
+    expect(() => core.magic.deleteWidget(widgetId)).toThrow(/in a workspace/);
 
     core.handlers["magic.config"]({ id: copy.id, values: { start: 10 } });
     await until(() => events.some((e) => e.type === "magic.data" && e.id === copy.id && (e.data as { n?: number })?.n === 13));
@@ -600,7 +600,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
       expect.objectContaining({ ref: "type:actions", source: "builtin", title: "Workspace Actions", windows: [] }),
     ]);
     const activity = core.handlers["widget.add"]({ ref: "type:agents" }) as unknown as { id: string; kind: string; state: { scope: string } };
-    expect(activity).toMatchObject({ kind: "agents", state: { scope: "space" } });
+    expect(activity).toMatchObject({ kind: "agents", state: { scope: "workspace" } });
     // A built-in widget can be about a folder: Live Diff of the selected terminal's repository.
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-diff-"));
     expect(core.handlers["widget.add"]({ ref: "type:diff", cwd: repo })).toMatchObject({ kind: "diff", state: { path: repo } });
@@ -616,7 +616,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(title()).toBe("My counter");
     expect(list()[0]!.title).toBe("My counter");
 
-    // Another copy in a Space, and a duplicate to change on its own.
+    // Another copy in a workspace, and a duplicate to change on its own.
     const copy = core.handlers["widget.add"]({ ref }) as unknown as { id: string; kind: string; title: string };
     expect(copy).toMatchObject({ kind: "magic", title: "My counter" });
     core.handlers["magic.secret"]({ id, key: "token", value: "s3cret" });
@@ -626,7 +626,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(core.magic.widgetSecrets.get(dup.ref.slice("magic:".length))).toEqual({ token: "s3cret" });
     expect(list().find((e) => e.ref === ref)!.windows.sort()).toEqual([id, copy.id].sort());
 
-    expect(() => core.handlers["widget.delete"]({ ref })).toThrow(/in a Space/);
+    expect(() => core.handlers["widget.delete"]({ ref })).toThrow(/in a workspace/);
     expect(() => core.handlers["widget.delete"]({ ref: "type:magic" })).toThrow(/built-in/);
     expect(() => core.handlers["widget.add"]({ ref: "magic:nope" })).toThrow(/no such widget/);
     core.handlers["widget.delete"]({ ref: dup.ref });

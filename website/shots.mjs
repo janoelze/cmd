@@ -1,4 +1,4 @@
-// Turns the macOS window screenshots in shots/ (⇧⌘4, space: the window on a
+// Turns the macOS window screenshots in shots/ (⇧⌘4, workspace: the window on a
 // transparent drop shadow) into the website's screenshots in public/shots/:
 // finds the opaque window inside the shadow and crops to it, keeping the
 // rounded corners' transparency and the colour profile. Plain Node, no

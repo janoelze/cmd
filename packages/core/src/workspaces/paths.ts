@@ -1,6 +1,6 @@
-// Path → Space matching. A Space's identity is its root's canonical path, so the
+// Path → workspace matching. A workspace's identity is its root's canonical path, so the
 // same folder reached by any spelling (symlink, /tmp vs /private/tmp, other case
-// on APFS, NFD vs NFC, `..`, trailing slash) is one Space. Containment compares
+// on APFS, NFD vs NFC, `..`, trailing slash) is one workspace. Containment compares
 // whole path segments: ~/src/cmd does not contain ~/src/cmd-old.
 
 import fs from "node:fs";

@@ -9,7 +9,7 @@ const pane = (id: string, p: Partial<Pane> = {}): Pane =>
   ({ id, title: "", cwd: "/Users/someone/src/cmd", foreground: "zsh", agentId: null, lastActivityAt: 0, createdAt: 0, attention: null, ...p }) as Pane;
 const agent = (id: string, a: Partial<Agent> = {}): Agent =>
   ({ id, kind: "claude", state: "working", stateSince: 0, seenAt: null, parentId: null, paneId: null, cwd: "/Users/someone/src/cmd", name: null, spawn: {}, native: {}, ...a }) as Agent;
-const win = (id: string, w: Partial<AppWindow> = {}): AppWindow => ({ id, spaceId: "home", kind: "browser", title: "Docs", createdAt: 0, updatedAt: 0, state: {}, ...w });
+const win = (id: string, w: Partial<AppWindow> = {}): AppWindow => ({ id, workspaceId: "home", kind: "browser", title: "Docs", createdAt: 0, updatedAt: 0, state: {}, ...w });
 
 function state(panes: Pane[], agents: Agent[], windows: AppWindow[] = []): State {
   return {

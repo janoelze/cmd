@@ -1,7 +1,7 @@
 // Motion and visual stability run (docs/37-motion.md): launches the built app
 // against a throwaway core, sets up a board of windows and plays the moves
 // that rearrange it (⌘↩, view switches, sidebars, opening and closing windows,
-// resizing the app window, Spaces). While each plays, a probe in the page reads
+// resizing the app window, workspaces). While each plays, a probe in the page reads
 // every window's rect, its content's rect, opacity and visibility on every
 // animation frame, counts content resizes (a terminal refit, a reflow) and
 // long animation frames, and the run scores what it saw:
@@ -54,7 +54,7 @@ fs.mkdirSync(path.join(fixture, "src"), { recursive: true });
 for (let i = 0; i < 30; i++) fs.writeFileSync(path.join(fixture, `file-${String(i).padStart(2, "0")}.txt`), "x\n".repeat(i));
 fs.writeFileSync(path.join(fixture, "README.md"), `# Motion\n\n${"A paragraph of text that wraps across the window, so a reflow shows. ".repeat(12)}\n\n## More\n\n${"- an item\n".repeat(20)}`);
 fs.writeFileSync(path.join(fixture, "notes.txt"), Array.from({ length: 80 }, (_, i) => `${i} the quick brown fox jumps over the lazy dog `.repeat(3)).join("\n"));
-const space2 = path.join(home, "space-two");
+const space2 = path.join(home, "workspace-two");
 fs.mkdirSync(space2, { recursive: true });
 
 const require = createRequire(path.join(root, "apps/desktop/package.json"));
@@ -160,7 +160,7 @@ await win.evaluate(() => {
       });
     // Closed windows fading out where they were (motion.ts ghost).
     frame.ghosts = document.querySelectorAll(".ghost-tile").length;
-    // The board under a View Transition (switching Spaces): what's seen is its crossfade, not the DOM.
+    // The board under a View Transition (switching workspaces): what's seen is its crossfade, not the DOM.
     frame.vt = !!document.querySelector(".stage:active-view-transition");
     rec.frames.push(frame);
     requestAnimationFrame(tick);
@@ -198,7 +198,7 @@ await win.evaluate(() => {
           if (!el || el.closest("[data-morphing], .ghost-tile, .dock.leaving, .tip-layer")) continue;
           // Containers whose content the motion system keeps in place (the board and its
           // track, whose windows are carried on screen), and the top bar's columns, which
-          // resize around the Space's name while their content stays put.
+          // resize around the workspace's name while their content stays put.
           if (el.matches(".main, .windows-scroller, .windows-track, .topbar-center, .topbar-trail, .topbar-lead")) continue;
           if (el.closest(".dock")?.getAnimations().length) continue;
           const a = src.previousRect;
@@ -527,7 +527,7 @@ await menu("view.grid");
 await sleep(700);
 
 // Chrome: the palette, find bars, a Markdown window's preview and editor, a command
-// running in a terminal, a notification, the Space menu, a tooltip.
+// running in a terminal, a notification, the workspace menu, a tooltip.
 await scenario("palette: open", () => menu("view.palette"));
 await scenario("palette: type to filter", () => win.keyboard.type("zzq", { delay: 60 }), { settle: 500 });
 await scenario("palette: clear the filter", async () => { for (let i = 0; i < 3; i++) await win.keyboard.press("Backspace"), await sleep(60); }, { settle: 500 });
@@ -548,8 +548,8 @@ if (pane) {
   await scenario("terminal: a command runs", () => call("pane.write", { paneId: pane.id, data: "sleep 0.3; echo done\r" }), { settle: 1200 });
   await scenario("notification", () => call("notify.send", { paneId: pane.id, title: "Build", body: "done" }), { settle: 1200 });
 }
-await scenario("space menu: open", () => win.locator(".space-trigger").first().click());
-await scenario("space menu: close", () => win.keyboard.press("Escape"));
+await scenario("workspace menu: open", () => win.locator(".workspace-trigger").first().click());
+await scenario("workspace menu: close", () => win.keyboard.press("Escape"));
 const tipAt = await win.evaluate(() => {
   const r = document.querySelector(".topbar [data-tip]")?.getBoundingClientRect();
   return r && { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -560,10 +560,10 @@ if (tipAt) {
 }
 await menu("view.grid");
 await sleep(700);
-await call("space.open", { path: space2, show: false });
+await call("workspace.open", { path: space2, show: false });
 await sleep(300);
-await scenario("next Space", () => menu("space.next"), { settle: 900 });
-await scenario("previous Space", () => menu("space.prev"), { settle: 900 });
+await scenario("next workspace", () => menu("workspace.next"), { settle: 900 });
+await scenario("previous workspace", () => menu("workspace.prev"), { settle: 900 });
 
 // ── report ───────────────────────────────────────────────
 const cols = ["motion ms", "dropped", "worst frame", "loaf", "instant", "snap", "desync", "wobble", "reflows", "drift", "pops", "lag", "shifts"];

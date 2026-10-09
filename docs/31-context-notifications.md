@@ -75,7 +75,7 @@ Data: `agent.hook` tool calls and results in the turn. "cmd · stuck on pnpm bui
 **10. A stopped agent can go on.** A turn failed on a usage limit with a reset time ("resets Oct 7, 3 am"); when that time passes, one notification for all agents stopped that way.
 Data: turns (`outcome: failed`, `error`, the parsed reset time). Needs a timer in the rule engine. "claude · available again" / "2 sessions stopped on the limit can go on." Informative. **On.**
 
-**11. An agent finished and you never looked.** An agent finished more than an hour ago and there's no `user.look` for it since; notified once, when you next open its Space (not on a timer).
+**11. An agent finished and you never looked.** An agent finished more than an hour ago and there's no `user.look` for it since; notified once, when you next open its workspace (not on a timer).
 Data: turns, `user.look`, `user.focus`. Quiet (marker in the sidebar plus one toast, no system notification). **On.**
 
 **12. Background work an agent left running finished.** Claude ends a turn with `background_tasks`; a later auto turn reports it. Today that's a second "done"; say it's the background work: "cmd · background task done" / "The test run it left running passed."
@@ -83,7 +83,7 @@ Data: turns (`background`, `auto`). Improves `agent-done`'s wording; no new rule
 
 ### Git and branches
 
-**13. A branch you worked on shipped.** A branch you or an agent committed to (in this Space's projects) was merged into the default branch, or shipped in a tag.
+**13. A branch you worked on shipped.** A branch you or an agent committed to (in this workspace's projects) was merged into the default branch, or shipped in a tag.
 Data: `git.merge`, `git.tag`, `git.commit` (branch), the journal's threads (release ships the branches merged since the last tag). "dnd · merged" / "Shipped in v0.14.4." Quiet. **On.**
 
 **14. Work left behind.** An agent's process exited (agent removed) while its worktree has uncommitted changes, and nothing happens there for 30 minutes.
@@ -94,7 +94,7 @@ Data: `agent` entity (cwd), `checkout.ts`, a `git status` at that moment (the on
 **15. While you were away.** You come back (focus after more than 30 minutes without any) and things happened: one notification summing it up, opening a "While you were away" sheet (a separate feature, docs/30).
 Data: `user.focus` gaps, turns, notifications sent meanwhile, failed commands. "While you were away" / "3 agents finished, 1 needs you, 1 build failed." Informative. **On** once the sheet exists.
 
-**16. Focus drift (opt-in).** You've been in a Space for 2 hours that isn't the one with agents waiting on you. Off by default; it's coaching, not news.
+**16. Focus drift (opt-in).** You've been in a workspace for 2 hours that isn't the one with agents waiting on you. Off by default; it's coaching, not news.
 
 ### cmd itself
 
@@ -136,7 +136,7 @@ interface Notice {
 interface RuleContext {
   data: DataService;               // data.query, store.entityOf
   turns(q): TurnRow[]; sessions(q): SessionInfo[];
-  focus(): { spaceId; paneId?; windowId? } | null;   // from the core's #focus (user.focus)
+  focus(): { workspaceId; paneId?; windowId? } | null;   // from the core's #focus (user.focus)
   openFiles(): string[];           // text/Markdown windows' paths
   checkout(dir): Checkout | null;
   at(time, ruleId, payload): void; // a timer (rule 10's reset time)

@@ -196,7 +196,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
 
   /** The entities an event names, noted once per process (their seen time follows the event). */
   #entities(e: NewDataEvent): void {
-    const pairs: [string, string | null | undefined][] = [["space", e.spaceId], ["project", e.projectId], ["session", e.sessionId], ["agent", e.agentId], ["pane", e.paneId], ["window", e.windowId], ["device", e.deviceId]];
+    const pairs: [string, string | null | undefined][] = [["workspace", e.workspaceId], ["project", e.projectId], ["session", e.sessionId], ["agent", e.agentId], ["pane", e.paneId], ["window", e.windowId], ["device", e.deviceId]];
     for (const [kind, id] of pairs) {
       if (!id) continue;
       const key = `${kind}:${id}`;

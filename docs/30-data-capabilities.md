@@ -4,7 +4,7 @@
 
 ## What cmd knows now
 
-One log of facts (`$CMD_HOME/data/events.sqlite`), each with the same envelope: when, what type, who produced it, which Space, project, session, agent, pane and window it belongs to, a one-line text, a typed payload, and big content as a compressed blob.
+One log of facts (`$CMD_HOME/data/events.sqlite`), each with the same envelope: when, what type, who produced it, which workspace, project, session, agent, pane and window it belongs to, a one-line text, a typed payload, and big content as a compressed blob.
 
 | What | Events | Kept |
 |---|---|---|
@@ -13,7 +13,7 @@ One log of facts (`$CMD_HOME/data/events.sqlite`), each with the same envelope: 
 | When an agent's pane was printing, and what each turn printed | `pane.activity`, `agent.output` | a year / 90 days |
 | Every shell command in a terminal: line, folder, exit code, how long, **what it printed** | `command` | 90 days for output |
 | Git: commits, merges, branches, checkouts, tags, rebases, resets, per worktree | `git.*` | forever |
-| Pages browser windows showed, files opened, windows (not terminals: those are their commands) and Spaces opened and closed | `browser.visit`, `file.open`, `window.*`, `space.*` | a year |
+| Pages browser windows showed, files opened, windows (not terminals: those are their commands) and workspaces opened and closed | `browser.visit`, `file.open`, `window.*`, `space.*` | a year |
 | What **you** did: which pane or window had focus and for how long, which commands you ran, which agents you looked at | `user.focus`, `user.command`, `user.look` | a year |
 | Notifications shown, notes written down | `notification`, `note` | forever |
 | Every model call cmd made: purpose, model, tokens, what was sent and what came back, and what the input was built from | `ai.call` | a year |
@@ -21,7 +21,7 @@ One log of facts (`$CMD_HOME/data/events.sqlite`), each with the same envelope: 
 
 Around the facts:
 
-- **Entities with links**: agents (kind, model, version), sessions (title, folder, branch, span), projects (path, name, git remote), panes, windows, Spaces; an agent *runs* a session, *ran in* a pane, is a *child of* another agent, is *in* a project.
+- **Entities with links**: agents (kind, model, version), sessions (title, folder, branch, span), projects (path, name, git remote), panes, windows, workspaces; an agent *runs* a session, *ran in* a pane, is a *child of* another agent, is *in* a project.
 - **Views**, derived and rebuildable: turns (one row per prompt with outcome, tools, files, final answer), sessions, full-text search over everything with words in it, journal days and weeks.
 - **One query shape** for the app, the CLI, agents and widgets, **live queries** over events and views, and **one context builder** for every model call.
 - **Privacy built in**: redaction before anything is stored, "Never record" rules for folders, hosts and commands, `cmd data forget` for a session or a project, retention per class, all visible in Settings → Data and `cmd data explain`.
@@ -36,7 +36,7 @@ Around the facts:
 | Transcripts were the agents' files; a deleted or rewritten file lost the session | cmd owns a copy; search, summaries and the journal read it |
 | Commands in memory, 300 runs, no output | Every command with what it printed, for months |
 | Nothing about what the person did | Focus, commands run, agents looked at |
-| Space attached later by guessing from folder paths; two journal APIs disagreed about a Space's events | Space, project and session recorded with every event when it happens |
+| Workspace attached later by guessing from folder paths; two journal APIs disagreed about a workspace's events | Workspace, project and session recorded with every event when it happens |
 | 120 RPC methods, each a query someone wrote for one feature | One query (`data.query`), live (`data.subscribe`, `data.subscribeView`), plus the old methods as thin views |
 | Polling: the Journal widget every 15 min, Resources every 2 s | Live queries push changes |
 | Credentials in commands stored as typed for 180 days and sent to models | Redacted before storage and again before any model call; patterns tested on 1.9 GB of real transcripts |
@@ -53,10 +53,10 @@ Grouped by how much is missing. "Has" is what exists; "needs" is the work.
 **Agent Activity, for real.** Per agent: its turns as they happen, what each asked, the files it changed, what its terminal printed, how long, how it ended; for agents that have exited too.
 Has: the turns view with live queries (`data.subscribeView {view: "turns", agentId}`), `agent.output`, entities. Needs: the widget's detail view.
 
-**While you were away.** Coming back to the Mac or a Space: "3 agents finished, 1 waits on you since 14:32 (wants to run `rm -rf dist`), the build you started failed after 4 min." 
+**While you were away.** Coming back to the Mac or a workspace: "3 agents finished, 1 waits on you since 14:32 (wants to run `rm -rf dist`), the build you started failed after 4 min." 
 Has: `user.focus` spans (when you were last here), turns since then, command events with exit codes. Needs: a sheet, and optionally the fast tier for one line per agent.
 
-**Search everything.** One field over sessions, commands and their output, commit messages, pages, files, notes and journal entries, filtered by project, Space or time.
+**Search everything.** One field over sessions, commands and their output, commit messages, pages, files, notes and journal entries, filtered by project, workspace or time.
 Has: the log's full-text index and `data.query {text, projectId, at}`. Needs: result rows per type in the palette.
 
 **Project pages.** One page per repository: its sessions and agents, branches and merges, releases, the commands that failed, the journal's days for it, where it lives and its remote.
@@ -131,7 +131,7 @@ From the app (renderer), a live list:
 
 ```ts
 subscribeView({ view: "turns", agentId }, (rows, initial) => …);
-subscribeData({ types: ["command"], spaceId, order: "desc", limit: 300 }, (events, initial) => …);
+subscribeData({ types: ["command"], workspaceId, order: "desc", limit: 300 }, (events, initial) => …);
 ```
 
 ## Limits worth knowing

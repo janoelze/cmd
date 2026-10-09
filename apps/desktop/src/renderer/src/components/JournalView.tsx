@@ -27,7 +27,7 @@ export function JournalView({ win }: WindowViewProps) {
   const [week, setWeek] = useState<JournalWeek | null>(null);
   const [writing, setWriting] = useState(false);
   const gen = useRef(0);
-  const params = scope === "all" ? { scope: "all" } : { spaceId: win.spaceId };
+  const params = scope === "all" ? { scope: "all" } : { workspaceId: win.workspaceId };
 
   const load = useCallback(
     async (write: "stale" | "force") => {
@@ -47,7 +47,7 @@ export function JournalView({ win }: WindowViewProps) {
         if (g === gen.current) setWriting(false);
       }
     },
-    [scope, win.spaceId, needsAi],
+    [scope, win.workspaceId, needsAi],
   );
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export function JournalView({ win }: WindowViewProps) {
     void load("stale");
     // Written again when something happened (a live query over the kinds the journal reads), with a slow backstop.
     let debounce: ReturnType<typeof setTimeout> | undefined;
-    const off = subscribeData({ types: ["command", "git.", "browser.visit", "file.open", "note", "space.", "transcript.message", "agent.note"], at: [Date.now(), Number.MAX_SAFE_INTEGER], limit: 1 }, (_events, initial) => {
+    const off = subscribeData({ types: ["command", "git.", "browser.visit", "file.open", "note", "workspace.", "transcript.message", "agent.note"], at: [Date.now(), Number.MAX_SAFE_INTEGER], limit: 1 }, (_events, initial) => {
       if (initial) return;
       clearTimeout(debounce);
       debounce = setTimeout(() => void load("stale"), 5000);

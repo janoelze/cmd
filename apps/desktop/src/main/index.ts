@@ -22,7 +22,7 @@ import { lucideSymbol, type SymbolImage } from "@cmd/ui/lucide";
 import { appMetrics } from "./metrics.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
 import { setDockIcon, startDockIcon } from "./dock-icon.ts";
-import { SpaceWindows, type Bounds } from "./spaces.ts";
+import { WorkspaceWindows, type Bounds } from "./workspaces.ts";
 import { handleCertificates } from "./certificates.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
 import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } from "./feedback.ts";
@@ -452,8 +452,8 @@ async function coreFailed(coreUp: () => void): Promise<void> {
 
 // ── window ──────────────────────────────────────────────
 
-/** An app window showing a Space (see spaces.ts, which decides which). */
-function createWindow(spaceId: string, b: Bounds): BrowserWindow {
+/** An app window showing a workspace (see workspaces.ts, which decides which). */
+function createWindow(workspaceId: string, b: Bounds): BrowserWindow {
   performance.mark("boot:window-start");
   const win = new BrowserWindow({
     ...b,
@@ -485,13 +485,13 @@ function createWindow(spaceId: string, b: Bounds): BrowserWindow {
   });
   performance.mark("boot:window-created");
   win.once("ready-to-show", () => (performance.mark("boot:ready-to-show"), win.show()));
-  // The renderer reads its Space from the URL before the core answers.
-  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}?space=${encodeURIComponent(spaceId)}`);
-  else win.loadFile(path.join(here, "../renderer/index.html"), { query: { space: spaceId } });
+  // The renderer reads its workspace from the URL before the core answers.
+  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}?workspace=${encodeURIComponent(workspaceId)}`);
+  else win.loadFile(path.join(here, "../renderer/index.html"), { query: { workspace: workspaceId } });
   return win;
 }
 
-const spaces = new SpaceWindows(createWindow);
+const workspaces = new WorkspaceWindows(createWindow);
 
 // ── utility windows ─────────────────────────────────────
 // One native Settings window (⌘,), like a macOS app's: a sidebar of categories,
@@ -634,13 +634,13 @@ app.on("browser-window-focus", (_e, win) => {
   const state = menuStates.get(win);
   if (state) applyMenuState(state);
 });
-ipcMain.on("space-show", (e, spaceId: string, o: { select?: string; newWindow?: boolean }) => spaces.show(spaceId, o ?? {}, winOf(e)));
-ipcMain.on("space-lost", (e) => {
+ipcMain.on("workspace-show", (e, workspaceId: string, o: { select?: string; newWindow?: boolean }) => workspaces.show(workspaceId, o ?? {}, winOf(e)));
+ipcMain.on("workspace-lost", (e) => {
   const win = winOf(e);
-  if (win) spaces.lost(win);
+  if (win) workspaces.lost(win);
 });
 ipcMain.handle("choose-folder", async (e) => {
-  const opts = { properties: ["openDirectory" as const, "createDirectory" as const], buttonLabel: "Open Space" };
+  const opts = { properties: ["openDirectory" as const, "createDirectory" as const], buttonLabel: "Open Workspace" };
   const win = winOf(e);
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
   return r.canceled ? null : (r.filePaths[0] ?? null);
@@ -668,10 +668,10 @@ ipcMain.on("open-path", async (e, p: string) => {
 });
 ipcMain.on("settings-window", (_e, page?: string) => void openSettings(typeof page === "string" ? page : undefined));
 ipcMain.on("check-updates", () => checkForUpdates());
-// The Task Manager: Electron's own processes, and showing a terminal in the app window of its Space.
+// The Task Manager: Electron's own processes, and showing a terminal in the app window of its workspace.
 ipcMain.handle("app-metrics", () => appMetrics());
 ipcMain.on("task-manager", () => openTaskManager());
-ipcMain.on("show-pane", (_e, spaceId: string, paneId: string) => spaces.show(spaceId, { select: paneId }, appWindows()[0] ?? null));
+ipcMain.on("show-pane", (_e, workspaceId: string, paneId: string) => workspaces.show(workspaceId, { select: paneId }, appWindows()[0] ?? null));
 ipcMain.on("install-update", () => void updater().then((u) => u.installUpdate()));
 ipcMain.handle("restart-core", () => restartCore());
 // Window → Resize to 1500 × 900: the whole window at that size, out of full screen, centred on its display.
@@ -1004,18 +1004,18 @@ app.whenReady().then(async () => {
   // First: the window loads its bundle while the menu is built and the core is
   // checked or started; the preload connects once that is done (core-checked).
   if (workbench !== undefined) openWorkbench();
-  else spaces.restore();
+  else workspaces.restore();
   // Decoding and setting it takes ~80 ms on this thread: not while the first window starts (dev builds only).
   if (devIcon) setTimeout(() => app.dock?.setIcon(devIcon), 1000);
   else if (!devBuild) setTimeout(() => startDockIcon(dockIcons, savedAppearance().dockIcon ?? null), 1000);
-  const coreUp = () => (performance.mark("boot:core-reachable"), spaces.followCore(socketPath, appWindows), servePreviews(socketPath), void countLaunch());
+  const coreUp = () => (performance.mark("boot:core-reachable"), workspaces.followCore(socketPath, appWindows), servePreviews(socketPath), void countLaunch());
   ensureCore()
     .finally(coreChecked)
     .then(coreUp, (err: Error) => (log.error("the core did not start", err), void coreFailed(coreUp)));
   followCrashReports(socketPath);
   // Its bundle (about 570 KB) is parsed on this thread; its first check is 30 s away anyway.
   setTimeout(() => void startUpdater(), 5000);
-  const send = commandSender(() => spaces.reopen(), { openSettings, openTaskManager, checkForUpdates, isUtility, appWindows });
+  const send = commandSender(() => workspaces.reopen(), { openSettings, openTaskManager, checkForUpdates, isUtility, appWindows });
   refreshMenu = () => buildMenu(send, recordingShortcut ? {} : keybindings.bindings);
   refreshMenu();
   watchKeybindings((next) => {
@@ -1032,7 +1032,7 @@ app.whenReady().then(async () => {
     ]),
   );
   app.on("activate", () => {
-    if (appWindows().length === 0) spaces.reopen();
+    if (appWindows().length === 0) workspaces.reopen();
   });
 });
 

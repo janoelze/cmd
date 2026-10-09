@@ -1,4 +1,4 @@
-// An empty space's hint: cycles through a few shortcuts worth knowing, as
+// An empty workspace's hint: cycles through a few shortcuts worth knowing, as
 // "Press ⌘K for the command palette". Commands are listed by id with the phrase
 // that follows their keys; keys come from the user's keybindings, so a remap
 // shows here and an unbound command is skipped.
@@ -14,7 +14,7 @@ const TIPS: [CommandId, string][] = [
   ["file.newTerminal", "for a new terminal"],
   ["file.newClaude", "to start a Claude session"],
   ["view.search", "to search windows and past sessions"],
-  ["file.openSpace", "to open a folder as a Space"],
+  ["file.openWorkspace", "to open a folder as a workspace"],
   ["app.settings", "for settings"],
 ];
 const EVERY_MS = 4000;

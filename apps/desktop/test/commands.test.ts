@@ -36,8 +36,8 @@ describe("commands", () => {
     expect(OTHER["view.palette"]).toEqual(["Ctrl+Shift+K"]);
     // No plain Ctrl+letter: those belong to the shell.
     expect(Object.values(OTHER).flat().filter((k) => /^Ctrl\+[A-Z]$/.test(k))).toEqual([]);
-    // ⇧⌘] and ⌃⌘] meet at Ctrl+Alt+Shift+]: Next Space keeps it, Next Session keeps Ctrl+Alt+Right.
-    expect(OTHER["space.next"]).toEqual(["Ctrl+Alt+Shift+]"]);
+    // ⇧⌘] and ⌃⌘] meet at Ctrl+Alt+Shift+]: Next Workspace keeps it, Next Session keeps Ctrl+Alt+Right.
+    expect(OTHER["workspace.next"]).toEqual(["Ctrl+Alt+Shift+]"]);
     expect(OTHER["session.next"]).toEqual(["Ctrl+Alt+Right"]);
   });
 });
@@ -64,6 +64,13 @@ describe("resolveKeybindings", () => {
     const { bindings } = resolveKeybindings({ "view.palette": "Cmd+Shift+P", "file.newClaude": "Command+N" }, MAC);
     expect(bindings["file.newTerminal"]).toEqual(["Cmd+T"]);
     expect(bindings["file.newClaude"]).toEqual(["Command+N"]);
+  });
+
+  it("reads the space.* ids from before workspaces, and drops them when the Settings window rebinds", () => {
+    const { bindings, errors } = resolveKeybindings({ "space.last": "Ctrl+Cmd+L" }, MAC);
+    expect(errors).toEqual([]);
+    expect(bindings["workspace.last"]).toEqual(["Ctrl+Cmd+L"]);
+    expect(editKeybindings({ "space.last": "Ctrl+Cmd+L" }, "workspace.last", ["Ctrl+Cmd+K"], MAC)).toEqual({ "workspace.last": ["Ctrl+Cmd+K"] });
   });
 });
 

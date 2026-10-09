@@ -57,7 +57,7 @@ describe("restore after a core restart", () => {
     await b.core.close();
   });
 
-  it("starts a terminal whose folder is gone in its Space's, and says so", async () => {
+  it("starts a terminal whose folder is gone in its workspace's, and says so", async () => {
     const db = path.join(dir, "gone.sqlite");
     const tree = path.join(dir, "tree");
     fs.mkdirSync(tree);
@@ -68,7 +68,7 @@ describe("restore after a core restart", () => {
 
     const b = start(db);
     b.core.restore();
-    expect(b.ptys[0]!.opts.cwd).toBe(b.core.spaces.home().root);
+    expect(b.ptys[0]!.opts.cwd).toBe(b.core.workspaces.home().root);
     expect((await text(b.core, pane.id)).replace(/\n/g, "")).toContain(`${tree} is gone, started in`);
     await b.core.close();
   });
@@ -108,15 +108,15 @@ describe("restore after a core restart", () => {
     await b.core.close();
   });
 
-  it("drops terminals that were closed, and those of closed Spaces", async () => {
+  it("drops terminals that were closed, and those of closed workspaces", async () => {
     const db = path.join(dir, "d.sqlite");
     fs.mkdirSync(path.join(dir, "proj"));
     const a = start(db);
     const closed = a.core.panes.create({ cwd: dir });
     a.ptys[0]!.exit(0);
-    const { space } = a.core.spaces.open(path.join(dir, "proj"));
-    a.core.panes.create({ cwd: dir, spaceId: space.id });
-    await a.core.call("space.close", { id: space.id });
+    const { workspace } = a.core.workspaces.open(path.join(dir, "proj"));
+    a.core.panes.create({ cwd: dir, workspaceId: workspace.id });
+    await a.core.call("workspace.close", { id: workspace.id });
     await a.core.close();
 
     const b = start(db);
@@ -232,7 +232,7 @@ describe("restore after a core restart", () => {
 describe("UI state of closed windows", () => {
   it("goes with the window", async () => {
     const { core } = start(path.join(dir, "ui.sqlite"));
-    const w = core.windows.open("files", { path: dir }, core.spaces.home());
+    const w = core.windows.open("files", { path: dir }, core.workspaces.home());
     core.store.setUiState(`files.expanded.${w.id}`, [dir]);
     core.store.setUiState("sidebar.open", true);
     core.windows.close(w.id);
@@ -293,7 +293,7 @@ describe("records another cmd version saved", () => {
       `INSERT INTO agents (id, parent_id, root_id, doc, updated_at) VALUES ('old-agent', NULL, 'old-agent', '${old}', 1)`,
       `INSERT INTO panes (id, doc) VALUES ('no-id', '{"cwd": "/"}')`,
       `INSERT INTO windows (id, doc) VALUES ('w', '[1, 2]')`,
-      `INSERT INTO spaces (id, root, doc) VALUES ('s', '/nowhere', '{')`,
+      `INSERT INTO workspaces (id, root, doc) VALUES ('s', '/nowhere', '{')`,
       `INSERT INTO ui_state (key, value, updated_at) VALUES ('k', 'nope', 0)`,
     ]);
 
@@ -339,7 +339,7 @@ describe("agents in the store", () => {
     const tracker = new AgentTracker(panes, { store });
     const turn = { format: 2, derivedBy: null, agentId: "a1", agentKind: "claude", agentVersion: null, model: null, index: 0, sessionId: "s", turnId: null, startedAt: 1, endedAt: 2, prompt: "hi", auto: false, followUps: [], notes: [], background: [], outcome: "done", ask: null, final: "Done.", error: null, tools: [], commands: [], shellWrites: 0, files: [], subagents: 0, events: 1, inferred: [] } as const;
     tracker.activity.saveTurn({ ...turn, followUps: [], notes: [], background: [], tools: [], commands: [], files: [], inferred: [] }, 1);
-    store.saveAgent({ id: "a1", paneId: null, spaceId: "home", kind: "claude", name: null, cwd: "/w", parentId: null, rootId: "a1", depth: 0, spawn: { source: "detected" }, native: {}, state: "done", stateSince: 2, detail: null, lastMessage: "Done.", lastPrompt: "hi", seenAt: null, createdAt: 1, turn: { ...turn, followUps: [], notes: [], background: [], tools: [], commands: [], files: [], inferred: [] } });
+    store.saveAgent({ id: "a1", paneId: null, workspaceId: "home", kind: "claude", name: null, cwd: "/w", parentId: null, rootId: "a1", depth: 0, spawn: { source: "detected" }, native: {}, state: "done", stateSince: 2, detail: null, lastMessage: "Done.", lastPrompt: "hi", seenAt: null, createdAt: 1, turn: { ...turn, followUps: [], notes: [], background: [], tools: [], commands: [], files: [], inferred: [] } });
     const raw = JSON.parse((store.db.prepare(`SELECT doc FROM agents WHERE id = 'a1'`).get() as { doc: string }).doc);
     expect(raw).not.toHaveProperty("turn");
     const [row] = store.agents();

@@ -163,7 +163,7 @@ Windows made before v2 keep their HTML and refresh their v1 source. The first Ch
 
 The folder already is the package. What's missing:
 
-1. **A library**: widgets outside windows ("Open Widget…", duplicate, reopen a closed one), and per-Space widget folders.
+1. **A library**: widgets outside windows ("Open Widget…", duplicate, reopen a closed one), and per-workspace widget folders.
 2. **Packaging**:
    - semver and a changelog in the manifest;
    - a content hash over the files;

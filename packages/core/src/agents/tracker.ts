@@ -10,8 +10,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import type { ActivityEvent, Agent, AgentId, AgentKind, AgentState, AgentTurn, GitPlace, Methods, NameSource, PaneId, Settings, SpaceId } from "@cmd/protocol";
-import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
+import type { ActivityEvent, Agent, AgentId, AgentKind, AgentState, AgentTurn, GitPlace, Methods, NameSource, PaneId, Settings, WorkspaceId } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, ENV, HOME_WORKSPACE_ID } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { Foreground, PaneManager } from "../panes.ts";
 import type { Store } from "../store.ts";
@@ -544,7 +544,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const agent = this.#create({
       kind: p.kind,
       paneId: null,
-      spaceId: p.spaceId,
+      workspaceId: p.workspaceId,
       source: parent ? "host-api" : "user",
       parentId: parent?.id ?? null,
       name: p.name ?? null,
@@ -558,7 +558,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (sessionId) agent.native.claudeSessionId = sessionId;
     const env: Record<string, string> = { [ENV.agentId]: agent.id };
     if (parent) env[ENV.parentId] = parent.id;
-    const pane = this.#panes.create({ cwd, command, env, spaceId: agent.spaceId });
+    const pane = this.#panes.create({ cwd, command, env, workspaceId: agent.workspaceId });
     this.#panes.setAgent(pane.id, agent.id);
     this.#update(agent, {}, { paneId: pane.id, cwd: pane.cwd });
     this.#expectStart(agent.id);
@@ -583,9 +583,9 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   resume(p: Methods["agent.resume"]["params"]): Agent {
     const command = this.#sources.resumeCommand(p.agent, p.sessionId, p.env ?? null, !!p.fork, this.#settings());
     const cwd = p.cwd && fs.existsSync(p.cwd) ? p.cwd : os.homedir();
-    const agent = this.#create({ kind: p.agent, paneId: null, spaceId: p.spaceId, source: "restored", cwd, state: "starting" });
+    const agent = this.#create({ kind: p.agent, paneId: null, workspaceId: p.workspaceId, source: "restored", cwd, state: "starting" });
     if (!p.fork) agent.native = { ...agent.native, ...nativeSession(p.agent, p.sessionId) };
-    const pane = this.#panes.create({ cwd, command, env: { [ENV.agentId]: agent.id }, spaceId: agent.spaceId });
+    const pane = this.#panes.create({ cwd, command, env: { [ENV.agentId]: agent.id }, workspaceId: agent.workspaceId });
     this.#panes.setAgent(pane.id, agent.id);
     this.#update(agent, {}, { paneId: pane.id });
     this.#expectStart(agent.id);
@@ -635,7 +635,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
       parentId: parent?.id ?? null,
       rootId: parent?.rootId ?? stored.id,
       depth: parent ? parent.depth + 1 : 0,
-      spaceId: (stored.paneId && this.#panes.get(stored.paneId)?.spaceId) || parent?.spaceId || stored.spaceId,
+      workspaceId: (stored.paneId && this.#panes.get(stored.paneId)?.workspaceId) || parent?.workspaceId || stored.workspaceId,
       ...(live ? {} : { state: "starting" as const, stateSince: now, detail: null }),
     };
     this.#agents.set(agent.id, agent);
@@ -706,13 +706,13 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     return targets;
   }
 
-  /** Move an agent, its descendants and their terminals to another Space. */
-  moveTree(id: AgentId, spaceId: SpaceId): void {
+  /** Move an agent, its descendants and their terminals to another workspace. */
+  moveTree(id: AgentId, workspaceId: WorkspaceId): void {
     for (const t of [id, ...this.#descendants(id)]) {
       const a = this.#agents.get(t);
       if (!a) continue;
-      if (a.paneId) this.#panes.setSpace(a.paneId, spaceId);
-      if (a.spaceId !== spaceId) this.#update(a, {}, { spaceId });
+      if (a.paneId) this.#panes.setWorkspace(a.paneId, workspaceId);
+      if (a.workspaceId !== workspaceId) this.#update(a, {}, { workspaceId });
     }
   }
 
@@ -734,8 +734,8 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   #create(o: {
     kind: AgentKind;
     paneId: PaneId | null;
-    /** Default: the pane's Space, else the parent's, else Home. */
-    spaceId?: SpaceId;
+    /** Default: the pane's workspace, else the parent's, else Home. */
+    workspaceId?: WorkspaceId;
     source: Agent["spawn"]["source"];
     parentId?: AgentId | null;
     name?: string | null;
@@ -752,7 +752,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     const agent: Agent = {
       id,
       paneId: o.paneId,
-      spaceId: o.spaceId ?? pane?.spaceId ?? parent?.spaceId ?? HOME_SPACE_ID,
+      workspaceId: o.workspaceId ?? pane?.workspaceId ?? parent?.workspaceId ?? HOME_WORKSPACE_ID,
       kind: o.kind,
       name: o.name ?? null,
       nameBy: o.nameBy ?? null,

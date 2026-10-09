@@ -79,7 +79,7 @@ export function installUpdate(): void {
 
 function install(): void {
   log("installing", ready);
-  // Windows close before before-quit; spaces.ts saves them on before-quit-for-update. The core keeps running.
+  // Windows close before before-quit; workspaces.ts saves them on before-quit-for-update. The core keeps running.
   setImmediate(() => autoUpdater.quitAndInstall(false, true));
 }
 
@@ -116,7 +116,7 @@ export function checkForUpdates(devBuild: boolean): void {
   check();
 }
 
-/** Mirror updates.mode from the core's settings; reconnects like the core connection in spaces.ts. */
+/** Mirror updates.mode from the core's settings; reconnects like the core connection in workspaces.ts. */
 function followSettings(socketPath: string): void {
   const attach = async () => {
     try {

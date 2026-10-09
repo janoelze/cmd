@@ -6,13 +6,13 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Space, SpaceId, WidgetEntry, WindowId, DataEvent, DataQuery, AppNotification, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
+import type { ActivityExportHeader, Agent, AgentHome, AgentId, AiModel, AiProvider, AppWindow, HookTarget, CoreEvent, Method, Methods, Params, Placement, RemoteScope, Result, Settings, Workspace, WorkspaceId, WidgetEntry, WindowId, DataEvent, DataQuery, AppNotification, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
 import { EXPORT_FORMAT, lineSplitter, TURN_FORMAT } from "@cmd/protocol";
 import { ipcPath, logger, machineId, recordCrash } from "@cmd/protocol/node";
 import { AgentTracker, sessionIdOf } from "./agents/tracker.ts";
 import { JournalService, SYNC_FRESH_MS } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
-import { recordNames, recordNotifications, recordSpaces, recordWindows } from "./data/recorders.ts";
+import { recordNames, recordNotifications, recordWorkspaces, recordWindows } from "./data/recorders.ts";
 import { DataService } from "./data/service.ts";
 import { buildContext } from "./ai/context.ts";
 import { describeAgent, describePane } from "./data/describe.ts";
@@ -51,7 +51,7 @@ import { SqliteService } from "./sqlite/service.ts";
 import { createPath, duplicatePath, renamePath, transferPaths } from "./fileops.ts";
 import { Store } from "./store.ts";
 import { SettingsService } from "./settings.ts";
-import { SpaceManager } from "./spaces/manager.ts";
+import { WorkspaceManager } from "./workspaces/manager.ts";
 import { MagicService } from "./magic/service.ts";
 import { SecretsService } from "./secrets.ts";
 import type { Backend } from "./ai/backends.ts";
@@ -146,8 +146,8 @@ const splitList = (v: string) => v.split(",").map((d) => d.trim()).filter(Boolea
 type Handlers = { [M in Method]: (params: Params<M>) => Result<M> | Promise<Result<M>> };
 
 /** Whether a view row answers a view query. */
-function viewMatches(q: ViewQuery, r: TurnRow | SessionInfo, spaceOf: (cwd: string | null) => string): boolean {
-  if (q.spaceId && spaceOf(r.cwd) !== q.spaceId) return false;
+function viewMatches(q: ViewQuery, r: TurnRow | SessionInfo, workspaceOf: (cwd: string | null) => string): boolean {
+  if (q.workspaceId && workspaceOf(r.cwd) !== q.workspaceId) return false;
   if ("key" in r) {
     if (q.sessionId && r.key !== q.sessionId) return false;
     if (q.projectId && r.projectId !== q.projectId) return false;
@@ -175,7 +175,7 @@ export class Core {
   readonly views: ViewsStore;
   /** Background work on a budget, startup jobs and the stall watchdog (scheduler.ts). */
   readonly scheduler: Scheduler;
-  /** Per Space, the pane or window selected there and the focus event that says so (its span ends when the selection moves). */
+  /** Per workspace, the pane or window selected there and the focus event that says so (its span ends when the selection moves). */
   #focus = new Map<string, { id: string; eventId: string; at: number }>();
   readonly settings: SettingsService;
   readonly resources: ResourceMonitor | null;
@@ -184,7 +184,7 @@ export class Core {
   readonly windowTypes: WindowTypes;
   /** Where each agent keeps transcripts and how to resume them. */
   readonly transcripts: TranscriptSources;
-  readonly spaces: SpaceManager;
+  readonly workspaces: WorkspaceManager;
   readonly magic: MagicService;
   readonly secrets: SecretsService;
   readonly ai: AiService;
@@ -204,7 +204,7 @@ export class Core {
   readonly homes: AgentHomes;
   #homesDiscovered = false;
   #homesTimer: NodeJS.Timeout | undefined;
-  #spacesTimer: NodeJS.Timeout | undefined;
+  #workspacesTimer: NodeJS.Timeout | undefined;
   /** Listening servers: one, plus one per time the socket file was put back (the old ones keep their clients). */
   #servers: net.Server[] = [];
   /** Open socket connections, cut on close so a lingering client can't hold it up. */
@@ -229,7 +229,7 @@ export class Core {
   #viewPending = new Map<Connection, Map<string, Map<string, TurnRow | SessionInfo>>>();
   #viewFlush: ReturnType<typeof setTimeout> | null = null;
   /** Connections on the widgets socket, and which widget each said it is (null until widget.hello). */
-  #widgetConns = new Map<Connection, { widgetId: string; spaceId: string | null } | null>();
+  #widgetConns = new Map<Connection, { widgetId: string; workspaceId: string | null } | null>();
   readonly widgetTokens = new WidgetTokens();
   /** Windows each connection shows (window.follow); remote sessions get output only for these. */
   #follows = new Map<Connection, Set<string>>();
@@ -305,7 +305,7 @@ export class Core {
       if (types.some((t) => t.startsWith("transcript."))) void this.sessions.rebuild().then(() => this.#searchView.invalidate());
     });
     const activity = new ActivityView(this.data, this.views, { deferRebuild: !!opts.stateDir, pace: this.scheduler });
-    activity.spaceOf = (paneId) => this.panes.get(paneId)?.spaceId ?? null;
+    activity.workspaceOf = (paneId) => this.panes.get(paneId)?.workspaceId ?? null;
     this.sessions = new SessionsView(this.views, this.data, { deferRebuild: !!opts.stateDir, pace: this.scheduler });
     this.sessions.onChange((rows) => this.#viewChanged("sessions", rows));
     this.sessions.onReset(() => this.#viewReset((q) => q.view === "sessions"));
@@ -340,23 +340,23 @@ export class Core {
     this.commands = new CommandLog(this.panes, this.data);
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler, 2000, () => this.#subscribers.size > 0) : null;
     this.processes = opts.procSampler ? new ProcessSampler(opts.procSampler) : null;
-    this.spaces = new SpaceManager(this.store, opts.home);
-    this.spaces.on("updated", (space) => this.#broadcast({ type: "space.updated", space }));
-    this.spaces.on("removed", (id) => this.#broadcast({ type: "space.removed", id }));
-    // A Space opened or closed moves folders between Spaces: live queries by Space start over.
+    this.workspaces = new WorkspaceManager(this.store, opts.home);
+    this.workspaces.on("updated", (workspace) => this.#broadcast({ type: "workspace.updated", workspace }));
+    this.workspaces.on("removed", (id) => this.#broadcast({ type: "workspace.removed", id }));
+    // A workspace opened or closed moves folders between workspaces: live queries by workspace start over.
     let roots = "";
     const rootsChanged = () => {
-      const now = this.spaces.list().map((s) => s.root).sort().join("\n");
-      if (now !== roots) (roots = now), this.#viewReset((q) => !!q.spaceId);
+      const now = this.workspaces.list().map((s) => s.root).sort().join("\n");
+      if (now !== roots) (roots = now), this.#viewReset((q) => !!q.workspaceId);
     };
     rootsChanged();
-    this.spaces.on("updated", rootsChanged);
-    this.spaces.on("removed", rootsChanged);
+    this.workspaces.on("updated", rootsChanged);
+    this.workspaces.on("removed", rootsChanged);
     this.windows = new WindowManager(this.panes, this.store, this.windowTypes, overrides);
-    this.notifications.spaceOf = (paneId, windowId) => (paneId ? this.panes.get(paneId)?.spaceId : windowId ? this.windows.others().find((w) => w.id === windowId)?.spaceId : null) ?? null;
-    // Windows of a Space that is gone or closed (e.g. the core died mid-close) go Home.
+    this.notifications.workspaceOf = (paneId, windowId) => (paneId ? this.panes.get(paneId)?.workspaceId : windowId ? this.windows.others().find((w) => w.id === windowId)?.workspaceId : null) ?? null;
+    // Windows of a workspace that is gone or closed (e.g. the core died mid-close) go Home.
     for (const w of this.windows.others()) {
-      if (this.spaces.get(w.spaceId)?.closedAt !== null) this.windows.move(w.id, this.spaces.home().id);
+      if (this.workspaces.get(w.workspaceId)?.closedAt !== null) this.windows.move(w.id, this.workspaces.home().id);
     }
     this.windows.on("updated", (window) => this.#broadcast({ type: "window.updated", window }));
     this.timers = new TimerAlarms(this.windows, (w, title, body) => this.notifications.window(w.id, "timer", title, body));
@@ -402,17 +402,17 @@ export class Core {
       transcript: (a) => (sessionIdOf(a) ? conversationOf(this.data, `${a.kind}:${sessionIdOf(a)}`) : null),
       agentTitle: (kind) => this.transcripts.get(kind)?.title ?? kind,
       dir: opts.stateDir ? path.join(opts.stateDir, "summaries") : null,
-      show: (file, spaceId) => {
+      show: (file, workspaceId) => {
         const open = this.windows.others().find((w) => (w.kind === "markdown" || w.kind === "text") && w.state.path === file);
         if (open) return this.#broadcast({ type: "window.focus", id: open.id }), open.id;
-        return this.#opened(this.windows.open("markdown", { path: file }, this.spaces.mustOpen(spaceId))).id;
+        return this.#opened(this.windows.open("markdown", { path: file }, this.workspaces.mustOpen(workspaceId))).id;
       },
       notify: (id, title, body) => this.notifications.window(id, "summary", title, body),
     });
     this.journal = new JournalService({
       store: new JournalStore(this.store.db, { recordedBy: this.agents.activity.recordedBy, data: this.data, turns: (since) => this.agents.activity.turnsSince(since), sessions: (since) => this.sessions.sessionsSince(since) }),
-      spaces: () => this.spaces.list(),
-      agentSpace: (id) => this.agents.get(id)?.spaceId ?? null,
+      workspaces: () => this.workspaces.list(),
+      agentWorkspace: (id) => this.agents.get(id)?.workspaceId ?? null,
       ai: {
         object: (o) => this.ai.object(o),
         modelName: () => {
@@ -423,10 +423,10 @@ export class Core {
       pace: this.scheduler,
     });
     recordWindows(this.data, this.windows);
-    recordSpaces(this.data, this.spaces);
+    recordWorkspaces(this.data, this.workspaces);
     recordNotifications(this.data, this.notifications);
     this.magic = new MagicService({
-      widgetSocket: path.isAbsolute(opts.socketPath) ? { path: widgetsSocketPath(opts.socketPath), token: (widgetId, spaceId) => this.widgetTokens.issue({ widgetId, spaceId }) } : null,
+      widgetSocket: path.isAbsolute(opts.socketPath) ? { path: widgetsSocketPath(opts.socketPath), token: (widgetId, workspaceId) => this.widgetTokens.issue({ widgetId, workspaceId }) } : null,
       windows: this.windows,
       settings,
       ai: this.ai,
@@ -438,9 +438,9 @@ export class Core {
       deno: opts.magicDeno,
       watched: () => this.#subscribers.size > 0,
       libraryChanged: () => this.#libraryChanged(),
-      cwdFor: (w) => this.spaces.get(w.spaceId)?.root ?? this.spaces.home().root,
+      cwdFor: (w) => this.workspaces.get(w.workspaceId)?.root ?? this.workspaces.home().root,
       workspaceFor: (w) => {
-        const sp = this.spaces.get(w.spaceId);
+        const sp = this.workspaces.get(w.workspaceId);
         return sp && !sp.home ? { name: sp.name, root: sp.root } : null;
       },
     });
@@ -457,14 +457,14 @@ export class Core {
       },
       ai: { object: (o) => this.ai.object(o), ready: () => this.ai.status().ready },
       describeOn: () => this.settings.settings["actions.describe"],
-      roots: () => this.windows.list().flatMap((w) => (w.kind === "actions" ? [this.#actionsRoot(w.state.path as string | undefined, w.spaceId)] : [])),
+      roots: () => this.windows.list().flatMap((w) => (w.kind === "actions" ? [this.#actionsRoot(w.state.path as string | undefined, w.workspaceId)] : [])),
       agentsIn: (top) => this.agents.list().filter((a) => a.git?.top === top && a.state !== "exited").length,
       agentCommand: (agent) => {
         const v = (this.settings.settings as Record<string, unknown>)[`agents.${agent}.command`];
         return typeof v === "string" && v.trim() ? v.trim() : null;
       },
       createPane: (o) => {
-        const pane = this.panes.create({ cwd: o.cwd, command: o.command, spaceId: this.spaces.mustOpen(o.spaceId).id });
+        const pane = this.panes.create({ cwd: o.cwd, command: o.command, workspaceId: this.workspaces.mustOpen(o.workspaceId).id });
         this.usage.window("terminal");
         return pane;
       },
@@ -474,8 +474,8 @@ export class Core {
     this.actions.on("url", (paneId, url) => {
       const pane = this.panes.get(paneId);
       if (!pane || !this.settings.settings["actions.openBrowser"]) return;
-      if (this.windows.list().some((w) => w.kind === "browser" && w.spaceId === pane.spaceId && typeof w.state.url === "string" && w.state.url.startsWith(url.replace(/\/$/, "")))) return;
-      this.#opened(this.windows.open("browser", { url }, this.spaces.mustOpen(pane.spaceId)));
+      if (this.windows.list().some((w) => w.kind === "browser" && w.workspaceId === pane.workspaceId && typeof w.state.url === "string" && w.state.url.startsWith(url.replace(/\/$/, "")))) return;
+      this.#opened(this.windows.open("browser", { url }, this.workspaces.mustOpen(pane.workspaceId)));
     });
     this.settings.bind(["actions.describe"], () => this.actions.aiChanged());
     this.ai.on("updated", () => this.actions.aiChanged());
@@ -563,25 +563,25 @@ export class Core {
     if (o.stateDir && o.statusRoot) s.startup("homes", "Looking for agents", () => this.#discoverHomes());
     if (o.stateDir) s.startup("journal", "Starting the journal", () => this.journal.start());
     if (o.stateDir) s.startup("retention", "Scheduling retention", () => this.data.start());
-    // Spaces whose folder was removed (a worktree after its merge) say so.
+    // Workspaces whose folder was removed (a worktree after its merge) say so.
     if (o.stateDir)
-      s.startup("spaces", "Checking Spaces", () => {
-        this.spaces.check();
-        this.#spacesTimer = setInterval(() => this.spaces.check(), 30_000);
-        this.#spacesTimer.unref();
+      s.startup("workspaces", "Checking workspaces", () => {
+        this.workspaces.check();
+        this.#workspacesTimer = setInterval(() => this.workspaces.check(), 30_000);
+        this.#workspacesTimer.unref();
       });
     s.ready();
   }
 
   /**
-   * Where a Space's files are searched: its folder. In the Home Space (the home
+   * Where a workspace's files are searched: its folder. In the Home workspace (the home
    * folder: too big to search as you type) the folder of `cwd` instead, the
    * selected window's: its repository's top if it's in one, else the folder
    * itself; never the home folder or one above it.
    */
-  #searchRoot(spaceId: SpaceId | null, cwd: string | null): string | null {
-    const space = spaceId ? this.spaces.get(spaceId) : undefined;
-    if (space && !space.home) return space.root;
+  #searchRoot(workspaceId: WorkspaceId | null, cwd: string | null): string | null {
+    const workspace = workspaceId ? this.workspaces.get(workspaceId) : undefined;
+    if (workspace && !workspace.home) return workspace.root;
     if (!cwd || !path.isAbsolute(cwd)) return null;
     const at = checkoutOf(cwd)?.top ?? path.resolve(cwd);
     const home = os.homedir();
@@ -619,8 +619,8 @@ export class Core {
     },
     "usage.launch": () => (this.usage.launch(), null),
     "pane.create": (p) => {
-      const space = this.#place(p, { path: p.cwd });
-      const pane = this.panes.create({ ...p, cwd: p.cwd ?? space.root, spaceId: space.id });
+      const workspace = this.#place(p, { path: p.cwd });
+      const pane = this.panes.create({ ...p, cwd: p.cwd ?? workspace.root, workspaceId: workspace.id });
       this.usage.window("terminal");
       return pane;
     },
@@ -643,9 +643,9 @@ export class Core {
     "pane.reset": async (p) => (await this.panes.resetState(p.paneId), null),
     "agent.list": () => this.agents.list(),
     "agent.spawn": (p) => {
-      const space = this.#place(p, { parentId: p.parentId, path: p.cwd });
+      const workspace = this.#place(p, { parentId: p.parentId, path: p.cwd });
       const parent = p.parentId ? this.agents.get(p.parentId) : null;
-      return this.agents.spawn({ ...p, spaceId: space.id, cwd: p.cwd ?? parent?.cwd ?? space.root });
+      return this.agents.spawn({ ...p, workspaceId: workspace.id, cwd: p.cwd ?? parent?.cwd ?? workspace.root });
     },
     "agent.send": async (p) => (await this.agents.send(p.agentId, p.text, p.submit), null),
     "agent.wait": (p) => this.agents.wait(p.agentIds, p.until, p.mode, p.timeoutMs),
@@ -653,7 +653,7 @@ export class Core {
     "agent.rename": (p) => this.agents.rename(p.agentId, p.name),
     "agent.markSeen": (p) => {
       this.agents.markSeen(p.agentId);
-      this.data.record({ id: `look:${p.agentId}:${Date.now()}`, at: Date.now(), type: "user.look", source: "user", agentId: p.agentId, paneId: this.agents.get(p.agentId)?.paneId ?? null, spaceId: this.agents.get(p.agentId)?.spaceId ?? null, data: { agentId: p.agentId } });
+      this.data.record({ id: `look:${p.agentId}:${Date.now()}`, at: Date.now(), type: "user.look", source: "user", agentId: p.agentId, paneId: this.agents.get(p.agentId)?.paneId ?? null, workspaceId: this.agents.get(p.agentId)?.workspaceId ?? null, data: { agentId: p.agentId } });
       return null;
     },
     "agent.summarize": async (p) => {
@@ -675,7 +675,7 @@ export class Core {
       const pane = p.paneId ? this.panes.get(p.paneId) : undefined;
       const agent = pane?.agentId ? this.agents.get(pane.agentId) : null;
       const session = agent ? (agent.native.claudeSessionId ?? agent.native.codexThreadId ?? null) : null;
-      return { id: this.journal.note(p.text, { by: agent ? "agent" : "user", agentSession: session, spaceId: p.spaceId ?? pane?.spaceId ?? null, cwd: pane?.cwd ?? null }) };
+      return { id: this.journal.note(p.text, { by: agent ? "agent" : "user", agentSession: session, workspaceId: p.workspaceId ?? pane?.workspaceId ?? null, cwd: pane?.cwd ?? null }) };
     },
     "journal.sync": async () => (await this.journal.sync(), null),
     "data.query": (p) => this.data.query(p.query),
@@ -767,21 +767,21 @@ export class Core {
     "widget.delete": (p) => (this.magic.deleteWidget(magicRef(p.ref)), null),
     "window.openTarget": (p) =>
       this.#opened(this.windows.openTarget(p.target, this.#place(p, { path: /^[a-z][\w+.-]+:/i.test(p.target) ? undefined : p.target }))),
-    "window.move": (p) => this.#moveWindow(p.id, p.spaceId),
-    "space.list": (p) => this.spaces.list(p.closed),
-    "space.open": (p) => {
-      const r = this.spaces.open(p.path, p);
-      if (p.show) this.#broadcast({ type: "space.show", spaceId: r.space.id, newWindow: !!p.newWindow });
+    "window.move": (p) => this.#moveWindow(p.id, p.workspaceId),
+    "workspace.list": (p) => this.workspaces.list(p.closed),
+    "workspace.open": (p) => {
+      const r = this.workspaces.open(p.path, p);
+      if (p.show) this.#broadcast({ type: "workspace.show", workspaceId: r.workspace.id, newWindow: !!p.newWindow });
       return r;
     },
-    "space.match": (p) => this.spaces.match(p.path, p.cwd),
-    "space.update": (p) => {
+    "workspace.match": (p) => this.workspaces.match(p.path, p.cwd),
+    "workspace.update": (p) => {
       const sel = p.view?.["selection.pane"];
       if (typeof sel === "string") this.#focused(p.id, sel);
-      return this.spaces.update(p.id, p);
+      return this.workspaces.update(p.id, p);
     },
-    "space.close": (p) => (this.#closeSpace(p.id), null),
-    "space.forget": (p) => (this.spaces.forget(p.id), null),
+    "workspace.close": (p) => (this.#closeWorkspace(p.id), null),
+    "workspace.forget": (p) => (this.workspaces.forget(p.id), null),
     "magic.run": (p) => (this.magic.run(p.id, p.prompt), null),
     "magic.cancel": (p) => (this.magic.cancel(p.id), null),
     "magic.refresh": (p) => (this.magic.refresh(p.id), null),
@@ -821,8 +821,8 @@ export class Core {
     "fs.duplicate": (p) => duplicatePath(p.path),
     "fs.create": (p) => createPath(p.dir, p.kind),
     "fs.transfer": (p) => transferPaths(p.paths, p.dir, p.op),
-    "actions.list": (p) => this.actions.list(this.#actionsRoot(p.path, p.spaceId)),
-    "actions.run": (p) => this.actions.run(p.root, p.actionId, this.#place({ spaceId: p.spaceId }, { path: p.root }).id, { restart: p.restart, fresh: p.fresh }),
+    "actions.list": (p) => this.actions.list(this.#actionsRoot(p.path, p.workspaceId)),
+    "actions.run": (p) => this.actions.run(p.root, p.actionId, this.#place({ workspaceId: p.workspaceId }, { path: p.root }).id, { restart: p.restart, fresh: p.fresh }),
     "actions.stop": (p) => (this.actions.stop(p.root, p.actionId), null),
     "actions.pin": (p) => (this.actions.pin(p.root, p.actionId, p.pinned), null),
     "git.status": (p) => gitStatus(p.path),
@@ -837,17 +837,17 @@ export class Core {
     "search.query": (p) => this.#searchView.search(p.text, p.limit),
     "search.status": () => this.#ingest?.status() ?? NO_SEARCH,
     "search.files": async (p) => {
-      const root = this.#searchRoot(p.spaceId ?? null, p.cwd ?? null);
+      const root = this.#searchRoot(p.workspaceId ?? null, p.cwd ?? null);
       return { root, hits: root ? await this.#fileSearch.search(root, p.text, { limit: p.limit, part: p.part }) : [] };
     },
-    "search.history": (p) => this.#searchView.history(p.text, { spaceId: p.spaceId ?? null, limit: p.limit }),
+    "search.history": (p) => this.#searchView.history(p.text, { workspaceId: p.workspaceId ?? null, limit: p.limit }),
     "search.reindex": () => {
       if (!this.#ingest) throw new Error("transcripts are off (Settings → Data)");
       this.#ingest.reindex();
       return null;
     },
     "agent.resumeCommand": (p) => this.agents.resumeCommand(p.agentId),
-    "agent.resume": (p) => this.agents.resume({ ...p, spaceId: this.#place(p, { path: p.cwd ?? undefined }).id }),
+    "agent.resume": (p) => this.agents.resume({ ...p, workspaceId: this.#place(p, { path: p.cwd ?? undefined }).id }),
     "ui.get": () => this.store.uiState(),
     "ui.set": (p) => {
       if (typeof p.key !== "string" || !p.key || p.key.length > 200) throw new Error("ui.set: invalid key");
@@ -870,7 +870,7 @@ export class Core {
       panes: this.panes.list(),
       agents: this.agents.list(),
       windows: this.windows.others(),
-      spaces: this.spaces.list(),
+      workspaces: this.workspaces.list(),
       windowTypes: this.windowTypes.info(),
       device: null,
       host: { name: computerName() },
@@ -880,7 +880,7 @@ export class Core {
       panes: this.panes.list(),
       agents: this.agents.list(),
       windows: this.windows.others(),
-      spaces: this.spaces.list(),
+      workspaces: this.workspaces.list(),
       windowTypes: this.windowTypes.info(),
       settings: this.settings.snapshot(),
       ui: this.store.uiState(),
@@ -998,55 +998,55 @@ export class Core {
   }
 
   /**
-   * Where something new goes (see Placement): an explicit Space, the calling
-   * pane's, the parent agent's, the open Space whose root most deeply contains
+   * Where something new goes (see Placement): an explicit workspace, the calling
+   * pane's, the parent agent's, the open workspace whose root most deeply contains
    * the path, else Home.
    */
-  /** The folder Workspace Actions are for: a path given, else the Space's root. */
-  #actionsRoot(p: string | undefined, spaceId: SpaceId | undefined): string {
+  /** The folder Workspace Actions are for: a path given, else the workspace's root. */
+  #actionsRoot(p: string | undefined, workspaceId: WorkspaceId | undefined): string {
     if (p) return path.resolve(expandHome(p));
-    return (spaceId ? this.spaces.get(spaceId)?.root : undefined) ?? this.spaces.home().root;
+    return (workspaceId ? this.workspaces.get(workspaceId)?.root : undefined) ?? this.workspaces.home().root;
   }
 
-  #place(p: Placement, o: { parentId?: AgentId | null; path?: string } = {}): Space {
-    if (p.spaceId) return this.spaces.mustOpen(p.spaceId);
+  #place(p: Placement, o: { parentId?: AgentId | null; path?: string } = {}): Workspace {
+    if (p.workspaceId) return this.workspaces.mustOpen(p.workspaceId);
     const caller = p.callerPaneId ? this.panes.get(p.callerPaneId) : null;
-    if (caller) return this.spaces.mustOpen(caller.spaceId);
+    if (caller) return this.workspaces.mustOpen(caller.workspaceId);
     const parent = o.parentId ? this.agents.get(o.parentId) : null;
-    if (parent) return this.spaces.mustOpen(parent.spaceId);
-    return o.path ? this.spaces.match(o.path) : this.spaces.home();
+    if (parent) return this.workspaces.mustOpen(parent.workspaceId);
+    return o.path ? this.workspaces.match(o.path) : this.workspaces.home();
   }
 
-  #moveWindow(id: WindowId, spaceId: SpaceId): AppWindow {
-    this.spaces.mustOpen(spaceId);
+  #moveWindow(id: WindowId, workspaceId: WorkspaceId): AppWindow {
+    this.workspaces.mustOpen(workspaceId);
     const pane = this.panes.get(id);
-    if (!pane) return this.windows.move(id, spaceId);
+    if (!pane) return this.windows.move(id, workspaceId);
     const agent = pane.agentId ? this.agents.get(pane.agentId) : null;
-    if (agent) this.agents.moveTree(agent.id, spaceId);
-    else this.panes.setSpace(id, spaceId);
+    if (agent) this.agents.moveTree(agent.id, workspaceId);
+    else this.panes.setWorkspace(id, workspaceId);
     return terminalWindow(this.panes.get(id)!);
   }
 
-  /** Kill the Space's terminals (their agents go with them) and remove its windows; keep it as a recent Space. */
-  /** The selection in a Space moved: the previous focus span ends, a new one starts (user.focus). */
-  #focused(spaceId: string, id: string): void {
-    const prev = this.#focus.get(spaceId);
+  /** Kill the workspace's terminals (their agents go with them) and remove its windows; keep it as a recent workspace. */
+  /** The selection in a workspace moved: the previous focus span ends, a new one starts (user.focus). */
+  #focused(workspaceId: string, id: string): void {
+    const prev = this.#focus.get(workspaceId);
     const now = Date.now();
     if (prev?.id === id) return;
-    if (prev) this.data.record({ id: prev.eventId, at: prev.at, until: now, type: "user.focus", source: "user", spaceId, ...(this.panes.get(prev.id) ? { paneId: prev.id, data: { paneId: prev.id } } : { windowId: prev.id, data: { windowId: prev.id } }) });
-    const eventId = `focus:${spaceId}:${id}:${now}`;
+    if (prev) this.data.record({ id: prev.eventId, at: prev.at, until: now, type: "user.focus", source: "user", workspaceId, ...(this.panes.get(prev.id) ? { paneId: prev.id, data: { paneId: prev.id } } : { windowId: prev.id, data: { windowId: prev.id } }) });
+    const eventId = `focus:${workspaceId}:${id}:${now}`;
     const pane = this.panes.get(id);
-    this.data.record({ id: eventId, at: now, type: "user.focus", source: "user", spaceId, ...(pane ? { paneId: id, agentId: pane.agentId, data: { paneId: id } } : { windowId: id, data: { windowId: id } }) });
-    this.#focus.set(spaceId, { id, eventId, at: now });
+    this.data.record({ id: eventId, at: now, type: "user.focus", source: "user", workspaceId, ...(pane ? { paneId: id, agentId: pane.agentId, data: { paneId: id } } : { windowId: id, data: { windowId: id } }) });
+    this.#focus.set(workspaceId, { id, eventId, at: now });
   }
 
-  #closeSpace(id: SpaceId): void {
-    const space = this.spaces.mustOpen(id);
-    if (space.home) throw new Error("Home can't be closed");
-    for (const p of this.panes.list()) if (p.spaceId === id) this.panes.kill(p.id);
-    for (const a of this.agents.list()) if (a.spaceId === id && !a.paneId) this.agents.kill(a.id);
-    for (const w of this.windows.inSpace(id)) this.windows.close(w.id);
-    this.spaces.markClosed(id);
+  #closeWorkspace(id: WorkspaceId): void {
+    const workspace = this.workspaces.mustOpen(id);
+    if (workspace.home) throw new Error("Home can't be closed");
+    for (const p of this.panes.list()) if (p.workspaceId === id) this.panes.kill(p.id);
+    for (const a of this.agents.list()) if (a.workspaceId === id && !a.paneId) this.agents.kill(a.id);
+    for (const w of this.windows.inWorkspace(id)) this.windows.close(w.id);
+    this.workspaces.markClosed(id);
   }
 
   /** Count a window someone opened (not restored ones) for usage stats. */
@@ -1094,7 +1094,7 @@ export class Core {
 
   #libraryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /** Tell UIs the library changed; changes in a burst (a build, closing a Space) go out once. */
+  /** Tell UIs the library changed; changes in a burst (a build, closing a workspace) go out once. */
   #libraryChanged(): void {
     if (this.#libraryTimer || !this.#subscribers.size) return;
     this.#libraryTimer = setTimeout(() => {
@@ -1116,7 +1116,7 @@ export class Core {
     this.usage.agent(a.kind);
   }
 
-  /** Requests from a pane's shell integration, e.g. `open .` → file window in the pane's Space. */
+  /** Requests from a pane's shell integration, e.g. `open .` → file window in the pane's workspace. */
   #onShellRequest(paneId: string, action: string, arg: string): void {
     if (action !== "open" || !arg) return;
     try {
@@ -1134,7 +1134,7 @@ export class Core {
    */
   restore(): void {
     try {
-      restoreSession({ panes: this.panes, agents: this.agents, spaces: this.spaces, store: this.store, settings: () => this.settings.settings });
+      restoreSession({ panes: this.panes, agents: this.agents, workspaces: this.workspaces, store: this.store, settings: () => this.settings.settings });
     } catch (err) {
       // A core without its last session still starts (and can update itself).
       log.error("could not restore the last session", err);
@@ -1428,7 +1428,7 @@ export class Core {
 
   /** What remote/policy.ts checks arguments against. */
   get #policy(): PolicyContext {
-    return { panes: this.panes, agents: this.agents, spaces: this.spaces, windows: this.windows, home: this.#opts.home };
+    return { panes: this.panes, agents: this.agents, workspaces: this.workspaces, windows: this.windows, home: this.#opts.home };
   }
 
   /** Widget previews: the app (offscreen Electron windows) when one is connected, else Playwright, else none. */
@@ -1488,10 +1488,10 @@ export class Core {
   /** A view's rows for a query: turns oldest first, sessions newest first. */
   #viewRows(q: ViewQuery): (TurnRow | SessionInfo)[] {
     const limit = Math.min(q.limit ?? 50, 1000);
-    if (q.view === "sessions") return this.sessions.list(q, q.spaceId ? (r) => this.spaces.of(r.cwd) === q.spaceId : undefined);
+    if (q.view === "sessions") return this.sessions.list(q, q.workspaceId ? (r) => this.workspaces.of(r.cwd) === q.workspaceId : undefined);
     const since = q.since ?? Date.now() - 7 * 86400_000;
     const rows = q.agentId && !q.since ? this.agents.activity.turns(q.agentId, limit).map((t) => ({ ...t, cwd: null })) : this.agents.activity.turnsSince(since).map(({ turn, cwd }) => ({ ...turn, cwd }));
-    return rows.filter((r) => viewMatches(q, r, (cwd) => this.spaces.of(cwd))).slice(-limit);
+    return rows.filter((r) => viewMatches(q, r, (cwd) => this.workspaces.of(cwd))).slice(-limit);
   }
 
   /** A changed view row against every view subscription; what matches goes out in one view.changed per subscription. */
@@ -1501,7 +1501,7 @@ export class Core {
       for (const [id, q] of subs) {
         if (q.view !== view) continue;
         for (const r of rows) {
-          if (!viewMatches(q, r, (cwd) => this.spaces.of(cwd))) continue;
+          if (!viewMatches(q, r, (cwd) => this.workspaces.of(cwd))) continue;
           let pending = this.#viewPending.get(conn);
           if (!pending) this.#viewPending.set(conn, (pending = new Map()));
           let m = pending.get(id);
@@ -1556,7 +1556,7 @@ export class Core {
   async close(): Promise<void> {
     if (this.#libraryTimer) clearTimeout(this.#libraryTimer);
     clearInterval(this.#homesTimer);
-    clearInterval(this.#spacesTimer);
+    clearInterval(this.#workspacesTimer);
     this.scheduler.dispose(); // a startup job still running fails on the closed stores, quietly
     this.agents.close();
     this.usage.close();
@@ -1634,7 +1634,7 @@ function magicRef(ref: string): string {
   return r.widgetId;
 }
 
-/** A journal method's scope: a Space, else the one asked for, else everything. */
-function journalScope(p: { spaceId?: SpaceId; scope?: string }): string {
-  return p.spaceId ? `space:${p.spaceId}` : (p.scope ?? "all");
+/** A journal method's scope: a workspace, else the one asked for, else everything. */
+function journalScope(p: { workspaceId?: WorkspaceId; scope?: string }): string {
+  return p.workspaceId ? `workspace:${p.workspaceId}` : (p.scope ?? "all");
 }

@@ -200,7 +200,7 @@ export async function magicCommand(argv: string[]): Promise<number> {
       prompt,
       backend,
       widget: ctx,
-      // Run from a project folder, it is the workspace, as a window's Space is in the app.
+      // Run from a project folder, it is the workspace, as a window's workspace is in the app.
       workspace: process.cwd() !== os.homedir() ? { name: path.basename(process.cwd()), root: process.cwd() } : null,
       explore: !o["no-explore"],
       noFast: o["no-fast"],

@@ -36,7 +36,7 @@ export function buildSystem(file?: string): string {
   return `${main}\n\n# Examples\n\nFinished widgets (the checks passed for each).\n\n${examples.join("\n\n")}\n`;
 }
 
-/** The Space a window belongs to (not Home): what "this project" or a relative path means. */
+/** The workspace a window belongs to (not Home): what "this project" or a relative path means. */
 export interface Workspace {
   name: string;
   root: string;
@@ -54,7 +54,7 @@ function describeFolder(root: string): string {
 
 export interface RequestContext {
   cwd: string;
-  /** The window's Space, when it has one besides Home. */
+  /** The window's workspace, when it has one besides Home. */
   workspace?: Workspace | null;
   home?: string;
   now?: Date;
@@ -80,7 +80,7 @@ export function buildRequest(prompt: string, c: RequestContext): string {
   ];
   if (c.workspace) {
     lines.push(
-      `Workspace: this window belongs to the Space "${c.workspace.name}" at ${short(c.workspace.root)} (${describeFolder(c.workspace.root)}). ` +
+      `Workspace: this window belongs to the workspace "${c.workspace.name}" at ${short(c.workspace.root)} (${describeFolder(c.workspace.root)}). ` +
         `The person is working there: "this project", "the repo", "my code", "the tests", a branch or a relative path mean this folder unless the request names another place, and the tools start there.`,
     );
   }

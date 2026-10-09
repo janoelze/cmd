@@ -2,42 +2,42 @@
 // palette's Actions group and Run Last Action Again all go through runAction, so
 // each runs in the same terminal the same way and the last one is remembered.
 
-import type { ActionsList, AppWindow, GitPlace, SpaceId, WindowId, WorkspaceAction } from "@cmd/protocol";
+import type { ActionsList, AppWindow, GitPlace, WorkspaceId, WindowId, WorkspaceAction } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { addWidget, selectPane } from "./actions.ts";
-import { getSpaceView, getState } from "./store.ts";
+import { getWorkspaceView, getState } from "./store.ts";
 import { goTo } from "./widgets.ts";
 
 /** The last action run, for Run Last Action Again; never a risky one (that asks each time). */
-let last: { root: string; action: WorkspaceAction; spaceId: SpaceId } | null = null;
+let last: { root: string; action: WorkspaceAction; workspaceId: WorkspaceId } | null = null;
 
 /**
  * Run an action: a recipe that needs arguments is typed into a new terminal in
  * its folder for the person to finish; anything else runs in its terminal
  * (the core picks or makes it), which is then shown.
  */
-export async function runAction(root: string, a: WorkspaceAction, spaceId: SpaceId, o: { restart?: boolean; fresh?: boolean } = {}): Promise<void> {
+export async function runAction(root: string, a: WorkspaceAction, workspaceId: WorkspaceId, o: { restart?: boolean; fresh?: boolean } = {}): Promise<void> {
   if (a.args) {
-    const t = await cmd.call("window.open", { kind: "terminal", input: { cwd: a.cwd }, spaceId });
-    goTo(t.id, spaceId);
+    const t = await cmd.call("window.open", { kind: "terminal", input: { cwd: a.cwd }, workspaceId });
+    goTo(t.id, workspaceId);
     await cmd.call("pane.write", { paneId: t.id, data: a.command + " " });
     return;
   }
-  const r = await cmd.call("actions.run", { root, actionId: a.id, spaceId, restart: o.restart, fresh: o.fresh });
-  if (!a.risky) last = { root, action: a, spaceId };
-  goTo(r.paneId, spaceId);
+  const r = await cmd.call("actions.run", { root, actionId: a.id, workspaceId, restart: o.restart, fresh: o.fresh });
+  if (!a.risky) last = { root, action: a, workspaceId };
+  goTo(r.paneId, workspaceId);
 }
 
 /** Run Last Action Again: a server still running is restarted. */
 export async function rerunLastAction(): Promise<boolean> {
   if (!last) return false;
-  await runAction(last.root, last.action, last.spaceId, { restart: true });
+  await runAction(last.root, last.action, last.workspaceId, { restart: true });
   return true;
 }
 
-/** The Space's folder, for its actions; null for Home (the home folder isn't a project). */
-export function spaceRoot(spaceId: SpaceId): string | null {
-  const sp = getState().spaces.get(spaceId);
+/** The workspace's folder, for its actions; null for Home (the home folder isn't a project). */
+export function workspaceRoot(workspaceId: WorkspaceId): string | null {
+  const sp = getState().workspaces.get(workspaceId);
   return sp && !sp.home ? sp.root : null;
 }
 
@@ -51,39 +51,39 @@ function placeOfPane(id: string): GitPlace | null {
 }
 
 /**
- * The checkout of the terminal or agent selected last in a Space, when it is
- * one of the Space's repository's (a worktree another agent works in): parallel
+ * The checkout of the terminal or agent selected last in a workspace, when it is
+ * one of the workspace's repository's (a worktree another agent works in): parallel
  * agents each in their own checkout, and the actions follow the one you look at.
  */
-export function followedRoot(spaceId: SpaceId): string | null {
-  const sp = getState().spaces.get(spaceId);
+export function followedRoot(workspaceId: WorkspaceId): string | null {
+  const sp = getState().workspaces.get(workspaceId);
   if (!sp?.git) return null;
-  for (const id of getSpaceView<string[]>(spaceId, "selection.history", [])) {
+  for (const id of getWorkspaceView<string[]>(workspaceId, "selection.history", [])) {
     const place = placeOfPane(id);
     if (place) return place.project === sp.git.project ? place.top : null;
   }
   return null;
 }
 
-/** The folder an actions widget is about: the one picked in its menu, else the followed checkout, else its Space's root. */
-export function actionsRootOf(win: Pick<AppWindow, "state" | "spaceId">): string | null {
+/** The folder an actions widget is about: the one picked in its menu, else the followed checkout, else its workspace's root. */
+export function actionsRootOf(win: Pick<AppWindow, "state" | "workspaceId">): string | null {
   if (typeof win.state.path === "string") return win.state.path;
-  return (win.state.follow !== false ? followedRoot(win.spaceId) : null) ?? getState().spaces.get(win.spaceId)?.root ?? null;
+  return (win.state.follow !== false ? followedRoot(win.workspaceId) : null) ?? getState().workspaces.get(win.workspaceId)?.root ?? null;
 }
 
 /** Each widget's last list, for its title bar menu (the worktrees to switch to). */
 export const lastLists = new Map<WindowId, ActionsList>();
 
-/** Show this Space's Workspace Actions widget, putting one on the workspace if there is none. */
+/** Show this workspace's Workspace Actions widget, putting one on the workspace if there is none. */
 export async function showActions(): Promise<void> {
   const st = getState();
-  const w = [...st.windows.values()].find((x) => x.kind === "actions" && x.spaceId === st.spaceId);
+  const w = [...st.windows.values()].find((x) => x.kind === "actions" && x.workspaceId === st.workspaceId);
   if (w) selectPane(w.id);
   else await addWidget("type:actions");
 }
 
-/** The current Space's actions, for the palette (read when it opens). */
-export function listActions(spaceId: SpaceId): Promise<ActionsList | null> {
-  const root = followedRoot(spaceId) ?? spaceRoot(spaceId);
+/** The current workspace's actions, for the palette (read when it opens). */
+export function listActions(workspaceId: WorkspaceId): Promise<ActionsList | null> {
+  const root = followedRoot(workspaceId) ?? workspaceRoot(workspaceId);
   return root ? cmd.call("actions.list", { path: root }).catch(() => null) : Promise.resolve(null);
 }

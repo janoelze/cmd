@@ -28,7 +28,7 @@ export interface BuildOptions {
   backend: Backend;
   /** The widget folder and how to check it. */
   widget: VerifyContext;
-  /** The window's Space (not Home), named in the request so "this project" resolves. */
+  /** The window's workspace (not Home), named in the request so "this project" resolves. */
   workspace?: Workspace | null;
   /** Let the agent look around this Mac (run, read, list). */
   explore?: boolean;

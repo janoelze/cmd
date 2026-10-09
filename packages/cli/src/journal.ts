@@ -1,7 +1,7 @@
 // `cmd journal …`: what happened, as a work log (docs/23-journal.md). Plain
 // Markdown by default, so an agent asked "what did we do this week?" can read
-// it as is; --json for the data. Inside a cmd terminal it's that Space's
-// journal, else everything (--all, --space, --project choose).
+// it as is; --json for the data. Inside a cmd terminal it's that workspace's
+// journal, else everything (--all, --workspace, --project choose).
 
 import type { JournalDay, JournalEvent } from "@cmd/protocol";
 import type { Connection } from "@cmd/protocol/node";
@@ -9,9 +9,9 @@ import { when } from "./data.ts";
 
 type Client = Connection["client"];
 
-export const JOURNAL_HELP = `  journal [--days N] [--all|--space ID|--project PATH] [--write|--no-write] [--json]
+export const JOURNAL_HELP = `  journal [--days N] [--all|--workspace ID|--project PATH] [--write|--no-write] [--json]
                                       what happened, day by day: releases, features, investigations
-  journal week [--weeks N] [--all|--space ID|--project PATH] [--write|--no-write] [--json]
+  journal week [--weeks N] [--all|--workspace ID|--project PATH] [--write|--no-write] [--json]
                                       the week's main threads of work, rolled up from its days
   journal note TEXT                   write something down (from an agent's terminal: in its session)
   journal threads [--day YYYY-MM-DD]  how cmd grouped a day, before AI: what a model is given
@@ -25,15 +25,15 @@ const dayName = (t: number) => new Date(t).toLocaleDateString("en-GB", { weekday
 const tilde = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 const OUTCOME: Record<string, string> = { shipped: "shipped", merged: "merged", fixed: "fixed", answered: "answered", open: "open", dropped: "dropped" };
 
-async function scope(client: Client, opt: Record<string, unknown>, paneId: string | undefined): Promise<{ spaceId?: string; scope?: string }> {
+async function scope(client: Client, opt: Record<string, unknown>, paneId: string | undefined): Promise<{ workspaceId?: string; scope?: string }> {
   if (opt.all) return { scope: "all" };
   // --project, as `cmd data` has it; --repo, its older name, still works.
   const project = opt.project ?? opt.repo;
   if (typeof project === "string") return { scope: `repo:${project.replace(/^~/, process.env.HOME ?? "~")}` };
-  if (typeof opt.space === "string") return { spaceId: opt.space };
+  if (typeof opt.workspace === "string") return { workspaceId: opt.workspace };
   if (paneId) {
     const { pane } = await client.call("identify", { paneId }).catch(() => ({ pane: null }));
-    if (pane) return { spaceId: pane.spaceId };
+    if (pane) return { workspaceId: pane.workspaceId };
   }
   return { scope: "all" };
 }
@@ -108,7 +108,7 @@ export async function journalCommand(client: Client, pos: string[], opt: Record<
     }
     case "events": {
       const s = await scope(client, opt, paneId);
-      const evs = await client.call("journal.events", { since: Date.now() - (days ?? 1) * 86400_000, spaceId: s.spaceId, repo: s.scope?.startsWith("repo:") ? s.scope.slice(5) : undefined, kinds: typeof opt.kind === "string" ? (opt.kind.split(",") as JournalEvent["kind"][]) : undefined });
+      const evs = await client.call("journal.events", { since: Date.now() - (days ?? 1) * 86400_000, workspaceId: s.workspaceId, repo: s.scope?.startsWith("repo:") ? s.scope.slice(5) : undefined, kinds: typeof opt.kind === "string" ? (opt.kind.split(",") as JournalEvent["kind"][]) : undefined });
       for (const e of evs) console.log(json ? JSON.stringify(e) : eventLine(e));
       return 0;
     }

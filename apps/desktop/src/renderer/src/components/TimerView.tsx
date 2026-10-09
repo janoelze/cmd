@@ -1,6 +1,6 @@
 // Timer, a built-in widget (docs/16-widgets.md): a countdown. Its state is the
 // window's (core windows/builtin.ts timerType: duration, endsAt, left, rang) and
-// the core rings it (core/timers.ts), so it ends on time in any Space. Here: the
+// the core rings it (core/timers.ts), so it ends on time in any workspace. Here: the
 // time left, large, a bar, Start / Pause / Reset, and presets. Click the time to
 // type one ("10", "1:30", "90s", "1h").
 

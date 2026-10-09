@@ -82,12 +82,12 @@ Ordered by expected win. Risk means the risk of a visible change in behaviour. �
 
 ### Renderer
 
-1. ✅ (invisible updates) **One store event re-renders the whole window.** `App` subscribes to everything. `inSpace` builds three new Maps per change, and `buildRows` builds new rows, so the Sidebar, every tile, `TileTitle` and `Slot` re-render. Triggers include every OSC title change (agent spinners), every 2 s usage sample per busy pane and every hook event. Fix: memoised `inSpace` and rows, `memo` on the heavy components, and notifications coalesced per frame.
+1. ✅ (invisible updates) **One store event re-renders the whole window.** `App` subscribes to everything. `inWorkspace` builds three new Maps per change, and `buildRows` builds new rows, so the Sidebar, every tile, `TileTitle` and `Slot` re-render. Triggers include every OSC title change (agent spinners), every 2 s usage sample per busy pane and every hook event. Fix: memoised `inWorkspace` and rows, `memo` on the heavy components, and notifications coalesced per frame.
 2. ✅ **IPC on every store change.** `closeNotification` runs on every update, and `setMenuState` on every agent event. Fix: narrower effect dependencies.
 3. **Canvas pan and drag re-render every title on every frame**, and `TerminalView`'s `memo` never holds because `onMenu` is a new closure each render.
 4. **Layout thrash.** `StripScrollbar` reads layout after every commit. `Slot` interleaves reads and writes. The tooltip runs a rAF loop with `getBoundingClientRect`.
 5. **Hidden work.** Focus mode hides tiles with `visibility:hidden`, so their terminals likely keep rendering. `DotMatrix` runs a 30 fps rAF loop off screen. The Files git poll runs while the app is in the background.
-6. **Every window mirrors every pane of every Space.** Each holds an xterm (about 12 B per cell) and snapshots every pane at startup. *Needs a decision: switching to a Space would then wait for a snapshot.*
+6. **Every window mirrors every pane of every workspace.** Each holds an xterm (about 12 B per cell) and snapshots every pane at startup. *Needs a decision: switching to a workspace would then wait for a snapshot.*
 7. **Settings changes re-apply everything**: they refit every terminal and restyle `:root` on any key.
 
 ### Electron main and startup

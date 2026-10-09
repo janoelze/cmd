@@ -5,7 +5,7 @@ import { IndexRing } from "./IndexRing.tsx";
 
 export interface PaletteItem {
   id: string;
-  /** "Commands", "Sessions", "Spaces", "Windows", "Widgets"… */
+  /** "Commands", "Sessions", "Workspaces", "Windows", "Widgets"… */
   group: string;
   label: string;
   /** SF Symbol before the label. */
@@ -16,7 +16,7 @@ export interface PaletteItem {
   /** Matching passage; \x01…\x02 mark highlighted terms. */
   snippet?: string | null;
   run: () => void;
-  /** ⌘↵ (Space picker: open in a new app window). */
+  /** ⌘↵ (Workspace picker: open in a new app window). */
   runAlt?: () => void;
 }
 
@@ -153,7 +153,7 @@ export function Palette({
     const matched = items
       .filter((it) => !group || it.group === group)
       .map((it) => {
-        // The second line (a Space's folder) matches too: "src/cmd" finds it.
+        // The second line (a workspace's folder) matches too: "src/cmd" finds it.
         const s = score(it.meta ? `${it.label} ${it.meta}` : it.label, q);
         const r = recent.indexOf(it.id);
         // Recent items first when the query is empty; a small boost otherwise.

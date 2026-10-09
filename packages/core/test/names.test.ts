@@ -63,17 +63,17 @@ describe("the worktree an agent works in", () => {
 });
 
 describe("agents by name", () => {
-  const a = (id: string, name: string | null, spaceId = "s1", extra: Partial<Agent> = {}) => ({ id, name, spaceId, ...extra });
+  const a = (id: string, name: string | null, workspaceId = "s1", extra: Partial<Agent> = {}) => ({ id, name, workspaceId, ...extra });
   const agents = [a("aaaa1111", "Notify permission"), a("bbbb2222", "Tours"), a("cccc3333", "Tours", "s2"), a("dddd4444", "Session names", "s1", { nameWas: "Data model", namedAt: 1000 })];
 
   it("takes an id or its start first", () => {
     expect(matchAgents(agents, "bbbb").map((x) => x.id)).toEqual(["bbbb2222"]);
   });
 
-  it("matches names loosely, in the caller's Space first", () => {
+  it("matches names loosely, in the caller's workspace first", () => {
     expect(matchAgents(agents, "notify-permission").map((x) => x.id)).toEqual(["aaaa1111"]);
     expect(matchAgents(agents, "NOTIFY PERMISSION").map((x) => x.id)).toEqual(["aaaa1111"]);
-    expect(matchAgents(agents, "Tours", { spaceId: "s2" }).map((x) => x.id)).toEqual(["cccc3333"]);
+    expect(matchAgents(agents, "Tours", { workspaceId: "s2" }).map((x) => x.id)).toEqual(["cccc3333"]);
     expect(matchAgents(agents, "tours").length).toBe(2);
     expect(matchAgents(agents, "perm").map((x) => x.id)).toEqual(["aaaa1111"]);
   });

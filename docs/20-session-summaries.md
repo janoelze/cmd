@@ -7,7 +7,7 @@ Right-click an agent's title bar (or the sidebar row, or Session → Summarize S
 ## Experience
 
 1. **The menu item exists only with an AI provider.** The title bar menu reads `aiStatus()` when it opens, so a key added in Settings → AI shows the item on the next right-click; a key the provider refuses hides it. The menu bar item is disabled instead (menu bar items are fixed; `MenuState` has no `visible`).
-2. **The window opens at once,** in the agent's Space, with what cmd knows without a model: title line, agent, project, branch, when, prompts, files changed, and "Summarizing 12 prompts with gpt-5.4-mini…".
+2. **The window opens at once,** in the agent's workspace, with what cmd knows without a model: title line, agent, project, branch, when, prompts, files changed, and "Summarizing 12 prompts with gpt-5.4-mini…".
 3. **The answer streams into the file.** `ai.object` with `onPartial` streams the structured answer; every partial is rendered to Markdown and written (at most every 200 ms). The Markdown window already re-renders a watched file in place, keeping the scroll, so no new UI was needed: a summary is a file, editable with ⌘E, readable by agents and the CLI.
 4. **When it's written,** a notification ("Summary ready") with the summary window as its `windowId`. The UI's usual rule shows it only if you looked away (`notifications.when`), and clicking it brings the window forward. A failure is written into the file and notified the same way.
 5. **Copy Summary** in the Markdown window's menu copies the file as edited, without its marker and footer (`summaryText` in `protocol/src/summary.ts`).

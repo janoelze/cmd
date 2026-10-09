@@ -235,7 +235,7 @@ registerWindowView({
 
 // List widgets: the title bar's menu (titleMenu) switches their scope and has their
 // options; the same entries are on right-click. Their summary is the title bar's status.
-const scopeLabel = (w: AppWindow) => (scopeOf(w.state.scope) === "all" ? "All Spaces" : "This Space");
+const scopeLabel = (w: AppWindow) => (scopeOf(w.state.scope) === "all" ? "All Workspaces" : "This Workspace");
 const scoped = (extra: (w: AppWindow) => MenuEntry[]) => (w: AppWindow) => [...scopeMenu(w.id, scopeOf(w.state.scope)), "-" as const, ...extra(w)];
 const commandsMenu = scoped((w) => [{ label: "Failed Only", checked: w.state.failedOnly === true, run: () => setWidgetState(w.id, { failedOnly: w.state.failedOnly !== true }) }]);
 const notificationsMenu = scoped(() => [{ label: "Clear Notifications", run: () => void cmd.call("notify.clear", {}).catch(() => {}) }]);
@@ -271,7 +271,7 @@ const actionsMenu = (w: AppWindow): MenuEntry[] => {
           })),
         ]
       : []),
-    { label: "Use the Space's Folder", checked: !pinned && !follow, run: () => setWidgetState(w.id, { path: null, follow: false }) },
+    { label: "Use the workspace's Folder", checked: !pinned && !follow, run: () => setWidgetState(w.id, { path: null, follow: false }) },
     "-",
     { label: "Describe with AI", checked: settings["actions.describe"], run: () => set("actions.describe", !settings["actions.describe"]) },
     { label: "Open Dev Servers in a Browser", checked: settings["actions.openBrowser"], run: () => set("actions.openBrowser", !settings["actions.openBrowser"]) },

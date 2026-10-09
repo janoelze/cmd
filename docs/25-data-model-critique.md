@@ -15,7 +15,7 @@ Measured on the author's Mac, release build, 6 October 2026 (`~/Library/Applicat
 | `agents` (live tree, 7) | `cmd.sqlite` | tracker, whole doc on every change | `restore.ts` only | while the agent lives | |
 | `journal_events` (1.8k) | `cmd.sqlite` | 5-min pull from turns, sessions, reflogs; live push of commands, visits, file opens | threads → digest → the day writer; `cmd journal` | 180 days | 1.7 MB |
 | `journal_days`, `_history` (0) | `cmd.sqlite` | the day writer (a model) | Journal widget, `cmd journal` | forever | |
-| `panes`, `pane_screens`, `windows`, `spaces`, `ui_state` | `cmd.sqlite` | their managers | restore, the renderer | while open | 4.3 MB screens |
+| `panes`, `pane_screens`, `windows`, `workspaces`, `ui_state` | `cmd.sqlite` | their managers | restore, the renderer | while open | 4.3 MB screens |
 | `remote_devices`, `remote_log`, `agent_homes`, `schema_versions`, `journal_meta` | `cmd.sqlite` | | | | |
 | `sessions`, `session_fts`, `message_fts`, `files`, `learned_roots` | `search.sqlite`, a worker | the indexer, from 4,055 transcripts | palette, Navigator, `cmd search`, the journal (sessions) | rebuilt on any version change | **352 MB** |
 | `CommandLog` | memory | OSC 133 | Commands widget, the journal | 300 runs | |
@@ -31,8 +31,8 @@ Two databases, five in-memory stores, four file formats. Versioned by nine const
 
 Each store answers the question its feature asked, and no more:
 
-- **The activity log** (docs/18) asked "what is this agent doing right now, and what did its last turn do", for state, notifications and a future Activity widget. So it keeps 14 days, has no Space, no user actions, and stores the current turn twice (`agent_turns.doc` and `agents.doc.turn`).
-- **The journal** (docs/23) asked "what happened in this workspace, for months". The activity log couldn't answer (14 days, no Space, agent rows vanish), so it copies turns, sessions, commits, commands and pages into a second log with a second vocabulary, and resolves Space by folder prefix at copy time.
+- **The activity log** (docs/18) asked "what is this agent doing right now, and what did its last turn do", for state, notifications and a future Activity widget. So it keeps 14 days, has no workspace, no user actions, and stores the current turn twice (`agent_turns.doc` and `agents.doc.turn`).
+- **The journal** (docs/23) asked "what happened in this workspace, for months". The activity log couldn't answer (14 days, no workspace, agent rows vanish), so it copies turns, sessions, commits, commands and pages into a second log with a second vocabulary, and resolves workspace by folder prefix at copy time.
 - **The command log** asked "what ran in my terminals today", for one widget. Memory, 300 runs; the journal copies finished ones out so they survive.
 - **The transcript index** asked "find that session". So it indexes foreign files in a separate database, and the journal reaches into it for sessions because nothing in cmd's own store knows them.
 - **Summaries** (docs/20) asked "what did this session do", once, now. So they re-parse the transcript, re-run git and assemble a context nothing else can reuse.
@@ -92,11 +92,11 @@ Days are never pruned; `remote_log` is never pruned; `runtime/` grows 34 MB per 
 
 What cmd records about the work is what hooks happen to send, plus OSC 133 marks, plus reflogs. Missing:
 
-- **The user.** Nothing records what the person did: which pane they looked at (only `seenAt` on an agent), what they typed into a terminal, which windows they opened or closed, which Space they switched to, which palette command they ran, which notification they clicked, what they dragged where. docs/23's "Next" lists UI actions as the next journal kind; without them, every "intelligent" feature sees agents and never the person working with them.
+- **The user.** Nothing records what the person did: which pane they looked at (only `seenAt` on an agent), what they typed into a terminal, which windows they opened or closed, which workspace they switched to, which palette command they ran, which notification they clicked, what they dragged where. docs/23's "Next" lists UI actions as the next journal kind; without them, every "intelligent" feature sees agents and never the person working with them.
 - **Terminal output.** Only the last screen per pane (`pane_screens`), for restore. A command's output, an agent's screen while it worked, errors that scrolled by: gone. The interrupt and "question answered" rules already lean on terminal activity (`pane.lastActivityAt`) without it being recorded, so they can't be replayed or tested from the log.
 - **Transcript content.** cmd never owns any of it. The index is a derived view of files Claude and Codex may delete, move or reformat; summaries re-read them; the journal takes titles and first prompts from the index. If a transcript goes, cmd's knowledge of that session is a title and a span.
 - **Commands in agent panes** are dropped on purpose (`commands.ts:51`), so an agent's `pnpm test` is known only as a `tool.start` payload clipped at 4 KB.
-- **Space on turns**: resolved from cwd prefix at pull time, from a live agent if it still exists (`journal/service.ts:133`).
+- **Workspace on turns**: resolved from cwd prefix at pull time, from a live agent if it still exists (`journal/service.ts:133`).
 - **"Raw" payloads are cut** at 4,000 characters per string and 200 array items before storage (`normalize.ts:201`). A `Write` of a 300-line file, a long `Bash` output, a `Read` result: truncated for good. That's a sensible bound for a 14-day cache; it isn't a record.
 - **Agents without hooks** (aider, amp, opencode, a plain `ssh`): process name and OSC only.
 
@@ -106,7 +106,7 @@ There is no entity model. Identities are whatever each pipeline had at hand:
 
 - An **agent** is a UUID that dies with the process; a `--resume` is a new agent. The thing people mean ("my session on the payments branch") has no id: it's `claudeSessionId ?? codexThreadId` joined by hand in seven places (`core.ts:450`, `summaries/service.ts`, `renderer/actions.ts:70,153`, `Navigator.tsx:87`, `tracker.ts`), and `sessions.id` isn't even unique in the index (archived copies).
 - A **project** is `repo` = the main worktree's path, computed three different ways; a folder that isn't a repository is its own project; moving the repo loses everything.
-- A **Space** is attached to events by `cwd.startsWith(space.root)` at sync time, and `journal.events` (strict `space_id = ?`) and `journal.days` (`#inScope`, with the prefix fallback) disagree about which events a Space has.
+- A **Workspace** is attached to events by `cwd.startsWith(workspace.root)` at sync time, and `journal.events` (strict `workspace_id = ?`) and `journal.days` (`#inScope`, with the prefix fallback) disagree about which events a workspace has.
 - A **thread** is a semantic string (`branch:cmd#dnd`, `terminal:<pane>@<at>`), good for determinism, useless for joining to anything stored.
 - A **turn** is `(agent_id, idx)`; a **journal event** is an AUTOINCREMENT id but its real identity is `key`, a string built differently per kind (`turn:<agent>:<idx>`, `visit:<window>:<url>:<half-hour>`, `note:<at>:<text40>`).
 - The **person** doesn't exist. Nor does a **device** (remote), a **model**, a **tool** or a **file** as something you can point at twice.
@@ -117,8 +117,8 @@ Time has the same problem: `at` is REAL ms from `mtimeNs/1e6` in `agent_events`,
 
 The read side is 120 RPC methods, each a bespoke query over one store, and most filtering happens after a full load:
 
-- `agents.coverage` scans every event of N days into JS; `journal.threads` loads a week plus a day and filters Space in JS (`#inScope`); the Commands widget fetches every run and filters Space, failure and state client-side though the server takes a `spaceId`; Resources and Task Manager both poll `pane.list` + `core.processes` every 2 s and aggregate in JS.
-- Documents are opaque JSON (`doc` columns) with a few promoted columns and indices on `at`, `space_id`, `repo`, `thread`. "Turns that touched `panes.ts`", "sessions where a test failed then passed", "what did I do after that notification" are impossible without `json_extract` over everything, or a new method.
+- `agents.coverage` scans every event of N days into JS; `journal.threads` loads a week plus a day and filters workspace in JS (`#inScope`); the Commands widget fetches every run and filters workspace, failure and state client-side though the server takes a `workspaceId`; Resources and Task Manager both poll `pane.list` + `core.processes` every 2 s and aggregate in JS.
+- Documents are opaque JSON (`doc` columns) with a few promoted columns and indices on `at`, `workspace_id`, `repo`, `thread`. "Turns that touched `panes.ts`", "sessions where a test failed then passed", "what did I do after that notification" are impossible without `json_extract` over everything, or a new method.
 - Agent bucketing and ranking (needs → unseen → recency) is written four times: `protocol/attention.ts` (used only by its test), `renderer/model.ts`, `AgentActivity.tsx`, `apps/web/model.ts`.
 - There are **no change events for the journal or summaries**: the widget polls every 15 minutes; a summary's progress arrives as `fs.changed` on its file. `agent.activity` is broadcast per event and consumed by nothing but `cmd agents events --follow`. Neither the Agent Activity widget nor the sidebar reads `agent.events` or `agent.turns`: the richest data cmd has is shown nowhere.
 - The two databases can't be joined in SQL. The journal pulls `sessions` rows through a callback and merges them with turns by sharing a thread string.
@@ -170,11 +170,11 @@ Each is a new pipeline, each pipeline a new place for the same facts to diverge.
 
 Not answers; the questions whose answers decide the design in the next two documents.
 
-1. **What is an event?** One log for everything that happens (agent hooks, user actions, terminal marks, git, files, windows, notifications, model calls) with one envelope (time, actor, Space, project, session, source, version) and typed payloads? Or several logs with a shared identity model? Today's answer is "whatever the feature needed".
+1. **What is an event?** One log for everything that happens (agent hooks, user actions, terminal marks, git, files, windows, notifications, model calls) with one envelope (time, actor, workspace, project, session, source, version) and typed payloads? Or several logs with a shared identity model? Today's answer is "whatever the feature needed".
 2. **What does cmd own?** Transcript content (and from which agents), terminal output (how much, for how long), tool inputs and outputs uncut? Owning more makes cmd resilient to the agents' files and formats, and costs disk and a privacy story. **Decided (2026-10-06): cmd owns transcripts.** It is to become the brain of AI-assisted development, with features over every kind of activity; a session's content can't depend on files another program may delete or reformat. Terminal output and uncut tool payloads are still open.
 3. **Retention and privacy as a policy, not a constant per table.** How long, per class of data; what is redacted at capture, what at use; what never leaves the machine; what the user can see and delete. Today: 14/180/forever/300 rows, redaction in one of three model paths. **Decided (2026-10-06): redact wherever possible**, with the patterns tested against real local transcripts; done ahead of the refactor on branch `redact`.
 4. **Derivation as one mechanism.** Projections (state, turns, threads, days, index) derived from the log by versioned rules, re-derivable from the log at any age, invalidated by one rule. Which projections must be live (state), which incremental (turns, index), which on demand (days)?
-5. **Identity.** Stable ids for session (across resumes and agents), project (across moves and worktrees), person, device, model, and how Space relates to them (membership recorded at the time, not inferred later).
+5. **Identity.** Stable ids for session (across resumes and agents), project (across moves and worktrees), person, device, model, and how workspace relates to them (membership recorded at the time, not inferred later).
 6. **Query.** Do we want SQL over promoted columns, a typed query API, a subscription model (live queries that push changes), or all three? Who may ask: the renderer, the CLI, agents (`cmd`), widgets (sandboxed), remote devices?
 7. **Model context as a product.** One context builder with budgets, redaction and provenance, inputs kept (not hashed) for debugging and evals; per-purpose on/off and cost.
 8. **One database or two?** The transcript index is 352 MB of rebuildable data; keeping it apart was right. Is "everything cmd records" one file, and derived indexes another, with a rule for what may be dropped and rebuilt?

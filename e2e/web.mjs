@@ -123,13 +123,13 @@ try {
   await shot("2b-settings");
   await page.keyboard.press("Escape");
 
-  // A busy Mac: two Spaces, Claude sessions waiting, working and done (the hook
+  // A busy Mac: two workspaces, Claude sessions waiting, working and done (the hook
   // events Claude Code sends), and a shell. Now sorts them; the chips filter.
-  const space = async (name) => {
+  const workspace = async (name) => {
     fs.mkdirSync(path.join(home, "work", name), { recursive: true });
-    return (await call("space.open", { path: path.join(home, "work", name) })).space;
+    return (await call("workspace.open", { path: path.join(home, "work", name) })).workspace;
   };
-  const [api, site] = [await space("api"), await space("site")];
+  const [api, site] = [await workspace("api"), await workspace("site")];
   // A stand-in Claude: a process really named claude (node, sleeping) that sets its
   // title, so the core detects it as Claude does; then the hook events it would send.
   const bin = path.join(home, "bin");
@@ -137,7 +137,7 @@ try {
   fs.symlinkSync(process.execPath, path.join(bin, "claude"));
   const claude = async (sp, title, events) => {
     const command = `printf '\\033]0;${title}\\007'; clear; exec ${bin}/claude -e 'setInterval(() => {}, 1e9)'`;
-    const p = await call("pane.create", { spaceId: sp.id, command });
+    const p = await call("pane.create", { workspaceId: sp.id, command });
     await until(async () => (await call("agent.list")).some((a) => a.paneId === p.id), `the core detects Claude in “${title}”`);
     for (const [event, payload] of events) await call("hook.ingest", { paneId: p.id, agent: "claude", event, payload });
     return p;
@@ -163,8 +163,8 @@ try {
 
   await page.locator(".chip", { hasText: "site" }).click();
   await page.locator(".row", { hasText: "Pricing page" }).waitFor();
-  check((await page.locator(".row").count()) === 1, "a Space chip filters Now");
-  await shot("2c-space");
+  check((await page.locator(".row").count()) === 1, "a workspace chip filters Now");
+  await shot("2c-workspace");
   await page.locator(".chip", { hasText: "All" }).click();
   await page.locator(".actions").getByRole("button", { name: "Next" }).click();
   await page.locator(".term-state", { hasText: "Needs you" }).waitFor();

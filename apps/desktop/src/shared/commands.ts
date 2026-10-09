@@ -36,7 +36,7 @@ export const COMMANDS = spec([
   { id: "file.newBrowser", label: "New Browser Window", keys: ["Shift+Cmd+B"] },
   { id: "file.newFiles", label: "New File Browser", keys: ["Shift+Cmd+O"] },
   { id: "file.newText", label: "New Text Window", keys: ["Shift+Cmd+E"] },
-  { id: "file.openSpace", label: "Open Space…", keys: ["Cmd+O"] },
+  { id: "file.openWorkspace", label: "Open Workspace…", keys: ["Cmd+O"] },
   { id: "file.newWindow", label: "New Window…", keys: ["Shift+Cmd+N"] },
   // Widgets (docs/16-widgets.md). Ids keep their old names: keybindings.json uses them.
   { id: "widget.library", label: "Widget Library…", keys: ["Shift+Cmd+L"] },
@@ -107,18 +107,18 @@ export const COMMANDS = spec([
     paletteHidden: true,
   })),
 
-  { id: "space.next", label: "Next Space", keys: ["Ctrl+Cmd+]"] },
-  { id: "space.prev", label: "Previous Space", keys: ["Ctrl+Cmd+["] },
-  { id: "space.last", label: "Last Space" },
-  { id: "space.moveWindow", label: "Move Window to Space…" },
-  { id: "space.rename", label: "Rename Space…" },
-  { id: "space.icon", label: "Change Space Icon…" },
-  { id: "space.reveal", label: "Show Space Folder in Finder" },
-  { id: "space.close", label: "Close Space…" },
+  { id: "workspace.next", label: "Next Workspace", keys: ["Ctrl+Cmd+]"] },
+  { id: "workspace.prev", label: "Previous Workspace", keys: ["Ctrl+Cmd+["] },
+  { id: "workspace.last", label: "Last Workspace" },
+  { id: "workspace.moveWindow", label: "Move Window to Workspace…" },
+  { id: "workspace.rename", label: "Rename Workspace…" },
+  { id: "workspace.icon", label: "Change Workspace Icon…" },
+  { id: "workspace.reveal", label: "Show Workspace Folder in Finder" },
+  { id: "workspace.close", label: "Close Workspace…" },
   // Ctrl+1–9 like Arc's spaces; ⌘1–9 stay for sessions.
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
-    id: `space.select${n}`,
-    label: `Switch to Space ${n}`,
+    id: `workspace.select${n}`,
+    label: `Switch to Workspace ${n}`,
     keys: [`Ctrl+${n}`],
     paletteHidden: true,
   })),
@@ -172,7 +172,7 @@ export function platformDefaults(mac: boolean): Keybindings {
   const out: Keybindings = Object.fromEntries(specs.map((c) => [c.id, (c.keys ?? []).map((k) => (mac ? k : otherPlatformKey(k)))]));
   if (mac) return out;
   // Two macOS shortcuts can land on the same one (⇧⌘] and ⌃⌘]): it stays with
-  // the command that has fewest shortcuts (Next Space keeps it; Next Session has ⌥→).
+  // the command that has fewest shortcuts (Next Workspace keeps it; Next Session has ⌥→).
   const owners = new Map<string, string[]>();
   for (const c of specs) for (const k of out[c.id]!) owners.set(norm(k), [...(owners.get(norm(k)) ?? []), c.id]);
   for (const [k, ids] of owners) {
@@ -185,6 +185,9 @@ export function platformDefaults(mac: boolean): Keybindings {
 
 export const DEFAULT_KEYBINDINGS: Keybindings = platformDefaults(MAC_KEYMAP);
 
+/** A command id as it is now: before 0.24 the workspace commands were `space.*`. */
+const currentId = (id: string): string => (id.startsWith("space.") ? `work${id}` : id);
+
 /**
  * Overlay the user's keybindings.json on the defaults:
  * { "session.next": "Ctrl+Tab" } replaces, ["A", "B"] binds several,
@@ -194,7 +197,8 @@ export function resolveKeybindings(user: unknown, defaults: Keybindings = DEFAUL
   const bindings: Keybindings = structuredClone(defaults);
   const errors: string[] = [];
   if (!user || typeof user !== "object" || Array.isArray(user)) return { bindings, errors };
-  for (const [id, v] of Object.entries(user as Record<string, unknown>)) {
+  for (const [key, v] of Object.entries(user as Record<string, unknown>)) {
+    const id = currentId(key);
     if (!COMMAND_BY_ID.has(id)) {
       errors.push(`unknown command "${id}"`);
       continue;
@@ -220,6 +224,7 @@ export function resolveKeybindings(user: unknown, defaults: Keybindings = DEFAUL
 export function editKeybindings(user: unknown, id: string, keys: string[] | null, defaults: Keybindings = DEFAULT_KEYBINDINGS): Record<string, unknown> {
   const out: Record<string, unknown> = user && typeof user === "object" && !Array.isArray(user) ? { ...(user as Record<string, unknown>) } : {};
   delete out[id];
+  for (const k of Object.keys(out)) if (k !== id && currentId(k) === id) delete out[k];
   if (!keys) return out;
   for (const [other, v] of Object.entries(out)) {
     const list = typeof v === "string" ? [v] : Array.isArray(v) ? v : null;

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, HOME_SPACE_ID, type Agent } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, HOME_WORKSPACE_ID, type Agent } from "@cmd/protocol";
 import { AgentTracker } from "../src/agents/tracker.ts";
 import { PaneManager } from "../src/panes.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
@@ -140,7 +140,7 @@ function stub(id: string, paneId: string | null): Agent {
   return {
     id,
     paneId,
-    spaceId: HOME_SPACE_ID,
+    workspaceId: HOME_WORKSPACE_ID,
     kind: "claude",
     name: null,
     cwd: "/",
@@ -278,7 +278,7 @@ describe("resume command", () => {
       transcript_path: path.join(profile, "projects", "-p", "abc.jsonl"),
     })!;
     expect(t.resumeCommand(a.id)).toBe(`cd '/tmp/it'\\''s' && CLAUDE_CONFIG_DIR='${profile}' claude --model opus --resume 'abc'`);
-    const r = t.resume({ agent: "codex", sessionId: "t1", cwd: null, spaceId: HOME_SPACE_ID });
+    const r = t.resume({ agent: "codex", sessionId: "t1", cwd: null, workspaceId: HOME_WORKSPACE_ID });
     expect(t.resumeCommand(r.id)).toBe(`cd '${os.homedir()}' && codex resume 't1'`);
     fs.rmSync(profile, { recursive: true, force: true });
   });

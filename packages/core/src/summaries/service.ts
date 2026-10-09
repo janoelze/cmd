@@ -17,7 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { logger } from "@cmd/protocol/node";
-import type { Agent, AgentId, AgentTurn, SpaceId, WindowId } from "@cmd/protocol";
+import type { Agent, AgentId, AgentTurn, WorkspaceId, WindowId } from "@cmd/protocol";
 import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import type { CallOptions } from "../ai/service.ts";
 import { parseClaude, parseCodex, type ConversationEntry, type SessionDocument } from "../search/parser.ts";
@@ -48,8 +48,8 @@ export interface SummaryServiceOptions {
   agentTitle: (kind: Agent["kind"]) => string;
   /** Where summaries are kept; null: the system's temp folder. */
   dir: string | null;
-  /** Shows `file` in a Markdown window in `spaceId` (an open one if there is); its id. */
-  show: (file: string, spaceId: SpaceId) => WindowId;
+  /** Shows `file` in a Markdown window in `workspaceId` (an open one if there is); its id. */
+  show: (file: string, workspaceId: WorkspaceId) => WindowId;
   notify: (windowId: WindowId, title: string, body: string) => void;
   /** Tests: git's commits since a time, newest first (default: `git log`). */
   commits?: (cwd: string, since: number) => Promise<Commit[]>;
@@ -272,7 +272,7 @@ export class SummaryService {
       ],
     });
     write(renderSummary(facts, {}, { pending: `Summarizing ${facts.prompts === 1 ? "1 prompt" : `${facts.prompts} prompts`} with ${model}…` }));
-    const windowId = o.open === false ? null : this.#o.show(file, a.spaceId);
+    const windowId = o.open === false ? null : this.#o.show(file, a.workspaceId);
 
     const footer = (m: string) =>
       `Written by ${m} from ${entries.length} messages${pruned.after < pruned.before ? " (shortened to fit)" : ""} · ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`;

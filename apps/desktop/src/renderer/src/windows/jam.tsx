@@ -17,7 +17,7 @@ function menu(w: AppWindow): MenuEntry[] {
     { label: "Ask for a Change…", run: () => c()?.ask() },
     { label: w.state.path ? "Save" : "Save…", run: () => c()?.save() },
     "-",
-    { label: "Open Visualizer", run: () => void cmd.call("window.open", { kind: "visualizer", input: { source: `window:${w.id}` }, spaceId: w.spaceId }).catch(() => {}) },
+    { label: "Open Visualizer", run: () => void cmd.call("window.open", { kind: "visualizer", input: { source: `window:${w.id}` }, workspaceId: w.workspaceId }).catch(() => {}) },
   ];
 }
 

@@ -5,7 +5,7 @@
 
    Shared recipe for controls: one height per size, the UI font at --text-md,
    --radius corners, a fill with an inset hairline (an inset shadow, so it
-   takes no layout space) and the input ring on keyboard focus. */
+   takes no layout workspace) and the input ring on keyboard focus. */
 
 /* ── icons ── */
 

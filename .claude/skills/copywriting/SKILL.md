@@ -26,7 +26,7 @@ Prefer: *waiting for you, needs you, done, stopped, couldn't, keeps running, sid
 - **Title Case** for menu items, buttons, window titles and section titles, as macOS does: "Pair a Device…", "Restart Core", "Check for Updates…". An ellipsis (…) means more input follows before anything happens.
 - **Sentence case** for everything else: notification bodies, toasts, tooltips, descriptions, errors, empty states.
 - **Periods only on full sentences.** "Summary copied" (fragment, none). "This file isn't a session summary." (sentence, period). In one string, all fragments or all sentences.
-- **Names as the app shows them:** windows, Spaces, the workspace, sidebars, agents, sessions, Magic widgets, the command palette, the Widget Library. Menu paths as `Settings → Agents`. Shortcuts as the menu shows them: ⌘T, ⇧⌘L, ⌥⌘N.
+- **Names as the app shows them:** windows, workspaces, the board, sidebars, agents, sessions, Magic widgets, the command palette, the Widget Library. Menu paths as `Settings → Agents`. Shortcuts as the menu shows them: ⌘T, ⇧⌘L, ⌥⌘N.
 - **Numbers as digits:** "3 terminals", "4 files changed", "7 min".
 - **Code and paths** in backticks where Markdown renders (docs, CLI help, settings descriptions); in plain-text surfaces (system notifications, tooltips), in typographic quotes: Allow “rm NOTES.md”?
 - **Times and durations short:** 40 s, 7 min, 1 h 5 min; dates as the system formats them.
@@ -38,7 +38,7 @@ Prefer: *waiting for you, needs you, done, stopped, couldn't, keeps running, sid
 | **Notification** | Title: what (project or agent) · state. Body: the one thing worth knowing. | subject ≤ 28 characters (cut), body ≤ 140 |
 | **Toast** | The result of something the person just did. An error toast carries an action that fixes it, or isn't a toast. | one short sentence |
 | **Tooltip** | Name the control, then its shortcut. Explain only when the name isn't enough. | ≤ 60 characters |
-| **Menu item, button** | Verb first, what happens. "Close Space", not "OK". | 1–4 words |
+| **Menu item, button** | Verb first, what happens. "Close Workspace", not "OK". | 1–4 words |
 | **Setting** | Title: what it controls. Description: what changes, at a glance. Details (`details`, behind the info button) only when something would surprise: what's sent where, which files change, a format to follow. Most settings have none. | description one line, ≤ 60 characters |
 | **Error** | What happened, then what to do. | ≤ 2 sentences |
 | **Empty state** | What goes here, and how to get some. | 1–2 sentences |
@@ -68,7 +68,7 @@ People turn notifications off when they cry wolf, so:
 | cmd set up your agents / Added cmd's hook to Gemini CLI (~/.gemini/settings.json), so their state shows in cmd. Settings → Agents → Hooks to change it. | **Gemini CLI set up** / Its state shows in cmd now. Change it in Settings → Agents. |
 | Summary copied. | Summary copied |
 | An error occurred while connecting to the core. | cmd lost touch with its background process. Reconnecting… |
-| Are you sure you want to close this Space? / OK · Cancel | **Close this Space?** Its 3 terminals stop. / Close Space · Cancel |
+| Are you sure you want to close this workspace? / OK · Cancel | **Close this workspace?** Its 3 terminals stop. / Close Workspace · Cancel |
 | No items | No agents running. Start one with ⌥⌘N, or run `claude` in any terminal. |
 
 ## Checklist

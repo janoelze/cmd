@@ -1,4 +1,4 @@
-// Journal, a built-in widget (docs/23-journal.md): what happened in a Space,
+// Journal, a built-in widget (docs/23-journal.md): what happened in a workspace,
 // as a work log people can read at a glance. A day is a headline, a ribbon of
 // the hours worked and a few entries ("Released v0.14.4", "Investigated a
 // corrupt database"), which the core writes from what it recorded (agent
@@ -155,7 +155,7 @@ export function Journal({
   /** The week so far, rolled up from its days: its threads of work above the days. */
   week?: JournalWeek | null;
   now?: number;
-  /** Projects as chips (off when the Space is one project). */
+  /** Projects as chips (off when the workspace is one project). */
   showProject?: boolean;
   /** Writing the newest entries: a line at the top. */
   summarising?: string | null;
@@ -194,7 +194,7 @@ export function Journal({
         )}
         {days.length === 0 && !summarising && !onSetUpAi && (
           <EmptyState compact icon="book" title="Nothing yet">
-            What you and your agents do in this Space shows up here, a few lines a day.
+            What you and your agents do in this workspace shows up here, a few lines a day.
           </EmptyState>
         )}
         {week && week.themes.length > 0 && days.length > 0 && (

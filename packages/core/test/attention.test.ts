@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { sortRows, type Agent, type Pane } from "@cmd/protocol";
 
 const pane = (id: string, lastActivityAt: number): Pane => ({
-  id, spaceId: "home", title: id, cwd: "/", shell: "zsh", pid: 1, foreground: "zsh", cols: 80, rows: 24,
+  id, workspaceId: "home", title: id, cwd: "/", shell: "zsh", pid: 1, foreground: "zsh", cols: 80, rows: 24,
   createdAt: 0, lastActivityAt, exitCode: null, agentId: null, usage: null, attention: null, muted: false, sizedBy: null, progress: null,
 });
 const agent = (state: Agent["state"], stateSince: number, seenAt: number | null = null) =>

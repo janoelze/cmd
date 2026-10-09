@@ -45,7 +45,7 @@ const HAND: Record<string, string[] | null> = {
   "Data model changes and agent sessions": ["Session names", "Data model"],
   "Marketing videos and UI accessibility survey": ["Tours"],
   "Workspace-übergreifende notifications": ["Notify permission", "Notification permission"],
-  "Navigator recent agent sessions filtering": ["Recent by Space", "Recent sessions"],
+  "Navigator recent agent sessions filtering": ["Recent by Workspace", "Recent sessions"],
   "Magic widgets status indicator refactoring": ["Widget status lights", "Widget status"],
   "Latest prod update doesn't start": ["Broken update", "Update startup"],
   "Icon sizing audit and retina support": ["Icon sizes"],

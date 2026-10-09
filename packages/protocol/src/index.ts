@@ -8,7 +8,7 @@ export type * from "./events.ts";
 export { DATA_CLASSES, DATA_FLAGS, EVENTS_SCHEMA, EVENT_V, classOf, commandRunOf, notificationOf } from "./events.ts";
 export * from "./rpc.ts";
 export * from "./attention.ts";
-export * from "./space.ts";
+export * from "./workspace.ts";
 export * from "./settings.ts";
 export * from "./client.ts";
 export * from "./magic.ts";

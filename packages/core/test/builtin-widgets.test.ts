@@ -25,7 +25,7 @@ afterEach(async () => {
 });
 
 /** What the Commands and Notifications widgets subscribe to, newest first. */
-const runs = (spaceId?: string) => core.data.query({ types: ["command"], spaceId, by: "time", order: "desc", limit: 300 }).map(commandRunOf);
+const runs = (workspaceId?: string) => core.data.query({ types: ["command"], workspaceId, by: "time", order: "desc", limit: 300 }).map(commandRunOf);
 const notifications = () => core.data.query({ types: ["notification"], by: "time", order: "desc", limit: 300 }).map(notificationOf);
 
 describe("command log", () => {
@@ -35,7 +35,7 @@ describe("command log", () => {
     const token = pty.opts.env.CMD_PANE_TOKEN;
     pty.output(`\x1b]133;C\x07\x1b]777;cmd;${token};exec;make test\x07`);
     let [run] = runs();
-    expect(run).toMatchObject({ paneId: pane.id, spaceId: pane.spaceId, command: "make test", endedAt: null, exitCode: null });
+    expect(run).toMatchObject({ paneId: pane.id, workspaceId: pane.workspaceId, command: "make test", endedAt: null, exitCode: null });
 
     pty.output("\x1b]133;D;2\x07\x1b]133;A\x07");
     [run] = runs();
@@ -43,13 +43,13 @@ describe("command log", () => {
     expect(run!.endedAt).toBeGreaterThanOrEqual(run!.startedAt);
   });
 
-  it("lists newest first, by Space, and ignores forged lines", async () => {
+  it("lists newest first, by workspace, and ignores forged lines", async () => {
     const pane = core.panes.create();
     const pty = ptys[0]!;
     const token = pty.opts.env.CMD_PANE_TOKEN;
     for (const line of ["ls", "pwd"]) pty.output(`\x1b]133;C\x07\x1b]777;cmd;${token};exec;${line}\x07\x1b]133;D;0\x07`);
     pty.output(`\x1b]133;C\x07\x1b]777;cmd;forged;exec;rm -rf ~\x07\x1b]133;D;0\x07`);
-    const list = runs(pane.spaceId);
+    const list = runs(pane.workspaceId);
     expect(list.map((r) => r.command)).toEqual([null, "pwd", "ls"]);
     expect(runs("elsewhere")).toEqual([]);
   });
@@ -97,13 +97,13 @@ describe("notification log", () => {
     expect(notifications()).toHaveLength(2);
   });
 
-  it("keeps the Space of the terminal it is about, even after the terminal is gone", async () => {
-    const space = core.spaces.open(fs.realpathSync(os.tmpdir())).space;
-    const pane = await core.call("pane.create", { spaceId: space.id });
+  it("keeps the workspace of the terminal it is about, even after the terminal is gone", async () => {
+    const workspace = core.workspaces.open(fs.realpathSync(os.tmpdir())).workspace;
+    const pane = await core.call("pane.create", { workspaceId: workspace.id });
     core.notifications.send(pane.id, "From a terminal", "hi");
     core.notifications.info("About nothing", "");
     await core.call("pane.kill", { paneId: pane.id });
-    expect(notifications().map((n) => [n.title, n.spaceId])).toEqual([["About nothing", null], ["From a terminal", space.id]]);
+    expect(notifications().map((n) => [n.title, n.workspaceId])).toEqual([["About nothing", null], ["From a terminal", workspace.id]]);
   });
 });
 

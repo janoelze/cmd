@@ -22,10 +22,10 @@ foreach ($releases as $r) {
     }
 }
 
-page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, browser, editor and widgets, side by side in one Space per project, arranged however you work.', '');
+page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, browser, editor and widgets, side by side in one workspace per project, arranged however you work.', '');
 ?>
 <h1>cmd</h1>
-<p class="lede">A software workbench for macOS. Terminals, coding agents, browser, editor and widgets, side by side in one Space per project, arranged however you work.</p>
+<p class="lede">A software workbench for macOS. Terminals, coding agents, browser, editor and widgets, side by side in one workspace per project, arranged however you work.</p>
 <p class="cta">
 <?php if ($latest): ?>
   <a class="button" href="<?= h($latest['dmg'] ?? $latest['url']) ?>">Download <?= h($latest['tag']) ?></a>
@@ -96,9 +96,9 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
 <p>I'm an engineer and designer with 15 years of experience, and yet I found myself shortcut-switching between tabs like a lunatic, trying to remember which session was doing what. Occasionally, I'd stumble across one that had been waiting for my feedback for 30 minutes. I'm objectively a power user, but I didn't feel like one.</p>
 <p>Looking at newer terminal emulators and agent tools didn't help much either. Agent orchestrators often impose their own workflows, with crazy levels of engineering and UI complexity.</p>
 <p>I started building cmd, a software workbench that embraces very normal workflows (you know... where people do things) and brings my tools together in one place.</p>
-<p>A Space per project holds everything I'm working on: terminals, browsers, text editors, and more. There are a few view modes, but the Strip, inspired by <a href="https://www.youtube.com/watch?v=TOPfzaKGWK8">PaperWM</a>, is by far my favorite. Windows sit side by side in a row you scroll through, making it easy to keep multiple terminals, agents, and a browser in view.</p>
+<p>A workspace per project holds everything I'm working on: terminals, browsers, text editors, and more. There are a few view modes, but the Strip, inspired by <a href="https://www.youtube.com/watch?v=TOPfzaKGWK8">PaperWM</a>, is by far my favorite. Windows sit side by side in a row you scroll through, making it easy to keep multiple terminals, agents, and a browser in view.</p>
 <p>Enable AI in the settings and cmd starts understanding what's happening across your workspaces. It recognizes terminals running agents, helps you keep track of what they're doing, surfaces sessions that need your attention, and suggests smart actions.</p>
-<p>Most of what I open stays inside cmd, too. Open a file from your shell and it appears in the current Space, whether it's a folder, text or code, Markdown, JSON, a PDF, an image, a SQLite database, a Strudel pattern, or a URL in the browser.</p>
+<p>Most of what I open stays inside cmd, too. Open a file from your shell and it appears in the current workspace, whether it's a folder, text or code, Markdown, JSON, a PDF, an image, a SQLite database, a Strudel pattern, or a URL in the browser.</p>
 <p>With Magic Widgets, you can prompt new widgets into existence on the spot: open merge requests, queue depth, recent CI runs, or whatever else you need. The built-in agent builds them on top of tools already on your machine, from <code>gh</code> and <code>kubectl</code> to your own scripts.</p>
 <p>cmd deliberately stays unopinionated. It bets on terminals and the tools you already know, and on the idea that they'll still matter when the next model arrives.</p>
 <p>I'm building cmd mostly for myself, in the open. But I'm hoping it fits your workflow, too.</p>

@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { IMAGE_EXTENSIONS, imageType, registerBuiltins, targetFor, WindowManager, WindowTypes } from "../src/windows/index.ts";
 import { PaneManager } from "../src/panes.ts";
 import { Store } from "../src/store.ts";
-import { SpaceManager } from "../src/spaces/manager.ts";
+import { WorkspaceManager } from "../src/workspaces/manager.ts";
 import { fakeFactory } from "./fake-pty.ts";
 
 const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-image-")));
@@ -35,10 +35,10 @@ describe("image window type", () => {
   it("renames the window as ← and → move to another file", () => {
     const panes = new PaneManager(fakeFactory().factory, { socketPath: "/tmp/img.sock", pollMs: 0 });
     const wins = new WindowManager(panes, new Store(path.join(dir, "wins.sqlite")), types, () => ({}));
-    const space = new SpaceManager(null, dir).home();
+    const workspace = new WorkspaceManager(null, dir).home();
     const a = file("a.png");
     const b = file("b.png");
-    const w = wins.openTarget(a, space)!;
+    const w = wins.openTarget(a, workspace)!;
     expect(w).toMatchObject({ kind: "image", title: "a.png" });
     expect(wins.update(w.id, { state: { path: b } })).toMatchObject({ title: "b.png", state: { path: b } });
     expect(wins.update(w.id, { state: { zoom: 2 } })).toMatchObject({ title: "b.png", state: { path: b, zoom: 2 } });

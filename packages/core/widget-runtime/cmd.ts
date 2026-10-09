@@ -396,7 +396,7 @@ export function takeSignals(): { status: Status | null; notify: Notification[] }
 export interface EventQuery {
   types?: string[];
   at?: [number, number];
-  spaceId?: string;
+  workspaceId?: string;
   projectId?: string;
   sessionId?: string;
   agentId?: string;
@@ -419,7 +419,7 @@ export interface Event {
   until: number | null;
   type: string;
   source: string;
-  spaceId: string | null;
+  workspaceId: string | null;
   projectId: string | null;
   sessionId: string | null;
   agentId: string | null;

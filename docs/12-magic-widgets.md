@@ -49,7 +49,7 @@ Sources: research.google/blog/generative-ui-a-rich-custom-visual-interactive-use
 7. **Self-repair.** If the frame reports a script error, an empty render or overflow after running, the agent gets one more turn with the error and the data sample. It keeps its tools for that turn, so it can re-check the source. It is never silently retried more than once.
 8. **Themed by construction.** The model never sees colours, only token names. The frame gets the theme's tokens and is re-sent them when the theme changes, so widgets follow light and dark mode and theme switches live, like everything else.
 9. **Keep what works.** "Save as Recipe" stores the widget (intent, source, view, refresh, and parameters such as `{{city}}`). Recipes appear in the palette and are matched against new prompts before any model call: an exact or near match opens instantly and costs no tokens.
-10. **Magic widgets are windows.** They live in a Space, show in the sidebar, survive core restarts (drawn instantly from their last data), and can be moved. Their sources stop when they close, and closed ones can be reopened with their history for 30 days (see Data model).
+10. **Magic widgets are windows.** They live in a workspace, show in the sidebar, survive core restarts (drawn instantly from their last data), and can be moved. Their sources stop when they close, and closed ones can be reopened with their history for 30 days (see Data model).
 
 ## Agent
 
@@ -82,7 +82,7 @@ The final answer is the output contract below, and it doesn't count as a tool ca
 - browser profiles;
 - the user's own `magic.denyPaths`.
 
-A setting `magic.explore` (`ask` | `allow` | `off`) controls exploring. The default `ask` shows "Look around this Mac to answer?" the first time per prompt in each Space and remembers the answer.
+A setting `magic.explore` (`ask` | `allow` | `off`) controls exploring. The default `ask` shows "Look around this Mac to answer?" the first time per prompt in each workspace and remembers the answer.
 
 **Escape hatch.** "Continue in Claude Code" opens a real agent pane with the prompt, the trace and the draft. That's for requests that need writes, `sudo` (`wg show`), or more than the budget.
 
@@ -213,7 +213,7 @@ Files rather than SQLite rows, because this is the same layout `cmd magic --out`
 
 **Lifecycle:**
 - **Restart:** the window draws `html` with `lastData` at once, marked stale; the scheduler then re-runs the source.
-- **Close** (or closing its Space): the window's row goes, as for every type. Its workbench moves to `$CMD_HOME/magic/closed/`, kept for 30 days. "Reopen Closed Magic Widget" in the palette brings it back with its full history.
+- **Close** (or closing its workspace): the window's row goes, as for every type. Its workbench moves to `$CMD_HOME/magic/closed/`, kept for 30 days. "Reopen Closed Magic Widget" in the palette brings it back with its full history.
 - **Save as Recipe** copies the current version to `$CMD_CONFIG_DIR/recipes/<name>.json`. Recipes are config, not state: kept forever, easy to sync or put in dotfiles, and shareable.
 - **Edit code** writes a new version. The text window edits `versions/<n>.json`'s HTML through a small adapter, so hand edits are versioned like prompts.
 - Ad-hoc `cmd magic` runs from the CLI aren't windows. They go to `$CMD_HOME/magic/runs/` until `cmd magic open RUN` turns one into a window.
@@ -321,16 +321,16 @@ The screenshots use the **same** `widget-host.html` and kit as the app. They are
 - **⌘M** (File → New Magic Widget) puts a new window in the layout immediately, in the slot it will keep. Its body is one large prompt field.
 - **The empty window suggests**:
   - your recipes;
-  - two or three examples fitted to the Space (a repo root → "git activity this week");
+  - two or three examples fitted to the workspace (a repo root → "git activity this week");
   - a hint that URLs, JSON and commands work too.
 - **Palette fallback:** a palette query with no good match ends with **"✦ Make a window for '…'"**, so the feature is discoverable without a single new habit.
 - **Paste or drop** a URL or JSON onto the main view (nothing focused) or the canvas: it offers a Magic widget.
-- **`cmd magic "…"`** from any terminal opens it in that terminal's Space.
+- **`cmd magic "…"`** from any terminal opens it in that terminal's workspace.
 
 **2. While it works: the magic moment.**
 - The prompt shrinks into the title bar and serves as the name until the header gives a title.
 - The body becomes a quiet **trace**: one line per step, each with a status light. Every tool call carries a short human label (a `why` parameter on each tool), e.g. "Looking at network services" with `scutil --nc list` dimmed in mono beside it. Clicking a line shows its output.
-- If consent is needed it appears as the first line, inline: "I'll look around this Mac, read-only. **Allow** · **Always in this Space** · **Answer without looking**".
+- If consent is needed it appears as the first line, inline: "I'll look around this Mac, read-only. **Allow** · **Always in this workspace** · **Answer without looking**".
 - Then "Drawing…" with the header's loading lines; the widget morphs in and the trace folds away into "How this was made".
 - Esc or ⌘. cancels.
 - Targets: the window in under 100 ms, the first trace line within 1 s, the widget in under 10 s for typical requests.
@@ -363,7 +363,7 @@ The screenshots use the **same** `widget-host.html` and kit as the app. They are
 **5. Living with them.**
 - They are ordinary windows in the sidebar's Windows section, marked ✦.
 - **Widgets can ask for attention** (frame API `cmd.attention(text)`), which goes through the same notification path as a terminal's bell. "Tell me when the VPN drops" is just a refinement that adds the rule, so Magic widgets become monitors that tap you on the shoulder.
-- Recipes show in the palette as "✦ VPN status". Parameterised ones ask for their parameter inline. Per-Space recipes in `<root>/.cmd/recipes` come later.
+- Recipes show in the palette as "✦ VPN status". Parameterised ones ask for their parameter inline. Per-workspace recipes in `<root>/.cmd/recipes` come later.
 
 **6. Feel.** It follows the Platinum design language (docs/07):
 - status lights in the trace;
@@ -403,4 +403,4 @@ The screenshots use the **same** `widget-host.html` and kit as the app. They are
 5. Terminal-kind commands are typed but not run until ⏎ or the policy allows them; command sources ask once per exact string.
 6. Using the user's `claude` / `codex` login as a fallback backend.
 7. A core-run agent with our own read-only tools (enforced by policy + `sandbox-exec`), rather than a Claude Code session with its own tools and permission prompts.
-8. Exploring asks once per prompt in each Space (`magic.explore: ask`), because what the agent reads leaves the machine.
+8. Exploring asks once per prompt in each workspace (`magic.explore: ask`), because what the agent reads leaves the machine.

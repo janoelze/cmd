@@ -124,7 +124,7 @@ export async function gitEvents(repoDir: string, since = 0): Promise<NewJournalE
   const commits = new Map<string, { at: number; subject: string; branch: string | null; worktree: string | null }>();
   const out: NewJournalEvent[] = [];
   const ev = (at: number, key: string, data: JournalData, text: string, thread: string | null, cwd: string | null) =>
-    out.push({ at, until: null, kind: data.kind as NewJournalEvent["kind"], key: `git:${repo}:${key}`, spaceId: null, repo, cwd, thread, text, data, source: "backfill" });
+    out.push({ at, until: null, kind: data.kind as NewJournalEvent["kind"], key: `git:${repo}:${key}`, workspaceId: null, repo, cwd, thread, text, data, source: "backfill" });
   const branchThread = (b: string | null) => (b && b !== "HEAD" ? `branch:${repo}#${b}` : null);
   // Merges seen in any log, to expand into the commits they brought.
   const merges: { e: ReflogEntry; branch: string; into: string | null; worktree: string | null }[] = [];

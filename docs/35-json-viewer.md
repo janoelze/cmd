@@ -59,7 +59,7 @@ export function togglePreview(win, reveal?): boolean;            // preview ⇄ 
 
 Recommend **1** for the tree and positions, and `JSON.parse` once for the "is it valid" verdict and its error message (V8's message has the position). Measure on a 5 MB file before deciding; if the Lezer walk is slow, parse in a worker (the file is already read in the renderer; a worker keeps a 5 MB parse off the UI thread).
 
-`.jsonc`: Lezer's JSON grammar has no comments, so strip `//` and `/* */` outside strings first (keeping offsets: replace with spaces).
+`.jsonc`: Lezer's JSON grammar has no comments, so strip `//` and `/* */` outside strings first (keeping offsets: replace with workspaces).
 
 ## Rendering large files
 

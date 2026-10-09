@@ -13,7 +13,7 @@ CREATE INDEX IF NOT EXISTS events_type_at ON events(type, at);
 CREATE INDEX IF NOT EXISTS events_session ON events(session_id, seq);
 CREATE INDEX IF NOT EXISTS events_agent ON events(agent_id, seq);
 CREATE INDEX IF NOT EXISTS events_project_at ON events(project_id, at);
-CREATE INDEX IF NOT EXISTS events_space_at ON events(space_id, at);
+CREATE INDEX IF NOT EXISTS events_workspace_at ON events(workspace_id, at);
 CREATE INDEX IF NOT EXISTS events_parent ON events(parent_id);
 CREATE INDEX IF NOT EXISTS blobs_unreferenced ON blobs(refs) WHERE refs <= 0;
 CREATE INDEX IF NOT EXISTS links_to ON links(to_kind, to_id);
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS events (
   source     TEXT NOT NULL,
   recorded   TEXT NOT NULL,
   parent_id  TEXT,
-  space_id   TEXT,
+  workspace_id   TEXT,
   project_id TEXT,
   session_id TEXT,
   agent_id   TEXT,

@@ -2,14 +2,14 @@
 // talks to the core over its own socket (widgets.sock), says which widget it
 // is with a token issued for that run, and may then query events, read-only,
 // within the policy here. Tokens are short-lived and single-run; the token
-// says the widget and its Space, which is all the policy needs.
+// says the widget and its workspace, which is all the policy needs.
 
 import { randomBytes } from "node:crypto";
 import type { DataQuery } from "@cmd/protocol";
 
 export interface WidgetIdentity {
   widgetId: string;
-  spaceId: string | null;
+  workspaceId: string | null;
 }
 
 /** Most rows one query may return a widget. */
@@ -31,7 +31,7 @@ export class WidgetTokens {
     const t = this.#tokens.get(token);
     if (!t) return null;
     if (t.expires < Date.now()) return this.#tokens.delete(token), null;
-    return { widgetId: t.widgetId, spaceId: t.spaceId };
+    return { widgetId: t.widgetId, workspaceId: t.workspaceId };
   }
 
   #sweep(): void {

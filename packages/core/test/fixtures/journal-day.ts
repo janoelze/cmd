@@ -14,7 +14,7 @@ export function syntheticDay(day: string): NewJournalEvent[] {
   const out: NewJournalEvent[] = [];
   let n = 0;
   const ev = (at: string, until: string | null, data: JournalData, text: string, o: { repo?: string | null; cwd?: string | null; thread?: string | null } = {}) =>
-    out.push({ at: t(at), until: until ? t(until) : null, kind: data.kind, key: `syn:${n++}`, spaceId: o.repo === DOTS || o.cwd?.startsWith(DOTS) ? null : "shop", repo: o.repo === undefined ? SHOP : o.repo, cwd: o.cwd === undefined ? SHOP : o.cwd, thread: o.thread ?? null, text, data, source: "backfill" });
+    out.push({ at: t(at), until: until ? t(until) : null, kind: data.kind, key: `syn:${n++}`, workspaceId: o.repo === DOTS || o.cwd?.startsWith(DOTS) ? null : "shop", repo: o.repo === undefined ? SHOP : o.repo, cwd: o.cwd === undefined ? SHOP : o.cwd, thread: o.thread ?? null, text, data, source: "backfill" });
   const cmd = (at: string, until: string, command: string, exitCode: number | null, pane = "p1", cwd = SHOP) =>
     ev(at, until, { kind: "command", command, exitCode, paneId: pane }, command, { cwd, repo: cwd.startsWith(SHOP) ? SHOP : cwd.startsWith(DOTS) ? DOTS : null, thread: `pane:${pane}` });
   const page = (at: string, title: string, url: string, win = "w1") => ev(at, null, { kind: "browser.visit", url, title, windowId: win }, title, { cwd: null, thread: `window:${win}` });

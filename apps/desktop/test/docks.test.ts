@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dock, dockedIds, dockWidths, DOCK_WIDTH, EMPTY_DOCKS, liveDocks, MIN_WORKSPACE, readDocks, shownIds, sideOf, undock } from "../src/renderer/src/docks.ts";
+import { dock, dockedIds, dockWidths, DOCK_WIDTH, EMPTY_DOCKS, liveDocks, MIN_BOARD, readDocks, shownIds, sideOf, undock } from "../src/renderer/src/docks.ts";
 
 describe("sidebars", () => {
   it("reads stored values, filling in what's missing", () => {
@@ -48,7 +48,7 @@ describe("sidebars", () => {
     const d = { left: { id: "a", width: null, hidden: false }, right: { id: "b", width: 9999, hidden: false } };
     expect(dockWidths(d, 2000)).toEqual({ left: DOCK_WIDTH.default, right: DOCK_WIDTH.max });
     // Narrow: the right side gives way first, never below its minimum.
-    const narrow = dockWidths(d, DOCK_WIDTH.default + DOCK_WIDTH.min + MIN_WORKSPACE + 10);
+    const narrow = dockWidths(d, DOCK_WIDTH.default + DOCK_WIDTH.min + MIN_BOARD + 10);
     expect(narrow).toEqual({ left: DOCK_WIDTH.default, right: DOCK_WIDTH.min + 10 });
     expect(dockWidths(d, 500)).toEqual({ left: DOCK_WIDTH.min, right: DOCK_WIDTH.min });
     expect(dockWidths({ ...d, right: { ...d.right, hidden: true } }, 2000).right).toBe(0);

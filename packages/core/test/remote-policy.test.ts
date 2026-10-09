@@ -10,7 +10,7 @@ import { rmTemp } from "./tmp.ts";
 
 const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-policy-")));
 const core = new Core({ socketPath: path.join(home, "core.sock"), dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0, home });
-const ctx: PolicyContext = { panes: core.panes, agents: core.agents, spaces: core.spaces, windows: core.windows, home };
+const ctx: PolicyContext = { panes: core.panes, agents: core.agents, workspaces: core.workspaces, windows: core.windows, home };
 afterAll(async () => {
   await core.close();
   rmTemp(home);
@@ -44,12 +44,12 @@ describe("remote policy table", () => {
 
   it("checks that targets exist", () => {
     expect(denied("pane.write", { paneId: "nope", data: "ls" })).toMatch(/no such terminal/);
-    const pane = core.panes.create({ spaceId: core.spaces.home().id });
+    const pane = core.panes.create({ workspaceId: core.workspaces.home().id });
     expect(denied("pane.write", { paneId: pane.id, data: "ls\r" })).toBeNull();
     expect(denied("pane.write", { paneId: pane.id, data: "x".repeat(65 * 1024) })).toMatch(/too long/);
   });
 
-  it("keeps paths inside open Spaces and off private files", () => {
+  it("keeps paths inside open workspaces and off private files", () => {
     fs.mkdirSync(path.join(home, "proj"));
     fs.writeFileSync(path.join(home, "proj/a.txt"), "hi");
     fs.writeFileSync(path.join(home, "proj/.env"), "TOKEN=1");

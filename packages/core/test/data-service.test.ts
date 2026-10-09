@@ -15,12 +15,12 @@ describe("DataService", () => {
 
   it("records with redaction, marks what it changed, notes the entities", () => {
     const d = service();
-    const e = d.record({ id: "c1", at: 1, type: "command", source: "osc", paneId: "p1", spaceId: "s1", text: "export TOKEN=abcdefghijklmnop", data: { command: "export TOKEN=abcdefghijklmnop", exitCode: 0, cwd: "/w", output: null } })!;
+    const e = d.record({ id: "c1", at: 1, type: "command", source: "osc", paneId: "p1", workspaceId: "s1", text: "export TOKEN=abcdefghijklmnop", data: { command: "export TOKEN=abcdefghijklmnop", exitCode: 0, cwd: "/w", output: null } })!;
     expect(e.text).toBe("export TOKEN=[redacted]");
     expect((e.data as { command: string }).command).toContain("[redacted]");
     expect(e.flags & DATA_FLAGS.redacted).toBeTruthy();
     expect(d.store.entities("pane").map((x) => x.id)).toEqual(["p1"]);
-    expect(d.store.entities("space").map((x) => x.id)).toEqual(["s1"]);
+    expect(d.store.entities("workspace").map((x) => x.id)).toEqual(["s1"]);
     const clean = d.record({ id: "c2", at: 2, type: "command", source: "osc", text: "ls", data: { command: "ls", exitCode: 0, cwd: "/w", output: null } })!;
     expect(clean.flags & DATA_FLAGS.redacted).toBeFalsy();
   });
@@ -64,7 +64,7 @@ describe("DataService", () => {
     ins.run(2000, "PreToolUse", JSON.stringify({ hook_event_name: "PreToolUse", session_id: "s", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "pnpm test" } }), HOOK_FORMAT);
     ins.run(3000, "PostToolUse", JSON.stringify({ hook_event_name: "PostToolUse", session_id: "s", tool_name: "Bash", tool_use_id: "t1", tool_response: "ok" }), HOOK_FORMAT);
     // The journal's own table as cmd ≤ 0.15 made it: live kinds come along, derived ones (agent.*) are views now.
-    legacy.exec(`CREATE TABLE journal_events (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, until INTEGER, kind TEXT NOT NULL, key TEXT NOT NULL UNIQUE, space_id TEXT, repo TEXT, cwd TEXT, thread TEXT, text TEXT NOT NULL, data TEXT NOT NULL, source TEXT NOT NULL, schema INTEGER NOT NULL, cmd TEXT)`);
+    legacy.exec(`CREATE TABLE journal_events (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, until INTEGER, kind TEXT NOT NULL, key TEXT NOT NULL UNIQUE, workspace_id TEXT, repo TEXT, cwd TEXT, thread TEXT, text TEXT NOT NULL, data TEXT NOT NULL, source TEXT NOT NULL, schema INTEGER NOT NULL, cmd TEXT)`);
     const jins = legacy.prepare(`INSERT INTO journal_events (at, until, kind, key, cwd, thread, text, data, source, schema, cmd) VALUES (?, ?, ?, ?, '/w', ?, ?, ?, 'live', 1, '0.15.0')`);
     jins.run(4000, 4100, "command", "command:x", "pane:p", "pnpm test", JSON.stringify({ kind: "command", command: "pnpm test", exitCode: 0, paneId: "p" }));
     jins.run(5000, null, "agent.session", "session:s", "session:s", "derived", JSON.stringify({ kind: "agent.session", agent: "claude", sessionId: "s", title: null, firstPrompt: null, branch: null }));

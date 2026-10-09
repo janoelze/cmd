@@ -44,10 +44,10 @@ describe("data subscriptions", () => {
   });
 
   it("sends an updated event again (a command that ended), and nothing after unsubscribing", async () => {
-    const { id } = await conn.client.call("data.subscribe", { query: { types: ["command"], spaceId: "s1" } });
-    core.data.record({ id: "command:x", at: 10, type: "command", source: "osc", spaceId: "s1", text: "pnpm test", data: { command: "pnpm test", exitCode: null, cwd: "/", output: null } });
-    core.data.record({ id: "command:x", at: 10, until: 20, type: "command", source: "osc", spaceId: "s1", text: "pnpm test", data: { command: "pnpm test", exitCode: 0, cwd: "/", output: null } });
-    core.data.record({ id: "command:y", at: 11, type: "command", source: "osc", spaceId: "s2", text: "ls", data: { command: "ls", exitCode: 0, cwd: "/", output: null } }); // another Space
+    const { id } = await conn.client.call("data.subscribe", { query: { types: ["command"], workspaceId: "s1" } });
+    core.data.record({ id: "command:x", at: 10, type: "command", source: "osc", workspaceId: "s1", text: "pnpm test", data: { command: "pnpm test", exitCode: null, cwd: "/", output: null } });
+    core.data.record({ id: "command:x", at: 10, until: 20, type: "command", source: "osc", workspaceId: "s1", text: "pnpm test", data: { command: "pnpm test", exitCode: 0, cwd: "/", output: null } });
+    core.data.record({ id: "command:y", at: 11, type: "command", source: "osc", workspaceId: "s2", text: "ls", data: { command: "ls", exitCode: 0, cwd: "/", output: null } }); // another workspace
     await settle();
     const mine = received.filter((e) => e.id === id).flatMap((e) => e.events as DataEvent[]);
     expect(mine.map((e) => [e.id, e.until])).toEqual([
@@ -55,7 +55,7 @@ describe("data subscriptions", () => {
       ["command:x", 20],
     ]);
     await conn.client.call("data.unsubscribe", { id });
-    core.data.record({ id: "command:z", at: 12, type: "command", source: "osc", spaceId: "s1", text: "pwd", data: { command: "pwd", exitCode: 0, cwd: "/", output: null } });
+    core.data.record({ id: "command:z", at: 12, type: "command", source: "osc", workspaceId: "s1", text: "pwd", data: { command: "pwd", exitCode: 0, cwd: "/", output: null } });
     await settle();
     expect(received.filter((e) => e.id === id).flatMap((e) => e.events as DataEvent[]).length).toBe(2);
   });
@@ -86,8 +86,8 @@ describe("the widgets socket", () => {
     const w = await connect(widgetsSocketPath(socketPath));
     await expect(w.client.call("data.query", { query: {} })).rejects.toThrow(/widget.hello/);
     await expect(w.client.call("widget.hello", { token: "nope" })).rejects.toThrow(/unknown or expired/);
-    const token = core.widgetTokens.issue({ widgetId: "w1", spaceId: "s1" });
-    expect(await w.client.call("widget.hello", { token })).toEqual({ widgetId: "w1", spaceId: "s1" });
+    const token = core.widgetTokens.issue({ widgetId: "w1", workspaceId: "s1" });
+    expect(await w.client.call("widget.hello", { token })).toEqual({ widgetId: "w1", workspaceId: "s1" });
     const events = await w.client.call("data.query", { query: { types: ["note"], limit: 5000 } });
     expect(events.length).toBeGreaterThan(0);
     await expect(w.client.call("pane.list", {})).rejects.toThrow(/only read events/);
@@ -117,10 +117,10 @@ describe("view subscriptions", () => {
     expect(views.filter((e) => e.id === s.id).flatMap((e) => e.rows).map((r) => ("key" in r ? r.key : "?"))).toEqual(["claude:vs2"]);
   });
 
-  it("keeps a Space's sessions, and starts over when Spaces change or the view is rebuilt", async () => {
+  it("keeps a workspace's sessions, and starts over when workspaces change or the view is rebuilt", async () => {
     const proj = fs.realpathSync(fs.mkdtempSync(path.join(dir, "proj-")));
     fs.mkdirSync(path.join(proj, "sub"));
-    const space = core.spaces.open(proj).space;
+    const workspace = core.workspaces.open(proj).workspace;
     const views: Extract<CoreEvent, { type: "view.changed" }>[] = [];
     conn.client.onEvent((e) => {
       if (e.type === "view.changed") views.push(e);
@@ -131,17 +131,17 @@ describe("view subscriptions", () => {
     session("in", path.join(proj, "src"), 1000);
     session("out", "/elsewhere", 2000);
     const keys = (rows: unknown[]) => rows.map((r) => (r as { key: string }).key);
-    const s = await conn.client.call("data.subscribeView", { query: { view: "sessions", spaceId: space.id } });
+    const s = await conn.client.call("data.subscribeView", { query: { view: "sessions", workspaceId: workspace.id } });
     expect(keys(s.rows)).toEqual(["claude:in"]);
     session("nested", path.join(proj, "sub"), 3000);
     session("out2", "/elsewhere/too", 4000);
     await settle();
     expect(keys(views.filter((e) => e.id === s.id).flatMap((e) => e.rows))).toEqual(["claude:nested"]);
-    expect(keys(await conn.client.call("data.view", { query: { view: "sessions", spaceId: space.id } }))).toEqual(["claude:nested", "claude:in"]);
+    expect(keys(await conn.client.call("data.view", { query: { view: "sessions", workspaceId: workspace.id } }))).toEqual(["claude:nested", "claude:in"]);
 
-    // A nested Space takes its folder's sessions: the subscription gets the whole list again.
+    // A nested workspace takes its folder's sessions: the subscription gets the whole list again.
     views.length = 0;
-    core.spaces.open(path.join(proj, "sub"));
+    core.workspaces.open(path.join(proj, "sub"));
     await settle();
     const reset = views.filter((e) => e.id === s.id);
     expect(reset.map((e) => [e.reset, keys(e.rows)])).toEqual([[true, ["claude:in"]]]);

@@ -412,10 +412,10 @@ function Frame({ win, src, active, html, data, kv, onPainted }: { win: AppWindow
       else if (m.type === "rendered") sent.current !== null && markPainted(sent.current);
       else if (handleEmbedMessage(ref.current!, m)) return;
       else if (m.type === "open-url" && typeof m.url === "string" && /^https?:\/\//i.test(m.url)) openLink(m.url);
-      else if (m.type === "terminal" && typeof m.command === "string" && m.command.trim() && !often(lastAct)) void typeInTerminal(w.spaceId, m.command);
+      else if (m.type === "terminal" && typeof m.command === "string" && m.command.trim() && !often(lastAct)) void typeInTerminal(w.workspaceId, m.command);
       else if (m.type === "open" && typeof m.path === "string" && /^(\/|~\/)/.test(m.path) && !often(lastAct)) {
         // Only into cmd's own windows: a path no type opens is not handed to macOS (it could be an app or a script).
-        void cmd.call("window.openTarget", { target: m.path, spaceId: w.spaceId }).then((o) => o && selectPane(o.id), () => {});
+        void cmd.call("window.openTarget", { target: m.path, workspaceId: w.workspaceId }).then((o) => o && selectPane(o.id), () => {});
       } else if (m.type === "copy" && typeof m.text === "string") copy(m.text.slice(0, 100_000));
       else if (m.type === "sound" && typeof m.name === "string" && (SYSTEM_SOUNDS as readonly string[]).includes(m.name)) {
         if (!w.state.muted && !often(lastSound)) cmd.playSound(m.name);
@@ -455,7 +455,7 @@ function Frame({ win, src, active, html, data, kv, onPainted }: { win: AppWindow
 
 function TerminalOffer({ win, command }: { win: AppWindow; command: string }) {
   const runIt = async () => {
-    await typeInTerminal(win.spaceId, command);
+    await typeInTerminal(win.workspaceId, command);
     await cmd.call("window.close", { id: win.id });
   };
   return (

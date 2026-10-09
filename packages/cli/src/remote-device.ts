@@ -76,7 +76,7 @@ if (cmd === "pair") {
   const { client } = await saved();
   client.onEvent((e) => console.log(JSON.stringify(e).slice(0, 200)));
   const boot = await client.call("remote.bootstrap", {});
-  console.log(`bootstrap: ${boot.spaces.length} Spaces, ${boot.panes.length} terminals, device ${JSON.stringify(boot.device)}`);
+  console.log(`bootstrap: ${boot.workspaces.length} Workspaces, ${boot.panes.length} terminals, device ${JSON.stringify(boot.device)}`);
   await client.call("window.follow", { ids: boot.panes.map((p) => p.id).slice(0, 64) });
 } else {
   console.error("usage: pnpm remote:device pair <url> [name] | call <method> [params] | watch");

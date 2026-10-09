@@ -7,27 +7,27 @@ export type PaneId = string;
 export type AgentId = string;
 /** Window id. A terminal window's id is its pane id. */
 export type WindowId = string;
-export type SpaceId = string;
+export type WorkspaceId = string;
 
 /**
- * A directory you work in, with everything opened for it (docs/11-spaces.md).
- * Panes, agents and windows each belong to exactly one Space.
+ * A directory you work in, with everything opened for it (docs/11-workspaces.md).
+ * Panes, agents and windows each belong to exactly one workspace.
  */
-export interface Space {
-  id: SpaceId;
+export interface Workspace {
+  id: WorkspaceId;
   name: string;
-  /** Canonical path (realpath, on-disk case); unique among Spaces. Home: the home folder. */
+  /** Canonical path (realpath, on-disk case); unique among workspaces. Home: the home folder. */
   root: string;
   /** The checkout its root is in, read when it opens; null for Home and outside a repository. */
   git?: Omit<GitPlace, "branch"> | null;
   /** Its folder is gone (a removed worktree, a deleted folder); checked every little while. */
   gone?: boolean;
   home: boolean;
-  /** SF Symbol name; null: the default (spaceIcon). */
+  /** SF Symbol name; null: the default (workspaceIcon). */
   icon: string | null;
   /** Position in the switcher (⌘1–9); user-chosen, never reshuffled by recency. */
   order: number;
-  /** null = open; otherwise closed and kept as a recent Space. */
+  /** null = open; otherwise closed and kept as a recent workspace. */
   closedAt: number | null;
   createdAt: number;
   lastActiveAt: number;
@@ -37,7 +37,7 @@ export interface Space {
 
 /**
  * The git checkout something is in (docs/35-checkouts.md): what the UI compares
- * with its Space's to say where it is only when that differs.
+ * with its workspace's to say where it is only when that differs.
  */
 export interface GitPlace {
   /** The project: the repository's main worktree (the same for all its worktrees). */
@@ -53,7 +53,7 @@ export interface GitPlace {
 /** A terminal session owned by the core. Every session is a pane, agent or not. */
 export interface Pane {
   id: PaneId;
-  spaceId: SpaceId;
+  workspaceId: WorkspaceId;
   title: string;
   cwd: string;
   /** The checkout its cwd is in, branch included; null outside a repository. */
@@ -114,8 +114,8 @@ export interface AppNotification {
   paneId: PaneId | null;
   /** The window it came from, when not a terminal (a widget). */
   windowId?: WindowId | null;
-  /** The Space of that terminal or window when it was sent; null: about nothing in particular (every Space). */
-  spaceId?: SpaceId | null;
+  /** The workspace of that terminal or window when it was sent; null: about nothing in particular (every workspace). */
+  workspaceId?: WorkspaceId | null;
   title: string;
   body: string;
   /** Show a system notification (false: only the attention marker / visual bell). */
@@ -135,7 +135,7 @@ export interface AppNotification {
 export interface CommandRun {
   id: string;
   paneId: PaneId;
-  spaceId: SpaceId;
+  workspaceId: WorkspaceId;
   /** The command line; null if the shell didn't report one (bash without a preexec hook). */
   command: string | null;
   cwd: string;
@@ -191,8 +191,8 @@ export interface Agent {
   id: AgentId;
   /** null = virtual child without a terminal (e.g. a Claude in-process subagent). */
   paneId: PaneId | null;
-  /** Its pane's Space; virtual children have their parent's. */
-  spaceId: SpaceId;
+  /** Its pane's workspace; virtual children have their parent's. */
+  workspaceId: WorkspaceId;
   kind: AgentKind;
   /** What cmd calls it (docs/32-session-names.md): 1–3 nouns, or null for its kind. */
   name: string | null;
@@ -272,7 +272,7 @@ export type WindowKind = string;
  */
 export interface AppWindow {
   id: WindowId;
-  spaceId: SpaceId;
+  workspaceId: WorkspaceId;
   kind: WindowKind;
   title: string;
   createdAt: number;
@@ -370,7 +370,7 @@ export interface GitStatus {
 
 /**
  * Remote access (docs/13-remote-access.md). view: watch terminals, read files,
- * see agents and Spaces. control: also type, write files, open and close windows.
+ * see agents and workspaces. control: also type, write files, open and close windows.
  */
 export type RemoteScope = "view" | "control";
 

@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, CommandRun, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Space, SpaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, CommandRun, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemoteDevice, RemoteLogEntry, RemotePairRequest, RemoteScope, RemoteStatus, Workspace, WorkspaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
 import type { DataClassInfo, DataEvent, DataQuery, DataStats, NewDataEvent, SessionInfo, TurnRow, ViewQuery } from "./events.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
@@ -62,12 +62,12 @@ export interface SettingsSnapshot {
 }
 
 /**
- * Where something new goes (docs/11-spaces.md). Resolved in order: `spaceId`,
- * the calling pane's Space (`callerPaneId`, the CLI's CMD_PANE_ID), the parent
- * agent's, the open Space whose root most deeply contains the cwd or path, Home.
+ * Where something new goes (docs/11-workspaces.md). Resolved in order: `workspaceId`,
+ * the calling pane's workspace (`callerPaneId`, the CLI's CMD_PANE_ID), the parent
+ * agent's, the open workspace whose root most deeply contains the cwd or path, Home.
  */
 export interface Placement {
-  spaceId?: SpaceId;
+  workspaceId?: WorkspaceId;
   callerPaneId?: PaneId;
 }
 
@@ -85,7 +85,7 @@ export interface Methods {
   /** The app started (usage stats, core/usage.ts). */
   "usage.launch": { params: {}; result: null };
 
-  /** cwd defaults to the Space's root. */
+  /** cwd defaults to the workspace's root. */
   "pane.create": {
     params: Placement & { cwd?: string; command?: string; cols?: number; rows?: number; env?: Record<string, string> };
     result: Pane;
@@ -163,22 +163,22 @@ export interface Methods {
   /** What each agent's events actually carried over the last `days` (default 7). */
   "agents.coverage": { params: { days?: number }; result: AgentCoverage[] };
   /**
-   * The journal (docs/23-journal.md). A scope is a Space (spaceId), "repo:<path>" or "all" (the default).
+   * The journal (docs/23-journal.md). A scope is a workspace (workspaceId), "repo:<path>" or "all" (the default).
    * `write`: "stale" writes days whose events changed (the default), "never" only reads, "force" writes again.
    */
-  "journal.days": { params: { spaceId?: SpaceId; scope?: string; count?: number; write?: "never" | "stale" | "force" }; result: JournalDay[] };
+  "journal.days": { params: { workspaceId?: WorkspaceId; scope?: string; count?: number; write?: "never" | "stale" | "force" }; result: JournalDay[] };
   /** One work day by its local midnight (a work day runs 04:00 to 04:00); null when nothing happened. */
-  "journal.day": { params: { spaceId?: SpaceId; scope?: string; date: number; write?: "never" | "stale" | "force" }; result: JournalDay | null };
+  "journal.day": { params: { workspaceId?: WorkspaceId; scope?: string; date: number; write?: "never" | "stale" | "force" }; result: JournalDay | null };
   /** The week a date falls in, rolled up from its days (written if they need to be, by `write`); null when nothing happened. */
-  "journal.week": { params: { spaceId?: SpaceId; scope?: string; date: number; write?: "never" | "stale" | "force" }; result: JournalWeek | null };
+  "journal.week": { params: { workspaceId?: WorkspaceId; scope?: string; date: number; write?: "never" | "stale" | "force" }; result: JournalWeek | null };
   /** A day as each earlier version wrote it, newest first (kept when a day is written again): for comparing revisions. */
-  "journal.history": { params: { spaceId?: SpaceId; scope?: string; date: number }; result: JournalDay[] };
+  "journal.history": { params: { workspaceId?: WorkspaceId; scope?: string; date: number }; result: JournalDay[] };
   /** The recorded events, oldest first. */
-  "journal.events": { params: { since?: number; until?: number; spaceId?: SpaceId; repo?: string; kinds?: JournalEventKind[]; limit?: number }; result: JournalEvent[] };
+  "journal.events": { params: { since?: number; until?: number; workspaceId?: WorkspaceId; repo?: string; kinds?: JournalEventKind[]; limit?: number }; result: JournalEvent[] };
   /** A day's threads and the digest a model would get: how the journal sees it, before any model. */
-  "journal.threads": { params: { spaceId?: SpaceId; scope?: string; date: number }; result: { threads: JournalThread[]; digest: string } };
+  "journal.threads": { params: { workspaceId?: WorkspaceId; scope?: string; date: number }; result: { threads: JournalThread[]; digest: string } };
   /** Writes something down: from an agent's terminal (paneId), it joins that agent's session. */
-  "journal.note": { params: { text: string; paneId?: PaneId; spaceId?: SpaceId }; result: { id: number } };
+  "journal.note": { params: { text: string; paneId?: PaneId; workspaceId?: WorkspaceId }; result: { id: number } };
   /** Reads new turns, sessions and git now (it does every few minutes). */
   "journal.sync": { params: {}; result: null };
   /** The event log (docs/28): events and views by one query shape. Prefix types end in a dot ("git."). */
@@ -197,7 +197,7 @@ export interface Methods {
    */
   "data.subscribe": { params: { query: DataQuery }; result: { id: string; events: DataEvent[] } };
   /** On the widgets socket: which widget this connection is (a token issued for its data.ts run); then data.query is allowed. */
-  "widget.hello": { params: { token: string }; result: { widgetId: string; spaceId: string | null } };
+  "widget.hello": { params: { token: string }; result: { widgetId: string; workspaceId: string | null } };
   "data.unsubscribe": { params: { id: string }; result: null };
   /** A view's rows now (turns or sessions), newest first for sessions. */
   "data.view": { params: { query: ViewQuery }; result: (TurnRow | SessionInfo)[] };
@@ -205,7 +205,7 @@ export interface Methods {
   "data.subscribeView": { params: { query: ViewQuery }; result: { id: string; rows: (TurnRow | SessionInfo)[] } };
   /** Deletes a session's, a project's, a time range's or some types' events (all given must match); a forgotten session or project is never recorded again. */
   "data.forget": { params: { sessionId?: string; projectId?: string; before?: number; types?: string[] }; result: { events: number } };
-  /** What the log knows about an entity (agent, session, project, pane, window, space), or the newest of a kind, with links. */
+  /** What the log knows about an entity (agent, session, project, pane, window, workspace), or the newest of a kind, with links. */
   "data.entities": { params: { kind: string; id?: string; limit?: number }; result: { kind: string; id: string; created: number; seen: number; attrs: Record<string, unknown>; links: { from: [string, string]; to: [string, string]; kind: string; at: number; until: number | null }[] }[] };
   /** Rebuilds a view from the log with the current rules (turns: the reducer and its timing rules; sessions: the transcripts). */
   "data.rebuild": { params: { view: "turns" | "sessions" }; result: { rows: number } };
@@ -265,29 +265,29 @@ export interface Methods {
    * the open.handlers setting). null = no type handles it (use the default app).
    */
   "window.openTarget": { params: Placement & { target: string }; result: AppWindow | null };
-  /** Move a window to another Space; a terminal takes its agent tree (and their terminals) along. */
-  "window.move": { params: { id: WindowId; spaceId: SpaceId }; result: AppWindow };
+  /** Move a window to another workspace; a terminal takes its agent tree (and their terminals) along. */
+  "window.move": { params: { id: WindowId; workspaceId: WorkspaceId }; result: AppWindow };
 
-  /** Open Spaces in switcher order; closed: also the closed (recent) ones. */
-  "space.list": { params: { closed?: boolean }; result: Space[] };
+  /** Open workspaces in switcher order; closed: also the closed (recent) ones. */
+  "workspace.list": { params: { closed?: boolean }; result: Workspace[] };
   /**
-   * Attach-or-create by root: the Space whose root is this path (canonicalized),
+   * Attach-or-create by root: the workspace whose root is this path (canonicalized),
    * reopened if it was closed, else a new one. Relative paths resolve against
    * `cwd`. gitRoot: use the enclosing repository's root (a worktree's own root).
-   * show: ask the UI to show it (space.show event; newWindow: in a new app window).
+   * show: ask the UI to show it (workspace.show event; newWindow: in a new app window).
    */
-  "space.open": {
+  "workspace.open": {
     params: { path: string; cwd?: string; gitRoot?: boolean; show?: boolean; newWindow?: boolean };
-    result: { space: Space; created: boolean };
+    result: { workspace: Workspace; created: boolean };
   };
-  /** The Space a path belongs to (longest open root containing it, else Home), without creating one. */
-  "space.match": { params: { path: string; cwd?: string }; result: Space };
-  /** view: keys merged into the Space's view (null deletes a key). active: it was just shown (recency for the picker). icon: an SF Symbol name, null for the default. */
-  "space.update": { params: { id: SpaceId; name?: string; icon?: string | null; order?: number; view?: Record<string, unknown>; active?: boolean }; result: Space };
-  /** Kill its terminals and agents, remove its windows; the Space stays as a recent one. Home can't be closed. */
-  "space.close": { params: { id: SpaceId }; result: null };
-  /** Delete a closed Space's record. */
-  "space.forget": { params: { id: SpaceId }; result: null };
+  /** The workspace a path belongs to (longest open root containing it, else Home), without creating one. */
+  "workspace.match": { params: { path: string; cwd?: string }; result: Workspace };
+  /** view: keys merged into the workspace's view (null deletes a key). active: it was just shown (recency for the picker). icon: an SF Symbol name, null for the default. */
+  "workspace.update": { params: { id: WorkspaceId; name?: string; icon?: string | null; order?: number; view?: Record<string, unknown>; active?: boolean }; result: Workspace };
+  /** Kill its terminals and agents, remove its windows; the workspace stays as a recent one. Home can't be closed. */
+  "workspace.close": { params: { id: WorkspaceId }; result: null };
+  /** Delete a closed workspace's record. */
+  "workspace.forget": { params: { id: WorkspaceId }; result: null };
   /** All windows, terminals included. */
   "window.list": { params: {}; result: AppWindow[] };
 
@@ -339,7 +339,7 @@ export interface Methods {
 
   /** The Widget Library (docs/16-widgets.md): built-in widgets, then yours by last use. */
   "widget.list": { params: {}; result: WidgetEntry[] };
-  /** Put a widget from the library in a Space (another window showing it, if one already does). */
+  /** Put a widget from the library in a workspace (another window showing it, if one already does). */
   /** `cwd`: the folder a built-in widget is about (Live Diff's repository), e.g. the selected terminal's. */
   "widget.add": { params: Placement & { ref: string; cwd?: string }; result: AppWindow };
   /** Name a widget made with Magic; the name sticks across changes. */
@@ -376,14 +376,14 @@ export interface Methods {
   "fs.transfer": { params: { paths: string[]; dir: string; op: "copy" | "move" | "auto" }; result: string[] };
   /**
    * Workspace Actions (docs/39): the ways to run the project in a folder (`path`,
-   * else the Space's root), ranked, described, and their runs. Changes arrive as actions.changed.
+   * else the workspace's root), ranked, described, and their runs. Changes arrive as actions.changed.
    */
-  "actions.list": { params: { path?: string; spaceId?: SpaceId }; result: ActionsList };
+  "actions.list": { params: { path?: string; workspaceId?: WorkspaceId }; result: ActionsList };
   /**
-   * Run an action in its terminal when that is back at its prompt, else in a new one in the Space.
+   * Run an action in its terminal when that is back at its prompt, else in a new one in the workspace.
    * A server still running isn't started twice: `started` false and its pane. `restart`: ⌃C, then run it again; `fresh`: always a new terminal.
    */
-  "actions.run": { params: { root: string; actionId: string; spaceId?: SpaceId; restart?: boolean; fresh?: boolean }; result: { paneId: PaneId; started: boolean } };
+  "actions.run": { params: { root: string; actionId: string; workspaceId?: WorkspaceId; restart?: boolean; fresh?: boolean }; result: { paneId: PaneId; started: boolean } };
   /** ⌃C to an action's running terminal. */
   "actions.stop": { params: { root: string; actionId: string }; result: null };
   /** Pin an action to the top of its folder's list; a command from history or the README is kept as one. */
@@ -405,13 +405,13 @@ export interface Methods {
   /** Full-text search over Claude Code / Codex transcripts. */
   "search.query": { params: { text: string; limit?: number }; result: SearchHit[] };
   /**
-   * Live search in the files of a Space's folder: names, then lines (docs/33).
-   * The Home Space's folder is the home folder, too big: there `cwd` (the selected
+   * Live search in the files of a workspace's folder: names, then lines (docs/33).
+   * The Home workspace's folder is the home folder, too big: there `cwd` (the selected
    * window's folder) picks the project instead. `root`: where it looked, null if nowhere.
    */
-  "search.files": { params: { text: string; spaceId?: SpaceId | null; cwd?: string | null; limit?: number; part?: "names" | "lines" }; result: { root: string | null; hits: FileHit[] } };
+  "search.files": { params: { text: string; workspaceId?: WorkspaceId | null; cwd?: string | null; limit?: number; part?: "names" | "lines" }; result: { root: string | null; hits: FileHit[] } };
   /** What happened, by full text: commands (and what they printed), pages and files opened in cmd; newest matches first per kind. */
-  "search.history": { params: { text: string; spaceId?: SpaceId | null; limit?: number }; result: HistoryHit[] };
+  "search.history": { params: { text: string; workspaceId?: WorkspaceId | null; limit?: number }; result: HistoryHit[] };
   /** The most recently active past sessions, newest first; `exclude`: session ids to leave out (open ones). */
   "search.status": { params: {}; result: SearchStatus };
   /** Rebuild the transcript index from scratch; progress arrives as search.status events. Fails when search is off. */
@@ -461,7 +461,7 @@ export interface Methods {
       panes: Pane[];
       agents: Agent[];
       windows: AppWindow[];
-      spaces: Space[];
+      workspaces: Workspace[];
       windowTypes: WindowTypeInfo[];
       device: { id: string; scope: RemoteScope } | null;
       /** This Mac, as the phone names it ("Jan's MacBook Pro"). */
@@ -480,8 +480,8 @@ export interface Methods {
       agents: Agent[];
       /** Non-terminal windows (terminal windows are the panes). */
       windows: AppWindow[];
-      /** Open Spaces in switcher order. */
-      spaces: Space[];
+      /** Open workspaces in switcher order. */
+      workspaces: Workspace[];
       windowTypes: WindowTypeInfo[];
       settings: SettingsSnapshot;
       ui: Record<string, unknown>;
@@ -507,17 +507,17 @@ export type CoreEvent =
   | { type: "core.startup"; status: StartupStatus }
   | { type: "window.updated"; window: AppWindow }
   | { type: "window.removed"; id: WindowId }
-  | { type: "space.updated"; space: Space }
-  | { type: "space.removed"; id: SpaceId }
-  /** Show this Space (cmd ., ⌘O from elsewhere); the app picks or creates the app window. */
-  | { type: "space.show"; spaceId: SpaceId; newWindow: boolean }
+  | { type: "workspace.updated"; workspace: Workspace }
+  | { type: "workspace.removed"; id: WorkspaceId }
+  /** Show this workspace (cmd ., ⌘O from elsewhere); the app picks or creates the app window. */
+  | { type: "workspace.show"; workspaceId: WorkspaceId; newWindow: boolean }
   /** A Magic widget's run: agent steps, the header, the body so far, done or failed. */
   | { type: "magic.stream"; id: WindowId; progress: MagicProgress }
   /** New data from a Magic widget's source (error: the source failed; the widget keeps its last data). */
   | { type: "magic.data"; id: WindowId; data: unknown; at: number; error?: string }
   /** To the previewer connection only: render these pages offscreen and answer with magic.previewResult. */
   | { type: "magic.previewRequest"; reqId: string; requests: MagicPreviewRequest[] }
-  /** The Widget Library changed (a widget made, changed, renamed, deleted, put in or taken out of a Space). */
+  /** The Widget Library changed (a widget made, changed, renamed, deleted, put in or taken out of a workspace). */
   | { type: "widget.library"; entries: WidgetEntry[] }
   /** A folder's Workspace Actions changed: its files, a run, the model's descriptions (actions.list again). */
   | { type: "actions.changed"; root: string }
@@ -527,7 +527,7 @@ export type CoreEvent =
   | { type: "data.changed"; id: string; events: DataEvent[] }
   /**
    * Rows of a view that changed, for a data.subscribeView subscription (turns by agent and index, sessions by key).
-   * reset: the rows are the query's whole result and replace what the subscriber has (the view was rebuilt, Spaces changed).
+   * reset: the rows are the query's whole result and replace what the subscriber has (the view was rebuilt, workspaces changed).
    */
   | { type: "view.changed"; id: string; view: "turns" | "sessions"; rows: (TurnRow | SessionInfo)[]; reset?: boolean }
   /** Bring a window to the front (e.g. `open .` in a terminal). */

@@ -131,12 +131,12 @@ export class SearchView {
    * opened in cmd (per path). Best match first within each kind, recent ones a
    * little more; `limit` per kind.
    */
-  history(text: string, o: { spaceId?: string | null; limit?: number } = {}, now = Date.now()): HistoryHit[] {
+  history(text: string, o: { workspaceId?: string | null; limit?: number } = {}, now = Date.now()): HistoryHit[] {
     const q = new SearchQuery(text);
     if (q.isEmpty) return [];
     let rows: { e: DataEvent; bm: number }[];
     try {
-      rows = this.#data.store.matches(q.expression(), ["command", "browser.visit", "file.open"], { spaceId: o.spaceId, limit: 400 });
+      rows = this.#data.store.matches(q.expression(), ["command", "browser.visit", "file.open"], { workspaceId: o.workspaceId, limit: 400 });
     } catch {
       return []; // malformed expression
     }

@@ -79,7 +79,7 @@ describe("file search", () => {
 describe("history search", () => {
   const data = () => new DataService({ file: null, recordedBy: "test", settings: () => DEFAULT_SETTINGS });
   const command = (d: DataService, id: string, at: number, cmdline: string, output: string, exitCode = 0) =>
-    d.record({ id: `command:${id}`, at, type: "command", source: "osc", paneId: "p1", spaceId: "s1", text: cmdline, body: commandBody(cmdline, output), data: { command: cmdline, exitCode, cwd: "/tmp/proj", output: { chars: output.length, cut: false } }, content: output });
+    d.record({ id: `command:${id}`, at, type: "command", source: "osc", paneId: "p1", workspaceId: "s1", text: cmdline, body: commandBody(cmdline, output), data: { command: cmdline, exitCode, cwd: "/tmp/proj", output: { chars: output.length, cut: false } }, content: output });
 
   it("finds commands by what they printed, one row per command line, and pages and files", () => {
     const d = data();
@@ -87,15 +87,15 @@ describe("history search", () => {
     command(d, "1", now - 5000, "pnpm test", "FAIL packages/core/test/flaky.test.ts", 1);
     command(d, "2", now - 1000, "pnpm test", "FAIL packages/core/test/flaky.test.ts", 1);
     command(d, "3", now - 3000, "ls", "nothing here");
-    d.record({ id: "visit:1", at: now - 2000, type: "browser.visit", source: "window", spaceId: "s1", text: "Flaky tests in Vitest", body: "Flaky tests in Vitest", data: { url: "https://vitest.dev/flaky", title: "Flaky tests in Vitest" } });
-    d.record({ id: "file:1", at: now - 2000, type: "file.open", source: "window", spaceId: "s1", text: "/tmp/proj/flaky.md", data: { path: "/tmp/proj/flaky.md", windowKind: "text" } });
+    d.record({ id: "visit:1", at: now - 2000, type: "browser.visit", source: "window", workspaceId: "s1", text: "Flaky tests in Vitest", body: "Flaky tests in Vitest", data: { url: "https://vitest.dev/flaky", title: "Flaky tests in Vitest" } });
+    d.record({ id: "file:1", at: now - 2000, type: "file.open", source: "window", workspaceId: "s1", text: "/tmp/proj/flaky.md", data: { path: "/tmp/proj/flaky.md", windowKind: "text" } });
     const view = new SearchView(d, new SessionsView(new ViewsStore(null), d));
     const hits = view.history("flaky", {}, now);
     const cmd = hits.find((h) => h.kind === "command");
     expect(cmd).toMatchObject({ command: "pnpm test", runs: 2, exitCode: 1, cwd: "/tmp/proj" });
     expect(cmd!.kind === "command" && cmd!.snippet).toContain("\x01flaky\x02");
     expect(hits.map((h) => h.kind).sort()).toEqual(["command", "file", "page"]);
-    expect(view.history("flaky", { spaceId: "elsewhere" }, now)).toEqual([]);
+    expect(view.history("flaky", { workspaceId: "elsewhere" }, now)).toEqual([]);
   });
 
   it("makes older commands' output searchable once", async () => {

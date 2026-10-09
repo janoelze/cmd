@@ -1,5 +1,5 @@
 // Floating surfaces: Popover (a card anchored to a control), Menu (a list of
-// actions in one, like the Space switcher's), Dialog (a sheet over the window
+// actions in one, like the workspace switcher's), Dialog (a sheet over the window
 // with a scrim) and toasts (a short message at the bottom that goes away).
 // Native menus and confirms (cmd.contextMenu, cmd.confirm) stay native; these
 // are for what needs more than text.

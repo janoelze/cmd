@@ -2,10 +2,10 @@
 // polled every 2 s. The app's own Electron processes (main/metrics.ts), the
 // core and PTY host (core.processes), and each terminal's whole process tree
 // (Pane.usage, sampled by the core), which expands to its largest processes.
-// A terminal can be shown in its Space's window or ended.
+// A terminal can be shown in its workspace's window or ended.
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import type { Pane, ProcessStat, Space } from "@cmd/protocol";
+import type { Pane, ProcessStat, Workspace } from "@cmd/protocol";
 import type { AppProcess } from "../../../main/metrics.ts";
 import { Button, EmptyState } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
@@ -17,7 +17,7 @@ interface Snapshot {
   app: AppProcess[];
   core: { core: ProcessStat | null; ptyHost: ProcessStat | null } | null;
   panes: Pane[];
-  spaces: Space[];
+  workspaces: Workspace[];
 }
 
 interface Row {
@@ -43,13 +43,13 @@ const COLUMNS: { key: SortKey; label: string; numeric: boolean }[] = [
 ];
 
 async function poll(): Promise<Snapshot> {
-  const [app, core, panes, spaces] = await Promise.all([
+  const [app, core, panes, workspaces] = await Promise.all([
     cmd.appMetrics(),
     cmd.call("core.processes", {}).catch(() => null),
     cmd.call("pane.list", {}),
-    cmd.call("space.list", {}),
+    cmd.call("workspace.list", {}),
   ]);
-  return { app, core, panes, spaces };
+  return { app, core, panes, workspaces };
 }
 
 function sortRows(rows: Row[], s: Sort): Row[] {
@@ -99,7 +99,7 @@ export function TaskManager() {
     const h = snap.core?.ptyHost;
     core.push({ key: "core", name: "Core", pid: c?.pid ?? null, memory: c?.memory ?? null, cpu: c?.cpu ?? null });
     if (h) core.push({ key: "pty-host", name: "PTY host", detail: "terminals", pid: h.pid, memory: h.memory, cpu: h.cpu });
-    const spaceName = new Map(snap.spaces.map((s) => [s.id, s.name]));
+    const workspaceName = new Map(snap.workspaces.map((s) => [s.id, s.name]));
     const terminals: Row[] = snap.panes
       .filter((p) => p.exitCode === null && p.pid > 0)
       .map((p) => {
@@ -107,7 +107,7 @@ export function TaskManager() {
         return {
         key: `pane:${p.id}`,
         name,
-        detail: [p.foreground !== name && p.foreground, spaceName.get(p.spaceId)].filter(Boolean).join(" · "),
+        detail: [p.foreground !== name && p.foreground, workspaceName.get(p.workspaceId)].filter(Boolean).join(" · "),
         pid: p.pid,
         memory: p.usage?.memory ?? null,
         cpu: p.usage?.cpu ?? null,
@@ -131,7 +131,7 @@ export function TaskManager() {
       if (!n.delete(key)) n.add(key);
       return n;
     });
-  const show = (r: Row | null) => r?.pane && cmd.showPane(r.pane.spaceId, r.pane.id);
+  const show = (r: Row | null) => r?.pane && cmd.showPane(r.pane.workspaceId, r.pane.id);
   const end = (r: Row | null) => {
     if (!r?.pane) return;
     if (!confirm(`End “${r.name}”?\n\nIts terminal and every process in it are stopped.`)) return;

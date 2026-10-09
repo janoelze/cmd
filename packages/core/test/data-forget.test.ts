@@ -88,16 +88,16 @@ describe("agent events in the log", () => {
     expect(parent(hook(3000 + 2 * 86400_000, "PostToolUse", "t2").id)).toBeNull();
   });
 
-  it("keeps a hook payload's long strings cut in the row and the whole payload as its content, with the pane's Space", async () => {
+  it("keeps a hook payload's long strings cut in the row and the whole payload as its content, with the pane's workspace", async () => {
     const { ActivityView } = await import("../src/data/views/activity.ts");
     const { ViewsStore } = await import("../src/data/views/views.ts");
     const { d } = service();
     const view = new ActivityView(d, new ViewsStore(null));
-    view.spaceOf = (paneId) => (paneId === "p1" ? "space-1" : null);
+    view.workspaceOf = (paneId) => (paneId === "p1" ? "space-1" : null);
     const big = "x".repeat(20_000);
     view.insert({ at: 1, agent: "claude", name: "PostToolUse", payload: { hook_event_name: "PostToolUse", session_id: "s", tool_name: "Read", tool_response: big } }, "p1", "a1");
     const [e] = d.query({ types: ["agent.hook"] });
-    expect(e!.spaceId).toBe("space-1");
+    expect(e!.workspaceId).toBe("space-1");
     expect(JSON.stringify(e!.data).length).toBeLessThan(6000);
     expect(JSON.parse(d.store.blob(e!.blob!)!.toString()).tool_response).toBe(big);
     view.insert({ at: 2, agent: "claude", name: "Stop", payload: { hook_event_name: "Stop", session_id: "s" } }, "p1", "a1");

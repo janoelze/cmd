@@ -1,5 +1,5 @@
 // Commands, a built-in widget (docs/16-widgets.md): every command the terminals
-// of this Space (or all of them) ran, from the shell integration (CommandRun,
+// of this workspace (or all of them) ran, from the shell integration (CommandRun,
 // core/commands.ts). Running ones first, then the rest, newest first; a failed
 // one says its exit status. A click goes to its terminal; Run Again types it there.
 
@@ -49,7 +49,7 @@ export function CommandsView({ win }: WindowViewProps) {
     return () => clearInterval(t);
   }, [anyRunning]);
 
-  const runs = useMemo(() => all.filter((r) => (scope === "all" || r.spaceId === win.spaceId) && (!failedOnly || r.endedAt === null || failed(r))), [all, scope, failedOnly, win.spaceId]);
+  const runs = useMemo(() => all.filter((r) => (scope === "all" || r.workspaceId === win.workspaceId) && (!failedOnly || r.endedAt === null || failed(r))), [all, scope, failedOnly, win.workspaceId]);
   const running = runs.filter((r) => r.endedAt === null);
   const done = runs.filter((r) => r.endedAt !== null);
   const failures = done.filter(failed).length;
@@ -63,11 +63,11 @@ export function CommandsView({ win }: WindowViewProps) {
   const rerun = (r: CommandRun) => {
     if (!canRerun(r)) return;
     void cmd.call("pane.write", { paneId: r.paneId, data: `${r.command}\r` }).catch(() => {});
-    goTo(r.paneId, r.spaceId);
+    goTo(r.paneId, r.workspaceId);
   };
   const rowMenu = (r: CommandRun) =>
     void showContextMenu([
-      { label: "Show Terminal", enabled: s.panes.has(r.paneId), run: () => goTo(r.paneId, r.spaceId) },
+      { label: "Show Terminal", enabled: s.panes.has(r.paneId), run: () => goTo(r.paneId, r.workspaceId) },
       { label: "Run Again", enabled: canRerun(r), run: () => rerun(r) },
       "-",
       { label: "Copy Command", enabled: !!r.command, run: () => copy(r.command ?? "") },
@@ -82,9 +82,9 @@ export function CommandsView({ win }: WindowViewProps) {
       : bad ? `Failed · exit ${r.exitCode} · ${took}`
       : r.exitCode !== null && STOPPED.has(r.exitCode) ? `Stopped · ${took}`
       : took;
-    const sp = s.spaces.get(r.spaceId);
+    const sp = s.workspaces.get(r.workspaceId);
     const where = whereOf(r.git, r.cwd, sp);
-    const space = scope === "all" ? sp?.name : undefined;
+    const workspace = scope === "all" ? sp?.name : undefined;
     return (
       <ListRow
         key={r.id}
@@ -92,7 +92,7 @@ export function CommandsView({ win }: WindowViewProps) {
         light={r.endedAt === null ? "working" : bad ? "danger" : undefined}
         title={r.command ?? "Command"}
         mono
-        detail={[state, space].filter(Boolean).join(" · ")}
+        detail={[state, workspace].filter(Boolean).join(" · ")}
         tone={bad ? "danger" : undefined}
         tip={r.cwd}
         end={
@@ -102,7 +102,7 @@ export function CommandsView({ win }: WindowViewProps) {
           </>
         }
         hover={<IconButton size="sm" icon="arrow.clockwise" label="Run Again" disabled={!canRerun(r)} onClick={() => rerun(r)} />}
-        onClick={() => goTo(r.paneId, r.spaceId)}
+        onClick={() => goTo(r.paneId, r.workspaceId)}
         onContextMenu={() => rowMenu(r)}
       />
     );
@@ -123,7 +123,7 @@ export function CommandsView({ win }: WindowViewProps) {
         )}
         {runs.length === 0 && (
           <EmptyState compact icon="terminal" title={failedOnly ? "Nothing failed" : "No commands yet"}>
-            {failedOnly ? "Commands that fail show up here." : scope === "all" ? "Commands you run in terminals show up here." : "Commands you run in this Space's terminals show up here."}
+            {failedOnly ? "Commands that fail show up here." : scope === "all" ? "Commands you run in terminals show up here." : "Commands you run in this workspace's terminals show up here."}
           </EmptyState>
         )}
       </PanelBody>

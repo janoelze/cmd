@@ -1,18 +1,18 @@
-// App windows ↔ Spaces (docs/11-spaces.md). Each app window shows one Space and
-// a Space is shown in at most one window, because its layout is fitted to one
+// App windows ↔ workspaces (docs/11-workspaces.md). Each app window shows one workspace and
+// a workspace is shown in at most one window, because its layout is fitted to one
 // viewport. Every switch goes through here: show() focuses the window that
-// already shows the Space, or switches the asking window, or opens a new one.
+// already shows the workspace, or switches the asking window, or opens a new one.
 // Which window shows what (and where it sits) is kept in windows.json, so all
-// windows come back on launch. The core's space.show events (`cmd .`) arrive here too.
+// windows come back on launch. The core's workspace.show events (`cmd .`) arrive here too.
 // Placement is also kept per display setup (displays.ts): docking or undocking
 // puts each window back where it last sat with those displays. With the
-// spaces.ownWindow setting, every Space gets a window of its own: showing one
+// workspaces.ownWindow setting, every workspace gets a window of its own: showing one
 // that no window shows opens a new window instead of switching in place.
 
 import { app, autoUpdater, BrowserWindow, screen } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import { HOME_SPACE_ID } from "@cmd/protocol";
+import { HOME_WORKSPACE_ID } from "@cmd/protocol";
 import { cmdHome, connect, logger } from "@cmd/protocol/node";
 import { parsePlacements, placementFor, record, setupKey, touch, type Placements } from "./displays.ts";
 
@@ -45,13 +45,13 @@ function focus(win: BrowserWindow): void {
   win.focus();
 }
 
-export class SpaceWindows {
-  #create: (spaceId: string, bounds: Bounds) => BrowserWindow;
+export class WorkspaceWindows {
+  #create: (workspaceId: string, bounds: Bounds) => BrowserWindow;
   #shown = new Map<BrowserWindow, string>();
   #bounds = new Map<BrowserWindow, Bounds>();
   #fullscreen = new Set<BrowserWindow>();
-  /** The Space of the most recently focused window: reopened when the last window was closed. */
-  #last = HOME_SPACE_ID;
+  /** The workspace of the most recently focused window: reopened when the last window was closed. */
+  #last = HOME_WORKSPACE_ID;
   #quitting = false;
   #saveTimer: NodeJS.Timeout | undefined;
   #placements: Placements = {};
@@ -59,10 +59,10 @@ export class SpaceWindows {
   #setup = "";
   /** Set from a display change until its replay has landed: moves then are macOS's, not the user's. */
   #settling: NodeJS.Timeout | undefined;
-  /** The spaces.ownWindow setting, followed from the core. */
+  /** The workspaces.ownWindow setting, followed from the core. */
   #ownWindow = false;
 
-  constructor(create: (spaceId: string, bounds: Bounds) => BrowserWindow) {
+  constructor(create: (workspaceId: string, bounds: Bounds) => BrowserWindow) {
     this.#create = create;
     const quitting = () => {
       this.#save();
@@ -75,39 +75,40 @@ export class SpaceWindows {
 
   /** Reopen the windows of the last session (at least one). */
   restore(): void {
-    let saved: { spaceId: string; bounds: Bounds }[] = [];
+    let saved: { workspaceId: string; bounds: Bounds }[] = [];
     try {
       const json = JSON.parse(fs.readFileSync(file(), "utf8"));
-      saved = json.windows ?? [];
+      // Before 0.24 a window's workspace was its spaceId.
+      saved = (json.windows ?? []).map((w: { workspaceId?: string; spaceId?: string }) => ({ ...w, workspaceId: w.workspaceId ?? w.spaceId }));
       this.#placements = parsePlacements(json.placements);
     } catch {}
     this.#setup = currentSetup();
     this.#placements = touch(this.#placements, this.#setup);
     const seen = new Set<string>();
     for (const w of saved) {
-      if (typeof w.spaceId !== "string" || seen.has(w.spaceId)) continue;
-      seen.add(w.spaceId);
-      const win = this.#open(w.spaceId, onScreen(this.#placed(w.spaceId) ?? w.bounds ?? DEFAULT_BOUNDS));
-      // Fullscreen (a macOS Space of its own) once shown; its frame stays the windowed one.
+      if (typeof w.workspaceId !== "string" || seen.has(w.workspaceId)) continue;
+      seen.add(w.workspaceId);
+      const win = this.#open(w.workspaceId, onScreen(this.#placed(w.workspaceId) ?? w.bounds ?? DEFAULT_BOUNDS));
+      // Fullscreen (a macOS Workspace of its own) once shown; its frame stays the windowed one.
       if (w.bounds?.fullscreen) win.once("ready-to-show", () => win.setFullScreen(true));
     }
-    if (seen.size === 0) this.#open(HOME_SPACE_ID, this.#placed(HOME_SPACE_ID) ?? DEFAULT_BOUNDS);
+    if (seen.size === 0) this.#open(HOME_WORKSPACE_ID, this.#placed(HOME_WORKSPACE_ID) ?? DEFAULT_BOUNDS);
     const changed = () => this.#displaysChanged();
     screen.on("display-added", changed);
     screen.on("display-removed", changed);
     screen.on("display-metrics-changed", changed);
   }
 
-  /** Where the Space's window last sat with the current displays. */
-  #placed(spaceId: string): Bounds | undefined {
-    return placementFor(this.#placements, this.#setup, spaceId);
+  /** Where the workspace's window last sat with the current displays. */
+  #placed(workspaceId: string): Bounds | undefined {
+    return placementFor(this.#placements, this.#setup, workspaceId);
   }
 
-  #remember(win: BrowserWindow, spaceId: string): void {
+  #remember(win: BrowserWindow, workspaceId: string): void {
     // A change macOS hasn't told us about yet would file its moves under the old setup.
     if (this.#settling || currentSetup() !== this.#setup) return;
     const b = this.#bounds.get(win);
-    if (b?.x !== undefined) this.#placements = record(this.#placements, this.#setup, spaceId, b);
+    if (b?.x !== undefined) this.#placements = record(this.#placements, this.#setup, workspaceId, b);
   }
 
   /**
@@ -123,13 +124,13 @@ export class SpaceWindows {
       this.#setup = key;
       this.#placements = touch(this.#placements, key);
       const replayed: string[] = [];
-      for (const [win, spaceId] of this.#shown) {
-        const b = this.#placed(spaceId);
+      for (const [win, workspaceId] of this.#shown) {
+        const b = this.#placed(workspaceId);
         if (!b || win.isDestroyed() || win.isFullScreen()) continue;
         if (win.isMaximized()) win.unmaximize();
         win.setBounds({ x: b.x, y: b.y, width: b.width, height: b.height });
         if (b.maximized) win.maximize();
-        replayed.push(spaceId);
+        replayed.push(workspaceId);
       }
       log.info(`displays ${key}: ${replayed.length ? `put back ${replayed.join(", ")}` : "nothing to put back"}`);
       this.#settling = setTimeout(() => {
@@ -146,62 +147,62 @@ export class SpaceWindows {
     return this.#open(this.#last, this.#nextBounds(this.#last));
   }
 
-  spaceOf(win: BrowserWindow): string | undefined {
+  workspaceOf(win: BrowserWindow): string | undefined {
     return this.#shown.get(win);
   }
 
-  #owner(spaceId: string): BrowserWindow | undefined {
-    for (const [w, s] of this.#shown) if (s === spaceId && !w.isDestroyed()) return w;
+  #owner(workspaceId: string): BrowserWindow | undefined {
+    for (const [w, s] of this.#shown) if (s === workspaceId && !w.isDestroyed()) return w;
     return undefined;
   }
 
   /**
-   * Show a Space: in the window that already shows it, else in `from` (the
-   * asking window), else (newWindow, spaces.ownWindow, or no window to ask) in
-   * a new window. here: in `from` even with spaces.ownWindow.
+   * Show a workspace: in the window that already shows it, else in `from` (the
+   * asking window), else (newWindow, workspaces.ownWindow, or no window to ask) in
+   * a new window. here: in `from` even with workspaces.ownWindow.
    */
-  show(spaceId: string, o: { select?: string; newWindow?: boolean; here?: boolean }, from: BrowserWindow | null): void {
-    const owner = this.#owner(spaceId);
+  show(workspaceId: string, o: { select?: string; newWindow?: boolean; here?: boolean }, from: BrowserWindow | null): void {
+    const owner = this.#owner(workspaceId);
     const apart = o.newWindow || (this.#ownWindow && !o.here);
     const target = owner ?? (apart || !from || from.isDestroyed() ? null : from);
     if (!target) {
-      const win = this.#open(spaceId, this.#nextBounds(spaceId));
-      if (o.select) win.webContents.once("did-finish-load", () => win.webContents.send("space-show", { spaceId, select: o.select }));
+      const win = this.#open(workspaceId, this.#nextBounds(workspaceId));
+      if (o.select) win.webContents.once("did-finish-load", () => win.webContents.send("workspace-show", { workspaceId, select: o.select }));
       focus(win);
       return;
     }
     if (target !== owner) {
-      // The window stays where it is; that's now where this Space sits.
-      this.#shown.set(target, spaceId);
-      this.#remember(target, spaceId);
+      // The window stays where it is; that's now where this workspace sits.
+      this.#shown.set(target, workspaceId);
+      this.#remember(target, workspaceId);
       this.#save();
     }
-    target.webContents.send("space-show", { spaceId, select: o.select });
-    this.#last = spaceId;
+    target.webContents.send("workspace-show", { workspaceId, select: o.select });
+    this.#last = workspaceId;
     focus(target);
   }
 
   /**
-   * The window's Space was closed: show Home there, or close the window if
-   * another one shows Home (with spaces.ownWindow: if any other window is open,
-   * since the window belonged to that Space).
+   * The window's workspace was closed: show Home there, or close the window if
+   * another one shows Home (with workspaces.ownWindow: if any other window is open,
+   * since the window belonged to that workspace).
    */
   lost(win: BrowserWindow): void {
-    const home = this.#owner(HOME_SPACE_ID);
+    const home = this.#owner(HOME_WORKSPACE_ID);
     const others = [...this.#shown.keys()].some((w) => w !== win && !w.isDestroyed());
     if ((home && home !== win) || (this.#ownWindow && others)) win.close();
-    else this.show(HOME_SPACE_ID, { here: true }, win);
+    else this.show(HOME_WORKSPACE_ID, { here: true }, win);
   }
 
-  #open(spaceId: string, bounds: Bounds): BrowserWindow {
-    const win = this.#create(spaceId, bounds);
-    this.#shown.set(win, spaceId);
+  #open(workspaceId: string, bounds: Bounds): BrowserWindow {
+    const win = this.#create(workspaceId, bounds);
+    this.#shown.set(win, workspaceId);
     this.#bounds.set(win, bounds);
-    this.#last = spaceId;
+    this.#last = workspaceId;
     const track = () => {
       if (win.isDestroyed() || win.isFullScreen()) return;
       this.#bounds.set(win, boundsOf(win));
-      this.#remember(win, this.#shown.get(win) ?? spaceId);
+      this.#remember(win, this.#shown.get(win) ?? workspaceId);
       this.#saveSoon();
     };
     win.on("resize", track);
@@ -215,24 +216,24 @@ export class SpaceWindows {
       this.#shown.delete(win);
       this.#bounds.delete(win);
       this.#fullscreen.delete(win);
-      // The last window stays saved, so the next launch reopens its Space.
+      // The last window stays saved, so the next launch reopens its workspace.
       if (this.#shown.size > 0) this.#save();
     });
-    // Opened here, so this is where the Space sits with these displays until moved.
+    // Opened here, so this is where the workspace sits with these displays until moved.
     this.#bounds.set(win, boundsOf(win));
-    this.#remember(win, spaceId);
+    this.#remember(win, workspaceId);
     this.#save();
     return win;
   }
 
   /**
-   * Where the Space last sat with these displays; else a new window cascades
+   * Where the workspace last sat with these displays; else a new window cascades
    * from the focused one, like macOS document windows. A window that showed the
-   * Space before and shows another one now still sits there: then cascade too,
+   * Workspace before and shows another one now still sits there: then cascade too,
    * rather than open exactly on top of it.
    */
-  #nextBounds(spaceId: string): Bounds {
-    const placed = this.#placed(spaceId);
+  #nextBounds(workspaceId: string): Bounds {
+    const placed = this.#placed(workspaceId);
     const taken = (b: Bounds) => [...this.#bounds.values()].some((o) => o.x === b.x && o.y === b.y);
     if (placed && !taken(placed)) return onScreen(placed);
     const from = BrowserWindow.getFocusedWindow();
@@ -251,7 +252,7 @@ export class SpaceWindows {
   #save(): void {
     clearTimeout(this.#saveTimer);
     if (this.#quitting) return;
-    const windows = [...this.#shown].filter(([w]) => !w.isDestroyed()).map(([w, spaceId]) => ({ spaceId, bounds: this.#fullscreen.has(w) ? { ...this.#bounds.get(w)!, fullscreen: true } : this.#bounds.get(w) }));
+    const windows = [...this.#shown].filter(([w]) => !w.isDestroyed()).map(([w, workspaceId]) => ({ workspaceId, bounds: this.#fullscreen.has(w) ? { ...this.#bounds.get(w)!, fullscreen: true } : this.#bounds.get(w) }));
     try {
       fs.mkdirSync(cmdHome(), { recursive: true });
       fs.writeFileSync(file(), JSON.stringify({ windows, placements: this.#placements }));
@@ -259,24 +260,24 @@ export class SpaceWindows {
   }
 
   /**
-   * Follow the core's space.show events (`cmd .` in any shell): bring the app
-   * forward and show the Space in the frontmost window. Also follows the
-   * spaces.ownWindow setting. Reconnects with the core.
+   * Follow the core's workspace.show events (`cmd .` in any shell): bring the app
+   * forward and show the workspace in the frontmost window. Also follows the
+   * workspaces.ownWindow setting. Reconnects with the core.
    */
   followCore(socketPath: string, appWindows: () => BrowserWindow[]): void {
     const attach = async () => {
       try {
         const conn = await connect(socketPath);
         conn.client.onEvent((e) => {
-          if (e.type === "settings.updated") this.#ownWindow = e.snapshot.settings["spaces.ownWindow"];
-          if (e.type !== "space.show") return;
+          if (e.type === "settings.updated") this.#ownWindow = e.snapshot.settings["workspaces.ownWindow"];
+          if (e.type !== "workspace.show") return;
           app.focus({ steal: true });
           const focused = BrowserWindow.getFocusedWindow();
           const from = (focused && this.#shown.has(focused) ? focused : null) ?? appWindows().find((w) => this.#shown.get(w) === this.#last) ?? null;
-          this.show(e.spaceId, { newWindow: e.newWindow }, from);
+          this.show(e.workspaceId, { newWindow: e.newWindow }, from);
         });
-        await conn.client.call("events.subscribe", { types: ["space.show", "settings.updated"] });
-        this.#ownWindow = (await conn.client.call("settings.get", {})).settings["spaces.ownWindow"];
+        await conn.client.call("events.subscribe", { types: ["workspace.show", "settings.updated"] });
+        this.#ownWindow = (await conn.client.call("settings.get", {})).settings["workspaces.ownWindow"];
         // Soon after a restart (Restart Core), or `cmd .` goes unheard meanwhile.
         conn.closed.then(() => setTimeout(attach, 250));
       } catch {

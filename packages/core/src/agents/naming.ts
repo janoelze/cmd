@@ -90,7 +90,7 @@ export class AgentNaming {
     const s: NameState = known?.session === session ? known : !known && a.name ? { ...NO_NAME, name: a.name, tries: FIRST_TRIES, history: a.nameWas ? [{ name: a.nameWas, until: a.namedAt ?? 0 }] : [] } : NO_NAME;
     const why = moment === "prompt" ? (s.name || s.tries >= FIRST_TRIES ? null : "first name, at the prompt") : shouldAsk(s, turns);
     if (!why) return void this.#state.set(id, { ...s, session });
-    const others = this.#o.agents().filter((x) => x.id !== id && x.spaceId === a.spaceId && x.name).map((x) => x.name!);
+    const others = this.#o.agents().filter((x) => x.id !== id && x.workspaceId === a.workspaceId && x.name).map((x) => x.name!);
     const { answer } = await askChecked((input) => this.#ask(askText(input)), { current: s.name, turns, others, project: path.basename(projectOf(a.cwd) ?? "") || null });
     const next = decide(s, answer, turns.at(-1)!.at);
     this.#state.set(id, { ...next, session });

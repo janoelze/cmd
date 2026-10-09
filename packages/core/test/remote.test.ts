@@ -100,11 +100,11 @@ describe("remote access", () => {
     const client = rpc(await c.session);
     const boot = await client.call("remote.bootstrap", {});
     expect(boot.device).toEqual({ id: deviceId, scope: "view" });
-    expect(boot.spaces.length).toBeGreaterThan(0);
+    expect(boot.workspaces.length).toBeGreaterThan(0);
     expect(await client.call("pane.list", {})).toEqual([]);
     await expect(client.call("settings.get", {})).rejects.toThrow(RpcError);
     await expect(client.call("pane.create", {})).rejects.toThrow(/needs control access/);
-    await expect(client.call("fs.read", { path: "/etc/passwd" })).rejects.toThrow(/outside your Spaces/);
+    await expect(client.call("fs.read", { path: "/etc/passwd" })).rejects.toThrow(/outside your workspaces/);
     c.ws.close();
   });
 

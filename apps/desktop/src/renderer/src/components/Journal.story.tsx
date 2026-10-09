@@ -8,7 +8,7 @@ import { Journal } from "./Journal.tsx";
 type Draft = Omit<JournalEntry, "repo" | "threads" | "counts" | "outcome"> & { project?: string; outcome?: JournalEntry["outcome"]; counts: Partial<JournalEntry["counts"]> };
 const day = (d: { date: number; headline: string; entries: Draft[] }): JournalDay => ({
   ...d,
-  scope: "space:cmd",
+  scope: "workspace:cmd",
   writtenBy: "Claude Sonnet 5.5",
   writtenAt: d.date,
   format: { schema: 1, threads: 1, writer: 1 },
@@ -133,7 +133,7 @@ function Tile({ width, height, children }: { width: number; height: number; chil
       <WindowBody style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <WindowBar icon="book" name="Journal">
           <span style={{ flex: 1 }} />
-          <WindowBarMenu>This Space</WindowBarMenu>
+          <WindowBarMenu>This Workspace</WindowBarMenu>
         </WindowBar>
         <div style={{ flex: 1, minHeight: 0, display: "flex" }}>{children}</div>
       </WindowBody>
@@ -163,7 +163,7 @@ export const Sidebar = () => (
     <Journal days={DAYS} week={WEEK} now={NOW} showProject={false} onRefresh={() => {}} />
   </Tile>
 );
-export const AllSpaces = () => (
+export const AllWorkspaces = () => (
   <Tile width={520} height={760}>
     <Journal days={DAYS} now={NOW} onRefresh={() => {}} />
   </Tile>

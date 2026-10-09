@@ -204,7 +204,7 @@ const SCENES = {
     await win.waitForTimeout(800);
   },
   // Magic widgets: real widgets the agent made (magic-widgets.json: their HTML
-  // and the data their source returned), in a Space of their own so the other
+  // and the data their source returned), in a workspace of their own so the other
   // scenes stay as they are, next to an empty one showing the prompt. No model
   // runs here, and nothing refreshes: windows made after the core started are
   // only scheduled when a run finishes.
@@ -212,11 +212,11 @@ const SCENES = {
     const widgets = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "magic-widgets.json"), "utf8"));
     const dir = path.join(home, "dashboard");
     fs.mkdirSync(dir, { recursive: true });
-    const { space } = await call("space.open", { path: dir, show: true });
+    const { workspace } = await call("workspace.open", { path: dir, show: true });
     await win.waitForTimeout(800);
     let first = null;
     for (const w of widgets) {
-      const m = await call("window.open", { kind: "magic", input: {}, spaceId: space.id });
+      const m = await call("window.open", { kind: "magic", input: {}, workspaceId: workspace.id });
       first ??= m.id;
       await call("window.update", {
         id: m.id,
@@ -224,7 +224,7 @@ const SCENES = {
         state: { prompt: w.prompt, phase: "ready", kind: "widget", html: w.html, source: w.source, refresh: w.refresh, size: w.size, lastData: w.data === null ? null : { data: w.data, at: Date.now() }, history: [w.prompt] },
       });
     }
-    await call("window.open", { kind: "magic", input: {}, spaceId: space.id });
+    await call("window.open", { kind: "magic", input: {}, workspaceId: workspace.id });
     await menu("view.grid");
     await win.evaluate((id) => window.__cmdSelect(id), first);
     await win.waitForTimeout(2000); // frames load and render their widgets

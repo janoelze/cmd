@@ -95,7 +95,7 @@ export function buildThreads(events: JournalEvent[], o: ThreadOptions): JournalT
         if (!DEFAULT_BRANCHES.has(d.to) && !/^[0-9a-f]{7,40}$/.test(d.to)) add(`branch:${e.repo}#${d.to}`, e);
         break;
       default:
-        break; // resets, Space open/close: context, not work
+        break; // resets, workspace open/close: context, not work
     }
   }
 
@@ -165,11 +165,11 @@ export function buildThreads(events: JournalEvent[], o: ThreadOptions): JournalT
       if (mainFiles && commits.some((c) => turns.some((e) => c.at >= e.at && c.at <= (e.until ?? e.at) + 5 * 60_000))) link(s, t.id, "committed during the session");
     }
   }
-  // Terminals and pages busy while exactly one session worked in the same project or Space: probably part of it. A hint, not a group.
+  // Terminals and pages busy while exactly one session worked in the same project or workspace: probably part of it. A hint, not a group.
   for (const t of threads.values()) {
     if (t.kind !== "terminal" && t.kind !== "browsing") continue;
     if (t.links.length) continue;
-    const during = [...threads.values()].filter((s) => s.kind === "session" && overlaps(s, t) && (s.repo === t.repo || (!!s.spaceId && s.spaceId === t.spaceId)) && !isMinor(s, groups.get(s.id)!));
+    const during = [...threads.values()].filter((s) => s.kind === "session" && overlaps(s, t) && (s.repo === t.repo || (!!s.workspaceId && s.workspaceId === t.workspaceId)) && !isMinor(s, groups.get(s.id)!));
     if (during.length === 1) link(t, during[0]!.id, t.kind === "terminal" ? "ran while that session worked" : "read while that session worked");
   }
   for (const t of threads.values()) t.minor = isMinor(t, groups.get(t.id)!, o.from);
@@ -218,7 +218,7 @@ function makeThread(id: string, events: JournalEvent[]): JournalThread {
   const start = Math.min(...timed.map((e) => e.at));
   const end = Math.max(...timed.map((e) => e.until ?? e.at));
   const first = events[0]!;
-  return { id, kind, repo: first.repo ?? events.find((e) => e.repo)?.repo ?? null, spaceId: events.find((e) => e.spaceId)?.spaceId ?? null, start, end, label: labelOf(id, kind, events), events: events.map((e) => e.id), links: [], minor: false, group: id };
+  return { id, kind, repo: first.repo ?? events.find((e) => e.repo)?.repo ?? null, workspaceId: events.find((e) => e.workspaceId)?.workspaceId ?? null, start, end, label: labelOf(id, kind, events), events: events.map((e) => e.id), links: [], minor: false, group: id };
 }
 
 function labelOf(id: string, kind: JournalThreadKind, events: JournalEvent[]): string {

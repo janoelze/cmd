@@ -332,7 +332,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   };
   // Files open in the window that suits them (text, browser), else their default app.
   const openFile = (e: FileEntry) =>
-    void cmd.call("window.openTarget", { target: e.path, spaceId: win.spaceId }).then((w) => {
+    void cmd.call("window.openTarget", { target: e.path, workspaceId: win.workspaceId }).then((w) => {
       if (w) selectPane(w.id);
       else cmd.openPath(e.path);
     });
@@ -343,7 +343,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     if (!git) return;
     const rel = shellQuote(relTo(git.root, e.path));
     const command = gitOf(e.path)?.state === "untracked" ? `git diff --no-index -- /dev/null ${rel}` : `git diff HEAD -- ${rel}`;
-    void cmd.call("pane.create", { cwd: git.root, command, spaceId: win.spaceId }).then((p) => selectPane(p.id));
+    void cmd.call("pane.create", { cwd: git.root, command, workspaceId: win.workspaceId }).then((p) => selectPane(p.id));
   };
 
   // ── file operations: each re-lists the folder it touched and selects the result ──
@@ -567,7 +567,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       ...(git && e.kind !== "dir" && gitOf(e.path) && gitOf(e.path)!.state !== "ignored" ? ["-" as const, { label: "Show Diff", run: () => showDiff(e) }] : []),
     ]);
 
-  // Right-click on the list's empty space: new items at the top level.
+  // Right-click on the list's empty workspace: new items at the top level.
   const listMenu = () =>
     void showContextMenu([
       { label: "New File", run: () => void create("file", root) },

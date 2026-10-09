@@ -35,7 +35,7 @@ describe("jam window", () => {
 describe("jam window migration", () => {
   it("moves windows stored under the old kind (livecode) to jam, and saves them so", () => {
     const saved: { kind: string }[] = [];
-    const old = { id: "w1", spaceId: "home", kind: "livecode", title: "Jam", createdAt: 0, updatedAt: 0, state: { code: 's("bd")' } };
+    const old = { id: "w1", workspaceId: "home", kind: "livecode", title: "Jam", createdAt: 0, updatedAt: 0, state: { code: 's("bd")' } };
     const store = { windows: () => [old], saveWindow: (w: { kind: string }) => saved.push({ ...w }) } as unknown as Store;
     const types = new WindowTypes();
     registerBuiltins(types);

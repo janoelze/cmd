@@ -109,7 +109,7 @@ describe("redaction at the stores", () => {
 
   it("the journal never keeps a credential", () => {
     const s = new JournalStore();
-    const id = s.record({ at: 1, until: 2, kind: "command", key: "c1", spaceId: null, repo: null, cwd: null, thread: null, text: "export TOKEN=abcdefghijklmnop", data: { kind: "command", command: "export TOKEN=abcdefghijklmnop && deploy", exitCode: 0, paneId: null } });
+    const id = s.record({ at: 1, until: 2, kind: "command", key: "c1", workspaceId: null, repo: null, cwd: null, thread: null, text: "export TOKEN=abcdefghijklmnop", data: { kind: "command", command: "export TOKEN=abcdefghijklmnop && deploy", exitCode: 0, paneId: null } });
     const [e] = s.events({});
     expect(e!.id).toBe(id);
     expect(JSON.stringify(e)).not.toContain("abcdefghijklmnop");

@@ -1,5 +1,5 @@
 // Workspace Actions, a built-in widget (docs/39): how to run the project in
-// this Space's folder (or the one the widget was given), from its own files,
+// this workspace's folder (or the one the widget was given), from its own files,
 // grouped by what they do, the main one first. A click runs one in its own
 // terminal (a server already running: goes to it); risky ones ask first;
 // a dev server's address opens in a browser window. The core finds, ranks,
@@ -7,7 +7,7 @@
 
 import { Button, Callout, Icon, CodeBlock, ConfirmDialog, EmptyState, IconButton, LinkButton, ListRow, ListSection, ListValue, Panel, PanelBody, SearchField } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { type ActionKind, type ActionRun, type ActionsList, type SpaceId, type WorkspaceAction } from "@cmd/protocol";
+import { type ActionKind, type ActionRun, type ActionsList, type WorkspaceId, type WorkspaceAction } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { actionsRootOf, lastLists, runAction } from "../workspaceActions.ts";
 import { copy, newBrowser, openFileAt, openLink } from "../actions.ts";
@@ -101,14 +101,14 @@ export function ActionsView({ win }: WindowViewProps) {
   const failedCount = (list?.runs ?? []).filter(failed).length;
   useWidgetStatus(win.id, runningCount ? `${runningCount} running` : failedCount ? `${failedCount} failed` : null);
 
-  const spaceId: SpaceId = win.spaceId;
+  const workspaceId: WorkspaceId = win.workspaceId;
   const run = useCallback(
     async (a: WorkspaceAction, o: { restart?: boolean; fresh?: boolean; confirmed?: boolean } = {}) => {
       if (!list) return;
       if (a.risky && !a.args && !o.confirmed) return setConfirm({ a, restart: o.restart });
-      await runAction(list.root, a, spaceId, o).catch(() => {});
+      await runAction(list.root, a, workspaceId, o).catch(() => {});
     },
-    [list, spaceId],
+    [list, workspaceId],
   );
   const stop = (a: WorkspaceAction) => list && void cmd.call("actions.stop", { root: list.root, actionId: a.id }).catch(() => {});
   const pin = (a: WorkspaceAction) => list && void cmd.call("actions.pin", { root: list.root, actionId: a.id, pinned: !a.pinned }).catch(() => {});
@@ -118,12 +118,12 @@ export function ActionsView({ win }: WindowViewProps) {
     const r = runs.get(a.id);
     const on = running(r);
     void showContextMenu([
-      { label: on ? "Show Terminal" : a.args ? "Type in Terminal" : "Run", run: () => (on ? goTo(r!.paneId, spaceId) : void run(a)) },
+      { label: on ? "Show Terminal" : a.args ? "Type in Terminal" : "Run", run: () => (on ? goTo(r!.paneId, workspaceId) : void run(a)) },
       { label: "Run in New Terminal", enabled: !a.args, run: () => void run(a, { fresh: true }) },
       ...(on ? [{ label: "Restart", run: () => void run(a, { restart: true }) }, { label: "Stop", run: () => stop(a) }] : []),
-      ...(r && !on && s.panes.has(r.paneId) ? [{ label: "Show Terminal", run: () => goTo(r.paneId, spaceId) }] : []),
+      ...(r && !on && s.panes.has(r.paneId) ? [{ label: "Show Terminal", run: () => goTo(r.paneId, workspaceId) }] : []),
       ...(r?.url || a.url ? [{ label: `Open ${shortUrl((r?.url ?? a.url)!)}`, run: () => openUrl((r?.url ?? a.url)!) }] : []),
-      ...(list?.elsewhere ?? []).filter((x) => x.actionId === a.id && x.endedAt === null).map((x) => ({ label: `Show It in ${x.branch ?? x.root.split("/").pop()}`, run: () => goTo(x.paneId, spaceId) })),
+      ...(list?.elsewhere ?? []).filter((x) => x.actionId === a.id && x.endedAt === null).map((x) => ({ label: `Show It in ${x.branch ?? x.root.split("/").pop()}`, run: () => goTo(x.paneId, workspaceId) })),
       "-",
       { label: a.pinned ? "Unpin" : "Pin to Top", run: () => pin(a) },
       { label: "Copy Command", run: () => copy(a.command) },
@@ -163,7 +163,7 @@ export function ActionsView({ win }: WindowViewProps) {
             )}
             {state && <ListValue>{state}</ListValue>}
             {away.map((x) => (
-              <LinkButton key={x.paneId} tone="dim" onClick={(e) => (e.stopPropagation(), goTo(x.paneId, spaceId))} data-tip={`Running in ${shortPath(x.root)}${x.url ? ` at ${x.url}` : ""}. Show its terminal`}>
+              <LinkButton key={x.paneId} tone="dim" onClick={(e) => (e.stopPropagation(), goTo(x.paneId, workspaceId))} data-tip={`Running in ${shortPath(x.root)}${x.url ? ` at ${x.url}` : ""}. Show its terminal`}>
                 in {x.branch ?? x.root.split("/").pop()}
                 {x.url ? ` · ${shortUrl(x.url)}` : ""}
               </LinkButton>
@@ -185,7 +185,7 @@ export function ActionsView({ win }: WindowViewProps) {
             <IconButton size="sm" icon={a.args ? "text.cursor" : "play.fill"} label={a.args ? "Type in Terminal" : "Run"} onClick={() => void run(a)} />
           )
         }
-        onClick={() => (on ? goTo(r!.paneId, spaceId) : void run(a))}
+        onClick={() => (on ? goTo(r!.paneId, workspaceId) : void run(a))}
         onContextMenu={() => rowMenu(a)}
       />
     );
@@ -202,7 +202,7 @@ export function ActionsView({ win }: WindowViewProps) {
     );
   };
 
-  if (!root) return <Panel><PanelBody><EmptyState compact icon="play.rectangle" title="No folder">This Space has no folder.</EmptyState></PanelBody></Panel>;
+  if (!root) return <Panel><PanelBody><EmptyState compact icon="play.rectangle" title="No folder">This workspace has no folder.</EmptyState></PanelBody></Panel>;
   if (!list) return <Panel><PanelBody>{error ? <EmptyState compact icon="exclamationmark.triangle" title="Can't read this folder">{error}</EmptyState> : null}</PanelBody></Panel>;
 
   const all = [...list.actions, ...list.history, ...list.suggested];
@@ -224,7 +224,7 @@ export function ActionsView({ win }: WindowViewProps) {
             <SearchField size="sm" fill value={query} onChange={setQuery} placeholder="Filter actions" onKeyDown={(k) => k.key === "Enter" && matches[0] && void run(matches[0])} />
           </div>
         )}
-        {list.checkout && (list.checkout.linked || list.root !== s.spaces.get(win.spaceId)?.root) && (
+        {list.checkout && (list.checkout.linked || list.root !== s.workspaces.get(win.workspaceId)?.root) && (
           <div className="wa-where" data-tip={`Actions of ${shortPath(list.root)}: they run there`}>
             <Icon name="arrow.triangle.branch" size={12} /> {list.checkout.branch ?? "detached"} · {shortPath(list.root)}
           </div>

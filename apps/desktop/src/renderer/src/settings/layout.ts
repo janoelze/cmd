@@ -41,7 +41,7 @@ export const SETTINGS_PAGES: Page[] = [
     title: "Windows",
     icon: "macwindow",
     sections: [
-      { title: "Spaces", items: ["spaces.ownWindow"] },
+      { title: "Workspaces", items: ["workspaces.ownWindow"] },
       { title: "Layout", items: ["ui.defaultView", "ui.gutter", "ui.paddingX", "ui.paddingY", "ui.windowRadius"] },
       { title: "Outline", items: ["ui.windowOutline", "ui.windowOutlineContrast", "ui.windowShadow", "ui.attentionOutline"] },
       { title: "Selected window", items: ["ui.focusOutline", "ui.focusColor", "ui.focusGlow", "ui.focusTitleBar", "ui.unfocusedDim", "ui.unfocusedDesaturation", "ui.showResources"] },

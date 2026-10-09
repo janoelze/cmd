@@ -203,7 +203,7 @@ export function TerminalScreen({ conn, item, control, onBack }: { conn: Connecti
             <Led light={item.light} /> <span>{item.title}</span>
           </div>
           <div className="term-state">
-            {item.space ? `${item.space} · ` : ""}
+            {item.workspace ? `${item.workspace} · ` : ""}
             {stateText(item)}
             {item.detail ? ` · ${item.detail}` : ""}
           </div>

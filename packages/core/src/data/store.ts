@@ -28,7 +28,7 @@ interface Before {
   text: string | null;
   data: string;
   parent_id: string | null;
-  space_id: string | null;
+  workspace_id: string | null;
   project_id: string | null;
   session_id: string | null;
   agent_id: string | null;
@@ -48,7 +48,7 @@ function unchanged(b: Before, e: StoreEvent, data: string, blob: string | null):
   if ((b.flags | (e.flags ?? 0)) !== b.flags) return false;
   const ids: [string | null, string | null | undefined][] = [
     [b.parent_id, e.parentId],
-    [b.space_id, e.spaceId],
+    [b.workspace_id, e.workspaceId],
     [b.project_id, e.projectId],
     [b.session_id, e.sessionId],
     [b.agent_id, e.agentId],
@@ -83,11 +83,34 @@ export class DataStore {
     this.#o = { ...DEFAULTS, ...o };
     this.db = new DatabaseSync(file, { timeout: 5000 });
     this.db.exec(SCHEMA_SQL);
+    this.#renameSpaces();
     this.db.exec(FTS_SQL);
     if (!this.#o.deferIndexes) this.ensureIndexes();
     if (!this.meta("schema")) {
       this.setMeta("schema", String(EVENTS_SCHEMA));
       this.setMeta("blobs.recounted", "1"); // counted right from the start
+    }
+  }
+
+  /** Before 0.24 workspaces were Spaces: the events' column, the open/close types, entities and links. The index comes back with ensureIndexes(). */
+  #renameSpaces(): void {
+    const old = () => !!this.db.prepare(`SELECT 1 FROM pragma_table_info('events') WHERE name = 'space_id'`).get();
+    if (!old()) return;
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      if (!old()) return void this.db.exec("ROLLBACK");
+      this.db.exec(`
+        DROP INDEX IF EXISTS events_space_at;
+        ALTER TABLE events RENAME COLUMN space_id TO workspace_id;
+        UPDATE events SET type = 'workspace' || substr(type, 6) WHERE type IN ('space.open', 'space.close');
+        UPDATE entities SET kind = 'workspace' WHERE kind = 'space';
+        UPDATE links SET from_kind = 'workspace' WHERE from_kind = 'space';
+        UPDATE links SET to_kind = 'workspace' WHERE to_kind = 'space';
+      `);
+      this.db.exec("COMMIT");
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
     }
   }
 
@@ -150,14 +173,14 @@ export class DataStore {
     const raw = e.content == null ? null : typeof e.content === "string" ? Buffer.from(e.content, "utf8") : e.content;
     const blob = raw ? hashOf(raw) : null;
     const data = JSON.stringify(e.data ?? null);
-    const before = this.#stmt(`SELECT seq, blob, at, until, text, json(data) AS data, parent_id, space_id, project_id, session_id, agent_id, pane_id, window_id, device_id, flags FROM events WHERE id = ?`).get(e.id) as Before | undefined;
+    const before = this.#stmt(`SELECT seq, blob, at, until, text, json(data) AS data, parent_id, workspace_id, project_id, session_id, agent_id, pane_id, window_id, device_id, flags FROM events WHERE id = ?`).get(e.id) as Before | undefined;
     // Handed in again with nothing new (a transcript read again, an archived copy): nothing written, not even
     // the blob's count. Every row written is a page in the WAL, and a re-read of the whole log churned gigabytes.
     if (before && unchanged(before, e, data, blob)) return { seq: before.seq, inserted: false };
     if (raw) this.#storeBlob(raw, blob!);
     const sameText = !!before && before.text === (e.text ?? null) && before.blob === blob;
     const r = this.#stmt(
-      `INSERT INTO events (id, at, until, type, v, source, recorded, parent_id, space_id, project_id, session_id, agent_id, pane_id, window_id, device_id, text, data, blob, flags)
+      `INSERT INTO events (id, at, until, type, v, source, recorded, parent_id, workspace_id, project_id, session_id, agent_id, pane_id, window_id, device_id, text, data, blob, flags)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          at = MIN(at, excluded.at),
@@ -166,7 +189,7 @@ export class DataStore {
          data = excluded.data,
          blob = COALESCE(excluded.blob, blob),
          parent_id = COALESCE(parent_id, excluded.parent_id),
-         space_id = COALESCE(space_id, excluded.space_id),
+         workspace_id = COALESCE(workspace_id, excluded.workspace_id),
          project_id = COALESCE(project_id, excluded.project_id),
          session_id = COALESCE(session_id, excluded.session_id),
          agent_id = COALESCE(agent_id, excluded.agent_id),
@@ -175,7 +198,7 @@ export class DataStore {
          device_id = COALESCE(device_id, excluded.device_id),
          flags = flags | excluded.flags
        RETURNING seq`,
-    ).get(e.id, Math.round(e.at), e.until == null ? null : Math.round(e.until), e.type, e.v ?? EVENT_V[e.type as DataEventType] ?? 1, e.source, this.#o.recordedBy, e.parentId ?? null, e.spaceId ?? null, e.projectId ?? null, e.sessionId ?? null, e.agentId ?? null, e.paneId ?? null, e.windowId ?? null, e.deviceId ?? null, e.text ?? null, data, blob, e.flags ?? 0) as { seq: number };
+    ).get(e.id, Math.round(e.at), e.until == null ? null : Math.round(e.until), e.type, e.v ?? EVENT_V[e.type as DataEventType] ?? 1, e.source, this.#o.recordedBy, e.parentId ?? null, e.workspaceId ?? null, e.projectId ?? null, e.sessionId ?? null, e.agentId ?? null, e.paneId ?? null, e.windowId ?? null, e.deviceId ?? null, e.text ?? null, data, blob, e.flags ?? 0) as { seq: number };
     // A new blob replaces the old one (the same one: putBlob counted it twice); without one the row keeps its blob.
     if (before?.blob && blob) this.#unref(before.blob);
     // The index follows text and content; the same words stay indexed as they are.
@@ -307,15 +330,15 @@ export class DataStore {
     this.db.exec(`INSERT INTO events_fts(events_fts) VALUES ('optimize')`);
   }
 
-  /** Events of these types matching an FTS5 expression, best first, with their bm25 (lower is better); `spaceId` narrows. */
-  matches(expression: string, types: string[], o: { spaceId?: string | null; limit?: number } = {}): { e: DataEvent; bm: number }[] {
-    const space = o.spaceId ? ` AND e.space_id = ?` : "";
+  /** Events of these types matching an FTS5 expression, best first, with their bm25 (lower is better); `workspaceId` narrows. */
+  matches(expression: string, types: string[], o: { workspaceId?: string | null; limit?: number } = {}): { e: DataEvent; bm: number }[] {
+    const workspace = o.workspaceId ? ` AND e.workspace_id = ?` : "";
     const rows = this.db
       .prepare(
         `SELECT e.*, json(e.data) AS data_json, bm25(events_fts, 3.0, 1.0) AS bm FROM events_fts JOIN events e ON e.seq = events_fts.rowid
-         WHERE events_fts MATCH ? AND e.type IN (${types.map(() => "?").join(",")})${space} ORDER BY bm LIMIT ?`,
+         WHERE events_fts MATCH ? AND e.type IN (${types.map(() => "?").join(",")})${workspace} ORDER BY bm LIMIT ?`,
       )
-      .all(expression, ...types, ...(o.spaceId ? [o.spaceId] : []), o.limit ?? 300) as unknown as (Row & { bm: number })[];
+      .all(expression, ...types, ...(o.workspaceId ? [o.workspaceId] : []), o.limit ?? 300) as unknown as (Row & { bm: number })[];
     return rows.map((r) => ({ e: toEvent(r), bm: r.bm }));
   }
 
@@ -376,7 +399,7 @@ export function logStats(db: DatabaseSync, file: string): DataStats {
   return { file: file === ":memory:" ? null : file, fileBytes, events, blobs, types, recent: { day, week }, oldest };
 }
 
-const COL = { sessionId: "session_id", agentId: "agent_id", projectId: "project_id", spaceId: "space_id", paneId: "pane_id", windowId: "window_id", parentId: "parent_id" } as const;
+const COL = { sessionId: "session_id", agentId: "agent_id", projectId: "project_id", workspaceId: "workspace_id", paneId: "pane_id", windowId: "window_id", parentId: "parent_id" } as const;
 
 /** WHERE clause and arguments for a query (without ORDER and LIMIT). */
 function conditions(q: DataQuery): [string, (string | number)[]] {
@@ -395,7 +418,7 @@ function conditions(q: DataQuery): [string, (string | number)[]] {
     for (const p of prefixes) args.push(p, `${p}￿`, ...range);
     where.push(`(${parts.join(" OR ")})`);
   } else if (q.at) where.push(`at >= ? AND at < ?`), args.push(q.at[0], q.at[1]);
-  for (const k of ["sessionId", "agentId", "projectId", "spaceId", "paneId", "windowId", "parentId"] as const) {
+  for (const k of ["sessionId", "agentId", "projectId", "workspaceId", "paneId", "windowId", "parentId"] as const) {
     const v = q[k];
     if (v) where.push(`${COL[k]} = ?`), args.push(v);
   }
@@ -414,7 +437,7 @@ interface Row {
   source: string;
   recorded: string;
   parent_id: string | null;
-  space_id: string | null;
+  workspace_id: string | null;
   project_id: string | null;
   session_id: string | null;
   agent_id: string | null;
@@ -444,7 +467,7 @@ function toEvent(r: Row): DataEvent {
     source: r.source,
     recorded: r.recorded,
     parentId: r.parent_id,
-    spaceId: r.space_id,
+    workspaceId: r.workspace_id,
     projectId: r.project_id,
     sessionId: r.session_id,
     agentId: r.agent_id,

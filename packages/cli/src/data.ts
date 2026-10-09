@@ -19,7 +19,7 @@ export const DATA_HELP = `  data stats                          what the event l
                                       events as they're recorded, one line each (Ctrl-C to stop)
   data ai [--since 30d]               model calls by purpose: how many, tokens in and out, failures, what was cut to fit
   data entities KIND [ID] [--limit N] [--json]
-                                      agents, sessions, projects, panes, windows, spaces: what they are and what they link to
+                                      agents, sessions, projects, panes, windows, workspaces: what they are and what they link to
   data forget [--session AGENT:ID] [--project PATH] [--before DATE] [--type T,…]
                                       delete what's named, for good; a forgotten session or project is never recorded again
   data rebuild turns|sessions         a view from the log again, with the current rules
@@ -55,7 +55,7 @@ function queryOf(opt: Record<string, unknown>): DataQuery {
   if (typeof opt.project === "string") q.projectId = `dir:${opt.project.replace(/^~/, process.env.HOME ?? "~")}`;
   if (typeof opt.session === "string") q.sessionId = opt.session;
   if (typeof opt.agent === "string") q.agentId = opt.agent;
-  if (typeof opt.space === "string") q.spaceId = opt.space;
+  if (typeof opt.workspace === "string") q.workspaceId = opt.workspace;
   if (typeof opt.text === "string") q.text = opt.text;
   if (typeof opt.limit === "string") q.limit = Math.max(1, Number(opt.limit));
   return q;
@@ -116,7 +116,7 @@ export async function dataCommand(client: Client, pos: string[], opt: Record<str
     }
     case "entities": {
       const [kind, id] = rest;
-      if (!kind) throw new Error("usage: cmd data entities KIND [ID]   (agent, session, project, pane, window, space)");
+      if (!kind) throw new Error("usage: cmd data entities KIND [ID]   (agent, session, project, pane, window, workspace)");
       const list = await client.call("data.entities", { kind, id, limit: typeof opt.limit === "string" ? Number(opt.limit) : 20 });
       if (json) return console.log(JSON.stringify(list, null, 2)), 0;
       for (const e of list) {

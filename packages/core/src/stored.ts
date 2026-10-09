@@ -5,7 +5,7 @@
 // skipped with a warning: losing one record beats a core that can't start.
 // Fields the defaults don't know (written by a newer cmd) are kept as they are.
 
-import type { Agent, AgentHome, AgentTurn, AppWindow, Space, TurnFile } from "@cmd/protocol";
+import type { Agent, AgentHome, AgentTurn, AppWindow, Workspace, TurnFile } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { PaneRecord } from "./panes.ts";
 import type { TranscriptRoot } from "./search/sources.ts";
@@ -123,7 +123,7 @@ export const decodeAgent = decoder<Agent>(
   {
     id: "",
     paneId: null,
-    spaceId: "",
+    workspaceId: "",
     kind: "claude",
     name: null,
     cwd: "",
@@ -155,7 +155,7 @@ export const decodePane = decoder<PaneRecord>(
 
   {
     id: "",
-    spaceId: "",
+    workspaceId: "",
     title: "",
     cwd: "",
     shell: "",
@@ -171,12 +171,12 @@ export const decodePane = decoder<PaneRecord>(
   ["id"],
 );
 
-export const decodeSpace = decoder<Space>(
+export const decodeWorkspace = decoder<Workspace>(
   { id: "", name: "", root: "", home: false, icon: null, order: 0, closedAt: null, createdAt: 0, lastActiveAt: 0, view: {} },
   ["id", "root"],
 );
 
-export const decodeWindow = decoder<AppWindow>({ id: "", spaceId: "", kind: "", title: "", createdAt: 0, updatedAt: 0, state: {} }, ["id", "kind"]);
+export const decodeWindow = decoder<AppWindow>({ id: "", workspaceId: "", kind: "", title: "", createdAt: 0, updatedAt: 0, state: {} }, ["id", "kind"]);
 
 export const decodeHome = decoder<AgentHome>({ agent: "claude", dir: "", via: [], env: null, firstSeen: 0, lastSeen: 0 }, ["agent", "dir"]);
 

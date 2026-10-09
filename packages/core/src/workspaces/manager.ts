@@ -1,28 +1,28 @@
-// Spaces: a directory you work in, with its terminals, agents and windows
-// (docs/11-spaces.md). Identity is the canonical root, so opening a folder is
+// Workspaces: a directory you work in, with its terminals, agents and windows
+// (docs/11-workspaces.md). Identity is the canonical root, so opening a folder is
 // attach-or-create. Home (rooted at the home folder) always exists and catches
-// everything without a better Space. Closed Spaces are kept as recent ones.
+// everything without a better workspace. Closed workspaces are kept as recent ones.
 
 import fs from "node:fs";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { HOME_SPACE_ID, ICON_NAME, type Space, type SpaceId } from "@cmd/protocol";
+import { HOME_WORKSPACE_ID, ICON_NAME, type Workspace, type WorkspaceId } from "@cmd/protocol";
 import type { Store } from "../store.ts";
 import { placeOf } from "../checkout.ts";
 import { canonical, deepest, gitRoot, nameFor } from "./paths.ts";
 
 const VIEW_MAX = 256 * 1024;
 
-/** The checkout a Space's root is in, without its branch (docs/35); none for Home, whose rows always say where they are. */
-function gitOf(s: Pick<Space, "root" | "home">): Space["git"] {
+/** The checkout a workspace's root is in, without its branch (docs/35); none for Home, whose rows always say where they are. */
+function gitOf(s: Pick<Workspace, "root" | "home">): Workspace["git"] {
   if (s.home) return null;
   const at = placeOf(s.root);
   return at && { project: at.project, top: at.top, linked: at.linked };
 }
 
-export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [SpaceId] }> {
-  #spaces = new Map<SpaceId, Space>();
+export class WorkspaceManager extends EventEmitter<{ updated: [Workspace]; removed: [WorkspaceId] }> {
+  #workspaces = new Map<WorkspaceId, Workspace>();
   #store: Store | null;
   #home: string;
 
@@ -30,13 +30,13 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     super();
     this.#store = store;
     this.#home = canonical(home, "/", home);
-    // Older records: no icon yet, and a hue Spaces no longer have.
-    for (const { hue: _, ...s } of (store?.spaces() ?? []) as (Space & { hue?: number })[]) this.#spaces.set(s.id, { ...s, icon: s.icon ?? null, git: gitOf(s) });
-    const h = this.#spaces.get(HOME_SPACE_ID);
+    // Older records: no icon yet, and a hue workspaces no longer have.
+    for (const { hue: _, ...s } of (store?.workspaces() ?? []) as (Workspace & { hue?: number })[]) this.#workspaces.set(s.id, { ...s, icon: s.icon ?? null, git: gitOf(s) });
+    const h = this.#workspaces.get(HOME_WORKSPACE_ID);
     if (!h || h.root !== this.#home || h.closedAt !== null) {
       const now = Date.now();
       this.#save({
-        id: HOME_SPACE_ID,
+        id: HOME_WORKSPACE_ID,
         name: "Home",
         root: this.#home,
         home: true,
@@ -51,9 +51,9 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     }
   }
 
-  /** Notes Spaces whose folder went away or came back (docs/35); a folder that came back gets its checkout read again. */
+  /** Notes workspaces whose folder went away or came back (docs/35); a folder that came back gets its checkout read again. */
   check(): void {
-    for (const s of this.#spaces.values()) {
+    for (const s of this.#workspaces.values()) {
       if (s.home) continue;
       let gone = true;
       try {
@@ -69,33 +69,33 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     }
   }
 
-  get(id: SpaceId): Space | undefined {
-    return this.#spaces.get(id);
+  get(id: WorkspaceId): Workspace | undefined {
+    return this.#workspaces.get(id);
   }
 
-  home(): Space {
-    return this.#spaces.get(HOME_SPACE_ID)!;
+  home(): Workspace {
+    return this.#workspaces.get(HOME_WORKSPACE_ID)!;
   }
 
-  /** Open Spaces in switcher order; closed: the closed ones too, after them, most recent first. */
-  list(closed = false): Space[] {
+  /** Open workspaces in switcher order; closed: the closed ones too, after them, most recent first. */
+  list(closed = false): Workspace[] {
     // The picker asks for closed ones too: a good moment to see what's gone.
     if (closed) this.check();
-    const all = [...this.#spaces.values()];
+    const all = [...this.#workspaces.values()];
     const open = all.filter((s) => s.closedAt === null).sort((a, b) => a.order - b.order);
     if (!closed) return open.map((s) => ({ ...s }));
     const recent = all.filter((s) => s.closedAt !== null).sort((a, b) => b.closedAt! - a.closedAt!);
     return [...open, ...recent].map((s) => ({ ...s }));
   }
 
-  /** Canonical root for an open request (see space.open). */
+  /** Canonical root for an open request (see workspace.open). */
   rootFor(p: string, cwd?: string, git = false): string {
     const c = canonical(p, cwd ?? this.#home, this.#home);
     return (git && gitRoot(c)) || c;
   }
 
-  /** Attach-or-create by root; a closed Space with this root is reopened. The root must be an existing folder. */
-  open(p: string, o: { cwd?: string; gitRoot?: boolean } = {}): { space: Space; created: boolean } {
+  /** Attach-or-create by root; a closed workspace with this root is reopened. The root must be an existing folder. */
+  open(p: string, o: { cwd?: string; gitRoot?: boolean } = {}): { workspace: Workspace; created: boolean } {
     const root = this.rootFor(p, o.cwd, o.gitRoot);
     let st: fs.Stats;
     try {
@@ -105,7 +105,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     }
     if (!st.isDirectory()) throw new Error(`not a folder: ${root}`);
     const now = Date.now();
-    const existing = [...this.#spaces.values()].find((s) => s.root === root);
+    const existing = [...this.#workspaces.values()].find((s) => s.root === root);
     if (existing) {
       if (existing.closedAt !== null) {
         existing.closedAt = null;
@@ -115,10 +115,10 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
       existing.git = gitOf(existing);
       delete existing.gone;
       this.#save(existing);
-      return { space: { ...existing }, created: false };
+      return { workspace: { ...existing }, created: false };
     }
     const name = nameFor(root);
-    const space: Space = {
+    const workspace: Workspace = {
       id: randomUUID(),
       name,
       root,
@@ -131,31 +131,31 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
       view: {},
       git: null,
     };
-    space.git = gitOf(space);
-    this.#save(space);
-    return { space: { ...space }, created: true };
+    workspace.git = gitOf(workspace);
+    this.#save(workspace);
+    return { workspace: { ...workspace }, created: true };
   }
 
   /**
-   * The open Space a path belongs to: the one whose root most deeply contains it
-   * (nested Spaces win over their parents), else Home.
+   * The open workspace a path belongs to: the one whose root most deeply contains it
+   * (nested workspaces win over their parents), else Home.
    */
-  match(p: string, cwd?: string): Space {
+  match(p: string, cwd?: string): Workspace {
     const c = canonical(p, cwd ?? this.#home, this.#home);
     return { ...(deepest(this.#open(), c) ?? this.home()) };
   }
 
-  /** The open Space an already canonical path belongs to, as `match` decides, without touching the disk (no path: Home). */
-  of(p: string | null): SpaceId {
-    return (p && deepest(this.#open(), p)?.id) || HOME_SPACE_ID;
+  /** The open workspace an already canonical path belongs to, as `match` decides, without touching the disk (no path: Home). */
+  of(p: string | null): WorkspaceId {
+    return (p && deepest(this.#open(), p)?.id) || HOME_WORKSPACE_ID;
   }
 
-  update(id: SpaceId, patch: { name?: string; icon?: string | null; order?: number; view?: Record<string, unknown>; active?: boolean }): Space {
+  update(id: WorkspaceId, patch: { name?: string; icon?: string | null; order?: number; view?: Record<string, unknown>; active?: boolean }): Workspace {
     const s = this.#must(id);
     if (patch.active) s.lastActiveAt = Date.now();
     if (patch.name !== undefined) {
       const name = patch.name.trim().slice(0, 100);
-      if (!name) throw new Error("a Space needs a name");
+      if (!name) throw new Error("a workspace needs a name");
       s.name = name;
     }
     if (patch.icon !== undefined) {
@@ -169,7 +169,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
         if (v === null || v === undefined) delete view[k];
         else view[k] = v;
       }
-      if (JSON.stringify(view).length > VIEW_MAX) throw new Error("space.update: view too large");
+      if (JSON.stringify(view).length > VIEW_MAX) throw new Error("workspace.update: view too large");
       s.view = view;
     }
     this.#save(s);
@@ -177,7 +177,7 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
   }
 
   /** Mark closed; the caller has already removed its terminals and windows. */
-  markClosed(id: SpaceId): void {
+  markClosed(id: WorkspaceId): void {
     const s = this.#must(id);
     if (s.home) throw new Error("Home can't be closed");
     if (s.closedAt !== null) return;
@@ -185,38 +185,38 @@ export class SpaceManager extends EventEmitter<{ updated: [Space]; removed: [Spa
     this.#save(s);
   }
 
-  forget(id: SpaceId): void {
+  forget(id: WorkspaceId): void {
     const s = this.#must(id);
-    if (s.closedAt === null) throw new Error("close the Space before forgetting it");
-    this.#spaces.delete(id);
-    this.#store?.deleteSpace(id);
+    if (s.closedAt === null) throw new Error("close the workspace before forgetting it");
+    this.#workspaces.delete(id);
+    this.#store?.deleteWorkspace(id);
     this.emit("removed", id);
   }
 
-  /** An open Space by id; throws for unknown or closed ones. */
-  mustOpen(id: SpaceId): Space {
+  /** An open workspace by id; throws for unknown or closed ones. */
+  mustOpen(id: WorkspaceId): Workspace {
     const s = this.#must(id);
-    if (s.closedAt !== null) throw new Error(`Space is closed: ${s.name}`);
+    if (s.closedAt !== null) throw new Error(`Workspace is closed: ${s.name}`);
     return s;
   }
 
-  #open(): Space[] {
-    return [...this.#spaces.values()].filter((s) => s.closedAt === null);
+  #open(): Workspace[] {
+    return [...this.#workspaces.values()].filter((s) => s.closedAt === null);
   }
 
   #nextOrder(): number {
     return Math.max(0, ...this.#open().map((s) => s.order)) + 1;
   }
 
-  #must(id: SpaceId): Space {
-    const s = this.#spaces.get(id);
-    if (!s) throw new Error(`no such Space: ${id}`);
+  #must(id: WorkspaceId): Workspace {
+    const s = this.#workspaces.get(id);
+    if (!s) throw new Error(`no such workspace: ${id}`);
     return s;
   }
 
-  #save(s: Space): void {
-    this.#spaces.set(s.id, s);
-    this.#store?.saveSpace(s);
+  #save(s: Workspace): void {
+    this.#workspaces.set(s.id, s);
+    this.#store?.saveWorkspace(s);
     this.emit("updated", { ...s });
   }
 }

@@ -10,10 +10,10 @@ import path from "node:path";
 import os from "node:os";
 import { EventEmitter } from "node:events";
 import { logger } from "@cmd/protocol/node";
-import type { Attention, Pane, PaneId, PaneUsage, Progress, Settings, SpaceId } from "@cmd/protocol";
+import type { Attention, Pane, PaneId, PaneUsage, Progress, Settings, WorkspaceId } from "@cmd/protocol";
 import { usageChanged } from "./resources.ts";
 import { placeOf, samePlace } from "./checkout.ts";
-import { DEFAULT_SETTINGS, ENV, HOME_SPACE_ID } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, ENV, HOME_WORKSPACE_ID } from "@cmd/protocol";
 import { DEVICE_REPLIES, OscScanner, type OscEvent } from "./osc.ts";
 import { agentVersion, classify, displayName, type Classification, type ForegroundInfo } from "./agents/procinfo.ts";
 import type { Store } from "./store.ts";
@@ -45,7 +45,7 @@ export type Inspector = (shellPid: number) => Promise<ForegroundInfo | null>;
 /** What the store keeps of a pane to reattach or resurrect it (see restore.ts). */
 export interface PaneRecord {
   id: PaneId;
-  spaceId: SpaceId;
+  workspaceId: WorkspaceId;
   title: string;
   cwd: string;
   shell: string;
@@ -165,8 +165,8 @@ export interface PaneManagerOptions {
 }
 
 export interface CreatePaneOptions {
-  /** Default: Home. The core resolves the Space before creating (see Placement). */
-  spaceId?: SpaceId;
+  /** Default: Home. The core resolves the workspace before creating (see Placement). */
+  workspaceId?: WorkspaceId;
   cwd?: string;
   command?: string;
   cols?: number;
@@ -309,7 +309,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     const now = Date.now();
     const pane: Pane = {
       id,
-      spaceId: opts.spaceId ?? HOME_SPACE_ID,
+      workspaceId: opts.workspaceId ?? HOME_WORKSPACE_ID,
       title: opts.restored?.title ?? (shellName(shell) || "shell"),
       cwd,
       shell,
@@ -342,7 +342,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     const now = Date.now();
     const pane: Pane = {
       id: term.id,
-      spaceId: rec?.spaceId ?? HOME_SPACE_ID,
+      workspaceId: rec?.workspaceId ?? HOME_WORKSPACE_ID,
       title: rec?.title ?? (shellName(shell) || "shell"),
       cwd: rec?.cwd ?? os.homedir(),
       shell,
@@ -550,10 +550,10 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     return [...this.#panes.values()].map((l) => ({ ...l.pane }));
   }
 
-  setSpace(id: PaneId, spaceId: SpaceId): void {
+  setWorkspace(id: PaneId, workspaceId: WorkspaceId): void {
     const l = this.#panes.get(id);
-    if (!l || l.pane.spaceId === spaceId) return;
-    l.pane.spaceId = spaceId;
+    if (!l || l.pane.workspaceId === workspaceId) return;
+    l.pane.workspaceId = workspaceId;
     this.#changed(l);
   }
 
@@ -733,7 +733,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     const size = this.#overrides.get(p.id)?.desktop ?? p;
     return {
       id: p.id,
-      spaceId: p.spaceId,
+      workspaceId: p.workspaceId,
       title: p.title,
       cwd: p.cwd,
       shell: p.shell,

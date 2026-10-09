@@ -1,4 +1,4 @@
-// What Visualizer windows listen to: one AudioContext for this page (a Space's
+// What Visualizer windows listen to: one AudioContext for this page (a workspace's
 // windows share it) and the sources it can tap.
 //   "none"        silence
 //   "mic"         the default input (macOS asks once; NSMicrophoneUsageDescription)
@@ -8,7 +8,7 @@
 // never played back. A tap reads 1024 samples per channel each frame, the
 // shape butterchurn's audioLevels takes. A window's sound is made in its own
 // sandboxed frame, so it publishes those samples, not an audio node, and is
-// told when someone listens (it only sends them then). Windows in other Spaces are other
+// told when someone listens (it only sends them then). Windows in other workspaces are other
 // pages: their sound can't be tapped from here.
 
 export const FFT_SIZE = 1024;

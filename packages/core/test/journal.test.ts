@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { JournalEvent, Space } from "@cmd/protocol";
+import type { JournalEvent, Workspace } from "@cmd/protocol";
 import { Core } from "../src/core.ts";
 import { digest } from "../src/journal/digest.ts";
 import { gitEvents, gitStamp, parseReflog } from "../src/journal/git.ts";
@@ -32,7 +32,7 @@ const note = (at: number, key: string, o: Partial<NewJournalEvent> = {}): NewJou
   until: null,
   kind: "note",
   key,
-  spaceId: null,
+  workspaceId: null,
   repo: null,
   cwd: null,
   thread: null,
@@ -192,12 +192,12 @@ describe("journal writer", () => {
 });
 
 describe("journal service", () => {
-  const space: Space = { id: "shop", name: "Shopfront", root: "/Users/sam/src/shopfront", home: false, icon: null, order: 0, closedAt: null, createdAt: 0, lastActiveAt: 0, view: {} } as unknown as Space;
+  const workspace: Workspace = { id: "shop", name: "Shopfront", root: "/Users/sam/src/shopfront", home: false, icon: null, order: 0, closedAt: null, createdAt: 0, lastActiveAt: 0, view: {} } as unknown as Workspace;
 
   function service(ai: JournalAi | null) {
     const store = new JournalStore();
     store.recordAll(syntheticDay(DAY));
-    return new JournalService({ store, spaces: () => [space], agentSpace: () => null, ai, now: () => to + 3 * 86400_000 });
+    return new JournalService({ store, workspaces: () => [workspace], agentWorkspace: () => null, ai, now: () => to + 3 * 86400_000 });
   }
 
   it("writes a day once, until its events change", async () => {
@@ -219,13 +219,13 @@ describe("journal service", () => {
   });
 
   it("writes no day without a model", async () => {
-    expect(await service(null).day("space:shop", new Date(DAY).setHours(0, 0, 0, 0))).toBeNull();
+    expect(await service(null).day("workspace:shop", new Date(DAY).setHours(0, 0, 0, 0))).toBeNull();
   });
 
-  it("keeps a Space to its own projects", async () => {
+  it("keeps a workspace to its own projects", async () => {
     let prompt = "";
     const ai: JournalAi = { modelName: () => "Model", object: async <T,>(o: { prompt: string }) => ((prompt = o.prompt), { value: { headline: "", entries: [] } as T, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }, model: "m" }) };
-    await service(ai).day("space:shop", new Date(DAY).setHours(0, 0, 0, 0));
+    await service(ai).day("workspace:shop", new Date(DAY).setHours(0, 0, 0, 0));
     expect(prompt).toContain("v2.3.0");
     expect(prompt).not.toContain("dotfiles");
   });
@@ -235,7 +235,7 @@ describe("journal service", () => {
     const date = j.dayOf(from + 3600_000);
     const pool = j.store.events({ since: from - 30 * 86400_000, limit: Number.MAX_SAFE_INTEGER });
     for (const d of [date, date - 86400_000, date + 86400_000])
-      for (const scope of ["all", "space:shop"]) {
+      for (const scope of ["all", "workspace:shop"]) {
         const one = j.threads(scope, d);
         const pooled = j.threads(scope, d, pool);
         expect(pooled.events).toEqual(one.events);
@@ -246,8 +246,8 @@ describe("journal service", () => {
   it("reads git at most once a minute for the widget, and skips repositories that didn't change", async () => {
     let now = 100 * 86400_000;
     const read: string[] = [];
-    const stamps: Record<string, string> = { [space.root]: "a" };
-    const j = new JournalService({ store: new JournalStore(), spaces: () => [space], agentSpace: () => null, ai: null, now: () => now, git: async (repo) => (read.push(repo), []), gitStamp: async (repo) => stamps[repo] ?? null });
+    const stamps: Record<string, string> = { [workspace.root]: "a" };
+    const j = new JournalService({ store: new JournalStore(), workspaces: () => [workspace], agentWorkspace: () => null, ai: null, now: () => now, git: async (repo) => (read.push(repo), []), gitStamp: async (repo) => stamps[repo] ?? null });
     await j.sync();
     expect(read).toHaveLength(1);
     await j.sync(SYNC_FRESH_MS);
@@ -255,7 +255,7 @@ describe("journal service", () => {
     await j.sync();
     expect(read).toHaveLength(1); // synced, but nothing changed
     now += SYNC_FRESH_MS;
-    stamps[space.root] = "b";
+    stamps[workspace.root] = "b";
     await j.sync(SYNC_FRESH_MS);
     expect(read).toHaveLength(2);
   });
@@ -273,12 +273,12 @@ describe("journal service", () => {
 });
 
 describe("journal versions", () => {
-  const space: Space = { id: "shop", name: "Shopfront", root: "/Users/sam/src/shopfront" } as unknown as Space;
+  const workspace: Workspace = { id: "shop", name: "Shopfront", root: "/Users/sam/src/shopfront" } as unknown as Workspace;
   const written = (headline: string) => ({ value: { headline, entries: [] }, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }, model: "m" });
 
   function service(store: JournalStore, now: number, onWrite: () => void) {
     const ai: JournalAi = { modelName: () => "Model", object: async <T,>() => (onWrite(), written("New rules.") as unknown as { value: T; usage: { input: number; output: number; cacheRead: number; cacheWrite: number }; model: string }) };
-    return new JournalService({ store, spaces: () => [space], agentSpace: () => null, ai, now: () => now });
+    return new JournalService({ store, workspaces: () => [workspace], agentWorkspace: () => null, ai, now: () => now });
   }
 
   it("records the days' schema, and which cmd wrote each event", () => {
@@ -358,7 +358,7 @@ describe("journal versions", () => {
   it("reads git again when the sources format changed, then only what's new", async () => {
     const store = new JournalStore();
     const asked: number[] = [];
-    const make = () => new JournalService({ store, spaces: () => [space], agentSpace: () => null, ai: null, now: () => 100 * 86400_000, git: async (_repo, since) => (asked.push(since), []) });
+    const make = () => new JournalService({ store, workspaces: () => [workspace], agentWorkspace: () => null, ai: null, now: () => 100 * 86400_000, git: async (_repo, since) => (asked.push(since), []) });
     await make().sync();
     expect(asked[0]).toBe(10 * 86400_000); // 90 days back
     expect(store.meta("sources.format")).toBe(String(SOURCES_FORMAT));
@@ -371,7 +371,7 @@ describe("journal versions", () => {
 });
 
 describe("journal weeks", () => {
-  const space: Space = { id: "shop", name: "Shopfront", root: "/Users/sam/src/shopfront", home: false, icon: null, order: 0, closedAt: null, createdAt: 0, lastActiveAt: 0, view: {} } as unknown as Space;
+  const workspace: Workspace = { id: "shop", name: "Shopfront", root: "/Users/sam/src/shopfront", home: false, icon: null, order: 0, closedAt: null, createdAt: 0, lastActiveAt: 0, view: {} } as unknown as Workspace;
   const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 };
 
   it("rolls a week up from its days, keeps it until a day changes, and gathers what the model left out", async () => {
@@ -390,7 +390,7 @@ describe("journal weeks", () => {
     const store = new JournalStore();
     store.recordAll(syntheticDay(DAY));
     const now = to + 3 * 86400_000;
-    const j = new JournalService({ store, spaces: () => [space], agentSpace: () => null, ai, now: () => now });
+    const j = new JournalService({ store, workspaces: () => [workspace], agentWorkspace: () => null, ai, now: () => now });
     const w = (await j.week("all", from + 3600_000))!;
     expect(w.headline).toBe("A week.");
     expect(w.themes[0]).toMatchObject({ title: "Checkout work", entries: [{ day: j.dayOf(from + 3600_000) }] }); // E99 dropped

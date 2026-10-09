@@ -21,7 +21,7 @@ import {
   youtubeType,
   type WindowType,
 } from "../src/windows/index.ts";
-import { SpaceManager } from "../src/spaces/manager.ts";
+import { WorkspaceManager } from "../src/workspaces/manager.ts";
 import { fakeFactory } from "./fake-pty.ts";
 
 const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-win-")));
@@ -30,7 +30,7 @@ const file = (name: string, content: string | Buffer) => {
   fs.writeFileSync(p, content);
   return p;
 };
-const space = new SpaceManager(null, dir).home();
+const workspace = new WorkspaceManager(null, dir).home();
 const builtins = () => {
   const t = new WindowTypes();
   registerBuiltins(t);
@@ -105,7 +105,7 @@ describe("window type registry", () => {
     expect(t.resolve(targetFor(path.join(dir, "notes.md"))!)?.kind).toBe("markdown-preview");
     expect(t.resolve(targetFor(path.join(dir, "README"))!)?.kind).toBe("text"); // others unchanged
     const { wins } = make(t, {}, path.join(dir, "plugin.sqlite"));
-    const w = wins.openTarget(path.join(dir, "notes.md"), space)!;
+    const w = wins.openTarget(path.join(dir, "notes.md"), workspace)!;
     expect(w).toMatchObject({ kind: "markdown-preview", title: "Preview", state: { path: path.join(dir, "notes.md") } });
     expect(t.info().find((i) => i.kind === "markdown-preview")).toMatchObject({ icon: "doc.richtext", opens: { extensions: ["md"] } });
   });
@@ -133,12 +133,12 @@ describe("window manager", () => {
   it("opens windows with type-owned state, persists them, applies updates through the type", () => {
     const db = path.join(dir, "persist.sqlite");
     const { wins } = make(builtins(), {}, db);
-    const b = wins.open("browser", { url: "localhost:5173" }, space);
-    const f = wins.open("files", { path: dir }, space);
+    const b = wins.open("browser", { url: "localhost:5173" }, workspace);
+    const f = wins.open("files", { path: dir }, workspace);
     expect(b).toMatchObject({ kind: "browser", state: { url: "http://localhost:5173" } });
     expect(f).toMatchObject({ kind: "files", state: { path: dir }, title: path.basename(dir) });
     wins.update(b.id, { state: { url: "example.com" }, title: "Example" });
-    expect(() => wins.open("nope", {}, space)).toThrow(/unknown window type/);
+    expect(() => wins.open("nope", {}, workspace)).toThrow(/unknown window type/);
 
     const again = make(builtins(), {}, db).wins; // a restarted core
     expect(again.others().find((w) => w.id === b.id)).toMatchObject({ state: { url: "https://example.com" }, title: "Example" });
@@ -148,7 +148,7 @@ describe("window manager", () => {
 
   it("keeps a browser window's device size until it is cleared", () => {
     const { wins } = make(builtins(), {}, path.join(dir, "device.sqlite"));
-    const b = wins.open("browser", { url: "example.com" }, space);
+    const b = wins.open("browser", { url: "example.com" }, workspace);
     expect(wins.update(b.id, { state: { device: "iphone-16" } }).state).toEqual({ url: "https://example.com", device: "iphone-16" });
     expect(wins.update(b.id, { state: { url: "localhost:3000" } }).state).toMatchObject({ device: "iphone-16" });
     expect(wins.update(b.id, { state: { device: null } }).state).toEqual({ url: "http://localhost:3000" });
@@ -157,7 +157,7 @@ describe("window manager", () => {
   it("switches a window's type in place (Markdown ⇄ text), keeping its id", () => {
     const { wins } = make(builtins(), {}, path.join(dir, "switch.sqlite"));
     const md = file("readme.md", "# Title");
-    const w = wins.openTarget(md, space)!;
+    const w = wins.openTarget(md, workspace)!;
     expect(w.kind).toBe("markdown");
     const t = wins.update(w.id, { kind: "text" });
     expect(t).toMatchObject({ id: w.id, kind: "text", state: { path: md } });
@@ -167,9 +167,9 @@ describe("window manager", () => {
 
   it("opens JSON and JSON Lines as a tree that switches to the editor at a line", () => {
     const { wins } = make(builtins(), {}, path.join(dir, "json.sqlite"));
-    for (const name of ["data.json", "log.jsonl", "events.ndjson", "tsconfig.jsonc"]) expect(wins.openTarget(file(name, "{}"), space)!.kind).toBe("json");
+    for (const name of ["data.json", "log.jsonl", "events.ndjson", "tsconfig.jsonc"]) expect(wins.openTarget(file(name, "{}"), workspace)!.kind).toBe("json");
     const j = file("package.json", '{"name":"cmd"}');
-    const w = wins.openTarget(j, space)!;
+    const w = wins.openTarget(j, workspace)!;
     expect(w).toMatchObject({ kind: "json", title: "package.json", state: { path: j } });
     const t = wins.update(w.id, { kind: "text", state: { reveal: { line: 3, column: null, text: null, at: 1 } } });
     expect(t).toMatchObject({ id: w.id, kind: "text", state: { path: j, reveal: { line: 3 } } });
@@ -179,8 +179,8 @@ describe("window manager", () => {
 
   it("opens untitled text windows that keep a draft until saved to a file", () => {
     const { wins } = make(builtins(), {}, path.join(dir, "untitled.sqlite"));
-    const w = wins.open("text", {}, space);
-    expect(w).toMatchObject({ kind: "text", title: "Untitled", state: { path: "", dir: path.resolve(space.root), draft: "" } });
+    const w = wins.open("text", {}, workspace);
+    expect(w).toMatchObject({ kind: "text", title: "Untitled", state: { path: "", dir: path.resolve(workspace.root), draft: "" } });
     expect(wins.update(w.id, { state: { draft: "hello" } }).state).toMatchObject({ draft: "hello" });
     const saved = file("saved.txt", "hello");
     expect(wins.update(w.id, { state: { path: saved } })).toMatchObject({ title: "saved.txt", state: { path: saved } });
@@ -189,7 +189,7 @@ describe("window manager", () => {
 
   it("treats panes as terminal windows", () => {
     const { wins, panes } = make(builtins(), {}, path.join(dir, "term.sqlite"));
-    const t = wins.open("terminal", { cwd: dir }, space);
+    const t = wins.open("terminal", { cwd: dir }, workspace);
     expect(t).toMatchObject({ kind: "terminal", state: { paneId: t.id } });
     wins.close(t.id);
     expect(panes.get(t.id)).toBeNull();

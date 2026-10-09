@@ -309,24 +309,24 @@ export const sqliteType: WindowType<{ path: string; table?: string; tab?: string
  * Built-in widgets (docs/16-widgets.md): native views over what the core
  * already knows, offered in the Widget Library, not the File menu.
  */
-export const agentsType: WindowType<{ scope: "space" | "all" }> = {
+export const agentsType: WindowType<{ scope: "workspace" | "all" }> = {
   kind: "agents",
   title: "Agent Activity",
   icon: "person.2",
   role: "widget",
   description: "Every agent at a glance: who is working, who waits for you, what just finished.",
   create(input) {
-    return { state: { scope: input.scope === "all" ? "all" : "space" }, title: "Agent Activity" };
+    return { state: { scope: input.scope === "all" ? "all" : "workspace" }, title: "Agent Activity" };
   },
   update(state, patch) {
-    return { state: patch.scope === "all" || patch.scope === "space" ? { ...state, scope: patch.scope } : state };
+    return { state: patch.scope === "all" || patch.scope === "workspace" ? { ...state, scope: patch.scope } : state };
   },
 };
 
-type Scope = "space" | "all";
-const scopeOf = (v: unknown, fallback: Scope = "space"): Scope => (v === "all" || v === "space" ? v : fallback);
+type Scope = "workspace" | "all";
+const scopeOf = (v: unknown, fallback: Scope = "workspace"): Scope => (v === "all" || v === "workspace" ? v : fallback);
 
-/** A built-in widget showing its Space's things or every Space's, plus on/off `flags` (e.g. Failed Only). */
+/** A built-in widget showing its workspace's things or every workspace's, plus on/off `flags` (e.g. Failed Only). */
 function scopedWidget(kind: string, title: string, icon: string, description: string, flags: string[] = []): WindowType<{ scope: Scope } & Record<string, unknown>> {
   return {
     kind,
@@ -386,7 +386,7 @@ export function durationLabel(s: number): string {
 /**
  * A countdown. `duration` (s) is what it counts from; running, `endsAt` is when
  * it ends; paused, `left` (s) is what is left; `rang` is when it last ended. The
- * core rings it (timers.ts), so it ends on time in any Space, app open or not.
+ * core rings it (timers.ts), so it ends on time in any workspace, app open or not.
  */
 export interface TimerState extends Record<string, unknown> {
   duration: number;
@@ -527,7 +527,7 @@ export const jamType: WindowType<{ code: string; path: string; versions: JamVers
   },
 };
 
-/** What changed in a repository, under a folder (default: the Space's root), as it changes. */
+/** What changed in a repository, under a folder (default: the workspace's root), as it changes. */
 export const diffType: WindowType<{ path: string }> = {
   kind: "diff",
   title: "Live Diff",
@@ -550,8 +550,8 @@ export const diffType: WindowType<{ path: string }> = {
 
 /**
  * Workspace Actions (docs/39): how to run the project in a folder. `path` unset:
- * the checkout of the terminal selected last in the Space (a worktree), else the
- * Space's root (`follow: false`: always the root). The app resolves which.
+ * the checkout of the terminal selected last in the workspace (a worktree), else the
+ * Workspace's root (`follow: false`: always the root). The app resolves which.
  */
 export const actionsType: WindowType<{ path?: string; follow?: boolean; toggled?: string[] }> = {
   kind: "actions",
@@ -567,7 +567,7 @@ export const actionsType: WindowType<{ path?: string; follow?: boolean; toggled?
     const next = { ...state };
     if (patch.path === null) delete next.path;
     else if (typeof patch.path === "string") next.path = path.resolve(expandHome(patch.path));
-    // Without a path: follow the selected terminal's checkout (default), or stay on the Space's folder.
+    // Without a path: follow the selected terminal's checkout (default), or stay on the workspace's folder.
     if (typeof patch.follow === "boolean") next.follow = patch.follow;
     // Sections opened or closed against their default.
     if (Array.isArray(patch.toggled)) next.toggled = patch.toggled.filter((x): x is string => typeof x === "string").slice(0, 100);
@@ -658,15 +658,15 @@ export const youtubeType: WindowType<YouTubeRef & { fill?: boolean }> = {
 
 /**
  * The Navigator (docs/21-sidebars.md): what the app's sidebar used to be, as a
- * widget. Search, then the Space's agents, windows and widgets and recent
- * sessions; docked left in every Space by default. Its data is the renderer's.
+ * widget. Search, then the workspace's agents, windows and widgets and recent
+ * sessions; docked left in every workspace by default. Its data is the renderer's.
  */
 export const navigatorType: WindowType<Record<string, never>> = {
   kind: "navigator",
   title: "Navigator",
   icon: "sidebar.left",
   role: "widget",
-  description: "Search, and everything open in this Space: agents, windows, widgets and recent sessions.",
+  description: "Search, and everything open in this workspace: agents, windows, widgets and recent sessions.",
   create() {
     return { state: {}, title: "Navigator" };
   },

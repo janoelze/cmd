@@ -65,7 +65,7 @@ export interface WidgetNotification {
 
 export interface MagicServiceOptions {
   /** The core's widgets socket and a token per data.ts run, so widgets can read the event log (docs/28 §4). */
-  widgetSocket?: { path: string; token: (widgetId: string, spaceId: string | null) => string } | null;
+  widgetSocket?: { path: string; token: (widgetId: string, workspaceId: string | null) => string } | null;
   windows: MagicWindows;
   settings: () => Settings;
   /** Show a widget's notification (data.ts notify()). */
@@ -76,9 +76,9 @@ export interface MagicServiceOptions {
   /** Tests inject a fake; default: the AI service's smart tier. */
   backend?: (s: Settings) => Backend;
   sandbox?: SandboxMode;
-  /** Where a window's agent and data.ts run (its Space's root); default: home. */
+  /** Where a window's agent and data.ts run (its workspace's root); default: home. */
   cwdFor?: (w: AppWindow) => string;
-  /** The window's Space, unless it is Home: named in the request, so "this project" means its folder. */
+  /** The window's workspace, unless it is Home: named in the request, so "this project" means its folder. */
   workspaceFor?: (w: AppWindow) => Workspace | null;
   /** $CMD_HOME: widgets, Deno's cache and cmd's own Deno live here; null: a temp folder (tests). */
   stateDir?: string | null;
@@ -593,7 +593,7 @@ export class MagicService {
     else {
       const secrets = this.widgetSecrets.get(s.widgetId!);
       const sock = this.#o.widgetSocket;
-      const r = await runData(this.store.dir(s.widgetId!), m.manifest, { ...deno, cwd: this.#cwd(w), config: { ...configValues(m.manifest, s.config), ...secrets }, socket: sock ? { path: sock.path, token: sock.token(s.widgetId!, w.spaceId ?? null) } : null });
+      const r = await runData(this.store.dir(s.widgetId!), m.manifest, { ...deno, cwd: this.#cwd(w), config: { ...configValues(m.manifest, s.config), ...secrets }, socket: sock ? { path: sock.path, token: sock.token(s.widgetId!, w.workspaceId ?? null) } : null });
       ok = r.ok;
       data = r.data;
       retryAfter = r.retryAfter;
@@ -794,7 +794,7 @@ export class MagicService {
   /** Delete a widget from the library: its folder, revisions and secrets. Not while a window shows it. */
   deleteWidget(widgetId: string): void {
     if (!this.store.info(widgetId)) throw new Error(`no such widget: ${widgetId}`);
-    if (this.#copies(widgetId).length) throw new Error("This widget is in a Space; remove it from there first.");
+    if (this.#copies(widgetId).length) throw new Error("This widget is in a workspace; remove it from there first.");
     this.#unwatch(widgetId);
     this.widgetSecrets.forget(widgetId);
     this.store.delete(widgetId);

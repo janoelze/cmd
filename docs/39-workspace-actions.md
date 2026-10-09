@@ -1,8 +1,8 @@
 # Workspace Actions
 
-> Status (2026-10-09): **built** on branch `workspace-actions`: discovery from every source below plus agent skills, watching, the fast tier's descriptions (cached per folder), ranking and "From Your History", runs with exit status, URLs and Stop/Restart, pins, the widget, the palette's Actions group, Space → Workspace Actions and Run Last Action Again (⇧⌘R), `actions.openBrowser`, `cmd actions [run]`. Not yet: remote access (the methods are Mac-only), the opt-in tool listers, arguments, listening ports, port blocks per worktree. Decided: the name stays "Workspace Actions" for now; no sidebar Run button yet; pins live in cmd's database; one-shot terminals are kept. From a #feedback idea (2026-10-08): "A widget that uses AI to gather the project's run commands and CLIs and make files to offer intelligent actions." The name may change; it lives in one string (`ACTIONS_TITLE`) and the internal id is `actions`.
+> Status (2026-10-09): **built** on branch `workspace-actions`: discovery from every source below plus agent skills, watching, the fast tier's descriptions (cached per folder), ranking and "From Your History", runs with exit status, URLs and Stop/Restart, pins, the widget, the palette's Actions group, workspace → Workspace Actions and Run Last Action Again (⇧⌘R), `actions.openBrowser`, `cmd actions [run]`. Not yet: remote access (the methods are Mac-only), the opt-in tool listers, arguments, listening ports, port blocks per worktree. Decided: the name stays "Workspace Actions" for now; no sidebar Run button yet; pins live in cmd's database; one-shot terminals are kept. From a #feedback idea (2026-10-08): "A widget that uses AI to gather the project's run commands and CLIs and make files to offer intelligent actions." The name may change; it lives in one string (`ACTIONS_TITLE`) and the internal id is `actions`.
 
-A widget that knows how to run the project in its Space: `pnpm dev`, `make test`, `just release`, `docker compose up api`, the GitHub workflow that deploys. It finds them in the folder's own files, keeps them current as those files change, describes each in a few words, ranks them by what you actually run, and runs one with a click in the right place: long-running ones in a terminal of their own, a dev server's URL in a browser window, a deploy only after you confirm.
+A widget that knows how to run the project in its workspace: `pnpm dev`, `make test`, `just release`, `docker compose up api`, the GitHub workflow that deploys. It finds them in the folder's own files, keeps them current as those files change, describes each in a few words, ranks them by what you actually run, and runs one with a click in the right place: long-running ones in a terminal of their own, a dev server's URL in a browser window, a deploy only after you confirm.
 
 Read first: this doc, docs/16-widgets.md (built-in widgets), docs/17-ai.md (the AI service), docs/30-data-capabilities.md (the `command` events), the Commands widget (`renderer/src/components/CommandsView.tsx`), which already runs a command again in a terminal.
 
@@ -54,7 +54,7 @@ New dependencies: `yaml` and `smol-toml` (both small, no dependencies) in `packa
 
 **The package manager** follows package-manager-detector: lockfile in the folder (`bun.lock(b)`, `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`), else the `packageManager` field, else walk up to the repository root, else npm.
 
-**Which folder.** The widget's folder is its Space's root (`cwdFor`), or a path set in its state (as Live Diff does). A monorepo's root actions come first, then one section per workspace package, collapsed. Sources look only at the root and the declared workspace packages, never a recursive scan (node_modules, vendored repos).
+**Which folder.** The widget's folder is its workspace's root (`cwdFor`), or a path set in its state (as Live Diff does). A monorepo's root actions come first, then one section per workspace package, collapsed. Sources look only at the root and the declared workspace packages, never a recursive scan (node_modules, vendored repos).
 
 ### The action
 
@@ -109,14 +109,14 @@ Order within a section: pinned first, then by use, then file order.
 
 | The action | Click runs it… |
 |---|---|
-| long (dev server, watcher) | in its own terminal named after it ("dev"), in this Space. Running already: the row shows Running, and the click goes to it. Stop sends ⌃C; Restart sends ⌃C, waits for the prompt, runs again |
+| long (dev server, watcher) | in its own terminal named after it ("dev"), in this workspace. Running already: the row shows Running, and the click goes to it. Stop sends ⌃C; Restart sends ⌃C, waits for the prompt, runs again |
 | one-shot (test, build, lint) | in its last terminal if it is back at its prompt, else a new one |
 | risky | the same, after a confirmation that shows the command |
 | ⌥-click | types it into the focused terminal without Return (as `typeInTerminal` does), to edit first |
 
-The core tracks runs: `actions.run { root, actionId, spaceId }` creates the pane with `pane.create { cwd, command, spaceId }`, remembers `actionId → paneId`, and follows the pane's OSC 133 marks (`PaneManager.command`, `command` events) for running, exit code and duration. The row shows ● running, ✓ passed, ✕ failed (status 130/137/143 count as stopped), with the time.
+The core tracks runs: `actions.run { root, actionId, workspaceId }` creates the pane with `pane.create { cwd, command, workspaceId }`, remembers `actionId → paneId`, and follows the pane's OSC 133 marks (`PaneManager.command`, `command` events) for running, exit code and duration. The row shows ● running, ✓ passed, ✕ failed (status 130/137/143 count as stopped), with the time.
 
-**URLs.** For terminals started by an action, the core scans their output (ANSI stripped) for `http://(localhost|127.0.0.1|0.0.0.0|[::1]|*.local):port`, the first one after start wins, and puts it on the run. The row gets a chip `localhost:5173` that opens a browser window in the same Space (`window.open { kind: "browser" }`). Setting `actions.openBrowser` (off): open it by itself the first time. Later: listening ports from procinfo for servers that print nothing.
+**URLs.** For terminals started by an action, the core scans their output (ANSI stripped) for `http://(localhost|127.0.0.1|0.0.0.0|[::1]|*.local):port`, the first one after start wins, and puts it on the run. The row gets a chip `localhost:5173` that opens a browser window in the same workspace (`window.open { kind: "browser" }`). Setting `actions.openBrowser` (off): open it by itself the first time. Later: listening ports from procinfo for servers that print nothing.
 
 ## The widget
 
@@ -149,13 +149,13 @@ Kind `actions`, role widget, in the Widget Library as "Workspace Actions", state
 
 ## Beyond the widget
 
-- **Palette:** an "Actions" group with the focused Space's actions ("Run dev", "Run test"), ranked the same way. "Rerun Last Action" is a command with a shortcut and a menu item (Terminal menu).
-- **CLI:** `cmd actions [--json] [path]` lists, `cmd actions run <name>` runs one in a new terminal in the Space. Agents get "how do I run this project" without reading four files; the hook's session-start context could mention it.
+- **Palette:** an "Actions" group with the focused workspace's actions ("Run dev", "Run test"), ranked the same way. "Rerun Last Action" is a command with a shortcut and a menu item (Terminal menu).
+- **CLI:** `cmd actions [--json] [path]` lists, `cmd actions run <name>` runs one in a new terminal in the workspace. Agents get "how do I run this project" without reading four files; the hook's session-start context could mention it.
 - **Remote:** `actions.list` read, `actions.run`/`stop` control, in `REMOTE_ACCESS`.
 
 ## Protocol
 
-Methods: `actions.list { path?, spaceId? } → { root, actions, suggestions, sources: {file, error?}[], describing: boolean }`, `actions.run { root, actionId, spaceId, mode?: "new" | "type" }`, `actions.stop { root, actionId }`, `actions.pin { root, command, name? }`. Event: `actions.changed { root }` (lists and run states). Settings: `actions.describe`, `actions.openBrowser`, `actions.hide` (regexes of names to hide, default `^(pre|post)`).
+Methods: `actions.list { path?, workspaceId? } → { root, actions, suggestions, sources: {file, error?}[], describing: boolean }`, `actions.run { root, actionId, workspaceId, mode?: "new" | "type" }`, `actions.stop { root, actionId }`, `actions.pin { root, command, name? }`. Event: `actions.changed { root }` (lists and run states). Settings: `actions.describe`, `actions.openBrowser`, `actions.hide` (regexes of names to hide, default `^(pre|post)`).
 
 ## Phases
 
@@ -164,11 +164,11 @@ Methods: `actions.list { path?, spaceId? } → { root, actions, suggestions, sou
 3. **AI.** Descriptions, primary, corrections, README suggestions, the cache table, the setting. A small eval on 10 real repositories under `~/src` (descriptions read well, nothing risky marked safe).
 4. **History.** Ranking from `command` events, "From your history", pinning.
 5. **URLs.** Output scan, the chip, `actions.openBrowser`.
-6. **Later.** GitHub workflows with inputs; opt-in tool listers; arguments (`{{name}}`, Zed-style variables like the focused file); listening ports from procinfo; a port block per worktree (docs/11-spaces.md `CMD_SPACE_PORT`); suggestions from state ("the lockfile changed: install?", "the build failed: run test?").
+6. **Later.** GitHub workflows with inputs; opt-in tool listers; arguments (`{{name}}`, Zed-style variables like the focused file); listening ports from procinfo; a port block per worktree (docs/11-workspaces.md `CMD_WORKSPACE_PORT`); suggestions from state ("the lockfile changed: install?", "the build failed: run test?").
 
 ## Open questions
 
-- The name: "Workspace Actions" in the library. cmd's word for a folder is Space; "Actions" alone may be enough inside a Space.
-- Should the primary action also sit outside the widget (a Run button on the Space in the sidebar, Conductor-style)?
+- The name: "Workspace Actions" in the library. cmd's word for a folder is workspace, so the name fits; "Actions" alone may be enough inside a workspace.
+- Should the primary action also sit outside the widget (a Run button on the workspace in the sidebar, Conductor-style)?
 - Where pinned "From your history" commands are stored: cmd's database (private, per Mac) or a file in the repository (shared, e.g. `.cmd/actions.json`)? Database first.
 - One-shot terminals: keep them, or close on success after a few seconds (Zed's `hide: on_success`)? Keep first; closing loses the output.

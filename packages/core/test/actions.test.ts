@@ -318,7 +318,7 @@ describe("service", () => {
   it("runs an action in a new terminal, follows it to its exit status, and reuses that terminal", async () => {
     write({ "package.json": JSON.stringify({ scripts: { test: "vitest run" } }) });
     const id = list().actions[0]!.id;
-    const r = core.actions.run(dir, id, core.spaces.home().id);
+    const r = core.actions.run(dir, id, core.workspaces.home().id);
     expect(r.started).toBe(true);
     const pty = ptys.at(-1)!;
     expect(pty.opts.cwd).toBe(dir);
@@ -326,7 +326,7 @@ describe("service", () => {
     pty.output("\x1b]133;C\x07running\r\n\x1b]133;D;1\x07\x1b]133;A\x07");
     expect(list().runs[0]).toMatchObject({ exitCode: 1 });
     expect(list().runs[0]!.endedAt).not.toBeNull();
-    const again = core.actions.run(dir, id, core.spaces.home().id);
+    const again = core.actions.run(dir, id, core.workspaces.home().id);
     expect(again.paneId).toBe(r.paneId);
     expect(pty.written.at(-1)).toBe("npm run test\r");
   });
@@ -334,15 +334,15 @@ describe("service", () => {
   it("a server: its URL from its output, not started twice, stopped with ⌃C, restarted", async () => {
     write({ "package.json": JSON.stringify({ scripts: { dev: "vite" } }) });
     const id = list().actions[0]!.id;
-    const r = core.actions.run(dir, id, core.spaces.home().id);
+    const r = core.actions.run(dir, id, core.workspaces.home().id);
     const pty = ptys.at(-1)!;
     pty.output("\x1b]133;C\x07  VITE ready\r\n  Local:   http://localhost:");
     pty.output("5173/\r\n");
     expect(list().runs[0]!.url).toBe("http://localhost:5173/");
-    expect(core.actions.run(dir, id, core.spaces.home().id)).toEqual({ paneId: r.paneId, started: false });
+    expect(core.actions.run(dir, id, core.workspaces.home().id)).toEqual({ paneId: r.paneId, started: false });
     core.actions.stop(dir, id);
     expect(pty.written.at(-1)).toBe("\x03");
-    core.actions.run(dir, id, core.spaces.home().id, { restart: true });
+    core.actions.run(dir, id, core.workspaces.home().id, { restart: true });
     pty.output("\x1b]133;D;130\x07");
     expect(pty.written.at(-1)).toBe("npm run dev\r");
     expect(list().runs[0]).toMatchObject({ endedAt: null, url: null });
@@ -351,7 +351,7 @@ describe("service", () => {
   it("starts an agent skill with the person's own agent command", async () => {
     write({ ".claude/skills/triage/SKILL.md": "---\nname: triage\ndescription: Triage\n---\n" });
     core.settings.set("agents.claude.command", "claude --model opus");
-    core.actions.run(dir, list().actions[0]!.id, core.spaces.home().id);
+    core.actions.run(dir, list().actions[0]!.id, core.workspaces.home().id);
     // The shell's first prompt: the command is typed then.
     ptys.at(-1)!.output("\x1b]133;A\x07\x1b]133;B\x07");
     await vi.waitFor(() => expect(ptys.at(-1)!.written.join("")).toContain("claude --model opus /triage"));
@@ -373,7 +373,7 @@ describe("service", () => {
     fs.writeFileSync(path.join(wt, "package.json"), pkg);
     const at = (root: string) => core.handlers["actions.list"]({ path: root }) as ReturnType<Core["actions"]["list"]>;
     expect(at(wt).checkout).toMatchObject({ top: wt, branch: "feature", linked: true, project: main });
-    core.actions.run(wt, "npm:package.json:dev", core.spaces.home().id);
+    core.actions.run(wt, "npm:package.json:dev", core.workspaces.home().id);
     ptys.at(-1)!.output("\x1b]133;C\x07Local: http://localhost:5174/\r\n");
     expect(at(main).worktrees).toEqual([
       { top: main, branch: "master", linked: false, running: 0, agents: 0 },

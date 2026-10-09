@@ -76,7 +76,7 @@ function Paired({ conn }: { conn: Connection }) {
   const phase = usePhase(conn);
   const model = useModel(conn, phase);
   const [open, setOpen] = useState<string | null>(null);
-  const [spaceId, setSpaceId] = useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
 
   if (phase.kind === "refused")
@@ -124,7 +124,7 @@ function Paired({ conn }: { conn: Connection }) {
             </button>
           </header>
           {phase.kind === "offline" && <div className="banner">{offlineText(phase)}</div>}
-          <Now conn={conn} model={model} spaceId={spaceId} onSpace={setSpaceId} onOpen={openPane} />
+          <Now conn={conn} model={model} workspaceId={workspaceId} onWorkspace={setWorkspaceId} onOpen={openPane} />
         </>
       )}
       {pane && phase.kind === "offline" && <div className="banner floating">{offlineText(phase)}</div>}

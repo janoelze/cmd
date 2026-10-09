@@ -4,17 +4,21 @@
 // never what's on a screen.
 
 import { useEffect, useState } from "react";
-import { bucketOf, type Agent, type CoreEvent, type Pane, type Space } from "@cmd/protocol";
+import { bucketOf, type Agent, type CoreEvent, type Pane, type Workspace } from "@cmd/protocol";
 import type { Connection, Phase } from "./connection.ts";
 import type { Light } from "./ui.tsx";
 
 export interface Model {
   panes: Map<string, Pane>;
   agents: Map<string, Agent>;
-  spaces: Map<string, Space>;
+  workspaces: Map<string, Workspace>;
   scope: "view" | "control";
   host: string;
 }
+
+/** A Mac still on cmd 0.23 or older says Space: `spaces`, `spaceId` and `space.*` events. The client deploys first, so it reads both. */
+type Legacy = { spaces?: Workspace[]; spaceId?: string; space?: Workspace };
+const paneOf = (p: Pane): Pane => (p.workspaceId ? p : { ...p, workspaceId: (p as Pane & Legacy).spaceId ?? "" });
 
 /** The bootstrap, kept current by events. Stays (stale) while offline. */
 export function useModel(conn: Connection, phase: Phase): Model | null {
@@ -23,9 +27,9 @@ export function useModel(conn: Connection, phase: Phase): Model | null {
     if (phase.kind !== "online") return;
     const b = phase.boot;
     setModel({
-      panes: new Map(b.panes.map((p) => [p.id, p])),
+      panes: new Map(b.panes.map((p) => [p.id, paneOf(p)])),
       agents: new Map(b.agents.map((a) => [a.id, a])),
-      spaces: new Map(b.spaces.map((s) => [s.id, s])),
+      workspaces: new Map((b.workspaces ?? (b as Legacy).spaces ?? []).map((s) => [s.id, s])),
       scope: b.device?.scope ?? "view",
       host: b.host?.name ?? "your Mac",
     });
@@ -36,12 +40,15 @@ export function useModel(conn: Connection, phase: Phase): Model | null {
         setModel((m) => {
           if (!m) return m;
           const next = { ...m };
-          if (e.type === "pane.updated") next.panes = new Map(m.panes).set(e.pane.id, e.pane);
+          const type = (e.type as string).replace(/^space\./, "workspace.");
+          if (e.type === "pane.updated") next.panes = new Map(m.panes).set(e.pane.id, paneOf(e.pane));
           else if (e.type === "pane.removed") (next.panes = new Map(m.panes)).delete(e.paneId);
           else if (e.type === "agent.updated") next.agents = new Map(m.agents).set(e.agent.id, e.agent);
           else if (e.type === "agent.removed") (next.agents = new Map(m.agents)).delete(e.agentId);
-          else if (e.type === "space.updated") next.spaces = new Map(m.spaces).set(e.space.id, e.space);
-          else if (e.type === "space.removed") (next.spaces = new Map(m.spaces)).delete(e.id);
+          else if (type === "workspace.updated") {
+            const w = (e as { workspace?: Workspace } & Legacy).workspace ?? (e as Legacy).space!;
+            next.workspaces = new Map(m.workspaces).set(w.id, w);
+          } else if (type === "workspace.removed") (next.workspaces = new Map(m.workspaces)).delete((e as { id: string }).id);
           else return m;
           return next;
         }),
@@ -58,8 +65,8 @@ export interface Item {
   agent: Agent | null;
   pane: Pane;
   title: string;
-  spaceId: string;
-  space: string;
+  workspaceId: string;
+  workspace: string;
   light: Light;
   group: Group;
   /** The second line: the agent's question or tool, the running program, or why it wants you. */
@@ -88,8 +95,8 @@ export function itemOf(m: Model, pane: Pane): Item {
     pane,
     // A program's own title (Claude names its task), else the agent's kind, else the shell's.
     title: a?.name ?? (a && SHELLS.has(pane.title) ? kind! : pane.title),
-    spaceId: pane.spaceId,
-    space: m.spaces.get(pane.spaceId)?.name ?? "",
+    workspaceId: pane.workspaceId,
+    workspace: m.workspaces.get(pane.workspaceId)?.name ?? "",
     light,
     group,
     detail: a ? (a.detail ?? firstLine(a.lastMessage) ?? firstLine(a.lastPrompt)) : pane.attention ? "Wants you" : running ? pane.foreground : null,
@@ -98,8 +105,8 @@ export function itemOf(m: Model, pane: Pane): Item {
 }
 
 /** Now's sections: what needs you (longest waiting first), what's working, what just finished, the rest. */
-export function sections(m: Model, spaceId: string | null): { group: Group; title: string; items: Item[] }[] {
-  const items = [...m.panes.values()].filter((p) => !spaceId || p.spaceId === spaceId).map((p) => itemOf(m, p));
+export function sections(m: Model, workspaceId: string | null): { group: Group; title: string; items: Item[] }[] {
+  const items = [...m.panes.values()].filter((p) => !workspaceId || p.workspaceId === workspaceId).map((p) => itemOf(m, p));
   const by = (g: Group) => items.filter((i) => i.group === g);
   const oldest = (x: Item[]) => x.sort((p, q) => p.since - q.since);
   const newest = (x: Item[]) => x.sort((p, q) => q.since - p.since);
@@ -111,11 +118,11 @@ export function sections(m: Model, spaceId: string | null): { group: Group; titl
   ].filter((s) => s.items.length);
 }
 
-/** Open Spaces in switcher order, with how many of their terminals need you. */
-export function spaceList(m: Model): { space: Space; needs: number }[] {
+/** Open workspaces in switcher order, with how many of their terminals need you. */
+export function workspaceList(m: Model): { workspace: Workspace; needs: number }[] {
   const needs = new Map<string, number>();
-  for (const p of m.panes.values()) if (itemOf(m, p).group === "needs") needs.set(p.spaceId, (needs.get(p.spaceId) ?? 0) + 1);
-  return [...m.spaces.values()].filter((s) => s.closedAt === null).sort((a, b) => a.order - b.order).map((space) => ({ space, needs: needs.get(space.id) ?? 0 }));
+  for (const p of m.panes.values()) if (itemOf(m, p).group === "needs") needs.set(p.workspaceId, (needs.get(p.workspaceId) ?? 0) + 1);
+  return [...m.workspaces.values()].filter((s) => s.closedAt === null).sort((a, b) => a.order - b.order).map((workspace) => ({ workspace, needs: needs.get(workspace.id) ?? 0 }));
 }
 
 export function stateText(i: Item): string {

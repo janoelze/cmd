@@ -7,7 +7,7 @@
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import type { DatabaseSync } from "node:sqlite";
-import type { ActionRun, ActionsList, Pane, PaneId, SpaceId, WorkspaceAction } from "@cmd/protocol";
+import type { ActionRun, ActionsList, Pane, PaneId, WorkspaceId, WorkspaceAction } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { WatchService } from "../watch.ts";
 import type { PaneManager } from "../panes.ts";
@@ -28,7 +28,7 @@ export interface ActionsOptions {
   /** Settings: whether the model may describe, and folders to keep watching (open widgets). */
   describeOn: () => boolean;
   roots: () => string[];
-  createPane: (o: { cwd: string; command: string; spaceId: SpaceId }) => Pane;
+  createPane: (o: { cwd: string; command: string; workspaceId: WorkspaceId }) => Pane;
   /** Live agents working in a checkout (its top), for the worktree list. */
   agentsIn?: (top: string) => number;
   /** How the person starts an agent (agents.<kind>.command), for its skills; null: the agent's name. */
@@ -181,7 +181,7 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
    * server still running, just say which pane it is), else in a new one.
    * `restart`: stop it first (⌃C) and run it again when it has stopped.
    */
-  run(root: string, actionId: string, spaceId: SpaceId, o: { restart?: boolean; fresh?: boolean } = {}): { paneId: PaneId; started: boolean } {
+  run(root: string, actionId: string, workspaceId: WorkspaceId, o: { restart?: boolean; fresh?: boolean } = {}): { paneId: PaneId; started: boolean } {
     const list = this.list(root);
     const found = [...list.actions, ...list.history, ...list.suggested].find((x) => x.id === actionId);
     if (!found) throw new Error(`no action ${actionId} in ${root}`);
@@ -203,7 +203,7 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
         return { paneId, started: true };
       }
     }
-    const pane = this.#o.createPane({ cwd: a.cwd, command: a.command, spaceId });
+    const pane = this.#o.createPane({ cwd: a.cwd, command: a.command, workspaceId });
     this.#track(pane.id, root, a);
     return { paneId: pane.id, started: true };
   }

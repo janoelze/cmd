@@ -1,8 +1,8 @@
 // Notifications, a built-in widget (docs/16-widgets.md): the notifications cmd
 // sent since the last Clear (core/notifications.ts), shown or not, so one
 // missed while away is still here: a live query over notification events. Of
-// this Space's terminals and windows (the Space recorded when it was sent), or
-// every Space's; those about nothing in particular show in every Space. A click
+// this workspace's terminals and windows (the workspace recorded when it was sent), or
+// every workspace's; those about nothing in particular show in every workspace. A click
 // goes to the terminal or window it is about.
 
 import { EmptyState, ListRow, ListSection, ListValue, Panel, PanelBody, useFlip } from "@cmd/ui";
@@ -66,9 +66,9 @@ export function NotificationsView({ win }: WindowViewProps) {
     return () => clearInterval(t);
   }, []);
 
-  /** The Space of what it is about: where it is now, else where it was when sent; undefined: nothing in particular. */
-  const spaceOf = (n: AppNotification) => (n.paneId ? s.panes.get(n.paneId)?.spaceId : n.windowId ? s.windows.get(n.windowId)?.spaceId : undefined) ?? n.spaceId ?? undefined;
-  const shown = useMemo(() => all.filter((n) => scope === "all" || (spaceOf(n) ?? win.spaceId) === win.spaceId), [all, scope, win.spaceId, s.panes, s.windows]);
+  /** The workspace of what it is about: where it is now, else where it was when sent; undefined: nothing in particular. */
+  const workspaceOf = (n: AppNotification) => (n.paneId ? s.panes.get(n.paneId)?.workspaceId : n.windowId ? s.windows.get(n.windowId)?.workspaceId : undefined) ?? n.workspaceId ?? undefined;
+  const shown = useMemo(() => all.filter((n) => scope === "all" || (workspaceOf(n) ?? win.workspaceId) === win.workspaceId), [all, scope, win.workspaceId, s.panes, s.windows]);
   const today = startOfToday();
   const groups = [
     { title: "Today", items: shown.filter((n) => n.at >= today) },
@@ -81,7 +81,7 @@ export function NotificationsView({ win }: WindowViewProps) {
   };
   const open = (n: AppNotification) => {
     const id = target(n);
-    if (id) goTo(id, spaceOf(n));
+    if (id) goTo(id, workspaceOf(n));
   };
   const rowMenu = (n: AppNotification) =>
     void showContextMenu([

@@ -1,6 +1,6 @@
 # Motion and visual stability
 
-How windows, sidebars and Spaces move, why, and how it's measured. The engine is
+How windows, sidebars and workspaces move, why, and how it's measured. The engine is
 `apps/desktop/src/renderer/src/motion.ts`; the harness is `e2e/motion.mjs`
 (`pnpm e2e:motion`). The vocabulary (curves, named timings, presence, FLIP) is the kit's,
 `packages/ui/src/motion.ts`, with the same values as tokens for CSS; a test
@@ -8,7 +8,7 @@ How windows, sidebars and Spaces move, why, and how it's measured. The engine is
 
 ## Rules
 
-1. **One curve.** Everything that moves a window, a sidebar or a Space glides on
+1. **One curve.** Everything that moves a window, a sidebar or a workspace glides on
    one critically damped spring (no bounce, response 0.26 s, done in 382 ms).
    JS uses `glide()`/`TileMotion`; CSS and Web Animations use `--glide` /
    `--glide-dur` (tokens.css), the same spring sampled into `linear()`. A test
@@ -38,10 +38,10 @@ How windows, sidebars and Spaces move, why, and how it's measured. The engine is
    a copy without its pages and canvases). A window moving to or from a sidebar
    glides between the two. A shown or hidden sidebar slides in from or out to its
    edge.
-8. **Spaces are a vertical stack.** Switching to the next Space, everything in the
+8. **Workspaces are a vertical stack.** Switching to the next workspace, everything in the
    old one (sidebars, the Navigator, windows, widgets) leaves out the top while the
-   new one rises from the bottom; the previous Space comes the other way. It's one
-   element-scoped View Transition on the stage: the old Space is a snapshot, the
+   new one rises from the bottom; the previous workspace comes the other way. It's one
+   element-scoped View Transition on the stage: the old workspace is a snapshot, the
    new one stays live, and the top bar and footer stay put.
 9. **Chrome comes and goes too.** Sheets, popovers, menus, toasts, the palette and its
    pickers fade out (`usePresence` in `@cmd/ui`) and the palette glides between
@@ -58,7 +58,7 @@ How windows, sidebars and Spaces move, why, and how it's measured. The engine is
 
 A View Transition snapshots the old state as an image and blocks input until it's
 done. That suits a discrete swap where nothing has to keep moving through it, like
-switching Spaces. It doesn't suit windows that are live (terminals, pages),
+switching workspaces. It doesn't suit windows that are live (terminals, pages),
 interrupted (⌘↩ twice) or following the pointer, and it can't hold a terminal's
 size through a move. Those use TileMotion, frame by frame.
 
@@ -70,7 +70,7 @@ the `motion` skill (`.claude/skills/motion/SKILL.md`).
 `e2e/motion.mjs` launches the built app on a throwaway core and sets up four
 windows (a terminal, a text window, a file browser, a Markdown preview). It then
 plays ⌘↩, view switches, sidebars, docking, opening and closing windows,
-resizing the app window and switching Spaces. After each painted frame (a task
+resizing the app window and switching workspaces. After each painted frame (a task
 posted from the frame's rAF, so it reads what was on screen) it records every
 window's rect, its content's rect, opacity and visibility, plus content resizes
 and long animation frames. It scores:

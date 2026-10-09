@@ -32,13 +32,13 @@ const one = (s: string, n = 90) => {
 
 /**
  * The live agent a reference means: an id or its start, else a name, in the
- * caller's Space first (docs/32-session-names.md, "Names as addresses"). Null
+ * caller's workspace first (docs/32-session-names.md, "Names as addresses"). Null
  * when none; more than one is an error that lists them.
  */
 export function pickAgent(agents: Agent[], panes: Pane[], ref: string): Agent | null {
-  const here = panes.find((p) => p.id === process.env[ENV.paneId])?.spaceId;
-  const hits = matchAgents(agents, ref, { spaceId: here });
-  if (hits.length > 1) throw new Error(`“${ref}” could mean:\n${hits.map((a) => `  ${a.id.slice(0, 8)} ${a.name ?? a.kind}${a.spaceId !== here ? `  (Space ${a.spaceId.slice(0, 8)})` : ""}`).join("\n")}\nUse an id.`);
+  const here = panes.find((p) => p.id === process.env[ENV.paneId])?.workspaceId;
+  const hits = matchAgents(agents, ref, { workspaceId: here });
+  if (hits.length > 1) throw new Error(`“${ref}” could mean:\n${hits.map((a) => `  ${a.id.slice(0, 8)} ${a.name ?? a.kind}${a.workspaceId !== here ? `  (Workspace ${a.workspaceId.slice(0, 8)})` : ""}`).join("\n")}\nUse an id.`);
   return hits[0] ?? null;
 }
 

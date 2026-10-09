@@ -1,7 +1,7 @@
 {
   "$comment": "The feature grid on the product page (website/public/index.php), three to a row. Keep it in step with the app: the release skill updates it with each release, and website/test/features.test.ts holds the limits (title, text, badges). `code` in text renders as <code>.",
   "features": [
-    { "title": "Spaces", "text": "One per project, with its terminals, agents, browser and widgets. Switch, or give each a window." },
+    { "title": "Workspaces", "text": "One per project, with its terminals, agents, browser and widgets. Switch, or give each a window." },
     { "title": "Layouts", "text": "Focus one window, tile a grid, scroll a strip or spread out on a canvas. Dock any as a sidebar." },
     { "title": "Agents, recognised", "text": "Claude Code, Codex, Gemini, Aider and more, in any terminal, even wrapped. Each named for its work." },
     { "title": "Needs you, on top", "text": "Waiting agents first, then working, then done. ⌃⌘J jumps to the next one that needs you." },

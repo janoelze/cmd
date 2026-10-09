@@ -9,7 +9,7 @@
 //   v0.14.4", "Investigated a corrupt search index"), written by a model from a
 //   digest of a day's threads. Each entry names the threads it was made from.
 
-import type { AgentKind, SpaceId } from "./model.ts";
+import type { AgentKind, WorkspaceId } from "./model.ts";
 
 /**
  * Versions of the journal's layers (docs/24-journal-versions.md). Each says
@@ -58,8 +58,8 @@ export type JournalEventKind =
   | "file.open"
   /** Something a person or an agent wrote down on purpose (`cmd journal note`). */
   | "note"
-  | "space.open"
-  | "space.close";
+  | "workspace.open"
+  | "workspace.close";
 
 export interface JournalEvent {
   /** Order of recording (row id). */
@@ -71,7 +71,7 @@ export interface JournalEvent {
   kind: JournalEventKind;
   /** What makes it the same event when seen twice (live and backfill, or a growing session). */
   key: string;
-  spaceId: SpaceId | null;
+  workspaceId: WorkspaceId | null;
   /** The project: a repository's main worktree, else the folder. Worktrees of one repository share it. */
   repo: string | null;
   cwd: string | null;
@@ -116,7 +116,7 @@ export type JournalData =
   | { kind: "browser.visit"; url: string; title: string | null; windowId: string | null }
   | { kind: "file.open"; path: string; windowKind: string; windowId: string | null }
   | { kind: "note"; by: "user" | "agent"; agentSession: string | null }
-  | { kind: "space.open" | "space.close"; name: string };
+  | { kind: "workspace.open" | "workspace.close"; name: string };
 
 export type JournalThreadKind = "session" | "branch" | "release" | "terminal" | "browsing" | "note" | "other";
 
@@ -132,7 +132,7 @@ export interface JournalThread {
   id: string;
   kind: JournalThreadKind;
   repo: string | null;
-  spaceId: SpaceId | null;
+  workspaceId: WorkspaceId | null;
   start: number;
   end: number;
   /** A label from the data (a session's title, a branch name, a tag), for the digest and fallbacks. */
@@ -169,7 +169,7 @@ export interface JournalEntry {
 export interface JournalDay {
   /** Local midnight of the work day (it runs 04:00 to 04:00). */
   date: number;
-  /** "space:<id>", "repo:<path>" or "all". */
+  /** "workspace:<id>", "repo:<path>" or "all". */
   scope: string;
   headline: string;
   entries: JournalEntry[];

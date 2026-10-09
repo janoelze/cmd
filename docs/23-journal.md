@@ -1,8 +1,8 @@
 # The journal
 
-> Status (2026-10-06), branch `journal`: built: events from the data layer's log (docs/28: commands, git, pages, files, notes, Spaces), the turns view and the sessions view, git from reflogs, threads, the digest, the day writer, `journal.*` RPC, `cmd journal`, the Journal widget. Tested on two real days of this repository and a made-up messy one. Versioned per layer: [24-journal-versions.md](24-journal-versions.md) (all at 1). Not yet: UI actions, week rollups, an agent tool beyond the CLI, the Settings switch. See "Next".
+> Status (2026-10-06), branch `journal`: built: events from the data layer's log (docs/28: commands, git, pages, files, notes, workspaces), the turns view and the sessions view, git from reflogs, threads, the digest, the day writer, `journal.*` RPC, `cmd journal`, the Journal widget. Tested on two real days of this repository and a made-up messy one. Versioned per layer: [24-journal-versions.md](24-journal-versions.md) (all at 1). Not yet: UI actions, week rollups, an agent tool beyond the CLI, the Settings switch. See "Next".
 
-cmd sees most of what happens in a workspace: agents and their prompts, terminals and their commands, git, pages read, files opened. Until now it kept almost none of it: the activity log goes after 14 days and has no Space, commands live in memory, a browser window remembers one URL, and an agent's row goes when it does. The journal keeps it, and turns it into what a person would write in a work log: "Released v0.14.4", "Investigated a corrupt search index (cause still open)", "Compared Stripe Checkout with Adyen". Not a timeline of tools; the work.
+cmd sees most of what happens in a workspace: agents and their prompts, terminals and their commands, git, pages read, files opened. Until now it kept almost none of it: the activity log goes after 14 days and has no workspace, commands live in memory, a browser window remembers one URL, and an agent's row goes when it does. The journal keeps it, and turns it into what a person would write in a work log: "Released v0.14.4", "Investigated a corrupt search index (cause still open)", "Compared Stripe Checkout with Adyen". Not a timeline of tools; the work.
 
 People read it in the Journal widget. Agents read it with `cmd journal` ("what did we do this week?", "where did we leave the flaky test?").
 
@@ -18,15 +18,15 @@ Each is derived from the one before and can be derived again when the rules or t
 
 ### Events
 
-`JournalEvent` (`protocol/src/journal.ts`): `at`, `until` (spans: sessions, turns, commands), `kind`, a `key`, `spaceId`, `repo` (the project: a repository's main worktree, so worktrees of one repository are one project), `cwd`, `thread` (the identity it was recorded under, the threads' seed), `text` (one line) and typed `data` per kind.
+`JournalEvent` (`protocol/src/journal.ts`): `at`, `until` (spans: sessions, turns, commands), `kind`, a `key`, `workspaceId`, `repo` (the project: a repository's main worktree, so worktrees of one repository are one project), `cwd`, `thread` (the identity it was recorded under, the threads' seed), `text` (one line) and typed `data` per kind.
 
 The key makes recording idempotent: seeing an event again (live, then a backfill; a session that grows) updates it. The span grows, the newest text wins, live wins over backfill. Text and data are redacted as they're recorded (`core/src/redact.ts`): a token typed into a terminal is never kept for 180 days or sent in a digest.
 
-Kinds: `agent.session`, `agent.turn`, `command`, `git.commit`, `git.merge`, `git.branch`, `git.checkout`, `git.tag`, `git.rebase`, `git.reset`, `browser.visit`, `file.open`, `note`, `space.open/close`.
+Kinds: `agent.session`, `agent.turn`, `command`, `git.commit`, `git.merge`, `git.branch`, `git.checkout`, `git.tag`, `git.rebase`, `git.reset`, `browser.visit`, `file.open`, `note`, `workspace.open/close`.
 
 **Two ways in** (`journal/service.ts`):
 
-- **From the log** (since docs/28): commands with their output, pages browser windows show (one visit per page per half hour, titled), files windows open, Spaces, notes (`cmd journal note`) are events the core records as they happen (`data/recorders.ts`, `commands.ts`); turns come from the turns view and sessions from the sessions view, read when a day is asked for. `journal/store.ts` assembles them into the events below.
+- **From the log** (since docs/28): commands with their output, pages browser windows show (one visit per page per half hour, titled), files windows open, workspaces, notes (`cmd journal note`) are events the core records as they happen (`data/recorders.ts`, `commands.ts`); turns come from the turns view and sessions from the sessions view, read when a day is asked for. `journal/store.ts` assembles them into the events below.
 - **Git** is the one source the journal still reads itself, from reflogs: `sync()` reads what changed since the last read, with an overlap, every 5 minutes and before a day is written, into the log. A core that was down misses nothing; the first sync reaches 30 days back.
 
 **Git** (`journal/git.ts`) is read from reflog files, not by running git: the main worktree's HEAD log, each linked worktree's, each branch's. They hold 90 days, so they're the backfill too. A branch merged and deleted (cmd's own workflow: a worktree per task) leaves only its merge in the main log; the commits it brought come from the merge's range. Each commit knows its branch and the worktree it was made in. Tags are releases.
@@ -40,7 +40,7 @@ Rules, in order (each link records its rule, shown in `cmd journal threads`):
 3. **Session → commits on the default branch** made while it worked in the main worktree.
 4. **Session → release**: a turn about releasing was running when the tag landed.
 5. **Release → branches it shipped**: merged since the previous tag.
-6. **Hints**: a terminal or browser burst busy while exactly one session of the same project or Space worked ("ran while", "read while").
+6. **Hints**: a terminal or browser burst busy while exactly one session of the same project or workspace worked ("ran while", "read while").
 
 **Groups.** Strong links (2–4) join threads into a group, the suggestion "this is one piece of work". Shipping (5) and hints (6) don't join: a release isn't the work it shipped. A session linked to three branches or more is an orchestrator: its links stay hints, or one long session would swallow the day.
 
@@ -73,17 +73,17 @@ What made the difference: git (branches as tasks, merges, tags) and the session 
 | | |
 |---|---|
 | RPC | `journal.days` (scope, count, write: never/stale/force), `journal.day`, `journal.events`, `journal.threads` (threads and digest), `journal.note`, `journal.sync`. Remote: never (prompts, commands, pages). |
-| CLI | `cmd journal [--days N] [--all\|--space\|--project] [--write\|--no-write] [--json]`, `journal note TEXT`, `journal threads [--day]`, `journal events`, `journal sync`. Inside a cmd terminal, the scope is its Space. |
-| Widget | `journal` (built-in, This Space / All Spaces): shows what's written at once, then writes what changed under "Writing up what happened…". |
+| CLI | `cmd journal [--days N] [--all\|--workspace\|--project] [--write\|--no-write] [--json]`, `journal note TEXT`, `journal threads [--day]`, `journal events`, `journal sync`. Inside a cmd terminal, the scope is its workspace. |
+| Widget | `journal` (built-in, This Workspace / All Workspaces): shows what's written at once, then writes what changed under "Writing up what happened…". |
 
-Scopes: a Space is its events, plus events without a Space whose project or folder is under its root. "repo:<path>" is one project. "all" is everything.
+Scopes: a workspace is its events, plus events without a workspace whose project or folder is under its root. "repo:<path>" is one project. "all" is everything.
 
 ## Next
 
 1. **Agents writing it down.** `cmd journal note` from an agent's terminal joins its session; a line in the agent briefing ("note decisions and causes with `cmd journal note`") would give investigations their conclusions in the agent's own words.
 2. **Agents reading it.** `cmd journal --days 7` is already Markdown an agent can read. A briefing line, or an MCP tool, so "what were we doing on the payments branch?" works across sessions.
-3. **UI actions** worth keeping: Spaces opened, windows opened and closed, widgets made with Magic, settings changed. Record in the core's handlers (the renderer's `run(id)` misses the palette's and context menus' paths).
-4. **Turns with their Space**, partly done: turns carry where their agent ran (`cwd`, the turns view) and agent events carry their pane's Space; a turn's own Space still comes from its live agent or its folder.
+3. **UI actions** worth keeping: workspaces opened, windows opened and closed, widgets made with Magic, settings changed. Record in the core's handlers (the renderer's `run(id)` misses the palette's and context menus' paths).
+4. **Turns with their workspace**, partly done: turns carry where their agent ran (`cwd`, the turns view) and agent events carry their pane's workspace; a turn's own workspace still comes from its live agent or its folder.
 5. **Weeks**, built (2026-10-06): `journal/weeks.ts`. A week (Monday 04:00 to Monday 04:00) is written by the smart tier from its days' entries, never from raw events again, into 2–6 themes and a headline; non-chores the model leaves out are gathered under "Also". Kept in `journal_weeks` and written again only when one of its days was (`daysHash`) or `WEEK_FORMAT` changes. `journal.week` RPC, `cmd journal week [--weeks N]`, and "This week" at the top of the Journal widget.
 6. **Outcomes that change.** An entry "merged" on Monday whose branch shipped on Tuesday could say "shipped" when Monday is read again (links already know).
 7. **Settings**: `journal.enabled`, the tier, kept days; pages and commands could be opt-out for people who don't want them recorded.

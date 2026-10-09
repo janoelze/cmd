@@ -11,14 +11,14 @@
 // drops a "done" you saw happen and sums up agents finishing together
 // (renderer/src/notify.ts). Looking at the terminal clears its marker
 // (pane.clearAttention). Every notification is an event in the log
-// (data/recorders.ts), with the Space of what it is about; the Notifications
+// (data/recorders.ts), with the workspace of what it is about; the Notifications
 // widget is a live query over them.
 
 import { EventEmitter } from "node:events";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { Agent, AppNotification, Attention, Pane, PaneId, Settings, SpaceId, WindowId } from "@cmd/protocol";
+import type { Agent, AppNotification, Attention, Pane, PaneId, Settings, WorkspaceId, WindowId } from "@cmd/protocol";
 import type { OscEvent } from "./osc.ts";
 import type { PaneManager } from "./panes.ts";
 import type { AgentTracker } from "./agents/tracker.ts";
@@ -61,8 +61,8 @@ const cleanTitle = (t: string) => t.replace(/^[\s✳✻✽✶✢·•*◐◑◒�
 
 
 export class NotificationCenter extends EventEmitter<{ notification: [AppNotification] }> {
-  /** The Space a terminal or window is in, for the notifications about it (set by the core once windows exist). */
-  spaceOf: (paneId: PaneId | null, windowId: WindowId | null) => SpaceId | null = () => null;
+  /** The workspace a terminal or window is in, for the notifications about it (set by the core once windows exist). */
+  workspaceOf: (paneId: PaneId | null, windowId: WindowId | null) => WorkspaceId | null = () => null;
   #panes: PaneManager;
   #settings: () => Settings;
   #agentStates = new Map<string, Agent["state"]>();
@@ -253,7 +253,7 @@ export class NotificationCenter extends EventEmitter<{ notification: [AppNotific
   }
 
   #emit(n: Omit<AppNotification, "id" | "at">): void {
-    const full: AppNotification = { id: randomUUID(), ...n, spaceId: this.spaceOf(n.paneId, n.windowId ?? null), at: Date.now() };
+    const full: AppNotification = { id: randomUUID(), ...n, workspaceId: this.workspaceOf(n.paneId, n.windowId ?? null), at: Date.now() };
     this.emit("notification", full);
   }
 }

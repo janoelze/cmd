@@ -17,7 +17,7 @@
 //    Resurrecting them would resume its agents a second time, and their hooks
 //    would report into the same status folders as the original panes
 //    ($TMPDIR/cmd-agents/<pane id>, statusfiles.ts), mixing up both cores' agents.
-// Pane ids stay the same, so the layouts and selections in Space.view still fit.
+// Pane ids stay the same, so the layouts and selections in workspace.view still fit.
 //
 // Records come from other cmd versions, so each pane and agent is restored on its
 // own: one that fails is logged and left out, and the rest still come back.
@@ -29,7 +29,7 @@ import { ENV } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { sessionIdOf, type AgentTracker } from "./agents/tracker.ts";
 import type { PaneManager } from "./panes.ts";
-import type { SpaceManager } from "./spaces/manager.ts";
+import type { WorkspaceManager } from "./workspaces/manager.ts";
 import type { Store } from "./store.ts";
 
 const log = logger("restore");
@@ -40,12 +40,12 @@ export const RESTORE_COMMAND_ENV = "CMD_RESTORE_COMMAND";
 export interface RestoreContext {
   panes: PaneManager;
   agents: AgentTracker;
-  spaces: SpaceManager;
+  workspaces: WorkspaceManager;
   store: Store;
   settings: () => Settings;
 }
 
-export function restoreSession({ panes, agents, spaces, store, settings }: RestoreContext): void {
+export function restoreSession({ panes, agents, workspaces, store, settings }: RestoreContext): void {
   const cfg = settings();
   const backend = panes.backend;
   const records = new Map(store.panes().map((r) => [r.id, r]));
@@ -62,8 +62,8 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
     tally[what] = (tally[what] ?? 0) + 1;
     log.debug(`${id.slice(0, 8)}: ${what}`, detail);
   };
-  const openSpace = (id: string) => {
-    const s = spaces.get(id);
+  const openWorkspace = (id: string) => {
+    const s = workspaces.get(id);
     return s && s.closedAt === null ? s : null;
   };
 
@@ -71,8 +71,8 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
     const rec = records.get(term.id) ?? null;
     records.delete(term.id);
     try {
-      // Its Space went away meanwhile (closed elsewhere, forgotten): it goes Home.
-      panes.adopt(term, rec && { ...rec, spaceId: openSpace(rec.spaceId)?.id ?? spaces.home().id });
+      // Its workspace went away meanwhile (closed elsewhere, forgotten): it goes Home.
+      panes.adopt(term, rec && { ...rec, workspaceId: openWorkspace(rec.workspaceId)?.id ?? workspaces.home().id });
       back.set(term.id, true);
       count(rec ? "reattached" : "reattached without a record", term.id);
     } catch (err) {
@@ -84,13 +84,13 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
   const hosted = new Map<PaneId, Agent>();
   for (const a of stored) if (a.paneId && !hosted.has(a.paneId)) hosted.set(a.paneId, a);
   for (const rec of records.values()) {
-    const space = openSpace(rec.spaceId);
+    const workspace = openWorkspace(rec.workspaceId);
     const drop = copiedFrom
       ? "dropped: the database was copied"
       : rec.host === backend.instance
         ? "dropped: exited while the core was away"
-        : !cfg["restore.terminals"] ? "dropped: restore.terminals is off" : !space ? "dropped: its Space is closed" : null;
-    if (drop || !space) {
+        : !cfg["restore.terminals"] ? "dropped: restore.terminals is off" : !workspace ? "dropped: its workspace is closed" : null;
+    if (drop || !workspace) {
       count(drop ?? "dropped", rec.id);
       panes.discard(rec.id);
       continue;
@@ -107,12 +107,12 @@ export function restoreSession({ panes, agents, spaces, store, settings }: Resto
       if (agent!.parentId) env[ENV.parentId] = agent!.parentId;
     }
     if (prefill) env[RESTORE_COMMAND_ENV] = prefill;
-    // Its folder can be gone (a removed worktree): it starts in the Space's, else the home folder, and says so.
-    const cwd = isDir(rec.cwd) ? rec.cwd : isDir(space.root) ? space.root : os.homedir();
+    // Its folder can be gone (a removed worktree): it starts in the workspace's, else the home folder, and says so.
+    const cwd = isDir(rec.cwd) ? rec.cwd : isDir(workspace.root) ? workspace.root : os.homedir();
     try {
       panes.create({
         id: rec.id,
-        spaceId: space.id,
+        workspaceId: workspace.id,
         cwd,
         cols: rec.cols,
         rows: rec.rows,

@@ -40,7 +40,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 ## Features
 
 - **Layouts.** Focus on one window, tile them in a grid, scroll through a strip inspired by [PaperWM](https://github.com/paperwm/PaperWM), or place them on an infinite canvas with a minimap.
-- **Spaces.** A Space is a folder you work in, with its own terminals, agents and windows. `cmd .` or ⌘O opens one; switch in place, or give each Space its own app window (⇧⌘N, or Settings → Windows → Open each Space in its own window). cmd reopens every window where it was, per display setup: laptop alone, or at the desk.
+- **Workspaces.** A workspace is a folder you work in, with its own terminals, agents and windows. `cmd .` or ⌘O opens one; switch in place, or give each workspace its own app window (⇧⌘N, or Settings → Windows → Open each workspace in its own window). cmd reopens every window where it was, per display setup: laptop alone, or at the desk.
 - **Agent detection.** Claude Code, Codex, Gemini, Aider and others are recognised in any terminal, even behind wrappers and sandboxes.
 - **Waiting agents first.** Agents waiting for input are listed first, then working, then done. ⌃⌘J jumps to the next one.
 - **Remote access (beta).** Pair a phone or another browser with a QR code and use your terminals and agents on the go, end-to-end encrypted.
@@ -67,7 +67,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
   <img alt="Magic widgets in a grid: GitHub Actions runs, the weather in Tokyo, a EUR to JPY chart, disk space, a tea timer, and an empty Magic widget asking what it should show" src="docs/screenshots/magic-light.png">
 </picture>
 
-Press ⇧⌘M and type what you want to see: "my open merge requests", "the last CI runs", a JSON URL, a command. An agent looks around with read-only commands, writes a small widget, checks that it works, and shows it in your theme. The widget refreshes on its own without calling the model. Change it by asking (⌘L), edit its versions, settings and files (⌘E), or take it off the board when you're done: it stays in your Widget Library (⇧⌘L), ready to put back in any Space.
+Press ⇧⌘M and type what you want to see: "my open merge requests", "the last CI runs", a JSON URL, a command. An agent looks around with read-only commands, writes a small widget, checks that it works, and shows it in your theme. The widget refreshes on its own without calling the model. Change it by asking (⌘L), edit its versions, settings and files (⌘E), or take it off the board when you're done: it stays in your Widget Library (⇧⌘L), ready to put back in any workspace.
 
 **Setup.** Magic widgets use your own Anthropic or OpenAI API key, asked for on first launch and kept in Settings → AI & Agents. cmd picks the newest models your key can use. Keys are stored outside `settings.json` and readable only by you. Widgets' data runs on [Deno](https://deno.com); cmd uses yours or downloads its own.
 
@@ -84,7 +84,7 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 | ⌥⌘N | new Claude session |
 | ⇧⌘M | new widget with Magic; in one, ⌘L changes it, ⌘E edits it, ⌘R refreshes it |
 | ⇧⌘L | Widget Library: your widgets, to put back on the board |
-| ⌘O / ⇧⌘N | open a Space here / in a new window |
+| ⌘O / ⇧⌘N | open a workspace here / in a new window |
 | ⌘K | command palette: `>` commands, `@` sessions, `?` past sessions |
 | ⌥⌘1 / 2 / 3 / 4 | focus / grid / strip / canvas |
 | ⌘↩ | focus on the selected window, and back |
@@ -98,7 +98,7 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 | ⇧⌘A | copy the last command's output |
 | ⌥-drag | select text in programs that use the mouse |
 | ⇧⌘1 / ⇧⌘2 | canvas: fit all / zoom to the selected window |
-| ⇧⌘F | search the Space: open windows, files (names and lines), past sessions, commands and what they printed, pages (the palette, with `?`) |
+| ⇧⌘F | search the workspace: open windows, files (names and lines), past sessions, commands and what they printed, pages (the palette, with `?`) |
 | ⌃⌘S | show or hide the sidebar |
 | ⌘, | settings |
 

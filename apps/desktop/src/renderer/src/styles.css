@@ -73,7 +73,7 @@ kbd {
 /* Three columns, the outer two equal while there's room: the middle one centres on
    the window, not on what's left between the traffic lights and the controls.
    Narrower, the lead keeps the lights' room and the trail its controls, and the
-   middle gives way (the Space name ellipsizes). */
+   middle gives way (the workspace name ellipsizes). */
 .topbar {
   display: grid;
   grid-template-columns: minmax(var(--lights-w, 0px), 1fr) auto minmax(max-content, 1fr);
@@ -90,7 +90,7 @@ kbd {
 .platform-mac .topbar { --lights-w: calc(80px - var(--pad-x)); }
 /* Empty for now: a drag region like the rest of the bar. */
 .topbar-lead { min-width: 0; }
-/* The columns stay drag regions; only the controls in them aren't (.spacebar is no-drag itself). */
+/* The columns stay drag regions; only the controls in them aren't (.workspace-bar is no-drag itself). */
 .topbar-center { display: flex; justify-content: center; min-width: 0; }
 /* At the right end, plain buttons like the footer's. */
 .topbar-trail { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
@@ -227,8 +227,8 @@ kbd {
 .index-ring-fill { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray var(--dur-slow) var(--ease); }
 
 .sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 10px; }
-/* Switching Spaces (store.ts switchSpace): Spaces are a vertical stack. Everything in
-   one (the sidebars, the Navigator, windows, widgets) moves as one: to the next Space,
+/* Switching workspaces (store.ts switchWorkspace): workspaces are a vertical stack. Everything in
+   one (the sidebars, the Navigator, windows, widgets) moves as one: to the next workspace,
    the old leaves out the top while the new rises from the bottom, a gap apart; to the
    previous, the other way. The stage is the scope of an element View Transition,
    captured as its `root` (the new side stays live), clipped to it; transforms only, on the glide. */
@@ -240,14 +240,14 @@ kbd {
   animation-fill-mode: both;
   mix-blend-mode: normal;
 }
-.stage:active-view-transition-type(space-next)::view-transition-old(root) { animation-name: space-out-up; }
-.stage:active-view-transition-type(space-next)::view-transition-new(root) { animation-name: space-in-up; }
-.stage:active-view-transition-type(space-prev)::view-transition-old(root) { animation-name: space-out-down; }
-.stage:active-view-transition-type(space-prev)::view-transition-new(root) { animation-name: space-in-down; }
-@keyframes space-out-up { to { transform: translateY(calc(-100% - 32px)); } }
-@keyframes space-in-up { from { transform: translateY(calc(100% + 32px)); } }
-@keyframes space-out-down { to { transform: translateY(calc(100% + 32px)); } }
-@keyframes space-in-down { from { transform: translateY(calc(-100% - 32px)); } }
+.stage:active-view-transition-type(workspace-next)::view-transition-old(root) { animation-name: workspace-out-up; }
+.stage:active-view-transition-type(workspace-next)::view-transition-new(root) { animation-name: workspace-in-up; }
+.stage:active-view-transition-type(workspace-prev)::view-transition-old(root) { animation-name: workspace-out-down; }
+.stage:active-view-transition-type(workspace-prev)::view-transition-new(root) { animation-name: workspace-in-down; }
+@keyframes workspace-out-up { to { transform: translateY(calc(-100% - 32px)); } }
+@keyframes workspace-in-up { from { transform: translateY(calc(100% + 32px)); } }
+@keyframes workspace-out-down { to { transform: translateY(calc(100% + 32px)); } }
+@keyframes workspace-in-down { from { transform: translateY(calc(-100% - 32px)); } }
 .sb-section + .sb-section { margin-top: 6px; }
 
 /* Section headings are the kit's ListHeading, inset like the rows. */
@@ -1118,18 +1118,18 @@ kbd {
   .mark > * { transform: none !important; }
 }
 
-/* ── Space switcher (the top bar) ── */
+/* ── Workspace switcher (the top bar) ── */
 
-.spacebar {
+.workspace-bar {
   flex: 0 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
   -webkit-app-region: no-drag;
 }
-/* The button: the Space's icon and name as plain text, the chevron after it; a
+/* The button: the workspace's icon and name as plain text, the chevron after it; a
    background only on hover or while its menu is open. */
-.space-trigger {
+.workspace-trigger {
   flex: 0 1 auto;
   min-width: 0;
   display: flex;
@@ -1145,23 +1145,23 @@ kbd {
   text-align: left;
   transition: background-color var(--dur) var(--ease);
 }
-.space-trigger:hover, .space-trigger.open { background: var(--bg-selected); }
-.space-trigger:focus-visible { outline: none; border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
-.space-trigger .space-name { flex: 0 1 auto; position: relative; top: -0.5px; } /* capitals centred on the icon and chevron (measured) */
-.space-trigger.pending { color: var(--text-dim); font-weight: 500; }
-.space-trigger.pending:hover { background: transparent; }
-.space-menu { min-width: 280px; } /* sized to its widest Space (SpaceBar.tsx), no wider than 400px */
-.space-trigger > .sf { flex: none; color: var(--text-dim); }
-.space-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* SpaceIcon.tsx: the Space's symbol; a dot on its corner when it wants you. */
-.space-icon {
+.workspace-trigger:hover, .workspace-trigger.open { background: var(--bg-selected); }
+.workspace-trigger:focus-visible { outline: none; border-color: var(--input-focus-edge); box-shadow: 0 0 0 2px var(--input-glow); }
+.workspace-trigger .workspace-name { flex: 0 1 auto; position: relative; top: -0.5px; } /* capitals centred on the icon and chevron (measured) */
+.workspace-trigger.pending { color: var(--text-dim); font-weight: 500; }
+.workspace-trigger.pending:hover { background: transparent; }
+.workspace-menu { min-width: 280px; } /* sized to its widest workspace (WorkspaceBar.tsx), no wider than 400px */
+.workspace-trigger > .sf { flex: none; color: var(--text-dim); }
+.workspace-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* WorkspaceIcon.tsx: the workspace's symbol; a dot on its corner when it wants you. */
+.workspace-icon {
   position: relative;
   flex: none;
   display: inline-grid;
   place-items: center;
   color: var(--icon);
 }
-.space-icon.attn-needs::after, .space-icon.attn-unseen::after {
+.workspace-icon.attn-needs::after, .workspace-icon.attn-unseen::after {
   content: "";
   position: absolute;
   top: -3px;
@@ -1171,14 +1171,14 @@ kbd {
   border-radius: 50%;
   box-shadow: 0 0 0 1.5px var(--bg-elevated);
 }
-.space-icon.attn-needs::after { background: var(--state-needs); }
-.space-icon.attn-unseen::after { background: var(--state-done); }
-/* The menu (SpaceBar.tsx) is @cmd/ui's Menu, one line per Space; a long folder keeps its end. */
-.space-item .ui-menu-detail { direction: rtl; text-align: left; }
-.space-item[data-active] .space-icon { color: inherit; }
-.space-item[data-active] .space-icon::after { box-shadow: 0 0 0 1.5px var(--accent); }
-.space-item-open .ui-menu-icon { color: var(--text-dim); }
-/* SpaceIconPicker: the palette's frame around a grid of symbols. */
+.workspace-icon.attn-needs::after { background: var(--state-needs); }
+.workspace-icon.attn-unseen::after { background: var(--state-done); }
+/* The menu (WorkspaceBar.tsx) is @cmd/ui's Menu, one line per workspace; a long folder keeps its end. */
+.workspace-item .ui-menu-detail { direction: rtl; text-align: left; }
+.workspace-item[data-active] .workspace-icon { color: inherit; }
+.workspace-item[data-active] .workspace-icon::after { box-shadow: 0 0 0 1.5px var(--accent); }
+.workspace-item-open .ui-menu-icon { color: var(--text-dim); }
+/* WorkspaceIconPicker: the palette's frame around a grid of symbols. */
 .icon-grid {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
@@ -1205,7 +1205,7 @@ kbd {
 .icon-cell.active { background: var(--accent); color: var(--on-accent); }
 .icon-picker-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
 @media (prefers-reduced-motion: reduce) {
-  .space-trigger, .space-menu { transition: none; animation: none; }
+  .workspace-trigger, .workspace-menu { transition: none; animation: none; }
 }
 
 /* ── remote access (components/Remote.tsx, PairPrompt.tsx) ── */

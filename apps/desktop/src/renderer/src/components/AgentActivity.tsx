@@ -1,5 +1,5 @@
 // Agent Activity, a built-in widget (docs/16-widgets.md): every agent in this
-// Space, or all of them, at a glance: who waits for you first, then who is
+// Workspace, or all of them, at a glance: who waits for you first, then who is
 // working, then what finished. Rows say what the sidebar says (fieldsOf), so
 // the two never disagree; a click goes to the agent's terminal. The counts are
 // the title bar's status, and its menu switches the scope.
@@ -10,7 +10,7 @@ import { bucketOf, type Agent } from "@cmd/protocol";
 import { newAgent, selectPane } from "../actions.ts";
 import { cmd } from "../bridge.ts";
 import { fieldsOf, whereOf, type SidebarRow } from "../model.ts";
-import { showSpace } from "../spaces.tsx";
+import { showWorkspace } from "../workspaces.tsx";
 import { useStore } from "../store.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
 import { useWidgetStatus } from "../widgets.ts";
@@ -29,7 +29,7 @@ function rank(a: Agent): number {
 
 export function AgentActivity({ win }: WindowViewProps) {
   const s = useStore();
-  const scope = win.state.scope === "all" ? "all" : "space";
+  const scope = win.state.scope === "all" ? "all" : "workspace";
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 15_000);
@@ -40,7 +40,7 @@ export function AgentActivity({ win }: WindowViewProps) {
   const listRef = useRef<HTMLDivElement>(null);
   useFlip(listRef, { selector: "[data-key]" });
   const { roots, children } = useMemo(() => {
-    const shown = [...s.agents.values()].filter((a) => scope === "all" || a.spaceId === win.spaceId);
+    const shown = [...s.agents.values()].filter((a) => scope === "all" || a.workspaceId === win.workspaceId);
     const ids = new Set(shown.map((a) => a.id));
     const children = new Map<string, Agent[]>();
     const roots: Agent[] = [];
@@ -52,9 +52,9 @@ export function AgentActivity({ win }: WindowViewProps) {
     roots.sort(order);
     for (const list of children.values()) list.sort(order);
     return { roots, children };
-  }, [s.agents, scope, win.spaceId]);
+  }, [s.agents, scope, win.workspaceId]);
 
-  const all = [...s.agents.values()].filter((a) => scope === "all" || a.spaceId === win.spaceId);
+  const all = [...s.agents.values()].filter((a) => scope === "all" || a.workspaceId === win.workspaceId);
   const counts = {
     needs: all.filter((a) => bucketOf(a) === "needs").length,
     working: all.filter((a) => a.state === "working" || a.state === "starting").length,
@@ -70,16 +70,16 @@ export function AgentActivity({ win }: WindowViewProps) {
     while (at && !at.paneId && at.parentId) at = s.agents.get(at.parentId);
     const pane = at?.paneId;
     if (!pane) return;
-    if (at!.spaceId === s.spaceId) selectPane(pane);
-    else showSpace(at!.spaceId, { select: pane });
+    if (at!.workspaceId === s.workspaceId) selectPane(pane);
+    else showWorkspace(at!.workspaceId, { select: pane });
     void cmd.call("agent.markSeen", { agentId: a.id }).catch(() => {});
   };
 
   const row = (a: Agent, depth: number) => {
     const r: SidebarRow = { key: a.id, pane: a.paneId ? (s.panes.get(a.paneId) ?? null) : null, win: null, agent: a, children: [], urgent: null };
     const f = fieldsOf(r, undefined, now);
-    const sp = s.spaces.get(a.spaceId);
-    const space = scope === "all" ? sp?.name : undefined;
+    const sp = s.workspaces.get(a.workspaceId);
+    const workspace = scope === "all" ? sp?.name : undefined;
     const where = whereOf(a.git, a.cwd, sp);
     return (
       <div key={a.id} data-key={a.id}>
@@ -90,7 +90,7 @@ export function AgentActivity({ win }: WindowViewProps) {
             {f.status && <span className="aa-status">{f.status.text}</span>}
           </span>
           <span className="aa-side">
-            <span className="aa-place" data-tip={where?.tip}>{[space, where?.text].filter(Boolean).join(" · ")}</span>
+            <span className="aa-place" data-tip={where?.tip}>{[workspace, where?.text].filter(Boolean).join(" · ")}</span>
             <span className="aa-time">{shortAgo(a.stateSince, now)}</span>
           </span>
         </button>
@@ -105,7 +105,7 @@ export function AgentActivity({ win }: WindowViewProps) {
         {roots.length ? (
           roots.map((a) => row(a, 0))
         ) : (
-          <EmptyState compact icon="person.2" title={scope === "all" ? "No agents running" : "No agents in this Space"} action={<Button onClick={() => void newAgent("claude")}>New Claude Session</Button>}>
+          <EmptyState compact icon="person.2" title={scope === "all" ? "No agents running" : "No agents in this workspace"} action={<Button onClick={() => void newAgent("claude")}>New Claude Session</Button>}>
             Agents you start show up here as they work.
           </EmptyState>
         )}

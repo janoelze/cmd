@@ -60,7 +60,7 @@ The library is ⇧⌘L, as Xcode's Library is: L for Library. ⌥⌘M looks natu
 
 
 - **File** starts with **New…** (⌘N), then holds windows only: Terminal (⌘T), Claude, Codex, Browser, File Browser, Text.
-- A **Widgets** menu (after Space, before Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Change Widget…, Refresh Widget, Stop Making Widget, Remove from Board. The Magic View-menu items moved here; their ids (`file.newMagic`, `view.magic*`) stay, since keybindings.json uses them. Edit stays ⌘E in View (Toggle Preview / Edit), which already serves every window.
+- A **Widgets** menu (after Workspace, before Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Change Widget…, Refresh Widget, Stop Making Widget, Remove from Board. The Magic View-menu items moved here; their ids (`file.newMagic`, `view.magic*`) stay, since keybindings.json uses them. Edit stays ⌘E in View (Toggle Preview / Edit), which already serves every window.
 - The top bar's + is New…, as ⌘N is.
 
 ### New…
@@ -71,22 +71,22 @@ One picker for everything new, in the command palette's frame (`renderer/src/new
 2. **Widgets**: yours by last use, then the built-in ones. A pick is the library's Add (`widget.add`).
 3. **New Widget with Magic** last. With text typed it becomes **Make “…” with Magic**, which opens a Magic window and starts making that request.
 
-Groups keep this order whatever is typed; a query only ranks within a group, so "t" offers Terminal and Text Window before Timer. A typed URL or path offers **Open …** first (the palette's `window.openTarget`), and no Magic. Each window runs its own command, so it opens in the same Space and folder as from the menu. The direct shortcuts (⌘T, ⌥⌘N, ⇧⌘B, ⇧⌘O, ⇧⌘E, ⇧⌘M) skip the picker.
-- The sidebar lists widgets in the Space in their own **Widgets** section, after Windows.
+Groups keep this order whatever is typed; a query only ranks within a group, so "t" offers Terminal and Text Window before Timer. A typed URL or path offers **Open …** first (the palette's `window.openTarget`), and no Magic. Each window runs its own command, so it opens in the same workspace and folder as from the menu. The direct shortcuts (⌘T, ⌥⌘N, ⇧⌘B, ⇧⌘O, ⇧⌘E, ⇧⌘M) skip the picker.
+- The sidebar lists widgets in the workspace in their own **Widgets** section, after Windows.
 
 ### The library
 
 A sheet, like the palette or Settings, with a grid of tall cards, three to a row: an avatar top left (a built-in widget's icon, else the widget's initial, in a colour of its own from its name, like projects' chips in the sidebar), the name and where it comes from beside it ("Made with Magic" or "Built-in"), open space, and the description or what was asked for at the bottom. Screenshots (the latest revision's `shot.png`) are still listed (`WidgetEntry.shot`) but not shown: a hover preview could use them.
 
-- **Your Widgets**: by last use. (A "Here" badge on widgets already in this Space was tried and dropped: unclear.) ✦ New Widget is a button beside the search field, not a card among them.
+- **Your Widgets**: by last use. (A "Here" badge on widgets already in this workspace was tried and dropped: unclear.) ✦ New Widget is a button beside the search field, not a card among them.
 - **Built-in**: Agent Activity, Live Diff, and more over time.
 - No **Examples** section. It was built (the Magic prompt's examples as widgets to add and change) and dropped: examples already live as the chips under the prompt when making a widget, and the library is for widgets you have.
 
-Clicking a card adds the widget to the current Space and closes the sheet; ⏎ in the search field adds the first match. A card's menu (right-click, or its … button) has Add to Space, and for yours Rename…, Duplicate, Show in Finder and Delete…. Deleting a widget that is in a Space says its windows close too, closes them, then deletes (the core itself still refuses while a window shows it). The sheet asks the core for a fresh list when it opens; `widget.library` events keep it current. Built: `renderer/src/components/WidgetLibrary.tsx`.
+Clicking a card adds the widget to the current workspace and closes the sheet; ⏎ in the search field adds the first match. A card's menu (right-click, or its … button) has Add to Workspace, and for yours Rename…, Duplicate, Show in Finder and Delete…. Deleting a widget that is in a workspace says its windows close too, closes them, then deletes (the core itself still refuses while a window shows it). The sheet asks the core for a fresh list when it opens; `widget.library` events keep it current. Built: `renderer/src/components/WidgetLibrary.tsx`.
 
 ### Making a widget
 
-As today: the widget appears in the Space right away, as a prompt; you describe it and watch it being built. Two additions:
+As today: the widget appears in the workspace right away, as a prompt; you describe it and watch it being built. Two additions:
 
 - Once it works for the first time it joins Your Widgets. A draft that was never built goes away when it is closed, so the library doesn't fill with attempts.
 - The first time a made widget is removed from the board, a toast says where it went: "Removed “…” from the board. It's in your Widget Library." with Undo (a toast has one action). The flag is the `widgets.removedHint` UI state.
@@ -97,7 +97,7 @@ As today: the widget appears in the Space right away, as a prompt; you describe 
 
 ### Copies
 
-The same widget can be on the board more than once (Agent Activity in every Space, the CI widget for two repositories). Each copy has its own settings (config, refresh, `cmd.state`) and runs in its own Space (`cwdFor(w)` already uses the window's Space). What the widget *is* (its files, revisions, problems) is shared: a change made from one copy updates all of them. Duplicate in the library is how you make a separate widget to change on its own.
+The same widget can be on the board more than once (Agent Activity in every workspace, the CI widget for two repositories). Each copy has its own settings (config, refresh, `cmd.state`) and runs in its own workspace (`cwdFor(w)` already uses the window's workspace). What the widget *is* (its files, revisions, problems) is shared: a change made from one copy updates all of them. Duplicate in the library is how you make a separate widget to change on its own.
 
 ### Terminal answers
 
@@ -134,15 +134,15 @@ The folder format reaches the library through the store, later (14-magic-v2.md, 
 
 Built in phase 4 (core types in `windows/builtin.ts`, views in `renderer/src/components/AgentActivity.tsx` and `LiveDiff.tsx`):
 
-- **Agent Activity** (`agents`, state `{ scope: "space" | "all" }`): the agents of its Space or of all of them, waiting for you first, then working, then the rest by recency; subagents under their host. Each row says what the sidebar says (`fieldsOf`: name, status line, light), plus its project and how long ago its state changed; a click goes to the agent's terminal (a subagent's: its host's), in its Space. The bar counts who waits, works and is done, and switches scope (also in the window's menu). The data is the renderer's store (`agent.updated`), nothing new in the core.
-- **Live Diff** (`diff`, state `{ path }`, default the Space's root; titled "Changes · <folder>"): the branch, ahead/behind, and each changed file with its state, +/− counts and its hunks (open when there are 6 files or fewer; a click toggles, a double-click opens the file). Files come from `git.status`, lines from the new `git.diff { path, file? }` (staged and unstaged against HEAD; with `file`, one file, an untracked one as all added). It refreshes at once when git's index or HEAD changes (fs.watch on them: stage, commit, checkout) and every 3 s while cmd is in front. Outside a repository it offers Choose Folder…, as its window menu does.
+- **Agent Activity** (`agents`, state `{ scope: "workspace" | "all" }`): the agents of its workspace or of all of them, waiting for you first, then working, then the rest by recency; subagents under their host. Each row says what the sidebar says (`fieldsOf`: name, status line, light), plus its project and how long ago its state changed; a click goes to the agent's terminal (a subagent's: its host's), in its workspace. The bar counts who waits, works and is done, and switches scope (also in the window's menu). The data is the renderer's store (`agent.updated`), nothing new in the core.
+- **Live Diff** (`diff`, state `{ path }`, default the workspace's root; titled "Changes · <folder>"): the branch, ahead/behind, and each changed file with its state, +/− counts and its hunks (open when there are 6 files or fewer; a click toggles, a double-click opens the file). Files come from `git.status`, lines from the new `git.diff { path, file? }` (staged and unstaged against HEAD; with `file`, one file, an untracked one as all added). It refreshes at once when git's index or HEAD changes (fs.watch on them: stage, commit, checkout) and every 3 s while cmd is in front. Outside a repository it offers Choose Folder…, as its window menu does.
 - **YouTube** (`youtube`, state `{ video?, list?, start?, fill? }`): a player filling the window. Empty, it asks for a link, video id or `<iframe>` embed code (`parseYouTube` in the core: watch, youtu.be, shorts, live, embed and playlist links, `t=`/`start=`). The player is youtube.com's embed page in a `<webview>` in the browser windows' session (an iframe would need the app's CSP opened, and YouTube refuses embeds without a Referer, error 153; the webview sends one). Signed out, YouTube may ask to "confirm you're not a bot": its Sign in opens a browser window, and the sign-in then holds for every webview. The video covers the window, cropped, by default; unchecking Fill Window (menu) letterboxes it instead (`fill: false`).
 - No `config` schema on window types yet: both keep their one setting in their window state and change it in place. A schema is worth it when the edit view serves built-ins too.
 - **Commands** (`commands`, state `{ scope, failedOnly? }`): every command the terminals ran, from OSC 133 C/D and the shell's exec request (`core/commands.ts`; a live query over `command` events, the newest 300). Running first, then finished, newest first; failed ones say their exit status (130/137/143 count as stopped). A click goes to the terminal; Run Again types the command there when it is back at its prompt. Terminals cmd started an agent in are left out.
-- **Notifications** (`notifications`, state `{ scope }`): the notifications sent since the last Clear, shown or not (a live query over `notification` events and `notification.clear` markers, which `notify.clear` records; the newest 200). Each carries the Space of what it is about when sent, so one from a closed terminal stays in its Space. Today, then Earlier; a click goes to the terminal or window it is about.
+- **Notifications** (`notifications`, state `{ scope }`): the notifications sent since the last Clear, shown or not (a live query over `notification` events and `notification.clear` markers, which `notify.clear` records; the newest 200). Each carries the workspace of what it is about when sent, so one from a closed terminal stays in its workspace. Today, then Earlier; a click goes to the terminal or window it is about.
 - **Resources** (`resources`, state `{ scope }`): CPU and memory per terminal's process tree (`Pane.usage`), busiest first, each expanding to its largest processes, then cmd itself (app, background). Polled every 2 s like the Task Manager.
-- **Timer** (`timer`, state `{ duration, endsAt, left, rang }`): a countdown, changed with `{ duration }` or `{ action: start | pause | reset }`. The core rings it (`core/timers.ts`), so it ends on time in any Space, and sends a `timer` notification.
-- The list widgets have no header of their own: the title bar names them, its status is their summary ("1 failed", "ends 14:30") and its menu button (`titleMenu`) switches This Space / All Spaces and has their options. Their lists are `@cmd/ui`'s Panel, ListSection, ListRow and Chip, the kit's version of the Navigator's and the file browser's look.
+- **Timer** (`timer`, state `{ duration, endsAt, left, rang }`): a countdown, changed with `{ duration }` or `{ action: start | pause | reset }`. The core rings it (`core/timers.ts`), so it ends on time in any workspace, and sends a `timer` notification.
+- The list widgets have no header of their own: the title bar names them, its status is their summary ("1 failed", "ends 14:30") and its menu button (`titleMenu`) switches This Workspace / All Workspaces and has their options. Their lists are `@cmd/ui`'s Panel, ListSection, ListRow and Chip, the kit's version of the Navigator's and the file browser's look.
 - Later, cheap: Listening Ports.
 
 ### Protocol
@@ -152,14 +152,14 @@ Built in phase 2:
 - `WindowType.role` (`"window"` by default, `"widget"`) and `description`, the same in `WindowTypeInfo`. `magic`, `agents` and `diff` are widget types.
 - Refs: `magic:<widget id>` for widgets made with Magic, `type:<kind>` for built-in widgets.
 - `widget.list` → `WidgetEntry[]` (`{ ref, source: "builtin" | "yours", kind, title, description?, icon, shot?, createdAt?, usedAt?, windows }`): built-in widget types (every type with role `widget` but `magic`, which is the New Widget button), then yours by last use.
-- `widget.add { ref, spaceId? | callerPaneId? }` → the new window. Refuses types that aren't widgets.
+- `widget.add { ref, workspaceId? | callerPaneId? }` → the new window. Refuses types that aren't widgets.
 - `widget.rename { ref, title }`: the name sticks (`named` in widget.json); changes and hand edits keep it instead of the manifest's title.
 - `widget.duplicate { ref }` → the new entry, titled "… copy": files, revisions and secrets copied.
 - `widget.delete { ref }`: refused while a window shows it.
 - Event `widget.library { entries }`, at most once per 50 ms burst, when a widget is made, changed, renamed, duplicated or deleted, or a window showing one opens or closes.
 - Remote sessions get none of these yet (screenshots are file paths).
 - `magic.*` methods keep addressing the window (instance). Those that change the widget (`magic.run` when changing, `magic.restore`) reach every window that shows it; `magic.secret` is per widget.
-- CLI: `cmd widget list [--json]`, `cmd widget add <widget>` (a ref, an id or kind, or a title), in the terminal's Space.
+- CLI: `cmd widget list [--json]`, `cmd widget add <widget>` (a ref, an id or kind, or a title), in the terminal's workspace.
 
 ### Migration
 
@@ -182,7 +182,7 @@ For whoever cuts the release with these changes in it; it passes `lintChangelog`
 ```markdown
 ### New
 
-- **Widget Library.** ⇧⌘L shows your widgets and the built-in ones. A widget you take off the board stays there, ready to put back in any Space.
+- **Widget Library.** ⇧⌘L shows your widgets and the built-in ones. A widget you take off the board stays there, ready to put back in any workspace.
 - **Agent Activity.** A built-in widget with every agent at a glance: who waits for you, who is working and what just finished.
 - **Live Diff.** A built-in widget with the uncommitted changes in a project, updated as you work.
 
@@ -196,4 +196,4 @@ For whoever cuts the release with these changes in it; it passes `lintChangelog`
 
 - **A Widgets menu or a group in File?** The menu makes the split plainest, at the cost of one more menu bar item. Proposed: the menu.
 - **Shared refreshes:** two copies with the same config and folder could share one data run. Not needed at first.
-- **Per-Space libraries:** not proposed. A widget runs in the Space it's in, so one library serves every project.
+- **Per-workspace libraries:** not proposed. A widget runs in the workspace it's in, so one library serves every project.

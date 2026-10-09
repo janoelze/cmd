@@ -1,8 +1,8 @@
 // What a paired device may do (docs/13-remote-access.md, "Scopes and the policy
 // table"). Fail-closed: every RPC method has an explicit entry (tsc refuses a new
 // method until someone decides), anything not allowed is denied, and arguments
-// are checked too: panes, agents and windows must belong to an open Space, paths
-// must resolve (symlinks followed) inside an open Space's root and off the
+// are checked too: panes, agents and windows must belong to an open workspace, paths
+// must resolve (symlinks followed) inside an open workspace's root and off the
 // deny-list of private files. Events go through an allowlist as well.
 
 import fs from "node:fs";
@@ -12,7 +12,7 @@ import type { CoreEvent, Method, Params, RemoteScope } from "@cmd/protocol";
 import { DEFAULT_DENY_PATHS, isDeniedPath } from "../magic/policy.ts";
 import type { AgentTracker } from "../agents/tracker.ts";
 import type { PaneManager } from "../panes.ts";
-import type { SpaceManager } from "../spaces/manager.ts";
+import type { WorkspaceManager } from "../workspaces/manager.ts";
 import type { WindowManager } from "../windows/index.ts";
 
 /** view: any paired device; control: control-scope devices; never: only the Mac. */
@@ -95,12 +95,12 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "window.move": "never",
   "window.list": "view",
   "window.follow": "view",
-  "space.list": "view",
-  "space.open": "never",
-  "space.match": "never",
-  "space.update": "never", // a phone's layout is its own, never Space.view
-  "space.close": "never",
-  "space.forget": "never",
+  "workspace.list": "view",
+  "workspace.open": "never",
+  "workspace.match": "never",
+  "workspace.update": "never", // a phone's layout is its own, never Workspace.view
+  "workspace.close": "never",
+  "workspace.forget": "never",
   "magic.run": "control", // spends API keys, runs the exploring agent
   "jam.change": "control", // spends API keys; returns code, runs nothing
   "magic.cancel": "control",
@@ -124,7 +124,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "widget.duplicate": "never",
   "widget.delete": "never",
   "fs.list": "view",
-  "fs.resolve": "never", // an existence oracle for any path; the web client resolves terminal links within Spaces later
+  "fs.resolve": "never", // an existence oracle for any path; the web client resolves terminal links within workspaces later
   "fs.read": "view",
   "fs.watch": "view",
   "fs.unwatch": "view",
@@ -171,7 +171,7 @@ export class RemoteDenied extends Error {}
 export interface PolicyContext {
   panes: PaneManager;
   agents: AgentTracker;
-  spaces: SpaceManager;
+  workspaces: WorkspaceManager;
   windows: WindowManager;
   home?: string;
 }
@@ -182,7 +182,7 @@ export const MAX_WRITE = 64 * 1024;
 type Check<M extends Method> = (p: Params<M>, ctx: PolicyContext) => void;
 const ARGS: { [M in Method]?: Check<M> } = {
   "pane.create": (p, ctx) => {
-    if (p.spaceId) openSpace(ctx, p.spaceId);
+    if (p.workspaceId) openWorkspace(ctx, p.workspaceId);
     if (p.callerPaneId) pane(ctx, p.callerPaneId);
     if (p.cwd !== undefined) allowedPath(ctx, p.cwd);
   },
@@ -203,7 +203,7 @@ const ARGS: { [M in Method]?: Check<M> } = {
   "pane.reset": (p, ctx) => pane(ctx, p.paneId),
   "pane.read": (p, ctx) => pane(ctx, p.paneId),
   "agent.spawn": (p, ctx) => {
-    if (p.spaceId) openSpace(ctx, p.spaceId);
+    if (p.workspaceId) openWorkspace(ctx, p.workspaceId);
     if (p.callerPaneId) pane(ctx, p.callerPaneId);
     if (p.parentId) agent(ctx, p.parentId);
     if (p.cwd !== undefined) allowedPath(ctx, p.cwd);
@@ -220,7 +220,7 @@ const ARGS: { [M in Method]?: Check<M> } = {
   },
   "agent.markSeen": (p, ctx) => agent(ctx, p.agentId),
   "window.open": (p, ctx) => {
-    if (p.spaceId) openSpace(ctx, p.spaceId);
+    if (p.workspaceId) openWorkspace(ctx, p.workspaceId);
     if (p.callerPaneId) pane(ctx, p.callerPaneId);
     for (const k of ["path", "cwd"]) {
       const v = p.input?.[k];
@@ -296,27 +296,27 @@ function text(v: unknown): void {
   if (v.length > MAX_WRITE) throw new RemoteDenied("too long");
 }
 
-function openSpace(ctx: PolicyContext, id: unknown): void {
-  const s = typeof id === "string" ? ctx.spaces.get(id) : undefined;
-  if (!s || s.closedAt !== null) throw new RemoteDenied("no such Space");
+function openWorkspace(ctx: PolicyContext, id: unknown): void {
+  const s = typeof id === "string" ? ctx.workspaces.get(id) : undefined;
+  if (!s || s.closedAt !== null) throw new RemoteDenied("no such workspace");
 }
 
 function pane(ctx: PolicyContext, id: unknown): void {
   const p = typeof id === "string" ? ctx.panes.get(id) : null;
   if (!p) throw new RemoteDenied("no such terminal");
-  openSpace(ctx, p.spaceId);
+  openWorkspace(ctx, p.workspaceId);
 }
 
 function agent(ctx: PolicyContext, id: unknown): void {
   const a = typeof id === "string" ? ctx.agents.get(id) : null;
   if (!a) throw new RemoteDenied("no such agent");
-  openSpace(ctx, a.spaceId);
+  openWorkspace(ctx, a.workspaceId);
 }
 
 function window(ctx: PolicyContext, id: unknown): void {
   const w = typeof id === "string" ? ctx.windows.list().find((x) => x.id === id) : undefined;
   if (!w) throw new RemoteDenied("no such window");
-  openSpace(ctx, w.spaceId);
+  openWorkspace(ctx, w.workspaceId);
 }
 
 function magicWidget(ctx: PolicyContext, id: unknown): void {
@@ -326,7 +326,7 @@ function magicWidget(ctx: PolicyContext, id: unknown): void {
 
 /**
  * The real path (symlinks resolved; for a file that doesn't exist yet, its
- * folder's) must be inside an open Space's root and not a private file.
+ * folder's) must be inside an open workspace's root and not a private file.
  */
 export function allowedPath(ctx: PolicyContext, p: unknown): string {
   if (typeof p !== "string" || !p || p.includes("\0")) throw new RemoteDenied("bad path");
@@ -334,8 +334,8 @@ export function allowedPath(ctx: PolicyContext, p: unknown): string {
   const home = ctx.home ?? os.homedir();
   const abs = path.resolve(p.startsWith("~") ? path.join(home, p.slice(1)) : p);
   const real = realpath(abs);
-  const roots = ctx.spaces.list().map((s) => realpath(s.root));
-  if (!roots.some((r) => real === r || real.startsWith(r.endsWith(path.sep) ? r : r + path.sep))) throw new RemoteDenied("outside your Spaces");
+  const roots = ctx.workspaces.list().map((s) => realpath(s.root));
+  if (!roots.some((r) => real === r || real.startsWith(r.endsWith(path.sep) ? r : r + path.sep))) throw new RemoteDenied("outside your workspaces");
   if (isDeniedPath(real, DEFAULT_DENY_PATHS, realpath(home)) || isDeniedPath(abs, DEFAULT_DENY_PATHS, home)) throw new RemoteDenied("a private file");
   return real;
 }
@@ -372,8 +372,8 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "agent.removed":
     case "window.updated": // TODO: strip the state of types the web client doesn't show (browser history)
     case "window.removed":
-    case "space.updated":
-    case "space.removed":
+    case "workspace.updated":
+    case "workspace.removed":
     case "notification":
     case "pane.resync":
       return true;
@@ -382,7 +382,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "ai.updated":
     case "search.status":
     case "core.startup": // this Mac's business (its sidebar footer)
-    case "space.show":
+    case "workspace.show":
     case "window.focus":
     case "remote.updated":
     case "remote.pairRequest":

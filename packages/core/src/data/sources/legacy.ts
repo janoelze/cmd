@@ -100,7 +100,7 @@ export function* journalEvents(db: DatabaseSync): Generator<NewEvent> {
       until: r.until,
       type: r.kind as DataEventType,
       source: r.source === "live" ? `cmd:${r.cmd ?? "?"}` : "git",
-      spaceId: r.space_id,
+      workspaceId: r.space_id,
       projectId: r.repo ? `dir:${r.repo}` : r.cwd ? `dir:${r.cwd}` : null,
       paneId,
       windowId,

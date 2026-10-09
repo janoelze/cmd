@@ -20,7 +20,7 @@ import os from "node:os";
 import { logger } from "@cmd/protocol/node";
 import { buildContext } from "../ai/context.ts";
 import { WEEK_FORMAT, WEEK_SCHEMA, WEEK_SYSTEM, daysHash, daysOfWeek, toWeek, weekDigest, weekOf, type WrittenWeek } from "./weeks.ts";
-import { HOME_SPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type JournalDay, type JournalFormat, type JournalEvent, type JournalWeek, type JournalThread, type Space, type SpaceId } from "@cmd/protocol";
+import { HOME_WORKSPACE_ID, JOURNAL_SCHEMA, SOURCES_FORMAT, THREADS_FORMAT, WRITER_FORMAT, type JournalDay, type JournalFormat, type JournalEvent, type JournalWeek, type JournalThread, type Workspace, type WorkspaceId } from "@cmd/protocol";
 import type { CompleteResult, ObjectRequest } from "../ai/backends.ts";
 import type { CallOptions } from "../ai/service.ts";
 import { digest, eventsHash, type Digest } from "./digest.ts";
@@ -63,13 +63,13 @@ export interface JournalAi {
 
 export interface JournalServiceOptions {
   store: JournalStore;
-  spaces: () => Space[];
+  workspaces: () => Workspace[];
   /** Tests: git's events for a repository since a time (default: its reflogs, journal/git.ts). */
   git?: (repo: string, since: number) => Promise<NewJournalEvent[]>;
   /** Tests: what changes when a repository's git does (default: gitStamp, or none with a custom `git`). */
   gitStamp?: (repo: string) => Promise<string | null>;
-  /** A live agent's Space. */
-  agentSpace: (agentId: string) => SpaceId | null;
+  /** A live agent's workspace. */
+  agentWorkspace: (agentId: string) => WorkspaceId | null;
   ai: JournalAi | null;
   now?: () => number;
   /** Between steps of a sync (the scheduler; by default the next tick). */
@@ -78,7 +78,7 @@ export interface JournalServiceOptions {
 
 export type WriteMode = "never" | "stale" | "force";
 
-/** "space:<id>", "repo:<path>" or "all". */
+/** "workspace:<id>", "repo:<path>" or "all". */
 export type JournalScope = string;
 
 export class JournalService {
@@ -142,8 +142,8 @@ export class JournalService {
     const now = this.#now;
     const since = this.#read.git ? this.#read.git - SYNC_OVERLAP : now - (this.#reread ? REREAD_DAYS : FIRST_SYNC_DAYS) * DAY_MS;
     const t0 = Date.now();
-    // Git for every project seen lately and every Space's folder.
-    const repos = new Set([...this.store.repos(now - FIRST_SYNC_DAYS * DAY_MS), ...this.#o.spaces().filter((s) => s.id !== HOME_SPACE_ID).map((s) => s.root)]);
+    // Git for every project seen lately and every workspace's folder.
+    const repos = new Set([...this.store.repos(now - FIRST_SYNC_DAYS * DAY_MS), ...this.#o.workspaces().filter((s) => s.id !== HOME_WORKSPACE_ID).map((s) => s.root)]);
     let git = 0;
     let skipped = 0;
     const read = this.#o.git ?? gitEvents;
@@ -163,7 +163,7 @@ export class JournalService {
       }
       // A first read is thousands of events (90 days of a busy repository): a few hundred per step.
       for (let i = 0; i < ev.length; i += 200) {
-        git += this.store.recordAll(ev.slice(i, i + 200).map((e) => ({ ...e, spaceId: this.#spaceOf(e.repo) })));
+        git += this.store.recordAll(ev.slice(i, i + 200).map((e) => ({ ...e, workspaceId: this.#workspaceOf(e.repo) })));
         await pace.yield();
       }
       if (stamp !== null) this.#stamps.set(r, stamp);
@@ -178,26 +178,26 @@ export class JournalService {
     log.info("journal synced", { git, repos: repos.size, skipped, ms: Date.now() - t0 });
   }
 
-  /** The Space whose folder holds `p` (deepest wins); null: only Home's. */
-  #spaceOf(p: string | null): SpaceId | null {
+  /** The workspace whose folder holds `p` (deepest wins); null: only Home's. */
+  #workspaceOf(p: string | null): WorkspaceId | null {
     if (!p) return null;
-    let best: Space | null = null;
-    for (const s of this.#o.spaces()) if (s.id !== HOME_SPACE_ID && (p === s.root || p.startsWith(s.root + "/")) && (!best || s.root.length > best.root.length)) best = s;
+    let best: Workspace | null = null;
+    for (const s of this.#o.workspaces()) if (s.id !== HOME_WORKSPACE_ID && (p === s.root || p.startsWith(s.root + "/")) && (!best || s.root.length > best.root.length)) best = s;
     return best?.id ?? null;
   }
 
-  /** Whether an event is in a scope: its Space, or (for events without one) its project's folder. */
+  /** Whether an event is in a scope: its workspace, or (for events without one) its project's folder. */
   #inScope(scope: JournalScope): (e: JournalEvent) => boolean {
     if (scope === "all") return () => true;
     if (scope.startsWith("repo:")) {
       const repo = scope.slice(5);
       return (e) => e.repo === repo;
     }
-    const id = scope.replace(/^space:/, "");
-    const space = this.#o.spaces().find((s) => s.id === id);
-    if (!space) return (e) => e.spaceId === id;
-    if (id === HOME_SPACE_ID) return (e) => e.spaceId === id || (!e.spaceId && !this.#spaceOf(e.repo ?? e.cwd));
-    return (e) => e.spaceId === id || (!e.spaceId && !!(e.repo ?? e.cwd) && this.#spaceOf(e.repo ?? e.cwd) === id);
+    const id = scope.replace(/^workspace:/, "");
+    const workspace = this.#o.workspaces().find((s) => s.id === id);
+    if (!workspace) return (e) => e.workspaceId === id;
+    if (id === HOME_WORKSPACE_ID) return (e) => e.workspaceId === id || (!e.workspaceId && !this.#workspaceOf(e.repo ?? e.cwd));
+    return (e) => e.workspaceId === id || (!e.workspaceId && !!(e.repo ?? e.cwd) && this.#workspaceOf(e.repo ?? e.cwd) === id);
   }
 
   /** Local midnight of the work day `t` falls in. */
@@ -230,8 +230,8 @@ export class JournalService {
   #scopeTitle(scope: JournalScope): string {
     if (scope === "all") return "Everything on this Mac.";
     if (scope.startsWith("repo:")) return `Project ${tilde(scope.slice(5))}.`;
-    const s = this.#o.spaces().find((x) => `space:${x.id}` === scope || x.id === scope);
-    return s ? `Space ${s.name} (${tilde(s.root)}).` : "";
+    const s = this.#o.workspaces().find((x) => `workspace:${x.id}` === scope || x.id === scope);
+    return s ? `Workspace ${s.name} (${tilde(s.root)}).` : "";
   }
 
   /** One day, written if it needs to be (see WriteMode). Null when nothing happened, or it isn't written and can't be (no AI provider). */
@@ -339,9 +339,9 @@ export class JournalService {
   }
 
   /** Something written down on purpose: by a person, or by an agent (with its session, so it joins its thread). */
-  note(text: string, o: { by: "user" | "agent"; agentSession?: string | null; spaceId?: SpaceId | null; cwd?: string | null }): number {
+  note(text: string, o: { by: "user" | "agent"; agentSession?: string | null; workspaceId?: WorkspaceId | null; cwd?: string | null }): number {
     const at = this.#now;
-    return this.store.record({ at, until: null, kind: "note", key: `note:${at}:${text.slice(0, 40)}`, spaceId: o.spaceId ?? this.#spaceOf(o.cwd ?? null), repo: null, cwd: o.cwd ?? null, thread: null, text: text.trim(), data: { kind: "note", by: o.by, agentSession: o.agentSession ?? null } });
+    return this.store.record({ at, until: null, kind: "note", key: `note:${at}:${text.slice(0, 40)}`, workspaceId: o.workspaceId ?? this.#workspaceOf(o.cwd ?? null), repo: null, cwd: o.cwd ?? null, thread: null, text: text.trim(), data: { kind: "note", by: o.by, agentSession: o.agentSession ?? null } });
   }
 }
 

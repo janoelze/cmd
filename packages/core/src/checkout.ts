@@ -1,9 +1,9 @@
 // The git checkout a path is in, read from .git without running git: the one
-// place cmd answers "which repository, which worktree, which branch" (Spaces'
+// place cmd answers "which repository, which worktree, which branch" (Workspaces'
 // roots, the event log's project ids, the journal's reflogs, peer briefings,
 // notification subjects). A linked worktree's .git is a file pointing at
 // <repo>/.git/worktrees/<name>, whose commondir points back at the shared .git.
-// `placeOf` is the cached form panes, agents and Spaces carry (docs/35).
+// `placeOf` is the cached form panes, agents and workspaces carry (docs/35).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -92,7 +92,7 @@ export function placeOf(dir: string): GitPlace | null {
     } else if (mtimeOf(hit.head) === hit.mtime) return hit.at;
   }
   const c = checkoutOf(dir);
-  // Real paths, so a cwd reached through a symlink compares equal to a Space's (canonical) root.
+  // Real paths, so a cwd reached through a symlink compares equal to a workspace's (canonical) root.
   const at = c ? { project: real(c.repo), top: real(c.top), linked: c.linked, branch: c.branch } : null;
   const head = c ? path.join(c.gitDir, "HEAD") : null;
   if (cache.size >= CACHE_MAX) cache.clear();

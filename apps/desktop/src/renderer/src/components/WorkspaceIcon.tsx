@@ -1,17 +1,17 @@
-// A Space's icon (an SF Symbol, marked with a dot when something
+// A workspace's icon (an SF Symbol, marked with a dot when something
 // in it needs you or finished unseen) and the picker that sets it: a filterable
 // grid of symbols, or any SF Symbol name typed in full.
 
 import { Dialog, EmptyState, LinkButton } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ICON_NAME, spaceIcon, type Space } from "@cmd/protocol";
+import { ICON_NAME, workspaceIcon, type Workspace } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
 import { ICON, Symbol } from "./Symbol.tsx";
 
-export function SpaceIcon(p: { space: Space; attention?: "needs" | "unseen"; size?: number }) {
+export function WorkspaceIcon(p: { workspace: Workspace; attention?: "needs" | "unseen"; size?: number }) {
   return (
-    <span className={`space-icon ${p.attention ? `attn-${p.attention}` : ""}`}>
-      <Symbol name={spaceIcon(p.space)} size={p.size ?? ICON.row} />
+    <span className={`workspace-icon ${p.attention ? `attn-${p.attention}` : ""}`}>
+      <Symbol name={workspaceIcon(p.workspace)} size={p.size ?? ICON.row} />
     </span>
   );
 }
@@ -51,8 +51,8 @@ const SYMBOLS = [
 
 const COLS = 10;
 
-export function SpaceIconPicker(p: { space: Space; onClose: () => void }) {
-  const current = spaceIcon(p.space);
+export function WorkspaceIconPicker(p: { workspace: Workspace; onClose: () => void }) {
+  const current = workspaceIcon(p.workspace);
   const [query, setQuery] = useState("");
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -70,7 +70,7 @@ export function SpaceIconPicker(p: { space: Space; onClose: () => void }) {
 
   const set = (icon: string | null) => {
     p.onClose();
-    void cmd.call("space.update", { id: p.space.id, icon }).catch(() => {});
+    void cmd.call("workspace.update", { id: p.workspace.id, icon }).catch(() => {});
   };
   const onKeyDown = (e: React.KeyboardEvent) => {
     const move = (d: number) => (e.preventDefault(), setActive((a) => Math.max(0, Math.min(shown.length - 1, a + d))));
@@ -82,11 +82,11 @@ export function SpaceIconPicker(p: { space: Space; onClose: () => void }) {
   };
 
   return (
-    <Dialog open onClose={p.onClose} padded={false} scrim={false} width={460} className="icon-picker" label="Space icon">
+    <Dialog open onClose={p.onClose} padded={false} scrim={false} width={460} className="icon-picker" label="Workspace icon">
       <input
         autoFocus
         className="palette-input"
-        placeholder={`Icon for ${p.space.name}: search, or type an SF Symbol name`}
+        placeholder={`Icon for ${p.workspace.name}: search, or type an SF Symbol name`}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={onKeyDown}
@@ -113,7 +113,7 @@ export function SpaceIconPicker(p: { space: Space; onClose: () => void }) {
         <span>
           <kbd>↵</kbd> set
         </span>
-        {p.space.icon !== null && (
+        {p.workspace.icon !== null && (
           <LinkButton onClick={() => set(null)}>Use the default</LinkButton>
         )}
       </footer>

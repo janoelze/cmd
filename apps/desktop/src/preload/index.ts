@@ -137,10 +137,10 @@ const api = {
     return () => ipcRenderer.off("settings-page", h);
   },
   checkForUpdates: () => ipcRenderer.send("check-updates"),
-  /** Task Manager: Electron's processes (CPU% since the previous call), and showing a terminal in its Space's window. */
+  /** Task Manager: Electron's processes (CPU% since the previous call), and showing a terminal in its workspace's window. */
   appMetrics: (): Promise<AppProcess[]> => ipcRenderer.invoke("app-metrics"),
   openTaskManager: () => ipcRenderer.send("task-manager"),
-  showPane: (spaceId: string, paneId: string) => ipcRenderer.send("show-pane", spaceId, paneId),
+  showPane: (workspaceId: string, paneId: string) => ipcRenderer.send("show-pane", workspaceId, paneId),
   /** Restart into a downloaded update. */
   installUpdate: () => ipcRenderer.send("install-update"),
   /** Settings → Updates & About. */
@@ -206,18 +206,18 @@ const api = {
     return () => ipcRenderer.off("keybindings", h);
   },
   /**
-   * Show a Space (docs/11-spaces.md). Main decides where: the app window that
+   * Show a workspace (docs/11-workspaces.md). Main decides where: the app window that
    * already shows it, else this one (newWindow: a new one). select: a window to
    * select there.
    */
-  showSpace: (spaceId: string, o: { select?: string; newWindow?: boolean } = {}) => ipcRenderer.send("space-show", spaceId, o),
-  /** This window's Space was closed or forgotten: switch it to Home, or close it if Home is shown elsewhere. */
-  spaceLost: () => ipcRenderer.send("space-lost"),
-  /** Main tells this window which Space to show. */
-  onShowSpace(fn: (o: { spaceId: string; select?: string }) => void): () => void {
-    const h = (_e: unknown, o: { spaceId: string; select?: string }) => fn(o);
-    ipcRenderer.on("space-show", h);
-    return () => ipcRenderer.off("space-show", h);
+  showWorkspace: (workspaceId: string, o: { select?: string; newWindow?: boolean } = {}) => ipcRenderer.send("workspace-show", workspaceId, o),
+  /** This window's workspace was closed or forgotten: switch it to Home, or close it if Home is shown elsewhere. */
+  workspaceLost: () => ipcRenderer.send("workspace-lost"),
+  /** Main tells this window which workspace to show. */
+  onShowWorkspace(fn: (o: { workspaceId: string; select?: string }) => void): () => void {
+    const h = (_e: unknown, o: { workspaceId: string; select?: string }) => fn(o);
+    ipcRenderer.on("workspace-show", h);
+    return () => ipcRenderer.off("workspace-show", h);
   },
   /** Native folder picker; null when cancelled. */
   chooseFolder: (): Promise<string | null> => ipcRenderer.invoke("choose-folder"),

@@ -31,7 +31,7 @@ export interface NamerInput {
   current: string | null;
   /** The turns so far, the newest last. */
   turns: NamerTurn[];
-  /** Names of the other live agents in the Space. */
+  /** Names of the other live agents in the workspace. */
   others: string[];
   /** The project's folder name ("cmd"): the row shows it, the name mustn't repeat it. */
   project?: string | null;
@@ -54,7 +54,7 @@ export function nameSystem(language = outputLanguage().name): string {
 
 - 1 to 3 words, at most 24 characters.
 - Nouns only: the thing worked on, never the activity. No verbs (fix, add, read, check, update, refactor, investigate, review, survey…). An adjective only where it is part of the thing ("Slow release CI", "Broken update").
-- The developer's own words from their prompts and the product's names (Navigator, Spaces, Magic, Tours) over paraphrase. A bug by its symptom.
+- The developer's own words from their prompts and the product's names (Navigator, Workspaces, Magic, Tours) over paraphrase. A bug by its symptom.
 - Sentence case. Code names as written (calc.py, ⌘W). Never the project's name (<project>), no agent name, no articles, no punctuation, no quotes.
 - Specific enough to tell it from other work: a single generic word (Descriptions, Downloads, Settings, Bugs, Cleanup) isn't a name; say what of ("Episode descriptions").
 - A session that starts with a slash command that does a task (/release, /triage, /tours) is that task: name it after the command ("Release", "Triage"), even as one word, not after what the command's work touches (a release's changelog lists features; the session is still the release). The same command after other work finishes that work: continue.
@@ -74,12 +74,12 @@ Examples (what the session is about → name):
 the data model, then how agent sessions get names → Session names
 marketing videos recorded with scripted tours → Tours
 asking for notification permission in the app → Notify permission
-the Navigator's recent sessions not filtered by Space → Recent by Space
+the Navigator's recent sessions not filtered by workspace → Recent by Workspace
 magic widgets using the agents' status indicator → Widget status lights
 the latest update doesn't start → Broken update
 icons too small, retina → Icon sizes
 the release CI takes 20 minutes → Slow release CI
-the "hack the planet" SVG in an empty Space → Hack the planet
+the "hack the planet" SVG in an empty workspace → Hack the planet
 remove the gopher link from the navigation → Gopher link
 the Widget Library ⌘W e2e test is flaky → Flaky ⌘W test
 a notification showed JSON → JSON in notification

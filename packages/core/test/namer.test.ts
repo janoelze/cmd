@@ -148,7 +148,7 @@ describe("naming live agents", () => {
   const setup = (answers: Record<string, NamerAnswer>, agent: Partial<Agent> = {}) => {
     const turns: AgentTurn[] = [];
     const asked: string[] = [];
-    const a = { id: "a1", spaceId: "s", kind: "claude", name: null, nameBy: null, depth: 0, ...agent } as Agent;
+    const a = { id: "a1", workspaceId: "s", kind: "claude", name: null, nameBy: null, depth: 0, ...agent } as Agent;
     const naming = new AgentNaming({
       ai: { ready: () => true, object: async <T,>(o: { prompt: string }) => (asked.push(o.prompt), { value: (answers[/<newest>(.*)<\/newest>/.exec(o.prompt)![1]!] ?? { intent: "continue", name: null }) as T }) as never },
       settings: () => ({ ...DEFAULT_SETTINGS }),

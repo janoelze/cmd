@@ -225,11 +225,11 @@ for (const t of types) {
 
 // Sheets, popovers, pickers and the windows of their own.
 await popup("new-picker", () => menu("file.new"));
-await popup("space-picker", () => menu("file.openSpace"));
-await popup("space-menu", () => win.getByRole("banner").getByRole("button").first().click());
-await popup("space-rename", () => menu("space.rename"));
-await popup("space-icon", () => menu("space.icon"));
-await popup("move-window", () => menu("space.moveWindow"));
+await popup("workspace-picker", () => menu("file.openWorkspace"));
+await popup("workspace-menu", () => win.getByRole("banner").getByRole("button").first().click());
+await popup("workspace-rename", () => menu("workspace.rename"));
+await popup("workspace-icon", () => menu("workspace.icon"));
+await popup("move-window", () => menu("workspace.moveWindow"));
 await popup("widget-library", () => menu("widget.library"));
 await popup("whats-new", () => menu("help.whatsNew"));
 await popup("core-status", () => win.getByRole("contentinfo").getByRole("button").first().click());

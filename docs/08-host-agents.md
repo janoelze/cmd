@@ -7,7 +7,7 @@ Researched 2026-10-02 from the cmux source (`manaflow-ai/cmux` HEAD, `manaflow-a
 ## How cmux does it
 
 ### Topology and ids
-Window → Workspace (a sidebar row) → Pane (a split) → Surface (a tab: terminal, browser, markdown, diff, agent-session).
+Window → workspace (a sidebar row) → Pane (a split) → Surface (a tab: terminal, browser, markdown, diff, agent-session).
 - Handles are UUIDs or refs (`workspace:2`, `surface:4`).
 - `--json` and `--id-format refs|uuids|both` for scripting.
 

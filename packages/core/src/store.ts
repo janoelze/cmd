@@ -1,14 +1,14 @@
 // Durable state in SQLite (node:sqlite, no native module), mostly as JSON
-// documents: Spaces, windows, UI state, and what restore.ts needs to bring
+// documents: workspaces, windows, UI state, and what restore.ts needs to bring
 // terminals and agents back after a restart (pane records, their last screens,
 // the live agents). The file also records where it lives, so a copy of it (a
 // test core on a copy of the real state) knows those terminals aren't its own.
 
 import fs from "node:fs";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import type { Agent, AgentId, AppWindow, PaneId, RemoteScope, Space } from "@cmd/protocol";
+import type { Agent, AgentId, AppWindow, PaneId, RemoteScope, Workspace } from "@cmd/protocol";
 import type { PaneRecord } from "./panes.ts";
-import { decodeAgent, decodeDoc, decodePane, decodeRemoteDevice, decodeRows, decodeSpace, decodeWindow } from "./stored.ts";
+import { decodeAgent, decodeDoc, decodePane, decodeRemoteDevice, decodeRows, decodeWorkspace, decodeWindow } from "./stored.ts";
 
 export interface RemoteDeviceRecord {
   id: string;
@@ -29,6 +29,7 @@ export class Store {
   constructor(file: string) {
     // Wait out a short lock (another process on the file) rather than throw.
     this.#db = new DatabaseSync(file, { timeout: 2000 });
+    this.#renameSpaces();
     this.#db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
@@ -44,7 +45,7 @@ export class Store {
         id TEXT PRIMARY KEY,
         doc TEXT NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS spaces (
+      CREATE TABLE IF NOT EXISTS workspaces (
         id TEXT PRIMARY KEY,
         root TEXT NOT NULL UNIQUE,
         doc TEXT NOT NULL
@@ -74,6 +75,22 @@ export class Store {
       );
     `);
     this.#path = file === ":memory:" ? null : fs.realpathSync(file);
+  }
+
+  /** Before 0.24 workspaces were Spaces: their table, and `spaceId` in every window, pane and agent. */
+  #renameSpaces(): void {
+    const has = (t: string) => !!this.#db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(t);
+    if (!has("spaces")) return;
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      if (!has("spaces") || has("workspaces")) return void this.#db.exec("ROLLBACK");
+      this.#db.exec(`ALTER TABLE spaces RENAME TO workspaces`);
+      for (const t of ["windows", "panes", "agents"]) if (has(t)) this.#db.exec(`UPDATE ${t} SET doc = replace(doc, '"spaceId":', '"workspaceId":')`);
+      this.#db.exec("COMMIT");
+    } catch (err) {
+      this.#db.exec("ROLLBACK");
+      throw err;
+    }
   }
 
   /**
@@ -127,17 +144,17 @@ export class Store {
     this.#stmt(`DELETE FROM windows WHERE id = ?`).run(id);
   }
 
-  spaces(): Space[] {
-    const rows = this.#stmt(`SELECT doc FROM spaces`).all() as { doc: string }[];
-    return decodeRows("Space", rows.map((r) => r.doc), decodeSpace);
+  workspaces(): Workspace[] {
+    const rows = this.#stmt(`SELECT doc FROM workspaces`).all() as { doc: string }[];
+    return decodeRows("Workspace", rows.map((r) => r.doc), decodeWorkspace);
   }
 
-  saveSpace(s: Space): void {
-    this.#stmt(`INSERT OR REPLACE INTO spaces (id, root, doc) VALUES (?, ?, ?)`).run(s.id, s.root, JSON.stringify(s));
+  saveWorkspace(s: Workspace): void {
+    this.#stmt(`INSERT OR REPLACE INTO workspaces (id, root, doc) VALUES (?, ?, ?)`).run(s.id, s.root, JSON.stringify(s));
   }
 
-  deleteSpace(id: string): void {
-    this.#stmt(`DELETE FROM spaces WHERE id = ?`).run(id);
+  deleteWorkspace(id: string): void {
+    this.#stmt(`DELETE FROM workspaces WHERE id = ?`).run(id);
   }
 
   /** UI state (view mode, selection, collapsed rows, …) as JSON values. */

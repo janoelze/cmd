@@ -73,7 +73,7 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
         ...i("file.newFiles"),
         ...i("file.newText"),
         sep,
-        ...i("file.openSpace"),
+        ...i("file.openWorkspace"),
         ...i("file.newWindow"),
         sep,
         ...i("file.save"),
@@ -156,25 +156,25 @@ export function buildMenu(send: Send, bindings: Keybindings): void {
       ],
     },
     {
-      label: "Space",
+      label: "Workspace",
       submenu: [
-        ...i("space.next"),
-        ...i("space.prev"),
-        ...i("space.last"),
+        ...i("workspace.next"),
+        ...i("workspace.prev"),
+        ...i("workspace.last"),
         ...[1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n) => {
-          const [main] = i(`space.select${n}` as CommandId);
+          const [main] = i(`workspace.select${n}` as CommandId);
           return [{ ...main!, visible: false, acceleratorWorksWhenHidden: true }];
         }),
         sep,
-        ...i("space.moveWindow"),
-        ...i("space.rename"),
-        ...i("space.icon"),
-        ...i("space.reveal"),
+        ...i("workspace.moveWindow"),
+        ...i("workspace.rename"),
+        ...i("workspace.icon"),
+        ...i("workspace.reveal"),
         sep,
         ...i("actions.show"),
         ...i("actions.rerun"),
         sep,
-        ...i("space.close"),
+        ...i("workspace.close"),
       ],
     },
     {

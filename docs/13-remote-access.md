@@ -1,8 +1,8 @@
 # Remote access (mobile viewer)
 
-> Status (2026-10-04): scaffolded. Built: `packages/remote-crypto` (Noise over WebCrypto, passing the cacophony test vectors), `apps/relay`, the core gateway (`packages/core/src/remote/`: relay link, sessions, pairing with approval, devices, audit log), the `Connection` abstraction and policy table, `remote.*` RPC methods and settings, `cmd remote`, and `pnpm remote:device` (a pretend phone for development). Since then: the app's Remote Access settings page, approval sheet and status bar indicator, and `apps/web`, the web client as a standalone app (pairing; Now with status lights, Space chips, Next, and starting terminals and Claude sessions; terminals that size the Mac's terminal to the phone while shown, pinned above the keyboard, with a sticky-ctrl key row, paste and a compose bar; a settings sheet; not yet the shared desktop views, files or Magic). Not yet: hosting the client, the PWA and push, fit-to-phone, the Keychain. The open questions at the end still need an answer before the client ships.
+> Status (2026-10-04): scaffolded. Built: `packages/remote-crypto` (Noise over WebCrypto, passing the cacophony test vectors), `apps/relay`, the core gateway (`packages/core/src/remote/`: relay link, sessions, pairing with approval, devices, audit log), the `Connection` abstraction and policy table, `remote.*` RPC methods and settings, `cmd remote`, and `pnpm remote:device` (a pretend phone for development). Since then: the app's Remote Access settings page, approval sheet and status bar indicator, and `apps/web`, the web client as a standalone app (pairing; Now with status lights, workspace chips, Next, and starting terminals and Claude sessions; terminals that size the Mac's terminal to the phone while shown, pinned above the keyboard, with a sticky-ctrl key row, paste and a compose bar; a settings sheet; not yet the shared desktop views, files or Magic). Not yet: hosting the client, the PWA and push, fit-to-phone, the Keychain. The open questions at the end still need an answer before the client ships.
 
-**Goal.** Turn on "Remote access" in cmd, scan a QR code with a phone, and from then on open one URL in any browser (phone or desktop, no app install) to use your Spaces on the go: the same terminals, agents, files, text and Magic widgets as on the desktop, in a phone-sized layout, with push notifications when an agent needs you.
+**Goal.** Turn on "Remote access" in cmd, scan a QR code with a phone, and from then on open one URL in any browser (phone or desktop, no app install) to use your workspaces on the go: the same terminals, agents, files, text and Magic widgets as on the desktop, in a phone-sized layout, with push notifications when an agent needs you.
 
 **Hard requirement: end-to-end encryption.** Everything between the Mac and the browser is encrypted with keys only those two hold. The relay in between, the host it runs on (Uberspace), the network and any CDN see only ciphertext, timing and sizes. A compromised relay can deny service; it can't read or type into a terminal.
 
@@ -92,7 +92,7 @@ Remote access is a security feature that people use on the go, often one-handed.
 4. On the Mac, a sheet: "Allow “iPhone” to use cmd?", the same four words, "Make sure your phone shows these words", and **Allow View Only · Allow Control · Don't Allow**. If the app isn't frontmost, a system notification brings it there. If the app is closed, the phone says "Open cmd on your Mac to approve", and `cmd remote pair` can approve in a terminal.
 5. The phone lands on **Now**, with a one-time banner: "Add to Home Screen to get notifications" (iOS needs it for push).
 
-**2. Everyday use.** Open the Home Screen app: it connects in one round trip and shows Now. A pill at the top names the Mac and its state ("MacBook Pro · Connected"). Rows are the agents and terminals across all Spaces; tap one to open its window.
+**2. Everyday use.** Open the Home Screen app: it connects in one round trip and shows Now. A pill at the top names the Mac and its state ("MacBook Pro · Connected"). Rows are the agents and terminals across all workspaces; tap one to open its window.
 
 **3. Getting pinged.** "Claude needs input in api" arrives as a push. Tapping it opens that terminal with the key row ready. Later (Phase 2) Allow/Deny for permission requests works from the notification itself.
 
@@ -112,14 +112,14 @@ Now answers "what is running and does anything need me?" from structured data on
 
 | Section | Rows | Each row shows |
 |---|---|---|
-| Needs you | Agents waiting for input or permission, terminals with attention (bell, finished long command, OSC notification) | Space · window title · the question (`lastMessage`) or the reason · how long it's been waiting |
-| Working | Agents in a turn; terminals running a long foreground command | Space · title · current tool or command · elapsed time · CPU, if notable |
-| Done recently | Turns that finished in the last few hours, unseen first | Space · title · the last message, one line · when |
-| Everything else | Collapsed: idle shells and quiet windows, by Space | |
+| Needs you | Agents waiting for input or permission, terminals with attention (bell, finished long command, OSC notification) | Workspace · window title · the question (`lastMessage`) or the reason · how long it's been waiting |
+| Working | Agents in a turn; terminals running a long foreground command | Workspace · title · current tool or command · elapsed time · CPU, if notable |
+| Done recently | Turns that finished in the last few hours, unseen first | Workspace · title · the last message, one line · when |
+| Everything else | Collapsed: idle shells and quiet windows, by workspace | |
 
 - A "Next" button jumps to the oldest thing that needs you, like ⌃⌘J on the Mac.
 - Pull to refresh does a fresh bootstrap. There's no other refresh to think about.
-- The Space switcher and window tabs ("Shell and navigation") are one tap away. Now is the home, not a replacement.
+- The workspace switcher and window tabs ("Shell and navigation") are one tap away. Now is the home, not a replacement.
 
 ### States and copy
 
@@ -261,7 +261,7 @@ Traffic, measured on the live core here (2026-10-04, 3 panes, one Claude working
 | An idle shell | ~0 |
 | Snapshot of a pane (100×70, alt screen) | ~6 KB (more for long scrollback, at most a few hundred KB) |
 | **The whole unfiltered event stream** | 15–30 KB/s, dominated by `magic.data` (~225 KB per event) and every pane's output |
-| Proposed remote stream: agents + Spaces + the one watched pane | ~1–13 KB/s while you look; near zero otherwise |
+| Proposed remote stream: agents + Workspaces + the one watched pane | ~1–13 KB/s while you look; near zero otherwise |
 
 **What this means:**
 - An hour of active watching costs at most about 50 MB.
@@ -340,15 +340,15 @@ The web client is **a third entry of the desktop renderer**, not a new app:
 The phone has **its own layout, not a copy of the desktop's**: every window is a full-width tab. Nothing about the desktop's grid, strip or canvas carries over, and nothing on the phone rearranges or resizes the desktop's windows.
 
 - **Tabs:**
-  - One tab per window of the current Space, in `grid.order`, as a scrollable tab strip at the top.
+  - One tab per window of the current workspace, in `grid.order`, as a scrollable tab strip at the top.
   - Each tab shows the window's icon, its title and an attention dot, as in the sidebar.
   - Swipe the content sideways to go to the next or previous tab.
-- **Home is Now** (see "The phone's home: Now"): the triage view across Spaces. The tabs below are where its rows lead.
-- **Spaces:** a switcher above the tabs (`SpaceBar.tsx`'s data) with each Space's attention marker. ⌃⌘J ("next needing attention") becomes a button that jumps to the right Space and tab.
+- **Home is Now** (see "The phone's home: Now"): the triage view across workspaces. The tabs below are where its rows lead.
+- **Workspaces:** a switcher above the tabs (`WorkspaceBar.tsx`'s data) with each workspace's attention marker. ⌃⌘J ("next needing attention") becomes a button that jumps to the right workspace and tab.
 - **Every window is full width with the same frame:** tab strip on top, content, and a bottom bar for that window type (keys and compose for terminals, actions for others).
   - Files, text, markdown and Magic widgets reflow to the width, so they need nothing special.
   - Terminals are the exception (next section).
-- **Phone state is local:** the selected tab and scroll positions are kept per device in local UI state, never in `Space.view`.
+- **Phone state is local:** the selected tab and scroll positions are kept per device in local UI state, never in `workspace.view`.
 - **Tablet and desktop browsers:** the same tabs, with the sidebar's list beside them when there is room. There is no grid, strip or canvas on the web.
 
 #### Terminals on a phone
@@ -416,7 +416,7 @@ Limits:
 ### Scopes and the policy table
 
 There are two scopes, chosen at pairing time and changeable on the Mac:
-- **view:** watch terminals, read files, see agents and Spaces, mark things seen.
+- **view:** watch terminals, read files, see agents and workspaces, mark things seen.
 - **control:** view + type into terminals, resize them, write files, open and close windows, answer permission requests.
 
 There is no in-between "respond" scope. In a terminal-first UI, answering an agent means typing into its terminal, and an agent's input line is effectively a shell (Claude Code runs `!command`). A scope that pretends otherwise would be false comfort.
@@ -427,7 +427,7 @@ The policy is **a typed table like `Handlers`**, so adding an RPC method doesn't
 // packages/core/src/remote/policy.ts
 type Access = "view" | "control" | "never";
 export const REMOTE_ACCESS: { [M in Method]: Access } = {
-  "pane.snapshot": "view", "pane.read": "view", "agent.list": "view", "space.list": "view",
+  "pane.snapshot": "view", "pane.read": "view", "agent.list": "view", "workspace.list": "view",
   "agent.markSeen": "view", "pane.clearAttention": "view", "magic.refresh": "view",
   "pane.write": "control", "agent.send": "control", "fs.write": "control", "window.open": "control", "window.close": "control",
   "pane.resize": "never",        // the desktop owns sizes; phones use pane.fitOverride
@@ -437,7 +437,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "hook.ingest": "never", "ui.set": "never", "events.subscribe": "never", // remote uses remote.bootstrap
   "magic.run": "control",        // spends API keys, runs the exploring agent
   "magic.media": "never", "magic.setRefresh": "never",
-  "window.openTarget": "never", "space.close": "never", "space.forget": "never", "search.reindex": "never",
+  "window.openTarget": "never", "workspace.close": "never", "workspace.forget": "never", "search.reindex": "never",
   "remote.pair": "never", "remote.revoke": "never", // a phone can never manage pairing
   // …every method, explicitly
 };
@@ -445,10 +445,10 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
 
 Arguments are checked too, not just method names:
 - **`fs.*`:**
-  - The path must be inside the root of an open Space.
+  - The path must be inside the root of an open workspace.
   - It must not hit `isDeniedPath(DEFAULT_DENY_PATHS)` (reused from `magic/policy.ts`: `~/.ssh`, keychains, browser profiles, `.env`).
   - It is resolved with `realpath`, so symlinks can't escape.
-- **`agent.send` / `pane.write` / `pane.fitOverride`:** the pane must exist and belong to an open Space. Writes are capped at 64 KiB; override sizes are clamped (20–300 cols, 5–200 rows).
+- **`agent.send` / `pane.write` / `pane.fitOverride`:** the pane must exist and belong to an open workspace. Writes are capped at 64 KiB; override sizes are clamped (20–300 cols, 5–200 rows).
 - **Events:** a separate allowlist covering `pane.output` for followed panes only, plus `pane.updated`, `agent.*`, `space.*`, `window.*` (with the state of hidden types stripped), `notification` and `fs.changed` for watched paths. `magic.data` only for followed Magic widgets. **Never** `secrets.updated` or `settings.updated`.
 
 The policy has to be fail-closed, so it gets heavy tests: every method × scope, path traversal, symlinks, and denied paths.
@@ -466,7 +466,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
    - A remote connection's writer merges `pane.output` per pane over 30 ms and caps its buffer at 1 MiB. On overflow it drops the queue and sends `pane.resync`, and the client re-fetches the snapshot.
    - The local socket keeps today's raw behaviour.
 3. **`remote.bootstrap`** replaces `events.subscribe` for remote connections. It returns a projection of the same data:
-   - Spaces, panes, agents and windows of known types.
+   - Workspaces, panes, agents and windows of known types.
    - Theme colours only.
    - No settings, no `ui` state, no secrets status.
 4. **Fit overrides** (`panes.ts:428`; today the last `pane.resize` wins):
@@ -490,7 +490,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
 - **Sources:**
   - `NotificationCenter`'s `agent-input` and `agent-done`, filtered by the existing `notifications.needsInput` and `notifications.done` settings.
   - A new **"Mac is idle or locked" rule**: push only when the desktop app isn't focused or hasn't seen input for N minutes. Today the UI decides focus (`App.tsx:224-232`), so main reports focus to the core with a new `ui.presence` call.
-- **Lock screen:** `remote.pushDetails` (default off) decides whether the agent's question appears there or just "Claude needs input in <Space>".
+- **Lock screen:** `remote.pushDetails` (default off) decides whether the agent's question appears there or just "Claude needs input in <workspace>".
 - **iOS:** push only works after "Add to Home Screen". The client detects this and explains it.
 
 **Approving from the notification (Phase 2, optional).** Both agents have an official, JSON-based way to answer permission requests, so this needs no screen reading:
@@ -534,7 +534,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
 | `apps/desktop/src/renderer/src/components/TerminalView.tsx` | Letterbox + "Fitted to iPhone · click to take back" bar while a phone holds an override |
 | `apps/desktop/src/renderer/src/components/Symbol.tsx` | Lucide fallback when `sfSymbols` is missing |
 | `apps/desktop/src/renderer/src/windows/builtin.tsx` | Web build: `browser` → card view; markdown images via `fs.readBinary` |
-| new `apps/desktop/src/renderer/remote.html`, `src/remote/` (`MobileApp.tsx`, Space switcher, tab strip, swipe pager, per-type bottom bars, touch sheets), `vite.remote.config.ts` | The web client: a tabbed shell around the shared window views; static build with CSP, PWA manifest and service worker |
+| new `apps/desktop/src/renderer/remote.html`, `src/remote/` (`MobileApp.tsx`, workspace switcher, tab strip, swipe pager, per-type bottom bars, touch sheets), `vite.remote.config.ts` | The web client: a tabbed shell around the shared window views; static build with CSP, PWA manifest and service worker |
 | new `apps/relay` | The relay plus a supervisord `.ini` template and deploy script |
 | `pnpm-workspace`, root `package.json` | `pnpm remote` (web client dev server against a local relay), `pnpm relay` (local relay), tests included in `vitest run` |
 | `.github/workflows` | Build the web client reproducibly, publish to Pages, attach `manifest.json` hashes to the release |
@@ -566,7 +566,7 @@ The policy has to be fail-closed, so it gets heavy tests: every method × scope,
    - Shared deny-path module.
 1. **E2E access with the desktop's windows:**
    - `packages/remote-crypto`, the relay (local and Uberspace), pairing with approval on the Mac.
-   - Web client: tabbed shell with Space switcher; terminals scaled to width with extra key row, compose bar and Fit to phone; files, text, markdown, Magic (no media), browser cards.
+   - Web client: tabbed shell with workspace switcher; terminals scaled to width with extra key row, compose bar and Fit to phone; files, text, markdown, Magic (no media), browser cards.
    - Scopes view and control. Presence indicator, audit log, `cmd remote`.
 2. **PWA, push and polish:**
    - PWA install and Web Push with the idle rule; optional Allow/Deny from the notification via `PermissionRequest` hooks.

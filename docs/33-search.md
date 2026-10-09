@@ -1,6 +1,6 @@
 # Search
 
-> Status (2026-10-08): **phases 1–4 built in their first form.** The palette's search (⇧⌘F) finds the Space's files live (names and lines, `search/files.ts`: ripgrep, else git; the Home Space searches the selected window's project), past sessions, commands by their line and output (`search.history`; output indexed from now on and once at startup for older commands), pages and files opened in cmd, each kind under its name; a line opens its file there (`reveal` on text windows). Not yet: ripgrep bundled with the app (it uses the system's `rg`, else `git grep` in repositories), `in:`/`kind:`/`since:` words, sessions `claude -p` ran left out. Before that (2026-10-07): **phase 1 built** (branch `search-design`): the kit's `FindBar`, `Glyph` and `Highlight`; `useFind` (`renderer/src/find.tsx`) in terminals (floating), text windows (CodeMirror's panel replaced, replace on ⌥⌘F), PDF, browser pages (`findInPage`), Markdown previews and Files (`find-dom.ts`, the CSS Custom Highlight API); Use Selection for Find (no shortcut: ⌘E is Toggle Preview / Edit); a shared last query for ⌘G; Find disabled where a window can't. Search in the palette: "Search…" (⇧⌘F, a magnifier in the top bar) opens it with `?`, open windows above past sessions; no Search view of its own. Not yet: Magic widgets (needs find in the widget runtime, `host.js`, over postMessage), phases 2, 4, 5 and the rest of 3. A user asked for full-text search. cmd has two kinds of search today, built separately and unevenly: find in a window (⌘F) and past-session search (⇧⌘F). This doc makes them one story with two keys, extends ⇧⌘F to everything cmd remembers and to the files in your projects, and says where an index of file contents fits (later, as an accelerator, never as the source of truth). Read first: this doc; `packages/core/src/data/views/search.ts`; `packages/core/src/search/query.ts`; docs/26 (S7, C3) and docs/30 ("Search everything"), which already promise most of it. Work in a worktree with its own `CMD_HOME` (CLAUDE.md).
+> Status (2026-10-08): **phases 1–4 built in their first form.** The palette's search (⇧⌘F) finds the workspace's files live (names and lines, `search/files.ts`: ripgrep, else git; the Home workspace searches the selected window's project), past sessions, commands by their line and output (`search.history`; output indexed from now on and once at startup for older commands), pages and files opened in cmd, each kind under its name; a line opens its file there (`reveal` on text windows). Not yet: ripgrep bundled with the app (it uses the system's `rg`, else `git grep` in repositories), `in:`/`kind:`/`since:` words, sessions `claude -p` ran left out. Before that (2026-10-07): **phase 1 built** (branch `search-design`): the kit's `FindBar`, `Glyph` and `Highlight`; `useFind` (`renderer/src/find.tsx`) in terminals (floating), text windows (CodeMirror's panel replaced, replace on ⌥⌘F), PDF, browser pages (`findInPage`), Markdown previews and Files (`find-dom.ts`, the CSS Custom Highlight API); Use Selection for Find (no shortcut: ⌘E is Toggle Preview / Edit); a shared last query for ⌘G; Find disabled where a window can't. Search in the palette: "Search…" (⇧⌘F, a magnifier in the top bar) opens it with `?`, open windows above past sessions; no Search view of its own. Not yet: Magic widgets (needs find in the widget runtime, `host.js`, over postMessage), phases 2, 4, 5 and the rest of 3. A user asked for full-text search. cmd has two kinds of search today, built separately and unevenly: find in a window (⌘F) and past-session search (⇧⌘F). This doc makes them one story with two keys, extends ⇧⌘F to everything cmd remembers and to the files in your projects, and says where an index of file contents fits (later, as an accelerator, never as the source of truth). Read first: this doc; `packages/core/src/data/views/search.ts`; `packages/core/src/search/query.ts`; docs/26 (S7, C3) and docs/30 ("Search everything"), which already promise most of it. Work in a worktree with its own `CMD_HOME` (CLAUDE.md).
 
 ## What exists
 
@@ -67,7 +67,7 @@ The command palette in search mode, not a view of its own (decided 2026-10-07: n
 
 Scope, kinds and time are words in the query, not controls (the palette has one field):
 
-- **Scope:** `in:space`, `in:project`; everywhere by default.
+- **Scope:** `in:workspace`, `in:project`; everywhere by default.
 - **Kinds:** `kind:command`, `kind:page`, `kind:file`… (several allowed); all by default. "Files" means file contents (below); a file you opened in cmd is a history hit and shows under Files too.
 - **Time:** `since:7d`, `since:today`.
 
@@ -131,7 +131,7 @@ Built: `weightOf` in `views/search.ts` (title 2, messages 1, tool results, tool 
 
 `SearchView` grows from sessions to kinds:
 
-- The transcript-only filter becomes a filter by kind (event types per kind: `transcript.*` → Sessions, `command` → Commands, `browser.visit` → Pages, `file.open` → Files, `agent.note` / journal notes → Notes), plus the identities `data.query` already filters by (`spaceId`, `projectId`, `at`).
+- The transcript-only filter becomes a filter by kind (event types per kind: `transcript.*` → Sessions, `command` → Commands, `browser.visit` → Pages, `file.open` → Files, `agent.note` / journal notes → Notes), plus the identities `data.query` already filters by (`workspaceId`, `projectId`, `at`).
 - One hit type per kind (a discriminated union), so the UI renders and opens each without guessing. `SearchHit` stays as the session variant.
 - Sessions keep "one hit per session". Commands collapse runs of the same command line in the same folder into one row with a count ("ran 14 times, last failed").
 - Ranking per kind: bm25, then recency, then signals the log has: the project you're in, files and pages you opened often, files agents edited.
@@ -143,13 +143,13 @@ Built: `weightOf` in `views/search.ts` (title 2, messages 1, tool results, tool 
 File contents are searched on disk, with ripgrep, streamed:
 
 - `rg --json` in the core, one process per search, killed when the query changes. Respects `.gitignore`, skips binary files. Bundled with the app (`@vscode/ripgrep` ships binaries); users won't have Homebrew's.
-- Scope: This project → the project's root (`checkout.ts`); This Space → the Space's root; Everywhere → every project root the log has seen recently, newest first, so the first results come from where you work.
+- Scope: This project → the project's root (`checkout.ts`); This Workspace → the workspace's root; Everywhere → every project root the log has seen recently, newest first, so the first results come from where you work.
 - Literal by default (smart case: case-sensitive only with a capital), regex with the toggle, whole word with the toggle.
 - Results stream as `search.results` events per search id; the view shows them as they come, grouped by file, at most N lines per file with "N more".
 - `data.exclude` folders are never searched; `.env*`, keys and the like are skipped by a default glob list.
 - Ranking files (not lines): files opened or edited recently (log), files in the current project, shorter paths; lines in order within a file.
 
-Measured on this machine: `rg` for a word over one repo (`~/src/cmd`) 0.34 s; over all of `~/src` 15 s. So This project and This Space are instant with ripgrep, and Everywhere is slow; it shows results as they come, nearest projects first.
+Measured on this machine: `rg` for a word over one repo (`~/src/cmd`) 0.34 s; over all of `~/src` 15 s. So This project and This workspace are instant with ripgrep, and Everywhere is slow; it shows results as they come, nearest projects first.
 
 ### Files: a trigram index, later
 
@@ -158,7 +158,7 @@ When Everywhere has to be instant, add an index of file contents **as an acceler
 - **Trigrams, not words.** The transcript index's unicode61 tokens can't find substrings or punctuation in code (`earchVie`, `?.find(`). Code search engines (Zoekt, GitHub's Blackbird, Google Code Search) index trigrams. SQLite's FTS5 `trigram` tokenizer does substring and case-insensitive matching; the bundled SQLite (3.53.4) has it. A regex is narrowed to candidate files by its literal trigrams, then run.
 - **The index picks candidates; the file on disk decides.** Every candidate is read and matched before it's shown, so lines and line numbers are always the file's current ones. A stale index can be slow, never wrong.
 - **Changed files bypass it.** Files changed since they were indexed (FSEvents per root, `git status`) are searched by ripgrep directly. A whole-tree change (`git checkout`, a rebase) marks the root dirty and ripgrep covers it until the reindex catches up.
-- In the views file (docs/28: disposable, rebuildable), never the facts file. Only roots cmd knows (Spaces, projects in the log), never `$HOME`; ignored and excluded files never indexed; a size cap per file (skip generated and minified files).
+- In the views file (docs/28: disposable, rebuildable), never the facts file. Only roots cmd knows (Workspaces, projects in the log), never `$HOME`; ignored and excluded files never indexed; a size cap per file (skip generated and minified files).
 - Indexing runs in a worker at low priority, on power only for the first pass, with progress in `IndexRing`.
 - A trigram index is typically 2–4× the text it covers. Report it in Settings → Data with the other views, with a switch.
 
@@ -170,7 +170,7 @@ Build it only after ripgrep's version is in use and Everywhere is shown to be to
 type SearchKind = "session" | "command" | "page" | "file" | "content" | "note";
 
 "search.query": {
-  params: { text: string; kinds?: SearchKind[]; spaceId?: SpaceId; projectId?: string; since?: number; until?: number; limit?: number };
+  params: { text: string; kinds?: SearchKind[]; workspaceId?: WorkspaceId; projectId?: string; since?: number; until?: number; limit?: number };
   result: { history: SearchResult[]; contentSearch: string | null }; // contentSearch: id of the streamed file-contents search, when "content" is asked
 };
 "search.cancel": { params: { id: string }; result: null };
@@ -185,7 +185,7 @@ CLI: `cmd search <text>` keeps its output for sessions; `--kind command,page`, `
 ## Phases
 
 1. **⌘F everywhere.** Glyph icons, `Highlight`, `FindBar` and `Findable` in the kit; terminal and PDF moved onto it; browser, markdown, Files, Magic new; CodeMirror's panel replaced; ⌘E; Find disabled where it can't. Small, and the most visible inconsistency today.
-2. **History search over every kind.** Built: `search.history` (commands with their output, pages, files opened in cmd; one row per command line and folder with its runs and last exit code), the Space's history (Home: all of it). Next: notes and journal entries, `kind:`/`since:` words.
+2. **History search over every kind.** Built: `search.history` (commands with their output, pages, files opened in cmd; one row per command line and folder with its runs and last exit code), the workspace's history (Home: all of it). Next: notes and journal entries, `kind:`/`since:` words.
 3. **Search in the palette.** Built: "Search…" (⇧⌘F, the top bar's magnifier) opens the palette with `?`, open windows matched above past sessions. Next: a group per kind from phase 2, ↩ and ⌘↵ per kind, `in:` / `kind:` / `since:` words.
 4. **File contents with ripgrep.** Built: `search.files`, names then lines (definitions first, nearer files next), bounded in hits and time, `.gitignore`, secrets and `data.exclude` left out; a line opens a text window at it with the match selected and ⌘G finding the next. Next: bundle `rg` (`@vscode/ripgrep`, unpacked from the asar) instead of needing the system's; stream results as they arrive.
 5. **Trigram index**, if Everywhere is too slow in use: the worker, FSEvents and git dirtiness, verify-on-read, Settings → Data.

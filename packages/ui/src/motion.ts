@@ -84,7 +84,7 @@ export const MOTION = {
   change: { ms: 150, easing: EASE },
   /** An indicator (a progress, a dot): --dur-slow, --ease. */
   slow: { ms: 240, easing: EASE },
-  /** Something moving (windows, sidebars, rows, Spaces): --glide-dur, --glide. */
+  /** Something moving (windows, sidebars, rows, workspaces): --glide-dur, --glide. */
   glide: { ms: GLIDE_MS, easing: GLIDE_EASING },
 } as const;
 

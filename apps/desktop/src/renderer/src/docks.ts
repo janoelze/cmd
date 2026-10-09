@@ -1,6 +1,6 @@
 // Sidebars (docs/21-sidebars.md): any window can be docked to the left or right
 // edge of the app window, out of the board's layout. Which window sits where
-// is per-Space layout, kept in Space.view["docks"] like grid order and the canvas
+// is per-workspace layout, kept in workspace.view["docks"] like grid order and the canvas
 // camera. Pure helpers; App owns the state, components/Dock.tsx draws a side.
 
 export type Side = "left" | "right";
@@ -19,7 +19,7 @@ export type Docks = Record<Side, DockSide>;
 
 export const DOCK_WIDTH = { default: 280, min: 200, max: 480 } as const;
 /** Room the board keeps however wide the sidebars are. */
-export const MIN_WORKSPACE = 320;
+export const MIN_BOARD = 320;
 
 const EMPTY_SIDE: DockSide = { id: null, width: null, hidden: false };
 export const EMPTY_DOCKS: Docks = { left: EMPTY_SIDE, right: EMPTY_SIDE };
@@ -38,7 +38,7 @@ export function readDocks(v: unknown): Docks {
   return { left: side(o.left), right: side(o.right) };
 }
 
-/** Sides whose window is gone (closed, moved to another Space) count as empty. */
+/** Sides whose window is gone (closed, moved to another workspace) count as empty. */
 export function liveDocks(d: Docks, alive: (id: string) => boolean): Docks {
   const fix = (s: DockSide): DockSide => (s.id && !alive(s.id) ? { ...s, id: null } : s);
   return { left: fix(d.left), right: fix(d.right) };
@@ -81,13 +81,13 @@ export function undock(d: Docks, id: string): Docks {
 /**
  * Widths for the shown sides in an app window `total` px wide: each its own
  * width (or the default) within min/max, then narrowed so the board keeps
- * MIN_WORKSPACE, the right side first and never below min. Hidden or empty: 0.
+ * MIN_BOARD, the right side first and never below min. Hidden or empty: 0.
  */
 export function dockWidths(d: Docks, total: number): Record<Side, number> {
   const want = (s: Side) =>
     d[s].id && !d[s].hidden ? Math.max(DOCK_WIDTH.min, Math.min(DOCK_WIDTH.max, d[s].width ?? DOCK_WIDTH.default)) : 0;
   const w = { left: want("left"), right: want("right") };
-  let over = w.left + w.right + MIN_WORKSPACE - total;
+  let over = w.left + w.right + MIN_BOARD - total;
   for (const s of ["right", "left"] as const) {
     if (over <= 0 || !w[s]) continue;
     const cut = Math.min(over, w[s] - DOCK_WIDTH.min);

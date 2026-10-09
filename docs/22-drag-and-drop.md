@@ -90,6 +90,6 @@ To check by hand (drags that leave the app or start in it can't be automated): d
 - Several rows at once: the file browser selects one row, so it drags one file.
 - ⌘Z for moves (the toast's Undo is the only way back).
 - Dragging a path out of terminal output (⌘-drag a path link).
-- Dropping on a Space in the switcher, or a sidebar row in the Navigator, to target that window or Space.
+- Dropping on a workspace in the switcher, or a sidebar row in the Navigator, to target that window or workspace.
 - Remote and web clients: `fs.transfer` is allowed by the remote policy, but no remote client drags yet.
 - A copy badge that knows about other disks before the drop.
