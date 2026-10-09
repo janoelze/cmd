@@ -129,7 +129,7 @@ export async function closePane(paneId: PaneId): Promise<void> {
 }
 
 /**
- * A widget made with Magic left the workspace but stays in the library
+ * A widget made with Magic left the board but stays in the library
  * (docs/16-widgets.md): say so the first time, with a way back. Drafts that
  * never built are gone with their window, so they say nothing.
  */
@@ -137,7 +137,7 @@ function removedFromDesk(win: AppWindow): void {
   const widgetId = typeof win.state.widgetId === "string" ? win.state.widgetId : null;
   if (!widgetId || !win.state.revision || getState().ui["widgets.removedHint"]) return;
   setUi("widgets.removedHint", true);
-  toast(`Removed “${win.title}” from the workspace. It's in your Widget Library.`, {
+  toast(`Removed “${win.title}” from the board. It's in your Widget Library.`, {
     icon: "sparkles",
     duration: 8000,
     action: { label: "Undo", run: () => void addWidget(`magic:${widgetId}`, win.spaceId).catch(() => {}) },
@@ -231,7 +231,7 @@ export async function openPath(target: string): Promise<void> {
   else cmd.openPath(t);
 }
 
-/** Put a widget from the library (`type:timer`, `magic:<id>`) on the workspace; throws when it can't. */
+/** Put a widget from the library (`type:timer`, `magic:<id>`) on the board; throws when it can't. */
 /** Adds a widget; a built-in one is about the selected terminal's folder (Live Diff shows that repository). */
 export async function addWidget(ref: string, spaceId: string = here()): Promise<void> {
   const w = await cmd.call("widget.add", { ref, spaceId, cwd: contextCwd() });

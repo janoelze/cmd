@@ -93,7 +93,7 @@ Before a scenario, put the app in the state it needs: select with `selectNth(i)`
 
 ## Pitfalls
 
-- Never set `transform`, `width`, `height` or `opacity` on a workspace window from React. TileMotion owns them, and React rewriting `className` drops classes, so TileMotion marks state with attributes (`data-morphing`, `data-hidden`, `data-held`).
+- Never set `transform`, `width`, `height` or `opacity` on a board window from React. TileMotion owns them, and React rewriting `className` drops classes, so TileMotion marks state with attributes (`data-morphing`, `data-hidden`, `data-held`).
 - `getBoundingClientRect()` includes running transforms and animations: read it for "where it's shown", `offsetWidth` for "where it's laid out".
 - A WebGL canvas can't be cloned, so a closed terminal's ghost fades without its text.
 - View Transitions snapshot the old state, block input and need a persistent scope element. Use them only for discrete swaps (Spaces). A scope element that React replaces never animates.

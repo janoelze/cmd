@@ -44,7 +44,7 @@ export const COMMANDS = spec([
   { id: "view.magicChange", label: "Change Widget…", keys: ["Cmd+L"] },
   { id: "view.magicRefresh", label: "Refresh Widget", keys: ["Cmd+R"] },
   { id: "view.magicStop", label: "Stop Making Widget", keys: ["Cmd+."] },
-  { id: "widget.remove", label: "Remove from Workspace" },
+  { id: "widget.remove", label: "Remove from Board" },
   { id: "file.save", label: "Save", keys: ["Cmd+S"] },
   { id: "file.close", label: "Close Window", keys: ["Cmd+W"] },
   { id: "file.closeWindow", label: "Close App Window", keys: ["Shift+Cmd+W"] },
@@ -82,7 +82,7 @@ export const COMMANDS = spec([
   { id: "view.rightSidebar", label: "Show Right Sidebar", checkable: "checkbox" },
   { id: "window.dockLeft", label: "Move to Left Sidebar" },
   { id: "window.dockRight", label: "Move to Right Sidebar" },
-  { id: "window.undock", label: "Move to Workspace" },
+  { id: "window.undock", label: "Move to Board" },
   // A fixed size for consistent screenshots (marketing site).
   { id: "window.screenshotSize", label: "Resize to 1500 × 900" },
   { id: "view.zoomIn", label: "Bigger", keys: ["Cmd+Plus", "Cmd+="] },

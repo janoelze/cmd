@@ -132,7 +132,7 @@ check(await waitFor(async () => (await windows()).some((w) => w.state.path === o
 const after = (await windows()).length;
 check(after === before + 1, "only one window opened");
 await dropOn(".statusbar", { files: [out("page.txt")] });
-check(win.url() === startUrl && (await windows()).length === after, "a file dropped outside the workspace (the status bar) is refused");
+check(win.url() === startUrl && (await windows()).length === after, "a file dropped outside the board (the status bar) is refused");
 
 // ── guards: native alerts and confirmations (dialogs stubbed: record, answer with __answer) ──
 await app.evaluate(({ dialog }) => {

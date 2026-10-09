@@ -37,10 +37,10 @@ export interface WindowView {
 }
 
 /**
- * Where a window is shown: in the workspace's layout, or docked as a sidebar
+ * Where a window is shown: on the board, or docked as a sidebar
  * (docs/21-sidebars.md). Views can read it to adapt (useContext).
  */
-export const PlacementContext = createContext<"workspace" | "sidebar">("workspace");
+export const PlacementContext = createContext<"board" | "sidebar">("board");
 
 const views = new Map<string, WindowView>();
 

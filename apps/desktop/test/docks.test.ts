@@ -18,7 +18,7 @@ describe("sidebars", () => {
     expect(sideOf(b, "files")).toBe("right");
   });
 
-  it("sends the window that held a side back to the workspace", () => {
+  it("sends the window that held a side back to the board", () => {
     const d = dock(dock(EMPTY_DOCKS, "nav", "left"), "files", "left");
     expect(d.left.id).toBe("files");
     expect(dockedIds(d).has("nav")).toBe(false);
@@ -44,7 +44,7 @@ describe("sidebars", () => {
     expect([...dockedIds(d)].sort()).toEqual(["ci", "nav"]);
   });
 
-  it("sizes sides within limits, keeping room for the workspace", () => {
+  it("sizes sides within limits, keeping room for the board", () => {
     const d = { left: { id: "a", width: null, hidden: false }, right: { id: "b", width: 9999, hidden: false } };
     expect(dockWidths(d, 2000)).toEqual({ left: DOCK_WIDTH.default, right: DOCK_WIDTH.max });
     // Narrow: the right side gives way first, never below its minimum.

@@ -1,5 +1,5 @@
 // Sidebars (docs/21-sidebars.md): any window can be docked to the left or right
-// edge of the app window, out of the workspace's layout. Which window sits where
+// edge of the app window, out of the board's layout. Which window sits where
 // is per-Space layout, kept in Space.view["docks"] like grid order and the canvas
 // camera. Pure helpers; App owns the state, components/Dock.tsx draws a side.
 
@@ -18,7 +18,7 @@ export interface DockSide {
 export type Docks = Record<Side, DockSide>;
 
 export const DOCK_WIDTH = { default: 280, min: 200, max: 480 } as const;
-/** Room the workspace keeps however wide the sidebars are. */
+/** Room the board keeps however wide the sidebars are. */
 export const MIN_WORKSPACE = 320;
 
 const EMPTY_SIDE: DockSide = { id: null, width: null, hidden: false };
@@ -54,14 +54,14 @@ export function shownIds(d: Docks): Set<string> {
   return new Set(SIDES.flatMap((s) => (d[s].id && !d[s].hidden ? [d[s].id!] : [])));
 }
 
-/** Every docked window, shown or hidden: not part of the workspace. */
+/** Every docked window, shown or hidden: not part of the board. */
 export function dockedIds(d: Docks): Set<string> {
   return new Set(SIDES.flatMap((s) => (d[s].id ? [d[s].id!] : [])));
 }
 
 /**
  * Dock `id` to `side`. It leaves the other side if it was there; the window
- * that held `side` goes back to the workspace. Docking shows the side.
+ * that held `side` goes back to the board. Docking shows the side.
  */
 export function dock(d: Docks, id: string, side: Side): Docks {
   const other: Side = side === "left" ? "right" : "left";
@@ -72,7 +72,7 @@ export function dock(d: Docks, id: string, side: Side): Docks {
   } as Docks;
 }
 
-/** Back to the workspace (the side keeps its width for the next window). */
+/** Back to the board (the side keeps its width for the next window). */
 export function undock(d: Docks, id: string): Docks {
   const side = sideOf(d, id);
   return side ? { ...d, [side]: { ...d[side], id: null } } : d;
@@ -80,7 +80,7 @@ export function undock(d: Docks, id: string): Docks {
 
 /**
  * Widths for the shown sides in an app window `total` px wide: each its own
- * width (or the default) within min/max, then narrowed so the workspace keeps
+ * width (or the default) within min/max, then narrowed so the board keeps
  * MIN_WORKSPACE, the right side first and never below min. Hidden or empty: 0.
  */
 export function dockWidths(d: Docks, total: number): Record<Side, number> {

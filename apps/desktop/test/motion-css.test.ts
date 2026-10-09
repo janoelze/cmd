@@ -1,7 +1,7 @@
 // The stylesheets move things the way docs/37-motion.md says: durations and curves
 // come from the tokens (so they're one set of values, and Reduce Motion reaches
 // them), nothing animates layout but what's listed below with its reason, and
-// nothing transitions a workspace window's geometry (TileMotion owns it).
+// nothing transitions a board window's geometry (TileMotion owns it).
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -82,7 +82,7 @@ describe("motion in the stylesheets", () => {
     expect(frames.map((d) => `@keyframes ${d.keyframes}: ${d.prop}`)).toEqual([]);
   });
 
-  it("never transitions a workspace window's geometry (TileMotion owns it)", () => {
+  it("never transitions a board window's geometry (TileMotion owns it)", () => {
     const tile = motion.filter(
       (d) =>
         d.prop.startsWith("transition") &&

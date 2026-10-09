@@ -1,5 +1,5 @@
 // Motion and visual stability run (docs/37-motion.md): launches the built app
-// against a throwaway core, sets up a workspace of windows and plays the moves
+// against a throwaway core, sets up a board of windows and plays the moves
 // that rearrange it (⌘↩, view switches, sidebars, opening and closing windows,
 // resizing the app window, Spaces). While each plays, a probe in the page reads
 // every window's rect, its content's rect, opacity and visibility on every
@@ -128,7 +128,7 @@ await win.evaluate(() => {
     if (w !== innerWidth || h !== innerHeight) return void requestAnimationFrame(tick);
     const view = document.querySelector(".main.windows")?.getBoundingClientRect();
     const frame = { t: now, vp: view ? [view.left, view.top, view.width, view.height] : null, tiles: {} };
-    // The workspace's windows, and the sidebars (keyed by their side).
+    // The board's windows, and the sidebars (keyed by their side).
     const els = [...document.querySelectorAll(".windows-track > .tile[data-pane]")].map((t) => [t.dataset.pane, t]);
     // Sidebars by their window too: a window moving to or from one is one window moving.
     for (const d of document.querySelectorAll(".stage > .dock > .tile[data-pane]")) els.push([d.dataset.pane, d]);
@@ -160,7 +160,7 @@ await win.evaluate(() => {
       });
     // Closed windows fading out where they were (motion.ts ghost).
     frame.ghosts = document.querySelectorAll(".ghost-tile").length;
-    // The workspace under a View Transition (switching Spaces): what's seen is its crossfade, not the DOM.
+    // The board under a View Transition (switching Spaces): what's seen is its crossfade, not the DOM.
     frame.vt = !!document.querySelector(".stage:active-view-transition");
     rec.frames.push(frame);
     requestAnimationFrame(tick);
@@ -196,7 +196,7 @@ await win.evaluate(() => {
         for (const src of e.sources ?? []) {
           const el = src.node?.nodeType === 1 ? src.node : src.node?.parentElement;
           if (!el || el.closest("[data-morphing], .ghost-tile, .dock.leaving, .tip-layer")) continue;
-          // Containers whose content the motion system keeps in place (the workspace and its
+          // Containers whose content the motion system keeps in place (the board and its
           // track, whose windows are carried on screen), and the top bar's columns, which
           // resize around the Space's name while their content stays put.
           if (el.matches(".main, .windows-scroller, .windows-track, .topbar-center, .topbar-trail, .topbar-lead")) continue;
@@ -244,7 +244,7 @@ await win.evaluate(() => {
 });
 
 // ── analysis ─────────────────────────────────────────────
-/** The area windows and sidebars are seen in: the workspace and the sidebars' columns (the app window's width). */
+/** The area windows and sidebars are seen in: the board and the sidebars' columns (the app window's width). */
 const document_stage = (frames) => {
   const vp = frames.find((f) => f.vp)?.vp;
   return vp && [0, vp[1], Math.max(...frames.filter((f) => f.vp).map((f) => f.vp[0] + f.vp[2])), vp[3]];
@@ -444,7 +444,7 @@ async function scenario(name, act, { settle = 700, ...expect } = {}) {
   if (shown > 10) console.log(`    … ${shown - 10} more`);
 }
 
-// A workspace of four windows: a terminal when terminals can start here, else a text window,
+// A board of four windows: a terminal when terminals can start here, else a text window,
 // and a text window, a file browser and a Markdown preview, side by side in the grid.
 await menu("view.grid");
 await call("window.open", { kind: "files", input: { path: fixture } });
@@ -476,7 +476,7 @@ await selectNth(0);
 await scenario("move a window to the right sidebar", () => menu("window.dockRight"));
 await scenario("hide right sidebar", () => menu("view.rightSidebar"));
 await scenario("show right sidebar", () => menu("view.rightSidebar"));
-await scenario("move it back to the workspace", () => menu("window.undock"));
+await scenario("move it back to the board", () => menu("window.undock"));
 await scenario("open a window (grid)", () => menu("file.newText"));
 const newest = await call("window.list").then((l) => l.filter((w) => w.kind === "text").sort((a, b) => b.createdAt - a.createdAt)[0]);
 await scenario("close a window (grid)", () => call("window.close", { id: newest.id }));
@@ -484,7 +484,7 @@ await scenario("app window: one step smaller", () => setSize(1200, 800), { expec
 await scenario("app window: live resize", async () => {
   for (let i = 1; i <= 20; i++) await setSize(1200 + i * 12, 800 + i * 5), await sleep(16);
 }, { expect: "follow" });
-// Font size (⌘+ / ⌘−) with a terminal selected, in the workspace and then in a sidebar.
+// Font size (⌘+ / ⌘−) with a terminal selected, on the board and then in a sidebar.
 const terminal = async () => win.evaluate(() => {
   const t = document.querySelector(".tile.kind-terminal[data-pane]");
   window.__cmdSelect(t.dataset.pane);

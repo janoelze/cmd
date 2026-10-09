@@ -1,6 +1,6 @@
 // One sidebar (docs/21-sidebars.md): a docked window at the left or right edge,
-// full height, floating on the backdrop like the workspace's windows. Same title
-// bar, frame and menu as on the workspace; its inner edge resizes it (double-click:
+// full height, floating on the backdrop like the board's windows. Same title
+// bar, frame and menu as on the board; its inner edge resizes it (double-click:
 // default width). Docking moves the window's DOM here, so a webview reloads once
 // (Electron reattaches a moved <webview>); terminals reattach their xterm as is.
 
@@ -19,7 +19,7 @@ interface Props {
   side: Side;
   row: SidebarRow;
   width: number;
-  /** The widest it can get and leave the workspace its room. */
+  /** The widest it can get and leave the board its room. */
   maxWidth: number;
   selected: boolean;
   /** Something waits for you somewhere: outline windows that need you. */
@@ -30,7 +30,7 @@ interface Props {
   onWidth: (px: number | null) => void;
   /**
    * Shown or hidden just now (View → Show Sidebar): it slides in from its edge, or
-   * out to it (out of the layout meanwhile, so the workspace takes its room at once).
+   * out to it (out of the layout meanwhile, so the board takes its room at once).
    */
   sliding?: "in" | "out";
 }
@@ -42,7 +42,7 @@ export function Dock(p: Props) {
   useLayoutEffect(() => {
     if (p.sliding) slide(ref.current!, p.side === "left" ? "-100%, 0" : "100%, 0", p.sliding);
   }, [p.sliding, p.side]);
-  // A window moved here from the workspace (or the other side) glides in from where it
+  // A window moved here from the board (or the other side) glides in from where it
   // was; one that leaves says where it was, for wherever it goes (motion.ts).
   const motion = useRef<TileMotion | null>(null);
   useLayoutEffect(() => {

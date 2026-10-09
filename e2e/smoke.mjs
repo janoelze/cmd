@@ -907,7 +907,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     }
     await gone(".widget-library");
     const listed = (await call("widget.list")).find((e) => e.title === "Counter");
-    check(!!back && (await win.locator(".widget-library").count()) === 0 && listed?.windows.includes(back.id) && (await win.locator(".sb-widgets").count()) === 1, `a widget comes back from the library, on the workspace and in the Navigator's Widgets (${listed?.windows.length})`);
+    check(!!back && (await win.locator(".widget-library").count()) === 0 && listed?.windows.includes(back.id) && (await win.locator(".sb-widgets").count()) === 1, `a widget comes back from the library, on the board and in the Navigator's Widgets (${listed?.windows.length})`);
     await menu("widget.library");
     await win.waitForSelector(".widget-library", { timeout: 5000 });
     await menu("file.close");
@@ -1346,21 +1346,21 @@ step("typing the re-attach marker");
 await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [markerPane, markerCmd]);
 await win.waitForTimeout(800);
 
-// Sidebars (docs/21-sidebars.md): any window docks to a side and comes back to the workspace.
+// Sidebars (docs/21-sidebars.md): any window docks to a side and comes back to the board.
 {
   await win.evaluate((id) => window.__cmdSelect(id), markerPane);
   await win.waitForTimeout(200);
-  const inWorkspace = () => win.locator(`.windows-track > .tile[data-pane="${markerPane}"]`).count();
+  const onBoard = () => win.locator(`.windows-track > .tile[data-pane="${markerPane}"]`).count();
   await menu("window.dockRight");
   await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
   // The Space's layout is saved debounced.
   let storedRight = null;
   for (let i = 0; i < 20 && storedRight !== markerPane; i++) (await win.waitForTimeout(100), (storedRight = (await homeView()).docks?.right?.id));
-  check((await inWorkspace()) === 0 && storedRight === markerPane, "Move to Right Sidebar docks the window, out of the workspace");
+  check((await onBoard()) === 0 && storedRight === markerPane, "Move to Right Sidebar docks the window, out of the board");
   await win.screenshot({ path: path.join(shots, "9-sidebars.png") });
   await menu("view.rightSidebar");
   await gone(".dock-right");
-  check((await win.locator(".dock-right").count()) === 0 && (await inWorkspace()) === 0, "Show Right Sidebar hides the side; the window stays docked");
+  check((await win.locator(".dock-right").count()) === 0 && (await onBoard()) === 0, "Show Right Sidebar hides the side; the window stays docked");
   await menu("view.rightSidebar");
   await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
   await win.waitForTimeout(200);
@@ -1381,7 +1381,7 @@ await win.waitForTimeout(800);
   await menu("window.undock");
   await win.waitForSelector(`.windows-track > .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
   await gone(".dock-right");
-  check((await win.locator(".dock-right").count()) === 0 && (await win.locator(".dock-left .navigator").count()) === 1, "Move to Workspace brings it back; the Navigator stays on the left");
+  check((await win.locator(".dock-right").count()) === 0 && (await win.locator(".dock-left .navigator").count()) === 1, "Move to Board brings it back; the Navigator stays on the left");
 }
 
 // ── remembered UI state across an app restart (the core keeps running) ──

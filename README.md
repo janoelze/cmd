@@ -67,7 +67,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
   <img alt="Magic widgets in a grid: GitHub Actions runs, the weather in Tokyo, a EUR to JPY chart, disk space, a tea timer, and an empty Magic widget asking what it should show" src="docs/screenshots/magic-light.png">
 </picture>
 
-Press ⇧⌘M and type what you want to see: "my open merge requests", "the last CI runs", a JSON URL, a command. An agent looks around with read-only commands, writes a small widget, checks that it works, and shows it in your theme. The widget refreshes on its own without calling the model. Change it by asking (⌘L), edit its versions, settings and files (⌘E), or take it off the workspace when you're done: it stays in your Widget Library (⇧⌘L), ready to put back in any Space.
+Press ⇧⌘M and type what you want to see: "my open merge requests", "the last CI runs", a JSON URL, a command. An agent looks around with read-only commands, writes a small widget, checks that it works, and shows it in your theme. The widget refreshes on its own without calling the model. Change it by asking (⌘L), edit its versions, settings and files (⌘E), or take it off the board when you're done: it stays in your Widget Library (⇧⌘L), ready to put back in any Space.
 
 **Setup.** Magic widgets use your own Anthropic or OpenAI API key, asked for on first launch and kept in Settings → AI & Agents. cmd picks the newest models your key can use. Keys are stored outside `settings.json` and readable only by you. Widgets' data runs on [Deno](https://deno.com); cmd uses yours or downloads its own.
 
@@ -83,7 +83,7 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 | ⌘T | new terminal, in the folder of the selected window |
 | ⌥⌘N | new Claude session |
 | ⇧⌘M | new widget with Magic; in one, ⌘L changes it, ⌘E edits it, ⌘R refreshes it |
-| ⇧⌘L | Widget Library: your widgets, to put back on the workspace |
+| ⇧⌘L | Widget Library: your widgets, to put back on the board |
 | ⌘O / ⇧⌘N | open a Space here / in a new window |
 | ⌘K | command palette: `>` commands, `@` sessions, `?` past sessions |
 | ⌥⌘1 / 2 / 3 / 4 | focus / grid / strip / canvas |
@@ -125,7 +125,7 @@ cmd agents turns <agent>             # what an agent did, turn by turn (also: ev
 cmd agents summary <agent>           # summarise its session with AI, as Markdown
 cmd data query --type git. --since 7d # what cmd recorded (also: stats, explain, subscribe, ai, forget, export)
 cmd magic "how full is my disk"      # build a Magic widget without the app
-cmd widget list                      # the Widget Library; `cmd widget add <widget>` puts one on the workspace
+cmd widget list                      # the Widget Library; `cmd widget add <widget>` puts one on the board
 ```
 
 `cmd` is on the PATH in cmd's terminals. To use it elsewhere, link `~/Library/Application Support/cmd/bin/cmd` onto your PATH, or run it from a checkout ([DEVELOPMENT.md](DEVELOPMENT.md)).

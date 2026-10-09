@@ -43,7 +43,7 @@ kbd {
 /* ── layout ─────────────────────────────────────────── */
 
 /* Three rows (docs/21-sidebars.md): the top bar, the stage, the footer. The stage
-   is one backdrop that the sidebars and the workspace's windows sit on. */
+   is one backdrop that the sidebars and the board's windows sit on. */
 .app {
   display: grid;
   grid-template-rows: var(--topbar-h) minmax(0, 1fr) auto;
@@ -97,20 +97,20 @@ kbd {
 .topbar-trail > :not(.bar-sep) { -webkit-app-region: no-drag; }
 .topbar-modes { display: flex; align-items: center; gap: 2px; }
 
-/* ── stage: sidebars and the workspace ──────────────── */
+/* ── stage: sidebars and the board ──────────────── */
 
 .stage {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
-  /* Sidebars' shadows stop at the stage, like the workspace's: not over the top bar or footer. */
+  /* Sidebars' shadows stop at the stage, like the board's: not over the top bar or footer. */
   overflow: clip;
 }
 /* All in row 1: auto-placement would move an item whose column comes before the last one's to a new row. */
 .stage > * { grid-row: 1; }
 .stage > .main { grid-column: 2; }
-/* Canvas and strip: the workspace runs under the sidebars, which float over it. */
+/* Canvas and strip: the board runs under the sidebars, which float over it. */
 .stage.under > .main { grid-column: 1 / -1; }
 .stage.under > .dock { z-index: 1; }
 .dock {
@@ -118,10 +118,10 @@ kbd {
   display: flex;
   min-width: 0;
   min-height: 0;
-  /* Inset like the workspace's windows; the workspace's own padding makes the gap between. */
+  /* Inset like the board's windows; the board's own padding makes the gap between. */
   padding: var(--pad-y) 0 var(--pad-y) var(--pad-x);
 }
-/* Hidden just now and sliding out (Dock): out of the layout, so the workspace takes its room at once. */
+/* Hidden just now and sliding out (Dock): out of the layout, so the board takes its room at once. */
 .stage { position: relative; }
 .dock.leaving { position: absolute; top: 0; bottom: 0; z-index: 1; pointer-events: none; }
 .dock-left.leaving { left: 0; }
@@ -129,7 +129,7 @@ kbd {
 .dock-left { grid-column: 1; }
 .dock-right { grid-column: 3; padding: var(--pad-y) var(--pad-x) var(--pad-y) 0; }
 .dock > .tile { position: relative; flex: 1; min-width: 0; }
-/* Arriving from the workspace (Dock, motion.ts): above everything while it glides into place. */
+/* Arriving from the board (Dock, motion.ts): above everything while it glides into place. */
 .dock > .tile[data-morphing] { position: absolute; left: 0; top: 0; z-index: 10; transform-origin: 0 0; flex: none; }
 .dock > .tile > .tile-body > [data-held] { flex: none; contain: strict; }
 /* A closed window fading out where it was (motion.ts ghost). */
@@ -606,7 +606,7 @@ kbd {
 .windows-track > .tile > .tile-body > [data-held] { flex: none; contain: strict; }
 
 /* Unfocused windows are dimmed by an overlay (not a filter, which would soften text).
-   It stops inside the outline, so outlines match across the workspace and the
+   It stops inside the outline, so outlines match across the board and the
    sidebars. Sidebars are always dimmed, selected or not, so they look like an
    unselected window. Amount: ui.unfocusedDim (--window-dim-amount, set in App) times
    the theme's --window-dim. A window that needs you isn't dimmed. */

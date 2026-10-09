@@ -1,5 +1,5 @@
 // The top bar (docs/21-sidebars.md): the app window's drag region, full width,
-// over the sidebars and the workspace. The Space switcher in the middle, like a
+// over the sidebars and the board. The Space switcher in the middle, like a
 // window title; at the right end Search (the palette's search), the view modes,
 // a divider and New…, as plain buttons like the footer's.
 

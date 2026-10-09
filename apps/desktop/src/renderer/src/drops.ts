@@ -3,7 +3,7 @@
 // from other apps, and from cmd itself (file drags are native macOS drags,
 // drags.ts, so they arrive as files like any other). It finds the window under
 // the pointer and asks the drop target that window registered (registerDropTarget:
-// terminals, file browsers…). Over a window without one, or the workspace
+// terminals, file browsers…). Over a window without one, or the board
 // between windows, dropped files and links open (window routing, like the
 // palette). Anywhere else a file drop is refused, so it can never replace the
 // app's page with the file.
@@ -68,7 +68,7 @@ export function readDrop(dt: DataTransfer): DropItems {
   return { files, urls: fromList.urls, text: dt.getData("text/plain") };
 }
 
-/** Over the workspace, or a window that has no target of its own: open dropped files and links. */
+/** Over the board, or a window that has no target of its own: open dropped files and links. */
 const openTarget: DropTarget = {
   over: (d) => (d.files || d.urls ? "copy" : null),
   drop: (items) => {

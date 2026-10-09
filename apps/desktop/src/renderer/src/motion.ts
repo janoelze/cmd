@@ -1,13 +1,13 @@
-// Window motion (docs/37-motion.md): how the workspace's windows move, on the
+// Window motion (docs/37-motion.md): how the board's windows move, on the
 // kit's glide (@cmd/ui motion.ts: the curve, its clock, the timings). TileMotion
-// owns every workspace window's geometry: React says where each window should be,
+// owns every board window's geometry: React says where each window should be,
 // and TileMotion glides position and size together, one frame at a time, from
 // wherever the window is now (a move that's interrupted carries its velocity into
 // the next). While a window glides, its content is held at the size it's going to
 // have, clipped by the window: a terminal is refit once, not every frame, and a
 // move ends without a reflow. Windows hidden by focus mode fade out where they are
 // rather than jump to the focused window's rect. Below it: windows moving between
-// the workspace and the sidebars, and closed windows fading out (ghosts).
+// the board and the sidebars, and closed windows fading out (ghosts).
 
 import { glideNow, reducedMotion, spring, timing } from "@cmd/ui";
 
@@ -35,7 +35,7 @@ export interface UpdateOptions {
   swap: boolean;
   /**
    * The windows' coordinates changed under them since the last update (a mode
-   * switch moved the track, a sidebar moved the workspace on screen): where a
+   * switch moved the track, a sidebar moved the board on screen): where a
    * window at (x, y), scaled s, now has to be to stay where it was on screen. Each
    * window glides on from there, scaled back to 1 (a zoomed-out canvas's windows
    * shrink and grow with it, content and all).
@@ -318,7 +318,7 @@ export class TileMotion {
   }
 }
 
-// ── windows moving between the workspace and the sidebars ──
+// ── windows moving between the board and the sidebars ──
 // Docking or undocking a window renders it somewhere else: one element goes, another
 // comes. The side that loses it says where it was on screen (departed), the side that
 // gains it glides it in from there (arrived). Either may come first in a commit. A

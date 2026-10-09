@@ -1,6 +1,6 @@
 // The Widget Library (docs/16-widgets.md): a sheet of cards, yours (by last
 // use) and built-in ones, with a New Widget button (Magic) beside the search field.
-// A click puts a widget on the workspace of this Space; the search field only searches. Each card's menu adds, and
+// A click puts a widget on the board of this Space; the search field only searches. Each card's menu adds, and
 // for yours renames, duplicates, shows the folder and deletes. Each card has
 // an avatar: a built-in widget's icon, else the widget's initial, in a colour
 // of its own from its name (as projects' chips in the sidebar).

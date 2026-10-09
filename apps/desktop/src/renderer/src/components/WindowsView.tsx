@@ -152,7 +152,7 @@ export function WindowsView(p: Props) {
   padRef.current = padX;
   const [panning, setPanning] = useState(false);
   const [liveResize, setLiveResize] = useState(false);
-  /** How far the workspace moved on screen since TileMotion last heard (see the ResizeObserver). */
+  /** How far the board moved on screen since TileMotion last heard (see the ResizeObserver). */
   const shiftRef = useRef({ x: 0, y: 0 });
   // Until the viewport is measured and holds still, windows take their places
   // without gliding (else at boot they glide out from a zero-size layout).
@@ -164,7 +164,7 @@ export function WindowsView(p: Props) {
     p.rows.map((r) => ({ id: idOf(r), createdAt: createdOf(r) })),
   ).map((x) => x.id);
   const ids = preview ?? settled;
-  // The workspace's own selection: a selected sidebar (docs/21-sidebars.md) leaves focus mode on the window it showed.
+  // The board's own selection: a selected sidebar (docs/21-sidebars.md) leaves focus mode on the window it showed.
   const shownRef = useRef<PaneId | null>(null);
   if (selected && ids.includes(selected)) shownRef.current = selected;
   // Canvas and strip run under the sidebars (docs/21-sidebars.md). The strip's maths
@@ -477,14 +477,14 @@ export function WindowsView(p: Props) {
       const now = performance.now();
       const resized = window.innerWidth !== win.w || window.innerHeight !== win.h;
       win = { w: window.innerWidth, h: window.innerHeight };
-      // Where the workspace moved on screen (layout is fresh here, so this costs nothing).
+      // Where the board moved on screen (layout is fresh here, so this costs nothing).
       const r = el.getBoundingClientRect();
       shiftRef.current = { x: shiftRef.current.x + at.left - r.left, y: shiftRef.current.y + at.top - r.top };
       at = r;
       if (done) clearTimeout(done);
       done = setTimeout(() => setLiveResize(false), LIVE_RESIZE_MS);
       // Before this frame is painted: the windows take the new size in the same frame
-      // as the workspace (else for a frame they sit at the old place in the new box).
+      // as the board (else for a frame they sit at the old place in the new box).
       flushSync(() => {
         if (resized || now - last < LIVE_RESIZE_MS) setLiveResize(true);
         setVp({ w: el.clientWidth, h: el.clientHeight });
@@ -542,7 +542,7 @@ export function WindowsView(p: Props) {
     // Back to the strip with the selection it was left with: exactly where it was.
     if (entering && selected === stripSelected.current) return;
     // A resized window keeps its scroll; but entering the strip changes the width too
-    // (the workspace runs under the sidebars), and that reveal must use the new one.
+    // (the board runs under the sidebars), and that reveal must use the new one.
     if (was.w && was.w !== vp.w && was.mode === mode && was.selected === selected && !entering) return;
     const target = revealOffset(offsetRef.current, selSlot, stripW, padX, stripTotal);
     if (Math.abs(target - offsetRef.current) <= 0.5) return;
@@ -840,7 +840,7 @@ export function WindowsView(p: Props) {
     motionMode.current = mode;
     // Following the pointer or the app window's edge: no gliding. Windows pushed aside by a drag still glide.
     const instant = entering || liveResize || !!resizing || !!sizing || !vp.w;
-    // The track jumped (a mode switch, the camera put somewhere at once) or the workspace
+    // The track jumped (a mode switch, the camera put somewhere at once) or the board
     // moved on screen (a sidebar): each window goes on from where it was on screen.
     const from = jumpFrom.current;
     const to = trackOf(mode);

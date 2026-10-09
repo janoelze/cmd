@@ -89,7 +89,7 @@ We don't name them in public copy. Internally, the differences are:
 
 - **Widgets and Magic** (2026-10-05, [16-widgets.md](16-widgets.md)): *widget* is the one noun, and widgets are no longer "a kind of window" to people: windows are where you work, widgets show you something at a glance and live in the Widget Library. *Magic* is how you make one ("New Widget with Magic", "Made with Magic"). Wire and storage names stay `magic` (the `magic` window kind, `magic.*` settings and RPC methods, `cmd magic`): renaming them would break stored state.
 - **Windows** and **widgets** are what you work with. **Spaces** group them by project. **Agents** are terminals with a coding agent in them. **Sessions** are an agent's transcript, live or past.
-- The **workspace** is the main area of a Space, where its windows sit in a layout (grid, strip, canvas and focus are ways of arranging it). Not "the desk": that framing was dropped as kitschy (2026-10-07).
+- The **board** is the main area of a Space, where its windows sit in a layout (grid, strip, canvas and focus are ways of arranging it). Not "the desk": that framing was dropped as kitschy (2026-10-07).
 
 ## Name and icon
 

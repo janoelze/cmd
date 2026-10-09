@@ -1,6 +1,6 @@
 # Drag and drop
 
-> Status (2026-10-06): built on branch `dnd`. Files and links drag between Finder (or any app), terminals, file browsers and the rest of the workspace, in both directions. Not built: see "Not yet" at the end. Prompted by feedback on 0.14.0 asking for file browser → terminal, Finder → terminal and Finder → file browser.
+> Status (2026-10-06): built on branch `dnd`. Files and links drag between Finder (or any app), terminals, file browsers and the rest of the board, in both directions. Not built: see "Not yet" at the end. Prompted by feedback on 0.14.0 asking for file browser → terminal, Finder → terminal and Finder → file browser.
 
 ## What people see
 
@@ -10,8 +10,8 @@
 | One folder, with ⌘ held | a terminal | `cd` and its path are typed; Return is yours to press. |
 | A link or text | a terminal | It's typed. Paste protection checks it like any paste. |
 | Files | a file browser | They go into the folder under the pointer: a folder's row means that folder, a file's row means its folder, empty space means the root. Moved on the same disk, copied from another, ⌥ always copies (Finder's rules). Resting on a closed folder opens it after 0.7s. The window gets the accent ring and the target folder's row is marked. |
-| Files or links | any other window, or empty workspace | They open, routed like `open` or the palette would (a text window, a browser, a file browser for a folder). |
-| Files | the top bar, status bar or anywhere outside the workspace | Refused. The page never navigates to the file. |
+| Files or links | any other window, or empty board | They open, routed like `open` or the palette would (a text window, a browser, a file browser for a folder). |
+| Files | the top bar, status bar or anywhere outside the board | Refused. The page never navigates to the file. |
 | A file browser's row | Finder, Mail, Slack, a page's upload field, any cmd window | A real file drag, the same as dragging it out of Finder. |
 | A window's title icon (the Mark) | the same | A text, Markdown, PDF or image window drags its file, a file browser its folder, a terminal its working directory, a browser window its page's link. Like the icon in a macOS document's title bar. |
 
@@ -24,8 +24,8 @@ Browser windows and Magic widgets are pages in their own process, so drags over 
 **One router takes every drop.** `drops.ts` (installed at startup in `main.tsx`) listens for `dragenter`, `dragover` and `drop` on the document in the capture phase. For each event it:
 
 1. Reads what's dragged. During the drag only the kinds are readable (`Files`, `text/uri-list`, `text/plain`); on drop, `readDrop` gets file paths (`webUtils.getPathForFile`, plus `file:` URLs from a uri-list), other URLs and text.
-2. Finds the window under the pointer: the closest `[data-pane]`, which workspace tiles and docked sidebars both carry.
-3. Asks that window's registered `DropTarget` what a drop would do (`over` → `copy` / `move` / `link` / null). If the window has no target or refuses, the fallback opens files and links: over a window, or over `.main`, the workspace.
+2. Finds the window under the pointer: the closest `[data-pane]`, which board tiles and docked sidebars both carry.
+3. Asks that window's registered `DropTarget` what a drop would do (`over` → `copy` / `move` / `link` / null). If the window has no target or refuses, the fallback opens files and links: over a window, or over `.main`, the board.
 4. Shows it: `.drop-over` on the window (an accent ring, through the tile frame), and the effect as the pointer's badge, reduced to one the drag's source allows (`allowedEffect`; a drop with an effect the source doesn't allow is refused by the browser).
 5. If no one takes a file drag, it still `preventDefault`s it, with `dropEffect = "none"`, so nothing navigates. Text drags nobody takes go on to editors and fields (CodeMirror moves selected text itself).
 

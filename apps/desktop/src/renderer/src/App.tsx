@@ -188,11 +188,11 @@ export function App() {
   const winWidth = useWindowWidth();
   const widths = dockWidths(docks, winWidth);
 
-  // Every row of the Space (the Navigator's, Dock badge…), and the workspace's: without sidebars.
+  // Every row of the Space (the Navigator's, Dock badge…), and the board's: without sidebars.
   const allRows = useMemo(() => buildRows(s), [s]);
   // A Space's first Navigator is docked once its window.open returns, which can be a
   // render after the window itself arrives: until the Space has sidebars, a Navigator
-  // isn't a workspace window (it would show full size for a frame, then jump left).
+  // isn't a board window (it would show full size for a frame, then jump left).
   const unsetDocks = storedDocks === null;
   const rows = useMemo(
     () => allRows.filter((r) => !docked.has(windowIdOf(r) ?? "") && !(unsetDocks && r.win?.kind === "navigator")),
@@ -672,7 +672,7 @@ export function App() {
     ]);
   };
 
-  /** Make Sidebar ▸ Left / Right on the workspace; on a sidebar, the other side or back (docs/21-sidebars.md). */
+  /** Make Sidebar ▸ Left / Right on the board; on a sidebar, the other side or back (docs/21-sidebars.md). */
   const sidebarEntries = (id: string): MenuEntry[] => {
     const side = sideOf(docks, id);
     if (!side) {
@@ -686,7 +686,7 @@ export function App() {
     const other: Side = side === "left" ? "right" : "left";
     return [
       { label: other === "left" ? "Move to Left Sidebar" : "Move to Right Sidebar", run: () => setDocks((d) => dock(d, id, other)) },
-      { label: "Move to Workspace", run: () => setDocks((d) => undock(d, id)) },
+      { label: "Move to Board", run: () => setDocks((d) => undock(d, id)) },
     ];
   };
 
