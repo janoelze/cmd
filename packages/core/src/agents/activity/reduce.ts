@@ -5,7 +5,7 @@
 
 import path from "node:path";
 import { TURN_FORMAT, type ActivityEvent, type AgentId, type AgentKind, type AgentTurn } from "@cmd/protocol";
-import type { StateChange } from "../state.ts";
+import { QUESTIONS, type StateChange } from "../state.ts";
 
 /** No events and no terminal output for this long ends a turn whose agent went quiet. */
 export const QUIET_MS = 30_000;
@@ -173,7 +173,9 @@ export class ActivityReducer {
           if (ev.tool.writes) t.shellWrites++;
         }
         r.turn = t;
-        this.#state(r, { state: "working", detail: ev.tool?.label ?? null }, cause);
+        // A question's call puts it up: waiting, whether or not a permission request follows.
+        if (ev.tool && QUESTIONS.has(ev.tool.name)) this.#ask(r, t, ev, cause);
+        else this.#state(r, { state: "working", detail: ev.tool?.label ?? null }, cause);
         break;
       }
       case "tool.end": {
@@ -198,17 +200,14 @@ export class ActivityReducer {
         const t = this.#ensureTurn(r, ev);
         // A reminder about the question already up (Claude's "needs your permission" a few seconds later) doesn't replace it.
         if (t.outcome === "waiting" && t.ask?.tool && !ev.tool) break;
-        const message = ev.text ?? "Needs input";
-        t.ask = { message, ...(ev.tool ? { tool: ev.tool.name } : {}), ...(ev.tool?.command || ev.tool?.paths?.[0] ? { input: ev.tool.command ?? ev.tool.paths![0] } : {}) };
-        t.outcome = "waiting";
-        this.#askAt = ev.at;
-        r.turn = t;
-        this.#state(r, { state: "needs_input", detail: line1(message) }, cause);
+        // The permission request for a question already up (Claude asks one for AskUserQuestion) is the same question.
+        if (t.outcome === "waiting" && t.ask?.tool && QUESTIONS.has(t.ask.tool) && ev.tool?.name === t.ask.tool) break;
+        this.#ask(r, t, ev, cause);
         break;
       }
       case "idle":
-        // Idle at its prompt with a turn still open: it ended without a Stop (interrupted).
-        if (this.open && this.turn!.outcome === "working") {
+        // Idle at its prompt with a turn still open: it ended without a Stop (interrupted), or its question was dismissed.
+        if (this.open && (this.turn!.outcome === "working" || this.turn!.outcome === "waiting")) {
           this.#close(r, ev.at, "interrupted", "agent idle at its prompt");
           this.#state(r, { state: "idle", detail: null }, `${cause} (idle_prompt)`);
         }
@@ -271,6 +270,8 @@ export class ActivityReducer {
     // A question dismissed without an answer event (Codex and Gemini send none for Esc or a denial):
     // the terminal changed after the question, then nothing for a while. A dialog that waits stays still.
     if (this.turn!.outcome === "waiting") {
+      // A question tool: only the agent says how it ended (the tool's end, a new prompt, idle at its prompt).
+      if (this.turn!.ask?.tool && QUESTIONS.has(this.turn!.ask.tool)) return null;
       // Still busy well after the question (the approved command's output, the agent's working timer):
       // it was answered. Agents send nothing for an approval until the call ends.
       if (outputAt > this.#askAt + ANSWERED_MS && now - outputAt < 2500) {
@@ -296,6 +297,15 @@ export class ActivityReducer {
     this.#close(r, since, "interrupted", `quiet for ${Math.round(quiet / 1000)} s with no answer`);
     this.#state(r, { state: "idle", detail: null }, `inferred: quiet for ${Math.round(quiet / 1000)} s`);
     return r;
+  }
+
+  #ask(r: Reduction, t: AgentTurn, ev: ActivityEvent, cause: string): void {
+    const message = ev.text ?? "Needs input";
+    t.ask = { message, ...(ev.tool ? { tool: ev.tool.name } : {}), ...(ev.tool?.command || ev.tool?.paths?.[0] ? { input: ev.tool.command ?? ev.tool.paths![0] } : {}) };
+    t.outcome = "waiting";
+    this.#askAt = ev.at;
+    r.turn = t;
+    this.#state(r, { state: "needs_input", detail: line1(message) }, cause);
   }
 
   /** Inside a foreground subagent's launcher call, and not the launcher itself. */

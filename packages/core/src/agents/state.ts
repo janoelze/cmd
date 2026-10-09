@@ -23,6 +23,13 @@ export function nativeSession(kind: AgentKind, sessionId: string): { claudeSessi
   return kind === "codex" ? { codexThreadId: sessionId } : { claudeSessionId: sessionId };
 }
 
+/**
+ * Tools that are the question itself (Claude's AskUserQuestion and plan approval, Codex's
+ * request_user_input): their end is the answer. While one is up the user moves through its
+ * options, which redraws the screen, so output says nothing about it being answered or dismissed.
+ */
+export const QUESTIONS = new Set(["AskUserQuestion", "ExitPlanMode", "request_user_input"]);
+
 /** Gemini CLI's names for the hook events Claude and Codex share; the rest are the same or unused. */
 const GEMINI_EVENTS: Record<string, string> = { BeforeAgent: "UserPromptSubmit", AfterAgent: "Stop", BeforeTool: "PreToolUse", AfterTool: "PostToolUse", PreCompress: "PreCompact" };
 

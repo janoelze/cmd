@@ -14,7 +14,7 @@ import type { AgentId, AgentKind, PaneId } from "./model.ts";
  * - EXPORT_FORMAT: `cmd agents export` files (ActivityExportHeader.version).
  */
 export const ACTIVITY_SCHEMA = 1;
-export const TURN_FORMAT = 2;
+export const TURN_FORMAT = 3;
 export const HOOK_FORMAT = 2;
 export const EXPORT_FORMAT = 1;
 

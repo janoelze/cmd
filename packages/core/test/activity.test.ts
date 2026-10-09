@@ -379,6 +379,32 @@ describe("reduce", () => {
     expect(red.turn!.ask).toMatchObject({ tool: "Bash", input: "rm x" });
   });
 
+  it("keeps waiting on a question tool while the user moves through its options; only its end answers it", () => {
+    const red = new ActivityReducer("a1");
+    const tool = { name: "AskUserQuestion", id: "q", label: "AskUserQuestion" };
+    red.apply(ev("prompt", 0));
+    expect(red.apply(ev("tool.start", 1000, { tool, text: "How should toolbars line up?" })).change).toMatchObject({ state: "needs_input", detail: "How should toolbars line up?" });
+    // Its permission request and Claude's reminder are the same question.
+    expect(red.apply(ev("ask", 1000, { tool, text: "How should toolbars line up?" })).change.state).toBeUndefined();
+    red.apply(ev("ask", 7000, { text: "Claude needs your permission" }));
+    // Arrow keys redraw the dialog: neither answered nor dismissed, however long it stays up.
+    for (let t = 2000; t < 120_000; t += 2000) expect(red.tick(t, t < 60_000 ? t - 500 : 59_500)).toBeNull();
+    expect(red.turn).toMatchObject({ outcome: "waiting", ask: { message: "How should toolbars line up?", tool: "AskUserQuestion" } });
+    const r = red.apply(ev("tool.end", 120_000, { tool: { ...tool, ok: true } }));
+    expect(r.change.state).toBe("working");
+    // Dismissed: the agent says so by going idle at its prompt.
+    red.apply(ev("tool.start", 130_000, { tool: { ...tool, id: "q2" }, text: "Merge now?" }));
+    const r2 = red.apply(ev("idle", 200_000));
+    expect(r2.change.state).toBe("idle");
+    expect(red.turn).toMatchObject({ outcome: "interrupted" });
+  });
+
+  it("asks what an AskUserQuestion call asks", () => {
+    const raw = (name: string): RawEvent => ({ at: 1, agent: "claude", name, payload: { hook_event_name: name, session_id: "s", tool_name: "AskUserQuestion", tool_use_id: "q", tool_input: { questions: [{ question: "Which edge?", header: "Edge", options: [] }] } } });
+    expect(normalize(raw("PreToolUse"))).toMatchObject({ kind: "tool.start", text: "Which edge?" });
+    expect(normalize(raw("PermissionRequest"))).toMatchObject({ kind: "ask", text: "Which edge?" });
+  });
+
   it("takes a prompt sent while the agent works as a follow-up in the same turn; a new session ends it", () => {
     const red = new ActivityReducer("a1");
     red.apply(ev("prompt", 0, { text: "one" }));

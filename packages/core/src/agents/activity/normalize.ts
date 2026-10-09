@@ -4,7 +4,7 @@
 // missing key loses one field, never the event. See docs/18-agent-activity.md.
 
 import type { ActivityEvent, ActivityKind, ActivityTool, AgentKind } from "@cmd/protocol";
-import { describeTool, hookEventName } from "../state.ts";
+import { describeTool, hookEventName, QUESTIONS } from "../state.ts";
 
 type Payload = Record<string, unknown>;
 
@@ -144,6 +144,16 @@ function askedTool(p: Payload): ActivityTool | undefined {
   return tool;
 }
 
+/** What a question tool asks (AskUserQuestion: its first question; plan approval: the plan). */
+function questionOf(p: Payload): string | undefined {
+  const tool = str(p.tool_name);
+  if (!tool || !QUESTIONS.has(tool)) return undefined;
+  const input = obj(p.tool_input) ?? {};
+  const first = Array.isArray(input.questions) ? obj(input.questions[0]) : undefined;
+  if (tool === "ExitPlanMode") return "Approve the plan?";
+  return str(first?.question) ?? str(input.question) ?? str(first?.header) ?? "Has a question";
+}
+
 /** The text an event carries, by kind. */
 function textOf(kind: ActivityKind, p: Payload): string | undefined {
   switch (kind) {
@@ -153,7 +163,9 @@ function textOf(kind: ActivityKind, p: Payload): string | undefined {
     case "subagent.stop":
       return (str(p.last_assistant_message) ?? str(p.prompt_response))?.trim();
     case "ask":
-      return str(p.message) ?? (str(p.tool_name) ? `Allow ${str(p.tool_name)}?` : undefined);
+      return questionOf(p) ?? str(p.message) ?? (str(p.tool_name) ? `Allow ${str(p.tool_name)}?` : undefined);
+    case "tool.start":
+      return questionOf(p);
     case "fail":
       // Claude: error is a code ("rate_limit"), last_assistant_message what the user saw.
       return str(p.last_assistant_message) ?? str(p.error_details) ?? str(p.message) ?? str(p.error);
