@@ -9,7 +9,7 @@
     { "title": "Search everything", "text": "⇧⌘F searches windows, files, past sessions, commands and their output. Return resumes a session." },
     { "title": "Your history, kept", "text": "Every agent session, command and commit, on your Mac with secrets redacted. You pick what's saved." },
     { "title": "Session summaries", "text": "Right-click an agent for what you asked, what was done and what changed, in Markdown." },
-    { "title": "Magic widgets", "text": "Ask for your open PRs or last CI runs, and an agent builds a live widget from `gh`, `curl` or a script." },
+    { "title": "Magic widgets", "text": "Ask for anything: your open PRs, a queue's depth, a calculator. An agent builds it as a live widget." },
     { "title": "Built-in widgets", "text": "Agent Activity, a Live Diff, Resources, a Timer and more, in the Widget Library (⇧⌘L)." },
     { "title": "Remote access", "badge": "Beta", "text": "Pair a phone or browser by QR code and take your terminals and agents along, end-to-end encrypted." },
     { "title": "Web browser", "text": "Beside your terminals, at phone, tablet or desktop size. Pages that won't load say why." },
