@@ -193,7 +193,7 @@ p.more a:hover { color: var(--link); }
 .notes li::marker { color: var(--ink-3); }
 .notes strong { color: var(--ink); font-weight: 500; }
 @media (max-width: 640px) {
-  .release .head .button { margin-left: 0; }
+  .release.latest .head .button { order: 1; flex-basis: 100%; justify-content: center; margin: 8px 0 2px; } /* the one to get: full width, under its version */
   .release.latest { margin-inline: -12px; padding-inline: 12px; }
   .releases li { grid-template-columns: 5em 1fr 4.5em auto; gap: 12px; padding: 10px 10px 10px 14px; }
   .releases time { display: none; }
