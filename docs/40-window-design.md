@@ -179,10 +179,52 @@ Sources: [ensure-design-token-usage](https://atlassian.design/components/eslint-
 
 Sources: [Atlassian llms.txt](https://atlassian.design/llms.txt), [Primer MCP](https://primer.style/product/getting-started/foundations/mcp), [Storybook MCP](https://storybook.js.org/docs/ai/mcp/overview), [shadcn MCP](https://ui.shadcn.com/docs/mcp).
 
+### 7. One source for the tokens: the DTCG format (2025.10)
+
+- **The format.** The Design Tokens Community Group released [Format Module 2025.10](https://www.designtokens.org/tr/2025.10/) on 2025-10-28 as its first stable version. It is a community-group report, not a W3C standard.
+  - Files are JSON (`*.tokens.json`). A token is an object with `$value`, plus optional `$type`, `$description`, `$deprecated` and `$extensions`.
+  - `$type` can be set on a group and is inherited by the tokens in it.
+  - Typed values:
+    - `dimension` is `{value, unit}`, with px or rem;
+    - `color` is `{colorSpace, components, alpha}` in any CSS Color 4 space;
+    - other types: `duration`, `cubicBezier`, `fontFamily`, `fontWeight`, `number`, and composites (`shadow`, `border`, `typography`, `transition`, `gradient`).
+  - References: `{group.token}` for a whole value, or a JSON-pointer `$ref` for one property. Groups can `$extends` other groups.
+  - The [Resolver Module](https://www.w3.org/community/reports/design-tokens/CG-FINAL-resolver-20251028/) adds *sets* and *modifiers* (theme: light/dark, density…). Each input (`{theme: "nord"}`) resolves to one flat set of tokens.
+- **Tooling:**
+  - [Terrazzo](https://terrazzo.app/docs/guides/dtcg/) 2.x supports 2025.10 fully, resolvers included. Its CSS plugin writes each resolver input under a selector of your choice (`[data-theme="dark"]`, an `@media`).
+  - [Style Dictionary](https://styledictionary.com/info/dtcg/) has supported the older DTCG draft since v4. In v5, 2025.10 is "not fully supported" (work in progress).
+  - Some tools still read only the older draft ([Hyvä](https://docs.hyva.io/hyva-themes/working-with-tailwindcss/design-tokens/formats.html)).
+- **Desktop precedent.** No Electron or macOS app turned up that publishes its use of DTCG. The closest is **Firefox**:
+  - its desktop design system keeps [JSON tokens](https://firefox-source-docs.mozilla.org/toolkit/themes/shared/design-system/docs/README.json-design-tokens.stories.html) as the source of truth, split into one file per category (`border.tokens.json` → `--border-*`);
+  - Style Dictionary builds the CSS;
+  - the same JSON drives its stylelint rules ([bug 1979109](https://bugzilla.mozilla.org/show_bug.cgi?id=1979109)).
+
+  Write-ups such as [Porsche's tech radar](https://opensource.porsche.com/porschedigital-technology-radar/methods-and-patterns/design-tokens/) give the same lessons: name tokens by meaning, lint for literal values, and version tokens with the components.
+
+**Where it fits cmd, and where it doesn't:**
+- **Fits:**
+  - the foundations: spacing, sizes, radii, the type scale, durations and curves (`--glide` is a `linear()`, which `cubicBezier` can't express, so it needs an extension);
+  - each theme's base colours (`ThemeColors`, 17 themes) as the resolver's theme contexts.
+- **Doesn't fit:**
+  - the derived layer. `tokens.css` builds most surfaces with `color-mix(in srgb, var(--ink) 6%, transparent)` at runtime, so they follow any theme, including a person's own. DTCG has no colour functions, so these would be either precomputed per theme (losing custom themes) or written as `$extensions` (`"org.cmd.mix": {"of": "{color.ink}", "amount": 0.06}`) that only our generator understands;
+  - the values the app sets from settings at runtime (`--window-radius`, `--window-elevation`). These stay CSS variables, with the token as their default.
+- **The payoff is one source with many outputs**, more than the format itself:
+  - `tokens.css`;
+  - **TypeScript unions** for the primitives' props (`Space = "1" | … | "8"`), so the kit's types can't drift from the scale;
+  - Magic's widget tokens (today `widgetTokens()` in `protocol/src/magic.ts` keeps a second vocabulary by hand);
+  - the gallery's token page;
+  - the manifest and skill an AI reads, with each token's `$description` as its rule ("between rows in a list", "a window's inset");
+  - the CSS test's list of allowed values.
+- **Generator:**
+  - A small script of our own (TypeScript, run on Node like the rest, no dependency) reads `packages/ui/tokens/*.tokens.json` and writes those outputs. A test fails when they are stale, as the motion tokens' test does today.
+  - Terrazzo is the alternative if we'd rather not own the parser. It is the only tool with full 2025.10 support.
+  - Style Dictionary isn't there yet.
+
 ## Plan
 
 In order of leverage:
 
+0. **Tokens in the DTCG format** (`packages/ui/tokens/*.tokens.json`) and a generator, starting with the new spacing and metrics tokens and the existing foundations. Theme colours follow once the derived layer has an extension.
 1. **Spacing and metrics tokens.**
    - A spacing scale on a 4px base: `--space-1` 2, `-2` 4, `-3` 6, `-4` 8, `-5` 12, `-6` 16, `-7` 24, `-8` 32.
    - One window inset (`--inset`).
