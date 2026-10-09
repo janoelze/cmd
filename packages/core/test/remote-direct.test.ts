@@ -2,6 +2,7 @@
 // its loopback listener serving a stand-in web client, and a device speaking
 // Noise over a real WebSocket to it, as a proxy in front would pass it on.
 import fs from "node:fs";
+import http from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +11,7 @@ import { WebSocket } from "ws";
 import { RpcClient, type CoreEvent, type RemotePairRequest } from "@cmd/protocol";
 import { decodePairing, generateKeyPair, openDeviceSession, type Bytes, type KeyPair } from "@cmd/remote-crypto";
 import { publicOrigin } from "../src/remote/access/url.ts";
+import { defaultDirectPort, DirectListener, type DirectListenerOptions } from "../src/remote/direct.ts";
 import { Core } from "../src/core.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
@@ -168,5 +170,128 @@ describe("publicOrigin", () => {
     expect(publicOrigin("http://127.0.0.1:47392")).toEqual({ url: "http://127.0.0.1:47392" });
     expect(publicOrigin("https://mac.example.com/cmd")).toHaveProperty("error");
     expect(publicOrigin("mac")).toHaveProperty("error");
+  });
+});
+
+describe("DirectListener", () => {
+  const root = path.join(dir, "listener");
+  const site = path.join(root, "site");
+  let open: DirectListener[] = [];
+
+  beforeAll(() => {
+    fs.mkdirSync(path.join(site, "assets"), { recursive: true });
+    fs.mkdirSync(path.join(site, ".hidden"), { recursive: true });
+    fs.writeFileSync(path.join(site, "index.html"), "<!doctype html><title>app</title>");
+    fs.writeFileSync(path.join(site, "assets", "a.js"), "a()");
+    fs.writeFileSync(path.join(site, ".hidden", "b.js"), "hidden");
+    fs.writeFileSync(path.join(root, "outside.txt"), "outside");
+  });
+
+  afterAll(() => {
+    for (const l of open) l.close();
+  });
+
+  async function listen(o: Partial<DirectListenerOptions> = {}): Promise<{ l: DirectListener; url: string }> {
+    const l = new DirectListener({ port: 0, route: "R".repeat(22), webDir: site, ...o });
+    open.push(l);
+    l.setOrigin(ORIGIN);
+    l.start();
+    await expect.poll(() => l.port).toBeTruthy();
+    return { l, url: `127.0.0.1:${l.port}` };
+  }
+
+  /** A raw GET, so the path reaches the server unnormalized. */
+  const raw = (url: string, p: string) =>
+    new Promise<string>((resolve, reject) => {
+      const [host, port] = url.split(":");
+      http.get({ host, port, path: p }, (res) => {
+        let b = "";
+        res.on("data", (d) => (b += d)).on("end", () => resolve(b));
+      }).on("error", reject);
+    });
+
+  /** Opens a device socket and resolves with what the listener's "open" reported. */
+  const opened = (l: DirectListener, url: string, headers: Record<string, string>) =>
+    new Promise<{ ip: string; user: string | null | undefined }>((resolve, reject) => {
+      l.once("open", (_ch, ip, user) => resolve({ ip, user }));
+      const ws = new WebSocket(`ws://${url}/r/${l.route}`, { origin: ORIGIN, headers });
+      ws.on("unexpected-response", () => reject(new Error("refused"))).on("error", () => {});
+      ws.on("open", () => ws.close());
+    });
+
+  it("serves from memory with an ETag, a 304 and HEAD", async () => {
+    const { url } = await listen();
+    const js = await fetch(`http://${url}/assets/a.js`);
+    expect(await js.text()).toBe("a()");
+    expect(js.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    const etag = js.headers.get("etag")!;
+    expect(etag).toMatch(/^".+"$/);
+    expect((await fetch(`http://${url}/assets/a.js`, { headers: { "if-none-match": etag } })).status).toBe(304);
+    const head = await fetch(`http://${url}/assets/a.js`, { method: "HEAD" });
+    expect(head.headers.get("content-length")).toBe("3");
+    expect(await head.text()).toBe("");
+  });
+
+  it("never leaves the build or serves dot folders", async () => {
+    const { url } = await listen();
+    expect(await raw(url, "/../outside.txt")).toContain("<title>app</title>");
+    expect(await raw(url, "/%2e%2e/outside.txt")).toContain("<title>app</title>");
+    expect(await raw(url, "/assets/..%2f..%2foutside.txt")).toContain("<title>app</title>");
+    expect(await raw(url, "/.hidden/b.js")).toContain("<title>app</title>");
+    expect(await raw(url, "/%")).toContain("<title>app</title>");
+  });
+
+  it("answers 503 without a build", async () => {
+    const { url } = await listen({ webDir: null });
+    expect((await fetch(`http://${url}/`)).status).toBe(503);
+    const { url: empty } = await listen({ webDir: path.join(root, "nope") });
+    expect((await fetch(`http://${empty}/`)).status).toBe(503);
+  });
+
+  it("takes the rightmost X-Forwarded-For entry, the one the proxy added", async () => {
+    const { l, url } = await listen();
+    expect((await opened(l, url, { "x-forwarded-for": "6.6.6.6, 100.64.0.9" })).ip).toBe("100.64.0.9");
+    expect((await opened(l, url, { "x-forwarded-for": "100.64.0.8" })).ip).toBe("100.64.0.8");
+  });
+
+  it("rate-limits by the proxy's entry, whatever the client puts left of it", async () => {
+    const { l, url } = await listen({ limits: { connectsPerIpPerMinute: 2 } });
+    for (const spoof of ["1.1.1.1", "2.2.2.2"]) await opened(l, url, { "x-forwarded-for": `${spoof}, 100.64.0.5` });
+    await expect(opened(l, url, { "x-forwarded-for": "3.3.3.3, 100.64.0.5" })).rejects.toThrow("refused");
+  });
+
+  it("knows who is on the other end only through identify", async () => {
+    const header = { "tailscale-user-login": "me@example.com" };
+    const plain = await listen();
+    expect((await opened(plain.l, plain.url, header)).user).toBeNull();
+    const id = await listen({ identify: (req) => String(req.headers["tailscale-user-login"] ?? "") || null });
+    expect((await opened(id.l, id.url, header)).user).toBe("me@example.com");
+    expect((await opened(id.l, id.url, {})).user).toBeNull();
+  });
+});
+
+describe("defaultDirectPort", () => {
+  const saved = { home: process.env.CMD_HOME, instance: process.env.CMD_INSTANCE };
+  const env = (instance: string | undefined, home: string | undefined) => {
+    for (const [k, v] of [["CMD_INSTANCE", instance], ["CMD_HOME", home]] as const) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  };
+  afterAll(() => env(saved.instance, saved.home));
+
+  it("keeps release and the default dev instance apart, and gives each CMD_HOME its own stable port", () => {
+    env("release", undefined);
+    expect(defaultDirectPort()).toBe(47391);
+    env("dev", undefined);
+    expect(defaultDirectPort()).toBe(47392);
+    env("dev", "/tmp/wt-a/.cmd-dev");
+    const a = defaultDirectPort();
+    expect(a).toBeGreaterThanOrEqual(47400);
+    expect(a).toBeLessThanOrEqual(48399);
+    env("dev", "/tmp/wt-a/sub/../.cmd-dev");
+    expect(defaultDirectPort()).toBe(a);
+    const ports = new Set(["a", "b", "c", "d", "e"].map((w) => (env("dev", `/tmp/wt-${w}/.cmd-dev`), defaultDirectPort())));
+    expect(ports.size).toBeGreaterThan(1);
   });
 });
