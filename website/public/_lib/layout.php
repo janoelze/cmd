@@ -151,17 +151,16 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
   footer { padding: 56px 24px 48px; }
 }
 /* Buttons: hover eases in, a press sinks in fast and springs back slow. Primary
-   brightens and glows; secondary fills in behind its edge. */
+   brightens; secondary fills in behind its edge. */
 .button {
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   display: inline-flex; align-items: center; justify-content: center; padding: 9px 16px; border-radius: 8px;
   font-weight: 500; text-decoration: none; color: var(--on-accent); background: var(--accent);
-  box-shadow: 0 0 0 0 transparent, 0 1px 2px rgb(0 0 0 / 0.3);
   user-select: none; -webkit-tap-highlight-color: transparent;
   transition: background-color 0.2s var(--ease), box-shadow 0.25s var(--ease), color 0.2s var(--ease), scale 0.35s var(--ease);
 }
-.button:hover { background: color-mix(in srgb, var(--accent) 86%, white); box-shadow: 0 0 0 0 transparent, 0 4px 18px -4px color-mix(in srgb, var(--accent) 45%, transparent); }
-.button:active { scale: 0.97; background: color-mix(in srgb, var(--accent) 85%, black); box-shadow: 0 0 0 0 transparent, 0 1px 2px rgb(0 0 0 / 0.3); transition-duration: 0.08s; }
+.button:hover { background: color-mix(in srgb, var(--accent) 86%, white); }
+.button:active { scale: 0.97; background: color-mix(in srgb, var(--accent) 85%, black); transition-duration: 0.08s; }
 .button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 .button.secondary { color: var(--ink); background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
 .button.secondary:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-3) 70%, transparent); }
