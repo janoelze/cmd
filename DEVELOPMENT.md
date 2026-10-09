@@ -39,7 +39,7 @@ For a throwaway state, or to use `pnpm core` and the CLI from source against it:
 export CMD_HOME=$PWD/.cmd-dev     # socket, SQLite and settings.json go here
 pnpm core                         # or let `pnpm dev` start it
 pnpm cmd ls
-pnpm core:stop                    # stop the core of $CMD_HOME (without it: the dev instance's; --release: the installed app's)
+pnpm core:stop                    # stop the core of $CMD_HOME (without it: a worktree's .cmd-dev, else the dev instance's; --release: the installed app's)
 pnpm core:stop --terminals        # … and its PTY host: its terminals close (they come back on the next start)
 ```
 
