@@ -34,11 +34,12 @@
 .ui-status-line-end { flex: none; display: flex; align-items: center; gap: var(--space-sm); }
 
 .ui-viewstate { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-2xl) var(--space-xl); text-align: center; color: var(--text-dim); }
-.ui-viewstate-icon { opacity: 0.6; }
-.ui-viewstate-title { font: 600 var(--text-base) var(--font-ui); color: var(--text); }
-.ui-viewstate-text { max-width: 320px; font-size: var(--text-md); line-height: 1.45; text-wrap: pretty; }
+.ui-viewstate-icon { color: var(--text); }
+/* Centred titles and texts wrap balanced (lines of about one length, the narrowest width that
+   keeps their line count), within a reading width in characters, whatever their length. */
+.ui-viewstate-title { max-width: min(32ch, 100%); font: 600 var(--text-base) var(--font-ui); color: var(--text); text-wrap: balance; }
+.ui-viewstate-text { max-width: min(44ch, 100%); font-size: var(--text-md); line-height: 1.45; text-wrap: balance; overflow-wrap: break-word; }
 .ui-viewstate-action { display: flex; gap: var(--space-md); padding-top: var(--space-xs); }
-.ui-viewstate[data-kind="error"] .ui-viewstate-icon { color: var(--danger); opacity: 1; }
 
 /* ── split: sidebar or inspector ── */
 .ui-split { flex: 1; min-height: 0; display: flex; container-type: inline-size; }

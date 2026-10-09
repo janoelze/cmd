@@ -64,6 +64,9 @@ export type ViewStateSpec =
   | { kind: "noResults"; title?: ReactNode; text?: ReactNode; action?: ReactNode }
   | { kind: "error"; title: ReactNode; text?: ReactNode; action?: ReactNode };
 
+/** A path or URL in a sentence may break after its slashes, so balanced wrapping splits it there rather than mid-name. */
+const breakable = (t: ReactNode): ReactNode => (typeof t === "string" ? t.replace(/([/\\])(?=\S)/g, "$1\u200b") : t);
+
 /** Loading, empty (nothing yet), no results (after a filter), error (what went wrong, and a way on). Fills the body. */
 export function ViewState({ state }: { state: ViewStateSpec }) {
   if (state.kind === "loading")
@@ -79,7 +82,7 @@ export function ViewState({ state }: { state: ViewStateSpec }) {
     <div className="ui-viewstate" data-kind={state.kind} role={state.kind === "error" ? "alert" : undefined}>
       {icon && <span className="ui-viewstate-icon">{iconNode(icon, ICON.empty, "light")}</span>}
       <div className="ui-viewstate-title">{title}</div>
-      {state.text && <div className="ui-viewstate-text">{state.text}</div>}
+      {state.text && <div className="ui-viewstate-text">{breakable(state.text)}</div>}
       {state.action && <div className="ui-viewstate-action">{state.action}</div>}
     </div>
   );

@@ -764,12 +764,12 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
   color: var(--text-dim);
 }
 .ui-empty[data-compact] { padding: 16px 12px; gap: 3px; }
-.ui-empty-icon { margin-bottom: 4px; opacity: 0.6; }
-.ui-empty-title { font: 600 var(--text-lg) var(--font-ui); color: var(--text); }
+.ui-empty-icon { margin-bottom: 4px; color: var(--text); }
+.ui-empty-title { max-width: min(32ch, 100%); font: 600 var(--text-lg) var(--font-ui); color: var(--text); text-wrap: balance; }
 .ui-empty[data-compact] .ui-empty-title { font-size: 12px; }
-.ui-empty-text { max-width: 360px; font-size: var(--text-md); line-height: 1.45; text-wrap: pretty; }
+.ui-empty-text { max-width: min(44ch, 100%); font-size: var(--text-md); line-height: 1.45; text-wrap: balance; overflow-wrap: break-word; }
 /* Compact (sidebars, widgets): a short, narrow block that reads at a glance. */
-.ui-empty[data-compact] .ui-empty-text { max-width: 240px; font-size: var(--text-sm); }
+.ui-empty[data-compact] .ui-empty-text { max-width: min(36ch, 100%); font-size: var(--text-sm); }
 .ui-empty-action { margin-top: 8px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 
 /* ── lists: panels, sections, rows (list.tsx) ──

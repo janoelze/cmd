@@ -35,8 +35,8 @@ export const ICON = {
   control: 9,
   /** a feature's mark (FeatureList) */
   feature: 22,
-  /** the mark of an empty view (a blank browser window) */
-  empty: 28,
+  /** the mark of an empty view or a window's state (a blank browser window, no results) */
+  empty: 20,
 } as const;
 
 function LucideIcon({ name, size = 14, weight = "medium", className = "" }: IconProps) {
