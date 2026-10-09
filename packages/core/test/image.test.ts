@@ -5,7 +5,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { IMAGE_EXTENSIONS, imageType, registerBuiltins, targetFor, WindowTypes } from "../src/windows/index.ts";
+import { IMAGE_EXTENSIONS, imageType, registerBuiltins, targetFor, WindowManager, WindowTypes } from "../src/windows/index.ts";
+import { PaneManager } from "../src/panes.ts";
+import { Store } from "../src/store.ts";
+import { SpaceManager } from "../src/spaces/manager.ts";
+import { fakeFactory } from "./fake-pty.ts";
 
 const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-image-")));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -26,6 +30,19 @@ describe("image window type", () => {
     expect(kindFor(file("page.html"))).toBe("browser");
     expect(kindFor(file("a.png"), { png: "browser" })).toBe("browser");
     expect(kindFor(file("a.svg"), { svg: "text" })).toBe("text");
+  });
+
+  it("renames the window as ← and → move to another file", () => {
+    const panes = new PaneManager(fakeFactory().factory, { socketPath: "/tmp/img.sock", pollMs: 0 });
+    const wins = new WindowManager(panes, new Store(path.join(dir, "wins.sqlite")), types, () => ({}));
+    const space = new SpaceManager(null, dir).home();
+    const a = file("a.png");
+    const b = file("b.png");
+    const w = wins.openTarget(a, space)!;
+    expect(w).toMatchObject({ kind: "image", title: "a.png" });
+    expect(wins.update(w.id, { state: { path: b } })).toMatchObject({ title: "b.png", state: { path: b } });
+    expect(wins.update(w.id, { state: { zoom: 2 } })).toMatchObject({ title: "b.png", state: { path: b, zoom: 2 } });
+    expect(wins.update(w.id, { state: { path: a } })).toMatchObject({ title: "a.png" });
   });
 
   it("keeps the path and a zoom of fit or a scale, within limits", () => {
