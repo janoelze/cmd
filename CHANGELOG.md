@@ -2,6 +2,22 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.23.0 — 2026-10-09
+
+Workspace Actions run your project in one click, and every Space can have its own window.
+
+### New
+
+- **Workspace Actions.** A widget lists how to run, build and test the project you're in, from its scripts and task files, and runs each in its own terminal.
+- **A window per Space.** File → New Window… (⇧⌘N) opens a Space in a new window. Turn on Settings → Windows → Spaces to give every Space its own.
+- **Image windows.** Images open in their own window that fits them on open, zooms around the cursor, and steps through the folder with ← and →.
+- **Jam.** A widget for Strudel patterns that play as you type. Ask for a change in words, and save your jam as a .strudel file.
+- **Visualizer.** A widget that plays MilkDrop presets to your microphone, system audio or a window's sound.
+
+### Improved
+
+- Windows that were fullscreen when you quit come back fullscreen.
+
 ## 0.22.0 — 2026-10-09
 
 SQLite files open in their own window, and windows glide instead of jumping.

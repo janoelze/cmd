@@ -1,7 +1,7 @@
 {
   "$comment": "The feature grid on the product page (website/public/index.php), three to a row. Keep it in step with the app: the release skill updates it with each release, and website/test/features.test.ts holds the limits (title, text, badges). `code` in text renders as <code>.",
   "features": [
-    { "title": "Spaces", "text": "One per project, with its terminals, agents, browser and widgets. Switch, and the desk follows." },
+    { "title": "Spaces", "text": "One per project, with its terminals, agents, browser and widgets. Switch, or give each a window." },
     { "title": "Layouts", "text": "Focus one window, tile a grid, scroll a strip or spread out on a canvas. Dock any as a sidebar." },
     { "title": "Agents, recognised", "text": "Claude Code, Codex, Gemini, Aider and more, in any terminal, even wrapped. Each named for its work." },
     { "title": "Needs you, on top", "text": "Waiting agents first, then working, then done. ⌃⌘J jumps to the next one that needs you." },
@@ -10,12 +10,12 @@
     { "title": "Your history, kept", "text": "Every agent session, command and commit, on your Mac with secrets redacted. You pick what's saved." },
     { "title": "Session summaries", "text": "Right-click an agent for what you asked, what was done and what changed, in Markdown." },
     { "title": "Magic widgets", "text": "Ask for anything: your open PRs, a queue's depth, a calculator. An agent builds it as a live widget." },
-    { "title": "Built-in widgets", "text": "Agent Activity, a Live Diff, Resources, a Timer and more, in the Widget Library (⇧⌘L)." },
+    { "title": "Workspace Actions", "badge": "New", "text": "How to run, build and test your project, read from its scripts and task files. One click runs it." },
+    { "title": "Built-in widgets", "text": "Jam, a Visualizer, Agent Activity, a Live Diff and more, in the Widget Library (⇧⌘L)." },
     { "title": "Remote access", "badge": "Beta", "text": "Pair a phone or browser by QR code and take your terminals and agents along, end-to-end encrypted." },
     { "title": "Web browser", "text": "Beside your terminals, at phone, tablet or desktop size. Pages that won't load say why." },
     { "title": "Files and editor", "text": "A file browser with git status, and an editor. `open README.md` in a shell opens it here." },
-    { "title": "Viewers for your files", "text": "Markdown, JSON, PDF and SQLite open in windows made for them, and follow the file as it changes." },
-    { "title": "Drag and drop", "text": "Drop files on a terminal to type their paths, or anywhere to open them. Drag them out to any app." },
+    { "title": "Viewers for your files", "text": "Markdown, JSON, PDF, images and SQLite open in windows made for them, and follow the file." },
     { "title": "Calm notifications", "text": "Waiting agents, bells and finished commands mark their window until you look. Nothing else nags." },
     { "title": "Keyboard first", "text": "⌘K finds windows, commands and sessions, ⌘F finds in any window. Every shortcut is remappable." },
     { "title": "Themes and updates", "text": "29 themes, light and dark, following the system or not. Updates install quietly when you quit." }
