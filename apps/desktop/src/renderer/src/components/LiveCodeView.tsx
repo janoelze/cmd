@@ -8,8 +8,8 @@
 //    a Visualizer listening to this window. ⌘. stops; ⌘L goes to the prompt.
 //  - The code is the window's state (core windows/builtin.ts livecodeType),
 //    saved as you type.
-//  - An AI change lands in the editor as one edit (⌘Z undoes it) and plays at
-//    once. If the frame refuses it (it doesn't evaluate, or throws when
+//  - An AI change lands in the editor line by line, the changed lines lit up for
+//    a moment (editor/flash.ts; ⌘Z undoes it), and plays at once. If the frame refuses it (it doesn't evaluate, or throws when
 //    queried), the error goes back to the AI, twice at most; then the edit is
 //    undone and the last good code plays on.
 //  - The window's sound is a Visualizer source (audio.ts publishLevels).
@@ -26,6 +26,7 @@ import { syntaxHighlighting } from "@codemirror/language";
 import { publishLevels, type Levels } from "../audio.ts";
 import { cmd } from "../bridge.ts";
 import { appTheme, minimalChange } from "../editor/theme.ts";
+import { applyAndFlash, flashChanges } from "../editor/flash.ts";
 import { syntax } from "../editor/syntax.ts";
 import { useStoreValue } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
@@ -134,8 +135,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
       const n = Math.max(1, Number(undo[1]) || COUNTS[undo[1]?.toLowerCase() ?? ""] || 1);
       const target = versions[n - 1];
       if (!target) return setAi("error"), setAiError(versions.length ? `Only ${versions.length} change${versions.length === 1 ? "" : "s"} to undo` : "Nothing to undo yet");
-      const edit = minimalChange(before, target.code);
-      if (edit) v.dispatch({ changes: edit, userEvent: "input.ai" });
+      applyAndFlash(v, target.code);
       const r = await evaluate(target.code);
       if (!r.ok) return setAi("error"), setAiError(r.error);
       saveVersions(versions.slice(n));
@@ -151,8 +151,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
       for (let i = 0; i < ATTEMPTS; i++) {
         const answer = await cmd.call("livecode.change", { code: before, request: text, sounds: sounds.current, history: versions, failed });
         if (!current()) return;
-        const edit = minimalChange(v.state.doc.toString(), answer.code);
-        if (edit) v.dispatch({ changes: edit, userEvent: "input.ai" });
+        applyAndFlash(v, answer.code);
         const r = await evaluate(answer.code);
         if (!current()) return;
         if (r.ok) {
@@ -199,6 +198,7 @@ export function LiveCodeView({ win }: WindowViewProps) {
           basicSetup,
           keymap.of([indentWithTab]),
           javascript(),
+          flashChanges,
           EditorView.contentAttributes.of({ "aria-label": "Live code" }),
           syntaxHighlighting(syntax),
           theme.of(appTheme(settings["font.code"], settings["font.codeSize"], dark)),

@@ -2,7 +2,7 @@
 // request (livecode/change.ts): what the model is sent and what comes back.
 
 import { describe, expect, it } from "vitest";
-import { changeCode, changePrompt, changeSystem, soundList } from "../src/livecode/change.ts";
+import { applyEdits, changeCode, changePrompt, changeSystem, soundList } from "../src/livecode/change.ts";
 import { LIVECODE_STARTER, livecodeType } from "../src/windows/builtin.ts";
 
 describe("livecode window", () => {
@@ -58,6 +58,24 @@ describe("livecode change", () => {
     }) as never;
     expect(await changeCode(object, { code: 's("bd")', request: "double the kick" })).toEqual({ code: 's("bd*2")', summary: "Doubled the kick" });
     expect(calls[0]).toMatchObject({ purpose: "livecode.change", cacheSystem: true });
+  });
+
+  it("applies edits, and says which one doesn't fit", () => {
+    const code = 'stack(\n  s("bd*4"),\n  s("hh*8").gain(.5),\n)';
+    expect(applyEdits(code, [{ find: 's("hh*8")', replace: 's("hh*16")' }])).toBe('stack(\n  s("bd*4"),\n  s("hh*16").gain(.5),\n)');
+    expect(() => applyEdits(code, [{ find: "sd", replace: "cp" }])).toThrow('Edit 1 (find "sd"): not in the code');
+    expect(() => applyEdits(code, [{ find: "s(", replace: "n(" }])).toThrow("occurs more than once");
+  });
+
+  it("answers with edits applied, and sends edits that don't fit back once", async () => {
+    const answers = [
+      { summary: "More hats", edits: [{ find: "hh*4", replace: "hh*8" }], code: "" },
+      { summary: "More hats", edits: [{ find: 's("hh")', replace: 's("hh*2")' }], code: "" },
+    ];
+    const prompts: string[] = [];
+    const object = (async (o: { prompt: string }) => (prompts.push(o.prompt), { value: answers.shift(), usage: { input: 0, output: 0 }, model: "m" })) as never;
+    expect(await changeCode(object, { code: 's("hh")', request: "more hats" })).toEqual({ code: 's("hh*2")', summary: "More hats" });
+    expect(prompts[1]).toContain("not in the code");
   });
 
   it("refuses an empty request", async () => {

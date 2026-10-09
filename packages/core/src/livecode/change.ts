@@ -28,15 +28,55 @@ export interface ChangeAnswer {
   summary: string;
 }
 
+/** One replacement in the code: `find` must occur in it exactly once. */
+export interface Edit {
+  find: string;
+  replace: string;
+}
+
+/** What the model returns: edits to the code (most changes), or the whole code (a new piece). */
+interface ModelAnswer {
+  summary: string;
+  edits: Edit[];
+  code: string;
+}
+
+// Every field required (strict structured output): edits leave `code` empty, a rewrite leaves `edits` empty.
 const SCHEMA = {
   type: "object",
   properties: {
-    code: { type: "string", description: "The whole new code." },
     summary: { type: "string", description: "What changed, in a few words." },
+    edits: {
+      type: "array",
+      description: "Replacements in the code now playing, applied in order. Empty when `code` has the whole new code.",
+      items: {
+        type: "object",
+        properties: {
+          find: { type: "string", description: "An exact snippet of the current code that occurs once." },
+          replace: { type: "string", description: "What it becomes." },
+        },
+        required: ["find", "replace"],
+        additionalProperties: false,
+      },
+    },
+    code: { type: "string", description: "The whole new code, only for a new piece or a change to most of it; else empty." },
   },
-  required: ["code", "summary"],
+  required: ["summary", "edits", "code"],
   additionalProperties: false,
 };
+
+/** The code after `edits`; throws, naming the edit, when a `find` is missing or not unique. */
+export function applyEdits(code: string, edits: Edit[]): string {
+  let out = code;
+  edits.forEach((e, i) => {
+    const at = e.find ? out.indexOf(e.find) : -1;
+    const which = `Edit ${i + 1} (find ${JSON.stringify(e.find.length > 60 ? e.find.slice(0, 60) + "…" : e.find)})`;
+    if (at < 0) throw new Error(`${which}: not in the code`);
+    if (out.indexOf(e.find, at + 1) >= 0) throw new Error(`${which}: occurs more than once; include more of the line`);
+    out = out.slice(0, at) + e.replace + out.slice(at + e.find.length);
+  });
+  return out;
+}
 
 let system: string | null = null;
 /** prompt.md and the reference, read once (they ship with the core). */
@@ -78,19 +118,29 @@ const HISTORY = 5;
 
 type ObjectCall = <T>(o: CallOptions & ObjectRequest<T>) => Promise<CompleteResult<T>>;
 
+/** Asks for the change; edits that don't apply are sent back once with the reason. */
 export async function changeCode(object: ObjectCall, r: ChangeRequest, signal?: AbortSignal): Promise<ChangeAnswer> {
   if (!r.request.trim()) throw new Error("Say what to change");
-  const res = await object<ChangeAnswer>({
-    tier: "smart",
-    purpose: "livecode.change",
-    system: changeSystem(),
-    cacheSystem: true,
-    prompt: changePrompt(r),
-    schema: SCHEMA,
-    effort: "low",
-    maxOutputTokens: 4000,
-    signal,
-  });
-  const code = res.value.code.replace(/^```\w*\n([\s\S]*?)\n?```\s*$/, "$1");
-  return { code, summary: res.value.summary.trim() };
+  let req = r;
+  for (let attempt = 0; ; attempt++) {
+    const res = await object<ModelAnswer>({
+      tier: "smart",
+      purpose: "livecode.change",
+      system: changeSystem(),
+      cacheSystem: true,
+      prompt: changePrompt(req),
+      schema: SCHEMA,
+      effort: "low",
+      maxOutputTokens: 6000,
+      signal,
+    });
+    const { summary, edits, code } = res.value;
+    if (code.trim()) return { code: code.replace(/^```\w*\n([\s\S]*?)\n?```\s*$/, "$1"), summary: summary.trim() };
+    try {
+      return { code: applyEdits(r.code, edits ?? []), summary: summary.trim() };
+    } catch (e) {
+      if (attempt >= 1) throw e;
+      req = { ...r, failed: { code: JSON.stringify(edits, null, 1), error: `${(e as Error).message}. Each find must be copied exactly from the code now playing.` } };
+    }
+  }
 }
