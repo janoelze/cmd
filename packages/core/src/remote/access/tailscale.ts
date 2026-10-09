@@ -76,12 +76,15 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
   }
 
   /** Why Tailscale can't publish yet, as a check that isn't ok; null when it's connected with MagicDNS and certificates. */
-  function blocker(st: Read<Status>): Check | null {
-    if (!st.ok) return { id: "running", title: "Connected to your tailnet", state: "todo", detail: "Tailscale isn't running. Open it and connect." };
+  function blocker(st: Read<Status>, cli: Cli): Check | null {
+    // The app is opened; a CLI-only install (Homebrew's tailscaled) is brought up from a terminal.
+    const app = cli.cmd === CANDIDATES[0]!.cmd;
+    if (!st.ok) return { id: "running", title: "Connected to your tailnet", state: "todo", detail: app ? "Tailscale isn't running. Open it and connect." : "Tailscale isn't running. Start tailscaled, then run “tailscale up”." };
     const s = st.value;
     if (s.BackendState !== "Running") {
       const login = s.BackendState === "NeedsLogin" || s.BackendState === "NeedsMachineAuth";
-      return { id: "running", title: "Connected to your tailnet", state: "todo", detail: login ? "Open Tailscale and log in." : "Open Tailscale and connect.", link: s.AuthURL || undefined };
+      const detail = s.AuthURL ? "Log in to Tailscale." : app ? (login ? "Open Tailscale and log in." : "Open Tailscale and connect.") : "Run “tailscale up” in a terminal to connect.";
+      return { id: "running", title: "Connected to your tailnet", state: "todo", detail, link: s.AuthURL || undefined };
     }
     if (!s.CurrentTailnet?.MagicDNSEnabled) return { id: "magicdns", title: "MagicDNS is on", state: "todo", detail: "Turn on MagicDNS in Tailscale's admin console.", link: DNS_ADMIN_URL };
     if (!s.CertDomains?.length || !host(s))
@@ -137,7 +140,7 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
       if (!cli) return rest({ id: "installed", title: "Tailscale is installed", state: "todo", detail: "Install Tailscale on this Mac.", link: DOWNLOAD_URL });
       checks.push({ id: "installed", title: "Tailscale is installed", state: "ok" });
       const st = await json<Status>(ctx, cli, ["status", "--json"]);
-      const b = blocker(st);
+      const b = blocker(st, cli);
       if (b) return rest(b);
       const s = (st as { value: Status }).value;
       const h = host(s)!;
@@ -171,7 +174,7 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
       const cli = await findCli(ctx);
       if (!cli) throw new Error("Install Tailscale on this Mac.");
       const st = await json<Status>(ctx, cli, ["status", "--json"]);
-      const b = blocker(st);
+      const b = blocker(st, cli);
       if (b) throw new Error(b.detail);
       const h = host((st as { value: Status }).value)!;
       const port = tsPort(ctx);
