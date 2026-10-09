@@ -16,9 +16,11 @@
   const post = (m) => parent.postMessage(m, "*");
   const msg = (err) => String(err?.message ?? err);
 
-  // Strudel's own sample maps, as strudel.cc loads them.
+  // Strudel's own sample maps, as strudel.cc loads them, and all of TidalCycles'
+  // Dirt-Samples (breaks, jungle, house, techno kits…), not just its small dough subset.
   const MAPS = "https://raw.githubusercontent.com/felixroos/dough-samples/main/";
-  const BANKS = ["tidal-drum-machines", "piano", "Dirt-Samples", "EmuSP12", "vcsl", "mridangam"];
+  const BANKS = ["tidal-drum-machines", "piano", "EmuSP12", "vcsl", "mridangam"].map((b) => `${MAPS}${b}.json`);
+  BANKS.push("https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/strudel.json");
 
   let pending = null; // the id of the eval in flight
   const settle = (ok, error) => {
@@ -28,7 +30,7 @@
   };
 
   const ready = initStrudel({
-    prebake: () => Promise.all(BANKS.map((b) => S.samples(`${MAPS}${b}.json`).catch((err) => console.warn(`samples ${b}:`, msg(err))))),
+    prebake: () => Promise.all(BANKS.map((url) => S.samples(url).catch((err) => console.warn(`samples ${url}:`, msg(err))))),
     // A pattern that throws when queried would play silence and log on every tick: refuse it here.
     editPattern: (pattern) => (pattern.queryArc(0, 2), pattern),
     afterEval: () => settle(true),

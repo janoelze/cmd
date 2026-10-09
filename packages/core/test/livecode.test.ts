@@ -27,6 +27,8 @@ describe("livecode change", () => {
     const system = changeSystem();
     expect(system).toContain("You change the code of a live-coded piece of music");
     expect(system).toContain("## lpf(frequency) [cutoff, ctf, lp]");
+    expect(system).toContain("## Drum & bass");
+    expect(system).toContain("`breaks165`");
     expect(system.length).toBeGreaterThan(50_000);
   });
 

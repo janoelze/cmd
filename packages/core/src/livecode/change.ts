@@ -1,8 +1,8 @@
 // Live Code's AI (docs/17-ai.md): turns a request ("drop the bass for a bar",
-// "more swing") into the window's new code. The system prompt is prompt.md plus
-// Strudel's function reference (reference.md, scripts/livecode-reference.mjs),
-// the same on every call so providers cache it; the request carries the code,
-// the sounds the window has loaded, and the last attempt's error when the
+// "more swing") into the window's new code. The system prompt is prompt.md, a
+// sound guide, a genre cookbook and Strudel's function reference (reference.md,
+// scripts/livecode-reference.mjs), the same on every call so providers cache it;
+// the request carries the code, the sounds the window has loaded, and the last attempt's error when the
 // window's frame refused it (renderer components/LiveCodeView.tsx retries).
 
 import fs from "node:fs";
@@ -79,9 +79,13 @@ export function applyEdits(code: string, edits: Edit[]): string {
 }
 
 let system: string | null = null;
-/** prompt.md and the reference, read once (they ship with the core). */
+/**
+ * The system prompt, read once (the files ship with the core): how to answer
+ * (prompt.md), what the important sounds are (sounds.md), genre starting points
+ * written for this app (cookbook.md), and every function (reference.md).
+ */
 export function changeSystem(): string {
-  system ??= `${fs.readFileSync(path.join(DIR, "prompt.md"), "utf8").trim()}\n\n${fs.readFileSync(path.join(DIR, "reference.md"), "utf8").trim()}`;
+  system ??= ["prompt.md", "sounds.md", "cookbook.md", "reference.md"].map((f) => fs.readFileSync(path.join(DIR, f), "utf8").trim()).join("\n\n");
   return system;
 }
 
