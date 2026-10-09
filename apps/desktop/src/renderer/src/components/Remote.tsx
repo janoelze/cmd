@@ -49,12 +49,13 @@ export function RemoteBadge({ id, compact = false }: { id: string | null; compac
 
 // ── status bar indicator ───────────────────────────────
 
-const STATE_TEXT = { off: "Off", connecting: "Connecting to the relay…", online: "Ready", error: "Can't reach the relay" } as const;
+/** Any access mode's state; its own words are in Settings → Remote Access. */
+const STATE_TEXT = { off: "Off", connecting: "Connecting…", online: "Ready", error: "Can't connect" } as const;
 
 /**
  * In the status bar while remote access is on. Its colour says the state at a
  * glance: dim when ready, accent while a device is connected, pulsing while one
- * waits for approval, warning when the relay can't be reached. Its tooltip says
+ * waits for approval, warning when devices can't reach this Mac. Its tooltip says
  * who is in and what they watch; the popover (a click) also offers Disconnect.
  */
 export function RemoteIndicator() {

@@ -37,7 +37,7 @@ import { useSettings } from "./useSettings.ts";
 import { AiKeyRow, AiProviderChoice } from "../ai/Providers.tsx";
 import { useAiStatus } from "../ai/status.ts";
 import { About } from "./About.tsx";
-import { Remote } from "./Remote.tsx";
+import { Remote, useAccessModes } from "./Remote.tsx";
 import { AgentHooks } from "./AgentHooks.tsx";
 import { NotifyPermission } from "./NotifyPermission.tsx";
 import { SITE_PERMISSION_WORDS, SitePermissions } from "./SitePermissions.tsx";
@@ -179,7 +179,7 @@ export function SettingsWindow() {
   } else if (page === "keyboard") {
     body = <Shortcuts />;
   } else if (page === "remote") {
-    body = <Remote key={pairAsk} status={remote} enabled={snap.settings["remote.enabled"]} pair={pairAsk > 0} row={(k) => <ItemRow k={k} ctx={ctx} />} config={remoteConfig(snap.settings)} />;
+    body = <Remote key={pairAsk} status={remote} settings={snap.settings} pair={pairAsk > 0} row={(k) => <ItemRow k={k} ctx={ctx} />} />;
   } else if (page === "about") {
     body = <About updates={<ItemRow k="updates.mode" ctx={ctx} />} crashReports={<ItemRow k="diagnostics.crashReports" ctx={ctx} />} usageStats={<ItemRow k="diagnostics.usageStats" ctx={ctx} />} />;
   } else {
@@ -314,6 +314,7 @@ function SettingRow({ k, ctx }: { k: SettingKey; ctx: RowContext }) {
   const onChange = (v: unknown) => ctx.save(k, v);
   if (def.type === "string" && def.control === "model" && def.provider && def.tier)
     return <ModelRow k={k} provider={def.provider} tier={def.tier} value={value as string} ctx={ctx} />;
+  if (def.type === "string" && def.control === "access") return <AccessRow k={k} value={value as string} ctx={ctx} />;
 
   let control: ReactNode;
   if (def.type === "boolean") control = <Switch checked={value as boolean} onChange={onChange} label={settingTitle(k)} />;
@@ -375,6 +376,27 @@ function ModelRow(p: { k: SettingKey; provider: AiProvider; tier: AiTier; value:
   );
 }
 
+/**
+ * How phones reach this Mac: a popup of the core's access modes (remote.modes).
+ * A value the core doesn't have stays selectable, marked, as in ModelRow.
+ */
+function AccessRow(p: { k: SettingKey; value: string; ctx: RowContext }) {
+  const modes = useAccessModes();
+  const options = (modes ?? []).map((m) => m.id);
+  const labels: Record<string, string> = Object.fromEntries((modes ?? []).map((m) => [m.id, m.title]));
+  if (!options.includes(p.value)) {
+    options.push(p.value);
+    labels[p.value] = modes ? `${p.value} (not in this version)` : p.value;
+  }
+  return (
+    <FormRow {...settingText(p.k, p.ctx)}>
+      <span data-tip={modes?.find((m) => m.id === p.value)?.description}>
+        <Select value={p.value} options={options} labels={labels} onChange={(v) => p.ctx.save(p.k, v)} />
+      </span>
+    </FormRow>
+  );
+}
+
 function useModels(provider: AiProvider, keySet: boolean | undefined, keyHint: string | undefined) {
   const [models, setModels] = useState<AiModel[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -393,9 +415,6 @@ function useModels(provider: AiProvider, keySet: boolean | undefined, keyHint: s
   useEffect(() => load(), [provider, keySet, keyHint]); // eslint-disable-line react-hooks/exhaustive-deps
   return { models, error, loading, load };
 }
-
-/** What a direct access mode's checks depend on: they run again when it changes. */
-const remoteConfig = (s: Settings) => [s["remote.access"], s["remote.url"], s["remote.tailscale.port"], s["remote.port"]].join(" ");
 
 /** An error from main without Electron's "Error invoking remote method …" prefix. */
 const ipcMessage = (e: Error) => e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
