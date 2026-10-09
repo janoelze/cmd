@@ -182,6 +182,8 @@ The phone side is `apps/web`, a prototype web client (pair, Now, a terminal with
 
 The hosted relay (`wss://relay.endtime-instruments.org`) and web client (`https://cmd.endtime-instruments.org`) are the defaults; CI deploys both from master with `scripts/deploy-remote.sh` (docs/13, "Deployment", also for running your own relay).
 
+Direct access (docs/38) skips both: `remote.access` = `tailscale` or `url` makes the core listen on `127.0.0.1:remote.port` (0: 47391, or 47392 for cmd dev; `remote/direct.ts`), serve the built client (`apps/web/dist`, found by `remote/webroot.ts`, `CMD_WEB_DIR` overrides; `pnpm dev` builds it when missing, `stage-runtime.mjs` always) and take devices on `/r/<route>`. How that port is reached is an access adapter (`remote/access/`): an `AccessAdapter` (`detect` → the setup checklist, `enable` → the public URL, `disable`) registered in an `AccessAdapters` registry like window types and transcript sources; `builtin.ts` registers `tailscale` and `url` through the same `register()` a plugin would use. The Tailscale adapter only runs the CLI (`tailscale serve --bg`, `serve status --json`) and only ever touches its own port's entry. `pnpm e2e:web:direct` runs the phone journey against the core's own listener, with `remote.url` on loopback (browsers treat it as secure).
+
 `pnpm e2e:remote` walks the whole journey through the built app (pair from Settings, approve, the status bar indicator and its popover, the watched window's badge) with a local relay and a pretend phone; screenshots land in `.cmd-dev/shots/remote-*.png`.
 
 The host key and route live in `$CMD_HOME/remote/host.json`, paired devices in SQLite (`remote_devices`), the audit log as `remote.audit` events in the event log, the pretend phone's identity in `$CMD_HOME/remote-device.json`.
@@ -199,7 +201,7 @@ The host key and route live in `$CMD_HOME/remote/host.json`, paired devices in S
 - Packaging, CI and GitHub releases
 
 **In progress**
-- Remote access (docs/13): crypto, relay, core gateway, policy, `cmd remote`, and in the app the Remote Access settings page, the approval sheet and the status bar indicator are in; the web client is a prototype (pair, Now, a terminal with key row and compose bar); next are hosting it, push, and fit-to-phone
+- Remote access (docs/13): crypto, relay, core gateway, policy, `cmd remote`, and in the app the Remote Access settings page, the approval sheet and the status bar indicator are in; the web client is a prototype (pair, Now, a terminal with key row and compose bar); next are hosting it, push, and fit-to-phone; direct access over Tailscale or your own URL (docs/38) is built, still to be tried on a real tailnet
 
 **Next**
 - Plugin host (routines and monitors in the core)
