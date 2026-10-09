@@ -616,7 +616,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });
   check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1 && (await win.locator(".tile.kind-text").count()) === 1 && (await win.locator(".tile.kind-markdown").count()) === 1, "browser, file, text and Markdown windows take part in the grid");
 
-  // New Text Window: an untitled buffer whose text survives in the window's state;
+  // New Text Editor: an untitled buffer whose text survives in the window's state;
   // ⌘S asks where to save (the native panel is stubbed) and the window becomes that file's.
   await menu("file.newText");
   const untitled = win.locator(".tile.kind-text.sel .cm-content");
@@ -934,7 +934,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     }
     await gone(".palette");
     check(
-      offered[0] === "Terminal" && offered.indexOf("Counter") > offered.indexOf("Text Window") && offered.at(-1) === "New Widget with Magic" && !!timer && (await win.locator(".palette").count()) === 0,
+      offered[0] === "Terminal" && offered.indexOf("Counter") > offered.indexOf("Text Editor") && offered.at(-1) === "New Widget with Magic" && !!timer && (await win.locator(".palette").count()) === 0,
       `New… lists windows, then widgets, then Magic, and opens what you type (${offered.join(", ")}; timer ${!!timer}, palette ${await win.locator(".palette").count()})`,
     );
     if (timer) await call("window.close", { id: timer.id });

@@ -1,5 +1,5 @@
 // Text window: a CodeMirror 6 editor for one file, or an untitled buffer
-// (File › New Text Window) whose first ⌘S asks where to save. No toolbar — the title bar
+// (File › New Text Editor) whose first ⌘S asks where to save. No toolbar — the title bar
 // (or, in focus mode, the status bar) shows the file, folder and state; ⌘S saves.
 //
 //  - Styled from the app's tokens (background, separators, selection, terminal

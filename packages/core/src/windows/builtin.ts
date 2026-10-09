@@ -82,7 +82,7 @@ const revealOf = (v: unknown): Reveal | undefined => {
 };
 export const textType: WindowType<{ path: string; dir?: string; draft?: string; reveal?: Reveal }> = {
   kind: "text",
-  title: "Text",
+  title: "Text Editor",
   icon: "doc.text",
   opens: {
     text: true,

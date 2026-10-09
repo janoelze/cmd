@@ -6,7 +6,7 @@ import { registerWindowView, setWindowTypes } from "../src/renderer/src/windows/
 // Window title fields (docs/10-window-titles.md): one meaning per field, for every type.
 
 setWindowTypes([
-  { kind: "text", title: "Text", icon: "doc.text" },
+  { kind: "text", title: "Text Editor", icon: "doc.text" },
   { kind: "browser", title: "Browser", icon: "globe" },
   { kind: "magic", title: "Magic Widget", icon: "sparkles" },
 ] as never);
@@ -73,7 +73,7 @@ describe("window fields", () => {
 
   it("windows: kind is the type, status and dirty come from the live status", () => {
     const f = fieldsOf(row({ win: win({}) }), { label: "Edited", key: "edited", dirty: true }, 0);
-    expect(f).toMatchObject({ name: "README.md", kind: "text", place: "~/src/cmd", icon: "doc.text", dirty: true, status: { text: "Edited", key: "edited" } });
+    expect(f).toMatchObject({ name: "README.md", kind: "text editor", place: "~/src/cmd", icon: "doc.text", dirty: true, status: { text: "Edited", key: "edited" } });
   });
 
   it("a status without a key is keyed by its text", () => {
