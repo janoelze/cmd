@@ -10,6 +10,7 @@ export * from "./rpc.ts";
 export * from "./attention.ts";
 export * from "./workspace.ts";
 export * from "./settings.ts";
+export * from "./jsonc.ts";
 export * from "./client.ts";
 export * from "./magic.ts";
 export * from "./ai.ts";

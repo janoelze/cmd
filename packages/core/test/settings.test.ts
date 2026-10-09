@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, parseJsonc, parseSettingValue, resolveSettings, type Settings } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, editJsonc, parseJsonc, parseSettingValue, resolveSettings, SETTINGS_TEMPLATE, type Settings } from "@cmd/protocol";
 import { Core } from "../src/core.ts";
 import { SettingsService } from "../src/settings.ts";
 import { fakeFactory } from "./fake-pty.ts";
@@ -37,6 +37,27 @@ describe("schema", () => {
       a: "x // not a comment",
       b: [1, 2],
     });
+  });
+
+  it("leaves strings alone when it drops trailing commas, and says where a file breaks", () => {
+    expect(parseJsonc('{ "data.exclude": "a, ]b" , }')).toEqual({ "data.exclude": "a, ]b" });
+    expect(parseJsonc('{ "a": "x, }" , "b": [", ]",], }')).toEqual({ a: "x, }", b: [", ]"] });
+    expect(() => parseJsonc('{\n  "a": 1\n  "b": 2\n}')).toThrow("expected a comma at line 3, column 3");
+  });
+
+  it("edits JSONC one key at a time, keeping everything else", () => {
+    const text = '// top\n{\n  // keep me\n  "a": [1, 2], /* and me */\n  "b": "x",\n}\n';
+    expect(editJsonc(text, { b: "y" })).toBe('// top\n{\n  // keep me\n  "a": [1, 2], /* and me */\n  "b": "y",\n}\n');
+    expect(editJsonc(text, { c: ["Cmd+K", "Ctrl+K"] })).toBe('// top\n{\n  // keep me\n  "a": [1, 2], /* and me */\n  "b": "x",\n  "c": ["Cmd+K", "Ctrl+K"],\n}\n');
+    expect(parseJsonc(editJsonc(text, { a: undefined, gone: undefined }))).toEqual({ b: "x" });
+    expect(editJsonc("", { a: 1 }, "// hi\n{\n}\n")).toBe('// hi\n{\n  "a": 1\n}\n');
+    // A comment at the end of the last key's line stays on that line, with or without trailing commas.
+    const plain = '{\n  "a": 1, // one\n  "b": 2 // two\n}\n';
+    expect(editJsonc(plain, { c: 3 })).toBe('{\n  "a": 1, // one\n  "b": 2, // two\n  "c": 3\n}\n');
+    expect(editJsonc(editJsonc(plain, { c: 3 }), { c: undefined })).toBe(plain);
+    expect(editJsonc(plain, { b: undefined })).toBe('{\n  "a": 1 // one\n}\n');
+    expect(editJsonc(plain.replaceAll("\n", "\r\n"), { c: 3 })).toBe(editJsonc(plain, { c: 3 }).replaceAll("\n", "\r\n"));
+    expect(parseJsonc(editJsonc('{ "a": 1 }', { b: 2 }))).toEqual({ a: 1, b: 2 }); // one line: modify() lays it out
   });
 
   it("coerces CLI strings by type", () => {
@@ -83,6 +104,59 @@ describe("SettingsService", () => {
     expect(parseJsonc(fs.readFileSync(file, "utf8"))).toEqual({ "font.codeSize": 18, "terminal.fontFamily": "Iosevka" });
     svc.reset("font.code");
     expect(parseJsonc(fs.readFileSync(file, "utf8"))).toEqual({ "font.codeSize": 18 });
+  });
+
+  it("changes only the key it sets: comments, order and trailing commas stay", () => {
+    const before = '// mine\n{\n  // big text\n  "font.codeSize": 16, // really\n  /* cursor */\n  "terminal.cursorStyle": "bar",\n}\n';
+    fs.writeFileSync(file, before);
+    svc = new SettingsService(file);
+    svc.set("ui.gutter", 12);
+    expect(fs.readFileSync(file, "utf8")).toBe(before.replace('"bar",\n', '"bar",\n  "ui.gutter": 12,\n'));
+    svc.set("font.codeSize", 18);
+    expect(fs.readFileSync(file, "utf8")).toBe(before.replace("16", "18").replace('"bar",\n', '"bar",\n  "ui.gutter": 12,\n'));
+    svc.reset("ui.gutter");
+    expect(fs.readFileSync(file, "utf8")).toBe(before.replace("16", "18"));
+  });
+
+  it("starts a missing or blank file from the template", () => {
+    svc = new SettingsService(file);
+    svc.set("ui.gutter", 12);
+    expect(fs.readFileSync(file, "utf8")).toBe(SETTINGS_TEMPLATE.replace("{\n}", '{\n  "ui.gutter": 12\n}'));
+    fs.writeFileSync(file, "  \n");
+    svc.reload();
+    expect(svc.snapshot().errors).toEqual([]);
+    svc.set("ui.gutter", 14);
+    expect(parseJsonc(fs.readFileSync(file, "utf8"))).toEqual({ "ui.gutter": 14 });
+  });
+
+  it("keeps the last good settings while the file doesn't parse", () => {
+    fs.writeFileSync(file, '{\n  "font.codeSize": 16,\n  "terminal.cursorStyle": "bar"\n}\n');
+    svc = new SettingsService(file);
+    fs.writeFileSync(file, '{\n  "font.codeSize": 17\n  "terminal.cursorStyle": "bar"\n}\n'); // a comma missing
+    svc.reload();
+    expect(svc.settings["font.codeSize"]).toBe(16);
+    expect(svc.settings["terminal.cursorStyle"]).toBe("bar");
+    expect(svc.snapshot().overrides.sort()).toEqual(["font.codeSize", "terminal.cursorStyle"]);
+    expect(svc.snapshot().errors).toEqual(["settings.json: expected a comma at line 3, column 3. Settings stay as they were until it's fixed."]);
+    fs.writeFileSync(file, '{ "font.codeSize": 17 }');
+    svc.reload();
+    expect(svc.snapshot()).toMatchObject({ errors: [], overrides: ["font.codeSize"], settings: { "font.codeSize": 17, "terminal.cursorStyle": DEFAULT_SETTINGS["terminal.cursorStyle"] } });
+  });
+
+  it("never writes over a file that doesn't parse", () => {
+    fs.writeFileSync(file, '// my notes\n{\n  "font.codeSize": 16,\n  "shell.program": "/bin/zsh"\n}\n');
+    svc = new SettingsService(file);
+    const broken = '// my notes\n{\n  "font.codeSize": 16\n  "shell.program": "/bin/zsh"\n}\n';
+    fs.writeFileSync(file, broken); // not reloaded yet: set reads the file as it is now
+    expect(() => svc!.set("ui.gutter", 12)).toThrow("settings.json: expected a comma at line 4, column 3. Fix it first.");
+    expect(() => svc!.reset("font.codeSize")).toThrow(/Fix it first/);
+    expect(fs.readFileSync(file, "utf8")).toBe(broken);
+    expect(fs.existsSync(`${file}.tmp`)).toBe(false);
+    expect(svc.snapshot().errors).toHaveLength(1);
+    expect(svc.settings["font.codeSize"]).toBe(16);
+    fs.writeFileSync(file, "[]"); // parses, but isn't settings
+    expect(() => svc!.set("ui.gutter", 12)).toThrow("settings.json: expected an object in { }. Fix it first.");
+    expect(fs.readFileSync(file, "utf8")).toBe("[]");
   });
 
   it("picks up edits made to the file by hand", async () => {

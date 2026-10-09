@@ -551,28 +551,3 @@ export function resolveSettings(user: Record<string, unknown>): { settings: Sett
   }
   return { settings: settings as Settings, errors };
 }
-
-/** Lenient JSON: allows // and /* *\/ comments and trailing commas. */
-export function parseJsonc(text: string): unknown {
-  let out = "";
-  let inStr = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]!;
-    if (inStr) {
-      out += c;
-      if (c === "\\") out += text[++i] ?? "";
-      else if (c === '"') inStr = false;
-    } else if (c === '"') {
-      inStr = true;
-      out += c;
-    } else if (c === "/" && text[i + 1] === "/") {
-      while (i < text.length && text[i] !== "\n") i++;
-      out += "\n";
-    } else if (c === "/" && text[i + 1] === "*") {
-      i += 2;
-      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
-      i++;
-    } else out += c;
-  }
-  return JSON.parse(out.replace(/,(\s*[}\]])/g, "$1"));
-}

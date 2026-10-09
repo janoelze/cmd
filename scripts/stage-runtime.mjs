@@ -24,10 +24,12 @@ for (const p of ["package.json", "src", "shell", "widget-runtime"]) copy(`packag
 // TypeScript is copied next to the core, and node_modules gets a small JavaScript
 // package per entry point that re-exports it from there (Node won't strip types
 // from .ts files under node_modules). Plain files, so they survive packaging on
-// every platform, unlike a symlink (Windows).
+// every platform, unlike a symlink (Windows). The package's own dependencies
+// (@cmd/protocol's jsonc-parser) go in its node_modules, where its source finds them.
 function stageWorkspacePackage(name, into = modules) {
   const dir = `packages/${name.slice("@cmd/".length)}`;
   for (const p of ["package.json", "src"]) copy(`${dir}/${p}`, `${dir}/${p}`);
+  stageDeps(path.join(root, dir), path.join(out, dir, "node_modules"));
   const entries = JSON.parse(fs.readFileSync(path.join(root, dir, "package.json"), "utf8")).exports;
   const shim = path.join(into, name);
   fs.mkdirSync(shim, { recursive: true });

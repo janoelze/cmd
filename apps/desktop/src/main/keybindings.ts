@@ -2,7 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { parseJsonc } from "@cmd/protocol";
+import { editJsonc, parseJsoncObject } from "@cmd/protocol";
 import { configDir } from "@cmd/protocol/node";
 import { editKeybindings, resolveKeybindings, type Keybindings } from "../shared/commands.ts";
 
@@ -29,7 +29,7 @@ export function loadKeybindings(): KeybindingsSnapshot {
   let user: unknown = {};
   const errors: string[] = [];
   try {
-    user = parseJsonc(fs.readFileSync(file, "utf8"));
+    user = parseJsoncObject(fs.readFileSync(file, "utf8"));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") errors.push(`keybindings.json: ${(err as Error).message}`);
   }
@@ -59,22 +59,30 @@ export function ensureKeybindingsFile(): string {
 
 /**
  * Bind `keys` to command `id` (null: its defaults) from the Settings window.
- * Rewrites the file, which drops comments, as settings.json does; the watcher
- * then applies it. A file that doesn't parse is left alone.
+ * Changes only the keys that differ, in the text, so comments survive; the
+ * watcher then applies it. A file that doesn't parse is left alone.
  */
 export function writeKeybinding(id: string, keys: string[] | null): void {
   const file = keybindingsPath();
-  let user: unknown = {};
+  let text = "";
+  let user: Record<string, unknown>;
   try {
-    user = parseJsonc(fs.readFileSync(file, "utf8"));
+    text = fs.readFileSync(file, "utf8");
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw new Error(`keybindings.json: ${(err as Error).message}. Fix it first.`);
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw new Error(`Couldn't read keybindings.json: ${(err as Error).message}`);
+  }
+  try {
+    user = parseJsoncObject(text);
+  } catch (err) {
+    throw new Error(`keybindings.json: ${(err as Error).message}. Fix it first.`);
   }
   const next = editKeybindings(user, id, keys);
-  const entries = Object.entries(next).map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v).replaceAll('","', '", "')}`);
+  const changes: Record<string, unknown> = {};
+  for (const k of Object.keys(user)) if (!(k in next)) changes[k] = undefined;
+  for (const [k, v] of Object.entries(next)) if (JSON.stringify(v) !== JSON.stringify(user[k])) changes[k] = v;
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, entries.length ? `${HEADER}{\n${entries.join(",\n")}\n}\n` : KEYBINDINGS_TEMPLATE);
+  fs.writeFileSync(tmp, editJsonc(text, changes, KEYBINDINGS_TEMPLATE));
   fs.renameSync(tmp, file);
 }
 

@@ -1,6 +1,8 @@
 // Settings file: load, validate, watch for edits, write changes.
 // The file is the source of truth, so hand edits and `cmd settings set` agree.
 // Core consumers that cache something derived from settings bind() to its keys.
+// A file that doesn't parse (mid hand edit) keeps the last good values and is
+// never written over; writes change one key in the text, so comments survive.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -8,9 +10,10 @@ import { EventEmitter } from "node:events";
 import { logger } from "@cmd/protocol/node";
 import {
   currentKey,
+  editJsonc,
   isSettingKey,
   RENAMED_SETTINGS,
-  parseJsonc,
+  parseJsoncObject,
   resolveSettings,
   SETTINGS_TEMPLATE,
   validateSetting,
@@ -24,6 +27,7 @@ const log = logger("settings");
 export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] }> {
   readonly path: string;
   #snapshot: SettingsSnapshot;
+  /** The file's settings as last read when it parsed. */
   #raw: Record<string, unknown> = {};
   #watcher: fs.FSWatcher | null = null;
   #debounce: NodeJS.Timeout | undefined;
@@ -84,18 +88,13 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
     key = currentKey(key);
     const r = validateSetting(key, value);
     if ("error" in r) throw new Error(r.error);
-    return this.#write({ ...this.#without(key), [key]: r.value });
+    return this.#write(key, r.value);
   }
 
   reset(key: string): SettingsSnapshot {
     key = currentKey(key);
     if (!isSettingKey(key)) throw new Error(`unknown setting "${key}"`);
-    return this.#write(this.#without(key));
-  }
-
-  /** The raw settings minus key and its old names. */
-  #without(key: string): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(this.#raw).filter(([k]) => k !== key && RENAMED_SETTINGS[k] !== key));
+    return this.#write(key, undefined);
   }
 
   close(): void {
@@ -106,15 +105,12 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
 
   #load(): SettingsSnapshot {
     let errors: string[] = [];
-    this.#raw = {};
     if (this.path) {
       try {
-        const text = fs.readFileSync(this.path, "utf8");
-        const parsed = parseJsonc(text);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) this.#raw = parsed as Record<string, unknown>;
-        else errors.push("settings file must contain a JSON object");
+        this.#raw = parseJsoncObject(fs.readFileSync(this.path, "utf8"));
       } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "ENOENT") errors.push(`could not read settings: ${(err as Error).message}`);
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") this.#raw = {};
+        else errors.push(`${this.#name}: ${(err as Error).message}. Settings stay as they were until it's fixed.`);
       }
     }
     const resolved = resolveSettings(this.#raw);
@@ -123,20 +119,40 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
     return { settings: resolved.settings, overrides: overridesOf(this.#raw), errors, path: this.path };
   }
 
-  // Note: rewriting the file drops comments. Fine for now; a JSONC-preserving
-  // editor (e.g. jsonc-parser's modify) can replace this later.
-  #write(raw: Record<string, unknown>): SettingsSnapshot {
-    if (this.path) {
-      fs.mkdirSync(path.dirname(this.path), { recursive: true });
-      const sorted = Object.fromEntries(Object.entries(raw).sort(([a], [b]) => a.localeCompare(b)));
-      const body = Object.keys(sorted).length ? JSON.stringify(sorted, null, 2) : "{\n}";
-      const tmp = `${this.path}.tmp`;
-      fs.writeFileSync(tmp, SETTINGS_TEMPLATE.replace("{\n}", body));
-      fs.renameSync(tmp, this.path);
-    } else {
+  get #name(): string {
+    return path.basename(this.path);
+  }
+
+  /** Set key (undefined: remove it) and drop its old names. Edits the file as it is now, not as last loaded. */
+  #write(key: string, value: unknown): SettingsSnapshot {
+    if (!this.path) {
+      const raw = Object.fromEntries(Object.entries(this.#raw).filter(([k]) => k !== key && RENAMED_SETTINGS[k] !== key));
+      if (value !== undefined) raw[key] = value;
       this.#raw = raw;
+      this.#snapshot = this.#fromRaw(raw);
+      this.emit("updated", this.#snapshot);
+      return this.#snapshot;
     }
-    this.#snapshot = this.path ? this.#load() : this.#fromRaw(raw);
+    let text = "";
+    try {
+      text = fs.readFileSync(this.path, "utf8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw new Error(`Couldn't read ${this.#name}: ${(err as Error).message}`);
+    }
+    let raw: Record<string, unknown>;
+    try {
+      raw = parseJsoncObject(text);
+    } catch (err) {
+      this.reload(); // the snapshot says so too
+      throw new Error(`${this.#name}: ${(err as Error).message}. Fix it first.`);
+    }
+    const changes: Record<string, unknown> = Object.fromEntries(Object.keys(raw).filter((k) => RENAMED_SETTINGS[k] === key).map((k) => [k, undefined]));
+    changes[key] = value;
+    fs.mkdirSync(path.dirname(this.path), { recursive: true });
+    const tmp = `${this.path}.tmp`;
+    fs.writeFileSync(tmp, editJsonc(text, changes, SETTINGS_TEMPLATE));
+    fs.renameSync(tmp, this.path);
+    this.#snapshot = this.#load();
     this.emit("updated", this.#snapshot);
     return this.#snapshot;
   }
