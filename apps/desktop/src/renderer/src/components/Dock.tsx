@@ -4,6 +4,7 @@
 // default width). Docking moves the window's DOM here, so a webview reloads once
 // (Electron reattaches a moved <webview>); terminals reattach their xterm as is.
 
+import { useLayoutEffect, useRef } from "react";
 import type { PaneId } from "@cmd/protocol";
 import { Window, WindowBody, WindowFrame } from "@cmd/ui";
 import { labelOf, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
@@ -12,6 +13,7 @@ import { PlacementContext } from "../windows/registry.ts";
 import { TerminalView } from "./TerminalView.tsx";
 import { TileTitle } from "./TileTitle.tsx";
 import { WindowContent } from "./WindowsView.tsx";
+import { arrived, departed, slide, TileMotion } from "../motion.ts";
 
 interface Props {
   side: Side;
@@ -26,18 +28,44 @@ interface Props {
   onTitleMenu: (row: SidebarRow) => void;
   onTerminalMenu: (id: PaneId) => void;
   onWidth: (px: number | null) => void;
+  /**
+   * Shown or hidden just now (View → Show Sidebar): it slides in from its edge, or
+   * out to it (out of the layout meanwhile, so the workspace takes its room at once).
+   */
+  sliding?: "in" | "out";
 }
 
 export function Dock(p: Props) {
   const id = windowIdOf(p.row)!;
   const r = p.row;
+  const ref = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (p.sliding) slide(ref.current!, p.side === "left" ? "-100%, 0" : "100%, 0", p.sliding);
+  }, [p.sliding, p.side]);
+  // A window moved here from the workspace (or the other side) glides in from where it
+  // was; one that leaves says where it was, for wherever it goes (motion.ts).
+  const motion = useRef<TileMotion | null>(null);
+  useLayoutEffect(() => {
+    const aside = ref.current!;
+    const tile = aside.querySelector<HTMLElement>(":scope > .tile")!;
+    arrived(id, (from) => {
+      const a = aside.getBoundingClientRect();
+      const t = tile.getBoundingClientRect();
+      motion.current ??= new TileMotion({ release: true });
+      const rect = { x: t.left - a.left, y: t.top - a.top, w: tile.offsetWidth, h: tile.offsetHeight };
+      const start = { x: from.left - a.left, y: from.top - a.top, w: from.width, h: from.height };
+      motion.current.update(new Map([[id, tile]]), new Map([[id, { rect, hidden: false, from: start }]]), { instant: false, swap: false });
+    });
+    return () => void departed(id, tile.getBoundingClientRect());
+  }, [id]);
+  useLayoutEffect(() => () => motion.current?.dispose(), []);
   const menu = (e: React.MouseEvent) => {
     e.preventDefault();
     p.onSelect(id);
     p.onTitleMenu(r);
   };
   return (
-    <aside className={`dock dock-${p.side}`} style={{ width: p.width }}>
+    <aside ref={ref} className={`dock dock-${p.side}${p.sliding === "out" ? " leaving" : ""}`} style={{ width: p.width }} inert={p.sliding === "out" || undefined}>
       <Window
         data-pane={id}
         label={labelOf(r)}

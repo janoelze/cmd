@@ -25,6 +25,30 @@ function spring(x0: number, v0: number, t: number): [number, number] {
 /** How far along (0…1) a glide is after `ms`: for tweens (scrolling, the canvas camera). */
 export const glide = (ms: number): number => (ms >= GLIDE_MS ? 1 : 1 - spring(1, 0, ms / 1000)[0]);
 
+/** The glide as a CSS easing (Web Animations), sampled densely early where it moves fast: tokens.css --glide. */
+export const GLIDE_EASING = `linear(${Array.from({ length: 25 }, (_, i) => {
+  const at = (i / 24) ** 1.6;
+  return `${i === 24 ? 1 : +glide(at * GLIDE_MS).toFixed(4)} ${+(at * 100).toFixed(1)}%`;
+}).join(", ")})`;
+
+/**
+ * Slide an element in from (or out to) `offset` (a CSS translate) on the glide; turning
+ * back halfway reverses the slide under way. Out leaves it there (fill forwards).
+ */
+export function slide(el: HTMLElement, offset: string, dir: "in" | "out"): Animation | null {
+  const running = el.getAnimations().find((a) => a.id === "slide" && a.playState === "running");
+  if (running) {
+    running.reverse();
+    return running;
+  }
+  if (reducedMotion()) return null;
+  const off = { transform: `translate(${offset})` };
+  const on = { transform: "none" };
+  const a = el.animate(dir === "in" ? [off, on] : [on, off], { duration: GLIDE_MS, easing: GLIDE_EASING, fill: dir === "out" ? "forwards" : "none" });
+  a.id = "slide";
+  return a;
+}
+
 export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export interface Rect {
@@ -40,6 +64,8 @@ export interface TileTarget {
   hidden: boolean;
   /** Follows at once (dragged by the pointer). */
   instant?: boolean;
+  /** A window new here starts at this rect and glides into place (it came from a sidebar). */
+  from?: Rect;
 }
 
 export interface UpdateOptions {
@@ -55,6 +81,8 @@ export interface UpdateOptions {
    * shrink and grow with it, content and all).
    */
   remap?: (x: number, y: number, s: number) => { x: number; y: number; s: number };
+  /** A window's element went away: where it last was (as written: x, y, w, h, s) and the element. */
+  onGone?: (id: string, el: HTMLElement, at: Rect & { s: number }) => void;
 }
 
 const KEYS = ["x", "y", "w", "h", "s", "o"] as const;
@@ -83,14 +111,26 @@ const geo = (r: Rect, o: number): Geo => ({ x: r.x, y: r.y, w: r.w, h: r.h, s: 1
 /** Rest when every key is within half a pixel (opacity within 1%, scale within 0.1%). */
 const EPS: Geo = { x: 0.5, y: 0.5, w: 0.5, h: 0.5, s: 0.001, o: 0.01 };
 const resting = (x: Geo, v: Geo) => KEYS.every((k) => Math.abs(x[k]) < EPS[k] && Math.abs(v[k]) < EPS[k] * 40);
-const now = () => performance.now();
+/** The longest step the glides' clock takes between two looks at it: a stalled frame pauses a glide rather than skipping it. */
+const MAX_STEP_MS = 34;
 /** A retarget this soon after the last belongs to the same change (see update). */
 const SETTLED_MS = 34;
 
 export class TileMotion {
+  /**
+   * release: at rest, hand the element back to the layout (clear what was written):
+   * for a window that's laid out by CSS and only glides when it arrives (a sidebar).
+   */
+  private opts: { release?: boolean };
+  constructor(opts: { release?: boolean } = {}) {
+    this.opts = opts;
+  }
   private tiles = new Map<string, Tile>();
   private raf = 0;
   private booted = false;
+  /** The glides' clock (ms): real time, except that it never jumps more than MAX_STEP_MS. */
+  private clock = 0;
+  private real = performance.now();
   /** Frames painted while gliding: counted by a task each frame posts, which runs after it's painted. */
   private painted = 0;
   private afterPaint = (() => {
@@ -104,9 +144,13 @@ export class TileMotion {
    * windows fade in (at boot: just appear), gone ones are forgotten.
    */
   update(els: Map<string, HTMLElement>, targets: Map<string, TileTarget>, opts: UpdateOptions): void {
-    const t = now();
+    const t = this.now();
     const instantAll = opts.instant || reducedMotion();
-    for (const [id, tile] of this.tiles) if (!els.has(id) || els.get(id) !== tile.el) this.drop(id);
+    for (const [id, tile] of this.tiles) {
+      if (els.has(id) && els.get(id) === tile.el) continue;
+      opts.onGone?.(id, tile.el, { x: tile.shown.x, y: tile.shown.y, w: tile.shown.w / tile.shown.s, h: tile.shown.h / tile.shown.s, s: tile.shown.s });
+      this.drop(id);
+    }
     for (const [id, el] of els) {
       const target = targets.get(id);
       if (!target) continue;
@@ -115,9 +159,18 @@ export class TileMotion {
         const g = geo(target.rect, target.hidden ? 0 : 1);
         tile = { el, target: g, x0: zero(), v0: zero(), t0: t, paintedAt: this.painted, hidden: target.hidden, frozen: [], shown: { x: NaN, y: NaN, w: NaN, h: NaN, s: NaN, o: NaN } };
         this.tiles.set(id, tile);
-        // A window opened after boot comes in: scaled up from a little smaller, fading in
-        // (its layout size never changes: shown size and scale shrink alike).
-        if (this.booted && !instantAll && !target.hidden) tile.x0 = { x: g.w * 0.02, y: g.h * 0.02, w: -g.w * 0.04, h: -g.h * 0.04, s: -0.04, o: -1 };
+        if (target.from && !instantAll && !target.hidden) {
+          // Moved here from elsewhere on screen: laid out at its size here (content held at
+          // the larger of both), then glides from there.
+          this.write(tile, g);
+          const f = target.from;
+          tile.x0 = { x: f.x - g.x, y: f.y - g.y, w: f.w - g.w, h: f.h - g.h, s: 0, o: 0 };
+          this.freeze(tile);
+        } else if (this.booted && !instantAll && !target.hidden) {
+          // A window opened after boot comes in: scaled up from a little smaller, fading in
+          // (its layout size never changes: shown size and scale shrink alike).
+          tile.x0 = { x: g.w * 0.02, y: g.h * 0.02, w: -g.w * 0.04, h: -g.h * 0.04, s: -0.04, o: -1 };
+        }
         this.write(tile, this.at(tile, t));
         continue;
       }
@@ -160,6 +213,10 @@ export class TileMotion {
     this.schedule();
   }
 
+  has(id: string): boolean {
+    return this.tiles.has(id);
+  }
+
   /** Every window at rest where it belongs (tests, and before reading layout). */
   finish(): void {
     for (const tile of this.tiles.values()) (tile.x0 = zero()), (tile.v0 = zero()), this.write(tile, tile.target), this.thaw(tile);
@@ -192,9 +249,16 @@ export class TileMotion {
     return v;
   }
 
+  private now(): number {
+    const real = performance.now();
+    this.clock += Math.min(MAX_STEP_MS, Math.max(0, real - this.real));
+    this.real = real;
+    return this.clock;
+  }
+
   private schedule() {
     if (this.raf) return;
-    const t = now();
+    const t = this.now();
     const moving = [...this.tiles.values()].some((tile) => !this.isResting(tile, t));
     if (moving) this.raf = requestAnimationFrame(this.frame);
   }
@@ -210,7 +274,7 @@ export class TileMotion {
   private frame = () => {
     this.raf = 0;
     this.afterPaint.postMessage(0);
-    const t = now();
+    const t = this.now();
     let moving = false;
     for (const tile of this.tiles.values()) {
       if (this.isResting(tile, t)) {
@@ -218,6 +282,7 @@ export class TileMotion {
         tile.v0 = zero();
         this.write(tile, tile.target);
         this.thaw(tile);
+        if (this.opts.release) this.release(tile);
       } else {
         moving = true;
         this.write(tile, this.at(tile, t));
@@ -284,9 +349,71 @@ export class TileMotion {
     tile.frozen = [];
   }
 
+  private release(tile: Tile) {
+    const s = tile.el.style;
+    s.transform = s.width = s.height = s.opacity = "";
+    for (const [id, t] of this.tiles) if (t === tile) this.tiles.delete(id);
+  }
+
   private drop(id: string) {
     const tile = this.tiles.get(id);
     if (tile) this.thaw(tile), tile.el.removeAttribute("data-morphing");
     this.tiles.delete(id);
   }
+}
+
+// ── windows moving between the workspace and the sidebars ──
+// Docking or undocking a window renders it somewhere else: one element goes, another
+// comes. The side that loses it says where it was on screen (departed), the side that
+// gains it glides it in from there (arrived). Either may come first in a commit. A
+// window nobody takes was closed: it fades out where it was (a ghost).
+
+type Arrival = (from: DOMRect) => void;
+const departures = new Map<string, { rect: DOMRect; at: number }>();
+const arrivals = new Map<string, { fn: Arrival; at: number }>();
+const FRESH_MS = 300;
+
+/** A window's element is going away from here, last seen at `rect` (screen). Returns whether it arrived elsewhere. */
+export function departed(id: string, rect: DOMRect): boolean {
+  const a = arrivals.get(id);
+  arrivals.delete(id);
+  if (a && performance.now() - a.at < FRESH_MS) return a.fn(rect), true;
+  departures.set(id, { rect, at: performance.now() });
+  return false;
+}
+
+/** A window's element is new here: glide it in if it just left somewhere else. */
+export function arrived(id: string, fn: Arrival): void {
+  const d = departures.get(id);
+  departures.delete(id);
+  if (d && performance.now() - d.at < FRESH_MS) return fn(d.rect);
+  arrivals.set(id, { fn, at: performance.now() });
+}
+
+/** Whether a window that departed has arrived somewhere since (else it was closed). */
+export const settledElsewhere = (id: string) => !departures.has(id);
+
+/**
+ * A closed window fades out where it was: a copy of its element, without what can't be
+ * copied (pages, canvases: a terminal's text is drawn on one), shrinking a little.
+ */
+export function ghost(el: HTMLElement, parent: Element): void {
+  if (reducedMotion()) return;
+  const g = el.cloneNode(true) as HTMLElement;
+  for (const live of g.querySelectorAll("webview, iframe, canvas, video, object, embed")) live.remove();
+  g.removeAttribute("data-pane");
+  g.removeAttribute("data-morphing");
+  g.setAttribute("aria-hidden", "true");
+  g.inert = true;
+  g.classList.add("ghost-tile");
+  parent.appendChild(g);
+  const base = g.style.transform;
+  const a = g.animate(
+    [
+      { opacity: 1, transform: base },
+      { opacity: 0, transform: `${base} translate(1.5%, 1.5%) scale(0.97)` },
+    ],
+    { duration: 160, easing: "cubic-bezier(0.4, 0, 1, 1)", fill: "forwards" },
+  );
+  a.onfinish = a.oncancel = () => g.remove();
 }

@@ -60,7 +60,7 @@ import { TileTitle } from "./TileTitle.tsx";
 import { useFooterCentre } from "./StatusBar.tsx";
 import { SlotMotion } from "./Slot.tsx";
 import { countRender } from "../perf.ts";
-import { glide, GLIDE_MS, TileMotion, type TileTarget } from "../motion.ts";
+import { arrived, departed, ghost, glide, GLIDE_MS, settledElsewhere, TileMotion, type TileTarget } from "../motion.ts";
 
 const DRAG_THRESHOLD = 4;
 const EDGE_SCROLL_ZONE = 56; // px from the pane edge where dragging auto-scrolls the strip
@@ -846,7 +846,33 @@ export function WindowsView(p: Props) {
             return { x: (f.tx + f.s * x + shift.x - to.tx) / to.s, y: (f.ty + f.s * y + shift.y - to.ty) / to.s, s: (s * f.s) / to.s };
           }
         : undefined;
-    tileMotion.current!.update(els, targets, { instant, swap, remap });
+    // A window new here that just left a sidebar glides in from there (motion.ts).
+    let root: DOMRect | undefined;
+    const screenToLocal = (r: DOMRect) => {
+      root ??= rootRef.current!.getBoundingClientRect();
+      return { x: (r.left - root.left - to.tx) / to.s, y: (r.top - root.top - to.ty) / to.s, w: r.width / to.s, h: r.height / to.s };
+    };
+    for (const id of els.keys()) {
+      if (tileMotion.current!.has(id)) continue;
+      arrived(id, (r) => {
+        const t = targets.get(id);
+        if (t) t.from = screenToLocal(r);
+      });
+    }
+    const track = rootRef.current!.querySelector(".windows-track")!;
+    tileMotion.current!.update(els, targets, {
+      instant,
+      swap,
+      remap,
+      // A window that went: to a sidebar (which glides it there), or closed (it fades out).
+      onGone: (id, el, at) => {
+        root ??= rootRef.current!.getBoundingClientRect();
+        const rect = new DOMRect(root.left + to.tx + to.s * at.x, root.top + to.ty + to.s * at.y, at.w * at.s * to.s, at.h * at.s * to.s);
+        if (departed(id, rect) || instant || el.isConnected) return;
+        // Taken nowhere by the end of this commit: closed.
+        queueMicrotask(() => settledElsewhere(id) || ghost(el, track));
+      },
+    });
   });
   useEffect(() => () => tileMotion.current?.dispose(), []);
   return (

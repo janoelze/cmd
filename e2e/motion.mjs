@@ -65,6 +65,7 @@ const app = await electron.launch({
 });
 const win = await app.firstWindow();
 win.on("pageerror", (e) => console.log("pageerror:", e.message));
+if (process.env.MOTION_DEBUG) win.on("console", (m) => m.text().startsWith("[") && console.log(m.text()));
 await win.waitForSelector(".statusbar .core-status");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -90,6 +91,12 @@ async function waitTiles(n) {
 }
 
 await setSize(1440, 900);
+// First launch shows onboarding: past it, so it doesn't cover the windows.
+if (await win.waitForSelector(".onboarding", { timeout: 3000 }).catch(() => null)) {
+  await win.locator(".onboarding button", { hasText: "Get Started" }).click();
+  await win.locator(".onboarding button", { hasText: "Set Up Later" }).click();
+  await win.waitForSelector(".onboarding", { state: "detached" });
+}
 await sleep(300);
 
 // ── the probe ────────────────────────────────────────────
@@ -121,21 +128,30 @@ await win.evaluate(() => {
     if (w !== innerWidth || h !== innerHeight) return void requestAnimationFrame(tick);
     const view = document.querySelector(".main.windows")?.getBoundingClientRect();
     const frame = { t: now, vp: view ? [view.left, view.top, view.width, view.height] : null, tiles: {} };
-    for (const t of document.querySelectorAll(".windows-track > .tile[data-pane]")) {
+    // The workspace's windows, and the sidebars (keyed by their side).
+    const els = [...document.querySelectorAll(".windows-track > .tile[data-pane]")].map((t) => [t.dataset.pane, t]);
+    // Sidebars by their window too: a window moving to or from one is one window moving.
+    for (const d of document.querySelectorAll(".stage > .dock > .tile[data-pane]")) els.push([d.dataset.pane, d]);
+    for (const [key, t] of els) {
       const r = t.getBoundingClientRect();
       const c = contentOf(t);
       const cr = c?.getBoundingClientRect();
       if (c && !observed.has(c)) observed.add(c), ro.observe(c);
       const cs = getComputedStyle(t);
-      frame.tiles[t.dataset.pane] = {
+      frame.tiles[key] = {
         r: [r.left, r.top, r.width, r.height],
         // Screen px per CSS px (a zoomed canvas, a window scaled while it glides).
         k: r.width / Math.max(1, t.offsetWidth),
+        dock: !!t.closest(".dock"),
         c: cr ? [cr.left, cr.top, cr.width, cr.height] : null,
         // What you see: hidden, or as opaque as the window and the track over it.
         o: cs.visibility === "hidden" ? 0 : +cs.opacity,
       };
     }
+    // Closed windows fading out where they were (motion.ts ghost).
+    frame.ghosts = document.querySelectorAll(".ghost-tile").length;
+    // The workspace under a View Transition (switching Spaces): what's seen is its crossfade, not the DOM.
+    frame.vt = !!document.querySelector(".stage:active-view-transition");
     rec.frames.push(frame);
     requestAnimationFrame(tick);
   };
@@ -146,6 +162,9 @@ await win.evaluate(() => {
       // What took the time: the longest scripts, and the frame's style and layout.
       scripts: [...e.scripts].sort((a, b) => b.duration - a.duration).slice(0, 3).map((s) => `${Math.round(s.duration)}ms ${s.invoker} ${s.sourceFunctionName || ""} ${(s.sourceURL || "").split("/").pop()}:${s.sourceCharPosition}`),
       layout: Math.round(e.startTime + e.duration - (e.styleAndLayoutStart || e.startTime)),
+      // Before rendering began: tasks, rAF callbacks, observers.
+      work: Math.round((e.renderStart || e.startTime + e.duration) - e.startTime),
+      render: Math.round(e.renderStart ? e.startTime + e.duration - e.renderStart : 0),
     })))).observe({ type: "long-animation-frame" });
   } catch {}
   w.__motion = {
@@ -171,6 +190,11 @@ await win.evaluate(() => {
 });
 
 // ── analysis ─────────────────────────────────────────────
+/** The area windows and sidebars are seen in: the workspace and the sidebars' columns (the app window's width). */
+const document_stage = (frames) => {
+  const vp = frames.find((f) => f.vp)?.vp;
+  return vp && [0, vp[1], Math.max(...frames.filter((f) => f.vp).map((f) => f.vp[0] + f.vp[2])), vp[3]];
+};
 const STEP_MIN = 16; // px: a change this big in one frame is a jump, not motion
 function analyse(rec, { expect = "glide", reversals: allowed = 0 } = {}) {
   const frames = rec.frames;
@@ -240,19 +264,27 @@ function analyse(rec, { expect = "glide", reversals: allowed = 0 } = {}) {
     if ((anim("left") || anim("top")) && (jump("width") || jump("height")) && !(jump("left") || jump("top")))
       add("desync", id, "size jumped while position glided");
     // Content anchored to its window: its offset from the window's top-left stays put.
-    const offs = shown.filter((x) => x.s.c).map((x) => [(x.s.c[0] - x.s.r[0]) / x.s.k, (x.s.c[1] - x.s.r[1]) / x.s.k]);
+    // Within one element: a sidebar lays its window's content out its own way.
+    const where = shown.at(-1)?.s.dock;
+    const offs = shown.filter((x) => x.s.c && x.s.dock === where).map((x) => [(x.s.c[0] - x.s.r[0]) / x.s.k, (x.s.c[1] - x.s.r[1]) / x.s.k]);
     if (offs.length > 1) {
       const drift = Math.max(...offs.map((o) => Math.hypot(o[0] - offs[0][0], o[1] - offs[0][1])));
       if (drift > 1) add("drift", id, `content slid ${Math.round(drift)} px inside its window`);
     }
-    // Appearing or vanishing in one frame while on screen.
-    const vp = frames.find((f) => f.vp)?.vp;
-    const onScreen = (s) => vp && s.r[0] < vp[0] + vp[2] && s.r[0] + s.r[2] > vp[0] && s.r[2] > 0;
+    // Appearing or vanishing in one frame while on screen (faded, added or removed).
+    const stage = document_stage(frames);
+    const onScreen = (s, o = 0.01) => stage && s.o > o && s.r[0] < stage[0] + stage[2] - 1 && s.r[0] + s.r[2] > stage[0] + 1 && s.r[2] > 0;
     for (let i = 1; i < seq.length; i++) {
       const a = seq[i - 1].s;
       const b = seq[i].s;
       if (Math.abs(b.o - a.o) > 0.6 && (onScreen(a) || onScreen(b))) add("pop", id, b.o > a.o ? "appeared in one frame" : "vanished in one frame");
     }
+    const at = frames.findIndex((f) => f.tiles[id]);
+    const gone = frames.findLastIndex((f) => f.tiles[id]);
+    // Mostly opaque on its first or last frame: not faded or slid in or out.
+    if (at > 0 && onScreen(frames[at].tiles[id], 0.5) && !frames[at].vt) add("pop", id, "added on screen at once");
+    // A closed window leaves a ghost that fades out in its place.
+    if (gone < frames.length - 1 && onScreen(frames[gone].tiles[id], 0.5) && !frames[gone + 1].ghosts && !frames[gone + 1].vt) add("pop", id, "removed from screen at once");
     const n = rec.reflows[id] ?? 0;
     if (n > 1) add("reflows", id, `content resized ${n}×`);
   }
@@ -318,7 +350,7 @@ async function scenario(name, act, { settle = 700, ...expect } = {}) {
   const flag = a.instant + a.snap + a.desync + a.wobble + a.drift + a.pops + a.lag ? "✗" : "✓";
   console.log(`${flag} ${name}`);
   for (const i of a.issues.slice(0, 8)) console.log(`    ${i.kind.padEnd(8)} ${i.id}  ${i.detail}`);
-  for (const l of rec.loaf.filter((l) => l.start >= rec.frames[0]?.t)) console.log(`    loaf     ${Math.round(l.dur)} ms (style+layout ${l.layout} ms) ${l.scripts.join(" · ")}`);
+  for (const l of rec.loaf.filter((l) => l.start >= rec.frames[0]?.t)) console.log(`    loaf     ${Math.round(l.dur)} ms (work ${l.work}, render ${l.render}, style+layout ${l.layout} ms) ${l.scripts.join(" · ")}`);
   if (a.issues.length > 8) console.log(`    … ${a.issues.length - 8} more`);
 }
 
@@ -350,10 +382,14 @@ await scenario("grid → canvas", () => menu("view.canvas"), { settle: 900 });
 await scenario("canvas → grid", () => menu("view.grid"), { settle: 900 });
 await scenario("hide left sidebar", () => menu("view.sidebar"));
 await scenario("show left sidebar", () => menu("view.sidebar"));
-await scenario("show right sidebar", () => menu("view.rightSidebar"));
+await selectNth(0);
+await scenario("move a window to the right sidebar", () => menu("window.dockRight"));
 await scenario("hide right sidebar", () => menu("view.rightSidebar"));
+await scenario("show right sidebar", () => menu("view.rightSidebar"));
+await scenario("move it back to the workspace", () => menu("window.undock"));
 await scenario("open a window (grid)", () => menu("file.newText"));
-await scenario("close a window (grid)", () => menu("file.close"));
+const newest = await call("window.list").then((l) => l.filter((w) => w.kind === "text").sort((a, b) => b.createdAt - a.createdAt)[0]);
+await scenario("close a window (grid)", () => call("window.close", { id: newest.id }));
 await scenario("app window: one step smaller", () => setSize(1200, 800), { expect: "follow" });
 await scenario("app window: live resize", async () => {
   for (let i = 1; i <= 20; i++) await setSize(1200 + i * 12, 800 + i * 5), await sleep(16);

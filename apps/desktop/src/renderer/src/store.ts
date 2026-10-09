@@ -321,7 +321,7 @@ cmd.onShowSpace(({ spaceId, select }) => {
     }
   };
   if (spaceId === state.spaceId) show();
-  else slideSidebar(state.spaceId, spaceId, show);
+  else switchSpace(state.spaceId, spaceId, show);
   // A reload (⌘R) loads the URL again: keep it naming the Space shown now.
   const url = new URL(location.href);
   url.searchParams.set("space", spaceId);
@@ -330,24 +330,19 @@ cmd.onShowSpace(({ spaceId, select }) => {
 });
 
 /**
- * Switching Spaces slides the Navigator toward the new Space's side of the
- * switcher, as in Arc: an element-scoped View Transition, so only it is
- * captured (terminals and webviews stay live) and the slide runs on the
- * compositor while the main view re-lays out. `update` must commit synchronously.
- * Each Space has its own Navigator window, so the transition runs on the left
- * sidebar's window body, which React keeps while the window inside changes.
+ * Switching Spaces moves through a vertical stack of them: everything in the old
+ * Space (sidebars, windows, widgets) leaves out the top while the next one's rises
+ * from the bottom; the previous Space comes the other way (styles.css). One
+ * element-scoped View Transition on the stage, so the top bar and footer stay put,
+ * the new side stays live, and the slide runs on the compositor while the view
+ * re-lays out. `update` must commit synchronously.
  */
-function slideSidebar(from: SpaceId, to: SpaceId, update: () => void): void {
-  const el = document.querySelector<HTMLElement & { startViewTransition?: Document["startViewTransition"] }>(".dock-left > .tile.kind-navigator > .tile-body");
+function switchSpace(from: SpaceId, to: SpaceId, update: () => void): void {
+  const stage = document.querySelector<HTMLElement & { startViewTransition?: (o: { update: () => void; types?: string[] }) => unknown }>(".stage");
   const a = state.spaces.get(from);
   const b = state.spaces.get(to);
-  const searching = !!document.querySelector<HTMLInputElement>(".sb-search input")?.value;
-  // Only Navigator to Navigator: if the new Space's left side is empty or holds another
-  // window (a new Space before its first Navigator), the element goes away mid-slide.
-  const leftId = (b?.view?.docks as { left?: { id?: unknown; hidden?: unknown } } | undefined)?.left;
-  const navNext = typeof leftId?.id === "string" && !leftId.hidden && state.windows.get(leftId.id)?.kind === "navigator";
-  if (!el?.startViewTransition || !a || !b || !navNext || searching || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
-  el.startViewTransition({ update: () => flushSync(update), types: [b.order > a.order ? "space-next" : "space-prev"] });
+  if (!stage?.startViewTransition || !a || !b || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
+  stage.startViewTransition({ update: () => flushSync(update), types: [b.order > a.order ? "space-next" : "space-prev"] });
 }
 
 /** This window's Space was closed or forgotten (here or elsewhere). */

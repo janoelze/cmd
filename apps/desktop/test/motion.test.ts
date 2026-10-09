@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { glide, GLIDE_MS } from "../src/renderer/src/motion.ts";
+import { glide, GLIDE_EASING, GLIDE_MS } from "../src/renderer/src/motion.ts";
 
 describe("glide", () => {
   it("runs from 0 to 1 without overshoot or a step back", () => {
@@ -27,5 +27,7 @@ describe("glide", () => {
     // The CSS curve's points lie on the spring.
     const points = [...css.match(/--glide:\s*linear\(([^)]*)\)/)![1]!.matchAll(/([\d.]+) ([\d.]+)%/g)];
     for (const [, v, at] of points) expect(Math.abs(glide((Number(at) / 100) * GLIDE_MS) - Number(v))).toBeLessThan(0.003);
+    // …and it's the one Web Animations use (sidebars sliding).
+    expect(css).toContain(`--glide: ${GLIDE_EASING};`);
   });
 });

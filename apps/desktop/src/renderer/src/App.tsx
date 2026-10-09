@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { GLIDE_MS } from "./motion.ts";
 import { Toaster, toast } from "@cmd/ui";
 import type { PaneId, Space, SpaceId } from "@cmd/protocol";
 import type { WebviewTag } from "electron";
@@ -148,6 +149,9 @@ export function App() {
   };
   /** Space pickers (open/switch, move a window, rename); see spaces.tsx. */
   const [picker, setPicker] = useState<Picker | null>(null);
+  /** Sidebars sliding in or out after View → Show Sidebar (one hidden is kept until it's out of sight). */
+  const [sliding, setSliding] = useState<Partial<Record<Side, { dir: "in" | "out"; row?: SidebarRow; width?: number }>>>({});
+  const slideTimers = useRef<Partial<Record<Side, ReturnType<typeof setTimeout>>>>({});
 
   // Spaces: the switcher's order, what waits in each, and the one shown before (Last Space).
   const openSpaces = useMemo(() => [...all.spaces.values()].sort((a, b) => a.order - b.order), [all.spaces]);
@@ -178,7 +182,14 @@ export function App() {
 
   // Every row of the Space (the Navigator's, Dock badge…), and the workspace's: without sidebars.
   const allRows = useMemo(() => buildRows(s), [s]);
-  const rows = useMemo(() => allRows.filter((r) => !docked.has(windowIdOf(r) ?? "")), [allRows, docked]);
+  // A Space's first Navigator is docked once its window.open returns, which can be a
+  // render after the window itself arrives: until the Space has sidebars, a Navigator
+  // isn't a workspace window (it would show full size for a frame, then jump left).
+  const unsetDocks = storedDocks === null;
+  const rows = useMemo(
+    () => allRows.filter((r) => !docked.has(windowIdOf(r) ?? "") && !(unsetDocks && r.win?.kind === "navigator")),
+    [allRows, docked, unsetDocks],
+  );
   const flat = useMemo(() => flatten(rows), [rows]);
   const allFlat = useMemo(() => flatten(allRows), [allRows]);
   const selectedRef = useRef(selected);
@@ -514,8 +525,16 @@ export function App() {
   };
   /** View → Show Left/Right Sidebar: hide or show a side; an empty left side gets a Navigator. */
   function toggleSide(side: Side) {
-    if (docks[side].id) setDocks((d) => ({ ...d, [side]: { ...d[side], hidden: !d[side].hidden } }));
-    else if (side === "left") void openNavigator(all.spaceId, "left");
+    const id = docks[side].id;
+    if (id) {
+      const row = allFlat.find((r) => windowIdOf(r) === id);
+      // It slides out (kept until it's gone) or in.
+      if (row && !docks[side].hidden) setSliding((m) => ({ ...m, [side]: { dir: "out", row, width: widths[side] } }));
+      else setSliding((m) => ({ ...m, [side]: { dir: "in" } }));
+      clearTimeout(slideTimers.current[side]);
+      slideTimers.current[side] = setTimeout(() => setSliding(({ [side]: _, ...m }) => m), GLIDE_MS);
+      setDocks((d) => ({ ...d, [side]: { ...d[side], hidden: !d[side].hidden } }));
+    } else if (side === "left") void openNavigator(all.spaceId, "left");
   }
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
@@ -843,13 +862,17 @@ export function App() {
         {/* Canvas and strip run under the sidebars (docs/21-sidebars.md). */}
         <div className={`stage${mode === "canvas" || mode === "strip" ? " under" : ""}`}>
           {SIDES.map((side) => {
-            const row = docks[side].hidden ? undefined : allFlat.find((r) => windowIdOf(r) === docks[side].id);
+            const slide = sliding[side];
+            // Hidden just now: still there while it slides out, if its window is nowhere else.
+            const leaving = docks[side].hidden && slide?.dir === "out" && slide.row && !flat.some((r) => windowIdOf(r) === windowIdOf(slide.row!)) ? slide : undefined;
+            const row = leaving?.row ?? (docks[side].hidden ? undefined : allFlat.find((r) => windowIdOf(r) === docks[side].id));
             return row ? (
               <Dock
                 key={side}
                 side={side}
                 row={row}
-                width={widths[side]}
+                sliding={leaving ? "out" : slide?.dir === "in" ? "in" : undefined}
+                width={leaving?.width ?? widths[side]}
                 maxWidth={Math.max(DOCK_WIDTH.min, Math.min(DOCK_WIDTH.max, winWidth - MIN_WORKSPACE - widths[side === "left" ? "right" : "left"]))}
                 selected={selected === docks[side].id}
                 attention={attention > 0}
