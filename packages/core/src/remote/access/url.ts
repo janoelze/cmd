@@ -55,7 +55,7 @@ export const urlAdapter: AccessAdapter = {
 };
 
 /** null when the origin serves cmd's web client; else what's wrong. */
-async function probePage(origin: string): Promise<string | null> {
+export async function probePage(origin: string): Promise<string | null> {
   try {
     const res = await fetch(origin, { signal: AbortSignal.timeout(8000), redirect: "manual" });
     if (!res.ok) return `${origin} answered ${res.status}. Check that it forwards to this Mac.`;
