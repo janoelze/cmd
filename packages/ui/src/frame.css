@@ -96,6 +96,23 @@
 
 /* ── content and media ── */
 .ui-measure { width: 100%; max-width: var(--measure); margin-inline: auto; padding: var(--space-2xl) var(--space-xl) var(--space-3xl); }
+/* Dial: a ring as large as the view allows, the value inside it scaled to the ring
+   (container units: the face is 80% of the view's shorter side). */
+.ui-dial { --dial-tone: var(--accent); flex: 1; min-height: 0; display: grid; place-items: center; container-type: size; }
+.ui-dial[data-tone="needs"] { --dial-tone: var(--state-needs); }
+.ui-dial[data-tone="dim"] { --dial-tone: var(--text-dim); }
+.ui-dial-face { position: relative; display: grid; place-items: center; width: min(80cqw, 80cqh); aspect-ratio: 1; }
+.ui-dial-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ui-dial-track { fill: none; stroke: var(--separator); stroke-width: 2; }
+.ui-dial-fill { fill: none; stroke: var(--dial-tone); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray var(--dur-slow) var(--ease), stroke var(--dur) var(--ease); }
+.ui-dial-center { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--space-2xs); }
+.ui-dial-value { all: unset; box-sizing: border-box; width: 6ch; padding-inline: var(--space-sm); border-radius: var(--radius); font-weight: 300; font-size: min(15cqw, 15cqh); line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; text-align: center; color: var(--text); }
+.ui-dial[data-tone="needs"] .ui-dial-value { color: var(--state-needs); }
+.ui-dial[data-tone="dim"] .ui-dial-value { color: var(--text-dim); }
+button.ui-dial-value:not(:disabled):hover { background: var(--bg-hover); }
+.ui-dial-value[data-editing] { background: var(--input-bg); box-shadow: 0 0 0 1px var(--input-focus-edge); user-select: text; }
+.ui-dial-caption { font-size: max(var(--text-sm), min(3.6cqw, 3.6cqh)); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+@container (max-height: 120px) { .ui-dial-caption { display: none; } }
 .ui-media { flex: 1; min-height: 0; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); padding: var(--space-xl); background: var(--scrim); }
 .ui-media-img { flex: 1; min-height: 0; max-width: 100%; object-fit: contain; border-radius: var(--radius-xs); }
 .ui-media-caption { font-size: var(--text-sm); color: var(--text-dim); }

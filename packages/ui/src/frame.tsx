@@ -9,7 +9,7 @@
 // a size container, so these adapt to the window, not to the screen.
 
 import type * as React from "react";
-import { forwardRef, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref, type UIEvent } from "react";
+import { forwardRef, useEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { Spinner, type Tone } from "./status.tsx";
 import type { SpaceName, TextSize } from "./tokens.gen.ts";
@@ -220,6 +220,63 @@ export function MediaStage({ src, alt, caption }: { src: string; alt: string; ca
       <img className="ui-media-img" src={src} alt={alt} draggable={false} />
       {caption && <figcaption className="ui-media-caption">{caption}</figcaption>}
     </figure>
+  );
+}
+
+/**
+ * A value to read across the room in a ring that shows how much is left (a timer):
+ * the ring fills the view as large as it fits, the value large and thin inside it,
+ * a quiet caption under it ("ends 14:32"). `progress` is how much of the ring is
+ * drawn (1: full). With `onEdit` the value is a button that asks to edit it; with
+ * `edit` it is a field (Enter commits, Escape cancels, so does leaving it).
+ */
+export function Dial({ progress, tone, value, caption, label, onEdit, edit }: {
+  progress: number;
+  /** The ring and value: accent (running), needs (done), dim (paused or idle). */
+  tone?: "accent" | "needs" | "dim";
+  value: string;
+  caption?: ReactNode;
+  /** The value's steady name ("Time"); the value is its description. */
+  label: string;
+  onEdit?: () => void;
+  edit?: { text: string; onChange: (t: string) => void; onCommit: () => void; onCancel: () => void };
+}) {
+  const f = Math.max(0, Math.min(1, progress));
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (edit) input.current?.select();
+  }, [!!edit]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="ui-dial" data-tone={tone}>
+      <div className="ui-dial-face">
+        <svg className="ui-dial-ring" viewBox="0 0 100 100" aria-hidden>
+          <circle className="ui-dial-track" cx="50" cy="50" r="47" />
+          {f > 0 && <circle className="ui-dial-fill" cx="50" cy="50" r="47" pathLength={100} strokeDasharray={`${f * 100} 100`} transform="rotate(-90 50 50)" />}
+        </svg>
+        <div className="ui-dial-center">
+          {edit ? (
+            <input
+              ref={input}
+              className="ui-dial-value"
+              data-editing
+              value={edit.text}
+              aria-label={label}
+              onChange={(e) => edit.onChange(e.target.value)}
+              onBlur={edit.onCommit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") edit.onCommit();
+                if (e.key === "Escape") edit.onCancel();
+              }}
+            />
+          ) : (
+            <button type="button" className="ui-dial-value" aria-label={label} aria-description={value} data-tip={onEdit ? `Set ${label}` : undefined} disabled={!onEdit} onClick={onEdit}>
+              {value}
+            </button>
+          )}
+          {caption && <div className="ui-dial-caption">{caption}</div>}
+        </div>
+      </div>
+    </div>
   );
 }
 

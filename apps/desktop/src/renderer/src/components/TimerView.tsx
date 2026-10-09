@@ -1,14 +1,13 @@
 // Timer, a built-in widget (docs/16-widgets.md): a countdown. Its state is the
 // window's (core windows/builtin.ts timerType: duration, endsAt, left, rang) and
 // the core rings it (core/timers.ts), so it ends on time in any workspace. Here: the
-// time left, large, a bar, Start / Pause / Reset, and presets. Click the time to
-// type one ("10", "1:30", "90s", "1h").
+// time left, large, in a ring that empties as it runs (Dial), and in the toolbar the
+// presets and Start / Pause / Reset. Click the time to type one ("10", "1:30", "90s", "1h").
 
-import { Button, ButtonGroup, Panel, Progress } from "@cmd/ui";
-import { useEffect, useRef, useState } from "react";
+import { Dial, ToolbarButton, ToolbarSegmented, ToolbarSpacer, View, WindowToolbar } from "@cmd/ui";
+import { useEffect, useState } from "react";
 import { setWidgetState, useWidgetStatus } from "../widgets.ts";
 import type { WindowViewProps } from "../windows/registry.ts";
-import "./widgets.css";
 
 const PRESETS = [5, 10, 15, 25, 45, 60];
 
@@ -56,71 +55,54 @@ export function TimerView({ win }: WindowViewProps) {
   const act = (action: string) => setWidgetState(win.id, { action });
   const setDuration = (seconds: number) => setWidgetState(win.id, { duration: seconds });
 
-  const [editing, setEditing] = useState<string | null>(null);
-  const input = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (editing !== null) input.current?.select();
-  }, [editing !== null]);
-  const commit = () => {
-    const s = editing === null ? null : parseDuration(editing);
-    setEditing(null);
-    if (s) setDuration(s);
-  };
-
   useWidgetStatus(win.id, running ? `ends ${hhmm(endsAt)}` : paused ? "paused" : rang !== null ? `done at ${hhmm(rang)}` : null);
 
   return (
-    <Panel className="tm">
-      <div className="tm-body" data-state={running ? "running" : paused ? "paused" : rang ? "done" : "idle"}>
-        {editing !== null ? (
-          <input
-            ref={input}
-            className="tm-time tm-input"
-            value={editing}
-            aria-label="Time"
-            onChange={(e) => setEditing(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
-              if (e.key === "Escape") setEditing(null);
-            }}
-          />
-        ) : (
-          <button
-            className="tm-time"
-            data-tip={running ? undefined : "Set Time"}
-            // A steady name; the time left is its description.
-            aria-label="Set Time"
-            aria-description={clock(remaining)}
-            disabled={running}
-            onClick={() => setEditing(clock(duration))}
-          >
-            {clock(remaining)}
-          </button>
-        )}
-        <div className="tm-bar">
-          <Progress value={running || paused ? 1 - remaining / duration : rang ? 1 : 0} tone={rang && !running && !paused ? "warning" : "accent"} />
-        </div>
-        <ButtonGroup>
-          {running ? (
-            <Button onClick={() => act("pause")}>Pause</Button>
+    <Timer
+      phase={running ? "running" : paused ? "paused" : rang ? "done" : "idle"}
+      duration={duration}
+      remaining={remaining}
+      caption={running ? `ends ${hhmm(endsAt)}` : paused ? "paused" : rang ? `done at ${hhmm(rang)}` : undefined}
+      onAction={act}
+      onDuration={setDuration}
+    />
+  );
+}
+
+/** The timer, drawn (TimerView.story.tsx shows every phase). */
+export function Timer(p: { phase: "idle" | "running" | "paused" | "done"; duration: number; remaining: number; caption?: string; onAction: (a: "start" | "pause" | "reset") => void; onDuration: (seconds: number) => void }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const commit = () => {
+    const s = editing === null ? null : parseDuration(editing);
+    setEditing(null);
+    if (s) p.onDuration(s);
+  };
+  const set = p.phase === "idle" || p.phase === "done";
+  return (
+    <View
+      toolbar={
+        <WindowToolbar label="Timer">
+          {set && <ToolbarSegmented label="Duration" value={String(p.duration / 60)} options={PRESETS.map((m) => ({ value: String(m), label: m < 60 ? `${m}m` : `${m / 60}h` }))} onChange={(v) => p.onDuration(Number(v) * 60)} />}
+          <ToolbarSpacer />
+          {(p.phase === "paused" || p.phase === "done") && <ToolbarButton icon="arrow.counterclockwise" label="Reset" onClick={() => p.onAction("reset")} />}
+          {p.phase === "running" ? (
+            <ToolbarButton icon="pause.fill" label="Pause" showLabel onClick={() => p.onAction("pause")} />
           ) : (
-            <Button variant="primary" onClick={() => act("start")}>
-              {paused ? "Resume" : rang ? "Start Again" : "Start"}
-            </Button>
+            <ToolbarButton icon="play.fill" label={p.phase === "paused" ? "Resume" : p.phase === "done" ? "Start Again" : "Start"} showLabel tone="accent" onClick={() => p.onAction("start")} />
           )}
-          {(paused || (rang && !running)) && <Button onClick={() => act("reset")}>Reset</Button>}
-        </ButtonGroup>
-        {!running && !paused && (
-          <div className="tm-presets">
-            {PRESETS.map((m) => (
-              <Button key={m} size="sm" variant="ghost" pressed={duration === m * 60} onClick={() => setDuration(m * 60)}>
-                {m} min
-              </Button>
-            ))}
-          </div>
-        )}
-      </div>
-    </Panel>
+        </WindowToolbar>
+      }
+    >
+      <Dial
+        label="Time"
+        value={clock(p.remaining)}
+        caption={p.caption}
+        // Set: only the track; running, the ring empties; done, full in the needs tone.
+        progress={p.phase === "running" || p.phase === "paused" ? p.remaining / p.duration : p.phase === "done" ? 1 : 0}
+        tone={p.phase === "done" ? "needs" : p.phase === "paused" ? "dim" : "accent"}
+        onEdit={set ? () => setEditing(clock(p.duration)) : undefined}
+        edit={editing === null ? undefined : { text: editing, onChange: setEditing, onCommit: commit, onCancel: () => setEditing(null) }}
+      />
+    </View>
   );
 }
