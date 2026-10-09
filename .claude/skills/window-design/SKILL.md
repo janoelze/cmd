@@ -19,6 +19,7 @@ Every window in cmd, built-in or made with Magic, is drawn from one set of desig
   - `Panes` / `Pane`: a dashboard's sections, one column, two from 720px.
   - `DataGrid`: tables. Columns as data: `grow` (takes the leftover width), `align: "end"` (numbers), `hide: "narrow" | "regular"` (dropped as space runs out), `icon` (hugs a dot or icon). `selected` / `onRowClick` for an inspector. `rowInfo(i)` makes a row a section heading (`heading`: its cells are the section's name and totals; not selectable) or a nested row (`depth`, `expanded` + `onToggle` draw a disclosure in the first non-icon column); `onRowDoubleClick` opens a row. Task Manager uses all three.
   - `Stat`, `Chart` (line, area, bar), `Sparkline`, `Legend`: series take `--chart-N` in order.
+  - `TitleBand` and `Page`: a window of its own with forms (Settings). `TitleBand` is the band under the traffic lights (`--titlebar-h`), the window drags by it: give it a `title` as a View's `toolbar` (the page's name, large, with a `line` once the body scrolls: `View onScroll`), or none at the top of a sidebar. `Page` is the column of `FormSection`s in a padded View, centred past `--page-w`. Under a section, `FormActions` (Restore Defaults; a `hint` at the left). Controls for it: `ShortcutField` (key caps to record, remove, add), `QrCode`. `Text select` is a value to copy (a path, a pid).
   - `Document`: a reading column for rendered Markdown or HTML, in the person's text and code fonts (the Markdown window).
   - `Viewport` (pan and zoom a picture: grab cursors, a loading cover; the view zooms) and `Picture` (a checkerboard behind transparency, crisp pixels far in): the Image window. Third-party markup (pdf.js) keeps a small stylesheet of its own, on tokens.
   - `Ribbon` (bars between two times on lanes, hour ticks) and `Timeline` / `TimelineEntry` (a time, a mark on a rail, the entry), marks in a hue with `--mark` (the Journal).
@@ -35,6 +36,7 @@ Every window in cmd, built-in or made with Magic, is drawn from one set of desig
   | `contentwindow` | text to read: outline sidebar, reading column | Markdown, Journal, What's New |
   | `mediawindow` | one picture or video: stage, filmstrip, info inspector | Image, PDF, YouTube |
   | `actionswindow` | things to run: main action first, grouped list | Workspace Actions, Commands |
+  | `settingswindow` | forms: a sidebar of pages, a title band, sections of rows | Settings |
 
 ## Rules
 
