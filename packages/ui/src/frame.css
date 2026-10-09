@@ -77,6 +77,8 @@
 .ui-chart svg, .ui-sparkline svg { display: block; overflow: visible; }
 .ui-chart-grid { stroke: var(--separator); stroke-width: 1; }
 .ui-chart-tick { font: var(--text-2xs) var(--font-mono); fill: var(--text-dim); }
+/* Over the plot: a halo in the window's colour keeps them legible over an area or a bar. */
+.ui-chart-ytick { paint-order: stroke; stroke: var(--well); stroke-width: 3px; stroke-linejoin: round; }
 .ui-chart-line { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
 .ui-chart-area { opacity: 0.14; }
 .ui-legend { display: flex; flex-wrap: wrap; gap: var(--space-2xs) var(--space-lg); font-size: var(--text-sm); color: var(--text-dim); }

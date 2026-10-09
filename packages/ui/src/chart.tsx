@@ -54,7 +54,9 @@ export function Chart({ kind = "area", series, labels, height = 140, format = St
   const [ref, w] = useWidth<HTMLDivElement>();
   const n = Math.max(...series.map((s) => s.values.length));
   const max = fixedMax ?? nice(Math.max(...series.flatMap((s) => s.values)));
-  const pad = { l: 34, r: 2, t: 6, b: labels ? 18 : 4 };
+  // The y labels sit inside the plot, on their grid lines at its left edge, so the plot and
+  // its labels line up with whatever is above the chart (a Pane's title).
+  const pad = { l: 0, r: 0, t: 14, b: labels ? 18 : 2 };
   const iw = Math.max(0, w - pad.l - pad.r);
   const ih = height - pad.t - pad.b;
   const x = (i: number) => pad.l + (n <= 1 ? 0 : (i / (n - 1)) * iw);
@@ -71,9 +73,6 @@ export function Chart({ kind = "area", series, labels, height = 140, format = St
             {grid.map((g) => (
               <g key={g}>
                 <line className="ui-chart-grid" x1={pad.l} x2={w - pad.r} y1={Math.round(y(g)) + 0.5} y2={Math.round(y(g)) + 0.5} />
-                <text className="ui-chart-tick" x={pad.l - 6} y={y(g)} textAnchor="end" dominantBaseline="middle">
-                  {format(g)}
-                </text>
               </g>
             ))}
             {kind === "bar"
@@ -92,6 +91,11 @@ export function Chart({ kind = "area", series, labels, height = 140, format = St
                     </g>
                   );
                 })}
+            {grid.slice(1).map((g) => (
+              <text key={g} className="ui-chart-tick ui-chart-ytick" x={pad.l} y={Math.round(y(g)) - 3}>
+                {format(g)}
+              </text>
+            ))}
             {labels && labels.length > 0 && (
               <>
                 <text className="ui-chart-tick" x={pad.l} y={height - 4}>
