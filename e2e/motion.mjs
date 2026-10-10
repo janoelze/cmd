@@ -29,6 +29,7 @@ import { createRequire } from "node:module";
 import { execFileSync, spawnSync } from "node:child_process";
 import { _electron as electron } from "playwright";
 import { corePid, stopCore } from "../scripts/stop-core.mjs";
+import { fitScreen, screenEnv } from "./screen.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const arg = (name) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : "");
@@ -61,9 +62,10 @@ const require = createRequire(path.join(root, "apps/desktop/package.json"));
 const app = await electron.launch({
   executablePath: require("electron"),
   args: [path.join(root, "apps/desktop")],
-  env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_TRANSCRIPTS_HOME: path.join(home, "transcripts-home") },
+  env: { ...process.env, CMD_HOME: home, CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_TRANSCRIPTS_HOME: path.join(home, "transcripts-home"), ...screenEnv() },
 });
 const win = await app.firstWindow();
+await fitScreen(app, win);
 win.on("pageerror", (e) => console.log("pageerror:", e.message));
 if (process.env.MOTION_DEBUG) win.on("console", (m) => m.text().startsWith("[") && console.log(m.text()));
 await win.waitForSelector(".statusbar .core-status");

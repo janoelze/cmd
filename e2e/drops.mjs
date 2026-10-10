@@ -9,6 +9,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { _electron as electron } from "playwright";
 import { corePid, stopCore } from "../scripts/stop-core.mjs";
+import { fitScreen, screenEnv } from "./screen.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const home = path.join(root, ".cmd-dev", "e2e-drops");
@@ -34,9 +35,10 @@ const require = createRequire(path.join(root, "apps/desktop/package.json"));
 const app = await electron.launch({
   executablePath: require("electron"),
   args: [path.join(root, "apps/desktop")],
-  env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1" },
+  env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", ...screenEnv() },
 });
 const win = await app.firstWindow();
+await fitScreen(app, win);
 win.on("pageerror", (e) => console.log("pageerror:", e.message));
 setTimeout(() => (console.log("HUNG"), process.exit(1)), 120_000).unref();
 

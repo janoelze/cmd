@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import http from "node:http";
 import { _electron as electron } from "playwright";
 import { corePid, stopCore } from "../scripts/stop-core.mjs";
+import { fitScreen, screenEnv } from "./screen.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const home = path.join(root, ".cmd-dev", "e2e");
@@ -45,9 +46,10 @@ const launch = async () => {
     executablePath: require("electron"),
     // Fake camera and microphone (not a fake permission prompt): a page's getUserMedia reaches cmd's sheet without real devices.
     args: ["--use-fake-device-for-media-stream", path.join(root, "apps/desktop")],
-    env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts },
+    env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ...screenEnv() },
   });
   const win = await app.firstWindow();
+  await fitScreen(app, win);
   win.on("pageerror", (e) => console.log("pageerror:", e.message));
   return { app, win };
 };
