@@ -219,7 +219,7 @@ A Magic widget is a folder under `$CMD_HOME/widgets/<id>/` (`widgets/store.ts`, 
 
 ### AR1-11-11 · Keep cmd's own secrets out of reach of Magic's tools
 
-- **Status:** in progress (magic-private-paths)
+- **Status:** done (84996b6c)
 - **Severity:** high
 - **Effort:** S (< ½ day)
 - **Where:** `packages/core/src/paths-deny.ts`, `packages/core/src/magic/tools.ts:104,129`, `packages/core/src/magic/sandbox.ts`

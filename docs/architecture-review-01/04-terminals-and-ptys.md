@@ -92,7 +92,7 @@ Terminals run in the **PTY host** (`packages/core/src/terminals/host.ts` 222 lin
 
 ### AR1-04-04 · Stop an OSC longer than 8 KB from ringing the bell
 
-- **Status:** in progress (osc-fixes)
+- **Status:** done (053fb061)
 - **Severity:** medium
 - **Effort:** S
 - **Where:** `packages/core/src/osc.ts:89-99`, `packages/core/src/osc.ts:34-79`, `packages/core/src/notifications.ts:189-198`
@@ -109,7 +109,7 @@ Terminals run in the **PTY host** (`packages/core/src/terminals/host.ts` 222 lin
 
 ### AR1-04-05 · Percent-encode the whole path in zsh's OSC 7
 
-- **Status:** in progress (osc-fixes)
+- **Status:** done (053fb061)
 - **Severity:** medium
 - **Effort:** S
 - **Where:** `packages/core/shell/zsh/cmd-integration.zsh:16-19`, `packages/core/shell/bash/cmd-integration.bash:71-75`, `packages/core/src/osc.ts:174-182`
