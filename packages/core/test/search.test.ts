@@ -206,27 +206,27 @@ describe("owned transcripts + search", () => {
     rmTemp(dir);
   });
 
-  it("finds sessions by prompt words, with a highlighted snippet and resume info", () => {
-    const hits = searcher.search("collapsible");
+  it("finds sessions by prompt words, with a highlighted snippet and resume info", async () => {
+    const hits = await searcher.search("collapsible");
     expect(hits).toHaveLength(1); // the archive copy has the same ids
     expect(hits[0]).toMatchObject({ sessionId: "s-sidebar", agent: "claude", cwd: "/Users/me/src/cmd", branch: "main", env: { CLAUDE_CONFIG_DIR: claudeCfg } });
     expect(hits[0]!.snippet).toContain("\x01");
   });
 
-  it("supports prefixes, phrases, exclusions, identifiers and Codex", () => {
-    expect(searcher.search("wiregu").map((h) => h.sessionId)).toEqual(["s-vpn"]);
-    expect(searcher.search('"keeps dropping"').map((h) => h.sessionId)).toEqual(["s-vpn"]);
-    expect(searcher.search("sidebar -collapsible")).toEqual([]);
-    expect(searcher.search("monitor").length).toBeGreaterThan(0); // from AgentMonitor.swift
-    expect(searcher.search("postgres")[0]).toMatchObject({ agent: "codex", sessionId: "0199-codex-thread" });
-    expect(searcher.search("rabbitmq")[0]).toMatchObject({ agent: "codex", sessionId: "0198-archived", env: null });
-    expect(searcher.search("kumquat")).toEqual([]);
-    expect(searcher.search("retry")[0]).toMatchObject({ agent: "qwen", sessionId: "q-live", title: "Queue worker retries", branch: "dev" });
-    expect(searcher.search("queueworker").map((h) => h.sessionId)).toContain("q-live"); // tool args, identifier parts
-    expect(searcher.search("zebra")[0]).toMatchObject({ agent: "qwen", sessionId: "q-old" }); // chats/archive
-    expect(searcher.search("walrus")[0]).toMatchObject({ agent: "qwen", sessionId: "q-archived" });
-    expect(searcher.search("lint")[0]).toMatchObject({ agent: "copilot", sessionId: "c-1", cwd: "/Users/me/src/c" });
-    expect(searcher.search("transcript")).toEqual([]);
+  it("supports prefixes, phrases, exclusions, identifiers and Codex", async () => {
+    expect((await searcher.search("wiregu")).map((h) => h.sessionId)).toEqual(["s-vpn"]);
+    expect((await searcher.search('"keeps dropping"')).map((h) => h.sessionId)).toEqual(["s-vpn"]);
+    expect(await searcher.search("sidebar -collapsible")).toEqual([]);
+    expect((await searcher.search("monitor")).length).toBeGreaterThan(0); // from AgentMonitor.swift
+    expect((await searcher.search("postgres"))[0]).toMatchObject({ agent: "codex", sessionId: "0199-codex-thread" });
+    expect((await searcher.search("rabbitmq"))[0]).toMatchObject({ agent: "codex", sessionId: "0198-archived", env: null });
+    expect(await searcher.search("kumquat")).toEqual([]);
+    expect((await searcher.search("retry"))[0]).toMatchObject({ agent: "qwen", sessionId: "q-live", title: "Queue worker retries", branch: "dev" });
+    expect((await searcher.search("queueworker")).map((h) => h.sessionId)).toContain("q-live"); // tool args, identifier parts
+    expect((await searcher.search("zebra"))[0]).toMatchObject({ agent: "qwen", sessionId: "q-old" }); // chats/archive
+    expect((await searcher.search("walrus"))[0]).toMatchObject({ agent: "qwen", sessionId: "q-archived" });
+    expect((await searcher.search("lint"))[0]).toMatchObject({ agent: "copilot", sessionId: "c-1", cwd: "/Users/me/src/c" });
+    expect(await searcher.search("transcript")).toEqual([]);
   });
 
   it("lists sessions newest first, through a filter SQL can't do", () => {
@@ -269,25 +269,25 @@ describe("owned transcripts + search", () => {
     ingest.pass();
   });
 
-  it("tolerates typos", () => {
-    const hits = searcher.search("wiregaurd");
+  it("tolerates typos", async () => {
+    const hits = await searcher.search("wiregaurd");
     expect(hits[0]).toMatchObject({ sessionId: "s-vpn", fuzzy: true });
   });
 
-  it("reads the vocabulary again at most every few minutes as the log grows", () => {
+  it("reads the vocabulary again at most every few minutes as the log grows", async () => {
     const s = new SearchView(data, sessions, { eagerTerms: 0 });
     const prepare = vi.spyOn(data.store.db, "prepare");
     const reads = () => prepare.mock.calls.filter(([sql]) => sql.includes("events_vocab")).length;
     try {
       vi.useFakeTimers({ now: Date.now(), toFake: ["Date"] });
-      s.search("wiregaurd");
+      await s.search("wiregaurd");
       s.invalidate();
-      expect(s.search("wiregaurd")[0]).toMatchObject({ sessionId: "s-vpn", fuzzy: true });
+      expect((await s.search("wiregaurd"))[0]).toMatchObject({ sessionId: "s-vpn", fuzzy: true });
       expect(reads()).toBe(1);
       vi.advanceTimersByTime(5 * 60_000);
-      s.search("wiregaurd");
+      await s.search("wiregaurd");
       expect(reads()).toBe(2);
-      s.search("wiregaurd");
+      await s.search("wiregaurd");
       expect(reads()).toBe(2); // not stale since
     } finally {
       vi.useRealTimers();
@@ -295,7 +295,7 @@ describe("owned transcripts + search", () => {
     }
   });
 
-  it("reads a small vocabulary again as soon as the log grows", () => {
+  it("reads a small vocabulary again as soon as the log grows", async () => {
     const s = new SearchView(data, sessions);
     const prepare = vi.spyOn(data.store.db, "prepare");
     const reads = () => prepare.mock.calls.filter(([sql]) => sql.includes("events_vocab")).length;
@@ -303,14 +303,14 @@ describe("owned transcripts + search", () => {
       s.warm();
       s.invalidate();
       expect(reads()).toBe(2);
-      s.search("wiregaurd");
+      await s.search("wiregaurd");
       expect(reads()).toBe(2); // not stale since
     } finally {
       prepare.mockRestore();
     }
   });
 
-  it("reads only a file's new lines on the next pass; a removed file's session stays, it's cmd's now", () => {
+  it("reads only a file's new lines on the next pass; a removed file's session stays, it's cmd's now", async () => {
     const vpnEvents = () => data.query({ sessionId: "claude:s-vpn", types: ["transcript."] }).length;
     const before = vpnEvents();
     const total = data.store.count({ types: ["transcript."] });
@@ -318,10 +318,10 @@ describe("owned transcripts + search", () => {
     fs.rmSync(path.join(archive, "s-sidebar.jsonl"));
     ingest.pass();
     searcher.invalidate();
-    expect(searcher.search("tailscale").map((h) => h.sessionId)).toEqual(["s-vpn"]);
+    expect((await searcher.search("tailscale")).map((h) => h.sessionId)).toEqual(["s-vpn"]);
     expect(vpnEvents()).toBe(before + 1);
     expect(data.store.count({ types: ["transcript."] })).toBe(total + 1);
-    expect(searcher.search("collapsible").map((h) => h.sessionId)).toEqual(["s-sidebar"]);
+    expect((await searcher.search("collapsible")).map((h) => h.sessionId)).toEqual(["s-sidebar"]);
     expect(ingest.status().files).toBe(8);
     const again = data.store.count({ types: ["transcript."] });
     ingest.pass();
@@ -335,7 +335,7 @@ describe("owned transcripts + search", () => {
     expect(entries.find((e) => e.role === "tool")?.text).toMatch(/pnpm test|Read/);
   });
 
-  it("reads everything again on reindex and learns folders live agents report", () => {
+  it("reads everything again on reindex and learns folders live agents report", async () => {
     const n = data.store.count({ types: ["transcript."] });
     ingest.reindex();
     expect(data.store.count({ types: ["transcript."] })).toBe(n); // the same ids
@@ -345,7 +345,7 @@ describe("owned transcripts + search", () => {
     fs.writeFileSync(path.join(learned, "s-else.jsonl"), claudeSession("s-else", "the quokka question", "Answered."));
     ingest.learn("claude", path.join(learned, "s-else.jsonl"));
     searcher.invalidate();
-    expect(searcher.search("quokka").map((h) => h.sessionId)).toEqual(["s-else"]);
+    expect((await searcher.search("quokka")).map((h) => h.sessionId)).toEqual(["s-else"]);
     expect(data.store.entities("transcript-root").map((e) => e.id)).toContainEqual(expect.stringContaining(path.join("elsewhere", "projects")));
   });
 });

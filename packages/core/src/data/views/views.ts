@@ -12,10 +12,13 @@ const log = logger("views");
 
 export class ViewsStore {
   readonly db: DatabaseSync;
+  /** views.sqlite; null: in memory. */
+  readonly file: string | null;
   #stmts = new Map<string, StatementSync>();
 
   /** `file`: views.sqlite; null: in memory (tests). */
   constructor(file: string | null) {
+    this.file = file;
     if (file) fs.mkdirSync(path.dirname(file), { recursive: true });
     this.db = new DatabaseSync(file ?? ":memory:", { timeout: 5000 });
     this.db.exec(`

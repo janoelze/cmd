@@ -79,17 +79,7 @@ CREATE TABLE IF NOT EXISTS links (
 CREATE UNIQUE INDEX IF NOT EXISTS links_one ON links(from_kind, from_id, to_kind, to_id, kind);
 `;
 
-/**
- * Full text over events: the one-line text and, for events with words in them
- * (prompts, messages, notes, commit bodies), a body. Contentless: the text is in
- * events and blobs already; rowid = seq. Rebuilt from events when dropped.
- */
-export const FTS_SQL = `
-CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
-  text, body, content='', contentless_delete=1, detail=full, tokenize='unicode61 remove_diacritics 2'
-);
-CREATE VIRTUAL TABLE IF NOT EXISTS events_vocab USING fts5vocab(events_fts, 'row');
-`;
+// The full-text index (events_fts) is fts.ts's: it has its own version and rebuild.
 
 /** Event flags. */
 export const FLAG_REDACTED = 1;

@@ -2,15 +2,18 @@
 // stalls the core's watchdog blamed (docs/34-startup-scheduler.md). One client
 // pings every 20 ms; the phases add load one after another: the startup jobs
 // (view rebuilds of a first launch), a first transcript pass, 30 terminals
-// printing, journal reloads with searches, query floods, idle. Afterwards, the
-// core's log has the whole picture: `grep '\[lag\]' $CMD_HOME/logs/core.log`.
+// printing, journal reloads with searches, query floods, idle, then typing in
+// the palette's search ("t", "th", "the": sessions and history per keystroke).
+// Afterwards, the core's log has the whole picture: `grep '\[lag\]' $CMD_HOME/logs/core.log`.
 //
-//   node scripts/perf/stress-core.mjs <core.sock> [journal]
+//   node scripts/perf/stress-core.mjs <core.sock> [journal|search] [--only P0,P6]
 //
-// With `journal`, only the startup jobs and then journal syncs as the core runs
-// them every 5 minutes (the first, in the startup job, reads 30 days of git; the
-// ones after are the steady state); `journal synced` lines in core.log say
-// where each sync's time went.
+// `--only` runs just the phases named (by their number, or a name below); P0
+// waits for the startup jobs. `journal` (alone or in --only): the startup jobs,
+// then journal syncs as the core runs them every 5 minutes (the first, in the
+// startup job, reads 30 days of git; the ones after are the steady state);
+// `journal synced` lines in core.log say where each sync's time went. `search`:
+// the startup jobs, then typing in the palette's search (P6).
 //
 // Run it against a core on a copy of a big log, started like this:
 //
@@ -25,9 +28,14 @@
 import net from "node:net";
 
 const sock = process.argv[2];
-const only = process.argv[3] ?? null;
+/** Phases by name, for `journal` and `search`. */
+const NAMED = { journal: ["P0", "PJ"], search: ["P0", "P6"] };
+const onlyAt = process.argv.indexOf("--only");
+const named = process.argv[3] && !process.argv[3].startsWith("--") ? process.argv[3] : null;
+const picked = onlyAt > 0 ? process.argv[onlyAt + 1].split(",") : named ? [named] : null;
+const only = picked ? new Set(picked.flatMap((n) => NAMED[n] ?? [n])) : null;
 if (!sock) {
-  console.error("usage: node scripts/perf/stress-core.mjs <core.sock>");
+  console.error("usage: node scripts/perf/stress-core.mjs <core.sock> [journal|search] [--only P0,P6]");
   process.exit(2);
 }
 const t0 = Date.now();
@@ -117,6 +125,7 @@ const until = async (fn, ms, every = 250) => {
 
 /** Runs a phase and prints its latency percentiles and the stalls the core kept from it (core.info.stalls holds the last 20). */
 const phase = async (name, run) => {
+  if (only && !only.has(name.split(" ")[0])) return;
   lat = [];
   const start = Date.now();
   const evBefore = ui.events.length;
@@ -141,12 +150,7 @@ const journalSyncs = () =>
       await sleep(2000);
     }
   });
-if (only === "journal") {
-  await journalSyncs();
-  pinging = false;
-  for (const c of [ui, pinger, loader]) c.close();
-  process.exit(0);
-}
+if (only?.has("PJ")) await journalSyncs(); // never in a full run
 await phase("P1 first transcript pass", async () => {
   await sleep(1000);
   const done = await until(async () => {
@@ -185,6 +189,27 @@ await phase("P4 query floods", async () => {
   for (const s of subs) await loader.call("data.unsubscribe", { id: s.id }).catch(() => {});
 });
 await phase("P5 idle", () => sleep(20_000));
+await phase("P6 palette search", async () => {
+  // What the palette's ? mode asks per keystroke (App.tsx): sessions and history, everywhere and in one workspace.
+  const ws = (await loader.call("data.query", { query: { types: ["command"], order: "desc", limit: 50 } }).catch(() => [])).find((e) => e.workspaceId)?.workspaceId ?? null;
+  const took = { query: [], history: [], "history in a workspace": [] };
+  const timed = async (k, p) => {
+    const t = performance.now();
+    await p.catch((err) => console.log(`   ${k}: ${err.message}`));
+    took[k].push(performance.now() - t);
+  };
+  for (let round = 0; round < 5; round++) {
+    for (const text of ["t", "th", "the"]) {
+      await Promise.all([
+        timed("query", loader.call("search.query", { text, limit: 8 })),
+        timed("history", loader.call("search.history", { text, workspaceId: null, limit: 5 })),
+        ...(ws ? [timed("history in a workspace", loader.call("search.history", { text, workspaceId: ws, limit: 5 }))] : []),
+      ]);
+      await sleep(120);
+    }
+  }
+  for (const [k, a] of Object.entries(took)) if (a.length) console.log(`   ${k}: p50 ${pct(a, 0.5).toFixed(0)}ms  max ${pct(a, 1).toFixed(0)}ms`);
+});
 
 pinging = false;
 ui.close();

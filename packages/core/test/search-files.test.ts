@@ -81,7 +81,7 @@ describe("history search", () => {
   const command = (d: DataService, id: string, at: number, cmdline: string, output: string, exitCode = 0) =>
     d.record({ id: `command:${id}`, at, type: "command", source: "osc", paneId: "p1", workspaceId: "s1", text: cmdline, body: commandBody(cmdline, output), data: { command: cmdline, exitCode, cwd: "/tmp/proj", output: { chars: output.length, cut: false } }, content: output });
 
-  it("finds commands by what they printed, one row per command line, and pages and files", () => {
+  it("finds commands by what they printed, one row per command line, and pages and files", async () => {
     const d = data();
     const now = Date.now();
     command(d, "1", now - 5000, "pnpm test", "FAIL packages/core/test/flaky.test.ts", 1);
@@ -90,12 +90,12 @@ describe("history search", () => {
     d.record({ id: "visit:1", at: now - 2000, type: "browser.visit", source: "window", workspaceId: "s1", text: "Flaky tests in Vitest", body: "Flaky tests in Vitest", data: { url: "https://vitest.dev/flaky", title: "Flaky tests in Vitest" } });
     d.record({ id: "file:1", at: now - 2000, type: "file.open", source: "window", workspaceId: "s1", text: "/tmp/proj/flaky.md", data: { path: "/tmp/proj/flaky.md", windowKind: "text" } });
     const view = new SearchView(d, new SessionsView(new ViewsStore(null), d));
-    const hits = view.history("flaky", {}, now);
+    const hits = await view.history("flaky", {}, now);
     const cmd = hits.find((h) => h.kind === "command");
     expect(cmd).toMatchObject({ command: "pnpm test", runs: 2, exitCode: 1, cwd: "/tmp/proj" });
     expect(cmd!.kind === "command" && cmd!.snippet).toContain("\x01flaky\x02");
     expect(hits.map((h) => h.kind).sort()).toEqual(["command", "file", "page"]);
-    expect(view.history("flaky", { workspaceId: "elsewhere" }, now)).toEqual([]);
+    expect(await view.history("flaky", { workspaceId: "elsewhere" }, now)).toEqual([]);
   });
 
   it("makes older commands' output searchable once", async () => {
@@ -103,9 +103,9 @@ describe("history search", () => {
     // As recorded before output was indexed: the line only.
     d.record({ id: "command:old", at: Date.now(), type: "command", source: "osc", text: "make", body: "make", data: { command: "make", exitCode: 2, cwd: "/tmp" }, content: "error: undefined symbol _frobnicate" });
     const view = new SearchView(d, new SessionsView(new ViewsStore(null), d));
-    expect(view.history("frobnicate")).toEqual([]);
+    expect(await view.history("frobnicate")).toEqual([]);
     expect(await indexCommandOutput(d, inlinePacer)).toBe(1);
-    expect(view.history("frobnicate").map((h) => h.kind)).toEqual(["command"]);
+    expect((await view.history("frobnicate")).map((h) => h.kind)).toEqual(["command"]);
     expect(await indexCommandOutput(d, inlinePacer)).toBe(0);
   });
 });

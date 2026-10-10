@@ -161,7 +161,7 @@ export class DataService extends EventEmitter<{ recorded: [DataEvent]; batch: [D
   textMatches(seq: number, expression: string): boolean {
     try {
       // Not `rowid = ? AND MATCH`: on a contentless table FTS5 takes the rowid lookup and can't check the match, so it says yes to everything.
-      return !!this.store.db.prepare(`SELECT 1 WHERE ? IN (SELECT rowid FROM events_fts WHERE events_fts MATCH ?)`).get(seq, expression);
+      return !!this.store.db.prepare(`SELECT 1 WHERE ? IN (SELECT rowid FROM events_fts WHERE events_fts MATCH ?)`).get(seq, this.store.textExpression(expression));
     } catch {
       return false;
     }

@@ -312,7 +312,7 @@ export class Core {
     this.sessions.onChange((rows) => this.#viewChanged("sessions", rows));
     this.sessions.onReset(() => this.#viewReset((q) => q.view === "sessions"));
     activity.onTurn((t, cwd) => this.#viewChanged("turns", [{ ...t, cwd }]));
-    this.#searchView = new SearchView(this.data, this.sessions);
+    this.#searchView = new SearchView(this.data, this.sessions, { viewsFile: this.views.file });
     this.#fileSearch = new FileSearch({ excluded: () => this.data.rules().folders });
     this.agents = new AgentTracker(this.panes, {
       store: this.store,
@@ -572,6 +572,14 @@ export class Core {
         this.workspaces.check();
         this.#workspacesTimer = setInterval(() => this.workspaces.check(), 30_000);
         this.#workspacesTimer.unref();
+      });
+    // A full-text index older than fts.ts's format: built again beside it in paced steps, the old one serving searches meanwhile. Last, as it takes minutes on a big log.
+    if (o.stateDir && this.data.store.needsFtsRebuild)
+      s.startup("fts", "Indexing for search", async () => {
+        const t0 = Date.now();
+        const n = await this.data.store.buildFts({ pace: s });
+        log.info("full-text index rebuilt", { events: n, ms: Date.now() - t0 });
+        this.#searchView.invalidate();
       });
     s.ready();
   }
@@ -1569,6 +1577,7 @@ export class Core {
     this.journal.dispose();
     // The transcript reader first: its worker's last batches must not land on closed stores.
     this.#closed = true;
+    this.#searchView.close();
     this.#paneOutput.dispose();
     if (this.#dataFlush) clearTimeout(this.#dataFlush);
     if (this.#viewFlush) clearTimeout(this.#viewFlush);

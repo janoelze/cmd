@@ -102,11 +102,11 @@ describe("DataStore", () => {
     s.close();
   });
 
-  it("rebuilds the full-text index from the rows", () => {
+  it("rebuilds the full-text index from the rows", async () => {
     const s = new DataStore(tmp());
     s.record({ id: "1", at: 10, type: "note", source: "cmd", text: "remember the sqlite pragma", data: {} });
     s.db.exec("DROP TABLE events_fts");
-    s.buildFts();
+    await s.buildFts();
     expect(s.query({ text: "pragma" }).length).toBe(1);
     s.close();
   });

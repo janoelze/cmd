@@ -10,7 +10,9 @@ import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { DataEvent, DataEventType, DataQuery, DataStats, NewDataEvent } from "@cmd/protocol";
 import { DATA_FLAGS, EVENT_V } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import { EVENTS_SCHEMA, FTS_SQL, INDEX_SQL, SCHEMA_SQL } from "./schema.ts";
+import type { Pacer } from "../scheduler.ts";
+import { bodyOf as ftsBodyOf, FTS_VERSION, ftsKind, ftsSql, VOCAB_SQL, wordsOnly } from "./fts.ts";
+import { EVENTS_SCHEMA, INDEX_SQL, SCHEMA_SQL } from "./schema.ts";
 
 const log = logger("data");
 
@@ -77,6 +79,10 @@ export class DataStore {
   readonly file: string;
   #o: Required<StoreOptions>;
   #stmts = new Map<string, StatementSync>();
+  /** events_fts has the kind column (FTS_VERSION); false: an older index, serving until buildFts() replaces it. */
+  #ftsKind = false;
+  /** While buildFts() fills events_fts_next: the last seq it filled (writes up to there go into both). */
+  #ftsCursor: number | null = null;
 
   constructor(file: string, o: StoreOptions = {}) {
     this.file = file;
@@ -84,7 +90,7 @@ export class DataStore {
     this.db = new DatabaseSync(file, { timeout: 5000 });
     this.db.exec(SCHEMA_SQL);
     this.#renameSpaces();
-    this.db.exec(FTS_SQL);
+    this.#openFts();
     if (!this.#o.deferIndexes) this.ensureIndexes();
     if (!this.meta("schema")) {
       this.setMeta("schema", String(EVENTS_SCHEMA));
@@ -112,6 +118,29 @@ export class DataStore {
       this.db.exec("ROLLBACK");
       throw err;
     }
+  }
+
+  /** A new log gets the current full-text index; an older one keeps its own until buildFts(), and a build cut short goes on from its cursor. */
+  #openFts(): void {
+    const has = (t: string) => !!this.db.prepare(`SELECT 1 FROM sqlite_master WHERE name = ?`).get(t);
+    if (!has("events_fts")) {
+      this.db.exec(ftsSql("events_fts"));
+      this.setMeta("fts.version", String(FTS_VERSION));
+    }
+    this.db.exec(VOCAB_SQL);
+    this.#ftsKind = this.meta("fts.version") === String(FTS_VERSION);
+    const cursor = this.meta("fts.cursor");
+    this.#ftsCursor = !this.#ftsKind && cursor !== null && has("events_fts_next") ? Number(cursor) : null;
+  }
+
+  /** Whether the full-text index is older than FTS_VERSION (Core.start rebuilds it). */
+  get needsFtsRebuild(): boolean {
+    return !this.#ftsKind;
+  }
+
+  /** A full-text expression as this log's index takes it: over the words only, not the kind. */
+  textExpression(expression: string): string {
+    return this.#ftsKind ? wordsOnly(expression) : expression;
   }
 
   /** The log's indexes; a new one is built here (one statement each, seconds on a big log). Queries work without them, slower. */
@@ -203,8 +232,8 @@ export class DataStore {
     if (before?.blob && blob) this.#unref(before.blob);
     // The index follows text and content; the same words stay indexed as they are.
     if (!sameText) {
-      if (before) this.#stmt(`DELETE FROM events_fts WHERE rowid = ?`).run(before.seq);
-      if (e.text || e.body) this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`).run(r.seq, e.text ?? "", (e.body ?? "").slice(0, this.#o.bodyCap));
+      if (before) this.#ftsDelete(before.seq);
+      if (e.text || e.body) this.#ftsInsert(r.seq, e.text ?? null, e.body ?? null, ftsKind(e.type, e.sessionId ?? before?.session_id));
     }
     return { seq: r.seq, inserted: !before };
   }
@@ -238,6 +267,7 @@ export class DataStore {
     return this.transaction(() => {
       for (const r of this.db.prepare(`SELECT blob FROM events ${w} AND blob IS NOT NULL`).all(...all) as { blob: string }[]) this.#unref(r.blob);
       this.db.prepare(`DELETE FROM events_fts WHERE rowid IN (SELECT seq FROM events ${w})`).run(...all);
+      if (this.#ftsCursor !== null) this.db.prepare(`DELETE FROM events_fts_next WHERE rowid IN (SELECT seq FROM events ${w} AND seq <= ?)`).run(...all, this.#ftsCursor);
       return Number(this.db.prepare(`DELETE FROM events ${w}`).run(...all).changes);
     });
   }
@@ -268,10 +298,7 @@ export class DataStore {
   }
 
   blob(hash: string): Buffer | null {
-    const r = this.#stmt(`SELECT enc, bytes FROM blobs WHERE hash = ?`).get(hash) as { enc: string; bytes: Uint8Array } | undefined;
-    if (!r) return null;
-    const b = Buffer.from(r.bytes);
-    return r.enc === "zstd" ? zlib.zstdDecompressSync(b) : r.enc === "deflate" ? zlib.inflateSync(b) : b;
+    return blobFrom(this.#stmt(`SELECT enc, bytes FROM blobs WHERE hash = ?`).get(hash) as BlobRow | undefined);
   }
 
   #unref(hash: string): void {
@@ -315,48 +342,100 @@ export class DataStore {
     return rows.map((r) => ({ from: [r.from_kind, r.from_id], to: [r.to_kind, r.to_id], kind: r.kind, at: r.at, until: r.until }));
   }
 
-  /** Builds the full-text index over what's recorded (after an import, or when it was dropped). */
-  buildFts(bodyOf?: (e: DataEvent) => string | null): void {
-    this.db.exec(`DROP TABLE IF EXISTS events_vocab; DROP TABLE IF EXISTS events_fts`);
-    this.db.exec(FTS_SQL);
-    const ins = this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`);
-    this.transaction(() => {
-      for (const row of this.db.prepare(`SELECT *, json(data) AS data_json FROM events ORDER BY seq`).iterate() as Iterable<Row>) {
-        const e = toEvent(row);
-        const body = bodyOf?.(e) ?? null;
-        if (e.text || body) ins.run(e.seq, e.text ?? "", (body ?? "").slice(0, this.#o.bodyCap));
-      }
-    });
-    this.db.exec(`INSERT INTO events_fts(events_fts) VALUES ('optimize')`);
+  /** An event's words into the index (and into the one a build is filling, once it passed them). */
+  #ftsInsert(seq: number, text: string | null, body: string | null, kind: string): void {
+    const t = text ?? "";
+    const b = (body ?? "").slice(0, this.#o.bodyCap);
+    if (this.#ftsKind) this.#stmt(`INSERT INTO events_fts (rowid, text, body, kind) VALUES (?, ?, ?, ?)`).run(seq, t, b, kind);
+    else this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`).run(seq, t, b);
+    if (this.#ftsCursor !== null && seq <= this.#ftsCursor) this.#stmt(`INSERT INTO events_fts_next (rowid, text, body, kind) VALUES (?, ?, ?, ?)`).run(seq, t, b, kind);
   }
 
-  /** Events of these types matching an FTS5 expression, best first, with their bm25 (lower is better); `workspaceId` narrows. */
-  matches(expression: string, types: string[], o: { workspaceId?: string | null; limit?: number } = {}): { e: DataEvent; bm: number }[] {
-    const workspace = o.workspaceId ? ` AND e.workspace_id = ?` : "";
-    const rows = this.db
-      .prepare(
-        `SELECT e.*, json(e.data) AS data_json, bm25(events_fts, 3.0, 1.0) AS bm FROM events_fts JOIN events e ON e.seq = events_fts.rowid
-         WHERE events_fts MATCH ? AND e.type IN (${types.map(() => "?").join(",")})${workspace} ORDER BY bm LIMIT ?`,
-      )
-      .all(expression, ...types, ...(o.workspaceId ? [o.workspaceId] : []), o.limit ?? 300) as unknown as (Row & { bm: number })[];
-    return rows.map((r) => ({ e: toEvent(r), bm: r.bm }));
+  #ftsDelete(seq: number): void {
+    this.#stmt(`DELETE FROM events_fts WHERE rowid = ?`).run(seq);
+    if (this.#ftsCursor !== null && seq <= this.#ftsCursor) this.#stmt(`DELETE FROM events_fts_next WHERE rowid = ?`).run(seq);
+  }
+
+  /**
+   * Builds the full-text index from the rows (after an import, when it was
+   * dropped, once when FTS_VERSION changed: Core.start's `fts` job), into
+   * events_fts_next, then puts it in events_fts's place. Steps of a few ms
+   * between `pace` yields, sized by time (a transcript's blob is parsed again
+   * for its words, docs/34 lesson 4); the old index answers searches meanwhile
+   * and what's recorded during the build goes into both. A build cut short
+   * (the core stopped) goes on from its cursor. Returns the events indexed.
+   */
+  async buildFts(o: { pace?: Pick<Pacer, "yield">; bodyOf?: (e: DataEvent) => string | null } = {}): Promise<number> {
+    const bodyOf = o.bodyOf ?? ((e: DataEvent) => ftsBodyOf(e, (h) => this.blob(h)));
+    const pace = o.pace?.yield ?? (() => Promise.resolve());
+    if (this.#ftsCursor === null) {
+      this.db.exec(`DROP TABLE IF EXISTS events_fts_next; ${ftsSql("events_fts_next")}`);
+      this.setMeta("fts.cursor", "0");
+      this.#ftsCursor = 0;
+    }
+    const page = this.db.prepare(`SELECT *, json(data) AS data_json FROM events WHERE seq > ? ORDER BY seq LIMIT ?`);
+    const ins = this.db.prepare(`INSERT INTO events_fts_next (rowid, text, body, kind) VALUES (?, ?, ?, ?)`);
+    let n = 0;
+    let size = 200;
+    for (;;) {
+      const t0 = performance.now();
+      const rows = page.all(this.#ftsCursor, size) as unknown as Row[];
+      if (!rows.length) break;
+      const last = rows[rows.length - 1]!.seq;
+      this.transaction(() => {
+        for (const row of rows) {
+          const e = toEvent(row);
+          const body = bodyOf(e);
+          if (e.text || body) ins.run(e.seq, e.text ?? "", (body ?? "").slice(0, this.#o.bodyCap), ftsKind(e.type, e.sessionId));
+        }
+        this.setMeta("fts.cursor", String(last));
+      });
+      this.#ftsCursor = last;
+      n += rows.length;
+      // Steps of about 8 ms: blobs parsed again make an event cost anything from µs to ms.
+      const ms = performance.now() - t0;
+      size = ms > 12 ? Math.max(10, size >> 1) : ms < 4 ? Math.min(5000, size * 2) : size;
+      await pace();
+    }
+    // Its segments merged a few hundred pages at a time ('optimize' is one statement over the whole index).
+    for (let first = true; ; first = false) {
+      const before = this.#totalChanges();
+      this.db.exec(`INSERT INTO events_fts_next(events_fts_next, rank) VALUES ('merge', ${first ? -400 : 400})`);
+      if (this.#totalChanges() - before < 2) break;
+      await pace();
+    }
+    // Caught up (rows recorded during the build were read by its last steps): in events_fts's place.
+    this.transaction(() => {
+      this.db.exec(`DROP TABLE IF EXISTS events_vocab; DROP TABLE IF EXISTS events_fts; ALTER TABLE events_fts_next RENAME TO events_fts; ${VOCAB_SQL}`);
+      this.setMeta("fts.version", String(FTS_VERSION));
+      this.db.prepare(`DELETE FROM meta WHERE key = 'fts.cursor'`).run();
+    });
+    this.#ftsKind = true;
+    this.#ftsCursor = null;
+    this.#stmts.clear(); // compiled against the tables before
+    return n;
+  }
+
+  #totalChanges(): number {
+    return (this.db.prepare(`SELECT total_changes() AS n`).get() as { n: number }).n;
   }
 
   /** An event's words in the full-text index again (what it's found by changed: a command's output). */
   reindex(seq: number, text: string | null, body: string | null): void {
-    this.#stmt(`DELETE FROM events_fts WHERE rowid = ?`).run(seq);
-    if (text || body) this.#stmt(`INSERT INTO events_fts (rowid, text, body) VALUES (?, ?, ?)`).run(seq, text ?? "", (body ?? "").slice(0, this.#o.bodyCap));
+    const row = this.#stmt(`SELECT type, session_id FROM events WHERE seq = ?`).get(seq) as { type: string; session_id: string | null } | undefined;
+    this.#ftsDelete(seq);
+    if (row && (text || body)) this.#ftsInsert(seq, text, body, ftsKind(row.type, row.session_id));
   }
 
   query(q: DataQuery): DataEvent[] {
-    const [cond, args] = conditions(q);
+    const [cond, args] = conditions(q, (t) => this.textExpression(t));
     const dir = q.order === "desc" ? "DESC" : "ASC";
     const sql = `SELECT *, json(data) AS data_json FROM events ${cond ? `WHERE ${cond}` : ""} ORDER BY ${q.by === "time" ? `at ${dir}, seq ${dir}` : `seq ${dir}`} LIMIT ?`;
     return (this.db.prepare(sql).all(...args, Math.min(q.limit ?? 1000, 100_000)) as unknown as Row[]).map(toEvent);
   }
 
   count(q: DataQuery): number {
-    const [cond, args] = conditions(q);
+    const [cond, args] = conditions(q, (t) => this.textExpression(t));
     return (this.db.prepare(`SELECT COUNT(*) AS n FROM events ${cond ? `WHERE ${cond}` : ""}`).get(...args) as { n: number }).n;
   }
 
@@ -383,6 +462,18 @@ export class DataStore {
   }
 }
 
+interface BlobRow {
+  enc: string;
+  bytes: Uint8Array;
+}
+
+/** A blob row's bytes as stored, uncompressed (also for readers on their own connection: search-worker.ts). */
+export function blobFrom(r: BlobRow | undefined): Buffer | null {
+  if (!r) return null;
+  const b = Buffer.from(r.bytes);
+  return r.enc === "zstd" ? zlib.zstdDecompressSync(b) : r.enc === "deflate" ? zlib.inflateSync(b) : b;
+}
+
 /** What a log holds, with sizes per type: reads every row (seconds on a big log; the core asks a worker, stats-worker.ts). */
 export function logStats(db: DatabaseSync, file: string): DataStats {
   const types = db.prepare(`SELECT type, COUNT(*) AS rows, SUM(length(data) + COALESCE(length(text), 0) + length(id) + 80) AS bytes, SUM(CASE WHEN blob IS NOT NULL THEN 1 ELSE 0 END) AS blobs FROM events GROUP BY type ORDER BY bytes DESC`).all() as DataStats["types"];
@@ -402,7 +493,7 @@ export function logStats(db: DatabaseSync, file: string): DataStats {
 const COL = { sessionId: "session_id", agentId: "agent_id", projectId: "project_id", workspaceId: "workspace_id", paneId: "pane_id", windowId: "window_id", parentId: "parent_id" } as const;
 
 /** WHERE clause and arguments for a query (without ORDER and LIMIT). */
-function conditions(q: DataQuery): [string, (string | number)[]] {
+function conditions(q: DataQuery, text: (expression: string) => string = (t) => t): [string, (string | number)[]] {
   const where: string[] = [];
   const args: (string | number)[] = [];
   if (q.types?.length) {
@@ -423,11 +514,11 @@ function conditions(q: DataQuery): [string, (string | number)[]] {
     if (v) where.push(`${COL[k]} = ?`), args.push(v);
   }
   if (q.after) where.push(`seq > ?`), args.push(q.after);
-  if (q.text) where.push(`seq IN (SELECT rowid FROM events_fts WHERE events_fts MATCH ?)`), args.push(q.text);
+  if (q.text) where.push(`seq IN (SELECT rowid FROM events_fts WHERE events_fts MATCH ?)`), args.push(text(q.text));
   return [where.join(" AND "), args];
 }
 
-interface Row {
+export interface Row {
   seq: number;
   id: string;
   at: number;
@@ -451,7 +542,7 @@ interface Row {
   flags: number;
 }
 
-function toEvent(r: Row): DataEvent {
+export function toEvent(r: Row): DataEvent {
   // JSONB is bytes in the row; every read asks for json(data) beside it.
   let data: unknown = null;
   try {

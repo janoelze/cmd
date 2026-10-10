@@ -1,305 +1,152 @@
-// Session search over the event log (docs/28 §4, C3): the palette's ?query and
-// the Navigator's search. Matches transcript events in the log's full-text
-// index (text and body: prompts, answers, tool inputs, titles), ranks their
-// sessions (best match; titles weigh more, tools' calls and output less, so a
-// session isn't found for a word a command printed; recent sessions a little more),
-// tolerates typos through the index's vocabulary, and answers with one hit
-// per session from the sessions view. Replaces search.sqlite's Searcher.
+// Session search over the event log (docs/28 §4, C3; docs/33): the palette's
+// ?query, its history and the Navigator's search. The searching is
+// search-worker.ts's, on a long-lived worker with its own read-only
+// connections, so a common word never blocks the core's thread (AR1-06-06);
+// this side forwards requests and answers. A worker that dies or times out fails
+// what it was asked (an error, never a wait) and is started again on the next
+// request after a short pause. A log in memory (tests) is searched in-process.
 
 import { Worker } from "node:worker_threads";
-import type { DataEvent, HistoryHit, SearchHit } from "@cmd/protocol";
+import type { HistoryHit, SearchHit } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import { SearchQuery, stem, Vocabulary, words } from "../../search/query.ts";
-import { textOf } from "../sources/transcripts.ts";
 import type { DataService } from "../service.ts";
-import type { SessionRow, SessionsView } from "./sessions.ts";
+import { SearchEngine, type SearchReply, type SearchRequest, type SearchWorkerData } from "./search-worker.ts";
+import type { SessionsView } from "./sessions.ts";
 
-/**
- * How long a vocabulary is used after the log grew: reading it blocks for a few
- * hundred ms on a big log, and transcripts grow every pass while agents work.
- * Only typo tolerance reads it; words as typed match the index directly.
- */
-const VOCAB_MAX_AGE_MS = 5 * 60_000;
-
-/** A vocabulary this small is read again as soon as the log grows: it costs a few ms (a fresh install, whose first pass comes after the startup read). */
-const VOCAB_EAGER_TERMS = 20_000;
+export { snippetOf, weightOf } from "./search-worker.ts";
 
 const log = logger("search");
 
-const oneLine = (t: string) => (t.split(/\r?\n/)[0] ?? t).trim().slice(0, 200);
+/** A request unanswered this long fails, and the worker is replaced. */
+const TIMEOUT_MS = 20_000;
+/** After the worker died, requests fail this long before a new one starts. */
+const RESTART_MS = 1000;
 
-interface Candidate {
-  key: string;
-  seq: number;
-  score: number;
+export interface SearchViewOptions {
+  /** A vocabulary up to this many terms is read again as soon as the log grows (search-worker.ts). */
+  eagerTerms?: number;
+  /** The views file the worker reads sessions from (views.sqlite); without it, a log on disk is searched in-process. */
+  viewsFile?: string | null;
+  timeoutMs?: number;
+  restartMs?: number;
 }
+
+type Request = Omit<Extract<SearchRequest, { op: "search" }>, "id"> | Omit<Extract<SearchRequest, { op: "history" }>, "id">;
 
 export class SearchView {
-  #data: DataService;
-  #sessions: SessionsView;
-  #vocab: Vocabulary | null = null;
-  #vocabAt = 0;
-  #vocabStale = false;
-  #vocabLoading = false;
-  #vocabTerms = 0;
-  #eagerTerms: number;
+  #engine: SearchEngine | null = null;
+  #files: SearchWorkerData["search"] | null = null;
+  #worker: Worker | null = null;
+  #pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  #id = 0;
+  #retryAt = 0;
+  #timeoutMs: number;
+  #restartMs: number;
+  #closed = false;
 
-  constructor(data: DataService, sessions: SessionsView, opts: { eagerTerms?: number } = {}) {
-    this.#data = data;
-    this.#sessions = sessions;
-    this.#eagerTerms = opts.eagerTerms ?? VOCAB_EAGER_TERMS;
+  constructor(data: DataService, sessions: SessionsView, opts: SearchViewOptions = {}) {
+    this.#timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
+    this.#restartMs = opts.restartMs ?? RESTART_MS;
+    const file = data.store.file;
+    if (file !== ":memory:" && opts.viewsFile) this.#files = { events: file, views: opts.viewsFile, eagerTerms: opts.eagerTerms };
+    else this.#engine = new SearchEngine(data.store.db, (key) => sessions.get(key), { eagerTerms: opts.eagerTerms });
   }
 
-  /** Call after the log grew so typo tolerance sees new words (within VOCAB_MAX_AGE_MS; at once while the vocabulary is small). */
+  /** Sessions matching `text`, best first, one hit each. */
+  search(text: string, limit = 60, now = Date.now()): Promise<SearchHit[]> {
+    if (this.#engine) return attempt(() => this.#engine!.search(text, limit, now));
+    return this.#ask({ op: "search", text, limit, now }) as Promise<SearchHit[]>;
+  }
+
+  /** Commands, pages and files matching `text`, `limit` per kind (search-worker.ts). */
+  history(text: string, o: { workspaceId?: string | null; limit?: number } = {}, now = Date.now()): Promise<HistoryHit[]> {
+    if (this.#engine) return attempt(() => this.#engine!.history(text, o, now));
+    return this.#ask({ op: "history", text, workspaceId: o.workspaceId ?? null, limit: o.limit, now }) as Promise<HistoryHit[]>;
+  }
+
+  /** Call after the log grew so typo tolerance sees new words (within a few minutes; at once while the vocabulary is small). */
   invalidate(): void {
-    this.#vocabStale = true;
-    if (this.#vocabTerms <= this.#eagerTerms) this.#vocabulary();
+    if (this.#engine) this.#engine.invalidate();
+    else this.#worker?.postMessage({ op: "invalidate" } satisfies SearchRequest); // a worker started later reads it fresh
   }
 
-  /** Starts the first read, so the first search has typo tolerance (Core.start). */
+  /** Starts the worker and its first vocabulary read, so the first search has typo tolerance (Core.start). */
   warm(): void {
-    this.#vocabulary();
+    if (this.#engine) this.#engine.warm();
+    else this.#spawn()?.postMessage({ op: "warm" } satisfies SearchRequest);
   }
 
-  /**
-   * The vocabulary as it is; null until the first read is done. A log on disk is
-   * read on a worker (vocab-worker.ts: hundreds of ms on a big log, which would
-   * block the core), the old vocabulary serving meanwhile; a log in memory
-   * (tests) is read here.
-   */
-  #vocabulary(): Vocabulary | null {
-    const due = !this.#vocab || (this.#vocabStale && (this.#vocabTerms <= this.#eagerTerms || Date.now() - this.#vocabAt >= VOCAB_MAX_AGE_MS));
-    if (due && !this.#vocabLoading) {
-      this.#vocabStale = false; // growth from here on, during the read too, makes it stale again
-      const file = this.#data.store.file;
-      if (file === ":memory:") this.#loaded(this.#data.store.db.prepare(`SELECT term, doc FROM events_vocab`).all() as { term: string; doc: number }[]);
-      else {
-        this.#vocabLoading = true;
-        const w = new Worker(new URL("./vocab-worker.ts", import.meta.url), { workerData: { file } });
-        w.unref();
-        w.once("message", (m: { terms: string[]; docs: number[] }) => {
-          this.#vocabLoading = false;
-          this.#loaded(m.terms.map((term, i) => ({ term, doc: m.docs[i]! })));
-        });
-        w.once("error", (err) => {
-          this.#vocabLoading = false;
-          log.warn(`could not read the search vocabulary: ${err.message}`);
-        });
-      }
-    }
-    return this.#vocab;
+  /** The worker, while one runs (tests). */
+  get worker(): Worker | null {
+    return this.#worker;
   }
 
-  #loaded(rows: { term: string; doc: number }[]): void {
-    this.#vocab = new Vocabulary(rows);
-    this.#vocabTerms = rows.length;
-    this.#vocabAt = Date.now();
-    log.debug("vocabulary read", { terms: rows.length });
+  close(): void {
+    this.#closed = true;
+    const w = this.#worker;
+    this.#lost(w, "Search is closed");
+    void w?.terminate();
   }
 
-  search(text: string, limit = 60, now = Date.now()): SearchHit[] {
-    const q = new SearchQuery(text);
-    if (q.isEmpty) return [];
-    const vocab = this.#vocabulary();
-    const expansions = q.terms.map((t) => vocab?.expansions(t) ?? []); // typo tolerance waits for the first read
-
-    // Tier 1: every term as typed (prefix). Tier 2: typo-tolerant, only if tier 1 came up short.
-    let ranked = this.#match(q.expression(), now);
-    let fuzzy = new Set<string>();
-    if (ranked.length < 40 && expansions.some((e) => e.length)) {
-      const seen = new Set(ranked.map((c) => c.key));
-      const more = this.#match(q.expression(expansions), now).filter((c) => !seen.has(c.key));
-      fuzzy = new Set(more.map((c) => c.key));
-      ranked = [...ranked, ...more];
-    }
-    // The index is contentless (the words are in the events and their blobs), so the passage is cut here.
-    const terms = [...q.terms, ...q.terms.map(stem), ...expansions.flat(), ...q.phrases.flatMap((p) => p.split(" "))];
-    const out: SearchHit[] = [];
-    for (const c of ranked) {
-      const row = this.#sessions.get(c.key);
-      if (!row) continue;
-      const e = this.#data.store.query({ sessionId: c.key, after: c.seq - 1, limit: 1 })[0];
-      out.push({ ...toHit(row), snippet: e ? snippetOf(fullText(this.#data, e), terms) : null, fuzzy: fuzzy.has(c.key) });
-      if (out.length === limit) break;
-    }
-    return out;
+  #ask(req: Request): Promise<unknown> {
+    const w = this.#spawn();
+    if (!w) return Promise.reject(new Error(this.#closed ? "Search is closed" : "Search is restarting. Try again in a moment."));
+    const id = ++this.#id;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        // Stuck on something (a lock, a runaway query): this request fails, and so does the worker.
+        this.#pending.delete(id);
+        reject(new Error("Search took too long"));
+        log.warn(`a ${req.op} took over ${this.#timeoutMs} ms; restarting the search worker`);
+        this.#lost(w, "Search took too long");
+        void w.terminate();
+      }, this.#timeoutMs);
+      this.#pending.set(id, { resolve, reject, timer });
+      w.postMessage({ ...req, id } as SearchRequest);
+    });
   }
 
-  /**
-   * What happened, by full text (the palette's search): commands (one row per
-   * command line and folder, with how often it ran), pages (per address) and files
-   * opened in cmd (per path). Best match first within each kind, recent ones a
-   * little more; `limit` per kind.
-   */
-  history(text: string, o: { workspaceId?: string | null; limit?: number } = {}, now = Date.now()): HistoryHit[] {
-    const q = new SearchQuery(text);
-    if (q.isEmpty) return [];
-    let rows: { e: DataEvent; bm: number }[];
-    try {
-      rows = this.#data.store.matches(q.expression(), ["command", "browser.visit", "file.open"], { workspaceId: o.workspaceId, limit: 400 });
-    } catch {
-      return []; // malformed expression
-    }
-    const terms = [...q.terms, ...q.terms.map(stem), ...q.phrases.flatMap((p) => p.split(" "))];
-    const limit = o.limit ?? 5;
-    const groups = new Map<string, { hit: HistoryHit; score: number; e: DataEvent }>();
-    for (const { e, bm } of rows) {
-      const d = (e.data ?? {}) as Record<string, unknown>;
-      const ageDays = Math.max(0, now - e.at) / 86_400_000;
-      const score = -bm * (1 + 0.6 * Math.exp(-ageDays / 21));
-      let key: string;
-      let hit: HistoryHit;
-      if (e.type === "command") {
-        const command = typeof d.command === "string" ? d.command : (e.text ?? "");
-        if (!command.trim()) continue;
-        const cwd = typeof d.cwd === "string" ? d.cwd : null;
-        key = `c\0${command}\0${cwd}`;
-        hit = { kind: "command", command: command.split("\n")[0]!.slice(0, 300), cwd, exitCode: typeof d.exitCode === "number" ? d.exitCode : null, at: e.at, paneId: e.paneId, runs: 1, snippet: null };
-      } else if (e.type === "browser.visit") {
-        const url = typeof d.url === "string" ? d.url : null;
-        if (!url) continue;
-        key = `p\0${url}`;
-        hit = { kind: "page", url, title: typeof d.title === "string" ? d.title : null, at: e.at };
-      } else {
-        const p = typeof d.path === "string" ? d.path : null;
-        if (!p) continue;
-        key = `f\0${p}`;
-        hit = { kind: "file", path: p, at: e.at };
-      }
-      const g = groups.get(key);
-      if (!g) groups.set(key, { hit, score, e });
-      else {
-        if (g.hit.kind === "command") g.hit.runs++;
-        // The best match ranks the row; the newest run is the one it shows.
-        if (score > g.score) g.score = score;
-        if (e.at > g.hit.at) (g.e = e), (g.hit = g.hit.kind === "command" && hit.kind === "command" ? { ...hit, runs: g.hit.runs } : hit);
-      }
-    }
-    const out: HistoryHit[] = [];
-    const per = new Map<string, number>();
-    for (const g of [...groups.values()].sort((a, b) => b.score - a.score)) {
-      const n = per.get(g.hit.kind) ?? 0;
-      if (n >= limit) continue;
-      per.set(g.hit.kind, n + 1);
-      // A command's snippet: where its output has the words, if the line doesn't.
-      if (g.hit.kind === "command" && g.e.blob && !terms.some((t) => g.hit.kind === "command" && g.hit.command.toLowerCase().includes(t))) {
-        const output = this.#data.store.blob(g.e.blob)?.toString("utf8");
-        if (output) g.hit.snippet = snippetOf(output, terms);
-      }
-      out.push(g.hit);
-    }
-    return out;
+  /** The running worker, or a new one; null while it may not start yet (it just died) or after close. */
+  #spawn(): Worker | null {
+    if (this.#worker) return this.#worker;
+    if (!this.#files || this.#closed || Date.now() < this.#retryAt) return null;
+    const w = new Worker(new URL("./search-worker.ts", import.meta.url), { workerData: { search: this.#files } satisfies SearchWorkerData });
+    w.unref();
+    w.on("message", (m: SearchReply) => {
+      const p = this.#pending.get(m.id);
+      if (!p) return;
+      this.#pending.delete(m.id);
+      clearTimeout(p.timer);
+      if ("error" in m) p.reject(new Error(m.error));
+      else p.resolve(m.result);
+    });
+    w.on("error", (err) => {
+      log.warn(`the search worker failed: ${err.message}`);
+      this.#lost(w, "Search failed. Try again in a moment.");
+    });
+    w.on("exit", (code) => this.#lost(w, `Search stopped (${code}). Try again in a moment.`));
+    this.#worker = w;
+    return w;
   }
 
-  /** Sessions whose transcript events match, best first: one per session, the best event's seq for the snippet. */
-  #match(expression: string, now: number): Candidate[] {
-    if (!expression) return [];
-    let rows: Row[];
-    try {
-      rows = this.#data.store.db
-        .prepare(
-          `SELECT e.session_id, e.seq, e.type, bm25(events_fts, 3.0, 1.0) AS bm,
-             (SELECT count(*) FROM json_each(e.data, '$.blocks') WHERE json_extract(value, '$.type') = 'text') AS texts,
-             json_array_length(e.data, '$.blocks') AS blocks
-           FROM events_fts JOIN events e ON e.seq = events_fts.rowid
-           WHERE events_fts MATCH ? AND e.session_id IS NOT NULL AND e.type >= 'transcript.' AND e.type < 'transcript.￿'
-           ORDER BY bm LIMIT 600`,
-        )
-        .all(expression) as unknown as Row[];
-    } catch {
-      return []; // malformed expression
+  /** The worker is gone: what it was asked fails now, and the next one starts after a pause. */
+  #lost(w: Worker | null, message: string): void {
+    if (!w || this.#worker !== w) return;
+    this.#worker = null;
+    this.#retryAt = Date.now() + this.#restartMs;
+    for (const [id, p] of this.#pending) {
+      clearTimeout(p.timer);
+      p.reject(new Error(message));
+      this.#pending.delete(id);
     }
-    const by = new Map<string, Candidate & { hits: number }>();
-    for (const r of rows) {
-      const score = -r.bm * weightOf(r);
-      const c = by.get(r.session_id);
-      if (!c) by.set(r.session_id, { key: r.session_id, seq: r.seq, score, hits: 1 });
-      else {
-        c.hits++;
-        if (score > c.score) (c.score = score), (c.seq = r.seq);
-      }
-    }
-    const out: Candidate[] = [];
-    for (const c of by.values()) {
-      const row = this.#sessions.get(c.key);
-      // Recent sessions get up to 60% more weight, fading over a few weeks; more matching events a little.
-      const ageDays = row?.updated ? Math.max(0, now - row.updated) / 86_400_000 : 365;
-      const recency = 1 + 0.6 * Math.exp(-ageDays / 21);
-      out.push({ key: c.key, seq: c.seq, score: c.score * recency * (1 + Math.min(c.hits, 10) * 0.03) });
-    }
-    return out.sort((a, b) => b.score - a.score);
   }
 }
 
-interface Row {
-  session_id: string;
-  seq: number;
-  type: string;
-  bm: number;
-  /** Text blocks in a Claude message, and blocks in all (null: no blocks, another agent's line). */
-  texts: number | null;
-  blocks: number | null;
-}
-
-/**
- * How much a match in this event says the session is about the words: a title
- * most, what you and the agent wrote, then the tools' calls and what they printed
- * (a session that ran the tests isn't about every word the tests print).
- * Measured on known-item queries over real history (docs/33).
- */
-export function weightOf(r: Pick<Row, "type" | "texts" | "blocks">): number {
-  if (r.type === "transcript.title") return 2;
-  if (r.type === "transcript.tool_result" || r.type === "transcript.tool_use") return 0.3;
-  // A Claude message that is only tool calls.
-  if (r.type === "transcript.message" && r.blocks && !r.texts) return 0.3;
-  return 1;
-}
-
-/** The words of an event: its message's text when inline, else from the blob, else its line. */
-function fullText(data: DataService, e: DataEvent): string {
-  const d = e.data as Record<string, unknown>;
-  const msg = d.message as Record<string, unknown> | undefined;
-  if (msg?.content !== undefined) return textOf(msg.content) || (e.text ?? "");
-  if (e.blob) {
-    try {
-      const line = JSON.parse(data.store.blob(e.blob)!.toString("utf8")) as Record<string, unknown>;
-      const m = (line.message ?? line.payload) as Record<string, unknown> | undefined;
-      const t = textOf(m?.content ?? m?.message);
-      if (t) return t;
-    } catch {}
+/** A result on this thread as a promise (a throw rejects it). */
+function attempt<T>(fn: () => T): Promise<T> {
+  try {
+    return Promise.resolve(fn());
+  } catch (err) {
+    return Promise.reject(err as Error);
   }
-  return e.text ?? "";
-}
-
-/** A passage around the first matching word, the matches wrapped in \x01…\x02 (what the palette highlights). */
-export function snippetOf(text: string, terms: string[], span = 18): string | null {
-  const flat = text.replace(/\s+/g, " ").trim();
-  if (!flat) return null;
-  const tokens = flat.split(" ");
-  const wanted = terms.filter(Boolean);
-  const wordMatches = (w: string) => wanted.some((t) => (t.length >= 3 ? w.startsWith(t) : w === t));
-  // Any word in the token: "flaky" is in packages/test/flaky.test.ts; only that word is marked.
-  const matches = (tok: string) => words(tok).some(wordMatches);
-  const mark = (tok: string) => tok.replace(/[\p{L}\p{N}]+/gu, (w) => (wordMatches(words(w)[0] ?? "") ? `\x01${w}\x02` : w));
-  let first = tokens.findIndex(matches);
-  if (first < 0) return tokens.slice(0, span).join(" ") + (tokens.length > span ? "…" : "");
-  const start = Math.max(0, first - Math.floor(span / 3));
-  const end = Math.min(tokens.length, start + span);
-  const part = tokens.slice(start, end).map((tok) => (matches(tok) ? mark(tok) : tok));
-  return `${start > 0 ? "…" : ""}${part.join(" ")}${end < tokens.length ? "…" : ""}`;
-}
-
-function toHit(r: SessionRow): SearchHit {
-  return {
-    sessionId: r.id,
-    agent: r.agent as SearchHit["agent"],
-    path: r.path ?? "",
-    env: r.env ? (JSON.parse(r.env) as Record<string, string>) : null,
-    cwd: r.cwd,
-    branch: r.branch,
-    title: oneLine(r.title ?? r.first_prompt ?? ""),
-    updatedAt: r.updated,
-    snippet: null,
-    fuzzy: false,
-  };
 }
