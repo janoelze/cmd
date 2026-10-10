@@ -118,21 +118,29 @@ describe("scheduler", () => {
       const stalls: { ms: number; in: string }[] = [];
       s.on("stall", (st) => stalls.push(st));
       await new Promise((r) => setTimeout(r, 60));
-      const from = stalls.length;
+      // A loaded machine stalls this process on its own too (blamed on nothing marked), at any
+      // moment: so each block is checked by the first stall after it, not by the stalls' order.
+      // The watchdog's tick comes due during a block and runs right after it (before the job's
+      // next pause ends), so the first stall reported after a block is the one it caused.
+      let otherFrom = -1;
+      let lastFrom = -1;
       const done = s.mark("sessions rebuild");
       let other: Promise<void> | null = null;
       for (let i = 0; i < 4; i++) {
         // While the job pauses (it ran past its budget), an unmarked timer blocks: not the job's.
-        if (i === 1) other = new Promise((r) => setTimeout(() => (burn(STALL_MS + 80), r()), 0));
+        if (i === 1) other = new Promise((r) => setTimeout(() => ((otherFrom = stalls.length), burn(STALL_MS + 80), r()), 0));
+        if (i === 3) lastFrom = stalls.length;
         burn(i === 3 ? STALL_MS + 80 : 6); // its last step blocks: the job's
         await s.yield();
       }
       done();
       await other;
       await new Promise((r) => setTimeout(r, 120));
-      const blamed = stalls.slice(from).map((x) => x.in);
-      expect(blamed).toContain("(idle: timers, I/O callbacks)");
-      expect(blamed.at(-1)).toBe("sessions rebuild");
+      expect(stalls.length).toBeGreaterThan(lastFrom);
+      expect(lastFrom).toBeGreaterThan(otherFrom);
+      expect(stalls[otherFrom]!.in).toBe("(idle: timers, I/O callbacks)");
+      expect(stalls[lastFrom]!.in).toBe("sessions rebuild");
+      expect(stalls[lastFrom]!.ms).toBeGreaterThanOrEqual(STALL_MS);
     } finally {
       s.dispose();
     }
