@@ -589,7 +589,7 @@ cmd.onStatus(async (status) => {
       try {
         const { data, cols, rows } = await cmd.call("pane.snapshot", { paneId: p.id });
         terminals.reset(p.id);
-        terminals.write(p.id, data, { cols, rows });
+        terminals.replay(p.id, data, { cols, rows });
       } finally {
         awaitingSnapshot.delete(p.id);
         terminals.release(p.id);

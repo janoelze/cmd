@@ -1972,10 +1972,8 @@ check(restored === selectedBefore && !!selectedBefore, `selected terminal restor
   const count = (shown.match(/MARKER-42/g) ?? []).length;
   const seen = `core ${(text.match(/MARKER-42/g) ?? []).length}×; on screen: ${JSON.stringify(shown.replace(/\s+/g, " ").slice(-300))}`;
   check((text.match(/MARKER-42/g) ?? []).length === 1, `the re-attached terminal's output is recorded exactly once (${seen})`);
-  check(count <= 1, `re-attached terminal shows its output at most once (${count}×; ${seen})`);
-  // Known flake, disabled 2026-10-10 (docs/41: a flaky check is disabled the same day, with an owner):
-  // on CI the redrawn screen sometimes lacks the output line the core has (0×). Being investigated.
-  if (count === 0) console.log(`warning: re-attached terminal's screen lacks the output line (${seen})`);
+  // 0×: the view fitted before the snapshot was parsed and zsh's redraw wiped lines (replay.ts).
+  check(count === 1, `re-attached terminal shows its output exactly once (${count}×; ${seen})`);
   check(!/\[<\d+;\d+;\d+[mM]/.test(shown), "no stray mouse escape codes after re-attaching");
   await menu("view.grid");
 }

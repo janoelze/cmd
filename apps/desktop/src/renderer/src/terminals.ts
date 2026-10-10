@@ -23,6 +23,7 @@ import { scrolled, type FindOptions, type FindResults } from "@cmd/ui";
 import type { FindRequest } from "./find.tsx";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
 import { registerDropTarget } from "./drops.ts";
+import { Replayer } from "./replay.ts";
 
 // ⌘ keys sent to the PTY as readline control characters: kill line, start, end.
 const CMD_KEYS: Record<string, string> = { Backspace: "\x15", ArrowLeft: "\x01", ArrowRight: "\x05" };
@@ -54,6 +55,8 @@ interface Host {
   /** The PTY's size, told at most every FIT_INTERVAL ms: when it was last told, and a size waiting. */
   ptyAt: number;
   ptyTimer: ReturnType<typeof setTimeout> | null;
+  /** Writes snapshots at their size; no fitting while one is being parsed (replay.ts). */
+  replays: Replayer;
   /** Removes its drop target (drops.ts). */
   undrop: () => void;
 }
@@ -325,6 +328,7 @@ class Terminals {
       fitTimer: null,
       ptyAt: 0,
       ptyTimer: null,
+      replays: new Replayer(term),
       undrop: () => {},
     };
     const host = h;
@@ -413,7 +417,7 @@ class Terminals {
 
   fit(paneId: PaneId): void {
     const h = this.#hosts.get(paneId);
-    if (!h?.opened || !h.el.isConnected) return;
+    if (!h?.opened || !h.el.isConnected || h.replays.busy) return;
     if (h.fitTimer) clearTimeout(h.fitTimer), (h.fitTimer = null);
     h.fittedAt = performance.now();
     const o = this.#overrides.get(paneId);
@@ -446,7 +450,7 @@ class Terminals {
    */
   resized(paneId: PaneId): void {
     const h = this.#hosts.get(paneId);
-    if (!h) return;
+    if (!h || h.replays.busy) return;
     if (h.opened && h.el.isConnected && !this.#overrides.has(paneId)) {
       const d = h.fit.proposeDimensions();
       // Rows never wait for columns: a new width is the throttled fit's below.
@@ -583,16 +587,20 @@ class Terminals {
     return !!this.#hosts.get(paneId)?.term.hasSelection();
   }
 
+  /** Write live output. */
+  write(paneId: PaneId, data: string): void {
+    this.get(paneId).term.write(data);
+  }
+
   /**
-   * Write output. With a size (a snapshot's), the terminal takes it first: a
-   * fresh terminal is 80x24, and a wider screen replayed into it wraps and puts
-   * its cursor moves on the wrong cells (Claude Code comes out mangled). That is
-   * the PTY's size already, so it isn't resized; the next fit sets the real one.
+   * Write a snapshot made at `size`: the terminal takes that size first (a fresh one is
+   * 80x24, and a wider screen replayed into it wraps and puts its cursor moves on the
+   * wrong cells). That is the PTY's size already, so it isn't resized. No fits until it
+   * is parsed (replay.ts says why); then the real size.
    */
-  write(paneId: PaneId, data: string, size?: { cols: number; rows: number }): void {
-    const t = this.get(paneId).term;
-    if (size && (size.cols !== t.cols || size.rows !== t.rows)) t.resize(size.cols, size.rows);
-    t.write(data);
+  replay(paneId: PaneId, data: string, size: { cols: number; rows: number }): void {
+    const h = this.get(paneId);
+    h.replays.replay(data, size, () => this.#hosts.get(paneId) === h && this.fit(paneId));
   }
 
   reset(paneId: PaneId): void {
