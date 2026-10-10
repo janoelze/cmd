@@ -573,15 +573,25 @@ export class Core {
         this.#workspacesTimer = setInterval(() => this.workspaces.check(), 30_000);
         this.#workspacesTimer.unref();
       });
-    // A full-text index older than fts.ts's format: built again beside it in paced steps, the old one serving searches meanwhile. Last, as it takes minutes on a big log.
-    if (o.stateDir && this.data.store.needsFtsRebuild)
-      s.startup("fts", "Indexing for search", async () => {
-        const t0 = Date.now();
-        const n = await this.data.store.buildFts({ pace: s });
-        log.info("full-text index rebuilt", { events: n, ms: Date.now() - t0 });
-        this.#searchView.invalidate();
-      });
+    // A full-text index older than fts.ts's format: built again beside it in paced steps, the old one serving searches
+    // meanwhile. Minutes on a big log, and only makes search faster: in the background, so startup is ready without it.
+    if (o.stateDir && this.data.store.needsFtsRebuild) s.startup("fts", "Indexing for search", () => void this.#rebuildFts());
     s.ready();
+  }
+
+  /** The full-text index's rebuild (DataStore.buildFts), named for the watchdog while it runs. */
+  async #rebuildFts(): Promise<void> {
+    const done = this.scheduler.mark("fts rebuild");
+    const t0 = Date.now();
+    try {
+      const n = await this.data.store.buildFts({ pace: this.scheduler });
+      log.info("full-text index rebuilt", { events: n, ms: Date.now() - t0 });
+      this.#searchView.invalidate();
+    } catch (err) {
+      if (!this.#closed) log.error("could not rebuild the full-text index", err); // closing mid-build: it goes on next start
+    } finally {
+      done();
+    }
   }
 
   /**

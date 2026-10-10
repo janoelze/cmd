@@ -115,6 +115,36 @@ describe("full-text index rebuild", () => {
   });
 });
 
+describe("full-text index rebuild, its last moments", () => {
+  it("keeps what's recorded after the last page, while the segments merge", async () => {
+    const file = path.join(tmpDir(), "events.sqlite");
+    const first = new DataStore(file);
+    first.recordAll(Array.from({ length: 1000 }, (_, i) => ({ id: `note:${i}`, at: i, type: "note" as const, source: "journal", text: `note ${i}`, body: `note number ${i}`, data: {} })));
+    first.close();
+    makeOld(file);
+    const s = new DataStore(file);
+    const cursor = () => Number(s.meta("fts.cursor"));
+    const max = () => (s.db.prepare(`SELECT MAX(seq) AS m FROM events`).get() as { m: number }).m;
+    let seen = -1;
+    let injected = false;
+    await s.buildFts({
+      pace: {
+        // A second yield at the same cursor, all rows read: the page loop is over and the merges run.
+        yield: async () => {
+          if (!injected && cursor() === max() && seen === cursor()) {
+            s.record({ id: "note:late", at: 2000, type: "note", source: "journal", text: "kumquat", body: "kumquat late", data: {} });
+            injected = true;
+          }
+          seen = cursor();
+        },
+      },
+    });
+    expect(injected).toBe(true);
+    expect(s.query({ text: "kumquat" }).map((e) => e.id)).toEqual(["note:late"]);
+    s.close();
+  });
+});
+
 describe("search worker", () => {
   const open = (o: { restartMs?: number; timeoutMs?: number } = {}) => {
     const dir = tmpDir();

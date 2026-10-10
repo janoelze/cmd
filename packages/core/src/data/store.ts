@@ -410,10 +410,16 @@ export class DataStore {
       if (this.#totalChanges() - before < 2) break;
       await pace();
     }
-    // Caught up (rows recorded during the build were read by its last steps): in events_fts's place.
-    // Renamed, not dropped: freeing the old index's pages in one DROP blocked for 100–200 ms on a big log.
+    // In events_fts's place. Renamed, not dropped: freeing the old index's pages in one DROP blocked for 100–200 ms on a big log.
     const old = this.#hasTable("events_fts") ? `ALTER TABLE events_fts RENAME TO events_fts_old;` : "";
     this.transaction(() => {
+      // Rows recorded since the last page (during the merges) went only into the old index: read here, with no yield until the rename.
+      for (const row of page.all(this.#ftsCursor, -1) as unknown as Row[]) {
+        const e = toEvent(row);
+        const body = bodyOf(e);
+        if (e.text || body) ins.run(e.seq, e.text ?? "", (body ?? "").slice(0, this.#o.bodyCap), ftsKind(e.type, e.sessionId));
+        n++;
+      }
       this.db.exec(`DROP TABLE IF EXISTS events_vocab; ${old} ALTER TABLE events_fts_next RENAME TO events_fts; ${VOCAB_SQL}`);
       this.setMeta("fts.version", String(FTS_VERSION));
       this.db.prepare(`DELETE FROM meta WHERE key = 'fts.cursor'`).run();
