@@ -24,6 +24,7 @@ import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts
 import { setDockIcon, startDockIcon } from "./dock-icon.ts";
 import { WorkspaceWindows, type Bounds } from "./workspaces.ts";
 import { handleCertificates } from "./certificates.ts";
+import { isPopup, startWebSession } from "./web-session.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
 import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } from "./feedback.ts";
 import { claimWhatsNew } from "./whats-new.ts";
@@ -888,82 +889,17 @@ ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
   });
 });
 
-// ── browser windows (webview guests) ───────────────────
+// ── browser windows (webview guests): main/web-session.ts ──
 
-// Guests get no Node, only cmd's guest preload, their own session. Links that
-// open new windows become new cmd browser windows; a sized window.open (sign-in
-// pop-ups: Google SSO, OAuth) gets a real pop-up, which keeps window.opener so
-// it can hand the result back and close itself.
-
-/** Pages' pop-ups (not the app's windows), each with the app window it came from. Their console stays out of main.log. */
-const popups = new WeakMap<WebContents, WebContents | null>();
-
-/** The app window a guest or pop-up belongs to (where "open-url" goes). */
-const appWindowOf = (contents: WebContents): WebContents | null =>
-  popups.has(contents) ? popups.get(contents)! : contents.getType() === "webview" ? (contents.hostWebContents ?? null) : null;
-
-function handleWindowOpen(contents: WebContents): void {
-  contents.setWindowOpenHandler(({ url, disposition }) => {
-    if (!/^(https?|about):/i.test(url)) return { action: "deny" };
-    if (disposition === "new-window") {
-      const parent = BrowserWindow.fromWebContents(appWindowOf(contents) ?? contents) ?? undefined;
-      return {
-        action: "allow",
-        overrideBrowserWindowOptions: {
-          parent,
-          show: true,
-          autoHideMenuBar: true,
-          webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, safeDialogs: true },
-        },
-      };
-    }
-    if (/^https?:/i.test(url)) appWindowOf(contents)?.send("open-url", url);
-    return { action: "deny" };
-  });
-  contents.on("did-create-window", (child) => {
-    popups.set(child.webContents, appWindowOf(contents));
-    handleWindowOpen(child.webContents);
-  });
-}
-
+// The app's own pages' warnings and errors go to main.log (browser windows' pages and Magic widgets' don't).
 app.on("web-contents-created", (_e, contents) => {
-  contents.on("will-attach-webview", (_ev, prefs, params) => {
-    // Only cmd's own guest preload, in an isolated world: it reports presses to
-    // the app (preload/guest.ts, renderer/src/embed.ts).
-    prefs.preload = path.join(here, "../preload/guest.cjs");
-    prefs.nodeIntegration = false;
-    prefs.contextIsolation = true;
-    prefs.sandbox = true;
-    prefs.scrollBounce = true; // pages bounce at their edges, like the rest of the app
-    prefs.safeDialogs = true; // a page looping alert() can be stopped
-    if (!/^(https?|about|file):/i.test(params.src ?? "")) params.src = "about:blank";
-  });
-  // The app's own pages' warnings and errors go to main.log (browser windows' pages and Magic widgets' don't).
   if (contents.getType() === "window") {
     contents.on("console-message", (e) => {
-      if ((e.level !== "warning" && e.level !== "error") || e.sourceId.startsWith("cmd-widget:") || popups.has(contents)) return;
+      if ((e.level !== "warning" && e.level !== "error") || e.sourceId.startsWith("cmd-widget:") || isPopup(contents)) return;
       const where = e.sourceId ? ` (${path.basename(e.sourceId.replace(/\?.*$/, ""))}:${e.lineNumber})` : "";
       rendererLog[e.level === "error" ? "error" : "warn"](`${e.message}${where}`);
     });
   }
-  if (contents.getType() === "webview") handleWindowOpen(contents);
-});
-
-/**
- * Cookies that mean "signed in" to a site, by domain: when one is set in the
- * browser windows' session, every app window hears "signed-in" with the site,
- * so a page showing a sign-in wall elsewhere (the YouTube widget) can reload.
- */
-const SIGN_IN_COOKIES: Record<string, string[]> = { "youtube.com": ["LOGIN_INFO", "SID", "__Secure-3PSID"] };
-app.whenReady().then(() => {
-  let last = 0;
-  session.fromPartition("persist:cmd-browser").cookies.on("changed", (_e, cookie, _cause, removed) => {
-    if (removed) return;
-    const site = Object.keys(SIGN_IN_COOKIES).find((d) => (cookie.domain ?? "").replace(/^\./, "").endsWith(d));
-    if (!site || !SIGN_IN_COOKIES[site]!.includes(cookie.name) || Date.now() - last < 2000) return;
-    last = Date.now();
-    for (const w of BrowserWindow.getAllWindows()) if (!popups.has(w.webContents)) w.webContents.send("signed-in", site);
-  });
 });
 
 // ── lifecycle ───────────────────────────────────────────
@@ -998,6 +934,8 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((wc, _permission, done, details) => {
     done(!/^cmd-widget:/.test(details.requestingUrl ?? "") && !fromFrame(details.requestingUrl));
   });
+  // Browser windows' pages: deny by default, ask for camera, location and the like (web-session.ts).
+  startWebSession();
   protocol.handle("cmd-file", (req) => {
     const file = new URL(req.url).searchParams.get("path") ?? "";
     if (!path.isAbsolute(file) || !CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });

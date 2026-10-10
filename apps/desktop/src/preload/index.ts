@@ -14,6 +14,7 @@ import type { WhatsNewClaim } from "../main/whats-new.ts";
 import type { NotifyAccess, NotifyPermission } from "../main/notify-permission.ts";
 import type { OnboardingClaim } from "../main/onboarding.ts";
 import type { AppProcess } from "../main/metrics.ts";
+import type { SitePermissionRequest } from "../main/web-policy.ts";
 
 export interface AppInfo {
   version: string;
@@ -184,6 +185,16 @@ const api = {
     ipcRenderer.on("open-url", h);
     return () => ipcRenderer.off("open-url", h);
   },
+  /** A page in a browser window asks for a permission (main/web-session.ts); done: its sheet is no longer needed. */
+  onSitePermission(fn: (r: SitePermissionRequest) => void, done: (id: string) => void): () => void {
+    const h = (_e: unknown, r: SitePermissionRequest) => fn(r);
+    const d = (_e: unknown, id: string) => done(id);
+    ipcRenderer.on("site-permission", h);
+    ipcRenderer.on("site-permission-done", d);
+    return () => (ipcRenderer.off("site-permission", h), ipcRenderer.off("site-permission-done", d));
+  },
+  /** Allow or Don't Allow (kept for the site); null: dismissed, asked again next time. */
+  answerSitePermission: (id: string, allow: boolean | null) => ipcRenderer.send("site-permission-answer", id, allow),
   /** A site signed in, in the browser windows' session (main: SIGN_IN_COOKIES). */
   onSignedIn(fn: (site: string) => void): () => void {
     const h = (_e: unknown, site: string) => fn(site);

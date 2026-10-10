@@ -13,6 +13,8 @@ const send = (m: unknown) => ipcRenderer.sendToHost("cmd-embed", m);
 window.addEventListener(
   "pointerdown",
   (e) => {
+    // Only the person's own presses: a page can dispatch synthetic ones.
+    if (!e.isTrusted) return;
     if (e.button === 0) send({ type: "press" });
   },
   { capture: true, passive: true },

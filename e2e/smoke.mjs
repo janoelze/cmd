@@ -352,8 +352,9 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
 
 // Browser and file windows
 {
-  const server = http.createServer((_req, res) => {
+  const server = http.createServer((req, res) => {
     res.setHeader("content-type", "text/html");
+    if (req.url === "/media") return res.end("<title>E2E Media</title><body style='font:20px sans-serif;padding:20px'>A page that asks for the camera</body>");
     res.end("<title>E2E Page</title><body style='font:20px sans-serif;padding:20px'>Hello from a cmd browser window</body>");
   });
   await new Promise((r) => server.listen(0, r));
@@ -422,6 +423,29 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await blankView.waitFor({ state: "detached", timeout: 5000 }).catch(() => {});
   check((await blankView.count()) === 0, "a blank window gets its page once given an address");
   await win.evaluate((id) => window.cmd.call("window.close", { id }), blankWin.id);
+
+  // A page asking for the camera and microphone gets cmd's sheet, never a silent grant;
+  // Don't Allow is kept for the site, so it isn't asked again (main/web-session.ts).
+  {
+    step("site permissions");
+    const page = (js) => win.evaluate((js) => document.querySelector(".tile.kind-browser webview").executeJavaScript(js), js);
+    await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [browserWin.id, `http://localhost:${port}/media`]);
+    for (let i = 0; i < 40 && (await page("location.pathname").catch(() => null)) !== "/media"; i++) await win.waitForTimeout(150);
+    await page(`window.__gum = navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(() => "granted", (e) => e.name); 0`);
+    const sheet = win.locator(".site-permission");
+    await sheet.waitFor({ timeout: 5000 }).catch(() => {});
+    const title = (await sheet.locator(".ui-dialog-title").textContent().catch(() => "")) ?? "";
+    await win.screenshot({ path: path.join(shots, "site-permission.png") });
+    check(title.includes(`localhost:${port}`) && title.includes("camera and microphone"), `a page asking for the camera gets cmd's sheet naming the site (${JSON.stringify(title)})`);
+    await sheet.getByRole("button", { name: "Don't Allow" }).click();
+    const got = await page("window.__gum");
+    check(got === "NotAllowedError", `Don't Allow refuses the page's getUserMedia (${got})`);
+    const again = await page(`navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name)`);
+    const kept = JSON.parse(fs.readFileSync(path.join(home, "site-permissions.json"), "utf8"));
+    check(again === "NotAllowedError" && (await sheet.count()) === 0 && kept[`http://localhost:${port}`]?.media === false, `the answer is kept for the site and not asked again (${again})`);
+    await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [browserWin.id, `http://localhost:${port}/`]);
+    for (let i = 0; i < 40 && (await page("document.title").catch(() => null)) !== "E2E Page"; i++) await win.waitForTimeout(150);
+  }
 
   fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
   fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# hi");

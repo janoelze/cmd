@@ -53,6 +53,7 @@ import { APP_VERSION, RELEASES, releasesSince, WhatsNew } from "./components/Wha
 import { closeSetup, Onboarding, showSetup, stepsAtLaunch, useSetup } from "./onboarding/Onboarding.tsx";
 import { compareVersions, type Release } from "../../shared/changelog.ts";
 import { PairSheet, useRemoteNotifications } from "./components/Remote.tsx";
+import { SitePermissionSheet } from "./components/SitePermissionSheet.tsx";
 import { Palette, SEARCH_PREFIX as SEARCH, type PaletteItem } from "./components/Palette.tsx";
 import { NavigatorContext, type NavigatorData } from "./components/Navigator.tsx";
 import { Dock } from "./components/Dock.tsx";
@@ -960,6 +961,7 @@ export function App() {
       {setup && <Onboarding key={setup.join()} ids={setup} onClose={endSetup} />}
       {whatsNew && <WhatsNew releases={whatsNew} onClose={() => setWhatsNew(null)} onLink={(url) => (setWhatsNew(null), openLink(url))} />}
       {all.pairRequests[0] && <PairSheet key={all.pairRequests[0].requestId} request={all.pairRequests[0]} />}
+      <SitePermissionSheet />
     </div>
   );
 }
