@@ -6,6 +6,7 @@ import { cmd } from "./bridge.ts";
 import { getState, setUi } from "./store.ts";
 import { isWidget, under } from "./model.ts";
 import { windowStatus } from "./windowActions.ts";
+import type { OpenFrom } from "../../main/open-policy.ts";
 
 type Selector = (paneId: PaneId) => void;
 let select: Selector = () => {};
@@ -205,13 +206,15 @@ export async function newBrowser(url?: string): Promise<void> {
 
 /** A clicked http(s) link: a cmd browser window or the default browser, per `open.links`. */
 export function openLink(url: string): void {
-  if (getState().settings.settings["open.links"] === "browser") cmd.openPath(url);
+  if (getState().settings.settings["open.links"] === "browser") cmd.openPath(url, { from: "content" }); // http(s): opens without asking either way
   else void newBrowser(url);
 }
 
 /**
  * Open a path or URL in the window type that handles it (core registry); bare
  * domains get https://; anything no type handles goes to the default app.
+ * `from`: "user" for menus, buttons and the palette; "content" for links in
+ * terminal output and files (main confirms those first if they'd launch something).
  */
 /**
  * A file at a line, in a text window (a search result): the one already showing
@@ -224,11 +227,11 @@ export async function openFileAt(path: string, line: number, column: number | nu
   select(w.id);
 }
 
-export async function openPath(target: string): Promise<void> {
+export async function openPath(target: string, from: OpenFrom): Promise<void> {
   const t = /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(target) || /^localhost(:\d+)?/i.test(target) ? `https://${target}`.replace("https://localhost", "http://localhost") : target;
   const w = await cmd.call("window.openTarget", { target: t, workspaceId: here() }).catch(() => null);
   if (w) select(w.id);
-  else cmd.openPath(t);
+  else cmd.openPath(t, { from });
 }
 
 /** Put a widget from the library (`type:timer`, `magic:<id>`) on the board; throws when it can't. */

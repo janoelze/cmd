@@ -232,7 +232,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
               }}
               onEscape={() => ref.current?.focus()}
             />
-            <ToolbarButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url)} secondary priority={1} />
+            <ToolbarButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url, { from: "user" })} secondary priority={1} />
           </WindowToolbar>
           {find.bar}
         </>

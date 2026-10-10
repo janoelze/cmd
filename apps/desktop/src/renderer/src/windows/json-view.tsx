@@ -294,7 +294,7 @@ export function JsonView({ win, focused }: WindowViewProps) {
   const currentHit = hits && hits.index >= 0 ? (hits.all[hits.index] ?? null) : null;
 
   useEffect(
-    () => registerWindowActions(win.id, { openExternally: () => cmd.openPath(file), find: find.request, line: currentLine }),
+    () => registerWindowActions(win.id, { openExternally: () => cmd.openPath(file, { from: "user" }), find: find.request, line: currentLine }),
     [win.id, file, find.request, currentLine],
   );
 
@@ -395,7 +395,7 @@ export function JsonView({ win, focused }: WindowViewProps) {
               <Button size="sm" onClick={() => edit()}>
                 Edit as Text
               </Button>
-              <Button size="sm" onClick={() => cmd.openPath(file)}>
+              <Button size="sm" onClick={() => cmd.openPath(file, { from: "user" })}>
                 Open with Default App
               </Button>
             </>

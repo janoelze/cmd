@@ -517,7 +517,7 @@ export function App() {
       const id = currentAgent && sessionId(currentAgent);
       if (id) copy(id);
     },
-    "session.reveal": () => current && cmd.openPath(current.cwd),
+    "session.reveal": () => current && cmd.openPath(current.cwd, { from: "user" }),
     ...(Object.fromEntries(
       [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`session.select${n}`, () => withPane[n - 1] && selectRow(withPane[n - 1]!)]),
     ) as Record<`session.select${number}`, () => void>),
@@ -529,7 +529,7 @@ export function App() {
     "workspace.moveWindow": () => selected && setPicker({ kind: "move", windowId: selected }),
     "workspace.rename": () => workspace && setPicker({ kind: "rename", workspace }),
     "workspace.icon": () => workspace && setPicker({ kind: "icon", workspace }),
-    "workspace.reveal": () => workspace && cmd.openPath(workspace.root),
+    "workspace.reveal": () => workspace && cmd.openPath(workspace.root, { from: "user" }),
     "workspace.close": () => workspace && void closeWorkspace(workspace),
     ...(Object.fromEntries(
       [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`workspace.select${n}`, () => openWorkspaces[n - 1] && showWorkspace(openWorkspaces[n - 1]!.id)]),
@@ -663,14 +663,14 @@ export function App() {
             { label: "Copy Session ID", run: () => id && copy(id), enabled: !!id },
             // Only with an AI provider set up; read when the menu opens, so a key added since counts.
             ...(aiStatus()?.ready ? [{ label: "Summarize Session", run: () => void summarizeSession(a), enabled: !!id }] : []),
-            ...(a.native.transcriptPath ? [{ label: "Reveal Transcript", run: () => cmd.openPath(a.native.transcriptPath!) }] : []),
+            ...(a.native.transcriptPath ? [{ label: "Reveal Transcript", run: () => cmd.openPath(a.native.transcriptPath!, { from: "user" }) }] : []),
             "-" as const,
           ]
         : []),
       ...(cwd
         ? [
             { label: "New Terminal Here", run: () => void newTerminalIn(cwd) },
-            { label: "Show Folder in Finder", run: () => cmd.openPath(cwd) },
+            { label: "Show Folder in Finder", run: () => cmd.openPath(cwd, { from: "user" }) },
             { label: "Copy Path", run: () => copy(cwd) },
           ]
         : []),
@@ -703,7 +703,7 @@ export function App() {
       "-",
       { label: "Rename…", run: () => setPicker({ kind: "rename", workspace: sp }) },
       { label: "Change Icon…", run: () => setPicker({ kind: "icon", workspace: sp }) },
-      { label: "Show Folder in Finder", run: () => cmd.openPath(sp.root) },
+      { label: "Show Folder in Finder", run: () => cmd.openPath(sp.root, { from: "user" }) },
       { label: "Copy Path", run: () => copy(sp.root) },
       "-",
       { label: "Close Workspace…", run: () => void closeWorkspace(sp), enabled: !sp.home },
@@ -791,7 +791,7 @@ export function App() {
       );
     await Promise.all([
       part("names", cmd.call("search.files", { text, workspaceId: st.workspaceId, cwd, limit: 8, part: "names" }), (r) =>
-        r.hits.map((h) => (named.add(h.path), { id: `f-${h.path}`, group: "Files", icon: "doc", label: base(h.path), meta: dirIn(h.path, h.root), run: () => void openPath(h.path) })),
+        r.hits.map((h) => (named.add(h.path), { id: `f-${h.path}`, group: "Files", icon: "doc", label: base(h.path), meta: dirIn(h.path, h.root), run: () => void openPath(h.path, "user") })),
       ),
       part("lines", cmd.call("search.files", { text, workspaceId: st.workspaceId, cwd, limit: 20, part: "lines" }), (r) =>
         r.hits.map((h) => ({ id: `l-${h.path}:${h.line}`, group: "Files", icon: "text.alignleft", label: `${base(h.path)}:${h.line}`, meta: dirIn(h.path, h.root), snippet: h.text, run: () => void openFileAt(h.path, h.line!, h.column, text.trim()) })),
@@ -825,7 +825,7 @@ export function App() {
             const host = /^https?:\/\/([^/]+)/.exec(h.url)?.[1] ?? h.url;
             return [{ id: `p-${h.url}`, group: "Pages", icon: "globe", label: h.title || h.url, meta: meta(host, ago(h.at, now)), run: () => openLink(h.url) }];
           }
-          return [{ id: `o-${h.path}`, group: "Opened files", icon: "doc", label: base(h.path), meta: meta(shortPath(h.path.slice(0, h.path.lastIndexOf("/"))), ago(h.at, now)), run: () => void openPath(h.path) }];
+          return [{ id: `o-${h.path}`, group: "Opened files", icon: "doc", label: base(h.path), meta: meta(shortPath(h.path.slice(0, h.path.lastIndexOf("/"))), ago(h.at, now)), run: () => void openPath(h.path, "user") }];
         }),
       ),
     ]);

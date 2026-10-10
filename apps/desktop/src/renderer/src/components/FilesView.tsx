@@ -135,7 +135,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       ? bookmarks.map((b) => ({
           label: `${b.path.split("/").pop() || "/"} — ${shortPath(parentOf(b.path))}`,
           checked: b.path === root,
-          run: () => (b.dir ? setRoot(b.path) : void openPath(b.path)),
+          run: () => (b.dir ? setRoot(b.path) : void openPath(b.path, "user")),
         }))
       : [{ label: "No Bookmarks", enabled: false, run: () => {} }]),
     "-",
@@ -338,7 +338,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   const openFile = (e: FileEntry) =>
     void cmd.call("window.openTarget", { target: e.path, workspaceId: win.workspaceId }).then((w) => {
       if (w) selectPane(w.id);
-      else cmd.openPath(e.path);
+      else cmd.openPath(e.path, { from: "user" });
     });
   const activate = (e: FileEntry) => (e.kind === "dir" ? toggle(e) : gitOf(e.path)?.state === "deleted" ? showDiff(e) : openFile(e));
 
@@ -553,7 +553,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
           ]
         : [
             { label: "Open", run: () => openFile(e) },
-            { label: "Open with Default App", run: () => cmd.openPath(e.path) },
+            { label: "Open with Default App", run: () => cmd.openPath(e.path, { from: "user" }) },
           ]),
       { label: "Show in Finder", run: () => cmd.revealPath(e.path) },
       { label: isBookmarked(e.path) ? "Remove from Bookmarks" : "Add to Bookmarks", run: () => toggleBookmark(e.path, e.kind === "dir") },

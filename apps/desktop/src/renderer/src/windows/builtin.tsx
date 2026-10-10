@@ -68,7 +68,7 @@ registerWindowView({
       ...(url
         ? [
             "-" as const,
-            { label: "Open in Default Browser", run: () => cmd.openPath(url) },
+            { label: "Open in Default Browser", run: () => cmd.openPath(url, { from: "user" }) },
             { label: "Copy URL", run: () => copy(url) },
           ]
         : []),
@@ -85,7 +85,7 @@ registerWindowView({
     const p = stateStr(w, "path");
     return p
       ? [
-          { label: "Show in Finder", run: () => cmd.openPath(p) },
+          { label: "Show in Finder", run: () => cmd.openPath(p, { from: "user" }) },
           { label: "Copy Path", run: () => copy(p) },
         ]
       : [];
@@ -104,7 +104,7 @@ registerWindowView({
       "-" as const,
       ...(p
         ? [
-            { label: "Open with Default App", run: () => cmd.openPath(p) },
+            { label: "Open with Default App", run: () => cmd.openPath(p, { from: "user" }) },
             { label: "Show in Finder", run: () => cmd.revealPath(p) },
             { label: "Copy Path", run: () => copy(p) },
           ]
@@ -123,7 +123,7 @@ registerWindowView({
     return p
       ? [
           ...(previewFor(p) ? [{ label: "Preview (⌘E)", run: () => togglePreview(w) }] : []),
-          { label: "Open with Default App", run: () => cmd.openPath(p) },
+          { label: "Open with Default App", run: () => cmd.openPath(p, { from: "user" }) },
           { label: "Copy Path", run: () => copy(p) },
         ]
       : [];
@@ -220,7 +220,7 @@ registerWindowView({
           { label: "Change Video…", run: () => void cmd.call("window.update", { id: w.id, title: "YouTube", state: { input: null } }).catch(() => {}) },
           { label: "Fill Window", checked: w.state.fill !== false, run: () => void cmd.call("window.update", { id: w.id, state: { fill: w.state.fill === false } }).catch(() => {}) },
           "-" as const,
-          { label: "Open on YouTube", run: () => cmd.openPath(url) },
+          { label: "Open on YouTube", run: () => cmd.openPath(url, { from: "user" }) },
           { label: "Copy Link", run: () => copy(url) },
         ]
       : [];

@@ -17,6 +17,7 @@ import type { NotifyAccess, NotifyPermission } from "../main/notify-permission.t
 import type { OnboardingClaim } from "../main/onboarding.ts";
 import type { AppProcess } from "../main/metrics.ts";
 import type { SitePermissionRequest } from "../main/web-policy.ts";
+import type { OpenFrom } from "../main/open-policy.ts";
 
 export interface AppInfo {
   version: string;
@@ -137,7 +138,13 @@ const api = {
   /** Native appearance (traffic lights, menus, vibrancy), window background and Dock icon for the active theme. */
   setAppearance: (a: Appearance) => ipcRenderer.send("appearance", a),
   focusWindow: () => ipcRenderer.send("focus"),
-  openPath: (p: string) => ipcRenderer.send("open-path", p),
+  /**
+   * A URL or file in its default app (a URL with a scheme other than file: goes
+   * to open-external, anything else to open-file). `from` says who chose it:
+   * "user" for cmd's own menus and buttons, "content" for links in terminal
+   * output and files, which main confirms first when they'd launch something.
+   */
+  openPath: (target: string, o: { from: OpenFrom }) => ipcRenderer.send(/^[a-z][\w+.-]+:/i.test(target) && !/^file:/i.test(target) ? "open-external" : "open-file", target, { from: o.from }),
   /** The Settings window (opens it, or brings it to the front), optionally at a page (e.g. "remote"). */
   openSettings: (page?: string) => ipcRenderer.send("settings-window", page),
   /** Settings window: main asks to show a page. */

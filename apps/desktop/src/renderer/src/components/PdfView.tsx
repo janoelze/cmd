@@ -234,7 +234,7 @@ export function PdfView({ win, focused }: WindowViewProps) {
   useEffect(
     () =>
       registerWindowActions(win.id, {
-        openExternally: () => cmd.openPath(file),
+        openExternally: () => cmd.openPath(file, { from: "user" }),
         find: find.request,
         zoom: (d) => (d === 0 ? setScale(1) : zoomBy(d)),
       }),
@@ -251,7 +251,7 @@ export function PdfView({ win, focused }: WindowViewProps) {
       const a = (e.target as Element).closest?.("a[href]") as HTMLAnchorElement | null;
       if (!a || a.getAttribute("href")!.startsWith("#")) return;
       e.preventDefault();
-      void openPath(a.href);
+      void openPath(a.href, "content");
     };
     el.addEventListener("click", click, true);
     return () => el.removeEventListener("click", click, true);
@@ -307,7 +307,7 @@ export function PdfView({ win, focused }: WindowViewProps) {
           <div ref={viewerEl} className="pdfViewer" />
         </div>
         {phase.kind === "loading" && <ViewState state={{ kind: "loading" }} />}
-        {phase.kind === "error" && <ViewState state={{ kind: "error", title: "Couldn't show this PDF", text: phase.message, action: <Button onClick={() => cmd.openPath(file)}>Open with Default App</Button> }} />}
+        {phase.kind === "error" && <ViewState state={{ kind: "error", title: "Couldn't show this PDF", text: phase.message, action: <Button onClick={() => cmd.openPath(file, { from: "user" })}>Open with Default App</Button> }} />}
         {phase.kind === "password" && <PasswordPrompt wrong={phase.wrong} onSubmit={(p) => (setPhase({ kind: "loading" }), password.current?.(p))} />}
       </div>
     </View>

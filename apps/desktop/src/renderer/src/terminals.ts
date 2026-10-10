@@ -130,7 +130,7 @@ function resolvePaths(paths: string[], cwd: string): Promise<(string | null)[]> 
 async function openTarget(kind: "url" | "path", target: string): Promise<void> {
   const { openLink, openPath } = await import("./actions.ts");
   if (kind === "url") openLink(target);
-  else void openPath(target);
+  else void openPath(target, "content");
 }
 
 function linkProvider(term: Terminal, paneId: PaneId) {
@@ -281,14 +281,16 @@ class Terminals {
       // Size reports some programs use to fit images and layouts (CSI 14/16/18 t).
       windowOptions: { getWinSizePixels: true, getCellSizePixels: true, getWinSizeChars: true },
       theme: theme(),
-      // OSC 8 hyperlinks (ls --hyperlink, Claude Code…): ⌘-click too, no confirm dialog.
+      // OSC 8 hyperlinks (ls --hyperlink, Claude Code…): ⌘-click too, no xterm dialog.
+      // The link text can say anything, so other schemes go to main as content:
+      // it confirms them (smb:, app URL handlers) in a sheet naming the real URL.
       linkHandler: {
         allowNonHttpProtocols: true,
         activate: (e, uri) => {
           if (!e.metaKey) return;
           if (/^https?:/i.test(uri)) void openTarget("url", uri);
           else if (/^file:/i.test(uri)) void openTarget("path", decodeURIComponent(new URL(uri).pathname));
-          else cmd.openPath(uri);
+          else cmd.openPath(uri, { from: "content" });
         },
       },
     });

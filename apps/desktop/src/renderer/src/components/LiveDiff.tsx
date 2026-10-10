@@ -133,7 +133,7 @@ export function LiveDiff({ win }: WindowViewProps) {
       files={shown}
       truncated={truncated}
       onToggle={(rel, open) => setToggled((m) => new Map(m).set(rel, open))}
-      onOpen={(abs) => void openPath(abs)}
+      onOpen={(abs) => void openPath(abs, "user")}
       onChoose={() => void choose()}
     />
   );

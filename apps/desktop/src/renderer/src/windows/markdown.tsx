@@ -25,7 +25,7 @@ registerWindowView({
       ...(p && SUMMARY_FILE.test(p) ? [{ label: "Copy Summary", run: () => void copySummary(p) }] : []),
       ...(p
         ? [
-            { label: "Open with Default App", run: () => cmd.openPath(p) },
+            { label: "Open with Default App", run: () => cmd.openPath(p, { from: "user" }) },
             { label: "Copy Path", run: () => copy(p) },
           ]
         : []),

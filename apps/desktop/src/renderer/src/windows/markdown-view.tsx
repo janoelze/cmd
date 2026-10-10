@@ -137,12 +137,12 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
     } else if (/^https?:/i.test(href)) {
       openLink(href); // cmd browser window or default browser (open.links)
     } else if (/^[a-z][\w+.-]*:/i.test(href)) {
-      cmd.openPath(href); // mailto:, other apps
+      cmd.openPath(href, { from: "content" }); // mailto:, other apps
     } else {
       const [p] = href.split("#");
       const target = resolveRelative(base, decodeURIComponent(p ?? ""));
       if (/\.(md|markdown|mdx)$/i.test(target)) void cmd.call("window.update", { id: win.id, state: { path: target } });
-      else void openPath(target);
+      else void openPath(target, "content");
     }
   };
 
@@ -159,7 +159,7 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
   const findable = useMemo(() => domFindable(() => body.current), []);
   const find = useFind(findable, { onClose: () => scroller.current?.focus() });
   useEffect(
-    () => registerWindowActions(win.id, { openExternally: () => cmd.openPath(file), find: find.request }),
+    () => registerWindowActions(win.id, { openExternally: () => cmd.openPath(file, { from: "user" }), find: find.request }),
     [win.id, file, find.request],
   );
 

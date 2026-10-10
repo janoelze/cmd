@@ -51,7 +51,7 @@ registerWindowView({
             ...(/\.svg$/i.test(p) ? [{ label: "Edit Source (⌘E)", run: () => togglePreview(w) }] : []),
             { label: "Copy Image", run: () => void copyImageFile(p) },
             { label: "Copy Path", run: () => copy(p) },
-            { label: "Open with Default App", run: () => cmd.openPath(p) },
+            { label: "Open with Default App", run: () => cmd.openPath(p, { from: "user" }) },
             { label: "Show in Finder", run: () => cmd.revealPath(p) },
           ]
         : []),

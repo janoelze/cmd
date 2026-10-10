@@ -209,7 +209,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
     () =>
       registerWindowActions(win.id, {
         save,
-        openExternally: file ? () => cmd.openPath(file) : undefined,
+        openExternally: file ? () => cmd.openPath(file, { from: "user" }) : undefined,
         // The menu bar owns ⌘F ⌘G ⇧⌘G, so CodeMirror's own bindings for them don't fire.
         find: find.request,
         // ⌘E to a preview (a JSON tree) selects what is on this line.

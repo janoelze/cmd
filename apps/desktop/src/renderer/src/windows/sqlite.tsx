@@ -23,7 +23,7 @@ registerWindowView({
       "-",
       ...(p
         ? [
-            { label: "Open with Default App", run: () => cmd.openPath(p) },
+            { label: "Open with Default App", run: () => cmd.openPath(p, { from: "user" }) },
             { label: "Show in Finder", run: () => cmd.revealPath(p) },
             { label: "Copy Path", run: () => copy(p) },
           ]

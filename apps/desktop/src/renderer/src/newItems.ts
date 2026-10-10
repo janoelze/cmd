@@ -47,7 +47,7 @@ export function openItems(query: string, group: string, o: { icon?: boolean } = 
   const t = openableTarget(query);
   if (!t) return [];
   const icon = o.icon ? { icon: t.kind === "url" ? "globe" : "folder" } : {};
-  return [{ id: `open-${t.kind}`, group, label: `Open ${t.value}`, hint: t.kind, ...icon, run: () => void openPath(t.value) }];
+  return [{ id: `open-${t.kind}`, group, label: `Open ${t.value}`, hint: t.kind, ...icon, run: () => void openPath(t.value, "user") }];
 }
 
 /** Last: New Widget with Magic, or, with text typed, a widget made from it. */

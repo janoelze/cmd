@@ -316,7 +316,7 @@ function Files({ info }: { info: MagicWidgetInfo | null }) {
             title={<Text mono>{f}</Text>}
             description={FILE_NOTES[f] ?? (f.startsWith("fixtures/") ? (f === "fixtures/live.json" ? "the data from the last check" : "test data the view must handle") : undefined)}
           >
-            <Button size="sm" onClick={() => void openPath(`${info.dir}/${f}`)}>
+            <Button size="sm" onClick={() => void openPath(`${info.dir}/${f}`, "user")}>
               Open
             </Button>
           </FormRow>

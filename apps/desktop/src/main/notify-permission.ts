@@ -4,7 +4,7 @@
 // built by postinstall). Without the addon (another OS, a failed build) the
 // answer is null and Settings doesn't show the row.
 
-import { shell } from "electron";
+import { openForUser } from "./open.ts";
 import path from "node:path";
 import { logger } from "@cmd/protocol/node";
 
@@ -76,8 +76,9 @@ export const requestNotifyPermission = (repoRoot: string) => call(repoRoot, "req
 
 /** System Settings → Notifications, at cmd's page (macOS 13+; older ones open the Notifications pane). */
 export function openNotifySettings(bundleId: string): void {
-  void shell.openExternal(`x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${encodeURIComponent(bundleId)}`).catch((err: Error) => {
-    log.warn("could not open System Settings at cmd", { bundleId, error: err.message });
-    return shell.openExternal("x-apple.systempreferences:com.apple.preference.notifications");
+  void openForUser(`x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${encodeURIComponent(bundleId)}`).then((error) => {
+    if (!error) return;
+    log.warn("could not open System Settings at cmd", { bundleId, error });
+    return openForUser("x-apple.systempreferences:com.apple.preference.notifications");
   });
 }

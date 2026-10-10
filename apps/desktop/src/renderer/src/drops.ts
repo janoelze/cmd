@@ -72,7 +72,7 @@ export function readDrop(dt: DataTransfer): DropItems {
 const openTarget: DropTarget = {
   over: (d) => (d.files || d.urls ? "copy" : null),
   drop: (items) => {
-    for (const p of [...items.files, ...items.urls]) void openPath(p);
+    for (const p of [...items.files, ...items.urls]) void openPath(p, "content");
   },
 };
 

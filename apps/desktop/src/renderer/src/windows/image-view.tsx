@@ -196,7 +196,7 @@ export function ImageView({ win, focused }: WindowViewProps) {
     () =>
       registerWindowActions(win.id, {
         zoom: (d) => (d === 0 ? zoomTo(1) : step(d)),
-        openExternally: () => cmd.openPath(file),
+        openExternally: () => cmd.openPath(file, { from: "user" }),
       }),
     [win.id, file, scale, zoomTo],
   );
@@ -219,7 +219,7 @@ export function ImageView({ win, focused }: WindowViewProps) {
       { label: "Copy Image", run: () => void copyImageFile(file) },
       { label: "Copy Path", run: () => copy(file) },
       "-",
-      { label: "Open with Default App", run: () => cmd.openPath(file) },
+      { label: "Open with Default App", run: () => cmd.openPath(file, { from: "user" }) },
       { label: "Show in Finder", run: () => cmd.revealPath(file) },
     ]);
 
@@ -244,7 +244,7 @@ export function ImageView({ win, focused }: WindowViewProps) {
       {/* The error shows inside the Viewport, which stays mounted: its size and pinch listeners are set up once. */}
       <Viewport ref={scroll} pannable={pannable} panning={panning} loading={!nat && !error} onMouseDown={onMouseDown} onKeyDown={onKeyDown} onContextMenu={(e) => (e.preventDefault(), imageMenu())}>
         {error ? (
-          <ViewState state={{ kind: "error", title: "Couldn't show this image", text: "It's a format that can't be shown here, like HEIC or TIFF, or the file is damaged or too large to decode.", action: <Button onClick={() => cmd.openPath(file)}>Open with Default App</Button> }} />
+          <ViewState state={{ kind: "error", title: "Couldn't show this image", text: "It's a format that can't be shown here, like HEIC or TIFF, or the file is damaged or too large to decode.", action: <Button onClick={() => cmd.openPath(file, { from: "user" })}>Open with Default App</Button> }} />
         ) : (
           <Picture
             ref={imgEl}

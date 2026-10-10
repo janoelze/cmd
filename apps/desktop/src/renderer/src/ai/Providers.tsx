@@ -47,7 +47,7 @@ export function AiKeyRow({ provider, autoFocus, stacked }: { provider: AiProvide
       tip={def.keySecret}
       titleAside={
         (!st?.key.set || st.state === "rejected") && (
-          <LinkButton data-tip={`Create one at ${new URL(def.keyUrl).host}`} onClick={() => cmd.openPath(def.keyUrl)}>
+          <LinkButton data-tip={`Create one at ${new URL(def.keyUrl).host}`} onClick={() => cmd.openPath(def.keyUrl, { from: "user" })}>
             Get a key
           </LinkButton>
         )

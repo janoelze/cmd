@@ -25,6 +25,7 @@ import { setDockIcon, startDockIcon } from "./dock-icon.ts";
 import { WorkspaceWindows, type Bounds } from "./workspaces.ts";
 import { handleCertificates } from "./certificates.ts";
 import { isPopup, startWebSession } from "./web-session.ts";
+import { handleOpen, openForUser } from "./open.ts";
 import { crashStatus, followCrashReports, record as recordCrash, startCrashReporting } from "./crash.ts";
 import { feedbackStatus, sendFeedback, startFeedback, type FeedbackRequest } from "./feedback.ts";
 import { claimWhatsNew } from "./whats-new.ts";
@@ -655,19 +656,9 @@ ipcMain.handle("choose-save-path", async (e, defaultPath: string) => {
 });
 ipcMain.on("close-window", (e) => winOf(e)?.close());
 ipcMain.on("edit-native", (e, op: string, guestId?: number) => editNative(e.sender, op, guestId));
-// URLs (https:, mailto:) go to their default app; anything else is a file path.
 ipcMain.on("clipboard-write", (_e, text: unknown) => typeof text === "string" && clipboard.writeText(text));
-// Nothing to open it with (an unknown scheme, a missing file) is the user's to know, not a crash.
-ipcMain.on("open-path", async (e, p: string) => {
-  const error = /^[a-z][\w+.-]+:/i.test(p)
-    ? await shell.openExternal(p).then(() => "", (err: Error) => err.message)
-    : await shell.openPath(p);
-  if (!error) return;
-  log.warn("could not open", { target: p, error });
-  const opts = { type: "warning" as const, message: `cmd could not open ${p}`, detail: error };
-  const win = winOf(e);
-  void (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts));
-});
+// URLs and files in other apps, behind the open policy (open.ts, open-policy.ts).
+handleOpen();
 ipcMain.on("settings-window", (_e, page?: string) => void openSettings(typeof page === "string" ? page : undefined));
 ipcMain.on("check-updates", () => checkForUpdates());
 // The Task Manager: Electron's own processes, and showing a terminal in the app window of its workspace.
@@ -741,7 +732,7 @@ ipcMain.on("open-settings", (_e, p: string) => {
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, SETTINGS_TEMPLATE);
   }
-  void shell.openPath(p);
+  void openForUser(p);
 });
 ipcMain.handle("keybindings", () => keybindings);
 ipcMain.handle("set-keybinding", (_e, id: string, keys: string[] | null) => writeKeybinding(id, keys));
@@ -838,8 +829,8 @@ async function renderSymbols(names: string[], size: number, weight: string, scal
 ipcMain.handle("sf-symbols", (_e, req: { names: string[]; size: number; weight?: string; scale?: number }) =>
   renderSymbols(req.names, req.size, req.weight ?? "regular", Math.max(1, Math.min(3, Math.round(req.scale ?? 2)))),
 );
-ipcMain.on("open-keybindings", () => void shell.openPath(ensureKeybindingsFile()));
-ipcMain.on("open-docs", () => void shell.openPath(path.join(repoRoot, "docs", "00-overview.md")));
+ipcMain.on("open-keybindings", () => void openForUser(ensureKeybindingsFile()));
+ipcMain.on("open-docs", () => void openForUser(path.join(repoRoot, "docs", "00-overview.md")));
 ipcMain.on("focus", (e) => {
   const win = winOf(e);
   if (win) {

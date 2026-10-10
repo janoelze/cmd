@@ -217,7 +217,7 @@ export function About(p: { updates: ReactNode; crashReports: ReactNode; usageSta
       </FormSection>
       <FormActions>
         {app && (
-          <Button onClick={() => cmd.openPath(app.coreLog)}>
+          <Button onClick={() => cmd.openPath(app.coreLog, { from: "user" })}>
             Open Log
           </Button>
         )}
