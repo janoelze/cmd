@@ -25,7 +25,7 @@
 // on the same disk, copied from another or with ⌥, like Finder. Hovering a closed
 // folder for a moment opens it.
 
-import { Callout, EmptyState, toast, ToolbarButton, ToolbarPath, ToolbarSpacer, WindowToolbar } from "@cmd/ui";
+import { Callout, toast, ToolbarButton, ToolbarPath, ToolbarSpacer, Tree, TreeHeader, TreeRename, TreeRow, View, ViewState, WindowToolbar, type TreeSort, type TreeTone } from "@cmd/ui";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AppWindow, FileEntry, GitFile, GitFileState, GitStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -109,6 +109,8 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   const gitOn = useStoreValue((s) => s.settings.settings["files.git"]);
   const [git, setGit] = useState<GitStatus | null>(null);
   const [changesOnly, setChangesOnly] = usePersisted<boolean>(`files.changes.${win.id}`, false);
+  /** The column the rows sort by; folders stay first. */
+  const [sort, setSort] = usePersisted<TreeSort>(`files.sort.${win.id}`, { key: "name", desc: false });
   const gitTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   /** The row being renamed in place. */
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -117,7 +119,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   const listRef = useRef<HTMLDivElement>(null);
   // Find a name among the rows shown; the current match is selected, so ↩ opens it.
   const findable = useMemo(
-    () => domFindable(() => listRef.current, { within: ".file-name", onCurrent: (el) => setSel(el.closest<HTMLElement>("[data-path]")?.dataset.path ?? null) }),
+    () => domFindable(() => listRef.current, { within: ".ui-tree-name", onCurrent: (el) => setSel(el.closest<HTMLElement>("[data-path]")?.dataset.path ?? null) }),
     [],
   );
   const find = useFind(findable, { placeholder: "Find a name", onClose: () => listRef.current?.focus() });
@@ -279,7 +281,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       return out;
     }
     const walk = (dir: string, depth: number, parent: string | null) => {
-      for (const e of children.get(dir) ?? []) {
+      for (const e of sorted(children.get(dir) ?? [], sort)) {
         if (!showHidden && e.hidden) continue;
         out.push({ entry: e, depth, parent });
         if (e.kind === "dir" && isOpen(e.path)) walk(e.path, depth + 1, e.path);
@@ -287,7 +289,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     };
     walk(root, 0, null);
     return out;
-  }, [children, root, showHidden, isOpen, showChanges, changes]);
+  }, [children, root, showHidden, isOpen, showChanges, changes, sort]);
 
   // Keep a selection. After going up, the folder we came from wins as soon as the
   // new root's rows contain it (the root change arrives from the core a moment
@@ -465,7 +467,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     let resting = { dir: "", since: 0 };
     const folderAt = (target: Element): { dir: string; closed: boolean } => {
       const s = dropState.current;
-      const path = target.closest<HTMLElement>(".file-row")?.dataset.path;
+      const path = target.closest<HTMLElement>(".ui-tree-row")?.dataset.path;
       const row = path ? s.rows.find((r) => r.entry.path === path) : undefined;
       if (!row) return { dir: s.root, closed: false };
       if (s.showChanges || row.entry.kind !== "dir") return { dir: parentOf(row.entry.path), closed: false };
@@ -605,38 +607,50 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       { label: "Show in Finder", run: () => cmd.revealPath(root) },
       { label: "Copy Path", run: () => copy(root) },
     ]);
+  const empty = !error && rows.length === 0 && (showChanges ? "No changes" : children.has(root) ? "Empty folder" : null);
   return (
-    <div className={`files${docked ? " in-sidebar" : ""}`}>
-      <WindowToolbar label="Files">
-        <ToolbarButton icon="chevron.up" label="Enclosing Folder" shortcut="⌘↑" disabled={!rootParent} onClick={rootUp} />
-        <ToolbarPath segments={crumbs.map((c) => ({ key: c.path, label: c.name }))} onSelect={setRoot} onMenu={folderMenu} tip={root} />
-        <ToolbarSpacer />
-        {git && (
-          <ToolbarButton
-            icon="arrow.triangle.branch"
-            label={branchLabel}
-            tip={branchTitle}
-            showLabel
-            pressed={showChanges}
-            badge={changes.length > 0 ? `${changes.length}${git.truncated ? "+" : ""}` : undefined}
-            onClick={() => setChangesOnly((c) => !c)}
-            priority={5}
-          />
-        )}
-        <ToolbarButton icon="doc.badge.plus" label="New File" onClick={() => void create("file", root)} priority={4} />
-        <ToolbarButton icon="folder.badge.plus" label="New Folder" shortcut="⇧⌘N" onClick={() => void create("dir", root)} priority={4} />
-        <ToolbarButton icon="rectangle.compress.vertical" label="Collapse All" disabled={!anyOpen} onClick={collapseAll} secondary priority={1} />
-        <ToolbarButton icon={isBookmarked(root) ? "bookmark.fill" : "bookmark"} label="Bookmarks" menu onClick={() => void showContextMenu(bookmarkEntries())} secondary priority={2} />
-        <ToolbarButton icon={showHidden ? "eye" : "eye.slash"} label={showHidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={showHidden} onClick={() => setShowHidden((h) => !h)} secondary priority={2} />
-        <ToolbarButton icon="terminal" label="New Terminal Here" onClick={() => void newTerminalIn(root)} secondary priority={3} />
-      </WindowToolbar>
-      {find.bar}
-      <div
-        className={`file-list ${dropDir === root ? "drop-into" : ""}`}
+    <View
+      scroll={false}
+      toolbar={
+        <>
+          <WindowToolbar label="Files">
+            <ToolbarButton icon="chevron.up" label="Enclosing Folder" shortcut="⌘↑" disabled={!rootParent} onClick={rootUp} />
+            <ToolbarPath segments={crumbs.map((c) => ({ key: c.path, label: c.name }))} onSelect={setRoot} onMenu={folderMenu} tip={root} />
+            <ToolbarSpacer />
+            {git && (
+              <ToolbarButton
+                icon="arrow.triangle.branch"
+                label={branchLabel}
+                tip={branchTitle}
+                showLabel
+                pressed={showChanges}
+                badge={changes.length > 0 ? `${changes.length}${git.truncated ? "+" : ""}` : undefined}
+                onClick={() => setChangesOnly((c) => !c)}
+                priority={5}
+              />
+            )}
+            <ToolbarButton icon="doc.badge.plus" label="New File" onClick={() => void create("file", root)} priority={4} />
+            <ToolbarButton icon="folder.badge.plus" label="New Folder" shortcut="⇧⌘N" onClick={() => void create("dir", root)} priority={4} />
+            <ToolbarButton icon="rectangle.compress.vertical" label="Collapse All" disabled={!anyOpen} onClick={collapseAll} secondary priority={1} />
+            <ToolbarButton icon={isBookmarked(root) ? "bookmark.fill" : "bookmark"} label="Bookmarks" menu onClick={() => void showContextMenu(bookmarkEntries())} secondary priority={2} />
+            <ToolbarButton icon={showHidden ? "eye" : "eye.slash"} label={showHidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={showHidden} onClick={() => setShowHidden((h) => !h)} secondary priority={2} />
+            <ToolbarButton icon="terminal" label="New Terminal Here" onClick={() => void newTerminalIn(root)} secondary priority={3} />
+          </WindowToolbar>
+          {find.bar}
+        </>
+      }
+    >
+      {opError && (
+        <Callout compact tone="danger" onDismiss={() => setOpError(null)}>
+          {opError}
+        </Callout>
+      )}
+      {!docked && !showChanges && <TreeHeader sort={sort} onSort={setSort} />}
+      <Tree
         ref={listRef}
-        tabIndex={0}
+        dense={docked}
+        dropping={dropDir === root}
         onKeyDown={onKey}
-        role="tree"
         aria-label="Files"
         onContextMenu={(ev) => {
           if (ev.target !== ev.currentTarget) return;
@@ -644,31 +658,33 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
           listMenu();
         }}
       >
-        {error && <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState>}
-        {opError && (
-          <Callout compact tone="danger" className="file-op-error" onDismiss={() => setOpError(null)}>
-            {opError}
-          </Callout>
-        )}
+        {/* Inside the tree, so an empty folder still takes drops and its menu. */}
+        {error ? <ViewState state={{ kind: "error", title: "Can't read this folder", text: error }} /> : empty && <ViewState state={{ kind: "empty", icon: showChanges ? "checkmark.circle" : "folder", title: empty }} />}
         {rows.map(({ entry: e, depth, label }) => {
           const dir = e.kind === "dir";
-          const open = dir && isOpen(e.path);
           const g = gitOf(e.path);
           const inside = dir ? gitInside.get(e.path) : undefined;
-          const tone = g?.state ?? inside;
           return (
-            <div
+            <TreeRow
               key={e.path}
               data-path={e.path}
-              role="treeitem"
               // Its name alone, not the twisty's "Expand" or the date; git state as the description.
               aria-label={label ?? e.name}
               aria-description={g ? GIT_WORD[g.state] : inside ? "Contains changes" : undefined}
-              aria-level={depth + 1}
-              aria-selected={sel === e.path}
-              aria-expanded={dir ? open : undefined}
-              className={`file-row ${sel === e.path ? "sel" : ""} ${dropDir === e.path ? "drop-into" : ""} ${e.hidden ? "hidden-file" : ""} ${tone ? `git-${tone}` : ""}`}
-              style={{ ["--depth" as string]: depth }}
+              depth={depth}
+              open={dir ? isOpen(e.path) : undefined}
+              onToggle={() => toggle(e)}
+              icon={iconFor(e)}
+              folder={dir}
+              name={renaming === e.path ? <TreeRename name={e.name} folder={dir} onDone={(name) => void rename(e, name)} /> : (label ?? e.name)}
+              mark={g ? GIT_LETTER[g.state] : inside ? "•" : undefined}
+              markTip={g ? `${GIT_WORD[g.state]}${g.staged ? " (staged)" : ""}` : inside ? "Contains changes" : undefined}
+              tone={toneOf(g?.state ?? inside)}
+              faded={e.hidden}
+              selected={sel === e.path}
+              dropping={dropDir === e.path}
+              size={dir || label !== undefined ? "" : formatBytes(e.size)}
+              date={when(e.mtime)}
               draggable={renaming !== e.path}
               onDragStart={(ev) => dragFiles(ev, [e.path])}
               onMouseDown={() => setSel(e.path)}
@@ -678,68 +694,27 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
                 setSel(e.path);
                 entryMenu(e);
               }}
-            >
-              {dir ? (
-                <button
-                  className={`twisty ${open ? "open" : ""}`}
-                  tabIndex={-1}
-                  aria-label={open ? "Collapse" : "Expand"}
-                  onMouseDown={(ev) => ev.stopPropagation()}
-                  onClick={() => toggle(e)}
-                >
-                  <Symbol name="chevron.right" size={ICON.disclosure} />
-                </button>
-              ) : (
-                <span className="twisty-space" />
-              )}
-              <Symbol name={iconFor(e)} size={ICON.row} className={dir ? "file-icon dir" : "file-icon"} />
-              {renaming === e.path ? (
-                <RenameField entry={e} onDone={(name) => void rename(e, name)} />
-              ) : (
-                <span className="file-name">{label ?? e.name}</span>
-              )}
-              <span className="git-mark" data-tip={g ? `${GIT_WORD[g.state]}${g.staged ? " (staged)" : ""}` : inside ? "Contains changes" : undefined}>
-                {g ? GIT_LETTER[g.state] : inside ? "•" : ""}
-              </span>
-              <span className="file-size">{dir || label !== undefined ? "" : formatBytes(e.size)}</span>
-              <span className="file-date">{when(e.mtime)}</span>
-            </div>
+            />
           );
         })}
-        {showChanges
-          ? rows.length === 0 && <EmptyState compact>No changes</EmptyState>
-          : children.has(root) && rows.length === 0 && !error && <EmptyState compact>Empty folder</EmptyState>}
-      </div>
-    </div>
+      </Tree>
+    </View>
   );
 }
 
-/** The name as an input: the name without its extension selected, like Finder. Return or leaving it renames, Escape doesn't. */
-function RenameField({ entry, onDone }: { entry: FileEntry; onDone: (name: string) => void }) {
-  const done = useRef(false);
-  const finish = (name: string) => {
-    if (done.current) return;
-    done.current = true;
-    onDone(name);
-  };
-  return (
-    <input
-      className="file-rename"
-      defaultValue={entry.name}
-      autoFocus
-      spellCheck={false}
-      onFocus={(ev) => {
-        const dot = entry.kind === "dir" ? -1 : entry.name.lastIndexOf(".");
-        ev.currentTarget.setSelectionRange(0, dot > 0 ? dot : entry.name.length);
-      }}
-      onKeyDown={(ev) => {
-        ev.stopPropagation(); // not the list's keys
-        if (ev.key === "Enter") finish(ev.currentTarget.value);
-        else if (ev.key === "Escape") finish(entry.name);
-      }}
-      onBlur={(ev) => finish(ev.currentTarget.value)}
-      onMouseDown={(ev) => ev.stopPropagation()}
-      onDoubleClick={(ev) => ev.stopPropagation()}
-    />
-  );
+const byName = (a: FileEntry, b: FileEntry) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+
+/** A folder's entries in the chosen order, folders first; ties go by name. */
+function sorted(list: readonly FileEntry[], s: TreeSort): FileEntry[] {
+  const dir = s.desc ? -1 : 1;
+  const by = s.key === "size" ? (a: FileEntry, b: FileEntry) => a.size - b.size : s.key === "date" ? (a: FileEntry, b: FileEntry) => a.mtime - b.mtime : byName;
+  return [...list].sort((a, b) => Number(b.kind === "dir") - Number(a.kind === "dir") || dir * by(a, b) || byName(a, b));
+}
+
+/** A git state as the tree's tone: renamed reads as modified, untracked as added. */
+function toneOf(state: string | undefined): TreeTone | undefined {
+  if (state === "modified" || state === "renamed") return "modified";
+  if (state === "added" || state === "untracked") return "added";
+  if (state === "deleted" || state === "conflict" || state === "ignored") return state;
+  return undefined;
 }

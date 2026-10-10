@@ -5,10 +5,10 @@
 
 import { useEffect, useState, type ComponentType } from "react";
 import { Segmented, Select, Spacer, Toolbar } from "@cmd/ui";
-import { allThemes, applyTheme, themeFor } from "@cmd/ui/themes";
+import { allThemes, themeFor } from "@cmd/ui/themes";
 import type { SettingsSnapshot } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { applyThemeSettings } from "../theme.ts";
+import { applyThemeSettings, pinTheme } from "../theme.ts";
 import { applyLookSettings } from "../look.ts";
 
 type Variants = Record<string, ComponentType>;
@@ -48,10 +48,9 @@ function useWorkbenchTheme(theme: string) {
   }, []);
   useEffect(() => {
     const t = theme !== FOLLOW ? themeFor(theme) : undefined;
-    if (t) {
-      applyTheme(t);
-      cmd.setAppearance({ source: t.appearance, background: t.colors.bg, dockIcon: null });
-    } else if (settings) applyThemeSettings(settings);
+    // Pinned, so a story that applies the settings' theme (the store, Settings) doesn't undo the pick.
+    pinTheme(t ?? null);
+    if (!t && settings) applyThemeSettings(settings);
     if (settings) applyLookSettings(settings);
     // Read by scripts/workbench.mjs: a shot waits until the theme it asked for is on.
     document.body.dataset.theme = t ? t.id : FOLLOW;

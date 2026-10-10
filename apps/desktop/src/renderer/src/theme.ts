@@ -5,10 +5,21 @@
 
 import type { Settings } from "@cmd/protocol";
 import { applyTheme, resolveTheme } from "@cmd/ui/themes";
+import type { Theme } from "@cmd/ui/themes/types";
 import { cmd } from "./bridge.ts";
 
 let lastSettings: Pick<Settings, "theme.appearance" | "theme.dark" | "theme.light" | "theme.dockIcon"> | undefined;
 const systemDark = matchMedia("(prefers-color-scheme: dark)");
+
+/** A theme that wins over the settings' (the Workbench's theme picker), or null to follow them again. */
+let pinned: Theme | null = null;
+export function pinTheme(t: Theme | null): void {
+  pinned = t;
+  if (t) {
+    applyTheme(t);
+    cmd.setAppearance({ source: t.appearance, background: t.colors.bg, dockIcon: null });
+  } else sync();
+}
 
 /** Apply the theme the settings choose; call on every settings snapshot. */
 export function applyThemeSettings(s: Settings): void {
@@ -17,7 +28,7 @@ export function applyThemeSettings(s: Settings): void {
 }
 
 function sync(): void {
-  if (!lastSettings) return;
+  if (!lastSettings || pinned) return;
   const appearance = lastSettings["theme.appearance"] === "auto" ? (systemDark.matches ? "dark" : "light") : lastSettings["theme.appearance"];
   const t = resolveTheme(appearance, lastSettings["theme.dark"], lastSettings["theme.light"]);
   applyTheme(t);

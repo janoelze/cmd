@@ -746,7 +746,7 @@ kbd {
 
 /* ── browser and file windows ───────────────────────── */
 
-.browser, .files {
+.browser {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -778,87 +778,6 @@ kbd {
 /* While dragging or resizing windows, embedded pages ([data-embed], embed.ts) must not swallow pointer events. */
 .main.windows.dragging [data-embed], .main.windows.resizing [data-embed], .main.windows.held [data-embed] { pointer-events: none; }
 
-.file-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; outline: none; }
-.file-row {
-  --depth: 0;
-  position: relative;
-  display: grid;
-  /* Twisty, icon (as wide as the widest file icon's box), name, git letter, size, date.
-     Even column widths and an even row height keep every icon on whole pixels. */
-  grid-template-columns: 12px 18px minmax(0, 1fr) 12px 72px 110px;
-  align-items: center;
-  justify-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 12px 0 calc(8px + var(--depth) * 16px);
-  /* The Navigator's type: the UI font, whole-pixel line height. */
-  font: 13px/18px var(--font-ui);
-  cursor: default;
-}
-.file-row:hover { background: var(--bg-hover); }
-.file-row.sel { background: var(--bg-selected); }
-.file-row.hidden-file { opacity: 0.55; }
-.file-icon { color: var(--text-dim); }
-.file-icon.dir { color: var(--folder); }
-.file-name { justify-self: stretch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-row .git-mark, .file-size, .file-date { justify-self: end; }
-/* Narrow (a sidebar, a thin strip window): names only, no size or date column. */
-.files { container-type: inline-size; }
-@container (max-width: 420px) {
-  .file-row { grid-template-columns: 12px 18px minmax(0, 1fr) 12px; }
-  .file-size, .file-date { display: none; }
-}
-.file-size, .file-date { font-size: 0.85em; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
-.file-op-error.ui-callout { margin: 2px 8px 4px; }
-
-/* As a sidebar (FilesView, docs/21-sidebars.md): rows like the Navigator's (inset, rounded, the same hover and selection), denser,
-   and a guide per level at each ancestor's twisty. */
-.files.in-sidebar .file-list { padding: 4px 0; }
-.files.in-sidebar .file-row { height: 22px; margin: 0 6px; padding-left: calc(4px + var(--depth) * 12px); padding-right: 6px; gap: 5px; border-radius: var(--radius-sm); }
-.files.in-sidebar .file-row::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 4px;
-  width: calc(var(--depth) * 12px);
-  background: repeating-linear-gradient(to right, transparent 0 6px, var(--guide) 6px 7px, transparent 7px 12px);
-  pointer-events: none;
-}
-.files.in-sidebar .file-list { --guide: color-mix(in srgb, var(--ink) 9%, transparent); }
-.files.in-sidebar .file-list:hover { --guide: color-mix(in srgb, var(--ink) 16%, transparent); }
-/* Renaming in place, like Finder and editors' explorers: the field takes the name's
-   place and runs to the row's end, its text exactly where the name's was (the margin
-   cancels its padding and border), a hairline focus edge rather than a glowing box. */
-.file-rename {
-  justify-self: stretch;
-  min-width: 0;
-  height: calc(100% - 4px);
-  margin: 0 0 0 -4px;
-  padding: 0 3px;
-  font: inherit;
-  color: var(--text);
-  background: var(--well);
-  border: 1px solid var(--input-focus-edge);
-  border-radius: 3px;
-  outline: none;
-  user-select: text;
-}
-.file-list:focus .file-row.sel { background: color-mix(in srgb, var(--accent) 55%, transparent); }
-/* The folder a drag would drop into (FilesView): its row, or the whole list for the root. */
-.file-row.drop-into, .file-list:focus .file-row.drop-into { background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px var(--accent); }
-.file-list.drop-into { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent); }
-.file-row .twisty { color: var(--text-dim); }
-/* Git state (FilesView): name and mark coloured; ignored files dimmed like hidden ones. */
-.git-mark { font-size: 0.85em; font-weight: 600; text-align: center; }
-.file-row.git-modified, .file-row.git-renamed { --git: var(--git-modified); }
-.file-row.git-added, .file-row.git-untracked { --git: var(--git-added); }
-.file-row.git-deleted { --git: var(--git-deleted); }
-.file-row.git-conflict { --git: var(--git-conflict); }
-.file-row[class*="git-"]:not(.git-ignored) :is(.file-name, .git-mark) { color: var(--git); }
-.file-row.git-deleted .file-name { text-decoration: line-through; }
-.file-row.git-ignored { opacity: 0.5; }
-.file-row.git-ignored.hidden-file { opacity: 0.4; }
 /* Text windows */
 .textwin { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); }
 .textwin-editor { flex: 1; min-height: 0; overflow: hidden; }

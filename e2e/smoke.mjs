@@ -429,13 +429,13 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const fw = await win.evaluate((p) => window.cmd.call("window.open", { kind: "files", input: { path: p } }), path.join(home, "files-fixture"));
   await win.waitForTimeout(200);
   await win.evaluate((id) => window.__cmdSelect(id), fw.id);
-  await win.waitForSelector(".tile.kind-files .file-row");
-  const rowsNow = () => win.locator(".tile.kind-files .file-row .file-name").allTextContents();
-  const selName = () => win.locator(".tile.kind-files .file-row.sel .file-name").textContent();
+  await win.waitForSelector(".tile.kind-files .ui-tree-row");
+  const rowsNow = () => win.locator(".tile.kind-files .ui-tree-row .ui-tree-name").allTextContents();
+  const selName = () => win.locator(".tile.kind-files .ui-tree-row[data-selected] .ui-tree-name").textContent();
   const filesPath = () => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.find((w) => w.kind === "files").state.path);
   check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.txt"]), "file tree lists the folder, folders first");
 
-  await win.locator(".tile.kind-files .file-row", { hasText: "sub-folder" }).dblclick();
+  await win.locator(".tile.kind-files .ui-tree-row", { hasText: "sub-folder" }).dblclick();
   await win.waitForTimeout(400);
   check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "inner.txt", "notes.txt"]), "double-clicking a folder expands it in place");
 
@@ -481,7 +481,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       };
       globalThis.__pick = "Add to Bookmarks";
     });
-    await win.locator(".tile.kind-files .file-row", { hasText: "sub-folder" }).click({ button: "right" });
+    await win.locator(".tile.kind-files .ui-tree-row", { hasText: "sub-folder" }).click({ button: "right" });
     let saved = null;
     for (let i = 0; i < 30 && !saved?.length; i++) (await win.waitForTimeout(100), (saved = (await win.evaluate(() => window.cmd.call("ui.get", {})))["files.bookmarks"]));
     await app.evaluate(() => (globalThis.__pick = null));
@@ -504,16 +504,16 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
         o?.callback?.();
       };
     });
-    await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).click({ button: "right" });
+    await win.locator(".tile.kind-files .ui-tree-row", { hasText: "notes.txt" }).click({ button: "right" });
     await win.waitForTimeout(400);
     const askedTrash = await app.evaluate(({ dialog }) => dialog.__trashAsked);
     await app.evaluate(({ dialog, Menu }) => ((dialog.showMessageBox = dialog.__orig), (Menu.prototype.popup = globalThis.__bmPopup)));
-    check(askedTrash === "Move “notes.txt” to the Trash?" && (await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).count()) === 1,
+    check(askedTrash === "Move “notes.txt” to the Trash?" && (await win.locator(".tile.kind-files .ui-tree-row", { hasText: "notes.txt" }).count()) === 1,
       `Move to Trash asks first, and Cancel keeps the file (${askedTrash})`);
   }
 
   // Files open in the window that suits them: notes.txt → text window; edit and ⌘S.
-  await win.locator(".tile.kind-files .file-row", { hasText: "notes.txt" }).dblclick();
+  await win.locator(".tile.kind-files .ui-tree-row", { hasText: "notes.txt" }).dblclick();
   await win.waitForSelector(".tile.kind-text .cm-content");
   await win.waitForTimeout(500);
   check((await win.locator(".tile.kind-text .cm-content").textContent()) === "# hi", "double-clicking a text file opens it in a text window (CodeMirror)");
@@ -536,7 +536,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   let rows = [];
   for (let i = 0; i < 30 && !rows.includes("zz-new-file.txt"); i++) {
     await win.waitForTimeout(100);
-    rows = await win.locator(".tile.kind-files .file-row .file-name").allTextContents();
+    rows = await win.locator(".tile.kind-files .ui-tree-row .ui-tree-name").allTextContents();
   }
   check(rows.includes("zz-new-file.txt"), "the file tree shows new files live");
 
@@ -1104,7 +1104,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   for (let i = 0; i < 40 && (await codePx()) !== "16px"; i++) await win.waitForTimeout(50);
   check((await codePx()) === "16px", "the app's file and Markdown windows get the code font size live (--font-code-size)");
   const fonts = await win.evaluate(() =>
-    [".file-row", ".ui-doc", ".ui-doc code"].map((sel) => {
+    [".ui-tree-row", ".ui-doc", ".ui-doc code"].map((sel) => {
       const el = document.querySelector(sel);
       return el ? [sel, getComputedStyle(el).fontFamily, getComputedStyle(el).fontSize] : null;
     }),

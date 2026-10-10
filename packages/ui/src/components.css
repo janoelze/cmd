@@ -760,6 +760,91 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 .ui-card { border-radius: var(--radius-md); background: var(--group-bg); box-shadow: inset 0 0 0 1px var(--group-edge); }
 .ui-card[data-padded] { padding: 12px 14px; }
 
+/* Tree (tree.tsx): disclosure, icon (as wide as the widest file icon's box), name, mark,
+   size, date. Even column widths and an even row height keep every icon on whole pixels.
+   Size and date drop out when the view is narrow (a sidebar, a thin strip). */
+.ui-tree { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding: var(--space-xs) 0; outline: none; }
+.ui-tree > * { flex: none; }
+.ui-tree > .ui-viewstate { flex: 1; }
+.ui-tree[data-dropping] { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent); }
+.ui-tree-row {
+  --depth: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: 12px 18px minmax(0, 1fr) 12px 72px 110px;
+  align-items: center;
+  justify-items: center;
+  gap: var(--space-sm);
+  height: var(--control-h);
+  padding: 0 var(--inset) 0 calc(var(--inset) - var(--space-2xs) + var(--depth) * var(--space-xl)); /* the disclosure's glyph on the inset */
+  font-size: var(--text-base);
+  line-height: 18px;
+  cursor: default;
+}
+@container (max-width: 420px) {
+  .ui-tree-row { grid-template-columns: 12px 18px minmax(0, 1fr) 12px; }
+  .ui-tree-col, .ui-tree-sort.ui-tree-col { display: none; }
+}
+.ui-tree-row:hover { background: var(--bg-hover); }
+.ui-tree-row[data-selected] { background: var(--bg-selected); }
+/* Selected in a focused tree: solid accent, and everything on it in --on-accent (git colours
+   and dim columns would fight the accent in some themes), as Finder and the kit's menus do. */
+.ui-tree:focus .ui-tree-row[data-selected] { background: var(--accent); color: var(--on-accent); }
+.ui-tree:focus .ui-tree-row[data-selected] :is(.ui-tree-name, .ui-tree-mark, .ui-tree-icon, .ui-tree-col, .ui-twisty) { color: var(--on-accent); }
+.ui-tree:focus .ui-tree-row[data-selected][data-faded], .ui-tree:focus .ui-tree-row[data-selected][data-tone="ignored"] { opacity: 1; }
+.ui-tree-row[data-dropping], .ui-tree:focus .ui-tree-row[data-dropping] { background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ui-tree-row[data-faded] { opacity: 0.55; }
+.ui-tree-head { flex: none; height: var(--control-h); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim); box-shadow: inset 0 -1px 0 var(--separator); }
+.ui-tree-head:hover { background: none; }
+.ui-tree-sort { all: unset; display: inline-flex; align-items: center; gap: var(--space-xs); cursor: default; }
+.ui-tree-sort.ui-tree-col { flex-direction: row-reverse; font-size: inherit; }
+.ui-tree-sort:hover, .ui-tree-sort[aria-sort] { color: var(--text); }
+.ui-tree-icon { display: grid; color: var(--text-dim); }
+.ui-tree-icon[data-folder] { color: var(--folder); }
+.ui-tree-name { justify-self: stretch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-tree-mark { justify-self: end; font-size: var(--text-xs); font-weight: 600; text-align: center; }
+.ui-tree-col { justify-self: end; font-size: var(--text-xs); color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
+/* Git: the name and mark in the state's colour; ignored files faded like hidden ones. */
+.ui-tree-row[data-tone="modified"] { --tree-tone: var(--git-modified); }
+.ui-tree-row[data-tone="added"] { --tree-tone: var(--git-added); }
+.ui-tree-row[data-tone="deleted"] { --tree-tone: var(--git-deleted); }
+.ui-tree-row[data-tone="conflict"] { --tree-tone: var(--git-conflict); }
+.ui-tree-row[data-tone]:not([data-tone="ignored"]) :is(.ui-tree-name, .ui-tree-mark) { color: var(--tree-tone); }
+.ui-tree-row[data-tone="deleted"] .ui-tree-name { text-decoration: line-through; }
+.ui-tree-row[data-tone="ignored"] { opacity: 0.5; }
+.ui-tree-row[data-tone="ignored"][data-faded] { opacity: 0.4; }
+/* Dense (a sidebar, docs/21-sidebars.md): rows like the Navigator's, inset and rounded,
+   a guide per level at each ancestor's disclosure. */
+.ui-tree[data-dense] { --guide: color-mix(in srgb, var(--ink) 9%, transparent); }
+.ui-tree[data-dense]:hover { --guide: color-mix(in srgb, var(--ink) 16%, transparent); }
+.ui-tree[data-dense] .ui-tree-row { height: var(--row-h-sm); margin: 0 var(--space-sm); padding-left: calc(var(--space-xs) + var(--depth) * var(--space-lg)); padding-right: var(--space-sm); gap: var(--space-xs); border-radius: var(--radius-sm); }
+.ui-tree[data-dense] .ui-tree-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--space-xs);
+  width: calc(var(--depth) * var(--space-lg));
+  background: repeating-linear-gradient(to right, transparent 0 6px, var(--guide) 6px 7px, transparent 7px 12px);
+  pointer-events: none;
+}
+/* TreeRename: the field takes the name's place and runs to the row's end, its text where
+   the name's was (the margin cancels its padding and border), a hairline focus edge. */
+.ui-tree-rename {
+  justify-self: stretch;
+  min-width: 0;
+  height: calc(100% - var(--space-xs));
+  margin: 0 0 0 calc(-1 * var(--space-xs));
+  padding: 0 calc(var(--space-xs) - 1px);
+  font: inherit;
+  color: var(--text);
+  background: var(--well);
+  border: 1px solid var(--input-focus-edge);
+  border-radius: var(--radius-xs);
+  outline: none;
+  user-select: text;
+}
+
 /* Diff: a file's changed lines under its row, past the row's disclosure (list inset, row
    padding, the twisty, its gap). */
 .ui-diff { --diff-indent: calc(var(--list-inset, var(--space-sm)) + var(--space-md) + var(--space-lg) + var(--space-sm)); margin: 0 0 var(--space-sm); padding: 0; overflow-x: auto; font: var(--text-xs) / 1.45 var(--font-mono); color: var(--text); }
