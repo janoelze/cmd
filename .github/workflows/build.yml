@@ -1,4 +1,4 @@
-# Typecheck, test and package the app for macOS on every push and PR.
+# Typecheck, test, smoke-test and package the app for macOS on every push and PR.
 # Pushing a tag `v*` additionally signs + notarizes the macOS dmg (when the
 # secrets below exist) and publishes one GitHub release: the .dmg and .zip, and
 # the update metadata (latest-mac.yml, blockmaps) installed apps update from.
@@ -90,7 +90,27 @@ jobs:
           pnpm build
           node scripts/stage-runtime.mjs
 
-      # The e2e test runs the core from source; this boots the staged copy the app ships.
+      # Playwright drives the built app through the real menu bar (e2e/smoke.mjs), against a
+      # throwaway CMD_HOME (.cmd-dev/e2e) and fixture transcripts. Panes run zsh, the
+      # Mac default (a runner's $SHELL may be bash). The script has its own 90 s hang watchdog.
+      - name: Smoke test
+        timeout-minutes: 10
+        env:
+          CMD_NO_SANDBOX: "1"
+          SHELL: /bin/zsh
+        run: node e2e/smoke.mjs
+
+      - name: Smoke test screenshots and core logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-mac
+          path: |
+            .cmd-dev/shots
+            .cmd-dev/e2e/logs
+          if-no-files-found: ignore
+
+      # The smoke test runs the core from source; this boots the staged copy the app ships.
       - name: Check the staged core starts
         run: node --no-warnings scripts/check-runtime.mjs
 

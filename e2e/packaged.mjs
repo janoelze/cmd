@@ -1,7 +1,7 @@
 // Launches the packaged app (apps/desktop/dist, from electron-builder), not the
 // source the smoke test drives, and checks it works end to end: its window
 // opens, its own bundled core starts and answers, and a terminal shows the
-// shell's prompt. CI runs it after packaging, on macOS and Windows.
+// shell's prompt. CI runs it after packaging, on macOS (and on Windows when that job is on).
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
