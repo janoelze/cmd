@@ -15,7 +15,7 @@ pnpm test                    # vitest, all packages
 pnpm vitest run packages/core/test/osc.test.ts   # one file
 pnpm vitest run -t "name"                        # one test by name
 pnpm typecheck               # root tsc (packages/*) + desktop tsc
-pnpm e2e                     # build, then Playwright drives the real app; screenshots in .cmd-dev/shots
+pnpm e2e                     # build if stale, then Playwright drives the real app in 3 shards (~15 s); E2E_SHOTS=1 for screenshots in .cmd-dev/shots
 pnpm tour <file.tour.ts>     # record a scripted demo video with real input (tours skill; needs the built app and screen access)
 pnpm core                    # run the core directly
 pnpm core:stop               # stop the core of $CMD_HOME, else the dev one; core:stop-all stops every non-release core
@@ -82,7 +82,7 @@ packages/cli (`cmd`, hook entry point)              ──┼─ newline-delimit
 ## Tests
 
 - Tests live in `packages/*/test` and `apps/*/test`. Core tests construct a `Core` directly with `dbPath: null`/`settingsPath: null` (in-memory) and either `fakeFactory()` from `packages/core/test/fake-pty.ts` or real PTYs for integration tests.
-- `e2e/smoke.mjs` launches the built app against a throwaway `CMD_HOME` (`.cmd-dev/e2e`) with fixture transcripts (`CMD_TRANSCRIPTS_HOME`) and drives it through the real menu bar. Rules for new tests (no fixed waits, where a behaviour's test belongs): docs/41-testing.md.
+- `e2e/smoke.mjs` launches the built app against a throwaway `CMD_HOME` (`.cmd-dev/e2e`, `.cmd-dev/e2e-<n>` per shard) with fixture transcripts (`CMD_TRANSCRIPTS_HOME`) and drives it through the real menu bar. Rules for new tests (no fixed waits, where a behaviour's test belongs): docs/41-testing.md.
 
 ## Conventions
 

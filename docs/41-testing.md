@@ -348,6 +348,48 @@ Items 1 to 3 alone take the suite from 71 s to roughly 15 s wall. The measuremen
 pipe the run through a script that prefixes each line with the time since the previous
 one, and make `step()` print any gap over 500 ms with the step before and after.
 
+### What landed (Oct 10)
+
+On top of the scenarios and Reduce Motion (cc01e49b), measured the same way
+(`E2E_SCREEN=ci`, all 35 scenarios green):
+
+| Change | One app | Notes |
+|---|---|---|
+| Start (smoke-root merged) | 66 s | |
+| The restart scenario waited for a renamed UI key (`sidebar.collapsed` → `sidebar.sections`) | 53 s | Sat out a 10 s deadline every run while the check after it passed. `E2E_GAPS=ms` found it |
+| `still()` waits for the menu command to reach the renderer (it counts `onCommand`) and two frames, not a fixed 300–800 ms; reads every 30 ms | 36 s | Real motion (`E2E_MOTION=1`) keeps the fixed wait |
+| Select All waits for the webview to be the app's focused element | 33 s | `getFocusedWebContents()` is always empty in the background, so the wait ran 3 s every time |
+| Screenshots only with `E2E_SHOTS=1` | 30.5 s | A failure still saves one |
+| Bare zsh in test terminals (`shell.login` false, empty `ZDOTDIR`) | 30 s | Mostly for sameness across machines |
+| `--shards 3` / `--shards 4` | **15 s / 13 s wall** | `pnpm e2e` uses 3, CI 2 |
+
+`pnpm e2e` also skips the build when nothing under `apps/desktop`, `packages` or the
+lockfile is newer than `apps/desktop/out` (`scripts/build-if-stale.mjs`), so a rerun
+costs only the run.
+
+Shards deal the scenarios longest-first (a rough cost table in `smoke.mjs`), each with what
+it needs, so `terminals` and `files` run in more than one. `browser` and what needs it stay
+in one shard: Select All and Copy use the system clipboard.
+
+Going faster removed the time some checks had relied on, and showed three races:
+- **⌘↑ right after ⌘↓ in a file window went up two levels** (the "Open" ⌘↑ incident above).
+  A product bug: the root's parent was set when the root's listing came back, and the rows
+  can show sooner, from the cache. FilesView now keeps the parent with the root it was
+  listed for, and falls back to the path's parent.
+- **Settings → Browser, Remove:** the check read the rows once the file changed; Settings
+  re-renders a moment later. A screenshot in between had hidden it.
+- **The OSC 8 http link** failed under load (4 shards). xterm keeps its link lookup for the
+  row under the pointer until the pointer leaves the row, and each retry stayed on row 0, so
+  a first hover that came before the text was drawn made all three miss. Each attempt now
+  comes in from another row. 8 of 8 alone and 3 of 3 under load since; not proven to be the
+  whole story.
+
+Not done: the fake clock (Reduce Motion already makes glides jump, and `still()` now costs
+frames, not hundreds of ms), seeding state over RPC, shorter deadlines (they only shorten
+a failure, and CI's runner needed the 10 s), and a warm app over CDP. The remaining gaps
+are about 1 s each and real work: the memory sampler's tick, Restart Core, a deliberate
+1 s "nothing else closed" check.
+
 ## Open
 
 - **Same-frame drag release ignored.** d18aa33e slowed the test's drag because a move and
@@ -355,7 +397,8 @@ one, and make `step()` print any gap over 500 ms with the step before and after.
   Check whether the drop handler needs the pointer to have moved in a frame before
   release, and fix the product if so.
 - **The intermittent OSC 8 link check** (`an OSC 8 http link opens in a browser window`,
-  about 2 in 6 local runs). Not yet understood.
+  about 2 in 6 local runs). Probably xterm's per-row link lookup (see "What landed"); watch
+  CI before calling it fixed.
 - **Load on the development Mac.** Several agents run builds and tests at once; the
   `system` vitest project runs two files at a time for this reason. The e2e has no such
   guard and nothing stops two `pnpm e2e` from running together (they share `.cmd-dev/e2e`
