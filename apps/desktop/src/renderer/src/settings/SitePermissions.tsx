@@ -42,7 +42,7 @@ export function SitePermissions() {
     window.addEventListener("focus", look);
     return () => (off(), window.removeEventListener("focus", look));
   }, []);
-  if (!kept) return error ? <EmptyState icon="exclamationmark.triangle" title="Couldn't read site permissions">{error}</EmptyState> : null;
+  if (!kept) return error ? <EmptyState title="Couldn't read site permissions">{error}</EmptyState> : null;
 
   const forget = (site: string, kind: SitePermission | null) =>
     void cmd.forgetSitePermission(site, kind).then((k) => (setKept(k), setError(null)), (e: Error) => setError(ipcMessage(e)));
@@ -53,7 +53,7 @@ export function SitePermissions() {
     return (
       <>
         {failed}
-        <EmptyState icon="hand.raised" title="No site permissions yet">
+        <EmptyState title="No site permissions yet">
           When a website asks for your camera, location or notifications, your answer shows here.
         </EmptyState>
       </>
