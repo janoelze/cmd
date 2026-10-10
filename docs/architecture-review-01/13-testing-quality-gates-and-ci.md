@@ -46,9 +46,9 @@ CI is `.github/workflows/build.yml`: one macOS arm64 job runs `pnpm typecheck`, 
 **Proposal.** Add a `Smoke` step to the mac job after `Build and stage` (the build is already there, so it costs the ~2 min run, not a rebuild): `CMD_NO_SANDBOX=1 node e2e/smoke.mjs`, then upload `.cmd-dev/shots` and `.cmd-dev/e2e/logs` with `if: failure()`, the way the Windows job did. The script already has its own watchdog and isolated `CMD_HOME`. Playwright's Electron support is experimental [PW-ELEC], so keep the watchdog and give the step `timeout-minutes: 10`. Fix the two stale sentences in the same commit. Packaged-app lifecycle coverage beyond this is doc 01 (AR1-01-10).
 
 **Success criteria.**
-- [ ] `build.yml`'s mac job runs `e2e/smoke.mjs` on every push and PR, with screenshots and core logs uploaded on failure
+- [x] `build.yml`'s mac job runs `e2e/smoke.mjs` on every push and PR, with screenshots and core logs uploaded on failure
 - [ ] Ten consecutive green runs on master (no retries) before it is made required
-- [ ] `grep -n "e2e on Windows\|on macOS and Windows" DEVELOPMENT.md e2e/packaged.mjs` returns nothing, or the text matches the workflow
+- [x] `grep -n "e2e on Windows\|on macOS and Windows" DEVELOPMENT.md e2e/packaged.mjs` returns nothing, or the text matches the workflow
 - [ ] A deliberately broken menu command on a branch turns the job red
 
 ### AR1-13-02 · Add architecture fitness tests in the style of design-css.test.ts
@@ -107,10 +107,10 @@ CI is `.github/workflows/build.yml`: one macOS arm64 job runs `pnpm typecheck`, 
 **Proposal.** Split by cost with vitest `projects`: a `unit` project (everything without real processes, fully parallel) and a `system` project (`core`, `detection`, `pty-leak`, `shells`, `widgets`, `magic`, `resources`, `loginpath`) with `maxWorkers: 2` and `until` deadlines derived from one `SYSTEM_TIMEOUT` constant. Replace `skipIf(!X)` with a `needs(X)` helper that skips locally but throws when `process.env.CI` is set, and install Deno in `build.yml` (`denoland/setup-deno`, pinned). Silence the per-worker `ExperimentalWarning: SQLite` noise with `--disable-warning=ExperimentalWarning` in the pool's `execArgv` so a real warning is visible.
 
 **Success criteria.**
-- [ ] `pnpm test` passes 10 runs in a row on this machine with no reruns (`for i in $(seq 10); do pnpm test || break; done`)
+- [x] `pnpm test` passes 10 runs in a row on this machine with no reruns (`for i in $(seq 10); do pnpm test || break; done`)
 - [ ] In CI the `widgets.test.ts` Deno blocks run (the job log shows 28 widgets tests, 0 skipped)
-- [ ] `grep -rn "skipIf(!" packages/*/test` returns only `needs(...)` call sites or none
-- [ ] `pnpm test` output contains no `ExperimentalWarning` lines
+- [x] `grep -rn "skipIf(!" packages/*/test` returns only `needs(...)` call sites or none
+- [x] `pnpm test` output contains no `ExperimentalWarning` lines
 
 ### AR1-13-05 · Build a tiered pipeline: pre-commit, CI, nightly
 
