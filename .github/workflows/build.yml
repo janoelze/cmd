@@ -12,6 +12,8 @@
 # reports to (apps/desktop/src/main/crash.ts). Without it they keep them locally.
 # CMD_FEEDBACK_WEBHOOK (optional): the Discord webhook Help → Send Feedback…
 # posts to (apps/desktop/src/main/feedback.ts). Without it the form can't send.
+# CMD_RELEASES_WEBHOOK (optional): the Discord webhook of #whats-new; a release
+# posts its CHANGELOG.md section there (scripts/changelog.mjs announce).
 # CMD_USAGE_URL=off: apps launched here (e2e) send no usage stats; each run would
 # count as a new install.
 # CMD_USAGE_SECRET: what release builds derive their usage stats signing key from
@@ -370,3 +372,13 @@ jobs:
           # latest-mac.yml, latest.yml and the blockmaps are what installed apps update from (src/main/updater.ts).
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" "${notes[@]}"
+
+      # Prereleases aren't announced. A failed post doesn't fail the release; it's already out.
+      - name: Announce on Discord
+        if: ${{ !contains(github.ref_name, '-') }}
+        continue-on-error: true
+        env:
+          CMD_RELEASES_WEBHOOK: ${{ secrets.CMD_RELEASES_WEBHOOK }}
+        run: |
+          if [ -z "$CMD_RELEASES_WEBHOOK" ]; then echo "No CMD_RELEASES_WEBHOOK: not announced"; exit 0; fi
+          node scripts/changelog.mjs announce "${GITHUB_REF_NAME#v}"

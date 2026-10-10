@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { compareVersions, lintChangelog, parseChangelog, releaseNotes, releasesBetween } from "../src/shared/changelog.ts";
+import { compareVersions, discordAnnouncement, lintChangelog, parseChangelog, releaseNotes, releasesBetween } from "../src/shared/changelog.ts";
 import type { claimWhatsNew } from "../src/main/whats-new.ts";
 
 const root = path.join(import.meta.dirname, "../../..");
@@ -66,6 +66,19 @@ describe("parseChangelog", () => {
     expect(releaseNotes(parseChangelog(SAMPLE)[0]!)).toBe(
       "A calmer release.\n\n### New\n\n- **What's New.** See what changed after an update, from the status bar's sparkles.\n\n### Fixed\n\n- Terminals keep their last line when the window is resized.\n",
     );
+  });
+  it("announces a release on Discord", () => {
+    const url = "https://github.com/janoelze/cmd/releases/tag/v0.10.0";
+    expect(discordAnnouncement(parseChangelog(SAMPLE)[0]!, url)).toEqual({
+      embeds: [
+        {
+          title: "cmd 0.10.0",
+          url,
+          description: "A calmer release.\n\n**New**\n- **What's New.** See what changed after an update, from the status bar's sparkles.\n\n**Fixed**\n- Terminals keep their last line when the window is resized.",
+          timestamp: "2026-10-06T00:00:00.000Z",
+        },
+      ],
+    });
   });
 });
 

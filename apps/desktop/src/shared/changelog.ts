@@ -1,6 +1,7 @@
 // CHANGELOG.md as data: the renderer's What's New sheet shows the releases since
 // the version someone last saw, scripts/changelog.mjs checks a release has its
-// section and prints it as the GitHub release notes, and a test lints the file.
+// section and prints it as the GitHub release notes and the Discord announcement,
+// and a test lints the file.
 // Format and style: .claude/skills/changelog/SKILL.md.
 
 export const KINDS = ["New", "Improved", "Fixed", "Removed"] as const;
@@ -57,6 +58,13 @@ export function releaseNotes(r: Release): string {
   const parts = r.summary ? [r.summary] : [];
   for (const s of r.sections) parts.push(`### ${s.kind}\n\n${s.entries.map((e) => `- ${e}`).join("\n")}`);
   return parts.join("\n\n") + "\n";
+}
+
+/** One release as a Discord webhook body: an embed titled with the version that links to the release page. */
+export function discordAnnouncement(r: Release, url: string) {
+  const parts = r.summary ? [r.summary] : [];
+  for (const s of r.sections) parts.push(`**${s.kind}**\n${s.entries.map((e) => `- ${e}`).join("\n")}`);
+  return { embeds: [{ title: `cmd ${r.version}`, url, description: parts.join("\n\n"), timestamp: `${r.date}T00:00:00.000Z` }] };
 }
 
 /**

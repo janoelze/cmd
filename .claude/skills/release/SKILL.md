@@ -7,7 +7,8 @@ description: Cut a cmd release (signed, notarized, auto-updating) and verify it,
 
 A release is a `v<version>` tag. CI (`.github/workflows/build.yml`) builds the tag on macOS. The
 `mac` job signs with Developer ID, notarizes the dmg once (its ticket covers the app), staples
-the dmg and the app, zips the stapled app for updates, and verifies all of that. A `release` job then publishes the files as a GitHub release. Installed apps update
+the dmg and the app, zips the stapled app for updates, and verifies all of that. A `release` job then publishes the files as a GitHub release and posts its notes to Discord's
+#whats-new (not for prereleases). Installed apps update
 themselves from it (`apps/desktop/src/main/updater.ts`).
 DEVELOPMENT.md ("Packaging and releases") has the background. This skill is the checklist.
 
@@ -27,7 +28,7 @@ DEVELOPMENT.md ("Packaging and releases") has the background. This skill is the 
 3. Pick the version: `patch` for fixes and small features, `minor` for bigger ones. Versions are
    never reused, even when a release was broken.
 4. **Write the changelog. Load the `changelog` skill and follow it.** Users read this section in
-   What's New right after they update, and it becomes the GitHub release notes. Write it from
+   What's New right after they update, and it becomes the GitHub release notes and the #whats-new post. Write it from
    `git log <last tag>..HEAD` in that skill's format and voice: what a user notices, in plain
    words, with no internals and no commit-message phrasing. Show the user the section, commit it
    (`Changelog for vX.Y.Z`), and check it:
