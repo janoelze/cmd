@@ -1422,6 +1422,10 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   await win.waitForTimeout(500);
   check((await win.locator(".strip-dots button").nth(n - 2).getAttribute("data-current")) === "true",
     "⌥⌘← from the last window moves the current dot, even when nothing scrolls");
+  await win.mouse.wheel(60, 0);
+  await win.waitForTimeout(300);
+  check((await win.locator(".strip-dots button").last().getAttribute("data-current")) === "true",
+    "swiping on at the end of the strip makes the last dot current again, whatever is selected");
   await win.locator(".strip-dots button").first().click();
   await win.waitForTimeout(700);
   check(Math.abs(await trackX()) < 1 && (await win.locator(".strip-dots button").first().getAttribute("data-current")) === "true",

@@ -203,6 +203,8 @@ export function WindowsView(p: Props) {
   const [offset, setOffsetState] = useState(0);
   const offsetRef = useRef(0);
   const anim = useRef<number | null>(null);
+  // A sideways swipe or wheel over the strip: the user scrolls it (StripDots listens).
+  const onSwipe = useRef<(() => void) | null>(null);
   // Where the strip was scrolled when it was left, to come back to exactly there.
   const stripOffset = useRef(0);
   // …and which window was selected then: the same one isn't revealed again on return.
@@ -566,7 +568,10 @@ export function WindowsView(p: Props) {
     const canvas = mode === "canvas";
     const onWheel = (e: WheelEvent) => {
       if (canvas) return canvasWheel(e);
-      if (mode === "strip" && Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.stopPropagation();
+      if (mode === "strip" && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.stopPropagation();
+        onSwipe.current?.();
+      }
     };
     // Canvas: pinch (or ⌘-scroll) zooms at the pointer. Scrolling over the
     // selected, live window scrolls it; anywhere else it pans.
@@ -1033,6 +1038,7 @@ export function WindowsView(p: Props) {
       {mode === "strip" && (
         <StripDots
           scroller={scrollerRef}
+          swipe={onSwipe}
           slots={stripDots.map((d) => d.slot)}
           names={stripDots.map((d) => {
             const r = p.rows.find((x) => idOf(x) === d.id);
@@ -1041,6 +1047,7 @@ export function WindowsView(p: Props) {
           total={stripTotal}
           viewport={stripW}
           selected={stripDots.findIndex((d) => d.id === selected)}
+          selectedId={selected}
           onGo={(i) => {
             const { id, slot } = stripDots[i]!;
             if (id === selected) animateTo(revealOffset(offsetRef.current, slot, stripW, padX, stripTotal));
@@ -1137,25 +1144,37 @@ function Minimap(p: {
 }
 
 /**
- * Strip pagination: a dot per window, the current one wider and lighter. The
- * current window is the selected one while at least half of it is in view (⌥⌘←
- * often moves to a window that is already visible, so nothing scrolls).
- * Otherwise it is the one under a point that moves from the view's left edge
- * (scrolled to the start) to its right edge (scrolled to the end), so every
- * window gets its turn. Click a dot to bring that window into view.
+ * Strip pagination: a dot per window, the current one wider and lighter. The dot
+ * follows what you did last. Chose a window (⌥⌘←, a click, a dot): it is that
+ * window while at least half of it is in view (⌥⌘← often moves to a window that
+ * is already visible, so nothing scrolls). Scrolled sideways since: it is the one
+ * under a point that moves from the view's left edge (scrolled to the start) to
+ * its right edge (scrolled to the end), so every window gets its turn and the
+ * last dot is current at the end. Click a dot to bring that window into view.
  */
 function StripDots(p: {
   scroller: React.RefObject<HTMLDivElement | null>;
+  /** Set to what a sideways swipe over the strip calls. */
+  swipe: React.RefObject<(() => void) | null>;
   slots: Slot[];
   /** Each dot's window, by name. */
   names: string[];
   total: number;
   viewport: number;
   selected: number;
+  /** The selected window's id: choosing another one hands the dot back to the selection. */
+  selectedId: string | null;
   onGo: (index: number) => void;
 }) {
   // Rendered only when the current dot changes, not on every scroll frame.
   const [cur, setCur] = useState(-1);
+  // Whether the selection has the dot: until the user scrolls the strip sideways.
+  const bySelection = useRef(true);
+  const lastSelected = useRef(p.selectedId);
+  if (lastSelected.current !== p.selectedId) {
+    lastSelected.current = p.selectedId;
+    bySelection.current = true;
+  }
   // In the footer's centre (StatusBar), not under the windows.
   const footer = useFooterCentre();
   const shown = !!p.viewport && p.total > p.viewport + 0.5;
@@ -1168,18 +1187,28 @@ function StripDots(p: {
       const max = p.total - p.viewport;
       const seen = sel ? Math.min(sel.x + sel.w, sc.scrollLeft + p.viewport) - Math.max(sel.x, sc.scrollLeft) : 0;
       const at = sc.scrollLeft + (max > 0 ? Math.min(1, Math.max(0, sc.scrollLeft / max)) : 0) * p.viewport;
-      const i = sel && seen >= Math.min(sel.w, p.viewport) / 2 ? p.selected : p.slots.findIndex((s) => at < s.x + s.w);
+      const i = bySelection.current && sel && seen >= Math.min(sel.w, p.viewport) / 2 ? p.selected : p.slots.findIndex((s) => at < s.x + s.w);
       setCur(i < 0 ? p.slots.length - 1 : i);
+    };
+    // A sideways swipe is the user's scroll; reveals and our own glides aren't.
+    p.swipe.current = () => {
+      if (!bySelection.current) return;
+      bySelection.current = false;
+      // At an end nothing scrolls, but the dot still moves there.
+      place();
     };
     place();
     sc.addEventListener("scroll", place, { passive: true });
-    return () => sc.removeEventListener("scroll", place);
+    return () => {
+      sc.removeEventListener("scroll", place);
+      p.swipe.current = null;
+    };
     // Not on every render: reading scrollLeft after each commit forced a layout.
-  }, [shown, p.total, p.viewport, edges, p.selected, p.scroller]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown, p.total, p.viewport, edges, p.selected, p.selectedId, p.scroller, p.swipe]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!shown || !footer) return null;
   return createPortal(
     <div className="strip-dots" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-      <PageDots count={p.slots.length} current={cur} onSelect={p.onGo} size="sm" label="Windows" names={p.names} />
+      <PageDots count={p.slots.length} current={cur} onSelect={(i) => ((bySelection.current = true), p.onGo(i))} size="sm" label="Windows" names={p.names} />
     </div>,
     footer,
   );
