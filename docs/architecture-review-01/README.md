@@ -148,7 +148,7 @@ This is the recommended order. Each wave can run in parallel worktrees; within a
 | AR1-06-05 | ~~Widget data policy (interim, before theme 1 lands)~~ done |
 | AR1-11-04 | Pin, verify and ask before installing Deno |
 | AR1-09-01, AR1-09-02 | Browser permission policy; navigation guards on app windows |
-| AR1-08-01 | Error boundaries, so one view can't blank a window |
+| AR1-08-01 | ~~Error boundaries, so one view can't blank a window~~ done |
 | AR1-14-02 | A tag build without signing fails instead of publishing |
 | AR1-14-01 | One Node major for dev, CI and release |
 | AR1-05-01 | ~~Another agent kind's hooks stay out of the pane's agent~~ done |

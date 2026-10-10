@@ -30,7 +30,7 @@ The renderer is React 19.3 (`apps/desktop/package.json`) on four HTML pages buil
 
 ### AR1-08-01 · Add error boundaries so one broken view can't blank the window
 
-- **Status:** in progress (error-boundaries)
+- **Status:** done (c435d9a4)
 - **Severity:** high
 - **Effort:** S (< ½ day)
 - **Where:** `apps/desktop/src/renderer/src/main.tsx:28`, `apps/desktop/src/renderer/src/windows/registry.ts:51-55`, `apps/desktop/src/renderer/src/errors.ts:9-18`
