@@ -44,7 +44,8 @@ How windows, sidebars and workspaces move, why, and how it's measured. The engin
    element-scoped View Transition on the stage: the old workspace is a snapshot, the
    new one stays live, and the top bar and footer stay put.
 9. **Chrome comes and goes too.** Sheets, popovers, menus, toasts, the palette and its
-   pickers fade out (`usePresence` in `@cmd/ui`) and the palette glides between
+   pickers fade out (`usePresence` in `@cmd/ui`; a sheet stays mounted through it in a
+   `Presence`, then runs none of its hooks) and the palette glides between
    sizes. Find bars open and close. List rows that move (the Navigator, Agent
    Activity, notifications, toasts) glide there (`useFlip`), and new ones fade in.
    The selection ring changes with the dimming. Browser windows fade in over the

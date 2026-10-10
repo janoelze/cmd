@@ -87,6 +87,7 @@ Before a scenario, put the app in the state it needs: select with `selectNth(i)`
 
 - A timing: use a named one (`MOTION.*` in JS, `var(--dur…)`/`var(--ease…)` in CSS). The CSS test fails on a literal duration; if one is really needed (a choreographed indicator), add it to `TIMED` in `motion-css.test.ts` with why.
 - Something that appears and leaves: `usePresence(open)` (or `usePresentValue`), render while `present`, set `data-motion="pop"` (or fade, reveal, rise), `data-closing={closing}`, `inert={closing}`. No keyframes of its own.
+- A sheet: never `{open && <Sheet/>}` (it vanishes, and the harness counts 2 pops). Wrap it in `<Presence when={value}>{(value, open) => <Sheet open={open} />}</Presence>` (`@cmd/ui`) and pass `open` to its `Dialog`: it stays mounted through the fade, then runs none of its hooks.
 - A list whose rows move: `useFlip(ref, { selector })`, rows keyed by `data-key`.
 - Something driven frame by frame: `tween(slot, t => …)`, on the glides' clock.
 - Moving the strip's scroll or the canvas camera at once: `jumpScroll`/`jumpCamera`, never `setOffset`/`setCam` alone.
