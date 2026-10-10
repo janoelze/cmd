@@ -79,11 +79,7 @@ fs.writeFileSync(
     { type: "ai-title", aiTitle: "VPN auto reconnect" },
   ].map((o) => JSON.stringify(o)).join("\n") + "\n",
 );
-// Terminals run a bare zsh: no login profile, an empty ZDOTDIR instead of the user's rc
-// (cmd's shell integration still loads), so one is ready at once and the same on every machine.
-const zdotdir = path.join(home, "zdotdir");
-fs.mkdirSync(zdotdir);
-fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "agents.claude.command": "echo claude", "shell.login": false }));
+fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "agents.claude.command": "echo claude" }));
 
 // Screenshots of the app at each step, for a person or an agent to look at: E2E_SHOTS=1
 // (they take about a fifth of a run). A failure always saves one.
@@ -96,7 +92,7 @@ const launch = async () => {
     executablePath: require("electron"),
     // Fake camera and microphone (not a fake permission prompt): a page's getUserMedia reaches cmd's sheet without real devices.
     args: ["--use-fake-device-for-media-stream", path.join(root, "apps/desktop")],
-    env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ZDOTDIR: zdotdir, ...screenEnv() },
+    env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ...screenEnv() },
   });
   // Reduce Motion in every page: the app window, Settings, browser pages (webviews are pages
   // here too). Chromium's --force-prefers-reduced-motion doesn't reach Electron's pages.
@@ -1966,7 +1962,8 @@ check(restored === selectedBefore && !!selectedBefore, `selected terminal restor
   const rows = () => win.evaluate((id) => document.querySelector(`.tile[data-pane="${id}"] .xterm-rows`)?.textContent ?? "", markerPane);
   const shown = await until(rows, (t) => /MARKER-42/.test(t), 15_000);
   const count = (shown.match(/MARKER-42/g) ?? []).length;
-  check((text.match(/MARKER-42/g) ?? []).length === 1 && count === 1, `re-attached terminal shows its output exactly once (${count}×)`);
+  check((text.match(/MARKER-42/g) ?? []).length === 1 && count === 1,
+    `re-attached terminal shows its output exactly once (${count}×${count === 1 ? "" : `; core ${(text.match(/MARKER-42/g) ?? []).length}×; on screen: ${JSON.stringify(shown.replace(/\s+/g, " ").slice(-300))}`})`);
   check(!/\[<\d+;\d+;\d+[mM]/.test(shown), "no stray mouse escape codes after re-attaching");
   await menu("view.grid");
 }

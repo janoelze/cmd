@@ -360,7 +360,7 @@ On top of the scenarios and Reduce Motion (cc01e49b), measured the same way
 | `still()` waits for the menu command to reach the renderer (it counts `onCommand`) and two frames, not a fixed 300–800 ms; reads every 30 ms | 36 s | Real motion (`E2E_MOTION=1`) keeps the fixed wait |
 | Select All waits for the webview to be the app's focused element | 33 s | `getFocusedWebContents()` is always empty in the background, so the wait ran 3 s every time |
 | Screenshots only with `E2E_SHOTS=1` | 30.5 s | A failure still saves one |
-| Bare zsh in test terminals (`shell.login` false, empty `ZDOTDIR`) | 30 s | Mostly for sameness across machines |
+| Bare zsh in test terminals (`shell.login` false, empty `ZDOTDIR`) | 30 s | Reverted: CI's restart check then found no output on the re-attached terminal (0×), not reproduced locally; worth half a second |
 | `--shards 3` / `--shards 4` | **15 s / 13 s wall** | `pnpm e2e` uses 3, CI 2 |
 
 `pnpm e2e` also skips the build when nothing under `apps/desktop`, `packages` or the

@@ -264,6 +264,7 @@ jobs:
           path: |
             .cmd-dev/shots
             .cmd-dev/e2e*/logs
+          include-hidden-files: true # .cmd-dev is hidden: without this nothing is uploaded
           if-no-files-found: ignore
 
   windows:
