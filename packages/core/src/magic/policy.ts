@@ -7,7 +7,7 @@
 
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_DENY_PATHS, isDeniedPath } from "../paths-deny.ts";
+import { isDeniedPath, magicDenyPaths } from "../paths-deny.ts";
 
 // The private paths moved to paths-deny.ts (shared with remote access); kept here for Magic's imports.
 export { DEFAULT_DENY_PATHS, expandPath, isDeniedPath } from "../paths-deny.ts";
@@ -297,7 +297,7 @@ export interface PolicyOptions {
 
 /** Classify one command line. */
 export function classify(command: string, o: PolicyOptions = {}): Verdict {
-  const deny = o.deny ?? DEFAULT_DENY_PATHS;
+  const deny = o.deny ?? magicDenyPaths();
   const home = o.home ?? os.homedir();
   const cwd = o.cwd ?? home;
   if (!command.trim()) return { level: "deny", reason: "empty command" };

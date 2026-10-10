@@ -5,7 +5,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { classify, credentialsFor, expandPath, isDeniedPath, redact } from "./policy.ts";
+import { classify, credentialsFor, expandPath, redact } from "./policy.ts";
+import { isPrivatePath } from "../paths-deny.ts";
 import { execCommand, type SandboxMode } from "./sandbox.ts";
 import { preview } from "./sources.ts";
 
@@ -46,7 +47,7 @@ export const TOOL_SPECS: ToolSpec[] = [
     name: "run",
     explores: true,
     description:
-      "Run a read-only shell command on the user's Mac (no TTY, 10 s timeout, 64 KB output). Only read-only commands are allowed (ls, cat, grep, find, ps, df, du, scutil, networksetup, ifconfig, git status/log, curl GET, jq, sw_vers, system_profiler, pmset -g, defaults read, …); anything that writes, needs sudo or runs other programs is refused with the reason. Private paths (~/.ssh, keychains, browser profiles, .env files) can't be read.",
+      "Run a read-only shell command on the user's Mac (no TTY, 10 s timeout, 64 KB output). Only read-only commands are allowed (ls, cat, grep, find, ps, df, du, scutil, networksetup, ifconfig, git status/log, curl GET, jq, sw_vers, system_profiler, pmset -g, defaults read, …); anything that writes, needs sudo or runs other programs is refused with the reason. Private paths (~/.ssh, keychains, browser profiles, .env files, cmd's own secrets and settings) can't be read.",
     schema: obj({ command: { type: "string" }, cwd: { type: "string", description: "Working folder; default: the user's current folder." } }, ["command"]),
   },
   {
@@ -101,7 +102,7 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
       const p = str(input.path);
       if (!p) return err("path is required");
       const abs = resolvePath(p, ctx);
-      if (isDeniedPath(abs, ctx.deny, ctx.home, ctx.cwd)) return err(`${p} is private; it can't be read.`);
+      if (isPrivatePath(abs, ctx.deny, ctx.home, ctx.cwd)) return err(`${p} is private; it can't be read.`);
       let st: fs.Stats;
       try {
         st = fs.statSync(abs);
@@ -126,14 +127,16 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
     case "list": {
       const p = str(input.path) ?? ".";
       const abs = resolvePath(p, ctx);
-      if (isDeniedPath(abs, ctx.deny, ctx.home, ctx.cwd)) return err(`${p} is private; it can't be listed.`);
+      if (isPrivatePath(abs, ctx.deny, ctx.home, ctx.cwd)) return err(`${p} is private; it can't be listed.`);
       let entries: fs.Dirent[];
       try {
         entries = fs.readdirSync(abs, { withFileTypes: true });
       } catch (e) {
         return err((e as Error).message);
       }
+      // Private entries (secrets.json in cmd's state dir) aren't shown at all.
       const rows = entries
+        .filter((d) => !isPrivatePath(path.join(abs, d.name), ctx.deny, ctx.home, ctx.cwd))
         .map((d) => {
           let size = "";
           try {

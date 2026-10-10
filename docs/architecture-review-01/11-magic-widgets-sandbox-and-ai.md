@@ -231,9 +231,9 @@ A Magic widget is a folder under `$CMD_HOME/widgets/<id>/` (`widgets/store.ts`, 
 **Proposal.** Deny files, not the folder: add a `magicPrivatePaths()` listing `secrets.json`, `remote/`, `settings.json`, `cmd.sqlite*`, `data/`, `widgets/*/secrets*` and the logs under every instance dir (`cmdPrivatePaths()`), plus `~/.config/cmd`, and use it for the tools and the sandbox profile. Widgets, fixtures, the Deno runtime and its cache stay readable.
 
 **Success criteria.**
-- [ ] A test: Magic's `read` tool on `$CMD_HOME/secrets.json` and `$CMD_HOME/remote/host.json` returns "private"; on a widget's `data.ts` it succeeds.
-- [ ] The sandbox profile denies the same files (test where `sandbox-exec` is available).
-- [ ] `widgets.test.ts` (with Deno) still passes.
+- [x] A test: Magic's `read` tool on `$CMD_HOME/secrets.json` and `$CMD_HOME/remote/host.json` returns "private"; on a widget's `data.ts` it succeeds.
+- [x] The sandbox profile denies the same files (test where `sandbox-exec` is available).
+- [x] `widgets.test.ts` (with Deno) still passes.
 
 Not issues here: API keys in `secrets.json` rather than the Keychain: see doc 03 (AR1-03-08). The renderer that hosts widget frames running unsandboxed: see doc 09 (AR1-09-07). The event log's policy table as a whole, and `ai` retention: see doc 06.
 

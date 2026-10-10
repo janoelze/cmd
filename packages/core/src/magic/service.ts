@@ -33,7 +33,7 @@ import {
 } from "@cmd/protocol";
 import type { Backend } from "../ai/backends.ts";
 import type { AiService } from "../ai/service.ts";
-import { DEFAULT_DENY_PATHS } from "./policy.ts";
+import { magicDenyPaths } from "../paths-deny.ts";
 import { buildWidget, type BuildEvent } from "./build.ts";
 import type { Workspace } from "./prompt.ts";
 import { sandboxAvailable, type SandboxMode } from "./sandbox.ts";
@@ -288,7 +288,7 @@ export class MagicService {
         workspace: this.#o.workspaceFor?.(w) ?? null,
         explore: s["magic.explore"],
         sandbox: this.#sandbox(),
-        deny: DEFAULT_DENY_PATHS,
+        deny: magicDenyPaths(),
         noFast: refining,
         signal: ac.signal,
         onEvent,
@@ -610,7 +610,7 @@ export class MagicService {
 
   async #tickLegacy(w: AppWindow, s: MagicState): Promise<void> {
     const t0 = Date.now();
-    const r = await runSource(s.source!, { cwd: this.#cwd(w), deny: DEFAULT_DENY_PATHS, sandbox: this.#sandbox() });
+    const r = await runSource(s.source!, { cwd: this.#cwd(w), deny: magicDenyPaths(), sandbox: this.#sandbox() });
     if (!this.#o.windows.others().some((x) => x.id === w.id)) return;
     this.#afterRun(w.id, { ok: r.ok, data: r.data, error: r.error ?? "failed", ms: Date.now() - t0 });
   }

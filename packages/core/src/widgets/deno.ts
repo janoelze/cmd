@@ -10,7 +10,8 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { credentialsForPrograms, DEFAULT_DENY_PATHS, expandPath, redact } from "../magic/policy.ts";
+import { credentialsForPrograms, expandPath, redact } from "../magic/policy.ts";
+import { magicDenyPaths } from "../paths-deny.ts";
 import { execArgv, type SandboxMode } from "../magic/sandbox.ts";
 import type { MagicNotify, MagicStatus } from "@cmd/protocol";
 import type { WidgetManifest } from "./manifest.ts";
@@ -89,7 +90,7 @@ export interface DenoEnv {
 /** What a sandboxed Deno may write besides its temp dir: its cache. */
 function denoExecOptions(env: DenoEnv) {
   fs.mkdirSync(env.denoDir, { recursive: true });
-  return { sandbox: env.sandbox, deny: DEFAULT_DENY_PATHS, writable: [env.denoDir], env: { DENO_DIR: env.denoDir, NO_COLOR: "1", DENO_NO_UPDATE_CHECK: "1" } };
+  return { sandbox: env.sandbox, deny: magicDenyPaths(), writable: [env.denoDir], env: { DENO_DIR: env.denoDir, NO_COLOR: "1", DENO_NO_UPDATE_CHECK: "1" } };
 }
 
 // ── type-checking ────────────────────────────────────────

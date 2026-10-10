@@ -14,7 +14,7 @@
 import os from "node:os";
 import { spawnSync } from "node:child_process";
 import type { Backend, Usage } from "../ai/backends.ts";
-import { DEFAULT_DENY_PATHS } from "./policy.ts";
+import { magicDenyPaths } from "../paths-deny.ts";
 import { buildRequest, buildSystem, type Workspace } from "./prompt.ts";
 import { commandsSupported, type SandboxMode } from "./sandbox.ts";
 import { runTool, toolsFor, type ToolContext, type ToolOutput } from "./tools.ts";
@@ -133,7 +133,7 @@ export async function buildWidget(o: BuildOptions): Promise<BuildResult> {
   emit({ type: "route", route: "agent", at: at() });
 
   const explore = o.explore ?? true;
-  const ctx: ToolContext = { cwd: w.cwd, home: os.homedir(), deny: o.deny ?? DEFAULT_DENY_PATHS, sandbox: o.sandbox ?? "required", signal: o.signal };
+  const ctx: ToolContext = { cwd: w.cwd, home: os.homedir(), deny: o.deny ?? magicDenyPaths(), sandbox: o.sandbox ?? "required", signal: o.signal };
   const trace: TraceStep[] = [];
   const timings: BuildResult["timings"] = { done: 0 };
   const state: WidgetToolState = { dirty: false, onManifest: (title, icon) => emit({ type: "title", title, icon, at: at() }) };

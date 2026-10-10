@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { expandPath, type Credentials } from "./policy.ts";
+import { INSTANCE_PRIVATE_PATTERN, realPathOf } from "../paths-deny.ts";
 import { pathReady } from "../loginpath.ts";
 
 export type SandboxMode = "required" | "off";
@@ -67,20 +68,16 @@ export function sandboxAvailable(): boolean {
   return available;
 }
 
-const real = (p: string) => {
-  try {
-    return fs.realpathSync(p);
-  } catch {
-    return p;
-  }
-};
+// Real paths, also of files that don't exist yet: the kernel checks /private/var, not /var.
+const real = realPathOf;
 const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
 /**
  * SBPL profile: everything allowed except writes outside `tmp`, the private
- * paths, and a few binaries. With credentials, the CLIs' own config folders stay
- * readable and writable (their caches live there) and, with keychain, the login
- * keychain and /usr/bin/security (how gh and glab fetch their tokens) too.
+ * paths (also .env files and worktree instances' private files), and a few
+ * binaries. With credentials, the CLIs' own config folders stay readable and
+ * writable (their caches live there) and, with keychain, the login keychain
+ * and /usr/bin/security (how gh and glab fetch their tokens) too.
  */
 export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; credentials?: Credentials; writable?: string[] }): string {
   const home = o.home ?? os.homedir();
@@ -100,6 +97,7 @@ export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; 
     `(allow file-write* (literal "/dev/null") (literal "/dev/zero") (regex #"^/dev/tty") (regex #"^/dev/fd/") ${writable.map((w) => `(subpath ${q(w)})`).join(" ")})`,
     deny.length ? `(deny file-read* ${deny.map((d) => `(subpath ${q(d)})`).join(" ")})` : "",
     `(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))`,
+    `(deny file-read* (regex #"${INSTANCE_PRIVATE_PATTERN}"))`,
     `(deny process-exec ${noExec.map((x) => `(literal ${q(x)})`).join(" ")})`,
   ]
     .filter(Boolean)
