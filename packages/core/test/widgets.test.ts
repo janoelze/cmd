@@ -206,10 +206,13 @@ describe.skipIf(noDeno)("data.ts in Deno", () => {
     expect(r.stderr).toContain("noise on stdout");
   });
 
+  // Also the regression test for Deno.connect's panic: macOS reports the address of
+  // a socket that libuv 1.53 (Node 24.21) binds at 255 bytes, more than sun_path.
   it("lets data.ts read cmd's event log through the widgets socket, with the run's token", async () => {
     const { Core, widgetsSocketPath } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
-    const sockDir = tmp();
+    // A TMPDIR so long that the socket path is past what macOS connects to: /tmp (that case has its own test).
+    const sockDir = fs.mkdtempSync(path.join(os.tmpdir().length > 60 ? "/tmp" : os.tmpdir(), "cmd-widgets-"));
     const core = new Core({ socketPath: path.join(sockDir, "core.sock"), dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     await core.listen();
     try {
@@ -246,6 +249,19 @@ export default async function data(): Promise<Data> {
     } finally {
       await core.close();
     }
+  });
+
+  it("says so when the widgets socket path is longer than macOS connects to", async () => {
+    // Deep worktrees and long TMPDIRs: Node binds such a path, Deno can't reach it.
+    const deep = path.join(tmp(), "a-deep-worktree-folder-name".repeat(3), "widgets.sock");
+    expect(Buffer.byteLength(deep)).toBeGreaterThan(103);
+    const { dir, m } = widget({
+      "manifest.json": MANIFEST(),
+      "data.ts": `import { s, events } from "cmd";\nexport const schema = s.object({ n: s.number() });\nexport default async () => ({ n: (await events()).length });\n`,
+    });
+    const r = await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {}, socket: { path: deep, token: "t" } });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/socket path is \d+ bytes, more than the 103 macOS allows/);
   });
 
   it("reports data of the wrong shape with the paths that are wrong", async () => {

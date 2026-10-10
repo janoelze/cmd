@@ -166,6 +166,8 @@ function viewMatches(q: ViewQuery, r: TurnRow | SessionInfo, workspaceOf: (cwd: 
 
 /** The widgets socket lives beside the main one. */
 export const widgetsSocketPath = (socketPath: string) => path.join(path.dirname(socketPath), "widgets.sock");
+/** The longest Unix socket path macOS connects to: sun_path is 104 bytes, its NUL included. */
+export const SOCKET_PATH_MAX = 103;
 
 export class Core {
   readonly panes: PaneManager;
@@ -1253,6 +1255,9 @@ export class Core {
   async #bindWidgets(): Promise<void> {
     const sock = widgetsSocketPath(this.#opts.socketPath);
     if (this.#widgetsBound && fs.existsSync(sock)) return;
+    // Node binds longer paths, but Deno can't connect to them: data.ts's events() would fail.
+    const bytes = Buffer.byteLength(sock);
+    if (bytes > SOCKET_PATH_MAX) log.warn(`widgets can't read the event log: the widgets socket path is ${bytes} bytes, more than the ${SOCKET_PATH_MAX} macOS allows. Set CMD_HOME to a shorter folder.`, { path: sock });
     const bindTo = path.join(path.dirname(sock), `.${process.pid}-${this.#servers.length}-w.sock`);
     fs.rmSync(bindTo, { force: true });
     const server = net.createServer((s) => this.#serveSocket(s, true));

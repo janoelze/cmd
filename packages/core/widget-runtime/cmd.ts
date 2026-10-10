@@ -442,35 +442,74 @@ export async function events(query: EventQuery = {}): Promise<Event[]> {
   const path = Deno.env.get("CMD_SOCKET");
   const token = Deno.env.get("CMD_WIDGET_TOKEN");
   if (!path || !token) throw new Error("events(): this widget runs without access to cmd's log");
-  const conn = await Deno.connect({ transport: "unix", path });
+  const bytes = new TextEncoder().encode(path).length;
+  if (bytes > SOCKET_PATH_MAX) throw new Error(`events(): cmd's socket path is ${bytes} bytes, more than the ${SOCKET_PATH_MAX} macOS allows. Set CMD_HOME to a shorter folder. (${path})`);
+  const conn = await connectUnix(path);
   try {
-    await rpc(conn, 1, "widget.hello", { token });
-    return (await rpc(conn, 2, "data.query", { query })) as Event[];
+    await conn.call("widget.hello", { token });
+    return (await conn.call("data.query", { query })) as Event[];
   } finally {
-    try {
-      conn.close();
-    } catch {}
+    conn.close();
   }
 }
 
-async function rpc(conn: Deno.UnixConn, id: number, method: string, params: unknown): Promise<unknown> {
-  await conn.write(new TextEncoder().encode(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n"));
-  const dec = new TextDecoder();
+/** The longest Unix socket path macOS connects to: sun_path is 104 bytes, its NUL included. */
+const SOCKET_PATH_MAX = 103;
+
+/**
+ * A JSON-RPC connection to cmd's widgets socket. Through node:net, not
+ * Deno.connect: Deno.connect reads the server's address back and panics when
+ * macOS reports it longer than sun_path, which it does for every socket that
+ * libuv 1.53 (Node 24.21) binds.
+ */
+async function connectUnix(path: string): Promise<{ call(method: string, params: unknown): Promise<unknown>; close(): void }> {
+  const net = await import("node:net");
+  const sock = net.connect({ path });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      sock.once("connect", () => resolve());
+      sock.once("error", reject);
+    });
+  } catch (err) {
+    sock.destroy();
+    throw new Error(`events(): couldn't reach cmd (${(err as Error).message})`);
+  }
+  const waiting = new Map<number, { resolve(v: unknown): void; reject(e: Error): void }>();
+  let failed: Error | null = null;
+  const fail = (err: Error) => {
+    failed ??= err;
+    for (const w of waiting.values()) w.reject(failed);
+    waiting.clear();
+  };
   let buf = "";
-  const chunk = new Uint8Array(65536);
-  for (;;) {
-    const n = await conn.read(chunk);
-    if (n === null) throw new Error("cmd closed the connection");
-    buf += dec.decode(chunk.subarray(0, n), { stream: true });
+  let next = 1;
+  sock.setEncoding("utf8");
+  sock.on("data", (chunk: string) => {
+    buf += chunk;
     let i: number;
     while ((i = buf.indexOf("\n")) >= 0) {
       const line = buf.slice(0, i);
       buf = buf.slice(i + 1);
       if (!line.trim()) continue;
       const msg = JSON.parse(line) as { id?: number; result?: unknown; error?: { message: string } };
-      if (msg.id !== id) continue; // an event or another answer
-      if (msg.error) throw new Error(msg.error.message);
-      return msg.result;
+      const w = msg.id === undefined ? undefined : waiting.get(msg.id);
+      if (!w) continue; // an event or another answer
+      waiting.delete(msg.id!);
+      if (msg.error) w.reject(new Error(msg.error.message));
+      else w.resolve(msg.result);
     }
-  }
+  });
+  sock.on("error", (err: Error) => fail(err));
+  sock.on("close", () => fail(new Error("cmd closed the connection")));
+  return {
+    call(method, params) {
+      if (failed) return Promise.reject(failed);
+      const id = next++;
+      return new Promise((resolve, reject) => {
+        waiting.set(id, { resolve, reject });
+        sock.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+      });
+    },
+    close: () => sock.destroy(),
+  };
 }
