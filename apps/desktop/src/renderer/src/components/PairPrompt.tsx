@@ -53,7 +53,7 @@ function PairText({ request, onEscape, autoFocus, children }: { request: RemoteP
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => void (autoFocus && box.current?.focus()), [autoFocus]);
   return (
-    <div tabIndex={-1} ref={box} style={{ outline: "none" }} onKeyDown={(e) => e.key === "Escape" && onEscape()}>
+    <div className="pair-prompt" tabIndex={-1} ref={box} style={{ outline: "none" }} onKeyDown={(e) => e.key === "Escape" && onEscape()}>
       <Stack gap="md">
         <Text strong>Allow “{request.name}” to use cmd?</Text>
         <Stack gap="sm">
@@ -79,7 +79,7 @@ function PairText({ request, onEscape, autoFocus, children }: { request: RemoteP
 export function PairSheet({ request }: { request: RemotePairRequest }) {
   const p = usePair(request);
   return (
-    <Dialog open onClose={() => {}} dismissable={false} width={420} position="center" label="Allow a device" window={{ icon: "iphone.radiowaves.left.and.right", name: "Allow a Device", close: false, status: p.expires }} actions={p.buttons}>
+    <Dialog open onClose={() => {}} dismissable={false} width={420} position="center" className="pair-sheet" label="Allow a device" window={{ icon: "iphone.radiowaves.left.and.right", name: "Allow a Device", close: false, status: p.expires }} actions={p.buttons}>
       <PairText request={request} onEscape={() => p.answer(false)} autoFocus />
     </Dialog>
   );

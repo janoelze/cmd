@@ -23,6 +23,9 @@ fs.rmSync(home, { recursive: true, force: true });
 fs.mkdirSync(home, { recursive: true });
 fs.mkdirSync(shots, { recursive: true });
 
+// Onboarding was seen (smoke.mjs tests it): its sheet would cover what this clicks.
+fs.mkdirSync(path.join(home, "ui"), { recursive: true });
+fs.writeFileSync(path.join(home, "ui", "onboarding.json"), JSON.stringify({ seen: ["welcome", "ai"] }));
 const relay = await startRelay({ log: () => {} });
 fs.writeFileSync(
   path.join(home, "settings.json"),
@@ -68,7 +71,7 @@ let ws;
 try {
   await win.waitForSelector(".statusbar .core-status");
   await until(() => win.evaluate(() => window.cmd.call("remote.status", {}).then((s) => s.state === "online")), "the core reaches the relay");
-  await win.waitForSelector(".statusbar .remote-indicator.idle");
+  await win.waitForSelector(".statusbar .remote-indicator:not([data-tone]):not([data-pulse])");
   check(true, "the status bar shows remote access is ready");
 
 
@@ -76,7 +79,7 @@ try {
   const settingsOpened = app.waitForEvent("window");
   await menu("app.pairDevice");
   const settings = await settingsOpened;
-  await settings.waitForSelector(".rm-qr svg");
+  await settings.waitForSelector(".ui-qr svg");
   check(true, "Pair a Device… shows a pairing code in Settings");
   await shot(settings, "1-code");
 
@@ -98,9 +101,9 @@ try {
   ws.onmessage = (e) => device.receive(new Uint8Array(e.data));
   ws.onclose = () => device.closed();
 
-  await win.waitForSelector(".statusbar .remote-indicator.asking");
+  await win.waitForSelector(".statusbar .remote-indicator[data-pulse]");
   check(true, "the indicator pulses while a device waits");
-  await settings.waitForSelector(".rm-card .pair-prompt");
+  await settings.waitForSelector(".ui-form-section .pair-prompt");
   const shown = await settings.locator('.ui-form-section .ui-badge[data-tone="accent"]').allInnerTexts();
   check(shown.join(" ") === words.join(" "), `Settings asks, with the phone's words (${shown.join(" ")})`);
   await win.waitForSelector(".pair-sheet");
@@ -119,12 +122,12 @@ try {
   await client.call("remote.bootstrap", {});
   const pane = await client.call("pane.create", {});
   await client.call("window.follow", { ids: [pane.id] });
-  await win.waitForSelector(".statusbar .remote-indicator.connected");
+  await win.waitForSelector('.statusbar .remote-indicator[data-tone="accent"]:not([data-pulse])');
   check(true, "the indicator turns to connected");
   await client.call("pane.write", { paneId: pane.id, data: "echo hello from the phone\r" });
 
-  // Focus view: the status bar stands in for the title bar.
-  await win.waitForSelector(".statusbar .remote-badge.typed");
+  // The window's title bar says who typed (the status bar no longer repeats the window's fields).
+  await win.waitForSelector(".tile .ui-live-badge-note");
   check(true, "the watched terminal shows who typed");
   await win.waitForSelector(".navigator .ui-list-row .ui-live-badge");
   check(true, "its sidebar row shows it's watched");
@@ -151,7 +154,7 @@ try {
   // Disconnect from the popover: the indicator goes, the device stays paired.
   await win.bringToFront();
   await win.getByRole("button", { name: "Disconnect All" }).click();
-  await win.waitForSelector(".statusbar .remote-indicator.idle");
+  await win.waitForSelector(".statusbar .remote-indicator:not([data-tone]):not([data-pulse])");
   const devices = await win.evaluate(() => window.cmd.call("remote.devices", {}));
   check(devices.length === 1, "Disconnect All keeps the device paired");
   console.log(`screenshots: ${shots}/remote-*.png`);
