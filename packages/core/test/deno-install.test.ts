@@ -115,17 +115,7 @@ describe("a build on a Mac without Deno", () => {
     expect(state().phase).toBe("working");
     expect(installs).toEqual([]);
 
-    // Not now: the build goes on without it.
-    core.handlers["magic.skipRuntime"]({});
-    await until(() => state().phase !== "working");
-    expect(state().askRuntime).toBeUndefined();
-    expect(installs).toEqual([]);
-    expect(steps).not.toContain("install");
-
-    // The next build asks again; yes downloads it once, and the build waits for it.
-    core.handlers["magic.run"]({ id, prompt: "count to four" });
-    await until(() => state().askRuntime === true);
-    expect(installs).toEqual([]);
+    // Yes downloads it once, and the build waits for it.
     const answer = core.handlers["magic.installRuntime"]({}) as unknown as Promise<unknown>;
     expect(installs).toHaveLength(1);
     await until(() => steps.includes("install"));
@@ -133,6 +123,39 @@ describe("a build on a Mac without Deno", () => {
     expect(state().askRuntime).toBeUndefined();
     finish();
     await answer;
+    await until(() => state().phase !== "working");
+    expect(installs).toHaveLength(1);
+    await core.close();
+  });
+
+  it("asks once: after Not Now, builds go on without asking until Deno is installed", async () => {
+    const { core, id, state, installs, finish, steps } = await setup();
+    core.handlers["magic.run"]({ id, prompt: "count to three" });
+    await until(() => state().askRuntime === true);
+
+    // Not now: the build goes on without it.
+    core.handlers["magic.skipRuntime"]({});
+    await until(() => state().phase !== "working");
+    expect(state().askRuntime).toBeUndefined();
+    expect(installs).toEqual([]);
+    expect(steps).not.toContain("install");
+
+    // The next build neither asks nor installs (the question would be set as the build starts).
+    const seen: unknown[] = [];
+    core.handlers["magic.run"]({ id, prompt: "count to four" });
+    seen.push(state().askRuntime);
+    await until(() => (seen.push(state().askRuntime), state().phase !== "working"));
+    expect(seen.every((v) => v === undefined)).toBe(true);
+    expect(installs).toEqual([]);
+
+    // Installing (Settings, the Health tab) clears the decline: with Deno still missing, the next build asks again.
+    const install = core.handlers["magic.installRuntime"]({}) as unknown as Promise<unknown>;
+    finish();
+    await install;
+    expect(installs).toHaveLength(1);
+    core.handlers["magic.run"]({ id, prompt: "count to five" });
+    await until(() => state().askRuntime === true);
+    core.handlers["magic.cancel"]({ id });
     await until(() => state().phase !== "working");
     expect(installs).toHaveLength(1);
     await core.close();

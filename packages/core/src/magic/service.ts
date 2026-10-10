@@ -129,6 +129,8 @@ export class MagicService {
   #parked = new Set<WindowId>();
   /** Builds waiting for the answer to "Download Deno?": the install (yes) or null (not now). */
   #asks = new Set<(answer: { install: Promise<unknown> } | null) => void>();
+  /** "Not now" to Deno: later builds don't ask again while the core runs (Settings and the Health tab still install it). */
+  #declinedRuntime = false;
   /** The Deno download under way, shared by everyone who asked for it. */
   #installing: Promise<MagicRuntime> | null = null;
   #disposed = false;
@@ -183,6 +185,7 @@ export class MagicService {
   /** Ask the window whether to download Deno (MagicState.askRuntime); resolves with the install (wrapped: not awaited), or null for "not now" and Stop. */
   #askRuntime(id: WindowId, signal: AbortSignal): Promise<{ install: Promise<unknown> } | null> {
     if (this.#installing) return Promise.resolve({ install: this.#installing });
+    if (this.#declinedRuntime) return Promise.resolve(null);
     log.info(`run ${id.slice(0, 8)} asks to download Deno`);
     this.#o.windows.update(id, { state: { askRuntime: true } });
     return new Promise<{ install: Promise<unknown> } | null>((resolve) => {
@@ -531,6 +534,7 @@ export class MagicService {
   installRuntime(): Promise<MagicRuntime> {
     const stateDir = this.#o.stateDir;
     if (!stateDir) return Promise.reject(new Error("no state folder to install Deno into"));
+    this.#declinedRuntime = false;
     if (!this.#installing) {
       const install = this.#o.installDeno ?? ((dir: string) => installDeno(dir));
       log.info(`installing Deno ${DENO_VERSION}`);
@@ -552,8 +556,9 @@ export class MagicService {
     return this.#installing;
   }
 
-  /** "Not now" to the question: the builds waiting for Deno go on without it. */
+  /** "Not now" to the question: the builds waiting for Deno go on without it, and later ones don't ask until it's installed. */
   skipRuntime(): void {
+    this.#declinedRuntime = true;
     for (const answer of [...this.#asks]) answer(null);
   }
 
