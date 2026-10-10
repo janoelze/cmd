@@ -1256,6 +1256,9 @@ await scenario("embedded", async () => {
 // back with magic.restore, the path a real build ends in; no model runs.
 await scenario("magic", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  // Every widget on screen: the edit view below is opened by a click on its window.
+  await menu("view.grid");
+  await win.waitForSelector(".main.mode-grid", { timeout: 10_000 });
   const rt = await call("magic.runtime");
   check(rt.previewer === "app", `the app renders widget previews for the core (${rt.previewer})`);
 
@@ -1829,6 +1832,11 @@ await scenario("sidebars", async () => {
 
 // ── remembered UI state across an app restart (the core keeps running) ──
 await scenario("restart", async () => {
+// A browser and a file window to come back (the browser and files scenarios leave one each;
+// run alone, this opens them).
+if (!(await countOf(".tile.kind-browser"))) await win.evaluate((url) => window.cmd.call("window.open", { kind: "browser", input: { url } }), `http://localhost:${port}/`);
+if (!(await countOf(".tile.kind-files"))) await win.evaluate((p) => window.cmd.call("window.open", { kind: "files", input: { path: p } }), path.join(home, "files-fixture"));
+await until(async () => (await countOf(".tile.kind-browser")) + (await countOf(".tile.kind-files")), (n) => n >= 2);
 await menu("view.grid");
 await win.click(".sb-windows .ui-list-heading"); // collapse a Navigator section
 await menu("view.zoomIn");
