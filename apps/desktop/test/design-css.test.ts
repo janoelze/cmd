@@ -56,7 +56,7 @@ const counts = Object.fromEntries(
 
 describe("design tokens in the stylesheets", () => {
   it("found the stylesheets", () => {
-    expect(files.length).toBeGreaterThan(10);
+    expect(files.length).toBeGreaterThan(5); // the glob works (fewer as windows move onto the kit)
   });
 
   if (process.env.UPDATE_DESIGN_DEBT) {

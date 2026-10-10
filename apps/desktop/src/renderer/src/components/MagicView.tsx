@@ -1,14 +1,15 @@
 // Magic widget (docs/14-magic-v2.md): a request in, a live widget (or a
-// terminal command) out. Empty, the window is one prompt field. While the agent
-// builds, a dot-matrix animation and its current step show (every tool call too
-// with magic.showSteps); the widget appears only once its frame has painted it.
+// terminal command) out. Empty, the window asks (an AiField, examples under it).
+// While the agent builds, its current step shows (every tool call too with
+// magic.showSteps), in the footer with Stop once there is a widget to keep
+// showing; the widget appears only once its frame has painted it.
 // ⌘E (and "Edit Widget" in its menu) turns the window to its edit view
 // (MagicEditor): changes and versions, settings, files, health. The widget
 // runs in a sandboxed frame (cmd-widget://, see the main process), fed with
 // theme tokens, its data and its saved cmd.state. Data that stops coming shows
 // as "Stale" with the reason; problems a build left show in a line with Fix.
 
-import { Button, Callout, LinkButton, Toast } from "@cmd/ui";
+import { AiField, Button, Callout, CodeBlock, Inline, LinkButton, List, ListRow, Spinner, Stack, StatusLine, Text, toast, View, ViewState, WebStage, type ViewStateSpec } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { kitVersion, requestedMedia, SYSTEM_SOUNDS, widgetTokens, type AppWindow, type MagicState, type MagicStep } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -19,12 +20,9 @@ import { themeVars, useTheme } from "@cmd/ui/themes";
 import { editTitle, registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { ago } from "../model.ts";
 import { handleEmbedMessage } from "../embed.ts";
-import { DotMatrix } from "./DotMatrix.tsx";
-import { ICON, Symbol } from "./Symbol.tsx";
 import { MagicEditor } from "./MagicEditor.tsx";
 import { useAiStatus } from "../ai/status.ts";
 import { showSetup, useSetup } from "../onboarding/Onboarding.tsx";
-import "./magic.css";
 
 const EXAMPLES = ["show my VPN connection status", "weather in Lisbon this week", "how full is my disk", "my open pull requests on GitHub", "a 25 minute focus timer"];
 
@@ -118,7 +116,6 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
   useEffect(() => () => editTitle(win.id, null), [win.id]);
 
   // Once, the first time a widget is made here: how to change it (no button shows it).
-  const [hint, setHint] = useState(false);
   const wasBuilding = useRef(false);
   useEffect(() => {
     if (building) wasBuilding.current = true;
@@ -126,9 +123,7 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
       wasBuilding.current = false;
       if (readFlag(HINT_FLAG)) return;
       writeFlag(HINT_FLAG);
-      setHint(true);
-      const t = setTimeout(() => setHint(false), 4500);
-      return () => clearTimeout(t);
+      toast("Right-click to change it · ⌘E to edit");
     }
   }, [building, widget, s.phase]);
 
@@ -139,19 +134,25 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
 
   const problems = s.problems?.length ? s.problems : null;
   const broken = s.health && !s.health.ok && s.health.failures >= 3 && !s.health.retryAt;
+  const answerRuntime = (yes: boolean) => void (yes ? cmd.call("magic.installRuntime", {}) : cmd.call("magic.skipRuntime", {})).catch((e: Error) => console.error("magic runtime", e));
   return (
-    <div className={`magic${asking ? " needs-action" : ""}`}>
-      {/* While a change runs, the current widget stays underneath, dimmed. */}
-      {s.kind === "terminal" && !building ? (
-        <TerminalOffer win={win} command={s.command ?? ""} />
-      ) : widget ? (
-        <WidgetFrame win={win} active={focused} html={s.html!} data={live.data?.data ?? s.lastData?.data} kv={s.kv} media={allowed} kit={s.kit} onPainted={setPainted} />
-      ) : null}
-      {building && <Progress live={live} showSteps={showSteps} overlay={widget} />}
-      {working && s.askRuntime && <RuntimeRequest onAnswer={(yes) => void (yes ? cmd.call("magic.installRuntime", {}) : cmd.call("magic.skipRuntime", {})).catch((e: Error) => console.error("magic runtime", e))} />}
-      {asking && <MediaRequest origins={pending} onAnswer={(allow) => void cmd.call("magic.media", { id: win.id, allow })} />}
+    <View
+      className="magic"
+      scroll={false}
+      // While it builds over a widget, the widget stays; the footer says what's happening.
+      footer={building && (widget || s.kind === "terminal") && <BuildingLine live={live} onStop={working ? stop : undefined} />}
+    >
+      <WebStage cover={working && s.askRuntime ? runtimeRequest(answerRuntime) : asking ? mediaRequest(pending, (allow) => void cmd.call("magic.media", { id: win.id, allow })) : null}>
+        {s.kind === "terminal" && !building ? (
+          <TerminalOffer win={win} command={s.command ?? ""} />
+        ) : widget ? (
+          <WidgetFrame win={win} active={focused} html={s.html!} data={live.data?.data ?? s.lastData?.data} kv={s.kv} media={allowed} kit={s.kit} onPainted={setPainted} />
+        ) : building ? (
+          <Building live={live} showSteps={showSteps} onStop={working ? stop : undefined} />
+        ) : null}
+      </WebStage>
       {!building && (s.error || problems || broken) && (
-        <div className="magic-error" data-tip={[s.error, ...(problems ?? []), broken ? s.health?.error : ""].filter(Boolean).join("\n")}>
+        <div data-tip={[s.error, ...(problems ?? []), broken ? s.health?.error : ""].filter(Boolean).join("\n")}>
           <Callout
             banner="bottom"
             compact
@@ -167,13 +168,7 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
           </Callout>
         </div>
       )}
-      {working && <StopButton onStop={stop} />}
-      {hint && (
-        <div className="magic-hint-flash">
-          <Toast>Right-click to change it · ⌘E to edit</Toast>
-        </div>
-      )}
-    </div>
+    </View>
   );
 }
 
@@ -223,44 +218,54 @@ function PromptPane({ focused, error, initial, onSubmit }: { focused: boolean; e
       submit();
     }
   };
+  return <Ask text={text} onText={setText} onAsk={ask} error={error && !NO_PROVIDER.test(error) ? error : undefined} needsAi={needsAi} autoFocus={focused} />;
+}
+
+/** The empty window, drawn: what it's for, the field, the examples (MagicView.story.tsx). */
+export function Ask(p: { text: string; onText: (t: string) => void; onAsk: (prompt: string) => void; error?: string; needsAi: boolean; autoFocus?: boolean }) {
   return (
-    <div className="magic-empty">
-      <div className="magic-ask">
-        <div className="magic-mark">✦</div>
-        <textarea
-          ref={ref}
-          className="magic-input"
-          rows={2}
-          placeholder="What do you want to see? A question, a URL, some JSON, a command…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKey}
-          spellCheck={false}
-        />
-        {error && !NO_PROVIDER.test(error) && <div className="magic-error-inline">{error}</div>}
-        {needsAi && (
-          <Callout
-            compact
-            tone="accent"
-            icon="sparkles"
-            actions={
-              <Button size="sm" onClick={() => showSetup(["ai"])}>
-                Set Up AI…
-              </Button>
-            }
-          >
-            An AI model builds widgets. Connect Anthropic or OpenAI first.
-          </Callout>
-        )}
-        <div className="magic-examples">
-          {EXAMPLES.map((x) => (
-            <button key={x} className="magic-chip" onClick={() => ask(x)}>
-              {x}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
+    <View
+      state={{
+        kind: "empty",
+        icon: "sparkles",
+        title: "New Widget",
+        text: "Ask for something to keep an eye on: a question, a URL, some JSON, a command.",
+        action: (
+          <Stack gap="md">
+            <AiField
+              size="lg"
+              value={p.text}
+              onChange={p.onText}
+              onSubmit={p.onAsk}
+              state={p.error ? "error" : undefined}
+              error={p.error}
+              placeholder="What do you want to see?"
+              autoFocus={p.autoFocus}
+              aria-label="Ask for a widget"
+            />
+            {p.needsAi && (
+              <Callout
+                compact
+                tone="accent"
+                icon="sparkles"
+                actions={
+                  <Button size="sm" onClick={() => showSetup(["ai"])}>
+                    Set Up AI…
+                  </Button>
+                }
+              >
+                An AI model builds widgets. Connect Anthropic or OpenAI first.
+              </Callout>
+            )}
+            <List>
+              {EXAMPLES.map((x) => (
+                <ListRow key={x} icon="sparkle" title={x} onClick={() => p.onAsk(x)} />
+              ))}
+            </List>
+          </Stack>
+        ),
+      }}
+    />
   );
 }
 
@@ -276,44 +281,88 @@ function messagesOf(live: MagicLive): string[] {
   return out;
 }
 
-/** The dot matrix over the whole window and the current step in the middle (Stop is StopButton). */
-function Progress({ live, showSteps, overlay }: { live: MagicLive; showSteps: boolean; overlay: boolean }) {
-  const messages = messagesOf(live);
-  const current = messages.at(-1)!;
+/** A first build: the current step in the middle, Stop, every step under it with magic.showSteps. */
+export function Building({ live, showSteps, onStop }: { live: MagicLive; showSteps: boolean; onStop?: () => void }) {
+  const current = messagesOf(live).at(-1)!;
   return (
-    <div className={`magic-progress${overlay ? " overlay" : ""}`}>
-      <DotMatrix className="magic-matrix" />
+    <Stack gap="none" grow>
+      <ViewState
+        state={{
+          kind: "loading",
+          title: (
+            <Stack gap="md" align="center">
+              <span aria-live="polite">{current}</span>
+              {onStop && (
+                <Button size="sm" data-tip-key="⌘." onClick={onStop}>
+                  Stop
+                </Button>
+              )}
+            </Stack>
+          ),
+        }}
+      />
       {showSteps && <StepList live={live} />}
-      <div className="magic-status" aria-live="polite">
-        <span key={`${messages.length}:${current}`}>{current}</span>
-      </div>
-    </div>
+    </Stack>
+  );
+}
+
+/** Over a widget (a change): the current step and Stop, in the footer. */
+function BuildingLine({ live, onStop }: { live: MagicLive; onStop?: () => void }) {
+  return (
+    <StatusLine
+      end={
+        onStop && (
+          <LinkButton tone="dim" data-tip-key="⌘." onClick={onStop}>
+            Stop
+          </LinkButton>
+        )
+      }
+    >
+      <Inline gap="sm">
+        <Spinner size={10} />
+        <span aria-live="polite">{messagesOf(live).at(-1)}</span>
+      </Inline>
+    </StatusLine>
   );
 }
 
 /** magic.showSteps: every tool call with its command, time and (on click) output. */
-export function StepList({ live, steps, className }: { live?: MagicLive; steps?: MagicStep[]; className?: string }) {
+export function StepList({ live, steps }: { live?: MagicLive; steps?: MagicStep[] }) {
   return (
-    <ol className={className ?? "magic-steps"}>
+    <List>
       {(steps ?? live?.steps ?? []).map((st) => (
         <StepRow key={st.id} step={st} />
       ))}
-      {live?.repair && <li className="magic-step magic-repair">↻ {live.repair}</li>}
-    </ol>
+      {live?.repair && <ListRow icon="arrow.triangle.2.circlepath" markTone="dim" title={live.repair} />}
+    </List>
   );
 }
 
 function StepRow({ step }: { step: MagicStep }) {
   const [open, setOpen] = useState(false);
-  const state = step.ms === undefined ? "working" : step.isError ? "failed" : "done";
+  const light = step.ms === undefined ? "working" : step.isError ? "danger" : "done";
   return (
-    <li className={`magic-step ${state}`} onClick={() => step.output && setOpen(!open)}>
-      <span className={`magic-light ${state}`} />
-      <span className="magic-why">{step.why}</span>
-      <span className="magic-detail">{step.detail}</span>
-      {step.ms !== undefined && <span className="magic-ms">{(step.ms / 1000).toFixed(1)}s</span>}
-      {open && step.output && <pre className="magic-output">{step.output}</pre>}
-    </li>
+    <>
+      <ListRow
+        icon="circle"
+        light={light}
+        title={step.why}
+        place={step.detail}
+        end={
+          step.ms !== undefined && (
+            <Text size="xs" tone="dim">
+              {(step.ms / 1000).toFixed(1)}s
+            </Text>
+          )
+        }
+        onClick={step.output ? () => setOpen(!open) : undefined}
+      />
+      {open && step.output && (
+        <Stack pad="sm">
+          <CodeBlock>{step.output}</CodeBlock>
+        </Stack>
+      )}
+    </>
   );
 }
 
@@ -321,45 +370,43 @@ function StepRow({ step }: { step: MagicStep }) {
 
 /**
  * "Play media from …?": the person allows or declines the widget's origins,
- * once per window. It covers the widget (dimmed underneath) until answered.
+ * once per window. It covers the widget (still loaded underneath) until answered.
  */
-function MediaRequest({ origins, onAnswer }: { origins: string[]; onAnswer: (allow: boolean) => void }) {
+export function mediaRequest(origins: string[], onAnswer: (allow: boolean) => void): ViewStateSpec {
   const hosts = origins.map((o) => new URL(o).host);
   const named = hosts.length > 3 ? `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} more` : hosts.join(", ");
-  return (
-    <div className="magic-overlay">
-      <div className="magic-media" role="alertdialog" aria-label="Allow media" data-tip={hosts.join("\n")}>
-        <div className="magic-media-title">Play media from {named}?</div>
-        <div className="magic-media-text">This widget streams audio, video or images from the web. They stay blocked until you allow them.</div>
-        <div className="magic-row">
-          <Button onClick={() => onAnswer(false)}>
-            Don't Allow
-          </Button>
-          <Button variant="primary" onClick={() => onAnswer(true)}>
-            Allow
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+  return {
+    kind: "empty",
+    icon: "play.rectangle",
+    title: `Play media from ${named}?`,
+    text: "This widget streams audio, video or images from the web. They stay blocked until you allow them.",
+    action: (
+      <>
+        <Button onClick={() => onAnswer(false)}>Don't Allow</Button>
+        <Button variant="primary" onClick={() => onAnswer(true)}>
+          Allow
+        </Button>
+      </>
+    ),
+  };
 }
 
 /** The first build on a Mac without Deno asks before downloading it (the core waits for the answer). */
-function RuntimeRequest({ onAnswer }: { onAnswer: (yes: boolean) => void }) {
-  return (
-    <div className="magic-overlay">
-      <div className="magic-media" role="alertdialog" aria-label="Download Deno">
-        <div className="magic-media-title">Download Deno?</div>
-        <div className="magic-media-text">Widgets with live data need it. It's 40 MB, downloaded once.</div>
-        <div className="magic-row">
-          <Button onClick={() => onAnswer(false)}>Not Now</Button>
-          <Button variant="primary" onClick={() => onAnswer(true)}>
-            Download
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+function runtimeRequest(onAnswer: (yes: boolean) => void): ViewStateSpec {
+  return {
+    kind: "empty",
+    icon: "arrow.down.circle",
+    title: "Download Deno?",
+    text: "Widgets with live data need it. It's 40 MB, downloaded once.",
+    action: (
+      <>
+        <Button onClick={() => onAnswer(false)}>Not Now</Button>
+        <Button variant="primary" onClick={() => onAnswer(true)}>
+          Download
+        </Button>
+      </>
+    ),
+  };
 }
 
 /** The frame's URL decides its CSP and its kit version (main process), so a new set of allowed origins, or a kit, loads a new frame.
@@ -376,7 +423,7 @@ export function WidgetFrame({ media, kit: kitRaw, ...props }: { win: AppWindow; 
     else void cmd.widgetFrame(key.split(" "), kit).then((u) => live && setSrc(u));
     return () => void (live = false);
   }, [key, kit, plain]);
-  return src ? <Frame key={`${src}\n${props.html}`} src={src} {...props} /> : <div className="magic-frame" />;
+  return src ? <Frame key={`${src}\n${props.html}`} src={src} {...props} /> : null;
 }
 
 /** `active`: the window is selected; only then do its links and actions work (host.js). */
@@ -469,46 +516,36 @@ function Frame({ win, src, active, html, data, kv, onPainted }: { win: AppWindow
     if (ready && data !== undefined) post({ type: "data", data });
   }, [ready, data]);
 
-  return <iframe ref={ref} className={`magic-frame${painted === html ? "" : " unpainted"}`} data-embed sandbox="allow-scripts" src={src} title={win.title} />;
+  return <iframe ref={ref} className="magic-frame" data-painted={painted === html || undefined} data-embed sandbox="allow-scripts" src={src} title={win.title} />;
 }
 
 // ── ready: a command to run ─────────────────────────────
 
-function TerminalOffer({ win, command }: { win: AppWindow; command: string }) {
+export function TerminalOffer({ win, command }: { win: AppWindow; command: string }) {
   const runIt = async () => {
     await typeInTerminal(win.workspaceId, command);
     await cmd.call("window.close", { id: win.id });
   };
   return (
-    <div className="magic-terminal">
-      <div className="magic-command">
-        <span className="magic-prompt">❯</span> {command}
-      </div>
-      <div className="magic-row">
-        <Button variant="primary" onClick={() => void runIt()}>
-          Open in Terminal
-        </Button>
-        <Button onClick={() => copy(command)}>
-          Copy
-        </Button>
-      </div>
-      <div className="magic-hint">Opens a terminal with the command typed in; press Return to run it.</div>
-    </div>
-  );
-}
-
-// ── stop ────────────────────────────────────────────────
-
-/**
- * × while the window is being made, at the bottom right; there's no content
- * under it then. Change and Refresh live in the window's menu (right-click,
- * windows/builtin.tsx) and the View menu instead, so nothing covers a widget.
- */
-function StopButton({ onStop }: { onStop: () => void }) {
-  return (
-    <button className="magic-stop" data-tip="Stop" data-tip-key="⌘." aria-label="Stop" onClick={onStop}>
-      <Symbol name="xmark" size={ICON.small} />
-    </button>
+    <ViewState
+      state={{
+        kind: "empty",
+        icon: "terminal",
+        title: "A command to run",
+        text: "Opens a terminal with it typed in; press Return to run it.",
+        action: (
+          <Stack gap="md">
+            <CodeBlock>{command}</CodeBlock>
+            <Inline gap="sm">
+              <Button variant="primary" onClick={() => void runIt()}>
+                Open in Terminal
+              </Button>
+              <Button onClick={() => copy(command)}>Copy</Button>
+            </Inline>
+          </Stack>
+        ),
+      }}
+    />
   );
 }
 

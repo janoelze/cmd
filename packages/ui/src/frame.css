@@ -120,9 +120,13 @@ button.ui-dial-value:not(:disabled):hover { background: var(--bg-hover); }
 .ui-webstage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; background: var(--well); }
 .ui-webstage > webview { flex: 1; min-height: 0; background: white; transition: opacity var(--dur) var(--ease); }
 .ui-webstage > webview:not([data-painted]) { opacity: 0; }
+.ui-webstage > iframe { flex: 1; min-height: 0; width: 100%; display: block; border: 0; background: transparent; transition: opacity var(--dur) var(--ease); }
+.ui-webstage > iframe:not([data-painted]) { opacity: 0; transition: none; }
 .ui-webstage[data-device] > webview { box-shadow: 0 0 0 1px var(--separator), var(--sheet-shadow); }
 .ui-webstage-cover { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--well); }
 .ui-webstage-caption { position: absolute; inset: 0 0 auto; height: var(--control-h-lg); line-height: var(--control-h-lg); text-align: center; font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-thumb { flex: none; display: block; width: 72px; height: 48px; object-fit: cover; object-position: top left; border-radius: var(--radius-sm); box-shadow: 0 0 0 1px var(--separator); background: var(--bg-elevated); }
+.ui-thumb[data-none] { background: var(--code-bg); }
 .ui-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--scrim); }
 .ui-stage > * { flex: 1; min-height: 0; width: 100%; border: 0; display: block; }
 .ui-media { flex: 1; min-height: 0; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); padding: var(--space-xl); background: var(--scrim); }

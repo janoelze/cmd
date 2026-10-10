@@ -17,24 +17,32 @@ import {
   Callout,
   CodeBlock,
   EmptyState,
+  Inline,
+  List,
+  ListRow,
   FormRow,
   FormSection,
   KeyValue,
   LinkButton,
   NumberField,
+  Page,
   ResetButton,
   SecretField,
   Spacer,
+  Stack,
   Select,
   Spinner,
   StatusDot,
   Switch,
+  Text,
   TextArea,
   TextField,
+  Thumb,
   ToolbarButton,
   ToolbarSegmented,
   ToolbarSpacer,
   ToolbarText,
+  View,
   WindowToolbar,
 } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
@@ -67,7 +75,10 @@ export function MagicEditor({ win, live, onRun, onClose }: { win: AppWindow; liv
   const healthBad = !!(s.health && !s.health.ok) || !!s.problems?.length || !!s.error;
 
   return (
-    <div className="magic-edit">
+    <View
+      className="magic-edit"
+      inset
+      toolbar={
       <WindowToolbar label="Widget editor">
         <ToolbarSegmented label="Editor" value={tab} onChange={setTab} options={TABS.map((t) => (t.value === "health" && healthBad ? { ...t, badge: <StatusDot size="sm" state="danger" /> } : t))} />
         <ToolbarSpacer />
@@ -78,17 +89,23 @@ export function MagicEditor({ win, live, onRun, onClose }: { win: AppWindow; liv
         )}
         <ToolbarButton label="Done" shortcut="⌘E" tip="Back to the widget" onClick={onClose} />
       </WindowToolbar>
-      <div className="magic-edit-body">
+      }
+    >
+      <Page>
         {tab === "changes" && <Changes win={win} info={info} working={working} onRun={onRun} />}
         {tab === "settings" && <Settings win={win} info={info} />}
         {tab === "files" && <Files info={info} />}
         {tab === "health" && <Health win={win} live={live} />}
-      </div>
-    </div>
+      </Page>
+    </View>
   );
 }
 
-const Dim = ({ children }: { children: ReactNode }) => <div className="magic-note">{children}</div>;
+const Dim = ({ children }: { children: ReactNode }) => (
+  <Text size="sm" tone="dim">
+    {children}
+  </Text>
+);
 
 // ── Changes ─────────────────────────────────────────────
 
@@ -117,8 +134,10 @@ function Changes({ win, info, working, onRun }: { win: AppWindow; info: MagicWid
           onSubmit={submit}
           submitOnEnter
         />
-        <div className="magic-actions">
-          <span className="magic-note">⏎ to send · the widget stays as it is until the change works</span>
+        <Inline gap="md">
+          <Text size="sm" tone="dim">
+            ⏎ to send · the widget stays as it is until the change works
+          </Text>
           <Spacer />
           <Button disabled={working} onClick={() => void cmd.call("magic.fix", { id: win.id })}>
             Check and Fix
@@ -126,45 +145,50 @@ function Changes({ win, info, working, onRun }: { win: AppWindow; info: MagicWid
           <Button variant="primary" disabled={working || !text.trim()} onClick={submit}>
             Change
           </Button>
-        </div>
+        </Inline>
       </FormSection>
       <FormSection title="Versions" aside={info?.edited ? "files edited since the last version" : undefined} plain>
         {!revisions.length && <EmptyState compact icon="clock.arrow.circlepath" title="No versions yet" />}
-        <ol className="magic-revisions">
+        <List>
           {revisions.map((r) => {
             const current = r.n === s.revision;
             return (
-              <li key={r.n} className={`magic-revision${current ? " current" : ""}`}>
-                {r.shot ? <img className="magic-shot" src={fileUrl(r.shot)} alt="" loading="lazy" /> : <div className="magic-shot none" />}
-                <div className="magic-revision-text">
-                  <div className="magic-revision-prompt" data-tip={r.prompt}>
-                    {r.prompt}
-                  </div>
-                  <div className="magic-note">
-                    <StatusDot size="sm" state={r.ok ? "success" : "warning"} /> {r.ok ? "checks passed" : `${r.problems?.length ?? "some"} problem${r.problems?.length === 1 ? "" : "s"} left`} ·{" "}
-                    {ago(r.at, Date.now())}
+              <ListRow
+                key={r.n}
+                className="magic-revision"
+                lead={<Thumb src={r.shot ? fileUrl(r.shot) : null} />}
+                title={current ? <Text strong>{r.prompt}</Text> : r.prompt}
+                tip={r.prompt}
+                detail={
+                  <Inline gap="xs">
+                    <StatusDot size="sm" state={r.ok ? "success" : "warning"} />
+                    {r.ok ? "checks passed" : `${r.problems?.length ?? "some"} problem${r.problems?.length === 1 ? "" : "s"} left`} · {ago(r.at, Date.now())}
                     {r.model ? ` · ${r.model}` : ""} · v{r.n}
-                  </div>
-                </div>
-                {current ? (
-                  <Badge>shown</Badge>
-                ) : (
-                  <Button size="sm" disabled={working} onClick={() => void cmd.call("magic.restore", { id: win.id, revision: r.n })}>
-                    Restore
-                  </Button>
-                )}
-              </li>
+                  </Inline>
+                }
+                end={
+                  current ? (
+                    <Badge>shown</Badge>
+                  ) : (
+                    <Button size="sm" disabled={working} onClick={() => void cmd.call("magic.restore", { id: win.id, revision: r.n })}>
+                      Restore
+                    </Button>
+                  )
+                }
+              />
             );
           })}
-        </ol>
+        </List>
       </FormSection>
       {(s.history?.length ?? 0) > 0 && (
         <FormSection title="Asked so far" plain>
-          <ol className="magic-history">
+          <Stack gap="2xs">
             {s.history!.map((h, i) => (
-              <li key={i}>{h}</li>
+              <Text key={i} tone="dim">
+                › {h}
+              </Text>
             ))}
-          </ol>
+          </Stack>
         </FormSection>
       )}
     </>
@@ -289,7 +313,7 @@ function Files({ info }: { info: MagicWidgetInfo | null }) {
           <FormRow
             key={f}
             compact
-            title={<span className="magic-file">{f}</span>}
+            title={<Text mono>{f}</Text>}
             description={FILE_NOTES[f] ?? (f.startsWith("fixtures/") ? (f === "fixtures/live.json" ? "the data from the last check" : "test data the view must handle") : undefined)}
           >
             <Button size="sm" onClick={() => void openPath(`${info.dir}/${f}`)}>
@@ -352,12 +376,12 @@ function Health({ win, live }: { win: AppWindow; live: MagicLive }) {
       </FormSection>
       {(s.problems?.length || s.error) && (
         <FormSection title="Problems" aside={h?.ok !== false && broken && fix} plain>
-          <div className="magic-stack">
+          <Stack gap="sm">
             {s.error && <CodeBlock tone="danger">{s.error}</CodeBlock>}
             {s.problems?.map((p, i) => (
               <CodeBlock key={i}>{p}</CodeBlock>
             ))}
-          </div>
+          </Stack>
         </FormSection>
       )}
       {s.summary && (
@@ -367,7 +391,7 @@ function Health({ win, live }: { win: AppWindow; live: MagicLive }) {
       )}
       {(live.running ? live.steps : s.steps)?.length ? (
         <FormSection title="How it was made" plain>
-          <StepList steps={live.running ? live.steps : s.steps} live={live.running ? live : undefined} className="magic-steps-inline" />
+          <StepList steps={live.running ? live.steps : s.steps} live={live.running ? live : undefined} />
         </FormSection>
       ) : null}
       <FormSection title="Runtime">

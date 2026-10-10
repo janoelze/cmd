@@ -306,6 +306,11 @@ export const WebStage = forwardRef<HTMLDivElement, Omit<HTMLAttributes<HTMLDivEl
   );
 });
 
+/** A small screenshot at a row's start (a widget's versions): cropped from its top left, a placeholder without one. */
+export function Thumb({ src, alt = "" }: { src?: string | null; alt?: string }) {
+  return src ? <img className="ui-thumb" src={src} alt={alt} loading="lazy" draggable={false} /> : <span className="ui-thumb" data-none />;
+}
+
 /** A row of thumbnails along a window's edge; the selected one ringed. Scrolls sideways. */
 export function Filmstrip({ items, selected, onSelect }: { items: readonly { key: string; src: string; label: string }[]; selected?: string; onSelect?: (key: string) => void }) {
   return (

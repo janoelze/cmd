@@ -765,13 +765,13 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.waitForTimeout(1500);
   const radioTile = win.locator(`.tile[data-pane="${radio.id}"]`);
   const radioText = () => win.frameLocator(`.tile[data-pane="${radio.id}"] iframe.magic-frame`).locator("#r").textContent({ timeout: 5000 });
-  const asked = await radioTile.locator(".magic-media").isVisible();
+  const asked = await radioTile.locator(".ui-webstage-cover").isVisible();
   const before = await radioText();
-  await radioTile.locator(".magic-media .ui-button[data-variant=primary]").click();
+  await radioTile.locator(".ui-webstage-cover .ui-button[data-variant=primary]").click();
   await win.waitForTimeout(2500);
   const after = await radioText();
   const stored = (await call("window.list")).find((x) => x.id === radio.id).state.mediaAllowed;
-  check(asked && before === "blocked" && after === "loaded" && !(await radioTile.locator(".magic-media").count()) && stored?.[0] === "https://radio.invalid", `a widget's media origins are asked for and then allowed by the frame's CSP (${asked}, ${before} → ${after})`);
+  check(asked && before === "blocked" && after === "loaded" && !(await radioTile.locator(".ui-webstage-cover").count()) && stored?.[0] === "https://radio.invalid", `a widget's media origins are asked for and then allowed by the frame's CSP (${asked}, ${before} → ${after})`);
   await call("window.close", { id: themed.id });
 
   // Links in a widget work only while its window is selected (underlined then): a click on

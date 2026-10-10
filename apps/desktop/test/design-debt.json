@@ -6,13 +6,7 @@
   "apps/desktop/src/renderer/src/components/library.css": {
     "color": 2,
     "fontSize": 1,
-    "radius": 1,
-    "spacing": 9
-  },
-  "apps/desktop/src/renderer/src/components/magic.css": {
-    "fontSize": 13,
-    "radius": 7,
-    "spacing": 30
+    "spacing": 5
   },
   "apps/desktop/src/renderer/src/pdf/pdf.css": {
     "color": 1
