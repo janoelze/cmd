@@ -15,6 +15,7 @@ import type { PaneId } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
 import { openPath } from "./actions.ts";
 import { parseUriList } from "./paste.ts";
+import type { OpenFrom } from "../../main/open-policy.ts";
 
 /** What a drag carries, by kind. Until the drop only the kinds can be read, not the data. */
 export interface DragKinds {
@@ -35,6 +36,8 @@ export interface DragInfo extends DragKinds {
 /** What was dropped: file paths (from Finder, cmd, or file: URLs), other URLs, and plain text. */
 export interface DropItems {
   files: string[];
+  /** Those of `files` that came as real files (a path from the drag's File objects): picked in Finder or cmd, not named by a page. */
+  picked?: string[];
   urls: string[];
   text: string;
 }
@@ -64,15 +67,27 @@ export function dragKinds(dt: DataTransfer | null): DragKinds {
 
 export function readDrop(dt: DataTransfer): DropItems {
   const fromList = parseUriList(dt.getData("text/uri-list"));
-  const files = [...new Set([...[...dt.files].map((f) => cmd.pathForFile(f)).filter(Boolean), ...fromList.files])];
-  return { files, urls: fromList.urls, text: dt.getData("text/plain") };
+  const picked = [...dt.files].map((f) => cmd.pathForFile(f)).filter(Boolean);
+  const files = [...new Set([...picked, ...fromList.files])];
+  return { files, picked, urls: fromList.urls, text: dt.getData("text/plain") };
+}
+
+/**
+ * Who chose each dropped target, for the open policy (main/open-policy.ts): a
+ * real file (a File with a path) was picked by the person in Finder or cmd, so
+ * it's "user"; a page can only drop links and text, so URLs and file: links
+ * from a uri-list are "content", and launchers among them are confirmed first.
+ */
+export function dropOpens(items: DropItems): { target: string; from: OpenFrom }[] {
+  const picked = new Set(items.picked ?? []);
+  return [...items.files, ...items.urls].map((target) => ({ target, from: picked.has(target) ? "user" : "content" }));
 }
 
 /** Over the board, or a window that has no target of its own: open dropped files and links. */
 const openTarget: DropTarget = {
   over: (d) => (d.files || d.urls ? "copy" : null),
   drop: (items) => {
-    for (const p of [...items.files, ...items.urls]) void openPath(p, "content");
+    for (const o of dropOpens(items)) void openPath(o.target, o.from);
   },
 };
 
