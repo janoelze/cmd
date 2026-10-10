@@ -78,7 +78,9 @@ export function WorkspaceIconPicker(p: { open?: boolean; workspace: Workspace; o
     else if (e.key === "ArrowLeft") move(-1);
     else if (e.key === "ArrowDown") move(COLS);
     else if (e.key === "ArrowUp") move(-COLS);
-    else if (e.key === "Enter" && shown[active]) set(shown[active]!);
+    // Handled here: closing hands focus back to the button that opened it (at once with
+    // Reduce Motion), and an Enter left to run on would click it.
+    else if (e.key === "Enter" && shown[active]) e.preventDefault(), set(shown[active]!);
   };
 
   return (
