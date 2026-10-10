@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GLIDE_MS, Presence, Toaster, toast, usePresentValue } from "@cmd/ui";
+import { GLIDE_MS, Presence, reducedMotion, Toaster, toast, usePresentValue } from "@cmd/ui";
 import type { ActionsList, PaneId, Workspace, WorkspaceId } from "@cmd/protocol";
 import { listActions, rerunLastAction, runAction, showActions } from "./workspaceActions.ts";
 import type { WebviewTag } from "electron";
@@ -556,7 +556,7 @@ export function App() {
       if (row && !docks[side].hidden) setSliding((m) => ({ ...m, [side]: { dir: "out", row, width: widths[side] } }));
       else setSliding((m) => ({ ...m, [side]: { dir: "in" } }));
       clearTimeout(slideTimers.current[side]);
-      slideTimers.current[side] = setTimeout(() => setSliding(({ [side]: _, ...m }) => m), GLIDE_MS);
+      slideTimers.current[side] = setTimeout(() => setSliding(({ [side]: _, ...m }) => m), reducedMotion() ? 0 : GLIDE_MS);
       setDocks((d) => ({ ...d, [side]: { ...d[side], hidden: !d[side].hidden } }));
     } else if (side === "left") void openNavigator(all.workspaceId, "left");
   }

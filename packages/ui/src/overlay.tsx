@@ -10,7 +10,7 @@ import { ICON, iconNode } from "./icon.tsx";
 import { Button, IconButton } from "./button.tsx";
 import type { Tone } from "./status.tsx";
 import { WindowBar } from "./window.tsx";
-import { MOTION, useFlip, usePresence, usePresentValue } from "./motion.ts";
+import { MOTION, reducedMotion, useFlip, usePresence, usePresentValue } from "./motion.ts";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -609,7 +609,7 @@ export function dismissToast(id: number): void {
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);
     emit();
-  }, MOTION.exit.ms);
+  }, reducedMotion() ? 0 : MOTION.exit.ms);
 }
 
 /** Show a short message at the bottom of the window; returns its id. Needs a <Toaster/> mounted. */

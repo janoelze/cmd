@@ -57,10 +57,14 @@ export function glideNow(): number {
 /**
  * Run `step(t)` every frame on the glide (t from 0 to 1, on the glides' clock) until it
  * gets there. `slot` holds the frame request: starting another in it, or cancelAnimationFrame
- * on it, stops this one.
+ * on it, stops this one. With Reduce Motion it gets there in the next frame.
  */
 export function tween(slot: { current: number | null }, step: (t: number) => void): void {
   if (slot.current) cancelAnimationFrame(slot.current);
+  if (reducedMotion()) {
+    slot.current = requestAnimationFrame(() => ((slot.current = null), step(1)));
+    return;
+  }
   const start = glideNow();
   const frame = () => {
     const t = glide(glideNow() - start);

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { EASE, EASE_EXIT, glide, GLIDE_EASING, GLIDE_MS, MOTION } from "../src/motion.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { EASE, EASE_EXIT, glide, GLIDE_EASING, GLIDE_MS, MOTION, tween } from "../src/motion.ts";
 
 const tokens = fs.readFileSync(path.join(import.meta.dirname, "../src/tokens.css"), "utf8");
 const token = (name: string) => tokens.match(new RegExp(`--${name}:\\s*([^;]+);`))?.[1]?.trim();
@@ -43,5 +43,43 @@ describe("MOTION and the tokens", () => {
     expect(token("glide")).toBe(GLIDE_EASING);
     expect(MOTION.exit.easing).toBe(EASE_EXIT);
     expect(MOTION.change.easing).toBe(EASE);
+  });
+});
+
+describe("tween", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  // Frames run when the test says: each run() is one frame.
+  const frames = (reduce: boolean) => {
+    let queue: FrameRequestCallback[] = [];
+    let id = 0;
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: reduce && q.includes("prefers-reduced-motion: reduce") }));
+    vi.stubGlobal("requestAnimationFrame", (fn: FrameRequestCallback) => (queue.push(fn), ++id));
+    vi.stubGlobal("cancelAnimationFrame", () => void (queue = []));
+    return () => {
+      const run = queue;
+      queue = [];
+      for (const fn of run) fn(0);
+      return queue.length;
+    };
+  };
+
+  it("gets there in one frame with Reduce Motion", () => {
+    const run = frames(true);
+    const seen: number[] = [];
+    const slot = { current: null as number | null };
+    tween(slot, (t) => seen.push(t));
+    expect(slot.current).not.toBeNull();
+    expect(run()).toBe(0);
+    expect(seen).toEqual([1]);
+    expect(slot.current).toBeNull();
+  });
+
+  it("steps along the glide otherwise", () => {
+    const run = frames(false);
+    const seen: number[] = [];
+    tween({ current: null }, (t) => seen.push(t));
+    expect(run()).toBe(1);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toBeLessThan(1);
   });
 });
