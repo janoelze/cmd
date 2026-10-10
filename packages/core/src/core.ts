@@ -133,6 +133,8 @@ export interface CoreOptions {
   homesContext?: () => LocateContext;
   /** Tests: the Deno for widgets (default: found on this Mac). */
   magicDeno?: string | null;
+  /** Tests: what downloads Deno (default: installDeno). */
+  magicInstallDeno?: (stateDir: string) => Promise<string>;
 }
 
 const NO_SEARCH = { sessions: 0, files: 0, indexing: false, done: 0, total: 0 };
@@ -436,6 +438,7 @@ export class Core {
       stateDir: opts.stateDir ?? null,
       previewer: () => this.#previewer(),
       deno: opts.magicDeno,
+      installDeno: opts.magicInstallDeno,
       watched: () => this.#subscribers.size > 0,
       libraryChanged: () => this.#libraryChanged(),
       cwdFor: (w) => this.workspaces.get(w.workspaceId)?.root ?? this.workspaces.home().root,
@@ -797,6 +800,7 @@ export class Core {
     "jam.change": (p) => changeCode((o) => this.ai.object(o), p),
     "magic.runtime": () => this.magic.runtime(),
     "magic.installRuntime": () => this.magic.installRuntime(),
+    "magic.skipRuntime": () => (this.magic.skipRuntime(), null),
     // Connection-aware (#afterCall): the caller becomes a previewer.
     "magic.previewer": () => null,
     "magic.previewResult": (p) => {

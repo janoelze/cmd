@@ -40,7 +40,7 @@ import { sandboxAvailable, type SandboxMode } from "./sandbox.ts";
 import { runSource } from "./sources.ts";
 import { WidgetStore } from "../widgets/store.ts";
 import { configValues, type WidgetManifest } from "../widgets/manifest.ts";
-import { denoVersion, describeDataError, findDeno, installDeno, runData, type DenoEnv } from "../widgets/deno.ts";
+import { DENO_VERSION, denoVersion, describeDataError, findDeno, installDeno, runData, type DenoEnv } from "../widgets/deno.ts";
 import type { Previewer } from "../widgets/preview.ts";
 import { WidgetSecrets } from "../widgets/secrets.ts";
 import type { VerifyContext } from "../widgets/verify.ts";
@@ -86,6 +86,8 @@ export interface MagicServiceOptions {
   previewer?: () => Promise<Previewer | null>;
   /** Tests: the Deno to use (default: findDeno). */
   deno?: string | null;
+  /** Tests: what installs Deno (default: installDeno, unless `deno` is given). */
+  installDeno?: (stateDir: string) => Promise<string>;
   /** Whether any UI could show the data (default: always); refreshes wait while none can (see resume). */
   watched?: () => boolean;
   /** The library changed: a widget made, changed, renamed, duplicated or deleted, or a window showing one opened or closed. */
@@ -125,6 +127,10 @@ export class MagicService {
   #autoFixed = new Map<WindowId, number>();
   /** Refreshes that came due while no UI was connected: run on resume. */
   #parked = new Set<WindowId>();
+  /** Builds waiting for the answer to "Download Deno?": the install (yes) or null (not now). */
+  #asks = new Set<(answer: { install: Promise<unknown> } | null) => void>();
+  /** The Deno download under way, shared by everyone who asked for it. */
+  #installing: Promise<MagicRuntime> | null = null;
   #disposed = false;
 
   constructor(o: MagicServiceOptions) {
@@ -139,7 +145,7 @@ export class MagicService {
       const s = stateOf(w);
       if (s.widgetId) this.#widgetOf.set(w.id, s.widgetId);
       // A run can't survive the core; say so instead of spinning forever.
-      if (s.phase === "working") o.windows.update(w.id, { state: { phase: s.html || s.command ? "ready" : "error", error: "Interrupted: cmd restarted while this was being made." } });
+      if (s.phase === "working") o.windows.update(w.id, { state: { phase: s.html || s.command ? "ready" : "error", askRuntime: undefined, error: "Interrupted: cmd restarted while this was being made." } });
       const now = stateOf(this.#window(w.id));
       if (now.phase === "ready") {
         this.#schedule(w.id, 0);
@@ -166,6 +172,30 @@ export class MagicService {
   #sandbox(): SandboxMode {
     if (this.#o.sandbox) return this.#o.sandbox;
     return process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required";
+  }
+
+  /** What installs cmd's own Deno; null when it can't (no state folder, or tests that pick the Deno). */
+  #installer(): ((stateDir: string) => Promise<string>) | null {
+    if (!this.#o.stateDir) return null;
+    return this.#o.installDeno ?? (this.#o.deno === undefined ? (dir) => installDeno(dir) : null);
+  }
+
+  /** Ask the window whether to download Deno (MagicState.askRuntime); resolves with the install (wrapped: not awaited), or null for "not now" and Stop. */
+  #askRuntime(id: WindowId, signal: AbortSignal): Promise<{ install: Promise<unknown> } | null> {
+    if (this.#installing) return Promise.resolve({ install: this.#installing });
+    log.info(`run ${id.slice(0, 8)} asks to download Deno`);
+    this.#o.windows.update(id, { state: { askRuntime: true } });
+    return new Promise<{ install: Promise<unknown> } | null>((resolve) => {
+      const answer = (install: { install: Promise<unknown> } | null) => {
+        this.#asks.delete(answer);
+        signal.removeEventListener("abort", stop);
+        if (this.#o.windows.others().some((w) => w.id === id)) this.#o.windows.update(id, { state: { askRuntime: undefined } });
+        resolve(install);
+      };
+      const stop = () => answer(null);
+      this.#asks.add(answer);
+      signal.addEventListener("abort", stop, { once: true });
+    });
   }
 
   #deno(): DenoEnv | null {
@@ -267,17 +297,20 @@ export class MagicService {
     }
     log.info(`run ${id.slice(0, 8)}${refining ? " (change)" : ""}`, { provider: backend.name, model: backend.model });
     void (async () => {
-      // The first widget on a Mac without Deno: get cmd's own copy before building.
-      if (!this.#deno() && this.#o.stateDir && this.#o.deno === undefined) {
-        const step: MagicStep = { id: 0, tool: "install", why: "Installing Deno for widgets (once)", detail: "deno.com" };
-        send({ type: "step", step });
-        const t0 = Date.now();
-        try {
-          await installDeno(this.#o.stateDir);
-          send({ type: "step", step: { ...step, ms: Date.now() - t0 } });
-        } catch (e) {
-          send({ type: "step", step: { ...step, ms: Date.now() - t0, isError: true, output: (e as Error).message } });
-          log.warn(`installing Deno failed: ${(e as Error).message}`);
+      // The first widget on a Mac without Deno: ask before downloading cmd's own copy (magic.installRuntime is yes, magic.skipRuntime not now).
+      if (!this.#deno() && this.#installer()) {
+        const yes = await this.#askRuntime(id, ac.signal);
+        if (ac.signal.aborted) throw new Error("Stopped.");
+        if (yes) {
+          const step: MagicStep = { id: 0, tool: "install", why: "Installing Deno for widgets (once)", detail: `Deno ${DENO_VERSION}` };
+          send({ type: "step", step });
+          const t0 = Date.now();
+          try {
+            await yes.install;
+            send({ type: "step", step: { ...step, ms: Date.now() - t0 } });
+          } catch (e) {
+            send({ type: "step", step: { ...step, ms: Date.now() - t0, isError: true, output: (e as Error).message } });
+          }
         }
       }
       const ctx = await this.#verifyContext(this.#window(id), widgetId, ac.signal);
@@ -494,13 +527,34 @@ export class MagicService {
     return { deno: env?.deno ?? null, version: env ? denoVersion(env.deno) : null, sandbox: process.platform === "darwin" && sandboxAvailable(), previewer: p?.name ?? null };
   }
 
-  async installRuntime(): Promise<MagicRuntime> {
-    if (!this.#o.stateDir) throw new Error("no state folder to install Deno into");
-    log.info("installing Deno");
-    await installDeno(this.#o.stateDir);
-    // Windows waiting for Deno can run now.
-    for (const w of this.#o.windows.others()) if (w.kind === "magic" && stateOf(w).phase === "ready") this.#schedule(w.id, 0);
-    return this.runtime();
+  /** Download cmd's own Deno: from Settings and the Health tab, and the yes to a build's question. One download at a time. */
+  installRuntime(): Promise<MagicRuntime> {
+    const stateDir = this.#o.stateDir;
+    if (!stateDir) return Promise.reject(new Error("no state folder to install Deno into"));
+    if (!this.#installing) {
+      const install = this.#o.installDeno ?? ((dir: string) => installDeno(dir));
+      log.info(`installing Deno ${DENO_VERSION}`);
+      this.#installing = (async () => {
+        try {
+          await install(stateDir);
+        } catch (e) {
+          log.warn(`installing Deno failed: ${(e as Error).message}`);
+          throw e;
+        }
+        // Windows waiting for Deno can run now.
+        for (const w of this.#o.windows.others()) if (w.kind === "magic" && stateOf(w).phase === "ready") this.#schedule(w.id, 0);
+        return this.runtime();
+      })().finally(() => (this.#installing = null));
+      // Builds don't fail on the download's error themselves (they show it as a step).
+      this.#installing.catch(() => {});
+    }
+    for (const answer of [...this.#asks]) answer({ install: this.#installing });
+    return this.#installing;
+  }
+
+  /** "Not now" to the question: the builds waiting for Deno go on without it. */
+  skipRuntime(): void {
+    for (const answer of [...this.#asks]) answer(null);
   }
 
   cancel(id: WindowId): void {

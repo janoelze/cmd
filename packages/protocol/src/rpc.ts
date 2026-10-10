@@ -330,8 +330,10 @@ export interface Methods {
   "magic.mute": { params: { id: WindowId; muted: boolean }; result: null };
   /** What widgets run on: Deno, the sandbox, the previewer. */
   "magic.runtime": { params: {}; result: MagicRuntime };
-  /** Download Deno into cmd's state folder. */
+  /** Download the pinned Deno into cmd's state folder (also the yes to a build's "Download Deno?"). */
   "magic.installRuntime": { params: {}; result: MagicRuntime };
+  /** "Not now" to a build's "Download Deno?": it goes on without it. */
+  "magic.skipRuntime": { params: {}; result: null };
   /** This connection renders widget previews (the app): it gets magic.previewRequest events. */
   "magic.previewer": { params: {}; result: null };
   /** The previewer's answer to a magic.previewRequest. */

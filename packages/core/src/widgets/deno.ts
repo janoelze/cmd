@@ -3,9 +3,11 @@
 // through widget-runtime/runner.ts. Permissions come from manifest.json and
 // become Deno flags; the whole process also runs under cmd's sandbox-exec
 // profile (no writes, no private paths), so even `--allow-run=git` can't
-// change anything.
+// change anything. cmd's own copy is one pinned Deno release, checked against
+// its SHA-256 and code signature before it runs (bumping it: DENO_VERSION).
 
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -13,8 +15,11 @@ import { fileURLToPath } from "node:url";
 import { credentialsForPrograms, expandPath, redact } from "../magic/policy.ts";
 import { magicDenyPaths } from "../paths-deny.ts";
 import { execArgv, type SandboxMode } from "../magic/sandbox.ts";
+import { logger } from "@cmd/protocol/node";
 import type { MagicNotify, MagicStatus } from "@cmd/protocol";
 import type { WidgetManifest } from "./manifest.ts";
+
+const log = logger("deno");
 
 export const RUNTIME_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../widget-runtime");
 
@@ -43,20 +48,67 @@ export function findDeno(o: { setting?: string; stateDir?: string } = {}): strin
   return CANDIDATES.find(ok) ?? null;
 }
 
-/** Download Deno into cmd's state folder (macOS, from Deno's GitHub releases). Returns its path. */
-export async function installDeno(stateDir: string, fetchImpl: typeof fetch = fetch): Promise<string> {
+// ── installing cmd's own copy ────────────────────────────
+
+/**
+ * The Deno release cmd installs, and the SHA-256 of each Mac asset
+ * (deno-<arch>-apple-darwin.zip, as GitHub's release lists it). Bumping it is a
+ * reviewed change: new hashes from the release's .sha256sum files, then the
+ * widget tests (CI installs this same version through installDeno).
+ */
+export const DENO_VERSION = "2.9.7";
+export const DENO_SHA256: Readonly<Record<"aarch64" | "x86_64", string>> = {
+  aarch64: "5cd46d6268f6f78f5d88bdc7159d20bd44cdaa4b3303474839f87ec6fe7ae25c",
+  x86_64: "95daaff11c116a52ad54785e7914c8e9c9cdcaba793c5ed929c74ca2d8e6259a",
+};
+
+export interface InstallDenoOptions {
+  fetchImpl?: typeof fetch;
+  /** Tests: the hash to expect instead of DENO_SHA256's. */
+  sha256?: string;
+}
+
+/**
+ * Download the pinned Deno into cmd's state folder (macOS). The zip's hash is
+ * checked before anything is written, the binary's signature before it is put
+ * in place; either failing leaves the runtime folder as it was. Returns its path.
+ */
+export async function installDeno(stateDir: string, o: InstallDenoOptions = {}): Promise<string> {
   if (process.platform !== "darwin") throw new Error("Installing Deno is only automatic on macOS; install it from deno.com.");
   const arch = process.arch === "arm64" ? "aarch64" : "x86_64";
-  const url = `https://github.com/denoland/deno/releases/latest/download/deno-${arch}-apple-darwin.zip`;
-  const res = await fetchImpl(url, { redirect: "follow", signal: AbortSignal.timeout(120_000) });
-  if (!res.ok) throw new Error(`Downloading Deno failed: HTTP ${res.status}`);
-  const dir = path.dirname(bundledDeno(stateDir));
-  fs.mkdirSync(dir, { recursive: true });
-  const zip = path.join(dir, "deno.zip");
-  fs.writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
-  execFileSync("/usr/bin/ditto", ["-x", "-k", zip, dir]);
-  fs.rmSync(zip, { force: true });
-  fs.chmodSync(bundledDeno(stateDir), 0o755);
+  const url = `https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-${arch}-apple-darwin.zip`;
+  log.info(`downloading Deno ${DENO_VERSION}`, { url });
+  const res = await (o.fetchImpl ?? fetch)(url, { redirect: "follow", signal: AbortSignal.timeout(120_000) });
+  if (!res.ok) throw new Error(`Couldn't download Deno: HTTP ${res.status}`);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  const want = o.sha256 ?? DENO_SHA256[arch];
+  const got = createHash("sha256").update(bytes).digest("hex");
+  if (got !== want) {
+    log.error(`Deno download doesn't match its pinned hash`, { url, want, got, bytes: bytes.length });
+    throw new Error(`The Deno download doesn't match Deno ${DENO_VERSION}, so it wasn't installed.`);
+  }
+  const target = path.dirname(bundledDeno(stateDir));
+  const runtime = path.dirname(target);
+  fs.mkdirSync(runtime, { recursive: true });
+  const tmp = fs.mkdtempSync(path.join(runtime, ".deno-"));
+  try {
+    const zip = path.join(tmp, "deno.zip");
+    fs.writeFileSync(zip, bytes);
+    execFileSync("/usr/bin/ditto", ["-x", "-k", zip, tmp]);
+    fs.rmSync(zip, { force: true });
+    const bin = path.join(tmp, "deno");
+    const sig = spawnSync("/usr/bin/codesign", ["-v", bin], { encoding: "utf8", timeout: 30_000 });
+    if (sig.status !== 0) {
+      log.error(`Deno's code signature doesn't verify`, { url, status: sig.status, stderr: sig.stderr?.trim() });
+      throw new Error(`Deno ${DENO_VERSION}'s signature doesn't verify, so it wasn't installed.`);
+    }
+    fs.chmodSync(bin, 0o755);
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.renameSync(tmp, target);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+  log.info(`installed Deno ${DENO_VERSION}`, { path: bundledDeno(stateDir) });
   return bundledDeno(stateDir);
 }
 

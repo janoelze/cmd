@@ -148,6 +148,7 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
         <WidgetFrame win={win} active={focused} html={s.html!} data={live.data?.data ?? s.lastData?.data} kv={s.kv} media={allowed} kit={s.kit} onPainted={setPainted} />
       ) : null}
       {building && <Progress live={live} showSteps={showSteps} overlay={widget} />}
+      {working && s.askRuntime && <RuntimeRequest onAnswer={(yes) => void (yes ? cmd.call("magic.installRuntime", {}) : cmd.call("magic.skipRuntime", {})).catch((e: Error) => console.error("magic runtime", e))} />}
       {asking && <MediaRequest origins={pending} onAnswer={(allow) => void cmd.call("magic.media", { id: win.id, allow })} />}
       {!building && (s.error || problems || broken) && (
         <div className="magic-error" data-tip={[s.error, ...(problems ?? []), broken ? s.health?.error : ""].filter(Boolean).join("\n")}>
@@ -336,6 +337,24 @@ function MediaRequest({ origins, onAnswer }: { origins: string[]; onAnswer: (all
           </Button>
           <Button variant="primary" onClick={() => onAnswer(true)}>
             Allow
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The first build on a Mac without Deno asks before downloading it (the core waits for the answer). */
+function RuntimeRequest({ onAnswer }: { onAnswer: (yes: boolean) => void }) {
+  return (
+    <div className="magic-overlay">
+      <div className="magic-media" role="alertdialog" aria-label="Download Deno">
+        <div className="magic-media-title">Download Deno?</div>
+        <div className="magic-media-text">Widgets with live data need it. It's 40 MB, downloaded once.</div>
+        <div className="magic-row">
+          <Button onClick={() => onAnswer(false)}>Not Now</Button>
+          <Button variant="primary" onClick={() => onAnswer(true)}>
+            Download
           </Button>
         </div>
       </div>

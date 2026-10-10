@@ -66,7 +66,19 @@ jobs:
 
       - run: pnpm typecheck
 
+      # The Deno widgets pin (DENO_VERSION in packages/core/src/widgets/deno.ts), installed by
+      # cmd's own installDeno, so its hash and signature are checked here too, and the widget
+      # suites in widgets.test.ts run against it (CMD_REQUIRE_DENO fails them rather than skipping).
+      - name: Deno for the widget tests
+        run: |
+          node --no-warnings --input-type=module -e '
+            const { installDeno, denoVersion } = await import("./packages/core/src/widgets/deno.ts");
+            console.log(denoVersion(await installDeno(process.env.RUNNER_TEMP)));'
+          echo "$RUNNER_TEMP/runtime/deno" >> "$GITHUB_PATH"
+
       - run: pnpm test
+        env:
+          CMD_REQUIRE_DENO: "1"
 
       - name: Build and stage
         env:

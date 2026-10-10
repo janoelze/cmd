@@ -119,6 +119,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "magic.mute": "never",
   "magic.runtime": "never",
   "magic.installRuntime": "never",
+  "magic.skipRuntime": "never",
   "magic.previewer": "never",
   "magic.previewResult": "never",
   "widget.list": "never", // file paths (screenshots)

@@ -103,9 +103,9 @@ A Magic widget is a folder under `$CMD_HOME/widgets/<id>/` (`widgets/store.ts`, 
 **Proposal.** Pin a Deno version and its SHA-256 for both archs in a constant (or `packages/core/deno.lock.json`), download that exact asset, check the hash before unzipping, and check `codesign -v` on the binary. Ask once ("Widgets with live data need Deno (40 MB). Download it?"), as `magic.installRuntime` already offers from Settings. Bumping the pin is then a reviewed change with the widget tests run against it (`widgets.test.ts` runs only when Deno exists: `describe.skipIf(!DENO)` ×3, so CI should install the pinned version). Bundling Deno in the app is the stronger route but adds roughly 40 MB per arch. Packaging is doc 14's call.
 
 **Success criteria.**
-- [ ] `installDeno` fails on a hash mismatch (test with a fake `fetchImpl`).
-- [ ] `grep -n "releases/latest" packages/core/src/widgets/deno.ts` returns nothing.
-- [ ] A build on a Mac without Deno shows a question before any download (e2e or `magic.test.ts` with an injected installer).
+- [x] `installDeno` fails on a hash mismatch (test with a fake `fetchImpl`).
+- [x] `grep -n "releases/latest" packages/core/src/widgets/deno.ts` returns nothing.
+- [x] A build on a Mac without Deno shows a question before any download (e2e or `magic.test.ts` with an injected installer).
 - [ ] CI installs the pinned Deno, and the three `skipIf(!DENO)` suites run there (see doc 13).
 
 ### AR1-11-05 · Enforce frame actions in the renderer, and share one frame host

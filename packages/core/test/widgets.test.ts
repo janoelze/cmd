@@ -26,6 +26,8 @@ import {
 import type { BackendRun } from "../src/ai/backends.ts";
 
 const DENO = findDeno();
+// CI installs the pinned Deno (build.yml) and sets this, so the suites below can't skip there unnoticed.
+if (process.env.CMD_REQUIRE_DENO === "1" && !DENO) throw new Error("CMD_REQUIRE_DENO is set but no Deno was found");
 const sandbox = sandboxAvailable() ? ("required" as const) : ("off" as const);
 const tmp = (p = "cmd-widgets-") => fs.mkdtempSync(path.join(os.tmpdir(), p));
 const denoEnv = () => ({ deno: DENO!, denoDir: path.join(os.tmpdir(), "cmd-test-deno"), sandbox });

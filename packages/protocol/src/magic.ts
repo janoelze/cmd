@@ -127,6 +127,8 @@ export interface MagicState {
   mediaAllowed?: string[];
   /** Media origins the person declined (not asked again). */
   mediaDenied?: string[];
+  /** The build waits for the person: download Deno (magic.installRuntime) or not now (magic.skipRuntime). */
+  askRuntime?: boolean;
 }
 
 /** A config field of a widget (its manifest), as the settings pane shows it. */
