@@ -22,13 +22,14 @@
 // Windows are never remounted or reordered in the DOM, so terminals keep
 // running and pointer capture is never lost.
 
-import { EmptyState, GLIDE_MS, PageDots, tween, Window, WindowBody, WindowFrame } from "@cmd/ui";
+import { EmptyState, ErrorBoundary, GLIDE_MS, PageDots, tween, Window, WindowBody, WindowFrame } from "@cmd/ui";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
 import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type Spacing, type ViewMode } from "../layouts.ts";
 import { arrangeTiles, labelOf, moveInOrder, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
+import { brokenView, useBrokenView } from "../windows/break.ts";
 import { useStoreValue } from "../store.ts";
 import {
   arrange,
@@ -1064,12 +1065,20 @@ export function WindowsView(p: Props) {
 /**
  * A window's content from its registered view (see windows/registry.ts). Memoized,
  * so moving the canvas camera (a re-render per frame) doesn't re-render file lists,
- * editors and pages; only a changed window or focus does.
+ * editors and pages; only a changed window or focus does. Each view has its own
+ * ErrorBoundary, so one that breaks can't blank the app window.
  */
 export const WindowContent = memo(function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
   const view = viewFor(win.kind);
+  const broken = useBrokenView(win.id);
   if (!view) return <EmptyState compact icon="exclamationmark.triangle.fill">No view registered for “{win.kind}” windows.</EmptyState>;
-  return <view.View win={win} focused={focused} />;
+  // A view that throws shows a fallback in its own tile; the rest of the window stays live.
+  // Reload mounts the view again (a lazy view's chunk is fetched again too).
+  return (
+    <ErrorBoundary text="Your other windows keep running.">
+      {broken ? brokenView() : <view.View win={win} focused={focused} />}
+    </ErrorBoundary>
+  );
 });
 
 /** Canvas overview: every window, the visible area; click or drag to move there. */

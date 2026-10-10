@@ -10,7 +10,9 @@ import { Gallery } from "./Gallery.tsx";
 
 installScrollbars();
 installTooltips();
-createRoot(document.getElementById("root")!).render(
+// The ErrorBoundary specimen throws on purpose; anything else a boundary catches is logged.
+const onCaughtError = (err: unknown) => void (String(err).includes("on purpose") || console.error(err));
+createRoot(document.getElementById("root")!, { onCaughtError }).render(
   <>
     <Gallery />
     <Toaster />

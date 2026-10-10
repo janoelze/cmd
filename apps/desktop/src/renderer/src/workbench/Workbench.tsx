@@ -4,7 +4,7 @@
 // (?story=feedback&variant=Sent&theme=gruvbox-dark), so a script can drive it.
 
 import { useEffect, useState, type ComponentType } from "react";
-import { Segmented, Select, Spacer, Toolbar } from "@cmd/ui";
+import { ErrorBoundary, Segmented, Select, Spacer, Toolbar } from "@cmd/ui";
 import { allThemes, themeFor } from "@cmd/ui/themes";
 import type { SettingsSnapshot } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -90,7 +90,13 @@ export function Workbench() {
         <Select label="Theme" value={theme} options={[{ value: FOLLOW, label: "Theme from Settings" }, ...allThemes().map((t) => ({ value: t.id, label: t.title }))]} onChange={setTheme} />
       </Toolbar>
       {/* key: a new variant (or mount) starts with fresh state. */}
-      <main className="wb-stage">{View && <View key={`${storyId}/${name}/${mount}`} />}</main>
+      <main className="wb-stage">
+        {View && (
+          <ErrorBoundary key={`${storyId}/${name}/${mount}`} title="This story stopped working" reloadLabel="Reload">
+            <View />
+          </ErrorBoundary>
+        )}
+      </main>
     </div>
   );
 }

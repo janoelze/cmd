@@ -28,6 +28,7 @@ import {
   ConfirmDialog,
   Dialog,
   EmptyState,
+  ErrorBoundary,
   FeatureList,
   FormActions,
   FormRow,
@@ -311,6 +312,30 @@ function TokensPage() {
 // ── windows ────────────────────────────────────────────
 
 /** A window frame for a specimen, at a size. */
+/** Throws while `broken`: the ErrorBoundary specimen's view. */
+function Fragile({ broken }: { broken: boolean }): ReactNode {
+  if (broken) throw new Error("This view broke on purpose (gallery)");
+  return <View state={{ kind: "empty", icon: "checkmark.circle", title: "Working again" }} />;
+}
+
+function BoundarySpecimen() {
+  const [broken, setBroken] = useState(true);
+  return (
+    <div style={{ display: "flex", gap: "var(--space-xl)", flexWrap: "wrap" }}>
+      <Win name="Widget" w={320} h={240}>
+        <ErrorBoundary text="Your other windows keep running." onError={() => setBroken(false)}>
+          <Fragile broken={broken} />
+        </ErrorBoundary>
+      </Win>
+      <Win name="narrow" w={200} h={240}>
+        <ErrorBoundary text="Your other windows keep running." onReload={() => {}}>
+          <Fragile broken />
+        </ErrorBoundary>
+      </Win>
+    </div>
+  );
+}
+
 function Win({ name, icon = "macwindow", w = 420, h = 260, children }: { name: string; icon?: string; w?: number; h?: number; children: ReactNode }) {
   return (
     <Window selected style={{ width: w, height: h, position: "relative", flex: "none" }}>
@@ -991,6 +1016,9 @@ function ContentPage() {
         <EmptyState compact icon="clock.arrow.circlepath" title="No versions yet">
           Each change you ask for is kept here, so you can go back.
         </EmptyState>
+      </Spec>
+      <Spec title="ErrorBoundary" code="<ErrorBoundary title text reloadLabel onReload onError>" note="A view that throws while rendering shows this in its own place (a window's tile, a page) instead of blanking the whole window. Reload mounts it again; this one works the second time." plain>
+        <BoundarySpecimen />
       </Spec>
       <Spec title="DataGrid" code="<DataGrid columns rows sort onSort mono numbered footer>" note="Rows of values: a table's rows, a query's result, a list of columns. The header sticks; a click sorts (asc, desc, off). Numbers sit right, NULL and blobs are dim; a cell is one line, the whole value in its tooltip.">
         <GridSpecimen />

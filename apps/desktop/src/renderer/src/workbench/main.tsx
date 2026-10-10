@@ -7,8 +7,8 @@ import "@cmd/ui/ui.css";
 import "../styles.css";
 import "./workbench.css";
 import { cmd } from "../bridge.ts";
-import { installErrorReporting } from "../errors.ts";
-import { installScrollbars, installTooltips, Toaster, UIProvider } from "@cmd/ui";
+import { installErrorReporting, reportRenderError } from "../errors.ts";
+import { ErrorBoundary, installScrollbars, installTooltips, Toaster, UIProvider } from "@cmd/ui";
 import "@cmd/ui/themes/builtin";
 import { bootTheme } from "@cmd/ui/themes";
 import { Workbench } from "./Workbench.tsx";
@@ -19,9 +19,11 @@ installScrollbars({ always: cmd.scrollBars === "always" });
 installTooltips();
 
 document.documentElement.classList.add(navigator.platform.startsWith("Mac") ? "platform-mac" : "platform-other");
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById("root")!, { onCaughtError: reportRenderError, onUncaughtError: reportRenderError }).render(
   <UIProvider icon={Symbol}>
-    <Workbench />
+    <ErrorBoundary onReload={() => location.reload()}>
+      <Workbench />
+    </ErrorBoundary>
     <Toaster />
   </UIProvider>,
 );

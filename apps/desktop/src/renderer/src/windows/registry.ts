@@ -49,7 +49,18 @@ const views = new Map<string, WindowView>();
  * Markdown renderer) stay out of the startup bundle. Shows an empty well meanwhile.
  */
 export function lazyView(load: () => Promise<ComponentType<WindowViewProps>>): ComponentType<WindowViewProps> {
-  const View = lazy(async () => ({ default: await load() }));
+  // A chunk that fails to load throws to the window's ErrorBoundary (WindowContent);
+  // React keeps a rejected lazy rejected, so start a fresh one for its Reload.
+  const make = () =>
+    lazy(async () => {
+      try {
+        return { default: await load() };
+      } catch (err) {
+        View = make();
+        throw err;
+      }
+    });
+  let View = make();
   const fallback = createElement("div", { style: { flex: 1, background: "var(--well)" } });
   return (props) => createElement(Suspense, { fallback }, createElement(View, props));
 }

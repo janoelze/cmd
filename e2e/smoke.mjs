@@ -616,6 +616,35 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });
   check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1 && (await win.locator(".tile.kind-text").count()) === 1 && (await win.locator(".tile.kind-markdown").count()) === 1, "browser, file, text and Markdown windows take part in the grid");
 
+  // A window whose view throws shows a fallback in its own tile (ErrorBoundary in
+  // WindowContent); the rest of the app stays live and terminals take input.
+  // __cmdBreakView is a test hook (windows/break.ts), absent in a packaged app.
+  {
+    step("error boundary");
+    const broken = (await win.evaluate(() => window.cmd.call("window.list", {}))).find((w) => w.kind === "markdown");
+    await win.evaluate((id) => window.__cmdBreakView(id, true), broken.id);
+    const fallback = win.locator(`.tile[data-pane="${broken.id}"] .ui-viewstate[data-kind="error"]`);
+    const shown = await fallback.waitFor({ timeout: 3000 }).then(() => true, () => false);
+    check(shown && (await fallback.textContent()).includes("This window stopped working"), "a window whose view throws shows its fallback in its own tile");
+    const term = win.locator(".tile.kind-terminal").first();
+    const termId = await term.getAttribute("data-pane");
+    await win.evaluate((id) => window.__cmdSelect(id), termId);
+    await term.locator(".xterm").click();
+    await win.keyboard.type("echo still-live-$((6*7))");
+    await win.keyboard.press("Enter");
+    let text = "";
+    for (let i = 0; i < 30 && !text.includes("still-live-42"); i++) {
+      await win.waitForTimeout(100);
+      text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 50 }).then((r) => r.text), termId);
+    }
+    check(text.includes("still-live-42") && (await win.locator(".topbar, .statusbar").count()) > 0, "with one window broken, the rest of the app renders and a terminal takes input");
+    await win.screenshot({ path: path.join(shots, "10b-error-boundary.png") });
+    await win.evaluate((id) => window.__cmdBreakView(id, false), broken.id);
+    await fallback.locator("button", { hasText: "Reload Window" }).click();
+    const back = await win.waitForSelector(`.tile.kind-markdown[data-pane="${broken.id}"] .ui-doc`, { timeout: 3000 }).then(() => true, () => false);
+    check(back && (await fallback.count()) === 0, "Reload Window mounts the view again");
+  }
+
   // New Text Editor: an untitled buffer whose text survives in the window's state;
   // ⌘S asks where to save (the native panel is stubbed) and the window becomes that file's.
   await menu("file.newText");

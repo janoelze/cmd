@@ -23,6 +23,7 @@ export { Badge, Kbd, PageDots, Progress, ProgressRing, Spinner, StatusDot, type 
 export { installScrollbars, scrollbarScript, scrolled, watchScrollbars, PAGE_SCROLLBAR_CSS, SCROLLBAR_CSS, SCROLLBAR_HOLD, type ScrollbarsOptions } from "./scrollbars.ts";
 export { displayAddress, ToolbarAddressField, ToolbarButton, ToolbarField, ToolbarSearchField, ToolbarGroup, ToolbarMenu, ToolbarPath, ToolbarSegmented, ToolbarSeparator, ToolbarSpacer, ToolbarText, WindowToolbar, type ToolbarButtonProps, type ToolbarFieldProps } from "./toolbar.tsx";
 export { EASE, EASE_EXIT, glide, GLIDE_EASING, GLIDE_MS, glideNow, MOTION, tween, reducedMotion, slide, spring, timing, useFlip, usePresence, usePresentValue } from "./motion.ts";
+export { ErrorBoundary, type ErrorBoundaryProps } from "./boundary.tsx";
 export { Window, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "./window.tsx";
 export { installTooltips, placeTip, useTooltip, type TipSide } from "./tooltips.tsx";
 export { Tree, TreeHeader, TreeRename, TreeRow, type TreeRowProps, type TreeSort, type TreeTone } from "./tree.tsx";
