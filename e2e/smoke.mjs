@@ -22,9 +22,38 @@ const arg = (name) => {
   return i > 0 ? process.argv[i + 1] : undefined;
 };
 const only = arg("--only")?.split(",").filter(Boolean) ?? null;
+// --shards N runs the scenarios in N apps at once, each its own run of this script
+// (--shard i/N) with its own CMD_HOME (.cmd-dev/e2e-<i>); scenarios a shard's need run there too.
+const shards = Number(arg("--shards") ?? process.env.E2E_SHARDS ?? 1);
+const shard = arg("--shard")?.split("/").map(Number) ?? null;
 
 const root = path.resolve(import.meta.dirname, "..");
-const home = path.join(root, ".cmd-dev", "e2e");
+const shots = path.join(root, ".cmd-dev", "shots");
+if (!shard) {
+  fs.mkdirSync(shots, { recursive: true });
+  for (const f of fs.readdirSync(shots)) if (/^(failed|hung)/.test(f)) fs.rmSync(path.join(shots, f)); // the last run's
+}
+if (shards > 1 && !shard && !only) {
+  const { spawn } = await import("node:child_process");
+  const t0 = Date.now();
+  // Each shard's output in one piece when it ends, not interleaved; then every failure.
+  const runs = await Promise.all(Array.from({ length: shards }, (_, i) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [import.meta.filename, "--shard", `${i + 1}/${shards}`], { stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (out += d));
+    child.on("exit", (code) => {
+      console.log(`\n━━ shard ${i + 1}/${shards} (${((Date.now() - t0) / 1000).toFixed(1)} s) ━━\n${out.trimEnd()}`);
+      resolve({ code, out });
+    });
+  })));
+  const failed = runs.flatMap((r) => r.out.split("\n").filter((l) => /^ {2}✗ /.test(l)));
+  const broken = runs.filter((r) => r.code && !r.out.includes("  ✗ ")).length; // ended without a report
+  console.log(`\n${shards} shards in ${((Date.now() - t0) / 1000).toFixed(1)} s: ${failed.length || broken ? `${failed.length} failed${broken ? `, ${broken} shard(s) crashed` : ""}` : "all checks passed"}`);
+  for (const l of failed) console.log(l);
+  process.exit(runs.some((r) => r.code) ? 1 : 0);
+}
+const home = path.join(root, ".cmd-dev", shard ? `e2e-${shard[0]}` : "e2e");
 // The app starts a detached core (and PTY host) that outlive it. Stop the last
 // run's before wiping its state (or they're orphaned), and this run's on any exit, pass or fail.
 await stopCore(home, { terminals: true });
@@ -37,9 +66,6 @@ process.on("exit", () => {
 });
 fs.rmSync(home, { recursive: true, force: true });
 fs.mkdirSync(home, { recursive: true });
-const shots = path.join(root, ".cmd-dev", "shots");
-fs.mkdirSync(shots, { recursive: true });
-for (const f of fs.readdirSync(shots)) if (/^(failed|hung)/.test(f)) fs.rmSync(path.join(shots, f)); // the last run's
 
 // Fixture transcripts (instead of the real ~/.claude) and a harmless agent command.
 const transcripts = path.join(home, "transcripts-home");
@@ -53,7 +79,11 @@ fs.writeFileSync(
     { type: "ai-title", aiTitle: "VPN auto reconnect" },
   ].map((o) => JSON.stringify(o)).join("\n") + "\n",
 );
-fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "agents.claude.command": "echo claude" }));
+// Terminals run a bare zsh: no login profile, an empty ZDOTDIR instead of the user's rc
+// (cmd's shell integration still loads), so one is ready at once and the same on every machine.
+const zdotdir = path.join(home, "zdotdir");
+fs.mkdirSync(zdotdir);
+fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "agents.claude.command": "echo claude", "shell.login": false }));
 
 // Screenshots of the app at each step, for a person or an agent to look at: E2E_SHOTS=1
 // (they take about a fifth of a run). A failure always saves one.
@@ -66,7 +96,7 @@ const launch = async () => {
     executablePath: require("electron"),
     // Fake camera and microphone (not a fake permission prompt): a page's getUserMedia reaches cmd's sheet without real devices.
     args: ["--use-fake-device-for-media-stream", path.join(root, "apps/desktop")],
-    env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ...screenEnv() },
+    env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ZDOTDIR: zdotdir, ...screenEnv() },
   });
   // Reduce Motion in every page: the app window, Settings, browser pages (webviews are pages
   // here too). Chromium's --force-prefers-reduced-motion doesn't reach Electron's pages.
@@ -191,14 +221,33 @@ const SCENARIOS = {
 const failures = [];
 const outcome = new Map(); // name → "passed" | "failed" | "skipped" | "not run"
 // --only: the named scenarios (a part of a name picks each it is in), what they need, and onboarding.
+// About how long each scenario takes, in seconds (others: half a second), to deal the shards evenly.
+const COST = { grid: 4.5, magic: 4.2, strip: 3.4, restart: 4, embedded: 1.9, "core-status": 1.4, browser: 1.2, text: 1.2, settings: 1.2, osc8: 1.2, untitled: 1.1, palette: 1.1, terminals: 0.9, sidebars: 1, "site-permissions": 0.9, "window-kinds": 0.7, "files-menus": 0.7 };
 const wanted = (() => {
-  if (!only) return null;
+  if (!only && !shard) return null;
   const want = new Set();
-  const add = (name) => {
-    if (want.has(name)) return;
-    want.add(name);
-    for (const n of SCENARIOS[name]) add(n);
+  const add = (name, set = want) => {
+    if (set.has(name)) return;
+    set.add(name);
+    for (const n of SCENARIOS[name]) add(n, set);
   };
+  if (shard) {
+    // Longest first, each to the shard it adds the least time to (with what it needs).
+    const sets = Array.from({ length: shard[1] }, () => new Set(["onboarding"]));
+    const load = (set) => [...set].reduce((t, n) => t + (COST[n] ?? 0.5), 0);
+    // browser uses the system clipboard: it and what needs it run in one shard.
+    for (const name of Object.keys(SCENARIOS).sort((a, b) => (COST[b] ?? 0.5) - (COST[a] ?? 0.5))) {
+      const grown = sets.map((set) => { const g = new Set(set); add(name, g); return g; });
+      const browserShard = sets.findIndex((set) => set.has("browser"));
+      const i = browserShard >= 0 && grown[browserShard].has("browser") && grown.every((g) => g.has("browser")) // name needs browser
+        ? browserShard
+        : grown.reduce((best, g, j) => (load(g) < load(grown[best]) ? j : best), 0);
+      sets[i] = grown[i];
+    }
+    for (const n of sets[shard[0] - 1]) want.add(n);
+    console.log(`shard ${shard.join("/")}: ${[...want].join(", ")}`);
+    return want;
+  }
   // A whole name picks that one; a part picks every one it is in.
   for (const o of only) for (const name of Object.keys(SCENARIOS)) if (o in SCENARIOS ? name === o : name.includes(o)) add(name);
   if (!want.size) throw new Error(`--only ${only.join(",")}: no such scenario (${Object.keys(SCENARIOS).join(", ")})`);
@@ -796,7 +845,9 @@ await scenario("osc8", async () => {
     const cmdClickRow0 = async (rows) => {
       const box = await screen.boundingBox();
       const at = { x: box.x + box.width / 2, y: box.y + box.height / rows / 2 };
-      await win.mouse.move(at.x - 20, at.y);
+      // Come in from another row: xterm keeps what it found under the pointer for a row until
+      // the pointer leaves it, so a retry along the same row would find no link again.
+      await win.mouse.move(at.x - 20, at.y + (box.height / rows) * 3);
       await win.mouse.move(at.x, at.y, { steps: 3 });
       await win.waitForTimeout(150); // for xterm to see the hover before the click (not a read)
       await win.keyboard.down("Meta");
@@ -820,7 +871,7 @@ await scenario("osc8", async () => {
       linked = await until(() => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.find((w) => w.kind === "browser" && w.state.url?.endsWith("/osc8"))), Boolean, 4000);
     }
     const after = await app.evaluate(() => globalThis.__asked.length);
-    check(!!linked && after === 1, `an OSC 8 http link opens in a browser window, without asking (${linked?.state.url})`);
+    check(!!linked && after === 1, `an OSC 8 http link opens in a browser window, without asking (${linked?.state.url}, asked ${after}×)`);
   } finally {
     await app.evaluate(({ dialog, shell }) => globalThis.__restore && ((dialog.showMessageBox = globalThis.__restore.box), (shell.openExternal = globalThis.__restore.ext), (shell.openPath = globalThis.__restore.path)));
     for (const w of [term, linked]) if (w) await win.evaluate((id) => window.cmd.call("window.close", { id }), w.id);

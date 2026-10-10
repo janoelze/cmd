@@ -222,7 +222,8 @@ jobs:
   # throwaway CMD_HOME (.cmd-dev/e2e) and fixture transcripts. It builds the app itself
   # (seconds) rather than wait for the mac job's build, so both run side by side. Panes run
   # zsh, the Mac default (a runner's $SHELL may be bash). The script runs every scenario,
-  # lists each failure at the end, and has its own 90 s hang watchdog.
+  # lists each failure at the end, and has its own 90 s hang watchdog. Two apps share the
+  # scenarios (--shards), each with its own CMD_HOME (.cmd-dev/e2e-<n>).
   smoke:
     runs-on: macos-latest
     timeout-minutes: 20
@@ -253,7 +254,7 @@ jobs:
         env:
           CMD_NO_SANDBOX: "1"
           SHELL: /bin/zsh
-        run: node e2e/smoke.mjs
+        run: node e2e/smoke.mjs --shards 2
 
       - name: Smoke test screenshots and core logs
         if: failure()
@@ -262,7 +263,7 @@ jobs:
           name: smoke-mac
           path: |
             .cmd-dev/shots
-            .cmd-dev/e2e/logs
+            .cmd-dev/e2e*/logs
           if-no-files-found: ignore
 
   windows:
