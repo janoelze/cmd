@@ -244,7 +244,7 @@ if (process.platform !== "win32") {
 }
 const panesOrder = async () => (await homeView())["grid.order"];
 const order0 = await panesOrder();
-{ const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
+{ const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0], { steps: 10 }); }
 let order1 = await panesOrder();
 for (let i = 0; i < 30 && (!Array.isArray(order1) || JSON.stringify(order1) === JSON.stringify(order0)); i++) {
   await win.waitForTimeout(100);
@@ -258,7 +258,7 @@ await win.waitForTimeout(400);
 // A drag that lands while a tile still glides can miss its target: take fresh positions and drag again.
 let order2 = order1;
 for (let attempt = 0; attempt < 3 && JSON.stringify(order2) === JSON.stringify(order1); attempt++) {
-  { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
+  { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0], { steps: 10 }); }
   for (let i = 0; i < 30 && JSON.stringify(order2) === JSON.stringify(order1); i++) {
     await win.waitForTimeout(100);
     order2 = await panesOrder();
