@@ -98,7 +98,7 @@ What the six runs taught, for the next person who sees a stall:
 
 ## Not built
 
-1. **A worker for the rest of the one-statement work.** The vocabulary read and checkpoints run on workers now; `CREATE INDEX` on a big table, `recountBlobs` and `buildFts` still don't. The `indexes` job is the first candidate: a new index still blocks about 2 s once per version.
+1. **A worker for the rest of the one-statement work.** The vocabulary read, search itself (`search-worker.ts`) and checkpoints run on workers now, and `buildFts` runs in paced steps beside the old index (the `fts` job: 150 s on 1.9 GB, pings p95 10 ms); `CREATE INDEX` on a big table and `recountBlobs` still block. The `indexes` job is the first candidate: a new index still blocks about 2 s once per version.
 2. **The app's wait.** `waitForCore` in `main/index.ts` treats an alive core as busy for up to 10 minutes and shows "Connecting to core…". With phases the core answers in about a second, so this matters less; the dialog after 5 s without a pid file, and the cores spawned every 10 s while another holds the lock (they exit "already running"), can go.
 3. **An e2e check** on a large fixture asserting the socket answers within 2 s of spawn and no startup stall exceeds 250 ms.
 4. **Budgets per job type**, as Cesium does, if two background jobs ever compete; today they run in sequence.

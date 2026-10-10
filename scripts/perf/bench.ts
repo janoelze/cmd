@@ -2,6 +2,7 @@
 // driven over the socket like one app window, measured from outside with the
 // procinfo helper (CPU time and memory of the core and the PTY host).
 //   node --no-warnings scripts/perf/bench.ts [idle|flood|memory|search|all] [--panes N] [--label NAME]
+//   node --no-warnings scripts/perf/bench.ts search --home DIR   (queries on a copy of a big log, below)
 // Results print as a table and are appended to .cmd-dev/perf/results.jsonl, so
 // runs before and after a change can be compared (docs/14-performance.md).
 
@@ -24,7 +25,9 @@ const PANES = Number(opt("panes", "10"));
 const LABEL = opt("label", "");
 const IDLE_SECONDS = Number(opt("seconds", "20"));
 
-const home = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-bench-"));
+/** An existing CMD_HOME (a copy of a big log's data/, never cmd.sqlite): `search` times queries on it, and it's kept. */
+const HOME = opt("home", "");
+const home = HOME ? path.resolve(HOME) : fs.mkdtempSync(path.join(os.tmpdir(), "cmd-bench-"));
 process.env.CMD_HOME = home;
 process.env.CMD_INSTANCE = "dev";
 delete process.env.CMD_SOCKET;
@@ -202,8 +205,51 @@ async function memory(u: Under): Promise<Result> {
   };
 }
 
+/**
+ * Search as the palette asks it, on a copy of a big log (--home): each query's
+ * first answer after the core started (the worker starts, reads the vocabulary)
+ * and its median of five after that (warm). Waits for the startup jobs first
+ * (a log with an older full-text index rebuilds it).
+ */
+async function searchQueries(): Promise<Result> {
+  const u = await start({ "data.record.transcripts": false, "agents.hooks.auto": false });
+  const r: Result = {};
+  try {
+    const file = path.join(home, "data", "events.sqlite");
+    r["log MB"] = mb(fs.statSync(file).size);
+    for (;;) {
+      const info = await u.conn.client.call("core.info", {});
+      if (info.startup.phase === "ready") break;
+      await sleep(1000);
+    }
+    const time = async (fn: () => Promise<unknown>) => {
+      const t = performance.now();
+      await fn();
+      return performance.now() - t;
+    };
+    for (const text of ["t", "th", "the"]) {
+      const ask = {
+        query: () => u.conn.client.call("search.query", { text, limit: 8 }),
+        history: () => u.conn.client.call("search.history", { text, workspaceId: null, limit: 5 }),
+      };
+      for (const [name, fn] of Object.entries(ask)) {
+        const first = await time(fn);
+        const warm: number[] = [];
+        for (let i = 0; i < 5; i++) warm.push(await time(fn));
+        warm.sort((a, b) => a - b);
+        r[`${name}("${text}") first ms`] = first;
+        r[`${name}("${text}") warm ms`] = warm[2]!;
+      }
+    }
+  } finally {
+    await stop(u);
+  }
+  return r;
+}
+
 /** Transcript search: a first index from scratch, then a start with the index already built. */
 async function search(): Promise<Result> {
+  if (HOME) return searchQueries();
   const r: Result = {};
   for (const pass of ["cold", "warm"]) {
     const u = await start({ "search.enabled": true });
@@ -272,7 +318,7 @@ for (const name of run) {
     await stop(u);
   }
 }
-if (args.includes("--keep")) console.log(`state kept in ${home}`);
+if (HOME || args.includes("--keep")) console.log(`state kept in ${home}`);
 else fs.rmSync(home, { recursive: true, force: true });
 
 function report(name: string, r: Result): void {

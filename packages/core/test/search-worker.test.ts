@@ -77,6 +77,7 @@ describe("full-text index rebuild", () => {
     expect(s.needsFtsRebuild).toBe(true);
     expect(await s.buildFts()).toBe(s.count({}));
     expect(s.needsFtsRebuild).toBe(false);
+    expect(s.db.prepare(`SELECT name FROM sqlite_master WHERE name LIKE 'events_fts_old%' OR name LIKE 'events_fts_next%'`).all()).toEqual([]); // the old one dropped
     expect(words(s)).toEqual(recorded);
     const kind = (k: string) => (s.db.prepare(`SELECT rowid FROM events_fts WHERE events_fts MATCH ?`).all(`kind : ${k}`) as { rowid: number }[]).length;
     expect([kind("transcript"), kind("history"), kind("agent"), kind("other")]).toEqual([12, 3, 1, 2]);

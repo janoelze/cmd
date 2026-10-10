@@ -135,7 +135,11 @@ export class DataStore {
 
   /** Whether the full-text index is older than FTS_VERSION (Core.start rebuilds it). */
   get needsFtsRebuild(): boolean {
-    return !this.#ftsKind;
+    return !this.#ftsKind || this.#hasTable("events_fts_old");
+  }
+
+  #hasTable(name: string): boolean {
+    return !!this.db.prepare(`SELECT 1 FROM sqlite_master WHERE name = ?`).get(name);
   }
 
   /** A full-text expression as this log's index takes it: over the words only, not the kind. */
@@ -367,7 +371,9 @@ export class DataStore {
    */
   async buildFts(o: { pace?: Pick<Pacer, "yield">; bodyOf?: (e: DataEvent) => string | null } = {}): Promise<number> {
     const bodyOf = o.bodyOf ?? ((e: DataEvent) => ftsBodyOf(e, (h) => this.blob(h)));
-    const pace = o.pace?.yield ?? (() => Promise.resolve());
+    const pace = () => o.pace?.yield() ?? Promise.resolve();
+    await this.#dropOldFts(pace); // a build's leftover, when the core stopped right after it
+    if (this.#ftsKind && this.#hasTable("events_fts")) return 0;
     if (this.#ftsCursor === null) {
       this.db.exec(`DROP TABLE IF EXISTS events_fts_next; ${ftsSql("events_fts_next")}`);
       this.setMeta("fts.cursor", "0");
@@ -405,15 +411,29 @@ export class DataStore {
       await pace();
     }
     // Caught up (rows recorded during the build were read by its last steps): in events_fts's place.
+    // Renamed, not dropped: freeing the old index's pages in one DROP blocked for 100–200 ms on a big log.
+    const old = this.#hasTable("events_fts") ? `ALTER TABLE events_fts RENAME TO events_fts_old;` : "";
     this.transaction(() => {
-      this.db.exec(`DROP TABLE IF EXISTS events_vocab; DROP TABLE IF EXISTS events_fts; ALTER TABLE events_fts_next RENAME TO events_fts; ${VOCAB_SQL}`);
+      this.db.exec(`DROP TABLE IF EXISTS events_vocab; ${old} ALTER TABLE events_fts_next RENAME TO events_fts; ${VOCAB_SQL}`);
       this.setMeta("fts.version", String(FTS_VERSION));
       this.db.prepare(`DELETE FROM meta WHERE key = 'fts.cursor'`).run();
     });
     this.#ftsKind = true;
     this.#ftsCursor = null;
     this.#stmts.clear(); // compiled against the tables before
+    await this.#dropOldFts(pace);
     return n;
+  }
+
+  /** The index a build replaced: its big tables emptied a few hundred rows at a time, then dropped (the term index, small, with it). */
+  async #dropOldFts(pace: () => Promise<void>): Promise<void> {
+    if (!this.#hasTable("events_fts_old")) return;
+    for (const shadow of ["events_fts_old_data", "events_fts_old_docsize"]) {
+      if (!this.#hasTable(shadow)) continue;
+      const del = this.db.prepare(`DELETE FROM ${shadow} WHERE rowid IN (SELECT rowid FROM ${shadow} LIMIT 500)`);
+      while (Number(del.run().changes) > 0) await pace();
+    }
+    this.db.exec(`DROP TABLE events_fts_old`);
   }
 
   #totalChanges(): number {

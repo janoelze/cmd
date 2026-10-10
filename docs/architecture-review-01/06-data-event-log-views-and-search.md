@@ -153,9 +153,9 @@ Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscr
 Rebuild the FTS once through `buildFts` (it exists).
 
 **Success criteria.**
-- [ ] `grep -n "events_fts MATCH" packages/core/src/data/views/search.ts` returns nothing (the queries live in the worker module).
-- [ ] On the stress log (`scripts/perf/stress-core.mjs` plus a search phase typing "t", "th", "the"), core pings p95 stay under 20 ms and no `[lag]` line names search.
-- [ ] `search.history("the")` returns in under 100 ms warm on a ≥1.5 GB log, measured by a bench case in `scripts/perf/bench.ts search`.
+- [x] `grep -n "events_fts MATCH" packages/core/src/data/views/search.ts` returns nothing (the queries live in the worker module).
+- [x] On the stress log (`scripts/perf/stress-core.mjs` plus a search phase typing "t", "th", "the"), core pings p95 stay under 20 ms and no `[lag]` line names search.
+- [x] `search.history("the")` returns in under 100 ms warm on a ≥1.5 GB log, measured by a bench case in `scripts/perf/bench.ts search`.
 
 ### AR1-06-07 · Make forget complete: entities, file pages and subscribers
 
