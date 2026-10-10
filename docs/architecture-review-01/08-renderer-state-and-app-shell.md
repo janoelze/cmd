@@ -42,10 +42,10 @@ The renderer is React 19.3 (`apps/desktop/package.json`) on four HTML pages buil
 **Proposal.** Put a boundary in the kit (`@cmd/ui`, an `ErrorBoundary` with an `EmptyState` fallback: "This window stopped working" · Reload Window) and use it at two levels. First, per tile: wrap the view in `lazyView` and wherever `viewFor(kind)` renders, so a broken window shows its fallback and the rest stays live. Second, one shell boundary per page whose fallback offers Reload. Pass `onCaughtError`/`onUncaughtError` to `createRoot` and send both to `cmd.reportError` with `kind: "render"` and the component stack, so crash reports keep what `errors.ts` sends today.
 
 **Success criteria.**
-- [ ] `grep -rn "ErrorBoundary" apps/desktop/src/renderer/src` finds the tile wrapper and the page shell (all four entries).
-- [ ] `createRoot` in every entry passes `onUncaughtError` and `onCaughtError` that call `cmd.reportError` with the component stack.
-- [ ] An e2e step (in `e2e/smoke.mjs`, through a test-only window kind or `__cmd` hook) makes one window's view throw and asserts another terminal tile still renders and accepts input.
-- [ ] The kit gallery shows the boundary's fallback specimen.
+- [x] `grep -rn "ErrorBoundary" apps/desktop/src/renderer/src` finds the tile wrapper and the page shell (all four entries).
+- [x] `createRoot` in every entry passes `onUncaughtError` and `onCaughtError` that call `cmd.reportError` with the component stack.
+- [x] An e2e step (in `e2e/smoke.mjs`, through a test-only window kind or `__cmd` hook) makes one window's view throw and asserts another terminal tile still renders and accepts input.
+- [x] The kit gallery shows the boundary's fallback specimen.
 
 ### AR1-08-02 · Split App.tsx into a shell, controllers and feature modules
 
