@@ -34,7 +34,7 @@ CI is `.github/workflows/build.yml`: one macOS arm64 job runs `pnpm typecheck`, 
 
 ### AR1-13-01 · Run the smoke e2e on macOS in CI
 
-- **Status:** in progress (ci-gates)
+- **Status:** done (483e6f28)
 - **Severity:** high
 - **Effort:** M (1–2 days)
 - **Where:** `.github/workflows/build.yml:67-69`, `.github/workflows/build.yml:190-216`, `e2e/smoke.mjs:1-60`, `DEVELOPMENT.md:85`, `e2e/packaged.mjs:4`
@@ -95,7 +95,7 @@ CI is `.github/workflows/build.yml`: one macOS arm64 job runs `pnpm typecheck`, 
 
 ### AR1-13-04 · Stop the real-process tests flaking, and make CI say what it skipped
 
-- **Status:** in progress (ci-gates)
+- **Status:** done (483e6f28)
 - **Severity:** medium
 - **Effort:** S (< ½ day)
 - **Where:** `packages/core/test/core.test.ts:107-122`, `packages/core/test/widgets.test.ts:28`, `packages/core/test/widgets.test.ts:143`, `packages/core/test/widgets.test.ts:312`, `packages/core/test/widgets.test.ts:355`, `vitest.config.ts:6`
