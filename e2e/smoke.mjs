@@ -87,7 +87,13 @@ let { app, win } = await launch();
 // scenario, ends the run.
 let lastStep = "launch";
 let lastAt = Date.now();
-const step = (s) => ((lastStep = s), (lastAt = Date.now()));
+// E2E_GAPS=ms prints every gap between two steps longer than that: where a run's time goes.
+const gaps = +(process.env.E2E_GAPS ?? 0);
+const step = (s) => {
+  if (gaps && Date.now() - lastAt > gaps) console.log(`  [${Date.now() - lastAt} ms] ${lastStep} → ${s}`);
+  lastStep = s;
+  lastAt = Date.now();
+};
 const HANG_MS = 90_000;
 let hangs = 0;
 let abortScenario = null;
@@ -258,35 +264,47 @@ const gone = (sel) => win.waitForSelector(sel, { state: "detached", timeout: 500
 const mac = process.platform === "darwin";
 const macOnly = (msg) => console.log(`skip - ${msg} (macOS keymap)`);
 // Synthetic keys bypass the native menu, so trigger menu items directly.
-const menu = (id) => (
-  step(`menu ${id}`),
-  app.evaluate(({ Menu }, id) => {
+// The app window counts the commands it receives, so still() knows when the last one landed.
+let sentCommands = 0;
+const countCommands = () => win.evaluate(() => {
+  if (window.__e2eCommands === undefined) (window.__e2eCommands = 0), window.cmd.onCommand(() => window.__e2eCommands++);
+  return window.__e2eCommands;
+});
+const menu = async (id) => {
+  step(`menu ${id}`);
+  const before = await countCommands().catch(() => null);
+  await app.evaluate(({ Menu }, id) => {
     const item = Menu.getApplicationMenu()?.getMenuItemById(id);
     if (!item) throw new Error(`no menu item ${id}`);
     item.click();
-  }, id)
-);
+  }, id);
+  sentCommands = before === null ? 0 : before + 1;
+};
 const accel = (id) => app.evaluate(({ Menu }, id) => Menu.getApplicationMenu()?.getMenuItemById(id)?.accelerator ?? null, id);
 const panes = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.length));
 // Layout and selection live in the shown workspace's view (docs/11-workspaces.md); these checks run in Home.
 const homeView = () => win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((s) => s.home).view));
 // Windows glide (TileMotion) on a clock that steps at most 34 ms a frame, so on a slow
-// machine (CI) a glide takes longer than its 0.38 s (with Reduce Motion they jump, but a
-// command still takes a moment to reach the renderer). Before measuring the board: give
-// the command `min` ms to land, then wait until no window, scroll or sidebar has moved
-// for 200 ms, or 5 s have passed (the check then fails on what it reads).
+// machine (CI) a glide takes longer than its 0.38 s. Before measuring the board: wait until
+// the last menu command reached the renderer and two frames have painted, then until no
+// window, scroll or sidebar has moved for two reads in a row, or 5 s have passed (the check
+// then fails on what it reads). With Reduce Motion glides jump, so that is a few frames;
+// with real motion (E2E_MOTION) the old fixed `min` wait comes first.
 const still = async (min = 300) => {
-  await win.waitForTimeout(min); // for the command to land (not a read)
-  const read = () => win.evaluate(() => JSON.stringify([
+  if (motion) await win.waitForTimeout(min); // for a glide to start (not a read)
+  const t0 = Date.now();
+  if (sentCommands) await until(() => countCommands().catch(() => sentCommands), (n) => n >= sentCommands, 2000);
+  sentCommands = 0;
+  const read = () => win.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))).then(() => win.evaluate(() => JSON.stringify([
     ...[...document.querySelectorAll(".windows-track > .tile, .dock-left, .dock-right")].map((e) => {
       const r = e.getBoundingClientRect();
       return [r.x, r.y, r.width, r.height].map(Math.round);
     }),
     Math.round(document.querySelector(".windows-scroller")?.scrollLeft ?? 0),
-  ]));
+  ])));
   let last = await read();
-  for (let same = 0, t0 = Date.now(); same < 2 && Date.now() - t0 < 5000; ) {
-    await win.waitForTimeout(100);
+  for (let same = 0; same < 2 && Date.now() - t0 < 5000; ) {
+    await win.waitForTimeout(motion ? 100 : 30);
     const now = await read();
     same = now === last ? same + 1 : 0;
     last = now;
@@ -1852,7 +1870,7 @@ await menu("view.zoomIn");
 }
 // Debounced writes reach the core before we read them back.
 await until(async () => (await homeView()).docks?.left?.width, (w) => w > 300);
-await until(() => win.evaluate(() => window.cmd.call("ui.get", {})), (u) => u["terminal.zoom"] === 2 && u["sidebar.collapsed"]?.length > 0);
+await until(() => win.evaluate(() => window.cmd.call("ui.get", {})), (u) => u["terminal.zoom"] === 2 && u["sidebar.sections"]?.windows === false);
 step("reading the UI state before the restart");
 // The selection is saved debounced too: the one shown, once the core has it.
 const shownSel = await selected();

@@ -99,7 +99,10 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
   const root = typeof win.state.path === "string" ? win.state.path : "/";
   /** Folder contents by path (lazy, refreshed on focus). */
   const [children, setChildren] = useState<Map<string, FileEntry[]>>(new Map());
-  const [rootParent, setRootParent] = useState<string | null>(null);
+  // The root's parent as the core lists it, for the root it was listed for: until that
+  // answer comes (rows can show sooner, from the cache), ⌘↑ goes to the path's parent.
+  const [listedParent, setListedParent] = useState<{ of: string; parent: string | null } | null>(null);
+  const rootParent = listedParent?.of === root ? listedParent.parent : root === "/" ? null : parentOf(root);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = usePersisted<string[]>(`files.expanded.${win.id}`, []);
   const hiddenOn = useStoreValue((s) => s.settings.settings["files.showHidden"]) !== false;
@@ -192,7 +195,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     refreshGit();
     fetchDir(root).then(
       (l) => {
-        setRootParent(l.parent);
+        setListedParent({ of: root, parent: l.parent });
         setError(null);
       },
       (e: Error) => setError(e.message),
