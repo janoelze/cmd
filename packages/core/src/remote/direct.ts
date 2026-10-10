@@ -86,6 +86,9 @@ export class DirectListener extends EventEmitter<TransportEvents> implements Tra
   #o: DirectListenerOptions;
   #limits: Record<keyof typeof RELAY_LIMITS, number>;
   #origin: string | null = null;
+  /** Why there's no origin (the adapter's), and why it isn't listening: kept apart, so one never clears the other. */
+  #originError: string | null = null;
+  #listenError: string | null = null;
   #listening = false;
   #server: http.Server | null = null;
   #wss: WebSocketServer | null = null;
@@ -116,7 +119,13 @@ export class DirectListener extends EventEmitter<TransportEvents> implements Tra
   /** The adapter's public origin (https://mac.tailnet.ts.net:8443), or why there is none. */
   setOrigin(url: string | null, error: string | null = null): void {
     this.#origin = url ? new URL(url).origin : null;
-    this.#update(error);
+    this.#originError = url ? null : error;
+    this.#update();
+  }
+
+  /** It couldn't listen (its port is taken): start() again once that's fixed. */
+  get listenFailed(): boolean {
+    return this.#listenError !== null;
   }
 
   start(): void {
@@ -146,12 +155,14 @@ export class DirectListener extends EventEmitter<TransportEvents> implements Tra
       this.#listening = false;
       const msg = err.code === "EADDRINUSE" ? `Port ${this.#o.port} is in use. Pick another Local port (remote.port).` : err.message;
       log.warn(`direct listener: ${msg}`);
-      this.#update(msg);
+      this.#listenError = msg;
+      this.#update();
     });
     server.listen(this.#o.port, "127.0.0.1", () => {
       this.#listening = true;
+      this.#listenError = null;
       log.info(`direct listener on 127.0.0.1:${this.port}`);
-      this.#update(null);
+      this.#update();
     });
     this.#ping = setInterval(() => this.#sweep(), this.#limits.pingMs);
   }
@@ -191,8 +202,9 @@ export class DirectListener extends EventEmitter<TransportEvents> implements Tra
       : Promise.resolve(null);
   }
 
-  #update(error: string | null): void {
-    const state: TransportState = error || !this.#listening ? (error ? "error" : "connecting") : this.#origin ? "online" : "connecting";
+  #update(): void {
+    const error = this.#listenError ?? this.#originError;
+    const state: TransportState = error ? "error" : this.#listening && this.#origin ? "online" : "connecting";
     if (state === this.state && error === this.error) return;
     this.state = state;
     this.error = error;

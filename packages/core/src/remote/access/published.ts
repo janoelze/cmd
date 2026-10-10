@@ -97,7 +97,7 @@ export function publishedMode(a: AccessAdapter): AccessMode<Publication> {
           if (l.state === "online") return;
           // The listener itself failed (its port was taken): listen again, and wait for it
           // (a second at most: the same error again changes no state).
-          if (l.port === null && l.state === "error") {
+          if (l.listenFailed) {
             l.close();
             const listened = new Promise<void>((resolve) => {
               const done = () => (clearTimeout(timer), l.off("state", done), resolve());

@@ -19,7 +19,7 @@ export function relayMode(): AccessMode {
     connecting: "Connecting to the relay…",
     messages: {
       offline: () => "Remote access isn't connected to its relay yet.",
-      noAddress: "Set the web client's address first (remote.client).",
+      noAddress: "Set the web client's address first, like https://cmd.example.com (remote.client).",
     },
 
     start(ctx) {
