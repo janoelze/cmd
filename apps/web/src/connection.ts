@@ -5,7 +5,7 @@
 
 import { RpcClient, type CoreEvent, type Result } from "@cmd/protocol";
 import { decodePairing, generateKeyPair, openDeviceSession, type Bytes, type KeyPair } from "@cmd/remote-crypto";
-import { deviceName, saveIdentity, type Identity } from "./identity.ts";
+import { deviceName, loadIdentity, saveIdentity, type Identity } from "./identity.ts";
 
 export type Phase =
   | { kind: "connecting" }
@@ -131,13 +131,13 @@ function open(socket: string, route: string, o: { hostKey: Bytes; device: KeyPai
 }
 
 /**
- * Pair from the link's fragment: a new non-extractable device key, the IKpsk1
- * handshake, the four words while the Mac decides. Saves the identity once the
- * Mac allowed it.
+ * Pair from the link's fragment: a new device key, the IKpsk1 handshake, the
+ * four words while the Mac decides. Saves the identity once the Mac allowed it
+ * and returns it as loaded back, so a browser that can't keep it says so now.
  */
 export async function pair(fragment: string, onWords: (w: string[]) => void): Promise<Identity> {
   const link = decodePairing(fragment);
-  const device = await generateKeyPair(false);
+  const device = await generateKeyPair(true);
   const { ws, session } = open(link.socket, link.route, { hostKey: link.hostKey, device, psk: link.psk, onFingerprint: onWords });
   const s = await session.catch(() => {
     throw new Error("The Mac didn't allow this browser, or the code expired. Make a new one on your Mac.");
@@ -145,5 +145,7 @@ export async function pair(fragment: string, onWords: (w: string[]) => void): Pr
   ws.close();
   const id: Identity = { device, hostKey: link.hostKey, socket: link.socket, route: link.route, deviceId: String(s.host.deviceId) };
   await saveIdentity(id);
-  return id;
+  const saved = await loadIdentity();
+  if (!saved) throw new Error("This browser couldn't save the pairing. Make a new code on your Mac and try again.");
+  return saved;
 }

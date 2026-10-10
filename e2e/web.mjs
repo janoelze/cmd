@@ -1,5 +1,5 @@
 // The phone's side of remote access (docs/13-remote-access.md): the web client
-// (apps/web, Vite dev server) in an emulated iPhone, a local relay and a core on
+// (apps/web, Vite dev server) in an emulated iPhone (WebKit), a local relay and a core on
 // a throwaway CMD_HOME; the Mac's approval comes over the core's socket, as
 // `cmd remote pair` does. Pairs, opens a terminal from Now, types from the key
 // row and the compose bar, checks the text reached the PTY and that the Mac's
@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync, spawn } from "node:child_process";
-import { chromium, devices } from "playwright";
+import { devices, webkit } from "playwright";
 import { pathToFileURL } from "node:url";
 import net from "node:net";
 import { stopCore } from "../scripts/stop-core.mjs";
@@ -62,7 +62,8 @@ const core = spawn(process.execPath, ["--no-warnings", path.join(root, "packages
 core.unref();
 
 let mac;
-const browser = await chromium.launch();
+// WebKit, as on an iPhone: it differs where it matters (an X25519 CryptoKey in IndexedDB reads back as null).
+const browser = await webkit.launch();
 try {
   const sock = path.join(home, "core.sock");
   await until(async () => fs.existsSync(sock), "the core starts");
