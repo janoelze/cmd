@@ -1056,7 +1056,13 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const tile = win.locator(`.tile[data-pane="${w.id}"]`);
     const versions = await tile.locator(".magic-revision").count();
     const tabs = await tile.locator(".ui-tb-seg [role=radio]").allTextContents();
-    await tile.locator(".ui-tb-seg [role=radio]", { hasText: "Settings" }).click();
+    // A narrow tile (CI's smaller screen) compacts the tabs into a popup.
+    const settingsTab = tile.locator(".ui-tb-seg [role=radio]", { hasText: "Settings" });
+    if (await settingsTab.isVisible()) await settingsTab.click();
+    else {
+      await tile.locator(".ui-tb-seg-pop").click();
+      await win.getByRole("menuitemradio", { name: "Settings" }).click();
+    }
     const fields = await tile.locator(".ui-row").allTextContents();
     await win.screenshot({ path: path.join(shots, "magic-edit.png") });
     await menu("view.toggleEdit");
