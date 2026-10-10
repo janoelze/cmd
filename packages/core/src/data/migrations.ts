@@ -6,8 +6,14 @@
 // one can't read. Steps are frozen once released: a later change is a new step,
 // and the test that migrates a v1 log checks it ends up as a new one would.
 // Payload shapes don't change here: they have `v` and upcast.ts.
+//
+// The copy aside is the way back: from a step that went wrong, and to the cmd
+// before the migration (0.23 fails on its first write to a schema-2 log). It is
+// as big as the log (1.9 GB on the author's), so it is kept BACKUP_DAYS (7)
+// and then removed by a startup job (removeOldBackups, from Core.start).
 
 import fs from "node:fs";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { logger } from "@cmd/protocol/node";
 import { EVENTS_SCHEMA, PRAGMA_SQL } from "./schema.ts";
@@ -181,6 +187,36 @@ export function migrate(db: DatabaseSync, file: string, steps: Migration[] = MIG
   const ms = Date.now() - t0;
   log.info(`event log: at schema ${newest}`, { from, ms });
   return { from, to: newest, backup, ms };
+}
+
+/** How long a copy aside is kept after the migration that made it. */
+export const BACKUP_DAYS = 7;
+
+/** Deletes the log's copies aside (`<file>.bak-v<n>`) older than `days`; returns the paths removed. */
+export function removeOldBackups(file: string, now = Date.now(), days = BACKUP_DAYS): string[] {
+  const dir = path.dirname(file);
+  const prefix = `${path.basename(file)}.bak-v`;
+  const removed: string[] = [];
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return removed;
+  }
+  for (const name of names) {
+    if (!name.startsWith(prefix)) continue;
+    const p = path.join(dir, name);
+    try {
+      const st = fs.statSync(p);
+      if (now - st.mtimeMs < days * 86400_000) continue;
+      fs.rmSync(p, { force: true });
+      removed.push(p);
+      log.info("event log: removed an old copy aside", { file: p, bytes: st.size, days: Math.floor((now - st.mtimeMs) / 86400_000) });
+    } catch (err) {
+      log.warn(`event log: could not remove ${p}: ${(err as Error).message}`);
+    }
+  }
+  return removed;
 }
 
 /**

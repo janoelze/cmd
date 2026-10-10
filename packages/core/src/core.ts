@@ -13,6 +13,7 @@ import { AgentTracker, sessionIdOf } from "./agents/tracker.ts";
 import { JournalService, SYNC_FRESH_MS } from "./journal/service.ts";
 import { JournalStore } from "./journal/store.ts";
 import { recordNames, recordNotifications, recordWorkspaces, recordWindows } from "./data/recorders.ts";
+import { removeOldBackups } from "./data/migrations.ts";
 import { DataService } from "./data/service.ts";
 import { buildContext } from "./ai/context.ts";
 import { describeAgent, describePane } from "./data/describe.ts";
@@ -564,6 +565,8 @@ export class Core {
     if (o.stateDir && o.statusRoot) s.startup("homes", "Looking for agents", () => this.#discoverHomes());
     if (o.stateDir) s.startup("journal", "Starting the journal", () => this.journal.start());
     if (o.stateDir) s.startup("retention", "Scheduling retention", () => this.data.start());
+    // The event log's copy aside from a migration is the way back for a week (migrations.ts), then it goes.
+    if (o.stateDir) s.startup("log-backups", "Removing old event log copies", () => void removeOldBackups(path.join(o.stateDir!, "data", "events.sqlite")));
     // Workspaces whose folder was removed (a worktree after its merge) say so.
     if (o.stateDir)
       s.startup("workspaces", "Checking workspaces", () => {

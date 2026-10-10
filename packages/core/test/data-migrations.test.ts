@@ -8,6 +8,8 @@ import { EVENT_V } from "@cmd/protocol";
 import { DataStore } from "../src/data/store.ts";
 import { EVENTS_SCHEMA } from "../src/data/schema.ts";
 import { EventsLogTooNew, MIGRATIONS, migrate, prepareEventsLog, schemaOf } from "../src/data/migrations.ts";
+import { Core } from "../src/core.ts";
+import { fakeFactory } from "./fake-pty.ts";
 import { UPCASTERS, upcast } from "../src/data/upcast.ts";
 import { ftsSql } from "../src/data/fts.ts";
 import { eventsV1, insertV1 } from "./events-v1.ts";
@@ -119,6 +121,29 @@ describe("event log migrations", () => {
     expect(migrate(db, file)).toBeNull();
     db.close();
     expect(fs.existsSync(`${file}.bak-v1`)).toBe(false);
+  });
+});
+
+describe("copies aside", () => {
+  it("are kept a week, then a startup job removes them", async () => {
+    const state = path.join(dir, "state");
+    fs.mkdirSync(path.join(state, "data"), { recursive: true });
+    const old = path.join(state, "data", "events.sqlite.bak-v1");
+    const young = path.join(state, "data", "events.sqlite.bak-v2");
+    const other = path.join(state, "data", "views.sqlite.bak-v1");
+    for (const f of [old, young, other]) fs.writeFileSync(f, "copy");
+    const days = (n: number) => new Date(Date.now() - n * 86400_000);
+    fs.utimesSync(old, days(8), days(8));
+    fs.utimesSync(young, days(6), days(6));
+    fs.utimesSync(other, days(30), days(30));
+    const core = new Core({ socketPath: path.join(dir, "core.sock"), dbPath: null, terminals: fakeFactory().factory, pollMs: 0, statusRoot: path.join(dir, "status"), stateDir: state });
+    try {
+      core.start();
+      await core.scheduler.idle();
+      expect([old, young, other].map((f) => fs.existsSync(f))).toEqual([false, true, true]);
+    } finally {
+      await core.close();
+    }
   });
 });
 
