@@ -31,7 +31,7 @@ Electron main (`apps/desktop/src/main/`, 21 files, 2914 lines; `index.ts` 1046) 
 
 ### AR1-09-01 · Give the browser session a permission policy and pin guests to it
 
-- **Status:** open
+- **Status:** in progress (web-session-policy)
 - **Severity:** high
 - **Effort:** S
 - **Where:** `apps/desktop/src/main/index.ts:927-938`, `apps/desktop/src/main/index.ts:956-965`, `apps/desktop/src/renderer/src/components/BrowserView.tsx:242`, `apps/desktop/src/renderer/src/components/YouTubeView.tsx:107`
@@ -51,7 +51,7 @@ Electron main (`apps/desktop/src/main/`, 21 files, 2914 lines; `index.ts` 1046) 
 
 ### AR1-09-02 · Guard app windows' own navigation and pop-ups in main
 
-- **Status:** open
+- **Status:** in progress (web-session-policy)
 - **Severity:** high
 - **Effort:** S
 - **Where:** `apps/desktop/src/main/index.ts:456-491`, `apps/desktop/src/main/index.ts:508-535`, `apps/desktop/src/main/index.ts:903-947`

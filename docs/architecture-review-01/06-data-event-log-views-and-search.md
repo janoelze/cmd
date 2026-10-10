@@ -119,7 +119,7 @@ Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscr
 
 ### AR1-06-05 · Enforce the widget data policy that docs/28 §4 describes
 
-- **Status:** open
+- **Status:** in progress (widget-data-policy)
 - **Severity:** high
 - **Effort:** S
 - **Where:** `packages/core/src/data/widgets.ts:1-5,43-46`, `packages/core/src/core.ts:1361-1371`
