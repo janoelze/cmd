@@ -11,7 +11,6 @@
   --font-text: var(--font-ui);
   --font-text-size: 14px;
 
-  --sidebar-pad: 14px; /* rows' inset from the sidebar edges */
   --topbar-h: 38px; /* the app window's top bar; on macOS set from shared/chrome.ts TOPBAR_HEIGHT */
   --statusbar-h: 34px; /* the footer */
   /* Window spacing in grid and strip (set on .app from ui.gutter, ui.paddingX/Y). */
@@ -183,24 +182,12 @@ kbd {
 
 /* ── sidebar ────────────────────────────────────────── */
 
-/* The Navigator (components/Navigator.tsx): the old sidebar's content, in a window,
-   on the window's background like any other. */
-.navigator {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--window-bg);
-}
-
-.sb-search.ui-field { flex: none; display: flex; width: auto; margin: 0 var(--sidebar-pad) 6px; }
 
 /* Indexing progress (IndexRing). */
 .index-ring { flex: none; display: block; }
 .index-ring-track { fill: none; stroke: color-mix(in srgb, var(--text-dim) 35%, transparent); stroke-width: 2; }
 .index-ring-fill { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray var(--dur-slow) var(--ease); }
 
-.sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 10px; }
 /* Switching workspaces (store.ts switchWorkspace): workspaces are a vertical stack. Everything in
    one (the sidebars, the Navigator, windows, widgets) moves as one: to the next workspace,
    the old leaves out the top while the new rises from the bottom, a gap apart; to the
@@ -222,99 +209,9 @@ kbd {
 @keyframes workspace-in-up { from { transform: translateY(calc(100% + 32px)); } }
 @keyframes workspace-out-down { to { transform: translateY(calc(100% + 32px)); } }
 @keyframes workspace-in-down { from { transform: translateY(calc(-100% - 32px)); } }
-.sb-section + .sb-section { margin-top: 6px; }
-
-/* Section headings are the kit's ListHeading, inset like the rows. */
-.navigator { --list-inset: var(--sidebar-pad); }
-/* Below its search toolbar, a little room before the first section. */
-.navigator > .ui-tb + .sidebar-scroll { padding-top: 6px; }
 
 
-.row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 var(--sidebar-pad);
-  padding: 0 8px;
-  border-radius: var(--radius);
-  cursor: default;
-}
-.row.tall { min-height: 38px; padding-top: 3px; padding-bottom: 3px; }
-.row.short { height: 28px; }
-.row:hover { background: var(--bg-hover); }
-.row.sel { background: var(--bg-selected); }
-.row.active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent); }
-.row-text { flex: 1; min-width: 0; }
-.row-title {
-  display: flex;
-  align-items: center;
-  /* Whole-pixel line heights keep rows (and their marks) on the pixel grid. */
-  line-height: 18px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* Short rows: where it is, after the name, dim. Gives way first. */
-.row-place {
-  flex: 0 100 auto;
-  min-width: 0;
-  margin-left: 7px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 400;
-  font-size: 11.5px;
-  color: var(--text-dim);
-}
-.row-detail {
-  display: flex;
-  font-size: 11.5px;
-  line-height: 16px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.led-row-needs .row-detail { color: var(--state-needs); }
-.badge { margin-left: 6px; font-size: 10px; color: var(--text-dim); font-weight: 400; }
-.row-age { flex: none; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.row.history { padding-left: 14px; }
-.row.history .mark-icon { color: var(--text-dim); }
-.row.history .row-detail { display: block; }
 
-/* Right end: the project chip, swapped for ⌘N and close on hover. */
-.row-end { flex: none; display: flex; align-items: center; }
-.row-hover { display: none; align-items: center; gap: 4px; }
-.row:hover .row-hover { display: flex; }
-.row:hover .row-end .chip { display: none; }
-.row-end .ui-live-badge { margin: 0 var(--space-xs) 0 0; }
-.row-key { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-
-.chip {
-  --hue: 240;
-  flex: none;
-  max-width: 84px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: 500 10.5px var(--font-ui);
-  padding: 1px 6px;
-  border-radius: 4px;
-  color: hsl(var(--hue) var(--chip-fg));
-  background: hsl(var(--hue) var(--chip-bg));
-}
-
-.twisty, .twisty-space { flex: none; width: 12px; height: 12px; }
-.twisty {
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-dim);
-  transition: transform var(--dur-fast) var(--ease);
-}
-.twisty.open { transform: rotate(90deg); }
 
 .app.sidebar-resizing, .app.sidebar-resizing * { cursor: col-resize !important; user-select: none; }
 .app.sidebar-resizing .xterm, .app.sidebar-resizing [data-embed] { pointer-events: none; }

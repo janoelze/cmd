@@ -4,7 +4,7 @@
 // Windows, Widgets, Recent past sessions). It reads App's rows and callbacks
 // through NavigatorContext, so every Navigator window shows the same.
 
-import { Button, EmptyState, ToolbarSearchField, useFlip, WindowToolbar } from "@cmd/ui";
+import { Button, EmptyState, List, ToolbarSearchField, useFlip, View, WindowToolbar } from "@cmd/ui";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { PaneId, SearchHit, SearchStatus, SessionInfo, WorkspaceId } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -132,12 +132,16 @@ function Navigator(p: NavigatorData) {
   const rowProps = { now, selected: p.selected, onSelect: p.onSelect, onMenu: p.onRowMenu, onClose: p.onClose, shortcutOf };
 
   return (
-    <div className="navigator">
-      <WindowToolbar label="Search">
-        <ToolbarSearchField ref={input} className="sb-search" value={query} placeholder="Search sessions" onChange={setQuery} onKeyDown={onKeyDown} end={<IndexRing status={p.search} />} />
-      </WindowToolbar>
-
-      <div className="sidebar-scroll" ref={list} data-frozen={rows !== p.rows || undefined}>
+    <View
+      className="navigator"
+      bodyRef={list}
+      toolbar={
+        <WindowToolbar label="Search">
+          <ToolbarSearchField ref={input} className="sb-search" value={query} placeholder="Search sessions" onChange={setQuery} onKeyDown={onKeyDown} end={<IndexRing status={p.search} />} />
+        </WindowToolbar>
+      }
+    >
+      <List>
         {searching ? (
           <>
             {matches.length > 0 && (
@@ -196,8 +200,8 @@ function Navigator(p: NavigatorData) {
             )}
           </>
         )}
-      </div>
-    </div>
+      </List>
+    </View>
   );
 }
 

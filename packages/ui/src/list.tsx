@@ -4,7 +4,7 @@
 // status light, a title, where it is, a detail line, an end that gives way to
 // actions on hover). Chip is the coloured project label rows carry.
 
-import type { CSSProperties, MouseEvent, ReactNode } from "react";
+import type { CSSProperties, HTMLAttributes, MouseEvent, ReactNode } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { StatusDot, type DotState } from "./status.tsx";
 
@@ -99,10 +99,10 @@ export function ListSection(p: { title: ReactNode; count?: number; open?: boolea
   );
 }
 
-/** An icon that gives way to a status light when there is one. */
-export function ListMark({ icon, light }: { icon: string | ReactNode; light?: DotState }) {
+/** An icon that gives way to a status light when there is one; `tone` colours the icon (needs: orange; dim: a past session's). */
+export function ListMark({ icon, light, tone }: { icon: string | ReactNode; light?: DotState; tone?: DotState | "dim" }) {
   return (
-    <span className={cls("ui-mark", light && "has-light")}>
+    <span className={cls("ui-mark", light && "has-light")} data-tone={tone}>
       <span className="ui-mark-icon">{iconNode(icon, ICON.small)}</span>
       <span className="ui-mark-light">
         <StatusDot state={light ?? "off"} />
@@ -111,10 +111,12 @@ export function ListMark({ icon, light }: { icon: string | ReactNode; light?: Do
   );
 }
 
-export interface ListRowProps {
+export interface ListRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "title" | "onClick" | "onDoubleClick" | "onContextMenu"> {
   icon?: string | ReactNode;
   /** A status light in place of the icon. */
   light?: DotState;
+  /** The icon's colour while there is no light. */
+  markTone?: DotState | "dim";
   title: ReactNode;
   /** After the title, dim; gives way first. One-line rows only. */
   place?: ReactNode;
@@ -144,42 +146,48 @@ export interface ListRowProps {
   flipKey?: string;
 }
 
-export function ListRow(p: ListRowProps) {
+export function ListRow({ icon, light, markTone, title, place, detail, tone, end, hover, selected, active, dim, depth, lead, mono, className, onClick, onDoubleClick, onContextMenu, tip, flipKey, style, ...rest }: ListRowProps) {
   return (
     <div
-      className={cls("ui-list-row", p.detail != null ? "tall" : "short", p.selected && "sel", p.active && "active", p.className)}
-      data-key={p.flipKey}
-      data-tone={p.tone}
-      data-dim={p.dim || undefined}
-      data-tip={p.tip}
-      style={p.depth ? ({ "--depth": p.depth } as CSSProperties) : undefined}
-      onClick={p.onClick}
-      onDoubleClick={p.onDoubleClick}
+      className={cls("ui-list-row", detail != null ? "tall" : "short", selected && "sel", active && "active", className)}
+      data-key={flipKey}
+      data-tone={tone}
+      data-dim={dim || undefined}
+      data-tip={tip}
+      style={depth ? ({ ...style, "--depth": depth } as CSSProperties) : style}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={
-        p.onContextMenu &&
+        onContextMenu &&
         ((e) => {
           e.preventDefault();
-          p.onContextMenu!(e);
+          onContextMenu(e);
         })
       }
+      {...rest}
     >
-      {p.lead}
-      {p.icon !== undefined && <ListMark icon={p.icon} light={p.light} />}
+      {lead}
+      {icon !== undefined && <ListMark icon={icon} light={light} tone={markTone} />}
       <div className="ui-list-row-text">
         <div className="ui-list-row-title">
-          <span className={cls("ui-list-row-name", p.mono && "mono")}>{p.title}</span>
-          {p.detail == null && p.place != null && <span className="ui-list-row-place">{p.place}</span>}
+          <span className={cls("ui-list-row-name", mono && "mono")}>{title}</span>
+          {detail == null && place != null && <span className="ui-list-row-place">{place}</span>}
         </div>
-        {p.detail != null && <div className="ui-list-row-detail">{p.detail}</div>}
+        {detail != null && <div className="ui-list-row-detail">{detail}</div>}
       </div>
-      {(p.end || p.hover) && (
+      {(end || hover) && (
         <span className="ui-list-row-end">
-          {p.end}
-          {p.hover && <span className="ui-list-row-hover" onClick={(e) => e.stopPropagation()}>{p.hover}</span>}
+          {end}
+          {hover && <span className="ui-list-row-hover" onClick={(e) => e.stopPropagation()}>{hover}</span>}
         </span>
       )}
     </div>
   );
+}
+
+/** A disclosure's space in a ListRow's lead, where a row has none but its siblings do. */
+export function TwistySpace() {
+  return <span className="ui-twisty-space" />;
 }
 
 /** A disclosure twisty for a ListRow's lead. */

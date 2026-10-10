@@ -1,12 +1,12 @@
 // Sidebar rows: open windows and agents (SessionRow), past sessions from the
 // transcript index (HistoryRow), and the section headings that group them.
 
-import { Highlight, IconButton, ListHeading } from "@cmd/ui";
+import { Chip, Highlight, IconButton, ListHeading, ListRow, Text, Twisty, TwistySpace } from "@cmd/ui";
 import type { ReactNode } from "react";
 import type { PaneId, SearchHit } from "@cmd/protocol";
 import { usePersisted, useStoreValue } from "../store.ts";
-import { ICON, Symbol } from "./Symbol.tsx";
-import { DirtyDot, Mark, Slot } from "./Slot.tsx";
+import { ICON } from "./Symbol.tsx";
+import { DirtyDot, Slot } from "./Slot.tsx";
 import { useFields } from "./TileTitle.tsx";
 import { ago, labelOf, project, shortPath, whereOf, windowIdOf, type SidebarRow } from "../model.ts";
 import { RemoteBadge } from "./Remote.tsx";
@@ -18,7 +18,7 @@ export const shortAgo = (ts: number, now: number) => ago(ts, now).replace(/ ago$
 /** A Navigator section: a tree named by its title, so a script finds `tree "Windows"` and its rows. */
 export function SidebarSection({ title, className, children }: { title: string; className?: string; children: ReactNode }) {
   return (
-    <section className={className ? `sb-section ${className}` : "sb-section"} role="tree" aria-label={title}>
+    <section className={`ui-list-section sb-section${className ? ` ${className}` : ""}`} role="tree" aria-label={title}>
       {children}
     </section>
   );
@@ -72,10 +72,11 @@ export function SessionRow(props: {
 
   return (
     <>
-      <div
-        className={`row ${tall ? "tall" : "short"} ${isSel ? "sel" : ""} ${props.active ? "active" : ""} led-row-${f.light ?? f.tone ?? "none"} ${winId ? "" : "virtual"}`}
-        style={{ paddingLeft: 14 + depth * 14 }}
-        data-key={row.key}
+      <ListRow
+        flipKey={row.key}
+        depth={depth}
+        selected={isSel}
+        active={props.active}
         // A tree item named like its window's tile (labelOf), with its status as the description.
         role="treeitem"
         aria-label={labelOf(row)}
@@ -84,56 +85,45 @@ export function SessionRow(props: {
         aria-selected={isSel}
         aria-expanded={kids.length > 0 ? open : undefined}
         onClick={() => onSelect(row)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          props.onMenu(row);
-        }}
-      >
-        {kids.length > 0 ? (
-          <button
-            className={`twisty ${open ? "open" : ""}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpen(!open);
-            }}
-            aria-label={open ? "Collapse" : "Expand"}
-          >
-            <Symbol name="chevron.right" size={ICON.disclosure} />
-          </button>
-        ) : (
-          (props.gutter || depth > 0) && <span className="twisty-space" />
-        )}
-        <Mark light={f.light} tone={f.tone} icon={f.icon} />
-        <div className="row-text">
-          <div className="row-title">
+        onContextMenu={() => props.onMenu(row)}
+        lead={kids.length > 0 ? <Twisty open={open} onToggle={() => setOpen(!open)} /> : (props.gutter || depth > 0) && <TwistySpace />}
+        icon={f.icon}
+        light={f.light}
+        markTone={f.tone}
+        title={
+          <>
             <Slot value={{ text: f.name }} fade />
             <DirtyDot on={!!f.dirty} />
-            {!tall && f.place && <span className="row-place">{f.place}</span>}
+          </>
+        }
+        place={f.place}
+        // Status if there is one ("does this need me?"), else Place ("which one is it?").
+        detail={tall ? <Slot value={f.status} fallback={f.place ? { text: f.place } : undefined} /> : undefined}
+        tone={(f.light ?? f.tone) === "needs" ? "needs" : undefined}
+        end={
+          <>
             {kids.length > 0 && !open && (
-              <span className="badge">
+              <Text size="2xs" tone="dim">
                 {doneKids}/{kids.length}
-              </span>
+              </Text>
             )}
-          </div>
-          {/* Status if there is one ("does this need me?"), else Place ("which one is it?"). */}
-          {tall && (
-            <div className="row-detail">
-              <Slot value={f.status} fallback={f.place ? { text: f.place } : undefined} />
-            </div>
-          )}
-        </div>
-        <span className="row-end">
-          <RemoteBadge id={winId} compact />
-          {where && (
-            <span className="chip" style={{ ["--hue" as string]: where.hue }} data-tip={where.tip}>
-              {where.text}
-            </span>
-          )}
-          <span className="row-hover">
-            {shortcut && <span className="row-key">⌘{shortcut}</span>}
+            <RemoteBadge id={winId} compact />
+            {where && (
+              <Chip hue={where.hue} tip={where.tip}>
+                {where.text}
+              </Chip>
+            )}
+          </>
+        }
+        hover={
+          <>
+            {shortcut && (
+              <Text size="2xs" tone="dim">
+                ⌘{shortcut}
+              </Text>
+            )}
             {winId && (
               <IconButton
-                className="row-close"
                 size="sm"
                 icon="xmark"
                 iconSize={ICON.disclosure}
@@ -143,11 +133,10 @@ export function SessionRow(props: {
                   props.onClose(row);
                 }}
               />
-              
             )}
-          </span>
-        </span>
-      </div>
+          </>
+        }
+      />
       {open &&
         kids.map((c) => (
           <SessionRow key={c.key} {...props} row={c} depth={depth + 1} active={false} />
@@ -163,27 +152,30 @@ export function HistoryRow(p: { hit: SearchHit; now: number; onOpen: (h: SearchH
   let detail: ReactNode = where || h.agent;
   if (p.rich && h.snippet) detail = <Highlight text={h.snippet} />;
   return (
-    <div
-      className={`row history ${p.rich ? "tall" : "short"} ${p.active ? "active" : ""}`}
-      data-key={`h-${h.agent}-${h.sessionId}`}
+    <ListRow
+      className="history"
+      flipKey={`h-${h.agent}-${h.sessionId}`}
+      active={p.active}
       role="treeitem"
       aria-label={h.title || "(untitled session)"}
       aria-description={where || h.agent}
       aria-level={1}
       aria-selected={false}
       data-tip-side="right"
-      data-tip={[h.title, h.cwd ? shortPath(h.cwd) : null, `${h.agent} · ${h.sessionId}`].filter(Boolean).join("\n")}
+      tip={[h.title, h.cwd ? shortPath(h.cwd) : null, `${h.agent} · ${h.sessionId}`].filter(Boolean).join("\n")}
       onClick={() => p.onOpen(h)}
-    >
-      <Mark icon="clock.arrow.circlepath" />
-      <div className="row-text">
-        <div className="row-title">
-          <span className="row-name">{h.title || "(untitled session)"}</span>
-          {!p.rich && where && <span className="row-place">{where}</span>}
-        </div>
-        {p.rich && <div className="row-detail">{detail}</div>}
-      </div>
-      {h.updatedAt && <span className="row-age">{shortAgo(h.updatedAt, p.now)}</span>}
-    </div>
+      icon="clock.arrow.circlepath"
+      markTone="dim"
+      title={h.title || "(untitled session)"}
+      place={!p.rich && where ? where : undefined}
+      detail={p.rich ? detail : undefined}
+      end={
+        h.updatedAt && (
+          <Text size="xs" tone="dim">
+            {shortAgo(h.updatedAt, p.now)}
+          </Text>
+        )
+      }
+    />
   );
 }

@@ -921,7 +921,7 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 
 /* ── lists: panels, sections, rows (list.tsx) ──
    The Navigator's and the file browser's sidebar look. --list-inset is the rows'
-   inset from the panel's edges (the Navigator sets it from --sidebar-pad). */
+   inset from the panel's edges (a View's body sets it, the Navigator's too). */
 .ui-panel { --list-inset: 6px; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); color: var(--text); font: var(--text-md) var(--font-ui); }
 .ui-panel-head { flex: none; display: flex; align-items: center; gap: 2px; height: 28px; padding: 0 6px 0 4px; box-shadow: inset 0 -1px 0 var(--separator); }
 .ui-panel-title { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px; font: 600 11px var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); }
@@ -966,6 +966,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-list-row-hover { display: none; align-items: center; gap: 2px; }
 .ui-list-row:hover .ui-list-row-hover { display: flex; }
 .ui-list-row:hover .ui-list-row-end > .ui-chip { display: none; }
+.ui-list-row-end .ui-live-badge { margin: 0; }
 .ui-list-value { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; text-align: right; }
 .ui-list-value[data-strong] { color: var(--text); font-weight: 500; }
 
@@ -973,6 +974,12 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 .ui-mark { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; }
 .ui-mark > * { grid-area: 1 / 1; display: inline-grid; place-items: center; transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
 .ui-mark-icon { color: var(--icon); }
+.ui-mark[data-tone="needs"] .ui-mark-icon { color: var(--state-needs); }
+.ui-mark[data-tone="unseen"] .ui-mark-icon { color: var(--state-done); }
+.ui-mark[data-tone="success"] .ui-mark-icon { color: var(--success); }
+.ui-mark[data-tone="warning"] .ui-mark-icon { color: var(--warning); }
+.ui-mark[data-tone="danger"] .ui-mark-icon { color: var(--danger); }
+.ui-mark[data-tone="dim"] .ui-mark-icon { color: var(--text-dim); }
 .ui-mark-light { opacity: 0; transform: scale(0.6); }
 .ui-mark.has-light .ui-mark-light { opacity: 1; transform: none; }
 .ui-mark.has-light .ui-mark-icon { opacity: 0; transform: scale(0.6); }
@@ -980,6 +987,7 @@ button.ui-panel-title:hover { color: var(--text); background: var(--bg-hover); }
 
 .ui-twisty { flex: none; display: grid; place-items: center; width: 12px; height: 12px; padding: 0; border: 0; background: none; color: var(--text-dim); transition: transform var(--dur-fast) var(--ease); }
 .ui-twisty.open { transform: rotate(90deg); }
+.ui-twisty-space { flex: none; width: 12px; height: 12px; }
 
 .ui-chip { --hue: 240; flex: none; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 10.5px var(--font-ui); padding: 1px 6px; border-radius: 4px; color: hsl(var(--hue) var(--chip-fg)); background: hsl(var(--hue) var(--chip-bg)); }
 

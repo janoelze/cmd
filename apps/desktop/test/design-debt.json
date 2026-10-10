@@ -18,10 +18,9 @@
     "color": 1
   },
   "apps/desktop/src/renderer/src/styles.css": {
-    "color": 2,
-    "fontSize": 18,
-    "radius": 7,
-    "spacing": 53
+    "fontSize": 12,
+    "radius": 6,
+    "spacing": 40
   },
   "apps/desktop/src/renderer/src/workbench/workbench.css": {
     "spacing": 2

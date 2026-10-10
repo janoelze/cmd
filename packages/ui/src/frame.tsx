@@ -99,9 +99,9 @@ export function ViewState({ state }: { state: ViewStateSpec }) {
  * edge to edge (a table, an image, a list with its own row insets). `state`
  * replaces the body.
  */
-export function View({ toolbar, footer, state, inset, scroll = true, focusable, bodyRef, onScroll, children }: { toolbar?: ReactNode; footer?: ReactNode; state?: ViewStateSpec | null; inset?: boolean; scroll?: boolean; /** The body takes keyboard focus (arrow keys and Page Down scroll it). */ focusable?: boolean; bodyRef?: Ref<HTMLDivElement>; onScroll?: (e: UIEvent<HTMLDivElement>) => void; children?: ReactNode }) {
+export function View({ toolbar, footer, state, inset, scroll = true, focusable, bodyRef, onScroll, className, children }: { /** A hook for the app's scripts and tests, not for styles. */ className?: string; toolbar?: ReactNode; footer?: ReactNode; state?: ViewStateSpec | null; inset?: boolean; scroll?: boolean; /** The body takes keyboard focus (arrow keys and Page Down scroll it). */ focusable?: boolean; bodyRef?: Ref<HTMLDivElement>; onScroll?: (e: UIEvent<HTMLDivElement>) => void; children?: ReactNode }) {
   return (
-    <div className="ui-view">
+    <div className={className ? `ui-view ${className}` : "ui-view"}>
       {toolbar}
       <div ref={bodyRef} className="ui-view-body" tabIndex={focusable ? 0 : undefined} data-inset={(inset && !state) || undefined} data-scroll={scroll || undefined} onScroll={onScroll}>
         {state ? <ViewState state={state} /> : children}

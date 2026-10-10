@@ -207,11 +207,11 @@ await win.waitForTimeout(500);
 check((await panes()) === 2, "two terminals open");
 await win.screenshot({ path: path.join(shots, "2-focus.png") });
 
-const before = await win.locator(".row.sel").getAttribute("class");
-const rowsBefore = await win.locator(".row:not(.history)").allTextContents();
+const before = await win.locator(".navigator .ui-list-row.sel").getAttribute("class");
+const rowsBefore = await win.locator(".navigator .ui-list-row:not(.history)").allTextContents();
 await menu("session.next");
 await win.waitForTimeout(200);
-const selIndexAfter = await win.locator(".row:not(.history)").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel")));
+const selIndexAfter = await win.locator(".navigator .ui-list-row:not(.history)").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel")));
 check(rowsBefore.length === 2 && selIndexAfter >= 0, `session.next moves selection (now row ${selIndexAfter + 1})`);
 void before;
 
@@ -340,15 +340,15 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
 {
   await win.locator(".sb-search input").click();
   await win.keyboard.type("wiregaurd");
-  await win.waitForSelector(".sidebar-scroll .row.history", { timeout: 15000 });
-  const label = await win.locator(".sidebar-scroll .row.history .row-name").first().textContent();
+  await win.waitForSelector(".navigator .ui-list-row.history", { timeout: 15000 });
+  const label = await win.locator(".navigator .ui-list-row.history .ui-list-row-name").first().textContent();
   check(label === "VPN auto reconnect", `sidebar search finds past sessions (${label})`);
   await win.screenshot({ path: path.join(shots, "4c-sidebar-search.png") });
   await win.keyboard.press("Escape");
   check((await win.locator(".sb-search input").inputValue()) === "", "Esc clears the sidebar search");
   await win.keyboard.press("Escape");
-  await win.waitForSelector(".sb-recent .row.history", { timeout: 5000 }).catch(() => {});
-  check((await win.locator(".sb-recent .row.history").count()) > 0, "Recent lists past sessions from the index");
+  await win.waitForSelector(".sb-recent .ui-list-row.history", { timeout: 5000 }).catch(() => {});
+  check((await win.locator(".sb-recent .ui-list-row.history").count()) > 0, "Recent lists past sessions from the index");
 }
 
 // Browser and file windows

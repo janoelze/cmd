@@ -126,7 +126,7 @@ try {
   // Focus view: the status bar stands in for the title bar.
   await win.waitForSelector(".statusbar .remote-badge.typed");
   check(true, "the watched terminal shows who typed");
-  await win.waitForSelector(".sidebar .row .remote-badge");
+  await win.waitForSelector(".navigator .ui-list-row .ui-live-badge");
   check(true, "its sidebar row shows it's watched");
   await shot(win, "4-connected");
   // The phone sizes the terminal to its screen: the Mac says so and can take it back.
