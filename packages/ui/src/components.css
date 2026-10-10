@@ -701,7 +701,7 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 }
 .ui-row[data-compact] { min-height: 34px; padding-top: var(--space-sm); padding-bottom: var(--space-sm); }
 .ui-checklist { margin: 0; padding: 0; list-style: none; }
-.ui-step { gap: 10px; }
+.ui-step { gap: var(--space-md); }
 .ui-step[data-compact] { min-height: 36px; }
 .ui-step-mark { flex: none; display: flex; align-self: flex-start; padding-top: 1px; color: var(--text-dim); }
 .ui-step[data-compact] .ui-step-mark { align-self: center; padding-top: 0; }
