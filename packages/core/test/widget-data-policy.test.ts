@@ -114,6 +114,22 @@ describe("the widget data policy", () => {
     d.close();
   });
 
+  it("keeps unreadable rows out even when a prefix reaches no class clampQuery knows", async () => {
+    // A type cmd doesn't classify (a future kind): classOf calls it system, which widgets must declare.
+    core.data.record({ id: "a-unclassified", at: 30, type: "zz.thing" as never, source: "cmd", workspaceId: "A", text: "zz", data: {} as never });
+    const secret = ["a-transcript", "a-hook", "a-ai", "a-remote", "a-unclassified"];
+    const w = await widget("A");
+    for (const types of [["."], ["zz."], ["zz.thing"], ["zz.", "."]]) {
+      const rows = await w.query({ types });
+      expect(ids(rows).filter((id) => secret.includes(id)), JSON.stringify(types)).toEqual([]);
+    }
+    // Proof the rows were in reach of the store: declared, the same prefix returns it.
+    const d = await widget("A", ["system"]);
+    expect(ids(await d.query({ types: ["zz."] }))).toEqual(["a-unclassified"]);
+    d.close();
+    w.close();
+  });
+
   it("clamps the query itself: workspace and limit from the policy, types to readable classes", () => {
     const q = widgetQuery({ widgetId: "w", workspaceId: "A", events: [] }, { workspaceId: "B", limit: 1e9 });
     expect(q.workspaceId).toBe("A");

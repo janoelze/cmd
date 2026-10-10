@@ -48,7 +48,7 @@ function access(r: Reader, c: DataClass): "all" | "fields" | "none" {
   return rule === "declare" ? "none" : "fields";
 }
 
-/** The classes a requested type reaches: a prefix may reach several ("agent.": agents and agent.output), a name one; an unknown name none. */
+/** The classes a requested type reaches: a prefix may reach several ("agent.": agents and agent.output), a name one; an unknown one none (passed on: clampRows keeps its rows out unless their class is readable). */
 function reached(t: string): DataClass[] {
   const prefix = t.endsWith(".");
   const hit = (Object.keys(DATA_CLASSES) as DataClass[]).filter((c) => DATA_CLASSES[c].types.some((p) => (prefix && p.startsWith(t)) || p === t || (p.endsWith(".") && t.startsWith(p))));
