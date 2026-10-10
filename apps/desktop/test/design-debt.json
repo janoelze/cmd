@@ -21,17 +21,17 @@
   },
   "packages/ui/src/components.css": {
     "color": 5,
-    "fontSize": 19,
-    "radius": 10,
-    "spacing": 158
+    "fontSize": 13,
+    "radius": 8,
+    "spacing": 61
   },
   "packages/ui/src/frame.css": {
     "color": 4,
     "radius": 1
   },
   "packages/ui/src/tooltips.css": {
-    "fontSize": 4,
-    "radius": 2,
-    "spacing": 7
+    "fontSize": 3,
+    "radius": 1,
+    "spacing": 3
   }
 }
