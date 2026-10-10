@@ -19,11 +19,10 @@ cmd needs both. The frame is "how long the core may go without answering"; the p
 
 ### Phases: answer first
 
-`main.ts` does, in order: lock, pid file, PTY host, `new Core` (opens `cmd.sqlite` and the event log's *tables*, wires services), `restore()` (reattach terminals), `listen()`. On the author's log that is about 0.8 s. `listen()` ends by calling `Core.start()`, which queues the startup jobs on the scheduler:
+`main.ts` does, in order: lock, pid file, PTY host, `new Core` (opens `cmd.sqlite` and the event log, migrating an older log first: `data/migrations.ts`, the one wait before listening, about a minute once on a 1.9 GB log; wires services), `restore()` (reattach terminals), `listen()`. On the author's log that is about 0.8 s. `listen()` ends by calling `Core.start()`, which queues the startup jobs on the scheduler:
 
 | Job | What it does | Why it waited before |
 |---|---|---|
-| `indexes` | `DataStore.ensureIndexes()`: the log's `CREATE INDEX IF NOT EXISTS` statements | a new index reads the whole log (about 2 s per index on 1.6 GB) |
 | `legacy` | tables older cmds kept in `cmd.sqlite`, once | 0.9 s for 7.7k rows |
 | `turns` | the turns view from `agent.hook` events, when `TURN_FORMAT` changed | one transaction, grows with history |
 | `sessions` | the sessions view from transcript events, when its `VERSION` changed | 529k events on the author's log |

@@ -7,6 +7,7 @@ import path from "node:path";
 import { cmdHome, configDir, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, logDir, logger, ptyHostSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import { Core } from "./core.ts";
 import { acquireLock } from "./lock.ts";
+import { prepareEventsLog } from "./data/migrations.ts";
 import { USAGE_URL } from "./usage.ts";
 import { nodePtyFactory } from "./panes.ts";
 import { adoptLoginPath } from "./loginpath.ts";
@@ -55,6 +56,20 @@ if (!lock) {
 // on the first launch of a version, and the app waits for a core it sees alive.
 const pidFile = path.join(home, "core.pid");
 fs.writeFileSync(pidFile, String(process.pid));
+
+// The event log before anything opens it: an older one is migrated now, once
+// (a minute on a 1.9 GB log; core.log says how far), a newer one refused: this
+// cmd would write rows that one can't read, so it doesn't start at all.
+try {
+  prepareEventsLog(path.join(home, "data", "events.sqlite"));
+} catch (err) {
+  const e = err as Error;
+  log.error(`could not open the event log: ${e.message}`, err);
+  console.error(`cmd core: ${e.message}`);
+  fs.rmSync(pidFile, { force: true });
+  lock.release();
+  process.exit(1);
+}
 
 // The user's PATH, in the background: launch isn't held up, and commands the core runs wait for it.
 void adoptLoginPath();

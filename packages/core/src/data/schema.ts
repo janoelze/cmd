@@ -1,29 +1,23 @@
 // The facts file (docs/28-data-plan.md, §2): one log of events with one
 // envelope, content-addressed blobs for anything big, entities and the links
-// between them. Spike (phase 0): the shape under test, measured against the
-// author's data by scripts/data/spike.ts before phase 1 builds on it.
+// between them. This is the newest schema, what a new file is created with; a
+// file of an older one is moved forward by migrations.ts, never by this.
 
 /** The events file's schema version: migrations move it forward, never the rows' `v`. */
-export const EVENTS_SCHEMA = 1;
+export const EVENTS_SCHEMA = 2;
 
-/** The log's indexes, apart from its tables: a new one is built after the core answers (DataStore.ensureIndexes), since it reads the whole log. */
-export const INDEX_SQL = `
-CREATE INDEX IF NOT EXISTS events_at ON events(at);
-CREATE INDEX IF NOT EXISTS events_type_at ON events(type, at);
-CREATE INDEX IF NOT EXISTS events_session ON events(session_id, seq);
-CREATE INDEX IF NOT EXISTS events_agent ON events(agent_id, seq);
-CREATE INDEX IF NOT EXISTS events_project_at ON events(project_id, at);
-CREATE INDEX IF NOT EXISTS events_workspace_at ON events(workspace_id, at);
-CREATE INDEX IF NOT EXISTS events_parent ON events(parent_id);
-CREATE INDEX IF NOT EXISTS blobs_unreferenced ON blobs(refs) WHERE refs <= 0;
-CREATE INDEX IF NOT EXISTS links_to ON links(to_kind, to_id);
-`;
-
-export const SCHEMA_SQL = `
+/** Every connection to the log, the migrations' included. */
+export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 PRAGMA foreign_keys = OFF;
+`;
 
+/**
+ * A new log. The indexes come with it: on an empty file they cost nothing,
+ * and a migration that adds one builds it once.
+ */
+export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS events (
@@ -77,6 +71,16 @@ CREATE TABLE IF NOT EXISTS links (
   PRIMARY KEY (from_kind, from_id, to_kind, to_id, kind, at)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS links_one ON links(from_kind, from_id, to_kind, to_id, kind);
+
+CREATE INDEX IF NOT EXISTS events_at ON events(at);
+CREATE INDEX IF NOT EXISTS events_type_at ON events(type, at);
+CREATE INDEX IF NOT EXISTS events_session ON events(session_id, seq);
+CREATE INDEX IF NOT EXISTS events_agent ON events(agent_id, seq);
+CREATE INDEX IF NOT EXISTS events_project_at ON events(project_id, at);
+CREATE INDEX IF NOT EXISTS events_workspace_at ON events(workspace_id, at);
+CREATE INDEX IF NOT EXISTS events_parent ON events(parent_id);
+CREATE INDEX IF NOT EXISTS blobs_unreferenced ON blobs(refs) WHERE refs <= 0;
+CREATE INDEX IF NOT EXISTS links_to ON links(to_kind, to_id);
 `;
 
 // The full-text index (events_fts) is fts.ts's: it has its own version and rebuild.

@@ -11,9 +11,6 @@ import type { AgentKind, AppNotification, CommandRun, GitPlace, PaneId, Workspac
 import type { AgentTurn } from "./activity.ts";
 import type { NameSource } from "./names.ts";
 
-/** The events file's schema version (tables), not the payloads'. */
-export const EVENTS_SCHEMA = 1;
-
 export interface EventPayloads {
   /** A hook event as the agent sent it (the activity log's raw row). */
   "agent.hook": { name: string; agent: AgentKind | null; env?: Record<string, string>; hook?: number | null; payload: Record<string, unknown> };

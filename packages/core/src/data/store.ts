@@ -12,7 +12,9 @@ import { DATA_FLAGS, EVENT_V } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { Pacer } from "../scheduler.ts";
 import { bodyOf as ftsBodyOf, FTS_VERSION, ftsKind, ftsSql, VOCAB_SQL, wordsOnly } from "./fts.ts";
-import { EVENTS_SCHEMA, INDEX_SQL, SCHEMA_SQL } from "./schema.ts";
+import { EVENTS_SCHEMA, PRAGMA_SQL, SCHEMA_SQL } from "./schema.ts";
+import { migrate, schemaOf } from "./migrations.ts";
+import { upcast } from "./upcast.ts";
 
 const log = logger("data");
 
@@ -68,11 +70,9 @@ export interface StoreOptions {
   compress?: boolean;
   /** `body` text indexed per event is cut here. */
   bodyCap?: number;
-  /** Leave the indexes to ensureIndexes() (the core: once it answers). Default: built now. */
-  deferIndexes?: boolean;
 }
 
-const DEFAULTS: Required<StoreOptions> = { recordedBy: "source", compress: true, bodyCap: 20_000, deferIndexes: false };
+const DEFAULTS: Required<StoreOptions> = { recordedBy: "source", compress: true, bodyCap: 20_000 };
 
 export class DataStore {
   readonly db: DatabaseSync;
@@ -88,36 +88,21 @@ export class DataStore {
     this.file = file;
     this.#o = { ...DEFAULTS, ...o };
     this.db = new DatabaseSync(file, { timeout: 5000 });
-    this.db.exec(SCHEMA_SQL);
-    this.#renameSpaces();
-    this.#openFts();
-    if (!this.#o.deferIndexes) this.ensureIndexes();
-    if (!this.meta("schema")) {
+    this.db.exec(PRAGMA_SQL);
+    const fresh = schemaOf(this.db) === 0;
+    try {
+      // An older log moves forward (copied aside first); a newer one is refused before anything is written.
+      migrate(this.db, file);
+    } catch (err) {
+      this.db.close();
+      throw err;
+    }
+    if (fresh) {
+      this.db.exec(SCHEMA_SQL);
       this.setMeta("schema", String(EVENTS_SCHEMA));
       this.setMeta("blobs.recounted", "1"); // counted right from the start
     }
-  }
-
-  /** Before 0.24 workspaces were Spaces: the events' column, the open/close types, entities and links. The index comes back with ensureIndexes(). */
-  #renameSpaces(): void {
-    const old = () => !!this.db.prepare(`SELECT 1 FROM pragma_table_info('events') WHERE name = 'space_id'`).get();
-    if (!old()) return;
-    this.db.exec("BEGIN IMMEDIATE");
-    try {
-      if (!old()) return void this.db.exec("ROLLBACK");
-      this.db.exec(`
-        DROP INDEX IF EXISTS events_space_at;
-        ALTER TABLE events RENAME COLUMN space_id TO workspace_id;
-        UPDATE events SET type = 'workspace' || substr(type, 6) WHERE type IN ('space.open', 'space.close');
-        UPDATE entities SET kind = 'workspace' WHERE kind = 'space';
-        UPDATE links SET from_kind = 'workspace' WHERE from_kind = 'space';
-        UPDATE links SET to_kind = 'workspace' WHERE to_kind = 'space';
-      `);
-      this.db.exec("COMMIT");
-    } catch (err) {
-      this.db.exec("ROLLBACK");
-      throw err;
-    }
+    this.#openFts();
   }
 
   /** A new log gets the current full-text index; an older one keeps its own until buildFts(), and a build cut short goes on from its cursor. */
@@ -145,11 +130,6 @@ export class DataStore {
   /** A full-text expression as this log's index takes it: over the words only, not the kind. */
   textExpression(expression: string): string {
     return this.#ftsKind ? wordsOnly(expression) : expression;
-  }
-
-  /** The log's indexes; a new one is built here (one statement each, seconds on a big log). Queries work without them, slower. */
-  ensureIndexes(): void {
-    this.db.exec(INDEX_SQL);
   }
 
   /**
@@ -588,13 +568,16 @@ export function toEvent(r: Row): DataEvent {
   try {
     data = r.data_json ? JSON.parse(r.data_json) : null;
   } catch {}
+  // A row written in an older shape of its payload is read in the current one (upcast.ts).
+  let v = r.v;
+  if (v < (EVENT_V[r.type as DataEventType] ?? v)) ({ v, data } = upcast(r.type, v, data));
   return {
     seq: r.seq,
     id: r.id,
     at: r.at,
     until: r.until,
     type: r.type as DataEventType,
-    v: r.v,
+    v,
     source: r.source,
     recorded: r.recorded,
     parentId: r.parent_id,

@@ -72,8 +72,9 @@ export class TranscriptIngest extends EventEmitter<{ status: [SearchStatus]; cha
   constructor(o: IngestOptions) {
     super();
     this.#o = o;
-    // Version 2: lines without a timestamp were stored at 0 (and dropped by retention): read every file again, those rows first gone.
-    if (o.views.ensure("transcript_files", 2, ["transcript_files"], FILES_SQL).rebuilt) o.data.store.delete({ types: ["transcript."], before: 1 });
+    // Version 2: lines without a timestamp were stored at 0 (and dropped by retention): every file is read again.
+    // (Those rows went in the log's migration to schema 2: a view's version never deletes facts.)
+    o.views.ensure("transcript_files", 2, ["transcript_files"], FILES_SQL);
     this.#roots = [...o.roots];
     for (const r of this.#learnedRoots()) if (isDir(r.dir) && !this.#roots.some((k) => k.dir === r.dir || covers(k, r.dir))) this.#roots.push(r);
     this.#status = { ...this.#status, ...this.#counts() };

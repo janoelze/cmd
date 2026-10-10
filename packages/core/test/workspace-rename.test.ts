@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Store } from "../src/store.ts";
 import { DataStore } from "../src/data/store.ts";
-import { SCHEMA_SQL } from "../src/data/schema.ts";
+import { eventsV1 } from "./events-v1.ts";
 import { JournalStore } from "../src/journal/store.ts";
 import { rmTemp } from "./tmp.ts";
 
@@ -43,10 +43,8 @@ describe("databases from before workspaces", () => {
 
   it("the log: space_id, space.open and the space entity and links", () => {
     const file = path.join(dir, "events.sqlite");
-    const old = new DatabaseSync(file);
-    old.exec(SCHEMA_SQL.replace("workspace_id", "space_id"));
+    const old = eventsV1(file, { spaces: true });
     old.exec(`
-      CREATE INDEX events_space_at ON events(space_id, at);
       INSERT INTO events (id, at, type, v, source, recorded, space_id, data) VALUES ('space:s1:open:1', 1000, 'space.open', 1, 'user', 'test', 's1', jsonb('{"name":"shop","root":"/src/shop"}'));
       INSERT INTO entities VALUES ('space', 's1', 0, 0, jsonb('{}'));
       INSERT INTO links VALUES ('pane', 'p1', 'space', 's1', 'in', 0, NULL);
