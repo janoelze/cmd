@@ -176,25 +176,63 @@ export class JournalStore {
 
   /** Oldest first. Spans that began before `since` but reach into it count. */
   events(q: EventQuery = {}): JournalEvent[] {
-    const want = (k: JournalEventKind) => !q.kinds?.length || q.kinds.includes(k);
-    const inRange = (e: JournalEvent) => (q.since === undefined || (e.until ?? e.at) >= q.since) && (q.until === undefined || e.at < q.until);
-    const inScope = (e: JournalEvent) => (!q.workspaceId || e.workspaceId === q.workspaceId) && (!q.repo || e.repo === q.repo);
     const out: JournalEvent[] = [];
-    const types = FACT_KINDS.filter(want) as DataEventType[];
+    const types = this.#types(q);
     if (types.length) {
       const at: [number, number] | undefined = q.since !== undefined || q.until !== undefined ? [q.since !== undefined ? q.since - SPAN_MS : 0, q.until ?? Number.MAX_SAFE_INTEGER] : undefined;
-      for (const d of this.data.query({ types, at, workspaceId: q.workspaceId, projectId: q.repo ? `dir:${q.repo}` : undefined, limit: 100_000 })) {
-        const e = toJournal(d);
-        if (e && inRange(e)) out.push(e);
-      }
+      out.push(...this.#facts(q, types, at, 100_000));
     }
+    return this.#finish(q, out);
+  }
+
+  /**
+   * Every event since a time, as events({ since }) reads them, for several days
+   * at once (the journal's pool): the log is read a day of its time index at a
+   * time, between `step`s (the scheduler's yield), so no one statement grows
+   * with the range; facts that begin from `until` on are left out. Null when
+   * there are more than `limit`: the caller reads day by day instead.
+   */
+  async eventsSince(since: number, o: { until: number; limit: number; step: () => Promise<void> }): Promise<JournalEvent[] | null> {
+    const q: EventQuery = { since };
+    const types = this.#types(q);
+    const out: JournalEvent[] = [];
+    const end = o.until;
+    for (let t = since - SPAN_MS; t < end; t += 86400_000) {
+      // A day's worth from the time index; at most one more than the limit, which says it's over.
+      out.push(...this.#facts(q, types, [t, Math.min(t + 86400_000, end)], o.limit + 1 - out.length));
+      if (out.length > o.limit) return null;
+      await o.step();
+    }
+    const all = this.#finish(q, out, Number.MAX_SAFE_INTEGER);
+    return all.length > o.limit ? null : all;
+  }
+
+  #types(q: EventQuery): DataEventType[] {
+    return FACT_KINDS.filter((k) => !q.kinds?.length || q.kinds.includes(k)) as DataEventType[];
+  }
+
+  /** Facts from the log in a range of their start (`at`), as journal events in the query's range. */
+  #facts(q: EventQuery, types: DataEventType[], at: [number, number] | undefined, limit: number): JournalEvent[] {
+    const out: JournalEvent[] = [];
+    if (limit <= 0) return out;
+    for (const d of this.data.query({ types, at, workspaceId: q.workspaceId, projectId: q.repo ? `dir:${q.repo}` : undefined, limit })) {
+      const e = toJournal(d);
+      if (e && inRange(q, e)) out.push(e);
+    }
+    return out;
+  }
+
+  /** The derived kinds (turns, sessions, seeded ones) added to facts, sorted and cut. */
+  #finish(q: EventQuery, out: JournalEvent[], limit = q.limit ?? 50_000): JournalEvent[] {
+    const want = (k: JournalEventKind) => !q.kinds?.length || q.kinds.includes(k);
+    const inScope = (e: JournalEvent) => (!q.workspaceId || e.workspaceId === q.workspaceId) && (!q.repo || e.repo === q.repo);
     const since = (q.since ?? 0) - SPAN_MS;
     const project = projectsOnce();
     if (want("agent.turn") && this.#sources.turns) {
       let n = 0;
       for (const { turn, cwd } of this.#sources.turns(since)) {
         const e = { ...turnEvent(turn, cwd, "backfill", project), id: 1_000_000_000 + n++, source: "backfill" as const };
-        if (inRange(e) && inScope(e)) out.push(e);
+        if (inRange(q, e) && inScope(e)) out.push(e);
       }
     }
     if (want("agent.session") && this.#sources.sessions) {
@@ -202,18 +240,31 @@ export class JournalStore {
       let n = 0;
       if (rows) for (const s of sessionEvents(rows, project)) {
         const e = { ...s, id: 2_000_000_000 + n++, source: "backfill" as const };
-        if (inRange(e) && inScope(e)) out.push(e);
+        if (inRange(q, e) && inScope(e)) out.push(e);
       }
     }
-    for (const e of this.#extra) if (want(e.kind) && inRange(e) && inScope(e)) out.push(e);
+    for (const e of this.#extra) if (want(e.kind) && inRange(q, e) && inScope(e)) out.push(e);
     out.sort((a, b) => a.at - b.at || a.id - b.id);
-    return out.slice(0, q.limit ?? 50_000);
+    return out.slice(0, limit);
   }
 
-  /** Repositories with events since `since` (a range over the project index, not LIKE, which skips it). */
-  repos(since = 0): string[] {
-    const rows = this.data.store.db.prepare(`SELECT DISTINCT project_id FROM events WHERE project_id >= 'dir:' AND project_id < 'dir;' AND at >= ?`).all(since) as { project_id: string }[];
-    return rows.map((r) => r.project_id.slice(4));
+  /**
+   * Repositories with events since `since`, with their newest event's time. A
+   * skip scan over the project index (one seek per project, then its newest
+   * event): a DISTINCT over the range read every entry of it, 540k on a big
+   * log, half a second when they weren't cached (AR1-16-03).
+   */
+  repos(since = 0): { repo: string; last: number }[] {
+    const next = this.data.store.db.prepare(`SELECT project_id AS p FROM events WHERE project_id > ? AND project_id < 'dir;' ORDER BY project_id LIMIT 1`);
+    const last = this.data.store.db.prepare(`SELECT MAX(at) AS at FROM events WHERE project_id = ?`);
+    const out: { repo: string; last: number }[] = [];
+    for (let p = "dir:"; ; ) {
+      const r = next.get(p) as { p: string } | undefined;
+      if (!r) return out;
+      p = r.p;
+      const at = (last.get(p) as { at: number | null }).at ?? 0;
+      if (at >= since) out.push({ repo: p.slice(4), last: at });
+    }
   }
 
   day(scope: string, date: number): JournalDay | null {
@@ -267,6 +318,9 @@ export class JournalStore {
     return rows.flatMap((r) => toDay(r.doc) ?? []);
   }
 }
+
+/** Whether an event (a span) reaches into a query's range. */
+const inRange = (q: EventQuery, e: JournalEvent) => (q.since === undefined || (e.until ?? e.at) >= q.since) && (q.until === undefined || e.at < q.until);
 
 /** A journal event as the log records it: the kind is the type, the key the id, the project the repository. */
 export function toData(e: NewJournalEvent): NewDataEvent {

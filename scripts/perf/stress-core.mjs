@@ -5,7 +5,12 @@
 // printing, journal reloads with searches, query floods, idle. Afterwards, the
 // core's log has the whole picture: `grep '\[lag\]' $CMD_HOME/logs/core.log`.
 //
-//   node scripts/perf/stress-core.mjs <core.sock>
+//   node scripts/perf/stress-core.mjs <core.sock> [journal]
+//
+// With `journal`, only the startup jobs and then journal syncs as the core runs
+// them every 5 minutes (the first, in the startup job, reads 30 days of git; the
+// ones after are the steady state); `journal synced` lines in core.log say
+// where each sync's time went.
 //
 // Run it against a core on a copy of a big log, started like this:
 //
@@ -20,6 +25,7 @@
 import net from "node:net";
 
 const sock = process.argv[2];
+const only = process.argv[3] ?? null;
 if (!sock) {
   console.error("usage: node scripts/perf/stress-core.mjs <core.sock>");
   process.exit(2);
@@ -126,6 +132,21 @@ const phase = async (name, run) => {
 };
 
 await phase("P0 startup jobs (view rebuilds)", () => until(async () => (await loader.call("core.info")).startup.phase === "ready", 600_000, 500));
+const journalSyncs = () =>
+  phase("PJ journal syncs", async () => {
+    for (let i = 0; i < 10; i++) {
+      const t = performance.now();
+      await loader.call("journal.sync").catch(() => {});
+      console.log(`   sync ${i}: ${(performance.now() - t).toFixed(0)}ms`);
+      await sleep(2000);
+    }
+  });
+if (only === "journal") {
+  await journalSyncs();
+  pinging = false;
+  for (const c of [ui, pinger, loader]) c.close();
+  process.exit(0);
+}
 await phase("P1 first transcript pass", async () => {
   await sleep(1000);
   const done = await until(async () => {
@@ -151,6 +172,7 @@ await phase("P3 journal reloads + searches", async () => {
     await sleep(200);
   }
 });
+await journalSyncs();
 await phase("P4 query floods", async () => {
   const end = Date.now() + 30_000;
   const subs = [];

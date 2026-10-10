@@ -71,10 +71,10 @@ Timers in scope, with their period and whether they are `unref`'d or paced. Only
 **Proposal.** Hash what the day *contains*, not the span's end. For span events, clip `until` to the day window (`min(until, to)`) before hashing. Then a session that continues tomorrow doesn't change yesterday. Leave titles out of past days' hashes, or hash only the day's own turns, which are per-turn events with stable ends. Add a rule matching docs/24's intent: a day older than `UPGRADE_RECENT_DAYS` is rewritten only on `force` or a format change, never because a hash moved. Separately, make the widget's reload cheaper: `journal.days` with `write: "stale"` should consider only days whose events changed since the last call. The core can track a dirty set from the log cursor, the same "views from a cursor" idea as AR1-06-02, instead of recomputing 21 days of threads each time.
 
 **Success criteria.**
-- [ ] A test: a session spanning three work days gets a new turn on day 3. Days 1 and 2 keep their `writtenAt`, and the fake AI is called once (for day 3).
-- [ ] A test: renaming a session (a `session.name` event) does not rewrite a day older than yesterday.
-- [ ] `eventsHash` clips span ends to the day window, and that is documented in `digest.ts`'s comment.
-- [ ] `THREADS_FORMAT` or `WRITER_FORMAT` is unchanged by the fix, or bumped with a note in docs/24, as AR1-16-04 requires.
+- [x] A test: a session spanning three work days gets a new turn on day 3. Days 1 and 2 keep their `writtenAt`, and the fake AI is called once (for day 3).
+- [x] A test: renaming a session (a `session.name` event) does not rewrite a day older than yesterday.
+- [x] `eventsHash` clips span ends to the day window, and that is documented in `digest.ts`'s comment.
+- [x] `THREADS_FORMAT` or `WRITER_FORMAT` is unchanged by the fix, or bumped with a note in docs/24, as AR1-16-04 requires.
 
 ### AR1-16-02 · Make forget and retention reach what these services derived
 
@@ -114,10 +114,10 @@ Timers in scope, with their period and whether they are `unref`'d or paced. Only
 If a single SQL statement stays over 100 ms, move the reflog read and the event diff into the indexer worker that search already uses (doc 06).
 
 **Success criteria.**
-- [ ] A profile of one sync, with the top three costs, is attached to the PR.
-- [ ] On the stress log, `journal sync` produces no `[lag]` line over 100 ms.
-- [ ] `journal synced` logs `skipped` ≥ 90% of repositories on a sync where nothing changed.
-- [ ] `JournalService.#pool` has a bounded `limit` and a test for a day with more events than the bound.
+- [x] A profile of one sync, with the top three costs, is attached to the PR.
+- [x] On the stress log, `journal sync` produces no `[lag]` line over 100 ms.
+- [x] `journal synced` logs `skipped` ≥ 90% of repositories on a sync where nothing changed.
+- [x] `JournalService.#pool` has a bounded `limit` and a test for a day with more events than the bound.
 
 ### AR1-16-04 · Enforce the journal's format versions with golden fixtures
 

@@ -8,7 +8,9 @@
 //
 // Reads (the Journal widget reloads as agents work) take git up to
 // SYNC_FRESH_MS old, and a sync skips repositories whose reflogs haven't
-// changed (gitStamp), so a busy widget costs little.
+// changed (gitStamp) and folders that are no checkout until something happens
+// in them, so a busy widget costs little. The repositories come from a skip scan
+// of the project index, not a DISTINCT over it (AR1-16-03).
 //
 // Days are written on request (the Journal widget, `cmd journal`): threads and
 // a digest from the events, then a model, unless the digest is the one the
@@ -55,6 +57,8 @@ const DAY_BUDGET = 160_000;
 const TODAY_EVERY_MS = 30 * 60_000;
 /** Earlier events read for context (a release ships what merged since the one before). */
 const CONTEXT_MS = 7 * DAY_MS;
+/** Events read at once for several days (#pool); a busier stretch is read day by day. */
+const POOL_LIMIT = 50_000;
 
 export interface JournalAi {
   object<T>(o: CallOptions & ObjectRequest<T>): Promise<CompleteResult<T>>;
@@ -75,6 +79,8 @@ export interface JournalServiceOptions {
   now?: () => number;
   /** Between steps of a sync (the scheduler; by default the next tick). */
   pace?: Pacer;
+  /** Tests: events read at once for several days (POOL_LIMIT). */
+  poolLimit?: number;
 }
 
 export type WriteMode = "never" | "stale" | "force";
@@ -97,6 +103,12 @@ export class JournalService {
   #syncedAt = -Infinity;
   /** Each repository's gitStamp when it was last read: unchanged, it isn't read again. */
   #stamps = new Map<string, string>();
+  /**
+   * Folders that were no git checkout (gitStamp null: never one, or gone), with
+   * when that was seen: skipped until an event names them again, or a workspace
+   * opens on one (most projects seen are plain folders; AR1-16-03).
+   */
+  #notGit = new Map<string, number>();
   #writing = new Map<string, Promise<JournalDay | null>>();
   #timer: ReturnType<typeof setInterval> | null = null;
 
@@ -143,28 +155,61 @@ export class JournalService {
     const now = this.#now;
     const since = this.#read.git ? this.#read.git - SYNC_OVERLAP : now - (this.#reread ? REREAD_DAYS : FIRST_SYNC_DAYS) * DAY_MS;
     const t0 = Date.now();
+    // Where a sync's time goes (the log line): sync parts by their own time, awaited ones by wall time. Marks name each
+    // part's synchronous run for the watchdog, never an await (a mark held across one outlives marks that interleave).
+    const ms = { repos: 0, stamps: 0, reads: 0, record: 0 };
+    const timed = <T,>(part: keyof typeof ms, run: () => T): T => {
+      const done = pace.mark(`journal sync: ${part}`);
+      const t = performance.now();
+      let out: T;
+      try {
+        out = run();
+      } finally {
+        done();
+      }
+      const end = () => (ms[part] += performance.now() - t);
+      if (out instanceof Promise) return out.finally(end) as T;
+      end();
+      return out;
+    };
     // Git for every project seen lately and every workspace's folder.
-    const repos = new Set([...this.store.repos(now - FIRST_SYNC_DAYS * DAY_MS), ...this.#o.workspaces().filter((s) => s.id !== HOME_WORKSPACE_ID).map((s) => s.root)]);
+    // The newest event naming each, so a folder that was no checkout is looked at again once something happens in it.
+    const last = new Map<string, number>();
+    for (const { repo, last: at } of timed("repos", () => this.store.repos(now - FIRST_SYNC_DAYS * DAY_MS))) last.set(repo, at);
+    for (const s of this.#o.workspaces()) if (s.id !== HOME_WORKSPACE_ID) last.set(s.root, Math.max(last.get(s.root) ?? 0, s.createdAt ?? 0, s.lastActiveAt ?? 0));
+    const repos = [...last.keys()];
     let git = 0;
     let skipped = 0;
     const read = this.#o.git ?? gitEvents;
     const stampOf = this.#o.gitStamp ?? (this.#o.git ? null : gitStamp);
     for (const r of repos) {
+      const seen = this.#notGit.get(r);
+      if (seen !== undefined && last.get(r)! <= seen) {
+        skipped++;
+        continue;
+      }
       // Unchanged since it was read: everything in the overlap is recorded already.
-      const stamp = stampOf ? await stampOf(r).catch(() => null) : null;
+      const stamp = stampOf ? await timed("stamps", () => stampOf(r).catch(() => null)) : null;
       if (stamp !== null && this.#stamps.get(r) === stamp) {
         skipped++;
         continue;
       }
+      if (stampOf && stamp === null) {
+        // No checkout: nothing to read (gitEvents would find none either).
+        this.#notGit.set(r, now);
+        this.#stamps.delete(r);
+        continue;
+      }
+      this.#notGit.delete(r);
       let ev: NewJournalEvent[];
       try {
-        ev = await read(r, since);
+        ev = await timed("reads", () => read(r, since));
       } catch {
         continue;
       }
       // A first read is thousands of events (90 days of a busy repository): a few hundred per step.
       for (let i = 0; i < ev.length; i += 200) {
-        git += this.store.recordAll(ev.slice(i, i + 200).map((e) => ({ ...e, workspaceId: this.#workspaceOf(e.repo) })));
+        git += timed("record", () => this.store.recordAll(ev.slice(i, i + 200).map((e) => ({ ...e, workspaceId: this.#workspaceOf(e.repo) }))));
         await pace.yield();
       }
       if (stamp !== null) this.#stamps.set(r, stamp);
@@ -176,7 +221,7 @@ export class JournalService {
       this.store.setMeta("sources.format", String(SOURCES_FORMAT));
       this.#reread = false;
     }
-    log.info("journal synced", { git, repos: repos.size, skipped, ms: Date.now() - t0 });
+    log.info("journal synced", { git, repos: repos.length, notGit: this.#notGit.size, skipped, ms: Date.now() - t0, parts: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])) });
   }
 
   /** The workspace whose folder holds `p` (deepest wins); null: only Home's. */
@@ -284,7 +329,7 @@ export class JournalService {
     let date = this.dayOf(this.#now);
     const tries = Math.max(count * 3, 14);
     // A day more than it may look back, for days with a clock change.
-    const pool = this.#pool(this.#window(date).from - (tries + 1) * DAY_MS);
+    const pool = await this.#pool(this.#window(date).from - (tries + 1) * DAY_MS);
     for (let i = 0; i < tries && out.length < count; i++) {
       const d = await this.day(scope, date, mode, pool);
       if (d) out.push(d);
@@ -307,7 +352,7 @@ export class JournalService {
     await this.sync(SYNC_FRESH_MS);
     const today = this.dayOf(this.#now);
     const days: JournalDay[] = [];
-    const pool = this.#pool(this.#window(start).from);
+    const pool = await this.#pool(this.#window(start).from);
     for (const d of daysOfWeek(start)) {
       if (d > today) break;
       const day = await this.day(scope, d, mode === "force" ? "stale" : mode, pool);
@@ -337,9 +382,14 @@ export class JournalService {
     return write;
   }
 
-  /** Every event a day from `from` on reads (its week of context included), in one query. */
-  #pool(from: number): JournalEvent[] {
-    return this.store.events({ since: from - CONTEXT_MS, limit: Number.MAX_SAFE_INTEGER });
+  /**
+   * Every event a day from `from` on reads (its week of context included), read
+   * once for several days, a day of the log at a time between the scheduler's
+   * steps. Undefined when there are more than POOL_LIMIT: each day reads its own.
+   */
+  async #pool(from: number): Promise<JournalEvent[] | undefined> {
+    const pace = this.#o.pace ?? inlinePacer;
+    return (await this.store.eventsSince(from - CONTEXT_MS, { until: this.#now + DAY_MS, limit: this.#o.poolLimit ?? POOL_LIMIT, step: () => pace.yield() })) ?? undefined;
   }
 
   /** Something written down on purpose: by a person, or by an agent (with its session, so it joins its thread). */

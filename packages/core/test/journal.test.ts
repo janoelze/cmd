@@ -261,6 +261,45 @@ describe("journal service", () => {
     expect(read).toHaveLength(2);
   });
 
+  it("skips folders that are no git checkout until an event names them again, and lists repositories without a scan", async () => {
+    let now = 100 * 86400_000;
+    const store = new JournalStore();
+    store.recordAll([note(now - 86400_000, "a", { repo: "/w/plain" }), note(now - 2 * 86400_000, "b", { repo: "/w/plain" }), note(now - 86400_000, "c", { repo: workspace.root }), note(now - 90 * 86400_000, "d", { repo: "/w/old" })]);
+    expect(store.repos(now - 30 * 86400_000)).toEqual([{ repo: workspace.root, last: now - 86400_000 }, { repo: "/w/plain", last: now - 86400_000 }]);
+    const stamped: string[] = [];
+    const j = new JournalService({ store, workspaces: () => [workspace], agentWorkspace: () => null, ai: null, now: () => now, git: async () => [], gitStamp: async (r) => (stamped.push(r), r === workspace.root ? "a" : null) });
+    await j.sync();
+    expect(stamped.sort()).toEqual(["/w/plain", workspace.root].sort());
+    stamped.length = 0;
+    now += 60_000;
+    await j.sync();
+    expect(stamped).toEqual([workspace.root]); // the plain folder isn't looked at again
+    store.record(note(now + 1, "e", { repo: "/w/plain" }));
+    now += 60_000;
+    await j.sync();
+    expect(stamped).toEqual([workspace.root, workspace.root, "/w/plain"]);
+  });
+
+  it("reads several days at once up to a bound, and a busier stretch day by day", async () => {
+    const prompts: string[] = [];
+    const ai: JournalAi = { modelName: () => "Model", object: async <T,>(o: { prompt: string }) => (prompts.push(o.prompt), { value: { headline: "", entries: [] } as T, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }, model: "m" }) };
+    const busy = () => {
+      const store = new JournalStore();
+      store.recordAll(syntheticDay(DAY));
+      // More events in the day than the bound below.
+      store.recordAll(Array.from({ length: 40 }, (_, i) => note(from + 3600_000 + i * 60_000, `busy${i}`, { text: `note ${i}` })));
+      return store;
+    };
+    const n = busy().events({ since: from - 30 * 86400_000 }).length;
+    expect(n).toBeGreaterThan(40);
+    expect(await busy().eventsSince(from - 30 * 86400_000, { until: to, limit: 20, step: async () => {} })).toBeNull();
+    expect(await busy().eventsSince(from - 30 * 86400_000, { until: to, limit: n, step: async () => {} })).toEqual(busy().events({ since: from - 30 * 86400_000 }));
+    for (const poolLimit of [20, undefined]) await new JournalService({ store: busy(), workspaces: () => [workspace], agentWorkspace: () => null, ai, now: () => to - 3600_000, git: async () => [], poolLimit }).days("all", 1);
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0]).toContain("note 39");
+    expect(prompts[0]).toBe(prompts[1]);
+  });
+
   it("notes from an agent's terminal join its session", async () => {
     const core = new Core({ socketPath: path.join(os.tmpdir(), `cmd-j-${process.pid}.sock`), dbPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     try {
