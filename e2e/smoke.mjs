@@ -1,5 +1,5 @@
 // Launches the built app against an isolated core, drives it through the real
-// menu bar, takes screenshots. usage: pnpm e2e [--only name,name]
+// menu bar (E2E_SHOTS=1: screenshots each step). usage: pnpm e2e [--only name,name]
 // E2E_SCREEN=ci runs it as on CI's smaller screen (e2e/screen.mjs); E2E_CPU_THROTTLE=12
 // slows the app window's CPU that many times, as on CI's slow runner.
 // Each section is a scenario: a failure saves failed-<name>.png, and the run goes on
@@ -54,6 +54,10 @@ fs.writeFileSync(
   ].map((o) => JSON.stringify(o)).join("\n") + "\n",
 );
 fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "agents.claude.command": "echo claude" }));
+
+// Screenshots of the app at each step, for a person or an agent to look at: E2E_SHOTS=1
+// (they take about a fifth of a run). A failure always saves one.
+const shot = (page, name) => (process.env.E2E_SHOTS ? page.screenshot({ path: path.join(shots, name) }) : undefined);
 
 const require = createRequire(path.join(root, "apps/desktop/package.json"));
 const motion = !!process.env.E2E_MOTION;
@@ -352,7 +356,7 @@ await scenario("onboarding", async () => {
   check((await win.locator(".onboarding .ui-sheet-header-title").textContent()) === "Welcome to cmd", "a new install opens onboarding at Welcome");
   await win.locator(".onboarding button", { hasText: "Get Started" }).click();
   await win.waitForSelector(".onboarding .ui-sheet-header-title:has-text('Connect an AI provider')");
-  await win.screenshot({ path: path.join(shots, "0-onboarding-ai.png") });
+  await shot(win, "0-onboarding-ai.png");
   const titles = await win.locator(".onboarding .ui-row-name").allTextContents();
   check(titles.includes("Anthropic") && titles.includes("OpenAI") && (await win.locator(".onboarding button", { hasText: "Done" }).isDisabled()), "the AI step lists the providers, and Done waits for a key");
   await win.locator(".onboarding button", { hasText: "Set Up Later" }).click();
@@ -360,7 +364,7 @@ await scenario("onboarding", async () => {
   const onboardingFile = path.join(home, "ui", "onboarding.json");
   const seen = await until(() => (fs.existsSync(onboardingFile) ? JSON.parse(fs.readFileSync(onboardingFile, "utf8")).seen.join() : ""), (s) => s === "welcome,ai");
   check(seen === "welcome,ai", `the steps shown are recorded, so they don't open again (${seen})`);
-  await win.screenshot({ path: path.join(shots, "1-empty.png") });
+  await shot(win, "1-empty.png");
 });
 await scenario("chrome", async () => {
   // One footer across the window (docs/21-sidebars.md): the core's health at its left end,
@@ -440,7 +444,7 @@ await scenario("terminals", async () => {
   await win.keyboard.type("ls -la");
   await win.keyboard.press("Enter");
   check((await panes()) === 2, "two terminals open");
-  await win.screenshot({ path: path.join(shots, "2-focus.png") });
+  await shot(win, "2-focus.png");
 });
 
 await scenario("navigator", async () => {
@@ -509,7 +513,7 @@ await win.mouse.down();
 await win.mouse.move(src.x + 60, src.y + 30, { steps: 4 });
 await win.mouse.move(dst.x + dst.width / 2, dst.y + dst.height / 2, { steps: 12 });
 check((await until(() => countOf(".tile.lifted"), (n) => n === 1, 5000)) === 1, "the dragged tile is lifted and follows the pointer");
-await win.screenshot({ path: path.join(shots, "3b-grid-drag.png") });
+await shot(win, "3b-grid-drag.png");
 await win.mouse.up();
 const ids3 = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.sort((a, b) => a.createdAt - b.createdAt).map((x) => x.id)));
 const before3 = [...order3, ...ids3.filter((id) => !order3.includes(id))];
@@ -519,7 +523,7 @@ check(JSON.stringify(order4) === JSON.stringify(expected), "dropping the first t
 await menu("file.close"); // back to two terminals for the checks below
 await until(panes, (n) => n === 2);
 await still();
-await win.screenshot({ path: path.join(shots, "3-grid.png") });
+await shot(win, "3-grid.png");
 await menu("view.focus");
 });
 
@@ -530,7 +534,7 @@ await scenario("palette", async () => {
   await focused(".palette-input");
   await win.keyboard.type("next");
   await until(() => win.locator(".palette-input").inputValue(), (v) => v === "next");
-  await win.screenshot({ path: path.join(shots, "4-palette.png") });
+  await shot(win, "4-palette.png");
   await menu("file.close"); // ⌘W closes the palette first
   await gone(".palette");
   check((await win.locator(".palette").count()) === 0, "⌘W closes the palette before any terminal");
@@ -549,7 +553,7 @@ await scenario("session-search", async () => {
   const label = await win.locator(".palette-list li.rich .palette-label").first().textContent();
   const snippet = await win.locator(".palette-snippet mark").first().textContent();
   check(label === "VPN auto reconnect" && /wireguard/i.test(snippet ?? ""), `session search finds past sessions, typo-tolerant (${label}: ${snippet})`);
-  await win.screenshot({ path: path.join(shots, "4b-search.png") });
+  await shot(win, "4b-search.png");
   const before = await panes();
   await until(() => countOf(".palette-list li.on.rich"), (n) => n === 1); // Enter acts on the highlighted row
   await win.keyboard.press("Enter");
@@ -572,7 +576,7 @@ await scenario("search", async () => {
   await win.keyboard.type("wiregaurd");
   await win.waitForSelector(".palette .palette-label:has-text('VPN auto reconnect')", { timeout: 15000 }).catch(() => {});
   check((await win.locator(".palette .palette-label", { hasText: "VPN auto reconnect" }).count()) > 0, "the palette's search finds past sessions, typos and all");
-  await win.screenshot({ path: path.join(shots, "4b-palette-search.png") });
+  await shot(win, "4b-palette-search.png");
   await win.keyboard.press("Escape");
   await win.locator(".palette").waitFor({ state: "detached" });
 });
@@ -585,7 +589,7 @@ await scenario("sidebar-search", async () => {
   await win.waitForSelector(".navigator .ui-list-row.history", { timeout: 15000 });
   const label = await win.locator(".navigator .ui-list-row.history .ui-list-row-name").first().textContent();
   check(label === "VPN auto reconnect", `sidebar search finds past sessions (${label})`);
-  await win.screenshot({ path: path.join(shots, "4c-sidebar-search.png") });
+  await shot(win, "4c-sidebar-search.png");
   await win.keyboard.press("Escape");
   check((await until(() => win.locator(".sb-search input").inputValue(), (v) => v === "")) === "", "Esc clears the sidebar search");
   await win.keyboard.press("Escape");
@@ -625,7 +629,8 @@ await scenario("browser", async () => {
     await app.evaluate(({ clipboard }) => clipboard.writeText(""));
     // The page takes focus a moment after the click (a slow runner took more than 200 ms):
     // wait until it has it, then Select All and Copy, again until the text arrives.
-    const pageFocused = () => app.evaluate(({ webContents }) => webContents.getFocusedWebContents()?.getType() === "webview");
+    // (The app's own focused element: in the background (CMD_BACKGROUND) no WebContents counts as focused.)
+    const pageFocused = () => win.evaluate(() => document.activeElement?.tagName === "WEBVIEW");
     let copied = "";
     for (let attempt = 0; attempt < 5 && !copied.includes("Hello from a cmd browser window"); attempt++) {
       await win.locator(".tile.kind-browser webview").click();
@@ -647,7 +652,7 @@ await scenario("browser", async () => {
     const w = await pageUntil("innerWidth", 393);
     const ua = await pageUntil("/iPhone/.test(navigator.userAgent)", true);
     check(w === 393 && ua === true, `a device size sets the page's viewport and user agent (${w}, ${ua})`);
-    await win.screenshot({ path: path.join(shots, "browser-device.png") });
+    await shot(win, "browser-device.png");
     await win.evaluate((id) => window.cmd.call("window.update", { id, state: { device: null } }), browserWin.id);
     const back = await pageUntil("/iPhone/.test(navigator.userAgent)", false);
     const fit = await pageUntil("innerWidth !== 393", true);
@@ -663,7 +668,7 @@ await scenario("blank-browser", async () => {
   await select(blankWin.id);
   const blankView = win.locator(`.tile[data-pane="${blankWin.id}"] .ui-webstage .ui-viewstate`);
   await blankView.waitFor({ timeout: 10_000 }).catch(() => {});
-  await win.screenshot({ path: path.join(shots, "browser-blank.png") });
+  await shot(win, "browser-blank.png");
   check(await blankView.isVisible(), "a blank browser window shows the empty view, not a white page");
   await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [blankWin.id, `http://localhost:${port}`]);
   await blankView.waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
@@ -684,7 +689,7 @@ await scenario("site-permissions", async () => {
     const sheet = win.locator(".site-permission:not([data-closing])"); // not one fading out
     await sheet.waitFor({ timeout: 10_000 }).catch(() => {});
     const title = (await sheet.locator(".ui-dialog-title").textContent().catch(() => "")) ?? "";
-    await win.screenshot({ path: path.join(shots, "site-permission.png") });
+    await shot(win, "site-permission.png");
     check(title.includes(`localhost:${port}`) && title.includes("camera and microphone"), `a page asking for the camera gets cmd's sheet naming the site (${JSON.stringify(title)})`);
     await sheet.getByRole("button", { name: "Don't Allow" }).click();
     const got = await page("window.__gum");
@@ -728,12 +733,13 @@ await scenario("site-permissions", async () => {
     await section.waitFor({ timeout: 10_000 }).catch(() => {});
     const rows = async () => (await section.locator(".ui-row").allTextContents().catch(() => [])).map((t) => t.replace(/Remove$/, ""));
     const listed = await rows();
-    await sw.screenshot({ path: path.join(shots, "site-permissions-settings.png") });
+    await shot(sw, "site-permissions-settings.png");
     check(listed.join("|") === "Camera and microphoneAllowed|NotificationsNot allowed", `Settings → Browser lists the site's answers (${listed.join(", ")})`);
     await section.getByRole("button", { name: "Remove Camera and microphone", exact: false }).click();
     await waitUntil(() => keptNow()[site]?.media === undefined);
-    await sw.screenshot({ path: path.join(shots, "site-permissions-removed-one.png") });
-    check(JSON.stringify(keptNow()) === JSON.stringify({ [site]: { notifications: false } }) && (await rows()).length === 1, `Remove forgets one answer and keeps the rest (${JSON.stringify(keptNow())})`);
+    const left = await until(rows, (r) => r.length === 1); // the row goes once Settings hears of the change
+    await shot(sw, "site-permissions-removed-one.png");
+    check(JSON.stringify(keptNow()) === JSON.stringify({ [site]: { notifications: false } }) && left.length === 1, `Remove forgets one answer and keeps the rest (${JSON.stringify(keptNow())})`);
     const reasked = await answerNext(gum, "Allow");
     check(reasked === "granted", `a removed answer is asked again on the next visit, without a restart (${reasked})`);
     await section.locator(".ui-row", { hasText: "Camera and microphone" }).waitFor({ timeout: 10_000 }).catch(() => {});
@@ -741,7 +747,7 @@ await scenario("site-permissions", async () => {
     await section.getByRole("button", { name: `Remove All for localhost:${port}` }).click();
     const empty = sw.locator(".ui-empty", { hasText: "No site permissions yet" });
     await empty.waitFor({ timeout: 10_000 }).catch(() => {});
-    await sw.screenshot({ path: path.join(shots, "site-permissions-empty.png") });
+    await shot(sw, "site-permissions-empty.png");
     check((await empty.count()) === 1 && JSON.stringify(keptNow()) === "{}", `Remove All forgets the site; the page says nothing is kept (${JSON.stringify(keptNow())})`);
     await sw.close();
     const askedAfterAll = await answerNext(`navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name)`, null);
@@ -804,7 +810,7 @@ await scenario("osc8", async () => {
       await cmdClickRow0(rows);
       asked = await until(() => app.evaluate(() => globalThis.__asked), (a) => a.length > 0, 3000);
     }
-    await win.screenshot({ path: path.join(shots, "open-policy-osc8.png") });
+    await shot(win, "open-policy-osc8.png");
     const opened = await app.evaluate(() => globalThis.__opened);
     check(asked.length === 1 && /^Open smb:\/\/example( in .+)?\?$/.test(asked[0].message) && asked[0].sheet && asked[0].buttons.at(-1) === "Cancel", `an OSC 8 smb: link asks first, in a sheet naming the real URL (${JSON.stringify(asked)})`);
     check(opened.length === 0, `Cancel opens nothing (${JSON.stringify(opened)})`);
@@ -1011,7 +1017,7 @@ await scenario("json", async () => {
   const lineRows = await until(() => win.locator(`.tile.kind-json[data-pane="${jl.id}"] .json-index`).allTextContents(), (r) => r.length >= 3);
   const unreadable = await until(() => countOf(`.tile.kind-json[data-pane="${jl.id}"] .json-invalid`), (n) => n === 1);
   check(jl.kind === "json" && lineRows.slice(0, 3).join(",") === "1,2,3" && unreadable === 1, `JSON Lines: a row per line, bad lines shown (${lineRows.join(", ")})`);
-  await win.screenshot({ path: path.join(shots, "10-json.png") });
+  await shot(win, "10-json.png");
   } finally {
     for (const w of opened) await win.evaluate((id) => window.cmd.call("window.close", { id }), w.id);
   }
@@ -1022,7 +1028,7 @@ await scenario("window-kinds", async () => {
   const kinds = async () => [await countOf(".tile.kind-browser"), await countOf(".tile.kind-files"), await countOf(".tile.kind-text"), await countOf(".tile.kind-markdown")].join();
   await until(kinds, (k) => k === "1,1,1,1");
   await still();
-  await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });
+  await shot(win, "10-window-kinds.png");
   check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1 && (await win.locator(".tile.kind-text").count()) === 1 && (await win.locator(".tile.kind-markdown").count()) === 1, "browser, file, text and Markdown windows take part in the grid");
 });
 
@@ -1050,7 +1056,7 @@ await scenario("error-boundary", async () => {
     const text = await until(() => paneText(termId), (t) => t.includes("still-live-42"));
     const screen = text.trim().split("\n").slice(-3).join(" ⏎ ");
     check(text.includes("still-live-42") && (await win.locator(".topbar, .statusbar").count()) > 0, `with one window broken, the rest of the app renders and a terminal takes input (focused: ${hasFocus}; screen: ${screen})`);
-    await win.screenshot({ path: path.join(shots, "10b-error-boundary.png") });
+    await shot(win, "10b-error-boundary.png");
     await win.evaluate((id) => window.__cmdBreakView(id, false), broken.id);
     await fallback.locator("button", { hasText: "Reload Window" }).click();
     const back = await win.waitForSelector(`.tile.kind-markdown[data-pane="${broken.id}"] .ui-doc`, { timeout: 10_000 }).then(() => true, () => false);
@@ -1335,7 +1341,7 @@ await scenario("magic", async () => {
       await win.getByRole("menuitemradio", { name: "Settings" }).click();
     }
     const fields = await until(() => tile.locator(".ui-row").allTextContents(), (f) => f.some((x) => x.includes("Start")));
-    await win.screenshot({ path: path.join(shots, "magic-edit.png") });
+    await shot(win, "magic-edit.png");
     await menu("view.toggleEdit");
     await until(() => tile.locator(".magic-edit").count(), (n) => n === 0);
     check(versions === 2 && tabs.join(",").startsWith("Changes,Settings,Files,Health") && fields.some((f) => f.includes("Start")) && !(await tile.locator(".magic-edit").count()), `⌘E shows a widget's edit view (versions, settings) and back (${versions}, ${tabs.join("/")})`);
@@ -1347,7 +1353,7 @@ await scenario("magic", async () => {
     await menu("widget.library");
     await win.waitForSelector(".widget-library .wl-card", { timeout: 10_000 });
     const cards = await until(() => win.locator(".widget-library .wl-name").allTextContents(), (c) => c[0] === "Counter" && c.includes("Agent Activity") && c.includes("Live Diff"), 5000);
-    await win.screenshot({ path: path.join(shots, "widget-library.png") });
+    await shot(win, "widget-library.png");
     const magicButton = await win.locator(".widget-library .ui-dialog-foot button", { hasText: "New Widget" }).count();
     check(magicButton === 1 && cards[0] === "Counter" && cards.includes("Agent Activity") && cards.includes("Live Diff"), `the Widget Library has New Widget in its footer, then the closed widget and the built-ins (${cards.join(", ")})`);
     await win.locator(".widget-library .wl-card", { hasText: "Counter" }).click();
@@ -1371,7 +1377,7 @@ await scenario("magic", async () => {
     const offered = await until(() => win.locator(".palette-list .palette-label").allTextContents(), (o) => o.at(-1) === "New Widget with Magic" && o.includes("Counter"), 5000);
     await win.mouse.move(0, 0);
     await win.waitForTimeout(500); // the rows' symbols load from macOS
-    await win.screenshot({ path: path.join(shots, "new-picker.png") });
+    await shot(win, "new-picker.png");
     await win.locator(".palette-input").fill("timer");
     // Enter acts on the highlighted row: wait until the filter has made it Timer (pressing at once raced the re-render).
     await win.waitForSelector(".palette-list li.on .palette-label:text-is('Timer')", { timeout: 10_000 }).catch(() => {});
@@ -1438,7 +1444,7 @@ await scenario("magic", async () => {
     await until(bstate, (st) => !!st.attention, 15_000);
     await until(statusText, (t) => t.includes("Build failed"), 5000);
     const marked = (await bstate()).attention;
-    await win.screenshot({ path: path.join(shots, "magic-attention.png") });
+    await shot(win, "magic-attention.png");
     check(marked?.text === "Build failed" && (await statusText()).includes("Build failed"), `a widget's notification marks its window until seen (${marked?.text}, ${await statusText()})`);
     // Looking at it (selected, with the app in front) is seeing it.
     await win.evaluate((id) => window.__cmdSelect?.(id), b.id);
@@ -1491,7 +1497,7 @@ await scenario("settings", async () => {
   );
   check(titles.includes("Model") && titles.includes("Fast model"), "a key brings its provider's models");
   await rpc("secrets.set", { key: "ai.openai.apiKey", value: null });
-  await sw.screenshot({ path: path.join(shots, "5-settings-terminal.png") });
+  await shot(sw, "5-settings-terminal.png");
   const page = (name) => sw.locator(".ui-split-pane .ui-list-row", { has: sw.getByText(name, { exact: true }) }).click();
   const row = (title) => sw.locator(".ui-row", { has: sw.locator(".ui-row-title", { hasText: title }) });
   const saved = () => JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8").replace(/^\/\/.*$/gm, ""));
@@ -1504,7 +1510,7 @@ await scenario("settings", async () => {
   const macos = sw.locator(".ui-row-title", { hasText: /^Notifications (are on|aren't on yet|are quiet|are off)$/ });
   await macos.waitFor();
   check(await macos.count() === 1, `Notifications says whether macOS shows them (${await macos.textContent()})`);
-  await sw.screenshot({ path: path.join(shots, "5-settings-notifications.png") });
+  await shot(sw, "5-settings-notifications.png");
   await page("AI & Agents");
 
   // AI & Agents → Hooks: the fixture's Claude config, and Install writes cmd's hook into it.
@@ -1513,7 +1519,7 @@ await scenario("settings", async () => {
   await claudeRow.locator("button", { hasText: "Remove" }).waitFor();
   const claudeSettings = await until(() => { try { return JSON.parse(fs.readFileSync(path.join(transcripts, ".claude", "settings.json"), "utf8")); } catch { return {}; } }, (c) => !!c.hooks);
   check(JSON.stringify(claudeSettings.hooks?.PreToolUse ?? []).includes("/hooks/cmd-hook' claude"), "Settings → AI & Agents installs cmd's hook into the Claude config");
-  await sw.screenshot({ path: path.join(shots, "5-settings-agents.png") });
+  await shot(sw, "5-settings-agents.png");
 
   await page("Updates & About");
   await sw.waitForSelector(".ui-row:has-text('Status') .ui-text[data-select]");
@@ -1532,7 +1538,7 @@ await scenario("settings", async () => {
   const radius = () => win.evaluate(() => document.documentElement.style.getPropertyValue("--window-radius"));
   check((await until(radius, (r) => r === "12px")) === "12px", "the app window applies it live");
   await row("Window corner radius").locator(".ui-reset").click();
-  await sw.screenshot({ path: path.join(shots, "5-settings-interface.png") });
+  await shot(sw, "5-settings-interface.png");
   await row("Show resource usage").locator(".ui-reset").click();
   await waitFor(() => !("ui.showResources" in saved()), "restore default removes the override");
 
@@ -1603,7 +1609,7 @@ await scenario("settings", async () => {
   const paletteRows = await until(() => sw.locator(".ui-row[data-compact] .ui-row-name").allTextContents(), (r) => r.includes("Command Palette"), 5000);
   check(paletteRows.includes("Command Palette"), `search finds shortcuts (${paletteRows.join(", ")})`);
   await sw.locator(".ui-split-pane .ui-search input").fill("");
-  await sw.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });
+  await shot(sw, "5-settings-shortcuts.png");
   await sw.close();
 });
 
@@ -1778,14 +1784,14 @@ await scenario("strip", async () => {
     await win.mouse.move(s0.x + 60, s0.y + 20, { steps: 3 });
     await win.mouse.move(Math.min(d1.x + d1.width / 2, pane.x + pane.width - 80), d1.y + 100, { steps: 12 });
     check((await until(() => countOf(".tile.lifted"), (n) => n === 1, 5000)) === 1, "dragging in the strip lifts the window");
-    await win.screenshot({ path: path.join(shots, "8b-strip-drag.png") });
+    await shot(win, "8b-strip-drag.png");
     await win.mouse.up();
     const order = await until(async () => (await homeView())["grid.order"], (o) => o?.indexOf(movedId) === o?.indexOf(nextId) + 1);
     check(order.indexOf(movedId) === order.indexOf(nextId) + 1, "dropping on the next window swaps their places along the strip");
   }
   await menu("session.next");
   await still();
-  await win.screenshot({ path: path.join(shots, "8-strip.png") });
+  await shot(win, "8-strip.png");
   const widths = await until(async () => (await homeView())["strip.widths"], (w) => w && Object.keys(w).length >= 1);
   check(widths && Object.keys(widths).length >= 1, "strip widths are remembered");
   } finally {
@@ -1817,7 +1823,7 @@ await scenario("sidebars", async () => {
   const storedRight = await until(async () => (await homeView()).docks?.right?.id, (id) => id === markerPane);
   await until(onBoard, (n) => n === 0, 5000);
   check((await onBoard()) === 0 && storedRight === markerPane, "Move to Right Sidebar docks the window, out of the board");
-  await win.screenshot({ path: path.join(shots, "9-sidebars.png") });
+  await shot(win, "9-sidebars.png");
   await menu("view.rightSidebar");
   await gone(".dock-right");
   await until(() => countOf(".dock-right"), (n) => n === 0, 5000);
@@ -1914,7 +1920,7 @@ check(restored === selectedBefore && !!selectedBefore, `selected terminal restor
   await menu("view.grid");
 }
 check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows survive an app restart");
-await win.screenshot({ path: path.join(shots, "7-restored.png") });
+await shot(win, "7-restored.png");
 });
 
 // The sidebar footer shows the core's health; its details restart the core, and the terminals live on.
@@ -1925,7 +1931,7 @@ await scenario("core-status", async () => {
   await button.click();
   await win.waitForSelector(".core-details .ui-kv");
   const details = await until(() => win.locator(".core-details").textContent(), (d) => /Uptime/.test(d) && /PTY host\d/.test(d) && /pid \d+/.test(d), 5000);
-  await win.screenshot({ path: path.join(shots, "7b-core-status.png") });
+  await shot(win, "7b-core-status.png");
   check(/Uptime/.test(details) && /PTY host\d/.test(details) && /pid \d+/.test(details), `core details show uptime and both processes (${details})`);
   const pidBefore = await win.evaluate(() => window.cmd.call("core.hello", {}).then((h) => h.pid));
   const clients = await win.evaluate(() => window.cmd.call("core.info", {}).then((i) => i.connections));
@@ -1962,7 +1968,7 @@ await scenario("workspaces", async () => {
   const p = await until(inWorkspace, (p) => p.length === 1 && p[0].cwd === fs.realpathSync.native(proj));
   check(p.length === 1 && p[0].cwd === fs.realpathSync.native(proj), `new terminals start at the workspace's root (${p[0]?.cwd})`);
   check((await until(() => win.title(), (t) => t === "proj", 5000)) === "proj", "the app window is titled after its workspace");
-  await win.screenshot({ path: path.join(shots, "8-workspace.png") });
+  await shot(win, "8-workspace.png");
   await menu("workspace.prev");
   await until(chip, (c) => c === "Home");
   const backTiles = await until(() => countOf(".windows-track > .tile"), (n) => n === tilesInHome);
@@ -1974,7 +1980,7 @@ await scenario("workspaces", async () => {
   const workspaceItems = () => countOf(".workspace-menu .workspace-item:not(.workspace-item-open)");
   const listed = await until(workspaceItems, (n) => n === 2, 5000);
   check(listed === 2, `the switcher's menu lists both workspaces (${listed})`);
-  await win.screenshot({ path: path.join(shots, "8-workspace-menu.png") });
+  await shot(win, "8-workspace-menu.png");
   await win.keyboard.press("Escape");
   // Change Icon…: the grid picker sets an SF Symbol on the workspace, shown in the switcher.
   await win.evaluate((id) => window.cmd.call("workspace.update", { id, icon: null }), "home");
@@ -1983,7 +1989,7 @@ await scenario("workspaces", async () => {
   await focused(".icon-picker input");
   await win.keyboard.type("leaf");
   await until(() => win.locator(".icon-picker input").inputValue(), (v) => v === "leaf"); // Enter picks from what it shows
-  await win.screenshot({ path: path.join(shots, "8-workspace-icon.png") });
+  await shot(win, "8-workspace-icon.png");
   await win.keyboard.press("Enter");
   const icon = await until(() => win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((x) => x.home).icon)), (i) => i === "leaf");
   check(icon === "leaf", `Change Workspace Icon… sets the workspace's icon (${icon})`);
@@ -2019,6 +2025,6 @@ await Promise.race([closeApp(), new Promise((r) => setTimeout(r, 30_000))]);
 await stopCore(home, { terminals: true });
 report();
 if (failures.length) console.log(`screenshots in ${shots}`);
-else console.log("all checks passed; screenshots in", shots);
+else console.log(`all checks passed${process.env.E2E_SHOTS ? `; screenshots in ${shots}` : " (E2E_SHOTS=1 for screenshots)"}`);
 // Done: don't let a handle Playwright leaves open keep us alive until the watchdog fires.
 process.exit(failures.length ? 1 : 0);
