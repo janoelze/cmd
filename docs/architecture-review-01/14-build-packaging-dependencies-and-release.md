@@ -73,10 +73,10 @@ Answers to this review's questions, in brief:
 
 **Success criteria.**
 - [ ] A tag pushed with the signing secrets removed fails the `mac` job before `gh release create` runs (demonstrated on a `-test` prerelease in a fork, or by a dry-run step).
-- [ ] `grep -n "::warning::No signing secrets" .github/workflows/build.yml` returns nothing.
-- [ ] A step compares the tag with `apps/desktop/package.json` and fails on a mismatch for non-prerelease tags.
-- [ ] A prerelease build's `app.getVersion()`, `__APP_VERSION__` and usage key all use the tag's version (asserted in `e2e/packaged.mjs` or a unit test of the version helper).
-- [ ] The release skill has a "Roll back" section.
+- [x] `grep -n "::warning::No signing secrets" .github/workflows/build.yml` returns nothing.
+- [x] A step compares the tag with `apps/desktop/package.json` and fails on a mismatch for non-prerelease tags.
+- [x] A prerelease build's `app.getVersion()`, `__APP_VERSION__` and usage key all use the tag's version (asserted in `e2e/packaged.mjs` or a unit test of the version helper).
+- [x] The release skill has a "Roll back" section.
 
 ### AR1-14-03 · Bundle each Node entry point at staging time instead of shipping a source tree
 
