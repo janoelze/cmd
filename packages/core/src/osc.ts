@@ -3,6 +3,8 @@
 // the core answers so programs that wait for them (fish, Neovim) start without
 // a window showing the terminal. Sequences may be split across chunks, so state
 // is carried between calls; kitty's OSC 99 notifications may also span sequences.
+// Where a string ends follows xterm.js: CAN and SUB abort any sequence, the 8-bit
+// C1 forms stand for their 7-bit ones, and an OSC over MAX_OSC is skipped to its end.
 
 import type { Progress } from "@cmd/protocol";
 
@@ -18,10 +20,16 @@ export type OscEvent =
 
 const ESC = "\x1b";
 const BEL = "\x07";
+const CAN = "\x18";
+const SUB = "\x1a";
 const MAX_OSC = 8192;
+/** The 8-bit C1 controls (U+0090…U+009F) that open or end strings, as the char after ESC. */
+const C1: Record<number, string> = { 0x90: "P", 0x98: "X", 0x9b: "[", 0x9c: "\\", 0x9d: "]", 0x9e: "^", 0x9f: "_" };
 
 export class OscScanner {
   #inOsc = false;
+  /** The OSC passed MAX_OSC (an inline image, a long OSC 52): dropped up to its terminator. */
+  #skipOsc = false;
   /** Inside a CSI sequence (ESC [): its parameter and intermediate bytes so far. */
   #csi: string | null = null;
   /** Inside a DCS/APC/PM/SOS string (ESC P, _, ^, X … ST): BELs there aren't bells. */
@@ -35,74 +43,95 @@ export class OscScanner {
     const out: OscEvent[] = [];
     for (let i = 0; i < chunk.length; i++) {
       const ch = chunk[i]!;
-      if (this.#inString) {
-        if (this.#pendingEsc) {
-          this.#pendingEsc = false;
-          if (ch === "\\") this.#inString = false;
-        }
-        if (ch === ESC) this.#pendingEsc = true;
-        continue;
-      }
-      if (this.#csi !== null) {
-        const c = ch.charCodeAt(0);
-        if (c >= 0x40 && c <= 0x7e) {
-          const ev = ch === "c" ? deviceQuery(this.#csi) : null;
-          if (ev) out.push(ev);
-          this.#csi = null;
-        } else if (ch === ESC) {
-          this.#csi = null;
-          this.#pendingEsc = true;
-        } else if (c >= 0x20 && this.#csi.length < 32) this.#csi += ch;
-        else if (c >= 0x20) this.#csi = null;
-        continue;
-      }
-      if (!this.#inOsc) {
-        if (this.#pendingEsc) {
-          this.#pendingEsc = false;
-          if (ch === "[") {
-            this.#csi = "";
-            continue;
-          }
-          if (ch === "]") {
-            this.#inOsc = true;
-            this.#buf = "";
-            continue;
-          }
-          if (ch === "P" || ch === "_" || ch === "^" || ch === "X") {
-            this.#inString = true;
-            continue;
-          }
-        }
-        if (ch === ESC) this.#pendingEsc = true;
-        else if (ch === BEL) out.push({ type: "bell" });
-        continue;
-      }
-      // inside OSC: terminated by BEL or ST (ESC \)
-      if (this.#pendingEsc) {
-        this.#pendingEsc = false;
-        if (ch === "\\") {
-          this.#finish(out);
-          continue;
-        }
-        this.#buf += ESC;
-      }
-      if (ch === BEL) {
-        this.#finish(out);
-      } else if (ch === ESC) {
-        this.#pendingEsc = true;
-      } else {
-        this.#buf += ch;
-        if (this.#buf.length > MAX_OSC) {
-          this.#inOsc = false;
-          this.#buf = "";
-        }
-      }
+      const c = ch.charCodeAt(0);
+      const seven = c >= 0x90 && c <= 0x9f ? C1[c] : undefined;
+      if (seven) {
+        this.#step(ESC, out);
+        this.#step(seven, out);
+      } else this.#step(ch, out);
     }
     return out;
   }
 
+  /** One char, C1 forms already turned into ESC and their 7-bit char. */
+  #step(ch: string, out: OscEvent[]): void {
+    if (ch === CAN || ch === SUB) {
+      this.#inOsc = this.#skipOsc = this.#inString = this.#pendingEsc = false;
+      this.#csi = null;
+      this.#buf = "";
+      return;
+    }
+    if (this.#inString) {
+      if (this.#pendingEsc) {
+        this.#pendingEsc = false;
+        if (ch === "\\") this.#inString = false;
+      }
+      if (ch === ESC) this.#pendingEsc = true;
+      return;
+    }
+    if (this.#csi !== null) {
+      const c = ch.charCodeAt(0);
+      if (c >= 0x40 && c <= 0x7e) {
+        const ev = ch === "c" ? deviceQuery(this.#csi) : null;
+        if (ev) out.push(ev);
+        this.#csi = null;
+      } else if (ch === ESC) {
+        this.#csi = null;
+        this.#pendingEsc = true;
+      } else if (c >= 0x20 && this.#csi.length < 32) this.#csi += ch;
+      else if (c >= 0x20) this.#csi = null;
+      return;
+    }
+    if (!this.#inOsc) {
+      if (this.#pendingEsc) {
+        this.#pendingEsc = false;
+        if (ch === "[") {
+          this.#csi = "";
+          return;
+        }
+        if (ch === "]") {
+          this.#inOsc = true;
+          this.#buf = "";
+          return;
+        }
+        if (ch === "P" || ch === "_" || ch === "^" || ch === "X") {
+          this.#inString = true;
+          return;
+        }
+      }
+      if (ch === ESC) this.#pendingEsc = true;
+      else if (ch === BEL) out.push({ type: "bell" });
+      return;
+    }
+    // inside OSC: terminated by BEL or ST (ESC \)
+    if (this.#pendingEsc) {
+      this.#pendingEsc = false;
+      if (ch === "\\") {
+        this.#finish(out);
+        return;
+      }
+      if (!this.#skipOsc) this.#buf += ESC;
+    }
+    if (ch === BEL) {
+      this.#finish(out);
+    } else if (ch === ESC) {
+      this.#pendingEsc = true;
+    } else if (!this.#skipOsc) {
+      this.#buf += ch;
+      if (this.#buf.length > MAX_OSC) {
+        this.#skipOsc = true;
+        this.#buf = "";
+      }
+    }
+  }
+
   #finish(out: OscEvent[]): void {
     this.#inOsc = false;
+    if (this.#skipOsc) {
+      this.#skipOsc = false;
+      this.#buf = "";
+      return;
+    }
     const ev = this.#buf.startsWith("99;") ? this.#kittyNotify(this.#buf.slice(3)) : parseOsc(this.#buf);
     this.#buf = "";
     if (ev) out.push(ev);

@@ -104,8 +104,8 @@ Terminals run in the **PTY host** (`packages/core/src/terminals/host.ts` 222 lin
 **Proposal.** On overflow, switch to a `#skipOsc` state that discards until BEL or ST instead of dropping to ground state; treat CAN (0x18) and SUB (0x1a) as aborting any sequence; map U+009B/U+009D/U+0090/U+009E/U+009F/U+0098 to their 7-bit equivalents and U+009C to ST. The more powerful route is to stop scanning in the core at all: the host's headless terminal already parses every byte with xterm.js's full VT500 state machine, and `registerOscHandler` works there, so the host could emit `{ev:"osc", t, code, data}` and `{ev:"bell"}`; that removes a second parse of every byte from the core's thread and keeps the two views consistent by construction. Do the S fix now; move OSC parsing to the host in the same `HOST_PROTOCOL` bump as AR1-04-01/03 if that lands.
 
 **Success criteria.**
-- [ ] `osc.test.ts` has cases for a 20 KB OSC 1337 and a 10 KB OSC 52 (no events), CAN inside an OSC (following text's BEL is a bell), and C1 OSC/ST (`\u009d0;title\u009c` → title).
-- [ ] An e2e or core test runs `printf '\e]1337;File=inline=1:%s\a' "$(head -c 30000 /dev/zero | base64)"` in a pane and no `attention` is set.
+- [x] `osc.test.ts` has cases for a 20 KB OSC 1337 and a 10 KB OSC 52 (no events), CAN inside an OSC (following text's BEL is a bell), and C1 OSC/ST (`\u009d0;title\u009c` → title).
+- [x] An e2e or core test runs `printf '\e]1337;File=inline=1:%s\a' "$(head -c 30000 /dev/zero | base64)"` in a pane and no `attention` is set.
 
 ### AR1-04-05 · Percent-encode the whole path in zsh's OSC 7
 

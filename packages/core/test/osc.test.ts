@@ -66,6 +66,40 @@ describe("OscScanner", () => {
   });
 });
 
+describe("where a string ends, as in xterm.js", () => {
+  it("skips a 20 KB OSC 1337 inline image and a 10 KB OSC 52 copy without a bell", () => {
+    const s = new OscScanner();
+    expect(s.feed(`\x1b]1337;File=inline=1:${"A".repeat(20_000)}\x07`)).toEqual([]);
+    expect(s.feed(`\x1b]52;c;${"B".repeat(10_000)}\x07`)).toEqual([]);
+    // Split across chunks, as a PTY delivers it.
+    const big = `\x1b]1337;File=inline=1:${"C".repeat(30_000)}\x07`;
+    for (let i = 0; i < big.length; i += 4096) expect(s.feed(big.slice(i, i + 4096))).toEqual([]);
+    expect(s.feed("\x07")).toEqual([{ type: "bell" }]);
+  });
+
+  it("parses the next OSC after one that overflowed and ended with ST", () => {
+    const s = new OscScanner();
+    expect(s.feed(`\x1b]1337;${"A".repeat(9000)}\x1b\\\x1b]0;after\x07`)).toEqual([{ type: "title", title: "after" }]);
+  });
+
+  it("aborts any sequence on CAN or SUB", () => {
+    expect(new OscScanner().feed("\x1b]0;lost\x18text\x07")).toEqual([{ type: "bell" }]);
+    expect(new OscScanner().feed("\x1b]0;lost\x1atext\x07")).toEqual([{ type: "bell" }]);
+    expect(new OscScanner().feed("\x1bPq\x18\x07")).toEqual([{ type: "bell" }]);
+    expect(new OscScanner().feed("\x1b[\x18c")).toEqual([]);
+  });
+
+  it("reads the 8-bit C1 forms as their 7-bit ones", () => {
+    expect(new OscScanner().feed("\u009d0;title\u009c")).toEqual([{ type: "title", title: "title" }]);
+    expect(new OscScanner().feed("\u009d2;t\x07")).toEqual([{ type: "title", title: "t" }]);
+    expect(new OscScanner().feed("\u0090q\x07data\u009c\x07")).toEqual([{ type: "bell" }]);
+    expect(new OscScanner().feed("\u009bc\u009b>c")).toEqual([
+      { type: "query", query: "da1" },
+      { type: "query", query: "da2" },
+    ]);
+  });
+});
+
 describe("stripAnsi", () => {
   it("removes colors, OSC and carriage returns", () => {
     expect(stripAnsi("\x1b]0;t\x07\x1b[1;32mok\x1b[0m\r\nnext")).toBe("ok\nnext");

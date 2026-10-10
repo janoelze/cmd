@@ -86,6 +86,22 @@ describe("core over the socket", () => {
     await conn.client.call("pane.kill", { paneId: pane.id });
   });
 
+  it.runIf(process.platform !== "win32")("doesn't ring the bell for an inline image longer than an OSC may be", async () => {
+    const out: string[] = [];
+    const pane = core.panes.create({
+      cwd: dir,
+      command: `printf '\\e]1337;File=inline=1:%s\\a' "$(head -c 30000 /dev/zero | base64)"; echo IMG-DONE; read -r _; printf '\\a'; echo BELL-DONE; sleep 5`,
+    });
+    core.panes.on("output", (id, data) => void (id === pane.id && out.push(data)));
+    await until(() => out.join("").includes("IMG-DONE"));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(core.panes.get(pane.id)!.attention).toBeNull();
+    // A plain bell afterwards still marks it, so the path above was live.
+    core.panes.write(pane.id, "\r");
+    await until(() => core.panes.get(pane.id)?.attention?.kind === "bell");
+    core.panes.kill(pane.id);
+  });
+
   it("ingests hooks for a pane and reports errors as RPC errors", async () => {
     const pane = await conn.client.call("pane.create", { cwd: dir });
     // Hooks come from an agent already in the foreground; a shell that is still
