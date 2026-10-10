@@ -772,14 +772,17 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const termId = await term.getAttribute("data-pane");
     await win.evaluate((id) => window.__cmdSelect(id), termId);
     await term.locator(".xterm").click();
+    // Typed only once the terminal has focus, and given 10 s to echo: 3 s ran out on a busy CI runner.
+    const focused = await win.waitForFunction((id) => document.activeElement?.closest(`.tile[data-pane="${id}"] .xterm`), termId, { timeout: 3000 }).then(() => true, () => false);
     await win.keyboard.type("echo still-live-$((6*7))");
     await win.keyboard.press("Enter");
     let text = "";
-    for (let i = 0; i < 30 && !text.includes("still-live-42"); i++) {
+    for (let i = 0; i < 100 && !text.includes("still-live-42"); i++) {
       await win.waitForTimeout(100);
       text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 50 }).then((r) => r.text), termId);
     }
-    check(text.includes("still-live-42") && (await win.locator(".topbar, .statusbar").count()) > 0, "with one window broken, the rest of the app renders and a terminal takes input");
+    const screen = text.trim().split("\n").slice(-3).join(" ⏎ ");
+    check(text.includes("still-live-42") && (await win.locator(".topbar, .statusbar").count()) > 0, `with one window broken, the rest of the app renders and a terminal takes input (focused: ${focused}; screen: ${screen})`);
     await win.screenshot({ path: path.join(shots, "10b-error-boundary.png") });
     await win.evaluate((id) => window.__cmdBreakView(id, false), broken.id);
     await fallback.locator("button", { hasText: "Reload Window" }).click();
