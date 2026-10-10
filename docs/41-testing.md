@@ -294,6 +294,60 @@ flakiness study. Nothing contradicts the plan; four points sharpen it.
 - A reliability run, not a gate: a nightly job runs the smoke suite several times in CI's
   shape and reports the per-check flake rate, so flakes are found there, not on a push.
 
+## Speed hacks
+
+Measured on 2026-10-10 against master in CI's screen shape (`E2E_SCREEN=ci`): `pnpm build`
+5 s, `e2e/smoke.mjs` 71 s for 184 checks. Most of it is waiting:
+
+| Where the 71 s go | About |
+|---|---|
+| `still()` minimums (29 calls × 300–800 ms) plus their 200 ms "read twice" confirmation | 19 s |
+| Literal `waitForTimeout`s | 5 s |
+| 38 screenshots at about 200 ms each | 7 s |
+| The app restart block: debounced-save polls, quit, relaunch with 9 restored windows | 12 s |
+| Checks that take 1–3 s each (Select All's retry, drags, resizing) | 15 s |
+| Actual work: 138 steps under 300 ms | 10 s |
+
+Launch to a ready core is 0.6 s. Electron exits in 141 ms; `app.close()` resolving takes
+4 s because Playwright waits for stdio pipes the detached core inherited, which the script
+sidesteps by waiting for the exit event instead. A broken check takes 20–30 s to report
+(two 10 s `until()` deadlines, or Playwright's 30 s locator default).
+
+Biggest payoff first:
+
+1. **Shard across app instances.** The sections are independent. Four Playwright workers,
+   each launching its own app with its own `CMD_HOME` (what worktrees already do), turn
+   71 s into about 20 s wall with no per-check work. In CI, 2–3 shards in a job that runs
+   beside packaging.
+2. **Fake the clock.** `page.clock.install()` at launch, `clock.runFor(400)` after anything
+   that glides or debounces. The motion engine runs on `requestAnimationFrame` and
+   `performance.now`, which the clock fakes, so a glide completes at once and the same way
+   on every machine. Removes the 19 s of `still()` and the 250 ms view-save debounce waits,
+   and is also the fix for the timing flakes.
+3. **Screenshots off by default.** On failure only, or behind `E2E_SHOTS=1` for the docs
+   run. 7 s.
+4. **Seed state, don't click it into existence.** Nine windows for the strip check come
+   from one `window.open` loop over RPC; onboarding is seeded as seen for every scenario
+   but the onboarding one (the remote e2e does this already). Only the check that is about
+   the menu goes through the menu.
+5. **Cheap shells.** Each new terminal starts a login zsh with the user's rc. For the test
+   home, `shell.login` false and `ZDOTDIR` on an empty fixture: a terminal is ready in tens
+   of milliseconds, not a second, and the same on every machine.
+6. **Fail fast.** Default locator timeout 5 s, `until()` deadlines 5 s. A broken check then
+   reports in 5 s instead of 20–30. Doesn't speed up a pass; halves every iteration on a
+   failure.
+7. **Run one section.** `--only <section>` as `motion.mjs` has, and skip the build when the
+   output is newer than the sources. One check iterates in under 10 s.
+8. **Keep the app warm while iterating.** Launch once with `--remote-debugging-port`,
+   attach with `chromium.connectOverCDP` and rerun only the section being edited against
+   the live app: 1–2 s per iteration. Local only.
+9. **CI plumbing.** Cache the Electron download with the pnpm store; run smoke in its own
+   job so its minutes overlap packaging's two instead of preceding them.
+
+Items 1 to 3 alone take the suite from 71 s to roughly 15 s wall. The measurement recipe:
+pipe the run through a script that prefixes each line with the time since the previous
+one, and make `step()` print any gap over 500 ms with the step before and after.
+
 ## Open
 
 - **Same-frame drag release ignored.** d18aa33e slowed the test's drag because a move and
