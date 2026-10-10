@@ -20,6 +20,22 @@ cd "$(dirname "$0")/.."
 pnpm --filter @cmd/relay build
 pnpm --filter @cmd/web build
 
+# The bundle must start before it replaces the running relay: a dependency esbuild
+# can't follow (a UMD file's relative require) only fails when node loads it.
+check_dir=$(mktemp -d)
+check_port=$((20000 + RANDOM % 20000))
+HOST=127.0.0.1 PORT=$check_port RELAY_STATE="$check_dir/routes.json" node apps/relay/dist/relay.mjs &
+check_pid=$!
+ok=""
+for i in $(seq 1 20); do
+  if curl -fsS "http://127.0.0.1:$check_port/health" >/dev/null 2>&1; then ok=1; break; fi
+  kill -0 "$check_pid" 2>/dev/null || break
+  sleep 0.5
+done
+kill "$check_pid" 2>/dev/null || true
+rm -rf "$check_dir"
+[ -n "$ok" ] || { echo "relay: the bundle doesn't start, not deploying" >&2; exit 1; }
+
 ssh "$HOST" "mkdir -p ~/cmd-relay ~/cmd-relay-data /var/www/virtual/\$USER/$CLIENT_DOMAIN"
 rsync -az apps/relay/dist/relay.mjs "$HOST:cmd-relay/relay.mjs"
 rsync -az --delete apps/web/dist/ "$HOST:/var/www/virtual/janoelze/$CLIENT_DOMAIN/"
