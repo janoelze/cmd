@@ -5,7 +5,7 @@
 // coordinates; the strip scrolls and the canvas pans/zooms (WindowsView
 // transforms the track).
 
-import { gridShape } from "./model.ts";
+import { gridShape, moveInOrder } from "./model.ts";
 import { layout as stripSlots } from "./strip.ts";
 
 export type ViewMode = "focus" | "grid" | "strip" | "canvas";
@@ -43,6 +43,17 @@ export interface Spacing {
   x: number;
   y: number;
   gap: number;
+}
+
+/**
+ * The order after dropping `id` at (x, y) in content coordinates: `order` with it moved to
+ * the slot under the pointer, or `order` itself when that changes nothing. Both the preview
+ * while dragging and the release use it, so a release lands where the pointer ends even
+ * when no frame has rendered since the last move.
+ */
+export function dropOrder(lay: Pick<Layout, "dropIndex">, order: string[], id: string, x: number, y: number): string[] {
+  const idx = lay.dropIndex(x, y);
+  return idx >= 0 && order.indexOf(id) !== idx ? moveInOrder(order, id, idx) : order;
 }
 
 export function gridLayout(ids: string[], vp: Viewport, sp: Spacing): Layout {

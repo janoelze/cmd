@@ -533,9 +533,24 @@ if (process.platform !== "win32") {
 const panesOrder = async () => (await homeView())["grid.order"];
 const order0 = await panesOrder();
 await still();
-{ const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0], { steps: 10 }); }
+// A flick: press, one move and the release in one task, so no frame renders in between
+// (the drop is decided from the release's position, not from a preview a render later).
+{
+  const t = await visualTiles();
+  const [from, to] = [await t[1].getAttribute("data-pane"), await t[0].getAttribute("data-pane")];
+  await win.evaluate(([from, to]) => {
+    const title = document.querySelector(`.tile[data-pane="${from}"] .tile-title`);
+    const s = title.getBoundingClientRect();
+    const d = document.querySelector(`.tile[data-pane="${to}"]`).getBoundingClientRect();
+    const at = (x, y) => ({ bubbles: true, cancelable: true, composed: true, pointerId: 1, isPrimary: true, pointerType: "mouse", button: 0, buttons: 1, clientX: x, clientY: y });
+    const [sx, sy, dx, dy] = [s.left + 40, s.top + s.height / 2, d.left + d.width / 2, d.top + d.height / 2];
+    title.dispatchEvent(new PointerEvent("pointerdown", at(sx, sy)));
+    window.dispatchEvent(new PointerEvent("pointermove", at(dx, dy)));
+    window.dispatchEvent(new PointerEvent("pointerup", { ...at(dx, dy), buttons: 0 }));
+  }, [from, to]);
+}
 const order1 = await until(panesOrder, (o) => Array.isArray(o) && JSON.stringify(o) !== JSON.stringify(order0));
-check(Array.isArray(order1) && order1.length === 2, `dragging a tile onto another reorders the grid (${JSON.stringify(order1?.map((x) => x.slice(0, 4)))})`);
+check(Array.isArray(order1) && order1.length === 2, `a tile flicked onto another (move and release in one frame) reorders the grid (${JSON.stringify(order1?.map((x) => x.slice(0, 4)))})`);
 // Let the windows glide into their new places first: mid-animation, positions (and so the drag target) are stale.
 await win.waitForFunction(() => !document.querySelector(".tile[data-morphing], .tile.lifted"), null, { timeout: 10_000 }).catch(() => {});
 await still(400);
@@ -544,7 +559,7 @@ await still(400);
 let order2 = order1;
 for (let attempt = 0; attempt < 3 && JSON.stringify(order2) === JSON.stringify(order1); attempt++) {
   if (attempt) await still();
-  { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0], { steps: 10 }); }
+  { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0]); }
   order2 = await until(panesOrder, (o) => JSON.stringify(o) !== JSON.stringify(order1), 5000);
 }
 check(order2[0] === order1[1] && order2[1] === order1[0], "dragging back swaps the slots again");

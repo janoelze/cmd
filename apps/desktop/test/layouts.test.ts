@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusLayout, gridLayout, stripLayout } from "../src/renderer/src/layouts.ts";
+import { dropOrder, focusLayout, gridLayout, stripLayout } from "../src/renderer/src/layouts.ts";
 
 const vp = { w: 1000, h: 600 };
 const even = { x: 8, y: 8, gap: 8 };
@@ -66,5 +66,20 @@ describe("focus layout", () => {
     expect(l.rects.get("a")).toEqual({ x: 8, y: 8, w: 984, h: 584 });
     expect(l.chrome).toBe(true);
     expect(l.dropIndex(1, 1)).toBe(-1);
+  });
+});
+
+describe("dropOrder", () => {
+  const order = ["a", "b", "c"];
+  const l = gridLayout(order, vp, even);
+
+  it("moves the dragged window to the slot under the pointer", () => {
+    expect(dropOrder(l, order, "b", 100, 100)).toEqual(["b", "a", "c"]);
+    expect(dropOrder(l, order, "a", 900, 500)).toEqual(["b", "c", "a"]);
+  });
+
+  it("keeps the order itself when the drop changes nothing", () => {
+    expect(dropOrder(l, order, "b", 900, 100)).toBe(order);
+    expect(dropOrder(focusLayout(order, "a", vp, even), order, "b", 100, 100)).toBe(order);
   });
 });

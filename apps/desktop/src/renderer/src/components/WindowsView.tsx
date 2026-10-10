@@ -26,8 +26,8 @@ import { EmptyState, ErrorBoundary, GLIDE_MS, PageDots, tween, Window, WindowBod
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
-import { canvasLayout, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type Spacing, type ViewMode } from "../layouts.ts";
-import { arrangeTiles, labelOf, moveInOrder, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
+import { canvasLayout, dropOrder, focusLayout, gridLayout, stripLayout, type Layout, type Rect, type Spacing, type ViewMode } from "../layouts.ts";
+import { arrangeTiles, labelOf, needsYou, windowIdOf, type SidebarRow } from "../model.ts";
 import { viewFor } from "../windows/registry.ts";
 import { brokenView, useBrokenView } from "../windows/break.ts";
 import { useStoreValue } from "../store.ts";
@@ -666,9 +666,9 @@ export function WindowsView(p: Props) {
     const root = rootRef.current;
     if (!drag || !root) return;
     const r = root.getBoundingClientRect();
-    const idx = lay.dropIndex(drag.x - r.left + offsetRef.current, drag.y - r.top);
     const current = preview ?? settled;
-    if (idx >= 0 && current.indexOf(drag.id) !== idx) setPreview(moveInOrder(current, drag.id, idx));
+    const next = dropOrder(lay, current, drag.id, drag.x - r.left + offsetRef.current, drag.y - r.top);
+    if (next !== current) setPreview(next);
   }, []);
   useEffect(() => updateDrop(), [drag?.x, drag?.y, offset, updateDrop]);
 
@@ -735,10 +735,17 @@ export function WindowsView(p: Props) {
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", cancel);
       if (!started) return;
-      const final = live.current.preview;
+      // From the release's own position: the preview follows moves a render later, and a
+      // move and a release in the same frame (a quick flick) would otherwise drop nothing.
+      let final = live.current.preview;
+      const root = rootRef.current;
+      if (commit && !free && root) {
+        const r = root.getBoundingClientRect();
+        const { lay, preview, settled } = live.current;
+        final = dropOrder(lay, preview ?? settled, id, ev.clientX - r.left + offsetRef.current, ev.clientY - r.top);
+      }
       if (commit && final) p.onReorder(final);
       const rect = live.current.lay.rects.get(id);
-      const root = rootRef.current;
       if (free && commit && rect && root) {
         // Where the window was dropped, in world coordinates (grab offsets are on screen).
         const r = root.getBoundingClientRect();
