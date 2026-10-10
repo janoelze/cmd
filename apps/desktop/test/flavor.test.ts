@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { DEV_MARKER } from "@cmd/protocol/node";
 import { buildInstance, FLAVOR_FIELD, readFlavor } from "../src/main/flavor.ts";
 
 const desktop = path.join(import.meta.dirname, "..");
@@ -17,6 +18,12 @@ describe("buildInstance", () => {
 
   it("runs a packaged dev build as dev, whatever its name", () => {
     expect(buildInstance({ isPackaged: true, flavor: "dev" })).toBe("dev");
+  });
+
+  it("takes either marker: the package.json field or the runtime's instance file", () => {
+    expect(buildInstance({ isPackaged: true, flavor: undefined, marker: true })).toBe("dev");
+    expect(buildInstance({ isPackaged: true, flavor: "dev", marker: false })).toBe("dev");
+    expect(buildInstance({ isPackaged: true, flavor: undefined, marker: false })).toBe("release");
   });
 
   it("runs any other packaged build as release", () => {
@@ -50,7 +57,20 @@ describe("electron-builder configs", () => {
     expect(yml("electron-builder.dev.yml")).toMatch(new RegExp(`^extraMetadata:\\n(?:  .*\\n)*  ${FLAVOR_FIELD}: dev$`, "m"));
   });
 
-  it("leave release builds without one", () => {
-    expect(yml("electron-builder.yml")).not.toContain(FLAVOR_FIELD);
+  it("put the dev marker next to the core in pnpm dist builds", () => {
+    expect(yml("electron-builder.dev.yml")).toMatch(new RegExp(`^extraResources:\\n  - from: build/dev/instance\\n    to: runtime/${DEV_MARKER}$`, "m"));
+    expect(fs.readFileSync(path.join(desktop, "build/dev/instance"), "utf8").trim()).toBe("dev");
+  });
+
+  it("leave release builds without either", () => {
+    const release = yml("electron-builder.yml");
+    expect(release).not.toContain(FLAVOR_FIELD);
+    expect(release).not.toContain("extraMetadata");
+    expect(release).not.toContain("build/dev");
+    // CI packages with electron-builder.yml and only overrides the version (.github/workflows/build.yml).
+    const ci = fs.readFileSync(path.join(desktop, "../../.github/workflows/build.yml"), "utf8");
+    expect(ci).not.toContain("electron-builder.dev.yml");
+    expect(ci).not.toContain(FLAVOR_FIELD);
+    expect([...ci.matchAll(/-c\.(\S+?)=/g)].map((m) => m[1]).filter((k) => k!.startsWith("extra"))).toEqual(["extraMetadata.version", "extraMetadata.version"]);
   });
 });

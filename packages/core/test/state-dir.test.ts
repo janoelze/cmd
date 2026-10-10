@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { coreRefusal, coreRefusalLine, defaultHome, foreignHome } from "@cmd/protocol/node";
+import { codeInstance, coreRefusal, coreRefusalLine, defaultHome, foreignHome, hasDevMarker } from "@cmd/protocol/node";
 import { prepareStateDir, StateDirRefused } from "../src/data/state-dir.ts";
 import { DataStore } from "../src/data/store.ts";
 import { EVENTS_SCHEMA } from "../src/data/schema.ts";
@@ -30,17 +30,14 @@ function v1Log(home: string): string {
 }
 
 /**
- * The files in `dir` (recursively) with their bytes, to show nothing was
- * written. An empty WAL and the shared-memory index are left out: SQLite makes
- * them for a reader and can't remove them after a read-only one.
+ * Every file and folder in `dir` (recursively) with its bytes, to show nothing
+ * was written: no -wal or -shm, no copy aside, no new folder.
  */
 function snapshot(d: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const name of fs.readdirSync(d, { recursive: true }) as string[]) {
     const p = path.join(d, name);
-    const st = fs.statSync(p);
-    if (!st.isFile() || name.endsWith("-shm") || (name.endsWith("-wal") && st.size === 0)) continue;
-    out[name] = fs.readFileSync(p).toString("base64");
+    out[name] = fs.statSync(p).isFile() ? fs.readFileSync(p).toString("base64") : "dir";
   }
   return out;
 }
@@ -65,6 +62,17 @@ describe("foreignHome", () => {
     expect(foreignHome(path.join(dir, "e2e"), "release", dir)).toBeNull();
   });
 
+  it("refuses the release dir to dev code, whatever instance it runs as", () => {
+    expect(foreignHome(defaultHome("release", dir), "release", dir, "dev")).toBe("release");
+    expect(foreignHome(defaultHome("release", dir), "release", dir, "release")).toBeNull();
+    expect(foreignHome(defaultHome("dev", dir), "release", dir, "dev")).toBe("dev"); // still not a release core's
+    expect(foreignHome(path.join(dir, "e2e"), "release", dir, "dev")).toBeNull();
+  });
+
+  it("ignores case, as macOS does", () => {
+    expect(foreignHome(defaultHome("release", dir).replace("Application Support", "application support"), "dev", dir)).toBe("release");
+  });
+
   it("sees through a symlink and a trailing slash", () => {
     const release = defaultHome("release", dir);
     fs.mkdirSync(release, { recursive: true });
@@ -74,21 +82,54 @@ describe("foreignHome", () => {
   });
 });
 
+describe("codeInstance", () => {
+  it("is dev for a checkout and a pnpm dist runtime, release for any other runtime", () => {
+    expect(codeInstance(path.resolve(import.meta.dirname, "../../.."))).toBe("dev"); // this checkout (.git)
+    const runtime = path.join(dir, "runtime");
+    fs.mkdirSync(runtime);
+    fs.writeFileSync(path.join(runtime, ".checkout"), "/src/cmd\n"); // stage-runtime.mjs writes it for CI too
+    expect(hasDevMarker(runtime)).toBe(false);
+    expect(codeInstance(runtime)).toBe("release");
+    fs.writeFileSync(path.join(runtime, "instance"), "release\n");
+    expect(codeInstance(runtime)).toBe("release");
+    fs.writeFileSync(path.join(runtime, "instance"), "dev\n"); // electron-builder.dev.yml's build/dev/instance
+    expect(codeInstance(runtime)).toBe("dev");
+    expect(codeInstance(path.join(dir, "missing"))).toBe("release");
+  });
+});
+
 describe("prepareStateDir", () => {
   it("won't let a dev core migrate the installed app's event log", () => {
     const home = defaultHome("release", dir);
     v1Log(home);
     const before = snapshot(home);
-    const e = refusal(() => prepareStateDir(home, "dev", dir));
+    const e = refusal(() => prepareStateDir(home, { instance: "dev", homedir: dir }));
     expect(e.reason).toBe("foreign");
-    expect(e.forPeople).toBe("That data belongs to the installed cmd. Set CMD_HOME to another folder.");
+    expect(e.forPeople).toBe("That data belongs to the installed cmd. To try this build, set CMD_HOME to another folder.");
     expect(snapshot(home)).toEqual(before);
   });
 
   it("won't let a release core open cmd dev's state dir", () => {
     const home = defaultHome("dev", dir);
     v1Log(home);
-    expect(refusal(() => prepareStateDir(home, "release", dir)).reason).toBe("foreign");
+    expect(refusal(() => prepareStateDir(home, { instance: "release", homedir: dir })).reason).toBe("foreign");
+  });
+
+  it("won't let dev code open the installed app's data, even started as release", () => {
+    const home = defaultHome("release", dir);
+    v1Log(home);
+    const before = snapshot(home);
+    expect(refusal(() => prepareStateDir(home, { instance: "release", code: "dev", homedir: dir })).message).toMatch(/this core is release \(dev code\)/);
+    expect(snapshot(home)).toEqual(before);
+    // Release code on its own dir, and dev code on any other: fine.
+    expect(() => prepareStateDir(home, { instance: "release", code: "release", homedir: dir })).not.toThrow();
+    expect(() => prepareStateDir(path.join(dir, "e2e"), { instance: "release", code: "dev", homedir: dir })).not.toThrow();
+  });
+
+  it("refuses a dir it hasn't made yet without making it", () => {
+    const home = defaultHome("release", dir);
+    expect(refusal(() => prepareStateDir(home, { instance: "dev", homedir: dir })).reason).toBe("foreign");
+    expect(fs.existsSync(home)).toBe(false);
   });
 
   it("migrates its own instance's log, and any CMD_HOME's", () => {
@@ -97,7 +138,7 @@ describe("prepareStateDir", () => {
       [path.join(dir, "worktree", ".cmd-dev"), "dev"],
     ] as const) {
       const file = v1Log(home);
-      prepareStateDir(home, instance, dir);
+      prepareStateDir(home, { instance, homedir: dir });
       const db = new DatabaseSync(file);
       expect(schemaOf(db)).toBe(EVENTS_SCHEMA);
       db.close();
@@ -113,11 +154,12 @@ describe("prepareStateDir", () => {
     db.exec(`UPDATE meta SET value = '${EVENTS_SCHEMA + 1}' WHERE key = 'schema'; PRAGMA wal_checkpoint(TRUNCATE)`);
     db.close();
     const before = snapshot(home);
-    const e = refusal(() => prepareStateDir(home, "release", dir));
+    const e = refusal(() => prepareStateDir(home, { instance: "release", homedir: dir }));
     expect(e.reason).toBe("too-new");
     expect(e.message).toMatch(/newer cmd \(event log schema/);
-    expect(e.forPeople).toBe("The data is from a newer version of cmd. Update cmd to open it.");
-    expect(snapshot(home)).toEqual(before);
+    expect(e.forPeople).toBe("It was saved by a newer version of cmd. Update cmd to open it.");
+    expect(snapshot(home)).toEqual(before); // no -wal, -shm or .bak-v<n> either
+    expect(Object.keys(before).sort()).toEqual(["data", "data/events.sqlite"]);
   });
 
   it("refuses a cmd.sqlite from a newer cmd before touching the event log", () => {
@@ -127,9 +169,40 @@ describe("prepareStateDir", () => {
     store.db.exec(`UPDATE meta SET value = '${STORE_SCHEMA + 1}' WHERE key = 'schema'; PRAGMA wal_checkpoint(TRUNCATE)`);
     store.close();
     const before = snapshot(home);
-    const e = refusal(() => prepareStateDir(home, "release", dir));
+    const e = refusal(() => prepareStateDir(home, { instance: "release", homedir: dir }));
     expect(e.reason).toBe("too-new");
     expect(e.message).toMatch(/newer cmd \(state schema/);
+    expect(snapshot(home)).toEqual(before); // the v1 log not migrated, no copy aside, no sidecars
+    expect(Object.keys(before).sort()).toEqual(["cmd.sqlite", "data", "data/events.sqlite"]);
+  });
+});
+
+describe("a cmd.sqlite from before the schema was recorded", () => {
+  it("is opened, not refused, and left as it was", () => {
+    const home = path.join(dir, "home");
+    fs.mkdirSync(home);
+    // As 0.24 before this change wrote it: meta, without a schema (WAL, checkpointed).
+    const file = path.join(home, "cmd.sqlite");
+    const db = new DatabaseSync(file);
+    db.exec(`PRAGMA journal_mode = WAL; CREATE TABLE workspaces (id TEXT PRIMARY KEY, root TEXT NOT NULL UNIQUE, doc TEXT NOT NULL); CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO meta VALUES ('path', '${file}')`);
+    db.close();
+    const before = snapshot(home);
+    prepareStateDir(home, { instance: "release", homedir: dir });
+    expect(snapshot(home)).toEqual(before);
+    const s = new Store(file);
+    expect(s.db.prepare(`SELECT value FROM meta WHERE key = 'schema'`).get()).toEqual({ value: String(STORE_SCHEMA) });
+    s.close();
+  });
+
+  it("is opened when it's a 0.23 one, with spaces and no meta", () => {
+    const home = path.join(dir, "home");
+    fs.mkdirSync(home);
+    const file = path.join(home, "cmd.sqlite");
+    const db = new DatabaseSync(file);
+    db.exec(`CREATE TABLE spaces (id TEXT PRIMARY KEY, root TEXT NOT NULL UNIQUE, doc TEXT NOT NULL)`);
+    db.close();
+    const before = snapshot(home);
+    prepareStateDir(home, { instance: "release", homedir: dir });
     expect(snapshot(home)).toEqual(before);
   });
 });
@@ -160,8 +233,8 @@ describe("cmd.sqlite schema", () => {
 
 describe("coreRefusal", () => {
   it("finds the refusal a core printed, for the app", () => {
-    const line = coreRefusalLine("too-new", "The data is from a newer version of cmd. Update cmd to open it.");
-    expect(coreRefusal(["Node warning", line, ""])).toEqual({ reason: "too-new", text: "The data is from a newer version of cmd. Update cmd to open it." });
+    const line = coreRefusalLine("too-new", "It was saved by a newer version of cmd. Update cmd to open it.");
+    expect(coreRefusal(["Node warning", line, ""])).toEqual({ reason: "too-new", text: "It was saved by a newer version of cmd. Update cmd to open it." });
     expect(coreRefusal(["cmd core: a core is already running for /x"])).toBeNull();
   });
 });

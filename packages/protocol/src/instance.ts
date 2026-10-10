@@ -95,13 +95,23 @@ export function defaultHome(name: InstanceName, homedir = os.homedir()): string 
  * runs only on a state dir of its own instance: a dev build on the installed
  * app's data would migrate it to a schema the installed cmd can't write (and
  * the reverse). Any other $CMD_HOME (tests, e2e, worktrees) is anyone's.
+ * `code`: what the running code is (codeInstance), when it isn't `name`: dev
+ * code never opens the release state dir, whatever instance it was told to be.
  */
-export function foreignHome(home: string, name: InstanceName = instanceName(), homedir = os.homedir()): InstanceName | null {
-  const other: InstanceName = name === "dev" ? "release" : "dev";
-  return samePath(home, defaultHome(other, homedir)) ? other : null;
+export function foreignHome(home: string, name: InstanceName = instanceName(), homedir = os.homedir(), code: InstanceName = name): InstanceName | null {
+  for (const own of new Set([name, code])) {
+    const other: InstanceName = own === "dev" ? "release" : "dev";
+    if (samePath(home, defaultHome(other, homedir))) return other;
+  }
+  return null;
 }
 
-/** Two paths name one folder (symlinks resolved where they exist; case as the disk has it). */
+/** Why the app and the core won't open `other`'s state dir, for people (the app's dialog). */
+export function foreignHomeText(other: InstanceName): string {
+  return other === "release" ? "That data belongs to the installed cmd. To try this build, set CMD_HOME to another folder." : "That data belongs to cmd dev. To open other data, set CMD_HOME to another folder.";
+}
+
+/** Two paths name one folder (symlinks resolved where they exist; case ignored, as macOS and Windows do by default). */
 function samePath(a: string, b: string): boolean {
   const real = (p: string) => {
     try {
@@ -110,7 +120,32 @@ function samePath(a: string, b: string): boolean {
       return path.resolve(p);
     }
   };
-  return real(a) === real(b);
+  return real(a).toLowerCase() === real(b).toLowerCase();
+}
+
+/**
+ * The file `pnpm dist` puts next to the core it packages (Resources/runtime/instance,
+ * from electron-builder.dev.yml), saying "dev". A release runtime (CI) has none.
+ */
+export const DEV_MARKER = "instance";
+
+/** Whether `root` (a packaged app's Resources/runtime) has the dev marker. */
+export function hasDevMarker(root: string): boolean {
+  try {
+    return fs.readFileSync(path.join(root, DEV_MARKER), "utf8").trim() === "dev";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What the code in `root` (the folder the core runs from) is, whatever
+ * instance it was started as: dev for a git checkout (pnpm dev, pnpm core) or a
+ * `pnpm dist` runtime (hasDevMarker), else release. When unsure it says
+ * release, which refuses nothing more: a release core never gets refused by it.
+ */
+export function codeInstance(root: string): InstanceName {
+  return hasDevMarker(root) || fs.existsSync(path.join(root, ".git")) ? "dev" : "release";
 }
 
 /**

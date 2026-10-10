@@ -4,10 +4,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { cmdHome, configDir, CORE_REFUSED_EXIT, coreRefusalLine, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, logDir, logger, ptyHostSocketPath, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, codeInstance, configDir, CORE_REFUSED_EXIT, coreRefusalLine, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, logDir, logger, ptyHostSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import { Core } from "./core.ts";
 import { acquireLock } from "./lock.ts";
-import { prepareStateDir, StateDirRefused } from "./data/state-dir.ts";
+import { checkHome, prepareStateDir, StateDirRefused } from "./data/state-dir.ts";
 import { USAGE_URL } from "./usage.ts";
 import { nodePtyFactory } from "./panes.ts";
 import { adoptLoginPath } from "./loginpath.ts";
@@ -27,20 +27,39 @@ delete process.env.CMD_USAGE_KEY;
 
 // Started from a pane, the core must not take over that pane's core socket or
 // hand its agent ids on to its own shells.
+const root = path.resolve(import.meta.dirname, "../../.."); // the checkout, or a packaged app's Resources/runtime
 const flag = process.argv.find((a) => a.startsWith("--instance="))?.slice("--instance=".length);
-enterInstance(flag === "dev" || (!flag && process.env.CMD_INSTANCE === "dev") ? "dev" : "release", path.resolve(import.meta.dirname, "../../.."));
+enterInstance(flag === "dev" || (!flag && process.env.CMD_INSTANCE === "dev") ? "dev" : "release", root);
+
+/** Refused (data/state-dir.ts): one line the app shows (coreRefusalLine), then out, with nothing started. */
+function refuse(e: StateDirRefused): never {
+  console.error(`cmd core: ${e.message}`);
+  console.error(coreRefusalLine(e.reason, e.forPeople));
+  process.exit(CORE_REFUSED_EXIT);
+}
+
+// Another instance's state dir is refused before anything is made in it, not
+// even the log ($CMD_HOME/logs) or the lock; dev code (a checkout, a `pnpm dist`
+// runtime) never opens the release one, whatever --instance says.
+const home = cmdHome();
+const code = codeInstance(root);
+try {
+  checkHome(home, { code });
+} catch (err) {
+  if (err instanceof StateDirRefused) refuse(err);
+  throw err;
+}
 
 // Logs to logDir()/core.log; stdout and stderr (where the app points them) only
 // get what bypasses the logger, e.g. Node's own fatal errors.
 initLog("core", { level: instanceName() === "dev" ? "debug" : "info" });
 const log = logger("core");
-const build = sourceBuildId(path.resolve(import.meta.dirname, "../../.."));
+const build = sourceBuildId(root);
 installCrashHandlers("core", { exitOnException: true, context: () => ({ build }) });
 
 const procinfo = new ProcInfo();
 if (!procinfo.available) log.warn("native/build/procinfo missing (run pnpm install); agent detection falls back to process names");
 
-const home = cmdHome();
 fs.mkdirSync(home, { recursive: true });
 const socketPath = coreSocketPath();
 
@@ -57,20 +76,21 @@ if (!lock) {
 const pidFile = path.join(home, "core.pid");
 fs.writeFileSync(pidFile, String(process.pid));
 
-// The state dir before anything opens it (data/state-dir.ts): one of the other
-// instance is refused, an older event log is migrated now, once (a minute on a
-// 1.9 GB log; core.log says how far), a newer one refused: this cmd would write
-// rows that one can't read. Refused, the core doesn't start at all, and tells
-// the app why (coreRefusalLine, CORE_REFUSED_EXIT).
+// The state dir before anything opens it (data/state-dir.ts): a cmd.sqlite or
+// event log from a newer cmd is refused, having only been read: this cmd would
+// write rows that one can't read. An older event log is migrated now, once (a
+// minute on a 1.9 GB log; core.log says how far). Refused, the core doesn't
+// start at all, and tells the app why (coreRefusalLine, CORE_REFUSED_EXIT).
 try {
-  prepareStateDir(home);
+  prepareStateDir(home, { code });
 } catch (err) {
   const e = err as Error;
   log.error(`could not open the state dir: ${e.message}`, err);
-  console.error(e instanceof StateDirRefused ? coreRefusalLine(e.reason, e.forPeople) : `cmd core: ${e.message}`);
   fs.rmSync(pidFile, { force: true });
   lock.release();
-  process.exit(e instanceof StateDirRefused ? CORE_REFUSED_EXIT : 1);
+  if (e instanceof StateDirRefused) refuse(e);
+  console.error(`cmd core: ${e.message}`);
+  process.exit(1);
 }
 
 // The user's PATH, in the background: launch isn't held up, and commands the core runs wait for it.
@@ -92,7 +112,7 @@ const core = new Core({
   dbPath: path.join(home, "cmd.sqlite"),
   settingsPath: path.join(configDir(), "settings.json"),
   secretsPath: path.join(home, "secrets.json"),
-  devKeys: instanceName() === "dev" ? devKeys(path.resolve(import.meta.dirname, "../../..")) : undefined,
+  devKeys: instanceName() === "dev" ? devKeys(root) : undefined,
   shellRulesFile: path.join(home, "shell-open.zsh"),
   terminals,
   reconnectTerminals: host,

@@ -8,6 +8,7 @@ import fs from "node:fs";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { Agent, AgentId, AppWindow, PaneId, RemoteScope, Workspace } from "@cmd/protocol";
 import type { PaneRecord } from "./panes.ts";
+import { peek } from "./data/peek.ts";
 import { decodeAgent, decodeDoc, decodePane, decodeRemoteDevice, decodeRows, decodeWorkspace, decodeWindow } from "./stored.ts";
 
 export interface RemoteDeviceRecord {
@@ -49,16 +50,14 @@ function recordedSchema(db: DatabaseSync): number | null {
   return row ? Number(row.value) || null : null;
 }
 
-/** Throws StoreTooNew for a file from a newer cmd; reads only (a missing file stays missing). */
+/**
+ * Throws StoreTooNew for a file from a newer cmd. Reads only, and leaves no
+ * trace (data/peek.ts); a missing file stays missing, and one from before the
+ * schema was recorded passes: it is this schema or the one migrated on open.
+ */
 export function checkStoreSchema(file: string): void {
-  if (!fs.existsSync(file)) return;
-  const db = new DatabaseSync(file, { readOnly: true, timeout: 2000 });
-  try {
-    const schema = recordedSchema(db);
-    if (schema !== null && schema > STORE_SCHEMA) throw new StoreTooNew(file, schema, STORE_SCHEMA);
-  } finally {
-    db.close();
-  }
+  const schema = peek(file, recordedSchema) ?? null;
+  if (schema !== null && schema > STORE_SCHEMA) throw new StoreTooNew(file, schema, STORE_SCHEMA);
 }
 
 export class Store {

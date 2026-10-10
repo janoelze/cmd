@@ -11,8 +11,15 @@ mac:
   extraResources:
     - from: build/dev/Assets.car
       to: Assets.car
-# Into the packaged package.json: this build runs as the dev instance (src/main/flavor.ts),
-# whatever the .app is called. productName too, so app.getName() says "cmd dev" from the start.
+# Two markers make this build the dev instance, whatever the .app is called (src/main/flavor.ts).
+# Into the packaged package.json, read by Electron main; productName too, so
+# app.getName() says "cmd dev" from the start:
 extraMetadata:
   productName: cmd dev
   cmdFlavor: dev
+# And Resources/runtime/instance, read by main and by the core, which then never opens
+# the installed app's data, whatever instance it's told to be (protocol/instance.ts,
+# codeInstance). Added to electron-builder.yml's list: `extends` concatenates them.
+extraResources:
+  - from: build/dev/instance
+    to: runtime/instance

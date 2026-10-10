@@ -14,7 +14,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { KIT_FILES, SETTINGS_TEMPLATE, SYSTEM_SOUNDS, kitVersion, mediaOrigin, widgetCsp } from "@cmd/protocol";
-import { cmdHome, connect, CORE_REFUSED_EXIT, coreRefusal, coreSocketPath, enterInstance, initLog, instanceName, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, connect, CORE_REFUSED_EXIT, coreRefusal, coreSocketPath, enterInstance, foreignHome, foreignHomeText, hasDevMarker, initLog, instanceName, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { SETTINGS_TITLEBAR_HEIGHT, TOPBAR_HEIGHT, trafficLights } from "../shared/chrome.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
@@ -52,7 +52,7 @@ const checkForUpdates = () => void startUpdater().then(() => updater()).then((u)
  * to <worktree>/.cmd-dev, so worktrees never share a core. Which one a build is
  * was fixed when it was packaged (./flavor.ts), not guessed from its name.
  */
-const devBuild = buildInstance({ isPackaged: app.isPackaged, flavor: readFlavor(app.getAppPath()) }) === "dev";
+const devBuild = buildInstance({ isPackaged: app.isPackaged, flavor: readFlavor(app.getAppPath()), marker: app.isPackaged && hasDevMarker(path.join(process.resourcesPath, "runtime")) }) === "dev";
 /** Signs usage stats batches (core/usage.ts); baked in at build time, release builds only. */
 declare const __USAGE_KEY__: string;
 const USAGE_KEY = typeof __USAGE_KEY__ === "string" && !devBuild ? __USAGE_KEY__ : "";
@@ -62,6 +62,18 @@ if (devBuild) app.setName("cmd dev");
 app.userAgentFallback = app.userAgentFallback.replace(/\s(?:Electron|cmd[\w-]*)\/\S+/g, "");
 // A checkout's build; in a linked worktree that makes it its own instance (instance.ts).
 enterInstance(devBuild ? "dev" : "release", app.isPackaged ? undefined : path.resolve(import.meta.dirname, "../../../.."));
+// Never on the other instance's state dir ($CMD_HOME pointed at it): said and
+// out before anything is written there, logs and the core's runtime copy
+// included. The core refuses it as well (core/data/state-dir.ts).
+{
+  const other = foreignHome(cmdHome());
+  if (other) {
+    console.error(`cmd: ${cmdHome()} is the ${other} instance's state dir; not opening it`);
+    dialog.showErrorBox("cmd couldn't open its data", foreignHomeText(other));
+    app.exit(CORE_REFUSED_EXIT);
+    process.exit(CORE_REFUSED_EXIT);
+  }
+}
 
 // Logs: main.log, renderer.log and (from the core) core.log in logDir(), see
 // protocol/log.ts. The core learns the app's version from this and its instance
@@ -194,7 +206,8 @@ async function checkCoreBuild(): Promise<void> {
 function coreRoot(): string {
   if (!app.isPackaged) return repoRoot;
   const base = path.join(cmdHome(), "runtime");
-  const dir = path.join(base, sourceBuildId(repoRoot));
+  // A dev build's copy (it has the dev marker) is named apart: a release core of the same source never runs from it.
+  const dir = path.join(base, sourceBuildId(repoRoot) + (hasDevMarker(repoRoot) ? "-dev" : ""));
   try {
     if (!fs.existsSync(dir)) {
       const tmp = `${dir}.tmp-${process.pid}`;
