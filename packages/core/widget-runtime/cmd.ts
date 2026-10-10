@@ -491,7 +491,14 @@ async function connectUnix(path: string): Promise<{ call(method: string, params:
       const line = buf.slice(0, i);
       buf = buf.slice(i + 1);
       if (!line.trim()) continue;
-      const msg = JSON.parse(line) as { id?: number; result?: unknown; error?: { message: string } };
+      let msg: { id?: number; result?: unknown; error?: { message: string } };
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        fail(new Error("events(): cmd sent a line that isn't JSON"));
+        sock.destroy();
+        return;
+      }
       const w = msg.id === undefined ? undefined : waiting.get(msg.id);
       if (!w) continue; // an event or another answer
       waiting.delete(msg.id!);

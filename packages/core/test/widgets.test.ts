@@ -4,6 +4,7 @@
 
 import fs from "node:fs";
 import http from "node:http";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -211,7 +212,7 @@ describe.skipIf(noDeno)("data.ts in Deno", () => {
   it("lets data.ts read cmd's event log through the widgets socket, with the run's token", async () => {
     const { Core, widgetsSocketPath } = await import("../src/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
-    // A TMPDIR so long that the socket path is past what macOS connects to: /tmp (that case has its own test).
+    // With a long TMPDIR the socket path would be past what macOS connects to, so use /tmp then (the long path has its own test).
     const sockDir = fs.mkdtempSync(path.join(os.tmpdir().length > 60 ? "/tmp" : os.tmpdir(), "cmd-widgets-"));
     const core = new Core({ socketPath: path.join(sockDir, "core.sock"), dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     await core.listen();
@@ -248,6 +249,23 @@ export default async function data(): Promise<Data> {
       expect(r3.error).toMatch(/add "transcripts" to permissions.events/);
     } finally {
       await core.close();
+    }
+  });
+
+  it("reports a line from cmd that isn't JSON as events()'s error", async () => {
+    const sock = path.join(fs.mkdtempSync(path.join(os.tmpdir().length > 60 ? "/tmp" : os.tmpdir(), "cmd-w-")), "w.sock");
+    const server = net.createServer((c) => c.once("data", () => c.write("not json\n")));
+    await new Promise<void>((resolve) => server.listen(sock, resolve));
+    try {
+      const { dir, m } = widget({
+        "manifest.json": MANIFEST(),
+        "data.ts": `import { s, events } from "cmd";\nexport const schema = s.object({ n: s.number() });\nexport default async () => ({ n: (await events()).length });\n`,
+      });
+      const r = await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {}, socket: { path: sock, token: "t" } });
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(/events\(\): cmd sent a line that isn't JSON/);
+    } finally {
+      server.close();
     }
   });
 
