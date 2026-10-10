@@ -36,7 +36,7 @@ Measured on a copy of the author's release log (1.92 GB, 618,609 events since 20
 
 ### AR1-06-01 · Stop reusing `seq` after a delete
 
-- **Status:** open
+- **Status:** in progress (events-migrations)
 - **Severity:** high
 - **Effort:** M
 - **Where:** `packages/core/src/data/schema.ts:30`, `packages/core/src/data/store.ts:226-243`, `packages/core/src/data/service.ts:279-288`
@@ -79,7 +79,7 @@ Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscr
 
 ### AR1-06-03 · Give events.sqlite a migration path and the promised upcasters
 
-- **Status:** open
+- **Status:** in progress (events-migrations)
 - **Severity:** medium
 - **Effort:** M
 - **Where:** `packages/core/src/data/schema.ts:7`, `packages/protocol/src/events.ts:5-15`, `packages/core/src/data/store.ts:81-115`, `packages/core/src/data/sources/ingest.ts:76`, `packages/core/src/core.ts:544-553`
@@ -137,7 +137,7 @@ Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscr
 
 ### AR1-06-06 · Take search off the core thread and stop joining every match
 
-- **Status:** open
+- **Status:** in progress (search-worker)
 - **Severity:** high
 - **Effort:** M
 - **Where:** `packages/core/src/data/views/search.ts:100-126,134-139,195-209`, `packages/core/src/data/store.ts:334-343`

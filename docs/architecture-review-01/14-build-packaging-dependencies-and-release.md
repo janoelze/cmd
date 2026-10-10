@@ -41,7 +41,7 @@ Answers to this review's questions, in brief:
 
 ### AR1-14-01 · Run dev, tests and release on one Node major: Electron's
 
-- **Status:** open
+- **Status:** in progress (release-gate)
 - **Severity:** high
 - **Effort:** S (< ½ day)
 - **Where:** `package.json:8-12`, `package.json:20` (`devDependencies["@types/node"]`), `apps/desktop/src/main/index.ts:329-334`, `.github/workflows/build.yml:55-58`, `CLAUDE.md:32`
@@ -60,7 +60,7 @@ Answers to this review's questions, in brief:
 
 ### AR1-14-02 · Make a tag build fail rather than publish a release users can't update to
 
-- **Status:** open
+- **Status:** in progress (release-gate)
 - **Severity:** high
 - **Effort:** S (< ½ day)
 - **Where:** `.github/workflows/build.yml:125-131`, `.github/workflows/build.yml:132-133`, `apps/desktop/electron.vite.config.ts:55-60`, `apps/desktop/electron.vite.config.ts:94`, `scripts/release.mjs:41-49`
