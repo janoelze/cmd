@@ -82,7 +82,7 @@ packages/cli (`cmd`, hook entry point)              ──┼─ newline-delimit
 ## Tests
 
 - Tests live in `packages/*/test` and `apps/*/test`. Core tests construct a `Core` directly with `dbPath: null`/`settingsPath: null` (in-memory) and either `fakeFactory()` from `packages/core/test/fake-pty.ts` or real PTYs for integration tests.
-- `e2e/smoke.mjs` launches the built app against a throwaway `CMD_HOME` (`.cmd-dev/e2e`) with fixture transcripts (`CMD_TRANSCRIPTS_HOME`) and drives it through the real menu bar.
+- `e2e/smoke.mjs` launches the built app against a throwaway `CMD_HOME` (`.cmd-dev/e2e`) with fixture transcripts (`CMD_TRANSCRIPTS_HOME`) and drives it through the real menu bar. Rules for new tests (no fixed waits, where a behaviour's test belongs): docs/41-testing.md.
 
 ## Conventions
 
