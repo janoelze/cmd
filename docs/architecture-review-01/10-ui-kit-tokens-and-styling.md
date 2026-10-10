@@ -30,7 +30,7 @@
 
 ### AR1-10-01 · Make Dialog actually modal: trap focus and make the page behind it inert
 
-- **Status:** in progress (modal-dialog)
+- **Status:** done (787ae813)
 - **Severity:** high
 - **Effort:** S (< ½ day)
 - **Where:** `packages/ui/src/overlay.tsx:323-420`, `packages/ui/src/overlay.tsx:68-130`

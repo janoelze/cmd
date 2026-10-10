@@ -91,7 +91,7 @@ A Magic widget is a folder under `$CMD_HOME/widgets/<id>/` (`widgets/store.ts`, 
 
 ### AR1-11-04 · Pin, verify and ask before installing Deno
 
-- **Status:** in progress (deno-pin)
+- **Status:** done (9e174a58)
 - **Severity:** high
 - **Effort:** S
 - **Where:** `packages/core/src/widgets/deno.ts:46-62`, `packages/core/src/magic/service.ts:268-280`

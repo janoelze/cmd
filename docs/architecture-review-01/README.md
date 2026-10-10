@@ -146,13 +146,13 @@ This is the recommended order. Each wave can run in parallel worktrees; within a
 | AR1-06-04 | ~~Key-aware secret redaction~~ done |
 | AR1-11-11 | ~~Magic's tools can't read cmd's secrets (follow-up to AR1-12-01)~~ done |
 | AR1-06-05 | ~~Widget data policy (interim, before theme 1 lands)~~ done |
-| AR1-11-04 | Pin, verify and ask before installing Deno |
-| AR1-09-01, AR1-09-02 | Browser permission policy; navigation guards on app windows |
+| AR1-11-04 | ~~Pin, verify and ask before installing Deno~~ done |
+| AR1-09-01, AR1-09-02 | ~~Browser permission policy; navigation guards on app windows~~ done |
 | AR1-08-01 | ~~Error boundaries, so one view can't blank a window~~ done |
 | AR1-14-02 | A tag build without signing fails instead of publishing |
 | AR1-14-01 | One Node major for dev, CI and release |
 | AR1-05-01 | ~~Another agent kind's hooks stay out of the pane's agent~~ done |
-| AR1-10-01 | Dialogs trap focus |
+| AR1-10-01 | ~~Dialogs trap focus~~ done |
 | AR1-04-04, AR1-04-05 | ~~Spurious bell on long OSC; zsh OSC 7 encoding~~ done |
 | AR1-16-01 (M) | Stop rewriting past journal days with the expensive tier |
 
