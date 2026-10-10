@@ -25,10 +25,11 @@ import {
 } from "../src/magic/index.ts";
 import type { BackendRun } from "../src/ai/backends.ts";
 import { denoNet, denoRunArgs } from "../src/widgets/deno.ts";
+import { needs, SYSTEM_TIMEOUT } from "../../../test/system.ts";
 
 const DENO = findDeno();
-// CI installs the pinned Deno (build.yml) and sets this, so the suites below can't skip there unnoticed.
-if (process.env.CMD_REQUIRE_DENO === "1" && !DENO) throw new Error("CMD_REQUIRE_DENO is set but no Deno was found");
+// CI installs the pinned Deno (build.yml), and needs() fails there without it rather than skipping.
+const noDeno = needs(DENO, "Deno (on PATH, or ~/.deno/bin; `brew install deno`)");
 const sandbox = sandboxAvailable() ? ("required" as const) : ("off" as const);
 const tmp = (p = "cmd-widgets-") => fs.mkdtempSync(path.join(os.tmpdir(), p));
 const denoEnv = () => ({ deno: DENO!, denoDir: path.join(os.tmpdir(), "cmd-test-deno"), sandbox });
@@ -171,7 +172,7 @@ describe("widget store", () => {
   });
 });
 
-describe.skipIf(!DENO)("data.ts in Deno", () => {
+describe.skipIf(noDeno)("data.ts in Deno", () => {
   let server: http.Server;
   let port = 0;
   beforeAll(async () => {
@@ -352,7 +353,7 @@ function scripted(turns: { calls?: { name: string; input: Record<string, unknown
 const write = (p: string, content: string) => ({ name: "write_file", input: { path: p, content } });
 const WIDGET_CALLS = (data = DATA()) => [write("manifest.json", MANIFEST()), write("data.ts", data), write("view.html", VIEW_HTML), write("view.ts", VIEW_TS), { name: "check", input: {} }, { name: "run_data", input: {} }, { name: "preview", input: {} }];
 
-describe.skipIf(!DENO)("buildWidget", () => {
+describe.skipIf(noDeno)("buildWidget", () => {
   const ctx = (): VerifyContext => ({ store: new WidgetStore(tmp()), id: "w", deno: denoEnv(), previewer: fakePreviewer, cwd: os.tmpdir() });
 
   it("builds a widget with the tools and accepts it once cmd's own check passes", async () => {
@@ -395,12 +396,13 @@ describe.skipIf(!DENO)("buildWidget", () => {
   });
 });
 
-describe.skipIf(!DENO)("Magic widgets in the core", () => {
+describe.skipIf(noDeno)("Magic widgets in the core", () => {
   beforeAll(() => void (process.env.CMD_MAGIC_UNSANDBOXED = "1"));
   afterAll(() => void delete process.env.CMD_MAGIC_UNSANDBOXED);
 
   let dump: (() => unknown) | null = null;
-  const until = async (cond: () => boolean, ms = 8000) => {
+  // The shared until, with what the window was doing when it timed out.
+  const until = async (cond: () => boolean, ms = SYSTEM_TIMEOUT) => {
     const end = Date.now() + ms;
     while (!cond()) {
       if (Date.now() > end) throw new Error("timed out" + (dump ? ": " + JSON.stringify(dump()).slice(0, 1500) : ""));
@@ -467,7 +469,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     expect(fs.readFileSync(path.join(info.dir, "data.ts"), "utf8")).toBe(DATA(3));
 
     fs.writeFileSync(path.join(info.dir, "view.html"), '<div id="n" class="k-big">–</div>');
-    await until(() => state().revision === 4, 5000);
+    await until(() => state().revision === 4);
     expect(String(state().html)).toContain("k-big");
     expect((core.handlers["magic.widget"]({ id }) as unknown as { revisions: { prompt: string }[] }).revisions.at(-1)!.prompt).toBe("Edited by hand");
     await core.close();
@@ -601,7 +603,7 @@ describe.skipIf(!DENO)("Magic widgets in the core", () => {
     // Closing one copy keeps watching for the other.
     core.handlers["window.close"]({ id });
     fs.writeFileSync(path.join(core.magic.store.dir(widgetId), "view.html"), '<div id="n" class="k-huge">–</div>');
-    await until(() => copyState().revision === 3, 5000);
+    await until(() => copyState().revision === 3);
     expect(String(copyState().html)).toContain("k-huge");
     await core.close();
   });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PaneManager } from "../src/panes.ts";
 import { ProcessSampler, processName, ResourceMonitor, usageChanged } from "../src/resources.ts";
 import { ProcInfo } from "../src/agents/procinfo.ts";
+import { needs } from "../../../test/system.ts";
 import { fakeFactory } from "./fake-pty.ts";
 
 describe("ResourceMonitor", () => {
@@ -67,7 +68,8 @@ describe("ProcessSampler", () => {
     expect((await s.sample([1], 3000)).get(1)!.cpu).toBe(50);
   });
 
-  it.runIf(process.platform === "darwin" && new ProcInfo().available)("samples real processes with the procinfo helper", async () => {
+  // The helper is native/procinfo.c, macOS only.
+  it.skipIf(process.platform !== "darwin" || needs(new ProcInfo().available, "procinfo helper (pnpm install builds native/build/procinfo)"))("samples real processes with the procinfo helper", async () => {
     const p = new ProcInfo();
     try {
       const [me] = await p.procs([process.pid, 999_999_999]);

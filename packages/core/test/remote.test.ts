@@ -10,6 +10,7 @@ import { startRelay, type Relay } from "../../../apps/relay/src/relay.ts";
 import { Core } from "../src/core.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
+import { until } from "../../../test/system.ts";
 
 const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-remote-")));
 let relay: Relay;
@@ -25,8 +26,7 @@ beforeAll(async () => {
   core.settings.set("remote.client", "https://client.test");
   await core.call("remote.enable", {});
   await core.remote.ready();
-  for (let i = 0; i < 100 && core.remote.status().state !== "online"; i++) await new Promise((r) => setTimeout(r, 20));
-  expect(core.remote.status().state).toBe("online");
+  await until("the relay link online", () => core.remote.status().state === "online");
 });
 
 afterAll(async () => {

@@ -49,21 +49,28 @@ describe("scheduler", () => {
       const stalls: { ms: number; in: string }[] = [];
       s.on("stall", (st) => stalls.push(st));
       await new Promise((r) => setTimeout(r, 60)); // the watchdog's timer is running
+      // A loaded machine can stall this process on its own while it waits: only stalls
+      // from after the mark count, and the first of them is the one the burn caused.
+      let from = stalls.length;
       const done = s.mark("rpc test.block");
       burn(STALL_MS + 80);
       done();
       await new Promise((r) => setTimeout(r, 120));
-      expect(stalls.length).toBeGreaterThanOrEqual(1);
-      expect(stalls[0]!.ms).toBeGreaterThanOrEqual(STALL_MS);
-      expect(stalls[0]!.in).toBe("rpc test.block");
+      expect(stalls.length).toBeGreaterThan(from);
+      expect(stalls[from]!.ms).toBeGreaterThanOrEqual(STALL_MS);
+      expect(stalls[from]!.in).toBe("rpc test.block");
       expect(s.longestStall()).toBe(Math.max(...stalls.map((x) => x.ms)));
       // A request answered in the middle of a job hands the name back to the job.
+      from = stalls.length;
       const endJob = s.mark("job");
       s.mark("rpc core.info")();
-      burn(STALL_MS + 40);
+      // As long as the first burn: the watchdog's tick may come due up to its 50 ms
+      // interval after the burn starts, and only lateness over STALL_MS counts.
+      burn(STALL_MS + 80);
       await new Promise((r) => setTimeout(r, 120));
       endJob();
-      expect(stalls.at(-1)!.in).toBe("job");
+      expect(stalls.length).toBeGreaterThan(from);
+      expect(stalls[from]!.in).toBe("job");
     } finally {
       s.dispose();
     }

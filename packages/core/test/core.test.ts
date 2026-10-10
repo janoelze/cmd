@@ -9,8 +9,10 @@ import { nodePtyFactory } from "../src/panes.ts";
 import { ProcInfo } from "../src/agents/procinfo.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
+import { needs, until } from "../../../test/system.ts";
 
 const procinfo = new ProcInfo();
+const noProcinfo = needs(procinfo.available, "procinfo helper (pnpm install builds native/build/procinfo)");
 
 let core: Core;
 let conn: Connection;
@@ -38,15 +40,6 @@ afterAll(async () => {
   await core?.close();
   rmTemp(dir);
 });
-
-const until = async (fn: () => boolean | Promise<boolean>, ms = 5000) => {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (await fn()) return;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  throw new Error("timed out");
-};
 
 describe("core over the socket", () => {
   it("answers hello", async () => {
@@ -79,8 +72,8 @@ describe("core over the socket", () => {
           ? 'Write-Host -NoNewline "`e]2;hello-title`a"; echo "pane=$env:CMD_PANE_ID"'
           : `printf '\\033]2;hello-title\\007'; echo "pane=$CMD_PANE_ID"`,
     });
-    await until(() => events.join("").includes(`pane=${pane.id}`));
-    await until(async () => (await conn.client.call("pane.list", {})).find((p) => p.id === pane.id)?.title === "hello-title");
+    await until("the pane's output", () => events.join("").includes(`pane=${pane.id}`));
+    await until("the OSC title", async () => (await conn.client.call("pane.list", {})).find((p) => p.id === pane.id)?.title === "hello-title");
     const { text } = await conn.client.call("pane.read", { paneId: pane.id, lines: 200 });
     expect(text).toContain(`pane=${pane.id}`);
     await conn.client.call("pane.kill", { paneId: pane.id });
@@ -90,15 +83,15 @@ describe("core over the socket", () => {
     const out: string[] = [];
     const pane = core.panes.create({
       cwd: dir,
-      command: `printf '\\e]1337;File=inline=1:%s\\a' "$(head -c 30000 /dev/zero | base64)"; echo IMG-DONE; read -r _; printf '\\a'; echo BELL-DONE; sleep 5`,
+      command: `printf '\\e]1337;File=inline=1:%s\\a' "$(head -c 30000 /dev/zero | base64)"; echo IMG-DONE; read -r _; printf '\\a'; echo BELL-DONE; sleep 60`,
     });
     core.panes.on("output", (id, data) => void (id === pane.id && out.push(data)));
-    await until(() => out.join("").includes("IMG-DONE"));
+    await until("the image", () => out.join("").includes("IMG-DONE"));
     await new Promise((r) => setTimeout(r, 200));
     expect(core.panes.get(pane.id)!.attention).toBeNull();
     // A plain bell afterwards still marks it, so the path above was live.
     core.panes.write(pane.id, "\r");
-    await until(() => core.panes.get(pane.id)?.attention?.kind === "bell");
+    await until("the bell", () => core.panes.get(pane.id)?.attention?.kind === "bell");
     core.panes.kill(pane.id);
   });
 
@@ -106,7 +99,7 @@ describe("core over the socket", () => {
     const pane = await conn.client.call("pane.create", { cwd: dir });
     // Hooks come from an agent already in the foreground; a shell that is still
     // starting would later read as "the agent exited" (slow CI machines).
-    await until(() => core.panes.foreground(pane.id)?.class.kind === "shell");
+    await until("the shell in the foreground", () => core.panes.foreground(pane.id)?.class.kind === "shell");
     const r = await conn.client.call("hook.ingest", {
       paneId: pane.id,
       agent: "claude",
@@ -121,19 +114,21 @@ describe("core over the socket", () => {
 });
 
 describe("agent detection with the native helper", () => {
-  it.skipIf(!procinfo.available)("sees an agent behind a wrapper and drops it when it exits", async () => {
-    // argv is ["sh", "-c", "sleep 2", "claude"]: like `bash …/safehouse … claude`
-    const pane = await conn.client.call("pane.create", { cwd: dir, command: "sh -c 'sleep 2; true' claude" });
-    await until(async () => (await conn.client.call("identify", { paneId: pane.id })).agent?.kind === "claude", 8000);
+  it.skipIf(noProcinfo)("sees an agent behind a wrapper and drops it when it exits", async () => {
+    // argv is ["sh", "-c", "read -r _", "claude"]: like `bash …/safehouse … claude`. It waits for
+    // a line rather than sleeping, so it can't exit before a loaded machine has seen it.
+    const pane = await conn.client.call("pane.create", { cwd: dir, command: "sh -c 'read -r _; true' claude" });
+    await until("the agent behind the wrapper", async () => (await conn.client.call("identify", { paneId: pane.id })).agent?.kind === "claude");
     const fg = (await conn.client.call("pane.list", {})).find((p) => p.id === pane.id)!.foreground;
     expect(fg).toBe("claude");
-    await until(async () => (await conn.client.call("identify", { paneId: pane.id })).agent === null, 8000);
+    core.panes.write(pane.id, "\r");
+    await until("the agent to be gone", async () => (await conn.client.call("identify", { paneId: pane.id })).agent === null);
     await conn.client.call("pane.kill", { paneId: pane.id });
-  }, 20_000);
+  });
 
-  it.skipIf(!procinfo.available)("reports the real foreground program", async () => {
-    const pane = await conn.client.call("pane.create", { cwd: dir, command: "sleep 3" });
-    await until(async () => (await conn.client.call("pane.list", {})).find((p) => p.id === pane.id)?.foreground === "sleep", 8000);
+  it.skipIf(noProcinfo)("reports the real foreground program", async () => {
+    const pane = await conn.client.call("pane.create", { cwd: dir, command: "sleep 60" }); // killed below; it must outlast a slow first look
+    await until("sleep in the foreground", async () => (await conn.client.call("pane.list", {})).find((p) => p.id === pane.id)?.foreground === "sleep");
     await conn.client.call("pane.kill", { paneId: pane.id });
   });
 });
@@ -151,14 +146,14 @@ describe("ui state", () => {
 });
 
 describe("resource usage", () => {
-  it.skipIf(!procinfo.available)("samples memory of the pane's process tree", async () => {
-    const pane = await conn.client.call("pane.create", { cwd: dir, command: "sleep 5" });
+  it.skipIf(noProcinfo)("samples memory of the pane's process tree", async () => {
+    const pane = await conn.client.call("pane.create", { cwd: dir, command: "sleep 60" }); // killed below
     await core.resources!.tick();
-    await until(async () => {
+    await until("the pane's memory", async () => {
       await core.resources!.tick();
       const p = (await conn.client.call("pane.list", {})).find((x) => x.id === pane.id);
       return !!p?.usage && p.usage.processes >= 2 && p.usage.top.some((t) => t.name === "sleep");
-    }, 8000);
+    });
     const p = (await conn.client.call("pane.list", {})).find((x) => x.id === pane.id)!;
     expect(p.usage!.memory).toBeGreaterThan(1024 * 1024);
     await conn.client.call("pane.kill", { paneId: pane.id });
@@ -166,8 +161,7 @@ describe("resource usage", () => {
 });
 
 describe("zsh shell integration", () => {
-  const zsh = fs.existsSync("/bin/zsh");
-  it.skipIf(!zsh)("reports the cwd and turns `open <folder>` into a file window; forged requests are ignored", async () => {
+  it.skipIf(needs(fs.existsSync("/bin/zsh"), "/bin/zsh"))("reports the cwd and turns `open <folder>` into a file window; forged requests are ignored", async () => {
     const target = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-open-"));
     const real = fs.realpathSync(target);
     const focused: string[] = [];
@@ -182,18 +176,18 @@ describe("zsh shell integration", () => {
       cwd: dir,
       command: `printf '\\033]777;cmd;forged;open;/tmp\\007'; cd ${JSON.stringify(target)} && open .`,
     });
-    await until(async () => (await conn.client.call("window.list", {})).some((w) => w.kind === "files"), 15000);
+    await until("the files window", async () => (await conn.client.call("window.list", {})).some((w) => w.kind === "files"));
     const files = (await conn.client.call("window.list", {})).filter((w) => w.kind === "files");
     expect(files).toHaveLength(1);
     expect(files[0]!.state.path).toBe(real);
     expect(focused).toContain(files[0]!.id);
     // zsh reports the logical path (/var/…); compare resolved paths (/private/var/…).
     const cwdOf = async () => (await conn.client.call("pane.list", {})).find((p) => p.id === pane.id)?.cwd ?? "";
-    await until(async () => fs.realpathSync(await cwdOf()) === real, 5000);
+    await until("the cwd", async () => fs.realpathSync(await cwdOf()) === real);
     await conn.client.call("window.close", { id: files[0]!.id });
     await conn.client.call("pane.kill", { paneId: pane.id });
     await conn.client.call("settings.reset", { key: "shell.program" });
-  }, 25_000); // a first zsh start on a fresh CI machine is slow
+  });
 });
 
 describe("restart", () => {
@@ -222,7 +216,7 @@ describe("restart", () => {
     await a.listen();
     const before = await connect(sock); // a client from before keeps working
     fs.unlinkSync(sock);
-    await until(() => fs.existsSync(sock));
+    await until("the socket file back", () => fs.existsSync(sock));
     const after = await connect(sock);
     expect(await after.client.call("core.hello", {})).toMatchObject({ pid: process.pid });
     expect(await before.client.call("core.hello", {})).toMatchObject({ pid: process.pid });

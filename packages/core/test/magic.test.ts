@@ -10,10 +10,13 @@ import { lintBody } from "../src/magic/lint.ts";
 import { nonPublic, type Lookup } from "../src/magic/fetch.ts";
 import { magicDenyPaths, magicPrivatePaths, realPathOf } from "../src/paths-deny.ts";
 import { requestedMedia, widgetCsp } from "@cmd/protocol";
+import { needs } from "../../../test/system.ts";
 
 const home = "/Users/test";
 // Shell commands (the run tool, command sources, the sandbox) are POSIX-only for now.
 const posix = process.platform !== "win32";
+// Applying a profile fails inside another sandbox (Agent Safehouse); CI runners can.
+const SANDBOX = "a working sandbox-exec (it can't apply a profile inside another sandbox; the profile text is still checked)";
 const level = (cmd: string) => classify(cmd, { home }).level;
 
 describe("command policy", () => {
@@ -72,7 +75,7 @@ describe("logged-in CLIs", () => {
     expect(credentialsForPrograms(["git", "/opt/homebrew/bin/gh"])).toMatchObject({ keychain: true, paths: ["~/.config/gh"] });
   });
 
-  it.skipIf(!posix)("opens only those logins in the sandbox profile", () => {
+  it.runIf(posix)("opens only those logins in the sandbox profile", () => {
     const deny = ["~/.ssh", "~/.config/gh", "~/Library/Keychains"];
     const plain = sandboxProfile({ tmp: "/tmp/x", deny, home });
     expect(plain).toContain(`(subpath "${home}/.config/gh")`);
@@ -138,7 +141,7 @@ describe("tools", () => {
     expect(list.output).toContain("f  a.txt  13");
   });
 
-  it.skipIf(!posix)("runs only read-only commands", async () => {
+  it.runIf(posix)("runs only read-only commands", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "magic-"));
     expect((await runTool("run", { why: "", command: "touch x" }, ctx(dir))).output).toMatch(/^Not run/);
     const r = await runTool("run", { why: "", command: "echo hi | tr a-z A-Z" }, ctx(dir));
@@ -148,7 +151,7 @@ describe("tools", () => {
 });
 
 describe("sandbox", () => {
-  it.skipIf(!sandboxAvailable())("blocks writes and private reads", async () => {
+  it.skipIf(needs(sandboxAvailable(), SANDBOX))("blocks writes and private reads", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "magic-sb-"));
     fs.writeFileSync(path.join(dir, "private"), "secret");
     const w = await execCommand(`echo x > ${dir}/out`, { sandbox: "required", deny: [] });
@@ -258,18 +261,13 @@ describe("cmd's own secrets (AR1-11-11)", () => {
     expect(profile).toMatch(/\(deny file-read\* \(regex #"\/\\\.cmd-dev\/\(secrets\\\.json\|/);
   });
 
-  it.skipIf(!fs.existsSync("/usr/bin/sandbox-exec"))("the profile compiles", () => {
+  it.skipIf(needs(fs.existsSync("/usr/bin/sandbox-exec"), "/usr/bin/sandbox-exec"))("the profile compiles", () => {
     // Even where it can't be applied (inside another sandbox), sandbox-exec parses it first: 65 is a syntax error.
     const r = spawnSync("/usr/bin/sandbox-exec", ["-p", sandboxProfile({ tmp: os.tmpdir(), deny: magicDenyPaths() }), "/usr/bin/true"], { encoding: "utf8" });
     if (r.status !== 0) expect(r.stderr).toMatch(/sandbox_apply/);
   });
 
-  it("a sandboxed process can't read secrets.json but can read a widget", async ({ skip }) => {
-    if (!sandboxAvailable()) {
-      const reason = "sandbox-exec can't apply a profile here (e.g. inside another sandbox); the profile text is checked above";
-      process.stderr.write(`[skip] ${reason}\n`);
-      return skip(reason);
-    }
+  it.skipIf(needs(sandboxAvailable(), SANDBOX))("a sandboxed process can't read secrets.json but can read a widget", async () => {
     const deny = magicDenyPaths();
     const secret = await execCommand(`cat "${path.join(cmdHome, "secrets.json")}"`, { sandbox: "required", deny });
     expect(secret.code).not.toBe(0);

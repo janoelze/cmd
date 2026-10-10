@@ -11,6 +11,7 @@ import { HOST_PROTOCOL, PtyHost } from "../src/terminals/host.ts";
 import { HostMismatch, RemoteBackend } from "../src/terminals/remote.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
+import { until as untilWhat } from "../../../test/system.ts";
 
 let dir: string;
 let hosts: PtyHost[];
@@ -39,13 +40,7 @@ async function startCore(db: string, sock: string, reconnect?: () => Promise<Rem
   return core;
 }
 
-const until = async (fn: () => boolean | Promise<boolean>, what = "condition") => {
-  for (let i = 0; i < 200; i++) {
-    if (await fn()) return;
-    await new Promise((r) => setTimeout(r, 10));
-  }
-  throw new Error(`timed out waiting for ${what}`);
-};
+const until = (fn: () => boolean | Promise<boolean>, what: string) => untilWhat(what, fn);
 
 describe("PTY host", () => {
   it("keeps terminals and their agents running across a core restart", async () => {

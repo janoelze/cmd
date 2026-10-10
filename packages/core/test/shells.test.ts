@@ -10,6 +10,7 @@ import { Core } from "../src/core.ts";
 import { nodePtyFactory } from "../src/panes.ts";
 import { BASH_INTEGRATION_SCRIPT, FISH_INTEGRATION_DATA_DIR, ZSH_INTEGRATION_DIR, integrate } from "../src/shells.ts";
 import { rmTemp } from "./tmp.ts";
+import { needs, until } from "../../../test/system.ts";
 
 const mac = process.platform === "darwin";
 
@@ -77,7 +78,8 @@ const CWD_FIXTURES = ["a#b", "c?d", "50%off", "ü ñ", "two words"];
 
 describe("shells to test", () => {
   const names = new Set(shells().map((s) => path.basename(s)));
-  for (const name of ["zsh", "bash", "fish"].filter((n) => !names.has(n))) it.skip(`${name} isn't installed, so its integration isn't tested`, () => {});
+  // CI has zsh and bash; fish only where someone installed it (CMD_TEST_FISH names one).
+  for (const name of ["zsh", "bash", "fish"]) if (needs(names.has(name), name, { optional: name === "fish" })) it.skip(`${name} isn't installed, so its integration isn't tested`, () => {});
 });
 
 describe.each(shells())("%s with cmd's integration", (shell) => {
@@ -126,13 +128,6 @@ describe.each(shells())("%s with cmd's integration", (shell) => {
     core.panes.on("request", (id, action, arg) => void (id === pane.id && r.requests.push([action, arg])));
     return r;
   }
-  const until = async (what: string, fn: () => boolean, ms = 10_000) => {
-    const end = Date.now() + ms;
-    while (!fn()) {
-      if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
-      await new Promise((r) => setTimeout(r, 25));
-    }
-  };
   const prompts = (r: ReturnType<typeof start>) => r.osc.filter((e) => e.type === "prompt" && e.mark === "A").length;
 
   it("loads the user's config, reports cwd, prompt marks and the running command, and opens files in cmd", async () => {
@@ -152,11 +147,11 @@ describe.each(shells())("%s with cmd's integration", (shell) => {
     await until("the running command", () => core.panes.command(r.id) === "sleep 1");
     await until("the command's end", () => core.panes.command(r.id) === null);
 
-    const n = prompts(r);
+    // Waits for the exit status itself: counting prompts raced the prompt after `sleep 1`,
+    // which can arrive after its D mark, so it was taken for the prompt after `false`.
     core.panes.write(r.id, "false\r");
-    await until("the next prompt", () => prompts(r) > n);
+    await until("false's exit status", () => r.osc.some((e) => e.type === "prompt" && e.mark === "D" && e.exitCode === 1));
     expect(r.osc).toContainEqual({ type: "prompt", mark: "C" });
-    expect(r.osc).toContainEqual({ type: "prompt", mark: "D", exitCode: 1 });
 
     core.panes.write(r.id, "open note.txt\r");
     await until("the open request", () => r.requests.length > 0);
@@ -168,7 +163,7 @@ describe.each(shells())("%s with cmd's integration", (shell) => {
       expect(hist).toContain("sleep 1");
     }
     core.panes.kill(r.id);
-  }, 30_000);
+  });
 
   it("reports folders with #, ?, %, spaces and non-ASCII in their names exactly", async () => {
     const base = path.join(home, "cwds");
@@ -183,7 +178,7 @@ describe.each(shells())("%s with cmd's integration", (shell) => {
       });
     }
     core.panes.kill(r.id);
-  }, 30_000);
+  });
 
   it("offers the command that was running before a restart", async () => {
     const r = start({ env: { CMD_RESTORE_COMMAND: "echo restored | tr a-z A-Z" } });
@@ -193,7 +188,7 @@ describe.each(shells())("%s with cmd's integration", (shell) => {
     core.panes.write(r.id, name === "bash" ? "\x1b[A\r" : "\r");
     await until("the restored command to run", () => r.out.includes("RESTORED"));
     core.panes.kill(r.id);
-  }, 30_000);
+  });
 
   it.runIf(name === "bash")("loads the terminal's history from before a restart", async () => {
     const id = "restored-pane";
@@ -205,5 +200,5 @@ describe.each(shells())("%s with cmd's integration", (shell) => {
     core.panes.write(r.id, "\x1b[A\r");
     await until("the command from history to run", () => r.out.includes("FROM-HISTORY"));
     core.panes.kill(r.id);
-  }, 30_000);
+  });
 });

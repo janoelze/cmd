@@ -24,10 +24,12 @@ The core is a separate, long-lived process. The UI connects over a Unix socket a
 ```sh
 pnpm install
 pnpm dev                     # Electron with HMR; starts a core if none is running
-pnpm test                    # vitest: unit + real-PTY integration tests
+pnpm test                    # vitest: the unit project, then the system one (--project unit|system)
 pnpm typecheck
 pnpm e2e                     # build, launch the app via Playwright, screenshots in .cmd-dev/shots
 ```
+
+`vitest.config.ts` has two projects. `unit` runs everything in-process, fully parallel. `system` holds the files that wait on real processes (PTYs and shells, the procinfo helper, Deno, sandbox-exec, Chromium, SQLite readers), two at a time, with every deadline taken from `SYSTEM_TIMEOUT` in `test/system.ts` (`until`, `repeating`): in parallel with everything else they starved each other and failed under load. A test that can't run without a capability says so with `needs(have, what)`: missing, the skip is printed (`[skip] …`); with `CI` set it fails instead, unless marked `optional` (fish).
 
 Development builds (`pnpm dev`, and `pnpm dist`, which packages "cmd dev") have a red icon and the name "cmd dev". They are the "dev" instance (`packages/protocol/src/instance.ts`): their own core and state in `~/Library/Application Support/cmd-dev` (socket in `$TMPDIR/cmd-dev`), so they never attach to the installed app's core and your real terminals. They share `~/.config/cmd` (settings, keybindings) with it and never update themselves. Setting `CMD_HOME` puts an instance's state, socket and logs in that folder instead. A development build run from a linked git worktree (not the main checkout) defaults it to `<worktree>/.cmd-dev`, so worktrees never share a core or PTY host.
 

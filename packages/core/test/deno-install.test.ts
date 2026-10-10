@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 import { afterAll, describe, expect, it } from "vitest";
 import { bundledDeno, DENO_SHA256, DENO_VERSION, installDeno } from "../src/widgets/deno.ts";
 import type { Backend } from "../src/ai/backends.ts";
+import { until as untilWhat } from "../../../test/system.ts";
 
 const mac = process.platform === "darwin";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-deno-install-"));
@@ -34,7 +35,7 @@ function fakeFetch(bytes: Buffer) {
   return { impl, urls };
 }
 
-describe.skipIf(!mac)("installDeno", () => {
+describe.runIf(mac)("installDeno", () => {
   it("downloads the pinned release, never latest", async () => {
     const { impl, urls } = fakeFetch(Buffer.from("not deno"));
     await expect(installDeno(path.join(tmp, "url"), { fetchImpl: impl })).rejects.toThrow(/doesn't match/);
@@ -72,13 +73,7 @@ describe.skipIf(!mac)("installDeno", () => {
 });
 
 describe("a build on a Mac without Deno", () => {
-  const until = async (cond: () => boolean, ms = 8000) => {
-    const end = Date.now() + ms;
-    while (!cond()) {
-      if (Date.now() > end) throw new Error("timed out");
-      await new Promise((r) => setTimeout(r, 10));
-    }
-  };
+  const until = (cond: () => boolean) => untilWhat("the build's next step", cond);
   const backend: Backend = {
     name: "fake",
     model: "fake-1",

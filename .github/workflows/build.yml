@@ -66,9 +66,9 @@ jobs:
 
       - run: pnpm typecheck
 
+      # What the system tests need (test/system.ts: needs() fails under CI rather than skipping).
       # The Deno widgets pin (DENO_VERSION in packages/core/src/widgets/deno.ts), installed by
-      # cmd's own installDeno, so its hash and signature are checked here too, and the widget
-      # suites in widgets.test.ts run against it (CMD_REQUIRE_DENO fails them rather than skipping).
+      # cmd's own installDeno, so its hash and signature are checked here too.
       - name: Deno for the widget tests
         run: |
           node --no-warnings --input-type=module -e '
@@ -76,9 +76,10 @@ jobs:
             console.log(denoVersion(await installDeno(process.env.RUNNER_TEMP)));'
           echo "$RUNNER_TEMP/runtime/deno" >> "$GITHUB_PATH"
 
+      # Playwright's Chromium, for the kit's Dialog focus tests (packages/ui/test/dialog.test.ts).
+      - run: pnpm exec playwright install chromium
+
       - run: pnpm test
-        env:
-          CMD_REQUIRE_DENO: "1"
 
       - name: Build and stage
         env:

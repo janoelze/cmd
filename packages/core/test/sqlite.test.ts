@@ -11,6 +11,7 @@ import { SqliteReader } from "../src/sqlite/worker.ts";
 import { refusedStatement, stripLeading } from "../src/sqlite/statements.ts";
 import { databaseOf, isSqliteFile, SqliteService } from "../src/sqlite/service.ts";
 import { registerBuiltins, sqliteType, targetFor, WindowTypes } from "../src/windows/index.ts";
+import { SYSTEM_TIMEOUT } from "../../../test/system.ts";
 
 const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-sqlite-")));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -144,11 +145,14 @@ describe("SqliteReader", () => {
 describe("SqliteService", () => {
   it("kills a reader stuck in a runaway query, and the next request gets a fresh one", async () => {
     const file = makeDb("runaway.sqlite");
-    const svc = new SqliteService({ timeoutMs: 700 });
+    // The guard also covers starting the fresh reader (a node process) for the second
+    // request, which took over 700 ms on a loaded machine: it is sized for that start.
+    const guard = SYSTEM_TIMEOUT / 8;
+    const svc = new SqliteService({ timeoutMs: guard });
     try {
       const t0 = Date.now();
       await expect(svc.query({ path: file, sql: "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r) SELECT count(*) FROM r" })).rejects.toThrow(/took too long/);
-      expect(Date.now() - t0).toBeLessThan(5000);
+      expect(Date.now() - t0).toBeLessThan(guard + 4300);
       expect(svc.open()).toEqual([]);
       expect((await svc.query({ path: file, sql: "SELECT count(*) FROM customers" })).rows).toEqual([[3]]);
     } finally {

@@ -9,6 +9,7 @@ import { SettingsService } from "../src/settings.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { launchCommand } from "../src/agents/tracker.ts";
 import { rmTemp } from "./tmp.ts";
+import { needs } from "../../../test/system.ts";
 
 describe("schema", () => {
   it("overlays valid user values and reports invalid ones", () => {
@@ -201,7 +202,7 @@ describe("live apply", () => {
     await core.close();
   });
 
-  it.skipIf(!fs.existsSync("/bin/zsh"))("keeps the shell `open` rules file current for running shells", async () => {
+  it.skipIf(needs(fs.existsSync("/bin/zsh"), "/bin/zsh"))("keeps the shell `open` rules file current for running shells", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-rules-"));
     const rules = path.join(dir, "shell-open.zsh");
     const { factory, ptys } = fakeFactory();

@@ -9,6 +9,7 @@ import headless from "@xterm/headless";
 import { Core } from "../src/core.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
+import { until } from "../../../test/system.ts";
 
 let dir: string;
 beforeEach(() => void (dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-restore-")))));
@@ -33,9 +34,6 @@ async function text(core: Core, paneId: string): Promise<string> {
   return lines.join("\n").trimEnd();
 }
 
-const until = async (fn: () => boolean) => {
-  for (let i = 0; i < 100 && !fn(); i++) await new Promise((r) => setTimeout(r, 20));
-};
 
 describe("restore after a core restart", () => {
   it("brings terminals back under their ids, in their folders, with their screens", async () => {
@@ -144,7 +142,7 @@ describe("restore after a core restart", () => {
     expect(b.ptys[0]!.opts.env.CMD_AGENT_ID).toBe(agent.id);
     // Typed once the shell is ready.
     b.ptys[0]!.output("\x1b]133;A\x07");
-    await until(() => b.ptys[0]!.written.length > 0);
+    await until("the restored command typed", () => b.ptys[0]!.written.length > 0);
     expect(b.ptys[0]!.written.join("")).toMatch(/--resume 'abc-123'/);
     await b.core.close();
   });

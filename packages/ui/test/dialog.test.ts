@@ -1,25 +1,21 @@
 // Dialog and Popover focus, in a real browser: the gallery's overlays page in
 // Playwright's Chromium (jsdom has no layout, inert or focus order to check).
 // A Dialog is modal: Tab stays inside, the page behind is inert, Escape closes
-// it from anywhere inside and focus goes back to where it was. Skipped when
-// Playwright's Chromium isn't installed (`pnpm exec playwright install chromium`).
+// it from anywhere inside and focus goes back to where it was. Needs Playwright's
+// Chromium (`pnpm exec playwright install chromium`; CI installs it).
 
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
+import { needs } from "../../../test/system.ts";
 
 const here = import.meta.dirname;
-const installed = existsSync(chromium.executablePath());
+const noChromium = needs(existsSync(chromium.executablePath()), "Playwright's Chromium (pnpm exec playwright install chromium)");
+if (noChromium) it.skip("Playwright's Chromium isn't installed, so Dialog and Popover focus aren't tested", () => {});
 
-// Said out loud when skipped (CI doesn't install it), so it doesn't pass as green.
-if (!installed) {
-  process.stderr.write("[skip] dialog.test.ts: Playwright's Chromium isn't installed (pnpm exec playwright install chromium), so Dialog and Popover focus aren't tested\n");
-  it.skip("Playwright's Chromium isn't installed, so Dialog and Popover focus aren't tested", () => {});
-}
-
-describe.skipIf(!installed)("Dialog and Popover focus (gallery, Chromium)", () => {
+describe.skipIf(noChromium)("Dialog and Popover focus (gallery, Chromium)", () => {
   let server: ViteDevServer;
   let browser: Browser;
   let page: Page;
@@ -102,18 +98,29 @@ describe.skipIf(!installed)("Dialog and Popover focus (gallery, Chromium)", () =
   });
 
   it("keeps the page inert when a dialog opens while another is still fading out", async () => {
-    await open();
-    await page.getByRole("button", { name: "Delete Workspace…" }).click();
-    await page.waitForSelector(".ui-dialog");
-    await page.keyboard.press("Escape");
-    // At once, while the first sheet plays its exit.
-    await page.getByRole("button", { name: "Send Feedback…" }).click();
-    expect(await page.locator(".ui-scrim[data-closing]").count()).toBe(1);
-    await page.waitForSelector(".ui-scrim[data-closing]", { state: "detached" });
-    expect(await page.locator("#root").getAttribute("inert")).not.toBeNull();
-    await page.keyboard.press("Escape");
-    await closed();
-    expect(await page.locator("#root").getAttribute("inert")).toBeNull();
+    // The exit lasts 120 ms (a timer, usePresence): a busy machine took longer than that
+    // between the Escape and the second click, and the first sheet was gone. A page with
+    // Playwright's clock, paused across both, holds the exit wherever the time goes.
+    const p = await browser.newPage({ viewport: { width: 1180, height: 900 } });
+    try {
+      await p.clock.install();
+      await p.goto(`${server.resolvedUrls!.local[0]}?theme=dark&page=overlays`);
+      await p.waitForSelector(".g-page h1");
+      await p.getByRole("button", { name: "Delete Workspace…" }).click();
+      await p.waitForSelector(".ui-dialog");
+      await p.clock.pauseAt(Date.now() + 1000); // a second on: nothing is due then
+      await p.keyboard.press("Escape");
+      await p.getByRole("button", { name: "Send Feedback…" }).click();
+      expect(await p.locator(".ui-scrim[data-closing]").count()).toBe(1);
+      await p.clock.resume();
+      await p.waitForSelector(".ui-scrim[data-closing]", { state: "detached" });
+      expect(await p.locator("#root").getAttribute("inert")).not.toBeNull();
+      await p.keyboard.press("Escape");
+      await p.waitForSelector(".ui-scrim", { state: "detached" });
+      expect(await p.locator("#root").getAttribute("inert")).toBeNull();
+    } finally {
+      await p.close();
+    }
   });
 
   it("keeps a Select inside the dialog reachable by Tab and working", async () => {

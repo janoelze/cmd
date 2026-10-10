@@ -5,7 +5,8 @@
     "packages/*/test/**/*.ts",
     "packages/tours/tours/**/*.ts",
     "apps/relay/src/**/*.ts",
-    "apps/relay/test/**/*.ts"
+    "apps/relay/test/**/*.ts",
+    "test/**/*.ts"
   ],
   // Example widgets are Deno code (deno check covers them: cmd widget check).
   // @cmd/ui is React (TSX) with its own tsconfig (pnpm --filter @cmd/ui typecheck).

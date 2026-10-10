@@ -17,6 +17,7 @@ import { findUrl } from "../src/actions/service.ts";
 import { Core } from "../src/core.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
+import { repeating, SYSTEM_TIMEOUT } from "../../../test/system.ts";
 
 let dir: string;
 
@@ -310,8 +311,8 @@ describe("service", () => {
     expect(list().actions.map((a) => a.name)).toEqual(["dev"]);
     expect(list().primary).toBe("npm:package.json:dev");
     const changed = new Promise<string>((r) => core.actions.once("changed", r));
-    write({ justfile: "test:\n  cargo test\n" });
-    expect(await changed).toBe(dir);
+    // Written again until seen: a write just after the folder's watch began can be lost (repeating's comment).
+    expect(await repeating("the folder's change", changed, () => write({ justfile: "test:\n  cargo test\n" }))).toBe(dir);
     expect(list().actions.map((a) => a.name)).toEqual(["dev", "test"]);
   });
 
@@ -354,7 +355,7 @@ describe("service", () => {
     core.actions.run(dir, list().actions[0]!.id, core.workspaces.home().id);
     // The shell's first prompt: the command is typed then.
     ptys.at(-1)!.output("\x1b]133;A\x07\x1b]133;B\x07");
-    await vi.waitFor(() => expect(ptys.at(-1)!.written.join("")).toContain("claude --model opus /triage"));
+    await vi.waitFor(() => expect(ptys.at(-1)!.written.join("")).toContain("claude --model opus /triage"), { timeout: SYSTEM_TIMEOUT / 2 });
   });
 
   it("knows the repository's worktrees and what runs in the others", async () => {
@@ -401,7 +402,7 @@ describe("service", () => {
     vi.spyOn(core.ai, "object").mockResolvedValue({ value: { actions: [{ id: "npm:package.json:dev", ...answer.actions["npm:package.json:dev"]! }], primary: null, suggested: answer.suggested } as never, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, model: "fast" });
     const service = core.actions as unknown as { list: typeof core.actions.list };
     expect(service.list(dir).actions[0]!.description).toBeUndefined();
-    await vi.waitFor(() => expect(service.list(dir).actions[0]!.description).toBe("Start the dev server"), { timeout: 4000 });
+    await vi.waitFor(() => expect(service.list(dir).actions[0]!.description).toBe("Start the dev server"), { timeout: SYSTEM_TIMEOUT / 2 });
     expect(service.list(dir).suggested.map((s) => s.command)).toEqual(["make db"]);
     core.settings.set("actions.describe", false);
     expect(service.list(dir).actions[0]!.description).toBeUndefined();

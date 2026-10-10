@@ -6,6 +6,7 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { loginShellPath, mergePath } from "../src/loginpath.ts";
 import { rmTemp } from "./tmp.ts";
+import { needs } from "../../../test/system.ts";
 
 const posix = process.platform !== "win32";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-loginpath-"));
@@ -39,7 +40,7 @@ describe("mergePath", () => {
   });
 });
 
-describe.skipIf(!posix)("loginShellPath", () => {
+describe.runIf(posix)("loginShellPath", () => {
   it("finds PATH among whatever the rc files print", async () => {
     const shell = fakeShell("noisy", `echo "Welcome back"; echo "${"x".repeat(5000)}"; echo "error: oops" >&2`);
     expect(await loginShellPath(shell, { env: { ...process.env, PATH: "/login/bin:/usr/bin:/bin" } })).toBe("/login/bin:/usr/bin:/bin");
@@ -57,7 +58,7 @@ describe.skipIf(!posix)("loginShellPath", () => {
     expect(await loginShellPath(path.join(dir, "missing"))).toBeNull();
   });
 
-  it.skipIf(!fs.existsSync("/bin/zsh"))("reads it from zsh", async () => {
+  it.skipIf(needs(fs.existsSync("/bin/zsh"), "/bin/zsh"))("reads it from zsh", async () => {
     const p = await loginShellPath("/bin/zsh", { env: { ...process.env, ZDOTDIR: dir, PATH: "/usr/bin:/bin" } });
     expect(p).toContain("/usr/bin");
   });
