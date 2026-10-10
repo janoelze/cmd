@@ -1,5 +1,7 @@
 // Replaying a pane's snapshot (the core's serialized screen) into a terminal at the size
 // it was made at, and knowing when it is parsed, so nothing resizes the terminal meanwhile.
+// Both clients replay this way: the app (renderer terminals.ts) and the web client
+// (apps/web screen.ts).
 
 /** What a replay needs of a terminal (xterm.js; @xterm/headless in tests). */
 export interface ReplayTerm {

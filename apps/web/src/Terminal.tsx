@@ -16,6 +16,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { Pane } from "@cmd/protocol";
 import type { Connection } from "./connection.ts";
 import { stateText, type Item } from "./model.ts";
+import { Screen } from "./screen.ts";
 import { Icon, Led, Sheet } from "./ui.tsx";
 
 const FONT = 13;
@@ -61,7 +62,9 @@ function withCtrl(data: string): string {
 export function TerminalScreen({ conn, item, control, onBack }: { conn: Connection; item: Item; control: boolean; onBack: () => void }) {
   const pane: Pane = item.pane;
   const host = useRef<HTMLDivElement>(null);
-  const term = useRef<{ t: Terminal; fit: FitAddon } | null>(null);
+  const term = useRef<{ t: Terminal; fit: FitAddon; screen: Screen } | null>(null);
+  /** Sizes the terminal (the size effect's), again once a snapshot is parsed. */
+  const sizeRef = useRef<() => void>(() => {});
   const [text, setText] = useState("");
   /** This phone sizes the terminal (else: the Mac's size, scaled). */
   const [fitting, setFitting] = useState(control);
@@ -97,23 +100,20 @@ export function TerminalScreen({ conn, item, control, onBack }: { conn: Connecti
     const fit = new FitAddon();
     t.loadAddon(fit);
     t.open(host.current!);
-    term.current = { t, fit };
+    // Written at the snapshot's size; no resizing until it is parsed, then the size again.
+    const screen = new Screen(t);
+    screen.onParsed = () => sizeRef.current();
+    term.current = { t, fit, screen };
     if (control) t.onData((d) => write(d));
     let live = true;
-    let ready = false;
-    const pending: string[] = [];
     const snapshot = async () => {
-      ready = false;
+      screen.awaitSnapshot();
       const snap = await client?.call("pane.snapshot", { paneId: pane.id });
       if (!live || !snap) return;
-      t.reset();
-      t.resize(snap.cols, snap.rows);
-      t.write(snap.data);
-      ready = true;
-      for (const d of pending.splice(0)) t.write(d);
+      screen.snapshot(snap);
     };
     const off = conn.onEvent((e) => {
-      if (e.type === "pane.output" && e.paneId === pane.id) (ready ? t.write(e.data) : pending.push(e.data));
+      if (e.type === "pane.output" && e.paneId === pane.id) screen.output(e.data);
       else if (e.type === "pane.resync" && e.paneId === pane.id) void snapshot();
     });
     void client?.call("window.follow", { ids: [pane.id] }).then(snapshot, () => {});
@@ -142,16 +142,17 @@ export function TerminalScreen({ conn, item, control, onBack }: { conn: Connecti
         if (!d || !Number.isFinite(d.cols) || !Number.isFinite(d.rows)) return;
         const cols = clamp(d.cols, 20, 300);
         const rows = clamp(d.rows, 5, 200);
-        if (x.t.cols !== cols || x.t.rows !== rows) x.t.resize(cols, rows);
-        if (!holding.current || pane.cols !== cols || pane.rows !== rows) {
+        x.screen.resize({ cols, rows }, () => {
+          if (holding.current && pane.cols === cols && pane.rows === rows) return;
           holding.current = true;
           void client?.call("pane.fitOverride", { paneId: pane.id, cols, rows }).catch(() => {});
-        }
+        });
       } else {
-        if (x.t.cols !== pane.cols || x.t.rows !== pane.rows) x.t.resize(pane.cols, pane.rows);
+        x.screen.resize({ cols: pane.cols, rows: pane.rows });
         x.t.options.fontSize = Math.max(MIN_FONT, Math.min(FONT, el.clientWidth / (pane.cols * CELL_W), el.clientHeight / (pane.rows * CELL_H)));
       }
     };
+    sizeRef.current = apply;
     // The keyboard and rotation change the space in steps; settle before resizing the PTY.
     const later = () => (clearTimeout(timer), (timer = setTimeout(apply, 120)));
     const ro = new ResizeObserver(later);

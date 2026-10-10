@@ -1972,7 +1972,7 @@ check(restored === selectedBefore && !!selectedBefore, `selected terminal restor
   const count = (shown.match(/MARKER-42/g) ?? []).length;
   const seen = `core ${(text.match(/MARKER-42/g) ?? []).length}×; on screen: ${JSON.stringify(shown.replace(/\s+/g, " ").slice(-300))}`;
   check((text.match(/MARKER-42/g) ?? []).length === 1, `the re-attached terminal's output is recorded exactly once (${seen})`);
-  // 0×: the view fitted before the snapshot was parsed and zsh's redraw wiped lines (replay.ts).
+  // 0×: the view fitted before the snapshot was parsed and zsh's redraw wiped lines (packages/protocol/src/replay.ts).
   check(count === 1, `re-attached terminal shows its output exactly once (${count}×; ${seen})`);
   check(!/\[<\d+;\d+;\d+[mM]/.test(shown), "no stray mouse escape codes after re-attaching");
   await menu("view.grid");

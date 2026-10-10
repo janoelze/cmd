@@ -23,7 +23,7 @@ import { scrolled, type FindOptions, type FindResults } from "@cmd/ui";
 import type { FindRequest } from "./find.tsx";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
 import { registerDropTarget } from "./drops.ts";
-import { Replayer } from "./replay.ts";
+import { Replayer } from "@cmd/protocol/replay";
 
 // ⌘ keys sent to the PTY as readline control characters: kill line, start, end.
 const CMD_KEYS: Record<string, string> = { Backspace: "\x15", ArrowLeft: "\x01", ArrowRight: "\x05" };
@@ -55,7 +55,7 @@ interface Host {
   /** The PTY's size, told at most every FIT_INTERVAL ms: when it was last told, and a size waiting. */
   ptyAt: number;
   ptyTimer: ReturnType<typeof setTimeout> | null;
-  /** Writes snapshots at their size; no fitting while one is being parsed (replay.ts). */
+  /** Writes snapshots at their size; no fitting while one is being parsed (@cmd/protocol/replay). */
   replays: Replayer;
   /** Removes its drop target (drops.ts). */
   undrop: () => void;
@@ -596,7 +596,7 @@ class Terminals {
    * Write a snapshot made at `size`: the terminal takes that size first (a fresh one is
    * 80x24, and a wider screen replayed into it wraps and puts its cursor moves on the
    * wrong cells). That is the PTY's size already, so it isn't resized. No fits until it
-   * is parsed (replay.ts says why); then the real size.
+   * is parsed (@cmd/protocol/replay says why); then the real size.
    */
   replay(paneId: PaneId, data: string, size: { cols: number; rows: number }): void {
     const h = this.get(paneId);
