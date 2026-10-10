@@ -31,6 +31,7 @@ export function watchTurn(dir: string): TurnWatch | null {
       if (rel !== self && !IGNORE.test(rel)) seen.add(rel);
     });
     watcher.unref();
+    watcher.on("error", () => {}); // e.g. EMFILE later on: the turn just reports what it saw until then
   } catch {
     return null;
   }

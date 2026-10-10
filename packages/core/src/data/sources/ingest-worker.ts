@@ -121,7 +121,7 @@ function watch(r: TranscriptRoot): void {
   try {
     fs.watch(r.dir, { recursive: true }, (_e, name) => {
       if (!name || String(name).endsWith(".jsonl")) schedule();
-    });
+    }).on("error", () => {}); // e.g. EMFILE: the periodic pass below still reads it
   } catch {}
 }
 

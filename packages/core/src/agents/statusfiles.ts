@@ -13,6 +13,9 @@ import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import type { PaneId } from "@cmd/protocol";
+import { logger } from "@cmd/protocol/node";
+
+const log = logger("statusfiles");
 
 export function statusRoot(): string {
   return path.join(os.tmpdir(), "cmd-agents");
@@ -26,6 +29,7 @@ export function removeStatus(paneId: PaneId, root = statusRoot()): void {
 export class StatusWatcher extends EventEmitter<{ changed: [PaneId] }> {
   #watcher: fs.FSWatcher | null = null;
   #timers = new Map<string, NodeJS.Timeout>();
+  #retry: NodeJS.Timeout | undefined;
   readonly root: string;
 
   constructor(root = statusRoot()) {
@@ -48,10 +52,32 @@ export class StatusWatcher extends EventEmitter<{ changed: [PaneId] }> {
       );
     });
     this.#watcher.unref();
+    // A watch can fail later (EMFILE); unhandled, that ends the core. Agents' events wait for the next try.
+    this.#watcher.on("error", (err) => {
+      log.warn(`watch of ${this.root} failed; trying again in 10 s`, err);
+      this.#watcher?.close();
+      this.#watcher = null;
+      this.#retryLater();
+    });
+  }
+
+  #retryLater(): void {
+    this.#retry = setTimeout(() => {
+      try {
+        this.start();
+        // What the hook wrote while nothing watched.
+        for (const id of fs.readdirSync(this.root)) this.emit("changed", id);
+      } catch (err) {
+        log.warn(`watch of ${this.root} failed again`, err);
+        this.#retryLater();
+      }
+    }, 10_000);
+    this.#retry.unref();
   }
 
   close(): void {
     this.#watcher?.close();
+    clearTimeout(this.#retry);
     for (const t of this.#timers.values()) clearTimeout(t);
   }
 }

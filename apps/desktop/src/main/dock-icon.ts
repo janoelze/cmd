@@ -45,7 +45,13 @@ function apply(): void {
   if (id === shown) return;
   // Electron can't unset a Dock icon, so going back means showing the bundle icon's own render.
   log.info(`dock icon: ${id ?? "default"}${style ? ` (icon style ${style})` : ""}`);
-  app.dock.setIcon(file(id ?? "default"));
+  try {
+    app.dock.setIcon(file(id ?? "default"));
+  } catch (err) {
+    // The bundle's files can go while it runs (a rebuilt or moved app); the Dock keeps what it shows.
+    log.warn("dock icon not set", err);
+    return;
+  }
   shown = id;
 }
 

@@ -70,6 +70,12 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
       this.#debounce = setTimeout(() => this.reload(), 100);
     });
     this.#watcher.unref();
+    // A watch can fail later (EMFILE); unhandled, that ends the core. The poll below carries on.
+    this.#watcher.on("error", (err) => {
+      log.warn("settings watch failed; polling only", err);
+      this.#watcher?.close();
+      this.#watcher = null;
+    });
     // FSEvents can miss changes (e.g. right after the watch starts); poll as a backstop.
     fs.watchFile(this.path, { interval: 1000, persistent: false }, () => this.reload());
     // The poll's baseline stat is async: a write that lands before it is never seen as a change.
