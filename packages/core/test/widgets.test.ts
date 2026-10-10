@@ -61,14 +61,16 @@ describe("data.ts's network (AR1-11-03)", () => {
     const args = denoRunArgs("/w", manifest(["api.example.com"]), env, "/tmp/cmd/widgets.sock");
     expect(args.filter((a) => a.startsWith("--allow-net"))).toEqual(["--allow-net=api.example.com,unix:/tmp/cmd/widgets.sock"]);
     expect(denoRunArgs("/w", manifest([]), env, null).some((a) => a.startsWith("--allow-net"))).toBe(false);
+    // The sandbox opens HTTPS and HTTP for granted hosts, plus the ports they name.
+    expect(denoNet(manifest(["api.example.com"]))).toEqual(["*:443", "*:80"]);
+    expect(denoNet(manifest(["localhost:3000"]))).toEqual(["*:443", "*:80", "localhost:3000"]);
   });
 
-  it("opens HTTPS in the sandbox only with hosts or a CLI that needs its server, and the ports hosts name", () => {
+  it("opens HTTPS in the sandbox only with hosts or a CLI that needs its server, HTTP only with hosts, and the ports hosts name", () => {
     expect(denoNet(manifest([]))).toEqual([]);
     expect(denoNet(manifest([], ["git"]))).toEqual([]);
     expect(denoNet(manifest([], ["gh"]), true)).toEqual(["*:443"]);
-    expect(denoNet(manifest(["api.example.com"]))).toEqual(["*:443"]);
-    expect(denoNet(manifest(["localhost:3000", "127.0.0.1:8080", "metrics.lan:9100"]))).toEqual(["*:443", "localhost:3000", "localhost:8080", "*:9100"]);
+    expect(denoNet(manifest(["localhost:3000", "127.0.0.1:8080", "metrics.lan:9100"]))).toEqual(["*:443", "*:80", "localhost:3000", "localhost:8080", "*:9100"]);
   });
 });
 

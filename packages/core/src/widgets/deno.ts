@@ -224,11 +224,14 @@ export function denoRunArgs(dir: string, m: WidgetManifest, env: DenoEnv, socket
 /**
  * The TCP endpoints data.ts's process may reach in the sandbox (SBPL can't
  * match host names; --allow-net does): HTTPS when it has hosts or runs a CLI
- * that needs its server, plus the ports granted hosts name ("localhost:3000").
+ * that needs its server, HTTP when it has hosts, plus the ports granted hosts
+ * name ("localhost:3000").
  */
 export function denoNet(m: WidgetManifest, cliNet = false): string[] {
   const out = new Set<string>();
   if (m.permissions.net.length || cliNet) out.add("*:443");
+  // Plain-http hosts too: --allow-net still limits which hosts.
+  if (m.permissions.net.length) out.add("*:80");
   for (const h of m.permissions.net) {
     const at = /^(.*):(\d{1,5})$/.exec(h);
     if (!at) continue;
