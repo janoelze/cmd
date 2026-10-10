@@ -27,6 +27,7 @@ export class ResourceMonitor {
   #panes: PaneManager;
   #sample: TreeSampler;
   #timer: NodeJS.Timeout | undefined;
+  #soon: NodeJS.Timeout | undefined;
   #prev = new Map<number, { cpu: number; at: number }>();
   #busy = false;
 
@@ -73,8 +74,19 @@ export class ResourceMonitor {
     }
   }
 
+  /** A sample shortly, not at the next tick: a new terminal, or a UI that starts showing them. */
+  soon(delayMs = 250): void {
+    if (this.#soon) return;
+    this.#soon = setTimeout(() => {
+      this.#soon = undefined;
+      void this.tick();
+    }, delayMs);
+    this.#soon.unref();
+  }
+
   close(): void {
     clearInterval(this.#timer);
+    clearTimeout(this.#soon);
   }
 }
 

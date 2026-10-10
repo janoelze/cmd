@@ -493,6 +493,7 @@ export class Core {
     this.panes.on("updated", (pane) => {
       this.#broadcast({ type: "pane.updated", pane });
       describePane(this.data, pane);
+      if (!pane.usage && pane.pid > 0 && pane.exitCode === null) this.resources?.soon(); // a new terminal's memory shows at once
     });
     this.panes.on("removed", (paneId) => {
       this.store.deleteUiStateOf(paneId);
@@ -1452,6 +1453,7 @@ export class Core {
     } else if (method === "events.subscribe") {
       const types = (params as Params<"events.subscribe">).types;
       const set = Array.isArray(types) ? new Set<string>(types) : null;
+      if (!this.#subscribers.size) this.resources?.soon(); // samples aren't taken while nobody watches
       this.#subscribers.set(conn, set ? (e) => set.has(e.type) : () => true);
       this.magic.resume();
     } else if (method === "remote.bootstrap") {

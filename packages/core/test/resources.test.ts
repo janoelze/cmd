@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PaneManager } from "../src/panes.ts";
 import { ProcessSampler, processName, ResourceMonitor, usageChanged } from "../src/resources.ts";
 import { ProcInfo } from "../src/agents/procinfo.ts";
-import { needs } from "../../../test/system.ts";
+import { needs, until } from "../../../test/system.ts";
 import { fakeFactory } from "./fake-pty.ts";
 
 describe("ResourceMonitor", () => {
@@ -26,6 +26,19 @@ describe("ResourceMonitor", () => {
     cpu = 500e6; // 0.5 s of CPU over 2 s of wall time = 25%
     await mon.tick(3000);
     expect(panes.get(pane.id)!.usage!.cpu).toBe(25);
+  });
+
+  it("samples soon when asked, once for several asks", async () => {
+    const panes = new PaneManager(fakeFactory().factory, { socketPath: "/tmp/s.sock", pollMs: 0 });
+    panes.create();
+    let calls = 0;
+    const mon = new ResourceMonitor(panes, async () => (calls++, []), 0);
+    mon.soon(10);
+    mon.soon(10);
+    await until("a sample", () => calls > 0);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(calls).toBe(1);
+    mon.close();
   });
 
   it("doesn't sample while no UI is connected", async () => {

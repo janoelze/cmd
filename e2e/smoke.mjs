@@ -124,6 +124,10 @@ const step = (s) => {
   lastStep = s;
   lastAt = Date.now();
 };
+// A wait that runs out its deadline in a passing run is time lost on every run (its condition
+// can never hold, or holds another way): say so, with the step it came after.
+const waitedOut = (what, t0) => console.log(`  [waited out ${((Date.now() - t0) / 1000).toFixed(1)} s] ${what} after: ${lastStep}`);
+const expired = (what) => { const t0 = Date.now(); return () => waitedOut(what, t0); };
 const HANG_MS = 90_000;
 let hangs = 0;
 let abortScenario = null;
@@ -308,7 +312,7 @@ function report() {
   }
 }
 // Overlays and sidebars play out a fade or slide before they leave the DOM: wait for that, not a fixed time.
-const gone = (sel) => win.waitForSelector(sel, { state: "detached", timeout: 5000 }).catch(() => {});
+const gone = (sel) => win.waitForSelector(sel, { state: "detached", timeout: 5000 }).catch(expired(`${sel} to go`));
 // Shortcut checks: the macOS keymap, or its Windows translation (docs/10-windows.md).
 const mac = process.platform === "darwin";
 const macOnly = (msg) => console.log(`skip - ${msg} (macOS keymap)`);
@@ -360,14 +364,15 @@ const still = async (min = 300) => {
   }
 };
 // State the app changes after a command (a write, a save, a re-render) settles later on a slow
-// runner (CI): read it every 100 ms until `ok` holds or `ms` pass, and return the last value
+// runner (CI): read it every 25 ms until `ok` holds or `ms` pass, and return the last value
 // read, so the check after it fails on (and prints) what it saw. Never a fixed wait before a read.
 const until = async (read, ok = Boolean, ms = 10_000) => {
   const t0 = Date.now();
   for (;;) {
     const v = await read();
-    if ((await ok(v)) || Date.now() - t0 > ms) return v;
-    await win.waitForTimeout(100);
+    if (await ok(v)) return v;
+    if (Date.now() - t0 > ms) return void waitedOut(`until(${String(ok).slice(0, 80)})`, t0), v;
+    await win.waitForTimeout(25);
   }
 };
 const countOf = (sel) => win.locator(sel).count();
@@ -583,7 +588,8 @@ await scenario("palette", async () => {
   await menu("file.close"); // ⌘W closes the palette first
   await gone(".palette");
   check((await win.locator(".palette").count()) === 0, "⌘W closes the palette before any terminal");
-  const n = await until(panes, (n) => n !== before, 1000); // a wrongly closed terminal would show by then
+  await win.waitForTimeout(300); // ⌘W must close nothing else: give a wrongly closed terminal time to show
+  const n = await panes();
   check(n === before, `…and leaves terminals alone (${n})`);
 });
 
@@ -619,7 +625,7 @@ await scenario("search", async () => {
   check((await until(() => win.locator(".palette-input").inputValue(), (v) => v === "?")) === "?", "⇧⌘F opens the palette in search mode");
   await focused(".palette-input");
   await win.keyboard.type("wiregaurd");
-  await win.waitForSelector(".palette .palette-label:has-text('VPN auto reconnect')", { timeout: 15000 }).catch(() => {});
+  await win.waitForSelector(".palette .palette-label:has-text('VPN auto reconnect')", { timeout: 15000 }).catch(expired(".palette .palette-label:has-text('VPN auto reconnect')"));
   check((await win.locator(".palette .palette-label", { hasText: "VPN auto reconnect" }).count()) > 0, "the palette's search finds past sessions, typos and all");
   await shot(win, "4b-palette-search.png");
   await win.keyboard.press("Escape");
@@ -638,7 +644,7 @@ await scenario("sidebar-search", async () => {
   await win.keyboard.press("Escape");
   check((await until(() => win.locator(".sb-search input").inputValue(), (v) => v === "")) === "", "Esc clears the sidebar search");
   await win.keyboard.press("Escape");
-  await win.waitForSelector(".sb-recent .ui-list-row.history", { timeout: 10_000 }).catch(() => {});
+  await win.waitForSelector(".sb-recent .ui-list-row.history", { timeout: 10_000 }).catch(expired(".sb-recent .ui-list-row.history"));
   check((await win.locator(".sb-recent .ui-list-row.history").count()) > 0, "Recent lists past sessions from the index");
 });
 
@@ -712,11 +718,11 @@ await scenario("blank-browser", async () => {
   await tileIn(blankWin.id);
   await select(blankWin.id);
   const blankView = win.locator(`.tile[data-pane="${blankWin.id}"] .ui-webstage .ui-viewstate`);
-  await blankView.waitFor({ timeout: 10_000 }).catch(() => {});
+  await blankView.waitFor({ timeout: 10_000 }).catch(expired("blankView"));
   await shot(win, "browser-blank.png");
   check(await blankView.isVisible(), "a blank browser window shows the empty view, not a white page");
   await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [blankWin.id, `http://localhost:${port}`]);
-  await blankView.waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
+  await blankView.waitFor({ state: "detached", timeout: 10_000 }).catch(expired("blankView to go"));
   check((await blankView.count()) === 0, "a blank window gets its page once given an address");
   } finally {
     await win.evaluate((id) => window.cmd.call("window.close", { id }), blankWin.id);
@@ -732,7 +738,7 @@ await scenario("site-permissions", async () => {
     await until(() => page("location.pathname").catch(() => null), (p) => p === "/media");
     await page(`window.__gum = navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(() => "granted", (e) => e.name); 0`);
     const sheet = win.locator(".site-permission:not([data-closing])"); // not one fading out
-    await sheet.waitFor({ timeout: 10_000 }).catch(() => {});
+    await sheet.waitFor({ timeout: 10_000 }).catch(expired("sheet"));
     const title = (await sheet.locator(".ui-dialog-title").textContent().catch(() => "")) ?? "";
     await shot(win, "site-permission.png");
     check(title.includes(`localhost:${port}`) && title.includes("camera and microphone"), `a page asking for the camera gets cmd's sheet naming the site (${JSON.stringify(title)})`);
@@ -745,7 +751,7 @@ await scenario("site-permissions", async () => {
     // Deleting site-permissions.json forgets the answers, without a restart.
     fs.rmSync(path.join(home, "site-permissions.json"));
     await page(`window.__gum = navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name); 0`);
-    await sheet.waitFor({ timeout: 10_000 }).catch(() => {});
+    await sheet.waitFor({ timeout: 10_000 }).catch(expired("sheet"));
     const askedAgain = await sheet.count();
     await focused(".site-permission"); // Esc goes where the focus is
     await win.keyboard.press("Escape");
@@ -758,7 +764,7 @@ await scenario("site-permissions", async () => {
     const keptNow = () => (fs.existsSync(path.join(home, "site-permissions.json")) ? JSON.parse(fs.readFileSync(path.join(home, "site-permissions.json"), "utf8")) : {});
     const answerNext = async (js, button) => {
       await page(`window.__ask = ${js}; 0`);
-      await sheet.waitFor({ timeout: 10_000 }).catch(() => {});
+      await sheet.waitFor({ timeout: 10_000 }).catch(expired("sheet"));
       if (button) await sheet.getByRole("button", { name: button, exact: true }).click();
       else await focused(".site-permission"), await win.keyboard.press("Escape");
       return page("window.__ask");
@@ -775,7 +781,7 @@ await scenario("site-permissions", async () => {
     await sw.waitForSelector(".ui-split-pane .ui-list-row");
     await sw.locator(".ui-split-pane .ui-list-row", { has: sw.getByText("Browser", { exact: true }) }).click();
     const section = sw.locator(".ui-form-section", { hasText: `localhost:${port}` });
-    await section.waitFor({ timeout: 10_000 }).catch(() => {});
+    await section.waitFor({ timeout: 10_000 }).catch(expired("section"));
     const rows = async () => (await section.locator(".ui-row").allTextContents().catch(() => [])).map((t) => t.replace(/Remove$/, ""));
     const listed = await rows();
     await shot(sw, "site-permissions-settings.png");
@@ -787,11 +793,11 @@ await scenario("site-permissions", async () => {
     check(JSON.stringify(keptNow()) === JSON.stringify({ [site]: { notifications: false } }) && left.length === 1, `Remove forgets one answer and keeps the rest (${JSON.stringify(keptNow())})`);
     const reasked = await answerNext(gum, "Allow");
     check(reasked === "granted", `a removed answer is asked again on the next visit, without a restart (${reasked})`);
-    await section.locator(".ui-row", { hasText: "Camera and microphone" }).waitFor({ timeout: 10_000 }).catch(() => {});
+    await section.locator(".ui-row", { hasText: "Camera and microphone" }).waitFor({ timeout: 10_000 }).catch(expired("section.locator(\".ui-row\", { hasText: \"Camera and microphone\" })"));
     check((await rows()).length === 2, `an open Settings shows a new answer at once (${(await rows()).join(", ")})`);
     await section.getByRole("button", { name: `Remove All for localhost:${port}` }).click();
     const empty = sw.locator(".ui-empty", { hasText: "No site permissions yet" });
-    await empty.waitFor({ timeout: 10_000 }).catch(() => {});
+    await empty.waitFor({ timeout: 10_000 }).catch(expired("empty"));
     await shot(sw, "site-permissions-empty.png");
     check((await empty.count()) === 1 && JSON.stringify(keptNow()) === "{}", `Remove All forgets the site; the page says nothing is kept (${JSON.stringify(keptNow())})`);
     await sw.close();
@@ -1423,11 +1429,11 @@ await scenario("magic", async () => {
     await win.waitForSelector(".palette", { timeout: 10_000 });
     const offered = await until(() => win.locator(".palette-list .palette-label").allTextContents(), (o) => o.at(-1) === "New Widget with Magic" && o.includes("Counter"), 5000);
     await win.mouse.move(0, 0);
-    await win.waitForTimeout(500); // the rows' symbols load from macOS
+    if (process.env.E2E_SHOTS) await win.waitForTimeout(500); // the rows' symbols load from macOS (for the screenshot)
     await shot(win, "new-picker.png");
     await win.locator(".palette-input").fill("timer");
     // Enter acts on the highlighted row: wait until the filter has made it Timer (pressing at once raced the re-render).
-    await win.waitForSelector(".palette-list li.on .palette-label:text-is('Timer')", { timeout: 10_000 }).catch(() => {});
+    await win.waitForSelector(".palette-list li.on .palette-label:text-is('Timer')", { timeout: 10_000 }).catch(expired(".palette-list li.on .palette-label:text-is('Timer')"));
     await win.keyboard.press("Enter");
     const timer = await until(async () => (await call("window.list")).find((x) => x.kind === "timer"), Boolean);
     await gone(".palette");
@@ -1780,7 +1786,7 @@ await scenario("strip", async () => {
     const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
     for (const dw of [-120, -60, 0]) {
       await app.evaluate(({ BrowserWindow }, w) => BrowserWindow.getAllWindows()[0].setSize(w, BrowserWindow.getAllWindows()[0].getSize()[1]), size[0] + dw);
-      await win.waitForTimeout(250); // a live resize, step by step (not a read)
+      await win.waitForTimeout(50); // a live resize, step by step: a few frames each (not a read)
     }
     await still(400);
     check((await trackX()) === 0, `resizing the window keeps the strip scrolled to the start (${Math.round(-(await trackX()))})`);
@@ -1882,7 +1888,7 @@ await scenario("sidebars", async () => {
   await still(200);
   // Canvas: one canvas under the sidebars; fitting keeps the windows between them.
   await menu("view.canvas");
-  await win.waitForSelector(".main.mode-canvas", { timeout: 10_000 }).catch(() => {});
+  await win.waitForSelector(".main.mode-canvas", { timeout: 10_000 }).catch(expired(".main.mode-canvas"));
   await still(400);
   const stage = await win.locator(".main.windows").boundingBox();
   const vw = await win.evaluate(() => window.innerWidth);
