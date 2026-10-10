@@ -95,6 +95,19 @@ async function audit(name, page = win) {
     const attrs = node?.attributes ?? [];
     m.at = `${node?.localName ?? "?"}.${(attrs[attrs.indexOf("class") + 1] ?? "").split(/\s+/).slice(0, 2).join(".")}`;
   }
+  // A sheet is modal: Chromium's tree (what VoiceOver reads; inert nodes are ignored in it)
+  // has no control outside it. Playwright's snapshot above still lists them: it doesn't read inert.
+  if (await page.locator(".ui-scrim:not([data-closing])").count()) {
+    const { nodes } = await cdp.send("Accessibility.getFullAXTree");
+    const outside = [];
+    for (const n of nodes.filter((n) => !n.ignored && CONTROLS.has(n.role?.value) && n.backendDOMNodeId)) {
+      const { object } = await cdp.send("DOM.resolveNode", { backendNodeId: n.backendDOMNodeId }).catch(() => ({ object: null }));
+      if (!object?.objectId) continue;
+      const { result } = await cdp.send("Runtime.callFunctionOn", { objectId: object.objectId, functionDeclaration: "function () { return !!this.closest('.ui-scrim, .ui-popover, .tip-layer, .ui-toaster') }", returnByValue: true });
+      if (!result.value) outside.push(`${n.role.value} "${n.name?.value ?? ""}"`);
+    }
+    ok(!outside.length, `${name}: the sheet is modal, no control outside it is in the accessibility tree${outside.length ? ` (${outside.slice(0, 5).join(", ")})` : ""}`);
+  }
   await cdp.detach();
   const controls = (tree.match(/^\s*- (button|textbox|combobox|option|treeitem|tab|radio|switch|checkbox|menuitem)\b/gm) ?? []).length;
   summary.push({ view: name, controls, unnamed: missing.length });
@@ -231,7 +244,16 @@ await popup("workspace-rename", () => menu("workspace.rename"));
 await popup("workspace-icon", () => menu("workspace.icon"));
 await popup("move-window", () => menu("workspace.moveWindow"));
 await popup("widget-library", () => menu("widget.library"));
-await popup("whats-new", () => menu("help.whatsNew"));
+await popup("whats-new", async () => {
+  await menu("help.whatsNew");
+  // Over the terminals: Tab and Shift-Tab never leave the sheet (no typing into a shell behind it).
+  await win.locator(".ui-dialog").waitFor();
+  await settle(300);
+  const where = () => win.evaluate(() => (document.activeElement?.closest(".ui-dialog") ? "inside" : document.activeElement?.closest(".xterm") ? "terminal" : (document.activeElement?.className || document.activeElement?.tagName)));
+  const seen = [];
+  for (const key of ["Tab", "Shift+Tab"]) for (let i = 0; i < 10; i++) (await win.keyboard.press(key), seen.push(await where()));
+  ok(seen.every((w) => w === "inside"), `What's New: Tab and Shift-Tab ×10 stay in the sheet${seen.every((w) => w === "inside") ? "" : ` (went to ${seen.find((w) => w !== "inside")})`}`);
+});
 await popup("core-status", () => win.getByRole("contentinfo").getByRole("button").first().click());
 await popup("remote-access", () => menu("app.remoteAccess"));
 await popup("pair-device", () => menu("app.pairDevice"));

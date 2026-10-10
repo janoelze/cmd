@@ -36,6 +36,12 @@ export function placePopover(anchor: { left: number; top: number; bottom: number
 /** Closes on Escape, on a press outside (other than on the anchor), and on blur of the window. */
 export type DismissReason = "escape" | "outside" | "blur";
 
+/** What Tab can reach inside `root`, in order (visible, enabled, not inert). */
+const TABBABLE = "a[href], button, input, select, textarea, iframe, [contenteditable]:not([contenteditable='false']), [tabindex]";
+function tabbables(root: Element): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(TABBABLE)].filter((el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled && !el.closest("[inert]") && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden");
+}
+
 function useDismiss(open: boolean, onClose: (why: DismissReason) => void, refs: RefObject<HTMLElement | null>[]) {
   useEffect(() => {
     if (!open) return;
@@ -88,7 +94,8 @@ export function Popover({
   width?: number | "content";
   maxWidth?: number;
   className?: string;
-  role?: "dialog" | "menu";
+  /** "dialog" with controls in it takes focus on open; with none it is a "group". "menu": the Menu moves focus itself. */
+  role?: "dialog" | "menu" | "group";
   label?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -96,6 +103,25 @@ export function Popover({
   // Closed, it fades out where it is (motion.ts).
   const { present, closing } = usePresence(open);
   useDismiss(open, onClose, [ref, anchor]);
+  // A dialog popover takes focus (its first control, once placed and visible) unless its
+  // content already did, and gives it back to the anchor when it closes with focus inside.
+  // Nothing to focus in it: it is a group, not a dialog.
+  const [bare, setBare] = useState(false);
+  useEffect(() => {
+    if (!open || role !== "dialog") return;
+    const frame = requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      const first = tabbables(el)[0];
+      setBare(!first);
+      if (first && !el.contains(document.activeElement)) first.focus({ preventScroll: true });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      const at = document.activeElement;
+      if (ref.current?.contains(at) || at === document.body) anchor.current?.focus({ preventScroll: true });
+    };
+  }, [open, role]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const el = ref.current;
     if (!open || !anchor.current || !el) return;
@@ -120,7 +146,7 @@ export function Popover({
   if (!present) return null;
   const style: CSSProperties = { ...pos, ...(width !== "content" ? { width } : {}), ...(maxWidth ? { maxWidth: `min(${maxWidth}px, 100vw - 16px)` } : {}) };
   return createPortal(
-    <div ref={ref} className={cls("ui-popover", className)} role={role} aria-label={label} style={style} data-motion="pop" data-closing={closing || undefined} inert={closing || undefined}>
+    <div ref={ref} className={cls("ui-popover", className)} role={role === "dialog" && bare ? "group" : role} aria-label={label} style={style} data-motion="pop" data-closing={closing || undefined} inert={closing || undefined}>
       {children}
     </div>,
     document.body,
@@ -315,6 +341,43 @@ export function Menu({
 
 // ── dialog ─────────────────────────────────────────────
 
+// Not a native <dialog> with showModal(): its top layer sits above the tooltip
+// layer, the toasts and any Popover or Menu opened from inside the dialog (all
+// portalled into <body>) and makes them inert. Instead everything else in
+// <body> is inert while a dialog is open, and Tab wraps inside it.
+
+/** Overlays that stay live over a dialog: the tooltip layer and the toasts. */
+const LIVE = ".tip-layer, .ui-toaster";
+
+/** Makes everything in <body> but `keep` (and the live overlays) inert; returns the undo. */
+function inertOthers(keep: Element): () => void {
+  const set: HTMLElement[] = [];
+  for (const el of document.body.children) {
+    if (el === keep || !(el instanceof HTMLElement) || el.inert || el.matches(LIVE)) continue;
+    el.inert = true;
+    set.push(el);
+  }
+  return () => set.forEach((el) => (el.inert = false));
+}
+
+/** Open dialogs, the topmost last: keys that reach no element (focus on <body>) are its. */
+const dialogs: RefObject<HTMLElement | null>[] = [];
+
+/** Tab and Shift-Tab past the ends of `root` wrap around to its other end. */
+function wrapTab(e: Pick<KeyboardEvent, "key" | "defaultPrevented" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "preventDefault">, root: HTMLElement | null) {
+  if (e.key !== "Tab" || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !root) return;
+  const at = document.activeElement;
+  // In a popover opened from the dialog (portalled outside it): its own business.
+  if (at && at !== document.body && !root.contains(at)) return;
+  const all = tabbables(root);
+  const first = all[0];
+  const last = all[all.length - 1];
+  const wrap = (el: HTMLElement | undefined) => (e.preventDefault(), (el ?? root).focus());
+  if (!first) wrap(root);
+  else if (e.shiftKey && (at === first || at === root || at === document.body)) wrap(last);
+  else if (!e.shiftKey && (at === last || at === document.body)) wrap(first);
+}
+
 /**
  * A sheet over the window with a scrim: a title, content, and actions at the
  * bottom right (the primary last). Escape and a click on the scrim close it,
@@ -367,22 +430,43 @@ export function Dialog({
   window?: { icon?: string | ReactNode; name: string; close?: boolean };
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const escape = useRef<(() => void) | null>(null);
+  escape.current = dismissable ? onClose : null;
   // Closed, the sheet and its scrim fade out (motion.ts).
   const { present, closing } = usePresence(open);
   useEffect(() => {
     if (!open) return;
     const before = document.activeElement as HTMLElement | null;
     const el = ref.current;
-    // Unless its content already took focus (its own effects run first).
-    if (!el?.contains(document.activeElement)) {
-      const first = el?.querySelector<HTMLElement>("[autofocus], input, textarea, select, button:not([data-variant='ghost'])");
-      (first ?? el)?.focus();
+    // Modal: the page behind can't be focused, clicked or read (a terminal can't be typed into).
+    const release = scrimRef.current ? inertOthers(scrimRef.current) : () => {};
+    // Unless its content already took focus (its own effects run first): its first field or
+    // button that isn't ghost (and can take focus: not disabled), else the sheet itself.
+    if (el && !el.contains(document.activeElement)) {
+      const all = tabbables(el);
+      const first = all.find((c) => c.hasAttribute("autofocus")) ?? all.find((c) => c.matches("input, textarea, select, button:not([data-variant='ghost'])"));
+      (first ?? el).focus();
     }
-    return () => before?.focus?.();
+    // Focus dropped to <body> (the focused button got disabled, say): Escape and Tab still work.
+    dialogs.push(ref);
+    const stray = (e: globalThis.KeyboardEvent) => {
+      if (dialogs[dialogs.length - 1] !== ref || (document.activeElement && document.activeElement !== document.body)) return;
+      if (e.key === "Escape" && escape.current) (e.preventDefault(), escape.current());
+      else wrapTab(e, ref.current);
+    };
+    window.addEventListener("keydown", stray);
+    return () => {
+      window.removeEventListener("keydown", stray);
+      dialogs.splice(dialogs.indexOf(ref), 1);
+      release();
+      before?.focus?.();
+    };
   }, [open]);
   if (!present) return null;
   return createPortal(
     <div
+      ref={scrimRef}
       className="ui-scrim"
       data-motion={scrim ? "fade" : undefined}
       data-closing={closing || undefined}
@@ -394,7 +478,7 @@ export function Dialog({
         if (e.key === "Escape" && dismissable) {
           e.stopPropagation();
           onClose();
-        }
+        } else wrapTab(e, ref.current);
       }}
     >
       <div ref={ref} className={cls("ui-dialog", className)} data-motion="pop" data-closing={closing || undefined} data-divided={divided || undefined} data-window={win ? true : undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : win?.name)} tabIndex={-1} style={{ width, height }}>
