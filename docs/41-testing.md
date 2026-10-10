@@ -167,6 +167,42 @@ run of a new check is CI's.
 `smoke.mjs`; nothing was ever removed or moved down. It is now the slowest, flakiest and
 least reportable test we have, and the one gating releases.
 
+## What others do
+
+Checked against VS Code's smoke suite and flakiness wiki, Playwright's docs, and Google's
+flakiness study. Nothing contradicts the plan; four points sharpen it.
+
+- **Focus is never assumed.** VS Code's smoke README: "Never depend on DOM elements having
+  focus using `.focused` classes or `:focus` pseudo-classes"; tests call
+  `waitForActiveElement` first. Three of our incidents were exactly that assumption.
+  "Don't use `setTimeout` just because. Think about what you should wait for in the DOM to
+  be ready and wait for that instead." Also: don't run two smoke runners in one checkout
+  (they share output and data dirs), which is our `.cmd-dev/e2e` lock.
+- **Retries are a stopgap; a flaky test is disabled, not tolerated.** VS Code's wiki:
+  "Retrying a test can work around a flaky test temporarily, but should generally not be
+  used in the long term", and "if you have a flaky test, you should disable it ASAP to keep
+  the build green." Reproduce by looping the test about 100 times locally, with verbose
+  logs; "polling is almost always a better approach" than timeouts, because timeouts depend
+  on "CPU speed, core count, and other running processes". Playwright traces are the
+  diagnostic: CI uploads `playwright-trace-*.zip`, opened at trace.playwright.dev. A
+  separate "Flaky Smoke Tests" pipeline runs the whole suite N times with
+  `continueOnError`, a reliability run rather than a gate.
+- **Timing is the cause, size is the predictor.** Google's study of its continuously run
+  tests found flake rate grows with test size, and an engineer on it: "much of the
+  flakiness in these tests comes from absolute timing" and relative thread timing. One team
+  found that when a stable test turned flaky after a code change, it was a real product
+  bug a sixth of the time: "if the default is to ignore the flaky tests then you will
+  eventually be ignoring a real bug." Our same-frame drag release is that case.
+- **The clock can be faked, including frames.** Playwright's `page.clock.install()`
+  overrides `Date`, timers, `requestAnimationFrame`, `requestIdleCallback` and
+  `performance`; `runFor(ms)` ticks them deterministically. Our motion engine
+  (`renderer/src/motion.ts`, `packages/ui/src/motion.ts`) runs on exactly
+  `requestAnimationFrame` and `performance.now`, so a glide can be stepped to its end in a
+  test on any machine. The install must precede any other clock call, so the fixture does
+  it at launch. `electron.launch` also takes `tracesDir` and `recordVideo`. The kit already
+  honours `prefers-reduced-motion` (`reducedMotion()` in `packages/ui/src/motion.ts`), so
+  `reducedMotion: "reduce"` is a second, coarser way to make functional checks instant.
+
 ## The plan
 
 ### Now: stop the bleeding (days)
@@ -187,9 +223,10 @@ least reportable test we have, and the one gating releases.
    `motion.mjs` does, so a check can be iterated on in seconds instead of minutes. A
    `pnpm ci` script runs typecheck, test, build and smoke the way the workflow does, so
    "it passes locally" means the same thing.
-5. **Traces on failure.** `context.tracing.start()` at launch; on failure, stop and upload
-   `trace.zip` with the screenshots and core logs. Open with `pnpm exec playwright
-   show-trace`.
+5. **Traces on failure.** `electron.launch({ tracesDir })` plus `context.tracing.start()`
+   at launch; on failure, stop and upload `trace.zip` with the screenshots and core logs.
+   Open with `pnpm exec playwright show-trace` or trace.playwright.dev. A trace shows the
+   DOM at the failing assertion, so "tiles still gliding" is seen, not inferred.
 
 ### Next: the app says when it is settled (a week)
 
@@ -240,6 +277,8 @@ least reportable test we have, and the one gating releases.
 - Never `waitForTimeout` before reading state. Wait for the condition, or for `settled()`.
 - A deadline is how long a broken test takes to say so, not how long the thing takes.
   Size it for a busy machine.
+- Never assume focus. Wait for the active element (or the pane's `focused` flag) before
+  typing or sending an edit command.
 - A check prints what it saw when it fails, not just that it failed.
 - Find UI by role and accessible name, or by a `data-*` attribute put there for tests.
   Never by a styling class.
@@ -248,6 +287,11 @@ least reportable test we have, and the one gating releases.
 - Run the e2e in CI's shape before a push (`pnpm e2e`, the default); a CI-only failure is
   reproduced locally (`E2E_SCREEN=ci`, `E2E_CPU_THROTTLE`, a trace) before a fix is pushed.
 - Every e2e script is in CI or in a nightly job. A script in neither is deleted.
+- A check that flakes is disabled the same day with an issue naming an owner, and the
+  failure is reproduced (loop it 20 to 100 times under load, or with a trace) before the
+  fix. Retries are allowed only as a marked, dated stopgap.
+- A reliability run, not a gate: a nightly job runs the smoke suite several times in CI's
+  shape and reports the per-check flake rate, so flakes are found there, not on a push.
 
 ## Open
 
