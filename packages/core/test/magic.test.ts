@@ -317,7 +317,7 @@ describe("network (AR1-11-03)", () => {
     expect(deno.indexOf("(deny network-outbound)")).toBeLessThan(deno.indexOf("(allow network-outbound"));
   });
 
-  it.skipIf(!fs.existsSync("/usr/bin/sandbox-exec"))("the profile with network rules compiles", () => {
+  it.skipIf(needs(fs.existsSync("/usr/bin/sandbox-exec"), "/usr/bin/sandbox-exec"))("the profile with network rules compiles", () => {
     for (const net of [[], ["*:443", "localhost:3000"]]) {
       const r = spawnSync("/usr/bin/sandbox-exec", ["-p", sandboxProfile({ tmp: os.tmpdir(), deny: magicDenyPaths(), net }), "/usr/bin/true"], { encoding: "utf8" });
       if (r.status !== 0) expect(r.stderr).toMatch(/sandbox_apply/);
@@ -327,15 +327,9 @@ describe("network (AR1-11-03)", () => {
   const online = () => spawnSync("/usr/bin/curl", ["-sS", "-o", "/dev/null", "--max-time", "8", "https://example.com"]).status === 0;
 
   it("a sandboxed command can't reach the internet, a credentialed CLI can", async ({ skip }) => {
-    if (!sandboxAvailable()) {
-      const reason = "sandbox-exec can't apply a profile here (e.g. inside another sandbox); the profile text is checked above";
-      process.stderr.write(`[skip] ${reason}\n`);
-      return skip(reason);
-    }
-    if (!online()) {
-      process.stderr.write("[skip] no internet here (curl https://example.com fails unsandboxed)\n");
-      return skip("offline");
-    }
+    if (needs(sandboxAvailable(), SANDBOX)) return skip(SANDBOX);
+    // Optional: a runner without the internet is no reason to fail.
+    if (needs(online(), "the internet (curl https://example.com fails unsandboxed)", { optional: true })) return skip("offline");
     const curl = await execCommand("/usr/bin/curl -sS --max-time 8 https://example.com", { sandbox: "required", deny: [] });
     expect(curl.code).not.toBe(0);
     // gh when it's logged in; else a TLS connection with gh's grant, which is what gh makes.
