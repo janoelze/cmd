@@ -3,6 +3,7 @@
 // a person can change. The same file a widget store would publish.
 
 import { KIT_FILES, kitVersion } from "@cmd/protocol";
+import { POLICY, declarable } from "../data/policy.ts";
 
 export type WidgetSize = "s" | "m" | "l" | "wide";
 
@@ -39,6 +40,8 @@ export interface WidgetManifest {
     env: string[];
     /** Extra folders data.ts may read (its own folder always). "~" is home. */
     read: string[];
+    /** Classes of cmd's event log events() may read beyond the default (data/policy.ts): "agents", "transcripts", "ai"… */
+    events: string[];
   };
   /** https origins the view plays audio/video or shows images from (asked once per window). */
   media: string[];
@@ -80,6 +83,9 @@ export function parseManifest(v: unknown): { ok: true; manifest: WidgetManifest 
   }
   const env = strs(p.env);
   const read = strs(p.read);
+  const events = [...new Set(strs(p.events))];
+  const may = declarable("widget");
+  for (const c of events) if (!may.includes(c as never)) errors.push(`permissions.events: "${c}" ${c in POLICY.widget ? "can't be read by widgets" : "is not a class of events"} (${may.join(", ")})`);
   const media = strs(m.media, 12);
   for (const o of media) if (!/^https:\/\/[^/\s]+\/?$/.test(o)) errors.push(`media: "${o}" is not an https origin`);
   const config: ConfigField[] = [];
@@ -110,7 +116,7 @@ export function parseManifest(v: unknown): { ok: true; manifest: WidgetManifest 
       size,
       refresh,
       command,
-      permissions: { net, run, env, read },
+      permissions: { net, run, env, read, events },
       media: media.map((o) => o.replace(/\/$/, "")),
       config,
       kit: kitVersion(m.kit),

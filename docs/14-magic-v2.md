@@ -57,7 +57,7 @@ Looking at the Magic widgets and logs on Jan's Mac (2026-10-04):
 
 | File | What it is |
 |---|---|
-| `manifest.json` | `title`, `size`, `refresh`, `permissions {net, run, env, read}`, `config` (fields a person sets, `secret` ones kept by cmd), `media`, `kind` (`widget` or `terminal` + `command`) |
+| `manifest.json` | `title`, `size`, `refresh`, `permissions {net, run, env, read, events}` (`events`: classes of the event log beyond the default, data/policy.ts), `config` (fields a person sets, `secret` ones kept by cmd), `media`, `kind` (`widget` or `terminal` + `command`) |
 | `data.ts` | Deno TypeScript: `export const schema = s.object({…})`, `export default async function data(config): Promise<Data>` |
 | `view.html` | the markup and a short `<style>` |
 | `view.ts` | the view's script: `import type { Data } from "./data.ts"; cmd.onData<Data>(…)` |

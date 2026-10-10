@@ -396,6 +396,7 @@ export function takeSignals(): { status: Status | null; notify: Notification[] }
 export interface EventQuery {
   types?: string[];
   at?: [number, number];
+  /** Ignored: a widget reads its own workspace. */
   workspaceId?: string;
   projectId?: string;
   sessionId?: string;
@@ -430,9 +431,11 @@ export interface Event {
 }
 
 /**
- * Events from cmd's log: what agents did (agent.hook), commands that ran
- * (command), commits (git.*), pages (browser.visit), files (file.open), notes,
- * what you focused (user.*). Read-only, at most 1000 per query; the widget
+ * Events from cmd's log, for the window's workspace: commits (git.*), commands
+ * that ran (command, without their output), notes, what you focused (user.*).
+ * Agents (agent.hook), transcripts, model calls (ai.*), pages and files
+ * (browser.visit, file.open) and command output need their class in the
+ * manifest's permissions.events. Read-only, at most 1000 per query; the widget
  * runs with the token cmd issued for this run.
  */
 export async function events(query: EventQuery = {}): Promise<Event[]> {

@@ -131,9 +131,9 @@ Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscr
 **Proposal.** Write `data/policy.ts` as docs/28 §4 drew it, a table `client kind × type prefix → allow | deny | fields`. For widgets: force `workspaceId` from the token, allow a declared set of classes (default `git`, `notes`, `output` without the blob, `actions`), deny `transcripts`, `agents` and `ai` unless the widget's manifest declares them, and strip `data` down to declared fields. Enforce it in `widgetQuery`, so a widget can't widen it. The same table can later serve remote (today `never` for all `data.*`, which is correct).
 
 **Success criteria.**
-- [ ] A test issues a token for workspace A. A widget query without `workspaceId`, or with B, returns only A's events.
-- [ ] A widget query for `types: ["transcript."]` without a declared capability returns an error or nothing (test).
-- [ ] `packages/core/src/data/policy.ts` exists, and `widgetQuery` takes the identity.
+- [x] A test issues a token for workspace A. A widget query without `workspaceId`, or with B, returns only A's events.
+- [x] A widget query for `types: ["transcript."]` without a declared capability returns an error or nothing (test).
+- [x] `packages/core/src/data/policy.ts` exists, and `widgetQuery` takes the identity.
 
 ### AR1-06-06 · Take search off the core thread and stop joining every match
 

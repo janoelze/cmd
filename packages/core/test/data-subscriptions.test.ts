@@ -86,8 +86,9 @@ describe("the widgets socket", () => {
     const w = await connect(widgetsSocketPath(socketPath));
     await expect(w.client.call("data.query", { query: {} })).rejects.toThrow(/widget.hello/);
     await expect(w.client.call("widget.hello", { token: "nope" })).rejects.toThrow(/unknown or expired/);
-    const token = core.widgetTokens.issue({ widgetId: "w1", workspaceId: "s1" });
-    expect(await w.client.call("widget.hello", { token })).toEqual({ widgetId: "w1", workspaceId: "s1" });
+    core.data.record({ id: "ws1-note", at: 50, type: "note", source: "cmd", workspaceId: "s1", text: "in s1", data: { by: "user", agentSession: null } });
+    const token = core.widgetTokens.issue({ widgetId: "w1", workspaceId: "s1", events: [] });
+    expect(await w.client.call("widget.hello", { token })).toEqual({ widgetId: "w1", workspaceId: "s1", events: [] });
     const events = await w.client.call("data.query", { query: { types: ["note"], limit: 5000 } });
     expect(events.length).toBeGreaterThan(0);
     await expect(w.client.call("pane.list", {})).rejects.toThrow(/only read events/);

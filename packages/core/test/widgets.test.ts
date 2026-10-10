@@ -58,7 +58,8 @@ describe("manifest", () => {
     const r = parseManifest({ title: "VPN", refresh: 0.5, permissions: { net: ["https://api.x.com/v1"], run: ["ifconfig"] }, config: [{ key: "city", type: "string", default: "Lisbon" }, { key: "token", secret: true }] });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.manifest).toMatchObject({ kind: "widget", size: "m", refresh: 2, permissions: { net: ["api.x.com"], run: ["ifconfig"], env: [], read: [] } });
+    expect(r.manifest).toMatchObject({ kind: "widget", size: "m", refresh: 2, permissions: { net: ["api.x.com"], run: ["ifconfig"], env: [], read: [], events: [] } });
+    expect(parseManifest({ title: "Agents", permissions: { events: ["agents", "agents", "transcripts"] } })).toMatchObject({ ok: true, manifest: { permissions: { events: ["agents", "transcripts"] } } });
     expect(r.manifest.icon).toBeUndefined();
     expect(parseManifest({ title: "VPN", icon: " lock.shield " })).toMatchObject({ manifest: { icon: "lock.shield" } });
     expect(configValues(r.manifest, { city: "" })).toEqual({ city: "Lisbon" });
@@ -77,6 +78,8 @@ describe("manifest", () => {
     expect(bad({ title: "x", icon: "Cloud Sun" })[0]).toMatch(/SF Symbol/);
     expect(bad({ kind: "widget" })[0]).toMatch(/title/);
     expect(bad({ title: "x", media: ["http://radio.example"] })[0]).toMatch(/https origin/);
+    expect(bad({ title: "x", permissions: { events: ["prompts"] } })[0]).toMatch(/not a class of events/);
+    expect(bad({ title: "x", permissions: { events: ["remote"] } })[0]).toMatch(/can't be read by widgets/);
   });
 });
 
@@ -181,7 +184,8 @@ describe.skipIf(!DENO)("data.ts in Deno", () => {
     const core = new Core({ socketPath: path.join(sockDir, "core.sock"), dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     await core.listen();
     try {
-      core.data.record({ id: "n1", at: 1, type: "note", source: "cmd", text: "a note", data: { by: "user", agentSession: null } });
+      core.data.record({ id: "n1", at: 1, type: "note", source: "cmd", workspaceId: "ws", text: "a note", data: { by: "user", agentSession: null } });
+      core.data.record({ id: "n2", at: 2, type: "note", source: "cmd", workspaceId: "other", text: "not ours", data: { by: "user", agentSession: null } });
       const { dir, m } = widget({
         "manifest.json": MANIFEST(),
         "data.ts": `import { s, events, type Infer } from "cmd";
@@ -192,13 +196,24 @@ export default async function data(): Promise<Data> {
   return { notes: evs.length, first: evs[0]?.text ?? "" };
 }`,
       });
-      const token = core.widgetTokens.issue({ widgetId: "w", workspaceId: null });
+      const token = core.widgetTokens.issue({ widgetId: "w", workspaceId: "ws", events: [] });
       const r = await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {}, socket: { path: widgetsSocketPath(path.join(sockDir, "core.sock")), token } });
       if (!r.ok) console.error("events() run failed:", r.error, "\n", r.stderr);
       expect(r).toMatchObject({ ok: true, data: { notes: 1, first: "a note" } });
       // Without the token the log is out of reach.
       const r2 = await runData(dir, m, { ...denoEnv(), cwd: os.tmpdir(), config: {} });
       expect(r2.ok).toBe(false);
+      // A class the manifest doesn't declare: the error says how to declare it.
+      const t = widget({ "manifest.json": MANIFEST(), "data.ts": `import { s, events, type Infer } from "cmd";
+export const schema = s.object({ n: s.number() });
+export type Data = Infer<typeof schema>;
+export default async function data(): Promise<Data> {
+  return { n: (await events({ types: ["transcript."] })).length };
+}` });
+      const token3 = core.widgetTokens.issue({ widgetId: "w", workspaceId: "ws", events: [] });
+      const r3 = await runData(t.dir, t.m, { ...denoEnv(), cwd: os.tmpdir(), config: {}, socket: { path: widgetsSocketPath(path.join(sockDir, "core.sock")), token: token3 } });
+      expect(r3.ok).toBe(false);
+      expect(r3.error).toMatch(/add "transcripts" to permissions.events/);
     } finally {
       await core.close();
     }

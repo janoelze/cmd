@@ -19,7 +19,7 @@ import { describeAgent, describePane } from "./data/describe.ts";
 import { PaneOutputRecorder } from "./data/sources/pane-output.ts";
 import { projectIdOf } from "./data/project.ts";
 import { matchesQuery } from "./data/match.ts";
-import { WidgetTokens, widgetQuery } from "./data/widgets.ts";
+import { WidgetTokens, widgetRead, type WidgetIdentity } from "./data/widgets.ts";
 import { ViewsStore } from "./data/views/views.ts";
 import { ActivityView } from "./data/views/activity.ts";
 import { SessionsView } from "./data/views/sessions.ts";
@@ -229,7 +229,7 @@ export class Core {
   #viewPending = new Map<Connection, Map<string, Map<string, TurnRow | SessionInfo>>>();
   #viewFlush: ReturnType<typeof setTimeout> | null = null;
   /** Connections on the widgets socket, and which widget each said it is (null until widget.hello). */
-  #widgetConns = new Map<Connection, { widgetId: string; workspaceId: string | null } | null>();
+  #widgetConns = new Map<Connection, WidgetIdentity | null>();
   readonly widgetTokens = new WidgetTokens();
   /** Windows each connection shows (window.follow); remote sessions get output only for these. */
   #follows = new Map<Connection, Set<string>>();
@@ -426,7 +426,7 @@ export class Core {
     recordWorkspaces(this.data, this.workspaces);
     recordNotifications(this.data, this.notifications);
     this.magic = new MagicService({
-      widgetSocket: path.isAbsolute(opts.socketPath) ? { path: widgetsSocketPath(opts.socketPath), token: (widgetId, workspaceId) => this.widgetTokens.issue({ widgetId, workspaceId }) } : null,
+      widgetSocket: path.isAbsolute(opts.socketPath) ? { path: widgetsSocketPath(opts.socketPath), token: (widgetId, workspaceId, events) => this.widgetTokens.issue({ widgetId, workspaceId, events }) } : null,
       windows: this.windows,
       settings,
       ai: this.ai,
@@ -1367,7 +1367,7 @@ export class Core {
     }
     const who = this.#widgetConns.get(conn);
     if (!who) throw new Error("say widget.hello first");
-    if (method === "data.query") return this.data.query(widgetQuery(params.query as DataQuery));
+    if (method === "data.query") return widgetRead(who, params.query as DataQuery, (q) => this.data.query(q));
     throw new Error(`widgets may only read events (data.query), not ${String(method)}`);
   }
 

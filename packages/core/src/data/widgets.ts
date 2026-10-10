@@ -1,15 +1,19 @@
 // Widgets reading the event log (docs/28 §4, scenario S6): a widget's data.ts
 // talks to the core over its own socket (widgets.sock), says which widget it
 // is with a token issued for that run, and may then query events, read-only,
-// within the policy here. Tokens are short-lived and single-run; the token
-// says the widget and its workspace, which is all the policy needs.
+// within the policy (policy.ts). Tokens are short-lived and single-run; the
+// token says the widget, its workspace and the classes its manifest declares,
+// which is all the policy needs: nothing the widget passes in a query widens it.
 
 import { randomBytes } from "node:crypto";
-import type { DataQuery } from "@cmd/protocol";
+import type { DataEvent, DataQuery } from "@cmd/protocol";
+import { clampQuery, clampRows, type Reader } from "./policy.ts";
 
 export interface WidgetIdentity {
   widgetId: string;
   workspaceId: string | null;
+  /** Classes of data its manifest declares (permissions.events). */
+  events: string[];
 }
 
 /** Most rows one query may return a widget. */
@@ -31,7 +35,7 @@ export class WidgetTokens {
     const t = this.#tokens.get(token);
     if (!t) return null;
     if (t.expires < Date.now()) return this.#tokens.delete(token), null;
-    return { widgetId: t.widgetId, workspaceId: t.workspaceId };
+    return { widgetId: t.widgetId, workspaceId: t.workspaceId, events: t.events };
   }
 
   #sweep(): void {
@@ -40,7 +44,15 @@ export class WidgetTokens {
   }
 }
 
-/** A widget's query as the policy allows it: bounded, never a cursor scan of everything. */
-export function widgetQuery(q: DataQuery): DataQuery {
-  return { ...q, limit: Math.min(q.limit ?? 200, WIDGET_QUERY_LIMIT) };
+const reader = (id: WidgetIdentity): Reader => ({ kind: "widget", workspaceId: id.workspaceId, declared: id.events });
+
+/** A widget's query as the policy allows it: its workspace, the classes it may read, bounded. Throws PolicyError. */
+export function widgetQuery(id: WidgetIdentity, q: DataQuery): DataQuery {
+  return clampQuery(reader(id), q && typeof q === "object" ? q : {}, { fallback: 200, max: WIDGET_QUERY_LIMIT });
+}
+
+/** Runs a widget's query: clamped going in, its rows cut to what the widget may see coming out. */
+export function widgetRead(id: WidgetIdentity, q: DataQuery, run: (q: DataQuery) => DataEvent[]): DataEvent[] {
+  const clamped = widgetQuery(id, q);
+  return clampRows(reader(id), clamped, run(clamped));
 }
