@@ -456,6 +456,68 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     for (let i = 0; i < 40 && (await page("document.title").catch(() => null)) !== "E2E Page"; i++) await win.waitForTimeout(150);
   }
 
+  // OSC 8 links in terminal output: the text can say anything, so a link to another
+  // app (smb:) gets a native confirm naming the real URL, and opens nothing until
+  // answered; a web link still opens in a browser window (main/open-policy.ts).
+  {
+    step("open policy");
+    await app.evaluate(({ dialog, shell }) => {
+      globalThis.__opened = [];
+      globalThis.__asked = [];
+      globalThis.__restore = { box: dialog.showMessageBox, ext: shell.openExternal, path: shell.openPath };
+      shell.openExternal = async (url) => void globalThis.__opened.push(url);
+      shell.openPath = async (p) => (globalThis.__opened.push(p), "");
+      dialog.showMessageBox = async (...args) => {
+        const o = args.at(-1);
+        globalThis.__asked.push({ message: o.message, detail: o.detail, buttons: o.buttons, sheet: args.length > 1 });
+        return { response: o.cancelId ?? 1, checkboxChecked: false };
+      };
+    });
+    const term = await win.evaluate(() => window.cmd.call("window.open", { kind: "terminal", input: {} }));
+    await win.evaluate((id) => window.__cmdSelect(id), term.id);
+    const screen = win.locator(`.tile[data-pane="${term.id}"] .xterm-screen`);
+    await screen.waitFor();
+    for (let i = 0; i < 50 && !/\S/.test(await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 5 }).then((r) => r.text), term.id)); i++) await win.waitForTimeout(100);
+    // The link's text fills the first row after `clear`, so a hover anywhere on it finds it.
+    const printLink = async (uri, label) => {
+      const { cols, rows } = (await win.evaluate(() => window.cmd.call("pane.list", {}))).find((p) => p.id === term.id);
+      const text = label.repeat(cols).slice(0, cols - 2);
+      await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [term.id, `clear; printf '\\e]8;;${uri}\\e\\\\${text}\\e]8;;\\e\\\\\\n'\r`]);
+      for (let i = 0; i < 50 && !(await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 5 }).then((r) => r.text), term.id)).startsWith(text.slice(0, 20)); i++) await win.waitForTimeout(100);
+      await win.waitForTimeout(200);
+      return rows;
+    };
+    const cmdClickRow0 = async (rows) => {
+      const box = await screen.boundingBox();
+      const at = { x: box.x + box.width / 2, y: box.y + box.height / rows / 2 };
+      await win.mouse.move(at.x - 20, at.y);
+      await win.mouse.move(at.x, at.y, { steps: 3 });
+      await win.waitForTimeout(150);
+      await win.keyboard.down("Meta");
+      await win.mouse.click(at.x, at.y);
+      await win.keyboard.up("Meta");
+    };
+    let rows = await printLink("smb://example", "github.com ");
+    await cmdClickRow0(rows);
+    let asked = [];
+    for (let i = 0; i < 30 && !asked.length; i++) (await win.waitForTimeout(100), (asked = await app.evaluate(() => globalThis.__asked)));
+    await win.screenshot({ path: path.join(shots, "open-policy-osc8.png") });
+    const opened = await app.evaluate(() => globalThis.__opened);
+    check(asked.length === 1 && /^Open smb:\/\/example( in .+)?\?$/.test(asked[0].message) && asked[0].sheet && asked[0].buttons.at(-1) === "Cancel", `an OSC 8 smb: link asks first, in a sheet naming the real URL (${JSON.stringify(asked)})`);
+    check(opened.length === 0, `Cancel opens nothing (${JSON.stringify(opened)})`);
+    rows = await printLink(`http://localhost:${port}/osc8`, "link ");
+    await cmdClickRow0(rows);
+    let linked = null;
+    for (let i = 0; i < 30 && !linked; i++) {
+      await win.waitForTimeout(150);
+      linked = (await win.evaluate(() => window.cmd.call("window.list", {}))).find((w) => w.kind === "browser" && w.state.url?.endsWith("/osc8"));
+    }
+    const after = await app.evaluate(() => globalThis.__asked.length);
+    check(!!linked && after === 1, `an OSC 8 http link opens in a browser window, without asking (${linked?.state.url})`);
+    await app.evaluate(({ dialog, shell }) => ((dialog.showMessageBox = globalThis.__restore.box), (shell.openExternal = globalThis.__restore.ext), (shell.openPath = globalThis.__restore.path)));
+    await win.evaluate(([a, b]) => Promise.all([window.cmd.call("window.close", { id: a }), window.cmd.call("window.close", { id: b })]), [term.id, linked.id]);
+  }
+
   fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
   fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# hi");
   fs.writeFileSync(path.join(home, "files-fixture", "sub-folder", "inner.txt"), "inside");
