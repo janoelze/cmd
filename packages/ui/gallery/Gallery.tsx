@@ -1160,6 +1160,7 @@ function OverlaysPage() {
   const [library, setLibraryOpen] = useState(false);
   const [workspace, setWorkspace] = useState("work");
   const [msg, setMsg] = useState("");
+  const [area, setArea] = useState("terminals");
   return (
     <>
       <h1>Overlays</h1>
@@ -1368,6 +1369,7 @@ function OverlaysPage() {
           }
         >
           <Segmented fill value="idea" onChange={() => {}} options={["bug", "idea", "other"]} labels={{ bug: "Bug", idea: "Idea", other: "Other" }} />
+          <Select label="Area" value={area} onChange={setArea} options={["terminals", "agents", "windows"]} labels={{ terminals: "Terminals", agents: "Agents", windows: "Windows" }} />
           <TextArea value={msg} onChange={setMsg} placeholder="What happened, or what would you like?" rows={4} />
         </Dialog>
         <ConfirmDialog

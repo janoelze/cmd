@@ -75,6 +75,35 @@ describe.skipIf(!installed)("Dialog and Popover focus (gallery, Chromium)", () =
     }
   });
 
+  it("keeps the page inert when a dialog opens while another is still fading out", async () => {
+    await open();
+    await page.getByRole("button", { name: "Delete Workspace…" }).click();
+    await page.waitForSelector(".ui-dialog");
+    await page.keyboard.press("Escape");
+    // At once, while the first sheet plays its exit.
+    await page.getByRole("button", { name: "Send Feedback…" }).click();
+    expect(await page.locator(".ui-scrim[data-closing]").count()).toBe(1);
+    await page.waitForSelector(".ui-scrim[data-closing]", { state: "detached" });
+    expect(await page.locator("#root").getAttribute("inert")).not.toBeNull();
+    await page.keyboard.press("Escape");
+    await closed();
+    expect(await page.locator("#root").getAttribute("inert")).toBeNull();
+  });
+
+  it("keeps a Select inside the dialog reachable by Tab and working", async () => {
+    await open();
+    await page.getByRole("button", { name: "Send Feedback…" }).click();
+    await page.waitForSelector(".ui-dialog");
+    const select = page.getByRole("dialog").getByRole("combobox", { name: "Area" });
+    let reached = false;
+    for (let i = 0; i < 10 && !reached; i++) (await page.keyboard.press("Tab"), (reached = await select.evaluate((el) => el === document.activeElement)));
+    expect(reached).toBe(true);
+    await select.selectOption("agents");
+    expect(await select.inputValue()).toBe("agents");
+    await page.keyboard.press("Escape");
+    await closed();
+  });
+
   it("lists nothing outside the dialog in the accessibility tree while it is open", async () => {
     await open();
     await page.getByRole("button", { name: "Delete Workspace…" }).click();

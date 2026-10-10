@@ -349,15 +349,26 @@ export function Menu({
 /** Overlays that stay live over a dialog: the tooltip layer and the toasts. */
 const LIVE = ".tip-layer, .ui-toaster";
 
+/** How many open dialogs hold each element inert: two can overlap (one fading out as the next opens) and close in any order. */
+const holds = new Map<HTMLElement, number>();
+
 /** Makes everything in <body> but `keep` (and the live overlays) inert; returns the undo. */
 function inertOthers(keep: Element): () => void {
-  const set: HTMLElement[] = [];
+  const held: HTMLElement[] = [];
   for (const el of document.body.children) {
-    if (el === keep || !(el instanceof HTMLElement) || el.inert || el.matches(LIVE)) continue;
+    // Inert for another reason (a closing overlay): not ours to undo.
+    if (el === keep || !(el instanceof HTMLElement) || el.matches(LIVE) || (el.inert && !holds.has(el))) continue;
+    holds.set(el, (holds.get(el) ?? 0) + 1);
     el.inert = true;
-    set.push(el);
+    held.push(el);
   }
-  return () => set.forEach((el) => (el.inert = false));
+  return () => {
+    for (const el of held) {
+      const n = (holds.get(el) ?? 1) - 1;
+      if (n > 0) holds.set(el, n);
+      else (holds.delete(el), (el.inert = false));
+    }
+  };
 }
 
 /** Open dialogs, the topmost last: keys that reach no element (focus on <body>) are its. */
