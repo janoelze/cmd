@@ -5,7 +5,7 @@
 // an avatar: a built-in widget's icon, else the widget's initial, in a colour
 // of its own from its name (as projects' chips in the sidebar).
 
-import { Button, Callout, Dialog, EmptyState, IconButton, SearchField, SectionHeading, TextField, iconNode } from "@cmd/ui";
+import { Button, Callout, Dialog, EmptyState, IconButton, Presence, SearchField, SectionHeading, TextField, iconNode } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WidgetEntry } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -28,7 +28,7 @@ function matches(e: WidgetEntry, query: string): boolean {
     .every((t) => hay.includes(t));
 }
 
-export function WidgetLibrary({ onClose }: { onClose: () => void }) {
+export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClose: () => void }) {
   const library = useStoreValue((s) => s.library);
   const workspaceId = useStoreValue((s) => s.workspaceId);
   const [query, setQuery] = useState("");
@@ -107,7 +107,7 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       window={{ icon: "square.grid.2x2", name: "Widget Library" }}
       width={720}
@@ -160,12 +160,12 @@ export function WidgetLibrary({ onClose }: { onClose: () => void }) {
         </section>
       )}
       {query && !shown.length && <EmptyState compact>Nothing matches “{query}”. New Widget makes one.</EmptyState>}
-      {renaming && <RenameDialog entry={renaming} onDone={() => setRenaming(null)} onError={fail} />}
+      <Presence when={renaming}>{(entry, open) => <RenameDialog open={open} entry={entry} onDone={() => setRenaming(null)} onError={fail} />}</Presence>
     </Dialog>
   );
 }
 
-function RenameDialog({ entry, onDone, onError }: { entry: WidgetEntry; onDone: () => void; onError: (e: unknown) => void }) {
+function RenameDialog({ open, entry, onDone, onError }: { open: boolean; entry: WidgetEntry; onDone: () => void; onError: (e: unknown) => void }) {
   const [title, setTitle] = useState(entry.title);
   const save = () => {
     if (title.trim() && title.trim() !== entry.title) void cmd.call("widget.rename", { ref: entry.ref, title }).catch(onError);
@@ -173,7 +173,7 @@ function RenameDialog({ entry, onDone, onError }: { entry: WidgetEntry; onDone: 
   };
   return (
     <Dialog
-      open
+      open={open}
       onClose={onDone}
       title="Rename Widget"
       width={360}

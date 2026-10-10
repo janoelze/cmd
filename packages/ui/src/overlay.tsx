@@ -1,6 +1,6 @@
 // Floating surfaces: Popover (a card anchored to a control), Menu (a list of
 // actions in one, like the workspace switcher's), Dialog (a sheet over the window
-// with a scrim) and toasts (a short message at the bottom that goes away).
+// with a scrim, and Presence, which mounts one only while it's shown) and toasts (a short message at the bottom that goes away).
 // Native menus and confirms (cmd.contextMenu, cmd.confirm) stay native; these
 // are for what needs more than text.
 
@@ -10,7 +10,7 @@ import { ICON, iconNode } from "./icon.tsx";
 import { Button, IconButton } from "./button.tsx";
 import type { Tone } from "./status.tsx";
 import { WindowBar } from "./window.tsx";
-import { MOTION, useFlip, usePresence } from "./motion.ts";
+import { MOTION, useFlip, usePresence, usePresentValue } from "./motion.ts";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -520,6 +520,18 @@ export function Dialog({
     </div>,
     document.body,
   );
+}
+
+/**
+ * A sheet that's shown while `when` is set: renders `children(value, open)` while
+ * it's set and through its exit after, then nothing, so a closed sheet runs no
+ * hooks (no fetching, no subscriptions). The sheet passes `open` to its Dialog
+ * (or `!open` as a Palette's `closing`), which fades it out.
+ */
+export function Presence<T>({ when, children }: { when: T | null | undefined | false; children: (value: T, open: boolean) => ReactNode }) {
+  const shown = usePresentValue(when, when != null && when !== false);
+  if (shown.value == null || shown.value === false) return null;
+  return <>{children(shown.value, !shown.closing)}</>;
 }
 
 /** Ask before something that can't be undone. */

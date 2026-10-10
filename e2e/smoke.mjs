@@ -433,7 +433,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [browserWin.id, `http://localhost:${port}/media`]);
     for (let i = 0; i < 40 && (await page("location.pathname").catch(() => null)) !== "/media"; i++) await win.waitForTimeout(150);
     await page(`window.__gum = navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(() => "granted", (e) => e.name); 0`);
-    const sheet = win.locator(".site-permission");
+    const sheet = win.locator(".site-permission:not([data-closing])"); // not one fading out
     await sheet.waitFor({ timeout: 5000 }).catch(() => {});
     const title = (await sheet.locator(".ui-dialog-title").textContent().catch(() => "")) ?? "";
     await win.screenshot({ path: path.join(shots, "site-permission.png") });

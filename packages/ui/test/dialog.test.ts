@@ -123,6 +123,25 @@ describe.skipIf(noChromium)("Dialog and Popover focus (gallery, Chromium)", () =
     }
   });
 
+  it("Presence keeps a sheet mounted while it fades out, then runs none of it", async () => {
+    await open();
+    const opener = page.getByRole("button", { name: "Task Manager…" });
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("dialog", { name: "Task Manager" }).waitFor();
+    await page.waitForTimeout(300);
+    const polls = () => page.evaluate(() => (window as { __polls?: number }).__polls ?? 0);
+    expect(await polls()).toBeGreaterThan(0);
+    await page.keyboard.press("Escape");
+    // Fading out: still there, closing.
+    expect(await page.locator(".ui-scrim[data-closing]").count()).toBe(1);
+    await closed();
+    expect(await opener.evaluate((el) => el === document.activeElement)).toBe(true);
+    const after = await polls();
+    await page.waitForTimeout(400);
+    expect(await polls()).toBe(after);
+  });
+
   it("keeps a Select inside the dialog reachable by Tab and working", async () => {
     await open();
     await page.getByRole("button", { name: "Send Feedback…" }).click();

@@ -95,7 +95,7 @@ await setSize(1440, 900);
 if (await win.waitForSelector(".onboarding", { timeout: 3000 }).catch(() => null)) {
   await win.locator(".onboarding button", { hasText: "Get Started" }).click();
   // "Set Up Later" while an agent isn't set up; with one found (your real HOME), the primary button.
-  for (let i = 0; i < 5 && (await win.locator(".onboarding").count()); i++) {
+  for (let i = 0; i < 5 && (await win.locator(".onboarding:not([data-closing])").count()); i++) {
     await sleep(400);
     const later = win.locator(".onboarding button", { hasText: "Set Up Later" });
     await ((await later.count()) ? later : win.locator('.onboarding .ui-dialog-foot button[data-variant="primary"]')).click();
@@ -214,7 +214,8 @@ await win.evaluate(() => {
     }).observe({ type: "layout-shift" });
   } catch {}
   // Overlays and chrome that come and go: sheets, popovers, toasts, the palette, tooltips, find bars.
-  const CHROME = [".ui-dialog", ".ui-scrim", ".ui-popover", ".ui-toast", ".palette", ".palette-list", ".ui-find", ".tip-pos .tip"];
+  // A clear scrim (a quick picker's, data-clear) draws nothing, so it can't pop.
+  const CHROME = [".ui-dialog", ".ui-scrim:not([data-clear])", ".ui-popover", ".ui-toast", ".palette", ".palette-list", ".ui-find", ".tip-pos .tip"];
   const opacityOf = (el) => {
     let o = 1;
     for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
@@ -537,6 +538,19 @@ await scenario("palette: open", () => menu("view.palette"));
 await scenario("palette: type to filter", () => win.keyboard.type("zzq", { delay: 60 }), { settle: 500 });
 await scenario("palette: clear the filter", async () => { for (let i = 0; i < 3; i++) await win.keyboard.press("Backspace"), await sleep(60); }, { settle: 500 });
 await scenario("palette: close", () => win.keyboard.press("Escape"));
+// Sheets and pickers fade in and out (they stay mounted while they leave: Presence in @cmd/ui).
+for (const [name, id] of [
+  ["Widget Library", "widget.library"],
+  ["What's New", "help.whatsNew"],
+  ["Feedback", "help.feedback"],
+  ["Task Manager", "app.taskManager"],
+  ["Welcome", "app.setup"],
+  ["New picker", "file.new"],
+  ["workspace icon", "workspace.icon"],
+]) {
+  await scenario(`sheet: open (${name})`, () => menu(id));
+  await scenario(`sheet: close (${name})`, () => win.keyboard.press("Escape"));
+}
 await terminal();
 await sleep(300);
 await scenario("find bar: open (terminal)", () => menu("edit.find"));

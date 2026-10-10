@@ -3,7 +3,7 @@
 // Allow and Don't Allow are kept for the site; Esc or the close button answers
 // no for now and asks again next time. One sheet at a time, oldest first.
 
-import { Button, Dialog } from "@cmd/ui";
+import { Button, Dialog, usePresentValue } from "@cmd/ui";
 import { useEffect, useState } from "react";
 import type { SitePermissionRequest } from "../../../main/web-policy.ts";
 import { cmd } from "../bridge.ts";
@@ -41,7 +41,9 @@ export function SitePermissionSheet() {
       ),
     [],
   );
-  const r = queue[0];
+  // The answered one stays while it fades out; the next one takes its place.
+  const shown = usePresentValue(queue[0], !!queue[0]);
+  const r = shown.value;
   if (!r) return null;
   const answer = (allow: boolean | null) => {
     cmd.answerSitePermission(r.id, allow);
@@ -50,7 +52,7 @@ export function SitePermissionSheet() {
   return (
     <Dialog
       key={r.id}
-      open
+      open={!shown.closing}
       onClose={() => answer(null)}
       title={`Allow “${siteName(r.site)}” to ${permissionAsk(r)}?`}
       width={400}

@@ -44,10 +44,10 @@ function inline(text: string, onLink: (url: string) => void): ReactNode[] {
   return out;
 }
 
-export function WhatsNew({ releases, onClose, onLink }: { releases: Release[]; onClose: () => void; onLink: (url: string) => void }) {
+export function WhatsNew({ open = true, releases, onClose, onLink }: { open?: boolean; releases: Release[]; onClose: () => void; onLink: (url: string) => void }) {
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       window={{ icon: "sparkles", name: "What's New" }}
       width={560}

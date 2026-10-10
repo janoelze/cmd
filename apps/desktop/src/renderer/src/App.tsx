@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GLIDE_MS, Toaster, toast, usePresentValue } from "@cmd/ui";
+import { GLIDE_MS, Presence, Toaster, toast, usePresentValue } from "@cmd/ui";
 import type { ActionsList, PaneId, Workspace, WorkspaceId } from "@cmd/protocol";
 import { listActions, rerunLastAction, runAction, showActions } from "./workspaceActions.ts";
 import type { WebviewTag } from "electron";
@@ -952,15 +952,18 @@ export function App() {
         />
       )}
       {shownPicker.value && <Palette key={shownPicker.value.kind} {...shownPicker.value.props} closing={shownPicker.closing} />}
-      {picker?.kind === "new" && <NewPicker run={run} onClose={() => setPicker(null)} />}
-      {picker?.kind === "icon" && <WorkspaceIconPicker workspace={all.workspaces.get(picker.workspace.id) ?? picker.workspace} onClose={() => setPicker(null)} />}
-      {library && <WidgetLibrary onClose={() => setLibrary(false)} />}
+      {/* Sheets stay mounted while they fade out, and not at all once closed (Presence). */}
+      <Presence when={picker?.kind === "new"}>{(_, open) => <NewPicker run={run} onClose={() => setPicker(null)} closing={!open} />}</Presence>
+      <Presence when={picker?.kind === "icon" && picker.workspace}>
+        {(w, open) => <WorkspaceIconPicker open={open} workspace={all.workspaces.get(w.id) ?? w} onClose={() => setPicker(null)} />}
+      </Presence>
+      <Presence when={library}>{(_, open) => <WidgetLibrary open={open} onClose={() => setLibrary(false)} />}</Presence>
       <Toaster />
-      {feedback && <Feedback onClose={() => setFeedback(false)} />}
-      {taskManager && <TaskManager onClose={() => setTaskManager(false)} />}
-      {setup && <Onboarding key={setup.join()} ids={setup} onClose={endSetup} />}
-      {whatsNew && <WhatsNew releases={whatsNew} onClose={() => setWhatsNew(null)} onLink={(url) => (setWhatsNew(null), openLink(url))} />}
-      {all.pairRequests[0] && <PairSheet key={all.pairRequests[0].requestId} request={all.pairRequests[0]} />}
+      <Presence when={feedback}>{(_, open) => <Feedback open={open} onClose={() => setFeedback(false)} />}</Presence>
+      <Presence when={taskManager}>{(_, open) => <TaskManager open={open} onClose={() => setTaskManager(false)} />}</Presence>
+      <Presence when={setup}>{(ids, open) => <Onboarding key={ids.join()} open={open} ids={ids} onClose={endSetup} />}</Presence>
+      <Presence when={whatsNew}>{(releases, open) => <WhatsNew open={open} releases={releases} onClose={() => setWhatsNew(null)} onLink={(url) => (setWhatsNew(null), openLink(url))} />}</Presence>
+      <Presence when={all.pairRequests[0]}>{(request, open) => <PairSheet key={request.requestId} open={open} request={request} />}</Presence>
       <SitePermissionSheet />
     </div>
   );

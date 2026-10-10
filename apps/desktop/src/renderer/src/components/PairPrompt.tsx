@@ -76,10 +76,10 @@ function PairText({ request, onEscape, autoFocus, children }: { request: RemoteP
 }
 
 /** In the main window, while a device waits: a sheet dressed as a window, answered only by its buttons. */
-export function PairSheet({ request }: { request: RemotePairRequest }) {
+export function PairSheet({ open = true, request }: { open?: boolean; request: RemotePairRequest }) {
   const p = usePair(request);
   return (
-    <Dialog open onClose={() => {}} dismissable={false} width={420} position="center" className="pair-sheet" label="Allow a device" window={{ icon: "iphone.radiowaves.left.and.right", name: "Allow a Device", close: false, status: p.expires }} actions={p.buttons}>
+    <Dialog open={open} onClose={() => {}} dismissable={false} width={420} position="center" className="pair-sheet" label="Allow a device" window={{ icon: "iphone.radiowaves.left.and.right", name: "Allow a Device", close: false, status: p.expires }} actions={p.buttons}>
       <PairText request={request} onEscape={() => p.answer(false)} autoFocus />
     </Dialog>
   );

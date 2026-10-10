@@ -69,11 +69,13 @@ function sortRows(rows: Row[], s: Sort): Row[] {
 
 const sum = (rows: Row[], k: "memory" | "cpu") => rows.reduce((n, r) => n + (r[k] ?? 0), 0);
 
-export function TaskManager({ onClose }: { onClose: () => void }) {
+export function TaskManager({ open = true, onClose }: { open?: boolean; onClose: () => void }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Polls while open; it stops as the sheet starts to fade out.
   useEffect(() => {
+    if (!open) return;
     let live = true;
     let timer: ReturnType<typeof setTimeout>;
     const tick = async () => {
@@ -92,10 +94,10 @@ export function TaskManager({ onClose }: { onClose: () => void }) {
       live = false;
       clearTimeout(timer);
     };
-  }, []);
+  }, [open]);
 
   return (
-    <Dialog open onClose={onClose} window={{ icon: ICON, name: "Task Manager" }} width={720} height={520} position="center" padded={false}>
+    <Dialog open={open} onClose={onClose} window={{ icon: ICON, name: "Task Manager" }} width={720} height={520} position="center" padded={false}>
       <TaskManagerView
         snap={snap}
         error={error}

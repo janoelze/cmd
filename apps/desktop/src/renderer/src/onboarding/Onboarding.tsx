@@ -55,7 +55,7 @@ export async function stepsAtLaunch(claim: OnboardingClaim | null): Promise<stri
 // ── the sheet ────────────────────────────────────────────
 
 /** onClose: call closeSetup (the app also shows What's New after it, if it waited). */
-export function Onboarding({ ids, onClose }: { ids: readonly string[]; onClose: () => void }) {
+export function Onboarding({ open = true, ids, onClose }: { open?: boolean; ids: readonly string[]; onClose: () => void }) {
   const ai = useAiStatus();
   const steps = ids.map(stepById).filter((s): s is OnboardingStep => !!s);
   const [at, setAt] = useState(0);
@@ -67,7 +67,7 @@ export function Onboarding({ ids, onClose }: { ids: readonly string[]; onClose: 
   const next = () => (last ? onClose() : setAt(at + 1));
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       width={480}
       height={600}

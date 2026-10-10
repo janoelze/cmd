@@ -45,6 +45,7 @@ import {
   Menu,
   NumberField,
   Popover,
+  Presence,
   PageDots,
   Panel,
   Prose,
@@ -1146,6 +1147,21 @@ function FindSpecimen() {
 
 // ── overlays ───────────────────────────────────────────
 
+/** Polls while it's mounted: window.__polls counts, so the test sees a closed one stop. */
+function PollingSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [polls, setPolls] = useState(0);
+  useEffect(() => {
+    const w = window as { __polls?: number };
+    const t = setInterval(() => (setPolls((n) => n + 1), (w.__polls = (w.__polls ?? 0) + 1)), 50);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <Dialog open={open} onClose={onClose} title="Task Manager" width={360} position="center" actions={<Button onClick={onClose}>Done</Button>}>
+      Polled {polls} times since it opened.
+    </Dialog>
+  );
+}
+
 function OverlaysPage() {
   const menuAnchor = useRef<HTMLButtonElement>(null);
   const rowMenuAnchor = useRef<HTMLButtonElement>(null);
@@ -1158,6 +1174,7 @@ function OverlaysPage() {
   const [divided, setDivided] = useState(false);
   const [welcome, setWelcome] = useState(false);
   const [library, setLibraryOpen] = useState(false);
+  const [polling, setPolling] = useState(false);
   const [workspace, setWorkspace] = useState("work");
   const [msg, setMsg] = useState("");
   const [area, setArea] = useState("terminals");
@@ -1382,6 +1399,16 @@ function OverlaysPage() {
         >
           Its 3 windows close. Terminals in it are ended.
         </ConfirmDialog>
+      </Spec>
+      <Spec
+        title="Presence"
+        code="<Presence when={value}>{(value, open) => <Sheet open={open} />}</Presence>"
+        note="For a sheet whose content does work (fetches, polls, subscribes): mounted while shown and while it fades out, then not at all."
+      >
+        <Row>
+          <Button onClick={() => setPolling(true)}>Task Manager…</Button>
+        </Row>
+        <Presence when={polling}>{(_, open) => <PollingSheet open={open} onClose={() => setPolling(false)} />}</Presence>
       </Spec>
       <Spec title="Toast" code="toast(message, { tone, action }) · <Toaster/>">
         <Row>

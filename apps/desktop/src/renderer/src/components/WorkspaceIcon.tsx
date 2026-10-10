@@ -51,7 +51,7 @@ const SYMBOLS = [
 
 const COLS = 10;
 
-export function WorkspaceIconPicker(p: { workspace: Workspace; onClose: () => void }) {
+export function WorkspaceIconPicker(p: { open?: boolean; workspace: Workspace; onClose: () => void }) {
   const current = workspaceIcon(p.workspace);
   const [query, setQuery] = useState("");
   const shown = useMemo(() => {
@@ -82,7 +82,7 @@ export function WorkspaceIconPicker(p: { workspace: Workspace; onClose: () => vo
   };
 
   return (
-    <Dialog open onClose={p.onClose} padded={false} scrim={false} width={460} className="icon-picker" label="Workspace icon">
+    <Dialog open={p.open ?? true} onClose={p.onClose} padded={false} scrim={false} width={460} className="icon-picker" label="Workspace icon">
       <input
         autoFocus
         className="palette-input"

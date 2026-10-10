@@ -22,10 +22,13 @@ export type FeedbackApi = Pick<CmdBridge, "feedbackStatus" | "sendFeedback">;
 const reason = (err: unknown) => String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
 
 export function Feedback({
+  open = true,
   onClose,
   initial,
   api = cmd,
 }: {
+  /** False while it fades out (Presence). */
+  open?: boolean;
   onClose: () => void;
   /** Filled in already (a bug report from an error). */
   initial?: { kind?: Kind; message?: string; contact?: string };
@@ -69,7 +72,7 @@ export function Feedback({
 
   if (state === "sent")
     return (
-      <Dialog open onClose={onClose} width={480} position="center" label="Feedback sent" window={{ icon: "bubble.left", name: "Send Feedback" }}>
+      <Dialog open={open} onClose={onClose} width={480} position="center" label="Feedback sent" window={{ icon: "bubble.left", name: "Send Feedback" }}>
         <EmptyState icon="checkmark.circle" title="Thanks for the feedback">
           It's on its way.
         </EmptyState>
@@ -78,7 +81,7 @@ export function Feedback({
 
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       window={{ icon: "bubble.left", name: "Send Feedback" }}
       width={480}
