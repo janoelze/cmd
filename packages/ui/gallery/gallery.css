@@ -8,6 +8,13 @@ body { font: var(--text-base) / 1.35 var(--font-ui); color: var(--text); backgro
 .g-side { display: flex; flex-direction: column; gap: 2px; padding: 14px 10px; background: var(--bg-sidebar); box-shadow: inset -1px 0 0 var(--separator); overflow-y: auto; }
 .g-brand { display: flex; align-items: baseline; gap: 6px; padding: 0 8px 12px; font: 600 var(--text-lg) var(--font-ui); }
 .g-brand span { font: var(--text-sm) var(--font-mono); color: var(--text-dim); }
+/* Opened as an app window (a browser's "install as app"): the traffic lights draw over
+   the page's top left. The sidebar starts below them; its top band drags the window.
+   In a tab, nothing changes. */
+@media (display-mode: standalone), (display-mode: window-controls-overlay) {
+  .g-side { padding-top: max(var(--titlebar-h), env(titlebar-area-height, 0px)); }
+  .g-side::before { content: ""; position: fixed; inset: 0 auto auto 0; width: 200px; height: var(--titlebar-h); -webkit-app-region: drag; app-region: drag; }
+}
 .g-nav { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; font: var(--text-base) var(--font-ui); color: var(--text); text-align: left; background: none; border: 0; border-radius: var(--radius); cursor: default; }
 .g-nav:hover { background: var(--bg-hover); }
 .g-nav[aria-current="page"] { background: var(--bg-selected); }
