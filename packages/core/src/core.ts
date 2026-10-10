@@ -1353,7 +1353,9 @@ export class Core {
         return;
       }
       if (conn.access !== "local") checkRemoteCall(req.method, params, conn.access, this.#policy);
-      const done = this.scheduler.mark(`rpc ${req.method}`);
+      // Named for the watchdog up to the handler's first await, and again for the reply (a big result is a long stringify).
+      const name = `rpc ${req.method}`;
+      let done = this.scheduler.mark(name);
       let result;
       try {
         result =
@@ -1363,8 +1365,13 @@ export class Core {
       } finally {
         done();
       }
-      this.#afterCall(conn, req.method, params, result);
-      reply({ result: result ?? null });
+      done = this.scheduler.mark(name);
+      try {
+        this.#afterCall(conn, req.method, params, result);
+        reply({ result: result ?? null });
+      } finally {
+        done();
+      }
       return;
     } catch (err) {
       if (err instanceof RemoteDenied) {

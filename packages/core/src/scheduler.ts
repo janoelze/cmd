@@ -12,6 +12,11 @@
 // late means something ran that long without yielding. A stall over STALL_MS
 // is logged with the activity that was running (a request, a job) so the cause
 // names itself in core.log, and the last few show in core.info.
+//
+// A mark names one synchronous run only: it ends at the next microtask
+// boundary (the first `await`) even if `done()` comes later, because whatever
+// runs while the marked code waits (another request, a timer, a job's step) is
+// not it. `yield()` names the job again for its next step.
 
 import { EventEmitter } from "node:events";
 import { logger } from "@cmd/protocol/node";
@@ -40,6 +45,16 @@ export interface Pacer {
 /** A pacer that only gives the next tick: tests, the lab, views built in memory. */
 export const inlinePacer: Pacer = { yield: () => new Promise<void>((r) => setImmediate(r)), mark: () => () => {} };
 
+/** One mark: `done()` and the steps `yield()` names again share it. */
+interface Token {
+  activity: string;
+}
+/** A mark's synchronous run: from its start (or a yield's return) to `done()` or the run's end. */
+interface Run {
+  token: Token;
+  since: number;
+}
+
 export interface SchedulerOptions {
   budgetMs?: number;
   share?: number;
@@ -52,8 +67,9 @@ export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [
   #share: number;
   /** When the current slice of background work began, or null between slices. */
   #sliceAt: number | null = null;
-  /** The activity that began most recently (a request, a job's step); what a stall is blamed on. */
-  #current: string | null = null;
+  /** The marks open in this synchronous run, innermost last; emptied at its end (#flush). */
+  #open: Run[] = [];
+  #flushing = false;
   /**
    * Activities that ended lately, with how long each ran: a stall's timer fires
    * only once the thread is free, after the culprit ended, and the one that ran
@@ -77,19 +93,35 @@ export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [
   }
 
   /**
-   * Names what runs now, for the watchdog's blame; returns a function that ends
-   * it and names what ran before again (a request answered during a job's pause
-   * must not take the job's name with it).
+   * Names what runs now, for the watchdog's blame, until `done()` or the end of
+   * this synchronous run, whichever comes first: a name held across an `await`
+   * would stick to whatever runs in the gap. Nested marks end innermost first,
+   * so a request answered inside a job's step hands the name back to the job.
    */
   mark(activity: string): () => void {
-    const before = this.#current;
-    const startedAt = performance.now();
-    this.#current = activity;
+    const token: Token = { activity };
+    this.#enter(token);
     return () => {
-      this.#ran(activity, startedAt);
-      if (this.#current === activity) this.#current = before;
+      const i = this.#open.findLastIndex((r) => r.token === token);
+      if (i < 0) return; // its run ended at an await: already counted
+      this.#ran(activity, this.#open[i]!.since);
+      this.#open.splice(i, 1);
     };
   }
+
+  #enter(token: Token): void {
+    this.#open.push({ token, since: performance.now() });
+    if (this.#flushing) return;
+    this.#flushing = true;
+    queueMicrotask(this.#flush);
+  }
+
+  /** The end of a synchronous run: what is still open ran until now, and stops being named. */
+  #flush = (): void => {
+    this.#flushing = false;
+    for (const r of this.#open) this.#ran(r.token.activity, r.since);
+    this.#open.length = 0;
+  };
 
   #ran(activity: string, since: number): void {
     const now = performance.now();
@@ -102,22 +134,27 @@ export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [
    * else after a pause that keeps background work to its share. Call it every
    * few hundred rows, and at least every few ms of work.
    */
-  async yield(): Promise<void> {
+  yield(): Promise<void> {
     const now = performance.now();
     this.#sliceAt ??= now;
     const used = now - this.#sliceAt;
-    if (used < this.#budget) {
-      await new Promise<void>((r) => setImmediate(r));
-    } else {
-      // The job isn't running while it pauses: a stall then is someone else's, unless its last slice was the block.
-      const held = this.#current;
-      if (held) this.#ran(held, this.#sliceAt);
-      this.#current = null;
-      const pause = Math.min(MAX_PAUSE_MS, (used * (1 - this.#share)) / this.#share);
-      await new Promise<void>((r) => setTimeout(r, pause));
-      this.#current = held;
-      this.#sliceAt = performance.now();
-    }
+    // The job's name, for its next step: its run ends at the caller's await. Named again after resolving, so the
+    // caller's continuation runs before the end of that run (#flush): `await pace.yield()` directly, not through a wrapper.
+    const held = this.#open.at(-1)?.token;
+    return new Promise<void>((resolve) => {
+      const resume = () => {
+        resolve();
+        if (held) this.#enter(held);
+      };
+      if (used < this.#budget) setImmediate(resume);
+      else {
+        const pause = Math.min(MAX_PAUSE_MS, (used * (1 - this.#share)) / this.#share);
+        setTimeout(() => {
+          this.#sliceAt = performance.now();
+          resume();
+        }, pause);
+      }
+    });
   }
 
   /**
@@ -195,10 +232,11 @@ export class Scheduler extends EventEmitter<{ startup: [StartupStatus]; stall: [
       const late = now - this.#expected;
       this.#expected = now + TICK_MS;
       if (late < STALL_MS) return;
-      // Blamed on what runs now, else on what ran longest among what ended since the timer came due (the block held the thread until then).
+      // The block ended before this timer could run, and every mark's run with it: blamed on the run that took longest
+      // among those that ended since the timer came due, if it was a good part of the block, else on nothing marked.
       const began = now - late;
       const ended = this.#ended.filter((e) => e.at >= began).sort((a, b) => b.ms - a.ms)[0];
-      const blame = this.#current ?? (ended && ended.ms >= late / 4 ? ended.activity : null) ?? "(idle: timers, I/O callbacks)";
+      const blame = (ended && ended.ms >= late / 4 ? ended.activity : null) ?? "(idle: timers, I/O callbacks)";
       const stall: Stall = { at: Date.now() - late, ms: Math.round(late), in: blame };
       this.#stalls.push(stall);
       if (this.#stalls.length > STALLS_KEPT) this.#stalls.shift();

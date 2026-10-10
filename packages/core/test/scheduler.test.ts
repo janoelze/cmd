@@ -75,4 +75,66 @@ describe("scheduler", () => {
       s.dispose();
     }
   });
+
+  it("doesn't blame an activity for what runs while it awaits", async () => {
+    const s = new Scheduler({});
+    try {
+      const stalls: { ms: number; in: string }[] = [];
+      s.on("stall", (st) => stalls.push(st));
+      await new Promise((r) => setTimeout(r, 60));
+      // A marks, then waits; while it waits, B blocks the thread: unmarked, then marked.
+      for (const b of [null, "rpc b.block"]) {
+        const from = stalls.length;
+        const a = (async () => {
+          const done = s.mark("journal sync");
+          try {
+            await new Promise((r) => setTimeout(r, STALL_MS + 300));
+          } finally {
+            done();
+          }
+        })();
+        await new Promise<void>((r) =>
+          setTimeout(() => {
+            const done = b ? s.mark(b) : () => {};
+            burn(STALL_MS + 80);
+            done();
+            r();
+          }, 20),
+        );
+        await a;
+        expect(stalls.length).toBeGreaterThan(from);
+        // A loaded machine may stall on its own as well: none of them is A's.
+        expect(stalls.slice(from).map((x) => x.in)).not.toContain("journal sync");
+        expect(stalls.slice(from).map((x) => x.in)).toContain(b ?? "(idle: timers, I/O callbacks)");
+      }
+    } finally {
+      s.dispose();
+    }
+  });
+
+  it("names a job again after each yield, and only its steps", async () => {
+    const s = new Scheduler({ budgetMs: 5, share: 0.5 });
+    try {
+      const stalls: { ms: number; in: string }[] = [];
+      s.on("stall", (st) => stalls.push(st));
+      await new Promise((r) => setTimeout(r, 60));
+      const from = stalls.length;
+      const done = s.mark("sessions rebuild");
+      let other: Promise<void> | null = null;
+      for (let i = 0; i < 4; i++) {
+        // While the job pauses (it ran past its budget), an unmarked timer blocks: not the job's.
+        if (i === 1) other = new Promise((r) => setTimeout(() => (burn(STALL_MS + 80), r()), 0));
+        burn(i === 3 ? STALL_MS + 80 : 6); // its last step blocks: the job's
+        await s.yield();
+      }
+      done();
+      await other;
+      await new Promise((r) => setTimeout(r, 120));
+      const blamed = stalls.slice(from).map((x) => x.in);
+      expect(blamed).toContain("(idle: timers, I/O callbacks)");
+      expect(blamed.at(-1)).toBe("sessions rebuild");
+    } finally {
+      s.dispose();
+    }
+  });
 });
