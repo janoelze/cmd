@@ -213,7 +213,11 @@ function useChecks(access: string | null, state: RemoteStatus["state"] | undefin
 
 /** Where the pairing code goes while a mode isn't set up yet. */
 export function SetupWait() {
-  return <div className="rm-card rm-wait">Finish the setup below to get a pairing code.</div>;
+  return (
+    <Stack pad="xl">
+      <Text tone="dim">Finish the setup below to get a pairing code.</Text>
+    </Stack>
+  );
 }
 
 /** The setup checklist of an access mode (docs/38, "Experience"), titled after it; stories in Remote.story.tsx. */
@@ -229,19 +233,22 @@ export function Setup({ title, checks, error, busy, again }: { title: string } &
     <FormSection title={`Set Up ${title}`} plain>
       {error && !checks ? (
         <>
-          <div className="rm-card">
+          <Stack pad="xl">
             <Callout tone="danger">Couldn't check the setup: {error}</Callout>
-          </div>
-          <div className="rm-actions">
+          </Stack>
+          <FormActions>
             <Button busy={busy} disabled={busy} onClick={again}>
               Check Again
             </Button>
-          </div>
+          </FormActions>
         </>
       ) : !checks ? (
-        <div className="rm-card rm-wait rm-checking">
-          <Spinner /> Checking…
-        </div>
+        <Stack pad="xl">
+          <Inline gap="md">
+            <Spinner />
+            <Text tone="dim">Checking…</Text>
+          </Inline>
+        </Stack>
       ) : (
         <Checklist
           steps={checks.map((c, i) => ({
@@ -250,7 +257,7 @@ export function Setup({ title, checks, error, busy, again }: { title: string } &
             detail: c.detail,
             action: (c.link || i === current) && (
               <>
-                {c.link && <Button onClick={() => cmd.openPath(c.link!)}>{c.linkLabel ?? "Open"}</Button>}
+                {c.link && <Button onClick={() => cmd.openPath(c.link!, { from: "user" })}>{c.linkLabel ?? "Open"}</Button>}
                 {i === current && againButton(c)}
               </>
             ),
