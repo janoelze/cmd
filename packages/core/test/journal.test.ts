@@ -3,9 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { JournalEvent, Workspace } from "@cmd/protocol";
+import type { AgentTurn, JournalEvent, Workspace } from "@cmd/protocol";
+import type { SessionRow } from "../src/data/views/sessions.ts";
 import { Core } from "../src/core.ts";
-import { digest } from "../src/journal/digest.ts";
+import { digest, eventsHash } from "../src/journal/digest.ts";
 import { gitEvents, gitStamp, parseReflog } from "../src/journal/git.ts";
 import { JournalService, SYNC_FRESH_MS, type JournalAi } from "../src/journal/service.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -194,10 +195,10 @@ describe("journal writer", () => {
 describe("journal service", () => {
   const workspace: Workspace = { id: "shop", name: "Shopfront", root: "/Users/sam/src/shopfront", home: false, icon: null, order: 0, closedAt: null, createdAt: 0, lastActiveAt: 0, view: {} } as unknown as Workspace;
 
-  function service(ai: JournalAi | null) {
+  function service(ai: JournalAi | null, now = to + 3 * 86400_000) {
     const store = new JournalStore();
     store.recordAll(syntheticDay(DAY));
-    return new JournalService({ store, workspaces: () => [workspace], agentWorkspace: () => null, ai, now: () => to + 3 * 86400_000 });
+    return new JournalService({ store, workspaces: () => [workspace], agentWorkspace: () => null, ai, now: () => now });
   }
 
   it("writes a day once, until its events change", async () => {
@@ -206,7 +207,7 @@ describe("journal service", () => {
       modelName: () => "Model",
       object: async <T,>() => (calls++, { value: { headline: "A day.", entries: [] } as T, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }, model: "m" }),
     };
-    const j = service(ai);
+    const j = service(ai, to + 3600_000); // yesterday: a past day older than that is final once written (below)
     const date = j.dayOf(from + 3600_000);
     expect((await j.day("all", date))?.headline).toBe("A day.");
     await j.day("all", date);
@@ -269,6 +270,86 @@ describe("journal service", () => {
     } finally {
       await core.close();
     }
+  });
+});
+
+describe("journal days a session spans", () => {
+  // Three work days, Monday to Wednesday; "now" is Wednesday, so Monday is older than yesterday.
+  const day = (n: number, h: number, m = 0) => new Date(2026, 9, 5 + n, h, m).getTime();
+  const turn = (index: number, start: number, prompt: string): { turn: AgentTurn; cwd: string | null } => ({
+    turn: { agentId: "a1", agentKind: "claude", sessionId: "s1", index, startedAt: start, endedAt: start + 10 * 60_000, prompt, auto: false, followUps: [], final: "Done.", outcome: "done", error: null, files: [{ path: "/w/shop/src/a.ts" }], commands: [], tools: [] } as unknown as AgentTurn,
+    cwd: "/w/shop",
+  });
+
+  function setup() {
+    const turns = [turn(0, day(0, 10), "Build the checkout flow"), turn(1, day(1, 10), "Add tests for the checkout flow"), turn(2, day(2, 10), "Fix the checkout totals")];
+    const session = { key: "claude:s1", id: "s1", agent: "claude", path: null, env: null, cwd: "/w/shop", branch: null, title: "Checkout", first_prompt: "Build the checkout flow", started: day(0, 10), updated: day(2, 10, 10), messages: 6, project_id: null, name: null, name_by: null, named_at: null } as SessionRow;
+    const store = new JournalStore(null, { turns: (since) => turns.filter((t) => (t.turn.endedAt ?? t.turn.startedAt) >= since), sessions: (since) => [session].filter((r) => (r.updated ?? 0) >= since) });
+    let now = day(2, 12);
+    const written: string[] = [];
+    const ai: JournalAi = { modelName: () => "Model", object: async <T,>() => (written.push(new Date(now).toDateString()), { value: { headline: "A day.", entries: [] } as T, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }, model: "m" }) };
+    const j = new JournalService({ store, workspaces: () => [], agentWorkspace: () => null, ai, now: () => now, git: async () => [] });
+    return { j, store, turns, session, written, at: (t: number) => (now = t), dates: [0, 1, 2].map((n) => j.dayOf(day(n, 12))) };
+  }
+
+  async function writeAll(j: JournalService, dates: number[], mode: "stale" | "force" = "stale") {
+    const out = [];
+    for (const d of dates) out.push(await j.day("all", d, mode));
+    return out;
+  }
+
+  it("leaves finished days alone when the session gets a new turn today", async () => {
+    const { j, turns, session, written, at, dates } = setup();
+    const first = await writeAll(j, dates);
+    expect(written).toHaveLength(3);
+    at(day(2, 12, 45)); // past today's throttle
+    turns.push(turn(3, day(2, 12, 20), "Round the totals per line"));
+    session.updated = day(2, 12, 30);
+    const second = await writeAll(j, dates);
+    expect(written).toHaveLength(4); // today only
+    expect(second[0]!.writtenAt).toBe(first[0]!.writtenAt);
+    expect(second[1]!.writtenAt).toBe(first[1]!.writtenAt);
+    expect(second[2]!.writtenAt).toBe(day(2, 12, 45));
+  });
+
+  it("doesn't write a day older than yesterday again when the session is renamed", async () => {
+    const { j, session, written, at, dates } = setup();
+    const first = await writeAll(j, dates);
+    at(day(2, 12, 45));
+    Object.assign(session, { title: "Checkout, renamed", name: "checkout", name_by: "user", named_at: day(2, 12, 40) });
+    const second = await writeAll(j, dates);
+    expect(written).toHaveLength(3);
+    expect(second.map((d) => d!.writtenAt)).toEqual(first.map((d) => d!.writtenAt));
+  });
+
+  it("writes a day older than yesterday again only when asked, unless it was written before it ended", async () => {
+    const { j, store, written, at, dates } = setup();
+    const first = await writeAll(j, dates);
+    at(day(2, 12, 45));
+    // Something recorded late into Monday (a commit read from git after the fact).
+    store.record({ at: day(0, 16), until: null, kind: "note", key: "late", workspaceId: null, repo: null, cwd: null, thread: null, text: "Found it", data: { kind: "note", by: "user", agentSession: null } });
+    expect((await j.day("all", dates[0]!))?.writtenAt).toBe(first[0]!.writtenAt);
+    expect(written).toHaveLength(3);
+    expect((await j.day("all", dates[0]!, "force"))?.writtenAt).toBe(day(2, 12, 45));
+    expect(written).toHaveLength(4);
+    // Monday written on Monday afternoon: still open, so what came after is written in.
+    store.saveDay({ ...store.day("all", dates[0]!)!, writtenAt: day(0, 15) });
+    store.record({ at: day(0, 18), until: null, kind: "note", key: "later", workspaceId: null, repo: null, cwd: null, thread: null, text: "And this", data: { kind: "note", by: "user", agentSession: null } });
+    await j.day("all", dates[0]!);
+    expect(written).toHaveLength(5);
+  });
+
+  it("hashes what the day contains: spans clipped to its window, without a session's title", () => {
+    const { j, session, dates } = setup();
+    const hash = (date: number) => {
+      const t = j.threads("all", date);
+      return eventsHash(t.threads, t.events, { from: t.from, to: t.to });
+    };
+    const before = dates.map(hash);
+    session.updated = day(2, 20);
+    session.title = "Something else";
+    expect(dates.slice(0, 2).map(hash)).toEqual(before.slice(0, 2));
+    expect(hash(dates[2]!)).not.toBe(before[2]); // today's part of the span grew
   });
 });
 

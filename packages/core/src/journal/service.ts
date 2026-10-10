@@ -13,7 +13,8 @@
 // Days are written on request (the Journal widget, `cmd journal`): threads and
 // a digest from the events, then a model, unless the digest is the one the
 // stored day was written from. Today is written again at most every
-// TODAY_EVERY_MS unless asked to. Without an AI provider no day is
+// TODAY_EVERY_MS unless asked to; a day older than yesterday, written after it
+// ended, only when asked to (docs/24). Without an AI provider no day is
 // written at all (events are still recorded, so they can be once there is).
 
 import os from "node:os";
@@ -239,18 +240,21 @@ export class JournalService {
     const key = `${scope}@${date}`;
     const running = this.#writing.get(key);
     if (running) return running;
-    const { events, threads, digest: d } = this.threads(scope, date, pool);
+    const { events, threads, digest: d, from, to } = this.threads(scope, date, pool);
     if (!threads.some((t) => !t.minor)) return null;
     const stored = this.store.day(scope, date);
     const outdated = !!stored && !sameFormat(stored.format, CURRENT);
     const shown = stored && { ...stored, outdated };
+    // What the day contains (clipped to its window); a day stored with the older, unclipped hash counts as unchanged while that one matches.
     // Days from before they carried an events hash compare by their digest.
-    const happened = stored && (stored.eventsHash ? stored.eventsHash !== eventsHash(threads, events) : stored.inputHash !== d.hash);
+    const happened = stored && (stored.eventsHash ? stored.eventsHash !== eventsHash(threads, events, { from, to }) && stored.eventsHash !== eventsHash(threads, events) : stored.inputHash !== d.hash);
     const today = date === this.dayOf(this.#now);
     const recentDay = this.dayOf(this.#now) - date < UPGRADE_RECENT_DAYS * DAY_MS;
     const throttled = stored && today && this.#now - stored.writtenAt < TODAY_EVERY_MS;
+    // A day written after it ended, older than yesterday, is final: only `force` writes it again (docs/24).
+    const final = stored && !recentDay && stored.writtenAt >= to;
     // Written again when something happened since, or when it's recent and older rules wrote it. History stays as written.
-    const stale = !stored || (happened && !throttled) || (outdated && recentDay && !throttled);
+    const stale = !stored || (happened && !throttled && !final) || (outdated && recentDay && !throttled);
     // Only a model writes days: titled from the data alone, they read like a list of prompts.
     const model = this.#o.ai?.modelName() ?? null;
     if (mode === "never" || !model || !this.#o.ai || (mode === "stale" && !stale)) return shown;
@@ -259,7 +263,7 @@ export class JournalService {
     const write = this.#o.ai
       .object<WrittenDay>({ tier: "smart", purpose: "journal.day", background: true, system: SYSTEM, prompt: ctx.text, context: ctx.record, schema: SCHEMA as unknown as Record<string, unknown>, maxOutputTokens: 6000 })
       .then((r) => {
-        const day = toDay(r.value, d, threads, events, { date, scope, writtenBy: r.model });
+        const day = toDay(r.value, d, threads, events, { date, scope, writtenBy: r.model, window: { from, to }, writtenAt: this.#now });
         this.store.saveDay(day);
         log.info("day written", { scope, date: new Date(date).toDateString(), entries: day.entries.length, chars: d.text.length, tokens: r.usage });
         return day;

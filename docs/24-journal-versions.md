@@ -27,7 +27,7 @@ All in `packages/protocol/src/journal.ts`:
 
 - **Every event row**: `schema` (the `JOURNAL_SCHEMA` that wrote it) and `cmd` (the build: its version, or `source+<build>` from a checkout), next to `source` (live or backfill).
 - **Every written day**: `format` (`{ schema, threads, writer }`), `writtenBy` (the model), `writtenAt`, `eventsHash` and `inputHash`.
-  - `eventsHash`: what happened, by event key, span and text. Independent of the rules.
+  - `eventsHash`: what the day contains, by event key, span and text, with spans clipped to the day's window and a session's title left out (its turns are what the day did). So a session resumed tomorrow, or renamed, doesn't change the days before. Independent of the rules. Days stored with the older, unclipped hash (before AR1-16-01) count as unchanged while that one still matches.
   - `inputHash`: the digest the model got, for comparing revisions.
 - **`journal_meta`**: the sync cursors per source (a restart reads only what's new) and the `SOURCES_FORMAT` events were read with.
 - **`journal_days_history`**: when a day is written again, the version it replaces, the newest 3 per day.
@@ -38,7 +38,7 @@ Days written before this (format 1, no `eventsHash`) are read with `format: {1, 
 
 `JournalService.day` (stale mode, what the widget and `cmd journal` use):
 
-1. **Something happened since** (`eventsHash` changed): written again. Today at most every 30 minutes.
+1. **Something happened since** (`eventsHash` changed): written again. Today at most every 30 minutes. A day older than yesterday that was written after it ended is **final**: a changed hash (a commit read late, say) no longer writes it again; only rule 3 does. One written before it ended (opened that afternoon) is still completed.
 2. **Only the rules changed** (`format` older than this cmd's): written again if it's today or yesterday; older days **stay as written** and come back with `outdated: true`.
 3. **Asked to** (`write: "force"`, `cmd journal --write`, the widget's Write Again): written again, whatever the rules.
 

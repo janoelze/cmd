@@ -68,7 +68,7 @@ export interface WrittenDay {
 }
 
 /** The model's answer as a JournalDay: refs resolved, threads it left out added, counts from the events. */
-export function toDay(w: WrittenDay, d: Digest, threads: JournalThread[], events: JournalEvent[], o: { date: number; scope: string; writtenBy: string | null }): JournalDay {
+export function toDay(w: WrittenDay, d: Digest, threads: JournalThread[], events: JournalEvent[], o: { date: number; scope: string; writtenBy: string | null; window?: { from: number; to: number }; writtenAt?: number }): JournalDay {
   const byThread = new Map(threads.map((t) => [t.id, t]));
   const byEvent = new Map(events.map((e) => [e.id, e]));
   const covered = new Set<string>();
@@ -116,9 +116,9 @@ export function toDay(w: WrittenDay, d: Digest, threads: JournalThread[], events
     headline: w.headline.trim(),
     entries: entries.sort((a, b) => b.start - a.start),
     writtenBy: o.writtenBy,
-    writtenAt: Date.now(),
+    writtenAt: o.writtenAt ?? Date.now(),
     format: { schema: JOURNAL_SCHEMA, threads: THREADS_FORMAT, writer: WRITER_FORMAT },
-    eventsHash: eventsHash(threads, events),
+    eventsHash: eventsHash(threads, events, o.window),
     inputHash: d.hash,
     minor: threads.filter((t) => t.minor && !covered.has(t.id)).length,
   };

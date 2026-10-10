@@ -14,14 +14,23 @@ import type { JournalEvent, JournalThread } from "@cmd/protocol";
  * What happened in a day, hashed, whatever the rules that read it: each event
  * in a thread, by key, span and text. A day is written again when this changes;
  * a change of rules alone (THREADS_FORMAT, WRITER_FORMAT) doesn't change it.
+ *
+ * With the day's window, it hashes what the day contains (AR1-16-01): a span is
+ * clipped to the window, so a session that goes on tomorrow, or began
+ * yesterday, doesn't change this day; and a session's text (its title, which a
+ * rename or a summary changes from outside the day) is left out, since its
+ * turns are what the day did. Without a window it is the hash days were
+ * written with before, kept so those days compare as they did.
  */
-export function eventsHash(threads: JournalThread[], events: JournalEvent[]): string {
+export function eventsHash(threads: JournalThread[], events: JournalEvent[], window?: { from: number; to: number }): string {
   const byId = new Map(events.map((e) => [e.id, e]));
   const ids = [...new Set(threads.flatMap((t) => t.events))].sort((a, b) => a - b);
   const h = createHash("sha256");
   for (const id of ids) {
     const e = byId.get(id);
-    if (e) h.update(`${e.key}\0${e.until ?? e.at}\0${e.text}\n`);
+    if (!e) continue;
+    if (!window) h.update(`${e.key}\0${e.until ?? e.at}\0${e.text}\n`);
+    else h.update(`${e.key}\0${Math.max(e.at, window.from)}\0${Math.min(e.until ?? e.at, window.to)}\0${e.kind === "agent.session" ? "" : e.text}\n`);
   }
   return h.digest("hex").slice(0, 16);
 }

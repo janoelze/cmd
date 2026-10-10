@@ -60,7 +60,7 @@ if (positionals[0] === "write") {
   const out = execFileSync("claude", ["-p", "--model", a.model!], { input: prompt, encoding: "utf8", maxBuffer: 1 << 24, shell: "/bin/zsh" });
   const json = out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1);
   const w = JSON.parse(json) as WrittenDay;
-  const day = toDay(w, d, threads, events, { date: new Date(from).setHours(0, 0, 0, 0), scope: a.repo ?? "all", writtenBy: a.model! });
+  const day = toDay(w, d, threads, events, { date: new Date(from).setHours(0, 0, 0, 0), scope: a.repo ?? "all", writtenBy: a.model!, window: { from, to } });
   if (a.out) fs.writeFileSync(a.out, JSON.stringify({ day, threads, digest: d.text }, null, 2));
   console.log(`# ${new Date(from).toDateString()}  (${((Date.now() - t0) / 1000).toFixed(0)} s, ${d.text.length} chars in)\n\n${day.headline}\n`);
   for (const e of day.entries) console.log(`${hm(e.start)}–${hm(e.end)}  [${e.kind}${e.outcome ? `/${e.outcome}` : ""}] ${e.title}\n             ${e.summary}\n             ${e.threads.map((t) => t.replace(/^(\w+):.*?#?([^#]*)$/, "$1:$2").slice(0, 40)).join(", ")}  ${JSON.stringify(e.counts)}`);
