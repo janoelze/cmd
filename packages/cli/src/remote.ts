@@ -82,9 +82,10 @@ export async function remoteCommand(client: Client, pos: string[], opt: Record<s
       const before = sub === "off" ? (await client.call("remote.status", {})).sessions.length : 0;
       const st = await client.call(sub === "on" ? "remote.enable" : sub === "off" ? "remote.disable" : "remote.status", {});
       if (opt.json) return out(st);
-      printRemote(st, await client.call("remote.modes", {}), await client.call("window.list", {}));
+      const modes = await client.call("remote.modes", {});
+      printRemote(st, modes, await client.call("window.list", {}));
       if (sub === "off" && before) console.log(`\nclosed ${before} session${before === 1 ? "" : "s"}`);
-      const mode = (await client.call("remote.modes", {})).find((m) => m.id === st.access);
+      const mode = modes.find((m) => m.id === st.access);
       if (sub === "on" && st.state !== "online" && mode?.setup) console.log("\nnext: cmd remote setup");
       else if (sub === "on" && st.state !== "error" && !st.devices.length) console.log("\nnext: cmd remote pair");
       return 0;

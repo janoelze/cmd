@@ -269,6 +269,29 @@ describe("DirectListener", () => {
       ws.on("open", () => ws.close());
     });
 
+  it("keeps the adapter's error once it listens", async () => {
+    const l = new DirectListener({ port: 0, route: "R".repeat(22), webDir: null });
+    open.push(l);
+    l.setOrigin(null, "Add your HTTPS address (remote.url).");
+    l.start();
+    await expect.poll(() => l.port).toBeTruthy();
+    expect(l).toMatchObject({ state: "error", error: "Add your HTTPS address (remote.url)." });
+    l.setOrigin(ORIGIN);
+    expect(l).toMatchObject({ state: "online", error: null });
+  });
+
+  it("keeps a taken port's error when the adapter's URL comes in later", async () => {
+    const blocker = net.createServer();
+    await new Promise<void>((r) => blocker.listen(0, "127.0.0.1", r));
+    const l = new DirectListener({ port: (blocker.address() as net.AddressInfo).port, route: "R".repeat(22), webDir: null });
+    open.push(l);
+    l.start();
+    await expect.poll(() => l.state).toBe("error");
+    l.setOrigin(ORIGIN);
+    expect(l).toMatchObject({ state: "error", error: expect.stringMatching(/is in use/), listenFailed: true });
+    await new Promise((r) => blocker.close(r));
+  });
+
   it("serves from memory with an ETag, a 304 and HEAD", async () => {
     const { url } = await listen();
     const js = await fetch(`http://${url}/assets/a.js`);

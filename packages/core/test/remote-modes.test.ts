@@ -14,6 +14,7 @@ import { AccessModes, type ModeContext } from "../src/remote/access/mode.ts";
 import { publishedMode } from "../src/remote/access/published.ts";
 import { relayMode } from "../src/remote/access/relay.ts";
 import { HostKeys } from "../src/remote/keys.ts";
+import { RelayLink, webClient } from "../src/remote/link.ts";
 import { RemoteService } from "../src/remote/service.ts";
 
 /** A publisher that records what it's asked, fails while `fail` says why, and holds enable() while `hold` is set. */
@@ -172,6 +173,36 @@ describe("Check Again on a published mode", () => {
     await svc.setup();
     expect(await online()).toMatchObject({ state: "online", address: "https://fake.example" });
     expect(adapter.calls).toEqual([`enable ${port} 8443`]);
+  });
+
+  it("listens again when its port was taken and the adapter published after that", async () => {
+    const port = freePort();
+    const blocker = net.createServer();
+    await new Promise<void>((r) => blocker.listen(port, "127.0.0.1", r));
+    const { adapter, settings, svc, online } = await service(port);
+    let release!: () => void;
+    adapter.hold = new Promise<void>((r) => (release = r));
+    settings.set("remote.access", "fake");
+    settings.set("remote.enabled", true);
+    expect(await online()).toMatchObject({ state: "error", error: expect.stringMatching(/is in use/) });
+    release();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(svc.status()).toMatchObject({ state: "error", error: expect.stringMatching(/is in use/) });
+    await new Promise((r) => blocker.close(r));
+    await svc.setup();
+    expect(await online()).toMatchObject({ state: "online", address: "https://fake.example" });
+  });
+});
+
+describe("the relay mode's web client", () => {
+  it("is an address only when it's an http(s) URL", () => {
+    expect(webClient(" https://cmd.example.com/ ")).toBe("https://cmd.example.com");
+    expect(webClient("http://localhost:5173")).toBe("http://localhost:5173");
+    expect(webClient("cmd.example.com")).toBeNull();
+    expect(webClient("ftp://cmd.example.com")).toBeNull();
+    expect(webClient("")).toBeNull();
+    const link = new RelayLink({ relay: "wss://relay.example", client: () => "cmd.example.com", route: null, secret: null, onRegistered: () => {} });
+    expect(link.endpoint()).toBeNull();
   });
 });
 

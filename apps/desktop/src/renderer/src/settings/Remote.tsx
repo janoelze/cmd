@@ -20,7 +20,16 @@ function stateLine(status: RemoteStatus | null, mode: RemoteAccessMode | undefin
   if (state === "off") return "Off.";
   if (state === "connecting") return mode?.connecting ?? "Connecting…";
   if (state === "error") return status?.error ? sentence(status.error) : "Can't connect. Retrying…";
-  return status?.address ? `Ready on ${new URL(status.address).host}. Paired devices can connect.` : "Ready. Paired devices can connect.";
+  return status?.address ? `Ready on ${host(status.address)}. Paired devices can connect.` : "Ready. Paired devices can connect.";
+}
+
+/** The address's host, or the address as given when it doesn't parse (a setting typed without https://). */
+function host(address: string): string {
+  try {
+    return new URL(address).host;
+  } catch {
+    return address;
+  }
 }
 
 /** "lost the relay; reconnecting" → "Lost the relay; reconnecting." */
@@ -174,18 +183,31 @@ function useChecks(access: string | null, state: RemoteStatus["state"] | undefin
     );
   };
   useEffect(() => setChecks(null), [access]);
-  // Back from the browser (an admin console, a download): look again.
-  useEffect(() => {
-    if (!access) return;
-    const look = () => run("remote.checks", access);
-    window.addEventListener("focus", look);
-    return () => window.removeEventListener("focus", look);
-  }, [access]);
   useEffect(() => {
     if (!access) return void ++ask.current;
     const timer = setTimeout(() => run("remote.checks", access), 400);
     return () => clearTimeout(timer);
   }, [access, state, config]);
+  // Back from the browser (an admin console, a download): look again, at most every few seconds,
+  // since each look runs the tailscale CLI and probes HTTPS.
+  useEffect(() => {
+    if (!access) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let last = 0;
+    const look = () => {
+      if (timer || Date.now() - last < 5_000) return;
+      timer = setTimeout(() => {
+        timer = null;
+        last = Date.now();
+        run("remote.checks", access);
+      }, 400);
+    };
+    window.addEventListener("focus", look);
+    return () => {
+      window.removeEventListener("focus", look);
+      if (timer) clearTimeout(timer);
+    };
+  }, [access]);
   return { checks, error, busy, again: () => access && run("remote.setup", access) };
 }
 

@@ -39,7 +39,7 @@ export class RelayLink extends EventEmitter<TransportEvents> implements Transpor
   }
 
   endpoint(): Endpoint | null {
-    const client = this.#o.client().trim().replace(/\/+$/, "");
+    const client = webClient(this.#o.client());
     return client ? { socket: this.#o.relay.trim(), client } : null;
   }
 
@@ -134,5 +134,15 @@ export class RelayLink extends EventEmitter<TransportEvents> implements Transpor
       this.#setState("error", authed ? "lost the relay; reconnecting" : `can't reach the relay (${ev.code || "no connection"})`);
       this.#timer = setTimeout(() => this.#connect(), delay);
     };
+  }
+}
+
+/** remote.client without a trailing slash, or null when it isn't an http(s) URL (cmd.example.com): phones couldn't open it. */
+export function webClient(raw: string): string | null {
+  const s = raw.trim().replace(/\/+$/, "");
+  try {
+    return /^https?:$/.test(new URL(s).protocol) ? s : null;
+  } catch {
+    return null;
   }
 }
