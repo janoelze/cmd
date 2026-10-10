@@ -14,10 +14,11 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { KIT_FILES, SETTINGS_TEMPLATE, SYSTEM_SOUNDS, kitVersion, mediaOrigin, widgetCsp } from "@cmd/protocol";
-import { cmdHome, connect, coreSocketPath, enterInstance, initLog, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, connect, coreSocketPath, enterInstance, initLog, instanceName, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { SETTINGS_TITLEBAR_HEIGHT, TOPBAR_HEIGHT, trafficLights } from "../shared/chrome.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
+import { buildInstance, readFlavor } from "./flavor.ts";
 import { lucideSymbol, type SymbolImage } from "@cmd/ui/lucide";
 import { appMetrics } from "./metrics.ts";
 import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
@@ -48,9 +49,10 @@ const checkForUpdates = () => void startUpdater().then(() => updater()).then((u)
  * attach to (and offer to restart) the core your real terminals run in, even
  * when started from one of them. Settings and keybindings stay shared. $CMD_HOME
  * relocates either instance; a build run from a linked git worktree defaults it
- * to <worktree>/.cmd-dev, so worktrees never share a core.
+ * to <worktree>/.cmd-dev, so worktrees never share a core. Which one a build is
+ * was fixed when it was packaged (./flavor.ts), not guessed from its name.
  */
-const devBuild = !app.isPackaged || app.getName() === "cmd dev";
+const devBuild = buildInstance({ isPackaged: app.isPackaged, flavor: readFlavor(app.getAppPath()) }) === "dev";
 /** Signs usage stats batches (core/usage.ts); baked in at build time, release builds only. */
 declare const __USAGE_KEY__: string;
 const USAGE_KEY = typeof __USAGE_KEY__ === "string" && !devBuild ? __USAGE_KEY__ : "";
@@ -71,7 +73,7 @@ const rendererLog = logger("renderer");
 installCrashHandlers("main", { exitOnException: false, context: () => crashContext() });
 startCrashReporting({ devBuild, context: () => crashContext() });
 startFeedback(devBuild);
-log.info(`${app.getName()} ${app.getVersion()} starting`, { pid: process.pid, electron: process.versions.electron, platform: `${process.platform} ${os.release()} ${process.arch}`, home: cmdHome() });
+log.info(`${app.getName()} ${app.getVersion()} starting`, { pid: process.pid, electron: process.versions.electron, platform: `${process.platform} ${os.release()} ${process.arch}`, instance: instanceName(), home: cmdHome() });
 
 let keybindings: KeybindingsSnapshot = loadKeybindings();
 // While the Settings window records a shortcut the menu has none, so the keys

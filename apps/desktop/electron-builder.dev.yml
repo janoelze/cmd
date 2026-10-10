@@ -11,3 +11,8 @@ mac:
   extraResources:
     - from: build/dev/Assets.car
       to: Assets.car
+# Into the packaged package.json: this build runs as the dev instance (src/main/flavor.ts),
+# whatever the .app is called. productName too, so app.getName() says "cmd dev" from the start.
+extraMetadata:
+  productName: cmd dev
+  cmdFlavor: dev
