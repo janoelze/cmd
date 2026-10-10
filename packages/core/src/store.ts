@@ -20,6 +20,47 @@ export interface RemoteDeviceRecord {
   lastSeenAt: number;
 }
 
+/**
+ * The file's schema, in meta('schema'): 2 since workspaces (0.24). Files from
+ * before have none: 1 when they still have `spaces`, else 2. A file newer than
+ * this is refused (StoreTooNew), not opened: this cmd would start over on
+ * tables it doesn't know, and the newer one would find its own state gone.
+ */
+export const STORE_SCHEMA = 2;
+
+/** A cmd.sqlite written by a newer cmd than this one: not opened, not written to. */
+export class StoreTooNew extends Error {
+  override name = "StoreTooNew";
+  readonly file: string;
+  readonly schema: number;
+  readonly supported: number;
+  constructor(file: string, schema: number, supported: number) {
+    super(`${file} is from a newer cmd (state schema ${schema}, this cmd knows ${supported}): update cmd to open it`);
+    this.file = file;
+    this.schema = schema;
+    this.supported = supported;
+  }
+}
+
+/** The schema meta('schema') records, or null without one (a file from before it was recorded, or new). */
+function recordedSchema(db: DatabaseSync): number | null {
+  if (!db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'`).get()) return null;
+  const row = db.prepare(`SELECT value FROM meta WHERE key = 'schema'`).get() as { value: string } | undefined;
+  return row ? Number(row.value) || null : null;
+}
+
+/** Throws StoreTooNew for a file from a newer cmd; reads only (a missing file stays missing). */
+export function checkStoreSchema(file: string): void {
+  if (!fs.existsSync(file)) return;
+  const db = new DatabaseSync(file, { readOnly: true, timeout: 2000 });
+  try {
+    const schema = recordedSchema(db);
+    if (schema !== null && schema > STORE_SCHEMA) throw new StoreTooNew(file, schema, STORE_SCHEMA);
+  } finally {
+    db.close();
+  }
+}
+
 export class Store {
   #db: DatabaseSync;
   #stmts = new Map<string, StatementSync>();
@@ -29,6 +70,11 @@ export class Store {
   constructor(file: string) {
     // Wait out a short lock (another process on the file) rather than throw.
     this.#db = new DatabaseSync(file, { timeout: 2000 });
+    const schema = recordedSchema(this.#db);
+    if (schema !== null && schema > STORE_SCHEMA) {
+      this.#db.close();
+      throw new StoreTooNew(file, schema, STORE_SCHEMA);
+    }
     this.#renameSpaces();
     this.#db.exec(`
       PRAGMA journal_mode = WAL;
@@ -74,6 +120,7 @@ export class Store {
         value TEXT NOT NULL
       );
     `);
+    this.#stmt(`INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)`).run(String(STORE_SCHEMA));
     this.#path = file === ":memory:" ? null : fs.realpathSync(file);
   }
 

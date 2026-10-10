@@ -14,7 +14,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { KIT_FILES, SETTINGS_TEMPLATE, SYSTEM_SOUNDS, kitVersion, mediaOrigin, widgetCsp } from "@cmd/protocol";
-import { cmdHome, connect, coreSocketPath, enterInstance, initLog, instanceName, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, connect, CORE_REFUSED_EXIT, coreRefusal, coreSocketPath, enterInstance, initLog, instanceName, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { SETTINGS_TITLEBAR_HEIGHT, TOPBAR_HEIGHT, trafficLights } from "../shared/chrome.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
@@ -350,13 +350,17 @@ function spawnCore(): void {
   // While this app runs, a core that dies without reporting it (killed by a
   // signal, a native crash, Node's own fatal errors) is reported from here.
   // 70: the core's crash handler has recorded it already. SIGTERM/SIGINT: stopped on purpose.
+  // CORE_REFUSED_EXIT: it won't run on this state dir (another instance's, or data from a newer cmd); not a crash.
   child.on("exit", (code, signal) => {
     log.info(`core ${child.pid} exited`, { code, signal });
     const stopped = signal === "SIGTERM" || signal === "SIGINT" || signal === "SIGHUP" || code === 0 || code === 70;
     const output = tailOf(out, 40);
     const locked = output.some((l) => l.includes("already running"));
-    started.state = locked ? "locked" : "exited";
-    if (stopped || locked) return;
+    const refused = code === CORE_REFUSED_EXIT ? coreRefusal(output) : null;
+    if (refused) log.error(`the core refused to start: ${refused.text}`, { reason: refused.reason, log: coreLog() });
+    lastRefusal = refused;
+    started.state = refused ? "refused" : locked ? "locked" : "exited";
+    if (stopped || locked || refused) return;
     recordCrash("core", "exit", signal ? `Core killed by ${signal}` : `Core exited with code ${code}`, output.join("\n") || null, {}, tailOf(coreLog(), 80));
   });
   child.unref();
@@ -366,9 +370,11 @@ function spawnCore(): void {
 const CORE_START_MS = 5000;
 const CORE_BUSY_MS = 10 * 60_000;
 
-type SpawnState = "starting" | "exited" | "locked";
-/** The last core this app started: still starting (or running), exited, or found another core holding the lock. */
+type SpawnState = "starting" | "exited" | "locked" | "refused";
+/** The last core this app started: still starting (or running), exited, found another core holding the lock, or refused the state dir. */
 let lastSpawn: { state: SpawnState; at: number } | null = null;
+/** Why the last core this app started refused its state dir, shown instead of the generic failure (coreFailed). */
+let lastRefusal: ReturnType<typeof coreRefusal> = null;
 
 /** A core process is alive for this state dir (sync check of its pid file). */
 function coreProcessAlive(): boolean {
@@ -414,6 +420,7 @@ async function waitForCore(): Promise<void> {
   let said = false;
   for (const t0 = Date.now(); ; ) {
     if (await canConnect()) return;
+    if (lastSpawn?.state === "refused") throw new Error(`core refused to start: ${lastRefusal?.text}; see ${coreLog()}`);
     const waited = Date.now() - t0;
     if (waited > CORE_START_MS) {
       const busy = coreProcessAlive() || lastSpawn?.state === "starting" || lastSpawn?.state === "locked";
@@ -430,6 +437,7 @@ async function waitForCore(): Promise<void> {
  * need the core, so a release with the fix may already be downloaded.
  */
 async function coreFailed(coreUp: () => void): Promise<void> {
+  if (lastRefusal) return coreRefused(lastRefusal);
   await startUpdater();
   const u = await updater();
   const ready = u.updateStatus().ready;
@@ -452,6 +460,19 @@ async function coreFailed(coreUp: () => void): Promise<void> {
     case "Show Log":
       shell.showItemInFolder(coreLog());
       return coreFailed(coreUp);
+  }
+}
+
+/** The core won't run on this state dir: say why; trying again won't help, an update might. */
+async function coreRefused(refusal: NonNullable<typeof lastRefusal>): Promise<void> {
+  const buttons = refusal.reason === "too-new" && !devBuild ? ["Check for Updates", "Show Log", "Close"] : ["Show Log", "Close"];
+  const { response } = await dialog.showMessageBox({ type: "warning", message: "cmd couldn't open its data", detail: refusal.text, buttons, defaultId: 0, cancelId: buttons.length - 1 });
+  switch (buttons[response]) {
+    case "Check for Updates":
+      return checkForUpdates();
+    case "Show Log":
+      shell.showItemInFolder(coreLog());
+      return coreRefused(refusal);
   }
 }
 

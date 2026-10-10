@@ -80,9 +80,37 @@ export function worktreeHome(checkout: string): string | null {
 
 /** State dir: $CMD_HOME, else ~/Library/Application Support/cmd (or cmd-dev). */
 export function cmdHome(): string {
-  if (process.env.CMD_HOME) return process.env.CMD_HOME;
-  if (process.platform === "win32") return path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local"), instanceDir());
-  return path.join(os.homedir(), "Library", "Application Support", instanceDir());
+  return process.env.CMD_HOME || defaultHome(instanceName());
+}
+
+/** The state dir `name` has when $CMD_HOME doesn't say: ~/Library/Application Support/cmd or cmd-dev. */
+export function defaultHome(name: InstanceName, homedir = os.homedir()): string {
+  const dir = name === "dev" ? "cmd-dev" : "cmd";
+  if (process.platform === "win32") return path.join(process.env.LOCALAPPDATA ?? path.join(homedir, "AppData", "Local"), dir);
+  return path.join(homedir, "Library", "Application Support", dir);
+}
+
+/**
+ * The other instance when `home` is its default state dir, else null. A core
+ * runs only on a state dir of its own instance: a dev build on the installed
+ * app's data would migrate it to a schema the installed cmd can't write (and
+ * the reverse). Any other $CMD_HOME (tests, e2e, worktrees) is anyone's.
+ */
+export function foreignHome(home: string, name: InstanceName = instanceName(), homedir = os.homedir()): InstanceName | null {
+  const other: InstanceName = name === "dev" ? "release" : "dev";
+  return samePath(home, defaultHome(other, homedir)) ? other : null;
+}
+
+/** Two paths name one folder (symlinks resolved where they exist; case as the disk has it). */
+function samePath(a: string, b: string): boolean {
+  const real = (p: string) => {
+    try {
+      return fs.realpathSync.native(p);
+    } catch {
+      return path.resolve(p);
+    }
+  };
+  return real(a) === real(b);
 }
 
 /**
@@ -132,4 +160,23 @@ export function isOwnCore(hello: { pid: number; stateDir?: string }, home = cmdH
 /** Where a client connects: $CMD_SOCKET (the pane's own core), else this instance's core. */
 export function defaultSocketPath(): string {
   return process.env[ENV.socket] || coreSocketPath();
+}
+
+/**
+ * A core that won't start on its state dir (core/data/state-dir.ts: another
+ * instance's, or data from a newer cmd) exits with CORE_REFUSED_EXIT after
+ * printing one line, `cmd core: refused (<reason>): <text for people>`, which
+ * the app shows instead of its generic "couldn't start" (coreRefusal).
+ */
+export const CORE_REFUSED_EXIT = 78;
+export type CoreRefusalReason = "too-new" | "foreign";
+export const coreRefusalLine = (reason: CoreRefusalReason, text: string): string => `cmd core: refused (${reason}): ${text}`;
+
+/** The refusal in a core's output, the last one if several; null without one. */
+export function coreRefusal(lines: readonly string[]): { reason: CoreRefusalReason; text: string } | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = /^cmd core: refused \((too-new|foreign)\): (.+)$/.exec(lines[i]!.trim());
+    if (m) return { reason: m[1] as CoreRefusalReason, text: m[2]! };
+  }
+  return null;
 }

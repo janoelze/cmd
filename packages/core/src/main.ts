@@ -4,10 +4,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { cmdHome, configDir, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, logDir, logger, ptyHostSocketPath, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, configDir, CORE_REFUSED_EXIT, coreRefusalLine, coreSocketPath, enterInstance, initLog, instanceName, installCrashHandlers, logDir, logger, ptyHostSocketPath, sourceBuildId } from "@cmd/protocol/node";
 import { Core } from "./core.ts";
 import { acquireLock } from "./lock.ts";
-import { prepareEventsLog } from "./data/migrations.ts";
+import { prepareStateDir, StateDirRefused } from "./data/state-dir.ts";
 import { USAGE_URL } from "./usage.ts";
 import { nodePtyFactory } from "./panes.ts";
 import { adoptLoginPath } from "./loginpath.ts";
@@ -57,18 +57,20 @@ if (!lock) {
 const pidFile = path.join(home, "core.pid");
 fs.writeFileSync(pidFile, String(process.pid));
 
-// The event log before anything opens it: an older one is migrated now, once
-// (a minute on a 1.9 GB log; core.log says how far), a newer one refused: this
-// cmd would write rows that one can't read, so it doesn't start at all.
+// The state dir before anything opens it (data/state-dir.ts): one of the other
+// instance is refused, an older event log is migrated now, once (a minute on a
+// 1.9 GB log; core.log says how far), a newer one refused: this cmd would write
+// rows that one can't read. Refused, the core doesn't start at all, and tells
+// the app why (coreRefusalLine, CORE_REFUSED_EXIT).
 try {
-  prepareEventsLog(path.join(home, "data", "events.sqlite"));
+  prepareStateDir(home);
 } catch (err) {
   const e = err as Error;
-  log.error(`could not open the event log: ${e.message}`, err);
-  console.error(`cmd core: ${e.message}`);
+  log.error(`could not open the state dir: ${e.message}`, err);
+  console.error(e instanceof StateDirRefused ? coreRefusalLine(e.reason, e.forPeople) : `cmd core: ${e.message}`);
   fs.rmSync(pidFile, { force: true });
   lock.release();
-  process.exit(1);
+  process.exit(e instanceof StateDirRefused ? CORE_REFUSED_EXIT : 1);
 }
 
 // The user's PATH, in the background: launch isn't held up, and commands the core runs wait for it.
