@@ -17,7 +17,7 @@ import { findUrl } from "../src/actions/service.ts";
 import { Core } from "../src/core.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
-import { repeating, SYSTEM_TIMEOUT } from "../../../test/system.ts";
+import { SYSTEM_TIMEOUT } from "../../../test/system.ts";
 
 let dir: string;
 
@@ -311,8 +311,9 @@ describe("service", () => {
     expect(list().actions.map((a) => a.name)).toEqual(["dev"]);
     expect(list().primary).toBe("npm:package.json:dev");
     const changed = new Promise<string>((r) => core.actions.once("changed", r));
-    // Written again until seen: a write just after the folder's watch began can be lost (repeating's comment).
-    expect(await repeating("the folder's change", changed, () => write({ justfile: "test:\n  cargo test\n" }))).toBe(dir);
+    // Right after the watch began, before it is live: the watch's settle check reports it (watch.ts).
+    write({ justfile: "test:\n  cargo test\n" });
+    expect(await changed).toBe(dir);
     expect(list().actions.map((a) => a.name)).toEqual(["dev", "test"]);
   });
 

@@ -56,4 +56,57 @@ describe("WatchService", () => {
     fs.writeFileSync(path.join(sub, "new3.txt"), "x");
     expect(await seen).toBe(false);
   });
+
+  // A watch isn't live at once (macOS starts its FSEvents stream on another thread): a write
+  // right after watch() was nearly always lost (27-30 of 30 before the settle check).
+  it("reports a change made right after the watch began, before it was live", async () => {
+    const runs = await Promise.all(
+      Array.from({ length: 20 }, async (_, i) => {
+        const own = new WatchService();
+        const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-watch-race-")));
+        const file = path.join(d, "f.txt");
+        fs.writeFileSync(file, "one");
+        await new Promise((r) => setTimeout(r, 20));
+        const folder = waitFor(own, d, 3000);
+        const edited = waitFor(own, file, 3000);
+        own.watch(d);
+        own.watch(file);
+        fs.writeFileSync(path.join(d, `new${i}.txt`), "x");
+        fs.writeFileSync(file, "two");
+        const r = [await folder, await edited];
+        own.close();
+        return r;
+      }),
+    );
+    expect(runs.flat().filter((ok) => !ok).length).toBe(0);
+  });
+
+  it("reports a change after `since` (when the caller read the folder) made before watch()", async () => {
+    svc = new WatchService({ settle: [50] });
+    const sub = fs.mkdtempSync(path.join(dir, "since-"));
+    const readAt = Date.now();
+    await new Promise((r) => setTimeout(r, 5));
+    fs.writeFileSync(path.join(sub, "late.txt"), "x");
+    await new Promise((r) => setTimeout(r, 300)); // long before the watch: no event of its own
+    const seen = waitFor(svc, sub, 1500);
+    svc.watch(sub, readAt);
+    expect(await seen).toBe(true);
+  });
+
+  it("reports nothing when nothing changed: not for a folder, its entries or a file", async () => {
+    const own = new WatchService();
+    const sub = fs.mkdtempSync(path.join(dir, "quiet-"));
+    fs.mkdirSync(path.join(sub, "inner"));
+    for (let i = 0; i < 50; i++) fs.writeFileSync(path.join(sub, `f${i}.txt`), "x");
+    await new Promise((r) => setTimeout(r, 50));
+    const events: string[] = [];
+    own.on("changed", (p) => events.push(p));
+    own.watch(sub);
+    own.watch(path.join(sub, "f1.txt"));
+    await new Promise((r) => setTimeout(r, 1400)); // past both settle checks and the debounce
+    own.watch(path.join(sub, "f2.txt")); // added once the watch is live: no check
+    await new Promise((r) => setTimeout(r, 300));
+    own.close();
+    expect(events).toEqual([]);
+  });
 });

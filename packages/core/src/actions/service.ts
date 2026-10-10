@@ -253,6 +253,7 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
   #open(root: string): Catalog {
     let c = this.#catalogs.get(root);
     if (c) return c;
+    const readAt = Date.now();
     const started = performance.now();
     const s = scan(root, null);
     const ms = performance.now() - started;
@@ -260,7 +261,7 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
     const cached = this.#cache.get(root);
     c = { root, scan: s, watched: [], usedAt: Date.now(), described: cached ? { hash: cached.hash, d: cached.described } : null, describing: false };
     this.#catalogs.set(root, c);
-    this.#rewatch(c);
+    this.#rewatch(c, readAt);
     this.#describeSoon(c);
     return c;
   }
@@ -273,20 +274,22 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
 
   #rescan(c: Catalog): void {
     if (this.#catalogs.get(c.root) !== c) return;
+    const readAt = Date.now();
     const next = scan(c.root, c.scan);
     const same = JSON.stringify(next.actions) === JSON.stringify(c.scan.actions) && JSON.stringify(next.errors) === JSON.stringify(c.scan.errors);
     c.scan = next;
-    this.#rewatch(c);
+    this.#rewatch(c, readAt);
     if (same) return;
     c.ranked = undefined;
     this.#describeSoon(c);
     this.emit("changed", c.root);
   }
 
-  #rewatch(c: Catalog): void {
+  /** Watch the scan's folders; a change after `readAt` (the scan began) is reported even if the watch wasn't live yet. */
+  #rewatch(c: Catalog, readAt: number): void {
     const next = c.scan.folders;
     for (const p of c.watched) if (!next.includes(p)) this.#watch.unwatch(p);
-    for (const p of next) if (!c.watched.includes(p)) this.#watch.watch(p);
+    for (const p of next) if (!c.watched.includes(p)) this.#watch.watch(p, readAt);
     c.watched = next;
   }
 
