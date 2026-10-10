@@ -68,13 +68,26 @@ setup: the header of `scripts/discord.mjs`.
    Can't find the cause from what the report holds? Make the next report say more (log lines, the
    stack, context), merge that, and mark the group `waiting` with a note: what you know, what the
    change adds, and what to look for in the first report from the release that ships it.
-4. **Ideas.** Don't build them unasked: summarise the open ones for Jan, with what exists already
-   (docs/, the README, the CHANGELOG) and a rough size. Mark `wip` only for one he asked you to
-   build; `done` when it is merged; `wontfix` only on his word, with his reason.
+4. **Feedback (#feedback), every time.** A triage covers both channels; "triage crashes" is no
+   reason to leave #feedback as it was. Go through every open and 👀 item and bring its state up
+   to date before handing back:
+   - **Already built or fixed?** Other agents ship features all day, often without touching the
+     thread. Search `git log --grep`/`-S`, the README and the CHANGELOG for it. Found: `done`
+     with the commits and what the user now does to get it, "ships in the next release" if it
+     isn't tagged yet (`git tag --contains <commit>`).
+   - **👀 whose branch is merged** (`git merge-base --is-ancestor <branch> master`, or the branch
+     is gone and its commits are on master): `done` with the commits. The claiming agent often
+     ends without closing it.
+   - **Bugs** are handled like crashes (step 3).
+   - **Ideas still unbuilt**: don't build them unasked. Summarise them for Jan with what exists
+     already (docs/, the README, the CHANGELOG) and a rough size. Mark `wip` only for one he asked
+     you to build, `done` when it is merged, `wontfix` only on his word, with his reason.
 5. **Duplicates.** A new report matching something already handled (`inbox --all`): `dup` with a
    note naming the first report's ref. If it was marked `done` but shows up in a *newer* version,
    it is not a dup — the fix didn't work: mark the new one `wip` and say so.
-6. **Hand back** with a short summary: what was open, what you marked, what needs Jan. Anything
+6. **Hand back** with a short summary of both channels: what was open, what you marked, what
+   needs Jan. Before that, run `pnpm discord inbox` again: nothing in it should be built, merged
+   or fixed and still look open. Anything
    in that summary about one issue belongs in its thread too: check the notes say it.
 
 ## Rules
