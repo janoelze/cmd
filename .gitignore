@@ -1,7 +1,7 @@
 node_modules/
 dist/
 out/
-.cmd-dev/
+.cmd-dev*
 *.log
 .DS_Store
 # API keys for development builds (packages/core/src/dev-keys.ts)
