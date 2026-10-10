@@ -8,6 +8,9 @@
 // Pages still act focused (Playwright emulates focus over CDP); for the main
 // process, the last window shown or focused stands in as the focused one.
 // Nobody sees these windows, so Chromium must not throttle or stop painting them.
+// Nor can anybody quit them: when the script that launched the app is gone (killed,
+// so it couldn't close it), the app quits too. Left running, it would reconnect to the
+// next run's core at the same socket and act as a second window there.
 import { app, BrowserWindow, Notification } from "electron";
 
 export const background = !!process.env.CMD_BACKGROUND;
@@ -50,4 +53,7 @@ if (background) {
   BrowserWindow.getFocusedWindow = focused;
   app.focus = () => {};
   Notification.prototype.show = function () {};
+
+  const parent = process.ppid;
+  setInterval(() => process.ppid !== parent && app.exit(0), 1000).unref();
 }
