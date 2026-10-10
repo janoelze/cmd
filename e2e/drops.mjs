@@ -62,6 +62,8 @@ async function dropOn(selector, { files = [], items = [], modifiers = 0, at = [0
 }
 const ALT = 1;
 const META = 4;
+// A long path wraps in a narrow terminal (CI's smaller screen): compare without line breaks and spaces.
+const squash = (s) => s.replace(/\s+/g, "");
 const screen = (paneId) => win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 30 }).then((r) => r.text), paneId);
 const openWin = (kind, input) => win.evaluate(([kind, input]) => window.cmd.call("window.open", { kind, input }), [kind, input]);
 const windows = () => win.evaluate(() => window.cmd.call("window.list", {}));
@@ -89,13 +91,13 @@ await win.locator(xterm).waitFor();
 await win.waitForTimeout(1500);
 await dropOn(xterm, { files: [out("dropped file.txt")] });
 const escaped = out("dropped file.txt").replace(/ /g, "\\ ");
-check(await waitFor(async () => (await screen(term.id)).includes(escaped)), "a file dropped on a terminal types its path, escaped like Terminal.app");
+check(await waitFor(async () => squash(await screen(term.id)).includes(squash(escaped))), "a file dropped on a terminal types its path, escaped like Terminal.app");
 await win.keyboard.press("Control+C");
 await dropOn(xterm, { items: [{ mimeType: "text/uri-list", data: "https://example.com/dropped" }] });
 check(await waitFor(async () => (await screen(term.id)).includes("https://example.com/dropped")), "a link dropped on a terminal types the URL");
 await win.keyboard.press("Control+C");
 await dropOn(xterm, { files: [path.join(fixture, "box")], modifiers: META });
-check(await waitFor(async () => (await screen(term.id)).includes(`cd ${path.join(fixture, "box")}`)), "⌘-dropping a folder on a terminal types cd and its path");
+check(await waitFor(async () => squash(await screen(term.id)).includes(squash(`cd ${path.join(fixture, "box")}`))), "⌘-dropping a folder on a terminal types cd and its path");
 await win.keyboard.press("Control+C");
 
 // ── into a file browser ──
