@@ -72,7 +72,7 @@ A Magic widget is a folder under `$CMD_HOME/widgets/<id>/` (`widgets/store.ts`, 
 
 ### AR1-11-03 · Close the network in the sandbox profile and the agent's `fetch`
 
-- **Status:** in progress (magic-network)
+- **Status:** done (628f3797)
 - **Severity:** high
 - **Effort:** M
 - **Where:** `packages/core/src/magic/sandbox.ts:85-107`, `packages/core/src/magic/policy.ts:182`, `packages/core/src/magic/policy.ts:196-204`, `packages/core/src/magic/tools.ts:149-165`

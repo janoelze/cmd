@@ -70,7 +70,7 @@ Electron main (`apps/desktop/src/main/`, 21 files, 2914 lines; `index.ts` 1046) 
 
 ### AR1-09-03 · Allow-list what `open-path` hands to `shell.openExternal` and `shell.openPath`
 
-- **Status:** in progress (open-policy)
+- **Status:** done (95614edf)
 - **Severity:** high
 - **Effort:** M
 - **Where:** `apps/desktop/src/main/index.ts:656-668`, `apps/desktop/src/renderer/src/terminals.ts:284-293`, `apps/desktop/src/renderer/src/windows/markdown-view.tsx:139-140`, `apps/desktop/src/renderer/src/actions.ts:227-232`

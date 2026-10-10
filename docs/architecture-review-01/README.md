@@ -154,7 +154,7 @@ This is the recommended order. Each wave can run in parallel worktrees; within a
 | AR1-05-01 | ~~Another agent kind's hooks stay out of the pane's agent~~ done |
 | AR1-10-01 | ~~Dialogs trap focus~~ done |
 | AR1-04-04, AR1-04-05 | ~~Spurious bell on long OSC; zsh OSC 7 encoding~~ done |
-| AR1-16-01 (M) | Stop rewriting past journal days with the expensive tier |
+| AR1-16-01 (M) | ~~Stop rewriting past journal days with the expensive tier~~ done |
 
 ### Wave 1: the capability model and the gates
 

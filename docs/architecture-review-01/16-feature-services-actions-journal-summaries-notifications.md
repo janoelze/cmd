@@ -59,7 +59,7 @@ Timers in scope, with their period and whether they are `unref`'d or paced. Only
 
 ### AR1-16-01 · Stop rewriting past journal days every time a long session moves
 
-- **Status:** in progress (journal-days)
+- **Status:** done (ecada57c)
 - **Severity:** high
 - **Effort:** M
 - **Where:** `packages/core/src/journal/digest.ts:18-27`, `packages/core/src/journal/backfill.ts:39-48`, `packages/core/src/journal/service.ts:248-253`, `apps/desktop/src/renderer/src/components/JournalView.tsx:56-62`
@@ -97,7 +97,7 @@ Timers in scope, with their period and whether they are `unref`'d or paced. Only
 
 ### AR1-16-03 · Take `journal sync` off the core thread's critical path
 
-- **Status:** in progress (journal-days)
+- **Status:** done (ecada57c)
 - **Severity:** high
 - **Effort:** M
 - **Where:** `packages/core/src/journal/service.ts:141-179`, `packages/core/src/journal/store.ts:214-217`, `packages/core/src/journal/service.ts:337-339`
