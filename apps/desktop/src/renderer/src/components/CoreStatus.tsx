@@ -2,7 +2,7 @@
 // light, memory, CPU). Clicking it opens the details (uptime, response time,
 // the core and PTY host processes) with Restart Core and the Task Manager.
 
-import { Button, Popover, StatusDot } from "@cmd/ui";
+import { Button, Inline, KeyValue, Popover, Stack, StatusDot, Text } from "@cmd/ui";
 import { useRef, useState } from "react";
 import type { StartupStatus } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
@@ -99,31 +99,35 @@ function Details(p: { summary: Summary; health: CoreHealth; connected: boolean; 
       ]
     : [];
   return (
-    <>
-      <div className="core-details-head">
+    <Stack gap="md" pad="lg">
+      <Inline gap="sm">
         <StatusDot state={p.summary.led === "ok" ? "success" : p.summary.led} />
-        <span>{p.summary.detail}</span>
-      </div>
-      {p.restart.error && <div className="core-details-error">{p.restart.error}</div>}
+        <Text>{p.summary.detail}</Text>
+      </Inline>
+      {p.restart.error && <Text tone="warning">{p.restart.error}</Text>}
       {rows.length > 0 && (
-        <dl className="core-details-rows">
-          {rows.map(([k, v, sub]) => (
-            <div key={k}>
-              <dt>{k}</dt>
-              <dd>{v}</dd>
-              <dd className="core-details-sub">{sub}</dd>
-            </div>
-          ))}
-        </dl>
+        <KeyValue
+          items={rows.map(([k, v, sub]) => [
+            k,
+            sub ? (
+              <Inline justify="between" gap="md">
+                <span>{v}</span>
+                <Text tone="dim">{sub}</Text>
+              </Inline>
+            ) : (
+              v
+            ),
+          ])}
+        />
       )}
-      <div className="core-details-actions">
+      <Inline gap="sm">
         <Button variant={p.health.outdated || p.health.unresponsive || !p.connected ? "primary" : "default"} disabled={p.restart.restarting} onClick={() => void restartCore()}>
           {p.restart.restarting ? "Restarting…" : "Restart Core"}
         </Button>
         <Button onClick={() => cmd.openTaskManager()}>
           Task Manager
         </Button>
-      </div>
-    </>
+      </Inline>
+    </Stack>
   );
 }

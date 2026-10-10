@@ -244,19 +244,6 @@ kbd {
 .core-status-button .ui-dot { margin-right: 8px; }
 .core-status-usage .slot-v { --gap: 15px; }
 .core-status-usage { flex-shrink: 10; }
-.core-details { padding: 10px 12px; font-size: 12px; }
-/* The light centred on the first line (the detail may wrap): a whole-pixel line height,
-   (16 − 10) / 2 above the light. */
-.core-details-head { display: flex; align-items: flex-start; gap: 8px; line-height: 16px; }
-.core-details-head .ui-dot { margin-top: 3px; }
-.core-details-error { margin-top: 8px; color: var(--state-needs); line-height: 1.4; overflow-wrap: anywhere; }
-/* label | value | a dim note (pid) on the right; nothing wraps */
-.core-details-rows { margin: 10px 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; white-space: nowrap; }
-.core-details-rows > div { display: contents; }
-.core-details-rows dt { color: var(--text-dim); }
-.core-details-rows dd { margin: 0; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
-.core-details-rows dd.core-details-sub { color: var(--text-dim); text-align: right; }
-.core-details-actions { display: flex; gap: 6px; margin-top: 12px; }
 
 
 /* ── main view ──────────────────────────────────────── */

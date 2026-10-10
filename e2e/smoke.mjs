@@ -1510,7 +1510,7 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   await win.waitForFunction(() => document.querySelector(".core-status-button .ui-dot[data-state=\"success\"]") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 10_000 });
   check((await button.locator(".ui-dot[data-state=\"success\"]").count()) === 1, `core status is healthy (${await button.textContent()})`);
   await button.click();
-  await win.waitForSelector(".core-details dl");
+  await win.waitForSelector(".core-details .ui-kv");
   const details = await win.locator(".core-details").textContent();
   await win.screenshot({ path: path.join(shots, "7b-core-status.png") });
   check(/Uptime/.test(details) && /PTY host\d/.test(details) && /pid \d+/.test(details), `core details show uptime and both processes (${details})`);
