@@ -579,9 +579,8 @@ export class Core {
     s.ready();
   }
 
-  /** The full-text index's rebuild (DataStore.buildFts), named for the watchdog while it runs. */
+  /** The full-text index's rebuild (DataStore.buildFts: its steps name themselves `fts rebuild` for the watchdog). */
   async #rebuildFts(): Promise<void> {
-    const done = this.scheduler.mark("fts rebuild");
     const t0 = Date.now();
     try {
       const n = await this.data.store.buildFts({ pace: this.scheduler });
@@ -589,8 +588,6 @@ export class Core {
       this.#searchView.invalidate();
     } catch (err) {
       if (!this.#closed) log.error("could not rebuild the full-text index", err); // closing mid-build: it goes on next start
-    } finally {
-      done();
     }
   }
 

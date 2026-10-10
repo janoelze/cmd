@@ -369,9 +369,23 @@ export class DataStore {
    * and what's recorded during the build goes into both. A build cut short
    * (the core stopped) goes on from its cursor. Returns the events indexed.
    */
-  async buildFts(o: { pace?: Pick<Pacer, "yield">; bodyOf?: (e: DataEvent) => string | null } = {}): Promise<number> {
-    const bodyOf = o.bodyOf ?? ((e: DataEvent) => ftsBodyOf(e, (h) => this.blob(h)));
-    const pace = () => o.pace?.yield() ?? Promise.resolve();
+  async buildFts(o: { pace?: Pick<Pacer, "yield"> & Partial<Pick<Pacer, "mark">>; bodyOf?: (e: DataEvent) => string | null } = {}): Promise<number> {
+    // Each step named for the watchdog on its own (a name held across the pauses would stick to whatever runs in them).
+    const mark = () => o.pace?.mark?.("fts rebuild") ?? (() => {});
+    let step = mark();
+    const pace = async () => {
+      step();
+      await (o.pace?.yield() ?? Promise.resolve());
+      step = mark();
+    };
+    try {
+      return await this.#buildFts(o.bodyOf ?? ((e: DataEvent) => ftsBodyOf(e, (h) => this.blob(h))), pace);
+    } finally {
+      step();
+    }
+  }
+
+  async #buildFts(bodyOf: (e: DataEvent) => string | null, pace: () => Promise<void>): Promise<number> {
     await this.#dropOldFts(pace); // a build's leftover, when the core stopped right after it
     if (this.#ftsKind && this.#hasTable("events_fts")) return 0;
     if (this.#ftsCursor === null) {
