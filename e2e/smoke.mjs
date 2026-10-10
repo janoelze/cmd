@@ -43,7 +43,8 @@ const require = createRequire(path.join(root, "apps/desktop/package.json"));
 const launch = async () => {
   const app = await electron.launch({
     executablePath: require("electron"),
-    args: [path.join(root, "apps/desktop")],
+    // Fake camera and microphone (not a fake permission prompt): a page's getUserMedia reaches cmd's sheet without real devices.
+    args: ["--use-fake-device-for-media-stream", path.join(root, "apps/desktop")],
     env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts },
   });
   const win = await app.firstWindow();
@@ -1568,6 +1569,24 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   await win.keyboard.press("Escape");
   const still = (await inWorkspace()).length;
   check(still === 0 && left === 1, `closing a workspace ends its terminals and leaves the switcher (${still} terminals, ${left} Workspaces)`);
+}
+
+// The app window never leaves its page and opens no windows (it carries window.cmd): a web
+// link that gets that far opens in a browser window instead (main/web-session.ts). Last:
+// Playwright waits for good on the navigation that main prevented.
+{
+  step("app window stays on its page");
+  const own = await win.evaluate(() => location.href);
+  await win.evaluate((u) => void (location.href = u), "https://example.invalid/?away");
+  const popup = await win.evaluate((u) => window.open(u) === null, "https://example.invalid/?popup");
+  let forwarded = [];
+  for (let i = 0; i < 40 && forwarded.length < 2; i++) {
+    await win.waitForTimeout(150);
+    forwarded = (await win.evaluate(() => window.cmd.call("window.list", {}))).filter((w) => w.kind === "browser" && /\?(away|popup)/.test(JSON.stringify(w.state)));
+  }
+  const stayed = (await win.evaluate(() => location.href)) === own && (await win.evaluate(() => typeof window.cmd?.call)) === "function";
+  check(stayed && popup && forwarded.length === 2, `an app window stays on its page and sends web links and pop-ups to browser windows (${stayed}, ${popup}, ${forwarded.length})`);
+  for (const w of forwarded) await win.evaluate((id) => window.cmd.call("window.close", { id }), w.id);
 }
 
 await closeApp();

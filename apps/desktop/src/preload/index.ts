@@ -1,10 +1,12 @@
 // Bridges the renderer to the core socket. Reconnects if the core restarts.
 
 import os from "node:os";
+import path from "node:path";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CoreEvent, Method, Params, Result } from "@cmd/protocol";
 import { connect, type Connection } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
+import { allowedAppUrl } from "../shared/app-url.ts";
 import type { KeybindingsSnapshot } from "../main/keybindings.ts";
 import type { Appearance } from "../main/appearance.ts";
 import type { UpdateStatus } from "../main/updater.ts";
@@ -34,6 +36,13 @@ export interface AppInfo {
 }
 
 type Status = "connecting" | "connected" | "disconnected";
+
+/**
+ * window.cmd reaches a shell, so only the app's own pages get it (out/renderer/*.html,
+ * or the dev server in pnpm dev): should anything else ever load in an app window
+ * (main prevents that, web-session.ts), it gets no cmd and no connection.
+ */
+const ownPage = allowedAppUrl(location.href, { rendererDir: path.join(__dirname, "../renderer"), devUrl: process.env.ELECTRON_RENDERER_URL });
 
 /** Main decides which core this app uses (development builds run their own). */
 const socketPath: string = ipcRenderer.sendSync("core-socket");
@@ -76,7 +85,7 @@ function open(): Promise<Connection> {
   })();
   return ready;
 }
-open();
+if (ownPage) open();
 
 const api = {
   /** The user's home folder ($HOME counts, so a tour's fixture home is "~" too). */
@@ -252,4 +261,5 @@ const api = {
 
 export type CmdBridge = typeof api;
 
-contextBridge.exposeInMainWorld("cmd", api);
+if (ownPage) contextBridge.exposeInMainWorld("cmd", api);
+else console.warn(`window.cmd is only for cmd's own pages, not ${location.href.slice(0, 200)}`);

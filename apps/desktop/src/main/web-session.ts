@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { cmdHome, logger } from "@cmd/protocol/node";
+import { allowedAppUrl, type AppPages } from "../shared/app-url.ts";
 import { BROWSER_PARTITION, guestPartitionAllowed, isAsked, parseDecisions, permissionVerdict, siteOf, type SiteDecisions, type SitePermission, type SitePermissionRequest } from "./web-policy.ts";
 
 const log = logger("web");
@@ -70,7 +71,37 @@ app.on("web-contents-created", (_e, contents) => {
     if (!/^(https?|about|file):/i.test(params.src ?? "")) params.src = "about:blank";
   });
   if (contents.getType() === "webview") handleWindowOpen(contents);
+  // App and utility windows (pop-ups from pages are in the browser session).
+  else if (contents.getType() === "window" && contents.session !== session.fromPartition(BROWSER_PARTITION)) guardAppWindow(contents);
 });
+
+// ── app and utility windows ─────────────────────────────
+// They carry window.cmd, which reaches a shell: their page never changes and they
+// open no windows. A web link that gets this far (one the renderer missed) opens
+// in a browser window instead, like a widget's link (open-url).
+
+let pages: { pages: AppPages; appWindows: () => BrowserWindow[] } | null = null;
+
+function guardAppWindow(contents: WebContents): void {
+  contents.on("will-navigate", (e) => {
+    if (popups.has(contents) || (pages && allowedAppUrl(e.url, pages.pages))) return;
+    e.preventDefault();
+    log.warn(`kept an app window on its page (not ${e.url.slice(0, 200)})`);
+    forward(contents, e.url);
+  });
+  contents.setWindowOpenHandler(({ url }) => {
+    forward(contents, url);
+    return { action: "deny" };
+  });
+}
+
+/** http(s) to open-url in this app window, or from Settings, in the front app window. */
+function forward(contents: WebContents, url: string): void {
+  if (!/^https?:/i.test(url) || !pages) return;
+  const all = pages.appWindows().filter((w) => w.webContents.session === session.defaultSession && !popups.has(w.webContents));
+  const to = all.find((w) => w.webContents === contents) ?? all.find((w) => w.isFocused()) ?? all[0];
+  to?.webContents.send("open-url", url);
+}
 
 /**
  * Cookies that mean "signed in" to a site, by domain: when one is set in the
@@ -150,8 +181,12 @@ function ask(page: WebContents, host: WebContents, req: Omit<SitePermissionReque
   return answered;
 }
 
-/** The browser session's permission handlers, and the answers from the sheet. */
-export function startWebSession(): void {
+/**
+ * The browser session's permission handlers and the answers from the sheet; the
+ * app's own pages, which app windows stay on. Before the first window opens.
+ */
+export function startWebSession(o: { pages: AppPages; appWindows: () => BrowserWindow[] }): void {
+  pages = o;
   const ses = session.fromPartition(BROWSER_PARTITION);
   ses.setPermissionCheckHandler((_wc, permission, origin) => permissionVerdict(permission, siteOf(origin), decisions()) === "allow");
   ses.setPermissionRequestHandler((wc, permission, done, details) => {

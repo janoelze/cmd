@@ -935,7 +935,7 @@ app.whenReady().then(async () => {
     done(!/^cmd-widget:/.test(details.requestingUrl ?? "") && !fromFrame(details.requestingUrl));
   });
   // Browser windows' pages: deny by default, ask for camera, location and the like (web-session.ts).
-  startWebSession();
+  startWebSession({ pages: { rendererDir: path.join(here, "../renderer"), devUrl: process.env.ELECTRON_RENDERER_URL }, appWindows });
   protocol.handle("cmd-file", (req) => {
     const file = new URL(req.url).searchParams.get("path") ?? "";
     if (!path.isAbsolute(file) || !CMD_FILE_TYPES.test(file)) return new Response("not an image or media file", { status: 403 });

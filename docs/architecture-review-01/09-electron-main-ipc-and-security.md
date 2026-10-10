@@ -43,11 +43,11 @@ Electron main (`apps/desktop/src/main/`, 21 files, 2914 lines; `index.ts` 1046) 
 **Proposal.** One module, `main/web-session.ts`, owns the web content policy (moved out of `index.ts:889-965`): at ready, `session.fromPartition("persist:cmd-browser")` gets a `setPermissionRequestHandler` and `setPermissionCheckHandler` that deny by default, allow `fullscreen`, `pointerLock` and `clipboard-sanitized-write`, and for `media`, `geolocation`, `notifications` and `openExternal` ask the person once per origin through a sheet in the hosting app window (main sends `permission-request` with origin and kind, the renderer answers), remembered in `site-permissions.json` next to `trusted-certificates.json`. `will-attach-webview` rejects (`event.preventDefault()`) any guest whose `params.partition` is not `persist:cmd-browser`. `guest.ts` ignores events with `!e.isTrusted`. Prior art: Chromium's own per-origin prompts; Electron security checklist items 5 and 12 [E-SEC]; `preview.ts` in this codebase.
 
 **Success criteria.**
-- [ ] `grep -n "setPermissionRequestHandler\|setPermissionCheckHandler" apps/desktop/src/main` shows both on `persist:cmd-browser`.
-- [ ] A unit test of the exported policy function (no Electron) asserts `media`, `geolocation`, `notifications`, `openExternal` are not granted without a stored decision, and `fullscreen` is.
-- [ ] `will-attach-webview` calls `preventDefault()` for a guest with any other partition (unit test of the exported predicate).
-- [ ] `pnpm e2e` (or a new e2e step) loads a local page calling `navigator.mediaDevices.getUserMedia` in a browser window and sees it rejected or a cmd prompt, never a silent grant.
-- [ ] `guest.ts` returns early on `!e.isTrusted`.
+- [x] `grep -n "setPermissionRequestHandler\|setPermissionCheckHandler" apps/desktop/src/main` shows both on `persist:cmd-browser`.
+- [x] A unit test of the exported policy function (no Electron) asserts `media`, `geolocation`, `notifications`, `openExternal` are not granted without a stored decision, and `fullscreen` is.
+- [x] `will-attach-webview` calls `preventDefault()` for a guest with any other partition (unit test of the exported predicate).
+- [x] `pnpm e2e` (or a new e2e step) loads a local page calling `navigator.mediaDevices.getUserMedia` in a browser window and sees it rejected or a cmd prompt, never a silent grant.
+- [x] `guest.ts` returns early on `!e.isTrusted`.
 
 ### AR1-09-02 · Guard app windows' own navigation and pop-ups in main
 
@@ -63,10 +63,10 @@ Electron main (`apps/desktop/src/main/`, 21 files, 2914 lines; `index.ts` 1046) 
 **Proposal.** In `web-contents-created`, for every `contents.getType() === "window"` that is not a pop-up: `will-navigate` prevents anything that is not the page's own URL (file:// of `out/renderer/*.html`, or `ELECTRON_RENDERER_URL` in dev) and forwards http(s) to `open-url`, exactly as subframes do now; `setWindowOpenHandler` returns `deny` and forwards http(s) to `open-url`. As a second line, the preload refuses to expose `window.cmd` unless `location.origin` is the app's (`file://` or the dev server). The longer-term fix is a custom `app://` scheme instead of `file://` [VSC-SANDBOX], which also narrows CSP `'self'`.
 
 **Success criteria.**
-- [ ] `grep -n '"will-navigate"' apps/desktop/src/main` shows a handler applied to app and utility windows.
-- [ ] Every `BrowserWindow` created in main has a `setWindowOpenHandler` (grep count of `new BrowserWindow` equals handled windows, or the handler is installed in `web-contents-created` for all non-guest types).
-- [ ] A unit test of the exported `allowedAppUrl(url)` predicate covers app file URL, dev URL, https, file:// elsewhere, javascript:.
-- [ ] The preload exposes `cmd` only when `location.protocol` is `file:` (packaged) or matches `ELECTRON_RENDERER_URL` (dev); `pnpm e2e` still passes.
+- [x] `grep -n '"will-navigate"' apps/desktop/src/main` shows a handler applied to app and utility windows.
+- [x] Every `BrowserWindow` created in main has a `setWindowOpenHandler` (grep count of `new BrowserWindow` equals handled windows, or the handler is installed in `web-contents-created` for all non-guest types).
+- [x] A unit test of the exported `allowedAppUrl(url)` predicate covers app file URL, dev URL, https, file:// elsewhere, javascript:.
+- [x] The preload exposes `cmd` only when `location.protocol` is `file:` (packaged) or matches `ELECTRON_RENDERER_URL` (dev); `pnpm e2e` still passes.
 
 ### AR1-09-03 · Allow-list what `open-path` hands to `shell.openExternal` and `shell.openPath`
 
