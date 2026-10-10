@@ -75,6 +75,26 @@ describe.skipIf(!installed)("Dialog and Popover focus (gallery, Chromium)", () =
     }
   });
 
+  it("fades out on close (no pop): the sheet stays, inert, while its opacity falls over several frames", async () => {
+    await open();
+    await page.getByRole("button", { name: "Send Feedback…" }).click();
+    await page.waitForSelector(".ui-dialog");
+    await page.waitForTimeout(400);
+    const frames = await page.evaluate(async () => {
+      document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      const seen: number[] = [];
+      for (let i = 0; i < 30; i++) {
+        await new Promise(requestAnimationFrame);
+        const sheet = document.querySelector<HTMLElement>(".ui-scrim[data-closing][inert] .ui-dialog");
+        seen.push(sheet ? Number(getComputedStyle(sheet).opacity) * Number(getComputedStyle(sheet.parentElement!).opacity) : 0);
+      }
+      return seen;
+    });
+    expect(frames[0]).toBeGreaterThan(0.5);
+    expect(frames.filter((o) => o > 0.05 && o < 0.95).length).toBeGreaterThanOrEqual(3);
+    await closed();
+  });
+
   it("keeps the page inert when a dialog opens while another is still fading out", async () => {
     await open();
     await page.getByRole("button", { name: "Delete Workspace…" }).click();

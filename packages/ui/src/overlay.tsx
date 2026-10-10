@@ -349,7 +349,7 @@ export function Menu({
 /** Overlays that stay live over a dialog: the tooltip layer and the toasts. */
 const LIVE = ".tip-layer, .ui-toaster";
 
-/** How many open dialogs hold each element inert: two can overlap (one fading out as the next opens) and close in any order. */
+/** How many open dialogs hold each element inert: two can be open at once (one opened over the other) and close in any order. */
 const holds = new Map<HTMLElement, number>();
 
 /** Makes everything in <body> but `keep` (and the live overlays) inert; returns the undo. */
@@ -392,7 +392,8 @@ function wrapTab(e: Pick<KeyboardEvent, "key" | "defaultPrevented" | "metaKey" |
 /**
  * A sheet over the window with a scrim: a title, content, and actions at the
  * bottom right (the primary last). Escape and a click on the scrim close it,
- * unless it is busy. Focus moves into it and back when it closes.
+ * unless it is busy. Modal: focus moves into it, Tab stays in it, the page
+ * behind is inert, and focus goes back when it closes.
  */
 export function Dialog({
   open,

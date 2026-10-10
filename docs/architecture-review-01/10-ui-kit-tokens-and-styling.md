@@ -42,8 +42,8 @@
 **Proposal.** Use the platform: render the dialog in a `<dialog>` element opened with `showModal()`, which gives a real focus trap, top-layer stacking, `inert` on everything else and Escape (`cancel` event) for free in Chromium; keep the scrim as `::backdrop` styled from tokens and keep `usePresence` for the exit fade. If the top layer conflicts with tooltips, the fallback is setting `inert` on `#root` while a Dialog is open plus a Tab wrap. For Popover with `role="dialog"`, move focus to its first focusable child on open (or set `role` to `group` when the content is non-interactive).
 
 **Success criteria.**
-- [ ] With a ConfirmDialog open over a terminal, pressing Tab 10 times never focuses an element outside the dialog (behaviour test, see AR1-10-04).
-- [ ] Escape closes the dialog wherever focus is inside it, and focus returns to the element that had it.
+- [x] With a ConfirmDialog open over a terminal, pressing Tab 10 times never focuses an element outside the dialog (behaviour test, see AR1-10-04).
+- [x] Escape closes the dialog wherever focus is inside it, and focus returns to the element that had it.
 - [ ] `pnpm e2e:a11y` snapshot of an open dialog lists no controls outside it.
 - [ ] `pnpm e2e:motion` still scores the dialog's exit without a pop.
 

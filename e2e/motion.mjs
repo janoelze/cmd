@@ -94,7 +94,12 @@ await setSize(1440, 900);
 // First launch shows onboarding: past it, so it doesn't cover the windows.
 if (await win.waitForSelector(".onboarding", { timeout: 3000 }).catch(() => null)) {
   await win.locator(".onboarding button", { hasText: "Get Started" }).click();
-  await win.locator(".onboarding button", { hasText: "Set Up Later" }).click();
+  // "Set Up Later" while an agent isn't set up; with one found (your real HOME), the primary button.
+  for (let i = 0; i < 5 && (await win.locator(".onboarding").count()); i++) {
+    await sleep(400);
+    const later = win.locator(".onboarding button", { hasText: "Set Up Later" });
+    await ((await later.count()) ? later : win.locator('.onboarding .ui-dialog-foot button[data-variant="primary"]')).click();
+  }
   await win.waitForSelector(".onboarding", { state: "detached" });
 }
 await sleep(300);
