@@ -82,10 +82,10 @@ Electron main (`apps/desktop/src/main/`, 21 files, 2914 lines; `index.ts` 1046) 
 **Proposal.** Split the channel by intent so main can apply policy: `open-external(url, { from: "content" | "user" })` and `open-file(path, { from })`. Main allows `http`, `https`, `mailto` silently; any other scheme, and any file whose type is executable or a launcher (`.app`, `.command`, `.tool`, `.terminal`, `.webloc`, `.inetloc`, `.fileloc`, `.pkg`, `.dmg`, `.scpt`, executables by mode bit) when `from: "content"`, gets a native confirm sheet naming the real target ("Open smb://host/share in Finder?"). This is VS Code's approach (`security.promptForLocalFileProtocolHandling`, link-opener confirmation). Menu-driven calls ("Open with Default App", "Show in Finder") pass `from: "user"` and skip the prompt.
 
 **Success criteria.**
-- [ ] `index.ts` (or its successor module) has no `shell.openExternal` call reachable without a scheme check; a unit test of the exported `openPolicy(target, from)` covers http, mailto, smb, x-apple.systempreferences, a `.command` file, a `.app` bundle and a plain `.txt`.
-- [ ] `terminals.ts` OSC 8 activation for non-http schemes goes through `from: "content"`.
-- [ ] Markdown and PDF link handlers pass `from: "content"`.
-- [ ] A manual or e2e check: `printf '\e]8;;smb://example\e\\click\e]8;;\e\\\n'` in a pane, ⌘-click shows a confirm sheet.
+- [x] `index.ts` (or its successor module) has no `shell.openExternal` call reachable without a scheme check; a unit test of the exported `openPolicy(target, from)` covers http, mailto, smb, x-apple.systempreferences, a `.command` file, a `.app` bundle and a plain `.txt`.
+- [x] `terminals.ts` OSC 8 activation for non-http schemes goes through `from: "content"`.
+- [x] Markdown and PDF link handlers pass `from: "content"`.
+- [x] A manual or e2e check: `printf '\e]8;;smb://example\e\\click\e]8;;\e\\\n'` in a pane, ⌘-click shows a confirm sheet.
 
 ### AR1-09-04 · Flip the Electron fuses that cmd doesn't need, and move run-as-Node to a helper
 
