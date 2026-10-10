@@ -12,7 +12,7 @@ export { Checkbox, RadioGroup, Segmented, Select, Switch, TabPanel, Tabs, type O
 export { ClearButton, NumberField, SearchField, SecretField, ShortcutField, TextArea, TextField, type SecretStatus, type TextAreaProps, type TextFieldProps } from "./fields.tsx";
 export { FindBar, findCount, Glyph, Highlight, NO_FIND_OPTIONS, type FindBarHandle, type FindBarProps, type FindOptions, type FindResults } from "./find.tsx";
 export { Chart, Legend, Sparkline, type Series } from "./chart.tsx";
-export { Dial, Document, Filmstrip, Hide, Picture, Viewport, Inline, List, ListGroup, Measure, MediaStage, Page, Pane, Panes, Split, Stack, Stage, Stat, StatusLine, Text, Tiles, TitleBand, View, ViewState, type Space, type ViewStateSpec } from "./frame.tsx";
+export { Dial, Document, Filmstrip, Hide, Picture, Viewport, Inline, List, ListGroup, Measure, MediaStage, Page, Pane, Panes, Split, Stack, Stage, Stat, StatusLine, Text, Tiles, TitleBand, View, WebStage, ViewState, type Space, type ViewStateSpec } from "./frame.tsx";
 export { Ribbon, Timeline, TimelineEntry, type RibbonItem } from "./timeline.tsx";
 export { DataGrid, type DataGridProps, type GridCell, type GridColumn, type GridSort, type GridRowInfo } from "./grid.tsx";
 export { Chip, ListHeading, ListMark, ListRow, ListSection, ListValue, Panel, PanelBody, PanelHeader, PanelSummary, Twisty, type ListRowProps } from "./list.tsx";

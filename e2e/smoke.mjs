@@ -414,7 +414,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.evaluate((id) => window.__cmdSelect(id), blankWin.id);
   await win.waitForTimeout(200);
   await win.evaluate((id) => window.__cmdSelect(id), blankWin.id);
-  const blankView = win.locator(`.tile[data-pane="${blankWin.id}"] .browser-blank`);
+  const blankView = win.locator(`.tile[data-pane="${blankWin.id}"] .ui-webstage .ui-viewstate`);
   await blankView.waitFor({ timeout: 5000 }).catch(() => {});
   await win.screenshot({ path: path.join(shots, "browser-blank.png") });
   check(await blankView.isVisible(), "a blank browser window shows the empty view, not a white page");

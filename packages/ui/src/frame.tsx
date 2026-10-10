@@ -285,6 +285,27 @@ export function Stage({ children }: { children: ReactNode }) {
   return <div className="ui-stage">{children}</div>;
 }
 
+/**
+ * Where a web page shows (the Browser): the page (a webview) fills it, on white,
+ * fading in once the caller marks it painted (`data-painted`) instead of flashing.
+ * With `device` the caller places the page at a device's size; it sits lifted, its
+ * `caption` above. `cover` shows a state over the page (it didn't load), which stays
+ * mounted underneath. Other props (a ref, onMouseDown) go to the stage.
+ */
+export const WebStage = forwardRef<HTMLDivElement, Omit<HTMLAttributes<HTMLDivElement>, "children"> & { device?: boolean; caption?: ReactNode; cover?: ViewStateSpec | null; children: ReactNode }>(function WebStage({ device, caption, cover, children, className, ...rest }, ref) {
+  return (
+    <div ref={ref} className={className ? `ui-webstage ${className}` : "ui-webstage"} data-device={device || undefined} {...rest}>
+      {children}
+      {cover && (
+        <div className="ui-webstage-cover">
+          <ViewState state={cover} />
+        </div>
+      )}
+      {caption && <div className="ui-webstage-caption">{caption}</div>}
+    </div>
+  );
+});
+
 /** A row of thumbnails along a window's edge; the selected one ringed. Scrolls sideways. */
 export function Filmstrip({ items, selected, onSelect }: { items: readonly { key: string; src: string; label: string }[]; selected?: string; onSelect?: (key: string) => void }) {
   return (

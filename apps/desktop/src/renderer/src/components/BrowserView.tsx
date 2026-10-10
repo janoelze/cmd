@@ -14,7 +14,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import type { WebviewTag } from "electron";
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../bridge.ts";
-import { Button, EmptyState, PAGE_SCROLLBAR_CSS, scrollbarScript, ToolbarAddressField, ToolbarButton, ToolbarGroup, WindowToolbar, type FindResults } from "@cmd/ui";
+import { Button, PAGE_SCROLLBAR_CSS, scrollbarScript, ToolbarAddressField, ToolbarButton, ToolbarGroup, View, ViewState, WebStage, WindowToolbar, type FindResults } from "@cmd/ui";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { useFind } from "../find.tsx";
 import { handleEmbedMessage } from "../embed.ts";
@@ -97,7 +97,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     // Pages get the app's scrollbars (drawn over them, and fading), so every window's look the same.
     const ready = () => {
       // Shown once it has something to show: it fades in over the window's well instead of
-      // flashing white (styles.css .webview).
+      // flashing white (WebStage).
       wv.setAttribute("data-painted", "");
       void wv.insertCSS(PAGE_SCROLLBAR_CSS).catch(() => {});
       void wv.executeJavaScript(scrollbarScript({ always: cmd.scrollBars === "always" })).catch(() => {});
@@ -211,32 +211,56 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   };
 
   return (
-    <div className="browser">
-      <WindowToolbar label="Browser">
-        <ToolbarGroup>
-          <ToolbarButton icon="chevron.left" label="Back" disabled={!nav.back} onClick={() => ref.current?.goBack()} />
-          <ToolbarButton icon="chevron.right" label="Forward" disabled={!nav.forward} onClick={() => ref.current?.goForward()} />
-          <ToolbarButton icon={loading ? "xmark" : "arrow.clockwise"} label={loading ? "Stop" : "Reload"} disabled={!live} onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())} priority={2} />
-        </ToolbarGroup>
-        <ToolbarAddressField
-          ref={input}
-          value={isBlank(address) ? "" : address}
-          placeholder="Enter a URL"
-          minWidth={90}
-          onSubmit={(text) => {
-            setAddress(text);
-            void go(text);
-          }}
-          onEscape={() => ref.current?.focus()}
-        />
-        <ToolbarButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url)} secondary priority={1} />
-      </WindowToolbar>
-      {find.bar}
-      <div ref={stage} className={device ? "browser-stage device" : "browser-stage"}>
+    <View
+      scroll={false}
+      toolbar={
+        <>
+          <WindowToolbar label="Browser">
+            <ToolbarGroup>
+              <ToolbarButton icon="chevron.left" label="Back" disabled={!nav.back} onClick={() => ref.current?.goBack()} />
+              <ToolbarButton icon="chevron.right" label="Forward" disabled={!nav.forward} onClick={() => ref.current?.goForward()} />
+              <ToolbarButton icon={loading ? "xmark" : "arrow.clockwise"} label={loading ? "Stop" : "Reload"} disabled={!live} onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())} priority={2} />
+            </ToolbarGroup>
+            <ToolbarAddressField
+              ref={input}
+              value={isBlank(address) ? "" : address}
+              placeholder="Enter a URL"
+              minWidth={90}
+              onSubmit={(text) => {
+                setAddress(text);
+                void go(text);
+              }}
+              onEscape={() => ref.current?.focus()}
+            />
+            <ToolbarButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url)} secondary priority={1} />
+          </WindowToolbar>
+          {find.bar}
+        </>
+      }
+    >
+      <WebStage
+        ref={stage}
+        device={!!device}
+        caption={device && initial ? caption(device, room) : undefined}
+        // A blank tab: a click anywhere goes to the address field.
+        onMouseDown={initial ? undefined : (e) => (e.preventDefault(), input.current?.focus())}
+        cover={
+          failed && {
+            kind: "error",
+            title: isCertError(failed.code) ? "Connection Not Private" : "Page Didn't Load",
+            text: failureText(failed),
+            action: (
+              <>
+                {isCertError(failed.code) && <Button onClick={() => void proceed()}>Continue Anyway</Button>}
+                <Button onClick={retry}>Try Again</Button>
+              </>
+            ),
+          }
+        }
+      >
         {initial ? (
           <webview
             ref={ref as never}
-            className="webview"
             data-embed
             src={initial.src}
             partition="persist:cmd-browser"
@@ -246,28 +270,10 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
             style={device ? deviceStyle(device, room) : undefined}
           />
         ) : (
-          <EmptyState className="browser-blank" icon="globe" title="New Tab" onMouseDown={(e) => (e.preventDefault(), input.current?.focus())}>
-            Type a web address, localhost:3000, or a file path
-          </EmptyState>
+          <ViewState state={{ kind: "empty", icon: "globe", title: "New Tab", text: "Type a web address, localhost:3000, or a file path" }} />
         )}
-        {failed && (
-          <EmptyState
-            className="browser-failed"
-            icon={isCertError(failed.code) ? "lock.slash" : "exclamationmark.triangle.fill"}
-            title={isCertError(failed.code) ? "Connection Not Private" : "Page Didn't Load"}
-            action={
-              <>
-                {isCertError(failed.code) && <Button size="sm" onClick={() => void proceed()}>Continue Anyway</Button>}
-                <Button size="sm" onClick={retry}>Try Again</Button>
-              </>
-            }
-          >
-            {failureText(failed)}
-          </EmptyState>
-        )}
-        {device && initial && <div className="device-caption">{caption(device, room)}</div>}
-      </div>
-    </div>
+      </WebStage>
+    </View>
   );
 }
 

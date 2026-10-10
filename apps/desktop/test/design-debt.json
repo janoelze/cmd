@@ -18,8 +18,8 @@
     "color": 1
   },
   "apps/desktop/src/renderer/src/styles.css": {
-    "color": 4,
-    "fontSize": 27,
+    "color": 2,
+    "fontSize": 26,
     "radius": 8,
     "spacing": 74
   },

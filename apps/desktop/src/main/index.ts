@@ -523,6 +523,8 @@ function openUtility(page: UtilityPage, o: { title: string; width: number; heigh
       preload: path.join(here, "../preload/index.cjs"),
       sandbox: false,
       contextIsolation: true,
+      // Stories of the browser and YouTube windows show real pages.
+      webviewTag: page === "workbench",
     },
   });
   utility.set(page, win);

@@ -744,37 +744,8 @@ kbd {
 .palette-list li.on .palette-snippet mark { background: color-mix(in srgb, var(--on-accent) 30%, transparent); color: var(--on-accent); }
 .palette-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 
-/* ── browser and file windows ───────────────────────── */
+/* ── embedded pages ─────────────────────────────────── */
 
-.browser {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--well);
-}
-.browser-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; background: var(--well); }
-/* Until its page is ready (BrowserView): the well, not a white flash, then a fade. */
-.webview { transition: opacity var(--dur) var(--ease); }
-.webview:not([data-painted]) { opacity: 0; }
-.webview { flex: 1; min-height: 0; background: #fff; }
-.browser-blank.ui-empty { flex: 1; background: var(--well); cursor: text; }
-.browser-failed.ui-empty { position: absolute; inset: 0; background: var(--well); }
-.browser-stage.device .webview { box-shadow: 0 0 0 1px var(--separator), 0 4px 18px rgba(0, 0, 0, 0.18); }
-.device-caption {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 28px;
-  line-height: 28px;
-  text-align: center;
-  font: 11px var(--font-ui);
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 /* While dragging or resizing windows, embedded pages ([data-embed], embed.ts) must not swallow pointer events. */
 .main.windows.dragging [data-embed], .main.windows.resizing [data-embed], .main.windows.held [data-embed] { pointer-events: none; }
 
