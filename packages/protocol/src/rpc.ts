@@ -110,8 +110,11 @@ export interface Methods {
   "notify.send": { params: { paneId?: PaneId | null; title?: string; body: string }; result: null };
   /** Clear the Notifications widget (records notification.clear; the events stay in the log). */
   "notify.clear": { params: {}; result: null };
-  /** Terminal state, for re-attaching a view after a UI reload; replay it into a terminal of `cols` x `rows`. */
-  "pane.snapshot": { params: { paneId: PaneId }; result: { data: string; cols: number; rows: number } };
+  /**
+   * Terminal state, for re-attaching a view after a UI reload; replay it into a terminal of `cols` x `rows`.
+   * `seq`: the pane's output count it shows; pane.output up to it is already in `data` (OutputGate, @cmd/protocol/replay).
+   */
+  "pane.snapshot": { params: { paneId: PaneId }; result: { data: string; cols: number; rows: number; seq?: number } };
   /** Clear stuck terminal state (modes a crashed program left on). */
   "pane.reset": { params: { paneId: PaneId }; result: null };
   /** Plain-text tail of the pane, as displayed. */
@@ -502,7 +505,8 @@ export type Params<M extends Method> = Methods[M]["params"];
 export type Result<M extends Method> = Methods[M]["result"];
 
 export type CoreEvent =
-  | { type: "pane.output"; paneId: PaneId; data: string }
+  /** `seq`: the pane's output count (UTF-16 units since this core took the pane on) after `data`; older cores leave it out. */
+  | { type: "pane.output"; paneId: PaneId; data: string; seq?: number }
   | { type: "pane.updated"; pane: Pane }
   | { type: "pane.removed"; paneId: PaneId }
   | { type: "agent.updated"; agent: Agent }

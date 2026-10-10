@@ -44,8 +44,23 @@ class RemoteTerm implements Term {
     return this.#host.request("process", { id: this.id }) as Promise<string>;
   }
 
+  /** Output received for this terminal and passed to onData listeners (UTF-16 units). */
+  seq = 0;
+
+  /**
+   * The host says how much of its output came after the snapshot; counted back from what
+   * arrived by its reply, that is our seq (an older host doesn't say: no seq).
+   */
   snapshot(o: { scrollback: number; restore?: boolean }): Promise<Snapshot> {
-    return this.#host.request("snapshot", { id: this.id, ...o }) as Promise<Snapshot>;
+    return this.#host.request("snapshot", { id: this.id, ...o }, (r) => {
+      const { after, ...s } = r as Snapshot & { after?: number };
+      return typeof after === "number" ? { ...s, seq: Math.max(0, this.seq - after) } : s;
+    }) as Promise<Snapshot>;
+  }
+
+  deliver(d: string): void {
+    if (this.data.length) this.seq += d.length;
+    for (const fn of this.data) fn(d);
   }
 
   read(lines: number): Promise<string> {
@@ -178,11 +193,12 @@ export class RemoteBackend implements TermBackend {
     this.#onReplaced.push(fn);
   }
 
-  request(m: string, p: Record<string, unknown>): Promise<unknown> {
+  /** `read` maps the reply as it arrives, before any message after it (a terminal's next output). */
+  request(m: string, p: Record<string, unknown>, read?: (r: unknown) => unknown): Promise<unknown> {
     const id = this.#nextId++;
     return new Promise((resolve, reject) => {
       if (!this.#sock.writable) return reject(new Error("the PTY host is gone"));
-      this.#pending.set(id, { resolve, reject });
+      this.#pending.set(id, { resolve: read ? (r) => resolve(read(r)) : resolve, reject });
       this.#sock.write(JSON.stringify({ id, m, p }) + "\n");
     });
   }
@@ -200,7 +216,7 @@ export class RemoteBackend implements TermBackend {
       this.#replaced = true;
     } else if (msg.ev === "data") {
       const t = this.#terms.get(msg.t!);
-      if (t) for (const fn of t.data) fn(msg.d!);
+      t?.deliver(msg.d!);
     } else if (msg.ev === "exit") {
       const t = this.#terms.get(msg.t!);
       if (t) for (const fn of [...t.exit]) fn(msg.c ?? null);

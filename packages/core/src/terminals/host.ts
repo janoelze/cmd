@@ -169,8 +169,12 @@ export class PtyHost {
         return term().kill();
       case "process":
         return term().process();
-      case "snapshot":
-        return term().snapshot({ scrollback: Number(p.scrollback), restore: !!p.restore });
+      case "snapshot": {
+        // The core counts output by what it received, not by our seq: tell it how much of
+        // what it has received by this reply came after the snapshot (remote.ts).
+        const t = term();
+        return t.snapshot({ scrollback: Number(p.scrollback), restore: !!p.restore }).then(({ seq, ...s }) => ({ ...s, after: t.seq - (seq ?? t.seq) }));
+      }
       case "read":
         return term().read(Number(p.lines));
       case "reset":

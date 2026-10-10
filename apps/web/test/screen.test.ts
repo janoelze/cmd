@@ -44,4 +44,19 @@ describe("the phone's screen", () => {
     await write(t, "");
     expect(text(t)).toBe("first second third");
   });
+
+  it("writes each byte once: what the snapshot shows is skipped, before its reply or after", async () => {
+    const t = term(CORE);
+    const s = new Screen(t);
+    s.awaitSnapshot();
+    // "one two " is in the snapshot (seq 8). Some of it arrived before the reply, the rest
+    // after it (a remote session holds output for a moment), one event half in it.
+    s.output("one ", 4);
+    s.output("tw", 6);
+    s.snapshot({ data: "one two ", cols: CORE, rows: ROWS, seq: 8 });
+    s.output("o three", 13);
+    s.output(" four", 18);
+    await write(t, "");
+    expect(text(t)).toBe("one two three four");
+  });
 });

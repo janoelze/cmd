@@ -150,8 +150,8 @@ class RemoteConnection implements Connection {
   #send: (b: Bytes) => void;
   #close: () => void;
   #out: Promise<void> = Promise.resolve();
-  /** Output waiting to be merged, per pane, in arrival order. */
-  #pending = new Map<string, string>();
+  /** Output waiting to be merged, per pane, in arrival order, with the seq of its end. */
+  #pending = new Map<string, { data: string; seq?: number }>();
   #pendingBytes = 0;
   #timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -178,7 +178,7 @@ class RemoteConnection implements Connection {
       this.send(line);
       return;
     }
-    this.#pending.set(e.paneId, (this.#pending.get(e.paneId) ?? "") + e.data);
+    this.#pending.set(e.paneId, { data: (this.#pending.get(e.paneId)?.data ?? "") + e.data, seq: e.seq });
     this.#pendingBytes += e.data.length;
     if (this.#pendingBytes > MAX_PENDING) {
       const panes = [...this.#pending.keys()];
@@ -193,7 +193,7 @@ class RemoteConnection implements Connection {
   #flush(): void {
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = null;
-    for (const [paneId, data] of this.#pending) this.send(eventLine({ type: "pane.output", paneId, data }));
+    for (const [paneId, { data, seq }] of this.#pending) this.send(eventLine({ type: "pane.output", paneId, data, seq }));
     this.#pending.clear();
     this.#pendingBytes = 0;
   }

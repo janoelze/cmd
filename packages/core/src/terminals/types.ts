@@ -17,6 +17,8 @@ export interface Snapshot {
   data: string;
   cols: number;
   rows: number;
+  /** The output it shows, as a count of what this Term passed to onData listeners (UTF-16 units). */
+  seq?: number;
 }
 
 export interface Term {

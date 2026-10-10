@@ -43,3 +43,76 @@ export class Replayer {
     });
   }
 }
+
+/**
+ * Of a pane.output event (`data`, ending at `seq`), what a snapshot showing output up to
+ * `shown` doesn't: all of it, its tail, or "". Null when either has no seq (an older core).
+ */
+export function unseen(data: string, seq: number | undefined, shown: number | undefined): string | null {
+  if (seq === undefined || shown === undefined) return null;
+  if (seq <= shown) return "";
+  const start = seq - data.length;
+  return start >= shown ? data : data.slice(shown - start);
+}
+
+/**
+ * A terminal's output around a snapshot, each byte once. Output arriving while the
+ * snapshot is asked for waits; the snapshot's reply lets through what it doesn't show
+ * already. The core sends output in order, but around the reply both ways happen:
+ * output the snapshot shows can arrive before the reply (a terminal printing meanwhile)
+ * or after it (a remote session holds output COALESCE_MS), and output it doesn't show
+ * before it (the PTY host's next lines). So the counts decide (pane.output's and the
+ * snapshot's `seq`), until output passes the snapshot. Without them (an older core),
+ * output that waited is written (`keep`) or dropped (`drop`), as each client did.
+ */
+export class OutputGate {
+  #legacy: "keep" | "drop";
+  /** A new gate waits for a snapshot. */
+  #waiting = true;
+  #early: { data: string; seq?: number }[] = [];
+  /** What the snapshot shows, while output may still overlap it. */
+  #shown: number | null = null;
+
+  constructor(legacy: "keep" | "drop") {
+    this.#legacy = legacy;
+  }
+
+  /** Nothing left to filter: the snapshot is applied and output has passed it. */
+  get done(): boolean {
+    return !this.#waiting && this.#shown === null;
+  }
+
+  /** Output waits for a snapshot. */
+  get waiting(): boolean {
+    return this.#waiting;
+  }
+
+  /** A (new) snapshot was asked for: output waits for it. */
+  wait(): void {
+    this.#waiting = true;
+    this.#early = [];
+    this.#shown = null;
+  }
+
+  /** A pane.output event: what to write now. */
+  output(data: string, seq?: number): string {
+    if (this.#waiting) {
+      this.#early.push({ data, seq });
+      return "";
+    }
+    if (this.#shown === null) return data;
+    const rest = unseen(data, seq, this.#shown);
+    if (rest === null || seq! > this.#shown) this.#shown = null;
+    return rest ?? data;
+  }
+
+  /** The snapshot (its `seq`) is written: what of the output that waited to write after it. */
+  snapshot(seq?: number): string {
+    const early = this.#early;
+    this.#early = [];
+    this.#waiting = false;
+    if (seq === undefined) return this.#legacy === "keep" ? early.map((e) => e.data).join("") : "";
+    this.#shown = seq;
+    return early.map((e) => this.output(e.data, e.seq)).join("");
+  }
+}

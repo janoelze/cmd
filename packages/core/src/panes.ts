@@ -112,6 +112,10 @@ interface Live {
   outputSincePoll: boolean;
   /** Clears a progress bar the program stopped updating (it may have crashed). */
   progressTimer: NodeJS.Timeout | null;
+  /** Output emitted (UTF-16 units): pane.output's and the snapshot's seq. Goes on from the old terminal's under a resurrected pane, so UIs never see it go back. */
+  seq: number;
+  /** Of that, what came from the terminal: lines up a Term's snapshot seq with ours. */
+  termSeq: number;
 }
 
 /** Panes without output since the last foreground check are checked this often. */
@@ -125,7 +129,8 @@ const CAPTURE_MAX = 300_000;
 const READY_MAX_MS = 4000;
 
 export interface PaneEvents {
-  output: [paneId: PaneId, data: string];
+  /** `seq`: the pane's output count after `data` (see snapshot). */
+  output: [paneId: PaneId, data: string, seq: number];
   updated: [pane: Pane];
   removed: [paneId: PaneId];
   osc: [paneId: PaneId, ev: OscEvent];
@@ -332,7 +337,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     if (opts.command) this.#scheduleCommand(live, opts.command);
     this.#changed(live);
     // A UI that is already attached hasn't seen the restored screen.
-    if (opts.replay) this.emit("output", id, opts.replay);
+    if (opts.replay) this.emit("output", id, opts.replay, (live.seq += opts.replay.length));
     return { ...pane };
   }
 
@@ -369,7 +374,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
 
   #attach(pane: Pane, term: Term, token: string): Live {
     pane.git = placeOf(pane.cwd);
-    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, capture: null, saved: "", dirty: true, screenHash: "", polledAt: 0, outputSincePoll: true, progressTimer: null };
+    const live: Live = { pane, term, osc: new OscScanner(), pending: null, fg: null, token, command: null, capture: null, saved: "", dirty: true, screenHash: "", polledAt: 0, outputSincePoll: true, progressTimer: null, seq: this.#panes.get(pane.id)?.seq ?? 0, termSeq: 0 };
     this.#panes.set(pane.id, live);
     term.onData((data) => this.#onData(live, data));
     term.onExit((code) => this.#exited(live, code));
@@ -425,7 +430,8 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     live.dirty = true;
     live.outputSincePoll = true;
     live.pane.lastActivityAt = Date.now();
-    this.emit("output", live.pane.id, data);
+    live.termSeq += data.length;
+    this.emit("output", live.pane.id, data, (live.seq += data.length));
     if (live.capture !== null && live.capture.length < CAPTURE_MAX) live.capture += data.slice(0, CAPTURE_MAX - live.capture.length);
     for (const ev of live.osc.feed(data)) {
       if (ev.type === "prompt" && ev.mark === "C") live.capture = "";
@@ -681,9 +687,14 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     if (this.#historyDir) for (const sh of ["zsh", "bash"] as const) fs.rmSync(this.#historyFile(id, sh), { force: true });
   }
 
-  /** Serialized terminal state for a UI to restore exactly what is on screen. */
-  snapshot(id: PaneId): Promise<{ data: string; cols: number; rows: number }> {
-    return this.#must(id).term.snapshot({ scrollback: SNAPSHOT_SCROLLBACK });
+  /**
+   * Serialized terminal state for a UI to restore exactly what is on screen, and `seq`, the
+   * output it shows: the terminal's output after its snapshot was emitted, or is about to be.
+   */
+  async snapshot(id: PaneId): Promise<{ data: string; cols: number; rows: number; seq?: number }> {
+    const live = this.#must(id);
+    const { seq, ...s } = await live.term.snapshot({ scrollback: SNAPSHOT_SCROLLBACK });
+    return seq === undefined ? s : { ...s, seq: Math.max(0, live.seq - (live.termSeq - seq)) };
   }
 
   /** The last `lines` lines of text (screen + scrollback, as displayed). */

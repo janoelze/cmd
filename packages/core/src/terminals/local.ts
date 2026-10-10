@@ -24,6 +24,8 @@ export class LocalTerm implements Term {
   #data: ((d: string) => void)[] = [];
   #exit: ((code: number | null) => void)[] = [];
   #exited = false;
+  /** Output passed to onData listeners (UTF-16 units): what a snapshot's seq counts. */
+  #seq = 0;
 
   constructor(pty: Pty, o: TermSpawn) {
     this.id = o.id;
@@ -36,6 +38,7 @@ export class LocalTerm implements Term {
     if (o.replay) this.#vt.write(o.replay);
     pty.onData((d) => {
       this.#vt.write(d);
+      if (this.#data.length) this.#seq += d.length;
       for (const fn of this.#data) fn(d);
     });
     pty.onExit(({ exitCode }) => this.exited(exitCode));
@@ -74,8 +77,28 @@ export class LocalTerm implements Term {
     return this.#pty.process;
   }
 
-  async snapshot(o: { scrollback: number; restore?: boolean }): Promise<Snapshot> {
-    await this.#flush();
+  get seq(): number {
+    return this.#seq;
+  }
+
+  /**
+   * Exactly the output so far (`seq`): serialized as soon as it is parsed, before xterm
+   * goes on to parse what came after it in the same slice.
+   */
+  snapshot(o: { scrollback: number; restore?: boolean }): Promise<Snapshot> {
+    const seq = this.#seq;
+    return new Promise((resolve, reject) =>
+      this.#vt.write("", () => {
+        try {
+          resolve({ ...this.#serialize(o), seq });
+        } catch (err) {
+          reject(err);
+        }
+      }),
+    );
+  }
+
+  #serialize(o: { scrollback: number; restore?: boolean }): Snapshot {
     const vt = this.#vt;
     if (!o.restore) {
       // Cursor moves and wrapping in the data only replay right at the size they were made at.

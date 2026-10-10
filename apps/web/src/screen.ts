@@ -1,8 +1,8 @@
 // The phone's terminal without the DOM (Terminal.tsx draws it): the core's snapshot
-// replayed at the size it was made at, live output after it, and sizing held while the
-// snapshot is parsed (@cmd/protocol/replay says why).
+// replayed at the size it was made at, the output it doesn't show after it (each byte
+// once), and sizing held while the snapshot is parsed (@cmd/protocol/replay says why).
 
-import { Replayer, type ReplayTerm } from "@cmd/protocol/replay";
+import { OutputGate, Replayer, type ReplayTerm } from "@cmd/protocol/replay";
 
 /** What the screen needs of a terminal (xterm.js; @xterm/headless in tests). */
 export interface ScreenTerm extends ReplayTerm {
@@ -17,9 +17,8 @@ export interface Size {
 export class Screen {
   #term: ScreenTerm;
   #replays: Replayer;
-  /** Output arriving before the snapshot waits for it. */
-  #ready = false;
-  #early: string[] = [];
+  /** Output arriving before the snapshot waits for it; an older Mac's is all written after it. */
+  #gate = new OutputGate("keep");
   /** Runs once a snapshot is parsed: the size held meanwhile applies now. */
   onParsed: () => void = () => {};
 
@@ -35,19 +34,20 @@ export class Screen {
 
   /** A new snapshot was asked for (a resync): output waits for it. */
   awaitSnapshot(): void {
-    this.#ready = false;
+    this.#gate.wait();
   }
 
-  snapshot(snap: Size & { data: string }): void {
+  snapshot(snap: Size & { data: string; seq?: number }): void {
     this.#term.reset();
     this.#replays.replay(snap.data, snap, () => this.onParsed());
-    this.#ready = true;
-    for (const d of this.#early.splice(0)) this.#term.write(d);
+    const rest = this.#gate.snapshot(snap.seq);
+    if (rest) this.#term.write(rest);
   }
 
-  output(data: string): void {
-    if (this.#ready) this.#term.write(data);
-    else this.#early.push(data);
+  /** A pane.output event (its `seq`, from a Mac that sends one). */
+  output(data: string, seq?: number): void {
+    const d = this.#gate.output(data, seq);
+    if (d) this.#term.write(d);
   }
 
   /**

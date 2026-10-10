@@ -489,7 +489,7 @@ export class Core {
     this.watches.on("changed", (path) => this.#broadcast({ type: "fs.changed", path }));
     this.settings.on("updated", (snapshot) => this.#broadcast({ type: "settings.updated", snapshot }));
 
-    this.panes.on("output", (paneId, data) => this.#broadcast({ type: "pane.output", paneId, data }));
+    this.panes.on("output", (paneId, data, seq) => this.#broadcast({ type: "pane.output", paneId, data, seq }));
     this.panes.on("updated", (pane) => {
       this.#broadcast({ type: "pane.updated", pane });
       describePane(this.data, pane);

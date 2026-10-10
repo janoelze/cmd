@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import type { Agent, AgentId, AppNotification, AppWindow, CommandRun, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Workspace, WorkspaceId, StartupStatus, WidgetEntry, WindowId, DataEvent, DataQuery, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_WORKSPACE_ID } from "@cmd/protocol";
+import { OutputGate } from "@cmd/protocol/replay";
 import { reducedMotion } from "@cmd/ui";
 import { cmd } from "./bridge.ts";
 import { terminals } from "./terminals.ts";
@@ -403,17 +404,21 @@ export function usePersisted<T>(key: string, fallback: T): [T, (v: T | ((prev: T
   return [value, setter];
 }
 
-// Output for panes that existed before we subscribed is held back until their
-// snapshot arrives. Events and responses share one ordered socket, so anything
-// received before the snapshot response is already contained in the snapshot.
-const awaitingSnapshot = new Set<PaneId>();
+// Output for panes that existed before we subscribed waits for their snapshot, which
+// lets through only what it doesn't show (by seq: output around the reply can be on
+// either side of what the snapshot holds, @cmd/protocol/replay). An older core's is dropped.
+const gates = new Map<PaneId, OutputGate>();
 
 function handle(e: CoreEvent): void {
   countEvent(e.type);
   switch (e.type) {
-    case "pane.output":
-      if (!awaitingSnapshot.has(e.paneId)) terminals.write(e.paneId, e.data);
+    case "pane.output": {
+      const gate = gates.get(e.paneId);
+      const data = gate ? gate.output(e.data, e.seq) : e.data;
+      if (gate?.done) gates.delete(e.paneId);
+      if (data) terminals.write(e.paneId, data);
       return;
+    }
     case "pane.updated": {
       const prev = state.panes.get(e.pane.id);
       // Agents animate a spinner in their title many times a second; the UI shows titles
@@ -431,6 +436,7 @@ function handle(e: CoreEvent): void {
       const panes = new Map(state.panes);
       panes.delete(e.paneId);
       terminals.dispose(e.paneId);
+      gates.delete(e.paneId);
       set({ panes });
       return;
     }
@@ -558,7 +564,7 @@ cmd.onStatus(async (status) => {
     set({ connected: false, error: (err as Error).message });
     return;
   }
-  for (const p of snap.panes) awaitingSnapshot.add(p.id), terminals.hold(p.id);
+  for (const p of snap.panes) gates.set(p.id, new OutputGate("drop")), terminals.hold(p.id);
   terminals.configure(snap.settings.settings);
   applyFonts(snap.settings.settings);
   applyThemeSettings(snap.settings.settings);
@@ -587,11 +593,15 @@ cmd.onStatus(async (status) => {
   await Promise.allSettled(
     [...snap.panes].sort((a, b) => rank(a) - rank(b)).map(async (p) => {
       try {
-        const { data, cols, rows } = await cmd.call("pane.snapshot", { paneId: p.id });
+        const { data, cols, rows, seq } = await cmd.call("pane.snapshot", { paneId: p.id });
         terminals.reset(p.id);
         terminals.replay(p.id, data, { cols, rows });
+        const rest = gates.get(p.id)?.snapshot(seq);
+        if (rest) terminals.write(p.id, rest);
       } finally {
-        awaitingSnapshot.delete(p.id);
+        // Failed (the pane is gone) or nothing left to skip: output goes straight through.
+        const gate = gates.get(p.id);
+        if (gate && (gate.done || gate.waiting)) gates.delete(p.id);
         terminals.release(p.id);
       }
     }),

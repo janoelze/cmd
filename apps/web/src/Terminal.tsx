@@ -113,7 +113,7 @@ export function TerminalScreen({ conn, item, control, onBack }: { conn: Connecti
       screen.snapshot(snap);
     };
     const off = conn.onEvent((e) => {
-      if (e.type === "pane.output" && e.paneId === pane.id) screen.output(e.data);
+      if (e.type === "pane.output" && e.paneId === pane.id) screen.output(e.data, e.seq);
       else if (e.type === "pane.resync" && e.paneId === pane.id) void snapshot();
     });
     void client?.call("window.follow", { ids: [pane.id] }).then(snapshot, () => {});
