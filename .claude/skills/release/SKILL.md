@@ -60,7 +60,9 @@ pnpm release patch        # or minor | major | 0.3.0
 together. It refuses to run if the section is missing or doesn't pass the lint.
 
 **Prereleases**, for testing CI, signing or packaging changes without shipping to users: tag
-directly. CI takes the version from the tag, so no bump commit is needed:
+directly. No bump commit is needed: CI's Version step (`scripts/release-version.mjs`) writes the
+tag's version into `apps/desktop/package.json` in its workspace, so the app, What's New and the
+usage stats key all report the prerelease's version:
 
 ```sh
 git tag -a v0.2.6-beta.1 -m v0.2.6-beta.1 && git push origin master v0.2.6-beta.1
@@ -68,6 +70,9 @@ git tag -a v0.2.6-beta.1 -m v0.2.6-beta.1 && git push origin master v0.2.6-beta.
 
 A tag with a `-` becomes a GitHub prerelease. The updater only follows the latest non-prerelease,
 so betas never reach installed apps.
+
+A release tag (no `-`) must equal `apps/desktop/package.json`'s version, which `pnpm release` bumps.
+Tag one by hand without the bump and CI's Version step fails the build before anything is published.
 
 ## 3. Watch CI
 
@@ -103,16 +108,38 @@ spctl -a -t open --context context:primary-signature -vv cmd-*.dmg
 - **Never delete or move a published tag or release**, even a broken one. Installed apps and people
   may already have it. Fix forward with the next patch.
 - **Releases must be Developer ID signed.** Squirrel.Mac only installs an update whose signature
-  matches the running app's, so an ad-hoc signed release strands everyone who installs it. If the
-  signing secrets are missing, CI warns ("ad-hoc signed") and still publishes. Treat that release as
-  broken.
+  matches the running app's, so an ad-hoc signed release strands everyone who installs it. A tag
+  build without the signing secrets fails in the Package step ("No signing secrets"), before
+  anything is published; branch and PR builds stay ad-hoc signed.
 - Don't hand out a `curl … | sh` command for a new `scripts/install.sh` before it's pushed to
   master.
+
+## Roll back
+
+There is no rolling back in place: installed apps follow the newest non-prerelease and only
+update to a higher version, and published tags stay (see Rules). To undo a bad vX.Y.Z, release
+the last good tree under a new, higher version:
+
+```sh
+git checkout -b rollback vX.Y.W                                    # the last good tag
+git checkout master -- CHANGELOG.md apps/desktop/package.json      # master's notes, and the bad version to bump from
+# write the new version's CHANGELOG.md section (changelog skill): what it undoes, in user terms
+git commit -am "Changelog for vX.Y.Z+1"
+pnpm release patch                                                 # vX.Y.Z+1 from the good tree; pushes the rollback branch and tag
+git checkout master && git checkout rollback -- CHANGELOG.md apps/desktop/package.json
+git commit -m "Release vX.Y.Z+1 (rollback)"                        # master takes the notes and version; the tag keeps the tree
+```
+
+Then fix forward on master as usual: the next release is higher again. To roll back only part of
+a release, `git revert` the bad commits on master and `pnpm release patch` instead. `pnpm release`
+refuses a version that isn't higher than every release tag.
 
 ## When it fails
 
 | Symptom | Cause / fix |
 |---|---|
+| `No signing secrets (MAC_CERT_P12_BASE64)` (CI's Package step on a tag) | The certificate secrets are gone or renamed. Restore them (Secrets and credentials below) and release the next patch: the failed tag stays, unpublished. |
+| `vX.Y.Z doesn't match apps/desktop/package.json` (CI's Version step) | The tag was pushed without `pnpm release`'s bump. Release the next patch with `pnpm release`. |
 | `CHANGELOG.md has no section for X.Y.Z` (release.mjs or CI's Changelog step) | Write the section with the changelog skill and commit it. If CI failed on a pushed tag, the tag stays: release the next patch with the section. |
 | `SecKeychainUnlock: passphrase not correct` | electron-builder's own CSC_LINK keychain. CI imports the cert into its own keychain instead; keep it that way. |
 | `::error::Certificate set but no APPLE_API_*` | Notarization secrets missing. Gatekeeper blocks unnotarized Developer ID apps, so CI refuses. |

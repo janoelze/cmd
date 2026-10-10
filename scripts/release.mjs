@@ -6,6 +6,7 @@
 //   node scripts/release.mjs patch|minor|major
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
+import { compareVersions } from "../apps/desktop/src/shared/changelog.ts";
 
 const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const fail = (msg) => {
@@ -30,6 +31,9 @@ const tag = `v${version}`;
 
 if (git("status", "--porcelain")) fail("working tree is not clean; commit or stash first");
 if (git("tag", "--list", tag)) fail(`tag ${tag} already exists`);
+// Installed apps only update to a higher version, so even a rollback is a new, higher release.
+const newest = git("tag", "--list", "v*").split("\n").map((t) => t.slice(1)).filter((v) => /^\d+\.\d+\.\d+$/.test(v)).sort(compareVersions).at(-1);
+if (newest && compareVersions(version, newest) <= 0 && !version.includes("-")) fail(`not releasing ${tag}: v${newest} is out already, and installed apps only update to a higher version`);
 // Users see this section in What's New, so a release without one doesn't ship (CI checks again).
 if (!version.includes("-")) {
   try {

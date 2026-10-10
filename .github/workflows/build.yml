@@ -17,7 +17,8 @@
 # ~/cmd-website-data/usage-secret. Without it releases send unsigned batches,
 # which the server rejects.
 #
-# Signing secrets (all optional; without them the app is ad-hoc signed, see DEVELOPMENT.md):
+# Signing secrets (a tag build fails without them: an ad-hoc signed release can't update
+# installed apps; other builds are ad-hoc signed, see DEVELOPMENT.md):
 #   MAC_CERT_P12_BASE64   Developer ID Application certificate (.p12), base64
 #   MAC_CERT_PASSWORD     password of that .p12
 # Notarization, either an App Store Connect API key (preferred):
@@ -80,6 +81,12 @@ jobs:
       - run: pnpm exec playwright install chromium
 
       - run: pnpm test
+
+      # One version for app.getVersion(), What's New and the usage stats key: a release tag
+      # must equal apps/desktop/package.json's, a prerelease's is written into it here.
+      - name: Version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: node scripts/release-version.mjs "$GITHUB_REF_NAME"
 
       - name: Build and stage
         env:
@@ -150,6 +157,9 @@ jobs:
             security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
             rm "$RUNNER_TEMP/cert.p12"
             security find-identity -v -p codesigning "$kc"
+            # New releases need a valid certificate (the release skill says how to renew it).
+            security find-certificate -c "Developer ID Application" -p "$kc" | openssl x509 -noout -checkend $((30 * 86400)) >/dev/null ||
+              echo "::warning::The Developer ID certificate expires within 30 days: renew it before the next release"
             if [ -z "${APPLE_API_KEY:-}${APPLE_ID:-}" ]; then
               # Gatekeeper blocks a Developer ID app that isn't notarized, so don't ship one.
               echo "::error::Certificate set but no APPLE_API_* or APPLE_ID secrets to notarize with"
@@ -160,9 +170,14 @@ jobs:
             # arm64 app only has the linker's signature and macOS calls it "damaged".
             export CSC_IDENTITY_AUTO_DISCOVERY=false
             sign=(-c.mac.identity=-)
-            [ "$IS_TAG" = true ] && echo "::warning::No signing secrets: this release is ad-hoc signed, not notarized"
+            if [ "$IS_TAG" = true ]; then
+              # Installed apps only take an update signed like them, so an ad-hoc release strands them.
+              echo "::error::No signing secrets (MAC_CERT_P12_BASE64): a tag build must be Developer ID signed, so nothing is released"
+              exit 1
+            fi
           fi
-          if [ "$IS_TAG" = true ]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.0-ci.${GITHUB_RUN_NUMBER}"; fi
+          # A tag's version is package.json's (the Version step made them equal).
+          if [ "$IS_TAG" = true ]; then version=$(node -p 'require("./package.json").version'); else version="0.0.0-ci.${GITHUB_RUN_NUMBER}"; fi
           builder=(pnpm exec electron-builder --publish never -c.extraMetadata.version="$version" "${sign[@]}")
           # One notarization, of the dmg (Apple's advice: the outermost container), not
           # one for the app and another for the dmg: each waits in Apple's queue, which

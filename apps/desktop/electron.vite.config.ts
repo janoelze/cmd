@@ -50,13 +50,17 @@ function pdfjsAssets(): Plugin {
   };
 }
 
+// The app's version, read here only: What's New (__APP_VERSION__) and the usage stats key
+// take it from this, and the packaged app's app.getVersion() from the same package.json.
+// On a tag, CI makes it the tag's version first (scripts/release-version.mjs).
+const APP_VERSION = (JSON.parse(readFileSync(resolve(import.meta.dirname, "package.json"), "utf8")) as { version: string }).version;
+
 // The usage stats key of this version (core/usage.ts): from $CMD_USAGE_SECRET (a CI
 // secret, tagged releases only), which the server holds too and derives the same key from.
 function usageKey(): string {
   const secret = process.env.CMD_USAGE_SECRET;
   if (!secret) return "";
-  const { version } = JSON.parse(readFileSync(resolve(import.meta.dirname, "package.json"), "utf8")) as { version: string };
-  return createHmac("sha256", secret).update(`cmd-usage:${version}`).digest("hex");
+  return createHmac("sha256", secret).update(`cmd-usage:${APP_VERSION}`).digest("hex");
 }
 
 // @cmd/protocol and @cmd/ui ship TypeScript source, so they must be bundled, not externalized.
@@ -89,9 +93,9 @@ export default defineConfig({
   },
   // electron-vite leaves minification off; the renderer bundle is parsed on every launch.
   // Two pages: the app (index.html) and the Settings window (settings.html).
-  // The app's version for What's New (CI's release tags have bumped package.json).
+  // The app's version for What's New.
   renderer: {
-    define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(resolve(import.meta.dirname, "package.json"), "utf8")).version) },
+    define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
     plugins: [react(), xtermScaledCoords(), pdfjsAssets()],
     optimizeDeps: { exclude: ["@xterm/xterm"] },
     build: {
