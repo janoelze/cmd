@@ -1,7 +1,8 @@
 // Running commands for Magic widgets: the agent's `run` tool and command data
 // sources. Every command runs without a PTY, with a timeout and an output cap,
 // with secret-looking variables removed from its environment, and under
-// sandbox-exec with a profile that denies writes and reading private paths.
+// sandbox-exec with a profile that denies writes, reading private paths and the
+// network (only Unix sockets, and TCP to the ports a run was granted).
 //
 // sandbox-exec can't apply a profile inside another sandbox (e.g. when the core
 // itself runs under Agent Safehouse). Then commands are refused unless the
@@ -29,6 +30,12 @@ export interface ExecOptions {
   credentials?: Credentials;
   /** More folders the command may write (e.g. Deno's cache). */
   writable?: string[];
+  /**
+   * Remote TCP endpoints the command may connect to, as SBPL addresses ("*:443",
+   * "localhost:3000"). Default: "*:443" when the credentials need the network
+   * (gh, glab, kubectl, tailscale), else none.
+   */
+  net?: string[];
   /** Text fed to stdin (default: none). */
   stdin?: string;
   /** Extra environment variables. */
@@ -72,14 +79,22 @@ export function sandboxAvailable(): boolean {
 const real = realPathOf;
 const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
+/** The TCP endpoints a run may reach by default: HTTPS when its CLIs need their servers. */
+export function defaultNet(credentials?: Credentials): string[] {
+  return credentials?.net ? ["*:443"] : [];
+}
+
 /**
  * SBPL profile: everything allowed except writes outside `tmp`, the private
- * paths (also .env files and worktree instances' private files), and a few
- * binaries. With credentials, the CLIs' own config folders stay readable and
- * writable (their caches live there) and, with keychain, the login keychain
- * and /usr/bin/security (how gh and glab fetch their tokens) too.
+ * paths (also .env files and worktree instances' private files), a few
+ * binaries, and the network: only Unix sockets (DNS through mDNSResponder, the
+ * widgets socket) and TCP to `net` (sandbox-exec can't match host names, so
+ * Deno's --allow-net filters hosts). With credentials, the CLIs' own config
+ * folders stay readable and writable (their caches live there) and, with
+ * keychain, the login keychain and /usr/bin/security (how gh and glab fetch
+ * their tokens) too.
  */
-export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; credentials?: Credentials; writable?: string[] }): string {
+export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; credentials?: Credentials; writable?: string[]; net?: string[] }): string {
   const home = o.home ?? os.homedir();
   const abs = (p: string) => real(path.resolve(expandPath(p, home)));
   const allowed = (o.credentials?.paths ?? []).map(abs);
@@ -89,6 +104,7 @@ export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; 
     .map(abs)
     .filter((d) => !allowed.some((a) => inside(d, a) || inside(a, d)) && !(keychain && inside(d, abs("~/Library/Keychains"))));
   const writable = [real(o.tmp), ...allowed, ...(o.writable ?? []).map(abs)];
+  const net = [...new Set(o.net ?? defaultNet(o.credentials))].filter((n) => /^(\*|localhost):(\*|\d{1,5})$/.test(n));
   const noExec = ["/usr/bin/sudo", "/usr/bin/su", "/usr/bin/osascript", "/usr/bin/open", ...(keychain ? [] : ["/usr/bin/security"])];
   return [
     "(version 1)",
@@ -99,6 +115,10 @@ export function sandboxProfile(o: { tmp: string; deny: string[]; home?: string; 
     `(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))`,
     `(deny file-read* (regex #"${INSTANCE_PRIVATE_PATTERN}"))`,
     `(deny process-exec ${noExec.map((x) => `(literal ${q(x)})`).join(" ")})`,
+    // No network but local sockets and the granted TCP ports: nothing can send what it read.
+    "(deny network-outbound)",
+    "(allow network-outbound (remote unix-socket))",
+    net.length ? `(allow network-outbound ${net.map((n) => `(remote tcp ${q(n)})`).join(" ")})` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -147,7 +167,7 @@ function execArgvNow(cmdArgv: string[], o: ExecOptions): Promise<ExecResult> {
   const maxBytes = o.maxBytes ?? 64 * 1024;
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cmd-magic-"));
   const argv = sandboxed
-    ? [SANDBOX_EXEC, "-p", sandboxProfile({ tmp, deny: o.deny ?? [], credentials: o.credentials, writable: o.writable }), ...cmdArgv]
+    ? [SANDBOX_EXEC, "-p", sandboxProfile({ tmp, deny: o.deny ?? [], credentials: o.credentials, writable: o.writable, net: o.net }), ...cmdArgv]
     : cmdArgv;
   return new Promise((resolve) => {
     const child = spawn(argv[0]!, argv.slice(1), {

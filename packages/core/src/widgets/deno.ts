@@ -2,8 +2,9 @@
 // widget (data.ts and view.ts against data.ts's schema), and run its data.ts
 // through widget-runtime/runner.ts. Permissions come from manifest.json and
 // become Deno flags; the whole process also runs under cmd's sandbox-exec
-// profile (no writes, no private paths), so even `--allow-run=git` can't
-// change anything. cmd's own copy is one pinned Deno release, checked against
+// profile (no writes, no private paths, TCP only to HTTPS and the granted
+// hosts' ports), so even `--allow-run=git` can't change anything, and Deno's
+// --allow-net picks the hosts. cmd's own copy is one pinned Deno release, checked against
 // its SHA-256 and code signature before it runs (bumping it: DENO_VERSION).
 
 import fs from "node:fs";
@@ -220,6 +221,22 @@ export function denoRunArgs(dir: string, m: WidgetManifest, env: DenoEnv, socket
   return args;
 }
 
+/**
+ * The TCP endpoints data.ts's process may reach in the sandbox (SBPL can't
+ * match host names; --allow-net does): HTTPS when it has hosts or runs a CLI
+ * that needs its server, plus the ports granted hosts name ("localhost:3000").
+ */
+export function denoNet(m: WidgetManifest, cliNet = false): string[] {
+  const out = new Set<string>();
+  if (m.permissions.net.length || cliNet) out.add("*:443");
+  for (const h of m.permissions.net) {
+    const at = /^(.*):(\d{1,5})$/.exec(h);
+    if (!at) continue;
+    out.add(`${/^(localhost|127\.0\.0\.1)$/i.test(at[1]!) ? "localhost" : "*"}:${at[2]}`);
+  }
+  return [...out];
+}
+
 /** Run data.ts once: its data validated against its schema, or what went wrong. */
 export async function runData(dir: string, m: WidgetManifest, o: RunDataOptions): Promise<DataResult> {
   if (!fs.existsSync(path.join(dir, "data.ts"))) return { ok: false, error: "this widget has no data.ts", stderr: "", ms: 0 };
@@ -236,6 +253,7 @@ export async function runData(dir: string, m: WidgetManifest, o: RunDataOptions)
     maxBytes: 4 * 1024 * 1024,
     signal: o.signal,
     credentials: { env: [...keep.env, ...m.permissions.env], paths: keep.paths, keychain: keep.keychain },
+    net: denoNet(m, keep.net),
   });
   const stderr = r.stderr.trim().slice(0, 4000);
   if (r.timedOut) return { ok: false, error: `data.ts didn't finish within ${Math.round((o.timeoutMs ?? 20_000) / 1000)} s`, stderr, ms: r.ms };

@@ -24,6 +24,7 @@ import {
   type VerifyContext,
 } from "../src/magic/index.ts";
 import type { BackendRun } from "../src/ai/backends.ts";
+import { denoNet, denoRunArgs } from "../src/widgets/deno.ts";
 
 const DENO = findDeno();
 // CI installs the pinned Deno (build.yml) and sets this, so the suites below can't skip there unnoticed.
@@ -48,6 +49,29 @@ cmd.onData<Data>((d) => { el.textContent = String(d.n); });
 `;
 
 /** Renders nothing; reports a script error for pages containing BROKEN. */
+describe("data.ts's network (AR1-11-03)", () => {
+  const manifest = (net: string[], run: string[] = []) => {
+    const r = parseManifest({ title: "Status", permissions: { net, run } });
+    if (!r.ok) throw new Error(r.errors.join("; "));
+    return r.manifest;
+  };
+  const env = { deno: "/opt/homebrew/bin/deno", denoDir: "/tmp/deno-cache", sandbox: "off" as const };
+
+  it("gives Deno the granted hosts and the widgets socket, nothing else", () => {
+    const args = denoRunArgs("/w", manifest(["api.example.com"]), env, "/tmp/cmd/widgets.sock");
+    expect(args.filter((a) => a.startsWith("--allow-net"))).toEqual(["--allow-net=api.example.com,unix:/tmp/cmd/widgets.sock"]);
+    expect(denoRunArgs("/w", manifest([]), env, null).some((a) => a.startsWith("--allow-net"))).toBe(false);
+  });
+
+  it("opens HTTPS in the sandbox only with hosts or a CLI that needs its server, and the ports hosts name", () => {
+    expect(denoNet(manifest([]))).toEqual([]);
+    expect(denoNet(manifest([], ["git"]))).toEqual([]);
+    expect(denoNet(manifest([], ["gh"]), true)).toEqual(["*:443"]);
+    expect(denoNet(manifest(["api.example.com"]))).toEqual(["*:443"]);
+    expect(denoNet(manifest(["localhost:3000", "127.0.0.1:8080", "metrics.lan:9100"]))).toEqual(["*:443", "localhost:3000", "localhost:8080", "*:9100"]);
+  });
+});
+
 const fakePreviewer: Previewer = {
   name: "fake",
   async render(requests) {

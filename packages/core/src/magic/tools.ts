@@ -9,6 +9,7 @@ import { classify, credentialsFor, expandPath, redact } from "./policy.ts";
 import { privateMatcher } from "../paths-deny.ts";
 import { execCommand, type SandboxMode } from "./sandbox.ts";
 import { preview } from "./sources.ts";
+import { FetchRefused, guardedFetch, type Lookup } from "./fetch.ts";
 
 export interface ToolSpec {
   name: string;
@@ -25,6 +26,8 @@ export interface ToolContext {
   deny: string[];
   sandbox: SandboxMode;
   signal?: AbortSignal;
+  /** Tests: how fetch resolves host names, and which it takes as public. */
+  fetch?: { lookup?: Lookup; publicHosts?: string[] };
 }
 
 export interface ToolOutput {
@@ -47,7 +50,7 @@ export const TOOL_SPECS: ToolSpec[] = [
     name: "run",
     explores: true,
     description:
-      "Run a read-only shell command on the user's Mac (no TTY, 10 s timeout, 64 KB output). Only read-only commands are allowed (ls, cat, grep, find, ps, df, du, scutil, networksetup, ifconfig, git status/log, curl GET, jq, sw_vers, system_profiler, pmset -g, defaults read, …); anything that writes, needs sudo or runs other programs is refused with the reason. Private paths (~/.ssh, keychains, browser profiles, .env files, cmd's own secrets and settings) can't be read.",
+      "Run a read-only shell command on the user's Mac (no TTY, 10 s timeout, 64 KB output). Only read-only commands are allowed (ls, cat, grep, find, ps, df, du, scutil, networksetup, ifconfig, git status/log, jq, sw_vers, system_profiler, pmset -g, defaults read, …); anything that writes, needs sudo or runs other programs is refused with the reason. Private paths (~/.ssh, keychains, browser profiles, .env files, cmd's own secrets and settings) can't be read.",
     schema: obj({ command: { type: "string" }, cwd: { type: "string", description: "Working folder; default: the user's current folder." } }, ["command"]),
   },
   {
@@ -65,7 +68,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   {
     name: "fetch",
     explores: false,
-    description: "HTTP GET a URL and return the status, content type and body (shortened). Use it to look at an API's response shape.",
+    description: "HTTP GET a public URL and return the status, content type and body (shortened). Use it to look at an API's response shape. Local and private addresses (localhost, 10.x, 192.168.x, 169.254.x, …) are refused.",
     schema: obj({ url: { type: "string" } }, ["url"]),
   },
 ];
@@ -154,21 +157,17 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
       const url = str(input.url);
       if (!url || !/^https?:\/\//i.test(url)) return err("an http(s) url is required");
       try {
-        const res = await fetch(url, { headers: { "user-agent": "cmd-magic/0.1" }, signal: AbortSignal.timeout(10_000), redirect: "follow" });
         // A stream (a web radio) never ends: its headers are the answer.
-        const type = res.headers.get("content-type") ?? "";
-        if (/^(audio|video)\/|ogg|aacp|mpegurl/i.test(type)) {
-          void res.body?.cancel();
-          return { output: `HTTP ${res.status} ${type}\n(a media stream at ${res.url}; not read)`, isError: !res.ok };
-        }
-        const text = (await res.text()).slice(0, MAX);
-        let body = text;
+        const res = await guardedFetch(url, { headers: { "user-agent": "cmd-magic/0.1" }, ...ctx.fetch, signal: ctx.signal, maxBytes: MAX, stream: /^(audio|video)\/|ogg|aacp|mpegurl/i });
+        const ok = res.status >= 200 && res.status < 300;
+        if (res.streamed) return { output: `HTTP ${res.status} ${res.contentType}\n(a media stream at ${res.url}; not read)`, isError: !ok };
+        let body = res.body;
         try {
-          body = preview(JSON.parse(text));
+          body = preview(JSON.parse(res.body));
         } catch {}
-        return { output: redact(`HTTP ${res.status} ${res.headers.get("content-type") ?? ""}\n${body.slice(0, 12_000)}`), isError: !res.ok };
+        return { output: redact(`HTTP ${res.status} ${res.contentType}\n${body.slice(0, 12_000)}`), isError: !ok };
       } catch (e) {
-        return err((e as Error).message);
+        return err(e instanceof FetchRefused ? e.message : `Not fetched: ${(e as Error).message}`);
       }
     }
   }

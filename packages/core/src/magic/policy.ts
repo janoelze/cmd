@@ -3,7 +3,7 @@
 // commands classified "allow"; anything else is refused with the reason, so the
 // agent picks another. A compound command is split on | || && ; & and newlines,
 // and every part must pass. This is a best-effort parse; the sandbox
-// (sandbox.ts) is what actually prevents writes.
+// (sandbox.ts) is what actually prevents writes and sending.
 
 import os from "node:os";
 import path from "node:path";
@@ -142,28 +142,15 @@ const READ_ONLY: Record<string, ArgRule> = {
   nl: ok, basename: ok, dirname: ok, realpath: ok, readlink: ok, pwd: ok, true: ok, false: ok, test: ok, "[": ok,
   seq: ok, expr: ok, bc: ok, tac: ok, rev: ok, fold: ok, paste: ok, comm: ok, diff: ok, cmp: ok, md5: ok,
   shasum: ok, base64: ok, xxd: ok, od: ok, strings: ok, vm_stat: ok, iostat: ok, w: ok, who: ok, last: ok,
-  netstat: ok, lsof: ok, mdfind: ok, mdls: ok, system_profiler: ok, ioreg: ok, dig: ok, nslookup: ok, host: ok,
-  arp: ok, ifconfig: (a) => (a.some((x) => /^(up|down|alias|-alias|delete|create|destroy|inet|mtu|ether|lladdr)$/.test(x)) ? "changes an interface" : null),
+  netstat: ok, lsof: ok, mdfind: ok, mdls: ok, system_profiler: ok, ioreg: ok, arp: ok,
+  ifconfig: (a) => (a.some((x) => /^(up|down|alias|-alias|delete|create|destroy|inet|mtu|ether|lladdr)$/.test(x)) ? "changes an interface" : null),
   tail: (a) => (has(a, "-f", "-F") ? "follows forever" : null),
   sort: (a) => (has(a, "-o", "--output") ? "writes a file" : null),
   find: (a) => (a.some((x) => /^-(delete|exec|execdir|ok|okdir|fprint|fprint0|fprintf|fls)$/.test(x)) ? "runs or deletes" : null),
   sysctl: (a) => (has(a, "-w") || a.some((x) => x.includes("=")) ? "changes a kernel setting" : null),
   top: (a) => (has(a, "-l") ? null : "is interactive; use top -l 1"),
-  ping: (a) => {
-    const i = a.indexOf("-c");
-    const n = i >= 0 ? Number(a[i + 1]) : NaN;
-    return n > 0 && n <= 5 ? null : "needs -c 1..5";
-  },
   awk: (a) => (a.some((x) => /system\s*\(|getline|\|\s*"|>\s*"|print[^;]*>/.test(x)) ? "runs commands or writes from awk" : null),
   sed: (a) => (a.some((x) => /^-i|^--in-place/.test(x)) || a.some((x) => /(^|[;{}\s])[wW]\s+\S|(^|[;{}\s])e(\s|$)/.test(x)) ? "edits files" : null),
-  curl: (a) => {
-    if (has(a, "-o", "-O", "--output", "--remote-name", "-T", "--upload-file", "-K", "--config", "-c", "--cookie-jar", "-D", "--dump-header")) return "writes or uploads files";
-    if (a.some((x) => /^-[a-zA-Z]*[oOTKcD]$/.test(x))) return "writes or uploads files";
-    if (has(a, "-d", "--data", "--data-raw", "--data-binary", "--data-urlencode", "--json", "-F", "--form")) return "sends data";
-    const xi = a.findIndex((x) => x === "-X" || x === "--request");
-    if (xi >= 0 && !/^(GET|HEAD)$/i.test(a[xi + 1] ?? "")) return "is not a GET";
-    return null;
-  },
   git: (a) => {
     // Global options before the subcommand; -C and -c take a value.
     let i = 0;
@@ -217,6 +204,18 @@ const READ_ONLY: Record<string, ArgRule> = {
   },
 };
 
+/**
+ * Programs that send what they're given to a host of its choosing (a URL, a DNS
+ * name, a packet): asked, never run as read-only. Data that comes from the
+ * network is fetch's job in the agent and permissions.net in a widget.
+ */
+const SENDS: Record<string, string> = {
+  curl: "sends requests to any host (use fetch, or permissions.net in data.ts)",
+  wget: "sends requests to any host (use fetch, or permissions.net in data.ts)",
+  dig: "sends DNS queries, which can carry data", nslookup: "sends DNS queries, which can carry data", host: "sends DNS queries, which can carry data",
+  ping: "sends packets to any host", nc: "opens connections to any host", telnet: "opens connections to any host",
+};
+
 /** Never, whatever the arguments: privilege, secrets, scripting, changing the system. */
 const DENY: Record<string, string> = {
   sudo: "needs root", su: "needs root", doas: "needs root", osascript: "can control other apps", security: "reads the keychain",
@@ -233,18 +232,20 @@ const DENY: Record<string, string> = {
  * the login keychain) readable in the sandbox. The model still can't read the
  * files (policy, read tool) and command output is scrubbed of tokens (redact).
  */
-export const CREDENTIALED: Record<string, { env: string[]; paths: string[]; keychain?: boolean }> = {
-  gh: { env: ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST", "GH_CONFIG_DIR"], paths: ["~/.config/gh"], keychain: true },
-  glab: { env: ["GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN", "GITLAB_HOST", "GITLAB_URI", "GLAB_CONFIG_DIR"], paths: ["~/.config/glab-cli", "~/Library/Application Support/glab-cli"], keychain: true },
-  kubectl: { env: ["KUBECONFIG"], paths: ["~/.kube"] },
+export const CREDENTIALED: Record<string, { env: string[]; paths: string[]; keychain?: boolean; net?: boolean }> = {
+  gh: { env: ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST", "GH_CONFIG_DIR"], paths: ["~/.config/gh"], keychain: true, net: true },
+  glab: { env: ["GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN", "GITLAB_HOST", "GITLAB_URI", "GLAB_CONFIG_DIR"], paths: ["~/.config/glab-cli", "~/Library/Application Support/glab-cli"], keychain: true, net: true },
+  kubectl: { env: ["KUBECONFIG"], paths: ["~/.kube"], net: true },
   docker: { env: ["DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CONTEXT"], paths: ["~/.docker"] },
-  tailscale: { env: [], paths: [], keychain: true },
+  tailscale: { env: [], paths: [], keychain: true, net: true },
 };
 
 export interface Credentials {
   env: string[];
   paths: string[];
   keychain: boolean;
+  /** The CLIs talk to their servers: HTTPS (TCP 443) is open in the sandbox. */
+  net?: boolean;
 }
 
 /** The logins the programs in a command may use (empty when none of them is credentialed). */
@@ -266,6 +267,7 @@ export function credentialsFor(command: string): Credentials {
         out.env.push(...c.env);
         out.paths.push(...c.paths);
         out.keychain ||= !!c.keychain;
+        out.net ||= !!c.net;
       }
     }
     start = false;
@@ -282,6 +284,7 @@ export function credentialsForPrograms(programs: string[]): Credentials {
     out.env.push(...c.env);
     out.paths.push(...c.paths);
     out.keychain ||= !!c.keychain;
+    out.net ||= !!c.net;
   }
   return out;
 }
@@ -348,6 +351,10 @@ export function classify(command: string, o: PolicyOptions = {}): Verdict {
     }
     if (DENY[name]) {
       worse({ level: "deny", reason: `${name} ${DENY[name]}` });
+      continue;
+    }
+    if (SENDS[name]) {
+      worse({ level: "ask", reason: `${name} ${SENDS[name]}` });
       continue;
     }
     const rule = READ_ONLY[name];

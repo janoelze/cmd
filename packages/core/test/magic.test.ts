@@ -1,10 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import { spawnSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { classify, credentialsFor, credentialsForPrograms, redact, sandboxProfile, execCommand, fastRoute, runTool, sandboxAvailable, widgetHtml } from "../src/magic/index.ts";
 import { lintBody } from "../src/magic/lint.ts";
+import { nonPublic, type Lookup } from "../src/magic/fetch.ts";
 import { magicDenyPaths, magicPrivatePaths, realPathOf } from "../src/paths-deny.ts";
 import { requestedMedia, widgetCsp } from "@cmd/protocol";
 
@@ -21,7 +24,6 @@ describe("command policy", () => {
       "ps -Ao pid,pcpu,comm -r | head -10",
       "df -k / | tail -1 | awk '{print $4}'",
       "git -C ~/src/cmd status --porcelain",
-      "curl -s https://api.ipify.org?format=json | jq .ip",
       "ifconfig utun3",
       "pmset -g batt",
       "networksetup -getairportnetwork en0",
@@ -291,5 +293,125 @@ describe("widget page and lint", () => {
     expect(lintBody("<style>#add{color:var(--text)}</style>").literalColors).toEqual([]);
     expect(lintBody("<style>.a{color: #fff}</style><script>e.style.color='#0a84ff'</script>").literalColors).toEqual(["#fff", "#0a84ff"]);
     expect(lintBody("<div style='background:rgb(0 0 0)'>").literalColors).toEqual(["rgb("]);
+  });
+});
+
+describe("network (AR1-11-03)", () => {
+  it("asks before programs that send to any host", () => {
+    for (const c of ["curl https://x/?q=1", "curl -s https://api.ipify.org?format=json | jq .ip", "dig example.com", "nslookup example.com", "host example.com", "ping -c 1 example.com", "ls; dig x.attacker.example", "wget https://x", "nc example.com 80"]) {
+      expect([c, level(c)]).toEqual([c, "ask"]);
+    }
+    expect(classify("curl https://x/?q=1", { home }).reason).toMatch(/^curl sends requests to any host/);
+  });
+
+  it("denies the network in the profile but Unix sockets, and opens HTTPS only for CLIs that need it", () => {
+    const plain = sandboxProfile({ tmp: "/tmp/x", deny: [], home });
+    expect(plain).toContain("(deny network-outbound)");
+    expect(plain).toContain("(allow network-outbound (remote unix-socket))");
+    expect(plain).not.toContain("remote tcp");
+    expect(sandboxProfile({ tmp: "/tmp/x", deny: [], home, credentials: credentialsFor("docker ps") })).not.toContain("remote tcp");
+    for (const c of ["gh pr list", "glab ci list", "kubectl get pods", "tailscale status"]) {
+      expect(sandboxProfile({ tmp: "/tmp/x", deny: [], home, credentials: credentialsFor(c) })).toContain('(allow network-outbound (remote tcp "*:443"))');
+    }
+    const deno = sandboxProfile({ tmp: "/tmp/x", deny: [], home, net: ["*:443", "localhost:3000", "evil.example:80"] });
+    expect(deno).toContain('(allow network-outbound (remote tcp "*:443") (remote tcp "localhost:3000"))');
+    // The deny comes after everything it closes; the allows after it.
+    expect(deno.indexOf("(deny network-outbound)")).toBeLessThan(deno.indexOf("(allow network-outbound"));
+  });
+
+  it.skipIf(!fs.existsSync("/usr/bin/sandbox-exec"))("the profile with network rules compiles", () => {
+    for (const net of [[], ["*:443", "localhost:3000"]]) {
+      const r = spawnSync("/usr/bin/sandbox-exec", ["-p", sandboxProfile({ tmp: os.tmpdir(), deny: magicDenyPaths(), net }), "/usr/bin/true"], { encoding: "utf8" });
+      if (r.status !== 0) expect(r.stderr).toMatch(/sandbox_apply/);
+    }
+  });
+
+  const online = () => spawnSync("/usr/bin/curl", ["-sS", "-o", "/dev/null", "--max-time", "8", "https://example.com"]).status === 0;
+
+  it("a sandboxed command can't reach the internet, a credentialed CLI can", async ({ skip }) => {
+    if (!sandboxAvailable()) {
+      const reason = "sandbox-exec can't apply a profile here (e.g. inside another sandbox); the profile text is checked above";
+      process.stderr.write(`[skip] ${reason}\n`);
+      return skip(reason);
+    }
+    if (!online()) {
+      process.stderr.write("[skip] no internet here (curl https://example.com fails unsandboxed)\n");
+      return skip("offline");
+    }
+    const curl = await execCommand("/usr/bin/curl -sS --max-time 8 https://example.com", { sandbox: "required", deny: [] });
+    expect(curl.code).not.toBe(0);
+    // gh when it's logged in; else a TLS connection with gh's grant, which is what gh makes.
+    const gh = spawnSync("gh", ["auth", "status"], { encoding: "utf8" }).status === 0;
+    const r = gh
+      ? await execCommand("gh auth status", { sandbox: "required", deny: [], credentials: credentialsFor("gh auth status"), timeoutMs: 20_000 })
+      : await execCommand("/usr/bin/curl -sS -o /dev/null --max-time 8 https://api.github.com", { sandbox: "required", deny: [], credentials: credentialsFor("gh api user") });
+    expect([r.code, r.stderr]).toEqual([0, expect.anything()]);
+  });
+
+  describe("the fetch tool", () => {
+    let server: http.Server;
+    let port = 0;
+    // public.test is a local server standing in for a public host; inside.test resolves to a private address.
+    const lookup: Lookup = async (h) => {
+      if (h === "public.test") return [{ address: "127.0.0.1", family: 4 }];
+      if (h === "inside.test") return [{ address: "192.168.1.20", family: 4 }];
+      if (h === "both.test") return [{ address: "93.184.215.14", family: 4 }, { address: "10.1.2.3", family: 4 }];
+      if (h === "localhost") return [{ address: "127.0.0.1", family: 4 }];
+      throw Object.assign(new Error("not found"), { code: "ENOTFOUND" });
+    };
+    const ctx = () => ({ cwd: os.tmpdir(), home, deny: [], sandbox: "off" as const, fetch: { lookup, publicHosts: ["public.test"] } });
+    const fetchTool = (url: string) => runTool("fetch", { why: "", url }, ctx());
+    beforeAll(async () => {
+      server = http.createServer((req, res) => {
+        const to: Record<string, string> = {
+          "/to-loopback": `http://127.0.0.1:${port}/ok`,
+          "/to-v6": `http://[::1]:${port}/ok`,
+          "/to-meta": "http://169.254.169.254/latest/meta-data/",
+          "/to-ten": "http://10.0.0.1/",
+          "/to-inside": "http://inside.test/",
+          "/to-localhost": `http://localhost:${port}/ok`,
+          "/hop": "/ok",
+        };
+        if (to[req.url!]) return void res.writeHead(302, { location: to[req.url!] }).end();
+        res.writeHead(200, { "content-type": "application/json" }).end('{"ok":true}');
+      });
+      await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+      port = (server.address() as AddressInfo).port;
+    });
+    afterAll(() => void server.close());
+
+    it("reads a public host and follows its redirects", async () => {
+      expect(await fetchTool(`http://public.test:${port}/hop`)).toMatchObject({ isError: false, output: expect.stringContaining('"ok": true') });
+    });
+
+    it("refuses loopback, link-local and private addresses, also by name", async () => {
+      for (const [url, kind] of [
+        [`http://127.0.0.1:${port}/ok`, "loopback"],
+        ["http://[::1]/", "loopback"],
+        ["http://169.254.169.254/latest/meta-data/", "link-local"],
+        ["http://10.0.0.1/", "private"],
+        ["http://172.20.0.1/", "private"],
+        ["http://[fd00::1]/", "private"],
+        ["http://[::ffff:127.0.0.1]/", "loopback"],
+        ["http://inside.test/", "private"],
+        ["http://both.test/", "private"],
+        [`http://localhost:${port}/ok`, "loopback"],
+      ]) {
+        const r = await fetchTool(url!);
+        expect([url, r.isError, r.output]).toEqual([url, true, expect.stringMatching(new RegExp(`^Not fetched: .* a ${kind} address; fetch only reaches public hosts\\.$`))]);
+      }
+    });
+
+    it("refuses a redirect to any of them", async () => {
+      for (const p of ["/to-loopback", "/to-v6", "/to-meta", "/to-ten", "/to-inside", "/to-localhost"]) {
+        const r = await fetchTool(`http://public.test:${port}${p}`);
+        expect([p, r.isError, r.output]).toEqual([p, true, expect.stringMatching(/^Not fetched: redirect to \S+ goes to \S+, a [a-z-]+ address/)]);
+        expect(r.output).not.toContain("true");
+      }
+    });
+
+    it("names what isn't public", () => {
+      expect(["8.8.8.8", "2606:4700::1111", "100.100.100.100", "::ffff:7f00:1", "64:ff9b::a00:1", "fe80::1%en0"].map(nonPublic)).toEqual([null, null, "carrier-grade NAT", "loopback", "private", "link-local"]);
+    });
   });
 });
