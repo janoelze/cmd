@@ -1,4 +1,6 @@
-# Typecheck, test, smoke-test and package the app for macOS on every push and PR.
+# Typecheck, test, smoke-test and package the app for macOS on every push and PR. The
+# smoke test is a job of its own, next to the one that tests and packages, so a red smoke
+# never hides whether the app packages, signs and boots; a release needs both.
 # Pushing a tag `v*` additionally signs + notarizes the macOS dmg (when the
 # secrets below exist) and publishes one GitHub release: the .dmg and .zip, and
 # the update metadata (latest-mac.yml, blockmaps) installed apps update from.
@@ -97,27 +99,7 @@ jobs:
           pnpm build
           node scripts/stage-runtime.mjs
 
-      # Playwright drives the built app through the real menu bar (e2e/smoke.mjs), against a
-      # throwaway CMD_HOME (.cmd-dev/e2e) and fixture transcripts. Panes run zsh, the
-      # Mac default (a runner's $SHELL may be bash). The script has its own 90 s hang watchdog.
-      - name: Smoke test
-        timeout-minutes: 10
-        env:
-          CMD_NO_SANDBOX: "1"
-          SHELL: /bin/zsh
-        run: node e2e/smoke.mjs
-
-      - name: Smoke test screenshots and core logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: smoke-mac
-          path: |
-            .cmd-dev/shots
-            .cmd-dev/e2e/logs
-          if-no-files-found: ignore
-
-      # The smoke test runs the core from source; this boots the staged copy the app ships.
+      # The smoke job runs the core from source; this boots the staged copy the app ships.
       - name: Check the staged core starts
         run: node --no-warnings scripts/check-runtime.mjs
 
@@ -168,7 +150,9 @@ jobs:
           else
             # No Developer ID: ad-hoc sign the whole bundle. Unsigned, a downloaded
             # arm64 app only has the linker's signature and macOS calls it "damaged".
+            # On a pull request electron-builder skips signing unless told not to.
             export CSC_IDENTITY_AUTO_DISCOVERY=false
+            export CSC_FOR_PULL_REQUEST=true
             sign=(-c.mac.identity=-)
             if [ "$IS_TAG" = true ]; then
               # Installed apps only take an update signed like them, so an ad-hoc release strands them.
@@ -233,6 +217,53 @@ jobs:
             apps/desktop/dist/*.blockmap
             apps/desktop/dist/latest-mac.yml
           if-no-files-found: error
+
+  # Playwright drives the built app through the real menu bar (e2e/smoke.mjs), against a
+  # throwaway CMD_HOME (.cmd-dev/e2e) and fixture transcripts. It builds the app itself
+  # (seconds) rather than wait for the mac job's build, so both run side by side. Panes run
+  # zsh, the Mac default (a runner's $SHELL may be bash). The script runs every scenario,
+  # lists each failure at the end, and has its own 90 s hang watchdog.
+  smoke:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Deno runs Magic widgets' data.ts (the magic scenario), as in the mac job's tests.
+      - name: Deno for widget data
+        run: |
+          node --no-warnings --input-type=module -e '
+            const { installDeno, denoVersion } = await import("./packages/core/src/widgets/deno.ts");
+            console.log(denoVersion(await installDeno(process.env.RUNNER_TEMP)));'
+          echo "$RUNNER_TEMP/runtime/deno" >> "$GITHUB_PATH"
+
+      - run: pnpm build
+
+      - name: Smoke test
+        timeout-minutes: 12
+        env:
+          CMD_NO_SANDBOX: "1"
+          SHELL: /bin/zsh
+        run: node e2e/smoke.mjs
+
+      - name: Smoke test screenshots and core logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-mac
+          path: |
+            .cmd-dev/shots
+            .cmd-dev/e2e/logs
+          if-no-files-found: ignore
 
   windows:
     if: false # disabled for now
@@ -305,7 +336,7 @@ jobs:
   # A tag publishes one release with the platforms' builds.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [mac]
+    needs: [mac, smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
