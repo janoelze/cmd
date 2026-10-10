@@ -103,7 +103,7 @@ const check = (cond, msg) => {
   console.log(`ok - ${msg}`);
 };
 // Overlays and sidebars play out a fade or slide before they leave the DOM: wait for that, not a fixed time.
-const gone = (sel) => win.waitForSelector(sel, { state: "detached", timeout: 2000 }).catch(() => {});
+const gone = (sel) => win.waitForSelector(sel, { state: "detached", timeout: 5000 }).catch(() => {});
 // Shortcut checks: the macOS keymap, or its Windows translation (docs/10-windows.md).
 const mac = process.platform === "darwin";
 const macOnly = (msg) => console.log(`skip - ${msg} (macOS keymap)`);
@@ -141,6 +141,18 @@ const still = async (min = 300) => {
     last = now;
   }
 };
+// State the app changes after a command (a write, a save, a re-render) settles later on a slow
+// runner (CI): read it every 100 ms until `ok` holds or `ms` pass, and return the last value
+// read, so the check after it fails on (and prints) what it saw. Never a fixed wait before a read.
+const until = async (read, ok = Boolean, ms = 10_000) => {
+  const t0 = Date.now();
+  for (;;) {
+    const v = await read();
+    if ((await ok(v)) || Date.now() - t0 > ms) return v;
+    await win.waitForTimeout(100);
+  }
+};
+const countOf = (sel) => win.locator(sel).count();
 // Windows in visual order (reading order); the DOM keeps a stable creation order.
 const visualTiles = async () => {
   const ids = await win.locator(".windows-track > .tile:not([data-hidden])").evaluateAll((els) =>
@@ -164,11 +176,8 @@ await win.waitForSelector(".statusbar .core-status");
   check(titles.includes("Anthropic") && titles.includes("OpenAI") && (await win.locator(".onboarding button", { hasText: "Done" }).isDisabled()), "the AI step lists the providers, and Done waits for a key");
   await win.locator(".onboarding button", { hasText: "Set Up Later" }).click();
   await win.waitForSelector(".onboarding", { state: "detached" });
-  let seen = "";
-  for (let i = 0; i < 20 && seen !== "welcome,ai"; i++) {
-    await win.waitForTimeout(50);
-    seen = fs.existsSync(path.join(home, "ui", "onboarding.json")) ? JSON.parse(fs.readFileSync(path.join(home, "ui", "onboarding.json"), "utf8")).seen.join() : "";
-  }
+  const onboardingFile = path.join(home, "ui", "onboarding.json");
+  const seen = await until(() => (fs.existsSync(onboardingFile) ? JSON.parse(fs.readFileSync(onboardingFile, "utf8")).seen.join() : ""), (s) => s === "welcome,ai");
   check(seen === "welcome,ai", `the steps shown are recorded, so they don't open again (${seen})`);
 }
 await win.screenshot({ path: path.join(shots, "1-empty.png") });
@@ -211,49 +220,54 @@ if (mac) {
   check((await accel("session.next")) === "Ctrl+Alt+Right", "Ctrl+Alt+→ is Next Session");
 }
 
+// Every pane's screen, joined: the focused one needn't be first.
+const screens = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((ps) =>
+  Promise.all(ps.map((p) => window.cmd.call("pane.read", { paneId: p.id, lines: 50 }).then((r) => r.text)))).then((t) => t.join("\n")));
+// The newest pane's screen and foreground process.
+const newestPane = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((ps) => ps.sort((a, b) => b.createdAt - a.createdAt)[0]));
+const paneText = (id, lines = 50) => win.evaluate(([id, lines]) => window.cmd.call("pane.read", { paneId: id, lines }).then((r) => r.text), [id, lines]);
+// A new terminal's login shell has started once it drew its prompt.
+const shellReady = async () => {
+  const p = await until(newestPane, (p) => !!p);
+  if (p) await until(() => paneText(p.id, 5), (t) => /\S/.test(t));
+  return p;
+};
 await menu("file.newTerminal");
 await win.locator(".xterm:visible").first().waitFor(); // hidden ones exist too (other workspaces, previews)
-await win.waitForTimeout(1500); // let the login shell finish starting
+const firstTerm = await shellReady();
 await win.keyboard.type("echo hello from cmd");
 await win.keyboard.press("Enter");
 {
   // ⇧↩ reaches the PTY as ESC CR (agents' newline), not a plain CR.
+  await until(() => paneText(firstTerm.id), (t) => /^hello from cmd$/m.test(t));
   await win.keyboard.type("cat -v");
   await win.keyboard.press("Enter");
-  await win.waitForTimeout(300);
+  // Sent before cat runs, the shell's line editor would take it.
+  await until(newestPane, (p) => p.foreground === "cat", 3000);
   await win.keyboard.press("Shift+Enter");
-  // Poll every pane's screen: the shell may still be starting, and the focused one needn't be first.
-  const screens = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((ps) =>
-    Promise.all(ps.map((p) => window.cmd.call("pane.read", { paneId: p.id, lines: 50 }).then((r) => r.text)))).then((t) => t.join("\n")));
-  let text = await screens();
-  for (let i = 0; i < 30 && !/^\^\[$/m.test(text); i++) {
-    await win.waitForTimeout(100);
-    text = await screens();
-  }
+  const text = await until(screens, (t) => /^\^\[$/m.test(t));
   await win.keyboard.press("Control+C");
   check(/^\^\[$/m.test(text), "⇧↩ sends ESC CR to the terminal");
 }
 await menu("file.newTerminal");
-await win.waitForTimeout(1500);
+await until(panes, (n) => n === 2);
+await shellReady();
 await win.keyboard.type("ls -la");
 await win.keyboard.press("Enter");
-await win.waitForTimeout(500);
 check((await panes()) === 2, "two terminals open");
 await win.screenshot({ path: path.join(shots, "2-focus.png") });
 
 const before = await win.locator(".navigator .ui-list-row.sel").getAttribute("class");
 const rowsBefore = await win.locator(".navigator .ui-list-row:not(.history)").allTextContents();
 await menu("session.next");
-await win.waitForTimeout(200);
-const selIndexAfter = await win.locator(".navigator .ui-list-row:not(.history)").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel")));
+const selIndexAfter = await until(() => win.locator(".navigator .ui-list-row:not(.history)").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel"))), (i) => i >= 0);
 check(rowsBefore.length === 2 && selIndexAfter >= 0, `session.next moves selection (now row ${selIndexAfter + 1})`);
 void before;
 
 await menu("view.grid");
-await win.waitForTimeout(400);
-check((await win.locator(".windows-track > .tile").count()) === 2, "grid shows both terminals");
+check((await until(() => countOf(".windows-track > .tile"), (n) => n === 2)) === 2, "grid shows both terminals");
 if (process.platform !== "win32") {
-  await win.waitForSelector(".statusbar-usage .slot-v", { timeout: 8000 });
+  await win.waitForSelector(".statusbar-usage .slot-v", { timeout: 10_000 });
   const usageText = await win.locator(".statusbar-usage .slot-v").first().textContent();
   check(/\d+ (KB|MB|GB)/.test(usageText ?? ""), `status bar shows memory of the process tree (${usageText})`);
 } else console.log("skip - status bar memory (needs a Windows procinfo helper)");
@@ -264,43 +278,39 @@ if (process.platform !== "win32") {
   const bell = process.platform === "win32" ? 'Write-Host -NoNewline "`a"\r' : "printf '\\a'\r";
   await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [other, bell]);
   const status = win.locator(`.tile[data-pane="${other}"] .slot-status .slot-v:not(.out)`);
-  await status.filter({ hasText: "Bell" }).waitFor({ timeout: 5000 });
+  await status.filter({ hasText: "Bell" }).waitFor({ timeout: 10_000 });
   check(true, "a terminal bell marks its window (Bell)");
   await win.evaluate((id) => window.cmd.call("notify.send", { paneId: id, title: "Build", body: "done" }), other);
-  await status.filter({ hasText: "done" }).waitFor({ timeout: 3000 });
+  await status.filter({ hasText: "done" }).waitFor({ timeout: 10_000 });
   check(true, "cmd notify marks the terminal it came from");
   await win.evaluate((id) => window.__cmdSelect(id), other);
-  await win.waitForFunction((id) => !document.querySelector(`.tile[data-pane="${id}"] .slot-status .slot-v:not(.out)`), other, { timeout: 3000 });
+  await win.waitForFunction((id) => !document.querySelector(`.tile[data-pane="${id}"] .slot-status .slot-v:not(.out)`), other, { timeout: 10_000 });
   check(true, "looking at the terminal clears its mark");
   await win.evaluate((id) => window.cmd.call("pane.clearAttention", { paneId: id }), other);
 }
 const panesOrder = async () => (await homeView())["grid.order"];
 const order0 = await panesOrder();
+await still();
 { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0], { steps: 10 }); }
-let order1 = await panesOrder();
-for (let i = 0; i < 30 && (!Array.isArray(order1) || JSON.stringify(order1) === JSON.stringify(order0)); i++) {
-  await win.waitForTimeout(100);
-  order1 = await panesOrder();
-}
+const order1 = await until(panesOrder, (o) => Array.isArray(o) && JSON.stringify(o) !== JSON.stringify(order0));
 check(Array.isArray(order1) && order1.length === 2, `dragging a tile onto another reorders the grid (${JSON.stringify(order1?.map((x) => x.slice(0, 4)))})`);
 // Let the windows glide into their new places first: mid-animation, positions (and so the drag target) are stale.
-await win.waitForFunction(() => !document.querySelector(".tile[data-morphing], .tile.lifted"), null, { timeout: 3000 }).catch(() => {});
-await win.waitForTimeout(400);
+await win.waitForFunction(() => !document.querySelector(".tile[data-morphing], .tile.lifted"), null, { timeout: 10_000 }).catch(() => {});
+await still(400);
 // The order is saved debounced: wait for it to change rather than a fixed time (slow CI runners).
 // A drag that lands while a tile still glides can miss its target: take fresh positions and drag again.
 let order2 = order1;
 for (let attempt = 0; attempt < 3 && JSON.stringify(order2) === JSON.stringify(order1); attempt++) {
+  if (attempt) await still();
   { const t = await visualTiles(); await t[1].locator(".tile-title").dragTo(t[0], { steps: 10 }); }
-  for (let i = 0; i < 30 && JSON.stringify(order2) === JSON.stringify(order1); i++) {
-    await win.waitForTimeout(100);
-    order2 = await panesOrder();
-  }
+  order2 = await until(panesOrder, (o) => JSON.stringify(o) !== JSON.stringify(order1), 5000);
 }
 check(order2[0] === order1[1] && order2[1] === order1[0], "dragging back swaps the slots again");
 // A real drag through three tiles: the dragged tile follows the pointer, the others make room.
 await menu("file.newTerminal");
-await win.waitForTimeout(800);
+await until(panes, (n) => n === 3);
 await menu("view.grid");
+await until(() => countOf(".windows-track > .tile"), (n) => n === 3);
 await still(400);
 const order3 = await panesOrder().then((o) => o ?? []);
 const vt = await visualTiles();
@@ -310,18 +320,17 @@ await win.mouse.move(src.x + 40, src.y + 10);
 await win.mouse.down();
 await win.mouse.move(src.x + 60, src.y + 30, { steps: 4 });
 await win.mouse.move(dst.x + dst.width / 2, dst.y + dst.height / 2, { steps: 12 });
-await win.waitForTimeout(250);
-check((await win.locator(".tile.lifted").count()) === 1, "the dragged tile is lifted and follows the pointer");
+check((await until(() => countOf(".tile.lifted"), (n) => n === 1, 5000)) === 1, "the dragged tile is lifted and follows the pointer");
 await win.screenshot({ path: path.join(shots, "3b-grid-drag.png") });
 await win.mouse.up();
-await win.waitForTimeout(500);
-const order4 = await panesOrder();
 const ids3 = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.sort((a, b) => a.createdAt - b.createdAt).map((x) => x.id)));
 const before3 = [...order3, ...ids3.filter((id) => !order3.includes(id))];
 const expected = [before3[1], before3[2], before3[0]];
+const order4 = await until(panesOrder, (o) => JSON.stringify(o) === JSON.stringify(expected));
 check(JSON.stringify(order4) === JSON.stringify(expected), "dropping the first tile on the third inserts it there and shifts the others");
 await menu("file.close"); // back to two terminals for the checks below
-await win.waitForTimeout(500);
+await until(panes, (n) => n === 2);
+await still();
 await win.screenshot({ path: path.join(shots, "3-grid.png") });
 await menu("view.focus");
 
@@ -348,13 +357,14 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.screenshot({ path: path.join(shots, "4b-search.png") });
   const before = await panes();
   await win.keyboard.press("Enter");
-  await win.waitForTimeout(1500);
-  const agents = await win.evaluate(() => window.cmd.call("agent.list", {}));
+  const agentList = () => win.evaluate(() => window.cmd.call("agent.list", {}));
+  await until(panes, (n) => n === before + 1);
+  const agents = await until(agentList, (a) => a.some((x) => x.native.claudeSessionId === "e2e-session-1"));
   check((await panes()) === before + 1 && agents.some((a) => a.native.claudeSessionId === "e2e-session-1"), "Enter resumes the session in a new terminal");
   // the resumed "agent" is just echo; close its terminal directly (no confirmation sheet)
   const resumed = agents.find((a) => a.native.claudeSessionId === "e2e-session-1");
   await win.evaluate((id) => window.cmd.call("pane.kill", { paneId: id }), resumed.paneId);
-  await win.waitForTimeout(600);
+  await until(panes, (n) => n === before);
 }
 
 // Search (⇧⌘F): the palette with ? typed, over open windows and past sessions.
@@ -381,7 +391,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.keyboard.press("Escape");
   check((await win.locator(".sb-search input").inputValue()) === "", "Esc clears the sidebar search");
   await win.keyboard.press("Escape");
-  await win.waitForSelector(".sb-recent .ui-list-row.history", { timeout: 5000 }).catch(() => {});
+  await win.waitForSelector(".sb-recent .ui-list-row.history", { timeout: 10_000 }).catch(() => {});
   check((await win.locator(".sb-recent .ui-list-row.history").count()) > 0, "Recent lists past sessions from the index");
 }
 
@@ -398,16 +408,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await menu("view.palette");
   await win.waitForSelector(".palette");
   await win.keyboard.type(`localhost:${port}`);
-  await win.waitForTimeout(200);
-  const offer = await win.locator(".palette-list li").first().textContent();
+  const offer = await until(() => win.locator(".palette-list li").first().textContent({ timeout: 10_000 }), (t) => t.includes(`Open localhost:${port}`));
   check(offer.includes(`Open localhost:${port}`), `typing a URL offers to open it (${offer.trim()})`);
   await win.keyboard.press("Enter");
-  let browserWin = null;
-  for (let i = 0; i < 50 && !browserWin; i++) {
-    await win.waitForTimeout(200);
-    const all = await win.evaluate(() => window.cmd.call("window.list", {}));
-    browserWin = all.find((w) => w.kind === "browser" && w.title === "E2E Page");
-  }
+  const browserWin = await until(() => win.evaluate(() => window.cmd.call("window.list", {})).then((all) => all.find((w) => w.kind === "browser" && w.title === "E2E Page")), Boolean, 15_000);
   check(!!browserWin && browserWin.state.url.startsWith(`http://localhost:${port}`), "browser window loads the page and reports its title");
 
   // Edit → Select All / Copy reach the page, which is its own WebContents (main/index.ts editNative).
@@ -436,19 +440,15 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   // Device Size (window menu): the page gets the device's viewport and, for phones, its user agent.
   {
     const page = (js) => win.evaluate((js) => document.querySelector(".tile.kind-browser webview").executeJavaScript(js), js);
-    const until = async (js, want) => {
-      let got;
-      for (let i = 0; i < 40; i++) if (((got = await page(js).catch(() => null)), got === want)) break; else await win.waitForTimeout(150);
-      return got;
-    };
+    const pageUntil = (js, want) => until(() => page(js).catch(() => null), (got) => got === want);
     await win.evaluate((id) => window.cmd.call("window.update", { id, state: { device: "iphone-16" } }), browserWin.id);
-    const w = await until("innerWidth", 393);
-    const ua = await until("/iPhone/.test(navigator.userAgent)", true);
+    const w = await pageUntil("innerWidth", 393);
+    const ua = await pageUntil("/iPhone/.test(navigator.userAgent)", true);
     check(w === 393 && ua === true, `a device size sets the page's viewport and user agent (${w}, ${ua})`);
     await win.screenshot({ path: path.join(shots, "browser-device.png") });
     await win.evaluate((id) => window.cmd.call("window.update", { id, state: { device: null } }), browserWin.id);
-    const back = await until("/iPhone/.test(navigator.userAgent)", false);
-    const fit = await until("innerWidth !== 393", true);
+    const back = await pageUntil("/iPhone/.test(navigator.userAgent)", false);
+    const fit = await pageUntil("innerWidth !== 393", true);
     check(back === false && fit === true, "Fit Window restores the window's size and the app's user agent");
   }
 
@@ -459,11 +459,11 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.waitForTimeout(200);
   await win.evaluate((id) => window.__cmdSelect(id), blankWin.id);
   const blankView = win.locator(`.tile[data-pane="${blankWin.id}"] .ui-webstage .ui-viewstate`);
-  await blankView.waitFor({ timeout: 5000 }).catch(() => {});
+  await blankView.waitFor({ timeout: 10_000 }).catch(() => {});
   await win.screenshot({ path: path.join(shots, "browser-blank.png") });
   check(await blankView.isVisible(), "a blank browser window shows the empty view, not a white page");
   await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [blankWin.id, `http://localhost:${port}`]);
-  await blankView.waitFor({ state: "detached", timeout: 5000 }).catch(() => {});
+  await blankView.waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
   check((await blankView.count()) === 0, "a blank window gets its page once given an address");
   await win.evaluate((id) => window.cmd.call("window.close", { id }), blankWin.id);
 
@@ -473,10 +473,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     step("site permissions");
     const page = (js) => win.evaluate((js) => document.querySelector(".tile.kind-browser webview").executeJavaScript(js), js);
     await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [browserWin.id, `http://localhost:${port}/media`]);
-    for (let i = 0; i < 40 && (await page("location.pathname").catch(() => null)) !== "/media"; i++) await win.waitForTimeout(150);
+    await until(() => page("location.pathname").catch(() => null), (p) => p === "/media");
     await page(`window.__gum = navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(() => "granted", (e) => e.name); 0`);
     const sheet = win.locator(".site-permission:not([data-closing])"); // not one fading out
-    await sheet.waitFor({ timeout: 5000 }).catch(() => {});
+    await sheet.waitFor({ timeout: 10_000 }).catch(() => {});
     const title = (await sheet.locator(".ui-dialog-title").textContent().catch(() => "")) ?? "";
     await win.screenshot({ path: path.join(shots, "site-permission.png") });
     check(title.includes(`localhost:${port}`) && title.includes("camera and microphone"), `a page asking for the camera gets cmd's sheet naming the site (${JSON.stringify(title)})`);
@@ -489,7 +489,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     // Deleting site-permissions.json forgets the answers, without a restart.
     fs.rmSync(path.join(home, "site-permissions.json"));
     await page(`window.__gum = navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name); 0`);
-    await sheet.waitFor({ timeout: 5000 }).catch(() => {});
+    await sheet.waitFor({ timeout: 10_000 }).catch(() => {});
     const askedAgain = await sheet.count();
     await win.keyboard.press("Escape");
     const dismissed = await page("window.__gum");
@@ -501,14 +501,12 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const keptNow = () => (fs.existsSync(path.join(home, "site-permissions.json")) ? JSON.parse(fs.readFileSync(path.join(home, "site-permissions.json"), "utf8")) : {});
     const answerNext = async (js, button) => {
       await page(`window.__ask = ${js}; 0`);
-      await sheet.waitFor({ timeout: 5000 }).catch(() => {});
+      await sheet.waitFor({ timeout: 10_000 }).catch(() => {});
       if (button) await sheet.getByRole("button", { name: button, exact: true }).click();
       else await win.keyboard.press("Escape");
       return page("window.__ask");
     };
-    const waitUntil = async (fn) => {
-      for (let i = 0; i < 50 && !fn(); i++) await win.waitForTimeout(100);
-    };
+    const waitUntil = (fn) => until(() => { try { return fn(); } catch { return false; } }, Boolean); // a file read mid-write throws
     const gum = `navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(() => "granted", (e) => e.name)`;
     const granted = await answerNext(gum, "Allow");
     const notified = await answerNext(`Notification.requestPermission()`, "Don't Allow");
@@ -520,7 +518,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await sw.waitForSelector(".ui-split-pane .ui-list-row");
     await sw.locator(".ui-split-pane .ui-list-row", { has: sw.getByText("Browser", { exact: true }) }).click();
     const section = sw.locator(".ui-form-section", { hasText: `localhost:${port}` });
-    await section.waitFor({ timeout: 5000 }).catch(() => {});
+    await section.waitFor({ timeout: 10_000 }).catch(() => {});
     const rows = async () => (await section.locator(".ui-row").allTextContents().catch(() => [])).map((t) => t.replace(/Remove$/, ""));
     const listed = await rows();
     await sw.screenshot({ path: path.join(shots, "site-permissions-settings.png") });
@@ -531,18 +529,18 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(JSON.stringify(keptNow()) === JSON.stringify({ [site]: { notifications: false } }) && (await rows()).length === 1, `Remove forgets one answer and keeps the rest (${JSON.stringify(keptNow())})`);
     const reasked = await answerNext(gum, "Allow");
     check(reasked === "granted", `a removed answer is asked again on the next visit, without a restart (${reasked})`);
-    await section.locator(".ui-row", { hasText: "Camera and microphone" }).waitFor({ timeout: 5000 }).catch(() => {});
+    await section.locator(".ui-row", { hasText: "Camera and microphone" }).waitFor({ timeout: 10_000 }).catch(() => {});
     check((await rows()).length === 2, `an open Settings shows a new answer at once (${(await rows()).join(", ")})`);
     await section.getByRole("button", { name: `Remove All for localhost:${port}` }).click();
     const empty = sw.locator(".ui-empty", { hasText: "No site permissions yet" });
-    await empty.waitFor({ timeout: 5000 }).catch(() => {});
+    await empty.waitFor({ timeout: 10_000 }).catch(() => {});
     await sw.screenshot({ path: path.join(shots, "site-permissions-empty.png") });
     check((await empty.count()) === 1 && JSON.stringify(keptNow()) === "{}", `Remove All forgets the site; the page says nothing is kept (${JSON.stringify(keptNow())})`);
     await sw.close();
     const askedAfterAll = await answerNext(`navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name)`, null);
     check(askedAfterAll === "NotAllowedError" && JSON.stringify(keptNow()) === "{}", `after Remove All the site is asked again (${askedAfterAll})`);
     await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [browserWin.id, `http://localhost:${port}/`]);
-    for (let i = 0; i < 40 && (await page("document.title").catch(() => null)) !== "E2E Page"; i++) await win.waitForTimeout(150);
+    await until(() => page("document.title").catch(() => null), (t) => t === "E2E Page");
   }
 
   // OSC 8 links in terminal output: the text can say anything, so a link to another
@@ -566,13 +564,13 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.evaluate((id) => window.__cmdSelect(id), term.id);
     const screen = win.locator(`.tile[data-pane="${term.id}"] .xterm-screen`);
     await screen.waitFor();
-    for (let i = 0; i < 50 && !/\S/.test(await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 5 }).then((r) => r.text), term.id)); i++) await win.waitForTimeout(100);
+    await until(() => paneText(term.id, 5), (t) => /\S/.test(t));
     // The link's text fills the first row after `clear`, so a hover anywhere on it finds it.
     const printLink = async (uri, label) => {
       const { cols, rows } = (await win.evaluate(() => window.cmd.call("pane.list", {}))).find((p) => p.id === term.id);
       const text = label.repeat(cols).slice(0, cols - 2);
       await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [term.id, `clear; printf '\\e]8;;${uri}\\e\\\\${text}\\e]8;;\\e\\\\\\n'\r`]);
-      for (let i = 0; i < 50 && !(await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 5 }).then((r) => r.text), term.id)).startsWith(text.slice(0, 20)); i++) await win.waitForTimeout(100);
+      await until(() => paneText(term.id, 5), (t) => t.startsWith(text.slice(0, 20)));
       await win.waitForTimeout(200);
       return rows;
     };
@@ -586,20 +584,22 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       await win.mouse.click(at.x, at.y);
       await win.keyboard.up("Meta");
     };
+    // A click before xterm has seen the hover finds no link: click again until it does.
     let rows = await printLink("smb://example", "github.com ");
-    await cmdClickRow0(rows);
     let asked = [];
-    for (let i = 0; i < 30 && !asked.length; i++) (await win.waitForTimeout(100), (asked = await app.evaluate(() => globalThis.__asked)));
+    for (let attempt = 0; attempt < 3 && !asked.length; attempt++) {
+      await cmdClickRow0(rows);
+      asked = await until(() => app.evaluate(() => globalThis.__asked), (a) => a.length > 0, 3000);
+    }
     await win.screenshot({ path: path.join(shots, "open-policy-osc8.png") });
     const opened = await app.evaluate(() => globalThis.__opened);
     check(asked.length === 1 && /^Open smb:\/\/example( in .+)?\?$/.test(asked[0].message) && asked[0].sheet && asked[0].buttons.at(-1) === "Cancel", `an OSC 8 smb: link asks first, in a sheet naming the real URL (${JSON.stringify(asked)})`);
     check(opened.length === 0, `Cancel opens nothing (${JSON.stringify(opened)})`);
     rows = await printLink(`http://localhost:${port}/osc8`, "link ");
-    await cmdClickRow0(rows);
     let linked = null;
-    for (let i = 0; i < 30 && !linked; i++) {
-      await win.waitForTimeout(150);
-      linked = (await win.evaluate(() => window.cmd.call("window.list", {}))).find((w) => w.kind === "browser" && w.state.url?.endsWith("/osc8"));
+    for (let attempt = 0; attempt < 3 && !linked; attempt++) {
+      await cmdClickRow0(rows);
+      linked = await until(() => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.find((w) => w.kind === "browser" && w.state.url?.endsWith("/osc8"))), Boolean, 4000);
     }
     const after = await app.evaluate(() => globalThis.__asked.length);
     check(!!linked && after === 1, `an OSC 8 http link opens in a browser window, without asking (${linked?.state.url})`);
@@ -620,37 +620,36 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.txt"]), "file tree lists the folder, folders first");
 
   await win.locator(".tile.kind-files .ui-tree .ui-tree-row", { hasText: "sub-folder" }).dblclick();
-  await win.waitForTimeout(400);
-  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "inner.txt", "notes.txt"]), "double-clicking a folder expands it in place");
+  const rowsAre = (want) => (rows) => JSON.stringify(rows) === JSON.stringify(want);
+  check(rowsAre(["sub-folder", "inner.txt", "notes.txt"])(await until(rowsNow, rowsAre(["sub-folder", "inner.txt", "notes.txt"]))), "double-clicking a folder expands it in place");
 
   // Keyboard: come from a terminal, then select the file window — arrows drive the tree.
-  await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => window.__cmdSelect(p[0].id)));
-  await win.waitForTimeout(300);
+  const focusIn = (id) => until(() => win.evaluate((id) => !!document.activeElement?.closest(`.tile[data-pane="${id}"]`), id), Boolean, 5000);
+  const firstPane = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p[0].id));
+  await win.evaluate((id) => window.__cmdSelect(id), firstPane);
+  await focusIn(firstPane);
   await win.evaluate((id) => window.__cmdSelect(id), fw.id);
-  await win.waitForTimeout(400);
+  await focusIn(fw.id);
   await win.keyboard.press("Home");
   await win.keyboard.press("ArrowLeft"); // collapse
-  await win.waitForTimeout(200);
-  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.txt"]), "← collapses the selected folder (focus moved here from a terminal)");
+  check(rowsAre(["sub-folder", "notes.txt"])(await until(rowsNow, rowsAre(["sub-folder", "notes.txt"]))), "← collapses the selected folder (focus moved here from a terminal)");
+  const selNameIs = async (want) => until(() => selName().catch(() => null), (n) => n === want);
   await win.keyboard.press("ArrowRight"); // expand
-  await win.waitForTimeout(300);
+  await until(rowsNow, (r) => r.includes("inner.txt"));
   await win.keyboard.press("ArrowRight"); // into first child
-  await win.waitForTimeout(150);
-  check((await selName()) === "inner.txt", "→ expands, then steps into the folder");
+  check((await selNameIs("inner.txt")) === "inner.txt", "→ expands, then steps into the folder");
   await win.keyboard.press("ArrowLeft");
-  await win.waitForTimeout(150);
-  check((await selName()) === "sub-folder", "← on a child jumps to its folder");
+  check((await selNameIs("sub-folder")) === "sub-folder", "← on a child jumps to its folder");
   await win.keyboard.type("n");
-  await win.waitForTimeout(150);
-  check((await selName()) === "notes.txt", "typing selects by name");
+  check((await selNameIs("notes.txt")) === "notes.txt", "typing selects by name");
   await win.keyboard.press("Home");
   if (mac) {
+    await selNameIs("sub-folder");
     await win.keyboard.press("Meta+ArrowDown");
-    await win.waitForTimeout(500);
-    check((await filesPath()).endsWith("sub-folder"), "⌘↓ makes the folder the root");
+    check((await until(filesPath, (p) => p.endsWith("sub-folder"))).endsWith("sub-folder"), "⌘↓ makes the folder the root");
     await win.keyboard.press("Meta+ArrowUp");
-    await win.waitForTimeout(500);
-    const fp = await filesPath(); const sn = await selName();
+    const fp = await until(filesPath, (p) => p.endsWith("files-fixture"));
+    const sn = await selNameIs("sub-folder");
     check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${path.basename(fp)}, ${sn})`);
   } else macOnly("⌘↓/⌘↑ in the file tree");
 
@@ -666,12 +665,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       globalThis.__pick = "Add to Bookmarks";
     });
     await win.locator(".tile.kind-files .ui-tree .ui-tree-row", { hasText: "sub-folder" }).click({ button: "right" });
-    let saved = null;
-    for (let i = 0; i < 30 && !saved?.length; i++) (await win.waitForTimeout(100), (saved = (await win.evaluate(() => window.cmd.call("ui.get", {})))["files.bookmarks"]));
-    await app.evaluate(() => (globalThis.__pick = null));
+    const saved = await until(() => win.evaluate(() => window.cmd.call("ui.get", {})).then((u) => u["files.bookmarks"]), (b) => b?.length > 0);
+    await app.evaluate(() => ((globalThis.__pick = null), (globalThis.__lastMenu = null)));
     await win.locator('.tile.kind-files [data-tip="Bookmarks"]').click();
-    await win.waitForTimeout(200);
-    const listed = await app.evaluate(() => globalThis.__lastMenu);
+    const listed = (await until(() => app.evaluate(() => globalThis.__lastMenu), Boolean)) ?? [];
     await app.evaluate(({ Menu }) => (Menu.prototype.popup = globalThis.__bmPopup));
     check(!!saved?.[0]?.path.endsWith("sub-folder") && saved[0].dir && listed.some((l) => l.startsWith("sub-folder —")),
       `a folder bookmarked from its menu is kept and listed by the bookmark button (${listed.slice(0, 3).join(", ")})`);
@@ -689,8 +686,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       };
     });
     await win.locator(".tile.kind-files .ui-tree .ui-tree-row", { hasText: "notes.txt" }).click({ button: "right" });
-    await win.waitForTimeout(400);
-    const askedTrash = await app.evaluate(({ dialog }) => dialog.__trashAsked);
+    const askedTrash = await until(() => app.evaluate(({ dialog }) => dialog.__trashAsked), Boolean);
+    await win.waitForTimeout(300); // Cancel must keep the file: give a wrong move time to show
     await app.evaluate(({ dialog, Menu }) => ((dialog.showMessageBox = dialog.__orig), (Menu.prototype.popup = globalThis.__bmPopup)));
     check(askedTrash === "Move “notes.txt” to the Trash?" && (await win.locator(".tile.kind-files .ui-tree .ui-tree-row", { hasText: "notes.txt" }).count()) === 1,
       `Move to Trash asks first, and Cancel keeps the file (${askedTrash})`);
@@ -699,29 +696,22 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   // Files open in the window that suits them: notes.txt → text window; edit and ⌘S.
   await win.locator(".tile.kind-files .ui-tree .ui-tree-row", { hasText: "notes.txt" }).dblclick();
   await win.waitForSelector(".tile.kind-text .cm-content");
-  await win.waitForTimeout(500);
-  check((await win.locator(".tile.kind-text .cm-content").textContent()) === "# hi", "double-clicking a text file opens it in a text window (CodeMirror)");
+  const editorText = () => win.locator(".tile.kind-text .cm-content").textContent();
+  check((await until(editorText, (t) => t === "# hi")) === "# hi", "double-clicking a text file opens it in a text window (CodeMirror)");
   await win.locator(".tile.kind-text .cm-content").click();
   await win.keyboard.press("End");
   await win.keyboard.type(" there");
+  await until(editorText, (t) => t === "# hi there");
   await menu("file.save");
-  await win.waitForTimeout(400);
-  check(fs.readFileSync(path.join(home, "files-fixture", "notes.txt"), "utf8") === "# hi there", "⌘S saves the text window");
+  const notes = () => fs.readFileSync(path.join(home, "files-fixture", "notes.txt"), "utf8");
+  check((await until(notes, (t) => t === "# hi there")) === "# hi there", "⌘S saves the text window");
 
   // Live: outside edits show up in the editor; new files show up in the tree.
   fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# changed by an agent\n");
-  let live = "";
-  for (let i = 0; i < 30 && !live.includes("changed by an agent"); i++) {
-    await win.waitForTimeout(100);
-    live = (await win.locator(".tile.kind-text .cm-content").textContent()) ?? "";
-  }
+  const live = (await until(editorText, (t) => t?.includes("changed by an agent"))) ?? "";
   check(live.includes("changed by an agent"), "the text window reloads live when the file changes on disk");
   fs.writeFileSync(path.join(home, "files-fixture", "zz-new-file.txt"), "new");
-  let rows = [];
-  for (let i = 0; i < 30 && !rows.includes("zz-new-file.txt"); i++) {
-    await win.waitForTimeout(100);
-    rows = await win.locator(".tile.kind-files .ui-tree .ui-tree-row .ui-tree-name").allTextContents();
-  }
+  const rows = await until(rowsNow, (r) => r.includes("zz-new-file.txt"));
   check(rows.includes("zz-new-file.txt"), "the file tree shows new files live");
 
   // Markdown window: rendered, highlighted code, local image, live, ⌘E ⇄ editor.
@@ -735,20 +725,20 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.evaluate((id) => window.__cmdSelect(id), md.id);
   await win.waitForSelector(".tile.kind-markdown .ui-doc h1");
   // Code highlighting waits for the language parser to load on demand.
-  await win.waitForSelector(".tile.kind-markdown pre code span[class]", { timeout: 5000 }).catch(() => {});
+  await win.waitForSelector(".tile.kind-markdown pre code span[class]", { timeout: 10_000 }).catch(() => {});
   const h1 = await win.locator(".tile.kind-markdown .ui-doc h1").textContent();
   const tokens = await win.locator(".tile.kind-markdown pre code span[class]").count();
-  const imgOk = await win.locator(".tile.kind-markdown .ui-doc img").evaluate((img) => img.complete && img.naturalWidth === 1);
+  const imgOk = await until(() => win.locator(".tile.kind-markdown .ui-doc img").evaluate((img) => img.complete && img.naturalWidth === 1, null, { timeout: 10_000 }), Boolean, 5000);
   check(h1 === "Hello cmd" && tokens > 0, `Markdown renders with highlighted code (${tokens} tokens)`);
   check(imgOk, "relative images load through cmd-file:");
   fs.appendFileSync(path.join(mdDir, "README.md"), "\n## Added live\n");
-  await win.waitForSelector(".tile.kind-markdown .ui-doc h2", { timeout: 3000 });
+  await win.waitForSelector(".tile.kind-markdown .ui-doc h2", { timeout: 10_000 });
   check(true, "Markdown re-renders live when the file changes");
   await menu("view.toggleEdit");
-  await win.waitForSelector(`.tile.kind-text[data-pane="${md.id}"] .cm-content`, { timeout: 3000 });
+  await win.waitForSelector(`.tile.kind-text[data-pane="${md.id}"] .cm-content`, { timeout: 10_000 });
   check(true, "⌘E switches the same window to the editor");
   await menu("view.toggleEdit");
-  await win.waitForSelector(`.tile.kind-markdown[data-pane="${md.id}"] .ui-doc h1`, { timeout: 3000 });
+  await win.waitForSelector(`.tile.kind-markdown[data-pane="${md.id}"] .ui-doc h1`, { timeout: 10_000 });
   check(true, "⌘E switches back to the preview");
 
   // JSON window: a tree, rows fold, ⌘E opens the editor at the selected row's line and back, live, JSON Lines.
@@ -759,29 +749,25 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.evaluate((id) => window.__cmdSelect(id), js.id);
   const jsonTile = `.tile.kind-json[data-pane="${js.id}"]`;
   await win.waitForSelector(`${jsonTile} .json-row`);
-  const keys = await win.locator(`${jsonTile} .json-key`).allTextContents();
+  const keys = await until(() => win.locator(`${jsonTile} .json-key`).allTextContents(), (k) => k.join(",") === "name,list,nested,deep");
   check(keys.join(",") === "name,list,nested,deep", `the JSON tree opens two levels (${keys.join(", ")})`);
   await win.locator(`${jsonTile} .json-row`, { hasText: "deep" }).locator(".ui-twisty").click();
-  await win.waitForSelector(`${jsonTile} .json-key:text-is("value")`, { timeout: 2000 });
+  await win.waitForSelector(`${jsonTile} .json-key:text-is("value")`, { timeout: 10_000 });
   check(true, "a row unfolds");
   await win.locator(`${jsonTile} .json-row`, { hasText: "value" }).click();
   await menu("view.toggleEdit");
-  await win.waitForSelector(`.tile.kind-text[data-pane="${js.id}"] .cm-content`, { timeout: 3000 });
-  let cursorLine = "";
-  for (let i = 0; i < 30 && !cursorLine.includes("value"); i++) {
-    await win.waitForTimeout(100);
-    cursorLine = await win.evaluate((id) => document.querySelector(`.tile.kind-text[data-pane="${id}"] .cm-activeLine`)?.textContent ?? "", js.id);
-  }
+  await win.waitForSelector(`.tile.kind-text[data-pane="${js.id}"] .cm-content`, { timeout: 10_000 });
+  const cursorLine = await until(() => win.evaluate((id) => document.querySelector(`.tile.kind-text[data-pane="${id}"] .cm-activeLine`)?.textContent ?? "", js.id), (l) => l.includes("value"));
   check(cursorLine.includes('"value": true'), `⌘E opens the editor at the selected row's line (${cursorLine.trim()})`);
   await menu("view.toggleEdit");
-  await win.waitForSelector(`${jsonTile} .json-row.sel`, { timeout: 3000 });
-  const back = await win.locator(`${jsonTile} .json-row.sel .json-key`).textContent();
+  await win.waitForSelector(`${jsonTile} .json-row.sel`, { timeout: 10_000 });
+  const back = await until(() => win.locator(`${jsonTile} .json-row.sel .json-key`).textContent().catch(() => null), (k) => k === "value");
   check(back === "value", `⌘E back selects the value at the cursor (${back})`);
   fs.writeFileSync(jsonFile, '{"name": "cmd", "added": 1}\n');
-  await win.waitForSelector(`${jsonTile} .json-key:text-is("added")`, { timeout: 3000 });
+  await win.waitForSelector(`${jsonTile} .json-key:text-is("added")`, { timeout: 10_000 });
   check(true, "the JSON tree re-renders live");
   fs.writeFileSync(jsonFile, '{"name": "cmd", "added": ');
-  const banner = await win.waitForSelector(`${jsonTile} .ui-callout`, { timeout: 3000 }).then(() => true, () => false);
+  const banner = await win.waitForSelector(`${jsonTile} .ui-callout`, { timeout: 10_000 }).then(() => true, () => false);
   check(banner && (await win.locator(`${jsonTile} .json-key:text-is("added")`).count()) === 1, "a half-written file keeps the last good tree under a banner");
   await win.evaluate((id) => window.cmd.call("window.close", { id }), js.id);
   const linesFile = path.join(mdDir, "events.jsonl");
@@ -789,14 +775,16 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const jl = await win.evaluate((p) => window.cmd.call("window.openTarget", { target: p }), linesFile);
   await win.evaluate((id) => window.__cmdSelect(id), jl.id);
   await win.waitForSelector(`.tile.kind-json[data-pane="${jl.id}"] .json-row`);
-  const lineRows = await win.locator(`.tile.kind-json[data-pane="${jl.id}"] .json-index`).allTextContents();
-  const unreadable = await win.locator(`.tile.kind-json[data-pane="${jl.id}"] .json-invalid`).count();
+  const lineRows = await until(() => win.locator(`.tile.kind-json[data-pane="${jl.id}"] .json-index`).allTextContents(), (r) => r.length >= 3);
+  const unreadable = await until(() => countOf(`.tile.kind-json[data-pane="${jl.id}"] .json-invalid`), (n) => n === 1);
   check(jl.kind === "json" && lineRows.slice(0, 3).join(",") === "1,2,3" && unreadable === 1, `JSON Lines: a row per line, bad lines shown (${lineRows.join(", ")})`);
   await win.screenshot({ path: path.join(shots, "10-json.png") });
   await win.evaluate((id) => window.cmd.call("window.close", { id }), jl.id);
 
   await menu("view.grid");
-  await win.waitForTimeout(800);
+  const kinds = async () => [await countOf(".tile.kind-browser"), await countOf(".tile.kind-files"), await countOf(".tile.kind-text"), await countOf(".tile.kind-markdown")].join();
+  await until(kinds, (k) => k === "1,1,1,1");
+  await still();
   await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });
   check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1 && (await win.locator(".tile.kind-text").count()) === 1 && (await win.locator(".tile.kind-markdown").count()) === 1, "browser, file, text and Markdown windows take part in the grid");
 
@@ -808,14 +796,14 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const broken = (await win.evaluate(() => window.cmd.call("window.list", {}))).find((w) => w.kind === "markdown");
     await win.evaluate((id) => window.__cmdBreakView(id, true), broken.id);
     const fallback = win.locator(`.tile[data-pane="${broken.id}"] .ui-viewstate[data-kind="error"]`);
-    const shown = await fallback.waitFor({ timeout: 3000 }).then(() => true, () => false);
+    const shown = await fallback.waitFor({ timeout: 10_000 }).then(() => true, () => false);
     check(shown && (await fallback.textContent()).includes("This window stopped working"), "a window whose view throws shows its fallback in its own tile");
     const term = win.locator(".tile.kind-terminal").first();
     const termId = await term.getAttribute("data-pane");
     await win.evaluate((id) => window.__cmdSelect(id), termId);
     await term.locator(".xterm").click();
     // Typed only once the terminal has focus, and given 10 s to echo: 3 s ran out on a busy CI runner.
-    const focused = await win.waitForFunction((id) => document.activeElement?.closest(`.tile[data-pane="${id}"] .xterm`), termId, { timeout: 3000 }).then(() => true, () => false);
+    const focused = await win.waitForFunction((id) => document.activeElement?.closest(`.tile[data-pane="${id}"] .xterm`), termId, { timeout: 10_000 }).then(() => true, () => false);
     await win.keyboard.type("echo still-live-$((6*7))");
     await win.keyboard.press("Enter");
     let text = "";
@@ -828,7 +816,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.screenshot({ path: path.join(shots, "10b-error-boundary.png") });
     await win.evaluate((id) => window.__cmdBreakView(id, false), broken.id);
     await fallback.locator("button", { hasText: "Reload Window" }).click();
-    const back = await win.waitForSelector(`.tile.kind-markdown[data-pane="${broken.id}"] .ui-doc`, { timeout: 3000 }).then(() => true, () => false);
+    const back = await win.waitForSelector(`.tile.kind-markdown[data-pane="${broken.id}"] .ui-doc`, { timeout: 10_000 }).then(() => true, () => false);
     check(back && (await fallback.count()) === 0, "Reload Window mounts the view again");
   }
 
@@ -836,13 +824,12 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   // ⌘S asks where to save (the native panel is stubbed) and the window becomes that file's.
   await menu("file.newText");
   const untitled = win.locator(".tile.kind-text.sel .cm-content");
-  await untitled.waitFor({ timeout: 5000 });
+  await untitled.waitFor({ timeout: 10_000 });
   const textWin = () => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.filter((w) => w.kind === "text").sort((a, b) => b.createdAt - a.createdAt)[0]);
   check((await textWin()).title === "Untitled", "⇧⌘E opens an untitled text window");
   await untitled.click();
   await win.keyboard.type("scratch notes");
-  await win.waitForTimeout(800);
-  check((await textWin()).state.draft === "scratch notes", "an untitled window keeps its unsaved text in the core");
+  check((await until(textWin, (w) => w.state.draft === "scratch notes")).state.draft === "scratch notes", "an untitled window keeps its unsaved text in the core");
   // ⌘W asks before losing that text (the sheet is stubbed to answer Cancel).
   const asked = () => app.evaluate(({ dialog }) => dialog.__asked);
   await app.evaluate(({ dialog }) => {
@@ -852,22 +839,22 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   });
   const draftId = (await textWin()).id;
   await menu("file.close");
-  await win.waitForTimeout(400);
+  await until(asked, (n) => n >= 1);
+  await win.waitForTimeout(300); // Cancel must keep the window: give a wrong close time to show
   check((await asked()) === 1 && (await textWin()).id === draftId, "⌘W on an untitled window with text asks first, and Cancel keeps it");
   const savedAs = path.join(home, "files-fixture", "scratch.txt");
   await app.evaluate(({ dialog }, p) => (dialog.showSaveDialog = async () => ({ canceled: false, filePath: p })), savedAs);
   await menu("file.save");
-  await win.waitForTimeout(600);
-  const after = await textWin();
+  const after = await until(textWin, (w) => w.title === "scratch.txt" && w.state.path === savedAs);
+  await until(() => fs.existsSync(savedAs) && fs.readFileSync(savedAs, "utf8"), (t) => t === "scratch notes");
   check(fs.readFileSync(savedAs, "utf8") === "scratch notes" && after.title === "scratch.txt" && after.state.path === savedAs, "⌘S on an untitled window saves it where the panel says, and the window becomes that file's");
   await win.evaluate((id) => window.cmd.call("window.close", { id }), after.id);
   // An empty Untitled has nothing to lose: ⌘W closes it without asking.
   await menu("file.newText");
-  await untitled.waitFor({ timeout: 5000 });
+  await untitled.waitFor({ timeout: 10_000 });
   const emptyId = (await textWin()).id;
   await menu("file.close");
-  await win.waitForTimeout(400);
-  const left = await win.evaluate(() => window.cmd.call("window.list", {}));
+  const left = await until(() => win.evaluate(() => window.cmd.call("window.list", {})), (l) => !l.some((w) => w.id === emptyId));
   check((await asked()) === 1 && !left.some((w) => w.id === emptyId), "⌘W closes an empty untitled window without asking");
   await app.evaluate(({ dialog }) => (dialog.showMessageBox = dialog.__orig));
   server.close();
@@ -890,8 +877,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     magic.push(w.id);
   }
   await menu("view.grid");
-  await win.waitForTimeout(1200);
-  const widgetText = await win.frameLocator(`.tile[data-pane="${magic[0]}"] iframe.magic-frame`).locator("#v").textContent({ timeout: 5000 });
+  const frameText = (id, sel) => win.frameLocator(`.tile[data-pane="${id}"] iframe.magic-frame`).locator(sel).textContent({ timeout: 10_000 }).catch(() => null);
+  const widgetText = await until(() => frameText(magic[0], "#v"), (t) => t === "Alpha data");
   check(widgetText === "Alpha data", "a Magic widget renders its data in its sandboxed frame");
 
   // A theme change reaches widgets live: CSS variables, and colours drawn from JavaScript (cmd.onTheme).
@@ -901,14 +888,12 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     title: "Themed",
     state: { prompt: "themed", phase: "ready", kind: "widget", html: '<canvas id="c"></canvas><script>cmd.onTheme(() => (c.dataset.bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()))</script>', source: null, refresh: 0, size: "s", lastData: null },
   });
-  await win.waitForTimeout(1000);
   const themedFrame = win.frameLocator(`.tile[data-pane="${themed.id}"] iframe.magic-frame`);
-  const readTheme = () => themedFrame.locator("body").evaluate(() => ({ css: getComputedStyle(document.body).backgroundColor, js: document.getElementById("c").dataset.bg }));
-  const beforeTheme = await readTheme();
+  const readTheme = () => themedFrame.locator("body").evaluate(() => ({ css: getComputedStyle(document.body).backgroundColor, js: document.getElementById("c")?.dataset.bg }), null, { timeout: 10_000 }).catch(() => ({}));
+  const beforeTheme = await until(readTheme, (t) => !!t.js && !!t.css);
   const appearance = (await call("settings.get")).settings["theme.appearance"];
   await call("settings.set", { key: "theme.appearance", value: appearance === "light" ? "dark" : "light" });
-  await win.waitForTimeout(1000);
-  const afterTheme = await readTheme();
+  const afterTheme = await until(readTheme, (t) => t.css && t.css !== beforeTheme.css && t.js && t.js !== beforeTheme.js);
   await call("settings.set", { key: "theme.appearance", value: appearance });
   check(!!beforeTheme.js && afterTheme.css !== beforeTheme.css && afterTheme.js !== beforeTheme.js, `a theme change reaches a widget live, CSS and cmd.onTheme (${beforeTheme.js} → ${afterTheme.js})`);
 
@@ -916,15 +901,14 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const radio = await call("window.open", { kind: "magic", input: {} });
   const radioHtml = '<div id="r">–</div><script>document.addEventListener("securitypolicyviolation",()=>r.textContent="blocked");const a=new Audio();a.onerror=()=>r.textContent==="–"&&(r.textContent="loaded");a.src="https://radio.invalid/live.aacp"</script>';
   await call("window.update", { id: radio.id, title: "Radio", state: { prompt: "radio", phase: "ready", kind: "widget", html: radioHtml, media: ["https://radio.invalid"], source: null, refresh: 0, size: "s", lastData: null } });
-  await win.waitForTimeout(1500);
   const radioTile = win.locator(`.tile[data-pane="${radio.id}"]`);
-  const radioText = () => win.frameLocator(`.tile[data-pane="${radio.id}"] iframe.magic-frame`).locator("#r").textContent({ timeout: 5000 });
-  const asked = await radioTile.locator(".ui-webstage-cover").isVisible();
-  const before = await radioText();
+  const radioText = () => frameText(radio.id, "#r");
+  const asked = await until(() => radioTile.locator(".ui-webstage-cover").isVisible(), Boolean);
+  const before = await until(radioText, (t) => t === "blocked");
   await radioTile.locator(".ui-webstage-cover .ui-button[data-variant=primary]").click();
-  await win.waitForTimeout(2500);
-  const after = await radioText();
-  const stored = (await call("window.list")).find((x) => x.id === radio.id).state.mediaAllowed;
+  const after = await until(radioText, (t) => t === "loaded");
+  await until(() => radioTile.locator(".ui-webstage-cover").count(), (n) => n === 0);
+  const stored = await until(async () => (await call("window.list")).find((x) => x.id === radio.id).state.mediaAllowed, (m) => m?.[0] === "https://radio.invalid");
   check(asked && before === "blocked" && after === "loaded" && !(await radioTile.locator(".ui-webstage-cover").count()) && stored?.[0] === "https://radio.invalid", `a widget's media origins are asked for and then allowed by the frame's CSP (${asked}, ${before} → ${after})`);
   await call("window.close", { id: themed.id });
 
@@ -934,42 +918,44 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const linked = await call("window.open", { kind: "magic", input: {} });
   const linkHtml = '<a id="l" href="https://link.invalid/a" target="_blank" style="display:block;padding:40px;text-decoration:none">link</a>';
   await call("window.update", { id: linked.id, title: "Links", state: { prompt: "links", phase: "ready", kind: "widget", html: linkHtml, source: null, refresh: 0, size: "s", lastData: null } });
-  await win.evaluate((id) => window.__cmdSelect?.(id), (await call("pane.list"))[0].id);
-  await win.waitForTimeout(1500);
+  const firstPaneId = (await call("pane.list"))[0].id;
+  await win.evaluate((id) => window.__cmdSelect?.(id), firstPaneId);
+  const selected = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
+  await until(selected, (s) => s === firstPaneId);
+  await still();
   const link = win.frameLocator(`.tile[data-pane="${linked.id}"] iframe.magic-frame`).locator("#l");
-  const underline = () => link.evaluate((a) => getComputedStyle(a).textDecorationLine);
+  const underline = () => link.evaluate((a) => getComputedStyle(a).textDecorationLine, null, { timeout: 10_000 }).catch(() => null);
   const linkWindows = async () => (await call("window.list")).filter((x) => x.kind === "browser" && JSON.stringify(x.state).includes("link.invalid"));
-  const lockedLook = await underline();
-  await link.click({ timeout: 5000 });
-  await win.waitForTimeout(800);
+  const lockedLook = await until(underline, (u) => u === "none");
+  await link.click({ timeout: 10_000 });
+  const selectedNow = await until(selected, (s) => s === linked.id);
+  const liveLook = await until(underline, (u) => u === "underline");
   const lockedOpened = (await linkWindows()).length;
-  const selectedNow = await win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
-  const liveLook = await underline();
   check(lockedLook === "none" && lockedOpened === 0 && selectedNow === linked.id && liveLook === "underline", `a widget's links wait until its window is selected, then show underlined (${lockedLook} → ${liveLook}, ${lockedOpened} opened)`);
-  await link.click({ timeout: 5000 });
-  await win.waitForTimeout(1000);
-  const inCmd = await linkWindows();
+  await link.click({ timeout: 10_000 });
+  const inCmd = await until(linkWindows, (l) => l.length >= 1);
+  await win.waitForTimeout(300); // one click, one window: give a second one time to show
   await app.evaluate(({ shell }) => {
     globalThis.__openExternal ??= shell.openExternal;
     shell.openExternal = async (u) => void (globalThis.__opened = u);
   });
   await call("settings.set", { key: "open.links", value: "browser" });
   await win.evaluate((id) => window.__cmdSelect?.(id), linked.id);
-  await win.waitForTimeout(300);
-  await link.click({ timeout: 5000 });
-  await win.waitForTimeout(1000);
-  const external = await app.evaluate(() => globalThis.__opened);
+  await until(selected, (s) => s === linked.id);
+  await until(underline, (u) => u === "underline");
+  await link.click({ timeout: 10_000 });
+  const external = await until(() => app.evaluate(() => globalThis.__opened), Boolean);
   check(inCmd.length === 1 && (await linkWindows()).length === 1 && external === "https://link.invalid/a", `a widget link opens a cmd browser window, or the default browser per open.links (${inCmd.length}, ${external})`);
   await app.evaluate(({ shell }) => (shell.openExternal = globalThis.__openExternal));
   await call("settings.reset", { key: "open.links" });
   for (const w of [linked, ...inCmd]) await call("window.close", { id: w.id });
-  await win.waitForTimeout(600);
+  await still(600);
 
-  const selected = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
-  const clickIn = async (loc) => {
+  // A click selects the window it lands in: wait for that, and return what is selected.
+  const clickIn = async (loc, id) => {
     const b = await loc.boundingBox();
     await win.mouse.click(b.x + b.width / 2, b.y + b.height * 0.6);
-    await win.waitForTimeout(400);
+    return until(selected, (s) => s === id, 5000);
   };
   const frame = (id) => win.locator(`.tile[data-pane="${id}"] iframe.magic-frame`);
   const page = win.locator(".tile.kind-browser webview");
@@ -978,8 +964,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const termId = await win.locator(".tile.kind-terminal").first().getAttribute("data-pane");
   const order = [];
   for (const [loc, id] of [[term, termId], [frame(magic[0]), magic[0]], [frame(magic[1]), magic[1]], [page, pageId], [frame(magic[0]), magic[0]]]) {
-    await clickIn(loc);
-    order.push((await selected()) === id);
+    order.push((await clickIn(loc, id)) === id);
   }
   check(order.every(Boolean), `clicking from one embedded page into the next selects each window (${order.map((x) => (x ? "✓" : "✗")).join(" ")})`);
 
@@ -996,19 +981,21 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const b0 = await frame(magic[0]).boundingBox();
   await win.mouse.click(b0.x + b0.width / 2, b0.y + b0.height / 2, { button: "right" });
   const titleInput = win.locator(`.tile[data-pane="${magic[0]}"] .tile-title-input`);
-  await titleInput.waitFor({ timeout: 3000 });
+  await titleInput.waitFor({ timeout: 10_000 });
   const menuItems = await app.evaluate(() => globalThis.__lastMenu);
+  await until(selected, (s) => s === magic[0], 5000);
   check(menuItems[0] === "Change…" && menuItems.includes("Copy Request") && (await selected()) === magic[0], `right-click in a Magic widget opens its window's menu, Change first (${menuItems.slice(0, 3).join(", ")}…)`);
-  check(await titleInput.evaluate((el) => el === document.activeElement), "Change from that menu edits the title bar, focused");
+  const isFocused = (loc) => until(() => loc.evaluate((el) => el === document.activeElement).catch(() => false), Boolean, 5000);
+  check(await isFocused(titleInput), "Change from that menu edits the title bar, focused");
   await win.keyboard.press("Escape");
-  check(!(await titleInput.count()), "Esc puts the title back");
+  check(!(await until(() => titleInput.count(), (n) => n === 0, 5000)), "Esc puts the title back");
   await app.evaluate(({ Menu }) => (Menu.prototype.popup = globalThis.__menuPopup));
 
-  await clickIn(frame(magic[0]));
+  await clickIn(frame(magic[0]), magic[0]);
   await menu("view.magicChange");
   const input = win.locator(`.tile[data-pane="${magic[0]}"] .tile-title-input`);
-  await input.waitFor({ timeout: 3000 });
-  check(await input.evaluate((el) => el === document.activeElement), "⌘L (a menu command) opens Change in the selected Magic widget's title bar, even with the widget focused");
+  await input.waitFor({ timeout: 10_000 });
+  check(await isFocused(input), "⌘L (a menu command) opens Change in the selected Magic widget's title bar, even with the widget focused");
   await win.keyboard.press("Escape");
 
   await menu("view.strip");
@@ -1022,8 +1009,9 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     for (const dx of [60, -60]) {
       const before = await offset();
       for (let i = 0; i < 3; i++) await win.mouse.wheel(dx, 0), await win.waitForTimeout(16);
-      const moved = (await offset()) !== before;
-      await win.waitForTimeout(500); // let it snap back to a window
+      // The page forwards the wheel to the strip by IPC: on a slow runner it lands later.
+      const moved = (await until(offset, (o) => o !== before, 1500)) !== before;
+      await still(300); // let it snap back to a window
       if (moved) return true;
     }
     return false;
@@ -1047,11 +1035,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const kept = await call("window.open", { kind: "magic", input: {} });
   const counter = (v) => `<div id="k"></div><script>/*${v}*/const n=(cmd.state.get("n")||0)+1;cmd.state.set("n",n);k.textContent=String(n)</script>`;
   await call("window.update", { id: kept.id, title: "Kept", state: { prompt: "kept", phase: "ready", kind: "widget", html: counter(1), refresh: 0, size: "s", lastData: null } });
-  await win.waitForTimeout(2500);
-  const storedN = (await call("window.list")).find((x) => x.id === kept.id).state.kv?.n;
+  const storedN = await until(async () => (await call("window.list")).find((x) => x.id === kept.id).state.kv?.n, (n) => n === 1);
   await call("window.update", { id: kept.id, state: { html: counter(2) } });
-  await win.waitForTimeout(1500);
-  const shownN = await win.frameLocator(`.tile[data-pane="${kept.id}"] iframe.magic-frame`).locator("#k").textContent({ timeout: 5000 });
+  const keptText = () => win.frameLocator(`.tile[data-pane="${kept.id}"] iframe.magic-frame`).locator("#k").textContent({ timeout: 10_000 }).catch(() => null);
+  const shownN = await until(keptText, (t) => t === "2");
   check(storedN === 1 && shownN === "2", `cmd.state is kept by the core across frames (${storedN}, ${shownN})`);
   await call("window.close", { id: kept.id });
 
@@ -1074,30 +1061,23 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     fs.writeFileSync(path.join(rev, "meta.json"), JSON.stringify({ n: 1, at: Date.now(), prompt: "a counter", ok: true }));
     await call("window.update", { id: w.id, state: { prompt: "a counter", phase: "ready", widgetId: w.id } });
     await call("magic.restore", { id: w.id, revision: 1 });
-    const frameN = () => win.frameLocator(`.tile[data-pane="${w.id}"] iframe.magic-frame`).locator("#n").textContent({ timeout: 8000 });
-    let shown = "";
-    for (let i = 0; i < 20 && shown !== "42"; i++) {
-      await win.waitForTimeout(500);
-      shown = await frameN().catch(() => "");
-    }
-    const st = (await call("window.list")).find((x) => x.id === w.id);
+    const frameN = () => win.frameLocator(`.tile[data-pane="${w.id}"] iframe.magic-frame`).locator("#n").textContent({ timeout: 10_000 }).catch(() => "");
+    let shown = await until(frameN, (t) => t === "42", 20_000);
+    const st = await until(async () => (await call("window.list")).find((x) => x.id === w.id), (x) => x.title === "Counter" && x.state.hasData && x.state.revision === 2, 5000);
     check(shown === "42" && st.title === "Counter" && st.state.hasData && st.state.revision === 2, `a widget's data.ts runs in the core and its typed view shows it (${shown}, ${st.title}, v${st.state.revision})`);
 
     // Its settings reach data.ts.
     await call("magic.config", { id: w.id, values: { start: 98 } });
-    for (let i = 0; i < 20 && shown !== "100"; i++) {
-      await win.waitForTimeout(500);
-      shown = await frameN().catch(() => "");
-    }
+    shown = await until(frameN, (t) => t === "100", 20_000);
     check(shown === "100", `a widget's settings reach its data (${shown})`);
 
     // ⌘E: the edit view, with its versions; ⌘E again: back to the widget.
     await win.locator(`.tile[data-pane="${w.id}"]`).click({ position: { x: 20, y: 10 } });
+    await until(() => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane), (s) => s === w.id, 5000);
     await menu("view.toggleEdit");
-    await win.waitForTimeout(600);
     const tile = win.locator(`.tile[data-pane="${w.id}"]`);
-    const versions = await tile.locator(".magic-revision").count();
-    const tabs = await tile.locator(".ui-tb-seg [role=radio]").allTextContents();
+    const versions = await until(() => tile.locator(".magic-revision").count(), (n) => n === 2);
+    const tabs = await until(() => tile.locator(".ui-tb-seg [role=radio]").allTextContents(), (t) => t.join(",").startsWith("Changes,Settings,Files,Health"), 5000);
     // A narrow tile (CI's smaller screen) compacts the tabs into a popup.
     const settingsTab = tile.locator(".ui-tb-seg [role=radio]", { hasText: "Settings" });
     if (await settingsTab.isVisible()) await settingsTab.click();
@@ -1105,10 +1085,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       await tile.locator(".ui-tb-seg-pop").click();
       await win.getByRole("menuitemradio", { name: "Settings" }).click();
     }
-    const fields = await tile.locator(".ui-row").allTextContents();
+    const fields = await until(() => tile.locator(".ui-row").allTextContents(), (f) => f.some((x) => x.includes("Start")));
     await win.screenshot({ path: path.join(shots, "magic-edit.png") });
     await menu("view.toggleEdit");
-    await win.waitForTimeout(400);
+    await until(() => tile.locator(".magic-edit").count(), (n) => n === 0);
     check(versions === 2 && tabs.join(",").startsWith("Changes,Settings,Files,Health") && fields.some((f) => f.includes("Start")) && !(await tile.locator(".magic-edit").count()), `⌘E shows a widget's edit view (versions, settings) and back (${versions}, ${tabs.join("/")})`);
     await call("window.close", { id: w.id });
 
@@ -1116,44 +1096,38 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const menuLabels = await app.evaluate(({ Menu }) => Object.fromEntries(Menu.getApplicationMenu().items.map((m) => [m.label, m.submenu?.items.filter((i) => i.visible && i.type !== "separator").map((i) => i.label) ?? []])));
     check(!menuLabels.File.some((l) => /widget/i.test(l)) && menuLabels.Widgets?.[0] === "Widget Library…" && menuLabels.Widgets.includes("New Widget with Magic…"), `File has windows only; widgets have their own menu (${menuLabels.Widgets?.join(", ")})`);
     await menu("widget.library");
-    await win.waitForSelector(".widget-library .wl-card", { timeout: 5000 });
-    const cards = await win.locator(".widget-library .wl-name").allTextContents();
+    await win.waitForSelector(".widget-library .wl-card", { timeout: 10_000 });
+    const cards = await until(() => win.locator(".widget-library .wl-name").allTextContents(), (c) => c[0] === "Counter" && c.includes("Agent Activity") && c.includes("Live Diff"), 5000);
     await win.screenshot({ path: path.join(shots, "widget-library.png") });
     const magicButton = await win.locator(".widget-library .ui-dialog-foot button", { hasText: "New Widget" }).count();
     check(magicButton === 1 && cards[0] === "Counter" && cards.includes("Agent Activity") && cards.includes("Live Diff"), `the Widget Library has New Widget in its footer, then the closed widget and the built-ins (${cards.join(", ")})`);
     await win.locator(".widget-library .wl-card", { hasText: "Counter" }).click();
-    let back = null;
-    for (let i = 0; i < 20 && !back; i++) {
-      await win.waitForTimeout(200);
-      back = (await call("window.list")).find((x) => x.kind === "magic" && x.title === "Counter" && x.state.phase === "ready");
-    }
+    const back = await until(async () => (await call("window.list")).find((x) => x.kind === "magic" && x.title === "Counter" && x.state.phase === "ready"), Boolean);
     await gone(".widget-library");
-    const listed = (await call("widget.list")).find((e) => e.title === "Counter");
+    await until(() => countOf(".widget-library"), (n) => n === 0, 5000);
+    const listed = await until(async () => (await call("widget.list")).find((e) => e.title === "Counter"), (l) => back && l?.windows.includes(back.id), 5000);
+    await until(() => countOf(".sb-widgets"), (n) => n === 1, 5000);
     check(!!back && (await win.locator(".widget-library").count()) === 0 && listed?.windows.includes(back.id) && (await win.locator(".sb-widgets").count()) === 1, `a widget comes back from the library, on the board and in the Navigator's Widgets (${listed?.windows.length})`);
     await menu("widget.library");
-    await win.waitForSelector(".widget-library", { timeout: 5000 });
+    await win.waitForSelector(".widget-library", { timeout: 10_000 });
     await menu("file.close");
     // The command reaches the renderer over IPC after the click returns: wait for the sheet to go.
-    const libraryClosed = await win.waitForSelector(".widget-library", { state: "detached", timeout: 3000 }).then(() => true, () => false);
+    const libraryClosed = await win.waitForSelector(".widget-library", { state: "detached", timeout: 10_000 }).then(() => true, () => false);
     check(libraryClosed, "⌘W closes the Widget Library first");
     await call("window.close", { id: back.id });
 
     // New… (⌘N): windows first, then your widgets and the built-in ones, then Magic; typing finds one.
     await menu("file.new");
-    await win.waitForSelector(".palette", { timeout: 5000 });
-    const offered = await win.locator(".palette-list .palette-label").allTextContents();
+    await win.waitForSelector(".palette", { timeout: 10_000 });
+    const offered = await until(() => win.locator(".palette-list .palette-label").allTextContents(), (o) => o.at(-1) === "New Widget with Magic" && o.includes("Counter"), 5000);
     await win.mouse.move(0, 0);
     await win.waitForTimeout(500); // the rows' symbols load from macOS
     await win.screenshot({ path: path.join(shots, "new-picker.png") });
     await win.locator(".palette-input").fill("timer");
     // Enter acts on the highlighted row: wait until the filter has made it Timer (pressing at once raced the re-render).
-    await win.waitForSelector(".palette-list li.on .palette-label:text-is('Timer')", { timeout: 3000 }).catch(() => {});
+    await win.waitForSelector(".palette-list li.on .palette-label:text-is('Timer')", { timeout: 10_000 }).catch(() => {});
     await win.keyboard.press("Enter");
-    let timer = null;
-    for (let i = 0; i < 20 && !timer; i++) {
-      await win.waitForTimeout(200);
-      timer = (await call("window.list")).find((x) => x.kind === "timer");
-    }
+    const timer = await until(async () => (await call("window.list")).find((x) => x.kind === "timer"), Boolean);
     await gone(".palette");
     check(
       offered[0] === "Terminal" && offered.indexOf("Counter") > offered.indexOf("Text Editor") && offered.at(-1) === "New Widget with Magic" && !!timer && (await win.locator(".palette").count()) === 0,
@@ -1174,15 +1148,14 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const ld = await call("widget.add", { ref: "type:diff" });
     await call("window.update", { id: ld.id, state: { path: repo } });
     const ldTile = win.locator(`.tile[data-pane="${ld.id}"]`);
-    for (let i = 0; i < 20 && (await ldTile.locator(".ui-list-row-name").count()) < 2; i++) await win.waitForTimeout(200);
-    const ldFiles = await ldTile.locator(".ui-list-row-name").allTextContents();
-    const ldLines = await ldTile.locator(".ui-diff-line[data-kind=add]").allTextContents();
+    const ldFiles = await until(() => ldTile.locator(".ui-list-row-name").allTextContents(), (f) => f.join(",") === "a.txt,b.txt");
+    const ldLines = await until(() => ldTile.locator(".ui-diff-line[data-kind=add]").allTextContents(), (l) => l.includes("+two") && l.includes("+new"));
     check(ldFiles.join(",") === "a.txt,b.txt" && ldLines.includes("+two") && ldLines.includes("+new"), `Live Diff shows a repository's changes, untracked files too (${ldFiles.join(", ")})`);
     const aa = await call("widget.add", { ref: "type:agents" });
-    await win.locator(`.tile[data-pane="${aa.id}"] .ui-view`).waitFor({ timeout: 5000 });
+    await win.locator(`.tile[data-pane="${aa.id}"] .ui-view`).waitFor({ timeout: 10_000 });
     // Its scope is the title bar's menu, as in the other list widgets.
-    const aaScope = (await win.locator(`.tile[data-pane="${aa.id}"] .tile-menu`).textContent()) ?? "";
-    const inWidgets = (await win.locator(".sb-widgets").textContent()) ?? "";
+    const aaScope = await until(async () => (await win.locator(`.tile[data-pane="${aa.id}"] .tile-menu`).textContent()) ?? "", (t) => t.includes("This Workspace"));
+    const inWidgets = await until(async () => (await win.locator(".sb-widgets").textContent()) ?? "", (t) => t.includes("Agent Activity") && t.includes("Changes · diff-repo"));
     check(inWidgets.includes("Agent Activity") && inWidgets.includes("Changes · diff-repo") && aaScope.includes("This Workspace"), `Agent Activity and Live Diff are listed under the sidebar's Widgets, Agent Activity's scope in its title bar (${aaScope})`);
     await call("window.close", { id: ld.id });
     await call("window.close", { id: aa.id });
@@ -1203,37 +1176,34 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await call("magic.restore", { id: b.id, revision: 1 });
     const btile = win.locator(`.tile[data-pane="${b.id}"]`);
     const bstate = async () => (await call("window.list")).find((x) => x.id === b.id).state;
-    const statusText = () => btile.locator(".tile-status").textContent();
-    for (let i = 0; i < 20 && !(await statusText()).includes("all good"); i++) await win.waitForTimeout(300);
+    const statusText = () => btile.locator(".tile-status").textContent({ timeout: 10_000 }).then((t) => t ?? "", () => "");
+    await until(statusText, (t) => t.includes("all good"), 15_000);
+    await until(() => btile.locator('.mark[data-tone="success"]:not(.has-light)').count(), (n) => n === 1, 5000);
     check((await statusText()).includes("all good") && (await btile.locator('.mark[data-tone="success"]:not(.has-light)').count()) === 1, `a widget's status line shows in its title bar, its icon tinted, no light (${await statusText()})`);
 
     // Select another window, so the news isn't seen at once.
     const other = (await call("pane.list"))[0];
     await win.evaluate((id) => window.__cmdSelect?.(id), other.id);
+    await until(() => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane), (s) => s === other.id, 5000);
     await call("magic.config", { id: b.id, values: { fail: 1 } });
-    for (let i = 0; i < 20 && !(await bstate()).attention; i++) await win.waitForTimeout(300);
-    for (let i = 0; i < 20 && !(await statusText()).includes("Build failed"); i++) await win.waitForTimeout(100);
+    await until(bstate, (st) => !!st.attention, 15_000);
+    await until(statusText, (t) => t.includes("Build failed"), 5000);
     const marked = (await bstate()).attention;
     await win.screenshot({ path: path.join(shots, "magic-attention.png") });
     check(marked?.text === "Build failed" && (await statusText()).includes("Build failed"), `a widget's notification marks its window until seen (${marked?.text}, ${await statusText()})`);
     // Looking at it (selected, with the app in front) is seeing it.
     await win.evaluate((id) => window.__cmdSelect?.(id), b.id);
-    for (let i = 0; i < 20 && (await bstate()).attention; i++) await win.waitForTimeout(200);
-    for (let i = 0; i < 20 && !(await statusText()).endsWith("1 failing"); i++) await win.waitForTimeout(100);
+    await until(bstate, (st) => !st.attention);
+    await until(statusText, (t) => t.endsWith("1 failing"), 5000);
     check(!(await bstate()).attention && (await statusText()).endsWith("1 failing"), `looking at the widget clears it, and its status shows again (${await statusText()})`);
 
     // cmd.terminal: refused at load, typed (not run) into a new terminal after a click.
     const known = new Set((await call("pane.list")).map((p) => p.id));
     const before = known.size;
     await win.frameLocator(`.tile[data-pane="${b.id}"] iframe.magic-frame`).locator("#go").click();
-    let panes = await call("pane.list");
-    for (let i = 0; i < 20 && panes.length === before; i++) (await win.waitForTimeout(200), (panes = await call("pane.list")));
+    const panes = await until(() => call("pane.list"), (p) => p.length !== before);
     const fresh = panes.filter((p) => !known.has(p.id));
-    let typed = "";
-    for (let i = 0; i < 20 && !typed.includes("clicked-rerun"); i++) {
-      await win.waitForTimeout(200);
-      typed = fresh.length ? (await call("pane.read", { paneId: fresh.at(-1).id })).text ?? "" : "";
-    }
+    const typed = await until(async () => (fresh.length ? (await call("pane.read", { paneId: fresh.at(-1).id })).text ?? "" : ""), (t) => t.includes("clicked-rerun"));
     check(panes.length === before + 1 && typed.includes("echo clicked-rerun") && !typed.includes("refused"), `cmd.terminal types a command into a new terminal only after a click (${panes.length - before} new)`);
     await call("pane.kill", { paneId: fresh.at(-1).id }).catch(() => {});
     await call("window.close", { id: b.id });
@@ -1247,7 +1217,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const sw = await opened;
   sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
   await sw.waitForSelector(".ui-split-pane .ui-list-row");
-  const pages = await sw.locator(".ui-split-pane .ui-list-row-name").allTextContents();
+  const allPages = ["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "AI & Agents", "Magic Widgets", "Browser", "Keyboard Shortcuts", "Updates & About"];
+  const pages = await until(() => sw.locator(".ui-split-pane .ui-list-row-name").allTextContents(), (p) => allPages.every((x) => p.includes(x)), 5000);
   check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "AI & Agents", "Magic Widgets", "Browser", "Keyboard Shortcuts", "Updates & About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
 
   // AI & Agents: a row per provider, models only once it has a key. Keys typed here are
@@ -1256,12 +1227,13 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await sw.locator(".ui-split-pane .ui-list-row", { has: sw.getByText("AI & Agents", { exact: true }) }).click();
   await sw.waitForSelector(".ui-row-title:has-text('Anthropic')");
   const rowTitles = () => sw.locator(".ui-row-name").allTextContents();
-  let titles = await rowTitles();
+  let titles = await until(rowTitles, (t) => t.includes("Anthropic") && t.includes("OpenAI"), 5000);
   check(titles.includes("Anthropic") && titles.includes("OpenAI") && !titles.includes("Model"), `AI lists the providers, and no models before a key (${titles.join(", ")})`);
   const rpc = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   await rpc("secrets.set", { key: "ai.openai.apiKey", value: "sk-e2e-not-a-real-key-1234" });
   await sw.waitForSelector(".ui-secret-stored");
-  titles = await rowTitles();
+  titles = await until(rowTitles, (t) => t.includes("Model") && t.includes("Fast model"));
+  await until(() => sw.locator(".ui-secret-stored").textContent(), (t) => t === "••••1234", 5000);
   const keyStatus = (await rpc("secrets.status", {}))["ai.openai.apiKey"];
   const settingsFile = fs.readFileSync(path.join(home, "settings.json"), "utf8");
   check(
@@ -1274,10 +1246,9 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const page = (name) => sw.locator(".ui-split-pane .ui-list-row", { has: sw.getByText(name, { exact: true }) }).click();
   const row = (title) => sw.locator(".ui-row", { has: sw.locator(".ui-row-title", { hasText: title }) });
   const saved = () => JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8").replace(/^\/\/.*$/gm, ""));
-  const waitFor = async (fn, what) => {
-    for (let i = 0; i < 40 && !fn(); i++) await sw.waitForTimeout(50);
-    check(fn(), what);
-  };
+  // fn may be async: until awaits it (a bare !fn() on a promise would pass at once).
+  // A file read mid-write throws: that's "not yet".
+  const waitFor = async (fn, what) => check(await until(() => Promise.resolve().then(fn).catch(() => false), Boolean), what);
 
   // Notifications: whether macOS shows them at all, read from macOS (Electron's bundle id in a dev build).
   await page("Notifications");
@@ -1301,7 +1272,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(/^pid \d+$/.test(status ?? ""), `About shows the running core (${status})`);
 
   await page("Terminal");
-  const tags = await sw.locator(".ui-row-desc i").allTextContents();
+  const tags = await until(() => sw.locator(".ui-row-desc i").allTextContents(), (t) => t.filter((x) => x.includes("new terminals")).length === 3, 5000);
   check(tags.filter((t) => t.includes("new terminals")).length === 3, `settings that don't apply live say so (${tags.join(", ")})`);
 
   await page("Windows");
@@ -1310,8 +1281,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await row("Window corner radius").locator(".ui-number button[aria-label=Increase]").click();
   await waitFor(() => saved()["ui.windowRadius"] === 12, "+ steps a number field and saves");
   const radius = () => win.evaluate(() => document.documentElement.style.getPropertyValue("--window-radius"));
-  for (let i = 0; i < 40 && (await radius()) !== "12px"; i++) await win.waitForTimeout(50);
-  check((await radius()) === "12px", "the app window applies it live");
+  check((await until(radius, (r) => r === "12px")) === "12px", "the app window applies it live");
   await row("Window corner radius").locator(".ui-reset").click();
   await sw.screenshot({ path: path.join(shots, "5-settings-interface.png") });
   await row("Show resource usage").locator(".ui-reset").click();
@@ -1323,8 +1293,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await fontSize.press("Enter");
   await waitFor(() => saved()["font.codeSize"] === 16, "the code font size saves");
   const codePx = () => win.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--font-code-size").trim());
-  for (let i = 0; i < 40 && (await codePx()) !== "16px"; i++) await win.waitForTimeout(50);
-  check((await codePx()) === "16px", "the app's file and Markdown windows get the code font size live (--font-code-size)");
+  check((await until(codePx, (p) => p === "16px")) === "16px", "the app's file and Markdown windows get the code font size live (--font-code-size)");
   const fonts = await win.evaluate(() =>
     [".ui-tree .ui-tree-row", ".ui-doc", ".ui-doc code"].map((sel) => {
       const el = document.querySelector(sel);
@@ -1343,6 +1312,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const size = row("Code font size").locator("input");
   await size.fill("");
   await size.press("Enter");
+  await until(() => size.inputValue(), (v) => v === "14", 5000);
   check((await size.inputValue()) === "14" && !("font.codeSize" in saved()), "an emptied number field reverts instead of saving 0");
   await size.fill("99");
   await size.press("Enter");
@@ -1356,12 +1326,12 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await waitFor(() => !("terminal.lineHeight" in saved()) && !("terminal.renderer" in saved()), "Restore Defaults resets the page");
 
   await sw.locator(".ui-split-pane .ui-search input").fill("zoom");
-  const found = await sw.locator(".ui-row-name").allTextContents();
+  const found = await until(() => sw.locator(".ui-row-name").allTextContents(), (f) => ["Minimum zoom", "Maximum zoom"].every((t) => f.some((x) => x.startsWith(t))), 5000);
   check(["Minimum zoom", "Maximum zoom"].every((t) => found.some((f) => f.startsWith(t))), `search finds settings across pages (${found.join(", ")})`);
   await sw.locator(".ui-split-pane .ui-search input").fill("");
 
   await page("Keyboard Shortcuts");
-  check((await sw.locator(".ui-row[data-compact] kbd").count()) > 10, "keyboard shortcuts are listed");
+  check((await until(() => sw.locator(".ui-row[data-compact] kbd").count(), (n) => n > 10, 5000)) > 10, "keyboard shortcuts are listed");
   // Recording a shortcut: the menu lets go of its keys meanwhile; it's saved to keybindings.json.
   const kbFile = path.join(home, "keybindings.json");
   const lastWorkspace = row("Last Workspace");
@@ -1380,8 +1350,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await sw.locator(".ui-form-actions .ui-button", { hasText: "Restore Defaults" }).click();
   await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("workspace.last"), "Restore Defaults puts every shortcut back");
   await sw.locator(".ui-split-pane .ui-search input").fill("palette");
-  await sw.waitForTimeout(100);
-  const paletteRows = await sw.locator(".ui-row[data-compact] .ui-row-name").allTextContents();
+  const paletteRows = await until(() => sw.locator(".ui-row[data-compact] .ui-row-name").allTextContents(), (r) => r.includes("Command Palette"), 5000);
   check(paletteRows.includes("Command Palette"), `search finds shortcuts (${paletteRows.join(", ")})`);
   await sw.locator(".ui-split-pane .ui-search input").fill("");
   await sw.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });
@@ -1390,41 +1359,42 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
 
 // Live remap via keybindings.json
 fs.writeFileSync(path.join(home, "keybindings.json"), '// test\n{ "session.next": ["Ctrl+Tab"], "edit.clear": null }');
-let remapped = null;
-for (let i = 0; i < 30 && remapped !== "Ctrl+Tab"; i++) {
-  await win.waitForTimeout(100);
-  remapped = await accel("session.next");
-}
+const remapped = await until(() => accel("session.next"), (a) => a === "Ctrl+Tab");
+await until(() => accel("edit.clear"), (a) => a === null, 5000);
 check(remapped === "Ctrl+Tab", "keybindings.json remaps live");
 check((await accel("edit.clear")) === null, "null unbinds a shortcut");
 
 // Closing the focused terminal returns to the previously used one (MRU), not a sidebar neighbour.
 {
+  const n0 = await panes();
   await menu("file.newTerminal");
-  await win.waitForTimeout(800);
+  await until(panes, (n) => n === n0 + 1);
+  await shellReady();
   const list = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.sort((a, b) => a.createdAt - b.createdAt).map((x) => x.id)));
   const [first, , newest] = [list[0], list[1], list[list.length - 1]];
-  const selectPane = (id) => win.evaluate((id) => window.__cmdSelect?.(id), id);
+  const selectedTile = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
+  const selectPane = async (id) => {
+    await win.evaluate((id) => window.__cmdSelect?.(id), id);
+    await until(selectedTile, (s) => s === id, 5000);
+  };
   await selectPane(first);
-  await win.waitForTimeout(200);
   await selectPane(newest);
-  await win.waitForTimeout(200);
   await menu("file.close");
-  await win.waitForTimeout(700);
-  const sel = (await homeView())["selection.pane"];
+  await until(panes, (n) => n === n0);
+  const sel = await until(async () => (await homeView())["selection.pane"], (s) => s === first);
   check(sel === first, "closing a terminal focuses the previously used one");
 }
 
 // ⌘W on an idle shell closes it without asking
 await menu("file.close");
-await win.waitForTimeout(600);
-check((await panes()) === 1, "⌘W closes an idle terminal");
+check((await until(panes, (n) => n === 1)) === 1, "⌘W closes an idle terminal");
 
 // ── PaperWM-style strip ──
 {
   for (let i = 0; i < 3; i++) {
+    const n0 = await panes();
     await menu("file.newTerminal");
-    await win.waitForTimeout(500);
+    await until(panes, (n) => n === n0 + 1);
   }
   await menu("view.strip");
   await win.waitForSelector(".main.mode-strip");
@@ -1448,25 +1418,28 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   await win.mouse.move(pane.x + pane.width / 2, pane.y + pane.height / 2);
   const before = -(await trackX());
   await win.mouse.wheel(-37, 0);
+  await until(trackX, (x) => -x !== before, 3000);
   await still(700);
   check(Math.abs(-(await trackX()) - (before - 37)) < 1, "horizontal scroll moves freely and stays put");
 
   // pagination: a dot per window, in strip order; a dot brings its window into view
   await win.locator(".windows-scroller").evaluate((e) => (e.scrollLeft = e.scrollWidth));
-  await win.waitForTimeout(300);
+  const dotIsCurrent = (i) => () => win.locator(".strip-dots button").nth(i).getAttribute("data-current", { timeout: 10_000 }).catch(() => null);
+  await until(dotIsCurrent(n - 1), (c) => c === "true");
   check((await win.locator(".strip-dots button").count()) === n && (await win.locator(".strip-dots button[data-current]").count()) === 1
     && (await win.locator(".strip-dots button").last().getAttribute("data-current")) === "true",
     "the strip shows a pagination dot per window, the last one current at the end");
   await menu("session.prev");
-  await win.waitForTimeout(500);
+  await until(dotIsCurrent(n - 2), (c) => c === "true");
   check((await win.locator(".strip-dots button").nth(n - 2).getAttribute("data-current")) === "true",
     "⌥⌘← from the last window moves the current dot, even when nothing scrolls");
   await win.mouse.wheel(60, 0);
-  await win.waitForTimeout(300);
+  await until(dotIsCurrent(n - 1), (c) => c === "true");
   check((await win.locator(".strip-dots button").last().getAttribute("data-current")) === "true",
     "swiping on at the end of the strip makes the last dot current again, whatever is selected");
   await win.locator(".strip-dots button").first().click();
   await still(700);
+  await until(dotIsCurrent(0), (c) => c === "true", 5000);
   check(Math.abs(await trackX()) < 1 && (await win.locator(".strip-dots button").first().getAttribute("data-current")) === "true",
     "clicking the first dot scrolls the strip to its start");
 
@@ -1488,7 +1461,8 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   // the selected window out of view
   {
     await win.locator(".windows-scroller").evaluate((e) => (e.scrollLeft = 0));
-    await win.waitForTimeout(300);
+    await until(trackX, (x) => x === 0, 3000);
+    await still(300);
     const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
     for (const dw of [-120, -60, 0]) {
       await app.evaluate(({ BrowserWindow }, w) => BrowserWindow.getAllWindows()[0].setSize(w, BrowserWindow.getAllWindows()[0].getSize()[1]), size[0] + dw);
@@ -1546,18 +1520,16 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
     await win.mouse.down();
     await win.mouse.move(s0.x + 60, s0.y + 20, { steps: 3 });
     await win.mouse.move(Math.min(d1.x + d1.width / 2, pane.x + pane.width - 80), d1.y + 100, { steps: 12 });
-    await win.waitForTimeout(300);
-    check((await win.locator(".tile.lifted").count()) === 1, "dragging in the strip lifts the window");
+    check((await until(() => countOf(".tile.lifted"), (n) => n === 1, 5000)) === 1, "dragging in the strip lifts the window");
     await win.screenshot({ path: path.join(shots, "8b-strip-drag.png") });
     await win.mouse.up();
-    await win.waitForTimeout(500);
-    const order = (await homeView())["grid.order"];
+    const order = await until(async () => (await homeView())["grid.order"], (o) => o?.indexOf(movedId) === o?.indexOf(nextId) + 1);
     check(order.indexOf(movedId) === order.indexOf(nextId) + 1, "dropping on the next window swaps their places along the strip");
   }
   await menu("session.next");
-  await win.waitForTimeout(500);
+  await still();
   await win.screenshot({ path: path.join(shots, "8-strip.png") });
-  const widths = (await homeView())["strip.widths"];
+  const widths = await until(async () => (await homeView())["strip.widths"], (w) => w && Object.keys(w).length >= 1);
   check(widths && Object.keys(widths).length >= 1, "strip widths are remembered");
   await menu("view.grid");
 }
@@ -1570,28 +1542,30 @@ const markerCmd = process.platform !== "win32"
   : 'Write-Host -NoNewline "`e[?1000h`e[?1000l"; echo "MARKER-$(40+2)"\r';
 step("typing the re-attach marker");
 await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [markerPane, markerCmd]);
-await win.waitForTimeout(800);
+await until(() => paneText(markerPane, 500), (t) => t.includes("MARKER-42"));
 
 // Sidebars (docs/21-sidebars.md): any window docks to a side and comes back to the board.
 {
   await win.evaluate((id) => window.__cmdSelect(id), markerPane);
-  await win.waitForTimeout(200);
+  await until(() => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane), (s) => s === markerPane, 5000);
   const onBoard = () => win.locator(`.windows-track > .tile[data-pane="${markerPane}"]`).count();
   await menu("window.dockRight");
-  await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
+  await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 10_000 });
   // The workspace's layout is saved debounced.
-  let storedRight = null;
-  for (let i = 0; i < 20 && storedRight !== markerPane; i++) (await win.waitForTimeout(100), (storedRight = (await homeView()).docks?.right?.id));
+  const storedRight = await until(async () => (await homeView()).docks?.right?.id, (id) => id === markerPane);
+  await until(onBoard, (n) => n === 0, 5000);
   check((await onBoard()) === 0 && storedRight === markerPane, "Move to Right Sidebar docks the window, out of the board");
   await win.screenshot({ path: path.join(shots, "9-sidebars.png") });
   await menu("view.rightSidebar");
   await gone(".dock-right");
+  await until(() => countOf(".dock-right"), (n) => n === 0, 5000);
   check((await win.locator(".dock-right").count()) === 0 && (await onBoard()) === 0, "Show Right Sidebar hides the side; the window stays docked");
   await menu("view.rightSidebar");
-  await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
-  await win.waitForTimeout(200);
+  await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 10_000 });
+  await still(200);
   // Canvas: one canvas under the sidebars; fitting keeps the windows between them.
   await menu("view.canvas");
+  await win.waitForSelector(".main.mode-canvas", { timeout: 10_000 }).catch(() => {});
   await still(400);
   const stage = await win.locator(".main.windows").boundingBox();
   const vw = await win.evaluate(() => window.innerWidth);
@@ -1605,8 +1579,9 @@ await win.waitForTimeout(800);
   await menu("view.grid");
   await win.waitForTimeout(300);
   await menu("window.undock");
-  await win.waitForSelector(`.windows-track > .tile[data-pane="${markerPane}"]`, { timeout: 3000 });
+  await win.waitForSelector(`.windows-track > .tile[data-pane="${markerPane}"]`, { timeout: 10_000 });
   await gone(".dock-right");
+  await until(() => countOf(".dock-right"), (n) => n === 0, 5000);
   check((await win.locator(".dock-right").count()) === 0 && (await win.locator(".dock-left .navigator").count()) === 1, "Move to Board brings it back; the Navigator stays on the left");
 }
 
@@ -1624,7 +1599,10 @@ await menu("view.zoomIn");
   await win.mouse.move(340, 300, { steps: 4 });
   await win.mouse.up();
 }
-await win.waitForTimeout(400); // debounced writes reach the core before we read them back
+// Debounced writes reach the core before we read them back.
+await until(async () => (await homeView()).docks?.left?.width, (w) => w > 300);
+await until(() => win.evaluate(() => window.cmd.call("ui.get", {})), (u) => u["terminal.zoom"] === 2 && u["sidebar.collapsed"]?.length > 0);
+await win.waitForTimeout(400);
 step("reading the UI state before the restart");
 const selectedBefore = (await homeView())["selection.pane"];
 step("closing the app");
@@ -1634,21 +1612,20 @@ step("relaunching the app");
 ({ app, win } = await launch());
 await win.waitForSelector(".statusbar .core-status");
 await win.waitForSelector(".dock-left .navigator");
-await win.waitForTimeout(800);
-check((await win.locator(".main.mode-grid").count()) === 1, "view mode restored (grid)");
+check((await until(() => countOf(".main.mode-grid"), (n) => n === 1)) === 1, "view mode restored (grid)");
 {
   const stored = (await homeView()).docks?.left?.width;
-  const w = (await win.locator(".dock-left").boundingBox()).width;
+  const leftWidth = async () => (await win.locator(".dock-left").boundingBox()).width;
+  const w = await until(leftWidth, (w) => Math.abs(w - stored) <= 1);
   check(stored > 300 && Math.abs(w - stored) <= 1, `dragged sidebar width restored (${w} / ${stored})`);
   await win.locator(".dock-left .dock-resize").dblclick();
-  await win.waitForTimeout(100);
-  const reset = (await win.locator(".dock-left").boundingBox()).width;
+  const reset = await until(leftWidth, (w) => Math.abs(w - 280) <= 1);
   check(Math.abs(reset - 280) <= 1, `double-clicking the edge resets the width (${reset})`);
 }
-check((await win.locator('.sb-windows .ui-list-heading[aria-expanded="false"]').count()) === 1, "collapsed sidebar section restored");
+check((await until(() => countOf('.sb-windows .ui-list-heading[aria-expanded="false"]'), (n) => n === 1)) === 1, "collapsed sidebar section restored");
 const ui = await win.evaluate(() => window.cmd.call("ui.get", {}));
 check(ui["terminal.zoom"] === 2, "terminal zoom restored (+2)");
-const restored = (await homeView())["selection.pane"];
+const restored = await until(async () => (await homeView())["selection.pane"], (s) => s === selectedBefore, 5000);
 check(restored === selectedBefore && !!selectedBefore, `selected terminal restored (${selectedBefore} → ${restored})`);
 {
   const text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 500 }).then((r) => r.text), markerPane);
@@ -1658,8 +1635,9 @@ check(restored === selectedBefore && !!selectedBefore, `selected terminal restor
   const settingsPath = path.join(home, "settings.json");
   const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8").replace(/^\/\/.*$/gm, ""));
   fs.writeFileSync(settingsPath, JSON.stringify({ ...settings, "terminal.renderer": "dom" }));
-  await win.waitForTimeout(600);
-  const shown = await win.locator(`.tile[data-pane="${markerPane}"] .xterm-rows`).textContent();
+  // The terminal redraws through the DOM renderer once the setting reaches it: a moment on a laptop, seconds on CI.
+  const rows = () => win.evaluate((id) => document.querySelector(`.tile[data-pane="${id}"] .xterm-rows`)?.textContent ?? "", markerPane);
+  const shown = await until(rows, (t) => /MARKER-42/.test(t), 15_000);
   const count = (shown.match(/MARKER-42/g) ?? []).length;
   check((text.match(/MARKER-42/g) ?? []).length === 1 && count === 1, `re-attached terminal shows its output exactly once (${count}×)`);
   check(!/\[<\d+;\d+;\d+[mM]/.test(shown), "no stray mouse escape codes after re-attaching");
@@ -1675,7 +1653,7 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   check((await button.locator(".ui-dot[data-state=\"success\"]").count()) === 1, `core status is healthy (${await button.textContent()})`);
   await button.click();
   await win.waitForSelector(".core-details .ui-kv");
-  const details = await win.locator(".core-details").textContent();
+  const details = await until(() => win.locator(".core-details").textContent(), (d) => /Uptime/.test(d) && /PTY host\d/.test(d) && /pid \d+/.test(d), 5000);
   await win.screenshot({ path: path.join(shots, "7b-core-status.png") });
   check(/Uptime/.test(details) && /PTY host\d/.test(details) && /pid \d+/.test(details), `core details show uptime and both processes (${details})`);
   const pidBefore = await win.evaluate(() => window.cmd.call("core.hello", {}).then((h) => h.pid));
@@ -1683,14 +1661,19 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   const before = await panes();
   await win.locator(".core-details button", { hasText: "Restart Core" }).click();
   // A call can land while the old core shuts down and reject; that's "not yet".
-  await win.waitForFunction((pid) => window.cmd.call("core.hello", {}).then((h) => h.pid !== pid, () => false), pidBefore, { timeout: 15_000 });
-  await win.waitForFunction(() => document.querySelector(".core-status-button .ui-dot[data-state=\"success\"]") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 15_000 });
+  // A call sent as the old core shuts down can reject, or never be answered (its socket
+  // closed under it): both are "not yet", so each try gives up after a second and asks again.
+  const ask = (m) => win.evaluate((m) => Promise.race([window.cmd.call(m, {}).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1000))]), m).catch(() => null);
+  const hello = await until(() => ask("core.hello"), (h) => h && h.pid !== pidBefore, 45_000);
+  check(hello && hello.pid !== pidBefore, `Restart Core starts a new core (pid ${pidBefore} → ${hello?.pid})`);
+  await win.waitForFunction(() => document.querySelector(".core-status-button .ui-dot[data-state=\"success\"]") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 30_000 });
   // Every client (this window, main's workspace.show listener) is back before going on.
-  await win.waitForFunction((n) => window.cmd.call("core.info", {}).then((i) => i.connections >= n, () => false), clients, { timeout: 10_000 });
+  await until(() => ask("core.info"), (i) => i?.connections >= clients, 20_000);
+  await until(panes, (n) => n === before);
   check((await panes()) === before, `terminals survive Restart Core (${before} → ${await panes()})`);
   await win.keyboard.press("Escape");
   await gone(".core-details");
-  check((await win.locator(".core-details").count()) === 0, "Escape closes the core details");
+  check((await until(() => countOf(".core-details"), (n) => n === 0, 5000)) === 0, "Escape closes the core details");
 }
 
 // Workspaces: `cmd .` (workspace.open with show) switches the window to a new, empty
@@ -1701,25 +1684,24 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   const tilesInHome = await win.locator(".windows-track > .tile").count();
   const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
   const sp = await win.evaluate((p) => window.cmd.call("workspace.open", { path: p, show: true }).then((r) => r.workspace), proj);
-  await win.waitForTimeout(700);
-  check((await chip()) === "proj", "workspace.open shows the new workspace in the switcher");
-  check((await win.locator(".windows-track > .tile").count()) === 0, "a new workspace starts empty");
+  check((await until(chip, (c) => c === "proj")) === "proj", "workspace.open shows the new workspace in the switcher");
+  check((await until(() => countOf(".windows-track > .tile"), (n) => n === 0)) === 0, "a new workspace starts empty");
   await menu("file.newTerminal");
-  await win.waitForTimeout(800);
   const inWorkspace = () => win.evaluate((id) => window.cmd.call("pane.list", {}).then((l) => l.filter((x) => x.workspaceId === id)), sp.id);
-  const p = await inWorkspace();
+  const p = await until(inWorkspace, (p) => p.length === 1 && p[0].cwd === fs.realpathSync.native(proj));
   check(p.length === 1 && p[0].cwd === fs.realpathSync.native(proj), `new terminals start at the workspace's root (${p[0]?.cwd})`);
-  check((await win.title()) === "proj", "the app window is titled after its workspace");
+  check((await until(() => win.title(), (t) => t === "proj", 5000)) === "proj", "the app window is titled after its workspace");
   await win.screenshot({ path: path.join(shots, "8-workspace.png") });
   await menu("workspace.prev");
-  await win.waitForTimeout(600);
-  const backTiles = await win.locator(".windows-track > .tile").count();
+  await until(chip, (c) => c === "Home");
+  const backTiles = await until(() => countOf(".windows-track > .tile"), (n) => n === tilesInHome);
   check((await chip()) === "Home" && backTiles === tilesInHome, `⌃⌘[ switches back to Home and its windows (${await chip()}, ${backTiles}/${tilesInHome})`);
   const again = await win.evaluate((p) => window.cmd.call("workspace.open", { path: p + "/" }), proj);
   check(again.created === false && again.workspace.id === sp.id, "opening the folder again returns the same workspace");
   await win.locator(".workspace-trigger").click();
   await win.locator(".workspace-menu").waitFor();
-  const listed = await win.locator(".workspace-menu .workspace-item:not(.workspace-item-open)").count();
+  const workspaceItems = () => countOf(".workspace-menu .workspace-item:not(.workspace-item-open)");
+  const listed = await until(workspaceItems, (n) => n === 2, 5000);
   check(listed === 2, `the switcher's menu lists both workspaces (${listed})`);
   await win.screenshot({ path: path.join(shots, "8-workspace-menu.png") });
   await win.keyboard.press("Escape");
@@ -1730,16 +1712,15 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   await win.keyboard.type("leaf");
   await win.screenshot({ path: path.join(shots, "8-workspace-icon.png") });
   await win.keyboard.press("Enter");
-  await win.waitForTimeout(400);
-  const icon = await win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((x) => x.home).icon));
+  const icon = await until(() => win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((x) => x.home).icon)), (i) => i === "leaf");
   check(icon === "leaf", `Change Workspace Icon… sets the workspace's icon (${icon})`);
   await win.evaluate((id) => window.cmd.call("workspace.close", { id }), sp.id);
-  await win.waitForTimeout(500);
+  const still = (await until(inWorkspace, (l) => l.length === 0)).length;
+  await gone(".icon-picker");
   await win.locator(".workspace-trigger").click();
   await win.locator(".workspace-menu").waitFor();
-  const left = await win.locator(".workspace-menu .workspace-item:not(.workspace-item-open)").count();
+  const left = await until(workspaceItems, (n) => n === 1, 5000);
   await win.keyboard.press("Escape");
-  const still = (await inWorkspace()).length;
   check(still === 0 && left === 1, `closing a workspace ends its terminals and leaves the switcher (${still} terminals, ${left} Workspaces)`);
 }
 
@@ -1751,11 +1732,7 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   const own = await win.evaluate(() => location.href);
   await win.evaluate((u) => void (location.href = u), "https://example.invalid/?away");
   const popup = await win.evaluate((u) => window.open(u) === null, "https://example.invalid/?popup");
-  let forwarded = [];
-  for (let i = 0; i < 40 && forwarded.length < 2; i++) {
-    await win.waitForTimeout(150);
-    forwarded = (await win.evaluate(() => window.cmd.call("window.list", {}))).filter((w) => w.kind === "browser" && /\?(away|popup)/.test(JSON.stringify(w.state)));
-  }
+  const forwarded = await until(() => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.filter((w) => w.kind === "browser" && /\?(away|popup)/.test(JSON.stringify(w.state)))), (f) => f.length >= 2);
   const stayed = (await win.evaluate(() => location.href)) === own && (await win.evaluate(() => typeof window.cmd?.call)) === "function";
   check(stayed && popup && forwarded.length === 2, `an app window stays on its page and sends web links and pop-ups to browser windows (${stayed}, ${popup}, ${forwarded.length})`);
   for (const w of forwarded) await win.evaluate((id) => window.cmd.call("window.close", { id }), w.id);
