@@ -489,6 +489,30 @@ await scenario("move it back to the board", () => menu("window.undock"));
 await scenario("open a window (grid)", () => menu("file.newText"));
 const newest = await call("window.list").then((l) => l.filter((w) => w.kind === "text").sort((a, b) => b.createdAt - a.createdAt)[0]);
 await scenario("close a window (grid)", () => call("window.close", { id: newest.id }));
+// Dragging a window's title onto another: the others make room, then the drop settles.
+// The lifted window follows the pointer, so its own steps count as instant moves.
+const titleAndTarget = (from, to) => win.evaluate(([from, to]) => {
+  const tiles = [...document.querySelectorAll(".windows-track > .tile:not([data-hidden])")]
+    .sort((a, b) => { const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect(); return ra.top - rb.top || ra.left - rb.left; });
+  const t = tiles[from].querySelector(".tile-title").getBoundingClientRect();
+  const d = tiles[to].getBoundingClientRect();
+  return { sx: t.left + 40, sy: t.top + t.height / 2, dx: d.left + d.width / 2, dy: d.top + d.height / 2 };
+}, [from, to]);
+await scenario("drag a window onto another (grid)", async () => {
+  const p = await titleAndTarget(1, 0);
+  await win.mouse.move(p.sx, p.sy);
+  await win.mouse.down();
+  await win.mouse.move(p.dx, p.dy, { steps: 10 });
+  await win.mouse.up();
+}, { settle: 900 });
+// A flick: one move and the release at once, before a frame renders the drag.
+await scenario("flick a window onto another (grid)", async () => {
+  const p = await titleAndTarget(1, 0);
+  await win.mouse.move(p.sx, p.sy);
+  await win.mouse.down();
+  await win.mouse.move(p.dx, p.dy);
+  await win.mouse.up();
+}, { settle: 900 });
 await scenario("app window: one step smaller", () => setSize(1200, 800), { expect: "follow" });
 await scenario("app window: live resize", async () => {
   for (let i = 1; i <= 20; i++) await setSize(1200 + i * 12, 800 + i * 5), await sleep(16);

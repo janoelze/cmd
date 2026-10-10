@@ -35,7 +35,7 @@ transcripts of the agents who fought the failures.
 | Oct 4 | Runs stole the user's focus; stale expectations (corner radius 9→12, line height), WebGL renderer vs DOM reads, a drag "that depends on animation timing", 4–5 terminals where 1 was expected | Visible runs; defaults changed under the tests; the last run's core still alive | `CMD_BACKGROUND=1`; expectations updated; terminals read through the DOM renderer (af04252f, 4648ab68) |
 | Oct 9 | Overlay and sidebar "gone" checks flaked on a loaded Mac since the motion work | Counted at once or after a fixed 300 ms while a fade or slide played | Wait for the element to detach (7d3d0e89) |
 | Oct 10 02:35 | `drops.mjs` timed out on `.file-list .file-row` | The Files window moved onto the kit Tree (dabe14c4); smoke was updated, drops wasn't, and drops isn't in CI | Selectors (7ef8698b) |
-| Oct 10 ~03:00 | `dragging back swaps the slots again`: passed once, then failed 4 runs in a row under load | Drag released while tiles still glide; one move + release in the same frame dropped nothing on a fast machine | Drags in steps (d18aa33e); possibly a product bug too, see "Open" |
+| Oct 10 ~03:00 | `dragging back swaps the slots again`: passed once, then failed 4 runs in a row under load | Drag released while tiles still glide; one move + release in the same frame dropped nothing on a fast machine | Drags in steps (d18aa33e), then the product fix: the release decides the drop from its own position (`dropOrder`), not from the preview a render later; smoke flicks in one task and drags back in one step again |
 | Oct 10 04:14 | `dialog.test.ts › fades out on close`: `expected 2 to be greater than or equal to 3` | Counted real frames in a 120 ms fade; a busy runner painted one or two | Playwright's clock seeks through the fade (ca6cf88e, PR #3) |
 | Oct 10 07:11–07:28 | PR #3, three CI cycles: `with one window broken … a terminal takes input` (3 s to echo), `locator.click: Timeout 30000ms` on Magic's Settings tab, `Select All and Copy work in a browser page ("")` | Echo slower than 3 s; tabs compact into a popup at CI's width; page not focused 200 ms after the click | 108c2b5b, 200da18a; the third came back on master |
 | Oct 10 11:45 | master 3d1ae132: `strip: 9 windows, all full height` | Tiles read mid-glide: at 12x CPU throttle a 382 ms glide settles at 685 ms, height 553 < 562 | `still()` waits until nothing moves; `E2E_CPU_THROTTLE`; `failed.png` (1ed33190) |
@@ -392,10 +392,6 @@ are about 1 s each and real work: the memory sampler's tick, Restart Core, a del
 
 ## Open
 
-- **Same-frame drag release ignored.** d18aa33e slowed the test's drag because a move and
-  a release in the same frame dropped nothing. A fast trackpad flick could do the same.
-  Check whether the drop handler needs the pointer to have moved in a frame before
-  release, and fix the product if so.
 - **The intermittent OSC 8 link check** (`an OSC 8 http link opens in a browser window`,
   about 2 in 6 local runs). Probably xterm's per-row link lookup (see "What landed"); watch
   CI before calling it fixed.
