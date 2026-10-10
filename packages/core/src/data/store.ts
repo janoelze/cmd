@@ -362,12 +362,12 @@ export class DataStore {
    */
   async buildFts(o: { pace?: Pick<Pacer, "yield"> & Partial<Pick<Pacer, "mark">>; bodyOf?: (e: DataEvent) => string | null } = {}): Promise<number> {
     // Each step named for the watchdog on its own (a name held across the pauses would stick to whatever runs in them).
-    const mark = () => o.pace?.mark?.("fts rebuild") ?? (() => {});
-    let step = mark();
-    const pace = async () => {
+    const mark = (activity: string) => o.pace?.mark?.(activity) ?? (() => {});
+    let step = mark("fts rebuild");
+    const pace = async (next = "fts rebuild") => {
       step();
       await (o.pace?.yield() ?? Promise.resolve());
-      step = mark();
+      step = mark(next);
     };
     try {
       return await this.#buildFts(o.bodyOf ?? ((e: DataEvent) => ftsBodyOf(e, (h) => this.blob(h))), pace);
@@ -376,7 +376,7 @@ export class DataStore {
     }
   }
 
-  async #buildFts(bodyOf: (e: DataEvent) => string | null, pace: () => Promise<void>): Promise<number> {
+  async #buildFts(bodyOf: (e: DataEvent) => string | null, pace: (next?: string) => Promise<void>): Promise<number> {
     await this.#dropOldFts(pace); // a build's leftover, when the core stopped right after it
     if (this.#ftsKind && this.#hasTable("events_fts")) return 0;
     if (this.#ftsCursor === null) {
@@ -415,7 +415,7 @@ export class DataStore {
       if (this.#totalChanges() - before < 2) break;
       await pace();
     }
-    // In events_fts's place. Renamed, not dropped: freeing the old index's pages in one DROP blocked for 100–200 ms on a big log.
+    // In events_fts's place. Renamed, not dropped: the DROP (tens of ms, up to 100+ cold) runs in a step of its own after.
     const old = this.#hasTable("events_fts") ? `ALTER TABLE events_fts RENAME TO events_fts_old;` : "";
     this.transaction(() => {
       // Rows recorded since the last page (during the merges) went only into the old index: read here, with no yield until the rename.
@@ -436,15 +436,17 @@ export class DataStore {
     return n;
   }
 
-  /** The index a build replaced: its big tables emptied a few hundred rows at a time, then dropped (the term index, small, with it). */
-  async #dropOldFts(pace: () => Promise<void>): Promise<void> {
+  /**
+   * The index a build replaced, dropped in one statement in a step of its own
+   * (`fts drop old index` for the watchdog): 20–130 ms on a 70 MB index, once
+   * per FTS_VERSION. Not emptied first: SQLite refuses writes to an FTS5
+   * table's shadow tables (defensive mode, on in Node's SQLite).
+   */
+  async #dropOldFts(pace: (next?: string) => Promise<void>): Promise<void> {
     if (!this.#hasTable("events_fts_old")) return;
-    for (const shadow of ["events_fts_old_data", "events_fts_old_docsize"]) {
-      if (!this.#hasTable(shadow)) continue;
-      const del = this.db.prepare(`DELETE FROM ${shadow} WHERE rowid IN (SELECT rowid FROM ${shadow} LIMIT 500)`);
-      while (Number(del.run().changes) > 0) await pace();
-    }
+    await pace("fts drop old index");
     this.db.exec(`DROP TABLE events_fts_old`);
+    await pace();
   }
 
   #totalChanges(): number {

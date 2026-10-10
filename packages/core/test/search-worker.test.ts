@@ -115,6 +115,59 @@ describe("full-text index rebuild", () => {
   });
 });
 
+describe("full-text index rebuild, the old index's drop", () => {
+  const old = (s: DataStore) => !!s.db.prepare(`SELECT 1 FROM sqlite_master WHERE name = 'events_fts_old'`).get();
+
+  it("drops the old index with its rows in a step of its own", async () => {
+    const file = path.join(tmpDir(), "events.sqlite");
+    const first = new DataStore(file);
+    first.recordAll(fixture());
+    first.close();
+    makeOld(file);
+    const s = new DataStore(file);
+    expect((s.db.prepare(`SELECT COUNT(*) AS n FROM events_fts`).get() as { n: number }).n).toBeGreaterThan(0);
+    // What each step saw: the drop's own step starts with the old index there and ends with it gone.
+    const steps: { activity: string; before: boolean; after?: boolean }[] = [];
+    await s.buildFts({
+      pace: {
+        yield: async () => {},
+        mark: (activity) => {
+          const step: (typeof steps)[number] = { activity, before: old(s) };
+          steps.push(step);
+          return () => void (step.after = old(s));
+        },
+      },
+    });
+    expect(steps.filter((x) => x.activity === "fts drop old index")).toEqual([{ activity: "fts drop old index", before: true, after: false }]);
+    expect(steps.every((x) => x.activity === "fts drop old index" || x.activity === "fts rebuild")).toBe(true);
+    expect(old(s)).toBe(false);
+    expect(s.needsFtsRebuild).toBe(false);
+    s.close();
+    expect(new DataStore(file).needsFtsRebuild).toBe(false);
+  });
+
+  it("finishes the drop on the next start when the core stopped right after the rename", async () => {
+    const file = path.join(tmpDir(), "events.sqlite");
+    const first = new DataStore(file);
+    first.recordAll(fixture());
+    first.close();
+    makeOld(file);
+    const s = new DataStore(file);
+    const stop = new Error("stopped");
+    await expect(s.buildFts({ pace: { yield: async () => { if (old(s)) throw stop; } } })).rejects.toBe(stop);
+    expect(old(s)).toBe(true);
+    s.close();
+    const again = new DataStore(file);
+    expect(again.needsFtsRebuild).toBe(true); // the leftover
+    expect(again.query({ text: "postgres" }).length).toBe(1); // the new index serves meanwhile
+    expect(await again.buildFts()).toBe(0); // nothing built again, only dropped
+    expect(old(again)).toBe(false);
+    expect(again.needsFtsRebuild).toBe(false);
+    again.close();
+    expect(new DataStore(file).needsFtsRebuild).toBe(false);
+  });
+});
+
 describe("full-text index rebuild, its last moments", () => {
   it("keeps what's recorded after the last page, while the segments merge", async () => {
     const file = path.join(tmpDir(), "events.sqlite");
