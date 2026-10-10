@@ -2,6 +2,14 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.24.1 — 2026-10-10
+
+The first release with everything in 0.24.0, which didn't ship.
+
+### Fixed
+
+- ⌘↑ in the Files window goes up one folder, not two, right after ⌘↓.
+
 ## 0.24.0 — 2026-10-10
 
 Reach your Mac directly over Tailscale, and decide what websites may use.
