@@ -15,6 +15,7 @@ import type { AppProcess } from "../../../main/metrics.ts";
 import { DataGrid, Dialog, StatusLine, Text, ToolbarButton, ToolbarSpacer, View, WindowToolbar, type GridCell, type GridRowInfo, type GridSort } from "@cmd/ui";
 import { cmd } from "../bridge.ts";
 import { formatBytes } from "../model.ts";
+import { countRender } from "../perf.ts";
 
 const POLL_MS = 2000;
 export const ICON = "gauge.with.dots.needle.33percent";
@@ -70,6 +71,7 @@ function sortRows(rows: Row[], s: Sort): Row[] {
 const sum = (rows: Row[], k: "memory" | "cpu") => rows.reduce((n, r) => n + (r[k] ?? 0), 0);
 
 export function TaskManager({ open = true, onClose }: { open?: boolean; onClose: () => void }) {
+  countRender("TaskManager"); // none while it's closed (e2e checks it polls only while open)
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 

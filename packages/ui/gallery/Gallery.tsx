@@ -1328,7 +1328,7 @@ function OverlaysPage() {
           height={420}
           position="center"
           divided
-          toolbar={<SearchField fill size="lg" value="" placeholder="Search widgets" onChange={() => {}} />}
+          toolbar={<SearchField fill size="lg" value="" placeholder="Search widgets" onChange={() => {}} autoFocus />}
           aside="Right-click a widget to rename, duplicate or delete it"
           actions={
             <Button variant="primary" icon="sparkles" onClick={() => setLibraryOpen(false)}>

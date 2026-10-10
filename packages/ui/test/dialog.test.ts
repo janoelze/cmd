@@ -77,6 +77,18 @@ describe.skipIf(noChromium)("Dialog and Popover focus (gallery, Chromium)", () =
     }
   });
 
+  it("gives focus back to the opener when its content took focus first (autoFocus)", async () => {
+    await open();
+    const opener = page.getByRole("button", { name: "Widget Library" });
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ui-dialog");
+    expect(await page.getByPlaceholder("Search widgets").evaluate((el) => el === document.activeElement)).toBe(true);
+    await page.keyboard.press("Escape");
+    await closed();
+    expect(await opener.evaluate((el) => el === document.activeElement)).toBe(true);
+  });
+
   it("fades out on close (no pop): the sheet stays, inert, while its opacity falls over several frames", async () => {
     await open();
     await page.getByRole("button", { name: "Send Feedback…" }).click();

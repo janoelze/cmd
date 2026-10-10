@@ -447,9 +447,15 @@ export function Dialog({
   escape.current = dismissable ? onClose : null;
   // Closed, the sheet and its scrim fade out (motion.ts).
   const { present, closing } = usePresence(open);
+  // Where focus was as it opened, read while rendering: content with autoFocus (the
+  // Widget Library's search field) takes focus as it mounts, before any effect here runs.
+  const opener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  if (open && !wasOpen.current) opener.current = document.activeElement as HTMLElement | null;
+  wasOpen.current = open;
   useEffect(() => {
     if (!open) return;
-    const before = document.activeElement as HTMLElement | null;
+    const before = opener.current;
     const el = ref.current;
     // Modal: the page behind can't be focused, clicked or read (a terminal can't be typed into).
     const release = scrimRef.current ? inertOthers(scrimRef.current) : () => {};
