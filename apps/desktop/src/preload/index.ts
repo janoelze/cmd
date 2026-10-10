@@ -16,7 +16,7 @@ import type { WhatsNewClaim } from "../main/whats-new.ts";
 import type { NotifyAccess, NotifyPermission } from "../main/notify-permission.ts";
 import type { OnboardingClaim } from "../main/onboarding.ts";
 import type { AppProcess } from "../main/metrics.ts";
-import type { SitePermissionRequest } from "../main/web-policy.ts";
+import type { SiteDecisions, SitePermission, SitePermissionRequest } from "../main/web-policy.ts";
 import type { OpenFrom } from "../main/open-policy.ts";
 
 export interface AppInfo {
@@ -211,6 +211,16 @@ const api = {
   },
   /** Allow or Don't Allow (kept for the site); null: dismissed, asked again next time. */
   answerSitePermission: (id: string, allow: boolean | null) => ipcRenderer.send("site-permission-answer", id, allow),
+  /** The answers kept per site (Settings → Browser). */
+  sitePermissions: (): Promise<SiteDecisions> => ipcRenderer.invoke("site-permissions"),
+  /** The kept answers changed (a sheet answered, or Settings removed one). */
+  onSitePermissionsChanged(fn: () => void): () => void {
+    const h = () => fn();
+    ipcRenderer.on("site-permissions-changed", h);
+    return () => ipcRenderer.off("site-permissions-changed", h);
+  },
+  /** Forgets a site's answer to one permission, or all of them (null); the answers left. */
+  forgetSitePermission: (site: string, kind: SitePermission | null): Promise<SiteDecisions> => ipcRenderer.invoke("site-permission-forget", site, kind),
   /** A site signed in, in the browser windows' session (main: SIGN_IN_COOKIES). */
   onSignedIn(fn: (site: string) => void): () => void {
     const h = (_e: unknown, site: string) => fn(site);

@@ -1,6 +1,6 @@
 // The Settings window (pnpm workbench settingswindow), on the Workbench's own
 // core: its real settings, at the window's default and smallest sizes, and the
-// pages drawn by hand (shortcuts, Remote Access, About).
+// pages drawn by hand (Browser, shortcuts, Remote Access, About).
 
 import { Window, WindowBody, WindowFrame } from "@cmd/ui";
 import type { ReactNode } from "react";
@@ -28,3 +28,4 @@ export const Shortcuts = () => <Frame page="keyboard" />;
 export const Remote = () => <Frame page="remote" />;
 export const About = () => <Frame page="about" />;
 export const Data = () => <Frame page="data" />;
+export const Browser = () => <Frame page="browser" />;

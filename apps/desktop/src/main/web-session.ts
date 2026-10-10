@@ -4,7 +4,8 @@
 // permissions by default and asks the person once per site for the ones that
 // matter, in a sheet over the app window the page is in (renderer:
 // SitePermissionSheet.tsx); the answers are kept in site-permissions.json next
-// to trusted-certificates.json. The rules themselves are in web-policy.ts.
+// to trusted-certificates.json, and Settings → Browser lists and removes them.
+// The rules themselves are in web-policy.ts.
 
 import { app, BrowserWindow, ipcMain, session, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
@@ -12,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { cmdHome, logger } from "@cmd/protocol/node";
 import { allowedAppUrl, type AppPages } from "../shared/app-url.ts";
-import { BROWSER_PARTITION, guestPartitionAllowed, isAsked, parseDecisions, permissionVerdict, siteOf, type SiteDecisions, type SitePermission, type SitePermissionRequest } from "./web-policy.ts";
+import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, isAsked, parseDecisions, permissionVerdict, siteOf, type SiteDecisions, type SitePermission, type SitePermissionRequest } from "./web-policy.ts";
 
 const log = logger("web");
 const here = import.meta.dirname; // apps/desktop/out/main
@@ -145,15 +146,40 @@ function decisions(): SiteDecisions {
   return read;
 }
 
+/** Writes the answers (only ever well-formed ones: what decisions() parsed, changed here) and tells app windows (an open Settings); false if it couldn't. */
+function save(all: SiteDecisions): boolean {
+  try {
+    fs.writeFileSync(file(), JSON.stringify(all, null, 2));
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed() && fromApp(w.webContents)) w.webContents.send("site-permissions-changed");
+    return true;
+  } catch (e) {
+    log.warn(`couldn't save ${file()}: ${(e as Error).message}`);
+    return false;
+  }
+}
+
 function remember(site: string, kind: SitePermission, allow: boolean): void {
   const all = { ...decisions() };
   all[site] = { ...all[site], [kind]: allow };
-  try {
-    fs.writeFileSync(file(), JSON.stringify(all, null, 2));
-  } catch (e) {
-    log.warn(`couldn't save ${file()}: ${(e as Error).message}`);
-  }
+  save(all);
 }
+
+/**
+ * Settings → Browser: forgets a site's answer to one permission, or (kind null)
+ * all of its answers, so the site is asked again. Only removes: the site must be
+ * an http(s) origin and the kind a permission cmd asks for, else it throws.
+ */
+function forget(site: unknown, kind: unknown): SiteDecisions {
+  const before = decisions();
+  const after = forgetDecision(before, site, kind);
+  if (after === before) return before;
+  if (!save(after)) throw new Error("Couldn't save the change. Check that cmd's folder is writable.");
+  log.info(`forgot ${site as string} ${(kind as string | null) ?? "(all)"}`);
+  return decisions();
+}
+
+/** Only the app's own windows (not pages, nor their pop-ups) may read or change the answers. */
+const fromApp = (sender: WebContents) => sender.session !== session.fromPartition(BROWSER_PARTITION) && !popups.has(sender);
 
 /** Sheets showing, by request id: answer(null) is dismissed (not kept). */
 const waiting = new Map<string, { host: WebContents; answer: (allow: boolean | null) => void }>();
@@ -220,5 +246,13 @@ export function startWebSession(o: { pages: AppPages; appWindows: () => BrowserW
     const w = typeof id === "string" ? waiting.get(id) : undefined;
     if (!w || w.host !== e.sender) return;
     w.answer(allow === true ? true : allow === false ? false : null);
+  });
+  ipcMain.handle("site-permissions", (e) => {
+    if (!fromApp(e.sender)) throw new Error("Not allowed here.");
+    return decisions();
+  });
+  ipcMain.handle("site-permission-forget", (e, site: unknown, kind: unknown) => {
+    if (!fromApp(e.sender)) throw new Error("Not allowed here.");
+    return forget(site, kind);
   });
 }

@@ -65,3 +65,22 @@ export function parseDecisions(json: unknown): SiteDecisions {
   }
   return out;
 }
+
+/**
+ * The answers without a site's answer to `kind`, or without all of its answers
+ * (kind null): only ever removes. Throws on a site that isn't an http(s) origin
+ * or a kind cmd doesn't ask for; the same object back when nothing was kept.
+ */
+export function forgetDecision(decisions: SiteDecisions, site: unknown, kind: unknown): SiteDecisions {
+  if (typeof site !== "string" || siteOf(site) !== site) throw new Error("That isn't a website's address.");
+  if (kind !== null && (typeof kind !== "string" || !isAsked(kind))) throw new Error("That isn't a permission sites are asked for.");
+  const answers = decisions[site];
+  if (!answers || (kind !== null && answers[kind] === undefined)) return decisions;
+  const left = kind === null ? {} : Object.fromEntries(Object.entries(answers).filter(([k]) => k !== kind));
+  const out: SiteDecisions = {};
+  for (const [s, a] of Object.entries(decisions)) {
+    if (s !== site) out[s] = a;
+    else if (Object.keys(left).length) out[s] = left;
+  }
+  return out;
+}

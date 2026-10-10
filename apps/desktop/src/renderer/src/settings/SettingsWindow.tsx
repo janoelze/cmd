@@ -3,7 +3,9 @@
 // the title, a one-line description and an info button for the details on the
 // left, a control chosen from the key's type and display hints on the right.
 // The key itself (what `cmd settings set` takes) is the title's tooltip. Secrets (API keys, SECRETS) are rows too but
-// are stored by the core outside settings.json.
+// are stored by the core outside settings.json. Pages that aren't settings
+// (Browser's site permissions, Keyboard Shortcuts, Updates & About) are added to
+// the sidebar here and draw themselves.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -37,12 +39,13 @@ import { About } from "./About.tsx";
 import { Remote } from "./Remote.tsx";
 import { AgentHooks } from "./AgentHooks.tsx";
 import { NotifyPermission } from "./NotifyPermission.tsx";
+import { SITE_PERMISSION_WORDS, SitePermissions } from "./SitePermissions.tsx";
 import { allThemes } from "@cmd/ui/themes";
 import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page as SettingsPage } from "./layout.ts";
 
 const PAGES: SettingsPage[] = settingsPages();
 type Nav = { id: string; title: string; icon: string };
-const NAV: Nav[] = [...PAGES, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard" }, { id: "about", title: "Updates & About", icon: "info.circle" }];
+const NAV: Nav[] = [...PAGES, { id: "browser", title: "Browser", icon: "globe" }, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard" }, { id: "about", title: "Updates & About", icon: "info.circle" }];
 
 const APPLIES_NOTE = { newTerminals: "Applies to new terminals.", firstLaunch: "Applies on first launch." } as const;
 const COMMAND_GROUPS: Record<string, string> = { app: "App", file: "File", edit: "Edit", view: "View", session: "Sessions", workspace: "Workspaces", help: "Help" };
@@ -71,6 +74,7 @@ const textOf = (k: ItemKey): string[] => {
 };
 const matches = (k: ItemKey, q: string) => textOf(k).some((t) => t.toLowerCase().includes(q));
 const shortcutMatches = (c: CommandSpec, q: string) => [c.label, c.id].some((t) => t.toLowerCase().includes(q));
+const sitePermissionMatches = (q: string) => SITE_PERMISSION_WORDS.some((w) => w.includes(q) || q.includes(w));
 
 /** A description with `code` spans. */
 const prose = (text: string): ReactNode[] => text.split(/`([^`]+)`/).map((t, i) => (i % 2 ? <code key={i}>{t}</code> : t));
@@ -144,12 +148,13 @@ export function SettingsWindow() {
     [q],
   );
   const shortcutHits = q ? (COMMANDS as readonly CommandSpec[]).filter((c) => shortcutMatches(c, q)).length : 0;
-  const hitPages = new Set([...hits.map((h) => h.page.id), ...(shortcutHits ? ["keyboard"] : [])]);
+  const siteHits = !!q && sitePermissionMatches(q);
+  const hitPages = new Set([...hits.map((h) => h.page.id), ...(siteHits ? ["browser"] : []), ...(shortcutHits ? ["keyboard"] : [])]);
   const errors = [...snap.errors, ...(error ? [error] : [])];
 
   let body: ReactNode;
   if (q) {
-    body = hits.length || shortcutHits ? (
+    body = hits.length || siteHits || shortcutHits ? (
       <>
         {hits.map((h) => (
           <FormSection key={`${h.page.id}/${h.section.title}`} title={[h.page.title, h.section.title].filter(Boolean).join(" › ")}>
@@ -158,11 +163,18 @@ export function SettingsWindow() {
             ))}
           </FormSection>
         ))}
+        {siteHits && (
+          <FormSection title="Browser › Site permissions" plain>
+            <SitePermissions />
+          </FormSection>
+        )}
         {shortcutHits > 0 && <Shortcuts q={q} />}
       </>
     ) : (
       <EmptyState title={`No settings match “${query.trim()}”`} />
     );
+  } else if (page === "browser") {
+    body = <SitePermissions />;
   } else if (page === "keyboard") {
     body = <Shortcuts />;
   } else if (page === "remote") {

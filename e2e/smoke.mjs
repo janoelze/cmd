@@ -452,6 +452,53 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.keyboard.press("Escape");
     const dismissed = await page("window.__gum");
     check(askedAgain === 1 && dismissed === "NotAllowedError" && !fs.existsSync(path.join(home, "site-permissions.json")), `deleting the saved answers asks again; Esc refuses without saving (${askedAgain}, ${dismissed})`);
+
+    // Settings → Browser lists the answers and removes them: the site is asked again, no restart.
+    step("site permissions in settings");
+    const site = `http://localhost:${port}`;
+    const keptNow = () => (fs.existsSync(path.join(home, "site-permissions.json")) ? JSON.parse(fs.readFileSync(path.join(home, "site-permissions.json"), "utf8")) : {});
+    const answerNext = async (js, button) => {
+      await page(`window.__ask = ${js}; 0`);
+      await sheet.waitFor({ timeout: 5000 }).catch(() => {});
+      if (button) await sheet.getByRole("button", { name: button, exact: true }).click();
+      else await win.keyboard.press("Escape");
+      return page("window.__ask");
+    };
+    const waitUntil = async (fn) => {
+      for (let i = 0; i < 50 && !fn(); i++) await win.waitForTimeout(100);
+    };
+    const gum = `navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(() => "granted", (e) => e.name)`;
+    const granted = await answerNext(gum, "Allow");
+    const notified = await answerNext(`Notification.requestPermission()`, "Don't Allow");
+    check(granted === "granted" && notified === "denied" && keptNow()[site]?.media === true && keptNow()[site]?.notifications === false, `Allow and Don't Allow are kept (${granted}, ${notified})`);
+    const opened = app.waitForEvent("window");
+    await menu("app.settings");
+    const sw = await opened;
+    sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
+    await sw.waitForSelector(".ui-split-pane .ui-list-row");
+    await sw.locator(".ui-split-pane .ui-list-row", { has: sw.getByText("Browser", { exact: true }) }).click();
+    const section = sw.locator(".ui-form-section", { hasText: `localhost:${port}` });
+    await section.waitFor({ timeout: 5000 }).catch(() => {});
+    const rows = async () => (await section.locator(".ui-row").allTextContents().catch(() => [])).map((t) => t.replace(/Remove$/, ""));
+    const listed = await rows();
+    await sw.screenshot({ path: path.join(shots, "site-permissions-settings.png") });
+    check(listed.join("|") === "Camera and microphoneAllowed|NotificationsNot allowed", `Settings → Browser lists the site's answers (${listed.join(", ")})`);
+    await section.getByRole("button", { name: "Remove Camera and microphone", exact: false }).click();
+    await waitUntil(() => keptNow()[site]?.media === undefined);
+    await sw.screenshot({ path: path.join(shots, "site-permissions-removed-one.png") });
+    check(JSON.stringify(keptNow()) === JSON.stringify({ [site]: { notifications: false } }) && (await rows()).length === 1, `Remove forgets one answer and keeps the rest (${JSON.stringify(keptNow())})`);
+    const reasked = await answerNext(gum, "Allow");
+    check(reasked === "granted", `a removed answer is asked again on the next visit, without a restart (${reasked})`);
+    await section.locator(".ui-row", { hasText: "Camera and microphone" }).waitFor({ timeout: 5000 }).catch(() => {});
+    check((await rows()).length === 2, `an open Settings shows a new answer at once (${(await rows()).join(", ")})`);
+    await section.getByRole("button", { name: `Remove All for localhost:${port}` }).click();
+    const empty = sw.locator(".ui-empty", { hasText: "No site permissions yet" });
+    await empty.waitFor({ timeout: 5000 }).catch(() => {});
+    await sw.screenshot({ path: path.join(shots, "site-permissions-empty.png") });
+    check((await empty.count()) === 1 && JSON.stringify(keptNow()) === "{}", `Remove All forgets the site; the page says nothing is kept (${JSON.stringify(keptNow())})`);
+    await sw.close();
+    const askedAfterAll = await answerNext(`navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name)`, null);
+    check(askedAfterAll === "NotAllowedError" && JSON.stringify(keptNow()) === "{}", `after Remove All the site is asked again (${askedAfterAll})`);
     await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [browserWin.id, `http://localhost:${port}/`]);
     for (let i = 0; i < 40 && (await page("document.title").catch(() => null)) !== "E2E Page"; i++) await win.waitForTimeout(150);
   }
@@ -1150,7 +1197,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
   await sw.waitForSelector(".ui-split-pane .ui-list-row");
   const pages = await sw.locator(".ui-split-pane .ui-list-row-name").allTextContents();
-  check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "AI & Agents", "Magic Widgets", "Keyboard Shortcuts", "Updates & About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
+  check(["Appearance", "Windows", "Terminal", "Opening Files", "Notifications", "AI & Agents", "Magic Widgets", "Browser", "Keyboard Shortcuts", "Updates & About"].every((p) => pages.includes(p)), `settings has its pages (${pages.join(", ")})`);
 
   // AI & Agents: a row per provider, models only once it has a key. Keys typed here are
   // checked with the provider first; this one goes in as `cmd settings secret`
