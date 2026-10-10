@@ -131,8 +131,8 @@ describe("tools", () => {
     expect((await runTool("read", { why: "", path: ".env" }, ctx(dir))).isError).toBe(true);
     expect((await runTool("list", { why: "", path: "secret" }, ctx(dir))).isError).toBe(true);
     const list = await runTool("list", { why: "", path: "." }, ctx(dir));
-    expect(list.output).not.toContain("secret");
-    expect(list.output).not.toContain(".env");
+    expect(list.output).toContain("d  secret/ (private)");
+    expect(list.output).toContain("f  .env (private)");
     expect(list.output).toContain("f  a.txt  13");
   });
 
@@ -217,12 +217,14 @@ describe("cmd's own secrets (AR1-11-11)", () => {
     expect((await runTool("read", { why: "", path: path.join(widget, "data.ts") }, ctx(os.homedir()))).isError).toBe(false);
   });
 
-  it("list hides them in the state dir and refuses their folders", async () => {
+  it("list marks them private in the state dir and refuses their folders", async () => {
     const r = await runTool("list", { why: "", path: cmdHome }, ctx(widget));
     expect(r.isError).toBe(false);
     expect(r.output).toContain("d  widgets/");
     expect(r.output).toContain("d  runtime/");
-    for (const f of ["secrets.json", "remote", "settings.json", "cmd.sqlite", "data", "widget-secrets.json"]) expect(r.output).not.toContain(`  ${f}`);
+    for (const f of ["secrets.json", "settings.json", "cmd.sqlite", "widget-secrets.json"]) expect(r.output).toContain(`f  ${f} (private)`);
+    for (const f of ["remote", "data"]) expect(r.output).toContain(`d  ${f}/ (private)`);
+    expect(r.output).not.toContain("widgets/ (private)");
     expect((await runTool("list", { why: "", path: path.join(cmdHome, "remote") }, ctx(widget))).output).toMatch(/is private/);
     expect((await runTool("list", { why: "", path: "fixtures" }, ctx(widget))).isError).toBe(false);
   });

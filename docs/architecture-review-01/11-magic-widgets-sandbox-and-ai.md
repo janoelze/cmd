@@ -232,7 +232,8 @@ A Magic widget is a folder under `$CMD_HOME/widgets/<id>/` (`widgets/store.ts`, 
 
 **Success criteria.**
 - [x] A test: Magic's `read` tool on `$CMD_HOME/secrets.json` and `$CMD_HOME/remote/host.json` returns "private"; on a widget's `data.ts` it succeeds.
-- [x] The sandbox profile denies the same files (test where `sandbox-exec` is available).
+- [ ] The sandbox profile denies the same files (test where `sandbox-exec` is available).
+  live check pending: run `pnpm vitest run packages/core/test/magic.test.ts` outside Agent Safehouse
 - [x] `widgets.test.ts` (with Deno) still passes.
 
 Not issues here: API keys in `secrets.json` rather than the Keychain: see doc 03 (AR1-03-08). The renderer that hosts widget frames running unsandboxed: see doc 09 (AR1-09-07). The event log's policy table as a whole, and `ai` retention: see doc 06.

@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { classify, credentialsFor, expandPath, redact } from "./policy.ts";
-import { isPrivatePath } from "../paths-deny.ts";
+import { privateMatcher } from "../paths-deny.ts";
 import { execCommand, type SandboxMode } from "./sandbox.ts";
 import { preview } from "./sources.ts";
 
@@ -102,7 +102,7 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
       const p = str(input.path);
       if (!p) return err("path is required");
       const abs = resolvePath(p, ctx);
-      if (isPrivatePath(abs, ctx.deny, ctx.home, ctx.cwd)) return err(`${p} is private; it can't be read.`);
+      if (privateMatcher(ctx.deny, ctx.home, ctx.cwd)(abs)) return err(`${p} is private; it can't be read.`);
       let st: fs.Stats;
       try {
         st = fs.statSync(abs);
@@ -127,22 +127,23 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
     case "list": {
       const p = str(input.path) ?? ".";
       const abs = resolvePath(p, ctx);
-      if (isPrivatePath(abs, ctx.deny, ctx.home, ctx.cwd)) return err(`${p} is private; it can't be listed.`);
+      const isPrivate = privateMatcher(ctx.deny, ctx.home, ctx.cwd);
+      if (isPrivate(abs)) return err(`${p} is private; it can't be listed.`);
       let entries: fs.Dirent[];
       try {
         entries = fs.readdirSync(abs, { withFileTypes: true });
       } catch (e) {
         return err((e as Error).message);
       }
-      // Private entries (secrets.json in cmd's state dir) aren't shown at all.
+      // Private entries are named (so the model knows ~/.ssh exists) but marked, without a size.
       const rows = entries
-        .filter((d) => !isPrivatePath(path.join(abs, d.name), ctx.deny, ctx.home, ctx.cwd))
         .map((d) => {
+          const hidden = isPrivate(path.join(abs, d.name));
           let size = "";
           try {
-            if (d.isFile()) size = String(fs.statSync(path.join(abs, d.name)).size);
+            if (d.isFile() && !hidden) size = String(fs.statSync(path.join(abs, d.name)).size);
           } catch {}
-          return { name: d.name, dir: d.isDirectory(), line: `${d.isDirectory() ? "d" : d.isSymbolicLink() ? "l" : "f"}  ${d.name}${d.isDirectory() ? "/" : ""}${size ? `  ${size}` : ""}` };
+          return { name: d.name, dir: d.isDirectory(), line: `${d.isDirectory() ? "d" : d.isSymbolicLink() ? "l" : "f"}  ${d.name}${d.isDirectory() ? "/" : ""}${size ? `  ${size}` : ""}${hidden ? " (private)" : ""}` };
         })
         .sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : a.name.localeCompare(b.name)));
       const shown = rows.slice(0, 300).map((r) => r.line);

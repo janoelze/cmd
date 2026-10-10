@@ -169,15 +169,21 @@ export function realPathOf(p: string): string {
   }
 }
 
-/** Is `p` private, as written or as its real path (symlinks), against each denied path as written and real? */
-export function isPrivatePath(p: string, deny: readonly string[], home = os.homedir(), cwd = home): boolean {
-  const abs = path.resolve(cwd, expandPath(p, home));
+/**
+ * A predicate: is a path private, as written or as its real path (symlinks),
+ * against each denied path as written and real? The deny list is resolved once
+ * here, so build one per call and use it for every path (a folder's entries).
+ */
+export function privateMatcher(deny: readonly string[], home = os.homedir(), cwd = home): (p: string) => boolean {
   const all = deny.flatMap((d) => {
     const e = path.resolve(expandPath(d, home));
     const r = realPathOf(e);
     return r === e ? [e] : [e, r];
   });
-  return isDeniedPath(abs, all, home) || isDeniedPath(realPathOf(abs), all, home);
+  return (p) => {
+    const abs = path.resolve(cwd, expandPath(p, home));
+    return isDeniedPath(abs, all, home) || isDeniedPath(realPathOf(abs), all, home);
+  };
 }
 
 export function expandPath(p: string, home = os.homedir()): string {
