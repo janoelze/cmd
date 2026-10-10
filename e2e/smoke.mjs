@@ -1,6 +1,7 @@
 // Launches the built app against an isolated core, drives it through the real
 // menu bar, takes screenshots. usage: pnpm e2e
-// E2E_SCREEN=ci runs it as on CI's smaller screen (e2e/screen.mjs).
+// E2E_SCREEN=ci runs it as on CI's smaller screen (e2e/screen.mjs); E2E_CPU_THROTTLE=12
+// slows the app window's CPU that many times, as on CI's slow runner.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -51,6 +52,7 @@ const launch = async () => {
   });
   const win = await app.firstWindow();
   await fitScreen(app, win);
+  if (process.env.E2E_CPU_THROTTLE) await (await win.context().newCDPSession(win)).send("Emulation.setCPUThrottlingRate", { rate: +process.env.E2E_CPU_THROTTLE });
   win.on("pageerror", (e) => console.log("pageerror:", e.message));
   return { app, win };
 };
@@ -74,6 +76,14 @@ setInterval(async () => {
   await within(win.screenshot({ path: path.join(shots, "hung.png") })).catch(() => {});
   process.exit(1);
 }, 5000).unref();
+// Any failure (a check, a timeout) saves a screenshot of the moment first, so CI's artifact shows it.
+process.on("uncaughtException", async (e) => {
+  console.log(e?.stack ?? e);
+  console.log(`failed after: ${lastStep}; screenshot in ${path.join(shots, "failed.png")}`);
+  const shot = win?.screenshot({ path: path.join(shots, "failed.png") }).catch(() => {});
+  await Promise.race([shot, new Promise((r) => setTimeout(r, 5000))]);
+  process.exit(1);
+});
 
 /**
  * app.close() waits until Electron's stdout/stderr pipes close. On Windows the
@@ -110,6 +120,27 @@ const accel = (id) => app.evaluate(({ Menu }, id) => Menu.getApplicationMenu()?.
 const panes = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.length));
 // Layout and selection live in the shown workspace's view (docs/11-workspaces.md); these checks run in Home.
 const homeView = () => win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((s) => s.home).view));
+// Windows glide (TileMotion) on a clock that steps at most 34 ms a frame, so on a slow
+// machine (CI) a glide takes longer than its 0.38 s. Before measuring the board: wait
+// at least `min` ms (for the move to start), then until no window, scroll or sidebar
+// has moved for 200 ms, or 5 s have passed (the check then fails on what it reads).
+const still = async (min = 300) => {
+  await win.waitForTimeout(min);
+  const read = () => win.evaluate(() => JSON.stringify([
+    ...[...document.querySelectorAll(".windows-track > .tile, .dock-left, .dock-right")].map((e) => {
+      const r = e.getBoundingClientRect();
+      return [r.x, r.y, r.width, r.height].map(Math.round);
+    }),
+    Math.round(document.querySelector(".windows-scroller")?.scrollLeft ?? 0),
+  ]));
+  let last = await read();
+  for (let same = 0, t0 = Date.now(); same < 2 && Date.now() - t0 < 5000; ) {
+    await win.waitForTimeout(100);
+    const now = await read();
+    same = now === last ? same + 1 : 0;
+    last = now;
+  }
+};
 // Windows in visual order (reading order); the DOM keeps a stable creation order.
 const visualTiles = async () => {
   const ids = await win.locator(".windows-track > .tile:not([data-hidden])").evaluateAll((els) =>
@@ -270,7 +301,7 @@ check(order2[0] === order1[1] && order2[1] === order1[0], "dragging back swaps t
 await menu("file.newTerminal");
 await win.waitForTimeout(800);
 await menu("view.grid");
-await win.waitForTimeout(400);
+await still(400);
 const order3 = await panesOrder().then((o) => o ?? []);
 const vt = await visualTiles();
 const src = await vt[0].locator(".tile-title").boundingBox();
@@ -973,11 +1004,11 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.keyboard.press("Escape");
 
   await menu("view.strip");
-  await win.waitForTimeout(800);
+  await still(800);
   const offset = () => win.evaluate(() => document.querySelector(".windows-scroller").scrollLeft);
   const scrolls = async (loc, id) => {
     await win.evaluate((id) => window.__cmdSelect(id), id); // the strip reveals it
-    await win.waitForTimeout(700);
+    await still(700);
     const b = await loc.boundingBox();
     await win.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
     for (const dx of [60, -60]) {
@@ -1389,18 +1420,18 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   }
   await menu("view.strip");
   await win.waitForSelector(".main.mode-strip");
-  await win.waitForTimeout(500);
+  await still(500);
   const pane = await win.locator(".main.mode-strip").boundingBox();
   const tiles = win.locator(".windows-track > .tile");
   const n = await tiles.count();
   const heights = await tiles.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
-  check(n >= 4 && heights.every((h) => Math.abs(h - heights[0]) < 1 && h > pane.height - 40), `strip: ${n} windows, all full height`);
+  check(n >= 4 && heights.every((h) => Math.abs(h - heights[0]) < 1 && h > pane.height - 40), `strip: ${n} windows, all full height (${heights.map(Math.round).join(", ")} in a ${Math.round(pane.height)} pane)`);
   // The strip is a native scroller: its content sits at -scrollLeft.
   const trackX = () => win.locator(".windows-scroller").evaluate((e) => -e.scrollLeft);
 
   // keyboard: walk to the last window; it must end up fully visible
   for (let i = 0; i < n; i++) await menu("session.next");
-  await win.waitForTimeout(500);
+  await still(500);
   const sel = await win.locator(".windows-track > .tile.sel").boundingBox();
   check(sel && sel.x >= pane.x - 1 && sel.x + sel.width <= pane.x + pane.width + 1 && (await trackX()) < 0,
     "⌥⌘→ scrolls the strip to reveal the selected window");
@@ -1409,7 +1440,7 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   await win.mouse.move(pane.x + pane.width / 2, pane.y + pane.height / 2);
   const before = -(await trackX());
   await win.mouse.wheel(-37, 0);
-  await win.waitForTimeout(700);
+  await still(700);
   check(Math.abs(-(await trackX()) - (before - 37)) < 1, "horizontal scroll moves freely and stays put");
 
   // pagination: a dot per window, in strip order; a dot brings its window into view
@@ -1427,12 +1458,12 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   check((await win.locator(".strip-dots button").last().getAttribute("data-current")) === "true",
     "swiping on at the end of the strip makes the last dot current again, whatever is selected");
   await win.locator(".strip-dots button").first().click();
-  await win.waitForTimeout(700);
+  await still(700);
   check(Math.abs(await trackX()) < 1 && (await win.locator(".strip-dots button").first().getAttribute("data-current")) === "true",
     "clicking the first dot scrolls the strip to its start");
 
   // ⌘↩ into focus and back: the strip returns to exactly where it was
-  await win.waitForTimeout(300);
+  await still(300);
   const scrolled = await trackX();
   const selX = (await win.locator(".windows-track > .tile.sel").boundingBox()).x;
   await menu("view.toggleFocus");
@@ -1440,7 +1471,7 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   await win.waitForTimeout(500);
   await menu("view.toggleFocus");
   await win.waitForSelector(".main.mode-strip");
-  await win.waitForTimeout(600);
+  await still(600);
   const selX2 = (await win.locator(".windows-track > .tile.sel").boundingBox()).x;
   check(Math.abs((await trackX()) - scrolled) < 1 && Math.abs(selX2 - selX) < 1,
     `toggling focus returns the strip to its scroll position (${Math.round(scrolled)} → ${Math.round(await trackX())})`);
@@ -1455,7 +1486,7 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
       await app.evaluate(({ BrowserWindow }, w) => BrowserWindow.getAllWindows()[0].setSize(w, BrowserWindow.getAllWindows()[0].getSize()[1]), size[0] + dw);
       await win.waitForTimeout(250);
     }
-    await win.waitForTimeout(400);
+    await still(400);
     check((await trackX()) === 0, `resizing the window keeps the strip scrolled to the start (${Math.round(-(await trackX()))})`);
   }
 
@@ -1464,32 +1495,32 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   await win.waitForTimeout(500);
   const first = (await visualTiles())[0];
   await win.evaluate((id) => window.__cmdSelect(id), await first.getAttribute("data-pane"));
-  await win.waitForTimeout(500);
+  await still(500);
   const fb = await first.boundingBox();
   const handle = await first.locator('.strip-resize[data-edge="right"]').boundingBox();
   await win.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
   await win.mouse.down();
   await win.mouse.move(pane.x + pane.width - 2, handle.y + handle.height / 2, { steps: 8 });
   await win.mouse.up();
-  await win.waitForTimeout(400);
+  await still(400);
   const fb2 = await first.boundingBox();
   check(fb2.width > fb.width && fb2.width <= pane.width - 16 + 1, `resizing is capped at the pane width (${Math.round(fb.width)} → ${Math.round(fb2.width)})`);
   await menu("view.cycleWidth");
-  await win.waitForTimeout(400);
+  await still(400);
   const fb3 = await first.boundingBox();
   check(fb3.width < fb2.width, `⌃⌘R cycles width presets (${Math.round(fb2.width)} → ${Math.round(fb3.width)})`);
   // Every window has a left edge too: it grows the window leftwards (its right edge stays, the strip scrolls).
   {
     const second = (await visualTiles())[1];
     await win.evaluate((id) => window.__cmdSelect(id), await second.getAttribute("data-pane"));
-    await win.waitForTimeout(600);
+    await still(600);
     const b = await second.boundingBox();
     const h = await second.locator('.strip-resize[data-edge="left"]').boundingBox();
     await win.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
     await win.mouse.down();
     await win.mouse.move(h.x + h.width / 2 - 50, h.y + h.height / 2, { steps: 6 });
     await win.mouse.up();
-    await win.waitForTimeout(400);
+    await still(400);
     const b2 = await second.boundingBox();
     check(Math.abs(b2.x + b2.width - (b.x + b.width)) <= 1 && b2.width >= b.width + 45,
       `a window's left edge resizes it leftwards, its right edge staying put (${Math.round(b.width)} → ${Math.round(b2.width)})`);
@@ -1497,7 +1528,7 @@ check((await panes()) === 1, "⌘W closes an idle terminal");
   // drag a window along the strip: the others make room (insert-style)
   {
     await win.evaluate((id) => window.__cmdSelect(id), await (await visualTiles())[0].getAttribute("data-pane"));
-    await win.waitForTimeout(500);
+    await still(500);
     const vt = await visualTiles();
     const movedId = await vt[0].getAttribute("data-pane");
     const nextId = await vt[1].getAttribute("data-pane");
@@ -1553,11 +1584,11 @@ await win.waitForTimeout(800);
   await win.waitForTimeout(200);
   // Canvas: one canvas under the sidebars; fitting keeps the windows between them.
   await menu("view.canvas");
-  await win.waitForTimeout(400);
+  await still(400);
   const stage = await win.locator(".main.windows").boundingBox();
   const vw = await win.evaluate(() => window.innerWidth);
   await menu("view.canvasFit");
-  await win.waitForTimeout(500);
+  await still(500);
   const leftEdge = (await win.locator(".dock-left").boundingBox()).width;
   const rightEdge = (await win.locator(".dock-right").boundingBox()).x;
   const tiles = await win.locator(".windows-track > .tile").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => [r.left, r.right]));

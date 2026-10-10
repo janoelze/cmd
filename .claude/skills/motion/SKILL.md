@@ -28,7 +28,7 @@ pnpm build                        # it drives the built app
 node e2e/motion.mjs --label before --json            # every scenario, ~5 min
 node e2e/motion.mjs --only "palette,find"            # some (others still run, unmeasured, to keep the state)
 node e2e/motion.mjs --only "⌘↩" --dump --film         # raw frames + a video per scenario
-E2E_SCREEN=ci node e2e/motion.mjs                     # as on CI's smaller screen (1024 × 674, 1x); app window resizes past it are clamped
+E2E_SCREEN=ci node e2e/motion.mjs                     # as on CI's smaller screen (work area 1024 × 674, 1x); app window resizes past it are clamped
 ```
 
 - Run it in the background and write its output to a file in the scratchpad, then read the table. Piping it through `tail` shows nothing until the end.

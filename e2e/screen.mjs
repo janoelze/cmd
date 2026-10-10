@@ -1,12 +1,14 @@
 // E2E_SCREEN: run an e2e script as on another screen, so failures that only
 // happen on CI's smaller one reproduce on a laptop. `E2E_SCREEN=ci` is the
-// GitHub macOS runner (its smoke screenshots: the app window 1024 × 674 at 1x);
+// GitHub macOS runner: a 1024 × 768 display at 1x whose work area (1024 × 674)
+// macOS fits the 1400 × 900 app window into when it is shown;
 // `E2E_SCREEN=1280x800` or `1280x800@2` is any work area, @ the device scale.
 // Every app window is kept inside that area from the top left of the primary
 // display, as macOS keeps windows inside a real screen: placed and sized into
 // it at launch, and clamped again whenever one is created, resized or maximized.
-// Unset, nothing changes. Every run prints the real display and window, so
-// CI's log says what it ran on.
+// Unset, nothing changes. Every run prints the real display, and the window and
+// page once shown (sizes read before that are the requested ones), so CI's log
+// says what it ran on.
 
 const PRESETS = { ci: "1024x674@1" };
 
@@ -25,6 +27,16 @@ export const screenEnv = () => (e2eScreen?.scale ? { CMD_FORCE_SCALE: String(e2e
 /** After launch: print the display and window, and fit every window to E2E_SCREEN if set. */
 export async function fitScreen(app, win) {
   await win.waitForLoadState("domcontentloaded").catch(() => {});
+  // Windows are created hidden and shown at ready-to-show; macOS fits a window into
+  // the screen only then, so read the bounds after that (before it, CI's 1400 x 900
+  // window still reads 1400 x 900, partly off a 1024 x 768 display).
+  await app
+    .evaluate(({ BrowserWindow }) => new Promise((resolve) => {
+      const t0 = Date.now();
+      const poll = () => (BrowserWindow.getAllWindows()[0]?.isVisible() || Date.now() - t0 > 10_000 ? setTimeout(resolve, 100) : setTimeout(poll, 50));
+      poll();
+    }))
+    .catch(() => {});
   const info = await app.evaluate(({ app, BrowserWindow, screen }, s) => {
     const d = screen.getPrimaryDisplay();
     if (s) {
@@ -48,9 +60,10 @@ export async function fitScreen(app, win) {
     const w = BrowserWindow.getAllWindows()[0];
     return { size: d.size, workArea: d.workArea, scaleFactor: d.scaleFactor, window: w?.getBounds(), content: w?.getContentBounds() };
   }, e2eScreen);
+  const page = await win.evaluate(() => ({ width: innerWidth, height: innerHeight })).catch(() => null);
   const r = (b) => (b ? `${b.width}x${b.height}${b.x !== undefined ? ` at ${b.x},${b.y}` : ""}` : "none");
   console.log(
-    `screen: display ${r(info.size)} @${info.scaleFactor}x, work area ${r(info.workArea)}, window ${r(info.window)}, content ${r(info.content)}` +
+    `screen: display ${r(info.size)} @${info.scaleFactor}x, work area ${r(info.workArea)}, window ${r(info.window)}, content ${r(info.content)}, page ${r(page)}` +
       (e2eScreen ? ` (E2E_SCREEN=${process.env.E2E_SCREEN})` : ""),
   );
   return info;
