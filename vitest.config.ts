@@ -8,7 +8,7 @@
 import { defineConfig } from "vitest/config";
 import { SYSTEM_TIMEOUT } from "./test/system.ts";
 
-const ALL = ["packages/*/test/**/*.test.ts", "apps/*/test/**/*.test.ts", "website/test/**/*.test.ts"];
+const ALL = ["packages/*/test/**/*.test.ts", "apps/*/test/**/*.test.ts", "website/test/**/*.test.ts", "e2e/test/**/*.test.ts"];
 const SYSTEM = [
   "core",
   "deno-install",

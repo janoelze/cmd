@@ -124,9 +124,14 @@ const step = (s) => {
   lastStep = s;
   lastAt = Date.now();
 };
-// A wait that runs out its deadline in a passing run is time lost on every run (its condition
-// can never hold, or holds another way): say so, with the step it came after.
-const waitedOut = (what, t0) => console.log(`  [waited out ${((Date.now() - t0) / 1000).toFixed(1)} s] ${what} after: ${lastStep}`);
+// A wait that runs out its deadline is time lost on every run, even when the check after it
+// passes (its condition can never hold, or holds another way): say so, and fail the run.
+let current = "(outside a scenario)";
+const waitedOut = (what, t0) => {
+  const line = `waited out ${((Date.now() - t0) / 1000).toFixed(1)} s for ${what} after: ${lastStep}`;
+  console.log(`  [${line}]`);
+  failures.push({ scenario: current, error: `${line} (fix the wait, docs/41-testing.md)` });
+};
 const expired = (what) => { const t0 = Date.now(); return () => waitedOut(what, t0); };
 const HANG_MS = 90_000;
 let hangs = 0;
@@ -265,6 +270,7 @@ async function scenario(name, fn) {
     return void outcome.set(name, "skipped");
   }
   console.log(`\n# ${name}`);
+  current = name;
   step(`scenario ${name}`);
   try {
     await Promise.race([fn(), new Promise((_, reject) => (abortScenario = reject))]);
@@ -274,9 +280,9 @@ async function scenario(name, fn) {
     const error = String(e?.message ?? e);
     failures.push({ scenario: name, error: error.split("\n")[0] });
     console.log(`FAILED in ${name}: ${e?.stack ?? e}`);
-    const shot = path.join(shots, `failed-${name}.png`);
-    await Promise.race([win.screenshot({ path: shot }).catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
-    console.log(`after: ${lastStep}; screenshot in ${shot}`);
+    const failedShot = path.join(shots, `failed-${name}.png`);
+    await Promise.race([win.screenshot({ path: failedShot }).catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
+    console.log(`after: ${lastStep}; screenshot in ${failedShot}`);
     await recover();
   } finally {
     abortScenario = null;
@@ -357,7 +363,7 @@ const still = async (min = 300) => {
   ])));
   let last = await read();
   for (let same = 0; same < 2 && Date.now() - t0 < 5000; ) {
-    await win.waitForTimeout(motion ? 100 : 30);
+    await win.waitForTimeout(motion ? 100 : 30); // between two reads of the board (a poll)
     const now = await read();
     same = now === last ? same + 1 : 0;
     last = now;
@@ -372,7 +378,7 @@ const until = async (read, ok = Boolean, ms = 10_000) => {
     const v = await read();
     if (await ok(v)) return v;
     if (Date.now() - t0 > ms) return void waitedOut(`until(${String(ok).slice(0, 80)})`, t0), v;
-    await win.waitForTimeout(25);
+    await win.waitForTimeout(25); // between two reads (a poll)
   }
 };
 const countOf = (sel) => win.locator(sel).count();
@@ -552,7 +558,7 @@ await still();
 const order1 = await until(panesOrder, (o) => Array.isArray(o) && JSON.stringify(o) !== JSON.stringify(order0));
 check(Array.isArray(order1) && order1.length === 2, `a tile flicked onto another (move and release in one frame) reorders the grid (${JSON.stringify(order1?.map((x) => x.slice(0, 4)))})`);
 // Let the windows glide into their new places first: mid-animation, positions (and so the drag target) are stale.
-await win.waitForFunction(() => !document.querySelector(".tile[data-morphing], .tile.lifted"), null, { timeout: 10_000 }).catch(() => {});
+await win.waitForFunction(() => !document.querySelector(".tile[data-morphing], .tile.lifted"), null, { timeout: 10_000 }).catch(expired("windows done gliding"));
 await still(400);
 // The order is saved debounced: wait for it to change rather than a fixed time (slow CI runners).
 // A drag that lands while a tile still glides can miss its target: take fresh positions and drag again.
@@ -1326,7 +1332,7 @@ await scenario("embedded", async () => {
     await win.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
     for (const dx of [60, -60]) {
       const before = await offset();
-      for (let i = 0; i < 3; i++) await win.mouse.wheel(dx, 0), await win.waitForTimeout(16);
+      for (let i = 0; i < 3; i++) await win.mouse.wheel(dx, 0), await win.waitForTimeout(16); // a frame between wheel events, as a trackpad sends them
       // The page forwards the wheel to the strip by IPC: on a slow runner it lands later.
       const moved = (await until(offset, (o) => o !== before, 1500)) !== before;
       await still(300); // let it snap back to a window

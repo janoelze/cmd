@@ -390,6 +390,18 @@ a failure, and CI's runner needed the 10 s), and a warm app over CDP. The remain
 are about 1 s each and real work: the memory sampler's tick, Restart Core, a deliberate
 1 s "nothing else closed" check.
 
+### Guards against slow patterns
+
+`e2e/test/patterns.test.ts` (vitest, `unit` project) reads the e2e scripts and fails on what
+cost time today: a fixed wait over a script's budget (the counts are locked in, like
+`design-debt.json`), a fixed wait in the smoke test without a reason on its line or the one
+before, a `waitFor…(…).catch(() => {})` that turns a deadline into a silent pass, a screenshot
+outside `shot()` or a failure, an app launched without `CMD_BACKGROUND`, a UI state key the
+smoke test reads that no app source writes (the `sidebar.collapsed` case), and an `e2e*`
+package script that rebuilds every time. At run time, a wait that runs out its deadline
+(`until()`, or `expired()` on a locator) prints `[waited out]` and fails the run even when the
+check after it passes: its condition can never hold, so every run pays the deadline.
+
 ## Open
 
 - **The intermittent OSC 8 link check** (`an OSC 8 http link opens in a browser window`,
