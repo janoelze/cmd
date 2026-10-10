@@ -2,6 +2,29 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.24.0 — 2026-10-10
+
+Reach your Mac directly over Tailscale, and decide what websites may use.
+
+### New
+
+- **Direct remote access.** Phones can reach your Mac through Tailscale or your own URL instead of the hosted relay. Settings → Remote Access walks you through it.
+- **Site permissions.** Websites in browser windows ask before using your camera, microphone, location or notifications. Review and remove your answers in Settings → Browser.
+
+### Improved
+
+- Spaces are now called workspaces, and the workspace menu and ⌘O list them by recent activity.
+- Windows, Settings and widgets share one refreshed design, and sheets fade out when they close.
+- Links to other apps or scripts ask before they open.
+- Magic widgets reach the internet and your files only as far as you allow.
+- The Files window shows hidden files and sorts by any column.
+
+### Fixed
+
+- A window that runs into an error shows a message in its place instead of blanking the app.
+- A change made right after you open a folder now shows up.
+- Search no longer slows cmd down while it rebuilds its index.
+
 ## 0.23.0 — 2026-10-09
 
 Workspace Actions run your project in one click, and every Space can have its own window.
