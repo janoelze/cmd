@@ -5,33 +5,26 @@
   },
   "apps/desktop/src/renderer/src/components/library.css": {
     "color": 2,
-    "fontSize": 1,
-    "spacing": 5
+    "fontSize": 1
   },
   "apps/desktop/src/renderer/src/pdf/pdf.css": {
     "color": 1
   },
   "apps/desktop/src/renderer/src/styles.css": {
-    "fontSize": 7,
-    "radius": 5,
-    "spacing": 12
+    "fontSize": 1,
+    "radius": 2
   },
   "apps/desktop/src/renderer/src/workbench/workbench.css": {
     "spacing": 2
   },
   "packages/ui/src/components.css": {
     "color": 5,
-    "fontSize": 13,
-    "radius": 8,
-    "spacing": 61
+    "fontSize": 2,
+    "radius": 7,
+    "spacing": 1
   },
   "packages/ui/src/frame.css": {
     "color": 4,
     "radius": 1
-  },
-  "packages/ui/src/tooltips.css": {
-    "fontSize": 3,
-    "radius": 1,
-    "spacing": 3
   }
 }

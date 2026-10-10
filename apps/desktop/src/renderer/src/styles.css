@@ -32,7 +32,7 @@ body {
 }
 
 kbd {
-  font: 11px var(--font-ui);
+  font: var(--text-xs) var(--font-ui);
   color: var(--text-dim);
 }
 
@@ -142,7 +142,7 @@ kbd {
   align-items: center;
   gap: var(--space-lg);
   min-height: var(--statusbar-h);
-  padding: 3px var(--space-sm) 3px var(--space-xl);
+  padding: var(--space-2xs) var(--space-sm) var(--space-2xs) var(--space-xl);
   background: var(--bg-sidebar);
   /* separator as an inset shadow: no layout space, so content centres exactly */
   box-shadow: inset 0 1px 0 var(--separator);
@@ -235,7 +235,7 @@ kbd {
   text-align: left;
   background: none;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   cursor: default;
   -webkit-app-region: no-drag;
 }
@@ -359,7 +359,7 @@ kbd {
   animation: shortcut-tip ease-in-out both;
 }
 /* A plain filled key, roomier than the kit's outlined one. */
-.shortcut-tip .ui-kbd { padding: var(--space-xs) 7px; background: var(--bg-selected); box-shadow: none; }
+.shortcut-tip .ui-kbd { padding: var(--space-xs) var(--space-sm); background: var(--bg-selected); box-shadow: none; }
 @keyframes shortcut-tip { 0%, 100% { opacity: 0; } 11.25%, 88.75% { opacity: 0.6; } }
 @media (prefers-reduced-motion: reduce) { .shortcut-tip { animation: none; } }
 
@@ -385,8 +385,8 @@ kbd {
   overflow: hidden;
 }
 .palette-input {
-  padding: 14px var(--space-xl);
-  font: 16px var(--font-ui);
+  padding: var(--space-lg) var(--space-xl);
+  font: var(--text-lg) var(--font-ui);
   color: var(--text);
   background: transparent;
   border: 0;
@@ -400,13 +400,13 @@ kbd {
 .palette-list li {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius);
 }
 .palette-list li.on { background: var(--accent); color: var(--on-accent); }
 .palette-list li.on .palette-group, .palette-list li.on kbd { color: color-mix(in srgb, var(--on-accent) 75%, transparent); }
-.palette-group { flex: none; width: 70px; font: 500 11px var(--font-ui); color: var(--text-dim); }
+.palette-group { flex: none; width: 70px; font: 500 var(--text-xs) var(--font-ui); color: var(--text-dim); }
 .palette-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A fixed slot: symbols load after the row draws, and some are wider than tall (person.2). */
 .palette-icon { flex: none; width: 16px; display: inline-flex; justify-content: center; color: var(--text-dim); }
@@ -414,9 +414,9 @@ kbd {
 .palette-empty { color: var(--text-dim); }
 .palette-foot {
   display: flex;
-  gap: 14px;
-  padding: 7px 14px;
-  font-size: 11px;
+  gap: var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--text-xs);
   color: var(--text-dim);
   border-top: 1px solid var(--separator);
 }
@@ -577,7 +577,7 @@ kbd {
   height: 30px;
   box-sizing: border-box;
   border: 1px solid var(--window-edge);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background:
     linear-gradient(var(--grip), var(--grip)) 2px 50% / 1px 12px no-repeat,
     linear-gradient(var(--grip), var(--grip)) 5px 50% / 1px 12px no-repeat,
@@ -609,16 +609,16 @@ kbd {
 /* Session search results in the palette */
 .palette.searching { width: min(760px, calc(100vw - 32px)); }
 /* A kind's name over its results in a search (Files, Commands…), like the Navigator's section names. */
-.palette-heading { padding: var(--space-md) 10px 3px; font: 600 var(--text-xs) var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
+.palette-heading { padding: var(--space-md) var(--space-md) var(--space-2xs); font: 600 var(--text-xs) var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
 .palette-heading:first-child { padding-top: var(--space-2xs); }
 .palette-list li.rich .palette-icon { margin-top: 1px; }
-.palette-list li.rich { align-items: flex-start; padding: var(--space-md) 10px; }
+.palette-list li.rich { align-items: flex-start; padding: var(--space-md) var(--space-md); }
 .palette-hit { flex: 1; min-width: 0; }
-.palette-hit-top { display: flex; align-items: baseline; gap: 10px; }
+.palette-hit-top { display: flex; align-items: baseline; gap: var(--space-md); }
 .palette-hit-top .palette-label { font-weight: 500; }
-.palette-meta { flex: none; margin-left: auto; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.palette-meta { flex: none; margin-left: auto; font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; }
 .palette-snippet {
-  margin-top: 3px;
+  margin-top: var(--space-2xs);
   font-size: var(--text-sm);
   color: var(--text-dim);
   white-space: nowrap;
@@ -840,14 +840,14 @@ kbd {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-sm);
   height: 26px;
   padding: 0 var(--space-md);
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text);
-  font: 600 14px var(--font-ui);
+  font: 600 var(--text-base) var(--font-ui);
   text-align: left;
   transition: background-color var(--dur) var(--ease);
 }
