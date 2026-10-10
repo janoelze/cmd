@@ -3,7 +3,7 @@
 // drags with real file paths, like a drag from Finder) onto terminals, file
 // browsers and other windows; and drags out of rows and title icons (the main
 // process's startDrag is stubbed: a native drag session can't be scripted).
-// usage: pnpm e2e:drops
+// usage: pnpm e2e:drops (E2E_SCREEN=ci: as on CI's smaller screen, e2e/screen.mjs)
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";

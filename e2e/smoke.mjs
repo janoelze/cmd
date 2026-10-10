@@ -1,5 +1,6 @@
 // Launches the built app against an isolated core, drives it through the real
 // menu bar, takes screenshots. usage: pnpm e2e
+// E2E_SCREEN=ci runs it as on CI's smaller screen (e2e/screen.mjs).
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";

@@ -23,6 +23,7 @@
 // --dump saves every scenario's raw frames to .cmd-dev/motion/frames-<scenario>.json.
 // --film saves a screencast per scenario to .cmd-dev/motion/<scenario>.mp4 (needs ffmpeg).
 // Results are appended to .cmd-dev/motion/results.jsonl.
+// E2E_SCREEN=ci plays it as on CI's smaller screen (e2e/screen.mjs): resizes beyond it are clamped.
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
