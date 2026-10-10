@@ -101,7 +101,7 @@ try {
   await win.waitForSelector(".statusbar .remote-indicator.asking");
   check(true, "the indicator pulses while a device waits");
   await settings.waitForSelector(".rm-card .pair-prompt");
-  const shown = await settings.locator(".rm-card .pair-words span").allInnerTexts();
+  const shown = await settings.locator('.ui-form-section .ui-badge[data-tone="accent"]').allInnerTexts();
   check(shown.join(" ") === words.join(" "), `Settings asks, with the phone's words (${shown.join(" ")})`);
   await win.waitForSelector(".pair-sheet");
   check(true, "the main window asks too");

@@ -287,6 +287,7 @@ kbd {
 .row-hover { display: none; align-items: center; gap: 4px; }
 .row:hover .row-hover { display: flex; }
 .row:hover .row-end .chip { display: none; }
+.row-end .ui-live-badge { margin: 0 var(--space-xs) 0 0; }
 .row-key { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 
 .chip {
@@ -1029,43 +1030,6 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .workspace-trigger, .workspace-menu { transition: none; animation: none; }
 }
-
-/* ── remote access (components/Remote.tsx, PairPrompt.tsx) ── */
-
-.ui-icon-button.remote-indicator.connected, .ui-icon-button.remote-indicator.asking { color: var(--accent); }
-.ui-icon-button.remote-indicator.error { color: var(--state-needs); }
-.ui-icon-button.remote-indicator.asking .sf { animation: remote-ask 1.2s var(--ease) infinite alternate; }
-@keyframes remote-ask { from { opacity: 1; } to { opacity: 0.35; } }
-
-.remote-popover { padding: 6px; font-size: 12px; }
-.remote-pop-head { padding: 4px 8px 6px; font: 600 11px var(--font-ui); color: var(--text-dim); }
-.remote-pop-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius); }
-.remote-pop-row > .sf { color: var(--text-dim); }
-.remote-pop-text { flex: 1; min-width: 0; }
-.remote-pop-dim { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.remote-pop-foot { display: flex; gap: 6px; padding: 8px 8px 4px; margin-top: 4px; border-top: 1px solid var(--separator); }
-.remote-pop-spacer { flex: 1; }
-
-.remote-tip { min-width: 220px; }
-.remote-tip-row { display: flex; gap: 8px; padding: 3px 0; }
-.remote-tip-row > .sf { flex: none; margin-top: 2px; color: var(--text-dim); }
-.remote-tip-row > span { min-width: 0; }
-.remote-tip-row .tip-dim { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.remote-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: var(--accent); font-size: 11px; white-space: nowrap; }
-.remote-badge.typed span { animation: remote-typed 4s var(--ease) forwards; }
-.row-end .remote-badge { margin: 0 4px 0 0; }
-@keyframes remote-typed { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
-
-.pair-prompt { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 22px 16px; text-align: center; outline: none; }
-.pair-icon { color: var(--accent); margin-bottom: 4px; }
-.pair-title { font: 600 15px var(--font-ui); color: var(--text); }
-.pair-sub { color: var(--text-dim); font-size: 12px; }
-.pair-words { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 4px 0 6px; }
-.pair-words span { font: 600 15px var(--font-ui); padding: 5px 10px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--text); }
-.pair-note { max-width: 380px; color: var(--text-dim); font-size: 11.5px; line-height: 1.45; }
-.pair-foot { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 10px; }
-.pair-expiry { flex: 1; text-align: left; color: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
 
 /* A phone sizes this terminal (TerminalView, docs/13): say so, and offer it back. */
 .term-sized.ui-toast { position: absolute; right: 10px; bottom: 10px; z-index: 3; }

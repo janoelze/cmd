@@ -438,8 +438,8 @@ export function Dialog({
   scrim?: boolean;
   /** Lines under the title and above the actions, like the palette's: for content that scrolls between them. */
   divided?: boolean;
-  /** Dressed as one of the app's windows: a title bar with its icon and name (and a title, larger, under it if given). `close: false` leaves out its close button. */
-  window?: { icon?: string | ReactNode; name: string; close?: boolean };
+  /** Dressed as one of the app's windows: a title bar with its icon and name (and a title, larger, under it if given). `close: false` leaves out its close button; `status` sits at its right. */
+  window?: { icon?: string | ReactNode; name: string; close?: boolean; /** Dim, at the bar's right: how long something has left. */ status?: ReactNode };
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
@@ -496,6 +496,7 @@ export function Dialog({
       <div ref={ref} className={cls("ui-dialog", className)} data-motion="pop" data-closing={closing || undefined} data-divided={divided || undefined} data-window={win ? true : undefined} role="dialog" aria-modal aria-label={label ?? (typeof title === "string" ? title : win?.name)} tabIndex={-1} style={{ width, height }}>
         {win && (
           <WindowBar icon={win.icon} name={win.name}>
+            {win.status != null && <span className="ui-window-bar-meta">{win.status}</span>}
             {dismissable && win.close !== false && <IconButton icon="xmark" size="sm" label="Close" onClick={onClose} />}
           </WindowBar>
         )}

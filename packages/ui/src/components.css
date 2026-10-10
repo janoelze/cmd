@@ -114,6 +114,10 @@
 .ui-icon-button:hover:not(:disabled) { color: var(--text); background: var(--bg-hover); }
 .ui-icon-button:active:not(:disabled), .ui-icon-button[aria-pressed="true"] { color: var(--text); background: var(--bg-selected); }
 .ui-icon-button:disabled { opacity: 0.35; }
+.ui-icon-button[data-tone="accent"] { color: var(--accent); }
+.ui-icon-button[data-tone="needs"] { color: var(--state-needs); }
+.ui-icon-button[data-pulse] > * { animation: ui-pulse 1.2s var(--ease) infinite alternate; }
+@keyframes ui-pulse { from { opacity: 1; } to { opacity: 0.35; } }
 .ui-icon-button[data-variant="default"] { --h: var(--control-h); min-width: var(--h); padding: 0; border-radius: var(--radius); color: var(--text-dim); background: var(--control-bg); box-shadow: inset 0 0 0 1px var(--control-edge); }
 .ui-icon-button[data-variant="default"]:hover:not(:disabled) { background: var(--control-hover); }
 /* Small and filled (bars): one segment of a small Segmented, the same height, corners,
@@ -554,6 +558,10 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 }
 .ui-badge[data-tone="neutral"] { color: var(--text-dim); background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .ui-badge[data-size="sm"] { min-width: 14px; height: 14px; padding: 0 4px; font-size: var(--text-2xs); font-weight: 600; border-radius: 7px; }
+/* LiveBadge: a device on a window; its note fades out after a moment. */
+.ui-live-badge { display: inline-flex; align-items: center; gap: var(--space-xs); margin-left: var(--space-sm); font-size: var(--text-xs); color: var(--accent); white-space: nowrap; }
+.ui-live-badge-note { animation: ui-live-note var(--dur-note) var(--ease) forwards; }
+@keyframes ui-live-note { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
 .ui-badge[data-solid] { color: var(--on-accent); background: var(--tone); }
 
 .ui-kbd {
@@ -1133,6 +1141,9 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
 .ui-dialog[data-window] { background: var(--window-bg); }
 .ui-dialog .ui-window-bar { padding-right: 4px; color: var(--text); }
 .ui-dialog .ui-window-bar-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Without a close button the bar ends at its own padding, as it starts. */
+.ui-dialog .ui-window-bar:not(:has(.ui-icon-button)) { padding-right: var(--space-lg); }
+.ui-dialog .ui-window-bar-meta { font-variant-numeric: tabular-nums; }
 .ui-dialog[data-window] .ui-dialog-head { padding: 18px var(--dialog-pad) 0; }
 .ui-dialog[data-window] .ui-dialog-title { font: 600 var(--text-xl) / 1.25 var(--font-ui); letter-spacing: -0.01em; }
 .ui-dialog[data-window][data-divided] .ui-dialog-head { padding: 18px var(--dialog-pad) 14px; }

@@ -41,6 +41,14 @@
         "value": 240,
         "unit": "ms"
       }
+    },
+    "note": {
+      "$description": "How long a passing note stays before it has faded out (LiveBadge's \"typed from iPhone\"). Not a motion: reduced motion keeps it.",
+      "$type": "duration",
+      "$value": {
+        "value": 4000,
+        "unit": "ms"
+      }
     }
   },
   "glide": {

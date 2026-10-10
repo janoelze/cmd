@@ -166,6 +166,8 @@
   --dur-fast: 120ms;
   --dur: 150ms;
   --dur-slow: 240ms;
+  /* How long a passing note stays before it has faded out (LiveBadge's "typed from iPhone"). Not a motion: reduced motion keeps it. */
+  --dur-note: 4000ms;
   /* Moving a window or a view: a critically damped spring (no bounce) sampled for CSS, the curve the app's TileMotion runs in JS (apps/desktop motion.ts, GLIDE_MS). */
   --glide: linear(0 0%, 0.0016 0.6%, 0.0134 1.9%, 0.0442 3.6%, 0.0979 5.7%, 0.1735 8.1%, 0.2659 10.9%, 0.368 13.9%, 0.4724 17.2%, 0.5724 20.8%, 0.6633 24.6%, 0.742 28.7%, 0.8075 33%, 0.86 37.5%, 0.9006 42.2%, 0.9311 47.1%, 0.9533 52.3%, 0.969 57.6%, 0.9799 63.1%, 0.9872 68.8%, 0.992 74.7%, 0.9951 80.8%, 0.9971 87%, 0.9983 93.4%, 1 100%);
   --glide-dur: 382ms;

@@ -68,10 +68,14 @@ export interface IconButtonProps extends Native {
   /** On (a panel that is shown, a mode that is active). */
   pressed?: boolean;
   iconSize?: number;
+  /** Its icon in a tone: accent (something is on, a device is connected), needs (it needs a look). */
+  tone?: "accent" | "needs";
+  /** The icon pulses: something waits for an answer. */
+  pulse?: boolean;
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon, label, shortcut, size = "md", variant = "ghost", pressed, iconSize, className, ...rest },
+  { icon, label, shortcut, size = "md", variant = "ghost", pressed, iconSize, tone, pulse, className, ...rest },
   ref,
 ) {
   return (
@@ -79,6 +83,8 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       ref={ref}
       type="button"
       className={cls("ui-icon-button", className)}
+      data-tone={tone}
+      data-pulse={pulse || undefined}
       data-variant={variant}
       data-size={size}
       aria-label={label}

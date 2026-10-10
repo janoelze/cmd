@@ -3,6 +3,7 @@
 // ProgressRing (a small determinate ring) and PageDots (pagination).
 
 import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { ICON, iconNode } from "./icon.tsx";
 
 export type Tone = "neutral" | "accent" | "success" | "warning" | "danger";
 
@@ -109,6 +110,19 @@ export function ProgressRing({ value, size = 14, label }: { value: number; size?
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />
     </svg>
+  );
+}
+
+/**
+ * Something live on a window: a device watching it (an icon in the accent), and for a
+ * moment a note of what it did ("typed from iPhone"), which fades out. Beside a title.
+ */
+export function LiveBadge({ icon, note, tip }: { icon: string; note?: ReactNode; tip?: string }) {
+  return (
+    <span className="ui-live-badge" data-tip={tip}>
+      {iconNode(icon, ICON.small)}
+      {note && <span className="ui-live-badge-note">{note}</span>}
+    </span>
   );
 }
 
