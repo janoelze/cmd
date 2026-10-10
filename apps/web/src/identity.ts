@@ -1,10 +1,14 @@
 // This browser's pairing with one Mac, kept in IndexedDB: the device's X25519
-// key as a non-extractable CryptoKey (script can use it, never read it), the
-// Mac's public key, and where to reach it. Nothing secret is ever in a URL
-// after pairing. Pairings saved before direct modes keep the socket as `relay`;
-// loading reads it as `socket`, so those phones stay paired.
+// key wrapped by a non-extractable AES key, the Mac's public key, and where to
+// reach it. WebKit stores an X25519 CryptoKey but reads it back as null (the
+// whole record), so the key is kept wrapped and unwrapped non-extractable on
+// load. Nothing secret is ever in a URL after pairing. Pairings saved before
+// direct modes keep the socket as `relay`; loading reads it as `socket`, and
+// ones saved with the bare CryptoKey (Chromium) still load.
 
 import type { KeyPair } from "@cmd/remote-crypto";
+
+const subtle = globalThis.crypto.subtle;
 
 export interface Identity {
   device: KeyPair;
@@ -37,13 +41,41 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
   });
 }
 
-export const loadIdentity = () =>
-  tx<(Omit<Identity, "socket"> & { socket?: string; relay?: string }) | undefined>("readonly", (s) => s.get(KEY)).then((d): Identity | undefined => {
-    if (!d) return undefined;
-    const { relay, socket, ...rest } = d;
-    return { ...rest, socket: socket ?? relay ?? "" };
-  });
-export const saveIdentity = (id: Identity) => tx("readwrite", (s) => s.put(id, KEY)).then(() => {});
+/** As stored: the device key wrapped (`wrapped` under `wrapKey`), or a bare CryptoKey from before. */
+interface Stored extends Omit<Identity, "device" | "socket"> {
+  socket?: string;
+  relay?: string;
+  device?: KeyPair;
+  wrapKey?: CryptoKey;
+  iv?: Uint8Array<ArrayBuffer>;
+  wrapped?: Uint8Array<ArrayBuffer>;
+  publicKey?: Uint8Array<ArrayBuffer>;
+}
+
+const AES = (iv: Uint8Array<ArrayBuffer>) => ({ name: "AES-GCM", iv });
+
+export async function loadIdentity(): Promise<Identity | undefined> {
+  const d = await tx<Stored | undefined>("readonly", (s) => s.get(KEY));
+  if (!d) return undefined;
+  const { relay, socket, device, wrapKey, iv, wrapped, publicKey, ...rest } = d;
+  let kp = device;
+  if (wrapKey && iv && wrapped && publicKey) {
+    const privateKey = await subtle.unwrapKey("pkcs8", wrapped, wrapKey, AES(iv), { name: "X25519" }, false, ["deriveBits"]);
+    kp = { privateKey, publicKey };
+  }
+  if (!kp) return undefined;
+  return { ...rest, device: kp, socket: socket ?? relay ?? "" };
+}
+
+/** Saves a pairing; the device key must be extractable (it is wrapped, never stored readable). */
+export async function saveIdentity(id: Identity): Promise<void> {
+  const { device, ...rest } = id;
+  const wrapKey = await subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["wrapKey", "unwrapKey"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const wrapped = new Uint8Array(await subtle.wrapKey("pkcs8", device.privateKey, wrapKey, AES(iv)));
+  const stored: Stored = { ...rest, wrapKey, iv, wrapped, publicKey: device.publicKey };
+  await tx("readwrite", (s) => s.put(stored, KEY));
+}
 export const forgetIdentity = () => tx("readwrite", (s) => s.delete(KEY)).then(() => {});
 
 /** What the Mac shows in its approval sheet. */
