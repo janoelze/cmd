@@ -27,9 +27,12 @@ import { onFsChanged, useStoreValue } from "../store.ts";
 import { registerWindowActions, setWindowStatus } from "../windowActions.ts";
 import { syntax } from "../editor/syntax.ts";
 import { appTheme, minimalChange } from "../editor/theme.ts";
+import { diskChange } from "../editor/disk.ts";
 import { editorFindable, findPanel } from "../editor/find.ts";
 import { shareFindQuery, useFind } from "../find.tsx";
 import { useTheme } from "@cmd/ui/themes";
+
+type ReadResult = { text: string; size: number; mtime: number; truncated: boolean; binary: boolean };
 
 export function TextView({ win, focused }: { win: AppWindow; focused: boolean }) {
   const file = typeof win.state.path === "string" ? win.state.path : "";
@@ -112,27 +115,31 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
     });
   }, [settings, dark]);
 
-  /** Load the file; merges into the buffer as a minimal change. */
+  /** Show what was read: merged into the buffer as a minimal change (cursor and scroll survive). */
+  const apply = useCallback((r: ReadResult) => {
+    const v = view.current;
+    if (!v) return;
+    meta.current = r;
+    setError(null);
+    const change = minimalChange(v.state.doc.toString(), r.text);
+    if (change) v.dispatch({ changes: change });
+    saved.current = v.state.doc;
+    setDirty(false);
+    setConflict(false);
+    setLines(v.state.doc.lines);
+    setLoaded(true);
+    v.dispatch({ effects: comps.current.readOnly.reconfigure(EditorState.readOnly.of(r.truncated || r.binary)) });
+  }, []);
+
+  /** Load the file. */
   const load = useCallback(async () => {
     if (!file) return;
     try {
-      const r = await cmd.call("fs.read", { path: file });
-      const v = view.current;
-      if (!v) return;
-      meta.current = r;
-      setError(null);
-      const change = minimalChange(v.state.doc.toString(), r.text);
-      if (change) v.dispatch({ changes: change });
-      saved.current = v.state.doc;
-      setDirty(false);
-      setConflict(false);
-      setLines(v.state.doc.lines);
-      setLoaded(true);
-      v.dispatch({ effects: comps.current.readOnly.reconfigure(EditorState.readOnly.of(r.truncated || r.binary)) });
+      apply(await cmd.call("fs.read", { path: file }));
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [file]);
+  }, [file, apply]);
   useEffect(() => void load(), [load]);
 
   // Live: watch the file; reload when clean, ask when there are unsaved edits.
@@ -142,11 +149,17 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
     const off = onFsChanged((p) => {
       if (p !== file) return;
       // Gone (deleted, moved away): the window keeps its text, to save again.
+      // Every event reads after it, and the core answers in order: the last read is the disk now.
       void cmd.call("fs.read", { path: file }).then(
         (r) => {
-          if (Math.abs(r.mtime - meta.current.mtime) < 1) return; // our own save
-          if (dirtyRef.current) setConflict(true);
-          else void load();
+          const v = view.current;
+          if (!v || fileRef.current !== file) return;
+          // By content: a save's mtime may be the next writer's (see editor/disk.ts).
+          const known = saved.current;
+          const change = diskChange(r.text, v.state.doc.toString(), known?.toString() ?? null, !!known && !v.state.doc.eq(known));
+          if (change === "unchanged") meta.current = { ...meta.current, mtime: r.mtime };
+          else if (change === "conflict") setConflict(true);
+          else apply(r);
         },
         () => {},
       );
@@ -155,7 +168,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
       off();
       void cmd.call("fs.unwatch", { path: file }).catch(() => {});
     };
-  }, [file, load]);
+  }, [file, apply]);
 
   useEffect(() => {
     if (!focused) return;
