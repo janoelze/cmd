@@ -1678,11 +1678,11 @@ await scenario("strip", async () => {
   await until(dotIsCurrent(n - 1), (c) => c === "true");
   check((await win.locator(".strip-dots button").last().getAttribute("data-current")) === "true",
     "swiping on at the end of the strip makes the last dot current again, whatever is selected");
+  // The swipe's scroll must have come to rest first: one still settling would carry on past the click.
+  await still(300);
   await win.locator(".strip-dots button").first().click();
-  await still(700);
-  await until(dotIsCurrent(0), (c) => c === "true", 5000);
-  check(Math.abs(await trackX()) < 1 && (await win.locator(".strip-dots button").first().getAttribute("data-current")) === "true",
-    "clicking the first dot scrolls the strip to its start");
+  const atStart = await until(async () => [await trackX(), await dotIsCurrent(0)()], ([x, c]) => Math.abs(x) < 1 && c === "true");
+  check(Math.abs(atStart[0]) < 1 && atStart[1] === "true", `clicking the first dot scrolls the strip to its start (at ${Math.round(atStart[0])}, first dot current: ${atStart[1]})`);
 
   // ⌘↩ into focus and back: the strip returns to exactly where it was
   await still(300);
