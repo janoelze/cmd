@@ -58,6 +58,24 @@ export function workspaceAttention(s: State): Map<WorkspaceId, "needs" | "unseen
   return out;
 }
 
+/**
+ * The open workspaces by last activity, for ⌘O and the switcher menu: the latest of
+ * when it was last shown, an agent in it changing state (started, finished, asking)
+ * and something in it asking for attention. The shown one goes last: you came to
+ * switch away from it. Ties keep switcher order.
+ */
+export function byActivity(s: Pick<State, "workspaces" | "agents" | "panes" | "windows">, shown?: WorkspaceId): Workspace[] {
+  const at = new Map<WorkspaceId, number>();
+  const bump = (id: WorkspaceId, t: number | null | undefined) => t && t > (at.get(id) ?? 0) && at.set(id, t);
+  for (const sp of s.workspaces.values()) bump(sp.id, sp.lastActiveAt);
+  for (const a of s.agents.values()) bump(a.workspaceId, a.stateSince);
+  for (const p of s.panes.values()) bump(p.workspaceId, p.attention?.at);
+  for (const w of s.windows.values()) bump(w.workspaceId, windowAttention(w)?.at);
+  return [...s.workspaces.values()].sort(
+    (a, b) => Number(a.id === shown) - Number(b.id === shown) || (at.get(b.id) ?? 0) - (at.get(a.id) ?? 0) || a.order - b.order,
+  );
+}
+
 /** Is `p` the folder `root` or inside it (whole segments)? */
 export function under(root: string, p: string): boolean {
   return p === root || p.startsWith(root.endsWith("/") ? root : root + "/");

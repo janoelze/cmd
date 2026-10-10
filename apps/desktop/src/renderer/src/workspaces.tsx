@@ -7,7 +7,7 @@ import { useEffect, useState, type ComponentProps } from "react";
 import type { Agent, Workspace, WorkspaceId } from "@cmd/protocol";
 import { agentName } from "@cmd/protocol";
 import { cmd } from "./bridge.ts";
-import { byProject, shortPath, workspaceDetail } from "./model.ts";
+import { byActivity, byProject, shortPath, workspaceDetail } from "./model.ts";
 import { getState, useStoreValue } from "./store.ts";
 import type { Palette, PaletteItem } from "./components/Palette.tsx";
 
@@ -90,7 +90,8 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
   }, [kind]);
 
   if (!picker || picker.kind === "icon" || picker.kind === "new") return null; // their own: WorkspaceIconPicker, NewPicker
-  const open = byProject([...workspaces.values()].sort((a, b) => a.order - b.order));
+  // Most recently active first (agents that just finished, the workspace you just left).
+  const open = byActivity({ ...getState(), workspaces }, here);
   const known = new Set([...open, ...recent].map((x) => x.root));
   const typed = (q: string, label: (p: string) => string, run: (p: string) => void): PaletteItem[] =>
     looksLikePath(q) ? [{ id: "typed-path", group: "Folders", label: label(q.trim()), run: () => run(q.trim()) }] : [];

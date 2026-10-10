@@ -1,6 +1,7 @@
 // The workspace switcher in the top bar (docs/11-workspaces.md, 21-sidebars.md): a button
-// with the shown workspace's icon and name that drops down a menu of the open workspaces
-// in switcher order (⌃1–9), one line each: icon, name, folder, and a dot when
+// with the shown workspace's icon and name that drops down a menu of the open workspaces,
+// most recently active first (model.ts byActivity, frozen while the menu is open; the
+// shortcuts stay switcher order, ⌃1–9), one line each: icon, name, folder, and a dot when
 // something in it needs you or finished unseen. The button carries the same mark
 // for the other workspaces, so a background workspace that wants you shows without
 // opening the menu.
@@ -11,7 +12,8 @@ import { Badge, Menu, StatusDot, type MenuItemProps } from "@cmd/ui";
 import type { Workspace, WorkspaceId } from "@cmd/protocol";
 import { ICON, Symbol } from "./Symbol.tsx";
 import { WorkspaceIcon } from "./WorkspaceIcon.tsx";
-import { workspaceDetail } from "../model.ts";
+import { byActivity, workspaceDetail } from "../model.ts";
+import { getState } from "../store.ts";
 
 type Attention = "needs" | "unseen";
 
@@ -27,6 +29,12 @@ interface Props {
 
 export function WorkspaceBar(p: Props) {
   const [open, setOpen] = useState(false);
+  // The menu's order, taken when it opens: an agent finishing meanwhile doesn't move the rows.
+  const [order, setOrder] = useState<WorkspaceId[]>([]);
+  const toggle = (on: boolean) => {
+    if (on) setOrder(byActivity({ ...getState(), workspaces: new Map(p.workspaces.map((sp) => [sp.id, sp])) }, p.current).map((sp) => sp.id));
+    setOpen(on);
+  };
   const button = useRef<HTMLButtonElement>(null);
   const name = useRef<HTMLSpanElement>(null);
   useWholePixelWidth(name); // the badge and chevron after it stay crisp
@@ -34,9 +42,12 @@ export function WorkspaceBar(p: Props) {
   // The strongest mark among the other workspaces, and how many have one.
   const others = p.workspaces.filter((sp) => sp.id !== p.current && p.attention.has(sp.id));
   const mark: Attention | undefined = others.some((sp) => p.attention.get(sp.id) === "needs") ? "needs" : others.length ? "unseen" : undefined;
-  // Every open workspace (switcher order, ⌃1–9), then "Open Workspace…".
-  const items: MenuItemProps[] = p.workspaces.map((sp, i) => {
+  // Every open workspace (most recently active first), then "Open Workspace…".
+  const rank = new Map(order.map((id, i) => [id, i]));
+  const listed = [...p.workspaces].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity));
+  const items: MenuItemProps[] = listed.map((sp) => {
     const on = sp.id === p.current;
+    const i = p.workspaces.indexOf(sp); // its switcher place, for ⌃1–9
     const attn = on ? undefined : p.attention.get(sp.id);
     return {
       label: sp.name,
@@ -69,10 +80,10 @@ export function WorkspaceBar(p: Props) {
         aria-haspopup="menu"
         aria-expanded={open}
         data-tip={shown ? workspaceDetail(shown) : undefined}
-        onClick={() => setOpen(!open)}
+        onClick={() => toggle(!open)}
         onContextMenu={(e) => (e.preventDefault(), setOpen(false), shown && p.onMenu(shown))}
         onKeyDown={(e) => {
-          if (e.key === "ArrowDown" || e.key === "ArrowUp") e.preventDefault(), setOpen(true);
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") e.preventDefault(), toggle(true);
         }}
       >
         {shown && <WorkspaceIcon workspace={shown} />}

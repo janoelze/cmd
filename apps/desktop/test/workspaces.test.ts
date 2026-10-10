@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Agent, AppWindow, Pane } from "@cmd/protocol";
-import { buildRows, inWorkspace, workspaceAttention, under } from "../src/renderer/src/model.ts";
+import type { Agent, AppWindow, Pane, Workspace } from "@cmd/protocol";
+import { buildRows, byActivity, inWorkspace, workspaceAttention, under } from "../src/renderer/src/model.ts";
 import type { State } from "../src/renderer/src/store.ts";
 
 // Workspaces in the UI: an app window sees only its workspace; the switcher sees what waits everywhere.
@@ -29,6 +29,19 @@ describe("Workspaces in the UI", () => {
 
   it("marks each workspace by its most urgent waiting thing", () => {
     expect(Object.fromEntries(workspaceAttention(s))).toEqual({ home: "needs", proj: "unseen", other: "unseen" });
+  });
+
+  it("lists workspaces by last activity, the shown one last", () => {
+    const sp = (id: string, order: number, lastActiveAt: number) => ({ id, order, lastActiveAt }) as Workspace;
+    const st = {
+      workspaces: new Map([sp("home", 0, 50), sp("proj", 1, 40), sp("other", 2, 30), sp("idle", 3, 0), sp("quiet", 4, 0)].map((w) => [w.id, w])),
+      // An agent in "other" finished last; a bell in "proj" came after home was shown.
+      agents: new Map([agent("a1", "other", { state: "done", stateSince: 90 })].map((a) => [a.id, a])),
+      panes: new Map([pane("p1", "proj", { attention: { kind: "bell", text: "Bell", urgent: false, at: 60 } })].map((p) => [p.id, p])),
+      windows: new Map(),
+    };
+    expect(byActivity(st).map((w) => w.id)).toEqual(["other", "proj", "home", "idle", "quiet"]);
+    expect(byActivity(st, "other").map((w) => w.id)).toEqual(["proj", "home", "idle", "quiet", "other"]);
   });
 
   it("compares folders by whole segments", () => {
