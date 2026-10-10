@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { HOME_WORKSPACE_ID, type Workspace, type WorkspaceId } from "@cmd/protocol";
 import { checkoutOf } from "../checkout.ts";
 
 /**
@@ -46,6 +47,18 @@ export function deepest<T extends { root: string }>(items: Iterable<T>, p: strin
   let best: T | null = null;
   for (const it of items) if (contains(it.root, p) && (!best || it.root.length > best.root.length)) best = it;
   return best;
+}
+
+/**
+ * The workspace other than Home whose folder most deeply holds `p` (canonical),
+ * as WorkspaceManager.of decides; null when only Home's does. What events read
+ * from history (git, past sessions) are given, as live ones get their pane's.
+ */
+export function workspaceAt(workspaces: readonly Workspace[], p: string | null): WorkspaceId | null {
+  if (!p) return null;
+  let best: Workspace | null = null;
+  for (const s of workspaces) if (s.id !== HOME_WORKSPACE_ID && contains(s.root, p) && (!best || s.root.length > best.root.length)) best = s;
+  return best?.id ?? null;
 }
 
 /**

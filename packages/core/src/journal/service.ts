@@ -32,6 +32,7 @@ import { JournalStore, type NewJournalEvent } from "./store.ts";
 import { inlinePacer, type Pacer } from "../scheduler.ts";
 import { buildThreads } from "./threads.ts";
 import { SCHEMA, SYSTEM, toDay, type WrittenDay } from "./writer.ts";
+import { workspaceAt } from "../workspaces/paths.ts";
 
 const log = logger("journal");
 
@@ -57,6 +58,8 @@ const DAY_BUDGET = 160_000;
 const TODAY_EVERY_MS = 30 * 60_000;
 /** Earlier events read for context (a release ships what merged since the one before). */
 const CONTEXT_MS = 7 * DAY_MS;
+/** The log's meta key for the open workspaces backfilled events were last placed in ("<id>\t<root>", sorted). */
+const ASSIGNED_META = "journal.workspaces";
 /** Events read at once for several days (#pool); a busier stretch is read day by day. */
 const POOL_LIMIT = 50_000;
 
@@ -111,6 +114,10 @@ export class JournalService {
   #notGit = new Map<string, number>();
   #writing = new Map<string, Promise<JournalDay | null>>();
   #timer: ReturnType<typeof setInterval> | null = null;
+  /** The running assignWorkspaces, and whether workspaces changed while it ran. */
+  #assigning: Promise<number> | null = null;
+  #assignAgain = false;
+  #disposed = false;
 
   constructor(o: JournalServiceOptions) {
     this.#o = o;
@@ -125,13 +132,62 @@ export class JournalService {
 
   /** Read git now and every few minutes (events' retention is the data layer's). */
   start(): void {
+    void this.assignWorkspaces();
     void this.sync();
     this.#timer = setInterval(() => void this.sync(), SYNC_EVERY_MS);
     this.#timer.unref?.();
   }
 
   dispose(): void {
+    this.#disposed = true;
     if (this.#timer) clearInterval(this.#timer);
+  }
+
+  /**
+   * Backfilled events in the log without a workspace get the one their folder
+   * is in (JournalStore.assignWorkspaces), as git read now would: at start and
+   * whenever the workspaces change (the core calls it then). The open
+   * workspaces a pass ran with are kept in the log's meta; a pass runs only
+   * when one is open that wasn't then, since only a new folder can place rows
+   * the last pass left. Resolves to the rows changed.
+   */
+  assignWorkspaces(): Promise<number> {
+    if (this.#assigning) {
+      this.#assignAgain = true;
+      return this.#assigning;
+    }
+    this.#assigning = (async () => {
+      let n = 0;
+      try {
+        do {
+          this.#assignAgain = false;
+          n += await this.#assign();
+        } while (this.#assignAgain && !this.#disposed);
+      } catch (err) {
+        if (!this.#disposed) log.warn("could not give backfilled events their workspaces", err);
+      } finally {
+        this.#assigning = null;
+      }
+      return n;
+    })();
+    return this.#assigning;
+  }
+
+  async #assign(): Promise<number> {
+    const spaces = this.#o.workspaces().filter((s) => s.id !== HOME_WORKSPACE_ID);
+    const keys = spaces.map((s) => `${s.id}\t${s.root}`).sort();
+    const meta = this.store.data.store;
+    let done: string[] = [];
+    try {
+      done = JSON.parse(meta.meta(ASSIGNED_META) ?? "[]") as string[];
+    } catch {}
+    if (keys.every((k) => done.includes(k))) return 0;
+    const t0 = Date.now();
+    const { scanned, changed } = await this.store.assignWorkspaces((p) => workspaceAt(spaces, p), this.#o.pace ?? inlinePacer);
+    if (this.#disposed) return changed;
+    meta.setMeta(ASSIGNED_META, JSON.stringify(keys));
+    log.info("backfilled events given workspaces", { workspaces: spaces.length, scanned, changed, ms: Date.now() - t0 });
+    return changed;
   }
 
   /** Reads git since the last read, unless it was read less than `maxAge` ago. Concurrent calls share one run. */
@@ -209,7 +265,7 @@ export class JournalService {
       }
       // A first read is thousands of events (90 days of a busy repository): a few hundred per step.
       for (let i = 0; i < ev.length; i += 200) {
-        git += timed("record", () => this.store.recordAll(ev.slice(i, i + 200).map((e) => ({ ...e, workspaceId: this.#workspaceOf(e.repo) }))));
+        git += timed("record", () => this.store.recordAll(ev.slice(i, i + 200).map((e) => ({ ...e, workspaceId: this.#workspaceOf(e.repo ?? e.cwd) }))));
         await pace.yield();
       }
       if (stamp !== null) this.#stamps.set(r, stamp);
@@ -226,10 +282,7 @@ export class JournalService {
 
   /** The workspace whose folder holds `p` (deepest wins); null: only Home's. */
   #workspaceOf(p: string | null): WorkspaceId | null {
-    if (!p) return null;
-    let best: Workspace | null = null;
-    for (const s of this.#o.workspaces()) if (s.id !== HOME_WORKSPACE_ID && (p === s.root || p.startsWith(s.root + "/")) && (!best || s.root.length > best.root.length)) best = s;
-    return best?.id ?? null;
+    return workspaceAt(this.#o.workspaces(), p);
   }
 
   /** Whether an event is in a scope: its workspace, or (for events without one) its project's folder. */

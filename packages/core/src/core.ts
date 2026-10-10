@@ -415,7 +415,7 @@ export class Core {
       notify: (id, title, body) => this.notifications.window(id, "summary", title, body),
     });
     this.journal = new JournalService({
-      store: new JournalStore(this.store.db, { recordedBy: this.agents.activity.recordedBy, data: this.data, turns: (since) => this.agents.activity.turnsSince(since), sessions: (since) => this.sessions.sessionsSince(since) }),
+      store: new JournalStore(this.store.db, { recordedBy: this.agents.activity.recordedBy, data: this.data, turns: (since) => this.agents.activity.turnsSince(since), sessions: (since) => this.sessions.sessionsSince(since), workspaces: () => this.workspaces.list() }),
       workspaces: () => this.workspaces.list(),
       agentWorkspace: (id) => this.agents.get(id)?.workspaceId ?? null,
       ai: {
@@ -565,7 +565,12 @@ export class Core {
     // Commands from before their output was searchable: once, from what they printed.
     if (o.stateDir) s.startup("command-output", "Indexing command output", () => void indexCommandOutput(this.data, s).then((n) => n && log.info("command output indexed", { commands: n })));
     if (o.stateDir && o.statusRoot) s.startup("homes", "Looking for agents", () => this.#discoverHomes());
-    if (o.stateDir) s.startup("journal", "Starting the journal", () => this.journal.start());
+    if (o.stateDir)
+      s.startup("journal", "Starting the journal", () => {
+        this.journal.start();
+        // A workspace opened on a folder: what git and imports recorded there before belongs to it too.
+        this.workspaces.on("updated", () => void this.journal.assignWorkspaces());
+      });
     if (o.stateDir) s.startup("retention", "Scheduling retention", () => this.data.start());
     // The event log's copy aside from a migration is the way back for a week (migrations.ts), then it goes.
     if (o.stateDir) s.startup("log-backups", "Removing old event log copies", () => void removeOldBackups(path.join(o.stateDir!, "data", "events.sqlite")));

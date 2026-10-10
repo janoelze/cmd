@@ -10,10 +10,12 @@
 // become events; THREADS_FORMAT and WRITER_FORMAT the layers above.
 
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { DATA_FLAGS, DEFAULT_SETTINGS, JOURNAL_SCHEMA, type AgentTurn, type DataEvent, type DataEventType, type JournalData, type JournalDay, type JournalEvent, type JournalEventKind, type JournalWeek, type NewDataEvent, type WorkspaceId } from "@cmd/protocol";
+import { DATA_FLAGS, DEFAULT_SETTINGS, JOURNAL_SCHEMA, type AgentTurn, type DataEvent, type DataEventType, type JournalData, type JournalDay, type JournalEvent, type JournalEventKind, type JournalWeek, type NewDataEvent, type Workspace, type WorkspaceId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import { DataService } from "../data/service.ts";
 import { projectOf } from "../data/project.ts";
+import type { Pacer } from "../scheduler.ts";
+import { workspaceAt } from "../workspaces/paths.ts";
 import type { SessionRow } from "../data/views/sessions.ts";
 import { projectsOnce, sessionEvents, turnEvent } from "./backfill.ts";
 
@@ -52,7 +54,12 @@ export interface JournalSources {
   turns?: ((since: number) => { turn: AgentTurn; cwd: string | null }[]) | null;
   /** Sessions active since a time (the transcript index); null while there is none. */
   sessions?: ((since: number) => SessionRow[] | null) | null;
+  /** The open workspaces: turns and sessions belong to the one whose folder holds their project or folder (workspaceAt). */
+  workspaces?: (() => Workspace[]) | null;
 }
+
+/** Rows read per step when the log's backfilled events are given their workspaces. */
+const ASSIGN_STEP = 500;
 
 export class JournalStore {
   #db: DatabaseSync;
@@ -69,7 +76,7 @@ export class JournalStore {
   constructor(db: DatabaseSync | null = null, o: { recordedBy?: string | null; data?: DataService } & JournalSources = {}) {
     this.#db = db ?? new DatabaseSync(":memory:");
     this.data = o.data ?? new DataService({ file: null, recordedBy: o.recordedBy ?? "test", settings: () => DEFAULT_SETTINGS });
-    this.#sources = { turns: o.turns ?? null, sessions: o.sessions ?? null };
+    this.#sources = { turns: o.turns ?? null, sessions: o.sessions ?? null, workspaces: o.workspaces ?? null };
     this.recordedBy = o.recordedBy ?? null;
     this.#db.exec(`
       CREATE TABLE IF NOT EXISTS journal_days (
@@ -228,10 +235,13 @@ export class JournalStore {
     const inScope = (e: JournalEvent) => (!q.workspaceId || e.workspaceId === q.workspaceId) && (!q.repo || e.repo === q.repo);
     const since = (q.since ?? 0) - SPAN_MS;
     const project = projectsOnce();
+    // Turns and sessions are read from history: like git, they belong to the workspace their folder is in.
+    const spaces = this.#sources.workspaces?.() ?? [];
+    const placed = <T extends NewJournalEvent>(e: T): T => (e.workspaceId ? e : { ...e, workspaceId: workspaceAt(spaces, e.repo ?? e.cwd) });
     if (want("agent.turn") && this.#sources.turns) {
       let n = 0;
       for (const { turn, cwd } of this.#sources.turns(since)) {
-        const e = { ...turnEvent(turn, cwd, "backfill", project), id: 1_000_000_000 + n++, source: "backfill" as const };
+        const e = { ...placed(turnEvent(turn, cwd, "backfill", project)), id: 1_000_000_000 + n++, source: "backfill" as const };
         if (inRange(q, e) && inScope(e)) out.push(e);
       }
     }
@@ -239,13 +249,61 @@ export class JournalStore {
       const rows = this.#sources.sessions(since);
       let n = 0;
       if (rows) for (const s of sessionEvents(rows, project)) {
-        const e = { ...s, id: 2_000_000_000 + n++, source: "backfill" as const };
+        const e = { ...placed(s), id: 2_000_000_000 + n++, source: "backfill" as const };
         if (inRange(q, e) && inScope(e)) out.push(e);
       }
     }
     for (const e of this.#extra) if (want(e.kind) && inRange(q, e) && inScope(e)) out.push(e);
     out.sort((a, b) => a.at - b.at || a.id - b.id);
     return out.slice(0, limit);
+  }
+
+  /**
+   * Gives the journal's backfilled events in the log (git, older cmds' imports)
+   * that have no workspace the one `workspaceOf` says for their project or
+   * folder, as recording them now would; the rest stay as they are. Reads each
+   * kind through its time index, ASSIGN_STEP rows per step with `pace` between,
+   * so a big log never holds the thread. Only workspace_id changes: not the
+   * text, so the full-text index stays, nor anything a day's eventsHash reads.
+   * Idempotent: a row once given a workspace is never read for one again.
+   */
+  async assignWorkspaces(workspaceOf: (p: string | null) => WorkspaceId | null, pace: Pacer): Promise<{ scanned: number; changed: number }> {
+    const db = this.data.store.db;
+    const read = db.prepare(
+      `SELECT seq, at, source, flags, workspace_id AS w, project_id AS p,
+         CASE WHEN workspace_id IS NULL THEN data->>'$.cwd' END AS cwd, CASE WHEN workspace_id IS NULL THEN data->>'$.path' END AS path
+       FROM events WHERE type = ? AND (at > ? OR (at = ? AND seq > ?)) ORDER BY at, seq LIMIT ?`,
+    );
+    const write = db.prepare(`UPDATE events SET workspace_id = ? WHERE seq = ? AND workspace_id IS NULL`);
+    let scanned = 0;
+    let changed = 0;
+    for (const type of FACT_KINDS) {
+      for (let at = Number.MIN_SAFE_INTEGER, seq = 0; ; ) {
+        const done = pace.mark("journal workspaces");
+        let rows: { seq: number; at: number; source: string; flags: number; w: string | null; p: string | null; cwd: string | null; path: string | null }[];
+        try {
+          rows = read.all(type, at, at, seq, ASSIGN_STEP) as typeof rows;
+          scanned += rows.length;
+          const set: [WorkspaceId, number][] = [];
+          for (const r of rows) {
+            if (r.w !== null || !isBackfill(r.source, r.flags)) continue;
+            // Where toJournal says the event happened: its project, else its folder (a command's, a file's).
+            const repo = r.p?.startsWith("dir:") ? r.p.slice(4) : null;
+            const id = workspaceOf(repo ?? (type === "command" ? r.cwd : type === "file.open" ? r.path : null) ?? null);
+            if (id) set.push([id, r.seq]);
+          }
+          if (set.length) this.data.store.transaction(() => {
+            for (const [id, s] of set) changed += Number(write.run(id, s).changes);
+          });
+        } finally {
+          done();
+        }
+        if (rows.length < ASSIGN_STEP) break;
+        ({ at, seq } = rows[rows.length - 1]!);
+        await pace.yield();
+      }
+    }
+    return { scanned, changed };
   }
 
   /**
@@ -371,9 +429,12 @@ export function toJournal(d: DataEvent): JournalEvent | null {
     thread,
     text: d.text ?? "",
     data: data as JournalData,
-    source: d.source === "git" || d.source.startsWith("import") || d.flags & DATA_FLAGS.imported ? "backfill" : "live",
+    source: isBackfill(d.source, d.flags) ? "backfill" : "live",
   };
 }
+
+/** Whether a logged event was read from history (git, an import) rather than recorded as it happened. */
+const isBackfill = (source: string, flags: number) => source === "git" || source.startsWith("import") || (flags & DATA_FLAGS.imported) !== 0;
 
 /** A stored day, with what older documents lack filled in. */
 function toDay(doc: string): JournalDay | null {
