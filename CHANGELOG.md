@@ -2,6 +2,16 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.24.2 — 2026-10-10
+
+### Fixed
+
+- Phones paired in Safari stay paired after you close and reopen it.
+- Terminals keep every line of output after cmd restarts, on your Mac and on your phone.
+- Your phone no longer shows a terminal's recent output twice when it reconnects.
+- A text window picks up a change made right after you save, such as an agent's edit.
+- A quick flick of a window onto another swaps them, like a slower drag.
+
 ## 0.24.1 — 2026-10-10
 
 The first release with everything in 0.24.0, which didn't ship.
