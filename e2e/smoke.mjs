@@ -1,7 +1,13 @@
 // Launches the built app against an isolated core, drives it through the real
-// menu bar, takes screenshots. usage: pnpm e2e
+// menu bar, takes screenshots. usage: pnpm e2e [--only name,name]
 // E2E_SCREEN=ci runs it as on CI's smaller screen (e2e/screen.mjs); E2E_CPU_THROTTLE=12
 // slows the app window's CPU that many times, as on CI's slow runner.
+// Each section is a scenario: a failure saves failed-<name>.png, and the run goes on
+// with the next (skipping those that need it) and lists every failure at the end.
+// --only runs the named scenarios (a part of the name will do) and what they need.
+// Pages run with Reduce Motion, so glides and fades end at once and checks don't
+// wait out animations (no check here is about motion: e2e/motion.mjs and the kit's
+// Dialog test measure that). E2E_MOTION=1 keeps real motion.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,6 +16,12 @@ import http from "node:http";
 import { _electron as electron } from "playwright";
 import { corePid, stopCore } from "../scripts/stop-core.mjs";
 import { fitScreen, screenEnv } from "./screen.mjs";
+
+const arg = (name) => {
+  const i = process.argv.indexOf(name);
+  return i > 0 ? process.argv[i + 1] : undefined;
+};
+const only = arg("--only")?.split(",").filter(Boolean) ?? null;
 
 const root = path.resolve(import.meta.dirname, "..");
 const home = path.join(root, ".cmd-dev", "e2e");
@@ -43,6 +55,7 @@ fs.writeFileSync(
 fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "agents.claude.command": "echo claude" }));
 
 const require = createRequire(path.join(root, "apps/desktop/package.json"));
+const motion = !!process.env.E2E_MOTION;
 const launch = async () => {
   const app = await electron.launch({
     executablePath: require("electron"),
@@ -50,40 +63,59 @@ const launch = async () => {
     args: ["--use-fake-device-for-media-stream", path.join(root, "apps/desktop")],
     env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ...screenEnv() },
   });
+  // Reduce Motion in every page: the app window, Settings, browser pages (webviews are pages
+  // here too). Chromium's --force-prefers-reduced-motion doesn't reach Electron's pages.
+  const reduce = (p) => (motion ? Promise.resolve() : p.emulateMedia({ reducedMotion: "reduce" }).catch(() => {}));
+  app.on("window", reduce);
   const win = await app.firstWindow();
+  await reduce(win);
   await fitScreen(app, win);
   if (process.env.E2E_CPU_THROTTLE) await (await win.context().newCDPSession(win)).send("Emulation.setCPUThrottlingRate", { rate: +process.env.E2E_CPU_THROTTLE });
   win.on("pageerror", (e) => console.log("pageerror:", e.message));
+  // What the checks stub in main (dialogs, menus, opening links), to put back after a failed scenario.
+  await app.evaluate(({ dialog, Menu, shell }) => {
+    globalThis.__e2eOriginals = { box: dialog.showMessageBox, save: dialog.showSaveDialog, popup: Menu.prototype.popup, ext: shell.openExternal, path: shell.openPath };
+  });
   return { app, win };
 };
 let { app, win } = await launch();
 
-// Some calls have no timeout (app.close, evaluate waiting on the core) and can
-// hang for good, on Windows in particular. A watchdog fails the run instead,
-// naming the last step and saving a screenshot.
+// Some calls have no timeout (app.close, evaluate waiting on the core) and can hang
+// for good, on Windows in particular. A watchdog fails the scenario under way instead,
+// naming the last step and saving a screenshot; a second hang, or one outside a
+// scenario, ends the run.
 let lastStep = "launch";
 let lastAt = Date.now();
 const step = (s) => ((lastStep = s), (lastAt = Date.now()));
 const HANG_MS = 90_000;
+let hangs = 0;
+let abortScenario = null;
 setInterval(async () => {
   if (Date.now() - lastAt < HANG_MS) return;
   console.log(`HUNG: nothing for ${HANG_MS / 1000}s after: ${lastStep}`);
+  lastAt = Date.now();
   const within = (p) => Promise.race([p, new Promise((r) => setTimeout(() => r("(no answer in 5s)"), 5000))]);
   const wins = await within(
     app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => ({ title: w.getTitle(), visible: w.isVisible() }))),
   ).catch((e) => e.message);
   console.log("electron windows:", JSON.stringify(wins));
   await within(win.screenshot({ path: path.join(shots, "hung.png") })).catch(() => {});
+  if (abortScenario && ++hangs < 2) return abortScenario(new Error(`HUNG: nothing for ${HANG_MS / 1000}s after: ${lastStep}`));
+  report();
   process.exit(1);
 }, 5000).unref();
-// Any failure (a check, a timeout) saves a screenshot of the moment first, so CI's artifact shows it.
+// A failure outside a scenario (launch, the restart) ends the run: screenshot first, so CI's artifact shows it.
 process.on("uncaughtException", async (e) => {
   console.log(e?.stack ?? e);
   console.log(`failed after: ${lastStep}; screenshot in ${path.join(shots, "failed.png")}`);
   const shot = win?.screenshot({ path: path.join(shots, "failed.png") }).catch(() => {});
   await Promise.race([shot, new Promise((r) => setTimeout(r, 5000))]);
+  failures.push({ scenario: "(outside a scenario)", error: String(e?.message ?? e) });
+  report();
   process.exit(1);
 });
+// A promise a failed scenario left behind (a waitForEvent it never reached) rejects later: say so, go on.
+process.on("unhandledRejection", (e) => console.log(`(a promise left by an earlier step failed: ${String(e?.message ?? e).split("\n")[0]})`));
 
 /**
  * app.close() waits until Electron's stdout/stderr pipes close. On Windows the
@@ -102,6 +134,123 @@ const check = (cond, msg) => {
   if (!cond) throw new Error(`FAILED: ${msg}`);
   console.log(`ok - ${msg}`);
 };
+
+// ── scenarios ──
+// Each top-level section runs as scenario(name, fn): a failed check ends that scenario
+// (screenshot failed-<name>.png), the run goes on, and a scenario that needs what a failed
+// one was to leave behind (its terminals, its windows) is skipped, saying so. In run order,
+// each with what it needs; every one needs onboarding (its sheet covers the window).
+const SCENARIOS = {
+  onboarding: [],
+  chrome: [],
+  keymap: [],
+  terminals: [],
+  navigator: ["terminals"],
+  grid: ["terminals"],
+  palette: [],
+  "session-search": [],
+  search: [],
+  "sidebar-search": [],
+  browser: [],
+  "blank-browser": [],
+  "site-permissions": ["browser"],
+  osc8: [],
+  files: ["terminals"],
+  "files-menus": ["files"],
+  text: ["files"],
+  markdown: [],
+  json: [],
+  "window-kinds": ["browser", "files", "text", "markdown"],
+  "error-boundary": ["markdown", "terminals"],
+  untitled: [],
+  embedded: ["browser", "terminals"],
+  magic: ["terminals"],
+  settings: ["files", "markdown"],
+  keybindings: [],
+  mru: ["terminals"],
+  "close-idle": ["mru"],
+  strip: ["terminals"],
+  marker: ["terminals"],
+  sidebars: ["marker"],
+  restart: ["marker"],
+  "core-status": [],
+  workspaces: [],
+  "app-window": [],
+};
+const failures = [];
+const outcome = new Map(); // name → "passed" | "failed" | "skipped" | "not run"
+// --only: the named scenarios (a part of a name picks each it is in), what they need, and onboarding.
+const wanted = (() => {
+  if (!only) return null;
+  const want = new Set();
+  const add = (name) => {
+    if (want.has(name)) return;
+    want.add(name);
+    for (const n of SCENARIOS[name]) add(n);
+  };
+  // A whole name picks that one; a part picks every one it is in.
+  for (const o of only) for (const name of Object.keys(SCENARIOS)) if (o in SCENARIOS ? name === o : name.includes(o)) add(name);
+  if (!want.size) throw new Error(`--only ${only.join(",")}: no such scenario (${Object.keys(SCENARIOS).join(", ")})`);
+  add("onboarding");
+  console.log(`only: ${[...want].join(", ")}`);
+  return want;
+})();
+async function scenario(name, fn) {
+  const needs = SCENARIOS[name];
+  if (!needs) throw new Error(`scenario ${name} isn't listed in SCENARIOS`);
+  if (wanted && !wanted.has(name)) return void outcome.set(name, "not run");
+  const missing = [...needs, ...(name === "onboarding" ? [] : ["onboarding"])].find((n) => outcome.get(n) !== "passed");
+  if (missing) {
+    console.log(`\n# ${name}\nskipped: needs ${missing}`);
+    return void outcome.set(name, "skipped");
+  }
+  console.log(`\n# ${name}`);
+  step(`scenario ${name}`);
+  try {
+    await Promise.race([fn(), new Promise((_, reject) => (abortScenario = reject))]);
+    outcome.set(name, "passed");
+  } catch (e) {
+    outcome.set(name, "failed");
+    const error = String(e?.message ?? e);
+    failures.push({ scenario: name, error: error.split("\n")[0] });
+    console.log(`FAILED in ${name}: ${e?.stack ?? e}`);
+    const shot = path.join(shots, `failed-${name}.png`);
+    await Promise.race([win.screenshot({ path: shot }).catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
+    console.log(`after: ${lastStep}; screenshot in ${shot}`);
+    await recover();
+  } finally {
+    abortScenario = null;
+  }
+}
+// After a failure: let go of keys and buttons, close what's open over the board, put the
+// stubs in main back, close other app windows (Settings), so the next scenario starts clean.
+async function recover() {
+  step("recovering from a failed scenario");
+  const within = (p) => Promise.race([p.catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
+  await within(win.mouse.up());
+  for (const k of ["Meta", "Shift", "Alt", "Control"]) await within(win.keyboard.up(k));
+  await within(app.evaluate(({ dialog, Menu, shell }) => {
+    const o = globalThis.__e2eOriginals;
+    if (!o) return;
+    dialog.showMessageBox = o.box;
+    dialog.showSaveDialog = o.save;
+    Menu.prototype.popup = o.popup;
+    shell.openExternal = o.ext;
+    shell.openPath = o.path;
+  }));
+  for (const p of app.windows()) if (p !== win && /settings\.html/.test(p.url())) await within(p.close());
+  for (let i = 0; i < 2; i++) await within(win.keyboard.press("Escape"));
+}
+function report() {
+  const ran = [...outcome].filter(([, o]) => o !== "not run");
+  console.log(`\n${ran.filter(([, o]) => o === "passed").length} of ${ran.length} scenarios passed`);
+  const skipped = ran.filter(([, o]) => o === "skipped").map(([n]) => n);
+  if (skipped.length) console.log(`skipped (needed a failed one): ${skipped.join(", ")}`);
+  if (failures.length) {
+    console.log(`${failures.length} failed:`);
+    for (const f of failures) console.log(`  ✗ ${f.scenario}: ${f.error}`);
+  }
+}
 // Overlays and sidebars play out a fade or slide before they leave the DOM: wait for that, not a fixed time.
 const gone = (sel) => win.waitForSelector(sel, { state: "detached", timeout: 5000 }).catch(() => {});
 // Shortcut checks: the macOS keymap, or its Windows translation (docs/10-windows.md).
@@ -121,11 +270,12 @@ const panes = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((p)
 // Layout and selection live in the shown workspace's view (docs/11-workspaces.md); these checks run in Home.
 const homeView = () => win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((s) => s.home).view));
 // Windows glide (TileMotion) on a clock that steps at most 34 ms a frame, so on a slow
-// machine (CI) a glide takes longer than its 0.38 s. Before measuring the board: wait
-// at least `min` ms (for the move to start), then until no window, scroll or sidebar
-// has moved for 200 ms, or 5 s have passed (the check then fails on what it reads).
+// machine (CI) a glide takes longer than its 0.38 s (with Reduce Motion they jump, but a
+// command still takes a moment to reach the renderer). Before measuring the board: give
+// the command `min` ms to land, then wait until no window, scroll or sidebar has moved
+// for 200 ms, or 5 s have passed (the check then fails on what it reads).
 const still = async (min = 300) => {
-  await win.waitForTimeout(min);
+  await win.waitForTimeout(min); // for the command to land (not a read)
   const read = () => win.evaluate(() => JSON.stringify([
     ...[...document.querySelectorAll(".windows-track > .tile, .dock-left, .dock-right")].map((e) => {
       const r = e.getBoundingClientRect();
@@ -153,6 +303,18 @@ const until = async (read, ok = Boolean, ms = 10_000) => {
   }
 };
 const countOf = (sel) => win.locator(sel).count();
+// Focus is never assumed (it moves asynchronously in Electron): before typing or pressing a
+// key, wait until the element that should take it has it. focusIn: inside a window.
+const focused = (sel) => until(() => win.evaluate((sel) => !!document.activeElement?.closest(sel), sel), Boolean, 10_000);
+const focusIn = (id) => focused(`.tile[data-pane="${id}"]`);
+// The window the renderer shows as selected: what a menu command acts on.
+const selected = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
+// A window the core opened is in the renderer (shown or not: focus mode hides the others).
+const tileIn = (id) => win.locator(`.tile[data-pane="${id}"]`).waitFor({ state: "attached", timeout: 10_000 });
+const select = async (id) => {
+  await win.evaluate((id) => window.__cmdSelect(id), id);
+  return until(selected, (s) => s === id);
+};
 // Windows in visual order (reading order); the DOM keeps a stable creation order.
 const visualTiles = async () => {
   const ids = await win.locator(".windows-track > .tile:not([data-hidden])").evaluateAll((els) =>
@@ -166,7 +328,7 @@ const visualTiles = async () => {
 
 await win.waitForSelector(".statusbar .core-status");
 // First launch: the onboarding sheet, Welcome then the AI step; without a key only "Set Up Later" moves on.
-{
+await scenario("onboarding", async () => {
   await win.waitForSelector(".onboarding");
   check((await win.locator(".onboarding .ui-sheet-header-title").textContent()) === "Welcome to cmd", "a new install opens onboarding at Welcome");
   await win.locator(".onboarding button", { hasText: "Get Started" }).click();
@@ -179,9 +341,9 @@ await win.waitForSelector(".statusbar .core-status");
   const onboardingFile = path.join(home, "ui", "onboarding.json");
   const seen = await until(() => (fs.existsSync(onboardingFile) ? JSON.parse(fs.readFileSync(onboardingFile, "utf8")).seen.join() : ""), (s) => s === "welcome,ai");
   check(seen === "welcome,ai", `the steps shown are recorded, so they don't open again (${seen})`);
-}
-await win.screenshot({ path: path.join(shots, "1-empty.png") });
-{
+  await win.screenshot({ path: path.join(shots, "1-empty.png") });
+});
+await scenario("chrome", async () => {
   // One footer across the window (docs/21-sidebars.md): the core's health at its left end,
   // tall enough for its tallest icon button.
   const right = await win.locator(".statusbar").boundingBox();
@@ -207,8 +369,9 @@ await win.screenshot({ path: path.join(shots, "1-empty.png") });
   );
   check(offsets.every(([dx, dy, fw, fh]) => Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01 && fw === 0 && fh === 0),
     `status bar icons are exactly centred on whole pixels (${offsets.length} buttons)`);
-}
+});
 
+await scenario("keymap", async () => {
 if (mac) {
   check((await accel("file.new")) === "Cmd+N" && (await accel("file.newTerminal")) === "Cmd+T", "⌘N is New…, ⌘T New Terminal");
   check((await accel("file.close")) === "Cmd+W", "⌘W is Close Terminal");
@@ -219,6 +382,7 @@ if (mac) {
   check((await accel("view.palette")) === "Ctrl+Shift+K", "Ctrl+Shift+K is the command palette");
   check((await accel("session.next")) === "Ctrl+Alt+Right", "Ctrl+Alt+→ is Next Session");
 }
+});
 
 // Every pane's screen, joined: the focused one needn't be first.
 const screens = () => win.evaluate(() => window.cmd.call("pane.list", {}).then((ps) =>
@@ -232,38 +396,43 @@ const shellReady = async () => {
   if (p) await until(() => paneText(p.id, 5), (t) => /\S/.test(t));
   return p;
 };
-await menu("file.newTerminal");
-await win.locator(".xterm:visible").first().waitFor(); // hidden ones exist too (other workspaces, previews)
-const firstTerm = await shellReady();
-await win.keyboard.type("echo hello from cmd");
-await win.keyboard.press("Enter");
-{
+// Two terminals, typed into: the scenarios after this one work with them.
+await scenario("terminals", async () => {
+  await menu("file.newTerminal");
+  await win.locator(".xterm:visible").first().waitFor(); // hidden ones exist too (other workspaces, previews)
+  const firstTerm = await shellReady();
+  await focusIn(firstTerm.id);
+  await win.keyboard.type("echo hello from cmd");
+  await win.keyboard.press("Enter");
   // ⇧↩ reaches the PTY as ESC CR (agents' newline), not a plain CR.
   await until(() => paneText(firstTerm.id), (t) => /^hello from cmd$/m.test(t));
   await win.keyboard.type("cat -v");
   await win.keyboard.press("Enter");
   // Sent before cat runs, the shell's line editor would take it.
-  await until(newestPane, (p) => p.foreground === "cat", 3000);
+  await until(newestPane, (p) => p.foreground === "cat");
   await win.keyboard.press("Shift+Enter");
   const text = await until(screens, (t) => /^\^\[$/m.test(t));
   await win.keyboard.press("Control+C");
   check(/^\^\[$/m.test(text), "⇧↩ sends ESC CR to the terminal");
-}
-await menu("file.newTerminal");
-await until(panes, (n) => n === 2);
-await shellReady();
-await win.keyboard.type("ls -la");
-await win.keyboard.press("Enter");
-check((await panes()) === 2, "two terminals open");
-await win.screenshot({ path: path.join(shots, "2-focus.png") });
+  await menu("file.newTerminal");
+  await until(panes, (n) => n === 2);
+  const second = await shellReady();
+  await focusIn(second.id);
+  await win.keyboard.type("ls -la");
+  await win.keyboard.press("Enter");
+  check((await panes()) === 2, "two terminals open");
+  await win.screenshot({ path: path.join(shots, "2-focus.png") });
+});
 
-const before = await win.locator(".navigator .ui-list-row.sel").getAttribute("class");
-const rowsBefore = await win.locator(".navigator .ui-list-row:not(.history)").allTextContents();
-await menu("session.next");
-const selIndexAfter = await until(() => win.locator(".navigator .ui-list-row:not(.history)").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel"))), (i) => i >= 0);
-check(rowsBefore.length === 2 && selIndexAfter >= 0, `session.next moves selection (now row ${selIndexAfter + 1})`);
-void before;
+await scenario("navigator", async () => {
+  // The Navigator lists both before ⌥⌘→ acts on what it shows.
+  const rowsBefore = await until(() => win.locator(".navigator .ui-list-row:not(.history)").allTextContents(), (r) => r.length === 2);
+  await menu("session.next");
+  const selIndexAfter = await until(() => win.locator(".navigator .ui-list-row:not(.history)").evaluateAll((els) => els.findIndex((e) => e.classList.contains("sel"))), (i) => i >= 0);
+  check(rowsBefore.length === 2 && selIndexAfter >= 0, `session.next moves selection (now row ${selIndexAfter + 1})`);
+});
 
+await scenario("grid", async () => {
 await menu("view.grid");
 check((await until(() => countOf(".windows-track > .tile"), (n) => n === 2)) === 2, "grid shows both terminals");
 if (process.platform !== "win32") {
@@ -333,21 +502,28 @@ await until(panes, (n) => n === 2);
 await still();
 await win.screenshot({ path: path.join(shots, "3-grid.png") });
 await menu("view.focus");
+});
 
-await menu("view.palette");
-await win.waitForSelector(".palette");
-await win.keyboard.type("next");
-await win.waitForTimeout(150);
-await win.screenshot({ path: path.join(shots, "4-palette.png") });
-await menu("file.close"); // ⌘W closes the palette first
-await gone(".palette");
-check((await win.locator(".palette").count()) === 0, "⌘W closes the palette before any terminal");
-{ const n = await panes(); check(n === 2, `…and leaves terminals alone (${n})`); }
-
-// Session search: ?query in the palette, Enter resumes the session in a new terminal.
-{
+await scenario("palette", async () => {
+  const before = await panes();
   await menu("view.palette");
   await win.waitForSelector(".palette");
+  await focused(".palette-input");
+  await win.keyboard.type("next");
+  await until(() => win.locator(".palette-input").inputValue(), (v) => v === "next");
+  await win.screenshot({ path: path.join(shots, "4-palette.png") });
+  await menu("file.close"); // ⌘W closes the palette first
+  await gone(".palette");
+  check((await win.locator(".palette").count()) === 0, "⌘W closes the palette before any terminal");
+  const n = await until(panes, (n) => n !== before, 1000); // a wrongly closed terminal would show by then
+  check(n === before, `…and leaves terminals alone (${n})`);
+});
+
+// Session search: ?query in the palette, Enter resumes the session in a new terminal.
+await scenario("session-search", async () => {
+  await menu("view.palette");
+  await win.waitForSelector(".palette");
+  await focused(".palette-input");
   await win.keyboard.type("?wiregaurd"); // typo on purpose
   await win.waitForSelector(".palette.searching");
   await win.waitForSelector(".palette-list li.rich", { timeout: 15000 });
@@ -356,6 +532,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(label === "VPN auto reconnect" && /wireguard/i.test(snippet ?? ""), `session search finds past sessions, typo-tolerant (${label}: ${snippet})`);
   await win.screenshot({ path: path.join(shots, "4b-search.png") });
   const before = await panes();
+  await until(() => countOf(".palette-list li.on.rich"), (n) => n === 1); // Enter acts on the highlighted row
   await win.keyboard.press("Enter");
   const agentList = () => win.evaluate(() => window.cmd.call("agent.list", {}));
   await until(panes, (n) => n === before + 1);
@@ -365,53 +542,62 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const resumed = agents.find((a) => a.native.claudeSessionId === "e2e-session-1");
   await win.evaluate((id) => window.cmd.call("pane.kill", { paneId: id }), resumed.paneId);
   await until(panes, (n) => n === before);
-}
+});
 
 // Search (⇧⌘F): the palette with ? typed, over open windows and past sessions.
-{
+await scenario("search", async () => {
   await menu("view.search");
   await win.locator(".palette").waitFor();
-  check((await win.locator(".palette-input").inputValue()) === "?", "⇧⌘F opens the palette in search mode");
+  check((await until(() => win.locator(".palette-input").inputValue(), (v) => v === "?")) === "?", "⇧⌘F opens the palette in search mode");
+  await focused(".palette-input");
   await win.keyboard.type("wiregaurd");
   await win.waitForSelector(".palette .palette-label:has-text('VPN auto reconnect')", { timeout: 15000 }).catch(() => {});
   check((await win.locator(".palette .palette-label", { hasText: "VPN auto reconnect" }).count()) > 0, "the palette's search finds past sessions, typos and all");
   await win.screenshot({ path: path.join(shots, "4b-palette-search.png") });
   await win.keyboard.press("Escape");
   await win.locator(".palette").waitFor({ state: "detached" });
-}
+});
 
 // Sidebar search: the Navigator's field filters open windows and searches past sessions; Esc leaves.
-{
+await scenario("sidebar-search", async () => {
   await win.locator(".sb-search input").click();
+  await focused(".sb-search");
   await win.keyboard.type("wiregaurd");
   await win.waitForSelector(".navigator .ui-list-row.history", { timeout: 15000 });
   const label = await win.locator(".navigator .ui-list-row.history .ui-list-row-name").first().textContent();
   check(label === "VPN auto reconnect", `sidebar search finds past sessions (${label})`);
   await win.screenshot({ path: path.join(shots, "4c-sidebar-search.png") });
   await win.keyboard.press("Escape");
-  check((await win.locator(".sb-search input").inputValue()) === "", "Esc clears the sidebar search");
+  check((await until(() => win.locator(".sb-search input").inputValue(), (v) => v === "")) === "", "Esc clears the sidebar search");
   await win.keyboard.press("Escape");
   await win.waitForSelector(".sb-recent .ui-list-row.history", { timeout: 10_000 }).catch(() => {});
   check((await win.locator(".sb-recent .ui-list-row.history").count()) > 0, "Recent lists past sessions from the index");
-}
+});
 
-// Browser and file windows
-{
-  const server = http.createServer((req, res) => {
-    res.setHeader("content-type", "text/html");
-    if (req.url === "/media") return res.end("<title>E2E Media</title><body style='font:20px sans-serif;padding:20px'>A page that asks for the camera</body>");
-    res.end("<title>E2E Page</title><body style='font:20px sans-serif;padding:20px'>Hello from a cmd browser window</body>");
-  });
-  await new Promise((r) => server.listen(0, r));
-  const port = server.address().port;
+// Browser and file windows: the pages they load, and the folder they show.
+const server = http.createServer((req, res) => {
+  res.setHeader("content-type", "text/html");
+  if (req.url === "/media") return res.end("<title>E2E Media</title><body style='font:20px sans-serif;padding:20px'>A page that asks for the camera</body>");
+  res.end("<title>E2E Page</title><body style='font:20px sans-serif;padding:20px'>Hello from a cmd browser window</body>");
+});
+await new Promise((r) => server.listen(0, r));
+const port = server.address().port;
+fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
+fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# hi");
+fs.writeFileSync(path.join(home, "files-fixture", "sub-folder", "inner.txt"), "inside");
+// The browser window the browser scenario opens, and the file window of the files one.
+let browserWin = null;
+let fw = null;
 
+await scenario("browser", async () => {
   await menu("view.palette");
   await win.waitForSelector(".palette");
+  await focused(".palette-input");
   await win.keyboard.type(`localhost:${port}`);
   const offer = await until(() => win.locator(".palette-list li").first().textContent({ timeout: 10_000 }), (t) => t.includes(`Open localhost:${port}`));
   check(offer.includes(`Open localhost:${port}`), `typing a URL offers to open it (${offer.trim()})`);
   await win.keyboard.press("Enter");
-  const browserWin = await until(() => win.evaluate(() => window.cmd.call("window.list", {})).then((all) => all.find((w) => w.kind === "browser" && w.title === "E2E Page")), Boolean, 15_000);
+  browserWin = await until(() => win.evaluate(() => window.cmd.call("window.list", {})).then((all) => all.find((w) => w.kind === "browser" && w.title === "E2E Page")), Boolean, 15_000);
   check(!!browserWin && browserWin.state.url.startsWith(`http://localhost:${port}`), "browser window loads the page and reports its title");
 
   // Edit → Select All / Copy reach the page, which is its own WebContents (main/index.ts editNative).
@@ -424,14 +610,11 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     let copied = "";
     for (let attempt = 0; attempt < 5 && !copied.includes("Hello from a cmd browser window"); attempt++) {
       await win.locator(".tile.kind-browser webview").click();
-      for (let i = 0; i < 30 && !(await pageFocused()); i++) await win.waitForTimeout(100);
+      await until(pageFocused, Boolean, 3000);
       await menu("edit.selectAll");
-      await win.waitForTimeout(200);
+      await win.waitForTimeout(200); // for the selection to land in the page before Copy (not a read)
       await menu("edit.copy");
-      for (let i = 0; i < 10 && !copied; i++) {
-        await win.waitForTimeout(100);
-        copied = await app.evaluate(({ clipboard }) => clipboard.readText());
-      }
+      copied = await until(() => app.evaluate(({ clipboard }) => clipboard.readText()), Boolean, 1000);
     }
     await app.evaluate(({ clipboard }, t) => clipboard.writeText(t), saved);
     check(copied.includes("Hello from a cmd browser window"), `Select All and Copy work in a browser page (${JSON.stringify(copied)})`);
@@ -451,13 +634,14 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const fit = await pageUntil("innerWidth !== 393", true);
     check(back === false && fit === true, "Fit Window restores the window's size and the app's user agent");
   }
+});
 
-  // A new, blank browser window shows the themed empty view, not a white page, until it loads one.
+// A new, blank browser window shows the themed empty view, not a white page, until it loads one.
+await scenario("blank-browser", async () => {
   const blankWin = await win.evaluate(() => window.cmd.call("window.open", { kind: "browser", input: {} }));
-  await win.waitForTimeout(200);
-  await win.evaluate((id) => window.__cmdSelect(id), blankWin.id);
-  await win.waitForTimeout(200);
-  await win.evaluate((id) => window.__cmdSelect(id), blankWin.id);
+  try {
+  await tileIn(blankWin.id);
+  await select(blankWin.id);
   const blankView = win.locator(`.tile[data-pane="${blankWin.id}"] .ui-webstage .ui-viewstate`);
   await blankView.waitFor({ timeout: 10_000 }).catch(() => {});
   await win.screenshot({ path: path.join(shots, "browser-blank.png") });
@@ -465,12 +649,15 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [blankWin.id, `http://localhost:${port}`]);
   await blankView.waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
   check((await blankView.count()) === 0, "a blank window gets its page once given an address");
-  await win.evaluate((id) => window.cmd.call("window.close", { id }), blankWin.id);
+  } finally {
+    await win.evaluate((id) => window.cmd.call("window.close", { id }), blankWin.id);
+  }
+});
 
   // A page asking for the camera and microphone gets cmd's sheet, never a silent grant;
   // Don't Allow is kept for the site, so it isn't asked again (main/web-session.ts).
+await scenario("site-permissions", async () => {
   {
-    step("site permissions");
     const page = (js) => win.evaluate((js) => document.querySelector(".tile.kind-browser webview").executeJavaScript(js), js);
     await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [browserWin.id, `http://localhost:${port}/media`]);
     await until(() => page("location.pathname").catch(() => null), (p) => p === "/media");
@@ -484,13 +671,14 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const got = await page("window.__gum");
     check(got === "NotAllowedError", `Don't Allow refuses the page's getUserMedia (${got})`);
     const again = await page(`navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name)`);
-    const kept = JSON.parse(fs.readFileSync(path.join(home, "site-permissions.json"), "utf8"));
+    const kept = await until(() => { try { return JSON.parse(fs.readFileSync(path.join(home, "site-permissions.json"), "utf8")); } catch { return {}; } }, (k) => k[`http://localhost:${port}`]?.media === false);
     check(again === "NotAllowedError" && (await sheet.count()) === 0 && kept[`http://localhost:${port}`]?.media === false, `the answer is kept for the site and not asked again (${again})`);
     // Deleting site-permissions.json forgets the answers, without a restart.
     fs.rmSync(path.join(home, "site-permissions.json"));
     await page(`window.__gum = navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name); 0`);
     await sheet.waitFor({ timeout: 10_000 }).catch(() => {});
     const askedAgain = await sheet.count();
+    await focused(".site-permission"); // Esc goes where the focus is
     await win.keyboard.press("Escape");
     const dismissed = await page("window.__gum");
     check(askedAgain === 1 && dismissed === "NotAllowedError" && !fs.existsSync(path.join(home, "site-permissions.json")), `deleting the saved answers asks again; Esc refuses without saving (${askedAgain}, ${dismissed})`);
@@ -503,7 +691,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       await page(`window.__ask = ${js}; 0`);
       await sheet.waitFor({ timeout: 10_000 }).catch(() => {});
       if (button) await sheet.getByRole("button", { name: button, exact: true }).click();
-      else await win.keyboard.press("Escape");
+      else await focused(".site-permission"), await win.keyboard.press("Escape");
       return page("window.__ask");
     };
     const waitUntil = (fn) => until(() => { try { return fn(); } catch { return false; } }, Boolean); // a file read mid-write throws
@@ -542,12 +730,15 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [browserWin.id, `http://localhost:${port}/`]);
     await until(() => page("document.title").catch(() => null), (t) => t === "E2E Page");
   }
+});
 
-  // OSC 8 links in terminal output: the text can say anything, so a link to another
-  // app (smb:) gets a native confirm naming the real URL, and opens nothing until
-  // answered; a web link still opens in a browser window (main/open-policy.ts).
-  {
-    step("open policy");
+// OSC 8 links in terminal output: the text can say anything, so a link to another
+// app (smb:) gets a native confirm naming the real URL, and opens nothing until
+// answered; a web link still opens in a browser window (main/open-policy.ts).
+await scenario("osc8", async () => {
+  let term = null;
+  let linked = null;
+  try {
     await app.evaluate(({ dialog, shell }) => {
       globalThis.__opened = [];
       globalThis.__asked = [];
@@ -560,8 +751,9 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
         return { response: o.cancelId ?? 1, checkboxChecked: false };
       };
     });
-    const term = await win.evaluate(() => window.cmd.call("window.open", { kind: "terminal", input: {} }));
-    await win.evaluate((id) => window.__cmdSelect(id), term.id);
+    term = await win.evaluate(() => window.cmd.call("window.open", { kind: "terminal", input: {} }));
+    await tileIn(term.id);
+    await select(term.id);
     const screen = win.locator(`.tile[data-pane="${term.id}"] .xterm-screen`);
     await screen.waitFor();
     await until(() => paneText(term.id, 5), (t) => /\S/.test(t));
@@ -571,6 +763,8 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       const text = label.repeat(cols).slice(0, cols - 2);
       await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [term.id, `clear; printf '\\e]8;;${uri}\\e\\\\${text}\\e]8;;\\e\\\\\\n'\r`]);
       await until(() => paneText(term.id, 5), (t) => t.startsWith(text.slice(0, 20)));
+      // The core has it; the app's terminal draws it to a canvas a moment later (unreadable
+      // here): a click that comes too early finds no link, and cmdClickRow0 is tried again.
       await win.waitForTimeout(200);
       return rows;
     };
@@ -579,7 +773,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
       const at = { x: box.x + box.width / 2, y: box.y + box.height / rows / 2 };
       await win.mouse.move(at.x - 20, at.y);
       await win.mouse.move(at.x, at.y, { steps: 3 });
-      await win.waitForTimeout(150);
+      await win.waitForTimeout(150); // for xterm to see the hover before the click (not a read)
       await win.keyboard.down("Meta");
       await win.mouse.click(at.x, at.y);
       await win.keyboard.up("Meta");
@@ -596,39 +790,38 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(asked.length === 1 && /^Open smb:\/\/example( in .+)?\?$/.test(asked[0].message) && asked[0].sheet && asked[0].buttons.at(-1) === "Cancel", `an OSC 8 smb: link asks first, in a sheet naming the real URL (${JSON.stringify(asked)})`);
     check(opened.length === 0, `Cancel opens nothing (${JSON.stringify(opened)})`);
     rows = await printLink(`http://localhost:${port}/osc8`, "link ");
-    let linked = null;
     for (let attempt = 0; attempt < 3 && !linked; attempt++) {
       await cmdClickRow0(rows);
       linked = await until(() => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.find((w) => w.kind === "browser" && w.state.url?.endsWith("/osc8"))), Boolean, 4000);
     }
     const after = await app.evaluate(() => globalThis.__asked.length);
     check(!!linked && after === 1, `an OSC 8 http link opens in a browser window, without asking (${linked?.state.url})`);
-    await app.evaluate(({ dialog, shell }) => ((dialog.showMessageBox = globalThis.__restore.box), (shell.openExternal = globalThis.__restore.ext), (shell.openPath = globalThis.__restore.path)));
-    await win.evaluate(([a, b]) => Promise.all([window.cmd.call("window.close", { id: a }), window.cmd.call("window.close", { id: b })]), [term.id, linked.id]);
+  } finally {
+    await app.evaluate(({ dialog, shell }) => globalThis.__restore && ((dialog.showMessageBox = globalThis.__restore.box), (shell.openExternal = globalThis.__restore.ext), (shell.openPath = globalThis.__restore.path)));
+    for (const w of [term, linked]) if (w) await win.evaluate((id) => window.cmd.call("window.close", { id }), w.id);
   }
+});
 
-  fs.mkdirSync(path.join(home, "files-fixture", "sub-folder"), { recursive: true });
-  fs.writeFileSync(path.join(home, "files-fixture", "notes.txt"), "# hi");
-  fs.writeFileSync(path.join(home, "files-fixture", "sub-folder", "inner.txt"), "inside");
-  const fw = await win.evaluate((p) => window.cmd.call("window.open", { kind: "files", input: { path: p } }), path.join(home, "files-fixture"));
-  await win.waitForTimeout(200);
-  await win.evaluate((id) => window.__cmdSelect(id), fw.id);
+// The file window: the tree, and the keyboard driving it.
+const rowsNow = () => win.locator(".tile.kind-files .ui-tree .ui-tree-row .ui-tree-name").allTextContents();
+const rowsAre = (want) => (rows) => JSON.stringify(rows) === JSON.stringify(want);
+await scenario("files", async () => {
+  fw = await win.evaluate((p) => window.cmd.call("window.open", { kind: "files", input: { path: p } }), path.join(home, "files-fixture"));
+  await tileIn(fw.id);
+  await select(fw.id);
   await win.waitForSelector(".tile.kind-files .ui-tree .ui-tree-row");
-  const rowsNow = () => win.locator(".tile.kind-files .ui-tree .ui-tree-row .ui-tree-name").allTextContents();
   const selName = () => win.locator(".tile.kind-files .ui-tree .ui-tree-row[data-selected] .ui-tree-name").textContent();
   const filesPath = () => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.find((w) => w.kind === "files").state.path);
-  check(JSON.stringify(await rowsNow()) === JSON.stringify(["sub-folder", "notes.txt"]), "file tree lists the folder, folders first");
+  check(rowsAre(["sub-folder", "notes.txt"])(await until(rowsNow, rowsAre(["sub-folder", "notes.txt"]))), "file tree lists the folder, folders first");
 
   await win.locator(".tile.kind-files .ui-tree .ui-tree-row", { hasText: "sub-folder" }).dblclick();
-  const rowsAre = (want) => (rows) => JSON.stringify(rows) === JSON.stringify(want);
   check(rowsAre(["sub-folder", "inner.txt", "notes.txt"])(await until(rowsNow, rowsAre(["sub-folder", "inner.txt", "notes.txt"]))), "double-clicking a folder expands it in place");
 
   // Keyboard: come from a terminal, then select the file window — arrows drive the tree.
-  const focusIn = (id) => until(() => win.evaluate((id) => !!document.activeElement?.closest(`.tile[data-pane="${id}"]`), id), Boolean, 5000);
   const firstPane = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p[0].id));
-  await win.evaluate((id) => window.__cmdSelect(id), firstPane);
+  await select(firstPane);
   await focusIn(firstPane);
-  await win.evaluate((id) => window.__cmdSelect(id), fw.id);
+  await select(fw.id);
   await focusIn(fw.id);
   await win.keyboard.press("Home");
   await win.keyboard.press("ArrowLeft"); // collapse
@@ -647,12 +840,20 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await selNameIs("sub-folder");
     await win.keyboard.press("Meta+ArrowDown");
     check((await until(filesPath, (p) => p.endsWith("sub-folder"))).endsWith("sub-folder"), "⌘↓ makes the folder the root");
+    // ⌘↑ goes up from the root the window shows: wait until it shows the new one, not only
+    // until the core has it (pressed before that, it went up from the old root, two levels).
+    const inside = await until(rowsNow, rowsAre(["inner.txt"]));
+    check(rowsAre(["inner.txt"])(inside), `⌘↓ shows the folder's contents (${inside.join(", ")})`);
+    await focusIn(fw.id);
     await win.keyboard.press("Meta+ArrowUp");
     const fp = await until(filesPath, (p) => p.endsWith("files-fixture"));
     const sn = await selNameIs("sub-folder");
     check(fp.endsWith("files-fixture") && sn === "sub-folder", `⌘↑ goes back up and re-selects where you were (${path.basename(fp)}, ${sn})`);
   } else macOnly("⌘↓/⌘↑ in the file tree");
+});
 
+// The file window's menus: Add to Bookmarks, Move to Trash.
+await scenario("files-menus", async () => {
   // Bookmarks: right-click → Add to Bookmarks; the toolbar's bookmark button lists them.
   {
     await app.evaluate(({ Menu }) => {
@@ -692,13 +893,16 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(askedTrash === "Move “notes.txt” to the Trash?" && (await win.locator(".tile.kind-files .ui-tree .ui-tree-row", { hasText: "notes.txt" }).count()) === 1,
       `Move to Trash asks first, and Cancel keeps the file (${askedTrash})`);
   }
+});
 
-  // Files open in the window that suits them: notes.txt → text window; edit and ⌘S.
+// Files open in the window that suits them: notes.txt → text window; edit and ⌘S.
+await scenario("text", async () => {
   await win.locator(".tile.kind-files .ui-tree .ui-tree-row", { hasText: "notes.txt" }).dblclick();
   await win.waitForSelector(".tile.kind-text .cm-content");
   const editorText = () => win.locator(".tile.kind-text .cm-content").textContent();
   check((await until(editorText, (t) => t === "# hi")) === "# hi", "double-clicking a text file opens it in a text window (CodeMirror)");
   await win.locator(".tile.kind-text .cm-content").click();
+  await focused(".tile.kind-text .cm-content");
   await win.keyboard.press("End");
   await win.keyboard.type(" there");
   await until(editorText, (t) => t === "# hi there");
@@ -713,21 +917,23 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   fs.writeFileSync(path.join(home, "files-fixture", "zz-new-file.txt"), "new");
   const rows = await until(rowsNow, (r) => r.includes("zz-new-file.txt"));
   check(rows.includes("zz-new-file.txt"), "the file tree shows new files live");
+});
 
-  // Markdown window: rendered, highlighted code, local image, live, ⌘E ⇄ editor.
-  const mdDir = path.join(home, "md-fixture");
-  fs.mkdirSync(mdDir, { recursive: true });
+// Markdown window: rendered, highlighted code, local image, live, ⌘E ⇄ editor.
+const mdDir = path.join(home, "md-fixture");
+fs.mkdirSync(mdDir, { recursive: true });
+await scenario("markdown", async () => {
   // 1×1 PNG
   fs.writeFileSync(path.join(mdDir, "dot.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
   fs.writeFileSync(path.join(mdDir, "README.md"), "# Hello cmd\n\nSome **bold** text and a [link](https://example.com).\n\n- [x] done\n- [ ] todo\n\n![dot](dot.png)\n\n```ts\nconst answer: number = 42;\n```\n");
   const md = await win.evaluate((p) => window.cmd.call("window.openTarget", { target: p }), path.join(mdDir, "README.md"));
   check(md.kind === "markdown", "README.md opens in a Markdown window");
-  await win.evaluate((id) => window.__cmdSelect(id), md.id);
+  await tileIn(md.id);
+  await select(md.id); // ⌘E below acts on the selected window
   await win.waitForSelector(".tile.kind-markdown .ui-doc h1");
-  // Code highlighting waits for the language parser to load on demand.
-  await win.waitForSelector(".tile.kind-markdown pre code span[class]", { timeout: 10_000 }).catch(() => {});
   const h1 = await win.locator(".tile.kind-markdown .ui-doc h1").textContent();
-  const tokens = await win.locator(".tile.kind-markdown pre code span[class]").count();
+  // Code highlighting waits for the language parser to load on demand.
+  const tokens = await until(() => countOf(".tile.kind-markdown pre code span[class]"), (n) => n > 0);
   const imgOk = await until(() => win.locator(".tile.kind-markdown .ui-doc img").evaluate((img) => img.complete && img.naturalWidth === 1, null, { timeout: 10_000 }), Boolean, 5000);
   check(h1 === "Hello cmd" && tokens > 0, `Markdown renders with highlighted code (${tokens} tokens)`);
   check(imgOk, "relative images load through cmd-file:");
@@ -740,13 +946,19 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await menu("view.toggleEdit");
   await win.waitForSelector(`.tile.kind-markdown[data-pane="${md.id}"] .ui-doc h1`, { timeout: 10_000 });
   check(true, "⌘E switches back to the preview");
+});
 
-  // JSON window: a tree, rows fold, ⌘E opens the editor at the selected row's line and back, live, JSON Lines.
+// JSON window: a tree, rows fold, ⌘E opens the editor at the selected row's line and back, live, JSON Lines.
+await scenario("json", async () => {
+  const opened = []; // closed at the end, passed or not (the window-kinds count)
+  try {
   const jsonFile = path.join(mdDir, "data.json");
   fs.writeFileSync(jsonFile, JSON.stringify({ name: "cmd", list: [1, 2, 3], nested: { deep: { value: true } } }, null, 2) + "\n");
   const js = await win.evaluate((p) => window.cmd.call("window.openTarget", { target: p }), jsonFile);
+  opened.push(js);
   check(js.kind === "json", "data.json opens in a JSON window");
-  await win.evaluate((id) => window.__cmdSelect(id), js.id);
+  await tileIn(js.id);
+  await select(js.id);
   const jsonTile = `.tile.kind-json[data-pane="${js.id}"]`;
   await win.waitForSelector(`${jsonTile} .json-row`);
   const keys = await until(() => win.locator(`${jsonTile} .json-key`).allTextContents(), (k) => k.join(",") === "name,list,nested,deep");
@@ -755,6 +967,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await win.waitForSelector(`${jsonTile} .json-key:text-is("value")`, { timeout: 10_000 });
   check(true, "a row unfolds");
   await win.locator(`${jsonTile} .json-row`, { hasText: "value" }).click();
+  await until(() => win.locator(`${jsonTile} .json-row.sel .json-key`).textContent().catch(() => null), (k) => k === "value"); // ⌘E opens at the selected row
   await menu("view.toggleEdit");
   await win.waitForSelector(`.tile.kind-text[data-pane="${js.id}"] .cm-content`, { timeout: 10_000 });
   const cursorLine = await until(() => win.evaluate((id) => document.querySelector(`.tile.kind-text[data-pane="${id}"] .cm-activeLine`)?.textContent ?? "", js.id), (l) => l.includes("value"));
@@ -769,30 +982,36 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   fs.writeFileSync(jsonFile, '{"name": "cmd", "added": ');
   const banner = await win.waitForSelector(`${jsonTile} .ui-callout`, { timeout: 10_000 }).then(() => true, () => false);
   check(banner && (await win.locator(`${jsonTile} .json-key:text-is("added")`).count()) === 1, "a half-written file keeps the last good tree under a banner");
-  await win.evaluate((id) => window.cmd.call("window.close", { id }), js.id);
   const linesFile = path.join(mdDir, "events.jsonl");
   fs.writeFileSync(linesFile, '{"event":"start"}\n{"event":"stop"}\nnot json\n');
   const jl = await win.evaluate((p) => window.cmd.call("window.openTarget", { target: p }), linesFile);
-  await win.evaluate((id) => window.__cmdSelect(id), jl.id);
+  opened.push(jl);
+  await tileIn(jl.id);
+  await select(jl.id);
   await win.waitForSelector(`.tile.kind-json[data-pane="${jl.id}"] .json-row`);
   const lineRows = await until(() => win.locator(`.tile.kind-json[data-pane="${jl.id}"] .json-index`).allTextContents(), (r) => r.length >= 3);
   const unreadable = await until(() => countOf(`.tile.kind-json[data-pane="${jl.id}"] .json-invalid`), (n) => n === 1);
   check(jl.kind === "json" && lineRows.slice(0, 3).join(",") === "1,2,3" && unreadable === 1, `JSON Lines: a row per line, bad lines shown (${lineRows.join(", ")})`);
   await win.screenshot({ path: path.join(shots, "10-json.png") });
-  await win.evaluate((id) => window.cmd.call("window.close", { id }), jl.id);
+  } finally {
+    for (const w of opened) await win.evaluate((id) => window.cmd.call("window.close", { id }), w.id);
+  }
+});
 
+await scenario("window-kinds", async () => {
   await menu("view.grid");
   const kinds = async () => [await countOf(".tile.kind-browser"), await countOf(".tile.kind-files"), await countOf(".tile.kind-text"), await countOf(".tile.kind-markdown")].join();
   await until(kinds, (k) => k === "1,1,1,1");
   await still();
   await win.screenshot({ path: path.join(shots, "10-window-kinds.png") });
   check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1 && (await win.locator(".tile.kind-text").count()) === 1 && (await win.locator(".tile.kind-markdown").count()) === 1, "browser, file, text and Markdown windows take part in the grid");
+});
 
-  // A window whose view throws shows a fallback in its own tile (ErrorBoundary in
-  // WindowContent); the rest of the app stays live and terminals take input.
-  // __cmdBreakView is a test hook (windows/break.ts), absent in a packaged app.
+// A window whose view throws shows a fallback in its own tile (ErrorBoundary in
+// WindowContent); the rest of the app stays live and terminals take input.
+// __cmdBreakView is a test hook (windows/break.ts), absent in a packaged app.
+await scenario("error-boundary", async () => {
   {
-    step("error boundary");
     const broken = (await win.evaluate(() => window.cmd.call("window.list", {}))).find((w) => w.kind === "markdown");
     await win.evaluate((id) => window.__cmdBreakView(id, true), broken.id);
     const fallback = win.locator(`.tile[data-pane="${broken.id}"] .ui-viewstate[data-kind="error"]`);
@@ -800,34 +1019,39 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     check(shown && (await fallback.textContent()).includes("This window stopped working"), "a window whose view throws shows its fallback in its own tile");
     const term = win.locator(".tile.kind-terminal").first();
     const termId = await term.getAttribute("data-pane");
-    await win.evaluate((id) => window.__cmdSelect(id), termId);
+    await select(termId);
     await term.locator(".xterm").click();
     // Typed only once the terminal has focus, and given 10 s to echo: 3 s ran out on a busy CI runner.
-    const focused = await win.waitForFunction((id) => document.activeElement?.closest(`.tile[data-pane="${id}"] .xterm`), termId, { timeout: 10_000 }).then(() => true, () => false);
+    const hasFocus = await focused(`.tile[data-pane="${termId}"] .xterm`);
     await win.keyboard.type("echo still-live-$((6*7))");
     await win.keyboard.press("Enter");
-    let text = "";
-    for (let i = 0; i < 100 && !text.includes("still-live-42"); i++) {
-      await win.waitForTimeout(100);
-      text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 50 }).then((r) => r.text), termId);
-    }
+    const text = await until(() => paneText(termId), (t) => t.includes("still-live-42"));
     const screen = text.trim().split("\n").slice(-3).join(" ⏎ ");
-    check(text.includes("still-live-42") && (await win.locator(".topbar, .statusbar").count()) > 0, `with one window broken, the rest of the app renders and a terminal takes input (focused: ${focused}; screen: ${screen})`);
+    check(text.includes("still-live-42") && (await win.locator(".topbar, .statusbar").count()) > 0, `with one window broken, the rest of the app renders and a terminal takes input (focused: ${hasFocus}; screen: ${screen})`);
     await win.screenshot({ path: path.join(shots, "10b-error-boundary.png") });
     await win.evaluate((id) => window.__cmdBreakView(id, false), broken.id);
     await fallback.locator("button", { hasText: "Reload Window" }).click();
     const back = await win.waitForSelector(`.tile.kind-markdown[data-pane="${broken.id}"] .ui-doc`, { timeout: 10_000 }).then(() => true, () => false);
     check(back && (await fallback.count()) === 0, "Reload Window mounts the view again");
   }
+});
 
-  // New Text Editor: an untitled buffer whose text survives in the window's state;
-  // ⌘S asks where to save (the native panel is stubbed) and the window becomes that file's.
-  await menu("file.newText");
-  const untitled = win.locator(".tile.kind-text.sel .cm-content");
-  await untitled.waitFor({ timeout: 10_000 });
+// New Text Editor: an untitled buffer whose text survives in the window's state;
+// ⌘S asks where to save (the native panel is stubbed) and the window becomes that file's.
+await scenario("untitled", async () => {
   const textWin = () => win.evaluate(() => window.cmd.call("window.list", {})).then((l) => l.filter((w) => w.kind === "text").sort((a, b) => b.createdAt - a.createdAt)[0]);
-  check((await textWin()).title === "Untitled", "⇧⌘E opens an untitled text window");
+  // A new Untitled: in the core, then selected and shown (what ⌘W and typing act on).
+  const newUntitled = async (not) => {
+    await menu("file.newText");
+    const w = await until(textWin, (w) => w?.title === "Untitled" && w.id !== not);
+    if (w?.title === "Untitled") await until(selected, (s) => s === w.id);
+    return w;
+  };
+  const draft = await newUntitled();
+  check(draft?.title === "Untitled", "⇧⌘E opens an untitled text window");
+  const untitled = win.locator(`.tile[data-pane="${draft.id}"] .cm-content`);
   await untitled.click();
+  await focused(`.tile[data-pane="${draft.id}"] .cm-content`);
   await win.keyboard.type("scratch notes");
   check((await until(textWin, (w) => w.state.draft === "scratch notes")).state.draft === "scratch notes", "an untitled window keeps its unsaved text in the core");
   // ⌘W asks before losing that text (the sheet is stubbed to answer Cancel).
@@ -850,23 +1074,21 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   check(fs.readFileSync(savedAs, "utf8") === "scratch notes" && after.title === "scratch.txt" && after.state.path === savedAs, "⌘S on an untitled window saves it where the panel says, and the window becomes that file's");
   await win.evaluate((id) => window.cmd.call("window.close", { id }), after.id);
   // An empty Untitled has nothing to lose: ⌘W closes it without asking.
-  await menu("file.newText");
-  await untitled.waitFor({ timeout: 10_000 });
-  const emptyId = (await textWin()).id;
+  const emptyId = (await newUntitled(draftId)).id;
   await menu("file.close");
   const left = await until(() => win.evaluate(() => window.cmd.call("window.list", {})), (l) => !l.some((w) => w.id === emptyId));
   check((await asked()) === 1 && !left.some((w) => w.id === emptyId), "⌘W closes an empty untitled window without asking");
   await app.evaluate(({ dialog }) => (dialog.showMessageBox = dialog.__orig));
-  server.close();
-}
+});
 
 // Embedded pages: browser pages and Magic widgets run in their own process, so
 // they report presses and sideways scrolls (renderer/src/embed.ts; browser pages
 // through preload/guest.ts, widgets by postMessage). Magic widgets are staged
 // with a widget and its data, so no model runs.
-{
+await scenario("embedded", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   const magic = [];
+  try {
   for (const name of ["Alpha", "Beta"]) {
     const w = await call("window.open", { kind: "magic", input: {} });
     await call("window.update", {
@@ -1002,7 +1224,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await still(800);
   const offset = () => win.evaluate(() => document.querySelector(".windows-scroller").scrollLeft);
   const scrolls = async (loc, id) => {
-    await win.evaluate((id) => window.__cmdSelect(id), id); // the strip reveals it
+    await select(id); // the strip reveals it
     await still(700);
     const b = await loc.boundingBox();
     await win.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
@@ -1018,15 +1240,17 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   };
   check(await scrolls(frame(magic[0]), magic[0]), "sideways scrolling over a Magic widget scrolls the strip");
   check(await scrolls(page, pageId), "sideways scrolling over a browser page scrolls the strip");
-  await menu("view.grid");
-  for (const id of magic) await call("window.close", { id });
-}
+  } finally {
+    await menu("view.grid");
+    for (const id of magic) await call("window.close", { id }).catch(() => {});
+  }
+});
 
 // Magic v2 (docs/14-magic-v2.md): cmd.state survives the frame, the app renders
 // previews for the core, and a widget folder's data.ts runs in the core (Deno,
 // validated against its schema). The folder is staged as a revision and brought
 // back with magic.restore, the path a real build ends in; no model runs.
-{
+await scenario("magic", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   const rt = await call("magic.runtime");
   check(rt.previewer === "app", `the app renders widget previews for the core (${rt.previewer})`);
@@ -1208,10 +1432,10 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     await call("pane.kill", { paneId: fresh.at(-1).id }).catch(() => {});
     await call("window.close", { id: b.id });
   }
-}
+});
 
 // Settings: its own native window (⌘,), generated from the schema; changes apply live.
-{
+await scenario("settings", async () => {
   const opened = app.waitForEvent("window");
   await menu("app.settings");
   const sw = await opened;
@@ -1262,7 +1486,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   const claudeRow = sw.locator(".ui-row", { has: sw.locator(".ui-row-title", { hasText: "Claude Code" }) });
   await claudeRow.locator("button", { hasText: "Install" }).click();
   await claudeRow.locator("button", { hasText: "Remove" }).waitFor();
-  const claudeSettings = JSON.parse(fs.readFileSync(path.join(transcripts, ".claude", "settings.json"), "utf8"));
+  const claudeSettings = await until(() => { try { return JSON.parse(fs.readFileSync(path.join(transcripts, ".claude", "settings.json"), "utf8")); } catch { return {}; } }, (c) => !!c.hooks);
   check(JSON.stringify(claudeSettings.hooks?.PreToolUse ?? []).includes("/hooks/cmd-hook' claude"), "Settings → AI & Agents installs cmd's hook into the Claude config");
   await sw.screenshot({ path: path.join(shots, "5-settings-agents.png") });
 
@@ -1345,6 +1569,7 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await waitFor(() => !fs.readFileSync(kbFile, "utf8").includes("workspace.last"), "Restore default removes the shortcut from keybindings.json");
   await lastWorkspace.hover();
   await lastWorkspace.locator(".ui-shortcut-add").click();
+  await until(async () => (await accel("view.palette")) === null, Boolean); // recording: the keys go to Settings, not the menu
   await sw.keyboard.press("Control+Alt+L");
   await waitFor(() => fs.readFileSync(kbFile, "utf8").includes("workspace.last"), "a second recording is saved");
   await sw.locator(".ui-form-actions .ui-button", { hasText: "Restore Defaults" }).click();
@@ -1355,17 +1580,19 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   await sw.locator(".ui-split-pane .ui-search input").fill("");
   await sw.screenshot({ path: path.join(shots, "5-settings-shortcuts.png") });
   await sw.close();
-}
+});
 
 // Live remap via keybindings.json
-fs.writeFileSync(path.join(home, "keybindings.json"), '// test\n{ "session.next": ["Ctrl+Tab"], "edit.clear": null }');
-const remapped = await until(() => accel("session.next"), (a) => a === "Ctrl+Tab");
-await until(() => accel("edit.clear"), (a) => a === null, 5000);
-check(remapped === "Ctrl+Tab", "keybindings.json remaps live");
-check((await accel("edit.clear")) === null, "null unbinds a shortcut");
+await scenario("keybindings", async () => {
+  fs.writeFileSync(path.join(home, "keybindings.json"), '// test\n{ "session.next": ["Ctrl+Tab"], "edit.clear": null }');
+  const remapped = await until(() => accel("session.next"), (a) => a === "Ctrl+Tab");
+  await until(() => accel("edit.clear"), (a) => a === null, 5000);
+  check(remapped === "Ctrl+Tab", "keybindings.json remaps live");
+  check((await accel("edit.clear")) === null, "null unbinds a shortcut");
+});
 
 // Closing the focused terminal returns to the previously used one (MRU), not a sidebar neighbour.
-{
+await scenario("mru", async () => {
   const n0 = await panes();
   await menu("file.newTerminal");
   await until(panes, (n) => n === n0 + 1);
@@ -1383,14 +1610,21 @@ check((await accel("edit.clear")) === null, "null unbinds a shortcut");
   await until(panes, (n) => n === n0);
   const sel = await until(async () => (await homeView())["selection.pane"], (s) => s === first);
   check(sel === first, "closing a terminal focuses the previously used one");
-}
+  // ⌘W next acts on the window the renderer shows selected.
+  await until(selectedTile, (s) => s === first);
+});
 
 // ⌘W on an idle shell closes it without asking
-await menu("file.close");
-check((await until(panes, (n) => n === 1)) === 1, "⌘W closes an idle terminal");
+await scenario("close-idle", async () => {
+  const before = await panes();
+  await menu("file.close");
+  const n = await until(panes, (n) => n === before - 1);
+  check(n === before - 1, `⌘W closes an idle terminal (${before} → ${n})`);
+});
 
 // ── PaperWM-style strip ──
-{
+await scenario("strip", async () => {
+  try {
   for (let i = 0; i < 3; i++) {
     const n0 = await panes();
     await menu("file.newTerminal");
@@ -1449,7 +1683,7 @@ check((await until(panes, (n) => n === 1)) === 1, "⌘W closes an idle terminal"
   const selX = (await win.locator(".windows-track > .tile.sel").boundingBox()).x;
   await menu("view.toggleFocus");
   await win.waitForSelector(".main.mode-focus");
-  await win.waitForTimeout(500);
+  await still();
   await menu("view.toggleFocus");
   await win.waitForSelector(".main.mode-strip");
   await still(600);
@@ -1466,17 +1700,15 @@ check((await until(panes, (n) => n === 1)) === 1, "⌘W closes an idle terminal"
     const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
     for (const dw of [-120, -60, 0]) {
       await app.evaluate(({ BrowserWindow }, w) => BrowserWindow.getAllWindows()[0].setSize(w, BrowserWindow.getAllWindows()[0].getSize()[1]), size[0] + dw);
-      await win.waitForTimeout(250);
+      await win.waitForTimeout(250); // a live resize, step by step (not a read)
     }
     await still(400);
     check((await trackX()) === 0, `resizing the window keeps the strip scrolled to the start (${Math.round(-(await trackX()))})`);
   }
 
   // resize by the right edge, capped at the pane width
-  await win.evaluate((id) => window.__cmdSelect(id), await (await visualTiles())[0].getAttribute("data-pane"));
-  await win.waitForTimeout(500);
   const first = (await visualTiles())[0];
-  await win.evaluate((id) => window.__cmdSelect(id), await first.getAttribute("data-pane"));
+  await select(await first.getAttribute("data-pane"));
   await still(500);
   const fb = await first.boundingBox();
   const handle = await first.locator('.strip-resize[data-edge="right"]').boundingBox();
@@ -1494,7 +1726,7 @@ check((await until(panes, (n) => n === 1)) === 1, "⌘W closes an idle terminal"
   // Every window has a left edge too: it grows the window leftwards (its right edge stays, the strip scrolls).
   {
     const second = (await visualTiles())[1];
-    await win.evaluate((id) => window.__cmdSelect(id), await second.getAttribute("data-pane"));
+    await select(await second.getAttribute("data-pane"));
     await still(600);
     const b = await second.boundingBox();
     const h = await second.locator('.strip-resize[data-edge="left"]').boundingBox();
@@ -1509,7 +1741,7 @@ check((await until(panes, (n) => n === 1)) === 1, "⌘W closes an idle terminal"
   }
   // drag a window along the strip: the others make room (insert-style)
   {
-    await win.evaluate((id) => window.__cmdSelect(id), await (await visualTiles())[0].getAttribute("data-pane"));
+    await select(await (await visualTiles())[0].getAttribute("data-pane"));
     await still(500);
     const vt = await visualTiles();
     const movedId = await vt[0].getAttribute("data-pane");
@@ -1531,23 +1763,28 @@ check((await until(panes, (n) => n === 1)) === 1, "⌘W closes an idle terminal"
   await win.screenshot({ path: path.join(shots, "8-strip.png") });
   const widths = await until(async () => (await homeView())["strip.widths"], (w) => w && Object.keys(w).length >= 1);
   check(widths && Object.keys(widths).length >= 1, "strip widths are remembered");
-  await menu("view.grid");
-}
+  } finally {
+    await menu("view.grid");
+  }
+});
 
-// Terminal content must survive re-attaching exactly once (no replayed duplicates).
-const markerPane = (await win.evaluate(() => window.cmd.call("pane.list", {})))[0].id;
-// Mouse reporting on, then off, then a marker computed by the shell (PowerShell on Windows).
-const markerCmd = process.platform !== "win32"
-  ? "printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r"
-  : 'Write-Host -NoNewline "`e[?1000h`e[?1000l"; echo "MARKER-$(40+2)"\r';
-step("typing the re-attach marker");
-await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [markerPane, markerCmd]);
-await until(() => paneText(markerPane, 500), (t) => t.includes("MARKER-42"));
+// Terminal content must survive re-attaching exactly once (no replayed duplicates): a
+// marker now, read again after the restart below. Sidebars dock this terminal too.
+let markerPane = null;
+await scenario("marker", async () => {
+  markerPane = (await win.evaluate(() => window.cmd.call("pane.list", {})))[0].id;
+  // Mouse reporting on, then off, then a marker computed by the shell (PowerShell on Windows).
+  const markerCmd = process.platform !== "win32"
+    ? "printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r"
+    : 'Write-Host -NoNewline "`e[?1000h`e[?1000l"; echo "MARKER-$(40+2)"\r';
+  await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [markerPane, markerCmd]);
+  const text = await until(() => paneText(markerPane, 500), (t) => t.includes("MARKER-42"));
+  check(text.includes("MARKER-42"), "the terminal runs the re-attach marker");
+});
 
 // Sidebars (docs/21-sidebars.md): any window docks to a side and comes back to the board.
-{
-  await win.evaluate((id) => window.__cmdSelect(id), markerPane);
-  await until(() => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane), (s) => s === markerPane, 5000);
+await scenario("sidebars", async () => {
+  await select(markerPane);
   const onBoard = () => win.locator(`.windows-track > .tile[data-pane="${markerPane}"]`).count();
   await menu("window.dockRight");
   await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 10_000 });
@@ -1577,15 +1814,17 @@ await until(() => paneText(markerPane, 500), (t) => t.includes("MARKER-42"));
   check(stage.x === 0 && Math.abs(stage.width - vw) < 1 && tiles.every(([l, r]) => l >= leftEdge - 1 && r <= rightEdge + 1),
     `the canvas spans the window under the sidebars, and Fit keeps windows between them (${stage.width} / ${vw})`);
   await menu("view.grid");
-  await win.waitForTimeout(300);
+  await win.waitForSelector(".main.mode-grid", { timeout: 10_000 });
+  await until(selected, (s) => s === markerPane); // what Move to Board acts on
   await menu("window.undock");
   await win.waitForSelector(`.windows-track > .tile[data-pane="${markerPane}"]`, { timeout: 10_000 });
   await gone(".dock-right");
   await until(() => countOf(".dock-right"), (n) => n === 0, 5000);
   check((await win.locator(".dock-right").count()) === 0 && (await win.locator(".dock-left .navigator").count()) === 1, "Move to Board brings it back; the Navigator stays on the left");
-}
+});
 
 // ── remembered UI state across an app restart (the core keeps running) ──
+await scenario("restart", async () => {
 await menu("view.grid");
 await win.click(".sb-windows .ui-list-heading"); // collapse a Navigator section
 await menu("view.zoomIn");
@@ -1602,9 +1841,10 @@ await menu("view.zoomIn");
 // Debounced writes reach the core before we read them back.
 await until(async () => (await homeView()).docks?.left?.width, (w) => w > 300);
 await until(() => win.evaluate(() => window.cmd.call("ui.get", {})), (u) => u["terminal.zoom"] === 2 && u["sidebar.collapsed"]?.length > 0);
-await win.waitForTimeout(400);
 step("reading the UI state before the restart");
-const selectedBefore = (await homeView())["selection.pane"];
+// The selection is saved debounced too: the one shown, once the core has it.
+const shownSel = await selected();
+const selectedBefore = await until(async () => (await homeView())["selection.pane"], (s) => s === shownSel);
 step("closing the app");
 await closeApp();
 step("relaunching the app");
@@ -1629,7 +1869,7 @@ const restored = await until(async () => (await homeView())["selection.pane"], (
 check(restored === selectedBefore && !!selectedBefore, `selected terminal restored (${selectedBefore} → ${restored})`);
 {
   const text = await win.evaluate((id) => window.cmd.call("pane.read", { paneId: id, lines: 500 }).then((r) => r.text), markerPane);
-  await win.evaluate((id) => window.__cmdSelect(id), markerPane);
+  await select(markerPane);
   await menu("view.focus");
   // WebGL draws to a canvas: read the screen through the DOM renderer (settings apply live).
   const settingsPath = path.join(home, "settings.json");
@@ -1645,9 +1885,10 @@ check(restored === selectedBefore && !!selectedBefore, `selected terminal restor
 }
 check((await win.locator(".tile.kind-browser").count()) === 1 && (await win.locator(".tile.kind-files").count()) === 1, "browser and file windows survive an app restart");
 await win.screenshot({ path: path.join(shots, "7-restored.png") });
+});
 
 // The sidebar footer shows the core's health; its details restart the core, and the terminals live on.
-{
+await scenario("core-status", async () => {
   const button = win.locator(".core-status-button");
   await win.waitForFunction(() => document.querySelector(".core-status-button .ui-dot[data-state=\"success\"]") && document.querySelector(".core-status-usage .slot-v"), null, { timeout: 10_000 });
   check((await button.locator(".ui-dot[data-state=\"success\"]").count()) === 1, `core status is healthy (${await button.textContent()})`);
@@ -1674,11 +1915,11 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   await win.keyboard.press("Escape");
   await gone(".core-details");
   check((await until(() => countOf(".core-details"), (n) => n === 0, 5000)) === 0, "Escape closes the core details");
-}
+});
 
 // Workspaces: `cmd .` (workspace.open with show) switches the window to a new, empty
 // Workspace; new terminals start at its root; ⌃⌘[ goes back; closing ends its terminals.
-{
+await scenario("workspaces", async () => {
   const proj = path.join(home, "proj");
   fs.mkdirSync(proj, { recursive: true });
   const tilesInHome = await win.locator(".windows-track > .tile").count();
@@ -1709,11 +1950,16 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   await win.evaluate((id) => window.cmd.call("workspace.update", { id, icon: null }), "home");
   await menu("workspace.icon");
   await win.locator(".icon-picker").waitFor();
+  await focused(".icon-picker input");
   await win.keyboard.type("leaf");
+  await until(() => win.locator(".icon-picker input").inputValue(), (v) => v === "leaf"); // Enter picks from what it shows
   await win.screenshot({ path: path.join(shots, "8-workspace-icon.png") });
   await win.keyboard.press("Enter");
   const icon = await until(() => win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((x) => x.home).icon)), (i) => i === "leaf");
   check(icon === "leaf", `Change Workspace Icon… sets the workspace's icon (${icon})`);
+  await gone(".icon-picker");
+  // The Enter that picks is the picker's: it doesn't also click the switcher that gets the focus back.
+  check((await win.locator(".workspace-trigger").getAttribute("aria-expanded")) === "false" && (await countOf(".workspace-menu")) === 0, "Enter in the icon picker doesn't open the switcher's menu");
   await win.evaluate((id) => window.cmd.call("workspace.close", { id }), sp.id);
   const still = (await until(inWorkspace, (l) => l.length === 0)).length;
   await gone(".icon-picker");
@@ -1722,13 +1968,12 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   const left = await until(workspaceItems, (n) => n === 1, 5000);
   await win.keyboard.press("Escape");
   check(still === 0 && left === 1, `closing a workspace ends its terminals and leaves the switcher (${still} terminals, ${left} Workspaces)`);
-}
+});
 
 // The app window never leaves its page and opens no windows (it carries window.cmd): a web
 // link that gets that far opens in a browser window instead (main/web-session.ts). Last:
 // Playwright waits for good on the navigation that main prevented.
-{
-  step("app window stays on its page");
+await scenario("app-window", async () => {
   const own = await win.evaluate(() => location.href);
   await win.evaluate((u) => void (location.href = u), "https://example.invalid/?away");
   const popup = await win.evaluate((u) => window.open(u) === null, "https://example.invalid/?popup");
@@ -1736,10 +1981,14 @@ await win.screenshot({ path: path.join(shots, "7-restored.png") });
   const stayed = (await win.evaluate(() => location.href)) === own && (await win.evaluate(() => typeof window.cmd?.call)) === "function";
   check(stayed && popup && forwarded.length === 2, `an app window stays on its page and sends web links and pop-ups to browser windows (${stayed}, ${popup}, ${forwarded.length})`);
   for (const w of forwarded) await win.evaluate((id) => window.cmd.call("window.close", { id }), w.id);
-}
+});
 
-await closeApp();
+server.close();
+step("closing");
+await Promise.race([closeApp(), new Promise((r) => setTimeout(r, 30_000))]);
 await stopCore(home, { terminals: true });
-console.log("all checks passed; screenshots in", shots);
+report();
+if (failures.length) console.log(`screenshots in ${shots}`);
+else console.log("all checks passed; screenshots in", shots);
 // Done: don't let a handle Playwright leaves open keep us alive until the watchdog fires.
-process.exit(0);
+process.exit(failures.length ? 1 : 0);
