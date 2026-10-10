@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, parseDecisions, permissionVerdict, siteOf } from "../src/main/web-policy.ts";
+import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, macDevices, macMediaStep, macPrivacyPane, parseDecisions, permissionVerdict, siteOf, type MacAccess, type MacDevice } from "../src/main/web-policy.ts";
 
 const SITE = "https://meet.example.com";
 
@@ -65,5 +65,43 @@ describe("will-attach-webview", () => {
     const kept = { [SITE]: { media: true } };
     for (const site of [`${SITE}/path`, "file:///tmp", "not a site", "", 1, null, undefined, { [SITE]: true }, "__proto__"]) expect(() => forgetDecision(kept, site, "media")).toThrow();
     for (const kind of ["midi", "", "__proto__", "toString", 1, undefined, { media: true }, ["media"]]) expect(() => forgetDecision(kept, SITE, kind)).toThrow();
+  });
+});
+
+describe("macOS camera and microphone access", () => {
+  const os = (camera: MacAccess, microphone: MacAccess) => (d: MacDevice) => (d === "camera" ? camera : microphone);
+
+  it("map the request's media types to devices", () => {
+    expect(macDevices(["video", "audio"])).toEqual(["camera", "microphone"]);
+    expect(macDevices(["audio"])).toEqual(["microphone"]);
+    expect(macDevices([])).toEqual([]);
+    expect(macDevices(undefined)).toEqual([]);
+  });
+
+  it("never reach macOS when cmd's answer is no", () => {
+    expect(macMediaStep(false, ["camera"], os("granted", "granted"))).toEqual({ kind: "deny" });
+    expect(macMediaStep(false, ["camera"], os("not-determined", "not-determined"))).toEqual({ kind: "deny" });
+  });
+
+  it("allow when macOS has given every device the page wants", () => {
+    expect(macMediaStep(true, ["camera", "microphone"], os("granted", "granted"))).toEqual({ kind: "allow" });
+    expect(macMediaStep(true, ["microphone"], os("denied", "granted"))).toEqual({ kind: "allow" });
+    expect(macMediaStep(true, ["camera"], os("unknown", "unknown"))).toEqual({ kind: "allow" });
+    expect(macMediaStep(true, [], os("denied", "denied"))).toEqual({ kind: "allow" });
+  });
+
+  it("ask macOS for the undecided devices only", () => {
+    expect(macMediaStep(true, ["camera", "microphone"], os("not-determined", "granted"))).toEqual({ kind: "ask", devices: ["camera"] });
+    expect(macMediaStep(true, ["camera", "microphone"], os("not-determined", "not-determined"))).toEqual({ kind: "ask", devices: ["camera", "microphone"] });
+  });
+
+  it("tell when macOS refused a device, without asking for the others", () => {
+    expect(macMediaStep(true, ["camera", "microphone"], os("denied", "not-determined"))).toEqual({ kind: "tell", devices: ["camera"] });
+    expect(macMediaStep(true, ["camera", "microphone"], os("restricted", "denied"))).toEqual({ kind: "tell", devices: ["camera", "microphone"] });
+  });
+
+  it("open System Settings at the device's list", () => {
+    expect(macPrivacyPane("camera")).toBe("x-apple.systempreferences:com.apple.preference.security?Privacy_Camera");
+    expect(macPrivacyPane("microphone")).toBe("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone");
   });
 });

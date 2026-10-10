@@ -32,8 +32,10 @@ mac:
   extendInfo:
     CFBundleIconName: Icon
     # Visualizer sources (renderer/src/audio.ts). Without the second, system audio comes back silent.
-    NSMicrophoneUsageDescription: A Visualizer can move to what your microphone hears.
+    NSMicrophoneUsageDescription: Websites in browser windows can use your microphone when you allow them, and a Visualizer can move to what it hears.
     NSAudioCaptureUsageDescription: A Visualizer can move to the audio your Mac is playing.
+    # Websites in browser windows (main/web-session.ts); the microphone's line covers them too.
+    NSCameraUsageDescription: Websites in browser windows can use your camera when you allow them.
   target:
     - dmg
     - zip

@@ -13,8 +13,11 @@
   <!-- shells and agents in panes inherit the core's environment -->
   <key>com.apple.security.cs.allow-dyld-environment-variables</key>
   <true/>
-  <!-- Visualizer windows can listen to the microphone (renderer/src/audio.ts) -->
+  <!-- Visualizer windows (renderer/src/audio.ts) and websites in browser windows can listen to the microphone -->
   <key>com.apple.security.device.audio-input</key>
+  <true/>
+  <!-- websites in browser windows can use the camera, once allowed (main/web-session.ts) -->
+  <key>com.apple.security.device.camera</key>
   <true/>
 </dict>
 </plist>

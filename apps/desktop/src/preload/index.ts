@@ -16,7 +16,7 @@ import type { WhatsNewClaim } from "../main/whats-new.ts";
 import type { NotifyAccess, NotifyPermission } from "../main/notify-permission.ts";
 import type { OnboardingClaim } from "../main/onboarding.ts";
 import type { AppProcess } from "../main/metrics.ts";
-import type { SiteDecisions, SitePermission, SitePermissionRequest } from "../main/web-policy.ts";
+import type { MacDevice, SiteDecisions, SitePermission, SitePermissionRequest } from "../main/web-policy.ts";
 import type { OpenFrom } from "../main/open-policy.ts";
 
 export interface AppInfo {
@@ -211,6 +211,14 @@ const api = {
   },
   /** Allow or Don't Allow (kept for the site); null: dismissed, asked again next time. */
   answerSitePermission: (id: string, allow: boolean | null) => ipcRenderer.send("site-permission-answer", id, allow),
+  /** macOS refused cmd a device a site was allowed (once per device and launch). */
+  onMediaBlocked(fn: (devices: MacDevice[]) => void): () => void {
+    const h = (_e: unknown, d: MacDevice[]) => fn(d);
+    ipcRenderer.on("media-blocked", h);
+    return () => ipcRenderer.off("media-blocked", h);
+  },
+  /** System Settings → Privacy & Security at the camera's or microphone's list. */
+  openMediaSettings: (d: MacDevice) => ipcRenderer.send("media-settings", d),
   /** The answers kept per site (Settings → Browser). */
   sitePermissions: (): Promise<SiteDecisions> => ipcRenderer.invoke("site-permissions"),
   /** The kept answers changed (a sheet answered, or Settings removed one). */

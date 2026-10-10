@@ -84,3 +84,39 @@ export function forgetDecision(decisions: SiteDecisions, site: unknown, kind: un
   }
   return out;
 }
+
+// ── macOS camera and microphone access ──────────────────
+// cmd allowing a site the camera isn't enough: macOS asks once whether cmd may
+// use it at all. Without that, a page waits forever for its stream.
+
+/** A device macOS guards (systemPreferences.getMediaAccessStatus). */
+export type MacDevice = "camera" | "microphone";
+/** What macOS says about cmd and a device; "unknown" off macOS. */
+export type MacAccess = "not-determined" | "granted" | "denied" | "restricted" | "unknown";
+
+/** The devices a media request wants (Electron's mediaTypes: "video", "audio"). */
+export function macDevices(mediaTypes: readonly string[] | undefined): MacDevice[] {
+  const t = mediaTypes ?? [];
+  return [...(t.includes("video") ? (["camera"] as const) : []), ...(t.includes("audio") ? (["microphone"] as const) : [])];
+}
+
+/**
+ * The answer to a media request, given cmd's own (allowed: the site's kept or
+ * just given answer) and what macOS says per device: deny (cmd said no), allow
+ * (macOS has given every device), ask (macOS hasn't decided: show its prompt for
+ * these, then allow only if it gives them all), or tell (macOS refused: answer
+ * no and say where to turn it on).
+ */
+export type MacMediaStep = { kind: "deny" } | { kind: "allow" } | { kind: "ask"; devices: MacDevice[] } | { kind: "tell"; devices: MacDevice[] };
+
+export function macMediaStep(allowed: boolean, devices: readonly MacDevice[], access: (d: MacDevice) => MacAccess): MacMediaStep {
+  if (!allowed) return { kind: "deny" };
+  const state = devices.map((d) => [d, access(d)] as const);
+  const refused = state.filter(([, a]) => a === "denied" || a === "restricted").map(([d]) => d);
+  if (refused.length) return { kind: "tell", devices: refused };
+  const undecided = state.filter(([, a]) => a === "not-determined").map(([d]) => d);
+  return undecided.length ? { kind: "ask", devices: undecided } : { kind: "allow" };
+}
+
+/** System Settings → Privacy & Security at the device's list. */
+export const macPrivacyPane = (d: MacDevice): string => `x-apple.systempreferences:com.apple.preference.security?${d === "camera" ? "Privacy_Camera" : "Privacy_Microphone"}`;

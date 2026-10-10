@@ -7,13 +7,13 @@
 // to trusted-certificates.json, and Settings → Browser lists and removes them.
 // The rules themselves are in web-policy.ts.
 
-import { app, BrowserWindow, ipcMain, session, type WebContents } from "electron";
+import { app, BrowserWindow, ipcMain, session, shell, systemPreferences, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { cmdHome, logger } from "@cmd/protocol/node";
 import { allowedAppUrl, type AppPages } from "../shared/app-url.ts";
-import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, isAsked, parseDecisions, permissionVerdict, siteOf, type SiteDecisions, type SitePermission, type SitePermissionRequest } from "./web-policy.ts";
+import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, isAsked, macDevices, macMediaStep, macPrivacyPane, parseDecisions, permissionVerdict, siteOf, type SiteDecisions, type SitePermission, type MacAccess, type MacDevice, type SitePermissionRequest } from "./web-policy.ts";
 
 const log = logger("web");
 const here = import.meta.dirname; // apps/desktop/out/main
@@ -215,6 +215,35 @@ function ask(page: WebContents, host: WebContents, req: Omit<SitePermissionReque
   return answered;
 }
 
+// ── macOS camera and microphone ─────────────────────────
+
+/** Devices macOS refused that the person has been told about, this launch. */
+const told = new Set<MacDevice>();
+
+/**
+ * cmd's answer to a media request, passed through macOS: its prompt when it
+ * hasn't decided (askForMediaAccess), else no, with a toast in the app window
+ * (once per device and launch) that says where to turn it on.
+ */
+async function withMacAccess(allowed: boolean, mediaTypes: readonly string[] | undefined, site: string, host: WebContents | null): Promise<boolean> {
+  // Fake devices (e2e) aren't the Mac's camera: macOS has nothing to say about them.
+  if (process.platform !== "darwin" || app.commandLine.hasSwitch("use-fake-device-for-media-stream")) return allowed;
+  const devices = macDevices(mediaTypes);
+  const step = macMediaStep(allowed, devices, (d) => systemPreferences.getMediaAccessStatus(d) as MacAccess);
+  if (step.kind === "allow" || step.kind === "deny") return step.kind === "allow";
+  let refused = step.kind === "tell" ? step.devices : [];
+  if (step.kind === "ask") {
+    for (const d of step.devices) if (!(await systemPreferences.askForMediaAccess(d))) refused = [...refused, d];
+    log.info(`macOS ${refused.length ? `refused ${refused.join(" and ")}` : `gave ${step.devices.join(" and ")}`} (asked for ${site})`);
+  } else log.info(`macOS refuses ${refused.join(" and ")}, so ${site} doesn't get it`);
+  const tell = refused.filter((d) => !told.has(d));
+  if (tell.length && host && !host.isDestroyed()) {
+    tell.forEach((d) => told.add(d));
+    host.send("media-blocked", tell);
+  }
+  return !refused.length;
+}
+
 /**
  * The browser session's permission handlers and the answers from the sheet; the
  * app's own pages, which app windows stay on. Before the first window opens.
@@ -227,9 +256,10 @@ export function startWebSession(o: { pages: AppPages; appWindows: () => BrowserW
     const site = siteOf(details.requestingUrl);
     const verdict = permissionVerdict(permission, site, isAsked(permission) ? decisions() : {});
     const host = wc && appWindowOf(wc);
+    const media = permission === "media" && site ? (allowed: boolean) => withMacAccess(allowed, "mediaTypes" in details ? details.mediaTypes : undefined, site, host) : (allowed: boolean) => Promise.resolve(allowed);
     if (verdict !== "ask" || !site || !isAsked(permission) || !host || host.isDestroyed()) {
       if (verdict !== "allow") log.info(`denied ${permission} to ${site ?? details.requestingUrl}`);
-      return done(verdict === "allow");
+      return void media(verdict === "allow").then(done, () => done(false));
     }
     const extra: Partial<SitePermissionRequest> = {};
     if ("mediaTypes" in details) {
@@ -240,12 +270,17 @@ export function startWebSession(o: { pages: AppPages; appWindows: () => BrowserW
       const name = app.getApplicationNameForProtocol(details.externalURL);
       if (name) extra.app = name.replace(/\.app$/, "");
     }
-    void ask(wc, host, { site, kind: permission, ...extra }).then(done);
+    void ask(wc, host, { site, kind: permission, ...extra })
+      .then(media)
+      .then(done, () => done(false));
   });
   ipcMain.on("site-permission-answer", (e, id: unknown, allow: unknown) => {
     const w = typeof id === "string" ? waiting.get(id) : undefined;
     if (!w || w.host !== e.sender) return;
     w.answer(allow === true ? true : allow === false ? false : null);
+  });
+  ipcMain.on("media-settings", (e, d: unknown) => {
+    if (fromApp(e.sender) && (d === "camera" || d === "microphone")) void shell.openExternal(macPrivacyPane(d));
   });
   ipcMain.handle("site-permissions", (e) => {
     if (!fromApp(e.sender)) throw new Error("Not allowed here.");

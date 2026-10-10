@@ -356,7 +356,15 @@ export function App() {
         action: { label: "Open System Settings", run: () => cmd.openNotifySettings() },
       }),
     );
-    return () => (off(), offClick(), offBlocked());
+    // A site was allowed the camera or microphone, but macOS won't give it to cmd (main: web-session.ts).
+    const offMedia = cmd.onMediaBlocked((devices) =>
+      toast(`macOS has cmd's ${devices.includes("camera") ? (devices.includes("microphone") ? "camera and microphone" : "camera") : "microphone"} turned off`, {
+        tone: "warning",
+        duration: 10_000,
+        action: { label: "Open System Settings", run: () => cmd.openMediaSettings(devices[0]!) },
+      }),
+    );
+    return () => (off(), offClick(), offBlocked(), offMedia());
   }, [select, looks, doneBatch]);
 
   /** The terminal a row lives in: its own, or for a subagent (no window of its own) its host's. */

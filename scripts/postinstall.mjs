@@ -72,6 +72,9 @@ if (process.platform === "darwin") {
     fs.copyFileSync(path.resolve("apps/desktop/build/icon.icns"), path.join(bundle, "Contents/Resources/electron.icns"));
     fs.copyFileSync(path.resolve("apps/desktop/build/Assets.car"), path.join(bundle, "Contents/Resources/Assets.car"));
     execFileSync("/usr/bin/plutil", ["-replace", "CFBundleIconName", "-string", "Icon", plist]);
+    // macOS's camera and microphone prompts say what the packaged app says (electron-builder.yml).
+    const yml = fs.readFileSync(path.resolve("apps/desktop/electron-builder.yml"), "utf8");
+    for (const [, key, text] of yml.matchAll(/^\s+(NS\w+UsageDescription): (.+)$/gm)) execFileSync("/usr/bin/plutil", ["-replace", key, "-string", text.trim(), plist]);
     const now = new Date();
     fs.utimesSync(bundle, now, now); // so LaunchServices picks up the new name and icon
   } catch (err) {
