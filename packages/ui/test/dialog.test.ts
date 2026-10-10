@@ -94,18 +94,36 @@ describe.skipIf(noChromium)("Dialog and Popover focus (gallery, Chromium)", () =
     await page.getByRole("button", { name: "Send Feedback…" }).click();
     await page.waitForSelector(".ui-dialog");
     await page.waitForTimeout(400);
-    const frames = await page.evaluate(async () => {
+    // The exit lasts 120 ms: counting real frames in it found one or two on a busy CI
+    // runner. Instead its animations are paused and seeked through, all in one task: React
+    // commits the close in a microtask, so the removal timer can't fire meanwhile.
+    const exit = await page.evaluate(async () => {
       document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      const seen: number[] = [];
-      for (let i = 0; i < 30; i++) {
-        await new Promise(requestAnimationFrame);
-        const sheet = document.querySelector<HTMLElement>(".ui-scrim[data-closing][inert] .ui-dialog");
-        seen.push(sheet ? Number(getComputedStyle(sheet).opacity) * Number(getComputedStyle(sheet.parentElement!).opacity) : 0);
-      }
-      return seen;
+      const find = () => document.querySelector<HTMLElement>(".ui-scrim[data-closing][inert] .ui-dialog");
+      for (let i = 0; i < 100 && !find(); i++) await Promise.resolve();
+      const sheet = find();
+      if (!sheet) return null;
+      const scrim = sheet.parentElement!;
+      const anims = [...sheet.getAnimations(), ...scrim.getAnimations()];
+      const ms = Math.max(...anims.map((a) => Number(a.effect!.getComputedTiming().endTime)));
+      const opacity = () => Number(getComputedStyle(sheet).opacity) * Number(getComputedStyle(scrim).opacity);
+      const seen = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+        for (const a of anims) (a.pause(), (a.currentTime = f * ms));
+        return opacity();
+      });
+      for (const a of anims) a.play();
+      return { anims: anims.length, ms, seen };
     });
-    expect(frames[0]).toBeGreaterThan(0.5);
-    expect(frames.filter((o) => o > 0.05 && o < 0.95).length).toBeGreaterThanOrEqual(3);
+    expect(exit, "the sheet stays, closing and inert").not.toBeNull();
+    expect(exit!.anims).toBeGreaterThan(0);
+    // It has faded out by the time it's removed (MOTION.exit, 120 ms), not cut off mid-fade.
+    expect(exit!.ms).toBeGreaterThan(50);
+    expect(exit!.ms).toBeLessThanOrEqual(120);
+    const [start, ...rest] = exit!.seen;
+    expect(start).toBeGreaterThan(0.95);
+    expect(rest.at(-1)).toBeLessThan(0.05);
+    expect(rest.slice(0, -1).filter((o) => o > 0.05 && o < 0.95).length, `opacity ${exit!.seen.join(", ")}`).toBe(3);
+    expect(exit!.seen).toEqual([...exit!.seen].sort((a, b) => b - a));
     await closed();
   });
 
