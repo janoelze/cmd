@@ -125,20 +125,28 @@ export const isPopup = (contents: WebContents): boolean => popups.has(contents);
 // ── site permissions ────────────────────────────────────
 
 const file = () => path.join(cmdHome(), "site-permissions.json");
-let kept: SiteDecisions | null = null;
+/** The answers as last read, and the file's mtime and size then: an edited or deleted file applies at the next request. */
+let kept: { decisions: SiteDecisions; stamp: string } | null = null;
 
 function decisions(): SiteDecisions {
-  if (kept) return kept;
+  let stamp = "none";
   try {
-    kept = parseDecisions(JSON.parse(fs.readFileSync(file(), "utf8")));
-  } catch {
-    kept = {};
+    const st = fs.statSync(file());
+    stamp = `${st.mtimeMs} ${st.size}`;
+  } catch {}
+  if (kept?.stamp === stamp) return kept.decisions;
+  let read: SiteDecisions = {};
+  try {
+    if (stamp !== "none") read = parseDecisions(JSON.parse(fs.readFileSync(file(), "utf8")));
+  } catch (e) {
+    log.warn(`couldn't read ${file()}: ${(e as Error).message}`);
   }
-  return kept;
+  kept = { decisions: read, stamp };
+  return read;
 }
 
 function remember(site: string, kind: SitePermission, allow: boolean): void {
-  const all = decisions();
+  const all = { ...decisions() };
   all[site] = { ...all[site], [kind]: allow };
   try {
     fs.writeFileSync(file(), JSON.stringify(all, null, 2));
@@ -188,10 +196,10 @@ function ask(page: WebContents, host: WebContents, req: Omit<SitePermissionReque
 export function startWebSession(o: { pages: AppPages; appWindows: () => BrowserWindow[] }): void {
   pages = o;
   const ses = session.fromPartition(BROWSER_PARTITION);
-  ses.setPermissionCheckHandler((_wc, permission, origin) => permissionVerdict(permission, siteOf(origin), decisions()) === "allow");
+  ses.setPermissionCheckHandler((_wc, permission, origin) => permissionVerdict(permission, siteOf(origin), isAsked(permission) ? decisions() : {}) === "allow");
   ses.setPermissionRequestHandler((wc, permission, done, details) => {
     const site = siteOf(details.requestingUrl);
-    const verdict = permissionVerdict(permission, site, decisions());
+    const verdict = permissionVerdict(permission, site, isAsked(permission) ? decisions() : {});
     const host = wc && appWindowOf(wc);
     if (verdict !== "ask" || !site || !isAsked(permission) || !host || host.isDestroyed()) {
       if (verdict !== "allow") log.info(`denied ${permission} to ${site ?? details.requestingUrl}`);

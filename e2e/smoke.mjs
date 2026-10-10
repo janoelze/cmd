@@ -444,6 +444,14 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
     const again = await page(`navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name)`);
     const kept = JSON.parse(fs.readFileSync(path.join(home, "site-permissions.json"), "utf8"));
     check(again === "NotAllowedError" && (await sheet.count()) === 0 && kept[`http://localhost:${port}`]?.media === false, `the answer is kept for the site and not asked again (${again})`);
+    // Deleting site-permissions.json forgets the answers, without a restart.
+    fs.rmSync(path.join(home, "site-permissions.json"));
+    await page(`window.__gum = navigator.mediaDevices.getUserMedia({ audio: true }).then(() => "granted", (e) => e.name); 0`);
+    await sheet.waitFor({ timeout: 5000 }).catch(() => {});
+    const askedAgain = await sheet.count();
+    await win.keyboard.press("Escape");
+    const dismissed = await page("window.__gum");
+    check(askedAgain === 1 && dismissed === "NotAllowedError" && !fs.existsSync(path.join(home, "site-permissions.json")), `deleting the saved answers asks again; Esc refuses without saving (${askedAgain}, ${dismissed})`);
     await win.evaluate(([id, url]) => window.cmd.call("window.update", { id, state: { url } }), [browserWin.id, `http://localhost:${port}/`]);
     for (let i = 0; i < 40 && (await page("document.title").catch(() => null)) !== "E2E Page"; i++) await win.waitForTimeout(150);
   }

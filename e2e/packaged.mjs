@@ -16,7 +16,8 @@ const exe =
     : fs
         .readdirSync(dist)
         .filter((d) => d.startsWith("mac"))
-        .map((d) => path.join(dist, d, "cmd.app/Contents/MacOS/cmd"))
+        // CI's release config makes cmd.app; `pnpm dist` (electron-builder.dev.yml) makes "cmd dev.app".
+        .flatMap((d) => [path.join(dist, d, "cmd.app/Contents/MacOS/cmd"), path.join(dist, d, "cmd dev.app/Contents/MacOS/cmd dev")])
         .find((p) => fs.existsSync(p));
 if (!exe || !fs.existsSync(exe)) {
   console.error(`no packaged app in ${dist}; run electron-builder (--dir is enough)`);
@@ -43,6 +44,10 @@ try {
   const win = await app.firstWindow();
   await win.waitForSelector(".statusbar .core-status", { timeout: 30_000 });
   check(true, `the packaged app opens its window (${path.relative(root, exe)})`);
+  // The preload gives window.cmd only to the app's own pages (shared/app-url.ts): inside app.asar, the
+  // page's file URL and the preload's folder must agree, or the window opens without cmd.
+  const page = await win.evaluate(() => ({ url: location.href, cmd: typeof window.cmd?.call }));
+  check(page.cmd === "function" && page.url.includes("app.asar/out/renderer/index.html"), `its window gets window.cmd from app.asar (${page.url.replace(/\?.*/, "")})`);
   const hello = await until(() => win.evaluate(() => window.cmd.call("core.hello", {})), 30_000, "the core");
   check(!!hello.version, `its bundled core starts and answers (${hello.version}, pid ${hello.pid})`);
   const pane = await win.evaluate(() => window.cmd.call("pane.create", {}));
