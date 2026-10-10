@@ -30,7 +30,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: .node-version # Electron's Node major, which runs the packaged core
           cache: pnpm
 
       # No postinstall: the relay and the client need neither the native helpers nor Electron.

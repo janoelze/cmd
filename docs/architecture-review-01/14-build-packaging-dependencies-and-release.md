@@ -53,10 +53,10 @@ Answers to this review's questions, in brief:
 **Proposal.** Make Electron's Node major the one supported dev runtime. Add `.node-version` (`24`) and set `engines.node` to `>=24.11` with `engine-strict=true` in `.npmrc`. Point setup-node at `node-version-file: .node-version`. Pin `@types/node` to `~24.x` and keep it in step with Electron, then add a test asserting that `electron/package.json`'s Node major (from `electron/dist/version` or `process.versions` via a one-line spawn) equals `.node-version`. Update `CLAUDE.md:32` and DEVELOPMENT.md ("Node ≥ 22.18"). Rejected alternative: run `pnpm core` and `pnpm cmd` under `ELECTRON_RUN_AS_NODE`. It matches the release exactly, but it makes the CLI depend on an Electron install and slows every `pnpm cmd`.
 
 **Success criteria.**
-- [ ] `.node-version` exists; `build.yml` and `remote.yml` read it; `grep -rn "22.18" CLAUDE.md DEVELOPMENT.md package.json` returns nothing.
-- [ ] `pnpm install` on Node 22 fails with an engine error.
-- [ ] A vitest test fails when Electron's bundled Node major differs from `.node-version`.
-- [ ] The workaround comment at `main/index.ts:329-332` still says why Electron's Node is used, without claiming system Node is supported.
+- [x] `.node-version` exists; `build.yml` and `remote.yml` read it; `grep -rn "22.18" CLAUDE.md DEVELOPMENT.md package.json` returns nothing.
+- [x] `pnpm install` on Node 22 fails with an engine error.
+- [x] A vitest test fails when Electron's bundled Node major differs from `.node-version`.
+- [x] The workaround comment at `main/index.ts:329-332` still says why Electron's Node is used, without claiming system Node is supported.
 
 ### AR1-14-02 · Make a tag build fail rather than publish a release users can't update to
 

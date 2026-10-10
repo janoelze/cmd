@@ -55,7 +55,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: .node-version # Electron's Node major, which runs the packaged core
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -248,7 +248,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: .node-version # Electron's Node major, which runs the packaged core
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -313,7 +313,7 @@ jobs:
       # No pnpm here: setup-node v5 would otherwise cache with pnpm (from packageManager) and fail.
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: .node-version # Electron's Node major, which runs the packaged core
           package-manager-cache: false
 
       - uses: actions/download-artifact@v4

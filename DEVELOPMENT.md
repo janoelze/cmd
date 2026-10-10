@@ -17,7 +17,9 @@ e2e/                Playwright smoke test driving the real app
 scripts/            postinstall, packaging, releases, icons, README screenshots
 ```
 
-The core is a separate, long-lived process. The UI connects over a Unix socket and can reload or quit without killing terminals. The core and CLI run TypeScript directly on Node ≥ 22.18, so there is no build step.
+The core is a separate, long-lived process. The UI connects over a Unix socket and can reload or quit without killing terminals. The core and CLI run TypeScript directly on Node (type stripping), so there is no build step.
+
+One Node major runs everything: Electron's, which runs the packaged core. `.node-version` names it (24 today), CI's setup-node reads it, and `pnpm install` refuses another (`engines.node` with `engineStrict` in `pnpm-workspace.yaml`). Install that major for `pnpm core`, `pnpm cmd` and `pnpm test` (`brew install node@24`, or any manager that reads `.node-version`). When an Electron upgrade moves to a new Node major, bump `.node-version`, `engines.node` and `@types/node` together; `apps/desktop/test/node-version.test.ts` fails until they match.
 
 ## Develop
 

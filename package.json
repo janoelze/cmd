@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@11.5.1",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=24.11"
   },
   "scripts": {
     "core": "node --no-warnings packages/core/src/main.ts --instance=dev",
@@ -39,7 +39,7 @@
     "shots": "pnpm build && node scripts/readme-shots/screenshots.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.9.0",
+    "@types/node": "~24.19.0",
     "happy-dom": "^20.14.6",
     "playwright": "^1.63.0",
     "typescript": "^5.9.0",

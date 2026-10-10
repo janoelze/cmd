@@ -8,3 +8,6 @@ allowBuilds:
   electron-winstaller: false
   '@vscode/ripgrep': set this to true or false
   core-js: false
+# Fail pnpm install on a Node outside package.json's engines (Electron's major, .node-version),
+# rather than warn. pnpm 11 reads this here; it ignores engine-strict in .npmrc.
+engineStrict: true

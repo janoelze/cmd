@@ -328,10 +328,11 @@ function spawnCore(): void {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   if (USAGE_KEY) env.CMD_USAGE_KEY = USAGE_KEY;
-  // Electron's own Node, in development too: the same runtime as the packaged app. (The
-  // system Node 22 resolves the first symlinked package wrong after any stat of a Unix
-  // socket, which the core does every few seconds: lazily loaded pnpm packages like
-  // the AI SDK then can't find their dependencies. Node 24 doesn't.)
+  // Electron's own Node, in development too: the same runtime, to the patch, as the packaged
+  // app. `pnpm core` runs on the system Node, which must be the same major (.node-version);
+  // Node 22, for one, resolves the first symlinked package wrong after any stat of a Unix
+  // socket, which the core does every few seconds, so lazily loaded pnpm packages like the
+  // AI SDK can't find their dependencies.
   const node = process.execPath;
   env.ELECTRON_RUN_AS_NODE = "1";
   // --instance also tells cores apart in `ps` (scripts/stop-core.mjs --all).

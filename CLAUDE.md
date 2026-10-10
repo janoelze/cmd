@@ -29,7 +29,7 @@ pnpm release <ver|patch|minor>  # needs the version's CHANGELOG.md section (chan
 
 `pnpm dev` and `pnpm dist` builds are "cmd dev" (red icon) with their own core and state, separate from the installed app, even when started from its terminals (instances: `packages/protocol/src/instance.ts`). From the main checkout that is `~/Library/Application Support/cmd-dev` (the user's dev instance); from a linked worktree it is `<worktree>/.cmd-dev` (see "Work style"). `CMD_HOME` overrides either (socket, SQLite, settings.json, core.pid and `logs/` go there). In the Agent Safehouse sandbox, Electron needs `CMD_NO_SANDBOX=1`.
 
-There is no build step for core/CLI/protocol: they run as `.ts` directly on Node ≥ 22.18 (type stripping). This means `tsconfig.base.json` enforces `erasableSyntaxOnly` (no enums, namespaces, parameter properties) and `verbatimModuleSyntax` (use `import type`), and relative imports must include the `.ts` extension.
+There is no build step for core/CLI/protocol: they run as `.ts` directly on Node (type stripping), on one major for dev, tests, CI and release: Electron's, named in `.node-version` (24; `pnpm install` refuses another). This means `tsconfig.base.json` enforces `erasableSyntaxOnly` (no enums, namespaces, parameter properties) and `verbatimModuleSyntax` (use `import type`), and relative imports must include the `.ts` extension.
 
 ## Work style: one git worktree per task
 
