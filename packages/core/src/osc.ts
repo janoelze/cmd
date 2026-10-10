@@ -7,6 +7,9 @@
 // C1 forms stand for their 7-bit ones, and an OSC over MAX_OSC is skipped to its end.
 
 import type { Progress } from "@cmd/protocol";
+import { logger } from "@cmd/protocol/node";
+
+const log = logger("osc");
 
 export type OscEvent =
   | { type: "title"; title: string } // OSC 0 / 2
@@ -192,6 +195,22 @@ function parseProgress(args: string): OscEvent | null {
   return { type: "progress", progress: { state, value } };
 }
 
+/** A file URL's path; a stray `%` (a shell that encodes too little) stays as it is. */
+function decodePath(p: string): string {
+  try {
+    return decodeURIComponent(p);
+  } catch {
+    log.debug("OSC 7 path is not valid percent-encoding", p);
+    return p.replace(/(?:%[0-9A-Fa-f]{2})+/g, (m) => {
+      try {
+        return decodeURIComponent(m);
+      } catch {
+        return m;
+      }
+    });
+  }
+}
+
 export function parseOsc(body: string): OscEvent | null {
   const semi = body.indexOf(";");
   const code = semi < 0 ? body : body.slice(0, semi);
@@ -204,7 +223,7 @@ export function parseOsc(body: string): OscEvent | null {
       try {
         const url = new URL(rest);
         if (url.protocol !== "file:") return null;
-        return { type: "cwd", cwd: decodeURIComponent(url.pathname) };
+        return { type: "cwd", cwd: decodePath(url.pathname) };
       } catch {
         return null;
       }

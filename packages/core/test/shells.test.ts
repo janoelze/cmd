@@ -72,6 +72,14 @@ function shells(): string[] {
   });
 }
 
+/** Folders whose names a cwd report has to survive, the same for every shell (OSC 7: #, ?, %, spaces, UTF-8). */
+const CWD_FIXTURES = ["a#b", "c?d", "50%off", "ü ñ", "two words"];
+
+describe("shells to test", () => {
+  const names = new Set(shells().map((s) => path.basename(s)));
+  for (const name of ["zsh", "bash", "fish"].filter((n) => !names.has(n))) it.skip(`${name} isn't installed, so its integration isn't tested`, () => {});
+});
+
 describe.each(shells())("%s with cmd's integration", (shell) => {
   const name = path.basename(shell);
   let dir: string;
@@ -158,6 +166,21 @@ describe.each(shells())("%s with cmd's integration", (shell) => {
     if (name !== "fish") {
       const hist = fs.readFileSync(path.join(dir, "history", `${r.id}.${name === "zsh" ? "zsh" : "bash"}_history`), "utf8");
       expect(hist).toContain("sleep 1");
+    }
+    core.panes.kill(r.id);
+  }, 30_000);
+
+  it("reports folders with #, ?, %, spaces and non-ASCII in their names exactly", async () => {
+    const base = path.join(home, "cwds");
+    for (const f of CWD_FIXTURES) fs.mkdirSync(path.join(base, f), { recursive: true });
+    const r = start({ cwd: base });
+    await until("the first prompt", () => prompts(r) > 0);
+    for (const f of CWD_FIXTURES) {
+      const want = path.join(base, f);
+      core.panes.write(r.id, `cd '${want}'\r`);
+      await until(`the cwd ${f}`, () => core.panes.get(r.id)?.cwd === want).catch((e) => {
+        throw new Error(`${e.message} (pane says ${JSON.stringify(core.panes.get(r.id)?.cwd)})`);
+      });
     }
     core.panes.kill(r.id);
   }, 30_000);

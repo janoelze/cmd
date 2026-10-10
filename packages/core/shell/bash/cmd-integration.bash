@@ -68,9 +68,17 @@ _cmd_osc() { builtin printf '\e]%s\a' "$1" >/dev/tty; }
 # Ask cmd to do something: OSC 777;cmd;<token>;<action>;<argument>
 _cmd_request() { _cmd_osc "777;cmd;${CMD_PANE_TOKEN};$1;$2"; }
 
+# Every byte but RFC 3986's unreserved ones and / percent-encoded, as in zsh.
+# (& 255: bash 3.2 reads bytes over 0x7f as negative.)
 _cmd_report_cwd() {
-  local p=${PWD//%/%25}
-  p=${p// /%20}; p=${p//#/%23}; p=${p//\?/%3F}
+  local LC_ALL=C p= c n i
+  for (( i = 0; i < ${#PWD}; i++ )); do
+    c=${PWD:i:1}
+    case $c in
+      [A-Za-z0-9/._~-]) p+=$c ;;
+      *) builtin printf -v n %d "'$c"; builtin printf -v c %%%02X $(( n & 255 )); p+=$c ;;
+    esac
+  done
   _cmd_osc "7;file://${HOSTNAME}${p}"
 }
 

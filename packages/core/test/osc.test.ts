@@ -100,6 +100,13 @@ describe("where a string ends, as in xterm.js", () => {
   });
 });
 
+describe("OSC 7", () => {
+  it("decodes the whole path, and keeps a stray % rather than dropping the update", () => {
+    expect(parseOsc("7;file://h/tmp/a%23b/c%3Fd/50%25off/%C3%BC%20%C3%B1")).toEqual({ type: "cwd", cwd: "/tmp/a#b/c?d/50%off/ü ñ" });
+    expect(parseOsc("7;file://h/tmp/50%off%20x")).toEqual({ type: "cwd", cwd: "/tmp/50%off x" });
+  });
+});
+
 describe("stripAnsi", () => {
   it("removes colors, OSC and carriage returns", () => {
     expect(stripAnsi("\x1b]0;t\x07\x1b[1;32mok\x1b[0m\r\nnext")).toBe("ok\nnext");

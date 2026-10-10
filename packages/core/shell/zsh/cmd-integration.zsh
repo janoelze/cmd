@@ -13,9 +13,11 @@
 
 _cmd_osc() { printf '\e]%s\a' "$1" > /dev/tty }
 
+# Every byte but RFC 3986's unreserved ones and / percent-encoded (#, ?, %, spaces, UTF-8).
 _cmd_report_cwd() {
-  local url_path=${PWD// /%20}
-  _cmd_osc "7;file://${HOST}${url_path}"
+  emulate -L zsh -o extendedglob
+  local LC_ALL=C MATCH MBEGIN MEND
+  _cmd_osc "7;file://${HOST}${PWD//(#m)[^A-Za-z0-9\/._~-]/%${(l:2::0:)$(( [##16] #MATCH ))}}"
 }
 
 _cmd_precmd() {

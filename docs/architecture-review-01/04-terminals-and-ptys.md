@@ -121,8 +121,8 @@ Terminals run in the **PTY host** (`packages/core/src/terminals/host.ts` 222 lin
 **Proposal.** Encode every byte outside the RFC 3986 unreserved set and `/`, as VS Code's and Ghostty's zsh integrations do, e.g. `local LC_ALL=C; for c in ${(s::)PWD}; [[ $c == [[:alnum:]/._~-] ]] && u+=$c || u+=$(printf '%%%02X' "'$c")`, or the zsh-native `${(j::)${(s::)PWD}//(#m)[^A-Za-z0-9\/._~-]/%${(l:2::0:)$(([##16]#MATCH))}}` with `setopt extendedglob` local. Make bash match (it misses other reserved bytes, e.g. `;` is fine but a newline in a folder name is not). Share one test fixture for all three shells.
 
 **Success criteria.**
-- [ ] `shells.test.ts` starts real zsh, bash and fish (where installed), `cd`s into `a#b`, `c?d`, `50%off`, `ü ñ`, and reads each cwd back exactly from the pane.
-- [ ] `grep -n 'PWD// /%20' packages/core/shell/zsh/cmd-integration.zsh` returns nothing.
+- [x] `shells.test.ts` starts real zsh, bash and fish (where installed), `cd`s into `a#b`, `c?d`, `50%off`, `ü ñ`, and reads each cwd back exactly from the pane.
+- [x] `grep -n 'PWD// /%20' packages/core/shell/zsh/cmd-integration.zsh` returns nothing.
 
 ### AR1-04-06 · Save screens only when they will be restored, and serialize them off the burst
 
