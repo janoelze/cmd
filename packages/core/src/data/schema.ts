@@ -14,14 +14,16 @@ PRAGMA foreign_keys = OFF;
 `;
 
 /**
- * A new log. The indexes come with it: on an empty file they cost nothing,
+ * A new log. `seq` is AUTOINCREMENT: never handed out twice, even after the
+ * newest rows are deleted (forget, retention), since cursors and subscriptions
+ * hold on to it. The indexes come with it: on an empty file they cost nothing,
  * and a migration that adds one builds it once.
  */
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS events (
-  seq        INTEGER PRIMARY KEY,
+  seq        INTEGER PRIMARY KEY AUTOINCREMENT,
   id         TEXT NOT NULL UNIQUE,
   at         INTEGER NOT NULL,
   until      INTEGER,

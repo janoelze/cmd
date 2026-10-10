@@ -53,10 +53,10 @@ Measured on a copy of the author's release log (1.92 GB, 618,609 events since 20
 Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscription cursor"), and SQLite enforces it with no code path to forget.
 
 **Success criteria.**
-- [ ] A test in `data-forget.test.ts` records a, b, forgets b's session, records c and asserts `c.seq > b.seq`.
-- [ ] The same test with `prune()` deleting the newest rows passes.
-- [ ] `sqlite_sequence` has a row for `events` in a migrated log, or `meta('seq.next')` exists.
-- [ ] `grep -n "INTEGER PRIMARY KEY," packages/core/src/data/schema.ts` returns no line for `events.seq`.
+- [x] A test in `data-forget.test.ts` records a, b, forgets b's session, records c and asserts `c.seq > b.seq`.
+- [x] The same test with `prune()` deleting the newest rows passes.
+- [x] `sqlite_sequence` has a row for `events` in a migrated log, or `meta('seq.next')` exists.
+- [x] `grep -n "INTEGER PRIMARY KEY," packages/core/src/data/schema.ts` returns no line for `events.seq`.
 
 ### AR1-06-02 · Drive views from a cursor on the log, not from in-process callbacks
 
@@ -91,11 +91,11 @@ Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscr
 **Proposal.** Add `data/migrations.ts`: an ordered list `[{ to: 2, run(db) }, …]` run in one `BEGIN IMMEDIATE`. Copy the file aside first (`VACUUM INTO events.sqlite.bak-v1`), compare `meta('schema')` against the newest version, and refuse with a clear error when the file is newer than the code. Fold `#renameSpaces`, the AUTOINCREMENT rebuild (AR1-06-01) and any new index into numbered steps, so a new index costs its one build under a startup label instead of a check on every start. Keep one `EVENTS_SCHEMA`, in `schema.ts`. Add `upcast.ts` as `Record<type, ((data) => data)[]>`, applied in `toEvent` when `row.v < EVENT_V[type]`, plus a test that fails if an `EVENT_V` entry above 1 has no upcaster. View versions stay as they are, since views rebuild by design. See doc 03 (AR1-03-05) for the same treatment of `cmd.sqlite`.
 
 **Success criteria.**
-- [ ] `packages/core/src/data/migrations.ts` exists. A test opens a v1 fixture, migrates it to the newest version, and checks `meta('schema')`.
-- [ ] Opening a file whose `meta('schema')` is above the code's version throws a named error, covered by a test.
-- [ ] `grep -rn "EVENTS_SCHEMA = " packages` returns one line.
-- [ ] `packages/core/src/data/upcast.ts` exists, and a test asserts every `EVENT_V[t] > 1` has `EVENT_V[t] - 1` upcasters.
-- [ ] `ingest.ts` no longer deletes events when a view version changes.
+- [x] `packages/core/src/data/migrations.ts` exists. A test opens a v1 fixture, migrates it to the newest version, and checks `meta('schema')`.
+- [x] Opening a file whose `meta('schema')` is above the code's version throws a named error, covered by a test.
+- [x] `grep -rn "EVENTS_SCHEMA = " packages` returns one line.
+- [x] `packages/core/src/data/upcast.ts` exists, and a test asserts every `EVENT_V[t] > 1` has `EVENT_V[t] - 1` upcasters.
+- [x] `ingest.ts` no longer deletes events when a view version changes.
 
 ### AR1-06-04 · Redact secrets held under a key name inside structured payloads
 

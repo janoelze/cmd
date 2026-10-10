@@ -51,8 +51,33 @@ export function schemaOf(db: DatabaseSync): number {
   return row ? Number(row.value) || 1 : 1;
 }
 
-// ── 2: workspaces, indexes in the schema ──────────────────
+// ── 2: workspaces, seq never reused, indexes in the schema ──────────────────
 
+/** The events table as of schema 2 (frozen: a later change is a later step). */
+const EVENTS_V2 = (name: string) => `
+CREATE TABLE ${name} (
+  seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+  id         TEXT NOT NULL UNIQUE,
+  at         INTEGER NOT NULL,
+  until      INTEGER,
+  type       TEXT NOT NULL,
+  v          INTEGER NOT NULL,
+  source     TEXT NOT NULL,
+  recorded   TEXT NOT NULL,
+  parent_id  TEXT,
+  workspace_id   TEXT,
+  project_id TEXT,
+  session_id TEXT,
+  agent_id   TEXT,
+  pane_id    TEXT,
+  window_id  TEXT,
+  device_id  TEXT,
+  text       TEXT,
+  data       BLOB NOT NULL,
+  blob       TEXT,
+  flags      INTEGER NOT NULL DEFAULT 0
+)`;
+const COLUMNS_V2 = "seq, id, at, until, type, v, source, recorded, parent_id, workspace_id, project_id, session_id, agent_id, pane_id, window_id, device_id, text, data, blob, flags";
 const INDEXES_V2 = `
 CREATE INDEX IF NOT EXISTS events_at ON events(at);
 CREATE INDEX IF NOT EXISTS events_type_at ON events(type, at);
@@ -64,7 +89,10 @@ CREATE INDEX IF NOT EXISTS events_parent ON events(parent_id);
 CREATE INDEX IF NOT EXISTS blobs_unreferenced ON blobs(refs) WHERE refs <= 0;
 CREATE INDEX IF NOT EXISTS links_to ON links(to_kind, to_id);
 `;
-function toV2(db: DatabaseSync): void {
+/** Rows copied per statement in the rebuild: progress between them, one transaction around all. */
+const COPY_STEP = 50_000;
+
+function toV2(db: DatabaseSync, progress: (done: number, total: number) => void): void {
   // Before 0.24 workspaces were Spaces: the events' column, the open/close types, entities and links.
   if (has(db, `SELECT 1 FROM pragma_table_info('events') WHERE name = 'space_id'`)) {
     db.exec(`
@@ -84,11 +112,29 @@ function toV2(db: DatabaseSync): void {
   // goes on from its cursor). events_fts_old is only waiting to be dropped.
   for (const fts of ["events_fts", "events_fts_next"]) if (hasTable(db, fts)) db.exec(`DELETE FROM ${fts} WHERE rowid IN (SELECT seq FROM events WHERE ${stale})`);
   db.exec(`DELETE FROM events WHERE ${stale}`);
+  // seq AUTOINCREMENT: SQLite can't add it to a table, so the table is built again, seqs kept
+  // (the full-text index's rowids are seqs and stay valid). Indexes are built once, after the rows.
+  db.exec(`DROP TABLE IF EXISTS events_next; ${EVENTS_V2("events_next")}`);
+  const { max, total } = db.prepare(`SELECT COALESCE(MAX(seq), 0) AS max, COUNT(*) AS total FROM events`).get() as { max: number; total: number };
+  const copy = db.prepare(`INSERT INTO events_next (${COLUMNS_V2}) SELECT ${COLUMNS_V2} FROM events WHERE seq > ? AND seq <= ? ORDER BY seq`);
+  let done = 0;
+  for (let lo = 0; lo < max; lo += COPY_STEP) {
+    done += Number(copy.run(lo, lo + COPY_STEP).changes);
+    progress(done, total);
+  }
+  let t = Date.now();
+  db.exec(`DROP TABLE events; ALTER TABLE events_next RENAME TO events`);
+  log.info("event log: schema 2: the old table dropped", { ms: Date.now() - t });
+  // The next seq comes after every one handed out so far, even on a log with no rows left.
+  // (sqlite_sequence has no key: the copy wrote the row unless the log was empty.)
+  if (!Number(db.prepare(`UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'events'`).run(max).changes)) db.prepare(`INSERT INTO sqlite_sequence (name, seq) VALUES ('events', ?)`).run(max);
+  t = Date.now();
   db.exec(INDEXES_V2);
+  log.info("event log: schema 2: indexes built", { ms: Date.now() - t });
 }
 
 /** Every step, in order; the last one's `to` is EVENTS_SCHEMA. */
-export const MIGRATIONS: Migration[] = [{ to: 2, label: "workspaces, indexes", run: toV2 }];
+export const MIGRATIONS: Migration[] = [{ to: 2, label: "workspaces, seqs never reused, indexes", run: toV2 }];
 
 /**
  * Brings the log in `db` to EVENTS_SCHEMA: refuses a newer one, copies an
@@ -124,7 +170,9 @@ export function migrate(db: DatabaseSync, file: string, steps: Migration[] = MIG
       });
       db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)`).run(String(s.to));
     }
+    const t = Date.now();
     db.exec("COMMIT");
+    log.info("event log: committed", { ms: Date.now() - t });
   } catch (err) {
     db.exec("ROLLBACK");
     log.error(`event log: migration from schema ${from} failed; the file is as it was`, err);

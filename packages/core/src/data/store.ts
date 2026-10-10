@@ -192,24 +192,9 @@ export class DataStore {
     if (before && unchanged(before, e, data, blob)) return { seq: before.seq, inserted: false };
     if (raw) this.#storeBlob(raw, blob!);
     const sameText = !!before && before.text === (e.text ?? null) && before.blob === blob;
-    const r = this.#stmt(
+    const r = before ? this.#update(before.seq, e, data, blob) : this.#stmt(
       `INSERT INTO events (id, at, until, type, v, source, recorded, parent_id, workspace_id, project_id, session_id, agent_id, pane_id, window_id, device_id, text, data, blob, flags)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         at = MIN(at, excluded.at),
-         until = MAX(COALESCE(until, excluded.until), COALESCE(excluded.until, until)),
-         text = COALESCE(excluded.text, text),
-         data = excluded.data,
-         blob = COALESCE(excluded.blob, blob),
-         parent_id = COALESCE(parent_id, excluded.parent_id),
-         workspace_id = COALESCE(workspace_id, excluded.workspace_id),
-         project_id = COALESCE(project_id, excluded.project_id),
-         session_id = COALESCE(session_id, excluded.session_id),
-         agent_id = COALESCE(agent_id, excluded.agent_id),
-         pane_id = COALESCE(pane_id, excluded.pane_id),
-         window_id = COALESCE(window_id, excluded.window_id),
-         device_id = COALESCE(device_id, excluded.device_id),
-         flags = flags | excluded.flags
        RETURNING seq`,
     ).get(e.id, Math.round(e.at), e.until == null ? null : Math.round(e.until), e.type, e.v ?? EVENT_V[e.type as DataEventType] ?? 1, e.source, this.#o.recordedBy, e.parentId ?? null, e.workspaceId ?? null, e.projectId ?? null, e.sessionId ?? null, e.agentId ?? null, e.paneId ?? null, e.windowId ?? null, e.deviceId ?? null, e.text ?? null, data, blob, e.flags ?? 0) as { seq: number };
     // A new blob replaces the old one (the same one: putBlob counted it twice); without one the row keeps its blob.
@@ -220,6 +205,32 @@ export class DataStore {
       if (e.text || e.body) this.#ftsInsert(r.seq, e.text ?? null, e.body ?? null, ftsKind(e.type, e.sessionId ?? before?.session_id));
     }
     return { seq: r.seq, inserted: !before };
+  }
+
+  /**
+   * An event recorded before, updated in place. Not an upsert: with AUTOINCREMENT,
+   * INSERT … ON CONFLICT DO UPDATE spends a seq each time even when it updates.
+   */
+  #update(seq: number, e: StoreEvent, data: string, blob: string | null): { seq: number } {
+    this.#stmt(
+      `UPDATE events SET
+         at = MIN(at, ?1),
+         until = MAX(COALESCE(until, ?2), COALESCE(?2, until)),
+         text = COALESCE(?3, text),
+         data = jsonb(?4),
+         blob = COALESCE(?5, blob),
+         parent_id = COALESCE(parent_id, ?6),
+         workspace_id = COALESCE(workspace_id, ?7),
+         project_id = COALESCE(project_id, ?8),
+         session_id = COALESCE(session_id, ?9),
+         agent_id = COALESCE(agent_id, ?10),
+         pane_id = COALESCE(pane_id, ?11),
+         window_id = COALESCE(window_id, ?12),
+         device_id = COALESCE(device_id, ?13),
+         flags = flags | ?14
+       WHERE seq = ?15`,
+    ).run(Math.round(e.at), e.until == null ? null : Math.round(e.until), e.text ?? null, data, blob, e.parentId ?? null, e.workspaceId ?? null, e.projectId ?? null, e.sessionId ?? null, e.agentId ?? null, e.paneId ?? null, e.windowId ?? null, e.deviceId ?? null, e.flags ?? 0, seq);
+    return { seq };
   }
 
   recordAll(events: Iterable<StoreEvent>): number {

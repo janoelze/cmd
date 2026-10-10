@@ -256,3 +256,39 @@ describe("the pane output recorder", () => {
     panes.dispose();
   });
 });
+
+describe("seq after a delete", () => {
+  it("never hands a forgotten event's seq out again", () => {
+    const { d } = service();
+    const a = d.record(msg("a", "claude:s0", 1))!;
+    const b = d.record(msg("b", "claude:s1", 2))!;
+    expect(d.forget({ sessionId: "claude:s1" })).toBe(1);
+    // The forget's own record came right after b was deleted: once it took b's seq.
+    const op = d.query({ types: ["data.op"] })[0]!;
+    expect(op.seq).toBeGreaterThan(b.seq);
+    const c = d.record(msg("c", "claude:s2", 3))!;
+    expect(c.seq).toBeGreaterThan(b.seq);
+    expect(c.seq).toBeGreaterThan(op.seq);
+    expect(d.query({ after: a.seq }).map((e) => e.id)).toEqual([op.id, "c"]);
+  });
+
+  it("nor the seq of the newest events retention deleted", () => {
+    const now = 1_800_000_000_000;
+    const settings: Record<string, unknown> = { ...DEFAULT_SETTINGS, "data.keepDays": 1 };
+    const d = new DataService({ file: null, recordedBy: "test", settings: () => settings as unknown as Settings, now: () => now });
+    d.record(msg("a", "claude:s1", now));
+    const b = d.record(msg("b", "claude:s1", now - 5 * 86400_000))!; // the newest row, and due
+    expect(d.prune()).toMatchObject({ events: 1 });
+    const op = d.query({ types: ["data.op"] })[0]!;
+    expect(op.seq).toBeGreaterThan(b.seq);
+    const c = d.record(msg("c", "claude:s1", now))!;
+    expect(c.seq).toBeGreaterThan(op.seq);
+  });
+
+  it("spends no seq on an event recorded again", () => {
+    const { d } = service();
+    const a = d.record(cmd("a", "ls"))!;
+    d.record({ ...cmd("a", "ls -la"), until: 5 });
+    expect(d.record(cmd("b", "make"))!.seq).toBe(a.seq + 1);
+  });
+});

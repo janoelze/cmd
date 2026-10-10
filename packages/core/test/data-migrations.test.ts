@@ -27,6 +27,8 @@ describe("event log migrations", () => {
     const old = eventsV1(file);
     insertV1(old, { seq: 1, id: "a", at: 1000, type: "command", text: "ls" });
     insertV1(old, { seq: 2, id: "b", at: 2000, type: "transcript.message", text: "flaky test", session: "claude:s1" });
+    insertV1(old, { seq: 3, id: "c", at: 3000, type: "command", text: "make" });
+    old.exec(`DELETE FROM events WHERE seq = 3; DELETE FROM events_fts WHERE rowid = 3`); // the newest gone: v1 would hand 3 out again
     old.close();
 
     const s = new DataStore(file);
@@ -35,6 +37,10 @@ describe("event log migrations", () => {
     // Rows keep their seqs, and the full-text index (rowid = seq) still finds them.
     expect(s.query({}).map((e) => [e.seq, e.id])).toEqual([[1, "a"], [2, "b"]]);
     expect(s.query({ text: "flaky" }).map((e) => e.id)).toEqual(["b"]);
+    expect(s.db.prepare(`SELECT seq FROM sqlite_sequence WHERE name = 'events'`).get()).toEqual({ seq: 2 });
+    expect(s.record({ id: "d", at: 4000, type: "command", source: "osc", data: {} }).seq).toBe(3); // MAX(seq)+1 of what was there at migration
+    s.db.exec(`DELETE FROM events WHERE id = 'd'`);
+    expect(s.record({ id: "e", at: 5000, type: "command", source: "osc", data: {} }).seq).toBe(4);
     s.close();
 
     // The copy is the file as it was.
@@ -98,6 +104,7 @@ describe("event log migrations", () => {
     expect(() => migrate(old, file, steps, EVENTS_SCHEMA + 1)).toThrow(/nowhere/);
     expect(schemaOf(old)).toBe(1);
     expect(old.prepare(`SELECT 1 FROM pragma_table_info('events') WHERE name = 'space_id'`).get()).toBeTruthy();
+    expect(old.prepare(`SELECT sql FROM sqlite_master WHERE name = 'events'`).get()).toMatchObject({ sql: expect.not.stringContaining("AUTOINCREMENT") });
     old.close();
   });
 
