@@ -414,13 +414,21 @@ check((await win.locator(".palette").count()) === 0, "⌘W closes the palette be
   {
     const saved = await app.evaluate(({ clipboard }) => clipboard.readText());
     await app.evaluate(({ clipboard }) => clipboard.writeText(""));
-    await win.locator(".tile.kind-browser webview").click();
-    await win.waitForTimeout(200);
-    await menu("edit.selectAll");
-    await win.waitForTimeout(200);
-    await menu("edit.copy");
-    await win.waitForTimeout(300);
-    const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
+    // The page takes focus a moment after the click (a slow runner took more than 200 ms):
+    // wait until it has it, then Select All and Copy, again until the text arrives.
+    const pageFocused = () => app.evaluate(({ webContents }) => webContents.getFocusedWebContents()?.getType() === "webview");
+    let copied = "";
+    for (let attempt = 0; attempt < 5 && !copied.includes("Hello from a cmd browser window"); attempt++) {
+      await win.locator(".tile.kind-browser webview").click();
+      for (let i = 0; i < 30 && !(await pageFocused()); i++) await win.waitForTimeout(100);
+      await menu("edit.selectAll");
+      await win.waitForTimeout(200);
+      await menu("edit.copy");
+      for (let i = 0; i < 10 && !copied; i++) {
+        await win.waitForTimeout(100);
+        copied = await app.evaluate(({ clipboard }) => clipboard.readText());
+      }
+    }
     await app.evaluate(({ clipboard }, t) => clipboard.writeText(t), saved);
     check(copied.includes("Hello from a cmd browser window"), `Select All and Copy work in a browser page (${JSON.stringify(copied)})`);
   }
