@@ -13,6 +13,12 @@ import { createServer, type ViteDevServer } from "vite";
 const here = import.meta.dirname;
 const installed = existsSync(chromium.executablePath());
 
+// Said out loud when skipped (CI doesn't install it), so it doesn't pass as green.
+if (!installed) {
+  process.stderr.write("[skip] dialog.test.ts: Playwright's Chromium isn't installed (pnpm exec playwright install chromium), so Dialog and Popover focus aren't tested\n");
+  it.skip("Playwright's Chromium isn't installed, so Dialog and Popover focus aren't tested", () => {});
+}
+
 describe.skipIf(!installed)("Dialog and Popover focus (gallery, Chromium)", () => {
   let server: ViteDevServer;
   let browser: Browser;
