@@ -39,6 +39,7 @@ fs.rmSync(home, { recursive: true, force: true });
 fs.mkdirSync(home, { recursive: true });
 const shots = path.join(root, ".cmd-dev", "shots");
 fs.mkdirSync(shots, { recursive: true });
+for (const f of fs.readdirSync(shots)) if (/^(failed|hung)/.test(f)) fs.rmSync(path.join(shots, f)); // the last run's
 
 // Fixture transcripts (instead of the real ~/.claude) and a harmless agent command.
 const transcripts = path.join(home, "transcripts-home");
@@ -1011,6 +1012,9 @@ await scenario("window-kinds", async () => {
 // WindowContent); the rest of the app stays live and terminals take input.
 // __cmdBreakView is a test hook (windows/break.ts), absent in a packaged app.
 await scenario("error-boundary", async () => {
+  // Both windows on screen: the broken one's Reload button is clicked after typing in the terminal.
+  await menu("view.grid");
+  await win.waitForSelector(".main.mode-grid", { timeout: 10_000 });
   {
     const broken = (await win.evaluate(() => window.cmd.call("window.list", {}))).find((w) => w.kind === "markdown");
     await win.evaluate((id) => window.__cmdBreakView(id, true), broken.id);
