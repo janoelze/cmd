@@ -1505,8 +1505,10 @@ await scenario("magic", async () => {
     await win.frameLocator(`.tile[data-pane="${b.id}"] iframe.magic-frame`).locator("#go").click();
     const panes = await until(() => call("pane.list"), (p) => p.length !== before);
     const fresh = panes.filter((p) => !known.has(p.id));
-    const typed = await until(async () => (fresh.length ? (await call("pane.read", { paneId: fresh.at(-1).id })).text ?? "" : ""), (t) => t.includes("clicked-rerun"));
-    check(panes.length === before + 1 && typed.includes("echo clicked-rerun") && !typed.includes("refused"), `cmd.terminal types a command into a new terminal only after a click (${panes.length - before} new)`);
+    const typed = await until(async () => (fresh.length ? (await call("pane.read", { paneId: fresh.at(-1).id })).text ?? "" : ""), (t) => t.replace(/\s+/g, "").includes("clicked-rerun"));
+    // A long prompt (CI's hostname) wraps the typed line in a narrow terminal: compared without line breaks.
+    const flat = typed.replace(/\s+/g, "");
+    check(panes.length === before + 1 && flat.includes("echoclicked-rerun") && !flat.includes("refused"), `cmd.terminal types a command into a new terminal only after a click (${panes.length - before} new; ${JSON.stringify(flat.slice(-120))})`);
     await call("pane.kill", { paneId: fresh.at(-1).id }).catch(() => {});
     await call("window.close", { id: b.id });
   }
