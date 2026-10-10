@@ -40,7 +40,9 @@ transcripts of the agents who fought the failures.
 | Oct 10 07:11–07:28 | PR #3, three CI cycles: `with one window broken … a terminal takes input` (3 s to echo), `locator.click: Timeout 30000ms` on Magic's Settings tab, `Select All and Copy work in a browser page ("")` | Echo slower than 3 s; tabs compact into a popup at CI's width; page not focused 200 ms after the click | 108c2b5b, 200da18a; the third came back on master |
 | Oct 10 11:45 | master 3d1ae132: `strip: 9 windows, all full height` | Tiles read mid-glide: at 12x CPU throttle a 382 ms glide settles at 685 ms, height 553 < 562 | `still()` waits until nothing moves; `E2E_CPU_THROTTLE`; `failed.png` (1ed33190) |
 | Oct 10 12:52 | master 1ed33190: `Select All and Copy work in a browser page ("")` | As above: a fixed 200 ms for focus | Wait for focus, retry until text arrives (72c8bcb4) |
-| Oct 10 13:01 | master 72c8bcb4: `re-attached terminal shows its output exactly once (0×)` | A fixed 600 ms after switching the terminal renderer | Open; the `smoke-robust` worktree is converting every fixed wait to polling |
+| Oct 10 13:01 | master 72c8bcb4: `re-attached terminal shows its output exactly once (0×)` | A fixed 600 ms after switching the terminal renderer | `until()` everywhere (13ed0ea2, the `smoke-robust` branch) |
+| Oct 10 13:19–13:21 | master: the smoke step made a warning instead of a gate (67220e9b), reverted two minutes later (749fa2c1) | | |
+| Oct 10 13:27 | master 13ed0ea2: `⌘↑ goes back up and re-selects where you were (e2e, bin)`; fails the same way locally, twice in a row, in CI's screen shape | The rewrite's own regression or a product one: after ⌘↓ into `sub-folder`, ⌘↑ lands two levels up, in the e2e home | Open |
 
 Vitest on CI, Oct 3 to Oct 10 (the runs a sibling run on the same commit passed, so flakes):
 `agent detection with the native helper … timed out` (3 runs, an 8 s deadline), the
@@ -207,9 +209,8 @@ flakiness study. Nothing contradicts the plan; four points sharpen it.
 
 ### Now: stop the bleeding (days)
 
-1. **No fixed waits before a read.** Finish the `smoke-robust` conversion: every
-   `waitForTimeout` before reading state becomes `until(read, ok, deadline)`, and the
-   check prints what it last saw. Deadlines are generous (10 s): they decide how long a
+1. **No fixed waits before a read.** Landed in 13ed0ea2: every `waitForTimeout` before
+   reading state became `until(read, ok, deadline)`, and the check prints what it last saw. Deadlines are generous (10 s): they decide how long a
    broken check takes to fail, nothing else. The remaining fixed waits are the ones that
    give an input time to land, and each says why.
 2. **Keep going after a failure.** Wrap each top-level section in a `scenario(name, fn)`
