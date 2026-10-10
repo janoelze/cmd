@@ -137,7 +137,7 @@ Prefer (a): it is what docs/28 §2 promised ("monotonic: identity, order, subscr
 
 ### AR1-06-06 · Take search off the core thread and stop joining every match
 
-- **Status:** in progress (search-worker)
+- **Status:** done (57caff75)
 - **Severity:** high
 - **Effort:** M
 - **Where:** `packages/core/src/data/views/search.ts:100-126,134-139,195-209`, `packages/core/src/data/store.ts:334-343`
