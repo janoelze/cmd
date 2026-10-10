@@ -24,7 +24,7 @@
 html, body, #root { height: 100%; margin: 0; }
 
 body {
-  font: 13px/1.35 var(--font-ui);
+  font: var(--text-base)/1.35 var(--font-ui);
   color: var(--text);
   background: var(--bg);
   user-select: none;
@@ -89,9 +89,9 @@ kbd {
 /* The columns stay drag regions; only the controls in them aren't (.workspace-bar is no-drag itself). */
 .topbar-center { display: flex; justify-content: center; min-width: 0; }
 /* At the right end, plain buttons like the footer's. */
-.topbar-trail { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.topbar-trail { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2xs); }
 .topbar-trail > :not(.bar-sep) { -webkit-app-region: no-drag; }
-.topbar-modes { display: flex; align-items: center; gap: 2px; }
+.topbar-modes { display: flex; align-items: center; gap: var(--space-2xs); }
 
 /* ── stage: sidebars and the board ──────────────── */
 
@@ -140,13 +140,13 @@ kbd {
 .statusbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-lg);
   min-height: var(--statusbar-h);
-  padding: 3px 6px 3px 16px;
+  padding: 3px var(--space-sm) 3px var(--space-xl);
   background: var(--bg-sidebar);
   /* separator as an inset shadow: no layout space, so content centres exactly */
   box-shadow: inset 0 1px 0 var(--separator);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
   -webkit-app-region: drag;
 }
@@ -174,9 +174,9 @@ kbd {
 .statusbar-usage { font-variant-numeric: tabular-nums; cursor: default; }
 /* Holds the usage's tooltip; out of the drag region, which would swallow the hover. */
 .statusbar-usage-tip { display: flex; min-width: 0; -webkit-app-region: no-drag; }
-.statusbar-actions { display: flex; align-items: center; gap: 2px; }
+.statusbar-actions { display: flex; align-items: center; gap: var(--space-2xs); }
 /* A divider between groups of bar buttons. */
-.bar-sep { flex: none; width: 1px; height: 14px; margin: 0 6px; background: var(--separator); }
+.bar-sep { flex: none; width: 1px; height: 14px; margin: 0 var(--space-sm); background: var(--separator); }
 
 /* Controls (buttons, segmented, fields…) are @cmd/ui's: packages/ui. */
 
@@ -229,7 +229,7 @@ kbd {
   /* Even, fixed height (the footer's icon buttons'), not the text's fractional line:
      the light centres on whole pixels. */
   height: 22px;
-  padding: 0 8px;
+  padding: 0 var(--space-md);
   font: inherit;
   color: inherit;
   text-align: left;
@@ -241,7 +241,7 @@ kbd {
 }
 .core-status-button:hover, .core-status-button.open { background: var(--bg-hover); color: var(--text); }
 .core-status-button { gap: 0; }
-.core-status-button .ui-dot { margin-right: 8px; }
+.core-status-button .ui-dot { margin-right: var(--space-md); }
 .core-status-usage .slot-v { --gap: 15px; }
 .core-status-usage { flex-shrink: 10; }
 
@@ -260,7 +260,7 @@ kbd {
   min-height: 0;
   height: 100%;
   background: var(--well);
-  padding: 8px 6px 4px 12px;
+  padding: var(--space-md) var(--space-sm) var(--space-xs) var(--space-lg);
   overflow: hidden;
 }
 .xterm-host { width: 100%; height: 100%; }
@@ -312,8 +312,8 @@ kbd {
 .dock-tile.sel.needs { --ring-color: var(--state-needs); border-color: var(--ring-color); }
 .dock-tile.sel.needs > .tile-frame { box-shadow: var(--ring), var(--drop); }
 .app .tile.dock-tile.sel .tile-title { background: var(--bg-sidebar); }
-.tile .term-well { padding-top: 6px; }
-.tile-name.editing { flex: 1 1 auto; margin-right: 8px; }
+.tile .term-well { padding-top: var(--space-sm); }
+.tile-name.editing { flex: 1 1 auto; margin-right: var(--space-md); }
 .tile-title-input {
   flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent;
   font: inherit; font-weight: 400; color: var(--text); cursor: text;
@@ -359,7 +359,7 @@ kbd {
   animation: shortcut-tip ease-in-out both;
 }
 /* A plain filled key, roomier than the kit's outlined one. */
-.shortcut-tip .ui-kbd { padding: 4px 7px; background: var(--bg-selected); box-shadow: none; }
+.shortcut-tip .ui-kbd { padding: var(--space-xs) 7px; background: var(--bg-selected); box-shadow: none; }
 @keyframes shortcut-tip { 0%, 100% { opacity: 0; } 11.25%, 88.75% { opacity: 0.6; } }
 @media (prefers-reduced-motion: reduce) { .shortcut-tip { animation: none; } }
 
@@ -380,12 +380,12 @@ kbd {
   flex-direction: column;
   background: var(--bg-elevated);
   border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 20px 60px var(--shadow);
   overflow: hidden;
 }
 .palette-input {
-  padding: 14px 16px;
+  padding: 14px var(--space-xl);
   font: 16px var(--font-ui);
   color: var(--text);
   background: transparent;
@@ -395,7 +395,7 @@ kbd {
 }
 /* The list takes whatever height the palette has while it glides to a new size (Palette),
    so the footer rides its bottom edge instead of jumping ahead of it. */
-.palette-list { flex: 1 1 auto; min-height: 0; list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+.palette-list { flex: 1 1 auto; min-height: 0; list-style: none; margin: 0; padding: var(--space-sm); max-height: 50vh; overflow-y: auto; }
 .palette > :not(.palette-list) { flex: none; }
 .palette-list li {
   display: flex;
@@ -609,17 +609,17 @@ kbd {
 /* Session search results in the palette */
 .palette.searching { width: min(760px, calc(100vw - 32px)); }
 /* A kind's name over its results in a search (Files, Commands…), like the Navigator's section names. */
-.palette-heading { padding: 8px 10px 3px; font: 600 10.5px var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
-.palette-heading:first-child { padding-top: 2px; }
+.palette-heading { padding: var(--space-md) 10px 3px; font: 600 var(--text-xs) var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
+.palette-heading:first-child { padding-top: var(--space-2xs); }
 .palette-list li.rich .palette-icon { margin-top: 1px; }
-.palette-list li.rich { align-items: flex-start; padding: 8px 10px; }
+.palette-list li.rich { align-items: flex-start; padding: var(--space-md) 10px; }
 .palette-hit { flex: 1; min-width: 0; }
 .palette-hit-top { display: flex; align-items: baseline; gap: 10px; }
 .palette-hit-top .palette-label { font-weight: 500; }
 .palette-meta { flex: none; margin-left: auto; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 .palette-snippet {
   margin-top: 3px;
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -627,7 +627,7 @@ kbd {
 }
 .palette-list li.on .palette-meta, .palette-list li.on .palette-snippet { color: color-mix(in srgb, var(--on-accent) 80%, transparent); }
 .palette-list li.on .palette-snippet mark { background: color-mix(in srgb, var(--on-accent) 30%, transparent); color: var(--on-accent); }
-.palette-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.palette-status { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-sm); }
 
 /* ── embedded pages ─────────────────────────────────── */
 
@@ -649,7 +649,7 @@ kbd {
   transform: scale(0);
   transition: width var(--dur) var(--ease), margin var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.dirty-dot.on { width: 6px; margin-left: 6px; transform: none; }
+.dirty-dot.on { width: 6px; margin-left: var(--space-sm); transform: none; }
 
 /* Canvas: windows on a pan/zoom plane (see WindowsView, canvas.ts). */
 .mode-canvas .windows-track { transform-origin: 0 0; }
@@ -719,17 +719,17 @@ kbd {
 
 /* ── JSON windows (windows/json-view.tsx) ───────────── */
 
-.json-scroll { flex: 1; min-height: 0; overflow: auto; background: var(--well); outline: none; padding: 6px 0; }
+.json-scroll { flex: 1; min-height: 0; overflow: auto; background: var(--well); outline: none; padding: var(--space-sm) 0; }
 .json-rows { position: relative; min-width: 100%; }
 /* Fixed height: the view draws only the rows on screen (ROW in json-view.tsx). */
 .json-row {
   --depth: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   height: 22px;
-  padding: 0 12px 0 calc(8px + var(--depth) * 16px);
-  font: 13px/22px var(--font-code);
+  padding: 0 var(--space-lg) 0 calc(var(--space-md) + var(--depth) * var(--space-xl));
+  font: var(--text-base)/22px var(--font-code);
   white-space: nowrap;
   cursor: default;
 }
@@ -842,7 +842,7 @@ kbd {
   align-items: center;
   gap: 7px;
   height: 26px;
-  padding: 0 8px;
+  padding: 0 var(--space-md);
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
@@ -889,8 +889,8 @@ kbd {
 .icon-grid {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 2px;
-  padding: 8px;
+  gap: var(--space-2xs);
+  padding: var(--space-md);
   max-height: 40vh;
   overflow-x: hidden;
   overflow-y: auto;
