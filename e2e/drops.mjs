@@ -99,27 +99,27 @@ await win.keyboard.press("Control+C");
 // ── into a file browser ──
 const files = await openWin("files", { path: path.join(fixture, "box") });
 await select(files.id);
-const list = `.tile[data-pane="${files.id}"] .file-list`;
-await win.locator(`${list} .file-row`).first().waitFor();
+const list = `.tile[data-pane="${files.id}"] .ui-tree`;
+await win.locator(`${list} .ui-tree-row`).first().waitFor();
 await dropOn(list, { files: [out("moved.txt")], at: [0.5, 0.8] });
 check(win.url() === startUrl, "a file dropped on a file browser leaves the app in place");
 check(fs.existsSync(inBox("moved.txt")) && !fs.existsSync(out("moved.txt")), "a file dropped on a file browser's empty space moves into its folder");
-await dropOn(`${list} .file-row[data-path="${inBox("inner")}"]`, { files: [out("dropped file.txt")] });
+await dropOn(`${list} .ui-tree-row[data-path="${inBox("inner")}"]`, { files: [out("dropped file.txt")] });
 check(fs.existsSync(inBox("inner/dropped file.txt")), "a file dropped on a folder's row moves into that folder");
 await dropOn(list, { files: [out("copied.txt")], modifiers: ALT, at: [0.5, 0.8] });
 check(fs.existsSync(inBox("copied.txt")) && fs.existsSync(out("copied.txt")), "⌥-dropping copies instead");
-check(await waitFor(() => win.locator(`${list} .file-row[data-path="${inBox("copied.txt")}"].sel`).count()), "the dropped file shows and is selected");
+check(await waitFor(() => win.locator(`${list} .ui-tree-row[data-path="${inBox("copied.txt")}"][data-selected]`).count()), "the dropped file shows and is selected");
 {
   // Mid-drag over a folder: the window's ring and the folder's row are marked.
-  const box = await win.locator(`${list} .file-row[data-path="${inBox("inner")}"]`).boundingBox();
+  const box = await win.locator(`${list} .ui-tree-row[data-path="${inBox("inner")}"]`).boundingBox();
   const data = { items: [], files: [out("page.txt")], dragOperationsMask: 1 | 16 };
   for (const type of ["dragEnter", "dragOver"]) await cdp.send("Input.dispatchDragEvent", { type, x: box.x + 40, y: box.y + box.height / 2, data });
   await win.waitForTimeout(200);
-  check((await win.locator(`.tile[data-pane="${files.id}"].drop-over .file-row.drop-into`).count()) === 1, "a drag over a folder marks the window and the folder");
+  check((await win.locator(`.tile[data-pane="${files.id}"].drop-over .ui-tree-row[data-dropping]`).count()) === 1, "a drag over a folder marks the window and the folder");
   await win.screenshot({ path: path.join(shots, "drops-files.png") });
   await cdp.send("Input.dispatchDragEvent", { type: "dragCancel", x: 0, y: 0, data });
   await win.waitForTimeout(200);
-  check((await win.locator(".drop-over, .drop-into").count()) === 0, "a cancelled drag leaves no marks");
+  check((await win.locator(".drop-over, [data-dropping]").count()) === 0, "a cancelled drag leaves no marks");
 }
 
 // ── a window without a target of its own opens what's dropped ──
@@ -181,7 +181,7 @@ await app.evaluate(({ webContents }) => {
 });
 const startDrags = () => app.evaluate(() => globalThis.__startDrags);
 await select(files.id);
-await win.locator(`${list} .file-row[data-path="${inBox("moved.txt")}"]`).dispatchEvent("dragstart");
+await win.locator(`${list} .ui-tree-row[data-path="${inBox("moved.txt")}"]`).dispatchEvent("dragstart");
 check(await waitFor(async () => JSON.stringify(await startDrags()) === JSON.stringify([[inBox("moved.txt")]])), "dragging a file browser's row starts a native drag of that file");
 await win.locator(`.tile[data-pane="${files.id}"] .tile-title .mark-drag`).dispatchEvent("dragstart");
 check(await waitFor(async () => JSON.stringify((await startDrags())[1]) === JSON.stringify([path.join(fixture, "box")])), "dragging a file browser's title icon drags its folder");
