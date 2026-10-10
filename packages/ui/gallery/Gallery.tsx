@@ -312,6 +312,18 @@ function TokensPage() {
 // ── windows ────────────────────────────────────────────
 
 /** A window frame for a specimen, at a size. */
+function Win({ name, icon = "macwindow", w = 420, h = 260, children }: { name: string; icon?: string; w?: number; h?: number; children: ReactNode }) {
+  return (
+    <Window selected style={{ width: w, height: h, position: "relative", flex: "none" }}>
+      <WindowBody style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <WindowBar icon={icon} name={name} />
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{children}</div>
+      </WindowBody>
+      <WindowFrame />
+    </Window>
+  );
+}
+
 /** Throws while `broken`: the ErrorBoundary specimen's view. */
 function Fragile({ broken }: { broken: boolean }): ReactNode {
   if (broken) throw new Error("This view broke on purpose (gallery)");
@@ -333,18 +345,6 @@ function BoundarySpecimen() {
         </ErrorBoundary>
       </Win>
     </div>
-  );
-}
-
-function Win({ name, icon = "macwindow", w = 420, h = 260, children }: { name: string; icon?: string; w?: number; h?: number; children: ReactNode }) {
-  return (
-    <Window selected style={{ width: w, height: h, position: "relative", flex: "none" }}>
-      <WindowBody style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <WindowBar icon={icon} name={name} />
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{children}</div>
-      </WindowBody>
-      <WindowFrame />
-    </Window>
   );
 }
 
