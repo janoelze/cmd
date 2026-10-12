@@ -9,6 +9,7 @@ import type { GridCell, GridRowInfo } from "@cmd/ui";
 import type { DotState } from "@cmd/ui";
 import { useRef, useState, type ReactNode } from "react";
 import type { GitFile } from "@cmd/protocol";
+import { changedBaseLines, FileDiff, type FileDiffHandle } from "./FileDiff.tsx";
 
 /** A file a lane changed: since its branch left the main branch, committed or not. */
 export interface LaneFile {
@@ -22,6 +23,9 @@ export interface LaneFile {
   committed?: boolean;
   /** Its diff's lines (against the merge base), from the first hunk header. */
   lines?: readonly string[];
+  /** The whole file at the merge base and now: the diff pane draws them with FileDiff (else `lines`). */
+  before?: string;
+  after?: string;
 }
 
 /** A checkout and who works in it: the workspace's own, or a linked worktree. */
@@ -72,7 +76,7 @@ const ranges = (lines: readonly string[] = []) =>
 
 /** Lines of the base two or more changes both touch, as "386–391", or null: same file, different places. */
 function clash(changes: Change[]): string | null {
-  const rs = changes.map((c) => ranges(c.f.lines));
+  const rs = changes.map((c) => (c.f.before !== undefined && c.f.after !== undefined ? changedBaseLines(c.f.before, c.f.after) : ranges(c.f.lines)));
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < rs.length; i++)
     for (let j = i + 1; j < rs.length; j++)
@@ -89,10 +93,13 @@ interface Entry {
 }
 
 /** The selected file's lines, one lane's change at a time (the toolbar picks whose). */
-function FileDiff({ e, change, onWhose, onClose }: { e: Entry; change: Change; onWhose: (laneId: string) => void; onClose: () => void }) {
+function DiffPane({ e, change, onWhose, onClose }: { e: Entry; change: Change; onWhose: (laneId: string) => void; onClose: () => void }) {
   const { lane, f } = change;
   const same = e.changes.length > 1 ? clash(e.changes) : null;
-  const hunks = ranges(f.lines).length;
+  const whole = f.before !== undefined && f.after !== undefined;
+  const nav = useRef<FileDiffHandle>(null);
+  const [place, setPlace] = useState({ count: ranges(f.lines).length, at: -1 });
+  const hunks = place.count;
   return (
     <View scroll={false}>
       <Stack pad="inset" gap={2}>
@@ -103,6 +110,13 @@ function FileDiff({ e, change, onWhose, onClose }: { e: Entry; change: Change; o
               <Text tone="dim">{dir(e.rel)}</Text>
             </Inline>
             <Inline gap={2}>
+              {whole && hunks > 1 && (
+                <Inline gap={0.5}>
+                  <Text size="sm" tone="dim">{`${Math.max(1, place.at + 1)} of ${hunks}`}</Text>
+                  <IconButton icon="chevron.up" label="Previous Change" size="sm" onClick={() => nav.current?.prev()} />
+                  <IconButton icon="chevron.down" label="Next Change" size="sm" onClick={() => nav.current?.next()} />
+                </Inline>
+              )}
               {e.changes.length > 1 && <Segmented size="sm" label="Whose change" value={lane.id} options={e.changes.map((c) => ({ value: c.lane.id, label: c.lane.name }))} onChange={onWhose} />}
               <IconButton icon="xmark" label="Close" shortcut="Esc" size="sm" onClick={onClose} />
             </Inline>
@@ -117,7 +131,13 @@ function FileDiff({ e, change, onWhose, onClose }: { e: Entry; change: Change; o
           </Callout>
         )}
       </Stack>
-      {f.lines?.length ? <Diff fill lines={f.lines} /> : <Diff fill note={f.state === "deleted" ? "Deleted" : "No line changes"} />}
+      {whole ? (
+        <FileDiff ref={nav} key={`${lane.id}:${e.rel}`} path={e.rel} before={f.before!} after={f.after!} others={e.changes.filter((c) => c !== change && c.f.after !== undefined).map((c) => ({ name: c.lane.name, after: c.f.after! }))} onPlace={setPlace} />
+      ) : f.lines?.length ? (
+        <Diff fill lines={f.lines} />
+      ) : (
+        <Diff fill note={f.state === "deleted" ? "Deleted" : "No line changes"} />
+      )}
     </View>
   );
 }
@@ -291,7 +311,7 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
       state={!lanes.length ? { kind: "empty", icon: "checkmark.circle", title: "Nothing changed" } : null}
       scroll={false}
     >
-      <Split side="bottom" open={!!(picked && change)} pane={shownDiff.current && <FileDiff e={shownDiff.current.e} change={shownDiff.current.change} onWhose={setWhose} onClose={() => setSel(null)} />} size={{ min: 120, ideal: 300, max: 2000 }}>
+      <Split side="bottom" open={!!(picked && change)} pane={shownDiff.current && <DiffPane e={shownDiff.current.e} change={shownDiff.current.change} onWhose={setWhose} onClose={() => setSel(null)} />} size={{ min: 120, ideal: 300, max: 2000 }}>
         {list}
       </Split>
     </View>

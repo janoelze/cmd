@@ -5,6 +5,13 @@
 import { AllSizes, RefWindow, type SizeName } from "../../reference/RefWindow.tsx";
 import { ActivityView, type Lane } from "./Activity.tsx";
 
+// Real code for the shared files' texts (the renderer's own files stand in for rpc.ts and checkout.ts: it may not read other packages).
+import RPC from "../../lib/model.ts?raw";
+import LIVEDIFF from "./LiveDiff.tsx?raw";
+import CHECKOUT from "../../lib/store.ts?raw";
+
+/** Where both agents add to "rpc.ts": its first exported function. */
+const GIT_STATUS = RPC.split("\n").find((l) => l.startsWith("export function"))!;
 const S = 1000;
 const M = 60 * S;
 
@@ -101,7 +108,40 @@ const RAW: Lane[] = [
     files: [{ rel: "docs/50-competitors.md", state: "added", added: 312, removed: 0, ago: 3 * 60 * M, committed: true }],
   },
 ];
-const LANES: Lane[] = RAW.map((l) => ({ ...l, files: l.files.map((f) => ({ ...f, lines: f.lines ?? hunk(f) })) }));
+// Whole texts for the diff pane: real files of this repository where agents share them, made-up code of the right size elsewhere.
+const ins = (s: string, after: string, add: string) => s.replace(after, `${after}\n${add}`);
+const TEXTS: Record<string, { before: string; after: string }> = {
+  "a:packages/protocol/src/rpc.ts": { before: RPC, after: ins(RPC, GIT_STATUS, '  /** Every worktree of the repository `path` is in, with what changed in each. */\n  "git.worktrees": { params: { path: string }; result: Worktree[] };') },
+  "b:packages/protocol/src/rpc.ts": { before: RPC, after: ins(RPC, GIT_STATUS, '  "mcp.tools": { params: Record<string, never>; result: McpTool[] };\n  "mcp.call": { params: { tool: string; args: unknown }; result: unknown };') },
+  "a:apps/desktop/src/renderer/src/windows/diff/LiveDiff.tsx": {
+    before: LIVEDIFF,
+    after: LIVEDIFF.replace("  const [status, setStatus] = useState<GitStatus | null | undefined>(undefined);", "  const worktrees = useWorktrees(dir);\n  const lanes = useLanes(worktrees);\n  if (lanes.length > 1) return <ActivityView lanes={lanes} />;\n  const [status, setStatus] = useState<GitStatus | null | undefined>(undefined);"),
+  },
+  "d:apps/desktop/src/renderer/src/windows/diff/LiveDiff.tsx": { before: LIVEDIFF, after: LIVEDIFF.replace("const POLL_MS = 3000;", "const POLL_MS = 2000;").replace("const OPEN_MAX = 6;", "const OPEN_MAX = 8;") },
+  "a:packages/core/src/lib/checkout.ts": {
+    before: CHECKOUT,
+    after: `${CHECKOUT}\n/** Every worktree of the repository \`common\` is the git folder of: <common>/worktrees/<name>/gitdir names each. */\nexport function worktreesOf(common: string): string[] {\n  let names: string[] = [];\n  try {\n    names = fs.readdirSync(path.join(common, "worktrees"));\n  } catch {\n    return [];\n  }\n  return names.flatMap((n) => {\n    try {\n      return [path.dirname(fs.readFileSync(path.join(common, "worktrees", n, "gitdir"), "utf8").trim())];\n    } catch {\n      return [];\n    }\n  });\n}\n`,
+  },
+};
+
+/** Made-up code for a file: `n` lines of small functions. */
+const code = (rel: string, n: number, tag = "") =>
+  [`// ${rel.split("/").pop()}`, "", ...Array.from({ length: n }, (_, i) => (i % 6 === 0 ? `export function step${i}${tag}(input: Input) {` : i % 6 === 5 ? "}" : `  const v${i} = read(input, ${i});`))].join("\n");
+/** A made-up file before and after: `added` and `removed` lines in a few places through it. */
+function synth(f: { rel: string; state: string; added: number; removed: number }) {
+  if (f.state === "added" || f.state === "untracked") return { before: "", after: code(f.rel, f.added - 2, "New") };
+  const before = code(f.rel, Math.max(60, f.removed * 3 + f.added));
+  if (f.state === "deleted") return { before, after: "" };
+  const lines = before.split("\n");
+  const n = Math.max(1, Math.ceil(f.added / 15));
+  for (let k = n - 1; k >= 0; k--) {
+    const at = 4 + Math.floor(((lines.length - 8) * (k + 0.5)) / n);
+    lines.splice(at, Math.ceil(f.removed / n), ...Array.from({ length: Math.ceil(f.added / n) }, (_, i) => `  next.step${i}(v${at}, "${k}");`));
+  }
+  return { before, after: lines.join("\n") };
+}
+
+const LANES: Lane[] = RAW.map((l) => ({ ...l, files: l.files.map((f) => ({ ...f, lines: f.lines ?? hunk(f), ...(TEXTS[`${l.id}:${f.rel}`] ?? synth(f)) })) }));
 
 function W({ size = "regular", lanes = LANES, lens, open }: { size?: SizeName; lanes?: Lane[]; lens?: "agents" | "files"; open?: string }) {
   return (
