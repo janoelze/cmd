@@ -3,7 +3,7 @@
 // split, and an agent still writing.
 
 import { useEffect, useRef, useState } from "react";
-import { Button, Inline, Stack, Text } from "@cmd/ui";
+import { Button, Inline, Separator, Stack, Text } from "@cmd/ui";
 import { RefWindow } from "../../reference/RefWindow.tsx";
 import { FileDiff, type FileDiffHandle, type FileDiffProps } from "./FileDiff.tsx";
 import BASE from "./LiveDiff.tsx?raw";
@@ -53,6 +53,7 @@ function W(p: Partial<FileDiffProps> & { size?: "regular" | "wide" }) {
         </Inline>
       </Inline>
       </Stack>
+      <Separator />
       <FileDiff ref={nav} path={PATH} before={p.before ?? BASE} after={p.after ?? SMALL} mode={p.mode} others={p.others} onPlace={setPlace} />
     </RefWindow>
   );

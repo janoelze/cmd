@@ -4,7 +4,7 @@
 // and the files more than one of them changed, first, because those are the
 // ones that will conflict. A second lens groups the same files by area.
 
-import { Callout, DataGrid, Diff, Inline, Split, Stack, StatusDot, StatusLine, Text, IconButton, Segmented, ToolbarSegmented, View, WindowToolbar } from "@cmd/ui";
+import { Callout, DataGrid, Separator, Diff, Inline, Split, Stack, StatusDot, StatusLine, Text, IconButton, Segmented, ToolbarSegmented, View, WindowToolbar } from "@cmd/ui";
 import type { GridCell, GridRowInfo } from "@cmd/ui";
 import type { DotState } from "@cmd/ui";
 import { useRef, useState, type ReactNode } from "react";
@@ -131,6 +131,7 @@ function DiffPane({ e, change, onWhose, onClose }: { e: Entry; change: Change; o
           </Callout>
         )}
       </Stack>
+      <Separator />
       {whole ? (
         <FileDiff ref={nav} key={`${lane.id}:${e.rel}`} path={e.rel} before={f.before!} after={f.after!} others={e.changes.filter((c) => c !== change && c.f.after !== undefined).map((c) => ({ name: c.lane.name, after: c.f.after! }))} onPlace={setPlace} />
       ) : f.lines?.length ? (

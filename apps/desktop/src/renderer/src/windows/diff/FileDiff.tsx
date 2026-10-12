@@ -9,7 +9,7 @@
 // the scroll stays where it is.
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ChangeSet, Compartment, EditorState, Prec, RangeSet, RangeSetBuilder, StateField, type Extension } from "@codemirror/state";
+import { Compartment, EditorState, Prec, RangeSet, RangeSetBuilder, StateField, type Extension } from "@codemirror/state";
 import { Decoration, EditorView, GutterMarker, gutterLineClass, lineNumbers, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
@@ -60,7 +60,7 @@ const diffTheme = Prec.highest(
   EditorView.theme({
     "&": { fontSize: "var(--text-xs)" },
     ".cm-scroller": { lineHeight: "1.5" },
-    ".cm-content": { padding: "0 0 var(--space-6)" },
+    ".cm-content": { padding: "var(--space-1) 0 var(--space-6)" },
     ".cm-line, .cm-deletedChunk .cm-deletedLine": { padding: "0 var(--inset) 0 var(--space-2)" },
     ".cm-gutters": { borderRight: "none" },
     ".cm-lineNumbers .cm-gutterElement": { padding: "0 var(--space-1) 0 var(--inset)", minWidth: "4ch", color: "var(--text-faint)" },
@@ -100,24 +100,23 @@ export function changedBaseLines(before: string, after: string): [number, number
   });
 }
 
-/** The lines of `after` (positions) that change base lines another version changes too. */
+/** The lines of `after` (positions) whose change touches base lines another version changes too. */
 function clashLines(before: string, after: string, others: readonly OtherVersion[]): { from: number; names: string[] }[] {
   if (!others.length) return [];
-  const mine = changedBaseLines(before, after);
   const theirs = others.map((o) => ({ name: o.name, ranges: changedBaseLines(before, o.after) }));
-  // Base offsets → this version's offsets: the diff as a change set.
-  const changes = ChangeSet.of(presentableDiff(before, after).map((c) => ({ from: c.fromA, to: c.toA, insert: after.slice(c.fromB, c.toB) })), before.length);
   const base = EditorState.create({ doc: before }).doc;
   const doc = EditorState.create({ doc: after }).doc;
   const out = new Map<number, Set<string>>();
-  for (const [a1, a2] of mine)
-    for (const t of theirs)
-      for (const [b1, b2] of t.ranges) {
-        if (a1 > b2 || b1 > a2) continue;
-        const from = doc.lineAt(Math.min(changes.mapPos(base.line(Math.max(a1, b1)).from, -1), doc.length)).number;
-        const to = doc.lineAt(Math.min(changes.mapPos(base.line(Math.min(a2, b2)).to, 1), doc.length)).number;
-        for (let l = from; l <= to; l++) (out.get(l) ?? out.set(l, new Set()).get(l)!).add(t.name);
-      }
+  for (const c of presentableDiff(before, after)) {
+    const a1 = base.lineAt(Math.min(c.fromA, base.length)).number;
+    const a2 = base.lineAt(Math.min(Math.max(c.fromA, c.toA - 1), base.length)).number;
+    const names = theirs.filter((t) => t.ranges.some(([b1, b2]) => a1 <= b2 && b1 <= a2)).map((t) => t.name);
+    if (!names.length) continue;
+    // This change's own lines (a deletion: the line it was taken from).
+    const from = doc.lineAt(Math.min(c.fromB, doc.length)).number;
+    const to = doc.lineAt(Math.min(Math.max(c.fromB, c.toB - 1), doc.length)).number;
+    for (let l = from; l <= to; l++) for (const n of names) (out.get(l) ?? out.set(l, new Set()).get(l)!).add(n);
+  }
   return [...out.entries()].map(([l, names]) => ({ from: doc.line(l).from, names: [...names] }));
 }
 
