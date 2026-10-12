@@ -199,8 +199,9 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
   const more = (key: string, n: number, depth: number) => rows.push({ key: `more:${key}`, info: { depth }, cells: ["", <Text key="m" tone="dim">{`${n} more files`}</Text>, "", "", ""], onClick: () => setAll((s) => new Set(s).add(key)) });
 
   if (shared.length) {
-    heading("h:shared", `In more than one worktree`);
-    for (const e of shared) fileRow(`shared:${e.rel}`, e, 0, true);
+    heading("h:shared", "Clashes");
+    // Same lines first: those will conflict; the rest are only the same file.
+    for (const e of [...shared].sort((a, b) => Number(!!clash(b.changes)) - Number(!!clash(a.changes)))) fileRow(`shared:${e.rel}`, e, 0, true);
   }
   if (lens === "agents") {
     heading("h:agents", "Agents");
