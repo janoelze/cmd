@@ -2,6 +2,22 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.28.0 — 2026-10-12
+
+### New
+
+- **Live Diff across worktrees.** When agents work in other worktrees, Live Diff shows each one's changes beside yours, named after its agent. Files two agents change on the same lines come first.
+
+### Improved
+
+- Live Diff opens a file's diff in a pane below the list, side by side or unified, with the changed words marked.
+
+### Fixed
+
+- Many terminals with fast reloads no longer run cmd out of memory.
+- Scrollbars line up with their window at every zoom in the free-form canvas.
+- Run Last Action Again opens the Actions widget instead of failing when that action's workspace is closed.
+
 ## 0.27.2 — 2026-10-12
 
 ### Improved
