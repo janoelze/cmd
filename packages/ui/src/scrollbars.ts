@@ -214,11 +214,16 @@ export function pageScrollbars(doc: Document, o: PageScrollbarsOptions, span: ty
   const root = () => doc.scrollingElement ?? doc.documentElement;
   const metrics = (el: Element, axis: Axis) =>
     axis === "y" ? { view: el.clientHeight, size: el.scrollHeight, scroll: el.scrollTop } : { view: el.clientWidth, size: el.scrollWidth, scroll: el.scrollLeft };
-  // The scroller's visible box: the viewport for the page itself, else its padding box.
+  // The scroller's visible box on screen: the viewport for the page itself, else its
+  // padding box. client* are layout px, the rect screen px: under a scaled ancestor (the
+  // canvas view zooms windows with a transform) the two differ, so scale one to the other.
   const box = (el: Element) => {
     if (el === root()) return { left: 0, top: 0, width: el.clientWidth, height: el.clientHeight };
     const r = el.getBoundingClientRect();
-    return { left: r.left + el.clientLeft, top: r.top + el.clientTop, width: el.clientWidth, height: el.clientHeight };
+    const h = el as HTMLElement;
+    const kx = h.offsetWidth ? r.width / h.offsetWidth : 1;
+    const ky = h.offsetHeight ? r.height / h.offsetHeight : 1;
+    return { left: r.left + el.clientLeft * kx, top: r.top + el.clientTop * ky, width: el.clientWidth * kx, height: el.clientHeight * ky };
   };
 
   // Light thumbs on dark backgrounds: the first opaque one behind the scroller decides.

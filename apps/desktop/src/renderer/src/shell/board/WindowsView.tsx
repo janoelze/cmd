@@ -22,7 +22,7 @@
 // Windows are never remounted or reordered in the DOM, so terminals keep
 // running and pointer capture is never lost.
 
-import { EmptyState, ErrorBoundary, GLIDE_MS, PageDots, tween, Window, WindowBody, WindowFrame } from "@cmd/ui";
+import { EmptyState, ErrorBoundary, GLIDE_MS, PageDots, scrollbarsMoved, tween, Window, WindowBody, WindowFrame } from "@cmd/ui";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { PaneId } from "@cmd/protocol";
@@ -238,7 +238,7 @@ export function WindowsView(p: Props) {
   const camSave = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onCamera = useRef(p.onCamera);
   onCamera.current = p.onCamera;
-
+  useLayoutEffect(() => scrollbarsMoved(), [cam]); // panning, zooming: shown scrollbars follow before the frame paints
   // The track's transform in each mode: screen = (tx, ty) + s × window coordinates.
   // The strip scrolls natively (its offset is the scroller's), the canvas has its camera.
   const trackOf = (m: ViewMode) =>
