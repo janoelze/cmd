@@ -244,6 +244,7 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
     >
       <View focusable>
         <DataGrid
+          headless
           columns={[
             { key: "mark", label: "", icon: true },
             { key: "name", label: "Name", grow: true },

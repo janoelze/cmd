@@ -69,12 +69,14 @@ export interface DataGridProps {
   numbered?: boolean;
   /** Under the rows, inside the scroll: a "Show more" button. */
   footer?: ReactNode;
+  /** No header row, where the values say what they are (a name, +12 −3, 2m): it still sizes the columns, unseen. Not with onSort. */
+  headless?: boolean;
   className?: string;
 }
 
 const isSpec = (c: GridCell): c is Exclude<GridCell, ReactNode> => typeof c === "object" && c !== null && "node" in c && !("$$typeof" in (c as object));
 
-export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu, onRowClick, onRowDoubleClick, rowInfo, selected, mono, numbered, footer, className }: DataGridProps) {
+export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu, onRowClick, onRowDoubleClick, rowInfo, selected, mono, numbered, footer, headless, className }: DataGridProps) {
   // The column a row's disclosure and indent go in: the one that grows, else the first.
   const tree = Math.max(0, columns.findIndex((c) => c.grow));
   // Its header lines up with the outermost text: section headings sit at the edge, else names
@@ -82,9 +84,9 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
   const headed = !!rowInfo && rows.some((_, i) => rowInfo(i)?.heading);
   const next = (key: string): GridSort | null => (sort?.key !== key ? { key, desc: false } : sort.desc ? null : { key, desc: true });
   return (
-    <div className={cls("ui-grid", className)} data-mono={mono || undefined}>
+    <div className={cls("ui-grid", className)} data-mono={mono || undefined} data-headless={headless || undefined}>
       <table>
-        <thead>
+        <thead aria-hidden={headless || undefined}>
           <tr>
             {numbered && <th className="ui-grid-num" aria-label="Row" />}
             {columns.map((c, j) => {
