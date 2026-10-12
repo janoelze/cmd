@@ -14,14 +14,22 @@ const LIVEDIFF_HERON = ["@@ -32,9 +32,14 @@ const STATE: Record<GitFile[\"state\
 const LIVEDIFF_WREN = ["@@ -17,3 +17,3 @@", "-const POLL_MS = 3000;", "+const POLL_MS = 2000;", " /** More files than this start collapsed. */", "-const OPEN_MAX = 6;", "+const OPEN_MAX = 8;"];
 
 /** A stand-in hunk for files the story gives no lines. */
-const hunk = (f: { rel: string; added: number; removed: number }) => [
-  `@@ -1,${f.removed + 2} +1,${f.added + 2} @@`,
-  ` // ${f.rel.split("/").pop()}`,
-  ...Array.from({ length: Math.min(f.removed, 4) }, (_, i) => `-  old line ${i + 1}`),
-  ...Array.from({ length: Math.min(f.added, 6) }, (_, i) => `+  new line ${i + 1}`),
-  ...(f.added > 6 ? [`+  … ${f.added - 6} more`] : []),
-  " ",
-];
+const hunk = (f: { rel: string; added: number; removed: number }) => {
+  // About one hunk per 20 added lines, spread through the file, as real changes are.
+  const n = Math.max(1, Math.min(12, Math.ceil(f.added / 20)));
+  return Array.from({ length: n }, (_, h) => {
+    const add = Math.ceil(f.added / n), del = Math.ceil(f.removed / n), at = 12 + h * 57;
+    return [
+      `@@ -${at},${del + 6} +${at + h * 3},${add + 6} @@ function part${h}() {`,
+      `   const value${h} = read(input);`,
+      "   if (!value) return null;",
+      ...Array.from({ length: del }, (_, i) => `-  legacy(${h}, ${i});`),
+      ...Array.from({ length: add }, (_, i) => `+  next.step${i}(value${h}, { from: "${f.rel.split("/").pop()}" });`),
+      "   return value;",
+      " }",
+    ];
+  }).flat();
+};
 
 const RAW: Lane[] = [
   { id: "main", name: "cmd", branch: "master", main: true, light: "idle", ahead: 0, files: [{ rel: "CHANGELOG.md", state: "modified", added: 4, removed: 0, ago: 42 * M }] },
@@ -95,10 +103,10 @@ const RAW: Lane[] = [
 ];
 const LANES: Lane[] = RAW.map((l) => ({ ...l, files: l.files.map((f) => ({ ...f, lines: f.lines ?? hunk(f) })) }));
 
-function W({ size = "regular", lanes = LANES, lens, open }: { size?: SizeName; lanes?: Lane[]; lens?: "agents" | "files"; open?: string[] }) {
+function W({ size = "regular", lanes = LANES, lens, open }: { size?: SizeName; lanes?: Lane[]; lens?: "agents" | "files"; open?: string }) {
   return (
     <RefWindow icon="plusminus" name="Changes · cmd" size={size}>
-      <ActivityView lanes={lanes} initialLens={lens} initialOpen={open} />
+      <ActivityView lanes={lanes} initialLens={lens} initialSelected={open} />
     </RefWindow>
   );
 }
@@ -106,9 +114,9 @@ function W({ size = "regular", lanes = LANES, lens, open }: { size?: SizeName; l
 /** Five agents and the main checkout; Heron and Lark both changed rpc.ts, Heron and Wren LiveDiff.tsx. Working agents start open. */
 export const ByAgent = () => <W />;
 /** rpc.ts opened from the overlaps: Lark's change, then Heron's, each under its own line. */
-export const SharedFileOpen = () => <W size="wide" open={["shared:packages/protocol/src/rpc.ts"]} />;
+export const SharedFileOpen = () => <W size="wide" open="shared:packages/protocol/src/rpc.ts" />;
 /** A file opened under its agent: one diff, no per-agent line. */
-export const AgentFileOpen = () => <W open={["a:packages/core/src/lib/checkout.ts"]} />;
+export const AgentFileOpen = () => <W open="a:packages/core/src/lib/checkout.ts" />;
 /** The same files by area, each with who changed it. */
 export const ByArea = () => <W lens="files" />;
 /** One agent alone: no overlap section. */

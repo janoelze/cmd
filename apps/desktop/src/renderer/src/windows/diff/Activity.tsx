@@ -4,7 +4,7 @@
 // and the files more than one of them changed, first, because those are the
 // ones that will conflict. A second lens groups the same files by area.
 
-import { Badge, Chip, Diff, Inline, List, ListRow, ListRowContent, ListRowEnd, ListRowIcon, ListSection, Segmented, StatusLine, Text, Twisty, View, WindowToolbar } from "@cmd/ui";
+import { Badge, Callout, Chip, Diff, Inline, List, ListRow, ListRowContent, ListRowEnd, ListRowIcon, ListSection, Split, Stack, StatusLine, Text, ToolbarButton, ToolbarSegmented, ToolbarSpacer, Twisty, View, WindowToolbar } from "@cmd/ui";
 import type { DotState } from "@cmd/ui";
 import { useState } from "react";
 import type { GitFile } from "@cmd/protocol";
@@ -105,57 +105,66 @@ interface Entry {
   changes: Change[];
 }
 
-/**
- * A changed file; a click opens its lines under it. Changed by more than one lane
- * (`who`), each lane's lines come under a line of its own: its chip, counts, age.
- */
-function FileRow({ e, depth = 0, who, open, onToggle }: { e: Entry; depth?: number; who?: boolean; open: boolean; onToggle: () => void }) {
+/** A changed file; a click shows its lines beside the list. Changed by more than one lane, it says whether they touch the same lines. */
+function FileRow({ e, depth = 0, who, selected, onSelect }: { e: Entry; depth?: number; who?: boolean; selected: boolean; onSelect: () => void }) {
   const f = e.changes[0]!.f;
   const st = LETTER[f.state];
   const many = e.changes.length > 1;
-  const t = sum(e.changes.map((c) => c.f));
   const same = many ? clash(e.changes) : null;
+  const committed = e.changes.every((c) => c.f.committed);
   return (
-    <>
-      <ListRow depth={depth} dim={e.changes.every((c) => c.f.committed)} tip={`${e.rel}${e.changes.every((c) => c.f.committed) ? "\nCommitted" : ""}`} onClick={onToggle}>
-        <Twisty open={open} onToggle={onToggle} />
-        <ListRowIcon icon={<Badge size="sm" tone={st.tone}>{st.letter}</Badge>} />
-        <ListRowContent title={base(e.rel)} place={dir(e.rel)} detail={many ? (same ? `Both change ${same}` : "Different places in the file") : undefined} tone={same ? "needs" : undefined} />
-        <ListRowEnd>
+    <ListRow depth={depth} selected={selected} dim={committed && !selected} tip={`${e.rel}${committed ? "\nCommitted" : ""}`} onClick={onSelect}>
+      <ListRowIcon icon={<Badge size="sm" tone={st.tone}>{st.letter}</Badge>} />
+      <ListRowContent title={base(e.rel)} place={dir(e.rel)} detail={many ? (same ? `Both change ${same}` : "Different places in the file") : undefined} tone={same ? "needs" : undefined} />
+      <ListRowEnd>
+        <Inline gap={2}>
+          {who &&
+            e.changes.map(({ lane }) => (
+              <Chip key={lane.id} hue={projectHue(lane.branch)} tip={`${lane.name} on ${lane.branch}`}>
+                {lane.name}
+              </Chip>
+            ))}
+          <Counts {...sum(e.changes.map((c) => c.f))} />
+          <Text size="xs" tone="dim">
+            {age(f.ago)}
+          </Text>
+        </Inline>
+      </ListRowEnd>
+    </ListRow>
+  );
+}
+
+/** The selected file's lines, one lane's change at a time (the toolbar picks whose). */
+function FileDiff({ e, change }: { e: Entry; change: Change }) {
+  const { lane, f } = change;
+  const same = e.changes.length > 1 ? clash(e.changes) : null;
+  const hunks = ranges(f.lines).length;
+  return (
+    <View>
+      <Stack pad="inset" gap={2}>
+        <Stack gap={0.5}>
           <Inline gap={2}>
-            {who &&
-              e.changes.map(({ lane }) => (
-                <Chip key={lane.id} hue={projectHue(lane.branch)} tip={`${lane.name} on ${lane.branch}`}>
-                  {lane.name}
-                </Chip>
-              ))}
-            <Counts {...t} />
-            <Text size="xs" tone="dim">
-              {age(f.ago)}
-            </Text>
+            <Text strong>{base(e.rel)}</Text>
+            <Text tone="dim">{dir(e.rel)}</Text>
           </Inline>
-        </ListRowEnd>
-      </ListRow>
-      {open &&
-        e.changes.map(({ lane, f }) => (
-          <div key={lane.id} style={{ display: "contents" }}>
-            {many && (
-              <ListRow depth={depth + 1} tip={`${lane.name}'s change, on ${lane.branch}`}>
-                <ListRowContent title={<Chip hue={projectHue(lane.branch)}>{lane.name}</Chip>} place={f.committed ? "committed" : "uncommitted"} />
-                <ListRowEnd>
-                  <Inline gap={2}>
-                    <Counts {...f} />
-                    <Text size="xs" tone="dim">
-                      {age(f.ago)}
-                    </Text>
-                  </Inline>
-                </ListRowEnd>
-              </ListRow>
-            )}
-            {f.lines?.length ? <Diff lines={f.lines} /> : <Diff note={f.state === "deleted" ? "Deleted" : "No line changes"} />}
-          </div>
-        ))}
-    </>
+          <Inline gap={2}>
+            <Chip hue={projectHue(lane.branch)} tip={`${lane.name} on ${lane.branch}`}>
+              {lane.name}
+            </Chip>
+            <Text size="sm" tone="dim">
+              {f.committed ? "Committed" : "Uncommitted"} · {hunks} {hunks === 1 ? "change" : "changes"} · {age(f.ago)}
+            </Text>
+            <Counts {...f} />
+          </Inline>
+        </Stack>
+        {same && (
+          <Callout tone="warning" compact>
+            {e.changes.map((c) => c.lane.name).join(" and ")} both change {same}.
+          </Callout>
+        )}
+      </Stack>
+      {f.lines?.length ? <Diff lines={f.lines} /> : <Diff note={f.state === "deleted" ? "Deleted" : "No line changes"} />}
+    </View>
   );
 }
 
@@ -172,17 +181,23 @@ function entries(lanes: Lane[]): Entry[] {
 }
 
 /** Live Diff over every checkout of a project with work in it (a prototype: data in, nothing fetched). */
-export function ActivityView({ lanes, initialLens = "agents", initialOpen = [] }: { lanes: Lane[]; initialLens?: "agents" | "files"; /** Files open at first, as "<section>:<path>" (shared:, area:, or a lane's id). */ initialOpen?: string[] }) {
+export function ActivityView({ lanes, initialLens = "agents", initialSelected = null }: { lanes: Lane[]; initialLens?: "agents" | "files"; /** The file shown at first, as "<section>:<path>" (shared:, area:, or a lane's id). */ initialSelected?: string | null }) {
   const [lens, setLens] = useState(initialLens);
   const [open, setOpen] = useState<Map<string, boolean>>(new Map());
   const [all, setAll] = useState<Set<string>>(new Set());
   const every = entries(lanes);
   const shared = every.filter((e) => e.changes.length > 1);
-  /** Files whose lines are open, by where they are: "<section>:<path>". */
-  const [diffs, setDiffs] = useState<Set<string>>(() => new Set(initialOpen));
-  const row = (key: string, e: Entry, p: { depth?: number; who?: boolean } = {}) => (
-    <FileRow key={key} e={e} {...p} open={diffs.has(key)} onToggle={() => setDiffs((s) => (s.delete(key) ? new Set(s) : new Set(s).add(key)))} />
-  );
+  /** The file shown, by where its row is: "<section>:<path>"; and whose change of it. */
+  const [sel, setSel] = useState<string | null>(initialSelected);
+  const [whose, setWhose] = useState<string | null>(null);
+  /** Rows in the order shown, for ↑ and ↓. */
+  const order: string[] = [];
+  const row = (key: string, e: Entry, p: { depth?: number; who?: boolean } = {}) => {
+    order.push(key);
+    return <FileRow key={key} e={e} {...p} selected={sel === key} onSelect={() => (setSel(key), setWhose(null))} />;
+  };
+  const picked = sel ? entryOf(sel, lanes, every) : null;
+  const change = picked && (picked.changes.find((c) => c.lane.id === whose) ?? picked.changes[0]!);
   const sorted = [...lanes].sort((a, b) => Math.min(...a.files.map((f) => f.ago), Infinity) - Math.min(...b.files.map((f) => f.ago), Infinity));
   const total = sum(lanes.flatMap((l) => l.files));
   const files = new Set(lanes.flatMap((l) => l.files.map((f) => f.rel))).size;
@@ -243,20 +258,18 @@ export function ActivityView({ lanes, initialLens = "agents", initialOpen = [] }
     </>
   );
 
-  return (
-    <View
-      toolbar={
-        <WindowToolbar label="Changes">
-          <Segmented value={lens} options={[{ value: "agents", label: "Agents" }, { value: "files", label: "Areas" }]} onChange={setLens} size="sm" />
-        </WindowToolbar>
-      }
-      footer={
-        <StatusLine end={<Counts {...total} />}>
-          {lanes.length} checkouts · {files} files
-        </StatusLine>
-      }
-      state={!lanes.length ? { kind: "empty", icon: "checkmark.circle", title: "Nothing changed" } : null}
+  const list = (
+    <div
+      style={{ display: "contents" }}
+      onKeyDown={(ev) => {
+        const i = sel ? order.indexOf(sel) : -1;
+        const next = ev.key === "ArrowDown" ? order[i + 1] : ev.key === "ArrowUp" ? order[i - 1] : ev.key === "Escape" ? null : undefined;
+        if (next === undefined) return;
+        ev.preventDefault();
+        setSel(next), setWhose(null);
+      }}
     >
+      <View focusable>
       <List>
         {shared.length > 0 && (
           <ListSection title="Changed in more than one worktree" count={shared.length} tone="needs">
@@ -265,6 +278,47 @@ export function ActivityView({ lanes, initialLens = "agents", initialOpen = [] }
         )}
         {lens === "agents" ? agents : byArea}
       </List>
+      </View>
+    </div>
+  );
+
+  return (
+    <View
+      toolbar={
+        <WindowToolbar label="Changes">
+          <ToolbarSegmented label="Group" value={lens} options={[{ value: "agents", label: "Agents" }, { value: "files", label: "Areas" }]} onChange={setLens} />
+          <ToolbarSpacer />
+          {picked && picked.changes.length > 1 && (
+            <ToolbarSegmented label="Whose change" value={change!.lane.id} options={picked.changes.map((c) => ({ value: c.lane.id, label: c.lane.name }))} onChange={setWhose} />
+          )}
+          {picked && <ToolbarButton icon="xmark" label="Close" shortcut="Esc" onClick={() => setSel(null)} />}
+        </WindowToolbar>
+      }
+      footer={
+        <StatusLine end={<Counts {...total} />}>
+          {lanes.length} checkouts · {files} files
+        </StatusLine>
+      }
+      state={!lanes.length ? { kind: "empty", icon: "checkmark.circle", title: "Nothing changed" } : null}
+      scroll={false}
+    >
+      {picked && change ? (
+        <Split side="start" pane={list} width={{ min: 240, ideal: 320, max: 480 }}>
+          <FileDiff e={picked} change={change} />
+        </Split>
+      ) : (
+        list
+      )}
     </View>
   );
+}
+
+/** The entry a row's key names: a shared or area row's file (every lane's change), or one lane's file. */
+function entryOf(key: string, lanes: Lane[], every: Entry[]): Entry | null {
+  const at = key.indexOf(":");
+  const where = key.slice(0, at), rel = key.slice(at + 1);
+  if (where === "shared" || where === "area") return every.find((e) => e.rel === rel) ?? null;
+  const lane = lanes.find((l) => l.id === where);
+  const f = lane?.files.find((x) => x.rel === rel);
+  return lane && f ? { rel, changes: [{ lane, f }] } : null;
 }
