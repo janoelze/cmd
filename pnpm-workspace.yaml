@@ -12,3 +12,8 @@ allowBuilds:
 # Fail pnpm install on a Node outside package.json's engines (Electron's major, .node-version),
 # rather than warn. pnpm 11 reads this here; it ignores engine-strict in .npmrc.
 engineStrict: true
+# addon-image made a sixel decoder (a Wasm instance, gigabytes of reserved address space) for every
+# terminal, hidden ones too, until the renderer ran out (crash report e26fec60): it now makes one on a
+# terminal's first sixel image. Regenerate with pnpm patch when bumping the addon.
+patchedDependencies:
+  '@xterm/addon-image@0.9.0': patches/@xterm__addon-image@0.9.0.patch

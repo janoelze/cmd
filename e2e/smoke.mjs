@@ -522,6 +522,10 @@ await scenario("terminals", async () => {
   await win.keyboard.type("ls -la");
   await win.keyboard.press("Enter");
   check((await panes()) === 2, "two terminals open");
+  // A terminal makes its sixel decoder on its first image (patches/@xterm__addon-image@0.9.0.patch).
+  await win.keyboard.type("printf '\\033Pq#0;2;100;0;0#0~~~~~~~~\\033\\\\'");
+  await win.keyboard.press("Enter");
+  check((await until(() => countOf(".xterm-image-layer"), (n) => n > 0)) > 0, "a sixel image shows in the terminal");
   await shot(win, "2-focus.png");
 });
 
