@@ -385,6 +385,43 @@ export interface GitStatus {
 }
 
 /**
+ * A checkout of a repository and what it changed (git.worktrees, Live Diff across worktrees,
+ * docs/52-livediff-worktrees.md): a linked worktree's branch since it left the main branch,
+ * committed or not; the main checkout's uncommitted changes.
+ */
+export interface WorktreeChanges {
+  top: string;
+  /** Its git folder (index, HEAD, logs/HEAD change on stage, commit, checkout). */
+  gitDir: string;
+  branch: string | null;
+  /** The repository's main checkout. */
+  main: boolean;
+  /** What its files are compared with: the merge base with the main branch (HEAD for the main checkout); null before a first commit. */
+  base: string | null;
+  /** Commits since the base. */
+  ahead: number;
+  files: BranchFile[];
+  /** More changed files than were listed. */
+  truncated: boolean;
+}
+
+/** A file a checkout changed against its base. */
+export interface BranchFile {
+  /** Relative to the checkout's top. */
+  path: string;
+  state: GitFileState;
+  added: number;
+  removed: number;
+  binary: boolean;
+  /** It has changes not yet committed (else they are all in commits). */
+  uncommitted: boolean;
+  /** Last written (ms); null when it's gone. */
+  mtime: number | null;
+  /** For a file another checkout changed too: the base's lines each of its changes covers ([from, to], 1-based; 0 for a new file). */
+  hunks?: [number, number][];
+}
+
+/**
  * Remote access (docs/13-remote-access.md). view: watch terminals, read files,
  * see agents and workspaces. control: also type, write files, open and close windows.
  */

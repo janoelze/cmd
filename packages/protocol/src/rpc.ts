@@ -1,7 +1,7 @@
 // Core API. Transport: newline-delimited JSON-RPC 2.0 over a Unix socket.
 // Every method is reachable from the UI, the `cmd` CLI and (later) MCP.
 
-import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, ClosedWindow, FileEntry, GitStatus, HookTarget, Pane, PaneId, ProcessStat, RemotePairRequest, RemoteStatus, RemoteTheme, Workspace, WorkspaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
+import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow, ClosedWindow, FileEntry, GitStatus, HookTarget, WorktreeChanges, Pane, PaneId, ProcessStat, RemotePairRequest, RemoteStatus, RemoteTheme, Workspace, WorkspaceId, WidgetEntry, WindowId, WindowTypeInfo } from "./model.ts";
 import type { DataClassInfo, DataEvent, DataQuery, DataStats, NewDataEvent, SessionInfo, TurnRow, ViewQuery } from "./events.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
@@ -388,6 +388,14 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
   "git.status": { params: { path: string }; result: GitStatus | null };
   /** Uncommitted changes under a folder (or one file of it) against HEAD, as a unified diff; null outside a repository. */
   "git.diff": { params: { path: string; file?: string }; result: { root: string; diff: string; truncated: boolean } | null };
+  /**
+   * Every checkout of the repository a folder is in that has work going on (the main one, and
+   * linked worktrees with a terminal or agent in them or touched in the last day), with what
+   * each changed since its base; null outside a repository.
+   */
+  "git.worktrees": { params: { path: string }; result: { repo: string; mainBranch: string | null; worktrees: WorktreeChanges[] } | null };
+  /** A file of a checkout as a whole, at `base` (empty where it didn't exist) and now (empty when gone); binary or too large ones without text. */
+  "git.fileVersions": { params: { top: string; file: string; base: string | null }; result: { before: string; after: string; binary: boolean; tooLarge: boolean } };
 
   /** A SQLite database's tables, views, indexes and triggers, for the SQLite window. Read-only, never writes. */
   "sqlite.schema": { params: { path: string }; result: SqliteSchema };

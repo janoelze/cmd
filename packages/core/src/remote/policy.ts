@@ -152,6 +152,8 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "video.trim": "never", // runs avconvert on a file
   "git.status": "view",
   "git.diff": "view",
+  "git.worktrees": "never",
+  "git.fileVersions": "never",
   "actions.list": "never", // Workspace Actions are the Mac's for now (docs/39)
   "actions.run": "never",
   "actions.stop": "never",

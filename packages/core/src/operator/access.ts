@@ -132,6 +132,8 @@ export const OPERATOR_ACCESS: { [M in Method]: OperatorAccess } = {
   "video.trim": "never",
   "git.status": "read",
   "git.diff": "read",
+  "git.worktrees": "read",
+  "git.fileVersions": "read",
   "actions.list": "read",
   "actions.run": "act", // a risky action is refused unless the person allowed it (actions/service.ts)
   "actions.stop": "act",

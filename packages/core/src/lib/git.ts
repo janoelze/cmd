@@ -11,7 +11,7 @@ import { expandHome } from "../windows/builtin.ts";
 /** At most this many changed paths are listed (untracked and ignored folders count once). */
 const MAX_FILES = 20_000;
 
-function git(cwd: string, args: string[]): Promise<string> {
+export function git(cwd: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       "git",
@@ -123,7 +123,7 @@ export async function gitDiff(dir: string, file?: string): Promise<{ root: strin
   return { root: top, diff: truncated ? diff.slice(0, diff.lastIndexOf("\n", MAX_DIFF) + 1) : diff, truncated };
 }
 
-function gitAllowing1(cwd: string, args: string[]): Promise<string> {
+export function gitAllowing1(cwd: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       "git",

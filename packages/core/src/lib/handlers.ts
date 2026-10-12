@@ -1,11 +1,13 @@
 // Files and git for windows (fs.*, git.*): list, read, write, rename, copy and move, watch a
-// path for changes (let go when the client closes), a folder's git status and diffs.
+// path for changes (let go when the client closes), a folder's git status and diffs, and
+// what every active checkout of its repository changed (Live Diff across worktrees).
 
 import type { CoreContext } from "../kernel/context.ts";
 import { IN_CORE, slice } from "../kernel/handlers.ts";
 import { listDir, readText, resolvePaths, writeText } from "../windows/manager.ts";
 import { createPath, duplicatePath, renamePath, transferPaths } from "./fileops.ts";
 import { gitDiff, gitStatus } from "./git.ts";
+import { fileVersions, worktreeChanges } from "./worktrees.ts";
 import { MAX_WATCHES, RemoteDenied } from "../remote/policy.ts";
 
 export const fileHandlers = (core: CoreContext) =>
@@ -33,4 +35,11 @@ export const fileHandlers = (core: CoreContext) =>
     },
     "git.status": (p) => gitStatus(p.path),
     "git.diff": (p) => gitDiff(p.path, p.file),
+    "git.worktrees": (p) => {
+      // Checkouts a terminal or an agent of this core is in count as active.
+      const tops = new Set<string>();
+      for (const x of [...core.panes.list(), ...core.agents.list()]) if (x.git) tops.add(x.git.top);
+      return worktreeChanges(p.path, (top) => tops.has(top));
+    },
+    "git.fileVersions": (p) => fileVersions(p.top, p.file, p.base),
   });
