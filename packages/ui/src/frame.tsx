@@ -23,9 +23,9 @@ const sp = (s: Pad | undefined) => (s === undefined ? undefined : s === 0 ? "0" 
 type Align = "start" | "center" | "end" | "stretch" | "baseline";
 
 /** Children in a column, `gap` apart. */
-export function Stack({ gap = 2, pad, align, grow, children }: { gap?: Space; pad?: Pad; align?: Align; grow?: boolean; children: ReactNode }) {
+export function Stack({ gap = 2, pad, padY, align, grow, children }: { gap?: Space; pad?: Pad; /** Top and bottom instead of `pad` there: a band tighter than its sides (a pane's header on the inset, a step above and below). */ padY?: Space; align?: Align; grow?: boolean; children: ReactNode }) {
   return (
-    <div className="ui-stack" data-align={align} data-grow={grow || undefined} data-pad={pad ? pad : undefined} style={{ gap: sp(gap), padding: sp(pad) }}>
+    <div className="ui-stack" data-align={align} data-grow={grow || undefined} data-pad={pad ? pad : undefined} style={{ gap: sp(gap), padding: sp(pad), ...(padY !== undefined && { paddingBlock: sp(padY) }) }}>
       {children}
     </div>
   );

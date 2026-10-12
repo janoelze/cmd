@@ -102,7 +102,7 @@ function DiffPane({ e, change, onWhose, onClose }: { e: Entry; change: Change; o
   const hunks = place.count;
   return (
     <View scroll={false}>
-      <Stack pad="inset" gap={2}>
+      <Stack pad="inset" padY={2}>
         <Stack gap={0.5}>
           <Inline justify="between">
             <Inline gap={2}>
