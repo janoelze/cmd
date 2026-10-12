@@ -2,13 +2,12 @@
 // a read-only CodeMirror (@codemirror/merge) in the editor's look and the file's
 // language. Unified (the old lines above the new, in place) or split (side by side);
 // unchanged stretches folded to a bar that opens them; the characters that changed
-// within a line marked; a ruler beside the scrollbar with a mark per change; next and
-// previous change. `others`: other versions of the same file from the same base (other
+// within a line marked; next and previous change. `others`: other versions of the same file from the same base (other
 // agents'): lines they change too are marked in the gutter, the clash. A new `after`
 // (the agent wrote again) changes only what differs and lights it up for a moment;
 // the scroll stays where it is.
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { Compartment, EditorState, Prec, RangeSet, RangeSetBuilder, StateField, type Extension } from "@codemirror/state";
 import { Decoration, EditorView, GutterMarker, gutterLineClass, lineNumbers, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
@@ -192,7 +191,6 @@ export const FileDiff = forwardRef<FileDiffHandle, FileDiffProps>(function FileD
   const dark = useTheme().appearance === "dark";
   const font = settings["font.code"];
   const size = settings["font.codeSize"];
-  const [marks, setMarks] = useState<{ top: number; height: number; kind: "add" | "del" | "change" }[]>([]);
   const place = useRef(onPlace);
   place.current = onPlace;
 
@@ -251,21 +249,11 @@ export const FileDiff = forwardRef<FileDiffHandle, FileDiffProps>(function FileD
     shown.current = after;
   }, [after]);
 
-  /** The ruler's marks and where the view is among the changes. */
+  /** Where the view is among the changes. */
   function measure() {
     const v = views.current?.main;
     if (!v) return;
     const chunks: readonly Chunk[] = (views.current?.merge?.chunks ?? getChunks(v.state)?.chunks) || [];
-    // The whole file onto the view's height when it's taller; where the lines are when it fits.
-    const view = v.scrollDOM.clientHeight;
-    const scale = v.contentHeight > view ? view / v.contentHeight : 1;
-    setMarks(
-      chunks.map((c) => {
-        const top = v.lineBlockAt(Math.min(c.fromB, v.state.doc.length)).top;
-        const end = c.toB > c.fromB ? v.lineBlockAt(Math.min(Math.max(c.fromB, c.toB - 1), v.state.doc.length)).bottom : top;
-        return { top: top * scale, height: Math.max(2, (end - top) * scale), kind: c.fromA === c.toA ? "add" : c.fromB === c.toB ? "del" : "change" };
-      }),
-    );
     const y = v.scrollDOM.scrollTop + 4;
     place.current?.({ count: chunks.length, at: chunks.filter((c) => v.lineBlockAt(Math.min(c.fromB, v.state.doc.length)).top <= y).length - 1 });
   }
@@ -284,11 +272,6 @@ export const FileDiff = forwardRef<FileDiffHandle, FileDiffProps>(function FileD
   return (
     <div className="file-diff" data-mode={mode}>
       <div ref={host} className="file-diff-host" />
-      <div className="file-diff-ruler" aria-hidden>
-        {marks.map((m, i) => (
-          <span key={i} data-kind={m.kind} style={{ top: m.top, height: m.height }} />
-        ))}
-      </div>
     </div>
   );
 });

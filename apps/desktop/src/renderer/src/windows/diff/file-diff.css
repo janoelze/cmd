@@ -1,10 +1,6 @@
-/* FileDiff (FileDiff.tsx): the editor fills the box and scrolls itself; the ruler, a strip
-   over the scrollbar's lane, marks where the changes are in the whole file. */
+/* FileDiff (FileDiff.tsx): the editor fills the box and scrolls itself. */
 .file-diff { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .file-diff-host { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .file-diff-host > .cm-editor { flex: 1; min-height: 0; }
 .file-diff-host > .cm-mergeView { flex: 1; min-height: 0; overflow: auto; }
-.file-diff-ruler { position: absolute; top: 0; bottom: 0; right: 0; width: var(--space-1); pointer-events: none; }
-.file-diff-ruler > span { position: absolute; left: 0; right: 0; min-height: 2px; background: var(--git-modified); opacity: 0.8; }
-.file-diff-ruler > span[data-kind="add"] { background: var(--git-added); }
-.file-diff-ruler > span[data-kind="del"] { background: var(--git-deleted); }
+
