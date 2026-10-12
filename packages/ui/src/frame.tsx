@@ -9,9 +9,10 @@
 // a size container, so these adapt to the window, not to the screen.
 
 import type * as React from "react";
-import { forwardRef, useEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref, type UIEvent } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { Spinner, type Tone } from "./status.tsx";
+import { GLIDE_MS, timing, usePresence } from "./motion.ts";
 import type { SpaceStep, TextSize } from "./tokens.gen.ts";
 
 /** A step of the spacing scale (--space-*, tokens/space.tokens.json: multiples of 4px, `2` is 8px), or 0; a Stack's `pad` also takes the window inset. */
@@ -142,25 +143,60 @@ export function StatusLine({ children, end }: { children: ReactNode; end?: React
  * A sidebar (side "start") or an inspector (side "end") beside the main content,
  * resizable between `min` and `max`. Hidden below the regular size (600px); offer what
  * it held another way there (`<Hide above="regular">` in the toolbar).
+ *
+ * side "bottom": a pane under the main content that opens and closes with `open`,
+ * growing up from the bottom on the glide (the content above shrinks with it, nothing
+ * jumps) and folding away again; its top edge drags to resize; shown at every width.
+ * `size` is its height then. Keep passing the pane while it closes (the last one shown).
  */
-export function Split({ side = "start", pane, open = true, width = { min: 160, ideal: 220, max: 360 }, children }: { side?: "start" | "end"; pane: ReactNode; open?: boolean; width?: { min: number; ideal: number; max: number }; children: ReactNode }) {
-  const [w, setW] = useState(width.ideal);
-  const drag = useRef<{ x: number; w: number } | null>(null);
+export function Split({ side = "start", pane, open = true, width, size, children }: { side?: "start" | "end" | "bottom"; pane: ReactNode; open?: boolean; /** The pane's width (its height for "bottom"), px. */ size?: { min: number; ideal: number; max: number }; /** Old name of size. */ width?: { min: number; ideal: number; max: number }; children: ReactNode }) {
+  const range = size ?? width ?? (side === "bottom" ? { min: 120, ideal: 320, max: 900 } : { min: 160, ideal: 220, max: 360 });
+  const bottom = side === "bottom";
+  const [w, setW] = useState(range.ideal);
+  const drag = useRef<{ at: number; w: number } | null>(null);
+  const paneRef = useRef<HTMLElement>(null);
+  const splitRef = useRef<HTMLDivElement>(null);
+  // A bottom pane's height leaves the content above at least `min`, however short the view.
+  const [room, setRoom] = useState(Infinity);
+  useLayoutEffect(() => {
+    const el = splitRef.current;
+    if (!bottom || !el) return;
+    const ro = new ResizeObserver(() => setRoom(el.clientHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [bottom]);
+  const h = bottom ? Math.max(0, Math.min(w, room - range.min)) : w;
+  const { present, closing } = usePresence(open, bottom ? GLIDE_MS : 0);
+  const shown = bottom ? present : open;
+  // The bottom pane grows from nothing and folds back, on the glide; turning halfway goes back from where it is.
+  const first = useRef(true);
+  useLayoutEffect(() => {
+    // Open from the start: there, not grown.
+    const mounting = first.current;
+    first.current = false;
+    const el = paneRef.current;
+    if (!bottom || !el || mounting) return;
+    const from = el.getAnimations().length ? getComputedStyle(el).height : open ? "0px" : `${el.getBoundingClientRect().height}px`;
+    for (const an of el.getAnimations()) an.cancel();
+    el.animate([{ height: from }, { height: open ? `${h}px` : "0px" }], timing("glide", { fill: open ? "none" : "forwards" }));
+  }, [open, present]); // eslint-disable-line react-hooks/exhaustive-deps
   const down = (e: PointerEvent<HTMLDivElement>) => {
-    drag.current = { x: e.clientX, w };
+    drag.current = { at: bottom ? e.clientY : e.clientX, w };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const move = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return;
-    const dx = (e.clientX - drag.current.x) * (side === "start" ? 1 : -1);
-    setW(Math.min(width.max, Math.max(width.min, drag.current.w + dx)));
+    const d = bottom ? drag.current.at - e.clientY : (e.clientX - drag.current.at) * (side === "start" ? 1 : -1);
+    // A bottom pane leaves the content above at least its own minimum.
+    const max = bottom ? Math.min(range.max, room - range.min) : range.max;
+    setW(Math.min(max, Math.max(range.min, drag.current.w + d)));
   };
   return (
-    <div className="ui-split" data-side={side} data-open={open || undefined} style={{ "--split-w": `${w}px` } as CSSProperties}>
-      {open && (
-        <aside className="ui-split-pane">
-          {pane}
-          <div className="ui-split-handle" onPointerDown={down} onPointerMove={move} onPointerUp={() => (drag.current = null)} onDoubleClick={() => setW(width.ideal)} />
+    <div ref={splitRef} className="ui-split" data-side={side} data-open={shown || undefined} style={{ "--split-w": `${h}px` } as CSSProperties}>
+      {shown && (
+        <aside ref={paneRef} className="ui-split-pane" data-closing={closing || undefined} inert={closing || undefined}>
+          {bottom ? <div className="ui-split-pane-inner">{pane}</div> : pane}
+          <div className="ui-split-handle" onPointerDown={down} onPointerMove={move} onPointerUp={() => (drag.current = null)} onDoubleClick={() => setW(range.ideal)} />
         </aside>
       )}
       <div className="ui-split-main">{children}</div>

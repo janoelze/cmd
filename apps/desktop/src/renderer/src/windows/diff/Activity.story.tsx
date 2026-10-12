@@ -114,7 +114,7 @@ function W({ size = "regular", lanes = LANES, lens, open }: { size?: SizeName; l
 /** Five agents and the main checkout; Heron and Lark both changed rpc.ts, Heron and Wren LiveDiff.tsx. Working agents start open. */
 export const ByAgent = () => <W />;
 /** rpc.ts opened from the overlaps: Lark's change, then Heron's, each under its own line. */
-export const SharedFileOpen = () => <W size="wide" open="shared:packages/protocol/src/rpc.ts" />;
+export const SharedFileOpen = () => <W open="shared:packages/protocol/src/rpc.ts" />;
 /** A file opened under its agent: one diff, no per-agent line. */
 export const AgentFileOpen = () => <W open="a:packages/core/src/lib/checkout.ts" />;
 /** The same files by area, each with who changed it. */

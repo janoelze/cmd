@@ -65,10 +65,17 @@
 .ui-split[data-side="start"] .ui-split-pane { box-shadow: inset -1px 0 0 var(--separator); }
 .ui-split[data-side="end"] .ui-split-pane { box-shadow: inset 1px 0 0 var(--separator); }
 .ui-split-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+/* Inside the pane's edge: past it, it would make the scrolling pane scroll sideways. */
 .ui-split-handle { position: absolute; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 1; }
-.ui-split[data-side="start"] .ui-split-handle { right: -3px; }
-.ui-split[data-side="end"] .ui-split-handle { left: -3px; }
-@container (width < 600px) { .ui-split-pane { display: none; } }
+.ui-split[data-side="start"] .ui-split-handle { right: 0; }
+.ui-split[data-side="end"] .ui-split-handle { left: 0; }
+@container (width < 600px) { .ui-split:not([data-side="bottom"]) > .ui-split-pane { display: none; } }
+/* A bottom pane: under the content, its line on top; its content keeps its full height while
+   the pane grows or folds (revealed, not squeezed), and scrolls itself. */
+.ui-split[data-side="bottom"] { flex-direction: column-reverse; }
+.ui-split[data-side="bottom"] > .ui-split-pane { width: auto; height: var(--split-w); overflow: hidden; box-shadow: inset 0 1px 0 var(--separator); }
+.ui-split-pane-inner { position: absolute; inset: 0 0 auto; height: var(--split-w); display: flex; flex-direction: column; }
+.ui-split[data-side="bottom"] .ui-split-handle { top: 0; bottom: auto; left: 0; right: 0; width: auto; height: 6px; cursor: row-resize; }
 
 /* ── dashboards ── */
 .ui-panes { display: grid; grid-template-columns: 1fr; gap: var(--space-8) var(--space-5); align-content: start; }

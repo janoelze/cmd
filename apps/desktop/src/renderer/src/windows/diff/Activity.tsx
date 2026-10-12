@@ -4,10 +4,10 @@
 // and the files more than one of them changed, first, because those are the
 // ones that will conflict. A second lens groups the same files by area.
 
-import { Callout, DataGrid, Diff, Inline, Split, Stack, StatusDot, StatusLine, Text, ToolbarButton, ToolbarSegmented, ToolbarSpacer, View, WindowToolbar } from "@cmd/ui";
+import { Callout, DataGrid, Diff, Inline, Split, Stack, StatusDot, StatusLine, Text, IconButton, Segmented, ToolbarSegmented, View, WindowToolbar } from "@cmd/ui";
 import type { GridCell, GridRowInfo } from "@cmd/ui";
 import type { DotState } from "@cmd/ui";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { GitFile } from "@cmd/protocol";
 
 /** A file a lane changed: since its branch left the main branch, committed or not. */
@@ -89,7 +89,7 @@ interface Entry {
 }
 
 /** The selected file's lines, one lane's change at a time (the toolbar picks whose). */
-function FileDiff({ e, change }: { e: Entry; change: Change }) {
+function FileDiff({ e, change, onWhose, onClose }: { e: Entry; change: Change; onWhose: (laneId: string) => void; onClose: () => void }) {
   const { lane, f } = change;
   const same = e.changes.length > 1 ? clash(e.changes) : null;
   const hunks = ranges(f.lines).length;
@@ -97,9 +97,15 @@ function FileDiff({ e, change }: { e: Entry; change: Change }) {
     <View scroll={false}>
       <Stack pad="inset" gap={2}>
         <Stack gap={0.5}>
-          <Inline gap={2}>
-            <Text strong>{base(e.rel)}</Text>
-            <Text tone="dim">{dir(e.rel)}</Text>
+          <Inline justify="between">
+            <Inline gap={2}>
+              <Text strong>{base(e.rel)}</Text>
+              <Text tone="dim">{dir(e.rel)}</Text>
+            </Inline>
+            <Inline gap={2}>
+              {e.changes.length > 1 && <Segmented size="sm" label="Whose change" value={lane.id} options={e.changes.map((c) => ({ value: c.lane.id, label: c.lane.name }))} onChange={onWhose} />}
+              <IconButton icon="xmark" label="Close" shortcut="Esc" size="sm" onClick={onClose} />
+            </Inline>
           </Inline>
           <Text size="sm" tone="dim">
             {lane.name} · {lane.main ? "main checkout" : lane.branch} · {f.committed ? "committed" : "uncommitted"} · {hunks} {hunks === 1 ? "change" : "changes"} · +{f.added} −{f.removed} · {age(f.ago)}
@@ -164,6 +170,9 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
   const files = new Set(lanes.flatMap((l) => l.files.map((f) => f.rel))).size;
   const picked = sel ? entryOf(sel, lanes, every) : null;
   const change = picked && (picked.changes.find((c) => c.lane.id === whose) ?? picked.changes[0]!);
+  /** The diff shown, kept while its pane folds away. */
+  const shownDiff = useRef<{ e: Entry; change: Change } | null>(null);
+  if (picked && change) shownDiff.current = { e: picked, change };
   const toggle = (key: string, def: boolean) => setOpen((m) => new Map(m).set(key, !(m.get(key) ?? def)));
 
   const rows: Row[] = [];
@@ -272,11 +281,6 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
       toolbar={
         <WindowToolbar label="Changes">
           <ToolbarSegmented label="Group" value={lens} options={[{ value: "agents", label: "Agents" }, { value: "files", label: "Areas" }]} onChange={setLens} />
-          <ToolbarSpacer />
-          {picked && picked.changes.length > 1 && (
-            <ToolbarSegmented label="Whose change" value={change!.lane.id} options={picked.changes.map((c) => ({ value: c.lane.id, label: c.lane.name }))} onChange={setWhose} />
-          )}
-          {picked && <ToolbarButton icon="xmark" label="Close" shortcut="Esc" onClick={() => setSel(null)} />}
         </WindowToolbar>
       }
       footer={
@@ -287,13 +291,9 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
       state={!lanes.length ? { kind: "empty", icon: "checkmark.circle", title: "Nothing changed" } : null}
       scroll={false}
     >
-      {picked && change ? (
-        <Split side="start" pane={list} width={{ min: 280, ideal: 380, max: 560 }}>
-          <FileDiff e={picked} change={change} />
-        </Split>
-      ) : (
-        list
-      )}
+      <Split side="bottom" open={!!(picked && change)} pane={shownDiff.current && <FileDiff e={shownDiff.current.e} change={shownDiff.current.change} onWhose={setWhose} onClose={() => setSel(null)} />} size={{ min: 120, ideal: 300, max: 2000 }}>
+        {list}
+      </Split>
     </View>
   );
 }
