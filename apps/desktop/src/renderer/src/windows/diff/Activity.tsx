@@ -4,11 +4,11 @@
 // and the files more than one of them changed, first, because those are the
 // ones that will conflict. A second lens groups the same files by area.
 
-import { Badge, Callout, Chip, Diff, Inline, List, ListRow, ListRowContent, ListRowEnd, ListRowIcon, ListSection, Split, Stack, StatusLine, Text, ToolbarButton, ToolbarSegmented, ToolbarSpacer, Twisty, View, WindowToolbar } from "@cmd/ui";
+import { Callout, DataGrid, Diff, Inline, Split, Stack, StatusDot, StatusLine, Text, ToolbarButton, ToolbarSegmented, ToolbarSpacer, View, WindowToolbar } from "@cmd/ui";
+import type { GridCell, GridRowInfo } from "@cmd/ui";
 import type { DotState } from "@cmd/ui";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { GitFile } from "@cmd/protocol";
-import { projectHue } from "../../lib/model.ts";
 
 /** A file a lane changed: since its branch left the main branch, committed or not. */
 export interface LaneFile {
@@ -57,23 +57,6 @@ const dir = (rel: string) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("
 const area = (rel: string) => rel.split("/").slice(0, -1).slice(0, rel.startsWith("apps/") || rel.startsWith("packages/") ? 2 : 1).join("/") || "(top level)";
 const sum = (fs: LaneFile[]) => fs.reduce((t, f) => ({ added: t.added + f.added, removed: t.removed + f.removed }), { added: 0, removed: 0 });
 
-function Counts({ added, removed }: { added: number; removed: number }) {
-  return (
-    <Inline gap={1.5}>
-      {added > 0 && (
-        <Text size="xs" mono tone="success">
-          +{added}
-        </Text>
-      )}
-      {removed > 0 && (
-        <Text size="xs" mono tone="danger">
-          −{removed}
-        </Text>
-      )}
-    </Inline>
-  );
-}
-
 /** One lane's change to a file. */
 interface Change {
   lane: Lane;
@@ -105,35 +88,6 @@ interface Entry {
   changes: Change[];
 }
 
-/** A changed file; a click shows its lines beside the list. Changed by more than one lane, it says whether they touch the same lines. */
-function FileRow({ e, depth = 0, who, selected, onSelect }: { e: Entry; depth?: number; who?: boolean; selected: boolean; onSelect: () => void }) {
-  const f = e.changes[0]!.f;
-  const st = LETTER[f.state];
-  const many = e.changes.length > 1;
-  const same = many ? clash(e.changes) : null;
-  const committed = e.changes.every((c) => c.f.committed);
-  return (
-    <ListRow depth={depth} selected={selected} dim={committed && !selected} tip={`${e.rel}${committed ? "\nCommitted" : ""}`} onClick={onSelect}>
-      <ListRowIcon icon={<Badge size="sm" tone={st.tone}>{st.letter}</Badge>} />
-      <ListRowContent title={base(e.rel)} place={dir(e.rel)} detail={many ? (same ? `Both change ${same}` : "Different places in the file") : undefined} tone={same ? "needs" : undefined} />
-      <ListRowEnd>
-        <Inline gap={2}>
-          {who &&
-            e.changes.map(({ lane }) => (
-              <Chip key={lane.id} hue={projectHue(lane.branch)} tip={`${lane.name} on ${lane.branch}`}>
-                {lane.name}
-              </Chip>
-            ))}
-          <Counts {...sum(e.changes.map((c) => c.f))} />
-          <Text size="xs" tone="dim">
-            {age(f.ago)}
-          </Text>
-        </Inline>
-      </ListRowEnd>
-    </ListRow>
-  );
-}
-
 /** The selected file's lines, one lane's change at a time (the toolbar picks whose). */
 function FileDiff({ e, change }: { e: Entry; change: Change }) {
   const { lane, f } = change;
@@ -147,15 +101,9 @@ function FileDiff({ e, change }: { e: Entry; change: Change }) {
             <Text strong>{base(e.rel)}</Text>
             <Text tone="dim">{dir(e.rel)}</Text>
           </Inline>
-          <Inline gap={2}>
-            <Chip hue={projectHue(lane.branch)} tip={`${lane.name} on ${lane.branch}`}>
-              {lane.name}
-            </Chip>
-            <Text size="sm" tone="dim">
-              {f.committed ? "Committed" : "Uncommitted"} · {hunks} {hunks === 1 ? "change" : "changes"} · {age(f.ago)}
-            </Text>
-            <Counts {...f} />
-          </Inline>
+          <Text size="sm" tone="dim">
+            {lane.name} · {lane.main ? "main checkout" : lane.branch} · {f.committed ? "committed" : "uncommitted"} · {hunks} {hunks === 1 ? "change" : "changes"} · +{f.added} −{f.removed} · {age(f.ago)}
+          </Text>
         </Stack>
         {same && (
           <Callout tone="warning" compact>
@@ -180,83 +128,108 @@ function entries(lanes: Lane[]): Entry[] {
   return [...by.values()].sort((a, b) => a.changes[0]!.f.ago - b.changes[0]!.f.ago);
 }
 
+/** A grid row: its cells, how it sits, and what a click does. */
+interface Row {
+  key: string;
+  cells: GridCell[];
+  info?: GridRowInfo;
+  /** A file's row: selecting it shows its diff. */
+  file?: boolean;
+  onClick?: () => void;
+}
+
+const lines = (t: { added: number; removed: number }) => ({ node: [t.added && `+${t.added}`, t.removed && `−${t.removed}`].filter(Boolean).join(" "), kind: "number" as const });
+const when = (ms: number) => ({ node: age(ms), kind: "number" as const });
+const dim = (on: boolean | undefined, node: ReactNode) => (on ? <Text tone="dim">{node}</Text> : node);
+/** A file's name, its folder after it, dim. */
+const fileName = (rel: string, faded?: boolean) => (
+  <Inline gap={1.5}>
+    {dim(faded, base(rel))}
+    {dir(rel) && <Text tone="dim">{dir(rel)}</Text>}
+  </Inline>
+);
+
 /** Live Diff over every checkout of a project with work in it (a prototype: data in, nothing fetched). */
 export function ActivityView({ lanes, initialLens = "agents", initialSelected = null }: { lanes: Lane[]; initialLens?: "agents" | "files"; /** The file shown at first, as "<section>:<path>" (shared:, area:, or a lane's id). */ initialSelected?: string | null }) {
   const [lens, setLens] = useState(initialLens);
   const [open, setOpen] = useState<Map<string, boolean>>(new Map());
   const [all, setAll] = useState<Set<string>>(new Set());
-  const every = entries(lanes);
-  const shared = every.filter((e) => e.changes.length > 1);
   /** The file shown, by where its row is: "<section>:<path>"; and whose change of it. */
   const [sel, setSel] = useState<string | null>(initialSelected);
   const [whose, setWhose] = useState<string | null>(null);
-  /** Rows in the order shown, for ↑ and ↓. */
-  const order: string[] = [];
-  const row = (key: string, e: Entry, p: { depth?: number; who?: boolean } = {}) => {
-    order.push(key);
-    return <FileRow key={key} e={e} {...p} selected={sel === key} onSelect={() => (setSel(key), setWhose(null))} />;
-  };
-  const picked = sel ? entryOf(sel, lanes, every) : null;
-  const change = picked && (picked.changes.find((c) => c.lane.id === whose) ?? picked.changes[0]!);
+  const every = entries(lanes);
+  const shared = every.filter((e) => e.changes.length > 1);
   const sorted = [...lanes].sort((a, b) => Math.min(...a.files.map((f) => f.ago), Infinity) - Math.min(...b.files.map((f) => f.ago), Infinity));
   const total = sum(lanes.flatMap((l) => l.files));
   const files = new Set(lanes.flatMap((l) => l.files.map((f) => f.rel))).size;
+  const picked = sel ? entryOf(sel, lanes, every) : null;
+  const change = picked && (picked.changes.find((c) => c.lane.id === whose) ?? picked.changes[0]!);
+  const toggle = (key: string, def: boolean) => setOpen((m) => new Map(m).set(key, !(m.get(key) ?? def)));
 
-  const agents = (
-    <ListSection title="Agents" count={lanes.length}>
-      {sorted.map((l) => {
-        const isOpen = open.get(l.id) ?? false;
-        const newest = [...l.files].sort((a, b) => a.ago - b.ago);
-        const shown = all.has(l.id) ? newest : newest.slice(0, FIRST);
-        const now = newest[0];
-        const t = sum(l.files);
-        const toggle = () => setOpen((m) => new Map(m).set(l.id, !isOpen));
-        return (
-          <div key={l.id} style={{ display: "contents" }}>
-            <ListRow onClick={toggle} tip={l.main ? "The workspace's own checkout" : `Worktree on ${l.branch}`}>
-              <Twisty open={isOpen} onToggle={toggle} />
-              <ListRowIcon icon="sparkle" light={l.light} />
-              <ListRowContent
-                title={l.name}
-                detail={now ? `${now.committed ? "Committed" : now.ago < 60_000 ? "Writing" : "Changed"} ${base(now.rel)} · ${age(now.ago)}${l.ahead ? ` · ${l.ahead} ${l.ahead === 1 ? "commit" : "commits"}` : ""}` : "No changes yet"}
-              />
-              <ListRowEnd>
-                <Inline gap={2}>
-                  {!l.main && <Chip hue={projectHue(l.branch)}>{l.branch}</Chip>}
-                  <Counts {...t} />
-                </Inline>
-              </ListRowEnd>
-            </ListRow>
-            {isOpen && shown.map((f) => row(`${l.id}:${f.rel}`, { rel: f.rel, changes: [{ lane: l, f }] }, { depth: 1 }))}
-            {isOpen && newest.length > shown.length && (
-              <ListRow depth={1} onClick={() => setAll((s) => new Set(s).add(l.id))}>
-                <ListRowContent title={<Text tone="dim">{`${newest.length - shown.length} more files`}</Text>} place={[...new Set(newest.slice(FIRST).map((f) => area(f.rel)))].slice(0, 3).join(", ")} />
-              </ListRow>
-            )}
-          </div>
-        );
-      })}
-    </ListSection>
-  );
+  const rows: Row[] = [];
+  const heading = (key: string, name: ReactNode, t?: { added: number; removed: number }) => rows.push({ key, cells: ["", name, "", t ? lines(t) : "", ""], info: { heading: true } });
+  /** A file's row; `who` lists the lanes that changed it, and says when they touch the same lines. */
+  const fileRow = (key: string, e: Entry, depth: number, who: boolean) => {
+    const committed = e.changes.every((c) => c.f.committed);
+    const same = e.changes.length > 1 ? clash(e.changes) : null;
+    const names = e.changes.map((c) => c.lane.name).join(", ");
+    rows.push({
+      key,
+      file: true,
+      info: { depth },
+      cells: [
+        same ? (
+          <span key="s" data-tip={`Both change ${same}`}>
+            <Text size="xs" mono strong tone="warning">
+              !
+            </Text>
+          </span>
+        ) : (
+          <Text key="s" size="xs" mono tone="dim">
+            {LETTER[e.changes[0]!.f.state].letter}
+          </Text>
+        ),
+        fileName(e.rel, committed),
+        who ? (same ? <Text tone="warning">{`${names} · same lines`}</Text> : <Text tone="dim">{names}</Text>) : <Text tone="dim">{committed ? "committed" : ""}</Text>,
+        lines(sum(e.changes.map((c) => c.f))),
+        when(e.changes[0]!.f.ago),
+      ],
+    });
+  };
+  const more = (key: string, n: number, depth: number) => rows.push({ key: `more:${key}`, info: { depth }, cells: ["", <Text key="m" tone="dim">{`${n} more files`}</Text>, "", "", ""], onClick: () => setAll((s) => new Set(s).add(key)) });
 
-  const areas = new Map<string, Entry[]>();
-  for (const e of every) areas.set(area(e.rel), [...(areas.get(area(e.rel)) ?? []), e]);
-  const byArea = (
-    <>
-      {[...areas.entries()]
-        .sort((a, b) => b[1].length - a[1].length)
-        .map(([name, es]) => (
-          <ListSection key={name} title={name} count={es.length} open={open.get(`area:${name}`) ?? true} onToggle={() => setOpen((m) => new Map(m).set(`area:${name}`, !(m.get(`area:${name}`) ?? true)))}>
-            {es.slice(0, all.has(`area:${name}`) ? undefined : FIRST).map((e) => row(`area:${e.rel}`, e, { who: true }))}
-            {es.length > FIRST && !all.has(`area:${name}`) && (
-              <ListRow onClick={() => setAll((s) => new Set(s).add(`area:${name}`))}>
-                <ListRowContent title={<Text tone="dim">{`${es.length - FIRST} more files`}</Text>} />
-              </ListRow>
-            )}
-          </ListSection>
-        ))}
-    </>
-  );
+  if (shared.length) {
+    heading("h:shared", `In more than one worktree`);
+    for (const e of shared) fileRow(`shared:${e.rel}`, e, 0, true);
+  }
+  if (lens === "agents") {
+    heading("h:agents", "Agents");
+    for (const l of sorted) {
+      const isOpen = open.get(l.id) ?? false;
+      const newest = [...l.files].sort((a, b) => a.ago - b.ago);
+      rows.push({
+        key: `lane:${l.id}`,
+        info: { expanded: newest.length ? isOpen : undefined, onToggle: () => toggle(l.id, false) },
+        onClick: () => toggle(l.id, false),
+        cells: [<StatusDot key="d" state={l.light} />, l.name, <Text key="b" tone="dim">{l.main ? "main checkout" : l.branch}</Text>, lines(sum(l.files)), newest[0] ? when(newest[0].ago) : ""],
+      });
+      if (!isOpen) continue;
+      const shown = all.has(l.id) ? newest : newest.slice(0, FIRST);
+      for (const f of shown) fileRow(`${l.id}:${f.rel}`, { rel: f.rel, changes: [{ lane: l, f }] }, 1, false);
+      if (newest.length > shown.length) more(l.id, newest.length - shown.length, 1);
+    }
+  } else {
+    const areas = new Map<string, Entry[]>();
+    for (const e of every) areas.set(area(e.rel), [...(areas.get(area(e.rel)) ?? []), e]);
+    for (const [name, es] of [...areas.entries()].sort((a, b) => b[1].length - a[1].length)) {
+      heading(`h:${name}`, name, sum(es.flatMap((e) => e.changes.map((c) => c.f))));
+      const key = `area:${name}`;
+      for (const e of es.slice(0, all.has(key) ? undefined : FIRST)) fileRow(`area:${e.rel}`, e, 0, true);
+      if (es.length > FIRST && !all.has(key)) more(key, es.length - FIRST, 0);
+    }
+  }
+  const order = rows.filter((r) => r.file).map((r) => r.key);
+  const at = rows.findIndex((r) => r.key === sel);
 
   const list = (
     <div
@@ -270,14 +243,24 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
       }}
     >
       <View focusable>
-      <List>
-        {shared.length > 0 && (
-          <ListSection title="Changed in more than one worktree" count={shared.length} tone="needs">
-            {shared.map((e) => row(`shared:${e.rel}`, e, { who: true }))}
-          </ListSection>
-        )}
-        {lens === "agents" ? agents : byArea}
-      </List>
+        <DataGrid
+          columns={[
+            { key: "mark", label: "", icon: true },
+            { key: "name", label: "Name", grow: true },
+            { key: "who", label: lens === "agents" ? "Branch" : "Agents", hide: "regular" },
+            { key: "lines", label: "Lines", align: "end" },
+            { key: "when", label: "Changed", align: "end", hide: "narrow" },
+          ]}
+          rows={rows.map((r) => r.cells)}
+          rowKey={(_, i) => rows[i]!.key}
+          rowInfo={(i) => rows[i]!.info}
+          selected={at >= 0 ? at : null}
+          onRowClick={(i) => {
+            const r = rows[i]!;
+            if (r.file) setSel(r.key), setWhose(null);
+            else r.onClick?.();
+          }}
+        />
       </View>
     </div>
   );
@@ -295,7 +278,7 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
         </WindowToolbar>
       }
       footer={
-        <StatusLine end={<Counts {...total} />}>
+        <StatusLine end={<span>{`+${total.added} −${total.removed}`}</span>}>
           {lanes.length} checkouts · {files} files
         </StatusLine>
       }
@@ -303,7 +286,7 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
       scroll={false}
     >
       {picked && change ? (
-        <Split side="start" pane={list} width={{ min: 240, ideal: 320, max: 480 }}>
+        <Split side="start" pane={list} width={{ min: 280, ideal: 380, max: 560 }}>
           <FileDiff e={picked} change={change} />
         </Split>
       ) : (
