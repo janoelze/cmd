@@ -141,7 +141,12 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
                             <span
                               className={cls("ui-twisty", info?.expanded && "open")}
                               data-none={info?.expanded === undefined || undefined}
-                              onClick={info?.onToggle}
+                              // Its own click: not the row's too (a row that toggles on click would undo it).
+                              onClick={(e) => {
+                                if (!info?.onToggle) return;
+                                e.stopPropagation();
+                                info.onToggle();
+                              }}
                               onDoubleClick={(e) => e.stopPropagation()}
                             >
                               <Icon name="chevron.right" size={ICON.disclosure} />
