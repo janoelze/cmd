@@ -4,7 +4,7 @@
 // and the files more than one of them changed, first, because those are the
 // ones that will conflict. A second lens groups the same files by area.
 
-import { Badge, Chip, Inline, List, ListRow, ListRowContent, ListRowEnd, ListRowIcon, ListSection, Segmented, StatusLine, Text, Twisty, View, WindowToolbar } from "@cmd/ui";
+import { Badge, Chip, Diff, Inline, List, ListRow, ListRowContent, ListRowEnd, ListRowIcon, ListSection, Segmented, StatusLine, Text, Twisty, View, WindowToolbar } from "@cmd/ui";
 import type { DotState } from "@cmd/ui";
 import { useState } from "react";
 import type { GitFile } from "@cmd/protocol";
@@ -20,6 +20,8 @@ export interface LaneFile {
   ago: number;
   /** Only in commits (nothing uncommitted left in it). */
   committed?: boolean;
+  /** Its diff's lines (against the merge base), from the first hunk header. */
+  lines?: readonly string[];
 }
 
 /** A checkout and who works in it: the workspace's own, or a linked worktree. */
@@ -72,47 +74,115 @@ function Counts({ added, removed }: { added: number; removed: number }) {
   );
 }
 
-function FileRow({ f, depth, who }: { f: LaneFile; depth?: number; who?: Lane[] }) {
+/** One lane's change to a file. */
+interface Change {
+  lane: Lane;
+  f: LaneFile;
+}
+
+/** The old file's lines each hunk covers ("@@ -a,b"). */
+const ranges = (lines: readonly string[] = []) =>
+  lines.flatMap((l) => {
+    const m = /^@@ -(\d+)(?:,(\d+))?/.exec(l);
+    return m ? [[+m[1]!, +m[1]! + Math.max(1, +(m[2] ?? 1)) - 1] as const] : [];
+  });
+
+/** Lines of the base two or more changes both touch, as "386–391", or null: same file, different places. */
+function clash(changes: Change[]): string | null {
+  const rs = changes.map((c) => ranges(c.f.lines));
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < rs.length; i++)
+    for (let j = i + 1; j < rs.length; j++)
+      for (const [a1, a2] of rs[i]!)
+        for (const [b1, b2] of rs[j]!)
+          if (a1 <= b2 && b1 <= a2) (lo = Math.min(lo, Math.max(a1, b1))), (hi = Math.max(hi, Math.min(a2, b2)));
+  return lo === Infinity ? null : lo === hi ? `line ${lo}` : `lines ${lo}–${hi}`;
+}
+
+/** A file and every lane that changed it, newest first. */
+interface Entry {
+  rel: string;
+  changes: Change[];
+}
+
+/**
+ * A changed file; a click opens its lines under it. Changed by more than one lane
+ * (`who`), each lane's lines come under a line of its own: its chip, counts, age.
+ */
+function FileRow({ e, depth = 0, who, open, onToggle }: { e: Entry; depth?: number; who?: boolean; open: boolean; onToggle: () => void }) {
+  const f = e.changes[0]!.f;
   const st = LETTER[f.state];
+  const many = e.changes.length > 1;
+  const t = sum(e.changes.map((c) => c.f));
+  const same = many ? clash(e.changes) : null;
   return (
-    <ListRow depth={depth} dim={f.committed} tip={`${f.rel}${f.committed ? "\nCommitted" : ""}`}>
-      <ListRowIcon icon={<Badge size="sm" tone={st.tone}>{st.letter}</Badge>} />
-      <ListRowContent title={base(f.rel)} place={dir(f.rel)} />
-      <ListRowEnd>
-        <Inline gap={2}>
-          {who?.map((l) => (
-            <Chip key={l.id} hue={projectHue(l.branch)} tip={`${l.name} on ${l.branch}`}>
-              {l.name}
-            </Chip>
-          ))}
-          <Counts added={f.added} removed={f.removed} />
-          <Text size="xs" tone="faint">
-            {age(f.ago)}
-          </Text>
-        </Inline>
-      </ListRowEnd>
-    </ListRow>
+    <>
+      <ListRow depth={depth} dim={e.changes.every((c) => c.f.committed)} tip={`${e.rel}${e.changes.every((c) => c.f.committed) ? "\nCommitted" : ""}`} onClick={onToggle}>
+        <Twisty open={open} onToggle={onToggle} />
+        <ListRowIcon icon={<Badge size="sm" tone={st.tone}>{st.letter}</Badge>} />
+        <ListRowContent title={base(e.rel)} place={dir(e.rel)} detail={many ? (same ? `Both change ${same}` : "Different places in the file") : undefined} tone={same ? "needs" : undefined} />
+        <ListRowEnd>
+          <Inline gap={2}>
+            {who &&
+              e.changes.map(({ lane }) => (
+                <Chip key={lane.id} hue={projectHue(lane.branch)} tip={`${lane.name} on ${lane.branch}`}>
+                  {lane.name}
+                </Chip>
+              ))}
+            <Counts {...t} />
+            <Text size="xs" tone="faint">
+              {age(f.ago)}
+            </Text>
+          </Inline>
+        </ListRowEnd>
+      </ListRow>
+      {open &&
+        e.changes.map(({ lane, f }) => (
+          <div key={lane.id} style={{ display: "contents" }}>
+            {many && (
+              <ListRow depth={depth + 1} tip={`${lane.name}'s change, on ${lane.branch}`}>
+                <ListRowContent title={<Chip hue={projectHue(lane.branch)}>{lane.name}</Chip>} place={f.committed ? "committed" : "uncommitted"} />
+                <ListRowEnd>
+                  <Inline gap={2}>
+                    <Counts {...f} />
+                    <Text size="xs" tone="faint">
+                      {age(f.ago)}
+                    </Text>
+                  </Inline>
+                </ListRowEnd>
+              </ListRow>
+            )}
+            {f.lines?.length ? <Diff lines={f.lines} /> : <Diff note={f.state === "deleted" ? "Deleted" : "No line changes"} />}
+          </div>
+        ))}
+    </>
   );
 }
 
-/** The files more than one lane changed, with who changed each, newest first. */
-function overlaps(lanes: Lane[]) {
-  const by = new Map<string, { f: LaneFile; who: Lane[] }>();
-  for (const l of lanes)
-    for (const f of l.files) {
-      const e = by.get(f.rel);
-      if (!e) by.set(f.rel, { f, who: [l] });
-      else e.who.push(l), e.f.ago > f.ago && (e.f = f);
+/** Every changed file with who changed it, newest change first. */
+function entries(lanes: Lane[]): Entry[] {
+  const by = new Map<string, Entry>();
+  for (const lane of lanes)
+    for (const f of lane.files) {
+      const e = by.get(f.rel) ?? by.set(f.rel, { rel: f.rel, changes: [] }).get(f.rel)!;
+      e.changes.push({ lane, f });
     }
-  return [...by.values()].filter((e) => e.who.length > 1).sort((a, b) => a.f.ago - b.f.ago);
+  for (const e of by.values()) e.changes.sort((a, b) => a.f.ago - b.f.ago);
+  return [...by.values()].sort((a, b) => a.changes[0]!.f.ago - b.changes[0]!.f.ago);
 }
 
 /** Live Diff over every checkout of a project with work in it (a prototype: data in, nothing fetched). */
-export function ActivityView({ lanes, initialLens = "agents" }: { lanes: Lane[]; initialLens?: "agents" | "files" }) {
+export function ActivityView({ lanes, initialLens = "agents", initialOpen = [] }: { lanes: Lane[]; initialLens?: "agents" | "files"; /** Files open at first, as "<section>:<path>" (shared:, area:, or a lane's id). */ initialOpen?: string[] }) {
   const [lens, setLens] = useState(initialLens);
   const [open, setOpen] = useState<Map<string, boolean>>(new Map());
   const [all, setAll] = useState<Set<string>>(new Set());
-  const shared = overlaps(lanes);
+  const every = entries(lanes);
+  const shared = every.filter((e) => e.changes.length > 1);
+  /** Files whose lines are open, by where they are: "<section>:<path>". */
+  const [diffs, setDiffs] = useState<Set<string>>(() => new Set(initialOpen));
+  const row = (key: string, e: Entry, p: { depth?: number; who?: boolean } = {}) => (
+    <FileRow key={key} e={e} {...p} open={diffs.has(key)} onToggle={() => setDiffs((s) => (s.delete(key) ? new Set(s) : new Set(s).add(key)))} />
+  );
   const sorted = [...lanes].sort((a, b) => Math.min(...a.files.map((f) => f.ago), Infinity) - Math.min(...b.files.map((f) => f.ago), Infinity));
   const total = sum(lanes.flatMap((l) => l.files));
   const files = new Set(lanes.flatMap((l) => l.files.map((f) => f.rel))).size;
@@ -142,7 +212,7 @@ export function ActivityView({ lanes, initialLens = "agents" }: { lanes: Lane[];
                 </Inline>
               </ListRowEnd>
             </ListRow>
-            {isOpen && shown.map((f) => <FileRow key={f.rel} f={f} depth={1} />)}
+            {isOpen && shown.map((f) => row(`${l.id}:${f.rel}`, { rel: f.rel, changes: [{ lane: l, f }] }, { depth: 1 }))}
             {isOpen && newest.length > shown.length && (
               <ListRow depth={1} onClick={() => setAll((s) => new Set(s).add(l.id))}>
                 <ListRowContent title={<Text tone="faint">{`${newest.length - shown.length} more files`}</Text>} place={[...new Set(newest.slice(FIRST).map((f) => area(f.rel)))].slice(0, 3).join(", ")} />
@@ -154,27 +224,15 @@ export function ActivityView({ lanes, initialLens = "agents" }: { lanes: Lane[];
     </ListSection>
   );
 
-  const areas = new Map<string, { f: LaneFile; who: Lane[] }[]>();
-  const seen = new Map<string, { f: LaneFile; who: Lane[] }>();
-  for (const l of lanes)
-    for (const f of l.files) {
-      const e = seen.get(f.rel);
-      if (e) e.who.push(l);
-      else seen.set(f.rel, { f, who: [l] });
-    }
-  for (const e of seen.values()) areas.set(area(e.f.rel), [...(areas.get(area(e.f.rel)) ?? []), e]);
+  const areas = new Map<string, Entry[]>();
+  for (const e of every) areas.set(area(e.rel), [...(areas.get(area(e.rel)) ?? []), e]);
   const byArea = (
     <>
       {[...areas.entries()]
         .sort((a, b) => b[1].length - a[1].length)
         .map(([name, es]) => (
           <ListSection key={name} title={name} count={es.length} open={open.get(`area:${name}`) ?? true} onToggle={() => setOpen((m) => new Map(m).set(`area:${name}`, !(m.get(`area:${name}`) ?? true)))}>
-            {es
-              .sort((a, b) => a.f.ago - b.f.ago)
-              .slice(0, all.has(`area:${name}`) ? undefined : FIRST)
-              .map((e) => (
-                <FileRow key={e.f.rel} f={e.f} who={e.who} />
-              ))}
+            {es.slice(0, all.has(`area:${name}`) ? undefined : FIRST).map((e) => row(`area:${e.rel}`, e, { who: true }))}
             {es.length > FIRST && !all.has(`area:${name}`) && (
               <ListRow onClick={() => setAll((s) => new Set(s).add(`area:${name}`))}>
                 <ListRowContent title={<Text tone="faint">{`${es.length - FIRST} more files`}</Text>} />
@@ -202,9 +260,7 @@ export function ActivityView({ lanes, initialLens = "agents" }: { lanes: Lane[];
       <List>
         {shared.length > 0 && (
           <ListSection title="Changed in more than one worktree" count={shared.length} tone="needs">
-            {shared.map((e) => (
-              <FileRow key={e.f.rel} f={e.f} who={e.who} />
-            ))}
+            {shared.map((e) => row(`shared:${e.rel}`, e, { who: true }))}
           </ListSection>
         )}
         {lens === "agents" ? agents : byArea}
