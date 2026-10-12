@@ -1,4 +1,5 @@
-// Live Diff, a built-in widget (docs/16-widgets.md): the uncommitted changes in
+// Live Diff, a built-in widget (docs/16-widgets.md): across worktrees when agents work in
+// several checkouts of the repository (Activity.tsx, docs/53); else the uncommitted changes in
 // a folder's repository (git.status for the files, git.diff for their lines),
 // current as you work: at once when git's index or HEAD changes (stage, commit,
 // checkout), and by polling while cmd is in front for edits anywhere below. The
@@ -9,11 +10,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GitFile, GitStatus } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 import { openPath } from "../../lib/actions.ts";
-import { onFsChanged } from "../../lib/store.ts";
+import { onFsChanged, useStoreValue } from "../../lib/store.ts";
 import { shortPath } from "../../lib/model.ts";
 import { stateStr, type WindowViewProps } from "../registry.ts";
 import { parseDiff, type FileDiff } from "./diff.ts";
 import { useWidgetStatus } from "../../lib/widgets.ts";
+import { ActivityView, type Lane } from "./Activity.tsx";
+import { lanesOf, useWorktrees } from "./worktrees.ts";
 
 const POLL_MS = 3000;
 /** More files than this start collapsed. */
@@ -29,7 +32,27 @@ const STATE: Record<GitFile["state"], { letter: string; tone: "success" | "warni
   ignored: { letter: "I", tone: "neutral", tip: "Ignored" },
 };
 
-export function LiveDiff({ win }: WindowViewProps) {
+/**
+ * Live Diff: across worktrees (ActivityView) when other checkouts of the folder's repository
+ * have work going on, else this checkout's uncommitted changes (CheckoutDiff).
+ */
+export function LiveDiff(props: WindowViewProps) {
+  const dir = stateStr(props.win, "path") ?? "";
+  const data = useWorktrees(dir);
+  const agents = useStoreValue((s) => s.agents);
+  const lanes = useMemo(() => (data && data.worktrees.some((w) => !w.main) ? lanesOf(data, agents.values(), Date.now()) : null), [data, agents]);
+  return lanes ? <WorktreesDiff win={props.win} lanes={lanes} /> : <CheckoutDiff {...props} />;
+}
+
+/** Every active checkout's changes; the title bar's status counts them. */
+function WorktreesDiff({ win, lanes }: { win: WindowViewProps["win"]; lanes: Lane[] }) {
+  const files = new Set(lanes.flatMap((l) => l.files.map((f) => f.rel))).size;
+  useWidgetStatus(win.id, `${lanes.length} checkouts · ${files === 1 ? "1 file" : `${files} files`}`, "summary");
+  return <ActivityView lanes={lanes} load={(lane, rel) => cmd.call("git.fileVersions", { top: lane.top!, file: rel, base: lane.base ?? null })} />;
+}
+
+/** One checkout's uncommitted changes, as Live Diff always showed them. */
+function CheckoutDiff({ win }: WindowViewProps) {
   const dir = stateStr(win, "path") ?? "";
   const [status, setStatus] = useState<GitStatus | null | undefined>(undefined);
   const [diff, setDiff] = useState("");

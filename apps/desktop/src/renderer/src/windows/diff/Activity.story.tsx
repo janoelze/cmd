@@ -1,9 +1,13 @@
 // Live Diff across worktrees (prototype): five agents in worktrees of one project and
 // the main checkout, two of them on the same files; by agent and by area; one agent;
-// every size.
+// every size; and this repository for real.
 
 import { AllSizes, RefWindow, type SizeName } from "../../reference/RefWindow.tsx";
+import { useMemo } from "react";
+import { cmd } from "../../lib/bridge.ts";
+import { useStoreValue } from "../../lib/store.ts";
 import { ActivityView, type Lane } from "./Activity.tsx";
+import { lanesOf, useWorktrees } from "./worktrees.ts";
 
 // Real code for the shared files' texts (the renderer's own files stand in for rpc.ts and checkout.ts: it may not read other packages).
 import RPC from "../../lib/model.ts?raw";
@@ -162,3 +166,17 @@ export const ByArea = () => <W lens="files" />;
 /** One agent alone: no overlap section. */
 export const OneAgent = () => <W lanes={LANES.slice(1, 2)} />;
 export const Sizes = () => <AllSizes render={(s) => <W size={s} />} />;
+
+/** This repository for real, through the core: every active checkout of ~/src/cmd as Live Diff shows it. */
+export const ThisRepository = () => <Real dir="~/src/cmd" />;
+
+function Real({ dir }: { dir: string }) {
+  const data = useWorktrees(dir);
+  const agents = useStoreValue((s) => s.agents);
+  const lanes = useMemo(() => (data ? lanesOf(data, agents.values(), Date.now()) : []), [data, agents]);
+  return (
+    <RefWindow icon="plusminus" name="Changes · cmd" size="wide">
+      <ActivityView lanes={lanes} load={(lane, rel) => cmd.call("git.fileVersions", { top: lane.top!, file: rel, base: lane.base ?? null })} />
+    </RefWindow>
+  );
+}

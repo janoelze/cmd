@@ -1,13 +1,14 @@
-// Prototype: Live Diff across worktrees. What several agents, each in a worktree
-// of one project, are changing on disk, as an overview: one row per agent (what
-// it touches now, how much, on which branch), its files newest first under it,
-// and the files more than one of them changed, first, because those are the
-// ones that will conflict. A second lens groups the same files by area.
+// Live Diff across worktrees (docs/53-livediff-worktrees.md): what several agents, each in a
+// worktree of one project, are changing on disk, as an overview: the files more than one of
+// them changed first (Clashes: the same lines are the ones that will conflict), then one row
+// per agent (how much, on which branch, when), its files newest first under it; or the same
+// files by area. A file opens in a pane under the list, whole (FileDiff), one agent's change
+// at a time; the footer says whose. Data in (lanes, worktrees.ts), texts loaded on open.
 
 import { DataGrid, Separator, Diff, Inline, Split, Stack, StatusDot, StatusLine, Text, IconButton, Segmented, ToolbarSegmented, View, WindowToolbar } from "@cmd/ui";
 import type { GridCell, GridRowInfo } from "@cmd/ui";
 import type { DotState } from "@cmd/ui";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { GitFile } from "@cmd/protocol";
 import { changedBaseLines, FileDiff, type FileDiffHandle } from "./FileDiff.tsx";
 
@@ -23,9 +24,13 @@ export interface LaneFile {
   committed?: boolean;
   /** Its diff's lines (against the merge base), from the first hunk header. */
   lines?: readonly string[];
-  /** The whole file at the merge base and now: the diff pane draws them with FileDiff (else `lines`). */
+  /** The whole file at the merge base and now: the diff pane draws them with FileDiff (else it loads them, else `lines`). */
   before?: string;
   after?: string;
+  /** For a file another lane changed too: the base lines its changes cover (else they come from the texts or `lines`). */
+  hunks?: [number, number][];
+  /** Changes when the file does (its mtime): an open diff loads it again. */
+  version?: number;
 }
 
 /** A checkout and who works in it: the workspace's own, or a linked worktree. */
@@ -39,6 +44,17 @@ export interface Lane {
   /** Commits ahead of the main branch. */
   ahead: number;
   files: LaneFile[];
+  /** Its checkout and what its files are compared with, for loading a file's texts. */
+  top?: string;
+  base?: string | null;
+}
+
+/** A file's texts as the core gives them (git.fileVersions). */
+export interface FileVersions {
+  before: string;
+  after: string;
+  binary: boolean;
+  tooLarge: boolean;
 }
 
 const LETTER: Record<GitFile["state"], { letter: string; tone: "success" | "warning" | "danger" | "accent" | "neutral" }> = {
@@ -54,7 +70,7 @@ const LETTER: Record<GitFile["state"], { letter: string; tone: "success" | "warn
 /** Files a lane shows before "N more". */
 const FIRST = 4;
 
-const age = (ms: number) => (ms < 10_000 ? "now" : ms < 60_000 ? `${Math.round(ms / 1000)}s` : ms < 3_600_000 ? `${Math.round(ms / 60_000)}m` : `${Math.round(ms / 3_600_000)}h`);
+const age = (ms: number) => (!Number.isFinite(ms) ? "" : ms < 10_000 ? "now" : ms < 60_000 ? `${Math.round(ms / 1000)}s` : ms < 3_600_000 ? `${Math.round(ms / 60_000)}m` : `${Math.round(ms / 3_600_000)}h`);
 const base = (rel: string) => rel.split("/").pop()!;
 const dir = (rel: string) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : undefined);
 /** A file's area: its first two folders (packages/core, apps/desktop, docs). */
@@ -76,7 +92,7 @@ const ranges = (lines: readonly string[] = []) =>
 
 /** Lines of the base two or more changes both touch, as "386–391", or null: same file, different places. */
 function clash(changes: Change[]): string | null {
-  const rs = changes.map((c) => (c.f.before !== undefined && c.f.after !== undefined ? changedBaseLines(c.f.before, c.f.after) : ranges(c.f.lines)));
+  const rs = changes.map((c) => c.f.hunks ?? (c.f.before !== undefined && c.f.after !== undefined ? changedBaseLines(c.f.before, c.f.after) : ranges(c.f.lines)));
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < rs.length; i++)
     for (let j = i + 1; j < rs.length; j++)
@@ -93,10 +109,23 @@ interface Entry {
 }
 
 /** The selected file's lines, one lane's change at a time (the toolbar picks whose). */
-function DiffPane({ e, change, place, onPlace, onWhose, onClose }: { e: Entry; change: Change; /** Where the view is among the changes (FileDiff says; the footer shows the count). */ place: { count: number; at: number }; onPlace: (p: { count: number; at: number }) => void; onWhose: (laneId: string) => void; onClose: () => void }) {
+function DiffPane({ e, change, place, onPlace, onWhose, onClose, load }: { e: Entry; change: Change; /** Where the view is among the changes (FileDiff says; the footer shows the count). */ place: { count: number; at: number }; onPlace: (p: { count: number; at: number }) => void; onWhose: (laneId: string) => void; onClose: () => void; load?: (lane: Lane, rel: string) => Promise<FileVersions> }) {
   const { lane, f } = change;
   const same = e.changes.length > 1 ? clash(e.changes) : null;
-  const whole = f.before !== undefined && f.after !== undefined;
+  // Every lane's texts of the file (the others mark the clash), loaded again when it changes; the last ones stay meanwhile.
+  const [loaded, setLoaded] = useState<Map<string, FileVersions>>(new Map());
+  const changed = e.changes.map((c) => `${c.lane.id}@${c.f.version ?? 0}`).join();
+  useEffect(() => {
+    if (!load || e.changes.every((c) => c.f.before !== undefined)) return;
+    let live = true;
+    void Promise.all(e.changes.map((c) => load(c.lane, e.rel).then((v) => [`${c.lane.id}:${e.rel}`, v] as const, () => null))).then((rs) => {
+      if (live) setLoaded((m) => new Map([...m, ...rs.filter((r) => r !== null)]));
+    });
+    return () => void (live = false);
+  }, [e.rel, changed]); // eslint-disable-line react-hooks/exhaustive-deps
+  const textsOf = (c: Change): FileVersions | undefined => (c.f.before !== undefined && c.f.after !== undefined ? { before: c.f.before, after: c.f.after, binary: false, tooLarge: false } : loaded.get(`${c.lane.id}:${e.rel}`));
+  const texts = textsOf(change);
+  const whole = !!texts && !texts.binary && !texts.tooLarge;
   const nav = useRef<FileDiffHandle>(null);
   const hunks = place.count;
   return (
@@ -129,7 +158,24 @@ function DiffPane({ e, change, place, onPlace, onWhose, onClose }: { e: Entry; c
       </Stack>
       <Separator />
       {whole ? (
-        <FileDiff ref={nav} key={`${lane.id}:${e.rel}`} path={e.rel} before={f.before!} after={f.after!} others={e.changes.filter((c) => c !== change && c.f.after !== undefined).map((c) => ({ name: c.lane.name, after: c.f.after! }))} onPlace={onPlace} />
+        <FileDiff
+          ref={nav}
+          key={`${lane.id}:${e.rel}`}
+          path={e.rel}
+          before={texts.before}
+          after={texts.after}
+          others={e.changes.flatMap((c) => {
+            const t = c !== change ? textsOf(c) : undefined;
+            return t && !t.binary && !t.tooLarge ? [{ name: c.lane.name, after: t.after }] : [];
+          })}
+          onPlace={onPlace}
+        />
+      ) : texts?.binary ? (
+        <Diff fill note="Binary file" />
+      ) : texts?.tooLarge ? (
+        <Diff fill note="Too large to show" />
+      ) : load && !texts ? (
+        <View state={{ kind: "loading" }} />
       ) : f.lines?.length ? (
         <Diff fill lines={f.lines} />
       ) : (
@@ -173,7 +219,7 @@ const fileName = (rel: string, faded?: boolean) => (
 );
 
 /** Live Diff over every checkout of a project with work in it (a prototype: data in, nothing fetched). */
-export function ActivityView({ lanes, initialLens = "agents", initialSelected = null }: { lanes: Lane[]; initialLens?: "agents" | "files"; /** The file shown at first, as "<section>:<path>" (shared:, area:, or a lane's id). */ initialSelected?: string | null }) {
+export function ActivityView({ lanes, initialLens = "agents", initialSelected = null, load }: { lanes: Lane[]; initialLens?: "agents" | "files"; /** The file shown at first, as "<section>:<path>" (shared:, area:, or a lane's id). */ initialSelected?: string | null; /** A file's texts, for lanes whose files don't carry them (git.fileVersions). */ load?: (lane: Lane, rel: string) => Promise<FileVersions> }) {
   const [lens, setLens] = useState(initialLens);
   const [open, setOpen] = useState<Map<string, boolean>>(new Map());
   const [all, setAll] = useState<Set<string>>(new Set());
@@ -189,7 +235,9 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
   const files = new Set(lanes.flatMap((l) => l.files.map((f) => f.rel))).size;
   const picked = sel ? entryOf(sel, lanes, every) : null;
   const change = picked && (picked.changes.find((c) => c.lane.id === whose) ?? picked.changes[0]!);
-  const place = change && change.f.before !== undefined && change.f.after !== undefined && diffPlace ? diffPlace : { count: ranges(change?.f.lines).length, at: -1 };
+  // FileDiff says once it shows the file; a patch's hunks until then.
+  useEffect(() => setPlace(null), [sel, whose]);
+  const place = diffPlace ?? { count: ranges(change?.f.lines).length, at: -1 };
   /** The diff shown, kept while its pane folds away. */
   const shownDiff = useRef<{ e: Entry; change: Change } | null>(null);
   if (picked && change) shownDiff.current = { e: picked, change };
@@ -318,7 +366,7 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
       state={!lanes.length ? { kind: "empty", icon: "checkmark.circle", title: "Nothing changed" } : null}
       scroll={false}
     >
-      <Split side="bottom" open={!!(picked && change)} pane={shownDiff.current && <DiffPane e={shownDiff.current.e} change={shownDiff.current.change} place={place} onPlace={setPlace} onWhose={setWhose} onClose={() => setSel(null)} />} size={{ min: 120, ideal: 300, max: 2000 }}>
+      <Split side="bottom" open={!!(picked && change)} pane={shownDiff.current && <DiffPane e={shownDiff.current.e} change={shownDiff.current.change} place={place} onPlace={setPlace} load={load} onWhose={setWhose} onClose={() => setSel(null)} />} size={{ min: 120, ideal: 300, max: 2000 }}>
         {list}
       </Split>
     </View>
