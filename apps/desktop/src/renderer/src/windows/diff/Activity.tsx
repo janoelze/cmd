@@ -130,7 +130,7 @@ function FileRow({ e, depth = 0, who, open, onToggle }: { e: Entry; depth?: numb
                 </Chip>
               ))}
             <Counts {...t} />
-            <Text size="xs" tone="faint">
+            <Text size="xs" tone="dim">
               {age(f.ago)}
             </Text>
           </Inline>
@@ -145,7 +145,7 @@ function FileRow({ e, depth = 0, who, open, onToggle }: { e: Entry; depth?: numb
                 <ListRowEnd>
                   <Inline gap={2}>
                     <Counts {...f} />
-                    <Text size="xs" tone="faint">
+                    <Text size="xs" tone="dim">
                       {age(f.ago)}
                     </Text>
                   </Inline>
@@ -215,7 +215,7 @@ export function ActivityView({ lanes, initialLens = "agents", initialOpen = [] }
             {isOpen && shown.map((f) => row(`${l.id}:${f.rel}`, { rel: f.rel, changes: [{ lane: l, f }] }, { depth: 1 }))}
             {isOpen && newest.length > shown.length && (
               <ListRow depth={1} onClick={() => setAll((s) => new Set(s).add(l.id))}>
-                <ListRowContent title={<Text tone="faint">{`${newest.length - shown.length} more files`}</Text>} place={[...new Set(newest.slice(FIRST).map((f) => area(f.rel)))].slice(0, 3).join(", ")} />
+                <ListRowContent title={<Text tone="dim">{`${newest.length - shown.length} more files`}</Text>} place={[...new Set(newest.slice(FIRST).map((f) => area(f.rel)))].slice(0, 3).join(", ")} />
               </ListRow>
             )}
           </div>
@@ -235,7 +235,7 @@ export function ActivityView({ lanes, initialLens = "agents", initialOpen = [] }
             {es.slice(0, all.has(`area:${name}`) ? undefined : FIRST).map((e) => row(`area:${e.rel}`, e, { who: true }))}
             {es.length > FIRST && !all.has(`area:${name}`) && (
               <ListRow onClick={() => setAll((s) => new Set(s).add(`area:${name}`))}>
-                <ListRowContent title={<Text tone="faint">{`${es.length - FIRST} more files`}</Text>} />
+                <ListRowContent title={<Text tone="dim">{`${es.length - FIRST} more files`}</Text>} />
               </ListRow>
             )}
           </ListSection>
