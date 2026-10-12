@@ -876,6 +876,8 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
 .ui-diff-line[data-kind="add"] { background: color-mix(in srgb, var(--git-added) 14%, transparent); }
 .ui-diff-line[data-kind="del"] { background: color-mix(in srgb, var(--git-deleted) 14%, transparent); }
 .ui-diff-line[data-kind="hunk"] { padding-top: var(--space-1); color: var(--text-dim); }
+.ui-diff[data-fill] { --diff-indent: var(--inset); flex: 1; min-height: 0; margin: 0; padding-bottom: var(--space-2); overflow: auto; }
+.ui-diff-note[data-fill] { padding-left: var(--inset); }
 .ui-diff-note { padding: var(--space-0-5) var(--inset) var(--space-2) calc(var(--list-inset, var(--space-1-5)) + var(--space-2) + var(--space-3) + var(--space-1-5)); font-size: var(--text-xs); color: var(--text-dim); }
 
 .ui-code {

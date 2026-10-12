@@ -140,7 +140,7 @@ function FileDiff({ e, change }: { e: Entry; change: Change }) {
   const same = e.changes.length > 1 ? clash(e.changes) : null;
   const hunks = ranges(f.lines).length;
   return (
-    <View>
+    <View scroll={false}>
       <Stack pad="inset" gap={2}>
         <Stack gap={0.5}>
           <Inline gap={2}>
@@ -163,7 +163,7 @@ function FileDiff({ e, change }: { e: Entry; change: Change }) {
           </Callout>
         )}
       </Stack>
-      {f.lines?.length ? <Diff lines={f.lines} /> : <Diff note={f.state === "deleted" ? "Deleted" : "No line changes"} />}
+      {f.lines?.length ? <Diff fill lines={f.lines} /> : <Diff fill note={f.state === "deleted" ? "Deleted" : "No line changes"} />}
     </View>
   );
 }

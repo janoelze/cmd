@@ -225,6 +225,13 @@ export const Changes = () => (
   </div>
 );
 
+/** A file's whole diff in a pane of its own (fill): it takes the pane's height and scrolls both ways, scrollbars at the pane's edges. */
+export const ChangesInAPane = () => (
+  <div style={{ width: 360, height: 160, display: "flex", flexDirection: "column", background: "var(--well)" }}>
+    <Diff fill lines={["@@ -12,6 +12,7 @@ export function Button(", ...Array.from({ length: 12 }, (_, i) => `+  option${i}: "a long line that runs past the pane's right edge, so it scrolls sideways",`), "   icon,"]} />
+  </div>
+);
+
 /** A pairing link as a camera reads it, on white in any theme. */
 export const Qr = () => (
   <div style={{ width: 200 }}>

@@ -282,12 +282,14 @@ export function Card({ children, className, padded = true }: { children: ReactNo
  * A file's changed lines, from a unified diff: added and removed lines on a tint of
  * their git colour, hunk headers dim, each line as it is (no wrapping; the block
  * scrolls sideways). Under a file's row in a list (Live Diff), indented past its
- * disclosure. `note` in place of lines: "Binary file".
+ * disclosure. `note` in place of lines: "Binary file". `fill`: a file's whole diff
+ * in a pane of its own (a View with scroll off): it takes the rest of the view's height,
+ * scrolls both ways with its scrollbars at the pane's edges, and sits on the inset.
  */
-export function Diff({ lines, note }: { lines?: readonly string[]; note?: ReactNode }) {
-  if (note) return <div className="ui-diff-note">{note}</div>;
+export function Diff({ lines, note, fill }: { lines?: readonly string[]; note?: ReactNode; fill?: boolean }) {
+  if (note) return <div className="ui-diff-note" data-fill={fill || undefined}>{note}</div>;
   return (
-    <pre className="ui-diff">
+    <pre className="ui-diff" data-fill={fill || undefined}>
       {lines?.map((l, i) => (
         <div key={i} className="ui-diff-line" data-kind={l.startsWith("@@") ? "hunk" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : undefined}>
           {l || " "}
