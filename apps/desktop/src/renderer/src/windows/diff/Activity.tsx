@@ -1,7 +1,7 @@
 // Live Diff across worktrees (docs/53-livediff-worktrees.md): what several agents, each in a
 // worktree of one project, are changing on disk, as an overview: the files more than one of
 // them changed first (Clashes: the same lines are the ones that will conflict), then one row
-// per agent (how much, on which branch, when), its files newest first under it; or the same
+// per agent (how much, on which branch, when), its files under it, the biggest changes first; or the same
 // files by area. A file opens in a pane under the list, whole (FileDiff), one agent's change
 // at a time; the footer says whose. Data in (lanes, worktrees.ts), texts loaded on open.
 
@@ -75,6 +75,8 @@ const base = (rel: string) => rel.split("/").pop()!;
 const dir = (rel: string) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : undefined);
 /** A file's area: its first two folders (packages/core, apps/desktop, docs). */
 const area = (rel: string) => rel.split("/").slice(0, -1).slice(0, rel.startsWith("apps/") || rel.startsWith("packages/") ? 2 : 1).join("/") || "(top level)";
+/** Lines changed, added and removed together: what "biggest" sorts by. */
+const size = (fs: LaneFile[]) => fs.reduce((n, f) => n + f.added + f.removed, 0);
 const sum = (fs: LaneFile[]) => fs.reduce((t, f) => ({ added: t.added + f.added, removed: t.removed + f.removed }), { added: 0, removed: 0 });
 
 /** One lane's change to a file. */
@@ -194,7 +196,8 @@ function entries(lanes: Lane[]): Entry[] {
       e.changes.push({ lane, f });
     }
   for (const e of by.values()) e.changes.sort((a, b) => a.f.ago - b.f.ago);
-  return [...by.values()].sort((a, b) => a.changes[0]!.f.ago - b.changes[0]!.f.ago);
+  // The biggest first: lines changed, every lane's together.
+  return [...by.values()].sort((a, b) => size(b.changes.map((c) => c.f)) - size(a.changes.map((c) => c.f)));
 }
 
 /** A grid row: its cells, how it sits, and what a click does. */
@@ -230,7 +233,8 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
   const [diffPlace, setPlace] = useState<{ count: number; at: number } | null>(null);
   const every = entries(lanes);
   const shared = every.filter((e) => e.changes.length > 1);
-  const sorted = [...lanes].sort((a, b) => Math.min(...a.files.map((f) => f.ago), Infinity) - Math.min(...b.files.map((f) => f.ago), Infinity));
+  // The biggest changes first: lanes by the lines they changed, files the same way.
+  const sorted = [...lanes].sort((a, b) => size(b.files) - size(a.files));
   const total = sum(lanes.flatMap((l) => l.files));
   const files = new Set(lanes.flatMap((l) => l.files.map((f) => f.rel))).size;
   const picked = sel ? entryOf(sel, lanes, every) : null;
@@ -284,22 +288,23 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
     heading("h:agents", "Agents");
     for (const l of sorted) {
       const isOpen = open.get(l.id) ?? false;
-      const newest = [...l.files].sort((a, b) => a.ago - b.ago);
+      const biggest = [...l.files].sort((a, b) => size([b]) - size([a]));
+      const last = Math.min(...l.files.map((f) => f.ago));
       rows.push({
         key: `lane:${l.id}`,
-        info: { expanded: newest.length ? isOpen : undefined, onToggle: () => toggle(l.id, false) },
+        info: { expanded: biggest.length ? isOpen : undefined, onToggle: () => toggle(l.id, false) },
         onClick: () => toggle(l.id, false),
-        cells: [<StatusDot key="d" state={l.light} />, l.name, <Text key="b" tone="dim">{l.main ? "main checkout" : l.branch}</Text>, lines(sum(l.files)), newest[0] ? when(newest[0].ago) : ""],
+        cells: [<StatusDot key="d" state={l.light} />, l.name, <Text key="b" tone="dim">{l.main ? "main checkout" : l.branch}</Text>, lines(sum(l.files)), biggest.length ? when(last) : ""],
       });
       if (!isOpen) continue;
-      const shown = all.has(l.id) ? newest : newest.slice(0, FIRST);
+      const shown = all.has(l.id) ? biggest : biggest.slice(0, FIRST);
       for (const f of shown) fileRow(`${l.id}:${f.rel}`, { rel: f.rel, changes: [{ lane: l, f }] }, 1, false);
-      if (newest.length > shown.length) more(l.id, newest.length - shown.length, 1);
+      if (biggest.length > shown.length) more(l.id, biggest.length - shown.length, 1);
     }
   } else {
     const areas = new Map<string, Entry[]>();
     for (const e of every) areas.set(area(e.rel), [...(areas.get(area(e.rel)) ?? []), e]);
-    for (const [name, es] of [...areas.entries()].sort((a, b) => b[1].length - a[1].length)) {
+    for (const [name, es] of [...areas.entries()].sort((a, b) => size(b[1].flatMap((e) => e.changes.map((c) => c.f))) - size(a[1].flatMap((e) => e.changes.map((c) => c.f))))) {
       heading(`h:${name}`, name, sum(es.flatMap((e) => e.changes.map((c) => c.f))));
       const key = `area:${name}`;
       for (const e of es.slice(0, all.has(key) ? undefined : FIRST)) fileRow(`area:${e.rel}`, e, 0, true);

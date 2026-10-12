@@ -175,7 +175,7 @@ function Real({ dir }: { dir: string }) {
   const agents = useStoreValue((s) => s.agents);
   const lanes = useMemo(() => (data ? lanesOf(data, agents.values(), Date.now()) : []), [data, agents]);
   return (
-    <RefWindow icon="plusminus" name="Changes · cmd" size="wide">
+    <RefWindow icon="plusminus" name="Changes · cmd" size="regular">
       <ActivityView lanes={lanes} load={(lane, rel) => cmd.call("git.fileVersions", { top: lane.top!, file: rel, base: lane.base ?? null })} />
     </RefWindow>
   );
