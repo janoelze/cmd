@@ -73,7 +73,9 @@
 /* A bottom pane: under the content, its line on top; its content keeps its full height while
    the pane grows or folds (revealed, not squeezed), and scrolls itself. */
 .ui-split[data-side="bottom"] { flex-direction: column-reverse; }
-.ui-split[data-side="bottom"] > .ui-split-pane { width: auto; height: var(--split-w); overflow: hidden; box-shadow: inset 0 1px 0 var(--separator); }
+.ui-split[data-side="bottom"] > .ui-split-pane { width: auto; height: var(--split-w); overflow: hidden; }
+/* Its line on top, over its content (which paints its own background). */
+.ui-split[data-side="bottom"] > .ui-split-pane::before { content: ""; position: absolute; inset: 0 0 auto; height: 1px; background: var(--separator); z-index: 2; pointer-events: none; }
 .ui-split-pane-inner { position: absolute; inset: 0 0 auto; height: var(--split-w); display: flex; flex-direction: column; }
 .ui-split[data-side="bottom"] .ui-split-handle { top: 0; bottom: auto; left: 0; right: 0; width: auto; height: 6px; cursor: row-resize; }
 
