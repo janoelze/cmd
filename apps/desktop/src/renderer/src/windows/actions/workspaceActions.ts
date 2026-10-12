@@ -29,8 +29,9 @@ export async function runAction(root: string, a: WorkspaceAction, workspaceId: W
   goTo(r.paneId, workspaceId);
 }
 
-/** Run Last Action Again: a server still running is restarted. */
+/** Run Last Action Again: a server still running is restarted. Forgotten once its workspace is closed (the store holds only open ones). */
 export async function rerunLastAction(): Promise<boolean> {
+  if (last && !getState().workspaces.has(last.workspaceId)) last = null;
   if (!last) return false;
   await runAction(last.root, last.action, last.workspaceId, { restart: true });
   return true;
