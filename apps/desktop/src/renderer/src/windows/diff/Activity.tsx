@@ -93,12 +93,11 @@ interface Entry {
 }
 
 /** The selected file's lines, one lane's change at a time (the toolbar picks whose). */
-function DiffPane({ e, change, onWhose, onClose }: { e: Entry; change: Change; onWhose: (laneId: string) => void; onClose: () => void }) {
+function DiffPane({ e, change, place, onPlace, onWhose, onClose }: { e: Entry; change: Change; /** Where the view is among the changes (FileDiff says; the footer shows the count). */ place: { count: number; at: number }; onPlace: (p: { count: number; at: number }) => void; onWhose: (laneId: string) => void; onClose: () => void }) {
   const { lane, f } = change;
   const same = e.changes.length > 1 ? clash(e.changes) : null;
   const whole = f.before !== undefined && f.after !== undefined;
   const nav = useRef<FileDiffHandle>(null);
-  const [place, setPlace] = useState({ count: ranges(f.lines).length, at: -1 });
   const hunks = place.count;
   return (
     <View scroll={false}>
@@ -121,9 +120,6 @@ function DiffPane({ e, change, onWhose, onClose }: { e: Entry; change: Change; o
               <IconButton icon="xmark" label="Close" shortcut="Esc" size="sm" onClick={onClose} />
             </Inline>
           </Inline>
-          <Text size="sm" tone="dim">
-            {lane.name} · {lane.main ? "main checkout" : lane.branch} · {f.committed ? "committed" : "uncommitted"} · {hunks} {hunks === 1 ? "change" : "changes"} · +{f.added} −{f.removed} · {age(f.ago)}
-          </Text>
           {same && (
             <Text size="sm" tone="warning">
               {e.changes.map((c) => c.lane.name).join(" and ")} both change {same}.
@@ -133,7 +129,7 @@ function DiffPane({ e, change, onWhose, onClose }: { e: Entry; change: Change; o
       </Stack>
       <Separator />
       {whole ? (
-        <FileDiff ref={nav} key={`${lane.id}:${e.rel}`} path={e.rel} before={f.before!} after={f.after!} others={e.changes.filter((c) => c !== change && c.f.after !== undefined).map((c) => ({ name: c.lane.name, after: c.f.after! }))} onPlace={setPlace} />
+        <FileDiff ref={nav} key={`${lane.id}:${e.rel}`} path={e.rel} before={f.before!} after={f.after!} others={e.changes.filter((c) => c !== change && c.f.after !== undefined).map((c) => ({ name: c.lane.name, after: c.f.after! }))} onPlace={onPlace} />
       ) : f.lines?.length ? (
         <Diff fill lines={f.lines} />
       ) : (
@@ -184,6 +180,8 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
   /** The file shown, by where its row is: "<section>:<path>"; and whose change of it. */
   const [sel, setSel] = useState<string | null>(initialSelected);
   const [whose, setWhose] = useState<string | null>(null);
+  /** Where the open diff is among its changes (from FileDiff; a patch's hunks without it). */
+  const [diffPlace, setPlace] = useState<{ count: number; at: number } | null>(null);
   const every = entries(lanes);
   const shared = every.filter((e) => e.changes.length > 1);
   const sorted = [...lanes].sort((a, b) => Math.min(...a.files.map((f) => f.ago), Infinity) - Math.min(...b.files.map((f) => f.ago), Infinity));
@@ -191,6 +189,7 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
   const files = new Set(lanes.flatMap((l) => l.files.map((f) => f.rel))).size;
   const picked = sel ? entryOf(sel, lanes, every) : null;
   const change = picked && (picked.changes.find((c) => c.lane.id === whose) ?? picked.changes[0]!);
+  const place = change && change.f.before !== undefined && change.f.after !== undefined && diffPlace ? diffPlace : { count: ranges(change?.f.lines).length, at: -1 };
   /** The diff shown, kept while its pane folds away. */
   const shownDiff = useRef<{ e: Entry; change: Change } | null>(null);
   if (picked && change) shownDiff.current = { e: picked, change };
@@ -305,14 +304,21 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
         </WindowToolbar>
       }
       footer={
-        <StatusLine end={<span>{`+${total.added} −${total.removed}`}</span>}>
-          {lanes.length} checkouts · {files} files
-        </StatusLine>
+        // A file open: what its change is; else the totals.
+        picked && change ? (
+          <StatusLine end={<span>{`+${change.f.added} −${change.f.removed} · ${age(change.f.ago)}`}</span>}>
+            {`${change.lane.name} · ${change.lane.main ? "main checkout" : change.lane.branch} · ${change.f.committed ? "committed" : "uncommitted"} · ${place.count} ${place.count === 1 ? "change" : "changes"}`}
+          </StatusLine>
+        ) : (
+          <StatusLine end={<span>{`+${total.added} −${total.removed}`}</span>}>
+            {lanes.length} checkouts · {files} files
+          </StatusLine>
+        )
       }
       state={!lanes.length ? { kind: "empty", icon: "checkmark.circle", title: "Nothing changed" } : null}
       scroll={false}
     >
-      <Split side="bottom" open={!!(picked && change)} pane={shownDiff.current && <DiffPane e={shownDiff.current.e} change={shownDiff.current.change} onWhose={setWhose} onClose={() => setSel(null)} />} size={{ min: 120, ideal: 300, max: 2000 }}>
+      <Split side="bottom" open={!!(picked && change)} pane={shownDiff.current && <DiffPane e={shownDiff.current.e} change={shownDiff.current.change} place={place} onPlace={setPlace} onWhose={setWhose} onClose={() => setSel(null)} />} size={{ min: 120, ideal: 300, max: 2000 }}>
         {list}
       </Split>
     </View>
