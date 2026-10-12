@@ -386,7 +386,7 @@ export interface GitStatus {
 
 /**
  * A checkout of a repository and what it changed (git.worktrees, Live Diff across worktrees,
- * docs/52-livediff-worktrees.md): a linked worktree's branch since it left the main branch,
+ * docs/53-livediff-worktrees.md): a linked worktree's branch since it left the main branch,
  * committed or not; the main checkout's uncommitted changes.
  */
 export interface WorktreeChanges {

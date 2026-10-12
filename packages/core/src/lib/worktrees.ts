@@ -1,4 +1,4 @@
-// Live Diff across worktrees (docs/52-livediff-worktrees.md): every checkout of a repository
+// Live Diff across worktrees (docs/53-livediff-worktrees.md): every checkout of a repository
 // with work going on, and what each changed. A linked worktree is compared with where its
 // branch left the main branch (its merge base), so an agent that commits as it goes still
 // shows its work; the main checkout with HEAD, as Live Diff always did. Files that more than
