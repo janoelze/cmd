@@ -1,7 +1,8 @@
 /* Now Playing (NowPlayingView.tsx). Small: the cover fills what's left above the track,
    which reads from the left. With room (the container query): one centred column, the
    cover 80% of the width up to a size, leaving room under it for the track and controls.
-   Really short (too little room for a cover worth seeing): a thumbnail in front of the title. */
+   Really short (too little room for a cover worth seeing): a thumbnail in front of the title
+   at the top, the player at the bottom. */
 .np {
   container: np / size;
   height: 100%;
@@ -105,11 +106,10 @@
 }
 
 @container np (max-height: 280px) {
-  .np-body {
-    justify-content: center;
-  }
+  /* The title row at the top, the player at the bottom, the room between them. */
   .np-head {
     flex: none;
+    margin-bottom: auto;
     flex-direction: row;
     align-items: center;
   }
