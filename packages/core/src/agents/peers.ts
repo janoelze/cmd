@@ -1,4 +1,4 @@
-// Peer briefings (beta, `agents.peers`): tell an agent which other agents work in
+// Peer briefings (part of Agent integration, briefing.ts): tell an agent which other agents work in
 // the same repository (any of its worktrees) and how to message them, so they
 // find each other before their work collides. Injected by `cmd hook` as context
 // at SessionStart, and again on a prompt when the set of peers changed.

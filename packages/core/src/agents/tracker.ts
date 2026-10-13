@@ -145,11 +145,11 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
   }
 
   /**
-   * Context for a hook to hand the agent (`agents.peers`): the other live agents in
-   * its repository. Always at SessionStart, then on a prompt only if they changed.
+   * The peer briefing for a hook to hand the agent (`agents.integration`, briefing.ts): the
+   * other live agents in its repository. Always at SessionStart, then on a prompt only if they changed.
    */
   peerBriefing(id: AgentId, event: string): string | null {
-    if (!this.#settings()["agents.peers"]) return null;
+    if (!this.#settings()["agents.integration"]) return null;
     if (event !== "SessionStart" && event !== "UserPromptSubmit") return null;
     const self = this.#agents.get(id);
     const at = self && this.#checkout(self);

@@ -31,6 +31,7 @@ export const SETTINGS_MIGRATIONS: readonly SettingsMigration[] = [
   { from: "magic.baseUrl", to: null }, // only Anthropic and OpenAI are providers now
   { from: "ui.sidebarPadding", to: null }, // the app's to set
   { from: "canvas.cardZoom", to: null }, // cards are never read-only (98e7664)
+  { from: "agents.peers", to: "agents.integration" }, // peer briefings became part of Agent integration (docs/54)
 ];
 
 /** Keys that were renamed (old → new). */

@@ -395,11 +395,11 @@ export const SETTINGS_SCHEMA = {
   },
   "agents.codex.command": { title: "Codex command", code: true, type: "string", default: "codex", description: "Starts Codex." },
   "agents.qwen.command": { title: "Qwen Code command", code: true, type: "string", default: "qwen", description: "Resumes Qwen Code sessions." },
-  "agents.peers": {
-    title: "Tell agents about each other (beta)",
+  "agents.integration": {
+    title: "Agent integration",
     type: "boolean",
     default: false,
-    description: "Each new agent hears who else works in its repository.", details: "Who they are, where and on what, and that `cmd send` reaches them. Needs cmd's hook (above).",
+    description: "Agents in cmd know they run in cmd.", details: "Each new agent hears its pane, its workspace and who else works in its repository, and that `cmd` reaches them. Needs cmd's hook (above).",
   },
   "agents.hooks.auto": {
     title: "Install the hook automatically",

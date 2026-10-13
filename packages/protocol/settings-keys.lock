@@ -8,6 +8,7 @@ agents.codex.command
 agents.copilot.command
 agents.homes
 agents.hooks.auto
+agents.integration
 agents.names.ai
 agents.peers
 agents.qwen.command

@@ -10,7 +10,7 @@ import { fakeFactory } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
 
 let dir: string, main: string, tree: string, other: string;
-let settings = { ...DEFAULT_SETTINGS, "agents.peers": true };
+let settings = { ...DEFAULT_SETTINGS, "agents.integration": true };
 let panes: PaneManager;
 let agents: AgentTracker;
 
@@ -26,7 +26,7 @@ beforeEach(() => {
   git(main, "init", "-q", "-b", "master");
   git(main, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init");
   git(main, "worktree", "add", "-q", "-b", "topic", tree);
-  settings = { ...DEFAULT_SETTINGS, "agents.peers": true };
+  settings = { ...DEFAULT_SETTINGS, "agents.integration": true };
   panes = new PaneManager(fakeFactory().factory, { socketPath: "/tmp/test.sock", pollMs: 0 });
   agents = new AgentTracker(panes, { settings: () => settings });
 });

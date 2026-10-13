@@ -17,7 +17,7 @@ export function writeAgentHooks(core: Pick<CoreContext, "settings">, stateDir: s
   const files = hookFiles(stateDir);
   try {
     writeHookFiles(files);
-    core.settings.bind(["agents.peers"], () => setBriefingFlag(files, core.settings.settings["agents.peers"]));
+    core.settings.bind(["agents.integration"], () => setBriefingFlag(files, core.settings.settings["agents.integration"]));
     return files;
   } catch (err) {
     log.error(`could not write the agent hook: ${(err as Error).message}`);

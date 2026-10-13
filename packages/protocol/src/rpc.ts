@@ -216,7 +216,7 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
   /** Called from inside agent hooks: by cmd's hook (spooled: the event is in the spool already) and the old `cmd hook`. */
   "hook.ingest": {
     params: { paneId: PaneId; agent: AgentKind; event: string; payload: Record<string, unknown>; spooled?: boolean };
-    /** context: text for the hook to hand the agent (peer briefings, `agents.peers`). */
+    /** context: text for the hook to hand the agent (the briefing, `agents.integration`). */
     result: { agentId: AgentId | null; context?: string };
   };
   /** Agent configs cmd's hook can go into, and whether it is there (agents/hooks.ts). */

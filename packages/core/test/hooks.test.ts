@@ -84,7 +84,7 @@ describe.skipIf(process.platform === "win32")("cmd's agent hook", () => {
     }
   });
 
-  it("asks the core for a peer briefing while agents.peers is on", async () => {
+  it("asks the core for a briefing while agents.integration is on", async () => {
     const repo = path.join(dir, "repo");
     fs.mkdirSync(repo);
     execFileSync("git", ["init", "-q", repo]);
@@ -92,16 +92,23 @@ describe.skipIf(process.platform === "win32")("cmd's agent hook", () => {
     const start = (paneId: string) => hookAsync("claude", { hook_event_name: "SessionStart", cwd: repo }, { CMD_PANE_ID: paneId, CMD_SOCKET: socketPath });
 
     expect(await start(a.id)).toBe(""); // off: no flag, no core round trip
-    await conn.client.call("settings.set", { key: "agents.peers", value: true });
+    await conn.client.call("settings.set", { key: "agents.integration", value: true });
     expect(fs.existsSync(files.flag)).toBe(true);
     await conn.client.call("hook.ingest", { paneId: a.id, agent: "claude", event: "SessionStart", payload: { cwd: repo } });
     const out = JSON.parse(await start(b.id));
     const peer = core.agents.list().find((x) => x.paneId === a.id)!;
     expect(out.hookSpecificOutput).toMatchObject({ hookEventName: "SessionStart" });
     expect(out.hookSpecificOutput.additionalContext).toContain(`id ${peer.id.slice(0, 8)}`);
+    expect(out.hookSpecificOutput.additionalContext).toContain("You are running in a terminal pane of cmd");
+    expect(out.hookSpecificOutput.additionalContext).toContain(`Pane: ${b.id}`);
+    // On a prompt, only what changed: nothing.
+    expect(await hookAsync("claude", { hook_event_name: "UserPromptSubmit", cwd: repo, prompt: "hi" }, { CMD_PANE_ID: b.id, CMD_SOCKET: socketPath })).toBe("");
 
-    await conn.client.call("settings.set", { key: "agents.peers", value: false });
+    await conn.client.call("settings.set", { key: "agents.integration", value: false });
     expect(fs.existsSync(files.flag)).toBe(false);
+    expect(await start(b.id)).toBe("");
+    // Off, the core says nothing either (a hook that still asks).
+    expect(await conn.client.call("hook.ingest", { paneId: b.id, agent: "claude", event: "SessionStart", payload: { cwd: repo } })).not.toHaveProperty("context");
   });
 
   it("runs from the agent config's command alone: nothing outside cmd, no script file needed inside", () => {

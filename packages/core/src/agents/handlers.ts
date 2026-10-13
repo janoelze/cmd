@@ -7,6 +7,7 @@ import { EXPORT_FORMAT, TURN_FORMAT } from "@cmd/protocol";
 import type { CoreContext } from "../kernel/context.ts";
 import { IN_CORE, slice } from "../kernel/handlers.ts";
 import { rewrite } from "./activity/fixture.ts";
+import { agentBriefing } from "./briefing.ts";
 import { hookEventName } from "./state.ts";
 import { eventId } from "../data/ids.ts";
 
@@ -59,7 +60,7 @@ export const agentHandlers = (core: CoreContext) =>
     "hook.ingest": (p) => {
       const event = hookEventName(p.agent, p.event);
       const agentId = core.agents.ingestHook(p.paneId, p.agent, event, p.payload, p.spooled)?.id ?? null;
-      const context = agentId ? core.agents.peerBriefing(agentId, event) : null;
+      const context = agentId ? agentBriefing(core, agentId, event) : null;
       return context ? { agentId, context } : { agentId };
     },
     "hooks.status": () => core.agentSetup.targets(),

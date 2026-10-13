@@ -199,8 +199,8 @@ export function SettingsWindow() {
               {s.items.some((it) => itemKey(it) === "search.archiveDirs") && <IndexStatusRow status={search} enabled={snap.settings["data.record.transcripts"]} />}
             </FormSection>
           );
-          // cmd's hook goes before what needs it (peer briefings).
-          if (s.items.some((it) => itemKey(it) === "agents.peers")) return [<AgentHooks key="hooks" />, section];
+          // cmd's hook goes before what needs it (Agent integration).
+          if (s.items.some((it) => itemKey(it) === "agents.integration")) return [<AgentHooks key="hooks" />, section];
           // Whether macOS shows them at all, before what to notify about.
           if (s.items.some((it) => itemKey(it) === "notifications.needsInput")) return [<NotifyPermission key="macos" />, section];
           return section;

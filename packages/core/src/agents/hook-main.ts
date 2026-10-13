@@ -1,5 +1,5 @@
 // The slow half of cmd's agent hook (hooks.ts). The hook script runs this only for
-// SessionStart and prompts, and only while peer briefings are on: it sends the
+// SessionStart and prompts, and only while Agent integration is on: it sends the
 // event to the core (hook.ingest) and prints the context the core returns, in the
 // shape Claude, Codex and Gemini read. Only node:net, so it starts fast. Never
 // fails the agent: always exits 0, within 2 s.

@@ -13,8 +13,8 @@
 // into the pane's spool (activity/spool.ts), where none is overwritten: plain sh,
 // fast enough for every tool call. It adds the agent's config dir from its
 // environment ($CLAUDE_CONFIG_DIR, …), the one place that knows which profile a
-// session runs in. Only SessionStart and prompts, and only while peer briefings
-// are on (a flag file next to it), go through hook-main.ts to the core.
+// session runs in. Only SessionStart and prompts, and only while Agent integration
+// is on (a flag file next to it), go through hook-main.ts to the core.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -24,7 +24,7 @@ import { shq } from "../terminals/shell.ts";
 export interface HookFiles {
   /** The hook script, `<script> <kind>`; agent configs carry its code and name it (hookCommand). */
   script: string;
-  /** Present while peer briefings are on (agents.peers). */
+  /** Present while Agent integration is on (agents.integration): the hook asks the core for a briefing. */
   flag: string;
   /** Holds `cmd`, put on PATH in panes; null when this build has no CLI. */
   bin: string | null;
@@ -88,7 +88,7 @@ function hookScript(script: string): string {
 # event as $TMPDIR/cmd-agents/<pane id>/<event>.json (the latest of each) and
 # links it into log/ (every one, until cmd has read it), with the agent's config
 # dirs ($CLAUDE_CONFIG_DIR, …: which profile the session runs in). Asks the core
-# for a peer briefing while the briefings flag is there. Never fails or blocks
+# for a briefing while the briefings flag is there. Never fails or blocks
 # the agent; outside cmd it does nothing. Nor for a headless Claude (claude -p,
 # the Agent SDK): it inherits the pane of whatever started it, often the pane's
 # own agent, and its events would pass for that agent's. Agent configs carry
@@ -118,7 +118,7 @@ export function writeHookFiles(f: HookFiles): void {
   if (f.bin) write(path.join(f.bin, "cmd"), `#!/bin/sh\n# cmd's CLI from the build of the core that wrote this (hooks.ts).\n${node("packages/cli/src/main.ts", "exec ")} "$@"\n`);
 }
 
-/** Peer briefings on or off: the script checks for the flag file. */
+/** Agent integration on or off: the script checks for the flag file. */
 export function setBriefingFlag(f: HookFiles, on: boolean): void {
   if (on) fs.writeFileSync(f.flag, "");
   else fs.rmSync(f.flag, { force: true });
