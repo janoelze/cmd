@@ -371,7 +371,9 @@ export async function connectHost(o: HostOptions): Promise<RemoteBackend> {
   }
   startHost(o);
   let last: unknown;
-  for (const until = Date.now() + 5000; Date.now() < until; ) {
+  // A loaded machine took a new host 11 s to listen (CI, several apps starting): a core that gave up
+  // after 5 s ran its terminals itself and the host exited unused. The app waits while the core starts.
+  for (const until = Date.now() + 30_000; Date.now() < until; ) {
     try {
       return attached(await RemoteBackend.connect(o.socketPath), true);
     } catch (err) {

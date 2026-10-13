@@ -1231,21 +1231,27 @@ await scenario("error-boundary", async () => {
   // Both windows on screen: the broken one's Reload button is clicked after typing in the terminal.
   await menu("view.grid");
   await win.waitForSelector(".main.mode-grid", { timeout: 10_000 });
-  {
-    const broken = (await win.evaluate(() => window.cmd.call("window.list", {}))).find((w) => w.kind === "markdown");
+  await still(); // the tiles glide and the terminals refit into the grid: click and type once they have
+  const broken = (await win.evaluate(() => window.cmd.call("window.list", {}))).find((w) => w.kind === "markdown");
+  const fallback = win.locator(`.tile[data-pane="${broken.id}"] .ui-viewstate[data-kind="error"]`);
+  try {
     await win.evaluate((id) => window.__cmdBreakView(id, true), broken.id);
-    const fallback = win.locator(`.tile[data-pane="${broken.id}"] .ui-viewstate[data-kind="error"]`);
     const shown = await fallback.waitFor({ timeout: 10_000 }).then(() => true, () => false);
     check(shown && (await fallback.textContent()).includes("This window stopped working"), "a window whose view throws shows its fallback in its own tile");
     const term = win.locator(".tile.kind-terminal").first();
     const termId = await term.getAttribute("data-pane");
     await select(termId);
-    await term.locator(".xterm").click();
-    // Typed only once the terminal has focus, and given 10 s to echo: 3 s ran out on a busy CI runner.
-    const hasFocus = await focused(`.tile[data-pane="${termId}"] .xterm`);
-    await win.keyboard.type("echo still-live-$((6*7))");
-    await win.keyboard.press("Enter");
-    const text = await until(() => paneText(termId), (t) => t.includes("still-live-42"));
+    // Typed only once the terminal has focus. Keys sent while the tile still settles can be lost
+    // (the prompt shown, nothing echoed), so type again until the output arrives.
+    let hasFocus = false;
+    let text = "";
+    for (let attempt = 0; attempt < 4 && !text.includes("still-live-42"); attempt++) {
+      await term.locator(".xterm").click();
+      hasFocus = await tryUntil(() => win.evaluate((id) => !!document.activeElement?.closest(`.tile[data-pane="${id}"] .xterm`), termId), Boolean, 3000);
+      await win.keyboard.type("echo still-live-$((6*7))");
+      await win.keyboard.press("Enter");
+      text = await tryUntil(() => paneText(termId), (t) => t.includes("still-live-42"), 5000);
+    }
     const screen = text.trim().split("\n").slice(-3).join(" ⏎ ");
     check(text.includes("still-live-42") && (await win.locator(".topbar, .statusbar").count()) > 0, `with one window broken, the rest of the app renders and a terminal takes input (focused: ${hasFocus}; screen: ${screen})`);
     await shot(win, "10b-error-boundary.png");
@@ -1253,6 +1259,12 @@ await scenario("error-boundary", async () => {
     await fallback.locator("button", { hasText: "Reload Window" }).click();
     const back = await win.waitForSelector(`.tile.kind-markdown[data-pane="${broken.id}"] .ui-doc`, { timeout: 10_000 }).then(() => true, () => false);
     check(back && (await fallback.count()) === 0, "Reload Window mounts the view again");
+  } finally {
+    // A failed check must not leave the Markdown window broken for the scenarios after it (settings reads its .ui-doc).
+    if (await fallback.count()) {
+      await win.evaluate((id) => window.__cmdBreakView(id, false), broken.id);
+      await fallback.locator("button", { hasText: "Reload Window" }).click().catch(() => {});
+    }
   }
 });
 
@@ -1647,7 +1659,10 @@ await scenario("magic", async () => {
     // cmd.terminal: refused at load, typed (not run) into a new terminal after a click.
     const known = new Set((await call("pane.list")).map((p) => p.id));
     const before = known.size;
-    await win.frameLocator(`.tile[data-pane="${b.id}"] iframe.magic-frame`).locator("#go").click();
+    const bframe = win.frameLocator(`.tile[data-pane="${b.id}"] iframe.magic-frame`);
+    // The widget acts only while its window is active (host.js locked(), the host's "active" message, after the select).
+    await bframe.locator("html.k-active").waitFor({ state: "attached", timeout: 10_000 });
+    await bframe.locator("#go").click();
     const panes = await until(() => call("pane.list"), (p) => p.length !== before);
     const fresh = panes.filter((p) => !known.has(p.id));
     const typed = await until(async () => (fresh.length ? (await call("pane.read", { paneId: fresh.at(-1).id })).text ?? "" : ""), (t) => t.replace(/\s+/g, "").includes("clicked-rerun"));
@@ -1743,12 +1758,13 @@ await scenario("settings", async () => {
   await waitFor(() => saved()["font.codeSize"] === 16, "the code font size saves");
   const codePx = () => win.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--font-code-size").trim());
   check((await until(codePx, (p) => p === "16px")) === "16px", "the app's file and Markdown windows get the code font size live (--font-code-size)");
-  const fonts = await win.evaluate(() =>
+  // The file rows and the prose may still be mounting: read until both are there.
+  const fonts = await until(() => win.evaluate(() =>
     [".ui-tree .ui-tree-row", ".ui-doc", ".ui-doc code"].map((sel) => {
       const el = document.querySelector(sel);
       return el ? [sel, getComputedStyle(el).fontFamily, getComputedStyle(el).fontSize] : null;
     }),
-  );
+  ), (f) => !!f[0] && !!f[1]);
   check(fonts[0] && !/Monaspace/.test(fonts[0][1]) && fonts[0][2] === "13px", `file browser rows use the UI font, like the Navigator (${fonts[0]})`);
   check(fonts[1] && /system-ui|-apple-system/.test(fonts[1][1]), `Markdown prose uses the text font (${fonts[1]})`);
   check(!fonts[2] || /Monaspace/.test(fonts[2][1]), `Markdown code uses the code font (${fonts[2]})`);
@@ -2021,8 +2037,11 @@ let markerPane = null;
 await scenario("marker", async () => {
   markerPane = (await win.evaluate(() => window.cmd.call("pane.list", {})))[0].id;
   // Mouse reporting on, then off, then a marker computed by the shell (PowerShell on Windows).
+  // A short prompt first: CI's (runner@<long random host>) can wrap in a narrow tile, and when the
+  // restart below resizes the terminal, zsh's redraw of a reflowed, wrapped prompt goes up too far
+  // and erases the marker (on screen "% print", then the prompt), depending on the host's name.
   const markerCmd = process.platform !== "win32"
-    ? "printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r"
+    ? "PS1='%% '; printf '\\033[?1000h\\033[?1000l'; echo MARKER-$((40+2))\r"
     : 'Write-Host -NoNewline "`e[?1000h`e[?1000l"; echo "MARKER-$(40+2)"\r';
   await win.evaluate(([id, data]) => window.cmd.call("pane.write", { paneId: id, data }), [markerPane, markerCmd]);
   const text = await until(() => paneText(markerPane, 500), (t) => t.includes("MARKER-42"));
