@@ -28,4 +28,5 @@ export * from "./tools.ts";
 export * from "./pages.ts";
 export * from "./arrange.ts";
 export * from "./stats.ts";
+export * from "./nowplaying.ts";
 export * from "./format.ts";

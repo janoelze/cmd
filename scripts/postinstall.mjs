@@ -27,6 +27,22 @@ try {
   console.warn("postinstall: could not build procinfo (agent detection falls back to process names):", err.message);
 }
 
+// Build the MediaRemote adapter the Now Playing widget reads through /usr/bin/perl
+// (packages/core/native/mediaremote/run.pl, core nowplaying/adapter.ts).
+if (process.platform === "darwin") {
+  try {
+    const dir = path.resolve("packages/core/native");
+    const src = path.join(dir, "mediaremote");
+    const files = ["adapter", "private", "utility"].flatMap((d) => fs.readdirSync(path.join(src, d)).filter((f) => f.endsWith(".m")).map((f) => path.join(src, d, f)));
+    fs.mkdirSync(path.join(dir, "build"), { recursive: true });
+    const out = path.join(dir, "build/libmediaremote.dylib");
+    const args = ["-O2", "-dynamiclib", "-fobjc-arc", "-fvisibility=default", "-w", "-mmacosx-version-min=12.0", "-arch", "arm64", "-arch", "x86_64", "-I", src, "-I", path.join(src, "include")];
+    execFileSync("/usr/bin/clang", [...args, "-framework", "Foundation", "-framework", "AppKit", "-framework", "UniformTypeIdentifiers", "-o", out, ...files], { stdio: "inherit" });
+  } catch (err) {
+    console.warn("postinstall: could not build the MediaRemote adapter (Now Playing shows nothing):", err.message);
+  }
+}
+
 // Build the desktop app's native SF Symbols renderer (crisp icons at exact sizes).
 try {
   const dir = path.resolve("apps/desktop/native");

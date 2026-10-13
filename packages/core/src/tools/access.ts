@@ -140,6 +140,8 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "actions.pin": "never",
   "stats.catalog": "never",
   "stats.query": "read",
+  "nowPlaying.get": "never",
+  "nowPlaying.control": "never",
   "stats.queryMany": "never",
   "stats.rebuild": "never",
   "operator.get": "never",

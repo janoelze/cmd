@@ -160,6 +160,8 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "actions.pin": "never",
   "stats.catalog": "never", // stats name commands and hosts; remote gets them with per-class filtering (docs/49)
   "stats.query": "never",
+  "nowPlaying.get": "never",
+  "nowPlaying.control": "never",
   "stats.queryMany": "never",
   "stats.rebuild": "never",
   "operator.get": "never", // the Operator is the Mac's for now (docs/51)
@@ -543,6 +545,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "window.closedChanged": // window.closed and window.reopen aren't remote
     case "actions.changed":
     case "stats.changed":
+    case "nowPlaying.changed":
     case "operator.changed":
     case "tool.acting": // approvals are answered on this Mac
     case "browser.request": // to the Mac's app windows only

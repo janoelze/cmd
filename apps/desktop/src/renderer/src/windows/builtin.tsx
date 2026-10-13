@@ -26,3 +26,4 @@ import "./notifications/register.tsx";
 import "./resources/register.tsx";
 import "./events/register.tsx";
 import "./timer/register.tsx";
+import "./nowplaying/register.tsx";

@@ -68,6 +68,17 @@ if (fs.existsSync(procinfo)) {
   throw new Error("packages/core/native/build/procinfo missing; run pnpm install");
 }
 
+// The MediaRemote adapter Now Playing runs in /usr/bin/perl (macOS; built by postinstall).
+// Without it Now Playing says it can't read what's playing.
+const mediaremote = path.join(root, "packages/core/native/build/libmediaremote.dylib");
+if (fs.existsSync(mediaremote)) {
+  fs.mkdirSync(path.join(core, "native/build"), { recursive: true });
+  fs.mkdirSync(path.join(core, "native/mediaremote"), { recursive: true });
+  fs.copyFileSync(mediaremote, path.join(core, "native/build/libmediaremote.dylib"));
+  fs.copyFileSync(path.join(root, "packages/core/native/mediaremote/run.pl"), path.join(core, "native/mediaremote/run.pl"));
+  fs.copyFileSync(path.join(root, "packages/core/native/mediaremote/LICENSE"), path.join(core, "native/mediaremote/LICENSE"));
+}
+
 // The app's notification permission addon (macOS; built by postinstall), loaded
 // by Electron main from here (src/main/notify-permission.ts).
 const notifications = path.join(root, "apps/desktop/native/build/notifications.node");
