@@ -269,6 +269,10 @@ button.ui-dial-value:not(:disabled):hover { background: var(--bg-hover); }
 .ui-scrub { flex: none; padding: var(--space-2) var(--inset); background: var(--bg-sidebar); box-shadow: inset 0 1px 0 var(--separator); user-select: none; }
 .ui-scrub[data-inline] { padding: 0; background: none; box-shadow: none; }
 .ui-tb > .ui-scrub[data-inline] { flex: 1 1 0; min-width: 0; padding: 0 var(--space-1); }
+/* the TimeBar (media.tsx): a chart's bar, the played part filled; scaled, so it runs smoothly */
+.ui-timebar { position: relative; height: 6px; border-radius: var(--radius-chart); background: var(--chart-seq-0); touch-action: none; user-select: none; }
+.ui-timebar[data-seek] { cursor: default; }
+.ui-timebar-fill { position: absolute; inset: 0; border-radius: inherit; background: var(--chart-current); transform-origin: left center; transform: scaleX(0); pointer-events: none; }
 .ui-scrub-track { position: relative; height: 16px; margin-inline: var(--space-1-5); cursor: default; touch-action: none; }
 .ui-scrub-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--ink) 14%, transparent); }
 .ui-scrub-played { position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: var(--radius-pill); background: var(--accent); pointer-events: none; }

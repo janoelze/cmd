@@ -33,6 +33,11 @@
   gap: var(--space-1);
   min-width: 0;
 }
+.np-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+}
 .np-controls {
   display: flex;
   align-items: center;

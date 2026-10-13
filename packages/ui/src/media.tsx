@@ -2,9 +2,10 @@
 // track with what has played (`inline`: inside a toolbar, between its times); with `thumbs`, a strip of frames to find a place by
 // eye; with `trim`, a range with a handle at each end, what falls outside it shaded.
 // Click or drag anywhere to seek; drag a handle to move that end (the caller shows
-// the frame there); the time under the pointer floats above it.
+// the frame there); the time under the pointer floats above it. The TimeBar: a track's
+// position drawn like a chart's bar, a rectangle with what has played filled.
 
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 export interface TrimRange {
   start: number;
@@ -119,6 +120,90 @@ export function Scrubber({ duration, time, onSeek, thumbs, trim, onTrim, minTrim
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+export interface TimeBarProps {
+  /** Seconds. */
+  duration: number;
+  /** Where it is now (s). */
+  time: number;
+  /** Runs on by itself from `time` at `rate`, smoothly (a CSS animation, no re-render per frame). */
+  playing?: boolean;
+  rate?: number;
+  /** Click or drag to seek; called once, where the pointer is let go. */
+  onSeek?: (t: number) => void;
+  label?: string;
+}
+
+/**
+ * A track's position, drawn like a chart's bar: a plain rectangle, what has played filled in the
+ * accent. While `playing` it moves on by itself, so a caller only passes a new `time` when the
+ * player reports one (a seek, a pause). Click or drag to seek; the time under the pointer floats above it.
+ */
+export function TimeBar({ duration, time, playing, rate = 1, onSeek, label = "Position" }: TimeBarProps) {
+  const bar = useRef<HTMLDivElement>(null);
+  const fill = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  const [drag, setDrag] = useState<number | null>(null);
+  const d = duration > 0 ? duration : 1;
+  const frac = (t: number) => Math.max(0, Math.min(1, t / d));
+  const at = (e: { clientX: number }) => {
+    const r = bar.current!.getBoundingClientRect();
+    return (Math.max(0, Math.min(r.width, e.clientX - r.left)) / (r.width || 1)) * d;
+  };
+
+  // From `time` to the end at the playing rate, as one linear animation of the fill's scale.
+  useLayoutEffect(() => {
+    const el = fill.current;
+    if (!el) return;
+    const from = frac(drag ?? time);
+    el.style.transform = `scaleX(${from})`;
+    if (!playing || drag !== null || from >= 1 || rate <= 0) return;
+    const a = el.animate([{ transform: `scaleX(${from})` }, { transform: "scaleX(1)" }], { duration: ((d - (drag ?? time)) / rate) * 1000, easing: "linear", fill: "forwards" });
+    return () => a.cancel();
+  }, [time, playing, rate, d, drag]);
+
+  const down = (e: ReactPointerEvent) => {
+    if (e.button !== 0 || !onSeek) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setDrag(at(e));
+  };
+  const move = (e: ReactPointerEvent) => {
+    const t = at(e);
+    setHover(t);
+    if (drag !== null) setDrag(t);
+  };
+  const up = () => {
+    if (drag !== null) onSeek?.(drag);
+    setDrag(null);
+  };
+  const shown = drag ?? hover;
+  return (
+    <div
+      ref={bar}
+      className="ui-timebar"
+      role="slider"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={Math.round(d)}
+      aria-valuenow={Math.round(time)}
+      aria-valuetext={formatTime(time)}
+      data-seek={onSeek ? "" : undefined}
+      onPointerDown={down}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerCancel={() => setDrag(null)}
+      onPointerLeave={() => drag === null && setHover(null)}
+    >
+      <div ref={fill} className="ui-timebar-fill" />
+      {shown !== null && onSeek && (
+        <div className="ui-scrub-tip" style={{ left: `${frac(shown) * 100}%` }}>
+          {formatTime(shown)}
+        </div>
+      )}
     </div>
   );
 }

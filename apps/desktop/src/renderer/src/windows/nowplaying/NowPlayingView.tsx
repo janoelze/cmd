@@ -4,8 +4,8 @@
 // runs without the core sending every second. Small, it reads left to right; with room, it
 // centres like an iPod: the cover at most of the width, the track and controls under it.
 
-import { EmptyState, IconButton, Inline, Scrubber, Text, View, formatTime } from "@cmd/ui";
-import { useEffect, useState } from "react";
+import { EmptyState, IconButton, Inline, Text, TimeBar, View, formatTime } from "@cmd/ui";
+import { useEffect, useMemo, useState } from "react";
 import { nowPlayingPosition, type NowPlaying, type NowPlayingCommand } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 import { useWidgetStatus } from "../../lib/widgets.ts";
@@ -27,12 +27,14 @@ export function NowPlayingView({ win }: WindowViewProps) {
 
 /** The widget, drawn (NowPlayingView.story.tsx shows it playing, paused and empty). */
 export function NowPlayingCard({ np, onControl }: { np: NowPlaying | null | undefined; onControl: (p: { command?: NowPlayingCommand; seek?: number }) => void }) {
+  // The times tick each second; the bar runs on by itself from where the last report put it.
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!np?.playing) return;
-    const t = setInterval(() => setNow(Date.now()), 250);
+    const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [np?.playing]);
+  const reported = useMemo(() => (np ? nowPlayingPosition(np) : null), [np]);
 
   if (np === undefined) return <View />;
   if (np === null) return <View><EmptyState icon="music.note" title="Nothing playing">Play something in Music, Spotify or a browser and it shows here.</EmptyState></View>;
@@ -48,7 +50,7 @@ export function NowPlayingCard({ np, onControl }: { np: NowPlaying | null | unde
           </div>
           {np.duration !== null && pos !== null && (
             <div className="np-progress">
-              <Scrubber duration={np.duration} time={pos} onSeek={(t) => onControl({ seek: t })} label="Position" inline />
+              <TimeBar duration={np.duration} time={reported ?? pos} playing={np.playing} rate={np.rate} onSeek={(t) => onControl({ seek: t })} />
               <Inline justify="between">
                 <Text tone="dim" size="sm" mono>{formatTime(pos)}</Text>
                 <Text tone="dim" size="sm" mono>−{formatTime(np.duration - pos)}</Text>

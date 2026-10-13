@@ -17,7 +17,7 @@ export { Chart, Legend, Sparkline, type Series } from "./chart.tsx";
 export { Bars, Line, Plot, PlotGroup, Rule, Ticks, axisTicks, seriesColor, usePlot, useSize, type ChartSeries, type PlotProps, type PlotScales } from "./plot.tsx";
 export { Calendar, ChartHead, Delta, Distribution, Meter, PunchCard, Proportion, Ranking, TimeBars, TimeSeries, heatLevels, type RankingRow, type TimeChartProps } from "./charts.tsx";
 export { Dial, Document, Filmstrip, Hide, Picture, Viewport, Inline, Measure, MediaStage, Page, Pane, Panes, Split, Stack, Stage, Stat, StatusLine, Text, Thumb, Tiles, TitleBand, View, WebStage, ViewState, type Space, type ViewStateSpec } from "./frame.tsx";
-export { formatTime, Scrubber, type ScrubberProps, type TrimRange } from "./media.tsx";
+export { formatTime, Scrubber, TimeBar, type ScrubberProps, type TimeBarProps, type TrimRange } from "./media.tsx";
 export { Ribbon, Timeline, TimelineEntry, type RibbonItem } from "./timeline.tsx";
 export { DataGrid, type DataGridProps, type GridCell, type GridColumn, type GridSort, type GridRowInfo } from "./grid.tsx";
 export { Chip, List, ListGroup, ListHeading, ListRow, ListRowActions, ListRowContent, ListRowEnd, ListRowIcon, ListSection, ListValue, Mark, Panel, PanelBody, PanelHeader, PanelSummary, Twisty, TwistySpace, type ListRowProps } from "./list.tsx";
