@@ -1,6 +1,6 @@
 # Agent integration
 
-**Status:** proposal: research done; nothing built beyond what peer briefings already do (docs/18, `agents/peers.ts`).
+**Status:** proposal: research done and the plan agreed (2026-10-13); nothing built beyond what peer briefings already do (docs/18, `agents/peers.ts`).
 
 Date: 2026-10-13. From two Discord ideas (2026-10-12 "agent connectivity: opt in/out of cmd announcing itself to agents with a global toggle", 2026-10-13 "cmd should expose MCP controls … the operator wastes API tokens") and Jan's take on them: the Operator (docs/51) does a job any coding agent could do, if it had cmd's tools and knew it runs inside cmd.
 
@@ -161,14 +161,18 @@ What stays the Operator's and goes with it: its service and conversations (`serv
 
 ### The Operator
 
-With its tools in every agent, the Operator's loop is a second agent doing what the first could. Two ways on, Jan's call: keep it as a small preset (a widget that starts the user's own agent with the briefing and the tools, no model loop of its own), or retire it and keep only its pieces (tools, access table, app round trips, chat kit components for anything else that needs them).
+With its tools in every agent, the Operator's loop is a second agent doing what the first could, so it is on its way out (Jan, 2026-10-13). Nothing new builds on it; the shared pieces leave its folder first (phase 2), so retiring it later deletes `operator/`, its widget and its chat methods, and nothing else. Until then it keeps working, reading the same tool registry.
 
-## Phases
+## Plan
 
-1. **The switch**: `agents.integration` replaces `agents.peers` (settings schema, `layout.ts`, `SettingsWindow.tsx`, `setBriefingFlag`), the briefing gets its "you are in cmd" lines. Useful alone.
-2. **The server**: `cmd mcp` (stdio, pane resolution, no tools outside cmd), the tools moved out of `operator/` into one registry (`tools/`) that MCP, the CLI (`cmd tools`, `cmd tool`) and the Operator all read, renamed as in Names (`Tool`, `ToolContext`, `Caller`, `TOOL_ACCESS`, approvals), the drift tests.
-3. **Registration**: one adapter per agent home beside `hooks.ts` (install, remove, state, shown with the hooks in Settings → Agents and `cmd hooks`), following the switch.
-4. **The Operator's future**, after real use of 1–3.
+Each phase merges on its own and leaves cmd working; each ends with `pnpm typecheck && pnpm test` and, where the UI changes, `pnpm e2e`.
+
+1. **The switch.** `agents.integration` replaces `agents.peers`: the key in `SETTINGS_SCHEMA` (a stored `agents.peers` carried over in `settings-migrations.ts`), Settings → Agents in `layout.ts` (the "Working together" section goes; `SettingsWindow.tsx` puts the hooks block beside the new key), `setBriefingFlag` in `agents/setup.ts` following it. The briefing gets its "you are in cmd" lines (pane, workspace, the CLI) beside the peers, in `agents/peers.ts` or a `briefing.ts` next to it. Done when: an agent started with the switch on is told it runs in cmd, with it off hears nothing, and status, turns and needs-input work either way.
+2. **One tool registry, renamed.** A move with no change in behaviour: `operator/tools.ts`, `window-tools.ts`, `page-tools.ts`, `tool-kit.ts`, `board.ts`, `access.ts` and `deny.ts` go to `packages/core/src/tools/` under the names in Names (`Tool`, `TOOLS`, `ToolContext`, `Caller`, `TOOL_ACCESS`, `Access`, `QUIET_EVENTS`, approvals, reports, the acting mark). The Operator imports them from there. Protocol: `operator.answer`, `operator.grants`, `operator.revoke` become `approvals.answer`, `approvals.list`, `approvals.forget` (a renamed method bumps `PROTOCOL`), `OperatorGrant` becomes `RememberedApproval`; the `operator.tool` event becomes `tool.call` in a `tools` data class, with old `operator.tool` events still read as tool calls. The drift tests land here: every method a tool calls is allowed in `TOOL_ACCESS`, descriptions under a budget. Done when: the Operator behaves as before and nothing outside `operator/` names it.
+3. **Callers other than the Operator.** `ToolContext` for a pane's agent: the caller from the pane (the acting mark names the agent, approvals that must ask in cmd show on the window acted on), reports delivered to the agent that started the work (the hook's `UserPromptSubmit` context, or `wait`). No `edit` tool for agents. A core method to call a tool by name for a caller (`tools.list`, `tools.call`), with the access table checked in the core. Done when: a test calls every tool as an agent caller against a `Core` with fake PTYs.
+4. **The surfaces.** `cmd mcp` (`tools/mcp.ts`): a stdio MCP server over `tools.list` and `tools.call`, resolving its pane from `CMD_PANE_ID`, else its process ancestry (`agents/procinfo.ts`); annotations from `TOOL_ACCESS`; `instructions` under 500 characters; no tools outside cmd or with the switch off. `cmd tools` and `cmd tool <name> '<json>'` in the CLI, from the same list. Tests: the MCP list and `cmd tools` equal the registry; `registries.test.ts` adds "every tool is reachable from MCP and the CLI". Done when: a real Claude, Codex and Gemini in a cmd pane, with the server added by hand, open a browser and start an agent through it.
+5. **Registration.** One adapter per agent home beside `hooks.ts` (`agents/mcp-config.ts` or similar): install through the agent's own `mcp add` at user scope where it has one, else edit the user config as `installHooks` does; forward `CMD_PANE_ID`, `CMD_SOCKET`, `CMD_PANE_TOKEN` where the agent filters the env; remove on switch off. Its state shown with the hooks (Settings → Agents, `cmd hooks`). The briefing mentions the server only in homes where it is registered. Done when: turning the switch on and off adds and removes the entry in every home cmd knows, and leaves the user's other servers untouched.
+6. **Retire the Operator**, Jan's call after real use of 1–5: delete `operator/` (service, conversations, prompt, rules), its widget type and Ask Operator… command, and the `operator.*` chat methods (a `PROTOCOL` bump); its kit chat components stay if anything else uses them. Its conversations stay in the database until the next data cleanup, or are dropped with it.
 
 ## Open questions
 
