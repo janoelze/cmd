@@ -7,11 +7,11 @@ import { Inline } from "./frame.tsx";
 import { Badge } from "./status.tsx";
 
 const noop = () => {};
-/** How long a yes holds, as the app words it: Allow gives the first, its menu the others. */
+/** How long a yes holds, as the app words it: short choices, what each covers in its tooltip. */
 const scopes = (who: string, kept: string) => [
-  { value: "once", label: "Allow Once" },
-  { value: "session", label: "Allow for This Session", detail: `Until ${who} exits.` },
-  { value: "always", label: `Always Allow ${kept}`, detail: "Change it in Settings → AI & Agents → Permissions." },
+  { value: "once", label: "Once", detail: "Asks again next time." },
+  { value: "session", label: "This Session", detail: `Until ${who} exits.` },
+  { value: "always", label: "Always", detail: `Kept for ${kept}. Change it in Settings → AI & Agents → Permissions.` },
 ];
 
 /** An agent wants to type a command into another terminal; a second ask waits behind it. */
@@ -71,8 +71,8 @@ export const Risky = () => (
     why="Shipping the fix to production"
     exact="wrangler deploy --env production"
     scopes={[
-      { value: "once", label: "Run Once" },
-      { value: "session", label: "Run for This Session", detail: "Until Claude “Release” exits. Risky actions are never allowed for always." },
+      { value: "once", label: "Once", detail: "Asks again next time." },
+      { value: "session", label: "This Session", detail: "Until Claude “Release” exits. Risky actions are never allowed for always." },
     ]}
     allow="Run"
     danger

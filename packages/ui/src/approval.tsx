@@ -4,7 +4,7 @@
 // happen, and how long the answer holds; Return allows, Esc denies.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, ButtonGroup, LinkButton } from "./button.tsx";
+import { Button, ButtonGroup } from "./button.tsx";
 import { Segmented } from "./choice.tsx";
 import { TextField } from "./fields.tsx";
 import { CodeBlock } from "./layout.tsx";
@@ -27,13 +27,13 @@ export interface ApprovalAnswer<S extends string = string, C extends string = st
  * title bar (an agent's icon and name, and the workspace as context);
  * `title` says what in plain words ("Type in the terminal “tests”"), `why` is the asker's own
  * reason, in dim text under the title, and `exact` is exactly what would happen (a string shows as code:
- * the command, the URL; a node for a diff). `scopes` are how long a yes may hold: Allow gives the
- * first, and its menu the others ("Allow for This Session", "Always Allow for github.com"),
- * each with a line on what it covers; leave them out for a plain yes or no. `choices` are what a
+ * the command, the URL; a node for a diff). `scopes` are how long a yes may hold, a switch in the
+ * footer (Once, This Session, Always; what each covers in its tooltip), the first chosen at
+ * first; leave them out for a plain yes or no. `choices` are what a
  * yes allows, where there are kinds of it (a device: Control or View only), shown as a switch.
  *
  * Return allows from anywhere in the sheet but the reason field, except in its first 300 ms;
- * Esc and the scrim deny. "Deny and Say Why…" opens a field whose text goes with the no.
+ * Esc and the scrim deny. Deny's menu has "Deny and Say Why…": a field whose text goes with the no.
  * `danger` makes Allow the danger button (a deploy). `position` says "1 of 3" when more wait;
  * `expiresAt` counts down to when the asker gives up.
  */
@@ -63,8 +63,8 @@ export function ApprovalSheet<S extends string = string, C extends string = stri
   title: ReactNode;
   why?: ReactNode;
   exact?: ReactNode;
-  /** How long a yes may hold, the first what Allow (and Return) gives; the rest are in Allow's menu, each with what it covers. */
-  scopes?: readonly { value: S; label: string; detail?: ReactNode }[];
+  /** How long a yes may hold, as a switch in the footer (short labels; `detail`, what each covers, is its tooltip); the first is chosen at first. */
+  scopes?: readonly { value: S; label: string; detail?: string }[];
   /** What a yes allows, when there is more than one way to (a device: Control or View only), shown as a switch beside Allow; the first is chosen at first. */
   choices?: readonly { value: C; label: string }[];
   allow?: string;
@@ -81,10 +81,10 @@ export function ApprovalSheet<S extends string = string, C extends string = stri
   askWhy?: boolean;
   busy?: boolean;
 }) {
-  const scope = scopes?.[0]?.value;
+  const [scope, setScope] = useState<S | undefined>(scopes?.[0]?.value);
   const [choice, setChoice] = useState<C | undefined>(choices?.[0]?.value);
   const [menu, setMenu] = useState(false);
-  const more = useRef<HTMLButtonElement>(null);
+  const denyMore = useRef<HTMLButtonElement>(null);
   const [reason, setReason] = useState<string | null>(null);
   const shownAt = useRef(Date.now());
   const content = useRef<HTMLDivElement>(null);
@@ -126,27 +126,29 @@ export function ApprovalSheet<S extends string = string, C extends string = stri
       window={{ icon: who.icon, name: who.context ? `${who.name} · ${who.context}` : who.name, status: meta.length ? meta.join("  ·  ") : undefined }}
       title={title}
       aside={
-        reason === null && askWhy ? (
-          <LinkButton tone="dim" disabled={busy} onClick={() => setReason("")}>
-            Deny and Say Why…
-          </LinkButton>
+        reason === null && scopes && scopes.length > 1 && scope !== undefined ? (
+          <Segmented value={scope} options={scopes.map((o) => ({ value: o.value, label: o.label, tip: o.detail }))} onChange={setScope} label="For how long" />
         ) : undefined
       }
       actions={
         reason === null ? (
           <>
-            <Button disabled={busy} onClick={no}>
-              {deny}
-            </Button>
-            <ButtonGroup joined className="ui-approval-allow" label={allow}>
-              <Button variant={danger ? "danger" : "primary"} busy={busy} autoFocus onClick={yes}>
-                {allow}
+            {askWhy ? (
+              <ButtonGroup joined label={deny}>
+                <Button disabled={busy} onClick={no}>
+                  {deny}
+                </Button>
+                <Button ref={denyMore} icon="chevron.down" disabled={busy} aria-label="More ways to deny" aria-haspopup="menu" onClick={() => setMenu(true)} />
+              </ButtonGroup>
+            ) : (
+              <Button disabled={busy} onClick={no}>
+                {deny}
               </Button>
-              {scopes && scopes.length > 1 && <Button ref={more} variant={danger ? "danger" : "primary"} icon="chevron.down" disabled={busy} aria-label="Allow for longer" aria-haspopup="menu" onClick={() => setMenu(true)} />}
-            </ButtonGroup>
-            {scopes && scopes.length > 1 && (
-              <Menu anchor={more} open={menu} onClose={() => setMenu(false)} align="end" placement="above" width="content" maxWidth={420} label="Allow for longer" items={scopes.map((o) => ({ label: o.label, detail: o.detail, onSelect: () => (setMenu(false), say({ allow: true, scope: o.value, choice })) }))} />
             )}
+            {askWhy && <Menu anchor={denyMore} open={menu} onClose={() => setMenu(false)} align="end" placement="above" width="content" label="More ways to deny" items={[{ label: `${deny} and Say Why…`, onSelect: () => (setMenu(false), setReason("")) }]} />}
+            <Button variant={danger ? "danger" : "primary"} busy={busy} autoFocus onClick={yes}>
+              {allow}
+            </Button>
           </>
         ) : (
           <>

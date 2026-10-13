@@ -1,7 +1,7 @@
 // The approval sheet in the app (docs/55): the oldest tool call waiting for the person, from any
-// workspace, opens at once over the window; "1 of 3" when more wait. Return allows once, Esc
-// denies; Allow's menu answers for this session or always, where the call offers it (lib/asks.ts,
-// the kit's ApprovalSheet).
+// workspace, opens at once over the window; "1 of 3" when more wait. How long a yes holds is a
+// switch in its footer (Once, This Session, Always, where the call offers them); Return allows,
+// Esc denies (lib/asks.ts, the kit's ApprovalSheet).
 
 import { ApprovalSheet, Presence } from "@cmd/ui";
 import { permissionOf, type ApprovalScope, type ToolActivity } from "@cmd/protocol";
@@ -17,13 +17,13 @@ function Ask({ ask, open, count }: { ask: ToolActivity; open: boolean; count: nu
   const workspace = useStoreValue((s) => s.workspaces.get(ask.workspaceId)?.name ?? null);
   const a = ask.approval!;
   const bySite = permissionOf(a.permission)?.bySite && a.site;
-  // Allow gives the first scope; its menu the longer ones, each with what it covers.
+  // How long a yes holds: short choices, what each covers in its tooltip.
   const where = workspace ? ` in “${workspace}”` : "";
-  const verb = a.risky ? "Run" : "Allow";
-  const scope: Record<ApprovalScope, { label: string; detail?: string }> = {
-    once: { label: `${verb} Once` },
-    session: { label: `${verb} for This Session`, detail: a.risky ? `Until ${ask.caller} exits. Risky actions are never allowed for always.` : `Until ${ask.caller} exits.` },
-    always: { label: bySite ? `Always Allow for ${a.site}${where}` : `Always Allow${where}`, detail: bySite ? "Change it in Settings → AI & Agents → Permissions." : `For “${permissionOf(a.permission)?.title ?? a.permission}”. Change it in Settings → AI & Agents → Permissions.` },
+  const settings = "Change it in Settings → AI & Agents → Permissions.";
+  const scope: Record<ApprovalScope, { label: string; detail: string }> = {
+    once: { label: "Once", detail: "Asks again next time." },
+    session: { label: "This Session", detail: a.risky ? `Until ${ask.caller} exits. Risky actions are never allowed for always.` : `Until ${ask.caller} exits.` },
+    always: { label: "Always", detail: bySite ? `Kept for ${a.site}${where}. ${settings}` : `Kept for “${permissionOf(a.permission)?.title ?? a.permission}”${where}. ${settings}` },
   };
   return (
     <ApprovalSheet<ApprovalScope, string>
@@ -33,7 +33,7 @@ function Ask({ ask, open, count }: { ask: ToolActivity; open: boolean; count: nu
       why={ask.why !== ask.tool ? ask.why : undefined}
       exact={a.exact || undefined}
       scopes={a.scopes.map((value) => ({ value, ...scope[value] }))}
-      allow={verb}
+      allow={a.risky ? "Run" : "Allow"}
       danger={a.risky}
       position={{ index: 1, count }}
       onAnswer={(r) => void answerAsk(ask, r.allow, r.allow ? { scope: r.scope } : { reason: r.reason }).catch(() => {})}

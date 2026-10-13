@@ -860,7 +860,7 @@ await scenario("approvals", async () => {
   const shownAt = Date.now();
   const text = (await sheet.textContent().catch(() => "")) ?? "";
   await shot(win, "approval.png");
-  check(text.includes("Open example.test") && text.includes("Checking the docs") && (await sheet.locator(".ui-approval-allow button").count()) === 2, `a tool call that asks opens the approval sheet at once (${JSON.stringify(text.slice(0, 160))})`);
+  check(text.includes("Open example.test") && text.includes("Checking the docs") && text.includes("This Session") && text.includes("Always"), `a tool call that asks opens the approval sheet at once (${JSON.stringify(text.slice(0, 160))})`);
   await until(() => Date.now() - shownAt > 400); // past the guard against an Enter already being typed
   await win.keyboard.press("Enter");
   const opened = await until(browsers, (n) => n === before + 1);
