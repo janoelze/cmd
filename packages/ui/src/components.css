@@ -1182,6 +1182,15 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
 /* With a toolbar, the title and the toolbar are one header: the line goes under the toolbar. */
 .ui-dialog[data-divided]:has(> .ui-dialog-bar) > .ui-dialog-head { padding-bottom: 0; border-bottom: 0; }
 .ui-dialog-aside { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-dim); }
+/* The approval sheet (approval.tsx, docs/55), a window sheet: who asks in its title bar, what in its title, why as their quote, exactly what in code, how long a yes holds. */
+.ui-approval-content { display: flex; flex-direction: column; gap: var(--space-3); }
+.ui-approval-why { color: var(--text-dim); }
+.ui-approval-scope { display: flex; align-items: center; gap: var(--space-3); }
+.ui-approval-scope-label { flex: none; font-size: var(--text-sm); color: var(--text-dim); }
+.ui-approval-scope > .ui-seg { flex: 1; }
+/* A node for what would happen (a diff) sits in the same well as a code block. */
+.ui-approval-exact { overflow: auto; padding: var(--space-1-5) 0; border-radius: var(--radius); background: var(--code-bg); }
+.ui-approval-exact > .ui-diff { --diff-indent: var(--space-2); margin: 0; }
 
 /* SheetHeader: a sheet's greeting. The step's content sits at the bottom, by the actions. */
 .ui-sheet-header { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1-5); }

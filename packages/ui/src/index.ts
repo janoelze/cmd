@@ -7,6 +7,7 @@
 // (registers the built-in themes).
 
 export { AiField, type AiFieldProps, type AiState } from "./ai.tsx";
+export { ApprovalSheet, type ApprovalAnswer } from "./approval.tsx";
 export { ChatApproval, ChatComposer, ChatLog, ChatMessage, ChatNote, ChatStep, useStickToEnd, type ChatStepState } from "./chat.tsx";
 export { Button, ButtonGroup, IconButton, LinkButton, type ButtonProps, type ButtonVariant, type IconButtonProps, type Size } from "./button.tsx";
 export { Checkbox, RadioGroup, Segmented, Select, Switch, TabPanel, Tabs, type Option, type TabItem } from "./choice.tsx";
