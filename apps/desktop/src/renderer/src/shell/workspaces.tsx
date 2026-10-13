@@ -60,6 +60,8 @@ export async function closeWorkspace(workspace: Workspace): Promise<void> {
     });
     if (!ok) return;
   }
+  // Closed meanwhile (another window, the CLI) or asked twice: nothing left to do.
+  if (!getState().workspaces.has(workspace.id)) return;
   await cmd.call("workspace.close", { id: workspace.id });
 }
 

@@ -35,7 +35,7 @@ registerCommands({
   "workspace.rename": { when: (c) => !!c.workspace, run: (c) => openSheet({ kind: "picker", picker: { kind: "rename", workspace: c.workspace! } }) },
   "workspace.icon": { when: (c) => !!c.workspace, run: (c) => openSheet({ kind: "picker", picker: { kind: "icon", workspace: c.workspace! } }) },
   "workspace.reveal": { when: (c) => !!c.workspace, run: (c) => cmd.openPath(c.workspace!.root, { from: "user" }) },
-  "workspace.close": { when: (c) => !!c.workspace && !c.workspace.home, run: (c) => void closeWorkspace(c.workspace!) },
+  "workspace.close": { when: (c) => !!c.workspace && !c.workspace.home, run: (c) => void closeWorkspace(c.workspace!).catch(() => {}) },
   "workspace.select1": nth(1),
   "workspace.select2": nth(2),
   "workspace.select3": nth(3),

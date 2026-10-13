@@ -369,6 +369,20 @@ describe("service", () => {
     expect(list().runs[0]).toMatchObject({ endedAt: null, url: null });
   });
 
+  it("a server whose workspace closed before it printed its URL opens no browser (and doesn't throw)", async () => {
+    write({ "package.json": JSON.stringify({ scripts: { dev: "vite" } }) });
+    core.settings.set("actions.openBrowser", true);
+    const ws = core.workspaces.open(dir).workspace;
+    core.actions.run(dir, list().actions[0]!.id, ws.id);
+    const pty = ptys.at(-1)!;
+    // The PTY host ends a terminal later, not as the workspace closes: its output can still arrive.
+    pty.kill = () => {};
+    core.handlers["workspace.close"]({ id: ws.id });
+    pty.output("\x1b]133;C\x07  Local:   http://localhost:5173/\r\n");
+    expect(list().runs[0]!.url).toBe("http://localhost:5173/");
+    expect(core.windows.list().filter((w) => w.kind === "browser")).toEqual([]);
+  });
+
   it("starts an agent skill with the person's own agent command", async () => {
     write({ ".claude/skills/triage/SKILL.md": "---\nname: triage\ndescription: Triage\n---\n" });
     core.settings.set("agents.claude.command", "claude --model opus");

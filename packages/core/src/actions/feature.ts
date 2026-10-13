@@ -48,9 +48,11 @@ export function createActions(core: Pick<CoreContext, "panes" | "store" | "data"
   // A dev server said where it listens: open it beside its terminal, once, if asked to.
   actions.on("url", (paneId, url) => {
     const pane = core.panes.get(paneId);
-    if (!pane || !core.settings.settings["actions.openBrowser"]) return;
-    if (core.windows.list().some((w) => w.kind === "browser" && w.workspaceId === pane.workspaceId && typeof w.state.url === "string" && w.state.url.startsWith(url.replace(/\/$/, "")))) return;
-    core.opened(core.windows.open("browser", { url }, core.workspaces.mustOpen(pane.workspaceId)));
+    // Output still in flight from a workspace that just closed opens nothing.
+    const ws = pane && core.workspaces.get(pane.workspaceId);
+    if (!ws || ws.closedAt !== null || !core.settings.settings["actions.openBrowser"]) return;
+    if (core.windows.list().some((w) => w.kind === "browser" && w.workspaceId === ws.id && typeof w.state.url === "string" && w.state.url.startsWith(url.replace(/\/$/, "")))) return;
+    core.opened(core.windows.open("browser", { url }, ws));
   });
   core.data.onForget(({ what }) => void (what.projectId?.startsWith("dir:") && actions.forgetProject(what.projectId.slice(4))));
   core.settings.bind(["actions.describe"], () => actions.aiChanged());

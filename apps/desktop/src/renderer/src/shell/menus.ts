@@ -32,7 +32,7 @@ export function homeOf(r: SidebarRow): string | null {
 /** Per-terminal mute: no system notifications from it (its marker still shows). */
 const muteEntry = (paneId: PaneId): MenuEntry => {
   const muted = !!getState().panes.get(paneId)?.muted;
-  return { label: muted ? "Unmute Notifications" : "Mute Notifications", run: () => void cmd.call("pane.setMuted", { paneId, muted: !muted }) };
+  return { label: muted ? "Unmute Notifications" : "Mute Notifications", run: () => void cmd.call("pane.setMuted", { paneId, muted: !muted }).catch(() => {}) };
 };
 
 /** On the board: Make Sidebar ▸ Left / Right; on a sidebar: the other side, or back (docs/21-sidebars.md). */
@@ -124,7 +124,7 @@ export function terminalMenu(paneId: PaneId): void {
       label: "Reset Terminal",
       run: () => {
         terminals.reset(paneId);
-        void cmd.call("pane.reset", { paneId });
+        void cmd.call("pane.reset", { paneId }).catch(() => {});
       },
     },
     "-",

@@ -130,7 +130,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
             setLines(u.state.doc.lines);
             if (fileRef.current) return;
             clearTimeout(persist);
-            persist = setTimeout(() => void cmd.call("window.update", { id: win.id, state: { draft: u.state.sliceDoc() } }), 500);
+            persist = setTimeout(() => void cmd.call("window.update", { id: win.id, state: { draft: u.state.sliceDoc() } }).catch(() => {}), 500);
           }),
           EditorView.domEventHandlers({ scroll: () => void keepPos() }),
         ],

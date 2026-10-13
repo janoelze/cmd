@@ -61,7 +61,7 @@ export function useNotifications(selected: PaneId | null, shown: State): void {
   const winAttention = !!windowAttention(selected ? shown.windows.get(selected) : null);
   useEffect(() => {
     if (!selected || !appFocused) return;
-    if (unseen && agent) void cmd.call("agent.markSeen", { agentId: agent.id });
+    if (unseen && agent) void cmd.call("agent.markSeen", { agentId: agent.id }).catch(() => {});
     if (paneAttention) void cmd.call("pane.clearAttention", { paneId: selected });
     if (winAttention) void cmd.call("window.clearAttention", { id: selected });
     cmd.closeNotification(selected);

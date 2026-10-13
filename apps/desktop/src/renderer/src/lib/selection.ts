@@ -28,7 +28,7 @@ export function select(id: PaneId): void {
   setWorkspaceView(s.workspaceId, "selection.pane", id);
   setWorkspaceView(s.workspaceId, "selection.history", pushHistory(history(), id));
   const agentId = s.panes.get(id)?.agentId;
-  if (agentId) void cmd.call("agent.markSeen", { agentId });
+  if (agentId) void cmd.call("agent.markSeen", { agentId }).catch(() => {});
 }
 
 /** Select nothing, on purpose; focus leaves the window too. */
