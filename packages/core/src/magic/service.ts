@@ -350,8 +350,8 @@ export class MagicService {
           tokens: { in: r.usage.input, out: r.usage.output, cacheRead: r.usage.cacheRead, cacheWrite: r.usage.cacheWrite },
           ...(v.problems.length ? { problems: v.problems.length, firstProblem: v.problems[0]!.split("\n")[0] } : {}),
         });
-        if (!v.usable || !v.manifest) {
-          // Back to the last version that worked, if there is one.
+        if (!v.usable || !v.manifest || !this.#o.windows.others().some((x) => x.id === id)) {
+          // Back to the last version that worked, if there is one (also when its window closed meanwhile).
           const last = this.store.latest(widgetId);
           if (last) this.store.checkout(widgetId, last.n);
           return this.#fail(id, prev, v.problems[0]?.split("\n")[0] ?? "The widget couldn't be built.");
@@ -418,15 +418,15 @@ export class MagicService {
   #fail(id: WindowId, prev: MagicState, message: string): void {
     log.warn(`run ${id.slice(0, 8)} failed: ${message}`);
     this.#runs.delete(id);
+    const w = this.#o.windows.others().find((x) => x.id === id);
+    if (!w) return; // closed meanwhile: nothing to show it in
     // A failed change keeps the widget that worked.
     if (prev.phase === "ready" && (prev.html || prev.command)) {
       this.#o.windows.update(id, { state: { phase: "ready", error: message } });
       this.#schedule(id, 0);
     } else {
       // The request being run is in the state by now (prev is from before it).
-      const asked = this.#o.windows.others().find((x) => x.id === id);
-      const prompt = asked ? stateOf(asked).prompt : prev.prompt;
-      this.#o.windows.update(id, { state: { phase: prompt ? "error" : "empty", error: message } });
+      this.#o.windows.update(id, { state: { phase: stateOf(w).prompt ? "error" : "empty", error: message } });
     }
     this.#o.broadcast({ type: "magic.stream", id, progress: { type: "error", message } });
   }

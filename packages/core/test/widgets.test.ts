@@ -610,6 +610,32 @@ describe.skipIf(noDeno)("Magic widgets in the core", () => {
     await core.close();
   });
 
+  it("ends a build quietly when its window closes, keeping the widget's last version", async () => {
+    // Waits until stopped, like a model mid-answer.
+    let started = () => {};
+    const hanging: Backend = {
+      name: "fake",
+      model: "fake-1",
+      run: (r) => (started(), new Promise((_, reject) => r.signal?.addEventListener("abort", () => reject(new Error("This operation was aborted"))))),
+    };
+    const rejections: unknown[] = [];
+    const onRejection = (e: unknown) => rejections.push(e);
+    process.on("unhandledRejection", onRejection);
+    try {
+      const { core, id } = await setup(hanging);
+      const running = new Promise<void>((res) => (started = res));
+      core.handlers["magic.run"]({ id, prompt: "count to three" });
+      await running;
+      core.handlers["window.close"]({ id });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(rejections).toEqual([]);
+      expect(core.magic.library()).toEqual([]);
+      await core.close();
+    } finally {
+      process.off("unhandledRejection", onRejection);
+    }
+  });
+
   it("shows one widget in several windows: changes reach every copy, config and data stay per copy", async () => {
     const backend = scripted([{ calls: WIDGET_CALLS(), answer: "v1" }, { calls: [write("view.html", '<div id="n" class="k-big"></div>')], answer: "v2" }]);
     const { core, id, state, events } = await setup(backend);
