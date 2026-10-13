@@ -101,6 +101,13 @@ describe.skipIf(process.platform === "win32")("cmd's agent hook", () => {
     expect(out.hookSpecificOutput.additionalContext).toContain(`id ${peer.id.slice(0, 8)}`);
     expect(out.hookSpecificOutput.additionalContext).toContain("You are running in a terminal pane of cmd");
     expect(out.hookSpecificOutput.additionalContext).toContain(`Pane: ${b.id}`);
+    // A pane of another instance (a dev build's: $CMD_CLI in its state dir) follows that instance's switch.
+    const other = path.join(dir, "other-instance");
+    const inOther = (paneId: string) => hookAsync("claude", { hook_event_name: "SessionStart", cwd: repo }, { CMD_PANE_ID: paneId, CMD_SOCKET: socketPath, CMD_CLI: path.join(other, "bin", "cmd") });
+    expect(await inOther(b.id)).toBe(""); // its switch is off: no flag there
+    fs.mkdirSync(path.join(other, "hooks"), { recursive: true });
+    fs.writeFileSync(path.join(other, "hooks", "briefings"), "");
+    expect(JSON.parse(await inOther(b.id)).hookSpecificOutput.additionalContext).toContain("You are running in a terminal pane of cmd");
     // On a prompt, only what changed: nothing.
     expect(await hookAsync("claude", { hook_event_name: "UserPromptSubmit", cwd: repo, prompt: "hi" }, { CMD_PANE_ID: b.id, CMD_SOCKET: socketPath })).toBe("");
 

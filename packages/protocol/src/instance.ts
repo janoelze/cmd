@@ -33,6 +33,7 @@ export const PANE_ENV: readonly string[] = [
   ENV.agentId,
   ENV.parentId,
   "CMD_PANE_TOKEN",
+  "CMD_CLI",
   "CMD_USER_ZDOTDIR",
   "CMD_BASH_INJECT",
   "CMD_USER_ENV",

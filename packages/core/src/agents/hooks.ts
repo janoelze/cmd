@@ -14,7 +14,9 @@
 // fast enough for every tool call. It adds the agent's config dir from its
 // environment ($CLAUDE_CONFIG_DIR, …), the one place that knows which profile a
 // session runs in. Only SessionStart and prompts, and only while Agent integration
-// is on (a flag file next to it), go through hook-main.ts to the core.
+// is on, go through hook-main.ts to the core: a flag file in the state dir of the pane's own
+// instance (found from $CMD_CLI, so a dev build's panes follow its switch whichever cmd
+// installed the hook; else the installer's).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -71,8 +73,10 @@ tmp="$dir/.$event.$$"
 printf '{"v":${HOOK_FORMAT},"agent":"%s","ts":%s,"env":{%s},"event":%s}\\n' "$kind" "$ts" "$env" "$payload" >"$tmp" 2>/dev/null || quiet
 ln "$tmp" "$dir/log/$ts.$$.$event.json" 2>/dev/null
 mv -f "$tmp" "$dir/$event.json" 2>/dev/null
+flag=${shq(flag)}
+case "$CMD_CLI" in */bin/cmd) flag="\${CMD_CLI%/bin/cmd}/hooks/briefings" ;; esac
 case "$event" in SessionStart | UserPromptSubmit | BeforeAgent)
-  if [ -e ${shq(flag)} ] && [ -n "$CMD_SOCKET" ]; then
+  if [ -e "$flag" ] && [ -n "$CMD_SOCKET" ]; then
     printf '%s' "$payload" | ${node("packages/core/src/agents/hook-main.ts")} "$kind" "$event" "$id" spooled
     exit 0
   fi ;;

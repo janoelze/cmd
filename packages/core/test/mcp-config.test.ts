@@ -13,6 +13,8 @@ import { fakeFactory } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
 
 const CMD = "/Users/x/Library/Application Support/cmd/bin/cmd";
+/** What every entry runs: the pane's instance's `cmd mcp`, else the installed app's. */
+const SH = `exec "\${CMD_CLI:-${CMD}}" mcp`;
 
 const CLAUDE = JSON.stringify({ numStartups: 3, mcpServers: { github: { type: "http", url: "https://api.github.com/mcp" } }, projects: { "/a": { allowedTools: [] } } }, null, 2);
 const GEMINI = JSON.stringify({ security: { auth: { selectedType: "oauth" } }, mcpServers: { fs: { command: "npx", args: ["fs-mcp"] } } }, null, 2) + "\n";
@@ -40,7 +42,7 @@ describe("cmd's MCP server in an agent's config", () => {
         expect(mcpState(agent, file, CMD), agent).toBe("registered");
         installMcp(agent, file, CMD); // twice: once
         const text = fs.readFileSync(file, "utf8");
-        expect(text.split('"mcp"').length - 1, agent).toBe(1);
+        expect(text.split("[mcp_servers.cmd]").length + text.split('"cmd": {').length - 2, agent).toBe(1);
         removeMcp(agent, file);
         expect(fs.readFileSync(file, "utf8"), agent).toBe(before);
         expect(mcpState(agent, file, CMD)).toBe("missing");
@@ -56,14 +58,14 @@ describe("cmd's MCP server in an agent's config", () => {
       const codex = path.join(dir, "config.toml");
       fs.writeFileSync(codex, CODEX);
       installMcp("codex", codex, CMD);
-      expect(fs.readFileSync(codex, "utf8")).toContain(`[mcp_servers.cmd]\ncommand = "${CMD}"\nargs = ["mcp"]\nenv_vars = ["CMD_PANE_ID", "CMD_SOCKET", "CMD_PANE_TOKEN"]\ntool_timeout_sec = 900\n`);
+      expect(fs.readFileSync(codex, "utf8")).toContain(`[mcp_servers.cmd]\ncommand = "/bin/sh"\nargs = ["-c", "exec \\"\${CMD_CLI:-${CMD}}\\" mcp"]\nenv_vars = ["CMD_PANE_ID", "CMD_SOCKET", "CMD_PANE_TOKEN", "CMD_CLI"]\ntool_timeout_sec = 900\n`);
       const gemini = path.join(dir, "settings.json");
       installMcp("gemini", gemini, CMD); // a file that wasn't there
-      expect(JSON.parse(fs.readFileSync(gemini, "utf8")).mcpServers.cmd).toEqual({ command: CMD, args: ["mcp"], env: { CMD_PANE_ID: "$CMD_PANE_ID", CMD_SOCKET: "$CMD_SOCKET", CMD_PANE_TOKEN: "$CMD_PANE_TOKEN" }, timeout: 900_000 });
+      expect(JSON.parse(fs.readFileSync(gemini, "utf8")).mcpServers.cmd).toEqual({ command: "/bin/sh", args: ["-c", SH], env: { CMD_PANE_ID: "$CMD_PANE_ID", CMD_SOCKET: "$CMD_SOCKET", CMD_PANE_TOKEN: "$CMD_PANE_TOKEN", CMD_CLI: "$CMD_CLI" }, timeout: 900_000 });
       const claude = path.join(dir, ".claude.json");
       fs.writeFileSync(claude, "{}");
       installMcp("claude", claude, CMD);
-      expect(JSON.parse(fs.readFileSync(claude, "utf8")).mcpServers.cmd).toEqual({ type: "stdio", command: CMD, args: ["mcp"], env: {} });
+      expect(JSON.parse(fs.readFileSync(claude, "utf8")).mcpServers.cmd).toEqual({ type: "stdio", command: "/bin/sh", args: ["-c", SH], env: {} });
       // Another "cmd" (another build's): seen as such.
       expect(mcpState("claude", claude, "/elsewhere/bin/cmd")).toBe("other");
       expect(mcpState("codex", codex, "/elsewhere/bin/cmd")).toBe("other");

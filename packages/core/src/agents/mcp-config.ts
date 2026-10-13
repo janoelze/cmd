@@ -1,8 +1,10 @@
 // cmd's MCP server (`cmd mcp`, docs/54) in the agents' own configs, user scope, one entry named
 // "cmd" per agent home, while Agent integration is on: Claude Code's .claude.json (the home's, or
-// ~/.claude.json for the default home), Codex's config.toml and Gemini CLI's settings.json. Each
-// entry starts the `cmd` wrapper the core writes (hooks.ts) and gets the pane's variables where
-// the agent filters the env: Codex passes a short list plus what `env_vars` names, Gemini drops
+// ~/.claude.json for the default home), Codex's config.toml and Gemini CLI's settings.json. The
+// entry names no build: it runs the pane's own instance's `cmd` ($CMD_CLI, set in every pane), so
+// one entry serves the installed app and every development build, and a dev build's panes reach
+// its own code; outside cmd it falls back to the installed app's `cmd` (which lists no tools
+// there). Each gets the pane's variables where the agent filters the env: Codex passes a short list plus what `env_vars` names, Gemini drops
 // names that look like secrets unless the entry sets them. Only cmd's entry is touched; the
 // rest of the file stays as it was (JSON files keep their two-space form and their last newline,
 // the TOML table is cut out as it went in).
@@ -18,7 +20,7 @@ export type McpState = "registered" | "missing" | "other";
 /** The server's name in configs: tools show as mcp__cmd__open… */
 export const SERVER = "cmd";
 /** The pane's variables the server needs (identity, the core, the proof). */
-const PANE_ENV = ["CMD_PANE_ID", "CMD_SOCKET", "CMD_PANE_TOKEN"];
+const PANE_ENV = ["CMD_PANE_ID", "CMD_SOCKET", "CMD_PANE_TOKEN", "CMD_CLI"];
 /** A call can wait for the person's approval in cmd (tools/runner.ts waits 15 min). */
 const TIMEOUT_S = 900;
 
@@ -33,10 +35,17 @@ export function mcpFile(h: Pick<AgentHome, "agent" | "dir">, home = os.homedir()
   return null;
 }
 
+/** The command and its arguments: the pane's instance's `cmd mcp`, else `fallback` (the installed app's `cmd`). */
+function command(fallback: string): [string, string[]] {
+  if (/["$`\\]/.test(fallback)) throw new Error(`can't name ${fallback} in a shell command`);
+  return ["/bin/sh", ["-c", `exec "\${CMD_CLI:-${fallback}}" mcp`]];
+}
+
 /** The entry for a JSON config: Claude's and Gemini's. */
-function jsonEntry(agent: AgentKind, cmd: string): Record<string, unknown> {
-  if (agent === "gemini") return { command: cmd, args: ["mcp"], env: Object.fromEntries(PANE_ENV.map((k) => [k, `$${k}`])), timeout: TIMEOUT_S * 1000 };
-  return { type: "stdio", command: cmd, args: ["mcp"], env: {} };
+function jsonEntry(agent: AgentKind, fallback: string): Record<string, unknown> {
+  const [cmd, args] = command(fallback);
+  if (agent === "gemini") return { command: cmd, args, env: Object.fromEntries(PANE_ENV.map((k) => [k, `$${k}`])), timeout: TIMEOUT_S * 1000 };
+  return { type: "stdio", command: cmd, args, env: {} };
 }
 
 // ── JSON (Claude, Gemini) ────────────────────────────────
@@ -83,8 +92,9 @@ function tomlBlock(lines: string[]): [number, number] | null {
 
 const tomlString = (s: string) => JSON.stringify(s);
 
-function tomlEntry(cmd: string): string[] {
-  return ["", NOTE, "[mcp_servers.cmd]", `command = ${tomlString(cmd)}`, `args = ["mcp"]`, `env_vars = [${PANE_ENV.map(tomlString).join(", ")}]`, `tool_timeout_sec = ${TIMEOUT_S}`];
+function tomlEntry(fallback: string): string[] {
+  const [cmd, args] = command(fallback);
+  return ["", NOTE, "[mcp_servers.cmd]", `command = ${tomlString(cmd)}`, `args = [${args.map(tomlString).join(", ")}]`, `env_vars = [${PANE_ENV.map(tomlString).join(", ")}]`, `tool_timeout_sec = ${TIMEOUT_S}`];
 }
 
 const readText = (file: string) => {
@@ -97,13 +107,14 @@ const readText = (file: string) => {
 
 // ── the adapter ──────────────────────────────────────────
 
-/** Whether cmd's server is in `file` for `agent`, pointing at `cmd` (the wrapper this core wrote). */
+/** Whether cmd's server is in `file` for `agent`, as cmd writes it (`fallback`: the installed app's `cmd`). */
 export function mcpState(agent: AgentKind, file: string, cmd: string): McpState {
   if (agent === "codex") {
     const lines = readText(file).split("\n");
     const b = tomlBlock(lines);
     if (!b) return "missing";
-    return lines.slice(b[0], b[1]).includes(`command = ${tomlString(cmd)}`) ? "registered" : "other";
+    const body = lines.slice(b[0], b[1]).filter((l) => l.trim() && l !== NOTE);
+    return body.join("\n") === tomlEntry(cmd).filter((l) => l && l !== NOTE).join("\n") ? "registered" : "other";
   }
   let entry: Record<string, unknown> | undefined;
   try {

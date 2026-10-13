@@ -303,7 +303,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       TERM_PROGRAM: "cmd",
       [ENV.socket]: this.#socketPath,
       [ENV.paneId]: id,
-      ...(this.#binDir ? { PATH: [this.#binDir, env.PATH].filter(Boolean).join(path.delimiter) } : {}),
+      ...(this.#binDir ? { PATH: [this.#binDir, env.PATH].filter(Boolean).join(path.delimiter), CMD_CLI: path.join(this.#binDir, "cmd") } : {}),
       ...opts.env,
     });
 

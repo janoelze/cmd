@@ -6,7 +6,7 @@
 
 import path from "node:path";
 import type { AgentHome, AgentKind, HookTarget } from "@cmd/protocol";
-import { logger } from "@cmd/protocol/node";
+import { defaultHome, logger } from "@cmd/protocol/node";
 import type { CoreContext } from "../kernel/context.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./hooks.ts";
 import { installMcp, mcpFile, mcpState, removeMcp, type McpState } from "./mcp-config.ts";
@@ -38,7 +38,7 @@ export class AgentSetup {
   #discovered = false;
   #timer: NodeJS.Timeout | undefined;
   #closed = false;
-  /** The command agents' configs start cmd's MCP server with (the `cmd` wrapper); null without a CLI. */
+  /** The `cmd` agents' configs fall back to outside a pane (the installed app's); null without a CLI. */
   #mcp: string | null;
   /** Per agent kind, whether cmd's server is in every home of it (the briefing names it then). */
   #served = new Map<AgentKind, boolean>();
@@ -48,7 +48,8 @@ export class AgentSetup {
     this.#core = core;
     this.#hooks = hooks;
     this.#auto = o.auto;
-    this.#mcp = hooks?.bin ? path.join(hooks.bin, "cmd") : null;
+    // What the entry falls back to outside a cmd pane: the installed app's `cmd`, whichever build writes it.
+    this.#mcp = hooks?.bin ? path.join(defaultHome("release"), "bin", "cmd") : null;
     core.agents.on("home", (agent, dir) => this.newHome(core.homes.learn(agent, dir, "hook")));
     core.agents.on("transcript", (agent, file) => {
       const dir = core.homes.homeOfTranscript(agent, file);
