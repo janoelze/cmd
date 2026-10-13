@@ -1,11 +1,11 @@
-// The Operator acting on a browser page (docs/51): click, fill a field, pick an option, submit a
+// Acting on a browser page (docs/54, docs/51): click, fill a field, pick an option, submit a
 // form, press a key. Pages are the most untrusted thing it reads, so every action asks first,
 // showing the site, the element as the page describes it and exactly what it would type; a
 // password, card or one-time-code field is refused outright. Before asking, a dry run finds the
 // element and outlines it on the page, so the person sees what is meant.
 
 import type { PageAction } from "@cmd/protocol";
-import { ref, schema, str, windowOf, type Bench, type Input, type OperatorTool } from "./tool-kit.ts";
+import { ref, schema, str, windowOf, type ToolContext, type Input, type Tool } from "./kit.ts";
 
 const ACTIONS: PageAction[] = ["click", "fill", "select", "submit", "press"];
 
@@ -17,7 +17,7 @@ const host = (url: string) => {
   }
 };
 
-async function target(i: Input, b: Bench) {
+async function target(i: Input, b: ToolContext) {
   const w = await windowOf(b, i.ref);
   if (w.kind !== "browser") throw new Error(`${String(i.ref)} is not a browser window`);
   const action = str(i.do) as PageAction;
@@ -29,7 +29,7 @@ async function target(i: Input, b: Bench) {
   return { w, action, selector, index: typeof i.index === "number" ? i.index : undefined, value };
 }
 
-const pageTool: OperatorTool = {
+const pageTool: Tool = {
   acts: true,
   spec: {
     name: "page",
@@ -69,4 +69,4 @@ const pageTool: OperatorTool = {
   },
 };
 
-export const PAGE_TOOLS: OperatorTool[] = [pageTool];
+export const PAGE_TOOLS: Tool[] = [pageTool];

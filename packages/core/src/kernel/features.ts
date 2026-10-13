@@ -11,12 +11,15 @@ import { timersFeature } from "../windows/timers.ts";
 import { statsFeature } from "../stats/feature.ts";
 import { usageFeature } from "../data/sources/usage.ts";
 import { operatorFeature } from "../operator/feature.ts";
+import { toolsFeature } from "../tools/feature.ts";
 
 /** Services the core makes from a feature (its field), without an import of its own each. */
 export { createStats } from "../stats/feature.ts";
 
 export interface Feature {
   id: string;
+  /** What its methods are named after, when not only its id ("tools" has approvals.* too). */
+  prefixes?: readonly string[];
   /** Its methods. They are merged into Core.handlers, where a method left out fails tsc. */
   handlers?(ctx: CoreContext): Partial<Handlers>;
   /** Run once the core answers (docs/34): label is what the footer shows while it runs. */
@@ -24,7 +27,7 @@ export interface Feature {
   dispose?(ctx: CoreContext): void;
 }
 
-export const FEATURES = [journalFeature, actionsFeature, timersFeature, usageFeature, statsFeature, operatorFeature] as const satisfies readonly Feature[];
+export const FEATURES = [journalFeature, actionsFeature, timersFeature, usageFeature, statsFeature, toolsFeature, operatorFeature] as const satisfies readonly Feature[];
 /** The same list, as plain Features (what loops over it need). */
 export const ALL: readonly Feature[] = FEATURES;
 

@@ -12,7 +12,7 @@ import type { Method } from "./rpc.ts";
  * client asks `has(method)` (core.hello's `methods`) before using a new one.
  * The app restarts a core of another protocol; the CLI refuses to talk to one.
  */
-export const PROTOCOL = 1;
+export const PROTOCOL = 2;
 
 /**
  * Whether a core runs this app's code: its protocol, its source build and the folder

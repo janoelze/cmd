@@ -89,9 +89,13 @@ export interface EventPayloads {
    */
   "operator.turn": { steps: number; denied: number; stopped: boolean; error: string | null; model: string | null; tokens: { in: number; out: number }; firstStepMs: number | null; ms: number | null; answer: string | null };
   /**
-   * One tool call in an Operator turn (its parent): what it did and why (the text), the window it acted on,
-   * how it ended, whether the person was asked and what they said. Its result as the model got it is the content.
+   * One tool call (docs/54), by an agent in a pane or in an Operator turn (its parent): what it did and why
+   * (the text), the window it acted on, how it ended, whether the person was asked and what they said, and
+   * who called (`caller`, its name as the board showed it; the agent's id is the event's agentId). Its result
+   * as the caller got it is the content. Before tools had callers other than the Operator: operator.tool.
    */
+  "tool.call": { caller?: string; tool: string; acts: boolean; state: "done" | "failed" | "denied"; input: Record<string, unknown>; ask: string | null; exact?: string | null; allowed: boolean | null; reason: string | null; remembered?: string | null; ms: number };
+  /** tool.call as the Operator recorded it before (read as one). */
   "operator.tool": { tool: string; acts: boolean; state: "done" | "failed" | "denied"; input: Record<string, unknown>; ask: string | null; exact?: string | null; allowed: boolean | null; reason: string | null; remembered?: string | null; ms: number };
   /** The data layer about itself: a rebuild, a prune, an import, a forget. */
   "data.op": { op: "import" | "prune" | "rebuild" | "forget"; detail: Record<string, unknown> };
@@ -142,6 +146,7 @@ export const EVENT_V: Record<DataEventType, number> = {
   "remote.audit": 1,
   "operator.turn": 1,
   "operator.tool": 1,
+  "tool.call": 1,
 };
 
 /** An event as stored and as every client sees it. */
@@ -230,7 +235,7 @@ export interface DataQuery {
 }
 
 /** Classes of data: what a retention rule, a switch and a privacy line are about. */
-export type DataClass = "agents" | "transcripts" | "output" | "browsing" | "actions" | "operator" | "ai" | "git" | "notes" | "system" | "remote";
+export type DataClass = "agents" | "transcripts" | "output" | "browsing" | "actions" | "operator" | "tools" | "ai" | "git" | "notes" | "system" | "remote";
 
 export interface DataClassInfo {
   class: DataClass;
@@ -254,7 +259,8 @@ export const DATA_CLASSES: Record<DataClass, Omit<DataClassInfo, "class" | "keep
   output: { title: "Command output", description: "What commands printed in your terminals, after they ended.", types: ["command", "agent.output"], keepDays: 90, cap: 256_000, setting: "data.record.output", leaves: "Only to a model you set up, when a feature asks." },
   browsing: { title: "Pages and files", description: "Addresses and titles of pages in cmd's browser windows (not other browsers), paths of files opened in cmd.", types: ["browser.", "file.", "window."], keepDays: "setting", cap: null, setting: "data.record.browsing", leaves: "Only to a model you set up, when a feature asks." },
   actions: { title: "Your actions", description: "What you focused, opened, closed and ran in cmd.", types: ["user.", "workspace."], keepDays: "setting", cap: null, setting: "data.record.actions", leaves: null },
-  operator: { title: "The Operator", description: "What you asked the Operator, what it did in your workspaces, step by step, and what you allowed or refused.", types: ["operator."], keepDays: "setting", cap: 64_000, setting: null, leaves: "Only to a model you set up: the Operator's own, and features that ask (journal, summaries)." },
+  operator: { title: "The Operator", description: "What you asked the Operator and what it answered; its steps are tool calls.", types: ["operator."], keepDays: "setting", cap: 64_000, setting: null, leaves: "Only to a model you set up: the Operator's own, and features that ask (journal, summaries)." },
+  tools: { title: "Tool calls", description: "What agents and the Operator did with cmd's tools, step by step, and what you allowed or refused.", types: ["tool.", "operator.tool"], keepDays: "setting", cap: 64_000, setting: null, leaves: "Only to a model you set up, when a feature asks (journal, summaries)." },
   ai: { title: "Model calls", description: "Each call cmd made to a model: purpose, model, tokens, what was sent and what came back.", types: ["ai."], keepDays: "setting", cap: 1_000_000, setting: null, leaves: "The call itself goes to the provider; the record stays here." },
   git: { title: "Git", description: "Commits, merges, branches and tags in your projects.", types: ["git."], keepDays: null, cap: null, setting: null, leaves: null },
   notes: { title: "Notes and notifications", description: "Notes you or agents wrote down; notifications shown; summaries written.", types: ["note", "notification", "notification.clear", "summary."], keepDays: null, cap: null, setting: null, leaves: null },

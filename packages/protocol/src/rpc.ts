@@ -13,6 +13,7 @@ import type { SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema } from ".
 import type { ActionsEvent, ActionsMethods } from "./actions.ts";
 import type { StatsEvent, StatsMethods } from "./stats.ts";
 import type { OperatorEvent, OperatorMethods } from "./operator.ts";
+import type { ToolsMethods } from "./tools.ts";
 import type { PagesEvent, PagesMethods } from "./pages.ts";
 import type { ArrangeEvent, ArrangeMethods } from "./arrange.ts";
 import type { RemoteMethods } from "./remote.ts";
@@ -83,7 +84,7 @@ export interface Placement {
 }
 
 /** Every method: the core's own, plus each feature's (declared in its own file, merged here). */
-export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, StatsMethods, OperatorMethods, PagesMethods, ArrangeMethods {
+export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, StatsMethods, OperatorMethods, ToolsMethods, PagesMethods, ArrangeMethods {
   /** What a client asks first: which protocol the core speaks and what it can do (CoreHello). */
   "core.hello": { params: {}; result: CoreHello };
   /** Diagnostics for the Settings window's Updates & About page. */

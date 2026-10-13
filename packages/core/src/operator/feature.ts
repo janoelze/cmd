@@ -1,6 +1,6 @@
 // The Operator as one feature (docs/51-operator.md; kernel/features.ts): its widget type, its
 // methods (OperatorMethods, protocol operator.ts) and its teardown. The service acts through
-// the core's own methods (CoreContext.call), gated by OPERATOR_ACCESS, and asks the AI
+// the core's own methods (CoreContext.call), gated by TOOL_ACCESS (tools/), and asks the AI
 // service for each turn; it is made with the first call, one per core.
 
 import { OPERATOR_TITLE, type OperatorMethods } from "@cmd/protocol";
@@ -9,6 +9,7 @@ import type { Feature } from "../kernel/features.ts";
 import type { HandlerSlice } from "../kernel/handlers.ts";
 import type { WindowType } from "../windows/types.ts";
 import { OperatorService } from "./service.ts";
+import { toolsOf } from "../tools/feature.ts";
 import { checkName, NAME_SCHEMA, nameInput, nameSystem, type NamerAnswer } from "../agents/namer.ts";
 
 /** The Operator widget: one per workspace is enough, the conversation is the workspace's. */
@@ -57,6 +58,7 @@ export function operatorOf(core: CoreContext): OperatorService {
         return checked.problem ? null : checked.name;
       },
       db: core.store.db,
+      approvals: toolsOf(core).approvals,
     });
     services.set(core, s);
   }
@@ -74,9 +76,6 @@ export const operatorFeature = {
     },
     "operator.send": (p) => (operatorOf(core).send(p.workspaceId, p.text, p.selected ?? null), null),
     "operator.stop": (p) => (operatorOf(core).stop(p.workspaceId), null),
-    "operator.answer": (p) => (operatorOf(core).answer(p.workspaceId, p.itemId, p.allow, p.reason, p.remember), null),
-    "operator.grants": (p) => operatorOf(core).grants(p.workspaceId),
-    "operator.revoke": (p) => (operatorOf(core).revoke(p.workspaceId, p.key), null),
     "operator.reset": (p) => (operatorOf(core).reset(p.workspaceId), null),
     "operator.history": (p) => operatorOf(core).history(p.workspaceId),
     "operator.open": (p) => (operatorOf(core).open(p.workspaceId, p.id), null),

@@ -200,10 +200,10 @@ const isStep = (b: Block) => b.kind === "looks" || b.item.kind === "tool" || b.i
 
 /** What the person allowed for good in this workspace: picking one forgets it, so it asks again. */
 async function showGrants(workspaceId: string): Promise<void> {
-  const grants = await cmd.call("operator.grants", { workspaceId }).catch(() => []);
+  const grants = await cmd.call("approvals.list", { workspaceId }).catch(() => []);
   await showContextMenu(
     grants.length
-      ? [{ label: "Choose one to ask again", run: () => {}, enabled: false }, "-", ...grants.map((g) => ({ label: `Allowed: ${g.label}`, run: () => void cmd.call("operator.revoke", { workspaceId, key: g.key }).catch(() => {}) }))]
+      ? [{ label: "Choose one to ask again", run: () => {}, enabled: false }, "-", ...grants.map((g) => ({ label: `Allowed: ${g.label}`, run: () => void cmd.call("approvals.forget", { workspaceId, key: g.key }).catch(() => {}) }))]
       : [{ label: "Nothing allowed for good here yet", run: () => {}, enabled: false }],
   );
 }

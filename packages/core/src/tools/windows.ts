@@ -1,10 +1,10 @@
-// The Operator's tools for the board itself (docs/51): open a window (or show something else in
+// The tools for the board itself (docs/54, docs/51): open a window (or show something else in
 // one), close, select, and arrange: dock, back to the board, place in the order, the view, or
 // another workspace. The board's layout is the app's, so arranging asks it (workspace.arrange).
 
 import path from "node:path";
 import type { AppWindow } from "@cmd/protocol";
-import { readablePath, ref, schema, str, windowName, windowOf, type OperatorTool } from "./tool-kit.ts";
+import { otherWindow, readablePath, ref, schema, str, windowName, windowOf, type Tool } from "./kit.ts";
 
 /** A web address to open: http or https only. */
 function urlOf(target: string | undefined): URL {
@@ -18,7 +18,7 @@ function urlOf(target: string | undefined): URL {
   return url;
 }
 
-const openTool: OperatorTool = {
+const openTool: Tool = {
   acts: true,
   spec: {
     name: "open",
@@ -28,7 +28,7 @@ const openTool: OperatorTool = {
     schema: schema({ kind: { type: "string", enum: ["terminal", "path", "url"] }, target: { type: "string", description: "The path (relative to the workspace's folder) or URL; for a terminal, the folder to start in." }, ref: { ...ref, description: "A browser or file browser to show it in, instead of a new window." } }, ["kind"]),
   },
   target: (i, b) => (i.ref ? b.refs.id(i.ref) : null),
-  // A URL asks first: a page can tell the Operator to visit an address carrying what it read. Remembered per site.
+  // A URL asks first: a page can tell a model to visit an address carrying what it read. Remembered per site.
   async confirm(i) {
     if (i.kind !== "url") return null;
     const url = urlOf(str(i.target));
@@ -59,7 +59,7 @@ const openTool: OperatorTool = {
   },
 };
 
-const closeTool: OperatorTool = {
+const closeTool: Tool = {
   acts: true,
   spec: {
     name: "close",
@@ -69,16 +69,13 @@ const closeTool: OperatorTool = {
   },
   target: (i, b) => (Array.isArray(i.refs) && i.refs.length === 1 ? b.refs.id(i.refs[0]) : null),
   async run(i, b) {
-    const wins = await Promise.all((Array.isArray(i.refs) ? i.refs : []).map((r) => windowOf(b, r)));
-    for (const w of wins) {
-      if (w.kind === "operator") throw new Error("you can't close an Operator window");
-      await b.call("window.close", { id: w.id });
-    }
+    const wins = await Promise.all((Array.isArray(i.refs) ? i.refs : []).map((r) => otherWindow(b, r, "close")));
+    for (const w of wins) await b.call("window.close", { id: w.id });
     return `Closed ${wins.map((w) => b.refs.of(w.id)).join(", ")}.`;
   },
 };
 
-const focusTool: OperatorTool = {
+const focusTool: Tool = {
   acts: true,
   spec: {
     name: "focus",
@@ -94,7 +91,7 @@ const focusTool: OperatorTool = {
   },
 };
 
-const arrangeTool: OperatorTool = {
+const arrangeTool: Tool = {
   acts: true,
   spec: {
     name: "arrange",
@@ -124,7 +121,7 @@ const arrangeTool: OperatorTool = {
       return `The board shows ${mode === "focus" ? "the selected window alone" : `as ${mode}`}.`;
     }
     const w = await windowOf(b, i.ref);
-    if (w.kind === "operator" && i.do !== "dock" && i.do !== "board") throw new Error("the Operator's own window stays where the person put it");
+    if (w.id === b.caller.windowId && i.do !== "dock" && i.do !== "board") throw new Error("your own window stays where the person put it");
     if (i.do === "move") {
       const name = str(i.to)?.trim().toLowerCase();
       const there = (await b.call("workspace.list", {})).find((x) => x.name.toLowerCase() === name);
@@ -150,4 +147,4 @@ const arrangeTool: OperatorTool = {
   },
 };
 
-export const WINDOW_TOOLS: OperatorTool[] = [openTool, closeTool, focusTool, arrangeTool];
+export const WINDOW_TOOLS: Tool[] = [openTool, closeTool, focusTool, arrangeTool];

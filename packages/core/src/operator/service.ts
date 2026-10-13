@@ -1,24 +1,26 @@
 // The Operator's conversations (docs/51-operator.md): one per workspace, owned by the core, so
 // closing the widget or the app doesn't stop a turn and reopening shows it where it is. A turn
 // is one ai.agent run over the whole history; each tool call becomes an item the chat shows
-// (and the board marks, when it acts), waits for the person when it must, and goes through
-// OPERATOR_ACCESS. Messages sent while a turn runs wait for the next one. Kept in cmd's
+// (and the board marks, when it acts), waits for the person when it must (tools/approvals.ts),
+// and goes through TOOL_ACCESS, like every caller of the tools (docs/54). Messages sent while a turn runs wait for the next one. Kept in cmd's
 // database, a row per workspace.
 
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type { ModelMessage } from "ai";
-import type { Agent, AgentId, AgentState, Method, NewDataEvent, OperatorGrant, OperatorPast, PaneId, OperatorConversation, OperatorEvent, OperatorItem, OperatorUsage, Params, Result, WindowId, Workspace, WorkspaceId } from "@cmd/protocol";
+import type { Agent, AgentId, AgentState, Method, NewDataEvent, OperatorPast, PaneId, OperatorConversation, OperatorEvent, OperatorItem, OperatorUsage, Params, Result, WindowId, Workspace, WorkspaceId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { AgentCall, AgentResult, AgentRun } from "../ai/backends.ts";
 import type { ToolOutput } from "../magic/tools.ts";
 import { AiNotConfigured } from "../ai/service.ts";
-import { OPERATOR_ACCESS } from "./access.ts";
-import { Refs, agentLine, clip, look } from "./board.ts";
+import { OPERATOR_TITLE } from "@cmd/protocol";
+import { TOOL_ACCESS } from "../tools/access.ts";
+import type { Approvals } from "../tools/approvals.ts";
+import { Refs, agentLine, clip, look } from "../tools/board.ts";
 import { RULES_VERSION, systemPrompt } from "./prompt.ts";
 import { workspaceBrief } from "./brief.ts";
 import { ConversationStore, type Saved } from "./store.ts";
-import { OPERATOR_TOOLS, type Ask, type Bench, type OperatorTool } from "./tools.ts";
+import { TOOLS, type Approval, type ToolContext, type Tool } from "../tools/index.ts";
 
 const log = logger("operator");
 
@@ -60,6 +62,8 @@ export interface OperatorDeps {
   name?(turns: { prompt: string; final: string | null; at: number }[], project: string | null): Promise<string | null>;
   /** Where conversations are kept (cmd's database); null: in memory only (tests). */
   db: DatabaseSync | null;
+  /** Calls waiting for the person, and the approvals remembered per workspace (shared with every caller of the tools). */
+  approvals: Approvals;
 }
 
 interface Conversation {
@@ -83,7 +87,8 @@ interface Conversation {
   commands: Map<PaneId, { label: string; url: string | null }>;
   /** News not yet told: with the next tool result while a turn runs, else in a turn of its own. */
   news: string[];
-  approvals: Map<string, (a: { allow: boolean; reason?: string; remember?: boolean }) => void>;
+  /** Its calls waiting for the person (ids in Approvals). */
+  approvals: Set<string>;
   denials: number;
 }
 
@@ -193,23 +198,7 @@ export class OperatorService {
     if (!c) return;
     c.queue = [];
     c.abort?.abort(new Error("stopped"));
-    for (const resolve of c.approvals.values()) resolve({ allow: false, reason: "stopped" });
-  }
-
-  answer(workspaceId: WorkspaceId, itemId: string, allow: boolean, reason?: string, remember = false): void {
-    const resolve = this.#all.get(workspaceId)?.approvals.get(itemId);
-    if (!resolve) throw new Error("nothing is waiting for that answer");
-    resolve({ allow, reason: reason?.trim() || undefined, remember: allow && remember });
-  }
-
-  /** The approvals remembered for a workspace, newest first. */
-  grants(workspaceId: WorkspaceId): OperatorGrant[] {
-    return this.#store.grants(workspaceId);
-  }
-
-  /** Forget one: that kind of action asks again. */
-  revoke(workspaceId: WorkspaceId, key: string): void {
-    this.#store.revoke(workspaceId, key);
+    for (const id of c.approvals) this.#d.approvals.cancel(id, "stopped");
   }
 
   /** A new conversation; the current one is put away. What it started still reports back (to the new one). */
@@ -302,7 +291,7 @@ export class OperatorService {
       const r = await this.#d.agent({
         system: c.system,
         messages: [...c.messages],
-        tools: OPERATOR_TOOLS.map((t) => t.spec),
+        tools: TOOLS.map((t) => t.spec),
         maxSteps: MAX_STEPS,
         signal: abort.signal,
         onStep: () => {
@@ -319,7 +308,7 @@ export class OperatorService {
         },
         exec: async (call) => {
           firstStep ??= Date.now() - t0;
-          const tool = OPERATOR_TOOLS.find((t) => t.spec.name === call.name);
+          const tool = TOOLS.find((t) => t.spec.name === call.name);
           if (!tool) return { output: `no tool ${call.name}`, isError: true };
           // Acts go one at a time, in the order the model asked; reads run beside them.
           if (!tool.acts) return this.#exec(c, tool, call, bench, done, abort, turn.id);
@@ -360,7 +349,7 @@ export class OperatorService {
   }
 
   /** One tool call: its card, the person's approval when it needs one, the call, the result. */
-  async #exec(c: Conversation, tool: OperatorTool, call: AgentCall, bench: Bench, done: OperatorItem[], abort: AbortController, turnId: string): Promise<ToolOutput> {
+  async #exec(c: Conversation, tool: Tool, call: AgentCall, bench: ToolContext, done: OperatorItem[], abort: AbortController, turnId: string): Promise<ToolOutput> {
     const { why, ...input } = call.input;
     let target: WindowId | null = null;
     try {
@@ -371,7 +360,7 @@ export class OperatorService {
     const item: Extract<OperatorItem, { kind: "tool" }> = { kind: "tool", id: call.id, at: Date.now(), tool: tool.spec.name, why: typeof why === "string" && why.trim() ? why.trim() : tool.spec.name, acts: tool.acts, target, state: "running", input };
     this.#add(c, item);
     const t0 = Date.now();
-    let approval: { ask: Ask; allowed: boolean | null; reason: string | null; remembered?: string } | null = null;
+    let approval: { ask: Approval; allowed: boolean | null; reason: string | null; remembered?: string } | null = null;
     const end = (state: "done" | "failed" | "denied", output: string, isError: boolean): ToolOutput => {
       const next = { ...item, ...(approval ? { ask: approval.ask.title, exact: approval.ask.exact, ...(approval.remembered ? { remembered: approval.remembered } : {}) } : {}), state, output: clip(output, CARD_MAX), ms: Date.now() - t0 };
       this.#update(c, next);
@@ -379,13 +368,13 @@ export class OperatorService {
       // News that came in while this ran goes back with it.
       const news = c.news.splice(0);
       const sent = clip(output, OUTPUT_MAX) + (news.length ? `\n\n<news>\n${news.map((n) => `- ${n}`).join("\n")}\n</news>` : "");
-      this.#d.record?.({ id: `operator:${call.id}`, at: t0, until: Date.now(), type: "operator.tool", source: "cmd", parentId: turnId, workspaceId: c.workspaceId, windowId: target, text: item.why, data: { tool: item.tool, acts: item.acts, state, input, ask: approval?.ask.title ?? null, exact: approval?.ask.exact ?? null, allowed: approval?.allowed ?? null, reason: approval?.reason ?? null, remembered: approval?.remembered ?? null, ms: next.ms }, content: sent });
+      this.#d.record?.({ id: `operator:${call.id}`, at: t0, until: Date.now(), type: "tool.call", source: "cmd", parentId: turnId, workspaceId: c.workspaceId, windowId: target, text: item.why, data: { caller: bench.caller.name, tool: item.tool, acts: item.acts, state, input, ask: approval?.ask.title ?? null, exact: approval?.ask.exact ?? null, allowed: approval?.allowed ?? null, reason: approval?.reason ?? null, remembered: approval?.remembered ?? null, ms: next.ms }, content: sent });
       return { output: sent, isError };
     };
     try {
       const ask = tool.confirm ? await tool.confirm(call.input, bench) : null;
       // Allowed here before, and remembered: it runs, and says so.
-      const grant = ask?.rule ? this.#store.granted(c.workspaceId, ask.rule.key) : null;
+      const grant = ask?.rule ? this.#d.approvals.remembered(c.workspaceId, ask.rule.key) : null;
       if (ask && grant) {
         approval = { ask, allowed: true, reason: null, remembered: grant.label };
         this.#update(c, { ...item, ask: ask.title, exact: ask.exact, remembered: grant.label });
@@ -394,10 +383,10 @@ export class OperatorService {
       if (ask) {
         this.#update(c, { ...item, state: "waiting", ask: ask.title, exact: ask.exact, ...(ask.rule ? { offer: ask.rule.label } : {}) });
         this.#d.notify?.(c.workspaceId, { title: `${c.name ?? "The Operator"} asks`, body: ask.title, urgent: true });
-        const a = await new Promise<{ allow: boolean; reason?: string; remember?: boolean }>((resolve) => c.approvals.set(item.id, resolve));
-        c.approvals.delete(item.id);
+        c.approvals.add(item.id);
+        const a = await this.#d.approvals.wait(item.id, c.workspaceId).finally(() => c.approvals.delete(item.id));
         approval = { ask, allowed: a.allow, reason: a.reason ?? null };
-        if (a.remember && ask.rule) this.#store.grant(c.workspaceId, ask.rule.key, ask.rule.label);
+        if (a.remember && ask.rule) this.#d.approvals.remember(c.workspaceId, ask.rule.key, ask.rule.label);
         if (!a.allow) {
           if (++c.denials >= DENIALS) queueMicrotask(() => abort.abort(new Error("denied")));
           return end("denied", `The person said no${a.reason ? `: ${a.reason}` : ""}. Don't do this another way; ask what they want instead.`, true);
@@ -413,9 +402,10 @@ export class OperatorService {
     }
   }
 
-  /** The tools' view of cmd: the workspace, its methods gated by OPERATOR_ACCESS (confirm ones only once allowed). */
-  #bench(c: Conversation, signal: AbortSignal): Bench {
+  /** The tools' view of cmd: the Operator as the caller, the workspace, its methods gated by TOOL_ACCESS (confirm ones only once allowed). */
+  #bench(c: Conversation, signal: AbortSignal): ToolContext {
     return {
+      caller: { kind: "agent", workspaceId: c.workspaceId, name: c.name ?? OPERATOR_TITLE, windowId: this.#d.selfIn(c.workspaceId) },
       workspace: () => {
         const ws = this.#d.workspace(c.workspaceId);
         if (!ws) throw new Error("the workspace is closed");
@@ -423,16 +413,15 @@ export class OperatorService {
       },
       call: this.#gate(false, signal),
       refs: c.refs,
-      self: this.#d.selfIn(c.workspaceId),
       started: { agent: (id) => this.watchAgent(c.workspaceId, id), command: (paneId, label) => this.watchCommand(c.workspaceId, paneId, label) },
       signal,
     };
   }
 
-  #gate(allowed: boolean, signal: AbortSignal): Bench["call"] {
+  #gate(allowed: boolean, signal: AbortSignal): ToolContext["call"] {
     return <M extends Method>(method: M, params: Params<M>) => {
       if (signal.aborted) return Promise.reject(new Error("stopped"));
-      const access = OPERATOR_ACCESS[method];
+      const access = TOOL_ACCESS[method];
       if (access === "never") return Promise.reject(new Error(`the Operator may not call ${method}`));
       // A dry page action only finds and outlines the element: it is what the approval shows.
       const dry = method === "browser.act" && (params as Params<"browser.act">).dry === true;
@@ -466,9 +455,9 @@ export class OperatorService {
     if (windows.find((w) => w.id === id)?.kind === "operator") throw new Error("an Operator window can't be closed by the Operator");
   }
 
-  async #look(b: Bench): Promise<string> {
+  async #look(b: ToolContext): Promise<string> {
     const [windows, panes, agents] = await Promise.all([b.call("window.list", {}), b.call("pane.list", {}), b.call("agent.list", {})]);
-    return look({ workspace: b.workspace(), windows, panes, agents, self: b.self }, b.refs);
+    return look({ workspace: b.workspace(), windows, panes, agents, self: b.caller.windowId ?? null }, b.refs);
   }
 
   async #safe<T>(fn: () => Promise<T>): Promise<T | null> {
@@ -530,7 +519,7 @@ export class OperatorService {
       agents: new Map(saved?.agents ?? []),
       commands: new Map(saved?.commands ?? []),
       news: [],
-      approvals: new Map(),
+      approvals: new Set(),
       denials: 0,
     };
     // A turn that was running when the core stopped didn't finish.

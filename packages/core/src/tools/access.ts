@@ -1,13 +1,13 @@
-// What the Operator may call (docs/51-operator.md, Guardrails): one entry per method, typed
-// against Method like REMOTE_ACCESS (remote/policy.ts), so a new method fails tsc until someone
-// decides. `never` by default: only what the tools call is open. read runs at once; act runs at
+// What the tools may call (docs/54, docs/51 Guardrails), whoever calls them: one entry per
+// method, typed against Method like REMOTE_ACCESS (remote/policy.ts), so a new method fails tsc
+// until someone decides. `never` by default: only what the tools call is open. read runs at once; act runs at
 // once and is marked on the board; confirm waits for the person's approval of that one call.
 
 import type { Method } from "@cmd/protocol";
 
-export type OperatorAccess = "read" | "act" | "confirm" | "never";
+export type Access = "read" | "act" | "confirm" | "never";
 
-export const OPERATOR_ACCESS: { [M in Method]: OperatorAccess } = {
+export const TOOL_ACCESS: { [M in Method]: Access } = {
   "core.hello": "never",
   "core.info": "never",
   "core.processes": "never",
@@ -145,12 +145,12 @@ export const OPERATOR_ACCESS: { [M in Method]: OperatorAccess } = {
   "operator.get": "never",
   "operator.send": "never",
   "operator.stop": "never",
-  "operator.answer": "never",
   "operator.reset": "never",
   "operator.history": "never",
   "operator.open": "never",
-  "operator.grants": "never",
-  "operator.revoke": "never",
+  "approvals.answer": "never",
+  "approvals.list": "never",
+  "approvals.forget": "never",
   "sqlite.schema": "never",
   "sqlite.rows": "never",
   "sqlite.query": "never",
@@ -190,9 +190,9 @@ export const OPERATOR_ACCESS: { [M in Method]: OperatorAccess } = {
 /**
  * Event types the events tool leaves out unless asked for by name: many, and little one by one
  * (focus is most of the log; raw hooks, counters and transcript rows say again what agents' turns
- * and `read` on an agent say condensed; ai.call would have the Operator read itself).
+ * and `read` on an agent say condensed; ai.call would have a model read its own calls).
  */
-export const OPERATOR_QUIET_EVENTS: readonly string[] = [
+export const QUIET_EVENTS: readonly string[] = [
   "user.focus",
   "pane.activity",
   "agent.hook",
@@ -207,4 +207,4 @@ export const OPERATOR_QUIET_EVENTS: readonly string[] = [
   "user.look",
 ];
 
-export const isQuiet = (type: string) => OPERATOR_QUIET_EVENTS.some((q) => (q.endsWith(".") ? type.startsWith(q) : type === q));
+export const isQuiet = (type: string) => QUIET_EVENTS.some((q) => (q.endsWith(".") ? type.startsWith(q) : type === q));

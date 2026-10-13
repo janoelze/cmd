@@ -92,7 +92,7 @@ export function useOperatorMark(id: WindowId | null | undefined): OperatorMark |
 export const operatorCall = {
   send: (workspaceId: WorkspaceId, text: string, selected: WindowId | null) => cmd.call("operator.send", { workspaceId, text, selected }),
   stop: (workspaceId: WorkspaceId) => cmd.call("operator.stop", { workspaceId }),
-  answer: (workspaceId: WorkspaceId, itemId: string, allow: boolean, reason?: string, remember?: boolean) => cmd.call("operator.answer", { workspaceId, itemId, allow, reason, remember }),
+  answer: (workspaceId: WorkspaceId, itemId: string, allow: boolean, reason?: string, remember?: boolean) => cmd.call("approvals.answer", { workspaceId, itemId, allow, reason, remember }),
   reset: (workspaceId: WorkspaceId) => cmd.call("operator.reset", { workspaceId }),
   open: (workspaceId: WorkspaceId, id: string) => cmd.call("operator.open", { workspaceId, id }),
 };

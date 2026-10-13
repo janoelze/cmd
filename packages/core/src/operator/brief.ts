@@ -3,8 +3,7 @@
 // never raw events: where the folder is in git, how to run it, what the journal says today, and
 // the event counts the events tool gives.
 
-import type { Bench } from "./tools.ts";
-import { OPERATOR_TOOLS } from "./tools.ts";
+import { TOOLS, type ToolContext } from "../tools/index.ts";
 
 const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
   try {
@@ -14,7 +13,7 @@ const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
   }
 };
 
-export async function workspaceBrief(b: Bench): Promise<string> {
+export async function workspaceBrief(b: ToolContext): Promise<string> {
   const ws = b.workspace();
   const parts: string[] = [];
   if (ws.home) parts.push("This is the Home workspace: the person's home folder, not a project. Before starting agents, running or editing anything, ask which project folder they mean (or use the folder they named).");
@@ -30,7 +29,7 @@ export async function workspaceBrief(b: Bench): Promise<string> {
   } else parts.push("No Workspace Actions found.");
   const day = await safe(() => b.call("journal.day", { workspaceId: ws.id, date: workDay(), write: "never" }));
   if (day?.entries.length) parts.push(`Today so far (the journal): ${day.headline}\n${day.entries.slice(0, 8).map((e) => `- ${e.title}: ${e.summary}`).join("\n")}`);
-  const events = OPERATOR_TOOLS.find((t) => t.spec.name === "events");
+  const events = TOOLS.find((t) => t.spec.name === "events");
   const counts = events ? await safe(() => events.run({ hours: 8 }, b)) : null;
   if (counts) parts.push(counts.replace(/\nAsk for rows.*$/, ""));
   return parts.join("\n\n");

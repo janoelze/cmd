@@ -7,23 +7,34 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Agent, AgentState, CoreEvent, OperatorEvent, OperatorItem, Workspace } from "@cmd/protocol";
 import type { AgentResult, AgentRun } from "../src/ai/backends.ts";
 import { Core } from "../src/kernel/core.ts";
-import { OPERATOR_ACCESS, isQuiet } from "../src/operator/access.ts";
-import { denied } from "../src/operator/deny.ts";
+import { TOOL_ACCESS, isQuiet } from "../src/tools/access.ts";
+import { Approvals } from "../src/tools/approvals.ts";
+import { denied } from "../src/tools/deny.ts";
 import { fitSections, instructionFiles } from "../src/operator/prompt.ts";
 import { OperatorService } from "../src/operator/service.ts";
-import { OPERATOR_TOOLS } from "../src/operator/tools.ts";
+import { TOOLS } from "../src/tools/index.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
 
+/** The approvals the services in a test wait on, answered as the app answers them (approvals.answer). */
+let approvals = new Approvals(null);
+const answer = (workspaceId: string, id: string, allow: boolean, reason?: string, remember?: boolean) => approvals.answer(workspaceId, id, { allow, reason, remember });
+/** A database for a service, with its approvals in it. */
+const withDb = () => {
+  const db = new DatabaseSync(":memory:");
+  return { db, approvals: (approvals = new Approvals(db)) };
+};
+
 describe("what the Operator may call", () => {
   it("never its own rules, secrets or keys; typing, writing files and stopping agents only with approval", () => {
-    for (const m of ["settings.set", "settings.reset", "secrets.set", "ai.connect", "data.forget", "remote.pair", "operator.send"] as const) expect(OPERATOR_ACCESS[m]).toBe("never");
-    expect(Object.entries(OPERATOR_ACCESS).filter(([, a]) => a === "confirm").map(([m]) => m).sort()).toEqual(["agent.kill", "agent.send", "browser.act", "fs.write", "pane.write"]);
-    expect(OPERATOR_ACCESS["actions.run"]).toBe("act");
+    for (const m of ["settings.set", "settings.reset", "secrets.set", "ai.connect", "data.forget", "remote.pair", "operator.send"] as const) expect(TOOL_ACCESS[m]).toBe("never");
+    expect(Object.entries(TOOL_ACCESS).filter(([, a]) => a === "confirm").map(([m]) => m).sort()).toEqual(["agent.kill", "agent.send", "browser.act", "fs.write", "pane.write"]);
+    expect(TOOL_ACCESS["actions.run"]).toBe("act");
   });
 
   it("leaves focus, activity, raw hooks and transcripts and its own model calls out of events", () => {
@@ -41,7 +52,7 @@ describe("what the Operator may call", () => {
   });
 
   it("every tool asks for why and has a description worth reading", () => {
-    for (const t of OPERATOR_TOOLS) {
+    for (const t of TOOLS) {
       expect((t.spec.schema as { required: string[] }).required[0]).toBe("why");
       expect(t.spec.description.length, t.spec.name).toBeGreaterThan(80);
     }
@@ -111,7 +122,7 @@ describe("the service", () => {
       if (e.type !== "operator.changed") return;
       events.push(e);
       // Opening a URL asks first (its own test below): allowed here, so the others go on.
-      for (const i of e.items ?? []) if (i.kind === "tool" && i.tool === "open" && i.state === "waiting") queueMicrotask(() => op.answer(ws.id, i.id, true));
+      for (const i of e.items ?? []) if (i.kind === "tool" && i.tool === "open" && i.state === "waiting") queueMicrotask(() => answer(ws.id, i.id, true));
     };
     core.serve({ access: "local", send: (line) => {
       const m = JSON.parse(line) as { method?: string; params?: CoreEvent };
@@ -143,13 +154,14 @@ describe("the service", () => {
         await step?.(r);
         return reply();
       },
-      selfIn: () => null,
+      selfIn: (id) => core.windows.others().find((w) => w.kind === "operator" && w.workspaceId === id)?.id ?? null,
       broadcast,
       onAgent: (fn) => void agentFns.push(fn),
       onCommandEnd: (fn) => void core.panes.on("osc", (id, ev) => ev.type === "prompt" && ev.mark === "D" && fn(id, ev.exitCode ?? null)),
       onServing: (fn) => void core.actions.on("url", fn),
       record: (e) => core.data.record(e),
       db: null,
+      approvals: (approvals = new Approvals(null)),
     });
   });
   afterEach(async () => {
@@ -213,7 +225,7 @@ describe("the service", () => {
     await vi.waitFor(() => expect(tool(op.get(ws.id).items, "type")?.state).toBe("waiting"));
     expect(tool(op.get(ws.id).items, "type")).toMatchObject({ ask: expect.stringMatching(/^Type in the terminal in /), exact: "ls -la  ⏎" });
     expect(ptys.at(-1)!.written.join("")).not.toContain("ls -la");
-    op.answer(ws.id, "t1", true);
+    answer(ws.id, "t1", true);
     await idle();
     expect(ptys.at(-1)!.written.join("")).toContain("ls -la\r");
     expect(result).toMatch(/Typed into w\d+/);
@@ -229,7 +241,7 @@ describe("the service", () => {
     op.send(ws.id, "say hi");
     for (const n of [1, 2, 3]) {
       await vi.waitFor(() => expect(op.get(ws.id).items.some((i) => i.id === `d${n}` && i.kind === "tool" && i.state === "waiting")).toBe(true));
-      op.answer(ws.id, `d${n}`, false, n === 1 ? "not now" : undefined);
+      answer(ws.id, `d${n}`, false, n === 1 ? "not now" : undefined);
     }
     await idle();
     expect(outs[0]).toBe("The person said no: not now. Don't do this another way; ask what they want instead.");
@@ -245,7 +257,7 @@ describe("the service", () => {
     op.send(ws.id, "trust the folder");
     await vi.waitFor(() => expect(tool(op.get(ws.id).items, "type")?.state).toBe("waiting"));
     expect(tool(op.get(ws.id).items, "type")).toMatchObject({ ask: expect.stringMatching(/^Press keys in the terminal in /), exact: "↓ ⏎" });
-    op.answer(ws.id, "k1", true);
+    answer(ws.id, "k1", true);
     await idle();
     expect(ptys.at(-1)!.written.slice(-2)).toEqual(["\x1b[B", "\r"]);
   });
@@ -296,7 +308,7 @@ describe("the service", () => {
     op.send(ws.id, "deploy");
     await vi.waitFor(() => expect(tool(op.get(ws.id).items, "run")?.state).toBe("waiting"));
     expect(tool(op.get(ws.id).items, "run")).toMatchObject({ ask: "Run “deploy”, which is risky", exact: "npm run deploy" });
-    op.answer(ws.id, "r1", true);
+    answer(ws.id, "r1", true);
     await idle();
     expect(tool(op.get(ws.id).items, "run")!.output).toMatch(/^Started “deploy”/);
   });
@@ -376,10 +388,10 @@ describe("the service", () => {
     await vi.waitFor(() => expect(op.get(ws.id).items.some((i) => i.id === "e1" && i.kind === "tool" && i.state === "waiting")).toBe(true));
     expect(op.get(ws.id).items.find((i) => i.id === "e1")).toMatchObject({ ask: "Edit config.toml", exact: "- port = 3000\n+ port = 4000\n  host = \"localhost\"\n  " });
     expect(fs.readFileSync(path.join(dir, "config.toml"), "utf8")).toContain("3000");
-    op.answer(ws.id, "e1", true);
+    answer(ws.id, "e1", true);
     await vi.waitFor(() => expect(op.get(ws.id).items.some((i) => i.id === "e2" && i.kind === "tool" && i.state === "waiting")).toBe(true));
     expect(op.get(ws.id).items.find((i) => i.id === "e2")).toMatchObject({ ask: "Create TODO.md" });
-    op.answer(ws.id, "e2", true);
+    answer(ws.id, "e2", true);
     await idle();
     expect(outs[0]).toMatch(/times: give more of the surrounding text/);
     expect(outs[1]).toMatch(/^Changed config.toml, shown in w\d+/);
@@ -400,7 +412,7 @@ describe("the service", () => {
     });
     op.send(ws.id, "close everything");
     await idle();
-    expect(outs[0]).toMatch(/can't close an Operator window/);
+    expect(outs[0]).toMatch(/your own window: you can't close it/);
     expect(core.windows.others().some((w) => w.id === self.id)).toBe(true);
   });
 
@@ -410,7 +422,7 @@ describe("the service", () => {
       const step = turns.shift();
       await step?.(r);
       return reply();
-    }, selfIn: () => null, broadcast: () => {}, notify: (_id, n) => void told.push(n), db: null });
+    }, selfIn: () => null, broadcast: () => {}, notify: (_id, n) => void told.push(n), db: null, approvals });
     try {
       turns.push(async (r) => {
         r.onStep();
@@ -421,7 +433,7 @@ describe("the service", () => {
       op2.send(ws.id, "check");
       await vi.waitFor(() => expect(told).toHaveLength(1));
       expect(told[0]).toMatchObject({ title: "The Operator asks", body: expect.stringMatching(/^Type in the terminal/), urgent: true });
-      op2.answer(ws.id, "n1", true);
+      answer(ws.id, "n1", true);
       await vi.waitFor(() => expect(op2.get(ws.id).busy).toBe(false));
       expect(told[1]).toEqual({ title: "The Operator", body: "The tests pass: see the log.", urgent: false });
       turns.push(() => {
@@ -444,12 +456,12 @@ describe("the service", () => {
     });
     op.send(ws.id, "list the files please");
     await vi.waitFor(() => expect(tool(op.get(ws.id).items, "type")?.state).toBe("waiting"));
-    op.answer(ws.id, "a1", false, "use the files window");
+    answer(ws.id, "a1", false, "use the files window");
     await idle();
     const [turn] = core.data.query({ types: ["operator.turn"], workspaceId: ws.id });
     expect(turn).toMatchObject({ text: "list the files please", data: { steps: 2, denied: 1, stopped: false, error: null, model: "test", answer: "Running them now." } });
     expect(turn!.until).not.toBeNull();
-    const tools = core.data.query({ types: ["operator.tool"], parentId: turn!.id, by: "time", order: "asc" });
+    const tools = core.data.query({ types: ["tool.call"], parentId: turn!.id, by: "time", order: "asc" });
     expect(tools.map((t) => [t.text, (t.data as { state: string }).state])).toEqual([["doing open", "done"], ["doing type", "denied"]]);
     expect(tools[1]).toMatchObject({ data: { allowed: false, reason: "use the files window", ask: expect.stringMatching(/^Type in the terminal/), exact: "ls  ⏎" } });
     expect(tools[1]!.windowId).toBeTruthy();
@@ -557,7 +569,7 @@ describe("the service", () => {
     expect(op.get(ws.id).items.find((i) => i.id === "p1")).toMatchObject({ ask: "Type into Search on thing.dev", exact: "<input type=text> Search\n→ cats" });
     // Only the dry runs reached the page so far.
     expect(moves).toEqual([{ act: "fill", dry: true, value: "hunter2" }, { act: "fill", dry: true, value: "cats" }]);
-    op.answer(ws.id, "p1", true);
+    answer(ws.id, "p1", true);
     await idle();
     expect(outs[0]).toMatch(/^refused: <input type=password> Password is a password, card or code field/);
     expect(outs[1]).toBe("Done: fill <input type=text> Search. The page is now “Thing” (https://thing.dev/search); read it to see what happened.");
@@ -582,12 +594,11 @@ describe("the service", () => {
 
 describe("remembered approvals", () => {
   it("offer a narrow rule; once remembered, that kind runs without asking (and says so); forgotten, it asks again", async () => {
-    const { DatabaseSync } = await import("node:sqlite");
     const f = fakeFactory();
     const core = new Core({ socketPath: "", dbPath: null, settingsPath: null, terminals: f.factory, pollMs: 0 });
     const ws = core.workspaces.home();
     const turns: ((r: AgentRun) => Promise<void>)[] = [];
-    const op = new OperatorService({ workspace: (id) => core.workspaces.get(id) ?? null, call: (m, p) => core.call(m, p as never), agent: async (r) => (await turns.shift()?.(r), reply()), selfIn: () => null, broadcast: () => {}, db: new DatabaseSync(":memory:") });
+    const op = new OperatorService({ workspace: (id) => core.workspaces.get(id) ?? null, call: (m, p) => core.call(m, p as never), agent: async (r) => (await turns.shift()?.(r), reply()), selfIn: () => null, broadcast: () => {}, ...withDb() });
     const exec = (r: AgentRun, name: string, input: Record<string, unknown>, id: string) => r.exec({ id, name, input: { why: name, ...input } });
     const item = (id: string) => op.get(ws.id).items.find((i) => i.id === id) as Extract<OperatorItem, { kind: "tool" }> | undefined;
     const idle = () => vi.waitFor(() => expect(op.get(ws.id).busy).toBe(false));
@@ -600,9 +611,9 @@ describe("remembered approvals", () => {
       op.send(ws.id, "test");
       await vi.waitFor(() => expect(item("t1")?.state).toBe("waiting"));
       expect(item("t1")!.offer).toBe("commands starting “pnpm test”");
-      op.answer(ws.id, "t1", true, undefined, true);
+      answer(ws.id, "t1", true, undefined, true);
       await idle();
-      expect(op.grants(ws.id)).toMatchObject([{ key: "type:pnpm test", label: "commands starting “pnpm test”" }]);
+      expect(approvals.list(ws.id)).toMatchObject([{ key: "type:pnpm test", label: "commands starting “pnpm test”" }]);
       // The same kind: no question.
       turns.push(async (r) => void (await exec(r, "type", { ref, text: "pnpm test packages/core" }, "t2")));
       // A URL asks before going to its site; remembered, that site doesn't ask again (another one does).
@@ -618,20 +629,20 @@ describe("remembered approvals", () => {
       op.send(ws.id, "look things up");
       await vi.waitFor(() => expect(item("u1")?.state).toBe("waiting"));
       expect(item("u1")).toMatchObject({ ask: "Open github.com", exact: "https://www.github.com/x", offer: "opening pages on github.com" });
-      op.answer(ws.id, "u1", true, undefined, true);
+      answer(ws.id, "u1", true, undefined, true);
       await vi.waitFor(() => expect(item("u3")?.state).toBe("waiting"));
       expect(item("u2")).toMatchObject({ state: "done", remembered: "opening pages on github.com" });
       expect(item("u3")).toMatchObject({ ask: "Open evil.example", exact: "https://evil.example/?q=secret" });
-      op.answer(ws.id, "u3", false);
+      answer(ws.id, "u3", false);
       await idle();
       // Another kind still asks; a forgotten one asks again.
-      op.revoke(ws.id, "type:pnpm test");
+      approvals.forget(ws.id, "type:pnpm test");
       turns.push(async (r) => void (await exec(r, "type", { ref, text: "pnpm test" }, "t3")));
       op.send(ws.id, "once more");
       await vi.waitFor(() => expect(item("t3")?.state).toBe("waiting"));
-      op.answer(ws.id, "t3", false);
+      answer(ws.id, "t3", false);
       await idle();
-      expect(op.grants(ws.id).map((g) => g.key)).toEqual(["url:github.com"]);
+      expect(approvals.list(ws.id).map((g) => g.key)).toEqual(["url:github.com"]);
     } finally {
       op.dispose();
       await core.close();
@@ -641,12 +652,11 @@ describe("remembered approvals", () => {
 
 describe("past conversations", () => {
   it("New Conversation puts the current one away; opening one brings it back and puts the other away", async () => {
-    const { DatabaseSync } = await import("node:sqlite");
     const core = new Core({ socketPath: "", dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0 });
     const ws = core.workspaces.home();
     const events: OperatorEvent[] = [];
     const asked: string[] = [];
-    const op = new OperatorService({ workspace: (id) => core.workspaces.get(id) ?? null, call: (m, p) => core.call(m, p as never), agent: async (r) => (r.onStep(), r.onText("Done."), reply()), selfIn: () => null, broadcast: (e) => void events.push(e), db: new DatabaseSync(":memory:"), name: async (turns) => (asked.push(turns.map((t) => `${t.prompt} → ${t.final}`).join("; ")), turns[0]!.prompt.startsWith("first") ? "First things" : null) });
+    const op = new OperatorService({ workspace: (id) => core.workspaces.get(id) ?? null, call: (m, p) => core.call(m, p as never), agent: async (r) => (r.onStep(), r.onText("Done."), reply()), selfIn: () => null, broadcast: (e) => void events.push(e), ...withDb(), name: async (turns) => (asked.push(turns.map((t) => `${t.prompt} → ${t.final}`).join("; ")), turns[0]!.prompt.startsWith("first") ? "First things" : null) });
     try {
       const idle = () => vi.waitFor(() => expect(op.get(ws.id).busy).toBe(false));
       op.send(ws.id, "first question");

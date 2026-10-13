@@ -64,14 +64,6 @@ export interface OperatorConversation {
   latency: { firstStepMs: number | null; totalMs: number } | null;
 }
 
-/** An approval the person chose to remember for a workspace: this kind of action runs without asking there. */
-export interface OperatorGrant {
-  key: string;
-  /** What it allows, in words ("commands starting “pnpm test”"). */
-  label: string;
-  at: number;
-}
-
 /** A conversation put away by New Conversation, to open again. */
 export interface OperatorPast {
   id: string;
@@ -109,15 +101,6 @@ export interface OperatorMethods {
   "operator.send": { params: { workspaceId: WorkspaceId; text: string; selected?: WindowId | null }; result: null };
   /** Stop the running turn: the model call and the tools it runs. */
   "operator.stop": { params: { workspaceId: WorkspaceId }; result: null };
-  /**
-   * Allow or deny a tool call waiting for approval; `reason` goes back to the model with a denial.
-   * `remember`: allow this kind of action in the workspace from now on (the step's `offer`).
-   */
-  "operator.answer": { params: { workspaceId: WorkspaceId; itemId: string; allow: boolean; reason?: string; remember?: boolean }; result: null };
-  /** The approvals remembered for a workspace. */
-  "operator.grants": { params: { workspaceId: WorkspaceId }; result: OperatorGrant[] };
-  /** Forget a remembered approval: it asks again. */
-  "operator.revoke": { params: { workspaceId: WorkspaceId; key: string }; result: null };
   /** Start a new conversation: the current one is put away (operator.history), a running turn stopped first. */
   "operator.reset": { params: { workspaceId: WorkspaceId }; result: null };
   /** The workspace's past conversations, newest first. */
