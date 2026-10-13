@@ -25,7 +25,8 @@
   max-height: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: var(--radius-md);
+  /* A share of the cover, so its corners grow with it, as album art's do. */
+  border-radius: 6%;
 }
 .np-meta {
   display: flex;
@@ -58,27 +59,27 @@
 
 @container np (min-width: 340px) and (min-height: 440px) {
   .np-body {
+    --np-column: min(80cqw, 360px);
     justify-content: center;
     align-items: center;
     gap: var(--space-4);
   }
   .np-art {
     flex: none;
-    width: min(80cqw, 360px, calc(100cqh - 200px));
+    width: min(var(--np-column), calc(100cqh - 200px));
     aspect-ratio: 1;
   }
   .np-art img {
     width: 100%;
     height: 100%;
-    border-radius: var(--radius-lg);
   }
   .np-meta,
   .np-progress {
-    width: min(80cqw, 360px);
+    width: var(--np-column);
   }
   .np-title {
     max-width: 100%;
-    font-size: clamp(var(--text-lg), calc(min(80cqw, 360px) / (var(--chars) * 0.6)), calc(var(--text-display) * 0.8));
+    font-size: clamp(var(--text-lg), calc(var(--np-column) / (var(--chars) * 0.6)), calc(var(--text-display) * 0.8));
   }
   .np-meta {
     align-items: center;
