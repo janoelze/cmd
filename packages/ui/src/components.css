@@ -89,6 +89,10 @@
 .ui-button[data-variant="danger"] { color: var(--danger); }
 .ui-button[data-variant="danger"] > .sf { color: inherit; }
 .ui-button[data-variant="danger"]:hover:not(:disabled) { color: var(--on-accent); background: var(--danger); box-shadow: none; }
+/* A sheet's last action is the primary one, Return's: filled even when it is the danger (Delete, Run a deploy). */
+.ui-dialog-foot > .ui-button[data-variant="danger"]:last-child { color: var(--on-accent); background: var(--danger); box-shadow: none; }
+.ui-dialog-foot > .ui-button[data-variant="danger"]:last-child:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 88%, var(--ink)); }
+.ui-dialog-foot > .ui-button[data-variant="danger"]:last-child:focus-visible { box-shadow: 0 0 0 2px var(--input-glow), 0 0 0 1px var(--input-focus-edge); }
 
 .ui-button[data-variant="ghost"] { background: transparent; box-shadow: none; }
 .ui-button[data-variant="ghost"]:hover:not(:disabled) { background: var(--bg-hover); }
