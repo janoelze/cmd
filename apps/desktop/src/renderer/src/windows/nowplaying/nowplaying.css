@@ -33,6 +33,18 @@
   gap: var(--space-1);
   min-width: 0;
 }
+/* The title: at least --text-lg; when it fits with room, as large as fills about the column
+   (a character is about 0.6em wide), up to --text-xl small and --text-display with room. */
+.np-title {
+  font-size: clamp(var(--text-lg), calc(100cqw / (var(--chars) * 0.6)), var(--text-xl));
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .np-progress {
   display: flex;
   flex-direction: column;
@@ -63,6 +75,10 @@
   .np-meta,
   .np-progress {
     width: min(80cqw, 360px);
+  }
+  .np-title {
+    max-width: 100%;
+    font-size: clamp(var(--text-lg), calc(min(80cqw, 360px) / (var(--chars) * 0.6)), var(--text-display));
   }
   .np-meta {
     align-items: center;

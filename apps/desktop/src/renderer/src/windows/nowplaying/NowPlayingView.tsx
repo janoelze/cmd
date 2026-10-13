@@ -5,7 +5,7 @@
 // centres like an iPod: the cover at most of the width, the track and controls under it.
 
 import { EmptyState, IconButton, Inline, Text, TimeBar, View, formatTime } from "@cmd/ui";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { nowPlayingPosition, type NowPlaying, type NowPlayingCommand } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 import { useWidgetStatus } from "../../lib/widgets.ts";
@@ -45,7 +45,8 @@ export function NowPlayingCard({ np, onControl }: { np: NowPlaying | null | unde
         <div className="np-body">
           <div className="np-art">{np.artwork ? <img src={np.artwork} alt="" draggable={false} /> : <EmptyState icon="music.note" compact />}</div>
           <div className="np-meta">
-            <Text strong truncate>{np.title}</Text>
+            {/* Its length sets how large it can be (nowplaying.css): a short title grows a little with the window. */}
+            <div className="np-title" style={{ "--chars": Math.max(8, np.title.length) } as CSSProperties}>{np.title}</div>
             <Text tone="dim" truncate>{[np.artist, np.album].filter(Boolean).join(" · ") || " "}</Text>
           </div>
           {np.duration !== null && pos !== null && (

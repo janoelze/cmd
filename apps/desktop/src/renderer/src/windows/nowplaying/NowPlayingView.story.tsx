@@ -21,4 +21,13 @@ export const NoCover = () => <W np={{ ...TRACK, artwork: null }} />;
 export const Nothing = () => <W np={null} />;
 /** With room: one centred column, like an iPod. */
 export const Large = () => <W size={[480, 640]} np={TRACK} />;
+/** A short title grows with the window; a long one stays at the base size and truncates. */
+export const Titles = () => (
+  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+    <W size={[420, 600]} np={{ ...TRACK, title: "Friends" }} />
+    <W size={[420, 600]} np={TRACK} />
+    <W size={[420, 600]} np={{ ...TRACK, title: "A Very Long Title That Goes On (Extended Club Mix, 2026 Remaster)" }} />
+    <W size={[300, 260]} np={{ ...TRACK, title: "Friends" }} />
+  </div>
+);
 export const Sizes = () => <AllSizes render={(s) => <W size={s} np={TRACK} />} />;
