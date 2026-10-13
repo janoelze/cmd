@@ -49,6 +49,7 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
   <img src="shots/jam.png" width="1498" height="898" alt="The grid: a Visualizer widget on system audio next to a Jam window playing a Strudel pattern">
   <img src="shots/painting.png" width="1498" height="898" alt="The strip: the Navigator over a Claude Code session, a still life in a browser window and the Actions widget">
   <img src="shots/light-hn.png" width="1498" height="898" alt="A light theme: Hacker News in a browser window between the Navigator and the Actions widget">
+  <img src="shots/light-wikipedia.png" width="1498" height="898" alt="A light theme: an agent reading Wikipedia in browser windows beside it, on Voyager 1 and cosmochemistry">
 </div>
 <script>
 // Shuffle the hero screenshots, fade the gallery in from a blur once the first has loaded,
