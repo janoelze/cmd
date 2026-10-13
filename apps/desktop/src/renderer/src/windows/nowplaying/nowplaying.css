@@ -34,9 +34,9 @@
   min-width: 0;
 }
 /* The title: at least --text-lg; when it fits with room, as large as fills about the column
-   (a character is about 0.6em wide), up to --text-xl small and --text-display with room. */
+   (a character is about 0.6em wide), up to 80% of --text-display. */
 .np-title {
-  font-size: clamp(var(--text-lg), calc(100cqw / (var(--chars) * 0.6)), var(--text-xl));
+  font-size: clamp(var(--text-lg), calc(100cqw / (var(--chars) * 0.6)), calc(var(--text-display) * 0.8));
   font-weight: 600;
   line-height: 1.25;
   color: var(--text);
@@ -78,7 +78,7 @@
   }
   .np-title {
     max-width: 100%;
-    font-size: clamp(var(--text-lg), calc(min(80cqw, 360px) / (var(--chars) * 0.6)), var(--text-display));
+    font-size: clamp(var(--text-lg), calc(min(80cqw, 360px) / (var(--chars) * 0.6)), calc(var(--text-display) * 0.8));
   }
   .np-meta {
     align-items: center;
