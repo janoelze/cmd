@@ -8,6 +8,12 @@ import { agentLine, untrusted } from "./board.ts";
 import { denied } from "./deny.ts";
 import { agentIn, num, otherWindow, readablePath, ref, schema, str, windowName, windowOf, type ToolContext, type Tool } from "./kit.ts";
 
+/** Where a started agent works by default: its caller's folder (an agent's terminal), else the workspace's. */
+async function homeOf(b: ToolContext): Promise<string> {
+  const own = b.caller.paneId ? (await b.call("pane.list", {})).find((p) => p.id === b.caller.paneId)?.cwd : null;
+  return own || b.workspace().root;
+}
+
 /** How long starting an agent waits for it to get going (or stop at a question). */
 const START_WAIT_MS = 15_000;
 
@@ -18,8 +24,8 @@ const agentTool: Tool = {
     name: "agent",
     explores: false,
     description:
-      "Start a coding agent with a task, or stop one. `start` opens a terminal with the agent (claude by default) working on `prompt` in the workspace's folder; write the prompt as a complete brief (what, where, how to check it's done). `stop` asks the person first. An agent you started reports back by itself when it is done, fails or needs input, so you needn't poll it. Read it to see what it said.",
-    schema: schema({ do: { type: "string", enum: ["start", "stop"] }, prompt: { type: "string" }, kind: { type: "string", enum: ["claude", "codex"] }, folder: { type: "string", description: "Where it works, relative to the workspace's folder (default: the workspace's folder)." }, ref }, ["do"]),
+      "Start a coding agent with a task, or stop one. `start` opens a terminal with the agent (claude by default) working on `prompt` in your folder (the workspace's for a caller without a terminal); write the prompt as a complete brief (what, where, how to check it's done). `stop` asks the person first. An agent you started reports back by itself when it is done, fails or needs input, so you needn't poll it. Read it to see what it said.",
+    schema: schema({ do: { type: "string", enum: ["start", "stop"] }, prompt: { type: "string" }, kind: { type: "string", enum: ["claude", "codex"] }, folder: { type: "string", description: "Where it works, relative to the workspace's folder (default: your own folder)." }, ref }, ["do"]),
   },
   target: (i, b) => (i.do === "stop" && i.ref ? b.refs.id(i.ref) : null),
   async confirm(i, b) {
@@ -38,7 +44,7 @@ const agentTool: Tool = {
     }
     const prompt = str(i.prompt)?.trim();
     if (!prompt) throw new Error("start needs a prompt");
-    const cwd = str(i.folder) ? readablePath(b, str(i.folder)!) : b.workspace().root;
+    const cwd = str(i.folder) ? readablePath(b, str(i.folder)!) : await homeOf(b);
     // An agent's agent is its child (the sidebar shows it under its caller).
     const a = await b.call("agent.spawn", { kind: str(i.kind) ?? "claude", prompt, workspaceId: b.workspace().id, cwd, parentId: b.caller.agentId ?? null });
     b.started?.agent(a.id);

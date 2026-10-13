@@ -58,6 +58,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 - **Notifications.** Waiting agents, bells and finished commands mark the terminal until you look, and count on the Dock badge.
 - **Keyboard first.** ⌘K finds windows, commands and past sessions. Every action is in the menu bar, and every shortcut can be remapped.
 - **CLI.** `cmd` spawns, messages, waits on and stops agents, so an agent can run other agents.
+- **Agent integration (beta).** Agents in cmd's terminals know they run in cmd: their pane and workspace, the agents working beside them, and cmd's tools to open a browser next to them, start other agents and wait for them, read other terminals and arrange the board. Turn it on in Settings → Agents: cmd adds its MCP server to Claude Code, Codex and Gemini CLI, and takes it out when you turn it off. Typing into another terminal or acting on a web page asks you in cmd first.
 - **A complete terminal.** Find in scrollback, jump between prompts, copy a command's output, inline images, copy from programs over ssh, and a check before risky pastes.
 - **16 themes**, light and dark, following the system or not.
 
@@ -124,6 +125,8 @@ cmd notify "deploy finished"         # marks this terminal inside cmd
 cmd events                           # NDJSON event stream
 cmd settings                         # list; `set KEY VALUE`, `reset KEY`, `path`
 cmd hooks                            # agent configs and whether cmd's hook is in them; `install`, `remove`
+cmd tools                            # cmd's tools for agents; `cmd tool look '{}'` runs one as this terminal's agent
+cmd mcp                              # the same tools as an MCP server over stdio (what agent configs start)
 cmd agents turns <agent>             # what an agent did, turn by turn (also: events, coverage, homes)
 cmd agents summary <agent>           # summarise its session with AI, as Markdown
 cmd data query --type git. --since 7d # what cmd recorded (also: stats, explain, subscribe, ai, forget, export)

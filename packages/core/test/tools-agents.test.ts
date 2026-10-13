@@ -149,6 +149,7 @@ describe("the tools for agents in panes", () => {
     expect((await starting).output).toMatch(/^Started claude in w\d+/);
     ran.add("agent");
     expect(child.parentId).toBe(core.panes.get(pane.id)!.agentId);
+    expect(child.cwd).toBe(core.panes.get(pane.id)!.cwd); // where its caller works
     await ok("close", { refs: [term] });
     expect(ran).toEqual(new Set(AGENT_TOOLS.map((t) => t.spec.name)));
     // Every call is in the log, with who made it.
