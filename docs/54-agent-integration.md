@@ -106,7 +106,7 @@ When the server didn't register in this home (a managed policy, an agent cmd onl
 
 ### The tools
 
-The Operator's tools (`operator/tools.ts`, `window-tools.ts`, `page-tools.ts`), moved where both can use them and called through the same bench, with the caller's pane as "where I am":
+The Operator's tools (`operator/tools.ts`, `window-tools.ts`, `page-tools.ts`), moved to `tools/` (names below) and called through the same `ToolContext`, with the caller's pane as "where I am":
 
 - look (the board, the windows, the agents), read (a pane's screen), open (a terminal, a browser on a URL, a file browser, a file), close, focus, arrange;
 - agent (start one, send to one, stop one), wait (for agents or a line of output), events;
@@ -114,28 +114,50 @@ The Operator's tools (`operator/tools.ts`, `window-tools.ts`, `page-tools.ts`), 
 
 What changes against the Operator:
 
-- **Who asks**: the agent's own approval flow asks first (an MCP call is a tool call like any other). The access table stays the authority: `OPERATOR_ACCESS` becomes the agent table (`AGENT_ACCESS`, or a shared one with a column per caller), `never` by default, typed against `Method`.
-- **Confirm** entries (text typed into another pane, a page act, an edit) still ask in cmd, on the window acted on, since the agent's prompt shows only what the agent chose to send. Remembered approvals (`operator.grants`) carry over per workspace.
+- **Who asks**: the agent's own approval flow asks first (an MCP call is a tool call like any other). The access table stays the authority: `TOOL_ACCESS`, one table whoever calls, `never` by default, typed against `Method`.
+- **Confirm** entries (text typed into another pane, a page act, an edit) still ask in cmd, on the window acted on, since the agent's prompt shows only what the agent chose to send. Remembered approvals (today `operator.grants`, then `approvals.list`) carry over per workspace.
 - **Marks on the board** stay: the window acted on lights up and its title bar says which agent acts on it.
 - **No `edit` tool**: the agent edits files itself.
-- **News**: what an agent starts (another agent, an action) reports back. The Operator's `<news>` notes go through the briefing path instead: the hook's `UserPromptSubmit` context, or a `wait` call.
+- **Reports**: what an agent starts (another agent, an action) reports back to it. The Operator's `<news>` notes become reports, delivered through the briefing path: the hook's `UserPromptSubmit` context, or a `wait` call.
 
 ### One source, no drift
 
 Two layers, each defined once; every surface is generated from them.
 
-- **Methods** (`Methods` in `rpc.ts`): the low-level calls. Already held together by tsc (a missing handler, an access table that hasn't decided a new method: `OPERATOR_ACCESS` and `REMOTE_ACCESS` are typed against `Method`) and `registries.test.ts` (every method has a caller). MCP adds no method and no second definition of one.
+- **Methods** (`Methods` in `rpc.ts`): the low-level calls. Already held together by tsc (a missing handler, an access table that hasn't decided a new method: `TOOL_ACCESS` (today `OPERATOR_ACCESS`) and `REMOTE_ACCESS` are typed against `Method`) and `registries.test.ts` (every method has a caller). MCP adds no method and no second definition of one.
 - **Tools**: about a dozen task-shaped verbs over the methods, the Operator's today (`operator/tools.ts`, `window-tools.ts`, `page-tools.ts`). Each already holds its name, description, JSON Schema input, whether it acts and what it asks. They compose methods (`read` by window kind, clipped and marked untrusted; `agent start` waits until the agent is past starting), which is why methods aren't exposed one MCP tool each: 200+ id-and-flag tools would fill the agent's context and skip the clipping and the approvals.
 
 The tools move from `operator/` to a registry of their own (`packages/core/src/tools/`), and every surface reads it:
 
 | Surface | From the registry |
 |---|---|
-| MCP (`cmd mcp`) | `tools/list` is the registry (name, description, `inputSchema`, annotations derived from the access table); `tools/call` runs one by name through the bench. No tool definitions of its own: an adapter about the size of `hook-main.ts`. |
+| MCP (`cmd mcp`) | `tools/list` is the registry (name, description, `inputSchema`, annotations derived from the access table); `tools/call` runs one by name with a `ToolContext` for the calling pane. No tool definitions of its own: an adapter about the size of `hook-main.ts`. |
 | CLI | `cmd tools` lists them with the same descriptions, `cmd tool <name> '<json>'` runs one; generated, for agents without MCP. The hand-written commands (`cmd spawn`, `send`, `wait`) stay for people and can become thin over the tools. |
 | Operator (if kept) | The same registry it uses now. |
 
-One access table for the tools, whoever calls (`OPERATOR_ACCESS` renamed); MCP's `readOnlyHint` and `destructiveHint` come from it, so approvals don't drift either. Tests: every method a tool calls is allowed in the table (the bench checks it at run time; a test catches it before a release); `cmd mcp`'s list and `cmd tools` equal the registry; descriptions under a budget, the server's instructions under 500 characters; `registries.test.ts` adds "every tool is reachable from MCP and the CLI".
+One access table for the tools, whoever calls (`TOOL_ACCESS`); MCP's `readOnlyHint` and `destructiveHint` come from it, so approvals don't drift either. Tests: every method a tool calls is allowed in the table (`ToolContext` checks it at run time; a test catches it before a release); `cmd mcp`'s list and `cmd tools` equal the registry; descriptions under a budget, the server's instructions under 500 characters; `registries.test.ts` adds "every tool is reachable from MCP and the CLI".
+
+### Names
+
+The Operator may be retired, so nothing shared is named after it, nor after one transport (RPC, MCP). The concepts:
+
+| Concept | Name | Today |
+|---|---|---|
+| A low-level call of the core | **method** (`Methods`, `Method`): the core's API; JSON-RPC is only how it travels | same |
+| A task-shaped verb a model calls, with a description and a JSON Schema input | **tool** (`Tool`, `TOOLS`, folder `packages/core/src/tools/`, files by area: `agents.ts`, `windows.ts`, `pages.ts`, …). The word every model API and agent uses for this, not MCP's own | `OperatorTool`, `OPERATOR_TOOLS`, `WINDOW_TOOLS`, `PAGE_TOOLS` in `operator/` |
+| Who calls a tool | **caller** (`Caller`: `{ kind: "agent" \| "person", paneId?, workspaceId }`): an agent in a pane, the person, anything later | implicit: the Operator |
+| What a tool runs with | **`ToolContext`**: the caller, `call()` checked against the access table, the window refs, the workspace (as `CoreContext` is for services) | `Bench` |
+| What a tool may call | **access** (`TOOL_ACCESS`, `Access`: `read`, `act`, `confirm`, `never`), beside `REMOTE_ACCESS`; quiet events with it (`QUIET_EVENTS`) | `OPERATOR_ACCESS`, `OperatorAccess`, `OPERATOR_QUIET_EVENTS` |
+| A call waiting for the person | **approval** (`Approval`); kept ones are **remembered approvals** (`approvals.list`, `approvals.answer`, `approvals.forget`) | `Ask`, `operator.answer`, `operator.grants`, `operator.revoke`, `OperatorGrant` |
+| Text refused outright | **deny-list** (`tools/deny.ts`) | `operator/deny.ts` |
+| What something a caller started says when it ends, fails or needs input | **report** | `<news>` |
+| A window being acted on (ring, title-bar line) | **acting** mark, naming the caller | the Operator's ring |
+| A tool call in the event log | **`tool.call`** in a `tools` data class, with the caller | `operator.tool` |
+| Context an agent gets at session start | **briefing** | peer briefing |
+| The switch and the feature | **Agent integration** (`agents.integration`) | `agents.peers` |
+| The MCP server | **`cmd`** (tools appear as `mcp__cmd__open`…); `cmd mcp` starts it. Adapters are named by transport (`tools/mcp.ts`), the only place one is | none |
+
+What stays the Operator's and goes with it: its service and conversations (`service.ts`, `store.ts`), prompt and rules (`prompt.ts`, `brief.ts`, `RULES`, `MAX_STEPS`), the widget type, and the `operator.*` methods for its chat (`get`, `send`, `stop`, `reset`, `history`, `open`).
 
 ### The Operator
 
@@ -144,7 +166,7 @@ With its tools in every agent, the Operator's loop is a second agent doing what 
 ## Phases
 
 1. **The switch**: `agents.integration` replaces `agents.peers` (settings schema, `layout.ts`, `SettingsWindow.tsx`, `setBriefingFlag`), the briefing gets its "you are in cmd" lines. Useful alone.
-2. **The server**: `cmd mcp` (stdio, pane resolution, no tools outside cmd), the tools moved out of `operator/` into one registry (`tools/`) that MCP, the CLI (`cmd tools`, `cmd tool`) and the Operator all read, one access table, the drift tests.
+2. **The server**: `cmd mcp` (stdio, pane resolution, no tools outside cmd), the tools moved out of `operator/` into one registry (`tools/`) that MCP, the CLI (`cmd tools`, `cmd tool`) and the Operator all read, renamed as in Names (`Tool`, `ToolContext`, `Caller`, `TOOL_ACCESS`, approvals), the drift tests.
 3. **Registration**: one adapter per agent home beside `hooks.ts` (install, remove, state, shown with the hooks in Settings → Agents and `cmd hooks`), following the switch.
 4. **The Operator's future**, after real use of 1–3.
 
