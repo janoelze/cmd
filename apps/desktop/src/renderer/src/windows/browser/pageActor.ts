@@ -1,4 +1,4 @@
-// Acting on the page in a browser window for browser.act (core windows/pages.ts; the Operator's
+// Acting on the page in a browser window for browser.act (core windows/pages.ts; the tools'
 // page tool, docs/51): one script run in the page that finds the element a CSS selector means,
 // describes it, tells a password, card or code field, and either outlines it (a dry run, while the
 // person decides) or acts on it: click, fill, select, submit, press. DOM events, not real input:
@@ -21,7 +21,7 @@ export function actScript(q: PageActQuery): string {
 
 /** Runs in the page: no imports, no closures over this module. */
 function inPage(q: PageActQuery): PageActed {
-  const MARK = "data-cmd-operator";
+  const MARK = "data-cmd-acting";
   const squash = (s: string) => s.replace(/\s+/g, " ").trim();
   let all: Element[];
   try {

@@ -1,4 +1,4 @@
-// Moves on the board asked for from outside the app (workspace.arrange, the Operator's arrange
+// Moves on the board asked for from outside the app (workspace.arrange, the arrange
 // tool, docs/51): the app window showing the workspace makes the move with the board's own
 // helpers and answers (workspace.arranged). Another app window, showing another workspace, stays out.
 

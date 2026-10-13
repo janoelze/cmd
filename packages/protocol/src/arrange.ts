@@ -1,4 +1,4 @@
-// Arranging a workspace's windows from outside the app (the Operator, docs/51): the layout is the
+// Arranging a workspace's windows from outside the app (the arrange tool, docs/54): the layout is the
 // app's (keys in the workspace's view only the renderer understands), so the core asks the app
 // window showing the workspace to make a move (workspace.arrangeRequest) and waits for its answer
 // (workspace.arranged).

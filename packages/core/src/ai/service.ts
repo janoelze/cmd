@@ -361,7 +361,7 @@ export class AiService extends EventEmitter<{ updated: [AiStatus] }> {
   }
 
   /**
-   * A conversation with tools (the Operator): history in, what the run added out. Logged as one
+   * A conversation with tools (a model calling cmd's tools): history in, what the run added out. Logged as one
    * call, with the last message sent and the text that came back.
    */
   agent(o: CallOptions & AgentRun): Promise<AgentResult> {

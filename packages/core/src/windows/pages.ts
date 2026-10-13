@@ -1,7 +1,7 @@
 // Reading a browser window's page (browser.read): the page lives in the app's renderer, in a
 // webview the core can't reach, so the core asks the app windows (the browser.request event)
 // and the one showing that window answers (browser.reply), through AppAsk (app-ask.ts).
-// Acting on it (browser.act: click, fill, submit) goes the same way. Used by the Operator's read
+// Acting on it (browser.act: click, fill, submit) goes the same way. Used by the tools' read
 // and page tools (docs/51); fails plainly when no app window shows the page.
 
 import type { PageAction, PageActed, PageRead, PageReadMode, WindowId } from "@cmd/protocol";

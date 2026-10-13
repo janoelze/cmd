@@ -1,4 +1,4 @@
-// A conversation with an agent that acts (the Operator, docs/51): what the person asked, what the
+// A conversation with an agent that acts (docs/51): what the person asked, what the
 // agent says, the steps it takes and the approvals it waits for, newest last, in a View that
 // keeps the end in sight while it streams. Rows, not bubbles: cmd is a workbench.
 //

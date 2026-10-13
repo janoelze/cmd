@@ -99,7 +99,7 @@ export interface CoreActions {
   watched(): boolean;
   /** Answers JSON-RPC on a connection: the socket's, or a paired device's session. */
   serve(conn: Connection): Served;
-  /** A method, as a caller inside the core calls it (Core.call): for features that act through the API, like the Operator. */
+  /** A method, as a caller inside the core calls it (Core.call): for features that act through the API, like the tools (tools/). */
   call<M extends Method>(method: M, params: Params<M>): Promise<Result<M>>;
 }
 

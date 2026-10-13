@@ -3,7 +3,7 @@
 // ToolContext, which checks TOOL_ACCESS first. Every input carries `why`, the line the board
 // shows. A tool says whether it acts (marked on the board, run one at a time) and, for a call
 // that needs the person's approval, exactly what it asks. MCP (`cmd mcp`), the CLI (`cmd tools`)
-// and the Operator all read this list; none defines a tool of its own.
+// and the model in a widget all read this list; none defines a tool of its own.
 
 import type { Tool } from "./kit.ts";
 import { WORKSPACE_TOOLS } from "./workspace.ts";

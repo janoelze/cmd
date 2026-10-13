@@ -1,5 +1,5 @@
 // Approvals (docs/54, docs/51 Guardrails): tool calls waiting for the person, whoever made them,
-// answered through approvals.answer from wherever the app shows them (the Operator's chat, the
+// answered through approvals.answer from wherever the app shows them (a widget's chat, the
 // window acted on); and the ones the person chose to remember, per workspace, in cmd's database
 // (remembered_approvals). Without a database (tests) nothing is remembered.
 

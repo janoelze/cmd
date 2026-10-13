@@ -1,4 +1,4 @@
-// The board's marks for tool calls (docs/54): a window an agent or the Operator acts on lights up
+// The board's marks for tool calls (docs/54): a window an agent or a widget's model acts on lights up
 // and its title bar says who and why, for as long as the call runs and a moment after; a call
 // waiting for the person marks the window it would act on (else the caller's own) and can be
 // answered there (TileTitle → ActingApproval). From tool.acting; the waiting ones again after a

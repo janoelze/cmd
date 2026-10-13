@@ -1,4 +1,4 @@
-// Running the tools for an agent in a pane (docs/54, Callers other than the Operator): what
+// Running the tools for an agent in a pane (docs/54, callers in panes): what
 // tools.list and tools.call do for `cmd mcp` and `cmd tool`. The caller is the pane: proven by its
 // CMD_PANE_TOKEN (else read-only), else found from the caller's process ancestry. Each call is
 // checked against TOOL_ACCESS whatever the agent's own approval said; one that must ask the person

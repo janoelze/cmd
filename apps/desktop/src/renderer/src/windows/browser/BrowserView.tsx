@@ -53,7 +53,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   const stage = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState({ w: 0, h: 0 });
 
-  // browser.read and browser.act (the Operator's read and page tools): in the webview, answered to the core.
+  // browser.read and browser.act (the read and page tools): in the webview, answered to the core.
   useEffect(
     () =>
       cmd.onEvent((e) => {

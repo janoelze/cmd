@@ -1,5 +1,5 @@
 // pane.waitFor: until a terminal shows something (on its screen now, or printed next), or is back at its prompt. For whoever
-// types into a terminal and needs to know when the command is done (the Operator, docs/51;
+// types into a terminal and needs to know when the command is done (a tool, docs/54;
 // agents in panes through the CLI): the output and the shell integration's OSC 133 marks,
 // never a fixed wait.
 

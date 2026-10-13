@@ -67,7 +67,7 @@ export function TileTitle({
   const place = f.place && !bare && !(row.win && viewFor(row.win.kind)?.placeInToolbar) ? f.place : undefined;
   const file = fileOf(row);
   const url = file ? null : urlOf(row);
-  // A tool call acting on this window (an agent's, the Operator's) says so where the status goes,
+  // A tool call acting on this window (a coding agent's, a widget's) says so where the status goes,
   // and rings it; one waiting for the person is answered from there (docs/54).
   const acting = useActingMark(windowIdOf(row));
   const asks = acting?.waiting && acting.call.approval ? acting.call : null;

@@ -1,4 +1,4 @@
-// A conversation with an agent that acts (the Operator): requests, answers, steps in every state,
+// A conversation with an agent that acts (a model with tools): requests, answers, steps in every state,
 // a step waiting for approval, a note when a turn was stopped.
 import { ChatApproval, ChatComposer, ChatLog, ChatMessage, ChatNote, ChatStep } from "./chat.tsx";
 import { AiField } from "./ai.tsx";
@@ -31,7 +31,7 @@ export const Conversation = () => (
   </div>
 );
 
-/** An answer with headings, lists (nested) and code, as the Operator writes them. */
+/** An answer with headings, lists (nested) and code, as a model writes them. */
 export const Answer = () => (
   <div style={frame}>
     <ChatMessage from="agent" copy="…">

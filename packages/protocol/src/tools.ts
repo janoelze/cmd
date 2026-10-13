@@ -1,5 +1,5 @@
 // The tools (docs/54): task-shaped verbs over the core's methods that a model calls (an agent in
-// a pane through `cmd mcp` or `cmd tool`, the Operator), whoever calls them under one access
+// a pane through `cmd mcp` or `cmd tool`, or a model in a widget), whoever calls them under one access
 // table. What a call waiting for the person looks like, the approvals remembered per workspace,
 // and the methods for both. The tools themselves live in the core (packages/core/src/tools/).
 
@@ -45,7 +45,7 @@ export interface ToolActivity {
   /** The call's id; approvals.answer takes it. */
   id: string;
   workspaceId: WorkspaceId;
-  /** Who calls, as people say it ("Claude “Bug hunt”", "Operator"). */
+  /** Who calls, as people say it ("Claude “Bug hunt”"). */
   caller: string;
   /** The caller's own window (its pane, its widget). */
   callerWindowId: WindowId | null;

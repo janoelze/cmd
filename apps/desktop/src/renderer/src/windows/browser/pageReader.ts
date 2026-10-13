@@ -1,4 +1,4 @@
-// Reading the page in a browser window for browser.read (core windows/pages.ts; the Operator's
+// Reading the page in a browser window for browser.read (core windows/pages.ts; the tools'
 // read tool, docs/51). A small script runs in the page (webview.executeJavaScript) and hands back
 // its HTML, or what a CSS selector or an XPath matches there, listed. The HTML becomes Markdown
 // here: Mozilla's Readability picks the main content (Firefox's Reader View), Turndown converts

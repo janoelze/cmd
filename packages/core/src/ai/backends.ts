@@ -134,7 +134,7 @@ export function aiBackend(o: AiBackendOptions): Backend {
   };
 }
 
-// ── a conversation with tools (the Operator, docs/51) ────
+// ── a conversation with tools (a model calling tools, docs/51) ────
 
 export interface AgentCall {
   id: string;
