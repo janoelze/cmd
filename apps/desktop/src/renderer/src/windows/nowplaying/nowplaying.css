@@ -1,6 +1,7 @@
 /* Now Playing (NowPlayingView.tsx). Small: the cover fills what's left above the track,
    which reads from the left. With room (the container query): one centred column, the
-   cover 80% of the width up to a size, leaving room under it for the track and controls. */
+   cover 80% of the width up to a size, leaving room under it for the track and controls.
+   Really short (too little room for a cover worth seeing): a thumbnail in front of the title. */
 .np {
   container: np / size;
   height: 100%;
@@ -12,6 +13,14 @@
   height: 100%;
   padding: var(--space-4);
   box-sizing: border-box;
+}
+/* The cover and the title under it (or beside it, really short). */
+.np-head {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 .np-art {
   flex: 1;
@@ -63,6 +72,11 @@
     align-items: center;
     gap: var(--space-4);
   }
+  .np-head {
+    flex: none;
+    align-items: center;
+    gap: var(--space-4);
+  }
   .np-art {
     flex: none;
     width: min(var(--np-column), calc(100cqh - 200px));
@@ -87,5 +101,32 @@
   .np-controls {
     justify-content: center;
     gap: var(--space-6);
+  }
+}
+
+@container np (max-height: 280px) {
+  .np-body {
+    justify-content: center;
+  }
+  .np-head {
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+  }
+  .np-art {
+    flex: none;
+    width: 44px;
+    height: 44px;
+  }
+  .np-art img {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius-sm);
+  }
+  .np-meta {
+    flex: 1;
+  }
+  .np-title {
+    font-size: var(--text-lg);
   }
 }

@@ -2,7 +2,8 @@
 // playing (core nowplaying/, read through the MediaRemote adapter), with play/pause,
 // skips and a scrubber. The position moves on here from the last report, so the bar
 // runs without the core sending every second. Small, it reads left to right; with room, it
-// centres like an iPod: the cover at most of the width, the track and controls under it.
+// centres like an iPod: the cover at most of the width, the track and controls under it;
+// really small, the cover is a thumbnail in front of the title.
 
 import { EmptyState, IconButton, Inline, Text, TimeBar, View, formatTime } from "@cmd/ui";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -43,11 +44,13 @@ export function NowPlayingCard({ np, onControl }: { np: NowPlaying | null | unde
     <View>
       <div className="np">
         <div className="np-body">
-          <div className="np-art">{np.artwork ? <img src={np.artwork} alt="" draggable={false} /> : <EmptyState icon="music.note" compact />}</div>
-          <div className="np-meta">
-            {/* Its length sets how large it can be (nowplaying.css): a short title grows a little with the window. */}
-            <div className="np-title" style={{ "--chars": Math.max(8, np.title.length) } as CSSProperties}>{np.title}</div>
-            <Text tone="dim" truncate>{[np.artist, np.album].filter(Boolean).join(" · ") || " "}</Text>
+          <div className="np-head">
+            <div className="np-art">{np.artwork ? <img src={np.artwork} alt="" draggable={false} /> : <EmptyState icon="music.note" compact />}</div>
+            <div className="np-meta">
+              {/* Its length sets how large it can be (nowplaying.css): a short title grows a little with the window. */}
+              <div className="np-title" style={{ "--chars": Math.max(8, np.title.length) } as CSSProperties}>{np.title}</div>
+              <Text tone="dim" truncate>{[np.artist, np.album].filter(Boolean).join(" · ") || " "}</Text>
+            </div>
           </div>
           {np.duration !== null && pos !== null && (
             <div className="np-progress">

@@ -21,6 +21,14 @@ export const NoCover = () => <W np={{ ...TRACK, artwork: null }} />;
 export const Nothing = () => <W np={null} />;
 /** With room: one centred column, like an iPod. */
 export const Large = () => <W size={[480, 640]} np={TRACK} />;
+/** Really short: the cover a thumbnail in front of the title. */
+export const Tiny = () => (
+  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+    <W size={[260, 200]} np={TRACK} />
+    <W size={[360, 240]} np={TRACK} />
+    <W size={[360, 240]} np={{ ...TRACK, artwork: null }} />
+  </div>
+);
 /** A short title grows with the window; a long one stays at the base size and truncates. */
 export const Titles = () => (
   <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
