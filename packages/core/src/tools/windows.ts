@@ -25,8 +25,16 @@ const openTool: Tool = {
     name: "open",
     explores: false,
     description:
-      "Open a window in the workspace: a terminal (in a folder of the workspace), a file or folder (in the window type that shows it), or a URL in a browser. Returns its ref. With `ref`, the window already open shows it instead: a browser goes to the URL, a file browser to the folder (prefer this to opening another window). A URL asks the person first, unless they allow its site here. To run a command, open nothing: use run or type.",
-    schema: schema({ kind: { type: "string", enum: ["terminal", "path", "url"] }, target: { type: "string", description: "The path (relative to the workspace's folder) or URL; for a terminal, the folder to start in." }, ref: { ...ref, description: "A browser or file browser to show it in, instead of a new window." } }, ["kind"]),
+      "Show the person something in a window beside you: a file in cmd's editor (`line` scrolls to it and selects it), a folder in the file browser, a web page in a browser, or a new terminal. It is for showing, not for reading or changing files: it returns only the window's ref. With `ref`, a window already open shows it instead: a browser goes to the URL, a file browser to the folder, an editor to the line (prefer this to opening another window). A URL asks the person first, unless they allow its site here. To run a command, open nothing: use run.",
+    schema: schema(
+      {
+        kind: { type: "string", enum: ["file", "url", "terminal"], description: "file: a file or folder, in the window that shows it (an editor, a Markdown view, an image, the file browser); url: a web page; terminal: a new terminal." },
+        target: { type: "string", description: "The file or folder (relative to the workspace's folder), or the URL; for a terminal, the folder to start in." },
+        line: { type: "number", description: "file: the line to show, from 1 (in the editor, even for Markdown)." },
+        ref: { ...ref, description: "A browser, file browser or editor to show it in, instead of a new window." },
+      },
+      ["kind"],
+    ),
   },
   target: (i, b) => (i.ref ? b.refs.id(i.ref) : null),
   // A URL asks first: a page can tell a model to visit an address carrying what it read. Remembered per site.
@@ -39,22 +47,39 @@ const openTool: Tool = {
   async run(i, b) {
     const ws = b.workspace();
     const target = str(i.target);
+    // "path" is what kind `file` was called before.
+    const kind = i.kind === "path" ? "file" : i.kind;
+    const line = typeof i.line === "number" && i.line >= 1 ? Math.floor(i.line) : null;
+    const reveal = line ? { line, column: null, text: null, at: Date.now() } : null;
     if (i.ref) {
       const w = await windowOf(b, i.ref);
-      if (w.kind === "browser" && i.kind === "url") {
+      if (w.kind === "browser" && kind === "url") {
         await b.call("window.update", { id: w.id, state: { url: urlOf(target).href } });
         return `${String(i.ref)} goes to ${target}.`;
       }
-      if (w.kind === "files" && i.kind === "path") {
+      if (w.kind === "text" && kind === "file" && (!target || readablePath(b, target) === w.state.path)) {
+        if (!reveal) throw new Error("give the line to show");
+        await b.call("window.update", { id: w.id, state: { reveal } });
+        return `${String(i.ref)} shows line ${line}.`;
+      }
+      if (w.kind === "files" && kind === "file") {
         const dir = readablePath(b, target ?? ".");
         await b.call("window.update", { id: w.id, state: { path: dir } });
         return `${String(i.ref)} shows ${path.relative(ws.root, dir) || "the workspace's folder"}.`;
       }
-      throw new Error(`${String(i.ref)} is ${windowName(w)}: only a browser takes a URL and a file browser a folder; open a new window instead`);
+      throw new Error(`${String(i.ref)} is ${windowName(w)}: only a browser takes a URL, a file browser a folder and an editor a line of its file; open a new window instead`);
     }
     let w: AppWindow | null;
-    if (i.kind === "terminal") w = await b.call("window.open", { kind: "terminal", input: { cwd: target ? readablePath(b, target) : ws.root }, workspaceId: ws.id });
-    else if (i.kind === "url") w = await b.call("window.open", { kind: "browser", input: { url: urlOf(target).href }, workspaceId: ws.id }); else w = await b.call("window.openTarget", { target: readablePath(b, target ?? "."), workspaceId: ws.id });
+    if (kind === "terminal") w = await b.call("window.open", { kind: "terminal", input: { cwd: target ? readablePath(b, target) : ws.root }, workspaceId: ws.id });
+    else if (kind === "url") w = await b.call("window.open", { kind: "browser", input: { url: urlOf(target).href }, workspaceId: ws.id });
+    else if (kind !== "file") throw new Error("kind is file, url or terminal");
+    else if (reveal) {
+      // At a line: the editor, the one already showing the file if there is one.
+      const file = readablePath(b, target ?? "");
+      const shown = (await b.call("window.list", {})).find((x) => x.workspaceId === ws.id && x.kind === "text" && x.state.path === file);
+      if (shown) await b.call("window.update", { id: shown.id, state: { reveal } });
+      w = shown ?? (await b.call("window.open", { kind: "text", input: { path: file, reveal }, workspaceId: ws.id }));
+    } else w = await b.call("window.openTarget", { target: readablePath(b, target ?? "."), workspaceId: ws.id });
     if (!w) return "No window type shows that; nothing opened.";
     return `Opened ${w.kind} ${b.refs.of(w.id)} "${w.title}".`;
   },

@@ -26,7 +26,7 @@ export const AGENT_TOOLS: Tool[] = TOOLS.filter((t) => t.for !== "models");
 
 /** What cmd's MCP server says about itself (`instructions`): front-loaded, under 500 characters. */
 export const INSTRUCTIONS =
-  "cmd's tools act on the cmd workspace you run in: open a browser, file or terminal beside you (open), start other coding agents, message them and wait for them (agent, wait), read other terminals and windows (look, read), run the project's Workspace Actions (run), arrange the board. Start with look: windows are named by refs (w1, w2…). Typing into another terminal or acting on a web page asks the person in cmd first.";
+  "cmd's tools act on the cmd app you run in, where the person watches your terminal beside other windows: show them a file in cmd's editor, a folder or a web page beside you (open), start other coding agents and wait for them (agent, wait), read other terminals and windows (look, read), run the project's own commands (run), arrange the board. Start with look: windows have refs (w1, w2…). Read and edit files with your own tools.";
 
 /** A tool as callers see it: the hints come from the access table, over the methods it calls. */
 export function toolInfo(t: Tool): ToolInfo {

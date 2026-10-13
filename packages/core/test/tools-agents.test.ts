@@ -110,6 +110,15 @@ describe("the tools for agents in panes", () => {
     const board = await ok("look");
     expect(board).toMatch(/w1 terminal \(you\)/); // its own pane
     expect(await ok("read", { path: "README.md" })).toContain("# Thing");
+    // Showing a file: in the editor at a line; again at another line, in the same window; "path" still works.
+    const editor = refOf(await ok("open", { kind: "file", target: "README.md", line: 1 }));
+    const shown = core.windows.list().find((w) => w.kind === "text")!;
+    expect(shown.state).toMatchObject({ path: path.join(dir, "README.md"), reveal: { line: 1 } });
+    expect(await ok("open", { kind: "file", target: "README.md", line: 3 })).toContain(editor);
+    expect(core.windows.list().filter((w) => w.kind === "text")).toHaveLength(1);
+    expect(core.windows.list().find((w) => w.id === shown.id)!.state).toMatchObject({ reveal: { line: 3 } });
+    expect(await ok("open", { ref: editor, kind: "file", line: 2 })).toBe(`${editor} shows line 2.`);
+    expect(await ok("open", { kind: "path", target: "." })).toMatch(/^Opened files/);
     expect(await ok("run", { list: true })).toContain("test: npm run test");
     const term = refOf(await ok("open", { kind: "terminal" }));
     expect(await ok("read", { ref: term })).toContain("<window");

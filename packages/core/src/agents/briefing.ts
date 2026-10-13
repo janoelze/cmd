@@ -26,7 +26,7 @@ export function introduction(agent: Agent, pane: Pane | null, workspace: Workspa
   return [
     "[cmd] You are running in a terminal pane of cmd, a macOS workspace for terminals and coding agents.",
     ...(where.length ? [where.join(" ")] : []),
-    `cmd can open windows and browsers beside you, start and message other agents and wait for them, read other panes and arrange the board: ${tools}. You are agent id ${agent.id.slice(0, 8)}.`,
+    `cmd can show the person files, folders and web pages in windows beside you, start and message other agents and wait for them, read other terminals and arrange the board: ${tools}. You are agent id ${agent.id.slice(0, 8)}.`,
   ].join("\n");
 }
 
