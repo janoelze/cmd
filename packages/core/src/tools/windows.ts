@@ -6,6 +6,9 @@ import path from "node:path";
 import type { AppWindow } from "@cmd/protocol";
 import { otherWindow, readablePath, ref, schema, str, windowName, windowOf, type Tool } from "./kit.ts";
 
+/** A host on this Mac: its pages never ask (a dev server, a local tool). */
+const isLocal = (host: string) => host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1" || host === "[::1]" || host === "0.0.0.0";
+
 /** A web address to open: http or https only. */
 function urlOf(target: string | undefined): URL {
   let url: URL;
@@ -37,12 +40,17 @@ const openTool: Tool = {
     ),
   },
   target: (i, b) => (i.ref ? b.refs.id(i.ref) : null),
-  // A URL asks first: a page can tell a model to visit an address carrying what it read. Remembered per site.
-  async confirm(i) {
-    if (i.kind !== "url") return null;
-    const url = urlOf(str(i.target));
-    const site = url.hostname.replace(/^www\./, "");
-    return { title: `Open ${site}`, exact: url.href, rule: { key: `url:${site}`, label: `opening pages on ${site}` } };
+  // A website is its own permission (a page can tell a model to visit an address carrying what it read), kept by site; pages on this Mac never ask.
+  async confirm(i, b) {
+    const target = str(i.target);
+    if (i.kind === "url") {
+      const url = urlOf(target);
+      const site = url.hostname.replace(/^www\./, "");
+      return { permission: "web", title: `Open ${site}`, exact: url.href, site, free: isLocal(url.hostname) };
+    }
+    const where = i.ref ? windowName(await windowOf(b, i.ref)) : null;
+    if (i.kind === "terminal") return { permission: "show", title: "Open a terminal", exact: target };
+    return { permission: "show", title: `Show ${target ?? "the workspace's folder"}${where ? ` in ${where}` : ""}`, exact: target };
   },
   async run(i, b) {
     const ws = b.workspace();
@@ -81,6 +89,7 @@ const openTool: Tool = {
       w = shown ?? (await b.call("window.open", { kind: "text", input: { path: file, reveal }, workspaceId: ws.id }));
     } else w = await b.call("window.openTarget", { target: readablePath(b, target ?? "."), workspaceId: ws.id });
     if (!w) return "No window type shows that; nothing opened.";
+    b.opened?.add(w.id);
     return `Opened ${w.kind} ${b.refs.of(w.id)} "${w.title}".`;
   },
 };
@@ -95,6 +104,12 @@ const closeTool: Tool = {
     schema: schema({ refs: { type: "array", items: ref } }, ["refs"]),
   },
   target: (i, b) => (Array.isArray(i.refs) && i.refs.length === 1 ? b.refs.id(i.refs[0]) : null),
+  // Closing what it opened is tidying up; anything else may end someone's work.
+  async confirm(i, b) {
+    const wins = await Promise.all((Array.isArray(i.refs) ? i.refs : []).map((r) => otherWindow(b, r, "close")));
+    const names = wins.map(windowName).join(", ");
+    return { permission: wins.every((w) => b.opened?.has(w.id)) ? "show" : "stop", title: `Close ${names}` };
+  },
   async run(i, b) {
     const wins = await Promise.all((Array.isArray(i.refs) ? i.refs : []).map((r) => otherWindow(b, r, "close")));
     for (const w of wins) await b.call("window.close", { id: w.id });
@@ -112,6 +127,7 @@ const focusTool: Tool = {
     schema: schema({ ref }, ["ref"]),
   },
   target: (i, b) => b.refs.id(i.ref),
+  confirm: async (i, b) => ({ permission: "show", title: `Bring ${windowName(await windowOf(b, i.ref))} into view` }),
   async run(i, b) {
     const w = await windowOf(b, i.ref);
     await b.call("window.select", { id: w.id });
@@ -141,6 +157,7 @@ const arrangeTool: Tool = {
     ),
   },
   target: (i, b) => (i.ref ? b.refs.id(i.ref) : null),
+  confirm: async (i) => ({ permission: "show", title: i.do === "mode" ? `Show the board as ${str(i.mode)}` : "Arrange the board" }),
   async run(i, b) {
     const ws = b.workspace();
     if (i.do === "mode") {

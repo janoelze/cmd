@@ -45,6 +45,8 @@ export class ToolRunner {
   #acting = new Map<PaneId, Promise<unknown>>();
   /** Per caller, its calls waiting for the person. */
   #asking = new Map<PaneId, Set<string>>();
+  /** Per caller, the windows it opened itself. */
+  #opened = new Map<PaneId, Set<string>>();
   /** Puts a call on the board (ToolsService.show). */
   #show: (a: ToolActivity) => void;
 
@@ -58,7 +60,12 @@ export class ToolRunner {
       // Nobody is left to tell the answer to.
       for (const call of this.#asking.get(id) ?? []) this.#approvals.cancel(call, "the agent's terminal closed");
       this.#asking.delete(id);
+      this.#opened.delete(id);
+      approvals.endSession(id);
     });
+    // "This session" is the agent's: it ends when the agent does (a new one in the same terminal starts over).
+    core.agents.on("removed", (id) => approvals.endSession(id));
+    core.agents.on("updated", (a) => a.state === "exited" && approvals.endSession(a.id));
   }
 
   /** A caller's refs for windows (w1, w2…), kept while its pane lives. */
@@ -123,10 +130,17 @@ export class ToolRunner {
       },
       call: this.#gate(false, trusted),
       refs: this.refs(paneId),
+      opened: this.#openedBy(paneId),
       started: { agent: (id) => this.#reports.watchAgent(paneId, id), command: (pane, label) => this.#reports.watchCommand(paneId, pane, label) },
       reports: (ms, signal) => this.#reports.next(paneId, ms, signal),
       signal: new AbortController().signal,
     };
+  }
+
+  #openedBy(paneId: PaneId): Set<string> {
+    let s = this.#opened.get(paneId);
+    if (!s) this.#opened.set(paneId, (s = new Set()));
+    return s;
   }
 
   /** The core's methods as tools may call them: TOOL_ACCESS first, `confirm` ones only once the person allowed the call. */
@@ -154,7 +168,8 @@ export class ToolRunner {
       // a bad ref: the run below says so
     }
     const caller = ctx.caller;
-    const shown: ToolActivity = { id, workspaceId: caller.workspaceId, caller: caller.name, callerWindowId: caller.windowId ?? null, tool: tool.spec.name, why, acts: tool.acts, target, state: "running" };
+    const kind = caller.agentId ? this.#core.agents.get(caller.agentId)?.kind : undefined;
+    const shown: ToolActivity = { id, workspaceId: caller.workspaceId, caller: caller.name, ...(kind ? { callerKind: kind } : {}), callerWindowId: caller.windowId ?? null, tool: tool.spec.name, why, acts: tool.acts, target, state: "running" };
     // Reads show only while they wait for the person.
     let asked = false;
     const show = (a: ToolActivity) => {
@@ -164,28 +179,32 @@ export class ToolRunner {
     show(shown);
     let ask: Approval | null = null;
     let answer: Answer | null = null;
-    let remembered: string | null = null;
+    let kept: string | null = null;
     const end = (state: "done" | "failed" | "denied", output: string, isError: boolean) => {
       show({ ...shown, state });
       const told = ctx.caller.paneId ? reportsText(this.#reports.take(ctx.caller.paneId)) : "";
       const sent = clip(output, OUTPUT_MAX) + (told ? `\n\n${told}` : "");
-      this.#core.data.record({ id: `tool:${id}`, at: t0, until: Date.now(), type: "tool.call", source: "cmd", workspaceId: caller.workspaceId, agentId: caller.agentId ?? null, paneId: caller.paneId ?? null, windowId: target, text: why, data: { caller: caller.name, tool: tool.spec.name, acts: tool.acts, state, input: withoutWhy(input), ask: ask?.title ?? null, exact: ask?.exact ?? null, allowed: answer ? answer.allow : remembered ? true : null, reason: answer?.reason ?? null, remembered, ms: Date.now() - t0 }, content: sent });
+      this.#core.data.record({ id: `tool:${id}`, at: t0, until: Date.now(), type: "tool.call", source: "cmd", workspaceId: caller.workspaceId, agentId: caller.agentId ?? null, paneId: caller.paneId ?? null, windowId: target, text: why, data: { caller: caller.name, tool: tool.spec.name, acts: tool.acts, state, input: withoutWhy(input), permission: ask?.permission ?? null, site: ask?.site ?? null, ask: ask?.title ?? null, exact: answer ? (ask!.exact ?? null) : null, allowed: answer ? answer.allow : null, scope: answer?.scope ?? null, reason: answer?.reason ?? null, remembered: kept, ms: Date.now() - t0 }, content: sent });
       return { output: sent, isError };
     };
     try {
       ask = tool.confirm ? await tool.confirm(input, ctx) : null;
       if (ask) {
-        const rule = ask.rule ? this.#approvals.remembered(caller.workspaceId, ask.rule.key) : null;
-        if (rule) remembered = rule.label;
+        const caller_ = caller.paneId!;
+        // Whose session a yes "for this session" is: the agent's, else the terminal's (cmd tool in a shell).
+        const session = caller.agentId ?? caller_;
+        const d = this.#approvals.decide(session, caller.workspaceId, ask);
+        if ("refuse" in d) return end("failed", d.refuse, true);
+        if ("run" in d) kept = d.kept ?? null;
         else {
-          show({ ...shown, state: "waiting", approval: { title: ask.title, exact: ask.exact, ...(ask.rule ? { offer: ask.rule.label } : {}) } });
-          if (caller.paneId) this.#core.notifications.send(caller.paneId, `${caller.name} asks`, ask.title);
+          show({ ...shown, state: "waiting", approval: { title: ask.title, ...(ask.exact ? { exact: ask.exact } : {}), permission: ask.permission, ...(ask.site ? { site: ask.site } : {}), ...(ask.risky ? { risky: true } : {}), scopes: d.ask } });
+          this.#core.notifications.send(caller_, `${caller.name} asks`, ask.title);
           const timer = setTimeout(() => this.#approvals.cancel(id, "no answer in time"), APPROVAL_MS);
-          const asking = this.#asking.get(caller.paneId!) ?? new Set<string>();
-          this.#asking.set(caller.paneId!, asking.add(id));
+          const asking = this.#asking.get(caller_) ?? new Set<string>();
+          this.#asking.set(caller_, asking.add(id));
           answer = await this.#approvals.wait(id, caller.workspaceId).finally(() => (clearTimeout(timer), asking.delete(id)));
-          if (answer.remember && ask.rule) this.#approvals.remember(caller.workspaceId, ask.rule.key, ask.rule.label);
           if (!answer.allow) return end("denied", `The person said no${answer.reason ? `: ${answer.reason}` : ""}. Don't do this another way; ask them what they want instead.`, true);
+          this.#approvals.grant(session, caller.workspaceId, ask, answer.scope);
           show({ ...shown, state: "running" });
         }
       }

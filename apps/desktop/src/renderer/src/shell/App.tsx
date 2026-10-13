@@ -37,6 +37,7 @@ import { useSelectionFollows } from "./selection.ts";
 import { closeSheet, openSheet, useSheet } from "./sheets.ts";
 import { BootSheet, useBootReport } from "./BootSheet.tsx";
 import { SitePermissionSheet } from "./SitePermissionSheet.tsx";
+import { Approvals } from "./Approvals.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { TaskManager } from "./TaskManager.tsx";
 import { TopBar } from "./TopBar.tsx";
@@ -207,6 +208,7 @@ export function App() {
       <Presence when={boot}>{(report, open) => <BootSheet open={open} report={report} />}</Presence>
       <Presence when={all.pairRequests[0]}>{(request, open) => <PairSheet key={request.requestId} open={open} request={request} />}</Presence>
       <SitePermissionSheet />
+      <Approvals />
     </div>
   );
 }

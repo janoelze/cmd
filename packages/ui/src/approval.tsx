@@ -48,7 +48,9 @@ export function ApprovalSheet<S extends string = string>({
   position,
   expiresAt,
   onAnswer,
+  onDismiss,
   askWhy = true,
+  className,
   busy,
 }: {
   /** False while it fades out (Presence). */
@@ -68,6 +70,9 @@ export function ApprovalSheet<S extends string = string>({
   /** When the asker stops waiting (ms since the epoch). */
   expiresAt?: number;
   onAnswer: (a: ApprovalAnswer<S>) => void;
+  /** Esc, ✕ and the scrim: "not now", where that differs from Deny (a web page's ask, asked again next time). Left out, they deny. */
+  onDismiss?: () => void;
+  className?: string;
   /** Offer "Deny and Say Why…": for an asker that reads it (an agent), not a web page or a device. */
   askWhy?: boolean;
   busy?: boolean;
@@ -105,11 +110,11 @@ export function ApprovalSheet<S extends string = string>({
   return (
     <Dialog
       open={open}
-      onClose={no}
+      onClose={() => !busy && (onDismiss ?? no)()}
       width={480}
       position="center"
       divided
-      className="ui-approval"
+      className={className ? `ui-approval ${className}` : "ui-approval"}
       label={typeof title === "string" ? title : "Approval"}
       dismissable={!busy}
       window={{ icon: who.icon, name: who.context ? `${who.name} · ${who.context}` : who.name, status: meta.length ? meta.join("  ·  ") : undefined }}

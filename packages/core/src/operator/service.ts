@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type { ModelMessage } from "ai";
+import { approvalLabel, type ApprovalScope } from "@cmd/protocol";
 import type { Agent, AgentId, AgentState, Method, NewDataEvent, OperatorPast, ToolActivity, PaneId, OperatorConversation, OperatorEvent, OperatorItem, OperatorUsage, Params, Result, WindowId, Workspace, WorkspaceId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { AgentCall, AgentResult, AgentRun } from "../ai/backends.ts";
@@ -91,6 +92,8 @@ interface Conversation {
   news: string[];
   /** Its calls waiting for the person (ids in Approvals). */
   approvals: Set<string>;
+  /** What each waiting call asks, and how long a yes may hold. */
+  pending: Map<string, { ask: Approval; scopes: ApprovalScope[] }>;
   denials: number;
 }
 
@@ -201,6 +204,7 @@ export class OperatorService {
     c.queue = [];
     c.abort?.abort(new Error("stopped"));
     for (const id of c.approvals) this.#d.approvals.cancel(id, "stopped");
+    this.#d.approvals.endSession(`operator:${workspaceId}`);
   }
 
   /** A new conversation; the current one is put away. What it started still reports back (to the new one). */
@@ -370,29 +374,34 @@ export class OperatorService {
       // News that came in while this ran goes back with it.
       const news = c.news.splice(0);
       const sent = clip(output, OUTPUT_MAX) + (news.length ? `\n\n<news>\n${news.map((n) => `- ${n}`).join("\n")}\n</news>` : "");
-      this.#d.record?.({ id: `operator:${call.id}`, at: t0, until: Date.now(), type: "tool.call", source: "cmd", parentId: turnId, workspaceId: c.workspaceId, windowId: target, text: item.why, data: { caller: bench.caller.name, tool: item.tool, acts: item.acts, state, input, ask: approval?.ask.title ?? null, exact: approval?.ask.exact ?? null, allowed: approval?.allowed ?? null, reason: approval?.reason ?? null, remembered: approval?.remembered ?? null, ms: next.ms }, content: sent });
+      this.#d.record?.({ id: `operator:${call.id}`, at: t0, until: Date.now(), type: "tool.call", source: "cmd", parentId: turnId, workspaceId: c.workspaceId, windowId: target, text: item.why, data: { caller: bench.caller.name, tool: item.tool, acts: item.acts, state, input, permission: approval?.ask.permission ?? null, site: approval?.ask.site ?? null, ask: approval?.ask.title ?? null, exact: approval?.ask.exact ?? null, allowed: approval?.allowed ?? null, reason: approval?.reason ?? null, remembered: approval?.remembered ?? null, ms: next.ms }, content: sent });
       return { output: sent, isError };
     };
     try {
       const ask = tool.confirm ? await tool.confirm(call.input, bench) : null;
-      // Allowed here before, and remembered: it runs, and says so.
-      const grant = ask?.rule ? this.#d.approvals.remembered(c.workspaceId, ask.rule.key) : null;
-      if (ask && grant) {
-        approval = { ask, allowed: true, reason: null, remembered: grant.label };
-        this.#update(c, { ...item, ask: ask.title, exact: ask.exact, remembered: grant.label });
+      const who = `operator:${c.workspaceId}`;
+      const d = ask ? this.#d.approvals.decide(who, c.workspaceId, ask) : null;
+      if (d && "refuse" in d) return end("failed", d.refuse, true);
+      // Allowed by the person's settings, or a kept answer: it runs, and says which.
+      if (ask && d && "run" in d) {
+        if (d.kept) {
+          approval = { ask, allowed: true, reason: null, remembered: d.kept };
+          this.#update(c, { ...item, ask: ask.title, exact: ask.exact, remembered: d.kept });
+        }
         return end("done", await tool.run(call.input, { ...bench, call: this.#gate(true, abort.signal) }), false);
       }
-      if (ask) {
-        this.#update(c, { ...item, state: "waiting", ask: ask.title, exact: ask.exact, ...(ask.rule ? { offer: ask.rule.label } : {}) });
+      if (ask && d && "ask" in d) {
+        c.pending.set(item.id, { ask, scopes: d.ask });
+        this.#update(c, { ...item, state: "waiting", ask: ask.title, exact: ask.exact, ...(d.ask.includes("always") ? { offer: approvalLabel(ask.permission, ask.site) } : {}) });
         this.#d.notify?.(c.workspaceId, { title: `${c.name ?? "The Operator"} asks`, body: ask.title, urgent: true });
         c.approvals.add(item.id);
-        const a = await this.#d.approvals.wait(item.id, c.workspaceId).finally(() => c.approvals.delete(item.id));
+        const a = await this.#d.approvals.wait(item.id, c.workspaceId).finally(() => (c.approvals.delete(item.id), c.pending.delete(item.id)));
         approval = { ask, allowed: a.allow, reason: a.reason ?? null };
-        if (a.remember && ask.rule) this.#d.approvals.remember(c.workspaceId, ask.rule.key, ask.rule.label);
         if (!a.allow) {
           if (++c.denials >= DENIALS) queueMicrotask(() => abort.abort(new Error("denied")));
           return end("denied", `The person said no${a.reason ? `: ${a.reason}` : ""}. Don't do this another way; ask what they want instead.`, true);
         }
+        this.#d.approvals.grant(who, c.workspaceId, ask, a.scope);
         c.denials = 0;
         this.#update(c, { ...item, ask: ask.title, exact: ask.exact, state: "running" });
         const out = await tool.run(call.input, { ...bench, call: this.#gate(true, abort.signal) });
@@ -505,8 +514,9 @@ export class OperatorService {
   /** A step on the board, as every caller's are (the window acted on lights up; one waiting can be answered there). */
   #acting(c: Conversation, item: OperatorItem): void {
     if (item.kind !== "tool" || (!item.acts && item.state !== "waiting")) return;
-    const approval = item.state === "waiting" && item.ask ? { title: item.ask, ...(item.exact ? { exact: item.exact } : {}), ...(item.offer ? { offer: item.offer } : {}) } : undefined;
-    this.#d.acting?.({ id: item.id, workspaceId: c.workspaceId, caller: c.name ?? OPERATOR_TITLE, callerWindowId: this.#d.selfIn(c.workspaceId), tool: item.tool, why: item.why, acts: item.acts, target: item.target, state: item.state, ...(approval ? { approval } : {}) });
+    const p = item.state === "waiting" ? c.pending.get(item.id) : undefined;
+    const approval = p ? { title: p.ask.title, ...(p.ask.exact ? { exact: p.ask.exact } : {}), permission: p.ask.permission, ...(p.ask.site ? { site: p.ask.site } : {}), ...(p.ask.risky ? { risky: true } : {}), scopes: p.scopes } : undefined;
+    this.#d.acting?.({ id: item.id, workspaceId: c.workspaceId, caller: c.name ?? OPERATOR_TITLE, callerKind: "operator", callerWindowId: this.#d.selfIn(c.workspaceId), tool: item.tool, why: item.why, acts: item.acts, target: item.target, state: item.state, ...(approval ? { approval } : {}) });
   }
 
   #conv(workspaceId: WorkspaceId): Conversation {
@@ -531,6 +541,7 @@ export class OperatorService {
       commands: new Map(saved?.commands ?? []),
       news: [],
       approvals: new Set(),
+      pending: new Map(),
       denials: 0,
     };
     // A turn that was running when the core stopped didn't finish.

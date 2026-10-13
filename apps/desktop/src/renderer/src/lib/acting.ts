@@ -1,7 +1,7 @@
 // The board's marks for tool calls (docs/54): a window an agent or a widget's model acts on lights up
 // and its title bar says who and why, for as long as the call runs and a moment after; a call
-// waiting for the person marks the window it would act on (else the caller's own) and can be
-// answered there (TileTitle → ActingApproval). From tool.acting; the waiting ones again after a
+// waiting for the person marks the window it would act on (else the caller's own) while the
+// approval sheet asks (shell/Approvals.tsx). From tool.acting; the waiting ones again after a
 // reconnect (approvals.waiting).
 
 import { useSyncExternalStore } from "react";
@@ -60,6 +60,3 @@ cmd.onStatus((s) => {
 export function useActingMark(id: WindowId | null | undefined): ActingMark | null {
   return useSyncExternalStore(subscribe, () => (id ? (marks.get(id) ?? null) : null));
 }
-
-/** Answer a call waiting for the person. */
-export const answerCall = (a: ToolActivity, allow: boolean, reason?: string, remember?: boolean) => cmd.call("approvals.answer", { workspaceId: a.workspaceId, itemId: a.id, allow, reason, remember });

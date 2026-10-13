@@ -25,7 +25,8 @@ const runTool: Tool = {
   async confirm(i, b) {
     if (i.list) return null;
     const { action } = await actionByName(b, String(i.name ?? ""));
-    return action.risky ? { title: `Run “${action.name}”, which is risky`, exact: action.command, rule: { key: `run:${action.id}`, label: `running “${action.name}”` } } : null;
+    // A risky one asks every time, kept at most for the session, and by the action itself.
+    return action.risky ? { permission: "run", title: `Run “${action.name}”, which is risky`, exact: action.command, risky: true, site: action.name } : { permission: "run", title: `Run “${action.name}”`, exact: action.command };
   },
   async run(i, b) {
     if (i.list) {
@@ -42,6 +43,7 @@ const runTool: Tool = {
       return `${label} is already running in ${b.refs.of(r.paneId)}${run?.url ? `, at ${run.url}` : ""}.`;
     }
     b.started?.command(r.paneId, label);
+    b.opened?.add(r.paneId);
     return `Started ${label} in ${b.refs.of(r.paneId)}. You'll be told when it ends${action.long ? ", and its address once it prints one (it keeps running)" : ""}.`;
   },
 };

@@ -174,6 +174,8 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "approvals.answer": "never",
   "approvals.list": "never",
   "approvals.forget": "never",
+  "approvals.allow": "never",
+  "approvals.denied": "never",
   "sqlite.schema": "view",
   "sqlite.rows": "view",
   "sqlite.query": "view",

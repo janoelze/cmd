@@ -212,6 +212,7 @@ const SCENARIOS = {
   browser: [],
   "blank-browser": [],
   "site-permissions": ["browser"],
+  approvals: [],
   osc8: [],
   resync: [],
   files: ["terminals"],
@@ -771,7 +772,7 @@ await scenario("site-permissions", async () => {
     await page(`window.__gum = navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(() => "granted", (e) => e.name); 0`);
     const sheet = win.locator(".site-permission:not([data-closing])"); // not one fading out
     await sheet.waitFor({ timeout: 10_000 }).catch(expired("sheet"));
-    const title = (await sheet.locator(".ui-dialog-title").textContent().catch(() => "")) ?? "";
+    const title = (await sheet.textContent().catch(() => "")) ?? ""; // the site in the title bar, what it wants as the title
     await shot(win, "site-permission.png");
     check(title.includes(`localhost:${port}`) && title.includes("camera and microphone"), `a page asking for the camera gets cmd's sheet naming the site (${JSON.stringify(title)})`);
     await sheet.getByRole("button", { name: "Don't Allow" }).click();
@@ -843,6 +844,36 @@ await scenario("site-permissions", async () => {
 // OSC 8 links in terminal output: the text can say anything, so a link to another
 // app (smb:) gets a native confirm naming the real URL, and opens nothing until
 // answered; a web link still opens in a browser window (main/open-policy.ts).
+// An agent's tool call that must ask (docs/55): `cmd tool` in a terminal, as an agent runs it, opens
+// the approval sheet; Return allows it (not in its first 300 ms), Esc denies it and the caller hears no.
+await scenario("approvals", async () => {
+  await win.evaluate(() => window.cmd.call("settings.set", { key: "agents.integration", value: true }));
+  await menu("file.newTerminal");
+  const term = await shellReady();
+  await focusIn(term.id);
+  const browsers = () => win.evaluate(() => window.cmd.call("window.list", {}).then((w) => w.filter((x) => x.kind === "browser").length));
+  const before = await browsers();
+  await win.keyboard.type(`cmd tool open '{"kind":"url","target":"https://example.test/approvals","why":"Checking the docs"}'`);
+  await win.keyboard.press("Enter");
+  const sheet = win.locator(".ui-approval:not([data-closing])");
+  await sheet.waitFor({ timeout: 10_000 }).catch(expired("approval sheet"));
+  const shownAt = Date.now();
+  const text = (await sheet.textContent().catch(() => "")) ?? "";
+  await shot(win, "approval.png");
+  check(text.includes("Open example.test") && text.includes("Checking the docs") && text.includes("Always for example.test"), `a tool call that asks opens the approval sheet at once (${JSON.stringify(text.slice(0, 160))})`);
+  await until(() => Date.now() - shownAt > 400); // past the guard against an Enter already being typed
+  await win.keyboard.press("Enter");
+  const opened = await until(browsers, (n) => n === before + 1);
+  check(opened === before + 1 && (await sheet.count()) === 0, `Return allows it: the browser opens and the sheet goes (${before} → ${opened})`);
+  await focusIn(term.id);
+  await win.keyboard.type(`cmd tool open '{"kind":"url","target":"https://other.test/"}'`);
+  await win.keyboard.press("Enter");
+  await sheet.waitFor({ timeout: 10_000 }).catch(expired("approval sheet"));
+  await win.keyboard.press("Escape");
+  const said = await until(() => paneText(term.id), (t) => /The person said no/.test(t));
+  check(/The person said no/.test(said) && (await browsers()) === opened, "Esc denies it, and the caller is told");
+});
+
 await scenario("osc8", async () => {
   let term = null;
   let linked = null;

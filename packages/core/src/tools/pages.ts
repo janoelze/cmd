@@ -55,12 +55,12 @@ const pageTool: Tool = {
     const found = await b.call("browser.act", { id: t.w.id, action: t.action, selector: t.selector, index: t.index, value: t.value, dry: true });
     if (found.sensitive) throw new Error(`refused: ${found.element} is a password, card or code field. Ask the person to fill it in themselves.`);
     const verb = { click: "Click", fill: "Type into", select: "Choose in", submit: "Submit the form of", press: `Press ${t.value} in` }[t.action];
-    const noun = { click: "clicks", fill: "typing", select: "choosing in lists", submit: "submitting forms", press: "key presses" }[t.action];
     const site = host(found.url);
     return {
       title: `${verb} ${found.element.replace(/^<[^>]*>\s*/, "").slice(0, 60) || found.element} on ${site}`,
       exact: [found.element, t.action === "fill" || t.action === "select" ? `→ ${t.value}` : ""].filter(Boolean).join("\n"),
-      rule: { key: `page:${site}:${t.action}`, label: `${noun} on ${site}` },
+      permission: "page",
+      site,
     };
   },
   async run(i, b) {

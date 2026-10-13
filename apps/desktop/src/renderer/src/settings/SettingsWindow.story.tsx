@@ -29,3 +29,5 @@ export const Remote = () => <Frame page="remote" />;
 export const About = () => <Frame page="about" />;
 export const Data = () => <Frame page="data" />;
 export const Browser = () => <Frame page="browser" />;
+/** AI & Agents: the hooks, Agent integration, and what agents may do without asking (Permissions). */
+export const Agents = () => <Frame page="ai" />;

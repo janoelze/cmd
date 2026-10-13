@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Agent, AgentState, CoreEvent, OperatorEvent, OperatorItem, Workspace } from "@cmd/protocol";
+import { PERMISSIONS, type Agent, type AgentState, type CoreEvent, type OperatorEvent, type OperatorItem, type Permission, type PermissionLevel, type Workspace } from "@cmd/protocol";
 import type { AgentResult, AgentRun } from "../src/ai/backends.ts";
 import { Core } from "../src/kernel/core.ts";
 import { TOOL_ACCESS, isQuiet } from "../src/tools/access.ts";
@@ -22,12 +22,14 @@ import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
 
 /** The approvals the services in a test wait on, answered as the app answers them (approvals.answer). */
-let approvals = new Approvals(null);
-const answer = (workspaceId: string, id: string, allow: boolean, reason?: string, remember?: boolean) => approvals.answer(workspaceId, id, { allow, reason, remember });
+/** The default levels (Settings → Agents → Permissions). */
+const LEVELS = Object.fromEntries(PERMISSIONS.map((p) => [p.id, p.default])) as Record<Permission, PermissionLevel>;
+let approvals = new Approvals(null, () => LEVELS);
+const answer = (workspaceId: string, id: string, allow: boolean, reason?: string, remember?: boolean) => approvals.answer(workspaceId, id, { allow, reason, scope: remember ? "always" : "once" });
 /** A database for a service, with its approvals in it. */
 const withDb = () => {
   const db = new DatabaseSync(":memory:");
-  return { db, approvals: (approvals = new Approvals(db)) };
+  return { db, approvals: (approvals = new Approvals(db, () => LEVELS)) };
 };
 
 describe("what the Operator may call", () => {
@@ -161,7 +163,7 @@ describe("the service", () => {
       onServing: (fn) => void core.actions.on("url", fn),
       record: (e) => core.data.record(e),
       db: null,
-      approvals: (approvals = new Approvals(null)),
+      approvals: (approvals = new Approvals(null, () => LEVELS)),
     });
   });
   afterEach(async () => {
@@ -593,7 +595,7 @@ describe("the service", () => {
 });
 
 describe("remembered approvals", () => {
-  it("offer a narrow rule; once remembered, that kind runs without asking (and says so); forgotten, it asks again", async () => {
+  it("offer always for the kind of action (websites by site); once kept, that kind runs without asking (and says so); forgotten, it asks again", async () => {
     const f = fakeFactory();
     const core = new Core({ socketPath: "", dbPath: null, settingsPath: null, terminals: f.factory, pollMs: 0 });
     const ws = core.workspaces.home();
@@ -610,12 +612,12 @@ describe("remembered approvals", () => {
       });
       op.send(ws.id, "test");
       await vi.waitFor(() => expect(item("t1")?.state).toBe("waiting"));
-      expect(item("t1")!.offer).toBe("commands starting “pnpm test”");
+      expect(item("t1")!.offer).toBe("Type into terminals and agents");
       answer(ws.id, "t1", true, undefined, true);
       await idle();
-      expect(approvals.list(ws.id)).toMatchObject([{ key: "type:pnpm test", label: "commands starting “pnpm test”" }]);
-      // The same kind: no question.
-      turns.push(async (r) => void (await exec(r, "type", { ref, text: "pnpm test packages/core" }, "t2")));
+      expect(approvals.list(ws.id)).toMatchObject([{ key: "type", label: "Type into terminals and agents" }]);
+      // The same kind, another command: no question.
+      turns.push(async (r) => void (await exec(r, "type", { ref, text: "ls src" }, "t2")));
       // A URL asks before going to its site; remembered, that site doesn't ask again (another one does).
       turns.push(async (r) => {
         await exec(r, "open", { kind: "url", target: "https://www.github.com/x" }, "u1");
@@ -624,25 +626,25 @@ describe("remembered approvals", () => {
       });
       op.send(ws.id, "again");
       await idle();
-      expect(item("t2")).toMatchObject({ state: "done", remembered: "commands starting “pnpm test”" });
-      expect(f.ptys.at(-1)!.written.join("")).toContain("pnpm test packages/core\r");
+      expect(item("t2")).toMatchObject({ state: "done", remembered: "Type into terminals and agents" });
+      expect(f.ptys.at(-1)!.written.join("")).toContain("ls src\r");
       op.send(ws.id, "look things up");
       await vi.waitFor(() => expect(item("u1")?.state).toBe("waiting"));
-      expect(item("u1")).toMatchObject({ ask: "Open github.com", exact: "https://www.github.com/x", offer: "opening pages on github.com" });
+      expect(item("u1")).toMatchObject({ ask: "Open github.com", exact: "https://www.github.com/x", offer: "Open websites: github.com" });
       answer(ws.id, "u1", true, undefined, true);
       await vi.waitFor(() => expect(item("u3")?.state).toBe("waiting"));
-      expect(item("u2")).toMatchObject({ state: "done", remembered: "opening pages on github.com" });
+      expect(item("u2")).toMatchObject({ state: "done", remembered: "Open websites: github.com" });
       expect(item("u3")).toMatchObject({ ask: "Open evil.example", exact: "https://evil.example/?q=secret" });
       answer(ws.id, "u3", false);
       await idle();
       // Another kind still asks; a forgotten one asks again.
-      approvals.forget(ws.id, "type:pnpm test");
+      approvals.forget(ws.id, "type");
       turns.push(async (r) => void (await exec(r, "type", { ref, text: "pnpm test" }, "t3")));
       op.send(ws.id, "once more");
       await vi.waitFor(() => expect(item("t3")?.state).toBe("waiting"));
       answer(ws.id, "t3", false);
       await idle();
-      expect(approvals.list(ws.id).map((g) => g.key)).toEqual(["url:github.com"]);
+      expect(approvals.list(ws.id).map((g) => g.key)).toEqual(["web:github.com"]);
     } finally {
       op.dispose();
       await core.close();

@@ -1,9 +1,9 @@
-// "Allow “meet.google.com” to use your camera and microphone?": a page in one of
-// this window's browser windows asks for a permission (main/web-session.ts).
-// Allow and Don't Allow are kept for the site; Esc or the close button answers
-// no for now and asks again next time. One sheet at a time, oldest first.
+// A page in one of this window's browser windows asks for a permission (main/web-session.ts):
+// the approval sheet (docs/55), the site in its title bar, "Use your camera and microphone".
+// Allow and Don't Allow are kept for the site; Esc or the close button answers no for now and
+// asks again next time. One sheet at a time, oldest first.
 
-import { Button, Dialog, usePresentValue } from "@cmd/ui";
+import { ApprovalSheet, usePresentValue } from "@cmd/ui";
 import { useEffect, useState } from "react";
 import type { SitePermissionRequest } from "../../../shared/ipc.ts";
 import { cmd } from "../lib/bridge.ts";
@@ -49,25 +49,19 @@ export function SitePermissionSheet() {
     cmd.answerSitePermission(r.id, allow);
     setQueue((q) => q.filter((x) => x.id !== r.id));
   };
+  const ask = permissionAsk(r);
   return (
-    <Dialog
+    <ApprovalSheet
       key={r.id}
       open={!shown.closing}
-      onClose={() => answer(null)}
-      title={`Allow “${siteName(r.site)}” to ${permissionAsk(r)}?`}
-      width={400}
-      position="center"
+      who={{ icon: "globe", name: siteName(r.site), context: "a page in a browser window" }}
+      title={ask[0]!.toUpperCase() + ask.slice(1)}
+      why="cmd remembers your answer for this site."
+      deny="Don't Allow"
+      askWhy={false}
       className="site-permission"
-      actions={
-        <>
-          <Button onClick={() => answer(false)}>Don't Allow</Button>
-          <Button variant="primary" onClick={() => answer(true)}>
-            Allow
-          </Button>
-        </>
-      }
-    >
-      cmd remembers your answer for this site.
-    </Dialog>
+      onAnswer={(a) => answer(a.allow)}
+      onDismiss={() => answer(null)}
+    />
   );
 }

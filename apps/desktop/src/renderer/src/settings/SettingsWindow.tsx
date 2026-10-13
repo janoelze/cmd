@@ -41,6 +41,7 @@ import { AgentHooks } from "./AgentHooks.tsx";
 import { UnknownSettings } from "./UnknownSettings.tsx";
 import { NotifyPermission } from "./NotifyPermission.tsx";
 import { SITE_PERMISSION_WORDS, SitePermissions } from "./SitePermissions.tsx";
+import { AgentPermissions } from "./AgentPermissions.tsx";
 import { allThemes } from "@cmd/ui/themes";
 import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page as SettingsPage } from "./layout.ts";
 
@@ -201,6 +202,8 @@ export function SettingsWindow() {
           );
           // cmd's hook goes before what needs it (Agent integration).
           if (s.items.some((it) => itemKey(it) === "agents.integration")) return [<AgentHooks key="hooks" />, section];
+          // What was kept and denied, after the levels it goes with.
+          if (s.items.some((it) => itemKey(it) === "agents.permissions.web")) return [section, <AgentPermissions key="permissions" />];
           // Whether macOS shows them at all, before what to notify about.
           if (s.items.some((it) => itemKey(it) === "notifications.needsInput")) return [<NotifyPermission key="macos" />, section];
           return section;

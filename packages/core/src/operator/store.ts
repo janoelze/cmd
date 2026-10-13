@@ -1,8 +1,7 @@
 // Where the Operator's conversations are kept (docs/51), in cmd's database: each workspace's
 // current one (operator_conversations), and the ones New Conversation put away (operator_past),
-// to open again. Without a database (tests) nothing is kept. The approvals the person chose to
-// remember were kept here (operator_grants) before every caller of the tools shared them
-// (tools/approvals.ts): moved there once.
+// to open again. Without a database (tests) nothing is kept. Approvals are every caller's
+// (tools/approvals.ts).
 
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
@@ -34,13 +33,8 @@ export class ConversationStore {
     db?.exec(`CREATE TABLE IF NOT EXISTS operator_conversations (workspace_id TEXT PRIMARY KEY, json TEXT NOT NULL, at INTEGER NOT NULL)`);
     db?.exec(`CREATE TABLE IF NOT EXISTS operator_past (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, title TEXT NOT NULL, at INTEGER NOT NULL, requests INTEGER NOT NULL, json TEXT NOT NULL)`);
     db?.exec(`CREATE INDEX IF NOT EXISTS operator_past_ws ON operator_past (workspace_id, at)`);
-    // Remembered approvals from before they were shared: into remembered_approvals (Approvals made it), once.
-    try {
-      if (db?.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'operator_grants'").get())
-        db.exec(`INSERT OR IGNORE INTO remembered_approvals (workspace_id, key, label, at) SELECT workspace_id, key, label, at FROM operator_grants; DROP TABLE operator_grants`);
-    } catch (e) {
-      log.warn(`could not move the remembered approvals: ${(e as Error).message}`);
-    }
+    // Approvals the Operator kept before permissions (docs/55) say nothing now.
+    db?.exec("DROP TABLE IF EXISTS operator_grants");
   }
 
   /** Workspaces that have a conversation. */

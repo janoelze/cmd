@@ -109,6 +109,7 @@ export const SETTINGS_PAGES: Page[] = [
       { title: "Commands", items: ["agents.claude.command", "agents.codex.command", "agents.qwen.command", "agents.copilot.command"] },
       { title: "Names", items: ["agents.names.ai"] },
       { title: "Setup", items: ["agents.integration", "agents.hooks.auto", "agents.homes"] },
+      { title: "Permissions", items: ["agents.permissions.web", "agents.permissions.type", "agents.permissions.page", "agents.permissions.stop", "agents.permissions.run", "agents.permissions.agents", "agents.permissions.show", "agents.permissions.edit"] },
       { title: "Transcript search", items: ["search.archiveDirs"] },
     ],
   },

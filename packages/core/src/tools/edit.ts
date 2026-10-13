@@ -74,9 +74,7 @@ const editTool: Tool = {
   async confirm(i, b) {
     const e = await planEdit(i, b);
     if (e.before === e.after) throw new Error(`that changes nothing in ${e.rel}`);
-    const dir = path.dirname(e.rel);
-    const rule = { key: `edit:${dir}`, label: dir === "." ? "edits to files at the workspace's top" : `edits in ${dir}` };
-    return { title: e.before === null ? `Create ${e.rel}` : `Edit ${e.rel}`, exact: e.before === null ? lineDiff("", e.after).replace(/^- $/m, "") : lineDiff(e.before, e.after), rule };
+    return { permission: "edit", title: e.before === null ? `Create ${e.rel}` : `Edit ${e.rel}`, exact: e.before === null ? lineDiff("", e.after).replace(/^- $/m, "") : lineDiff(e.before, e.after) };
   },
   async run(i, b) {
     const e = await planEdit(i, b);

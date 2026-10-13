@@ -126,7 +126,7 @@ describe("the tools for agents in panes", () => {
     const opening = call("open", { kind: "url", target: "https://thing.dev/" });
     await vi.waitFor(async () => expect(await core.call("approvals.waiting", {})).toHaveLength(1));
     const [asked] = await core.call("approvals.waiting", {});
-    expect(asked).toMatchObject({ caller: "Claude", callerWindowId: pane.id, tool: "open", approval: { title: "Open thing.dev", offer: "opening pages on thing.dev" } });
+    expect(asked).toMatchObject({ caller: "Claude", callerWindowId: pane.id, tool: "open", approval: { title: "Open thing.dev", permission: "web", site: "thing.dev", scopes: ["once", "session", "always"] } });
     await core.call("approvals.answer", { workspaceId: ws.id, itemId: asked!.id, allow: true });
     const browser = refOf((await opening).output);
     ran.add("open");
@@ -165,6 +165,59 @@ describe("the tools for agents in panes", () => {
     const calls = core.data.query({ types: ["tool.call"], by: "time", order: "asc", limit: 100 });
     expect(calls.length).toBeGreaterThan(15);
     expect(calls[0]).toMatchObject({ paneId: pane.id, agentId: core.panes.get(pane.id)!.agentId, data: { caller: "Claude", tool: "look", state: "done" } });
+  });
+
+  it("decides by the kind of action (docs/55): levels, this session, always in the workspace, risky actions, pages on this Mac", async () => {
+    const waitingFor = async (tool: string) => {
+      const [a] = await vi.waitFor(async () => {
+        const w = await core.call("approvals.waiting", {});
+        if (w[0]?.tool !== tool) throw new Error(`waiting for ${tool}`);
+        return w;
+      });
+      return a!;
+    };
+    expect((await call("look")).output).toMatch(/w1 terminal \(you\)/);
+    // Pages on this Mac never ask; other sites do.
+    expect((await call("open", { kind: "url", target: "http://localhost:5173/" })).isError).toBe(false);
+    // Allow for this session: the same kind of action (another site is another question) runs, until the agent exits.
+    const term = refOf((await call("open", { kind: "terminal" })).output);
+    const first = call("type", { ref: term, text: "ls" });
+    await core.call("approvals.answer", { workspaceId: ws.id, itemId: (await waitingFor("type")).id, allow: true, scope: "session" });
+    expect((await first).isError).toBe(false);
+    expect(await call("type", { ref: term, text: "pwd" })).toMatchObject({ isError: false });
+    // Always in the workspace: kept, listed, and it outlives the session.
+    const page = call("open", { kind: "url", target: "https://github.com/x" });
+    await core.call("approvals.answer", { workspaceId: ws.id, itemId: (await waitingFor("open")).id, allow: true, scope: "always" });
+    await page;
+    expect(await core.call("approvals.list", {})).toMatchObject([{ workspaceId: ws.id, key: "web:github.com", label: "Open websites: github.com" }]);
+    expect((await call("open", { kind: "url", target: "https://github.com/y" })).isError).toBe(false);
+    core.agents.ingestHook(pane.id, "claude", "SessionEnd", { cwd: dir });
+    core.agents.ingestHook(pane.id, "claude", "SessionStart", { cwd: dir });
+    const again = call("type", { ref: term, text: "ls" });
+    const asked = await waitingFor("type");
+    expect(asked.approval).toMatchObject({ permission: "type", scopes: ["once", "session", "always"] });
+    await core.call("approvals.answer", { workspaceId: ws.id, itemId: asked.id, allow: false, reason: "not now" });
+    expect((await again).output).toContain("The person said no: not now");
+    expect((await core.call("approvals.denied", {}))[0]).toMatchObject({ caller: "Claude", permission: "type", reason: "not now" });
+    // Never refuses at once, naming the setting; Allow runs without asking.
+    await core.call("settings.set", { key: "agents.permissions.type", value: "never" });
+    expect(await call("type", { ref: term, text: "ls" })).toMatchObject({ isError: true, output: expect.stringContaining("“Type into terminals and agents” is set to Never") });
+    await core.call("settings.set", { key: "agents.permissions.type", value: "allow" });
+    expect((await call("type", { ref: term, text: "ls" })).isError).toBe(false);
+    // Closing what it opened is showing things; closing anything else stops someone's work.
+    expect((await call("close", { refs: [term] })).isError).toBe(false);
+    const other = await core.call("window.open", { kind: "terminal", input: { cwd: dir }, workspaceId: ws.id });
+    const closing = call("close", { refs: [refOf(await call("look").then((r) => r.output.split("\n").find((l) => l.includes("terminal") && !l.includes("(you)"))!))] });
+    expect((await waitingFor("close")).approval).toMatchObject({ permission: "stop" });
+    await core.call("approvals.answer", { workspaceId: ws.id, itemId: (await waitingFor("close")).id, allow: true });
+    await closing;
+    expect(core.windows.list().some((w) => w.id === other!.id)).toBe(false);
+    // A risky action asks every time and never offers always, even with run project commands allowed.
+    const deploying = call("run", { name: "deploy" });
+    const r = await waitingFor("run");
+    expect(r.approval).toMatchObject({ title: "Run “deploy”, which is risky", risky: true, scopes: ["once", "session"] });
+    await core.call("approvals.answer", { workspaceId: ws.id, itemId: r.id, allow: false });
+    expect((await deploying).isError).toBe(true);
   });
 
   it("waits for the person in cmd, marks the window acted on, and takes no for an answer", async () => {

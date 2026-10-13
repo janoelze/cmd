@@ -3,7 +3,7 @@
 // reports.ts), and the methods for both (ToolsMethods, protocol tools.ts). Made with the first
 // use, one per core.
 
-import type { ToolActivity, ToolsMethods } from "@cmd/protocol";
+import { PERMISSIONS, approvalKey, approvalLabel, type DeniedCall, type Permission, type PermissionLevel, type ToolActivity, type ToolsMethods } from "@cmd/protocol";
 import type { CoreContext } from "../kernel/context.ts";
 import type { Feature } from "../kernel/features.ts";
 import type { HandlerSlice } from "../kernel/handlers.ts";
@@ -27,7 +27,7 @@ const services = new WeakMap<CoreContext, ToolsService>();
 export function toolsOf(core: CoreContext): ToolsService {
   let s = services.get(core);
   if (!s) {
-    const approvals = new Approvals(core.store.db);
+    const approvals = new Approvals(core.store.db, () => levels(core));
     let runner: ToolRunner | null = null;
     const reports = new Reports(core, (caller, id) => runner!.refs(caller).of(id));
     const shown = new Map<string, ToolActivity>();
@@ -42,6 +42,17 @@ export function toolsOf(core: CoreContext): ToolsService {
   return s;
 }
 
+/** Each permission's level, from Settings → Agents → Permissions. */
+const levels = (core: Pick<CoreContext, "settings">) => Object.fromEntries(PERMISSIONS.map((p) => [p.id, core.settings.settings[`agents.permissions.${p.id}`] as PermissionLevel])) as Record<Permission, PermissionLevel>;
+
+/** Calls the person said no to lately, from the log (tool.call, denied). */
+function denied(core: Pick<CoreContext, "data">, limit: number): DeniedCall[] {
+  return core.data.query({ types: ["tool.call"], by: "time", order: "desc", limit: 500 }).flatMap((e) => {
+    const d = e.data as { state?: string; caller?: string; ask?: string | null; reason?: string | null; permission?: Permission | null; site?: string | null };
+    return d.state === "denied" && e.workspaceId ? [{ id: e.id, at: e.at, workspaceId: e.workspaceId, caller: d.caller ?? "An agent", title: d.ask ?? e.text ?? "", reason: d.reason ?? null, permission: d.permission ?? null, site: d.site ?? null }] : [];
+  }).slice(0, limit);
+}
+
 export const toolsFeature = {
   id: "tools",
   prefixes: ["tools", "approvals"],
@@ -49,8 +60,10 @@ export const toolsFeature = {
     "tools.list": (p) => toolsOf(core).runner.list(p),
     "tools.call": (p) => toolsOf(core).runner.call(p),
     "approvals.waiting": () => toolsOf(core).waiting(),
-    "approvals.answer": (p) => (toolsOf(core).approvals.answer(p.workspaceId, p.itemId, { allow: p.allow, reason: p.reason, remember: p.remember }), null),
+    "approvals.answer": (p) => (toolsOf(core).approvals.answer(p.workspaceId, p.itemId, { allow: p.allow, reason: p.reason, scope: p.scope }), null),
     "approvals.list": (p) => toolsOf(core).approvals.list(p.workspaceId),
+    "approvals.allow": (p) => (toolsOf(core).approvals.remember(p.workspaceId, approvalKey(p.permission, p.site), approvalLabel(p.permission, p.site)), null),
+    "approvals.denied": (p) => denied(core, Math.min(p.limit ?? 20, 100)),
     "approvals.forget": (p) => (toolsOf(core).approvals.forget(p.workspaceId, p.key), null),
   }),
 } satisfies Feature;

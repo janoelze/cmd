@@ -91,10 +91,11 @@ export interface EventPayloads {
   /**
    * One tool call (docs/54), by an agent in a pane or in an Operator turn (its parent): what it did and why
    * (the text), the window it acted on, how it ended, whether the person was asked and what they said, and
-   * who called (`caller`, its name as the board showed it; the agent's id is the event's agentId). Its result
+   * who called (`caller`, its name as the board showed it; the agent's id is the event's agentId), its permission
+   * (docs/55) and site, and how long a yes holds (`scope`). Its result
    * as the caller got it is the content. Before tools had callers other than the Operator: operator.tool.
    */
-  "tool.call": { caller?: string; tool: string; acts: boolean; state: "done" | "failed" | "denied"; input: Record<string, unknown>; ask: string | null; exact?: string | null; allowed: boolean | null; reason: string | null; remembered?: string | null; ms: number };
+  "tool.call": { caller?: string; tool: string; acts: boolean; state: "done" | "failed" | "denied"; input: Record<string, unknown>; permission?: string | null; site?: string | null; ask: string | null; exact?: string | null; allowed: boolean | null; scope?: string | null; reason: string | null; remembered?: string | null; ms: number };
   /** tool.call as the Operator recorded it before (read as one). */
   "operator.tool": { tool: string; acts: boolean; state: "done" | "failed" | "denied"; input: Record<string, unknown>; ask: string | null; exact?: string | null; allowed: boolean | null; reason: string | null; remembered?: string | null; ms: number };
   /** The data layer about itself: a rebuild, a prune, an import, a forget. */

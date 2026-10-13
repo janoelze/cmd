@@ -29,11 +29,14 @@ const agentTool: Tool = {
   },
   target: (i, b) => (i.do === "stop" && i.ref ? b.refs.id(i.ref) : null),
   async confirm(i, b) {
-    if (i.do !== "stop") return null;
+    if (i.do !== "stop") {
+      const prompt = str(i.prompt)?.trim();
+      return { permission: "agents", title: `Start ${str(i.kind) === "codex" ? "Codex" : "Claude"} on a task`, exact: prompt ?? "" };
+    }
     const w = await windowOf(b, i.ref);
     const a = await agentIn(b, w);
     if (!a) throw new Error(`${String(i.ref)} has no agent`);
-    return { title: `Stop ${a.kind}${a.name ? ` “${a.name}”` : ""} in ${windowName(w)}`, exact: agentLine(a), rule: { key: "agent.stop", label: "stopping agents" } };
+    return { title: `Stop ${a.kind}${a.name ? ` “${a.name}”` : ""} in ${windowName(w)}`, exact: agentLine(a), permission: "stop" };
   },
   async run(i, b) {
     if (i.do === "stop") {
@@ -48,6 +51,7 @@ const agentTool: Tool = {
     // An agent's agent is its child (the sidebar shows it under its caller).
     const a = await b.call("agent.spawn", { kind: str(i.kind) ?? "claude", prompt, workspaceId: b.workspace().id, cwd, parentId: b.caller.agentId ?? null });
     b.started?.agent(a.id);
+    if (a.paneId) b.opened?.add(a.paneId);
     if (!a.paneId) return `Started ${a.kind}.`;
     // Not "started" until it is past starting: it may stop at a question first (trusting the folder, a login).
     const r = await b.call("agent.wait", { agentIds: [a.id], until: ["working", "needs_input", "idle", "done", "failed", "exited"], timeoutMs: START_WAIT_MS }).catch(() => null);
@@ -152,12 +156,7 @@ const typeTool: Tool = {
     const where = await terminalName(b, w, agent);
     const pressed = keys.map((k) => KEYS[k]![1]).join(" ");
     const exact = [text, keys.length ? pressed : text && i.submit !== false ? "⏎" : ""].filter(Boolean).join("  ");
-    const kind = agent ? (agent.kind === "claude" ? "Claude" : agent.kind === "codex" ? "Codex" : agent.kind) : null;
-    // What "Always allow" covers: a command by its program (and subcommand), messages to an agent kind, key presses.
-    const words = text.trim().split(/\s+/);
-    const prefix = words[0] + (words[1] && /^[a-z][\w:.-]*$/.test(words[1]) ? ` ${words[1]}` : "");
-    const rule = keys.length ? { key: `keys:${agent?.kind ?? "terminal"}`, label: `key presses in ${kind ?? "terminals"}` } : agent ? { key: `send:${agent.kind}`, label: `messages to ${kind}` } : { key: `type:${prefix}`, label: `commands starting “${prefix}”` };
-    return { title: keys.length && !text ? `Press keys in ${where}` : agent ? `Send to ${where}` : `Type in ${where}`, exact, rule };
+    return { permission: "type", title: keys.length && !text ? `Press keys in ${where}` : agent ? `Send a message to ${where}` : `Type in ${where}`, exact };
   },
   async run(i, b) {
     const w = await windowOf(b, i.ref);

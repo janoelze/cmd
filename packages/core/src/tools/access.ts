@@ -154,6 +154,8 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "approvals.answer": "never",
   "approvals.list": "never",
   "approvals.forget": "never",
+  "approvals.allow": "never",
+  "approvals.denied": "never",
   "sqlite.schema": "never",
   "sqlite.rows": "never",
   "sqlite.query": "never",

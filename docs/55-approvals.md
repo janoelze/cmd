@@ -1,6 +1,8 @@
 # Approvals
 
-**Status:** proposal (2026-10-13), from trying docs/54: the blue ring on the window acted on works; asking does not.
+**Status:** partly built (2026-10-13): the model, the sheet and Settings → Agents → Permissions; pairing still asks its own way.
+
+> Status (2026-10-13), branch `agent-integration`: built as proposed, with these differences. The sheet is the kit's `ApprovalSheet` (`packages/ui/src/approval.tsx`, stories for every case), dressed as a window sheet after prototyping: the asker in its title bar with the workspace, "1 of 2" and a countdown at its right, the title under it, the reason in dim text (no quotes), the exact text or diff in a code well, the scope as a segmented control, and a filled Allow (a filled red Run for risky actions; the kit now fills a sheet's last danger action everywhere). It opens centred, in every app window, for asks from any workspace (`lib/asks.ts`, `shell/Approvals.tsx`); the title bar's popover is gone. A yes "for this session" is the agent's (keyed by the agent, not its terminal), so a new agent in the same terminal starts over. Kept answers are keyed `<permission>` or `<permission>:<site>` (for a risky action the site is the action's name, kept at most for the session); old per-command keys are dropped. Closing a window the caller opened is "Show things", any other "Stop agents and close windows". `approvals.allow` and `approvals.denied` back Settings' "Always allowed" and "Recently denied" (`settings/AgentPermissions.tsx`). The camera, microphone and location ask uses the sheet (`SitePermissionSheet`, Esc still "not now" through `onDismiss`). Not moved: device pairing (`PairPrompt`, also shown inline in Settings), and the risky-run confirm in the Actions widget, which is the person's own action rather than someone asking. e2e: `approvals` (a `cmd tool` call opens the sheet, Return allows, Esc denies and the caller is told).
 
 Read first: docs/54-agent-integration.md (agents calling cmd's tools), docs/51-operator.md (where the tools and their approvals came from).
 
@@ -178,12 +180,12 @@ Each level is a settings key (`agents.permissions.web`, …), live as every sett
 
 ## Success criteria
 
-- [ ] A call that needs the person opens the sheet at once, in the window showing its workspace; Return allows it (but not within 300 ms of it opening), Esc denies it, "Deny and Say Why…" sends the reason to the agent.
-- [ ] Each category in the table has a level in Settings → Agents → Permissions and in `cmd settings`; Never refuses at once with a message naming the setting; Allow runs without a sheet.
-- [ ] This session holds until the agent exits (test); Always holds in its workspace only, shows under "Always allowed", and ✕ makes it ask again.
-- [ ] A risky Workspace Action asks every time and never offers Always; the deny-list and sensitive fields never reach the sheet.
-- [ ] Two asks at once show as "1 of 2" in one sheet; one whose agent exits leaves the queue.
-- [ ] The camera/microphone, pairing and risky-run asks use the same sheet.
+- [x] A call that needs the person opens the sheet at once, in the window showing its workspace; Return allows it (but not within 300 ms of it opening), Esc denies it, "Deny and Say Why…" sends the reason to the agent.
+- [x] Each category in the table has a level in Settings → Agents → Permissions and in `cmd settings`; Never refuses at once with a message naming the setting; Allow runs without a sheet.
+- [x] This session holds until the agent exits (test); Always holds in its workspace only, shows under "Always allowed", and ✕ makes it ask again.
+- [x] A risky Workspace Action asks every time and never offers Always; the deny-list and sensitive fields never reach the sheet.
+- [x] Two asks at once show as "1 of 2" in one sheet; one whose agent exits leaves the queue.
+- [ ] (2026-10-13: the camera/microphone ask does; pairing not yet; the risky-run confirm stays a confirm) The camera/microphone, pairing and risky-run asks use the same sheet.
 - [ ] `pnpm typecheck && pnpm test && pnpm e2e` pass; the stories render in the Workbench.
 
 ## Open questions

@@ -11,6 +11,14 @@ agents.hooks.auto
 agents.integration
 agents.names.ai
 agents.peers
+agents.permissions.agents
+agents.permissions.edit
+agents.permissions.page
+agents.permissions.run
+agents.permissions.show
+agents.permissions.stop
+agents.permissions.type
+agents.permissions.web
 agents.qwen.command
 ai.anthropic.fastModel
 ai.anthropic.model

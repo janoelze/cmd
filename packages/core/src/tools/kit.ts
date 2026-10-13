@@ -4,7 +4,7 @@
 // windows, agents and paths in the workspace.
 
 import path from "node:path";
-import type { Agent, AgentId, AppWindow, Method, PaneId, Params, Result, WindowId, Workspace, WorkspaceId } from "@cmd/protocol";
+import type { Agent, AgentId, AppWindow, Method, PaneId, Params, Permission, Result, WindowId, Workspace, WorkspaceId } from "@cmd/protocol";
 import type { ToolSpec } from "../magic/tools.ts";
 import { isDeniedPath, remotePrivatePaths } from "../lib/paths-deny.ts";
 import type { Refs } from "./board.ts";
@@ -30,6 +30,8 @@ export interface ToolContext {
   refs: Refs;
   /** What it started reports back: an agent when done, failed or needing input; a command when it ends, a server its address. */
   started?: { agent(agentId: string): void; command(paneId: string, label: string): void };
+  /** Windows the caller opened itself (closing those is showing things, not stopping them). */
+  opened?: Set<string>;
   /** The next reports of what it started (reports.ts): at once if some are waiting, else when one comes, or none after `ms`. */
   reports?(ms: number, signal?: AbortSignal): Promise<string[]>;
   signal: AbortSignal;
@@ -45,19 +47,27 @@ export interface Tool {
   for?: "models";
   /** The window it is about, for the board's mark. */
   target?(input: Input, b: ToolContext): WindowId | null;
-  /** What to ask the person before running it, or null to run at once. Throws to refuse outright. */
+  /** What the call would do, for approvals.ts to decide on (every tool that acts has one; null: nothing to decide). Throws to refuse outright. */
   confirm?(input: Input, b: ToolContext): Promise<Approval | null>;
   run(input: Input, b: ToolContext): Promise<string>;
 }
 
 export type Input = Record<string, unknown>;
 
-/** What an approval asks: in words (`title`, naming windows as people do), and exactly what would happen (`exact`: the text, a diff). */
+/**
+ * What a call that acts would do, for deciding whether it runs (approvals.ts) and for asking: the
+ * kind of action (docs/55), in words (`title`, naming windows as people do), and exactly what would
+ * happen (`exact`: the text, the URL, a diff). `site`: what a yes is kept for beside the
+ * permission (the site, for websites and pages; the action, for a risky one). `risky` always
+ * asks and is never kept for always; `free` never asks (a page on this Mac).
+ */
 export interface Approval {
+  permission: Permission;
   title: string;
   exact?: string;
-  /** What "Always allow" would remember for the workspace: a key for this kind of action, and its label. Left out: it always asks. */
-  rule?: { key: string; label: string };
+  site?: string;
+  risky?: boolean;
+  free?: boolean;
 }
 
 const why = { type: "string", description: "One short line for the person watching, saying what this step does and why, in their words, e.g. \"Running the tests to see what fails\". Name windows by what they are, never by ref." };

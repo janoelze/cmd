@@ -17,7 +17,6 @@ import { RemoteBadge } from "../components/Remote.tsx";
 import { countRender } from "../lib/perf.ts";
 import { dragFiles, dragLink } from "../lib/drags.ts";
 import { useActingMark } from "../lib/acting.ts";
-import { ActingApproval } from "./ActingApproval.tsx";
 
 /** SF Symbol for a window kind (from the core's window type registry). */
 export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "macwindow";
@@ -68,14 +67,10 @@ export function TileTitle({
   const file = fileOf(row);
   const url = file ? null : urlOf(row);
   // A tool call acting on this window (a coding agent's, a widget's) says so where the status goes,
-  // and rings it; one waiting for the person is answered from there (docs/54).
+  // and rings it (docs/54); one waiting for the person asks in the approval sheet (shell/Approvals.tsx).
   const acting = useActingMark(windowIdOf(row));
-  const asks = acting?.waiting && acting.call.approval ? acting.call : null;
-  const [asking, setAsking] = useState(false);
-  const statusRef = useRef<HTMLSpanElement>(null);
-  useEffect(() => void (!asks && setAsking(false)), [asks]);
   const status = acting ? { text: acting.waiting ? `${acting.call.caller} asks…` : `${acting.call.caller}: ${acting.call.why}`, key: "acting" } : f.status;
-  const press = asks ? () => setAsking(true) : action?.run;
+  const press = acting ? undefined : action?.run;
   return (
     <WindowBar className={acting ? "tile-title acting" : "tile-title"} onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} data-tip={title}>
       {file || url ? (
@@ -106,14 +101,12 @@ export function TileTitle({
         {/* A divider only after a field that's there. */}
         <Slot className="slot-place" value={place ? { text: place } : undefined} clipStart divider={!!f.kind && !bare} />
         <span
-          ref={statusRef}
           className="tile-status"
           onPointerDown={press ? (e) => e.stopPropagation() : undefined}
           onClick={press ? (e) => (e.stopPropagation(), press()) : undefined}
         >
-          <Slot className={`slot-status${(action && !acting) || asks ? " actionable" : ""}${acting ? " acting" : ""}`} value={status} divider={!bare && !!(f.kind || place)} title={asks ? "Show what it asks" : action?.title} />
+          <Slot className={`slot-status${action && !acting ? " actionable" : ""}${acting ? " acting" : ""}`} value={status} divider={!bare && !!(f.kind || place)} title={acting ? undefined : action?.title} />
         </span>
-        {asks && <ActingApproval call={asks} anchor={statusRef} open={asking} onClose={() => setAsking(false)} />}
       </span>
       {menu && (
         <WindowBarMenu
