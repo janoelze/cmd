@@ -34,18 +34,12 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
 </p>
 
 <div class="hero-shots" aria-roledescription="slideshow">
-  <img class="on" src="shots/strip.png" width="1498" height="898" alt="The strip: a Claude Code session, a shader widget, the file browser and a CI widget; four agents in the sidebar">
-  <img src="shots/grid-dark.png" width="1498" height="898" alt="The grid: usage and CI widgets, four Claude Code sessions, a shader, the file browser and a shell">
-  <img src="shots/light-agents.png" width="1498" height="898" alt="A light theme: a Claude Code session, the Agent Activity widget and a CI widget">
-  <img src="shots/usage.png" width="1498" height="898" alt="The usage widget, a Claude Code session and a shader widget in the strip">
-  <img src="shots/search.png" width="1498" height="898" alt="Searching files from the palette: json files and matching lines across the repo">
+  <img class="on" src="shots/grid-dark.png" width="1498" height="898" alt="The grid: usage and CI widgets, four Claude Code sessions, a shader, the file browser and a shell">
   <img src="shots/light-files.png" width="1498" height="898" alt="A light theme: the file browser on the repo next to a CI widget">
   <img src="shots/canvas-shader.png" width="1498" height="898" alt="The canvas: a shader widget and the file browser">
   <img src="shots/strip-agents.png" width="1498" height="898" alt="The strip: two Claude Code sessions side by side with a CI widget">
-  <img src="shots/weather.png" width="1498" height="898" alt="A weather widget next to a Claude Code session, in a warm theme">
   <img src="shots/light-palette.png" width="1498" height="898" alt="The command palette over the canvas, in a light theme">
   <img src="shots/json.png" width="1498" height="898" alt="A JSON window on package.json next to the Navigator and a CI widget">
-  <img src="shots/search-shader.png" width="1498" height="898" alt="File search over the canvas, with a shader widget behind">
   <img src="shots/maps.png" width="1498" height="898" alt="The strip: Google Maps in a browser window between the Navigator and a CI widget">
   <img src="shots/site.png" width="1498" height="898" alt="The strip: this website in a browser window between the Navigator, a usage widget and a CI widget">
   <img src="shots/canvas-commands.png" width="1498" height="898" alt="The canvas: the file browser, a Hacker widget, the Commands widget and a Claude Code session, with the Navigator docked on the right">
