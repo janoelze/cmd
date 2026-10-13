@@ -25,7 +25,7 @@ export interface ApprovalAnswer<S extends string = string> {
  * window sheets, and answers one question, may *who* do *what*. `who` is the asker, in the
  * title bar (an agent's icon and name, and the workspace as context);
  * `title` says what in plain words ("Type in the terminal “tests”"), `why` is the asker's own
- * reason, shown as a quote, and `exact` is exactly what would happen (a string shows as code:
+ * reason, in dim text under the title, and `exact` is exactly what would happen (a string shows as code:
  * the command, the URL; a node for a diff). `scopes` are how long a yes holds (Once, This
  * session, Always in “demo”), the first chosen by default; leave them out for a plain yes or no.
  *
@@ -144,7 +144,7 @@ export function ApprovalSheet<S extends string = string>({
       }
     >
       <div ref={content} className="ui-approval-content">
-        {why != null && <div className="ui-approval-why">“{why}”</div>}
+        {why != null && <div className="ui-approval-why">{why}</div>}
         {exact != null && (typeof exact === "string" ? <CodeBlock tone={danger ? "danger" : undefined}>{exact}</CodeBlock> : <div className="ui-approval-exact" style={{ maxHeight: 220 }}>{exact}</div>)}
         {scopes && scopes.length > 1 && scope !== undefined && reason === null && (
           <div className="ui-approval-scope">
