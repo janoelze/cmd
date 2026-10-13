@@ -24,7 +24,7 @@ export interface ScrubberProps {
   /** The shortest range a trim can be (s). */
   minTrim?: number;
   label?: string;
-  /** In a toolbar: no band of its own, it takes the row's spare width. */
+  /** No band of its own: in a toolbar (where it takes the row's spare width) or on a view's background. */
   inline?: boolean;
 }
 

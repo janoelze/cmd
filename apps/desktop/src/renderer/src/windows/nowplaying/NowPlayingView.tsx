@@ -1,9 +1,10 @@
 // Now Playing, a built-in widget: the cover, track and position of whatever the Mac is
 // playing (core nowplaying/, read through the MediaRemote adapter), with play/pause,
 // skips and a scrubber. The position moves on here from the last report, so the bar
-// runs without the core sending every second.
+// runs without the core sending every second. Small, it reads left to right; with room, it
+// centres like an iPod: the cover at most of the width, the track and controls under it.
 
-import { EmptyState, IconButton, Inline, Scrubber, Stack, Text, View, formatTime } from "@cmd/ui";
+import { EmptyState, IconButton, Inline, Scrubber, Text, View, formatTime } from "@cmd/ui";
 import { useEffect, useState } from "react";
 import { nowPlayingPosition, type NowPlaying, type NowPlayingCommand } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
@@ -39,25 +40,27 @@ export function NowPlayingCard({ np, onControl }: { np: NowPlaying | null | unde
   return (
     <View>
       <div className="np">
-        <div className="np-art">{np.artwork ? <img src={np.artwork} alt="" draggable={false} /> : <EmptyState icon="music.note" compact />}</div>
-        <Stack gap={1}>
-          <Text strong truncate>{np.title}</Text>
-          <Text tone="dim" truncate>{[np.artist, np.album].filter(Boolean).join(" · ") || " "}</Text>
-        </Stack>
-        {np.duration !== null && pos !== null && (
-          <Stack gap={0.5}>
-            <Scrubber duration={np.duration} time={pos} onSeek={(t) => onControl({ seek: t })} label="Position" />
-            <Inline justify="between">
-              <Text tone="dim" size="sm" mono>{formatTime(pos)}</Text>
-              <Text tone="dim" size="sm" mono>−{formatTime(np.duration - pos)}</Text>
-            </Inline>
-          </Stack>
-        )}
-        <Inline justify="between">
-          <IconButton icon="backward.fill" label="Previous" onClick={() => onControl({ command: "previous" })} />
-          <IconButton icon={np.playing ? "pause.fill" : "play.fill"} label={np.playing ? "Pause" : "Play"} onClick={() => onControl({ command: "toggle" })} />
-          <IconButton icon="forward.fill" label="Next" onClick={() => onControl({ command: "next" })} />
-        </Inline>
+        <div className="np-body">
+          <div className="np-art">{np.artwork ? <img src={np.artwork} alt="" draggable={false} /> : <EmptyState icon="music.note" compact />}</div>
+          <div className="np-meta">
+            <Text strong truncate>{np.title}</Text>
+            <Text tone="dim" truncate>{[np.artist, np.album].filter(Boolean).join(" · ") || " "}</Text>
+          </div>
+          {np.duration !== null && pos !== null && (
+            <div className="np-progress">
+              <Scrubber duration={np.duration} time={pos} onSeek={(t) => onControl({ seek: t })} label="Position" inline />
+              <Inline justify="between">
+                <Text tone="dim" size="sm" mono>{formatTime(pos)}</Text>
+                <Text tone="dim" size="sm" mono>−{formatTime(np.duration - pos)}</Text>
+              </Inline>
+            </div>
+          )}
+          <div className="np-controls">
+            <IconButton icon="backward.fill" label="Previous" onClick={() => onControl({ command: "previous" })} />
+            <IconButton icon={np.playing ? "pause.fill" : "play.fill"} label={np.playing ? "Pause" : "Play"} onClick={() => onControl({ command: "toggle" })} />
+            <IconButton icon="forward.fill" label="Next" onClick={() => onControl({ command: "next" })} />
+          </div>
+        </div>
       </div>
     </View>
   );

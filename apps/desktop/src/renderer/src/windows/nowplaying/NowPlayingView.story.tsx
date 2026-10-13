@@ -19,4 +19,6 @@ export const Playing = () => <W np={TRACK} />;
 export const Paused = () => <W np={{ ...TRACK, playing: false }} />;
 export const NoCover = () => <W np={{ ...TRACK, artwork: null }} />;
 export const Nothing = () => <W np={null} />;
+/** With room: one centred column, like an iPod. */
+export const Large = () => <W size={[480, 640]} np={TRACK} />;
 export const Sizes = () => <AllSizes render={(s) => <W size={s} np={TRACK} />} />;
