@@ -13,6 +13,7 @@ const START_WAIT_MS = 15_000;
 
 const agentTool: Tool = {
   acts: true,
+  calls: ["window.list", "pane.list", "agent.list", "agent.spawn", "agent.wait", "pane.read", "agent.kill"],
   spec: {
     name: "agent",
     explores: false,
@@ -38,7 +39,8 @@ const agentTool: Tool = {
     const prompt = str(i.prompt)?.trim();
     if (!prompt) throw new Error("start needs a prompt");
     const cwd = str(i.folder) ? readablePath(b, str(i.folder)!) : b.workspace().root;
-    const a = await b.call("agent.spawn", { kind: str(i.kind) ?? "claude", prompt, workspaceId: b.workspace().id, cwd, parentId: null });
+    // An agent's agent is its child (the sidebar shows it under its caller).
+    const a = await b.call("agent.spawn", { kind: str(i.kind) ?? "claude", prompt, workspaceId: b.workspace().id, cwd, parentId: b.caller.agentId ?? null });
     b.started?.agent(a.id);
     if (!a.paneId) return `Started ${a.kind}.`;
     // Not "started" until it is past starting: it may stop at a question first (trusting the folder, a login).
@@ -52,15 +54,21 @@ const agentTool: Tool = {
 
 const waitTool: Tool = {
   acts: false,
+  calls: ["window.list", "pane.list", "agent.list", "agent.wait", "pane.waitFor"],
   spec: {
     name: "wait",
     explores: false,
     description:
-      "Rarely needed: what you start reports back by itself. Wait, for a short while, until a terminal shows some text (already on its screen counts) or is back at its prompt, or until agents are done or need input. Give the refs of the windows to wait for. Returns what each ended as; read them for details. Times out after `seconds` (default 120, at most 600); waiting again is fine.",
-    schema: schema({ refs: { type: "array", items: ref }, until: { type: "string", enum: ["done", "prompt", "text"], description: "done: agents finished or need you; prompt: a terminal's command ended; text: a terminal printed `text`." }, text: { type: "string" }, all: { type: "boolean", description: "Agents: wait for all of them (default: the first)." }, seconds: { type: "number" } }, ["refs", "until"]),
+      "Wait, for a short while: until what you started reports back (`reports`: an agent done, failed or needing input, a command ended, a server up), until a terminal shows some text (already on its screen counts) or is back at its prompt, or until agents are done or need input. Give the refs of the windows to wait for (not for reports). Returns what each ended as; read them for details. Times out after `seconds` (default 120, at most 600); waiting again is fine.",
+    schema: schema({ refs: { type: "array", items: ref }, until: { type: "string", enum: ["reports", "done", "prompt", "text"], description: "reports: what you started reports back; done: agents finished or need you; prompt: a terminal's command ended; text: a terminal printed `text`." }, text: { type: "string" }, all: { type: "boolean", description: "Agents: wait for all of them (default: the first)." }, seconds: { type: "number" } }, ["until"]),
   },
   async run(i, b) {
     const ms = num(i.seconds, 120, 600) * 1000;
+    if (i.until === "reports") {
+      if (!b.reports) throw new Error("what you start reports back by itself here: wait for done, prompt or text instead");
+      const r = await b.reports(ms, b.signal);
+      return r.length ? r.map((x) => `- ${x}`).join("\n") : "Nothing reported back during the wait.";
+    }
     const wins = await Promise.all((Array.isArray(i.refs) ? i.refs : []).map((r) => windowOf(b, r)));
     if (!wins.length) throw new Error("give the refs to wait for");
     if (i.until === "done") {
@@ -115,6 +123,7 @@ async function terminalName(b: ToolContext, w: AppWindow, agent: Agent | null): 
 
 const typeTool: Tool = {
   acts: true,
+  calls: ["window.list", "pane.list", "agent.list", "agent.send", "pane.write"],
   spec: {
     name: "type",
     explores: false,

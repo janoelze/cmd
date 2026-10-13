@@ -504,11 +504,11 @@ kbd {
 .tile.drop-over { --ring-color: var(--accent); }
 .tile.drop-over > .tile-frame, .dock-tile.drop-over > .tile-frame { box-shadow: var(--ring), var(--drop); }
 .windows-track > .tile.drop-over > .tile-frame::after { opacity: 0; }
-/* The Operator acting on a window (docs/51; TileTitle): the ring in the info colour, undimmed, while it acts. */
-.tile:has(> .tile-body > .tile-title.operator-acting) { --ring-color: var(--info); border-color: var(--ring-color); }
-.tile:has(> .tile-body > .tile-title.operator-acting) > .tile-frame { box-shadow: var(--ring), var(--drop); }
-:is(.windows-track, .dock) > .tile:has(> .tile-body > .tile-title.operator-acting) > .tile-frame::after { opacity: 0; }
-.tile-title .slot-status.operator { color: var(--info); }
+/* A tool call acting on a window (docs/54; TileTitle, lib/acting.ts): the ring in the info colour, undimmed, while it acts. */
+.tile:has(> .tile-body > .tile-title.acting) { --ring-color: var(--info); border-color: var(--ring-color); }
+.tile:has(> .tile-body > .tile-title.acting) > .tile-frame { box-shadow: var(--ring), var(--drop); }
+:is(.windows-track, .dock) > .tile:has(> .tile-body > .tile-title.acting) > .tile-frame::after { opacity: 0; }
+.tile-title .slot-status.acting { color: var(--info); }
 @keyframes tile-bell { 0%, 30% { border-color: var(--state-needs); } }
 @keyframes tile-bell-ring { 0%, 30% { box-shadow: var(--ring), var(--drop); } }
 @media (prefers-reduced-motion: reduce) {

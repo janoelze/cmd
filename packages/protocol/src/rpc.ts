@@ -13,7 +13,7 @@ import type { SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema } from ".
 import type { ActionsEvent, ActionsMethods } from "./actions.ts";
 import type { StatsEvent, StatsMethods } from "./stats.ts";
 import type { OperatorEvent, OperatorMethods } from "./operator.ts";
-import type { ToolsMethods } from "./tools.ts";
+import type { ToolsEvent, ToolsMethods } from "./tools.ts";
 import type { PagesEvent, PagesMethods } from "./pages.ts";
 import type { ArrangeEvent, ArrangeMethods } from "./arrange.ts";
 import type { RemoteMethods } from "./remote.ts";
@@ -496,6 +496,7 @@ export type CoreEvent =
   | ActionsEvent
   | StatsEvent
   | OperatorEvent
+  | ToolsEvent
   | PagesEvent
   | ArrangeEvent
   /** A watched file or folder changed on disk (see fs.watch). */

@@ -1,9 +1,9 @@
 // The Operator in the renderer (docs/51): each workspace's conversation as the core keeps it,
-// kept current by operator.changed, and the board's marks: the window a step is acting on, for
-// as long as it acts and a moment after, so the title bar can say so (TileTitle).
+// kept current by operator.changed. The board's marks for its steps come from tool.acting, as
+// every caller's do (lib/acting.ts).
 
 import { useEffect, useSyncExternalStore } from "react";
-import type { OperatorConversation, OperatorItem, WindowId, WorkspaceId } from "@cmd/protocol";
+import type { OperatorConversation, WindowId, WorkspaceId } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 
 const convs = new Map<WorkspaceId, OperatorConversation>();
@@ -11,36 +11,8 @@ const listeners = new Set<() => void>();
 const changed = () => listeners.forEach((fn) => fn());
 const subscribe = (fn: () => void) => (listeners.add(fn), () => listeners.delete(fn));
 
-/** What a step acting on a window says on its title bar. */
-export interface OperatorMark {
-  why: string;
-  waiting: boolean;
-}
-const marks = new Map<WindowId, OperatorMark & { item: string }>();
-const linger = new Map<string, ReturnType<typeof setTimeout>>();
-/** How long a mark stays after its step ended, so a quick one is still seen. */
-const LINGER_MS = 1500;
-
-function mark(item: OperatorItem): void {
-  if (item.kind !== "tool" || !item.acts || !item.target) return;
-  const target = item.target;
-  clearTimeout(linger.get(item.id));
-  if (item.state === "running" || item.state === "waiting") {
-    marks.set(target, { item: item.id, why: item.why, waiting: item.state === "waiting" });
-    return;
-  }
-  linger.set(
-    item.id,
-    setTimeout(() => {
-      linger.delete(item.id);
-      if (marks.get(target)?.item === item.id) marks.delete(target), changed();
-    }, LINGER_MS),
-  );
-}
-
 cmd.onEvent((e) => {
   if (e.type !== "operator.changed") return;
-  for (const item of e.items ?? []) mark(item);
   const c = convs.get(e.workspaceId);
   if (c) {
     let items = e.reset ? [] : c.items;
@@ -82,11 +54,6 @@ export function useOperator(workspaceId: WorkspaceId): OperatorConversation | nu
     if (!convs.has(workspaceId)) void load(workspaceId);
   }, [workspaceId]);
   return useSyncExternalStore(subscribe, () => convs.get(workspaceId) ?? null);
-}
-
-/** What the Operator is doing to this window right now, if anything. */
-export function useOperatorMark(id: WindowId | null | undefined): OperatorMark | null {
-  return useSyncExternalStore(subscribe, () => (id ? (marks.get(id) ?? null) : null));
 }
 
 export const operatorCall = {

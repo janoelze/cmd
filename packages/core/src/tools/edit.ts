@@ -62,6 +62,7 @@ async function planEdit(i: Input, b: ToolContext): Promise<{ abs: string; rel: s
 
 const editTool: Tool = {
   acts: true,
+  calls: ["window.list", "window.open", "fs.read", "fs.list", "fs.write"],
   for: "models",
   spec: {
     name: "edit",

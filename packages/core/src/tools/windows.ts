@@ -20,6 +20,7 @@ function urlOf(target: string | undefined): URL {
 
 const openTool: Tool = {
   acts: true,
+  calls: ["window.list", "window.update", "window.open", "window.openTarget"],
   spec: {
     name: "open",
     explores: false,
@@ -61,6 +62,7 @@ const openTool: Tool = {
 
 const closeTool: Tool = {
   acts: true,
+  calls: ["window.list", "window.close"],
   spec: {
     name: "close",
     explores: false,
@@ -77,6 +79,7 @@ const closeTool: Tool = {
 
 const focusTool: Tool = {
   acts: true,
+  calls: ["window.list", "window.select"],
   spec: {
     name: "focus",
     explores: false,
@@ -93,6 +96,7 @@ const focusTool: Tool = {
 
 const arrangeTool: Tool = {
   acts: true,
+  calls: ["window.list", "workspace.arrange", "workspace.list", "window.move"],
   spec: {
     name: "arrange",
     explores: false,

@@ -22,6 +22,10 @@ describe("the tools", () => {
     expect(called.size).toBeGreaterThan(20);
     const closed = [...called].filter((m) => !(m in TOOL_ACCESS) || TOOL_ACCESS[m as Method] === "never");
     expect(closed).toEqual([]);
+    // What each tool says it calls (MCP's hints come from it) covers what its code calls.
+    const declared = new Set(TOOLS.flatMap((t) => t.calls));
+    expect([...called].filter((m) => !declared.has(m as Method))).toEqual([]);
+    for (const t of TOOLS) expect(t.calls.filter((m) => TOOL_ACCESS[m] === "never"), t.spec.name).toEqual([]);
   });
 
   it("have unique names, an object schema with `why`, and short descriptions", () => {

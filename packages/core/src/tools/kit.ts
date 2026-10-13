@@ -30,6 +30,8 @@ export interface ToolContext {
   refs: Refs;
   /** What it started reports back: an agent when done, failed or needing input; a command when it ends, a server its address. */
   started?: { agent(agentId: string): void; command(paneId: string, label: string): void };
+  /** The next reports of what it started (reports.ts): at once if some are waiting, else when one comes, or none after `ms`. */
+  reports?(ms: number, signal?: AbortSignal): Promise<string[]>;
   signal: AbortSignal;
 }
 
@@ -37,6 +39,8 @@ export interface Tool {
   spec: ToolSpec;
   /** It changes something: marked on the board, never run beside another act. */
   acts: boolean;
+  /** The methods it may call (TOOL_ACCESS decides each; MCP's hints are derived from them; tools.test.ts checks them against the code). */
+  calls: readonly Method[];
   /** Who may call it; left out: every caller. Coding agents edit files themselves, so `edit` is only for models without their own tools. */
   for?: "models";
   /** The window it is about, for the board's mark. */

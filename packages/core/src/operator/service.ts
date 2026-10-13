@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type { ModelMessage } from "ai";
-import type { Agent, AgentId, AgentState, Method, NewDataEvent, OperatorPast, PaneId, OperatorConversation, OperatorEvent, OperatorItem, OperatorUsage, Params, Result, WindowId, Workspace, WorkspaceId } from "@cmd/protocol";
+import type { Agent, AgentId, AgentState, Method, NewDataEvent, OperatorPast, ToolActivity, PaneId, OperatorConversation, OperatorEvent, OperatorItem, OperatorUsage, Params, Result, WindowId, Workspace, WorkspaceId } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { AgentCall, AgentResult, AgentRun } from "../ai/backends.ts";
 import type { ToolOutput } from "../magic/tools.ts";
@@ -45,6 +45,8 @@ export interface OperatorDeps {
   /** The Operator's window in a workspace, if one is open. */
   selfIn(workspaceId: WorkspaceId): WindowId | null;
   broadcast(e: OperatorEvent): void;
+  /** A step that acts, or waits for the person, as the board shows every caller's (tool.acting). */
+  acting?(a: ToolActivity): void;
   /** Every change to an agent (AgentTracker's updated): the Operator hears about the ones it started. */
   onAgent?(fn: (a: Agent) => void): void;
   /** A command ended in a terminal (OSC 133 D), with its exit status. */
@@ -487,15 +489,24 @@ export class OperatorService {
   // ── items and storage ──────────────────────────────────
 
   #add(c: Conversation, item: OperatorItem): void {
+    this.#acting(c, item);
     c.items.push(item);
     if (c.items.length > ITEMS_MAX) c.items.splice(0, c.items.length - ITEMS_MAX);
     this.#d.broadcast({ type: "operator.changed", workspaceId: c.workspaceId, items: [item] });
   }
 
   #update(c: Conversation, item: OperatorItem): void {
+    this.#acting(c, item);
     const i = c.items.findIndex((x) => x.id === item.id);
     if (i >= 0) c.items[i] = item;
     this.#d.broadcast({ type: "operator.changed", workspaceId: c.workspaceId, items: [item] });
+  }
+
+  /** A step on the board, as every caller's are (the window acted on lights up; one waiting can be answered there). */
+  #acting(c: Conversation, item: OperatorItem): void {
+    if (item.kind !== "tool" || (!item.acts && item.state !== "waiting")) return;
+    const approval = item.state === "waiting" && item.ask ? { title: item.ask, ...(item.exact ? { exact: item.exact } : {}), ...(item.offer ? { offer: item.offer } : {}) } : undefined;
+    this.#d.acting?.({ id: item.id, workspaceId: c.workspaceId, caller: c.name ?? OPERATOR_TITLE, callerWindowId: this.#d.selfIn(c.workspaceId), tool: item.tool, why: item.why, acts: item.acts, target: item.target, state: item.state, ...(approval ? { approval } : {}) });
   }
 
   #conv(workspaceId: WorkspaceId): Conversation {

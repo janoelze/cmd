@@ -553,6 +553,9 @@ export class PaneManager extends EventEmitter<PaneEvents> {
     return this.#panes.get(id)?.command ?? null;
   }
 
+  /** Whether `token` is the pane's CMD_PANE_TOKEN: only its shell and what runs in it know it. */
+  trusts = (id: PaneId, token: string | undefined): boolean => !!token && this.#panes.get(id)?.token === token;
+
   get(id: PaneId): Pane | null {
     const l = this.#panes.get(id);
     return l ? { ...l.pane } : null;

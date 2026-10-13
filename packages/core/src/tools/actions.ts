@@ -14,6 +14,7 @@ async function actionByName(b: ToolContext, name: string): Promise<{ root: strin
 
 const runTool: Tool = {
   acts: true,
+  calls: ["actions.list", "actions.run"],
   spec: {
     name: "run",
     explores: false,

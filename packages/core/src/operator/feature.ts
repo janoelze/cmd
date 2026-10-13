@@ -36,6 +36,7 @@ export function operatorOf(core: CoreContext): OperatorService {
       agent: (r) => core.ai.agent({ ...r, tier: "smart", purpose: "operator" }),
       selfIn: (id) => core.windows.others().find((w) => w.kind === "operator" && w.workspaceId === id)?.id ?? null,
       broadcast: (e) => core.broadcast(e),
+      acting: (call) => toolsOf(core).show(call),
       named: (id, name) => {
         for (const w of core.windows.others()) if (w.kind === "operator" && w.workspaceId === id) core.windows.update(w.id, { title: name ?? OPERATOR_TITLE });
       },

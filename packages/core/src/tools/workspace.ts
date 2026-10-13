@@ -9,6 +9,7 @@ import { agentIn, board, fmtTime, num, readablePath, ref, schema, str, windowOf,
 
 const lookTool: Tool = {
   acts: false,
+  calls: ["window.list", "pane.list", "agent.list"],
   spec: {
     name: "look",
     explores: false,
@@ -21,6 +22,7 @@ const lookTool: Tool = {
 
 const readTool: Tool = {
   acts: false,
+  calls: ["window.list", "pane.list", "agent.list", "pane.read", "git.diff", "fs.read", "fs.list", "browser.read"],
   spec: {
     name: "read",
     explores: false,
@@ -77,6 +79,7 @@ async function readPath(b: ToolContext, abs: string, r?: string): Promise<string
 
 const searchTool: Tool = {
   acts: false,
+  calls: ["search.query", "search.files", "search.history"],
   spec: {
     name: "search",
     explores: false,
@@ -107,6 +110,7 @@ const searchTool: Tool = {
 
 const eventsTool: Tool = {
   acts: false,
+  calls: ["data.query"],
   spec: {
     name: "events",
     explores: false,

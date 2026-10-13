@@ -168,6 +168,9 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "operator.reset": "never",
   "operator.history": "never",
   "operator.open": "never",
+  "tools.list": "never",
+  "tools.call": "never",
+  "approvals.waiting": "never",
   "approvals.answer": "never",
   "approvals.list": "never",
   "approvals.forget": "never",
@@ -539,6 +542,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "actions.changed":
     case "stats.changed":
     case "operator.changed":
+    case "tool.acting": // approvals are answered on this Mac
     case "browser.request": // to the Mac's app windows only
     case "workspace.arrangeRequest":
     case "browser.actRequest":

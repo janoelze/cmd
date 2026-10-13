@@ -31,6 +31,7 @@ async function target(i: Input, b: ToolContext) {
 
 const pageTool: Tool = {
   acts: true,
+  calls: ["window.list", "browser.act"],
   spec: {
     name: "page",
     explores: false,

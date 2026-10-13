@@ -16,7 +16,8 @@ import { DirtyDot, Mark, Slot } from "../components/Slot.tsx";
 import { RemoteBadge } from "../components/Remote.tsx";
 import { countRender } from "../lib/perf.ts";
 import { dragFiles, dragLink } from "../lib/drags.ts";
-import { useOperatorMark } from "../windows/operator/operator.ts";
+import { useActingMark } from "../lib/acting.ts";
+import { ActingApproval } from "./ActingApproval.tsx";
 
 /** SF Symbol for a window kind (from the core's window type registry). */
 export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "macwindow";
@@ -66,11 +67,17 @@ export function TileTitle({
   const place = f.place && !bare && !(row.win && viewFor(row.win.kind)?.placeInToolbar) ? f.place : undefined;
   const file = fileOf(row);
   const url = file ? null : urlOf(row);
-  // The Operator acting on this window says so where the status goes, and rings it (docs/51).
-  const operator = useOperatorMark(windowIdOf(row));
-  const status = operator ? { text: operator.waiting ? "Operator asks…" : `Operator: ${operator.why}`, key: "operator" } : f.status;
+  // A tool call acting on this window (an agent's, the Operator's) says so where the status goes,
+  // and rings it; one waiting for the person is answered from there (docs/54).
+  const acting = useActingMark(windowIdOf(row));
+  const asks = acting?.waiting && acting.call.approval ? acting.call : null;
+  const [asking, setAsking] = useState(false);
+  const statusRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => void (!asks && setAsking(false)), [asks]);
+  const status = acting ? { text: acting.waiting ? `${acting.call.caller} asks…` : `${acting.call.caller}: ${acting.call.why}`, key: "acting" } : f.status;
+  const press = asks ? () => setAsking(true) : action?.run;
   return (
-    <WindowBar className={operator ? "tile-title operator-acting" : "tile-title"} onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} data-tip={title}>
+    <WindowBar className={acting ? "tile-title acting" : "tile-title"} onPointerDown={onPointerDown} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick} data-tip={title}>
       {file || url ? (
         <span
           className="mark-drag"
@@ -99,12 +106,14 @@ export function TileTitle({
         {/* A divider only after a field that's there. */}
         <Slot className="slot-place" value={place ? { text: place } : undefined} clipStart divider={!!f.kind && !bare} />
         <span
+          ref={statusRef}
           className="tile-status"
-          onPointerDown={action ? (e) => e.stopPropagation() : undefined}
-          onClick={action ? (e) => (e.stopPropagation(), action.run()) : undefined}
+          onPointerDown={press ? (e) => e.stopPropagation() : undefined}
+          onClick={press ? (e) => (e.stopPropagation(), press()) : undefined}
         >
-          <Slot className={`slot-status${action && !operator ? " actionable" : ""}${operator ? " operator" : ""}`} value={status} divider={!bare && !!(f.kind || place)} title={action?.title} />
+          <Slot className={`slot-status${(action && !acting) || asks ? " actionable" : ""}${acting ? " acting" : ""}`} value={status} divider={!bare && !!(f.kind || place)} title={asks ? "Show what it asks" : action?.title} />
         </span>
+        {asks && <ActingApproval call={asks} anchor={statusRef} open={asking} onClose={() => setAsking(false)} />}
       </span>
       {menu && (
         <WindowBarMenu
