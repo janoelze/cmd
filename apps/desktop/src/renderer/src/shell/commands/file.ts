@@ -1,7 +1,7 @@
-// File: new windows and agents, opening workspaces, saving, closing (⌘W closes the frontmost
+// File: new windows, opening workspaces, saving, closing (⌘W closes the frontmost
 // thing: a sheet, the selected window, then the app window) and reopening.
 
-import { closePane, newAgent, newBrowser, newFiles, newMagic, newTerminal, newText } from "../../lib/actions.ts";
+import { closePane, newBrowser, newFiles, newMagic, newTerminal, newText } from "../../lib/actions.ts";
 import { cmd } from "../../lib/bridge.ts";
 import { reopenClosed } from "../closed.ts";
 import { closeSheet, currentSheet, openSheet, toggleSheet } from "../sheets.ts";
@@ -11,8 +11,6 @@ registerCommands({
   // ⌘N: one picker for every new window and widget (shell/newItems.ts).
   "file.new": { run: () => toggleSheet({ kind: "picker", picker: { kind: "new" } }, (s) => s.kind === "picker" && s.picker.kind === "new") },
   "file.newTerminal": { run: () => void newTerminal() },
-  "file.newClaude": { run: () => void newAgent("claude") },
-  "file.newCodex": { run: () => void newAgent("codex") },
   "file.newBrowser": { run: () => void newBrowser() },
   "file.newFiles": { run: () => void newFiles() },
   "file.newText": { run: () => void newText() },

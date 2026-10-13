@@ -48,7 +48,7 @@ describe("resolveKeybindings", () => {
       {
         "session.next": ["Ctrl+Tab", "Alt+Cmd+Right"],
         "edit.clear": null,
-        "file.newClaude": "Shift+Cmd+N",
+        "file.newText": "Shift+Cmd+N",
         "nope.cmd": "Cmd+X",
         "view.grid": 42,
       },
@@ -56,14 +56,14 @@ describe("resolveKeybindings", () => {
     );
     expect(bindings["session.next"]).toEqual(["Ctrl+Tab", "Alt+Cmd+Right"]);
     expect(bindings["edit.clear"]).toEqual([]);
-    expect(bindings["file.newClaude"]).toEqual(["Shift+Cmd+N"]);
+    expect(bindings["file.newText"]).toEqual(["Shift+Cmd+N"]);
     expect(errors).toEqual(['unknown command "nope.cmd"', "view.grid: expected a shortcut string, a list of them, or null"]);
   });
 
   it("steals a shortcut from the command that had it by default", () => {
-    const { bindings } = resolveKeybindings({ "view.palette": "Cmd+Shift+P", "file.newClaude": "Command+N" }, MAC);
+    const { bindings } = resolveKeybindings({ "view.palette": "Cmd+Shift+P", "file.newText": "Command+N" }, MAC);
     expect(bindings["file.newTerminal"]).toEqual(["Cmd+T"]);
-    expect(bindings["file.newClaude"]).toEqual(["Command+N"]);
+    expect(bindings["file.newText"]).toEqual(["Command+N"]);
   });
 
   it("reads the space.* ids from before workspaces, and drops them when the Settings window rebinds", () => {

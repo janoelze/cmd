@@ -12,8 +12,6 @@ export const NEW_GROUPS = ["Open", "Windows", "Widgets"];
 
 const WINDOWS: { id: CommandId; icon: string }[] = [
   { id: "file.newTerminal", icon: "terminal" },
-  { id: "file.newClaude", icon: "text.bubble" },
-  { id: "file.newCodex", icon: "text.bubble" },
   { id: "file.newBrowser", icon: "globe" },
   { id: "file.newFiles", icon: "folder" },
   { id: "file.newText", icon: "doc.text" },

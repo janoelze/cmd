@@ -43,8 +43,6 @@ export const COMMANDS = spec([
   // ⌘N: one picker for every new window and widget (renderer/src/shell/newItems.ts); the rest skip it.
   { id: "file.new", label: "New…", keys: ["Cmd+N"], menu: "File/new" },
   { id: "file.newTerminal", label: "New Terminal", keys: ["Cmd+T"], menu: "File/agents" },
-  { id: "file.newClaude", label: "New Claude Session", keys: ["Alt+Cmd+N"], menu: "File/agents" },
-  { id: "file.newCodex", label: "New Codex Session", menu: "File/agents" },
   { id: "file.newBrowser", label: "New Browser Window", keys: ["Shift+Cmd+B"], menu: "File/windows" },
   { id: "file.newFiles", label: "New File Browser", keys: ["Shift+Cmd+O"], menu: "File/windows" },
   { id: "file.newText", label: "New Text Editor", keys: ["Shift+Cmd+E"], menu: "File/windows" },

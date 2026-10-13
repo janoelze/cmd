@@ -38,7 +38,6 @@ Sources: code.visualstudio.com/docs/configure/command-line · github.com/microso
 6. **Defaults follow the workspace.**
    - A new terminal starts in the selected terminal's cwd if that is inside the root, otherwise in the root.
    - New Files windows open at the root.
-   - New agents (`file.newClaude`) start in the root.
    - "Resume session" and recent sessions in the palette are scoped to transcripts whose cwd is under the root, with a "show all" escape.
 7. **Membership of new things** is resolved in this order:
    1. an explicit `workspaceId`;

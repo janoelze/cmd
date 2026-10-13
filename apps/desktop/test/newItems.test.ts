@@ -18,7 +18,7 @@ describe("New… items", () => {
 
   it("lists windows, then your widgets by last use, then built-in ones", () => {
     expect(items.map((i) => i.id)).toEqual([
-      "file.newTerminal", "file.newClaude", "file.newCodex", "file.newBrowser", "file.newFiles", "file.newText",
+      "file.newTerminal", "file.newBrowser", "file.newFiles", "file.newText",
       "magic:b", "magic:a", "type:timer", "type:diff",
     ]);
     expect(items[0]).toMatchObject({ group: "Windows", label: "Terminal", hint: "⌘T" });
@@ -28,7 +28,7 @@ describe("New… items", () => {
     const run = vi.fn();
     const add = vi.fn();
     const xs = newItems(library, MAC, run, add);
-    xs[3]!.run();
+    xs[1]!.run();
     xs.at(-1)!.run();
     expect(run).toHaveBeenCalledWith("file.newBrowser");
     expect(add).toHaveBeenCalledWith("type:diff");

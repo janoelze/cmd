@@ -25,7 +25,9 @@ export const meta: TourMeta = {
     await t.command("file.newFiles");
     await p.getByRole("tree", { name: "Files" }).getByRole("treeitem", { name: "README.md", exact: true }).waitFor();
     // Claude Code, asked something earlier.
-    await t.command("file.newClaude");
+    await t.command("file.newTerminal");
+    await main.getByRole("textbox", { name: "Terminal input" }).last().waitFor();
+    await t.type("claude\n", TYPING.exact);
     const claude = main.getByRole("group", { name: /claude/i }).last();
     await t.waitForText(claude, /\? for shortcuts|auto mode/i, 30_000);
     await t.pause(500);
