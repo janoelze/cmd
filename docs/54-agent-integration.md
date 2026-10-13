@@ -194,6 +194,35 @@ Each phase merges on its own and leaves cmd working; each ends with `pnpm typech
 5. **Registration.** One adapter per agent home beside `hooks.ts` (`agents/mcp-config.ts` or similar): install through the agent's own `mcp add` at user scope where it has one, else edit the user config as `installHooks` does; forward `CMD_PANE_ID`, `CMD_SOCKET`, `CMD_PANE_TOKEN` where the agent filters the env; remove on switch off. Its state shown with the hooks (Settings → Agents, `cmd hooks`). The briefing mentions the server only in homes where it is registered. Done when: turning the switch on and off adds and removes the entry in every home cmd knows, and leaves the user's other servers untouched.
 6. **Retire the Operator**, Jan's call after real use of 1–5: delete `operator/` (service, conversations, prompt, rules), its widget type and Ask Operator… command, and the `operator.*` chat methods (a `PROTOCOL` bump); its kit chat components stay if anything else uses them. Its conversations stay in the database until the next data cleanup, or are dropped with it.
 
+## Success criteria
+
+The plan is done when all of these hold. Each is checkable by an agent; where a check needs a real agent or Jan's eye, it says so.
+
+**The switch**
+- [ ] Settings → Agents has one "Agent integration" switch and no "Tell agents about each other" row; `cmd settings` lists `agents.integration` and not `agents.peers`; a settings.json with `"agents.peers": true` loads as `agents.integration: true`.
+- [ ] Switch on: a new Claude, Codex and Gemini session in a cmd pane gets a briefing naming its pane, its workspace and the `cmd` tools (unit test on the hook output per agent; one real session per agent, its transcript showing the context).
+- [ ] Switch off: the same sessions get no briefing, the server lists no tools, and cmd's MCP entries are gone from every agent home cmd knows (`cmd hooks` shows them absent); cmd's hooks are still installed and an agent's status, turns and needs-input still show.
+- [ ] Outside cmd (a session in another terminal, `CMD_SOCKET` unset), the hook prints nothing and `cmd mcp` lists no tools, with the switch on.
+
+**One source**
+- [ ] Nothing outside `operator/` names the Operator: `grep -rni operator packages apps --include=*.ts --include=*.tsx`, excluding `operator/`, its widget and its protocol file, finds nothing; no shared identifier is named after MCP or RPC except the adapter `tools/mcp.ts`.
+- [ ] Tools are defined only in `packages/core/src/tools/`; `cmd mcp`'s `tools/list`, `cmd tools` and the registry match (test), and every tool is reachable from both (`registries.test.ts`).
+- [ ] Every method a tool calls is allowed in `TOOL_ACCESS` (test); a new method fails tsc until `TOOL_ACCESS` decides it.
+- [ ] Every tool description is under its budget and the server's `instructions` are under 500 characters (test).
+
+**Agents using it**
+- [ ] A test calls every tool as an agent caller against a `Core` with fake PTYs, and an approval-needing call waits for an answer in cmd, not only the agent's own prompt.
+- [ ] A real Claude, Codex and Gemini, each in a cmd pane with the switch on and no other setup, given "start the dev server and open it in a browser beside you" and "start a second agent on X and tell me when it is done", do both through cmd's tools: the browser opens next to their pane, the second agent shows in the sidebar as their child, and they report its end without polling the screen. (Run by an agent; Jan watches one.)
+- [ ] The pane resolves when the agent filters the server's env (Codex, with `CMD_PANE_ID` not forwarded): the server finds its pane from its process ancestry (test with a fake process tree).
+- [ ] The window acted on shows the acting mark naming the agent; a call `TOOL_ACCESS` marks `never`, or the deny-list refuses, fails with a message the agent can act on.
+- [ ] Turning the switch on and off leaves the user's own MCP servers and hooks in every agent config as they were (test on fixture configs, byte for byte outside cmd's entries).
+
+**Wrap-up**
+- [ ] `pnpm typecheck && pnpm test && pnpm e2e` pass; `[lag]` lines in the core log show no new stall from the tools or the briefing.
+- [ ] README (features, CLI: `cmd tools`, `cmd tool`, `cmd mcp`), CHANGELOG and docs/51 updated; this doc's status says built, with what differs from the plan.
+- [ ] The Discord ideas (2026-10-12 "agent connectivity", 2026-10-13 "cmd should expose mcp controls") are marked done with what users now do to get it.
+- [ ] Retiring the Operator (phase 6) is not required for the plan to be done; it is Jan's call afterwards, and when it happens `operator/` and its widget are deleted with no change elsewhere.
+
 ## Open questions
 
 - Default on or off for new installs: on is the point of the feature, off is what a user who never asked for an extra MCP server expects.
