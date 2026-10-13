@@ -35,26 +35,28 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
 
 <div class="hero-shots" aria-roledescription="slideshow">
   <img class="on" src="shots/grid-dark.png" width="1498" height="898" alt="The grid: usage and CI widgets, four Claude Code sessions, a shader, the file browser and a shell">
-  <img src="shots/light-files.png" width="1498" height="898" alt="A light theme: the file browser on the repo next to a CI widget">
-  <img src="shots/canvas-shader.png" width="1498" height="898" alt="The canvas: a shader widget and the file browser">
-  <img src="shots/strip-agents.png" width="1498" height="898" alt="The strip: two Claude Code sessions side by side with a CI widget">
-  <img src="shots/light-palette.png" width="1498" height="898" alt="The command palette over the canvas, in a light theme">
-  <img src="shots/json.png" width="1498" height="898" alt="A JSON window on package.json next to the Navigator and a CI widget">
-  <img src="shots/maps.png" width="1498" height="898" alt="The strip: Google Maps in a browser window between the Navigator and a CI widget">
-  <img src="shots/site.png" width="1498" height="898" alt="The strip: this website in a browser window between the Navigator, a usage widget and a CI widget">
-  <img src="shots/canvas-commands.png" width="1498" height="898" alt="The canvas: the file browser, a Hacker widget, the Commands widget and a Claude Code session, with the Navigator docked on the right">
-  <img src="shots/strip-hacker.png" width="1498" height="898" alt="The strip: a Claude Code session and a Hacker widget between the file browser and the Navigator">
-  <img src="shots/top.png" width="1498" height="898" alt="The strip: the Navigator, a usage widget, top in a terminal and a CI widget">
-  <img src="shots/stats.png" width="1498" height="898" alt="The strip: the Navigator over a Claude Code session, the Stats widget and a CI widget">
-  <img src="shots/jam.png" width="1498" height="898" alt="The grid: a Visualizer widget on system audio next to a Jam window playing a Strudel pattern">
-  <img src="shots/painting.png" width="1498" height="898" alt="The strip: the Navigator over a Claude Code session, a still life in a browser window and the Actions widget">
-  <img src="shots/light-hn.png" width="1498" height="898" alt="A light theme: Hacker News in a browser window between the Navigator and the Actions widget">
-  <img src="shots/light-wikipedia.png" width="1498" height="898" alt="A light theme: an agent reading Wikipedia in browser windows beside it, on Voyager 1 and cosmochemistry">
+  <img src="shots/lo/light-files.png" data-full="shots/light-files.png" width="1498" height="898" alt="A light theme: the file browser on the repo next to a CI widget">
+  <img src="shots/lo/canvas-shader.png" data-full="shots/canvas-shader.png" width="1498" height="898" alt="The canvas: a shader widget and the file browser">
+  <img src="shots/lo/strip-agents.png" data-full="shots/strip-agents.png" width="1498" height="898" alt="The strip: two Claude Code sessions side by side with a CI widget">
+  <img src="shots/lo/light-palette.png" data-full="shots/light-palette.png" width="1498" height="898" alt="The command palette over the canvas, in a light theme">
+  <img src="shots/lo/json.png" data-full="shots/json.png" width="1498" height="898" alt="A JSON window on package.json next to the Navigator and a CI widget">
+  <img src="shots/lo/maps.png" data-full="shots/maps.png" width="1498" height="898" alt="The strip: Google Maps in a browser window between the Navigator and a CI widget">
+  <img src="shots/lo/site.png" data-full="shots/site.png" width="1498" height="898" alt="The strip: this website in a browser window between the Navigator, a usage widget and a CI widget">
+  <img src="shots/lo/canvas-commands.png" data-full="shots/canvas-commands.png" width="1498" height="898" alt="The canvas: the file browser, a Hacker widget, the Commands widget and a Claude Code session, with the Navigator docked on the right">
+  <img src="shots/lo/strip-hacker.png" data-full="shots/strip-hacker.png" width="1498" height="898" alt="The strip: a Claude Code session and a Hacker widget between the file browser and the Navigator">
+  <img src="shots/lo/top.png" data-full="shots/top.png" width="1498" height="898" alt="The strip: the Navigator, a usage widget, top in a terminal and a CI widget">
+  <img src="shots/lo/stats.png" data-full="shots/stats.png" width="1498" height="898" alt="The strip: the Navigator over a Claude Code session, the Stats widget and a CI widget">
+  <img src="shots/lo/jam.png" data-full="shots/jam.png" width="1498" height="898" alt="The grid: a Visualizer widget on system audio next to a Jam window playing a Strudel pattern">
+  <img src="shots/lo/painting.png" data-full="shots/painting.png" width="1498" height="898" alt="The strip: the Navigator over a Claude Code session, a still life in a browser window and the Actions widget">
+  <img src="shots/lo/light-hn.png" data-full="shots/light-hn.png" width="1498" height="898" alt="A light theme: Hacker News in a browser window between the Navigator and the Actions widget">
+  <img src="shots/lo/light-wikipedia.png" data-full="shots/light-wikipedia.png" width="1498" height="898" alt="A light theme: an agent reading Wikipedia in browser windows beside it, on Voyager 1 and cosmochemistry">
 </div>
 <script>
 // Shuffle the hero screenshots, fade the gallery in from a blur once the first has loaded,
 // then crossfade through them; reduced motion shows one at random. Without
-// script the first one shows.
+// script the first one shows. All but that one start as small stand-ins
+// (shots/lo/, from shots.mjs) and get their full image one at a time: the one
+// showing and the next; the crossfade waits until the next has fully loaded.
 (() => {
   const box = document.querySelector(".hero-shots");
   const shots = [...box.children];
@@ -64,8 +66,22 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
   }
   for (const s of shots) { s.classList.remove("on"); box.append(s); }
   shots[0].classList.add("on");
-  // Hidden until the first screenshot has loaded, then faded in from a blur; the
-  // crossfade starts from there.
+  // The full image, decoded before it replaces the stand-in, so the swap is
+  // instant. Resolves either way: on an error the stand-in stays.
+  const loading = new Map();
+  const full = (img) => {
+    if (!loading.has(img)) {
+      const src = img.dataset.full;
+      const pre = src ? new Image() : img;
+      if (src) pre.src = src;
+      loading.set(img, pre.decode().then(() => {
+        if (src) { img.src = src; delete img.dataset.full; return img.decode(); }
+      }).catch(() => {}));
+    }
+    return loading.get(img);
+  };
+  // Hidden until the first screenshot (its stand-in) has loaded, then faded in
+  // from a blur; the crossfade starts from there.
   const cycle = shots.length > 1 && !matchMedia("(prefers-reduced-motion: reduce)").matches;
   let shown = false;
   const reveal = () => {
@@ -74,14 +90,21 @@ page_start('cmd', 'A software workbench for macOS. Terminals, coding agents, bro
     box.classList.add("revealing");
     box.classList.remove("loading");
     setTimeout(() => box.classList.remove("revealing"), 1800); // after the 1.6 s transition
+    full(shots[0]).then(() => { if (cycle) full(shots[1]); });
     if (!cycle) return;
     let i = 0;
-    setInterval(() => {
-      if (document.hidden) return;
-      shots[i].classList.remove("on");
-      i = (i + 1) % shots.length;
-      shots[i].classList.add("on");
-    }, 3500);
+    const next = async () => {
+      const j = (i + 1) % shots.length;
+      await full(shots[j]);
+      if (!document.hidden) {
+        shots[i].classList.remove("on");
+        shots[j].classList.add("on");
+        i = j;
+        full(shots[(i + 1) % shots.length]);
+      }
+      setTimeout(next, 3500);
+    };
+    setTimeout(next, 3500);
   };
   box.classList.add("loading");
   shots[0].decode().then(reveal, reveal);

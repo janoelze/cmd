@@ -1,10 +1,12 @@
 // Turns the macOS window screenshots in shots/ (⇧⌘4, workspace: the window on a
 // transparent drop shadow) into the website's screenshots in public/shots/:
 // finds the opaque window inside the shadow and crops to it, keeping the
-// rounded corners' transparency and the colour profile. Plain Node, no
-// dependencies, so deploy.sh runs it on CI. usage: node website/shots.mjs
+// rounded corners' transparency and the colour profile. Each also gets a small
+// stand-in in public/shots/lo/ that the page shows until the full one has
+// loaded. Plain Node, no dependencies, so deploy.sh runs it on CI. usage:
+// node website/shots.mjs
 // Prints each one's size; the <img> tags in index.php expect 1498×898 (a
-// 1500×900 window less its 1px border).
+// 1500×900 window less its 1px border), or twice that from a Retina capture.
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -14,6 +16,7 @@ import { deflateSync, inflateSync } from "node:zlib";
 const dir = dirname(fileURLToPath(import.meta.url));
 const src = join(dir, "shots");
 const out = join(dir, "public/shots");
+const LO_WIDTH = 375; // the stand-ins' width, about: a quarter of a 1x capture, an eighth of a 2x one
 const OPAQUE = 250; // alpha at or above this is the window; the shadow never gets there
 const INSET = 1; // px cut from each side on top: the window's own border
 const SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -138,7 +141,22 @@ function crop(img, box) {
   return { ...img, ...box, px };
 }
 
-mkdirSync(out, { recursive: true });
+// Averages each factor×factor block into one pixel.
+function shrink(img, factor) {
+  const width = Math.floor(img.width / factor), height = Math.floor(img.height / factor);
+  const px = Buffer.alloc(width * height * 4), n = factor * factor;
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++)
+      for (let c = 0; c < 4; c++) {
+        let sum = 0;
+        for (let dy = 0; dy < factor; dy++)
+          for (let dx = 0; dx < factor; dx++) sum += img.px[((y * factor + dy) * img.width + x * factor + dx) * 4 + c];
+        px[(y * width + x) * 4 + c] = Math.round(sum / n);
+      }
+  return { ...img, width, height, px };
+}
+
+mkdirSync(join(out, "lo"), { recursive: true });
 const files = readdirSync(src).filter((f) => f.endsWith(".png")).sort();
 if (files.length === 0) {
   console.error(`no screenshots in ${src}`);
@@ -152,6 +170,9 @@ for (const file of files) {
     process.exitCode = 1;
     continue;
   }
-  writeFileSync(join(out, file), encode(crop(img, box)));
-  console.log(`${file} ${box.width}×${box.height} (from ${img.width}×${img.height}, offset ${box.x},${box.y})`);
+  const cropped = crop(img, box);
+  const lo = shrink(cropped, Math.max(1, Math.round(box.width / LO_WIDTH)));
+  writeFileSync(join(out, file), encode(cropped));
+  writeFileSync(join(out, "lo", file), encode(lo));
+  console.log(`${file} ${box.width}×${box.height} (from ${img.width}×${img.height}, offset ${box.x},${box.y}), stand-in ${lo.width}×${lo.height}`);
 }
