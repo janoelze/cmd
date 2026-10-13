@@ -1,13 +1,17 @@
 // The Now Playing widget playing, paused, without a cover, with nothing playing, and at every size.
 
+import { useState } from "react";
 import type { NowPlaying } from "@cmd/protocol";
 import { AllSizes, RefWindow, type SizeName } from "../../reference/RefWindow.tsx";
 import { NowPlayingCard } from "./NowPlayingView.tsx";
 
 const COVER = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#f06"/><stop offset="1" stop-color="#40f"/></linearGradient></defs><rect width="10" height="10" fill="url(#g)"/></svg>')}`;
-const TRACK: NowPlaying = { app: "com.spotify.client", title: "Interdimensional Life", artist: "ooxygen", album: "Rave Rats Volume 1", playing: true, duration: 586, elapsed: 132, at: Date.now(), rate: 1, artwork: COVER };
+const TRACK: NowPlaying = { app: "com.spotify.client", title: "Interdimensional Life", artist: "ooxygen", album: "Rave Rats Volume 1", playing: true, duration: 586, elapsed: 132, at: 0, rate: 1, artwork: COVER };
 
 function W({ size = "regular", np }: { size?: SizeName | readonly [number, number]; np: NowPlaying | null }) {
+  // Playing from where the fixture says as the variant mounts, not from when the page loaded.
+  const [at] = useState(Date.now);
+  np = np && { ...np, at };
   return (
     <RefWindow icon="music.note" name="Now Playing" size={size}>
       <NowPlayingCard np={np} onControl={() => {}} />

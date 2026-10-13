@@ -5,7 +5,7 @@
 // centres like an iPod: the cover at most of the width, the track and controls under it;
 // really small, the cover is a thumbnail in front of the title.
 
-import { EmptyState, IconButton, Inline, Text, TimeBar, View, formatTime } from "@cmd/ui";
+import { EmptyState, Icon, IconButton, Inline, Text, TimeBar, View, formatTime } from "@cmd/ui";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { nowPlayingPosition, type NowPlaying, type NowPlayingCommand } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
@@ -24,6 +24,16 @@ export function NowPlayingView({ win }: WindowViewProps) {
   useWidgetStatus(win.id, np ? `${np.title}${np.artist ? ` · ${np.artist}` : ""}` : null);
   const control = (p: { command?: NowPlayingCommand; seek?: number }) => void cmd.call("nowPlaying.control", p);
   return <NowPlayingCard np={np} onControl={control} />;
+}
+
+/** In place of a cover the player didn't send: the cover's box with a note, a large one and the thumbnail's (nowplaying.css shows the one that fits). */
+function NoCover() {
+  return (
+    <div className="np-nocover">
+      <Icon name="music.note" size={40} weight="light" className="np-nocover-lg" />
+      <Icon name="music.note" size={18} className="np-nocover-sm" />
+    </div>
+  );
 }
 
 /** The widget, drawn (NowPlayingView.story.tsx shows it playing, paused and empty). */
@@ -45,7 +55,7 @@ export function NowPlayingCard({ np, onControl }: { np: NowPlaying | null | unde
       <div className="np">
         <div className="np-body">
           <div className="np-head">
-            <div className="np-art">{np.artwork ? <img src={np.artwork} alt="" draggable={false} /> : <EmptyState icon="music.note" compact />}</div>
+            <div className="np-art">{np.artwork ? <img src={np.artwork} alt="" draggable={false} /> : <NoCover />}</div>
             <div className="np-meta">
               {/* Its length sets how large it can be (nowplaying.css): a short title grows a little with the window. */}
               <div className="np-title" style={{ "--chars": Math.max(8, np.title.length) } as CSSProperties}>{np.title}</div>
