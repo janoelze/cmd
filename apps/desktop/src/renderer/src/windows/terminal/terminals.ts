@@ -18,7 +18,7 @@ import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 import { currentTheme, onThemeChange, terminalColors } from "@cmd/ui/themes";
-import { findLinks, logicalLine, type Row } from "./links.ts";
+import { lineLinks, pickPaths, type CellLink, type Row } from "./links.ts";
 import { optionIsMeta } from "./option.ts";
 import { scrolled, type FindOptions, type FindResults } from "@cmd/ui";
 import type { FindRequest } from "../../lib/find.tsx";
@@ -141,8 +141,8 @@ function linkProvider(term: Terminal, paneId: PaneId) {
   return {
     provideLinks(y: number, done: (links: ILink[] | undefined) => void): void {
       // The logical line around row y (1-based), from the rows on either side:
-      // soft wraps and URLs wrapped by the program (logicalLine), with each
-      // character's cell, so wide characters and wraps map back exactly.
+      // soft wraps and URLs or paths wrapped by the program (lineLinks), with
+      // each character's cell, so wide characters and wraps map back exactly.
       const buf = term.buffer.active;
       const rows: Row[] = [];
       const first = Math.max(0, y - 1 - LINK_MAX_ROWS);
@@ -161,13 +161,11 @@ function linkProvider(term: Terminal, paneId: PaneId) {
         }
         rows.push({ text, cells, wrapped: line.isWrapped });
       }
-      const { text: full, cells } = logicalLine(rows, y - 1 - first, term.cols);
-      const text = full.slice(0, LINK_MAX_CHARS);
-      const matches = findLinks(text.trimEnd());
-      if (!matches.length) return done(undefined);
-      const make = (start: number, end: number, open: () => void): ILink => ({
-        range: { start: cells[start]!, end: cells[end - 1]! },
-        text: text.slice(start, end),
+      const { urls, paths } = lineLinks(rows, y - 1 - first, term.cols, LINK_MAX_CHARS);
+      if (!urls.length && !paths.length) return done(undefined);
+      const make = (l: CellLink, open: () => void): ILink => ({
+        range: { start: l.start, end: l.end },
+        text: l.text,
         decorations: { underline: metaDown, pointerCursor: metaDown },
         activate: (e) => e.metaKey && open(),
         hover(this: ILink) {
@@ -177,14 +175,13 @@ function linkProvider(term: Terminal, paneId: PaneId) {
           if (hovered === this) hovered = null;
         },
       });
-      const urls = matches.filter((m) => m.kind === "url").map((m) => make(m.start, m.end, () => void openTarget("url", m.target)));
-      const paths = matches.filter((m) => m.kind === "path");
-      if (!paths.length) return done(urls);
+      const urlLinks = urls.map((l) => make(l, () => void openTarget("url", l.target)));
+      if (!paths.length) return done(urlLinks);
       void import("../../lib/store.ts").then(async ({ getState }) => {
         const cwd = getState().panes.get(paneId)?.cwd;
-        const abs = cwd ? await resolvePaths(paths.map((m) => m.target), cwd) : [];
-        const links = paths.flatMap((m, i) => (abs[i] ? [make(m.start, m.end, () => void openTarget("path", abs[i]!))] : []));
-        done([...urls, ...links].sort((a, b) => a.range.start.y - b.range.start.y || a.range.start.x - b.range.start.x));
+        const abs = cwd ? await resolvePaths(paths.map((l) => l.target), cwd) : [];
+        const links = pickPaths(paths, abs).map(({ link, abs }) => make(link, () => void openTarget("path", abs)));
+        done([...urlLinks, ...links].sort((a, b) => a.range.start.y - b.range.start.y || a.range.start.x - b.range.start.x));
       });
     },
   };

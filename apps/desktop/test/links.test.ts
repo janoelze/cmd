@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findLinks, logicalLine, type Row } from "../src/renderer/src/windows/terminal/links.ts";
+import { findLinks, lineLinks, logicalLine, pickPaths, type Row } from "../src/renderer/src/windows/terminal/links.ts";
 
 const targets = (s: string) => findLinks(s).map((l) => `${l.kind}:${l.target}`);
 const text = (s: string) => findLinks(s).map((l) => s.slice(l.start, l.end));
@@ -76,5 +76,42 @@ describe("links across rows", () => {
     expect(urlsAt(25, ["x https://example.com/abcd", "            deep"], 0)).toEqual(["https://example.com/abcd"]);
     // Two lines that each hold their own link stay apart.
     expect(urlsAt(25, ["x https://example.com/abcd", "https://b.example/"], 1)).toEqual(["https://b.example/"]);
+  });
+});
+
+describe("paths across rows", () => {
+  const png = "/Users/me/src/cmd/apps/desktop/src/renderer/src/reference/fixtures/kinds/shot.png";
+  // The paths the disk check finds, and the text of each link the terminal would show.
+  const pathsAt = (cols: number, lines: string[], at: number, disk: string[]) => {
+    const { paths } = lineLinks(screen(cols, lines), at, cols);
+    return pickPaths(paths, paths.map((p) => (disk.includes(p.target) ? p.target : null))).map(({ link }) => link);
+  };
+  const targetsAt = (cols: number, lines: string[], at: number, disk: string[]) => pathsAt(cols, lines, at, disk).map((l) => l.target);
+
+  it("joins a path Claude Code wrapped at the edge, from any of its rows", () => {
+    // ⏺ Read(<path>) at 60 columns: hard-broken at the edge, continued under the text.
+    const lines = ["⏺ Read(" + png.slice(0, 53), "  " + png.slice(53) + ")", "  ⎿  Read image (52.3KB)"];
+    for (const at of [0, 1]) expect(targetsAt(60, lines, at, [png])).toEqual([png]);
+    const [link] = pathsAt(60, lines, 1, [png]);
+    expect([link!.start, link!.end]).toEqual([{ x: 8, y: 1 }, { x: 2 + png.length - 53, y: 2 }]);
+    expect(targetsAt(60, lines, 2, [png])).toEqual([]);
+  });
+
+  it("follows a path over several rows, a few columns short of the edge or broken after a slash", () => {
+    const lines = ["    ⎿  " + png.slice(0, 30), "       " + png.slice(30, 60), "       " + png.slice(60)];
+    for (const at of [0, 1, 2]) expect(targetsAt(40, lines, at, [png])).toEqual([png]);
+    const slash = png.lastIndexOf("/") + 1;
+    expect(targetsAt(80, ["Saved to " + png.slice(0, slash), png.slice(slash)], 1, [png])).toEqual([png]);
+  });
+
+  it("keeps the rows' own paths when the joined one doesn't exist", () => {
+    // Prose that happens to end in a path at the edge, and goes on below.
+    const lines = ["see packages/core/src/a.ts", "and README.md"];
+    expect(targetsAt(26, lines, 0, ["packages/core/src/a.ts", "README.md"])).toEqual(["packages/core/src/a.ts"]);
+    expect(targetsAt(26, lines, 1, ["packages/core/src/a.ts", "README.md"])).toEqual(["README.md"]);
+  });
+
+  it("leaves rows alone that end far from the edge", () => {
+    expect(targetsAt(80, ["/tmp/a", "b.png"], 0, ["/tmp/ab.png", "/tmp/a"])).toEqual(["/tmp/a"]);
   });
 });

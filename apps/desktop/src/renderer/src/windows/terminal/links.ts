@@ -62,28 +62,41 @@ export interface Row {
 }
 
 // Programs that draw their own screen (Claude Code, other TUIs) wrap a long URL
-// with real line breaks, so the terminal sees separate rows. A row continues a
-// URL from the row above when that row ends inside a URL at the right edge (or
-// a few columns short after a /, - or ?, where wrappers like to break), and it
-// starts, after a little indent, with URL characters (not a new URL).
+// or path with real line breaks, so the terminal sees separate rows. A row
+// continues a URL from the row above when that row ends inside a URL at the
+// right edge (or a few columns short after a /, - or ?, where wrappers like to
+// break), and it starts, after a little indent, with URL characters (not a new
+// URL). Paths are joined more freely (`paths`), since the disk check decides
+// between the joined path and the rows' own (lineLinks).
 const OPEN_URL = /\b(?:https?|file):\/\/\S*$/;
 const CONTINUES = /^ {0,8}(?=[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%])/;
 const BREAK_AFTER = /[/\-?&=#_~+]$/;
+const OPEN_PATH = /[\w.@%+,\-~/]$/;
+const CONTINUES_PATH = /^ {0,10}(?=[\w.@%+,\-~/])/;
+const PATH_GAP = 12; // columns a wrapper may leave free at the right
 
-function continues(line: Row, next: Row, cols: number): number | null {
+function continues(line: Row, next: Row, cols: number, paths: boolean): number | null {
   const text = line.text.trimEnd();
-  if (!OPEN_URL.test(text) || next.wrapped) return null;
+  if (!text || next.wrapped) return null;
   const gap = cols - line.cells[text.length - 1]!.x;
-  if (gap > 1 && !(gap <= 12 && BREAK_AFTER.test(text))) return null;
-  const indent = next.text.match(CONTINUES)?.[0].length;
-  return indent === undefined || /^[a-z]+:\/\//i.test(next.text.slice(indent)) ? null : indent; // not a URL of its own
+  if (OPEN_URL.test(text)) {
+    if (gap > 1 && !(gap <= 12 && BREAK_AFTER.test(text))) return null;
+    const indent = next.text.match(CONTINUES)?.[0].length;
+    return indent === undefined || /^[a-z]+:\/\//i.test(next.text.slice(indent)) ? null : indent; // not a URL of its own
+  }
+  if (!paths || gap > PATH_GAP || !OPEN_PATH.test(text)) return null;
+  return next.text.match(CONTINUES_PATH)?.[0].length ?? null;
 }
 
-/** The logical line holding row `at` (an index into rows): soft-wrapped rows joined, and URLs a program wrapped itself. */
-export function logicalLine(rows: Row[], at: number, cols: number): Row {
+/**
+ * The logical line holding row `at` (an index into rows): soft-wrapped rows
+ * joined, and URLs a program wrapped itself (with `paths`, any row ending in
+ * path characters near the edge and the next row's leading ones too).
+ */
+export function logicalLine(rows: Row[], at: number, cols: number, paths = false): Row {
   let line: Row | null = null;
   for (const [i, row] of rows.entries()) {
-    const indent: number | null = line && i > 0 ? (row.wrapped ? 0 : continues(line, row, cols)) : null;
+    const indent: number | null = line && i > 0 ? (row.wrapped ? 0 : continues(line, row, cols, paths)) : null;
     if (line && indent !== null) {
       const keep = row.wrapped ? line.text.length : line.text.trimEnd().length;
       line = { text: line.text.slice(0, keep) + row.text.slice(indent), cells: [...line.cells.slice(0, keep), ...row.cells.slice(indent)], wrapped: line.wrapped };
@@ -93,4 +106,48 @@ export function logicalLine(rows: Row[], at: number, cols: number): Row {
     }
   }
   return line ?? { text: "", cells: [], wrapped: false };
+}
+
+type Cell = { x: number; y: number };
+/** A link found in the rows, by the cells it covers (first and last, inclusive). */
+export interface CellLink {
+  kind: "url" | "path";
+  target: string;
+  text: string;
+  start: Cell;
+  end: Cell;
+}
+
+/**
+ * The links in the logical line holding row `at`. URLs come out final; paths
+ * are candidates for the disk check, those that only reading across
+ * program-wrapped rows finds first, then the rows' own: pickPaths keeps the first that exists of
+ * each overlapping set.
+ */
+export function lineLinks(rows: Row[], at: number, cols: number, maxChars = Infinity): { urls: CellLink[]; paths: CellLink[] } {
+  const read = (line: Row) => {
+    const text = line.text.slice(0, maxChars);
+    return findLinks(text.trimEnd()).map((m) => ({ kind: m.kind, target: m.target, text: text.slice(m.start, m.end), start: line.cells[m.start]!, end: line.cells[m.end - 1]! }));
+  };
+  const own = read(logicalLine(rows, at, cols));
+  const joined = read(logicalLine(rows, at, cols, true)).filter((l) => l.kind === "path" && l.start.y !== l.end.y);
+  const key = (l: CellLink) => `${l.target}\0${l.start.x},${l.start.y}`;
+  const seen = new Set(own.map(key));
+  return {
+    urls: own.filter((l) => l.kind === "url"),
+    paths: [...joined.filter((l) => !seen.has(key(l))), ...own.filter((l) => l.kind === "path")],
+  };
+}
+
+const pos = (c: Cell) => c.y * 1e5 + c.x;
+const overlaps = (a: CellLink, b: CellLink) => pos(a.start) <= pos(b.end) && pos(b.start) <= pos(a.end);
+
+/** The candidates that exist (`exists[i]` for `paths[i]`), earlier ones winning where they overlap. */
+export function pickPaths<T>(paths: CellLink[], exists: (T | null)[]): { link: CellLink; abs: T }[] {
+  const out: { link: CellLink; abs: T }[] = [];
+  paths.forEach((link, i) => {
+    const abs = exists[i];
+    if (abs != null && !out.some((o) => overlaps(o.link, link))) out.push({ link, abs });
+  });
+  return out;
 }
