@@ -1189,9 +1189,12 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
 /* The approval sheet (approval.tsx, docs/55), a window sheet: who asks in its title bar, what in its title, why in their words, exactly what in code, how long a yes holds. */
 .ui-approval-content { display: flex; flex-direction: column; gap: var(--space-3); }
 .ui-approval-why { color: var(--text-dim); }
-.ui-approval-scope { display: flex; align-items: center; gap: var(--space-3); }
+.ui-approval-scope { display: flex; flex-direction: column; gap: var(--space-1-5); }
+.ui-approval-scope-row { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .ui-approval-scope-label { flex: none; font-size: var(--text-sm); color: var(--text-dim); }
-.ui-approval-scope > .ui-seg { flex: 1; }
+.ui-approval-scope-row > .ui-seg { flex: 1; min-width: 0; }
+.ui-approval-scope-row > .ui-seg > button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-approval-scope-note { font-size: var(--text-sm); color: var(--text-dim); }
 /* A node for what would happen (a diff) sits in the same well as a code block. */
 .ui-approval-exact { overflow: auto; padding: var(--space-1-5) 0; border-radius: var(--radius); background: var(--code-bg); }
 .ui-approval-exact > .ui-diff { --diff-indent: var(--space-2); margin: 0; }

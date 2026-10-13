@@ -26,8 +26,9 @@ export interface ApprovalAnswer<S extends string = string> {
  * title bar (an agent's icon and name, and the workspace as context);
  * `title` says what in plain words ("Type in the terminal “tests”"), `why` is the asker's own
  * reason, in dim text under the title, and `exact` is exactly what would happen (a string shows as code:
- * the command, the URL; a node for a diff). `scopes` are how long a yes holds (Once, This
- * session, Always in “demo”), the first chosen by default; leave them out for a plain yes or no.
+ * the command, the URL; a node for a diff). `scopes` are how long a yes holds, in short words
+ * (Once, This session, Always), the first chosen by default, with what each covers in
+ * `scopeNotes`; leave them out for a plain yes or no.
  *
  * Return allows from anywhere in the sheet but the reason field, except in its first 300 ms;
  * Esc and the scrim deny. "Deny and Say Why…" opens a field whose text goes with the no.
@@ -42,6 +43,7 @@ export function ApprovalSheet<S extends string = string>({
   exact,
   scopes,
   scope: initial,
+  scopeNotes,
   allow = "Allow",
   deny = "Deny",
   danger,
@@ -61,6 +63,8 @@ export function ApprovalSheet<S extends string = string>({
   why?: ReactNode;
   exact?: ReactNode;
   scopes?: readonly Option<S>[];
+  /** What each scope covers, in a dim line under the choice ("Kept for github.com in “demo”…"): keeps the choices short. */
+  scopeNotes?: Partial<Record<S, ReactNode>>;
   /** The scope chosen at first (default: the first). */
   scope?: S;
   allow?: string;
@@ -153,8 +157,11 @@ export function ApprovalSheet<S extends string = string>({
         {exact != null && (typeof exact === "string" ? <CodeBlock tone={danger ? "danger" : undefined}>{exact}</CodeBlock> : <div className="ui-approval-exact" style={{ maxHeight: 220 }}>{exact}</div>)}
         {scopes && scopes.length > 1 && scope !== undefined && reason === null && (
           <div className="ui-approval-scope">
-            <span className="ui-approval-scope-label">{allow}</span>
-            <Segmented value={scope} options={scopes} onChange={setScope} label="For how long" fill />
+            <div className="ui-approval-scope-row">
+              <span className="ui-approval-scope-label">{allow}</span>
+              <Segmented value={scope} options={scopes} onChange={setScope} label="For how long" fill />
+            </div>
+            {scopeNotes?.[scope] != null && <div className="ui-approval-scope-note">{scopeNotes[scope]}</div>}
           </div>
         )}
         {reason !== null && (

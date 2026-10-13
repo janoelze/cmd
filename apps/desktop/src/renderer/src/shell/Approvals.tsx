@@ -16,7 +16,15 @@ function Ask({ ask, open, count }: { ask: ToolActivity; open: boolean; count: nu
   const workspace = useStoreValue((s) => s.workspaces.get(ask.workspaceId)?.name ?? null);
   const a = ask.approval!;
   const bySite = permissionOf(a.permission)?.bySite && a.site;
-  const label: Record<ApprovalScope, string> = { once: "Once", session: "This session", always: bySite ? `Always for ${a.site}` : workspace ? `Always in “${workspace}”` : "Always here" };
+  const label: Record<ApprovalScope, string> = { once: "Once", session: "This session", always: "Always" };
+  // What each choice covers, under them: the choices stay short whatever the site or workspace.
+  const where = workspace ? ` in “${workspace}”` : "";
+  const kept = bySite ? `Kept for ${a.site}${where}.` : `Kept for “${permissionOf(a.permission)?.title ?? a.permission}”${where}.`;
+  const notes: Record<ApprovalScope, string> = {
+    once: "Asks again next time.",
+    session: a.risky ? `Until ${ask.caller} exits. Risky actions are never allowed for always.` : `Until ${ask.caller} exits.`,
+    always: `${kept} Change it in Settings → AI & Agents → Permissions.`,
+  };
   return (
     <ApprovalSheet<ApprovalScope>
       open={open}
@@ -25,6 +33,7 @@ function Ask({ ask, open, count }: { ask: ToolActivity; open: boolean; count: nu
       why={ask.why !== ask.tool ? ask.why : undefined}
       exact={a.exact || undefined}
       scopes={a.scopes.map((value) => ({ value, label: label[value] }))}
+      scopeNotes={notes}
       allow={a.risky ? "Run" : "Allow"}
       danger={a.risky}
       position={{ index: 1, count }}
