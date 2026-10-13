@@ -15,6 +15,7 @@ import { REMOTE_HELP, remoteCommand } from "./remote.ts";
 import { skewMessage } from "./skew.ts";
 import { exitCode } from "./exit.ts";
 import { hook } from "./hook.ts";
+import { TOOLS_HELP, toolsCommand } from "./tools.ts";
 
 const HELP = `cmd — terminal + agent workbench
 
@@ -41,7 +42,7 @@ usage: cmd <command> [options]
   events [--output]                   stream core events as NDJSON
   hooks [--json]                      agent configs (Claude Code, Codex, Gemini) and whether cmd's hook is in them
   hooks install|remove [AGENT|FILE]   add cmd's hook to them (all by default), or take it out
-${AGENTS_HELP}
+${AGENTS_HELP}\n${TOOLS_HELP}
 ${JOURNAL_HELP}
 ${DATA_HELP}
 ${STATS_HELP}
@@ -65,7 +66,7 @@ ${REMOTE_HELP}
 env: ${ENV.socket} (default ${defaultSocketPath()})
 exit: 0 done, 1 failed, 2 bad usage (or a core of another version), 3 not found, 4 turned off, 5 not allowed, 6 the core doesn't have it`;
 
-const COMMANDS = new Set(["ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "journal", "data", "stats", "open", "actions", "search", "resume", "settings", "workspace", "remote", "help"]);
+const COMMANDS = new Set(["mcp", "tools", "tool", "ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "journal", "data", "stats", "open", "actions", "search", "resume", "settings", "workspace", "remote", "help"]);
 
 /**
  * `cmd .`, `cmd ~/src/x`, `cmd ../y`: a folder to open as a workspace. A command name
@@ -146,11 +147,9 @@ const { values: opt, positionals: pos } = parseArgs({
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
 
 async function main(): Promise<number> {
-  if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
-    console.log(HELP);
-    return 0;
-  }
+  if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") return (console.log(HELP), 0);
   if (cmd === "hook") return hook(pos[0] ?? "claude", pos[1]);
+  if (cmd === "mcp" || cmd === "tools" || cmd === "tool") return toolsCommand(cmd, argv.slice(1));
   // Magic and widgets build with the core's code: loaded for them only, so every other `cmd` (a hook's included) starts small.
   if (cmd === "magic") return (await import("./magic.ts")).magicCommand(argv.slice(1));
   if (cmd === "widget") return (await import("./widget.ts")).widgetCommand(argv.slice(1));

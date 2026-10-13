@@ -1,10 +1,13 @@
 // The registries' two ends agree (docs/architecture-review-01/13 AR1-13-02): every API
 // method in protocol's Methods has a caller (the CLI, the app, the web client or the core
 // itself; tsc and handlers.test.ts check it has a handler), and every window type the core
-// registers has a view in the renderer. Read from the sources, so it costs no build.
+// registers has a view in the renderer, and every tool an agent may call is reachable from MCP
+// (`cmd mcp`) and the CLI (`cmd tool`). Read from the sources, so it costs no build.
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { TOOLS } from "../packages/core/src/tools/index.ts";
+import { AGENT_TOOLS } from "../packages/core/src/tools/runner.ts";
 
 const root = path.join(import.meta.dirname, "..");
 const read = (f: string) => fs.readFileSync(path.join(root, f), "utf8");
@@ -22,7 +25,7 @@ function files(dir: string, out: string[] = []): string[] {
 const methods = files("packages/protocol/src").flatMap((f) => [...read(f).matchAll(/^\s+"([a-z][A-Za-z]*\.[A-Za-z.]+)":\s*\{\s*params/gm)].map((m) => m[1]!));
 
 /** Where calls come from: the clients, and the core calling itself (not where methods are declared, handled or listed for remote or Operator access). */
-const callers = [...files("packages/cli/src"), ...files("apps/desktop/src"), ...files("apps/web/src"), ...files("packages/core/src").filter((f) => !/\/handlers\.ts$|\/feature\.ts$|remote\/policy\.ts$|operator\/access\.ts$|kernel\/core\.ts$/.test(f))];
+const callers = [...files("packages/cli/src"), ...files("apps/desktop/src"), ...files("apps/web/src"), ...files("packages/core/src").filter((f) => !/\/handlers\.ts$|\/feature\.ts$|remote\/policy\.ts$|tools\/access\.ts$|kernel\/core\.ts$/.test(f))];
 
 /** The window kinds the core registers (windows/builtin.ts, a feature's scopedWidget) and the views the renderer registers. */
 const coreKinds = new Set(files("packages/core/src").flatMap((f) => [...read(f).matchAll(/^\s+kind: "([a-z-]+)",$/gm), ...read(f).matchAll(/scopedWidget\("([a-z-]+)"/g)].filter(() => /windows\/builtin\.ts$|\/feature\.ts$/.test(f)).map((m) => m[1]!)));
@@ -48,5 +51,17 @@ describe("registries", () => {
     expect(missing, `Window types without a renderer view (windows/<kind>/register.tsx):\n${missing.join("\n")}`).toEqual([]);
     const orphans = [...views].filter((k) => !coreKinds.has(k));
     expect(orphans, `Renderer views for window types the core doesn't register:\n${orphans.join("\n")}`).toEqual([]);
+  });
+
+  it("every tool is reachable from MCP and the CLI, and defined only in the core's registry", () => {
+    // Both surfaces list and call through the registry's methods, never a list of their own.
+    const cli = read("packages/cli/src/tools.ts");
+    for (const m of ["tools.list", "tools.call"]) expect(cli.split(`"${m}"`).length - 1, m).toBeGreaterThanOrEqual(2);
+    expect(cli).not.toMatch(/name: "(look|read|open|agent)"/);
+    // Every tool but those for models without tools of their own (edit) reaches agents.
+    expect(TOOLS.filter((t) => !AGENT_TOOLS.includes(t)).map((t) => t.spec.name)).toEqual(["edit"]);
+    // No tool is defined outside packages/core/src/tools.
+    const defined = files("packages").filter((f) => /: Tool = \{/.test(read(f)));
+    expect(defined.every((f) => f.startsWith("packages/core/src/tools/"))).toBe(true);
   });
 });
