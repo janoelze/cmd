@@ -5,7 +5,7 @@
 // centres like an iPod: the cover at most of the width, the track and controls under it;
 // really small, the cover is a thumbnail in front of the title.
 
-import { EmptyState, Icon, IconButton, Inline, Text, TimeBar, View, formatTime } from "@cmd/ui";
+import { Icon, IconButton, Inline, Text, TimeBar, View, formatTime } from "@cmd/ui";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { nowPlayingPosition, type NowPlaying, type NowPlayingCommand } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
@@ -48,7 +48,7 @@ export function NowPlayingCard({ np, onControl }: { np: NowPlaying | null | unde
   const reported = useMemo(() => (np ? nowPlayingPosition(np) : null), [np]);
 
   if (np === undefined) return <View />;
-  if (np === null) return <View><EmptyState icon="music.note" title="Nothing playing">Play something in Music, Spotify or a browser and it shows here.</EmptyState></View>;
+  if (np === null) return <View state={{ kind: "empty", icon: "music.note", title: "Nothing playing", text: "Play something in Music, Spotify or a browser and it shows here." }} />;
   const pos = nowPlayingPosition(np, now);
   return (
     <View>
