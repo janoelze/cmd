@@ -2,6 +2,18 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.29.0 — 2026-10-13
+
+### New
+
+- **Agent integration.** Agents in your terminals can know they run in cmd and use its tools to open files, pages and terminals for you. Turn it on in `Settings → Agents`.
+- **Approvals.** When an agent asks to do something, cmd asks you right away on one sheet: allow once, for the session or always. Choose per kind of action in `Settings → Agents → Permissions`.
+
+### Fixed
+
+- Closing a workspace while a dev server in it starts up no longer makes cmd stop.
+- Closing a Magic widget while it builds no longer makes cmd stop.
+
 ## 0.28.0 — 2026-10-12
 
 ### New

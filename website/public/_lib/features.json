@@ -8,7 +8,7 @@
     { "title": "Terminals outlive the app", "text": "A background process owns them: quit or update cmd and nothing ends. After a reboot, agents resume." },
     { "title": "Search everything", "text": "⇧⌘F searches windows, files, past sessions, commands and their output. Return resumes a session." },
     { "title": "Your history, kept", "text": "Every session, command and commit, on your Mac with secrets redacted. Right-click one for a summary." },
-    { "title": "Operator", "badge": "New", "text": "Ask, and it starts agents, runs commands and arranges windows while you watch. It asks first." },
+    { "title": "Agents that use cmd", "badge": "New", "text": "The Operator and your agents open files, run commands and arrange windows in cmd. They ask first." },
     { "title": "Magic widgets", "text": "Ask for anything: your open PRs, a queue's depth, a calculator. An agent builds it as a live widget." },
     { "title": "Workspace Actions", "text": "How to run, build and test your project, read from its scripts and task files. One click runs it." },
     { "title": "Built-in widgets", "text": "Stats, Jam, Agent Activity and a Live Diff across agents' worktrees, in the Widget Library (⇧⌘L)." },
