@@ -14,6 +14,26 @@ Read first: docs/08-host-agents.md (cmd as the orchestrator), docs/18-agent-acti
 
 What this replaces: the Operator's own model loop. The person already has an agent open, paid for and trusted; a second one in a widget that drives the first through the board costs tokens twice and feels less direct. What stays: the Operator's tools, its access table and the app round trips behind them (`windows/app-ask.ts`), now called by the agent the person already talks to.
 
+## Why
+
+- **Agents in cmd work blind to cmd.** A Claude or Codex session in a pane doesn't know it is in a workspace with a browser, a file tree, other agents and named actions beside it. It starts a dev server and tells the person to open localhost; it can't see that another agent is editing the same files; it reinvents with `sleep` loops what `cmd wait` does. Everything cmd knows about the workspace stops at the pane's edge.
+- **The tools exist, behind the wrong caller.** The Operator proved the methods and tools work: opening windows, reading browser pages, starting and waiting for agents, arranging the board, with approvals and marks on the board. But only a second model in a widget can call them. The person has to switch to it, explain the task again, and pay for both models' tokens; "less magical", as the feedback put it.
+- **The CLI alone isn't enough.** `cmd` is on every pane's PATH, but an agent that doesn't know about it never runs it, and one that does has to learn its flags from `--help`. Typed tools with descriptions are what agents use without being told.
+- **Peer briefings showed the way.** The hook that tells an agent about its peers already reaches Claude, Codex and Gemini at session start. Saying more through it is cheap.
+- **Users asked for control.** Not everyone wants cmd talking to their agents or adding an MCP server to their configs. One switch, and nothing left behind when it is off.
+
+## Goals
+
+- **Any agent in a cmd pane can use the workspace** as the Operator does today: open a browser on what it serves, start and message other agents and wait for them, read other panes, run Workspace Actions, arrange the board.
+- **It knows without being told**: the person never has to explain cmd to their agent.
+- **One switch** (`agents.integration`): on, agents get the briefing and the tools; off, they get neither, and cmd's entries leave their configs. Activity is captured either way.
+- **One source**: the methods once, the tools once; MCP, the CLI and any later surface are generated from them and tested against them.
+- **Safe by the same rules**: an access table enforced in the core, approvals for what types into another pane or acts on a page, the window acted on marked, whatever the agent's own approval said.
+- **Works however the agent was started**: typed by hand, resumed by cmd, spawned by another agent.
+- **No second model**: the Operator can be retired without losing any of it.
+
+Not goals: writing to the user's instruction files or repository; a tool per method; supporting every agent from day one (Claude, Codex and Gemini first, the ones cmd's hook already reaches); ACP or running agents headless (cmd runs the agent's own TUI).
+
 ## What a parent app has to deliver
 
 Four things, each of which fails differently:
