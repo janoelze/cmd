@@ -3,19 +3,16 @@
 // page wanting the camera, and a device pairing. Return allows, Esc denies.
 import { ApprovalSheet } from "./approval.tsx";
 import { Diff } from "./layout.tsx";
+import { Inline } from "./frame.tsx";
+import { Badge } from "./status.tsx";
 
 const noop = () => {};
-const scopes = [
-  { value: "once", label: "Once" },
-  { value: "session", label: "This session" },
-  { value: "always", label: "Always" },
+/** How long a yes holds, as the app words it: Allow gives the first, its menu the others. */
+const scopes = (who: string, kept: string) => [
+  { value: "once", label: "Allow Once" },
+  { value: "session", label: "Allow for This Session", detail: `Until ${who} exits.` },
+  { value: "always", label: `Always Allow ${kept}`, detail: "Change it in Settings → AI & Agents → Permissions." },
 ];
-/** What each scope covers, as the app words it. */
-const notes = (who: string, kept: string) => ({
-  once: "Asks again next time.",
-  session: `Until ${who} exits.`,
-  always: `${kept} Change it in Settings → AI & Agents → Permissions.`,
-});
 
 /** An agent wants to type a command into another terminal; a second ask waits behind it. */
 export const Terminal = () => (
@@ -24,8 +21,7 @@ export const Terminal = () => (
     title="Type in the terminal “tests”"
     why="Re-running the failing test to see the error"
     exact={"pnpm vitest run src/math.test.ts  ⏎"}
-    scopes={scopes}
-    scopeNotes={notes("Claude “Bug hunt”", "Kept for typing into terminals and agents in “demo”.")}
+    scopes={scopes("Claude “Bug hunt”", "typing into terminals and agents in “demo”")}
     position={{ index: 1, count: 2 }}
     onAnswer={noop}
   />
@@ -38,8 +34,7 @@ export const Website = () => (
     title="Open github.com"
     why="Reading the library's release notes"
     exact="https://github.com/vitest-dev/vitest/releases/tag/v4.1.0"
-    scopes={scopes}
-    scopeNotes={notes("Codex", "Kept for github.com in “demo”.")}
+    scopes={scopes("Codex", "github.com in “demo”")}
     onAnswer={noop}
   />
 );
@@ -51,8 +46,7 @@ export const PageFill = () => (
     title="Fill “Search” on staging.example.com"
     why="Checking the search finds the new product"
     exact={'<input type=search name="q"> Search\n→ red running shoes'}
-    scopes={scopes}
-    scopeNotes={notes("Claude “Checkout”", "Kept for staging.example.com in “shop”.")}
+    scopes={scopes("Claude “Checkout”", "staging.example.com in “shop”")}
     onAnswer={noop}
   />
 );
@@ -64,8 +58,7 @@ export const Message = () => (
     title="Send a message to Codex “Tests”"
     why="Telling it which file changed"
     exact={"src/math.ts changed: add() now takes three numbers. Update the tests.  ⏎"}
-    scopes={scopes}
-    scopeNotes={notes("Claude “Bug hunt”", "Kept for typing into terminals and agents in “demo”.")}
+    scopes={scopes("Claude “Bug hunt”", "typing into terminals and agents in “demo”")}
     onAnswer={noop}
   />
 );
@@ -77,8 +70,10 @@ export const Risky = () => (
     title="Run “deploy”, which is risky"
     why="Shipping the fix to production"
     exact="wrangler deploy --env production"
-    scopes={scopes.slice(0, 2)}
-    scopeNotes={{ once: "Asks again next time.", session: "Until Claude “Release” exits. Risky actions are never allowed for always." }}
+    scopes={[
+      { value: "once", label: "Run Once" },
+      { value: "session", label: "Run for This Session", detail: "Until Claude “Release” exits. Risky actions are never allowed for always." },
+    ]}
     allow="Run"
     danger
     onAnswer={noop}
@@ -92,8 +87,7 @@ export const Edit = () => (
     title="Edit vite.config.ts"
     why="Moving the dev server to port 5180"
     exact={<Diff lines={["@@ line 4", "  server: {", "-    port: 5173,", "+    port: 5180,", "  },"]} />}
-    scopes={scopes}
-    scopeNotes={notes("this conversation", "Kept for editing files in “demo”.")}
+    scopes={scopes("this conversation", "editing files in “demo”")}
     onAnswer={noop}
   />
 );
@@ -103,23 +97,28 @@ export const Camera = () => (
   <ApprovalSheet
     who={{ icon: "globe", name: "meet.google.com", context: "a browser window in demo" }}
     title="Use your camera and microphone"
-    scopes={[
-      { value: "always", label: "Always for this site" },
-      { value: "once", label: "Only this time" },
-    ]}
     deny="Don't Allow"
     askWhy={false}
     onAnswer={noop}
   />
 );
 
-/** A device asking to pair: how much it may do is the choice, and the ask runs out. */
+/** A device asking to pair: the words to compare as pills, how much it may do as a switch, and the ask runs out. */
 export const Pairing = () => (
   <ApprovalSheet
     who={{ icon: "iphone", name: "Jan's iPhone", context: "Remote Access" }}
     title="Allow this device to use cmd?"
-    exact="maple · river · lantern · seven"
-    scopes={[
+    why="Check that its screen shows these words:"
+    exact={
+      <Inline gap={2} wrap>
+        {["maple", "river", "lantern", "seven"].map((w) => (
+          <Badge key={w} tone="accent">
+            {w}
+          </Badge>
+        ))}
+      </Inline>
+    }
+    choices={[
       { value: "control", label: "Control" },
       { value: "view", label: "View only" },
     ]}
@@ -133,16 +132,14 @@ export const Pairing = () => (
 /** A plain yes or no: no scopes. */
 export const Plain = () => <ApprovalSheet who={{ icon: "terminal", name: "Claude", context: "demo" }} title="Stop Codex “Tests”" why="It is stuck in a loop" exact="codex “Tests”: working for 42m · running pnpm test --watch" onAnswer={noop} />;
 
-/** A long site name and a long workspace name: the choices stay short, the note says what Always keeps. */
+/** A long site and workspace name: Allow stays one word; the longer answers are in its menu. */
 export const LongSite = () => (
   <ApprovalSheet
     who={{ icon: "terminal", name: "Claude “Browser window”", context: "Home" }}
     title="Click About on www.google.com"
     why="Clicking the first link on the page (About)"
     exact="<a> About"
-    scopes={scopes}
-    scopeNotes={notes("Claude “Browser window”", "Kept for www.google.com in “Home”.")}
-    scope="always"
+    scopes={scopes("Claude “Browser window”", "www.google.com in “Home”")}
     onAnswer={noop}
   />
 );

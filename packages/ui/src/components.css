@@ -1189,15 +1189,20 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
 /* The approval sheet (approval.tsx, docs/55), a window sheet: who asks in its title bar, what in its title, why in their words, exactly what in code, how long a yes holds. */
 .ui-approval-content { display: flex; flex-direction: column; gap: var(--space-3); }
 .ui-approval-why { color: var(--text-dim); }
-.ui-approval-scope { display: flex; flex-direction: column; gap: var(--space-1-5); }
-.ui-approval-scope-row { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
-.ui-approval-scope-label { flex: none; font-size: var(--text-sm); color: var(--text-dim); }
-.ui-approval-scope-row > .ui-seg { flex: 1; min-width: 0; }
-.ui-approval-scope-row > .ui-seg > button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ui-approval-scope-note { font-size: var(--text-sm); color: var(--text-dim); }
+.ui-approval-choice { display: flex; align-items: center; gap: var(--space-3); }
+.ui-approval-choice-label { flex: none; font-size: var(--text-sm); color: var(--text-dim); }
+.ui-approval-choice > .ui-seg { flex: 1; min-width: 0; }
+/* Allow and its menu, one control: the halves' divider in the button's own ink. */
+.ui-approval-allow > .ui-button + .ui-button::before { background: color-mix(in srgb, var(--on-accent) 35%, transparent); }
+.ui-approval-allow > .ui-button + .ui-button { padding-inline: var(--space-2); }
+.ui-dialog-foot .ui-approval-allow > .ui-button[data-variant="danger"] { color: var(--on-accent); background: var(--danger); box-shadow: none; }
+.ui-dialog-foot .ui-approval-allow > .ui-button[data-variant="danger"]:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 88%, var(--ink)); }
 /* A node for what would happen (a diff) sits in the same well as a code block. */
 .ui-approval-exact { overflow: auto; padding: var(--space-1-5) 0; border-radius: var(--radius); background: var(--code-bg); }
 .ui-approval-exact > .ui-diff { --diff-indent: var(--space-2); margin: 0; }
+/* Words to compare (pairing): pills, centred in the well. */
+.ui-approval-exact > .ui-inline { justify-content: center; padding: var(--space-2); }
+.ui-approval-exact > .ui-inline > .ui-badge { font-size: var(--text-base); padding: var(--space-1) var(--space-3); }
 
 /* SheetHeader: a sheet's greeting. The step's content sits at the bottom, by the actions. */
 .ui-sheet-header { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1-5); }

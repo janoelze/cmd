@@ -4,19 +4,20 @@
 // happen, and how long the answer holds; Return allows, Esc denies.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, LinkButton } from "./button.tsx";
-import { Segmented, type Option } from "./choice.tsx";
+import { Button, ButtonGroup, LinkButton } from "./button.tsx";
+import { Segmented } from "./choice.tsx";
 import { TextField } from "./fields.tsx";
 import { CodeBlock } from "./layout.tsx";
-import { Dialog } from "./overlay.tsx";
+import { Dialog, Menu } from "./overlay.tsx";
 
 /** How long a Return right after the sheet appears is ignored: an Enter already being typed into a terminal mustn't approve unread. */
 const GUARD_MS = 300;
 
-/** The person's answer: allowed or not, for how long (a scope's value), and why not, if they said. */
-export interface ApprovalAnswer<S extends string = string> {
+/** The person's answer: allowed or not, for how long (a scope's value), what (a choice's value), and why not, if they said. */
+export interface ApprovalAnswer<S extends string = string, C extends string = string> {
   allow: boolean;
   scope?: S;
+  choice?: C;
   reason?: string;
 }
 
@@ -26,24 +27,24 @@ export interface ApprovalAnswer<S extends string = string> {
  * title bar (an agent's icon and name, and the workspace as context);
  * `title` says what in plain words ("Type in the terminal “tests”"), `why` is the asker's own
  * reason, in dim text under the title, and `exact` is exactly what would happen (a string shows as code:
- * the command, the URL; a node for a diff). `scopes` are how long a yes holds, in short words
- * (Once, This session, Always), the first chosen by default, with what each covers in
- * `scopeNotes`; leave them out for a plain yes or no.
+ * the command, the URL; a node for a diff). `scopes` are how long a yes may hold: Allow gives the
+ * first, and its menu the others ("Allow for This Session", "Always Allow for github.com"),
+ * each with a line on what it covers; leave them out for a plain yes or no. `choices` are what a
+ * yes allows, where there are kinds of it (a device: Control or View only), shown as a switch.
  *
  * Return allows from anywhere in the sheet but the reason field, except in its first 300 ms;
  * Esc and the scrim deny. "Deny and Say Why…" opens a field whose text goes with the no.
  * `danger` makes Allow the danger button (a deploy). `position` says "1 of 3" when more wait;
  * `expiresAt` counts down to when the asker gives up.
  */
-export function ApprovalSheet<S extends string = string>({
+export function ApprovalSheet<S extends string = string, C extends string = string>({
   open = true,
   who,
   title,
   why,
   exact,
   scopes,
-  scope: initial,
-  scopeNotes,
+  choices,
   allow = "Allow",
   deny = "Deny",
   danger,
@@ -62,18 +63,17 @@ export function ApprovalSheet<S extends string = string>({
   title: ReactNode;
   why?: ReactNode;
   exact?: ReactNode;
-  scopes?: readonly Option<S>[];
-  /** What each scope covers, in a dim line under the choice ("Kept for github.com in “demo”…"): keeps the choices short. */
-  scopeNotes?: Partial<Record<S, ReactNode>>;
-  /** The scope chosen at first (default: the first). */
-  scope?: S;
+  /** How long a yes may hold, the first what Allow (and Return) gives; the rest are in Allow's menu, each with what it covers. */
+  scopes?: readonly { value: S; label: string; detail?: ReactNode }[];
+  /** What a yes allows, when there is more than one way to (a device: Control or View only), shown as a switch beside Allow; the first is chosen at first. */
+  choices?: readonly { value: C; label: string }[];
   allow?: string;
   deny?: string;
   danger?: boolean;
   position?: { index: number; count: number };
   /** When the asker stops waiting (ms since the epoch). */
   expiresAt?: number;
-  onAnswer: (a: ApprovalAnswer<S>) => void;
+  onAnswer: (a: ApprovalAnswer<S, C>) => void;
   /** Esc, ✕ and the scrim: "not now", where that differs from Deny (a web page's ask, asked again next time). Left out, they deny. */
   onDismiss?: () => void;
   className?: string;
@@ -81,8 +81,10 @@ export function ApprovalSheet<S extends string = string>({
   askWhy?: boolean;
   busy?: boolean;
 }) {
-  const first = scopes?.[0];
-  const [scope, setScope] = useState<S | undefined>(initial ?? (first === undefined ? undefined : typeof first === "object" ? first.value : first));
+  const scope = scopes?.[0]?.value;
+  const [choice, setChoice] = useState<C | undefined>(choices?.[0]?.value);
+  const [menu, setMenu] = useState(false);
+  const more = useRef<HTMLButtonElement>(null);
   const [reason, setReason] = useState<string | null>(null);
   const shownAt = useRef(Date.now());
   const content = useRef<HTMLDivElement>(null);
@@ -91,15 +93,15 @@ export function ApprovalSheet<S extends string = string>({
   const meta = [left, position && position.count > 1 ? `${position.index} of ${position.count}` : null].filter((x): x is string => !!x);
   useEffect(() => void (shownAt.current = Date.now()), [title]);
 
-  const say = (a: ApprovalAnswer<S>) => !busy && onAnswer(a);
-  const yes = () => say({ allow: true, scope });
+  const say = (a: ApprovalAnswer<S, C>) => !busy && onAnswer(a);
+  const yes = () => say({ allow: true, scope, choice });
   const no = () => say({ allow: false });
   const yesRef = useRef(yes);
   yesRef.current = yes;
 
   // Return allows from anywhere in the sheet (a focused Deny or scope too), but not while writing why.
   useEffect(() => {
-    if (!open || reason !== null) return;
+    if (!open || reason !== null || menu) return;
     const onKey = (e: KeyboardEvent) => {
       const sheet = content.current?.closest(".ui-dialog");
       if (e.key !== "Enter" || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey || !sheet?.contains(e.target as Node)) return;
@@ -109,7 +111,7 @@ export function ApprovalSheet<S extends string = string>({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, reason]);
+  }, [open, reason, menu]);
 
   return (
     <Dialog
@@ -136,9 +138,15 @@ export function ApprovalSheet<S extends string = string>({
             <Button disabled={busy} onClick={no}>
               {deny}
             </Button>
-            <Button variant={danger ? "danger" : "primary"} busy={busy} autoFocus onClick={yes}>
-              {allow}
-            </Button>
+            <ButtonGroup joined className="ui-approval-allow" label={allow}>
+              <Button variant={danger ? "danger" : "primary"} busy={busy} autoFocus onClick={yes}>
+                {allow}
+              </Button>
+              {scopes && scopes.length > 1 && <Button ref={more} variant={danger ? "danger" : "primary"} icon="chevron.down" disabled={busy} aria-label="Allow for longer" aria-haspopup="menu" onClick={() => setMenu(true)} />}
+            </ButtonGroup>
+            {scopes && scopes.length > 1 && (
+              <Menu anchor={more} open={menu} onClose={() => setMenu(false)} align="end" placement="above" width="content" maxWidth={420} label="Allow for longer" items={scopes.map((o) => ({ label: o.label, detail: o.detail, onSelect: () => (setMenu(false), say({ allow: true, scope: o.value, choice })) }))} />
+            )}
           </>
         ) : (
           <>
@@ -155,13 +163,10 @@ export function ApprovalSheet<S extends string = string>({
       <div ref={content} className="ui-approval-content">
         {why != null && <div className="ui-approval-why">{why}</div>}
         {exact != null && (typeof exact === "string" ? <CodeBlock tone={danger ? "danger" : undefined}>{exact}</CodeBlock> : <div className="ui-approval-exact" style={{ maxHeight: 220 }}>{exact}</div>)}
-        {scopes && scopes.length > 1 && scope !== undefined && reason === null && (
-          <div className="ui-approval-scope">
-            <div className="ui-approval-scope-row">
-              <span className="ui-approval-scope-label">{allow}</span>
-              <Segmented value={scope} options={scopes} onChange={setScope} label="For how long" fill />
-            </div>
-            {scopeNotes?.[scope] != null && <div className="ui-approval-scope-note">{scopeNotes[scope]}</div>}
+        {choices && choices.length > 1 && choice !== undefined && reason === null && (
+          <div className="ui-approval-choice">
+            <span className="ui-approval-choice-label">{allow}</span>
+            <Segmented value={choice} options={choices} onChange={setChoice} label={allow} fill />
           </div>
         )}
         {reason !== null && (
