@@ -183,7 +183,9 @@ type PageScrollbarsOptions = { hold: number; always: boolean; light: Tones; dark
  * drawn like SCROLLBAR_CSS's: shown while it scrolls and for `hold` ms after, kept while
  * the pointer rests on it, draggable, a click on its track pages. Thumbs live in a closed
  * shadow root over the page, styled through a constructed sheet, which pages' CSS and CSP
- * don't reach. Self-contained (only its arguments), so BrowserView can stringify it.
+ * don't reach. A scroller that shows its position its own way (the strip's dots) opts out
+ * with data-scrollbar="none". Self-contained (only its arguments), so BrowserView can
+ * stringify it.
  */
 export function pageScrollbars(doc: Document, o: PageScrollbarsOptions, span: typeof thumbSpan): void {
   const win = doc.defaultView as (Window & typeof globalThis & { __cmdScrollbars?: boolean }) | null;
@@ -359,6 +361,7 @@ export function pageScrollbars(doc: Document, o: PageScrollbarsOptions, span: ty
     for (const b of Object.values(s.bars)) b?.el.classList.remove("on");
   };
   function keep(el: Element) {
+    if (el.getAttribute("data-scrollbar") === "none") return;
     let s = states.get(el);
     if (!s) {
       s = { bars: {}, on: false, hovered: false, held: false };

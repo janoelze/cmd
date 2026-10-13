@@ -442,7 +442,7 @@ kbd {
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain; /* bounces at the ends, doesn't pass scroll on */
-  scrollbar-width: none; /* the strip draws its own (.strip-dots) */
+  scrollbar-width: none; /* the strip draws its own (.strip-dots); data-scrollbar="none" keeps the floated one off */
 }
 .windows-track {
   position: absolute;

@@ -905,7 +905,7 @@ export function WindowsView(p: Props) {
       onPointerDown={startPan}
       onDoubleClick={(e) => canvas && onBackground(e) && fitAll()}
     >
-      <div className="windows-scroller" ref={scrollerRef}>
+      <div className="windows-scroller" data-scrollbar="none" ref={scrollerRef}>
       <div
         className="windows-track"
         style={

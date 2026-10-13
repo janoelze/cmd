@@ -81,4 +81,15 @@ describe.skipIf(noChromium)("pageScrollbars placement (Chromium)", () => {
     expect(bar.right).toBeCloseTo(box.right, 0);
     expect(bar.top).toBeCloseTo(box.top, 0);
   });
+
+  it("leaves a scroller with data-scrollbar=none alone (the strip, which has its dots)", async () => {
+    await load("none");
+    await page.evaluate(() => document.querySelector("#s")!.setAttribute("data-scrollbar", "none"));
+    await scroll();
+    const bars = await page.evaluate(async () => {
+      await new Promise(requestAnimationFrame);
+      return document.querySelector("cmd-scrollbars")!.shadowRoot!.querySelectorAll(".bar").length;
+    });
+    expect(bars).toBe(0);
+  });
 });
