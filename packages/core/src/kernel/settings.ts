@@ -36,6 +36,8 @@ export class SettingsService extends EventEmitter<{ updated: [SettingsSnapshot] 
   /** file = null keeps settings in memory only (tests). */
   constructor(file: string | null) {
     super();
+    // Every core consumer binds here (a dozen and growing): warn at a leak, not at the eleventh.
+    this.setMaxListeners(50);
     this.path = file ?? "";
     this.#snapshot = this.#load();
   }

@@ -12,8 +12,13 @@ import { reportsText } from "../tools/reports.ts";
 
 const tilde = (p: string) => (p === os.homedir() ? "~" : p.startsWith(os.homedir() + "/") ? "~" + p.slice(os.homedir().length) : p);
 
-/** The lines that say where the agent runs; `tools`: how it reaches cmd's tools (the CLI until the MCP server is registered). */
-export function introduction(agent: Agent, pane: Pane | null, workspace: Workspace | null, tools = "`cmd --help` in the shell lists them"): string {
+/** How an agent reaches cmd's tools: the MCP server where it is in the agent's config, else the CLI. */
+const TOOLS_MCP = 'they are the "cmd" MCP server\'s tools (`cmd tools` in the shell lists the same)';
+const TOOLS_CLI = "`cmd tools` in the shell lists them and `cmd tool NAME '<json>'` runs one";
+
+/** The lines that say where the agent runs, and how it reaches cmd's tools (`mcp`: through the MCP server). */
+export function introduction(agent: Agent, pane: Pane | null, workspace: Workspace | null, mcp = false): string {
+  const tools = mcp ? TOOLS_MCP : TOOLS_CLI;
   const where = [
     pane ? `Pane: ${pane.id}${agent.name ? `, named "${agent.name}"` : ""}.` : null,
     workspace ? `Workspace: "${workspace.name}" (${tilde(workspace.root)}).` : null,
@@ -36,6 +41,6 @@ export function agentBriefing(core: CoreContext, id: AgentId, event: string): st
   }
   if (!agent) return peers;
   const pane = agent.paneId ? (core.panes.get(agent.paneId) ?? null) : null;
-  const intro = introduction(agent, pane, core.workspaces.get(pane?.workspaceId ?? agent.workspaceId) ?? null);
+  const intro = introduction(agent, pane, core.workspaces.get(pane?.workspaceId ?? agent.workspaceId) ?? null, core.agentSetup.serves(agent.kind));
   return peers ? `${intro}\n\n${peers}` : intro;
 }

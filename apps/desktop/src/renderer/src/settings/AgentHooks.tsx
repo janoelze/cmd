@@ -1,6 +1,7 @@
 // Settings → Agents → Hooks: each coding agent's config file and whether cmd's
-// hook is in it, with Install/Remove (core: agents/hooks.ts). The hook is how an
-// agent reports its state to the sidebar and gets peer briefings.
+// hook is in it, with Install/Remove (core: agents/hooks.ts), and whether cmd's tools (its MCP
+// server, agents/mcp-config.ts) are set up there. The hook is how an agent reports its state to
+// the sidebar and gets its briefing.
 
 import { useEffect, useState } from "react";
 import type { HookTarget } from "@cmd/protocol";
@@ -14,6 +15,13 @@ const STATE: Record<HookTarget["state"], { text: string; tone: "accent" | "warni
   legacy: { text: "Has an older version of the hook. Install replaces it.", tone: "warning" },
   elsewhere: { text: "Has the hook of another cmd (e.g. a development build). Install points it here.", tone: "warning" },
   stale: { text: "Has a cmd hook whose script is gone. Install replaces it.", tone: "warning" },
+};
+
+/** cmd's tools in this agent home (docs/54): there while Agent integration is on. */
+const MCP: Record<NonNullable<HookTarget["mcp"]>, string> = {
+  registered: "cmd's tools are set up.",
+  missing: "cmd's tools aren't set up.",
+  other: "Has another “cmd” MCP server; cmd leaves it alone.",
 };
 
 const tilde = shortPath;
@@ -43,7 +51,7 @@ export function AgentHooks() {
             key={t.file}
             title={t.title}
             description={tilde(t.file)}
-            note={codex ? "Installed. Codex runs it once you approve it: run /hooks in Codex." : t.declined && t.state === "missing" ? "Not installed. You removed it, so cmd won't add it by itself." : s.text}
+            note={`${codex ? "Installed. Codex runs it once you approve it: run /hooks in Codex." : t.declined && t.state === "missing" ? "Not installed. You removed it, so cmd won't add it by itself." : s.text}${t.mcp ? ` ${MCP[t.mcp]}` : ""}`}
             noteTone={codex ? "accent" : s.tone}
           >
             {t.state === "installed" ? (

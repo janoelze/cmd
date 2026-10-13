@@ -256,6 +256,13 @@ export interface HookTarget {
   state: "installed" | "missing" | "legacy" | "elsewhere" | "stale";
   /** The user took cmd's hook out of this file: automatic installs leave it alone. */
   declined?: boolean;
+  /**
+   * cmd's MCP server in this home (docs/54), and the file it goes in: this cmd's (registered),
+   * none (missing), or another "cmd" server (another build's, or the user's own). Absent for
+   * agents cmd doesn't register with.
+   */
+  mcp?: "registered" | "missing" | "other";
+  mcpFile?: string;
 }
 
 // ── windows ──────────────────────────────────────────────

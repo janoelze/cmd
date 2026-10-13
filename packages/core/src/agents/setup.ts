@@ -1,11 +1,15 @@
 // cmd's hook in the agents' configs, and where agents keep them (docs/18): the hook files this
 // build writes, finding agent homes (at startup, every few hours, when agents.homes changes, and
-// from what hooks and transcripts report), and putting the hook into configs that lack it.
+// from what hooks and transcripts report), and putting the hook into configs that lack it. While
+// Agent integration is on, cmd's MCP server goes in beside it (mcp-config.ts, docs/54), and
+// comes out when it is turned off.
 
-import type { AgentHome, HookTarget } from "@cmd/protocol";
+import path from "node:path";
+import type { AgentHome, AgentKind, HookTarget } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { CoreContext } from "../kernel/context.ts";
 import { hookFiles, hookState, hookTargets, installHooks, removeHooks, setBriefingFlag, writeHookFiles, type HookFiles } from "./hooks.ts";
+import { installMcp, mcpFile, mcpState, removeMcp, type McpState } from "./mcp-config.ts";
 
 const log = logger("core");
 
@@ -34,12 +38,17 @@ export class AgentSetup {
   #discovered = false;
   #timer: NodeJS.Timeout | undefined;
   #closed = false;
+  /** The command agents' configs start cmd's MCP server with (the `cmd` wrapper); null without a CLI. */
+  #mcp: string | null;
+  /** Per agent kind, whether cmd's server is in every home of it (the briefing names it then). */
+  #served = new Map<AgentKind, boolean>();
 
   /** `rediscover`: look for homes every few hours and when agents.homes changes (real cores); `auto`: install the hook (the installed app only). */
   constructor(core: SetupCore, hooks: HookFiles | null, o: { auto: boolean; rediscover: boolean }) {
     this.#core = core;
     this.#hooks = hooks;
     this.#auto = o.auto;
+    this.#mcp = hooks?.bin ? path.join(hooks.bin, "cmd") : null;
     core.agents.on("home", (agent, dir) => this.newHome(core.homes.learn(agent, dir, "hook")));
     core.agents.on("transcript", (agent, file) => {
       const dir = core.homes.homeOfTranscript(agent, file);
@@ -51,6 +60,7 @@ export class AgentSetup {
       // (bind also runs once now: these wait for the startup discovery instead)
       core.settings.bind(["agents.homes"], () => this.#discovered && this.discover());
       core.settings.bind(["agents.hooks.auto"], () => this.#discovered && this.#autoHooks());
+      core.settings.bind(["agents.integration"], () => this.#discovered && this.#autoMcp());
     }
   }
 
@@ -69,13 +79,19 @@ export class AgentSetup {
       log.error(`looking for agent homes: ${(err as Error).message}`);
     }
     this.#autoHooks();
+    this.#autoMcp();
   }
 
   /** A home cmd didn't know: its transcripts are indexed, and it may get the hook. */
   newHome(h: AgentHome | null): void {
     if (!h) return;
     this.#core.search.learnHome(h.agent, h.dir);
-    if (this.#discovered) this.#autoHooks();
+    if (this.#discovered) this.#autoHooks(), this.#autoMcp();
+  }
+
+  /** Whether agents of `kind` have cmd's MCP server (in every home of theirs cmd knows). */
+  serves(kind: AgentKind): boolean {
+    return this.#served.get(kind) ?? false;
   }
 
   /** The agent configs cmd's hook can go into, and whether it is there. */
@@ -87,21 +103,61 @@ export class AgentSetup {
       for (const h of this.#core.homes.discover()) this.#core.search.learnHome(h.agent, h.dir);
     }
     const declined = this.#declined();
-    return hookTargets(this.#core.homes.all()).map((t) => ({ ...t, state: hookState(t.agent, t.file, script), ...(declined.has(t.file) ? { declined: true } : {}) }));
+    const homes = this.#core.homes.all();
+    const targets = hookTargets(homes).map((t) => {
+      const mcp = this.#mcpOf(homes, t.file);
+      return { ...t, state: hookState(t.agent, t.file, script), ...(declined.has(t.file) ? { declined: true } : {}), ...(mcp ? { mcp: mcp.state, mcpFile: mcp.file } : {}) };
+    });
+    for (const kind of new Set(targets.map((t) => t.agent))) this.#served.set(kind, targets.filter((t) => t.agent === kind).every((t) => t.mcp === "registered"));
+    return targets;
   }
 
+  /** The hook, and cmd's MCP server while Agent integration is on. */
   install(file: string): HookTarget[] {
     const t = this.#target(file);
     installHooks(t.agent, t.file, this.#hooks!.script);
+    if (this.#core.settings.settings["agents.integration"] && this.#mcp && t.mcpFile && t.mcp !== "registered") installMcp(t.agent, t.mcpFile, this.#mcp);
     this.#setDeclined(t.file, false);
     return this.targets();
   }
 
+  /** The hook and cmd's MCP server, both. */
   remove(file: string): HookTarget[] {
     const t = this.#target(file);
     removeHooks(t.file);
+    if (t.mcpFile && t.mcp === "registered") removeMcp(t.agent, t.mcpFile);
     this.#setDeclined(t.file, true);
     return this.targets();
+  }
+
+  /** cmd's MCP server for the home whose hook config is `hookFile`. */
+  #mcpOf(homes: AgentHome[], hookFile: string): { file: string; state: McpState } | null {
+    const home = homes.find((h) => path.dirname(hookFile) === h.dir);
+    const file = home && this.#mcp ? mcpFile(home) : null;
+    return file ? { file, state: mcpState(home!.agent, file, this.#mcp!) } : null;
+  }
+
+  /**
+   * Out of the box, following Agent integration: on, cmd's server in every home that has no
+   * "cmd" server (never over another one, never where the user took the hook out); off, this
+   * cmd's taken out again. Not from a development build (CoreOptions.autoHooks), as for hooks.
+   */
+  #autoMcp(): void {
+    if (!this.#auto || !this.#mcp || this.#closed) return;
+    const on = this.#core.settings.settings["agents.integration"];
+    let changed = false;
+    for (const t of this.targets()) {
+      if (!t.mcpFile || (on ? t.mcp !== "missing" || t.declined : t.mcp !== "registered")) continue;
+      try {
+        if (on) installMcp(t.agent, t.mcpFile, this.#mcp);
+        else removeMcp(t.agent, t.mcpFile);
+        log.info(`${on ? "added cmd's MCP server to" : "took cmd's MCP server out of"} ${t.mcpFile}`);
+        changed = true;
+      } catch (err) {
+        log.error(`could not ${on ? "add cmd's MCP server to" : "take cmd's MCP server out of"} ${t.mcpFile}: ${(err as Error).message}`);
+      }
+    }
+    if (changed) this.targets();
   }
 
   dispose(): void {
