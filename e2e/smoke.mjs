@@ -872,6 +872,12 @@ await scenario("approvals", async () => {
   await win.keyboard.press("Escape");
   const said = await until(() => paneText(term.id), (t) => /The person said no/.test(t));
   check(/The person said no/.test(said) && (await browsers()) === opened, "Esc denies it, and the caller is told");
+  // Leave the board as it was for the scenarios after it: the browser it opened and its terminal go.
+  await win.evaluate(async (id) => {
+    for (const w of await window.cmd.call("window.list", {})) if ((w.kind === "browser" && String(w.state.url ?? "").includes("example.test")) || w.id === id) await window.cmd.call("window.close", { id: w.id });
+    await window.cmd.call("settings.set", { key: "agents.integration", value: false });
+  }, term.id);
+  await until(browsers, (n) => n === before);
 });
 
 await scenario("osc8", async () => {
