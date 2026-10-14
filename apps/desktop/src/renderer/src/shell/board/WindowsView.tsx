@@ -32,6 +32,7 @@ import { viewFor } from "../../windows/registry.ts";
 import { brokenView, useBrokenView } from "../../windows/break.ts";
 import { useStoreValue } from "../../lib/store.ts";
 import { useTitleHandlers } from "./titles.ts";
+import { sidebarsSliding } from "./sidebars.ts";
 import {
   arrange,
   bounds,
@@ -494,7 +495,9 @@ export function WindowsView(p: Props) {
       done = setTimeout(() => setLiveResize(false), LIVE_RESIZE_MS);
       // Before this frame is painted: the windows take the new size in the same frame
       // as the board (else for a frame they sit at the old place in the new box).
-      const apply = () => (resized || now - last < LIVE_RESIZE_MS ? setLiveResize(true) : undefined, setVp(size));
+      // Sidebars toggled again mid-slide aren't a live resize: the windows turn back on their glide.
+      const live = resized || (now - last < LIVE_RESIZE_MS && !sidebarsSliding());
+      const apply = () => (live ? setLiveResize(true) : undefined, setVp(size));
       if (sync) flushSync(apply);
       else apply();
       last = now;
